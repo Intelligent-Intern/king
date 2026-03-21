@@ -1,0 +1,39 @@
+libcurl
+quiche
+node_modules
+
+# Archived source snapshots
+extension/src_bak/
+
+# Local build and cache artifacts
+extension/autom4te.cache/
+extension/.libs/
+extension/**/.libs/
+extension/config.log
+extension/configure~
+extension/modules/*.so
+extension/modules/*.la
+extension/src/**/*.dep
+extension/src/**/*.lo
+extension/src/**/*.o
+extension/tests/*.diff
+extension/tests/*.exp
+extension/tests/*.log
+extension/tests/*.out
+extension/tests/*.php
+extension/tests/*.sh
+.cache/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local image artifacts
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.bmp
+*.tiff
+*.svg

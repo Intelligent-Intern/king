@@ -1,0 +1,32 @@
+/*
+ * =========================================================================
+ * FILENAME:   include/config/quic_transport/config.h
+ * PROJECT:    king
+ * AUTHOR:     Jochen Schultz <jschultz@php.net>
+ *
+ * PURPOSE:
+ * This header file declares the public C-API for applying runtime
+ * configuration changes from PHP userland to the QUIC Transport module.
+ * =========================================================================
+ */
+
+#ifndef KING_CONFIG_QUIC_TRANSPORT_CONFIG_H
+#define KING_CONFIG_QUIC_TRANSPORT_CONFIG_H
+
+#include "php.h"
+#include "include/config/quic_transport/base_layer.h"
+
+/**
+ * @brief Applies runtime configuration settings from a PHP array.
+ * @param config_arr A zval pointer to a PHP array containing the key-value
+ * pairs of the configuration to apply.
+ * @return `SUCCESS` if all settings were successfully validated and applied,
+ * `FAILURE` otherwise.
+ */
+int kg_config_quic_transport_apply_userland_config(zval *config_arr);
+int kg_config_quic_transport_apply_userland_config_to(
+    kg_quic_transport_config_t *target,
+    zval *config_arr
+);
+
+#endif /* KING_CONFIG_QUIC_TRANSPORT_CONFIG_H */

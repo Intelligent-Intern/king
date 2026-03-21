@@ -1,0 +1,53 @@
+#!/bin/bash
+# help.sh - Help script for the King PHP extension
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}King PHP Extension - Build System Help${NC}"
+echo ""
+echo -e "${YELLOW}Available Make Targets:${NC}"
+echo ""
+echo -e "${BLUE}build${NC}      - Build the King extension and all dependencies"
+echo -e "${BLUE}unit${NC}       - Run unit tests"
+echo -e "${BLUE}clean${NC}      - Clean all build artifacts"
+echo -e "${BLUE}tree${NC}       - Show project directory tree"
+echo -e "${BLUE}ext-tree${NC}   - Show extension directory tree"
+echo -e "${BLUE}infra-tree${NC} - Show infrastructure directory tree"
+echo -e "${BLUE}tests-tree${NC} - Show tests directory tree"
+echo -e "${BLUE}help${NC}       - Show this help message"
+echo ""
+echo -e "${YELLOW}Build Examples:${NC}"
+echo ""
+echo -e "${BLUE}make build${NC}           - Build extension"
+echo -e "${BLUE}make build --install${NC} - Build and install extension"
+echo -e "${BLUE}make unit${NC}            - Run tests"
+echo -e "${BLUE}make clean${NC}           - Clean build"
+echo ""
+echo -e "${YELLOW}Manual Build Steps:${NC}"
+echo ""
+echo -e "${BLUE}1.${NC} Initialize submodules:"
+echo "   git submodule update --init --recursive"
+echo ""
+echo -e "${BLUE}2.${NC} Build dependencies:"
+echo "   cd quiche && cargo build --release --features ffi,pkg-config-meta,qlog"
+echo "   cd libcurl && ./buildconf && ./configure && make"
+echo ""
+echo -e "${BLUE}3.${NC} Build extension:"
+echo "   cd extension && phpize && ./configure --with-king && make"
+echo ""
+echo -e "${BLUE}4.${NC} Install extension:"
+echo "   cd extension && make install"
+echo ""
+echo -e "${YELLOW}Configuration:${NC}"
+echo ""
+echo "Add to php.ini:"
+echo "extension=king.so"
+echo ""
+echo -e "${YELLOW}Testing:${NC}"
+echo ""
+echo "php -m | grep king"
+echo "php -r \"echo king_version();\""

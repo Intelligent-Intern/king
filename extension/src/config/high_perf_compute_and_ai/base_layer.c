@@ -1,0 +1,3 @@
+#include "include/config/high_perf_compute_and_ai/base_layer.h"
+
+kg_high_perf_compute_ai_config_t king_high_perf_compute_ai_config;

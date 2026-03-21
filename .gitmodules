@@ -1,0 +1,6 @@
+[submodule "quiche"]
+	path = quiche
+	url = https://github.com/cloudflare/quiche.git
+[submodule "libcurl"]
+	path = libcurl
+	url = https://github.com/curl/curl.git

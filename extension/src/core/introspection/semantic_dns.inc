@@ -1,0 +1,5 @@
+#include "semantic_dns/service_registry.inc"
+#include "semantic_dns/mother_nodes.inc"
+#include "semantic_dns/topology.inc"
+#include "semantic_dns/discovery.inc"
+#include "semantic_dns/routing.inc"

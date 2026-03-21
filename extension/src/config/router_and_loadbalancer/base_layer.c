@@ -1,0 +1,3 @@
+#include "include/config/router_and_loadbalancer/base_layer.h"
+
+kg_router_loadbalancer_config_t king_router_loadbalancer_config;
