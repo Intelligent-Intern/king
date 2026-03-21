@@ -6,9 +6,10 @@
 > This README is intentionally stable.
 > It describes the target system, not the moving implementation state.
 > It is not a changelog, migration log, issue list, or verification report.
-> Public API signatures live in `stubs/king.php`.
-> Deep architecture lives in the technical reference under `../docs/king-tech-brief.md`.
-> Current implementation and verification status live under `../docs/project_assessment.md`.
+> Public API signatures live in [`stubs/king.php`](stubs/king.php).
+> Strategic program structure lives in [`EPIC.md`](EPIC.md).
+> Current implementation state lives in [`PROJECT_ASSESSMENT.md`](PROJECT_ASSESSMENT.md).
+> Active repo-local execution work lives in [`ISSUES.md`](ISSUES.md).
 
 ## What King Is
 
@@ -173,8 +174,16 @@ It is supposed to look like one native system with a PHP-facing control surface.
 
 - `extension/`
   Native extension sources, headers, build scripts, and PHPT coverage.
-- `stubs/`
+- [`stubs/`](stubs/)
   Public PHP signature surface and IDE-facing type stubs.
+- [`EPIC.md`](EPIC.md)
+  Strategic delivery map.
+- [`PROJECT_ASSESSMENT.md`](PROJECT_ASSESSMENT.md)
+  Verified current implementation reach.
+- [`ISSUES.md`](ISSUES.md)
+  Active repo-local execution queue.
+- [`CONTRIBUTE.md`](CONTRIBUTE.md)
+  Contribution rules and development expectations.
 - `benchmarks/`
   Performance-oriented fixtures and measurements.
 - `demo/`
@@ -185,22 +194,24 @@ It is supposed to look like one native system with a PHP-facing control surface.
   Vendored libcurl source used for headers and integration work.
 - `quiche/`
   Vendored QUIC/HTTP/3 backend source.
-- `CONTRIBUTE.md`
-  Contribution rules and development expectations.
 
 ## Documentation Boundaries
 
 This file is the permanent product-level description.
 Other documents serve different purposes:
 
-- `stubs/king.php`
+- [`README.md`](README.md)
+  Permanent target-system description.
+- [`EPIC.md`](EPIC.md)
+  Strategic delivery decomposition and ordering.
+- [`PROJECT_ASSESSMENT.md`](PROJECT_ASSESSMENT.md)
+  Verified current implementation state and reach.
+- [`ISSUES.md`](ISSUES.md)
+  Open repo-local execution queue.
+- [`CONTRIBUTE.md`](CONTRIBUTE.md)
+  Contribution and workflow rules.
+- [`stubs/king.php`](stubs/king.php)
   Public signature and type surface.
-- `../docs/king-tech-brief.md`
-  Long-form target architecture and design rationale.
-- `../docs/project_assessment.md`
-  Verified current implementation state.
-- `../docs/issues.md`
-  Open implementation queue and remaining work.
 
 If a statement is about the target system and should remain true over time, it
 belongs here. If a statement is about current reach, current gaps, test counts,
@@ -218,7 +229,8 @@ cd extension
 
 The build entrypoint above is the repository build path.
 Implementation maturity and subsystem completeness are intentionally documented
-outside this README.
+in [`PROJECT_ASSESSMENT.md`](PROJECT_ASSESSMENT.md) and [`ISSUES.md`](ISSUES.md),
+not in this file.
 
 ## Contributing
 

@@ -2,7 +2,7 @@
 
 > This document is the strategic delivery map for King.
 > It sits between the permanent product description in `README.md` and the
-> granular execution backlog in `../docs/issues.md`.
+> granular execution backlog in `ISSUES.md`.
 > It is not a changelog, not a test report, and not a line-by-line migration log.
 
 ## Purpose
@@ -28,15 +28,15 @@ Use the documents in this way:
   Permanent target-system description. This should stay stable.
 - `EPIC.md`
   Strategic delivery decomposition and ordering.
-- `../docs/issues.md`
-  Active execution queue with verifiable leaves.
-- `../docs/project_assessment.md`
+- `PROJECT_ASSESSMENT.md`
   Verified implementation state and current reach.
+- `ISSUES.md`
+  Active execution queue with verifiable leaves.
 
 If a statement is about what King is supposed to become, it belongs in
 `README.md`. If it is about how the program is decomposed and delivered, it
 belongs here. If it is about what is open right now, it belongs in
-`../docs/issues.md`.
+`ISSUES.md`.
 
 ## North Star
 
@@ -311,7 +311,7 @@ following are true:
 ## Execution Notes
 
 Granular work decomposition, checkboxes, and current leaves belong in
-`../docs/issues.md`. That file is expected to move frequently.
+`ISSUES.md`. That file is expected to move frequently.
 
 This EPIC should change only when:
 

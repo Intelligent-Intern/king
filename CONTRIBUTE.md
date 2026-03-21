@@ -1,380 +1,232 @@
-# Contributing to King PHP Extension
+# Contributing to King
 
-Welcome to the King PHP extension development team! This document provides comprehensive guidelines for contributing to the project.
+This document defines how work lands in the King repository.
 
-## Development Environment Setup
+It is not a product description.
+It is not the strategic program map.
+It is not the active backlog.
 
-### Prerequisites
+Use the repository docs like this:
 
-- PHP 8.1+ with development headers (`php-dev` package)
-- Rust toolchain (latest stable)
-- C compiler (GCC or Clang)
-- OpenSSL development libraries
-- libcurl development libraries
-- Git with submodule support
-- Make and autotools
+- `README.md`
+  Permanent target-system description.
+- `EPIC.md`
+  Strategic delivery decomposition.
+- `PROJECT_ASSESSMENT.md`
+  Verified current implementation state.
+- `ISSUES.md`
+  Active repo-local execution queue.
+- `CONTRIBUTE.md`
+  Contribution and workflow rules.
+- `stubs/king.php`
+  Public PHP signature surface.
 
-### Initial Setup
+## Working Standard
 
-```bash
-# Clone the repository
-git clone <repository-url> king
-cd king
+King is a native systems project, not a demo app.
 
-# Initialize submodules
-git submodule update --init --recursive
+Every change is expected to preserve these rules:
 
-# Build the extension
-make build
+- one runtime kernel, multiple API surfaces
+- explicit ownership and teardown
+- no capability claims without code and verification
+- no documentation drift between what exists and what is claimed
+- no convenience shortcut that weakens transport, lifecycle, or validation semantics
 
-# Run tests to verify setup
-make unit
-```
+If a change lowers clarity, weakens lifecycle guarantees, or widens the surface
+without a real backend behind it, it is the wrong change.
 
-## Project Architecture
+## Canonical Build Path
 
-King follows a layered architecture with clear separation of concerns:
+The canonical extension workflow is inside `extension/`.
+Do not treat ad-hoc local commands or legacy wrappers as the source of truth.
 
-### Layer 1: Configuration Foundation
-- **php.ini Integration**: System-wide defaults with `king.` prefix
-- **Runtime Configuration**: Per-connection `King\Config` objects
-- **Policy Enforcement**: Administrative controls via `king.allow_config_override`
-
-### Layer 2: C-Native Core
-- **QUIC Transport**: Native QUIC/HTTP3 implementation via quiche
-- **Performance Optimization**: CPU affinity, zero-copy I/O, busy polling
-- **Memory Management**: Efficient resource handling and cleanup
-
-### Layer 3: High-Level Abstractions
-- **Session Management**: `King\Session` for connection lifecycle
-- **Clustering**: Multi-process supervisor with automatic restart
-- **Event-Driven API**: Callback-based server implementations
-
-### Layer 4: Service Communication
-- **MCP Protocol**: Model Context Protocol for service-to-service communication
-- **IIBIN Serialization**: High-performance binary serialization format
-- **Schema Management**: Type-safe data contracts
-
-### Layer 5: Workflow Engine
-- **Pipeline Orchestrator**: Declarative workflow execution
-- **Tool Integration**: Generic tool handlers with MCP binding
-- **Parallel Execution**: Concurrent step processing
-
-## Code Organization
-
-### Directory Structure
-
-```
-king/
-├── extension/                    # C extension source code
-│   ├── config/                   # Configuration modules (18 modules)
-│   ├── src/                      # Core C implementation
-│   ├── include/                  # Header files
-│   └── tests/                    # C-level tests
-├── quiche/                       # QUIC implementation (submodule)
-├── libcurl/                      # HTTP fallback (submodule)
-├── infra/                        # Build and deployment infrastructure
-├── tests/                        # PHP-level tests
-├── benchmarks/                   # Performance benchmarks
-└── stubs/                        # PHP stub files for IDE support
-```
-
-### Configuration Modules
-
-Each configuration module follows a strict 5-file pattern:
-- `default.c` - Default values and constants
-- `ini.c` - php.ini parameter definitions
-- `config.c` - Runtime configuration handling
-- `base_layer.c` - Base layer integration
-- `index.c` - Module registration
-
-Some modules include `default.h` for shared constants.
-
-## Development Workflow
-
-### Making Changes
-
-1. **Create Feature Branch**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. **Make Changes**
-   - Follow coding standards (see below)
-   - Add tests for new functionality
-   - Update documentation as needed
-
-3. **Test Changes**
-   ```bash
-   make clean
-   make build
-   make unit
-   ```
-
-4. **Commit Changes**
-   ```bash
-   git add .
-   git commit -m "feat: descriptive commit message"
-   ```
-
-5. **Submit Pull Request**
-   - Ensure all tests pass
-   - Include clear description of changes
-   - Reference any related issues
-
-### Coding Standards
-
-#### C Code Standards
-
-- **Naming**: Use `king_` prefix for all public functions
-- **Memory Management**: Always free allocated memory
-- **Error Handling**: Use consistent error reporting patterns
-- **Documentation**: Document all public functions with Doxygen comments
-
-```c
-/**
- * Validates a configuration parameter
- * 
- * @param value The value to validate
- * @param max_length Maximum allowed length
- * @return 1 if valid, 0 if invalid
- */
-int king_validate_string(const char *value, size_t max_length);
-```
-
-#### PHP Code Standards
-
-- **Namespacing**: All classes in `King\` namespace
-- **Type Hints**: Use strict typing where possible
-- **Documentation**: PHPDoc comments for all public methods
-
-```php
-<?php
-namespace King;
-
-/**
- * QUIC session management class
- */
-class Session
-{
-    /**
-     * Establishes a QUIC connection
-     * 
-     * @param string $host Target hostname
-     * @param int $port Target port
-     * @param Config $config Connection configuration
-     */
-    public function __construct(string $host, int $port, Config $config) {
-        // Implementation
-    }
-}
-```
-
-### Testing Guidelines
-
-#### Unit Tests
-
-- **C Tests**: Test individual functions and components
-- **PHP Tests**: Test PHP API functionality
-- **Integration Tests**: Test end-to-end functionality
-- **Performance Tests**: Benchmark critical paths
-
-#### Test Structure
-
-```
-tests/
-├── unit/
-│   ├── c/                        # C-level unit tests
-│   └── php/                      # PHP-level unit tests
-├── integration/                  # Integration tests
-└── performance/                  # Performance benchmarks
-```
-
-#### Writing Tests
-
-```php
-<?php
-// PHP test example
-class SessionTest extends PHPUnit\Framework\TestCase
-{
-    public function testConnectionEstablishment(): void
-    {
-        $config = new King\Config(['verify_peer' => false]);
-        $session = new King\Session('localhost', 4433, $config);
-        
-        $this->assertTrue($session->isConnected());
-        $session->close();
-    }
-}
-```
-
-### Configuration Development
-
-When adding new configuration parameters:
-
-1. **Choose Appropriate Module**: Add to existing or create new config module
-2. **Follow 5-File Pattern**: Implement all required files
-3. **Add Validation**: Create appropriate validation function
-4. **Update Documentation**: Document new parameters
-5. **Add Tests**: Test parameter validation and usage
-
-### Performance Considerations
-
-- **Memory Efficiency**: Minimize allocations in hot paths
-- **CPU Optimization**: Use CPU affinity and scheduling policies
-- **Network Efficiency**: Leverage zero-copy I/O where possible
-- **Concurrency**: Design for multi-process and fiber-based concurrency
-
-## Build System
-
-### Build Targets
+Build:
 
 ```bash
-make build      # Build extension and dependencies
-make unit       # Run unit tests
-make clean      # Clean build artifacts
-make tree       # Show project structure
-make help       # Show available targets
-```
-
-### Manual Build Process
-
-```bash
-# Build quiche
-cd quiche
-cargo build --release --features ffi,pkg-config-meta,qlog
-
-# Build libcurl
-cd libcurl
-./buildconf
-./configure --enable-static --with-openssl --enable-http3
-make
-
-# Build extension
 cd extension
-phpize
-./configure --with-king
-make
+./scripts/build-skeleton.sh
 ```
 
-## Debugging
-
-### Debug Build
+Test:
 
 ```bash
-# Build with debug symbols
 cd extension
-phpize
-./configure --with-king --enable-debug
-make
+./scripts/test-skeleton.sh
 ```
 
-### Memory Debugging
+Audit the active build surface:
 
 ```bash
-# Run with Valgrind
-valgrind --tool=memcheck --leak-check=full php test_script.php
+cd extension
+./scripts/audit-skeleton-surface.sh
 ```
 
-### Performance Profiling
+If you touch the PHP stub surface, also run:
 
 ```bash
-# Profile with perf
-perf record php test_script.php
-perf report
+php -l stubs/king.php
 ```
 
-## Documentation
+## Workflow
 
-### Code Documentation
+### 1. Start from the right document
 
-- **C Code**: Use Doxygen-style comments
-- **PHP Code**: Use PHPDoc comments
-- **Configuration**: Document all parameters in module files
+Before changing code, align the change against the right file:
 
-### User Documentation
+- product meaning or permanent system description: `README.md`
+- strategic decomposition: `EPIC.md`
+- current verified implementation state: `PROJECT_ASSESSMENT.md`
+- active work queue: `ISSUES.md`
+- actual code and tests: `extension/` and `stubs/`
 
-- **README.md**: Keep updated with new features
-- **Examples**: Add practical usage examples
-- **API Reference**: Maintain comprehensive API documentation
+### 2. Change the kernel first
 
-## Release Process
+When a feature has both procedural and OO entry points, the native kernel comes
+first. Wrappers, aliases, arginfo, and docs move after the kernel is real.
 
-### Version Numbering
+### 3. Move docs with reality
 
-King follows semantic versioning (SemVer):
-- **Major**: Breaking changes
-- **Minor**: New features, backward compatible
-- **Patch**: Bug fixes, backward compatible
+If runtime behavior changes, update the relevant repo-local docs in the same
+change. Do not leave README, EPIC, PROJECT_ASSESSMENT, ISSUES, stubs, and
+tests describing different systems.
 
-### Release Checklist
+### 4. Verify before claiming done
 
-1. Update version numbers
-2. Update CHANGELOG.md
-3. Run full test suite
-4. Build and test on all supported platforms
-5. Create release tag
-6. Update documentation
+A feature or fix is only done when:
 
-## Community Guidelines
+- the code builds
+- affected tests pass
+- changed public surface is reflected in stubs and docs
+- no stale claim remains in repo-local documentation
 
-### Code of Conduct
+## Documentation Rules
 
-- Be respectful and inclusive
-- Focus on constructive feedback
-- Help newcomers learn the codebase
-- Maintain professional communication
+### README
 
-### Getting Help
+`README.md` is intentionally stable.
+Do not use it as:
 
-- **Documentation**: Check existing docs first
-- **Issues**: Search existing issues before creating new ones
-- **Discussions**: Use GitHub Discussions for questions
-- **Code Review**: Participate in code review process
+- a changelog
+- a migration diary
+- an issue tracker
+- a current-state verification dump
 
-## Advanced Topics
+If information is volatile, it belongs somewhere else.
 
-### Adding New Protocols
+### EPIC
 
-When adding support for new protocols:
+`EPIC.md` is the strategic layer.
+Update it only when:
 
-1. Create protocol-specific module in `src/`
-2. Add configuration parameters
-3. Implement C-level protocol handling
-4. Create PHP API wrapper
-5. Add comprehensive tests
-6. Update documentation
+- the program decomposition changes
+- ordering constraints change
+- the definition of done changes
+- the product boundary changes
 
-### Performance Optimization
+### ISSUES
 
-Key areas for optimization:
-- **Memory allocation patterns**
-- **System call reduction**
-- **Cache-friendly data structures**
-- **SIMD instruction usage**
-- **Lock-free algorithms**
+`ISSUES.md` is the active queue.
+This is where current open fronts, next leaves, and execution priorities belong.
 
-### Security Considerations
+### PROJECT_ASSESSMENT
 
-- **Input validation**: Validate all external input
-- **Memory safety**: Prevent buffer overflows
-- **Cryptographic security**: Use secure random number generation
-- **Network security**: Implement proper TLS validation
+`PROJECT_ASSESSMENT.md` is the current-state document.
+This is where verified implementation reach, current limits, and the last known
+green baseline belong.
 
-## Troubleshooting
+## Code and Review Expectations
 
-### Common Build Issues
+### Runtime work
 
-1. **Missing dependencies**: Install development packages
-2. **Submodule issues**: Update submodules recursively
-3. **PHP version**: Ensure compatible PHP version
-4. **Compiler errors**: Check GCC/Clang compatibility
+Prefer:
 
-### Runtime Issues
+- explicit native state
+- narrow helper functions
+- stable validation and error contracts
+- shared kernels for procedural and OO surfaces
 
-1. **Extension loading**: Check php.ini configuration
-2. **Memory leaks**: Use Valgrind for detection
-3. **Performance issues**: Profile with appropriate tools
-4. **Network issues**: Check firewall and routing
+Avoid:
 
-Thank you for contributing to King! Your efforts help make PHP a first-class language for high-performance systems programming.
+- duplicate logic across entry points
+- fake parity where one surface is real and the other is a stub
+- hidden global state
+- undocumented ownership transfer
+
+### Review bar
+
+A change is not high-quality just because it compiles.
+The review bar is:
+
+- technically coherent
+- lifecycle-safe
+- policy-consistent
+- test-backed
+- documentation-backed
+
+## Tests
+
+PHPTs are the primary verification surface for extension behavior.
+
+When changing runtime behavior:
+
+- add or update focused PHPTs
+- preserve negative-path coverage
+- keep direct, dispatcher, and OO contracts aligned where relevant
+
+Prefer small targeted tests over broad vague ones.
+
+## Generated Artifacts
+
+Do not treat generated build outputs as source.
+
+Examples of generated or local-only noise include:
+
+- `extension/.libs/`
+- `extension/autom4te.cache/`
+- `extension/modules/*.so`
+- `extension/src/**/*.dep`
+- `extension/src/**/*.lo`
+- PHPT side artifacts such as `.diff`, `.exp`, `.log`, `.out`, `.php`, `.sh`
+
+If a change requires a generated file to be committed, that should be explicit
+and justified, not accidental.
+
+## Archived Sources
+
+`extension/src_bak/` is archived reference material, not the active runtime.
+
+Do not:
+
+- wire new behavior to `src_bak`
+- treat archived files as active implementation
+- describe archived code as if it were part of the build
+
+Ports only count when the active build compiles and tests the new path.
+
+## Commit Discipline
+
+Keep commits coherent.
+One commit should represent one understandable unit of change.
+
+Good commit scopes:
+
+- one runtime slice
+- one documentation reframing
+- one test matrix expansion
+- one policy cleanup
+
+Bad commit scopes:
+
+- unrelated code plus unrelated docs plus opportunistic cleanup
+- generated noise mixed with source edits
+- speculative API surface with no backend
+
+## When in Doubt
+
+Use the stricter rule:
+
+- prefer explicitness over convenience
+- prefer fewer claims over overstated claims
+- prefer real runtime over wrapper inflation
+- prefer smaller, verifiable leaves over broad vague changes
