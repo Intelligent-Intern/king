@@ -40,10 +40,10 @@ if test "$PHP_KING" != "no"; then
         fi
         dnl PHP 8.5 support: accepted; PHP_KING_PHP85 flag set for conditional
         dnl code paths that need adaptation (e.g. deprecated ZEND_BEGIN_ARG_INFO_EX,
-        dnl new fiber hook API, etc.). See docs/php85_compat.md.
+        dnl new fiber hook API, etc.).
         if test "$PHP_VERSION_ID" -ge "80500"; then
             AC_DEFINE([KING_PHP85], [1], [Building against PHP 8.5+])
-            AC_MSG_NOTICE([PHP 8.5+ detected — KING_PHP85 defined. See docs/php85_compat.md for API delta.])
+            AC_MSG_NOTICE([PHP 8.5+ detected — KING_PHP85 defined for compatibility-specific code paths.])
         fi
     fi
 
@@ -76,4 +76,3 @@ if test "$PHP_KING" != "no"; then
     PHP_ADD_INCLUDE([$ext_srcdir])
 
 fi
-
