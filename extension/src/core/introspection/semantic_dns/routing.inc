@@ -1,3 +1,5 @@
+#include "include/semantic_dns/semantic_dns.h"
+
 PHP_FUNCTION(king_semantic_dns_get_optimal_route)
 {
     zend_string *service_name;
@@ -13,17 +15,13 @@ PHP_FUNCTION(king_semantic_dns_get_optimal_route)
     ZEND_PARSE_PARAMETERS_END();
 
     /*
-     * The current skeleton route picker uses the registered service state,
-     * not deep client-side semantic matching. Keep accepting client_info for
-     * forward compatibility, but do not let nested hint payloads suppress a
-     * routable service outright.
+     * Build native score using the core scoring policy from routing.c
      */
-    (void) client_info;
-
     if (king_semantic_dns_registry_initialized) {
         ZEND_HASH_FOREACH_VAL(&king_semantic_dns_service_registry, service_entry) {
             king_semantic_dns_service *service;
-            int route_rank;
+            king_service_record_t native_record;
+            int route_score;
 
             if (Z_TYPE_P(service_entry) != IS_PTR) {
                 continue;
@@ -35,19 +33,38 @@ PHP_FUNCTION(king_semantic_dns_get_optimal_route)
                 continue;
             }
 
-            route_rank = king_semantic_dns_route_rank(service);
-            if (route_rank >= 2) {
+            memset(&native_record, 0, sizeof(native_record));
+            if (service->hostname != NULL) {
+                strncpy(native_record.hostname, ZSTR_VAL(service->hostname), 255);
+            }
+            native_record.port = service->port;
+            native_record.current_load_percent = service->current_load_percent;
+            native_record.active_connections = service->active_connections;
+            
+            if (service->status != NULL) {
+                if (zend_string_equals_literal(service->status, "healthy")) {
+                    native_record.status = KING_SERVICE_STATUS_HEALTHY;
+                } else if (zend_string_equals_literal(service->status, "degraded")) {
+                    native_record.status = KING_SERVICE_STATUS_DEGRADED;
+                } else if (zend_string_equals_literal(service->status, "maintenance")) {
+                    native_record.status = KING_SERVICE_STATUS_MAINTENANCE;
+                } else {
+                    native_record.status = KING_SERVICE_STATUS_UNKNOWN;
+                }
+            } else {
+                native_record.status = KING_SERVICE_STATUS_UNKNOWN;
+            }
+
+            route_score = king_semantic_dns_calculate_service_score(&native_record, client_info);
+            
+            /* Score of 0 or -1 means not eligible */
+            if (route_score <= 0) {
                 continue;
             }
 
-            if (king_semantic_dns_candidate_beats_best(
-                service,
-                route_rank,
-                best_service,
-                best_rank
-            )) {
+            if (best_service == NULL || route_score > best_rank) {
                 best_service = service;
-                best_rank = route_rank;
+                best_rank = route_score;
             }
         } ZEND_HASH_FOREACH_END();
     }
@@ -55,6 +72,7 @@ PHP_FUNCTION(king_semantic_dns_get_optimal_route)
     if (best_service != NULL) {
         king_semantic_dns_export_service(return_value, best_service);
         add_assoc_long(return_value, "routed_at", (zend_long) time(NULL));
+        add_assoc_long(return_value, "route_score", (zend_long) best_rank);
         return;
     }
 

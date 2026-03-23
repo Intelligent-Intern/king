@@ -15,14 +15,14 @@
 
 ## Current Next Leaf
 
-- [ ] End-to-end network and routing tests
-  `extension/tests/`
+- [ ] Replace local registry behavior with a real object-store backend core
+  `extension/src/server/`
 
 ## Active Fronts
 
 ### 1. Semantic DNS and routing
 
-- [ ] End-to-end network and routing tests
+All checked!
 
 ### 2. Object store and CDN runtime
 
