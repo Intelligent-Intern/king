@@ -4,10 +4,10 @@ int king_iibin_minit(void);
 int king_semantic_dns_registry_minit(void);
 void king_semantic_dns_registry_mshutdown(void);
 void king_semantic_dns_shutdown_system(void);
-int king_object_store_registry_minit(void);
-void king_object_store_registry_mshutdown(void);
+
 int king_cdn_cache_registry_minit(void);
 void king_cdn_cache_registry_mshutdown(void);
+void king_object_store_shutdown_system(void);
 
 PHP_FUNCTION(king_version);
 PHP_FUNCTION(king_health);

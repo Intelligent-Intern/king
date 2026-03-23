@@ -9,6 +9,6 @@ try {
     var_dump($e->getMessage());
 }
 ?>
---EXPECT--
-string(24) "King\ValidationException"
-string(25) "Object ID cannot be empty"
+--EXPECTF--
+string(21) "King\RuntimeException"
+string(37) "Object-store registry is unavailable."

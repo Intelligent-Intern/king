@@ -19,11 +19,9 @@
 
 static HashTable king_semantic_dns_service_registry;
 static HashTable king_semantic_dns_mother_node_registry;
-static HashTable king_object_store_registry;
 static HashTable king_cdn_cache_registry;
 static HashTable king_telemetry_metric_registry;
 static bool king_semantic_dns_registry_initialized = false;
-static bool king_object_store_registry_initialized = false;
 static bool king_cdn_cache_registry_initialized = false;
 static bool king_telemetry_registry_initialized = false;
 
@@ -51,12 +49,6 @@ typedef struct _king_semantic_dns_mother_node {
     time_t registered_at;
 } king_semantic_dns_mother_node;
 
-typedef struct _king_object_store_entry {
-    zend_string *object_id;
-    zend_string *payload;
-    time_t stored_at;
-} king_object_store_entry;
-
 typedef struct _king_cdn_cache_entry {
     zend_string *object_id;
     zend_long payload_size;
@@ -64,17 +56,7 @@ typedef struct _king_cdn_cache_entry {
     time_t expires_at;
 } king_cdn_cache_entry;
 
-typedef struct _king_object_store_runtime_state {
-    bool initialized;
-    char primary_backend[32];
-    char storage_root_path[512];
-    zend_long max_storage_size_bytes;
-    zend_long replication_factor;
-    zend_long chunk_size_kb;
-    bool cdn_enabled;
-    zend_long cdn_cache_size_mb;
-    zend_long cdn_default_ttl_sec;
-} king_object_store_runtime_state;
+
 
 typedef struct _king_telemetry_metric_record {
     zend_string *metric_name;
@@ -102,61 +84,13 @@ static const char * const king_proto_primitive_types[] = {
     "bytes"
 };
 
-static king_object_store_runtime_state king_object_store_runtime;
 
 static zend_always_inline const char *king_safe_string(const char *value)
 {
     return value != NULL ? value : "";
 }
 
-static void king_object_store_runtime_assign_defaults(
-    king_object_store_runtime_state *state
-)
-{
-    memset(state, 0, sizeof(*state));
 
-    strncpy(state->primary_backend, "local_fs", sizeof(state->primary_backend) - 1);
-    strncpy(state->storage_root_path, "/tmp/king_object_store", sizeof(state->storage_root_path) - 1);
-    state->max_storage_size_bytes = 10LL * 1024 * 1024 * 1024;
-    state->replication_factor =
-        king_native_object_store_config.default_replication_factor > 0
-        ? king_native_object_store_config.default_replication_factor
-        : 1;
-    state->chunk_size_kb =
-        king_native_object_store_config.default_chunk_size_mb > 0
-        ? king_native_object_store_config.default_chunk_size_mb * 1024
-        : 1024;
-    state->cdn_enabled = king_native_cdn_config.enable ? true : false;
-    state->cdn_cache_size_mb = king_native_cdn_config.cache_memory_limit_mb;
-    state->cdn_default_ttl_sec = king_native_cdn_config.cache_default_ttl_sec;
-}
-
-static void king_object_store_runtime_reset_defaults(void)
-{
-    king_object_store_runtime_assign_defaults(&king_object_store_runtime);
-    king_object_store_runtime.initialized = false;
-}
-
-static bool king_object_store_runtime_backend_supported(zend_string *backend)
-{
-    static const char * const supported_backends[] = {
-        "local_fs",
-        "distributed",
-        "cloud_s3",
-        "cloud_gcs",
-        "cloud_azure",
-        "memory_cache"
-    };
-    size_t i;
-
-    for (i = 0; i < sizeof(supported_backends) / sizeof(supported_backends[0]); i++) {
-        if (strcmp(ZSTR_VAL(backend), supported_backends[i]) == 0) {
-            return true;
-        }
-    }
-
-    return false;
-}
 
 static uint32_t king_proto_float_to_bits(float value)
 {

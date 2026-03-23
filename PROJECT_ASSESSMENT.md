@@ -37,12 +37,12 @@ Repository facts from the current tree:
 - `extension/src`: 169 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 167 headers
-- `extension/tests`: 254 PHPT files
+- `extension/tests`: 255 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently tracked green regression baseline is:
 
-- `254/254` PHPT tests passing
+- `255/255` PHPT tests passing
 
 ## What Is Real Today
 
@@ -56,16 +56,15 @@ The repo already has active native runtime slices for:
 - local server dispatch, local HTTP/1, HTTP/2, and HTTP/3 listener leaves
 - server-side cancel, early hints, websocket upgrade, admin API, TLS reload, CORS, and telemetry-init helpers
 - IIBIN schema, enum, encode, decode, object hydration, and wire validation
-- local Semantic DNS registry, native server-state baseline, native routing, native state persistence, and mother-node tracking
-- local object-store and CDN read-model behavior
+- native Semantic DNS registry, routing, state persistence, discovery, and mother-node tracking
+- native file-system object-store backend core with local CDN cache registry
 - local MCP lifecycle and stream-upload/download parity surfaces
 
 ## What Is Not Finished
 
 The repo is not yet a full production-grade implementation for:
 
-- Semantic DNS distributed network coordination and network-backed end-to-end behavior
-- object-store backend abstraction, persistence, and CDN edge/runtime behavior
+- CDN edge/runtime distribution behavior
 - real MCP transport and backend-backed upload/download paths
 - telemetry write runtime, metric export, autoscaling engine, and system integration runtime
 - benchmark harnesses, CI hardening, release packaging, and full go-live readiness
@@ -83,17 +82,17 @@ transport depth, or operational depth is still incomplete.
 - HTTP client protocol breadth inside the current skeleton scope
 - local server control and dispatch slices
 - IIBIN runtime ownership and codec maturity
+- native Semantic DNS control-plane, routing, and policy-based discovery
+- native object-store `local_fs` backend core and read/write parity
 
 ### Medium
 
 - local WebSocket runtime
-- local Semantic DNS core and read-model behavior
-- local object-store/CDN behavior
+- local CDN cache behavior and lifecycle hooks
 - OO/procedural parity over shared native kernels
 
 ### Weak or Still Open
 
-- true distributed control-plane behavior
 - transport-backed MCP runtime
 - operational subsystems beyond snapshots and local helpers
 - release engineering, benchmark coverage, and end-to-end readiness

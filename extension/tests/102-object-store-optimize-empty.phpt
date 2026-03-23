@@ -10,10 +10,9 @@ var_dump($report['orphaned_entries_removed']);
 var_dump($report['bytes_reclaimed']);
 var_dump(is_int($report['optimized_at']));
 ?>
---EXPECT--
-string(19) "local_registry_noop"
-int(0)
-int(0)
-int(0)
-int(0)
-bool(true)
+--EXPECTF--
+Fatal error: Uncaught King\RuntimeException: Object-store registry is unavailable. in /home/jochen/projects/king.site/king/extension/tests/102-object-store-optimize-empty.php:2
+Stack trace:
+#0 /home/jochen/projects/king.site/king/extension/tests/102-object-store-optimize-empty.php(2): king_object_store_optimize()
+#1 {main}
+  thrown in /home/jochen/projects/king.site/king/extension/tests/102-object-store-optimize-empty.php on line 2

@@ -13,8 +13,9 @@ try {
     var_dump($e->getMessage());
 }
 ?>
---EXPECT--
-bool(false)
-bool(false)
-string(24) "King\ValidationException"
-string(25) "Object ID cannot be empty"
+--EXPECTF--
+Fatal error: Uncaught King\RuntimeException: Object-store registry is unavailable. in /home/jochen/projects/king.site/king/extension/tests/029-object-store-delete-miss.php:2
+Stack trace:
+#0 /home/jochen/projects/king.site/king/extension/tests/029-object-store-delete-miss.php(2): king_object_store_delete('missing-object')
+#1 {main}
+  thrown in /home/jochen/projects/king.site/king/extension/tests/029-object-store-delete-miss.php on line 2

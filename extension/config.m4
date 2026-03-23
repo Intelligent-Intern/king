@@ -256,6 +256,7 @@ if test "$PHP_KING" != "no"; then
         src/semantic_dns/mother_node_discovery.c \
         src/semantic_dns/routing.c \
         src/semantic_dns/state.c \
+        src/object_store/object_store.c \
         src/server/admin_api.c \
         src/server/cancel.c \
         src/server/cors.c \

@@ -2,7 +2,8 @@ PHP_FUNCTION(king_cdn_cache_object)
 {
     zend_string *object_id;
     zval *options = NULL;
-    king_object_store_entry *object_entry;
+    void *data = NULL;
+    size_t data_size = 0;
     king_cdn_cache_entry *cache_entry;
     zval stored_entry;
     zend_long ttl_sec;
@@ -29,7 +30,7 @@ PHP_FUNCTION(king_cdn_cache_object)
     }
 
     ttl_sec = king_object_store_runtime.initialized
-        ? king_object_store_runtime.cdn_default_ttl_sec
+        ? king_object_store_runtime.config.cdn_config.default_ttl_seconds
         : king_native_cdn_config.cache_default_ttl_sec;
     if (options != NULL) {
         zval *ttl_zv;
@@ -56,14 +57,17 @@ PHP_FUNCTION(king_cdn_cache_object)
         }
     }
 
-    object_entry = king_object_store_registry_get_entry(object_id);
-    if (object_entry == NULL || object_entry->payload == NULL) {
+    if (king_object_store_read_object(ZSTR_VAL(object_id), &data, &data_size, NULL) != SUCCESS) {
         RETURN_FALSE;
     }
 
     cache_entry = pecalloc(1, sizeof(*cache_entry), 1);
     cache_entry->object_id = zend_string_dup(object_id, 1);
-    cache_entry->payload_size = (zend_long) ZSTR_LEN(object_entry->payload);
+    cache_entry->payload_size = (zend_long) data_size;
+    
+    if (data) {
+        pefree(data, 1);
+    }
     cached_at = time(NULL);
     cache_entry->cached_at = cached_at;
     cache_entry->expires_at = ttl_sec > 0 ? cached_at + ttl_sec : 0;

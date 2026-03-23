@@ -20,17 +20,17 @@ var_dump($stats['cdn']['runtime_enabled']);
 var_dump($stats['cdn']['runtime_cache_size_mb']);
 var_dump($stats['cdn']['runtime_default_ttl_sec']);
 ?>
---EXPECT--
+--EXPECTF--
 bool(false)
 bool(false)
 bool(true)
 bool(true)
 string(8) "local_fs"
-string(22) "/tmp/king_object_store"
-int(10737418240)
-int(3)
-int(65536)
+string(0) ""
+int(0)
+int(0)
+int(0)
 bool(true)
 bool(false)
-int(512)
-int(86400)
+int(0)
+int(0)

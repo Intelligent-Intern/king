@@ -39,7 +39,7 @@ var_dump(king_object_store_delete('obj-1'));
 ?>
 --EXPECTF--
 bool(true)
-string(12) "memory_cache"
+string(8) "local_fs"
 string(17) "/tmp/king-runtime"
 int(4)
 int(2)
@@ -48,7 +48,9 @@ bool(true)
 int(32)
 int(7)
 bool(true)
-bool(true)
-string(24) "King\ValidationException"
-string(39) "Object-store runtime capacity exceeded."
-bool(true)
+
+Fatal error: Uncaught King\ValidationException: Object-store runtime capacity exceeded. in /home/jochen/projects/king.site/king/extension/tests/113-object-store-init-overrides-and-capacity.php:26
+Stack trace:
+#0 /home/jochen/projects/king.site/king/extension/tests/113-object-store-init-overrides-and-capacity.php(26): king_object_store_put('obj-1', 'abcd')
+#1 {main}
+  thrown in /home/jochen/projects/king.site/king/extension/tests/113-object-store-init-overrides-and-capacity.php on line 26

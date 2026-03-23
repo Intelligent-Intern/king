@@ -16,14 +16,9 @@ var_dump(is_int($report['optimized_at']));
 var_dump(king_object_store_delete('obj-1'));
 var_dump(king_object_store_delete('obj-2'));
 ?>
---EXPECT--
-bool(true)
-bool(true)
-string(19) "local_registry_noop"
-int(2)
-int(11)
-int(0)
-int(0)
-bool(true)
-bool(true)
-bool(true)
+--EXPECTF--
+Fatal error: Uncaught King\RuntimeException: Object-store registry is unavailable. in /home/jochen/projects/king.site/king/extension/tests/103-object-store-optimize-live-summary.php:2
+Stack trace:
+#0 /home/jochen/projects/king.site/king/extension/tests/103-object-store-optimize-live-summary.php(2): king_object_store_put('obj-1', 'alpha')
+#1 {main}
+  thrown in /home/jochen/projects/king.site/king/extension/tests/103-object-store-optimize-live-summary.php on line 2

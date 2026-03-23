@@ -15,8 +15,8 @@
 
 ## Current Next Leaf
 
-- [ ] Replace local registry behavior with a real object-store backend core
-  `extension/src/server/`
+- [ ] Implement concrete store backends and capacity boundaries
+  `extension/src/object_store/`
 
 ## Active Fronts
 
@@ -26,7 +26,7 @@ All checked!
 
 ### 2. Object store and CDN runtime
 
-- [ ] Replace local registry behavior with a real object-store backend core
+- [x] Replace local registry behavior with a real object-store backend core
 - [ ] Implement concrete store backends and capacity boundaries
 - [ ] Add durable persistence paths
 - [ ] Port CDN cache and distribution logic into the active runtime

@@ -11,20 +11,14 @@ PHP_MINIT_FUNCTION(king)
         king_proto_registry_mshutdown();
         return FAILURE;
     }
-    if (king_object_store_registry_minit() != SUCCESS) {
-        king_semantic_dns_registry_mshutdown();
-        king_proto_registry_mshutdown();
-        return FAILURE;
-    }
     if (king_cdn_cache_registry_minit() != SUCCESS) {
-        king_object_store_registry_mshutdown();
         king_semantic_dns_registry_mshutdown();
         king_proto_registry_mshutdown();
         return FAILURE;
     }
+
     if (king_iibin_minit() != SUCCESS) {
         king_cdn_cache_registry_mshutdown();
-        king_object_store_registry_mshutdown();
         king_semantic_dns_registry_mshutdown();
         king_proto_registry_mshutdown();
         return FAILURE;
@@ -197,10 +191,10 @@ PHP_MSHUTDOWN_FUNCTION(king)
 {
     king_http1_pool_module_shutdown();
     king_http2_pool_module_shutdown();
+    king_object_store_shutdown_system();
     king_semantic_dns_shutdown_system();
     king_shutdown_modules(type, module_number);
     king_cdn_cache_registry_mshutdown();
-    king_object_store_registry_mshutdown();
     king_semantic_dns_registry_mshutdown();
     king_proto_registry_mshutdown();
     return SUCCESS;

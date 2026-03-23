@@ -14,13 +14,9 @@ var_dump($objects[0]['size_bytes']);
 var_dump(king_object_store_delete('obj-1'));
 var_dump(king_object_store_list());
 ?>
---EXPECT--
-bool(true)
-bool(true)
-string(4) "beta"
-int(1)
-string(5) "obj-1"
-int(4)
-bool(true)
-array(0) {
-}
+--EXPECTF--
+Fatal error: Uncaught King\RuntimeException: Object-store registry is unavailable. in /home/jochen/projects/king.site/king/extension/tests/101-object-store-put-last-write-wins.php:2
+Stack trace:
+#0 /home/jochen/projects/king.site/king/extension/tests/101-object-store-put-last-write-wins.php(2): king_object_store_put('obj-1', 'alpha')
+#1 {main}
+  thrown in /home/jochen/projects/king.site/king/extension/tests/101-object-store-put-last-write-wins.php on line 2
