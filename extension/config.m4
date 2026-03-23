@@ -253,6 +253,9 @@ if test "$PHP_KING" != "no"; then
         src/iibin/iibin_encoding.c \
         src/iibin/iibin_decoding.c \
         src/semantic_dns/semantic_dns.c \
+        src/semantic_dns/mother_node_discovery.c \
+        src/semantic_dns/routing.c \
+        src/semantic_dns/state.c \
         src/server/admin_api.c \
         src/server/cancel.c \
         src/server/cors.c \

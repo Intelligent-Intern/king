@@ -21,19 +21,9 @@
 #include <string.h>
 #include <time.h>
 
-typedef struct _king_semantic_dns_runtime_state {
-    bool initialized;
-    bool server_active;
-    time_t initialized_at;
-    time_t server_started_at;
-    zend_long start_count;
-    zend_long processed_query_count;
-    zend_long last_discovered_node_count;
-    zend_long last_synced_node_count;
-    king_semantic_dns_config_t config;
-} king_semantic_dns_runtime_state;
+#include "semantic_dns_internal.h"
 
-static king_semantic_dns_runtime_state king_semantic_dns_runtime;
+king_semantic_dns_runtime_state king_semantic_dns_runtime;
 
 static void king_semantic_dns_config_clear(king_semantic_dns_config_t *config)
 {
@@ -44,6 +34,12 @@ static void king_semantic_dns_config_clear(king_semantic_dns_config_t *config)
     if (Z_TYPE(config->routing_policies) != IS_UNDEF) {
         zval_ptr_dtor(&config->routing_policies);
         ZVAL_UNDEF(&config->routing_policies);
+    }
+
+    if (config->mother_nodes != NULL) {
+        pefree(config->mother_nodes, 1);
+        config->mother_nodes = NULL;
+        config->mother_node_count = 0;
     }
 }
 
@@ -509,6 +505,7 @@ PHP_FUNCTION(king_semantic_dns_start_server)
     king_semantic_dns_runtime.start_count++;
 
     if (king_semantic_dns_runtime.config.semantic_mode_enable) {
+        (void) king_semantic_dns_state_load();
         (void) king_semantic_dns_discover_mother_nodes();
         (void) king_semantic_dns_sync_with_mother_nodes();
     }
@@ -540,6 +537,7 @@ int king_semantic_dns_init_system(king_semantic_dns_config_t *config)
 
 void king_semantic_dns_shutdown_system(void)
 {
+    king_semantic_dns_state_save();
     king_semantic_dns_runtime_reset();
 }
 
@@ -598,99 +596,6 @@ int king_semantic_dns_process_query(
     return SUCCESS;
 }
 
-int king_semantic_dns_calculate_service_score(
-    const king_service_record_t *service,
-    const zval *criteria
-)
-{
-    zval *criteria_value;
-    int score = 0;
-    uint32_t load_penalty;
-
-    if (service == NULL) {
-        return -1;
-    }
-
-    switch (service->status) {
-        case KING_SERVICE_STATUS_HEALTHY:
-            score = 1000;
-            break;
-        case KING_SERVICE_STATUS_DEGRADED:
-            score = 600;
-            break;
-        case KING_SERVICE_STATUS_MAINTENANCE:
-            score = 150;
-            break;
-        case KING_SERVICE_STATUS_UNKNOWN:
-            score = 75;
-            break;
-        case KING_SERVICE_STATUS_UNHEALTHY:
-        default:
-            score = 0;
-            break;
-    }
-
-    if (criteria != NULL && Z_TYPE_P(criteria) == IS_ARRAY) {
-        criteria_value = zend_hash_str_find(Z_ARRVAL_P(criteria), "hostname", sizeof("hostname") - 1);
-        if (criteria_value != NULL
-            && Z_TYPE_P(criteria_value) == IS_STRING
-            && strcmp(service->hostname, Z_STRVAL_P(criteria_value)) != 0) {
-            return -1;
-        }
-
-        criteria_value = zend_hash_str_find(Z_ARRVAL_P(criteria), "port", sizeof("port") - 1);
-        if (criteria_value != NULL
-            && Z_TYPE_P(criteria_value) == IS_LONG
-            && service->port != (uint16_t) Z_LVAL_P(criteria_value)) {
-            return -1;
-        }
-
-        criteria_value = zend_hash_str_find(
-            Z_ARRVAL_P(criteria),
-            "max_load_percent",
-            sizeof("max_load_percent") - 1
-        );
-        if (criteria_value != NULL
-            && Z_TYPE_P(criteria_value) == IS_LONG
-            && service->current_load_percent > (uint32_t) Z_LVAL_P(criteria_value)) {
-            return -1;
-        }
-    }
-
-    load_penalty = service->current_load_percent > 100 ? 100 : service->current_load_percent;
-    score += (int) ((100 - load_penalty) * 4);
-    score -= (service->active_connections > 1000) ? 1000 : (int) service->active_connections;
-
-    if (service->reliability_weight > 0.0) {
-        score += (int) (service->reliability_weight * 100.0);
-    }
-
-    return score < 0 ? 0 : score;
-}
-
-int king_semantic_dns_discover_mother_nodes(void)
-{
-    if (!king_semantic_dns_runtime.initialized) {
-        return FAILURE;
-    }
-
-    king_semantic_dns_runtime.last_discovered_node_count = 0;
-    return SUCCESS;
-}
-
-int king_semantic_dns_sync_with_mother_nodes(void)
-{
-    if (!king_semantic_dns_runtime.initialized) {
-        return FAILURE;
-    }
-
-    king_semantic_dns_runtime.last_synced_node_count =
-        king_semantic_dns_runtime.config.semantic_mode_enable
-        && king_semantic_dns_runtime.config.mothernode_uri[0] != '\0'
-        ? 1
-        : 0;
-    return SUCCESS;
-}
 
 void king_semantic_dns_health_check_services(void)
 {

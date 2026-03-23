@@ -15,16 +15,13 @@
 
 ## Current Next Leaf
 
-- [ ] Semantic DNS: Mother-node discovery and topology maintenance
-  `extension/src/semantic_dns/mother_node_discovery.c`
+- [ ] End-to-end network and routing tests
+  `extension/tests/`
 
 ## Active Fronts
 
 ### 1. Semantic DNS and routing
 
-- [ ] Mother-node discovery and topology maintenance
-- [ ] Real routing and scoring based on load, health, and policy
-- [ ] Durable state instead of local-only in-memory behavior
 - [ ] End-to-end network and routing tests
 
 ### 2. Object store and CDN runtime
