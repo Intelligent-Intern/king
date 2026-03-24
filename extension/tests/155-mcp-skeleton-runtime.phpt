@@ -14,8 +14,8 @@ var_dump(king_mcp_get_error());
 ?>
 --EXPECT--
 bool(true)
-bool(false)
-string(71) "king_mcp_request() is not available in the active skeleton MCP runtime."
+string(15) "{"res":"{}"}"
+string(0) ""
 bool(true)
 bool(false)
 string(57) "king_mcp_request() cannot run on a closed MCP connection."

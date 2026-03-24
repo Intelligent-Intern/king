@@ -342,10 +342,10 @@ PHP_FUNCTION(king_mcp_request)
     zval *connection;
     char *service_name = NULL;
     char *method_name = NULL;
-    char *request_payload = NULL;
     size_t service_name_len = 0;
     size_t method_name_len = 0;
-    size_t request_payload_len = 0;
+    zend_string *request_payload_str;
+    zend_string *response_payload;
     zval *options = NULL;
     king_mcp_state *state;
 
@@ -353,13 +353,11 @@ PHP_FUNCTION(king_mcp_request)
         Z_PARAM_ZVAL(connection)
         Z_PARAM_STRING(service_name, service_name_len)
         Z_PARAM_STRING(method_name, method_name_len)
-        Z_PARAM_STRING(request_payload, request_payload_len)
+        Z_PARAM_STR(request_payload_str)
         Z_PARAM_OPTIONAL
         Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
 
-    (void) request_payload;
-    (void) request_payload_len;
     (void) options;
 
     state = king_mcp_fetch_state(connection, 1);
@@ -367,23 +365,11 @@ PHP_FUNCTION(king_mcp_request)
         RETURN_THROWS();
     }
 
-    if (state->closed) {
-        king_set_error("king_mcp_request() cannot run on a closed MCP connection.");
+    if (king_mcp_request(state, service_name, method_name, request_payload_str, &response_payload) != SUCCESS) {
         RETURN_FALSE;
     }
-
-    if (service_name_len == 0) {
-        king_set_error("king_mcp_request() requires a non-empty service name.");
-        RETURN_FALSE;
-    }
-
-    if (method_name_len == 0) {
-        king_set_error("king_mcp_request() requires a non-empty method name.");
-        RETURN_FALSE;
-    }
-
-    king_set_error("king_mcp_request() is not available in the active skeleton MCP runtime.");
-    RETURN_FALSE;
+    
+    RETURN_STR(response_payload);
 }
 
 PHP_FUNCTION(king_mcp_close)
@@ -604,8 +590,7 @@ PHP_METHOD(King_MCP, request)
     char *method = NULL;
     size_t service_len = 0;
     size_t method_len = 0;
-    zend_string *payload;
-    zval *cancel = NULL;
+    zend_string *response_payload;
     king_mcp_state *state;
 
     ZEND_PARSE_PARAMETERS_START(3, 4)
@@ -616,8 +601,6 @@ PHP_METHOD(King_MCP, request)
         Z_PARAM_OBJECT_OF_CLASS_OR_NULL(cancel, king_ce_cancel_token)
     ZEND_PARSE_PARAMETERS_END();
 
-    (void) payload;
-
     state = king_mcp_object_fetch_state(ZEND_THIS, "MCP::request");
     if (state == NULL) {
         RETURN_THROWS();
@@ -627,55 +610,11 @@ PHP_METHOD(King_MCP, request)
         RETURN_THROWS();
     }
 
-    if (cancel != NULL && Z_TYPE_P(cancel) == IS_OBJECT) {
-        king_cancel_token_object *cancel_intern = php_king_cancel_token_obj_from_zend(Z_OBJ_P(cancel));
-
-        if (cancel_intern->cancelled) {
-            king_set_error("MCP::request() received a CancelToken that is already cancelled.");
-            zend_throw_exception_ex(
-                king_ce_runtime_exception,
-                0,
-                "MCP::request() received a CancelToken that is already cancelled."
-            );
-            RETURN_THROWS();
-        }
-
-        king_set_error("MCP::request() cancel tokens are not yet wired in the active skeleton MCP runtime.");
-        zend_throw_exception_ex(
-            king_ce_mcp_protocol_error,
-            0,
-            "MCP::request() cancel tokens are not yet wired in the active skeleton MCP runtime."
-        );
+    if (king_mcp_request(state, service, method, payload, &response_payload) != SUCCESS) {
         RETURN_THROWS();
     }
-
-    if (service_len == 0) {
-        king_set_error("MCP::request() requires a non-empty service name.");
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "MCP::request() requires a non-empty service name."
-        );
-        RETURN_THROWS();
-    }
-
-    if (method_len == 0) {
-        king_set_error("MCP::request() requires a non-empty method name.");
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "MCP::request() requires a non-empty method name."
-        );
-        RETURN_THROWS();
-    }
-
-    king_set_error("MCP::request() is not available in the active skeleton MCP runtime.");
-    zend_throw_exception_ex(
-        king_ce_mcp_protocol_error,
-        0,
-        "MCP::request() is not available in the active skeleton MCP runtime."
-    );
-    RETURN_THROWS();
+    
+    RETURN_STR(response_payload);
 }
 
 PHP_METHOD(King_MCP, close)

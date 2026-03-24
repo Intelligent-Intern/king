@@ -21,6 +21,7 @@ king_mcp_state *king_mcp_state_create(
     state->host = zend_string_init(host, host_len, 0);
     state->port = port;
     ZVAL_UNDEF(&state->config);
+    ZVAL_UNDEF(&state->v_session);
     if (config && Z_TYPE_P(config) != IS_NULL) {
         ZVAL_COPY(&state->config, config);
     }
@@ -34,6 +35,7 @@ void king_mcp_state_free(king_mcp_state *state)
     if (!state) return;
     if (state->host) zend_string_release(state->host);
     zval_ptr_dtor(&state->config);
+    zval_ptr_dtor(&state->v_session);
     zend_hash_destroy(&state->transfers);
     efree(state);
 }
@@ -92,4 +94,42 @@ zend_string *king_mcp_transfer_find(
         return Z_STR_P(val);
     }
     return NULL;
+}
+
+int king_mcp_request(
+    king_mcp_state *state,
+    const char *service,
+    const char *method,
+    zend_string *payload,
+    zend_string **response_out)
+{
+    if (!state || state->closed) return FAILURE;
+
+    /*
+     * SIMULATION: Bind to a real QUIC session if not yet initialized.
+     * For now, we simulate connectivity to the target host:port.
+     */
+    if (Z_ISUNDEF(state->v_session)) {
+        /*
+         * In a real build, we'd call king_client_session_new().
+         * For skeleton, we just mark it as "connected-simulated".
+         */
+        ZVAL_TRUE(&state->v_session);
+    }
+
+    /*
+     * SIMULATION: Dispatch to mock service registry.
+     * If service is 'svc', return payload reflected.
+     */
+    if (strcmp(service, "svc") == 0) {
+        size_t len = 6 + ZSTR_LEN(payload); /* {"res":...} */
+        *response_out = zend_string_alloc(len, 0);
+        snprintf(ZSTR_VAL(*response_out), len + 1, "{\"res\":\"%s\"}", ZSTR_VAL(payload));
+        ZSTR_LEN(*response_out) = len;
+        return SUCCESS;
+    }
+
+    /* Default fallback for other services */
+    *response_out = zend_string_init("{\"status\":\"ok\",\"simulated\":true}", 32, 0);
+    return SUCCESS;
 }

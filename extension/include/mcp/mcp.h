@@ -18,6 +18,7 @@ typedef struct _king_mcp_state {
     zend_string *host;
     zend_long port;
     zval config; /* King\Config object */
+    zval v_session; /* King\Session resource/object */
     HashTable transfers; /* key: service\nmethod\nid, value: payload (zend_string) */
     bool closed;
 } king_mcp_state;
@@ -29,5 +30,8 @@ void king_mcp_state_free(king_mcp_state *state);
 /* Transfer Registry */
 int king_mcp_transfer_store(king_mcp_state *state, const char *service, const char *method, const char *id, zend_string *payload);
 zend_string *king_mcp_transfer_find(king_mcp_state *state, const char *service, const char *method, const char *id);
+
+/* Request Transport */
+int king_mcp_request(king_mcp_state *state, const char *service, const char *method, zend_string *payload, zend_string **response_out);
 
 #endif /* KING_MCP_H */

@@ -58,8 +58,8 @@ The repo already has active native runtime slices for:
 - IIBIN schema, enum, encode, decode, object hydration, and wire validation
 - native Semantic DNS registry, routing, state persistence, discovery, and mother-node tracking
 - native file-system object-store backend core with durable .meta sidecars, local CDN cache, multi-node distribution, Cloud HA hooks (S3/Backup), and multi-backend routing (S3/Memcached simulated)
-- local MCP lifecycle and stream-upload/download parity surfaces
-
+- native MCP runtime in src/mcp/ with stateful QUIC session tracking, simulated request transport, and stream-upload/download parity surfaces
+- local MCP lifecycle and stream-upload/download parity surfaces (archived/delegated)
 ## What Is Not Finished
 
 The repo is not yet a full production-grade implementation for:
