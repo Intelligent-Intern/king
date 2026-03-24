@@ -69,51 +69,8 @@ static void king_stub_set_unavailable_error(const char *function_name)
  * ========================================================================= */
 
 /*
- * Target modules:
- * - king_pipeline_orchestrator_run -> src/pipeline_orchestrator/pipeline_orchestrator.c
- * - king_pipeline_orchestrator_register_tool -> src/pipeline_orchestrator/tool_handler_registry.c
- * - king_pipeline_orchestrator_configure_logging -> src/pipeline_orchestrator/pipeline_orchestrator.c
+ * Pipeline Orchestrator functions moved to src/pipeline_orchestrator/
  */
-PHP_FUNCTION(king_pipeline_orchestrator_run)
-{
-    zval *initial_data;
-    zval *pipeline;
-    zval *exec_options = NULL;
-
-    ZEND_PARSE_PARAMETERS_START(2, 3)
-        Z_PARAM_ZVAL(initial_data)
-        Z_PARAM_ARRAY(pipeline)
-        Z_PARAM_OPTIONAL
-        Z_PARAM_ARRAY_OR_NULL(exec_options)
-    ZEND_PARSE_PARAMETERS_END();
-
-    KING_STUB_RETURN_FALSE("king_pipeline_orchestrator_run");
-}
-
-PHP_FUNCTION(king_pipeline_orchestrator_register_tool)
-{
-    char *tool_name = NULL;
-    size_t tool_name_len = 0;
-    zval *config;
-
-    ZEND_PARSE_PARAMETERS_START(2, 2)
-        Z_PARAM_STRING(tool_name, tool_name_len)
-        Z_PARAM_ARRAY(config)
-    ZEND_PARSE_PARAMETERS_END();
-
-    KING_STUB_RETURN_FALSE("king_pipeline_orchestrator_register_tool");
-}
-
-PHP_FUNCTION(king_pipeline_orchestrator_configure_logging)
-{
-    zval *config;
-
-    ZEND_PARSE_PARAMETERS_START(1, 1)
-        Z_PARAM_ARRAY(config)
-    ZEND_PARSE_PARAMETERS_END();
-
-    KING_STUB_RETURN_FALSE("king_pipeline_orchestrator_configure_logging");
-}
 
 /* =========================================================================
  * Semantic DNS

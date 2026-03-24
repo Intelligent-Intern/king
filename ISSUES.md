@@ -42,8 +42,8 @@ All checked!
 - [x] Bind MCP request transport to real session and QUIC-backed paths (simulated)
 - [x] Replace local upload and download storage with real backends (Object Store integration)
 - [x] Add MCP transport and mock-service end-to-end tests (Verifying Object Store persistence)
-- [ ] Activate the pipeline orchestrator core and tool registry
-- [ ] Add focused orchestrator tests
+- [x] Activate the pipeline orchestrator core and tool registry
+- [x] Add focused orchestrator tests
 
 ### 4. Telemetry, autoscaling, and system integration
 

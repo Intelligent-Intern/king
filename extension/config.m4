@@ -258,6 +258,8 @@ if test "$PHP_KING" != "no"; then
         src/semantic_dns/state.c \
         src/object_store/object_store.c \
         src/mcp/mcp.c \
+        src/pipeline_orchestrator/tool_registry.c \
+        src/pipeline_orchestrator/orchestrator.c \
         src/server/admin_api.c \
         src/server/cancel.c \
         src/server/cors.c \

@@ -1,3 +1,5 @@
+#include "include/pipeline_orchestrator/orchestrator.h"
+
 int king_init_modules(int type, int module_number)
 {
     (void) type;
@@ -31,6 +33,8 @@ int king_init_modules(int type, int module_number)
     kg_config_smart_contracts_init();
     kg_config_ssh_over_quic_init();
 
+    king_orchestrator_registry_init();
+
     if (king_ticket_ring_init() != SUCCESS) {
         return FAILURE;
     }
@@ -45,6 +49,7 @@ int king_shutdown_modules(int type, int module_number)
     king_ini_module_number = module_number;
 
     king_ticket_ring_shutdown();
+    king_orchestrator_registry_shutdown();
 
     kg_config_ssh_over_quic_shutdown();
     kg_config_smart_contracts_shutdown();
