@@ -63,10 +63,11 @@
 #  include "include/config/config.h"
 #  include "include/connect/connect.h"
 #  include "include/client/http3.h"
-#  include "include/mcp/mcp.h"
 #  include "include/poll/poll.h"
 #  include "include/websocket/websocket.h"
 #endif /* KING_SKELETON_BUILD */
+
+#include "include/mcp/mcp.h"
 
 
 /* -----------------------------------------------------------------------------
@@ -269,13 +270,7 @@ typedef struct _king_stream_object {
     zend_object std;
 } king_stream_object;
 
-typedef struct _king_mcp_state {
-    zend_string *host;
-    zval config;
-    HashTable transfers;
-    zend_long port;
-    bool closed;
-} king_mcp_state;
+/* king_mcp_state is now in include/mcp/mcp.h */
 
 typedef struct _king_mcp_object {
     zval resource;

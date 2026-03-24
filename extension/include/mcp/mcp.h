@@ -1,32 +1,33 @@
 /*
- * include/mcp/mcp.h - Public C API for MCP operations
- * ====================================================
+ * =========================================================================
+ * FILENAME:   include/mcp/mcp.h
+ * PROJECT:    king
  *
- * This header exposes the low-level MCP client functions used by the
- * extension's orchestrator and PHP wrapper code.
+ * PURPOSE:
+ * Native Machine Control Protocol (MCP) runtime. This defines the stateful
+ * connection handle and transfer registry for stream-upload/download parity.
+ * =========================================================================
  */
-
 #ifndef KING_MCP_H
 #define KING_MCP_H
 
-#include <php.h>
+#include "php.h"
+#include <stdbool.h>
 
-/* Opens an MCP connection over QUIC. */
-PHP_FUNCTION(king_mcp_connect);
+typedef struct _king_mcp_state {
+    zend_string *host;
+    zend_long port;
+    zval config; /* King\Config object */
+    HashTable transfers; /* key: service\nmethod\nid, value: payload (zend_string) */
+    bool closed;
+} king_mcp_state;
 
-/* Closes an MCP connection resource. */
-PHP_FUNCTION(king_mcp_close);
+/* Runtime Management */
+king_mcp_state *king_mcp_state_create(const char *host, size_t host_len, zend_long port, zval *config);
+void king_mcp_state_free(king_mcp_state *state);
 
-/* Sends a unary request and returns the binary response. */
-PHP_FUNCTION(king_mcp_request);
-
-/* Uploads data from a readable PHP stream. */
-PHP_FUNCTION(king_mcp_upload_from_stream);
-
-/* Downloads data into a writable PHP stream. */
-PHP_FUNCTION(king_mcp_download_to_stream);
-
-/* Returns the last MCP error message. */
-PHP_FUNCTION(king_mcp_get_error);
+/* Transfer Registry */
+int king_mcp_transfer_store(king_mcp_state *state, const char *service, const char *method, const char *id, zend_string *payload);
+zend_string *king_mcp_transfer_find(king_mcp_state *state, const char *service, const char *method, const char *id);
 
 #endif /* KING_MCP_H */

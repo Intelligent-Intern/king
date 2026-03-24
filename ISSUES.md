@@ -15,7 +15,7 @@
 
 ## Current Next Leaf
 
-- [ ] Port MCP runtime out of the local lifecycle-only slice into `extension/src/mcp/`
+- [x] Port MCP runtime out of the local lifecycle-only slice into `extension/src/mcp/`
   `extension/src/mcp/`
 
 ## Active Fronts
@@ -38,7 +38,7 @@ All checked!
 
 ### 3. MCP and orchestration
 
-- [ ] Port MCP runtime out of the local lifecycle-only slice into `extension/src/mcp/`
+- [x] Port MCP runtime out of the local lifecycle-only slice into `extension/src/mcp/`
 - [ ] Bind MCP request transport to real session and QUIC-backed paths
 - [ ] Replace local upload and download storage with real backends
 - [ ] Add MCP transport and mock-service end-to-end tests

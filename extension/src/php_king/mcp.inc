@@ -1,4 +1,6 @@
 #include "main/php_streams.h"
+#include "include/mcp/mcp.h"
+
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_MCP___construct, 0, 0, 2)
     ZEND_ARG_TYPE_INFO(0, host, IS_STRING, 0)
@@ -224,135 +226,7 @@ static zend_result king_mcp_write_payload_to_stream(
     return SUCCESS;
 }
 
-static void king_mcp_state_store_transfer(
-    king_mcp_state *state,
-    const char *service_name,
-    size_t service_name_len,
-    const char *method_name,
-    size_t method_name_len,
-    const char *transfer_id,
-    size_t transfer_id_len,
-    zend_string *payload)
-{
-    zend_string *key = king_mcp_transfer_key_create(
-        service_name,
-        service_name_len,
-        method_name,
-        method_name_len,
-        transfer_id,
-        transfer_id_len
-    );
-    zval value;
-
-    ZVAL_STR(&value, payload);
-    zend_hash_update(&state->transfers, key, &value);
-    zend_string_release(key);
-}
-
-static zend_string *king_mcp_state_find_transfer(
-    king_mcp_state *state,
-    const char *service_name,
-    size_t service_name_len,
-    const char *method_name,
-    size_t method_name_len,
-    const char *transfer_id,
-    size_t transfer_id_len)
-{
-    zend_string *key = king_mcp_transfer_key_create(
-        service_name,
-        service_name_len,
-        method_name,
-        method_name_len,
-        transfer_id,
-        transfer_id_len
-    );
-    zval *value = zend_hash_find(&state->transfers, key);
-
-    zend_string_release(key);
-
-    if (value == NULL || Z_TYPE_P(value) != IS_STRING) {
-        return NULL;
-    }
-
-    return Z_STR_P(value);
-}
-
-static zend_result king_mcp_state_validate_inputs(
-    const char *host,
-    size_t host_len,
-    zend_long port,
-    zval *config,
-    const char *function_name)
-{
-    char message[KING_ERR_LEN];
-
-    if (host_len == 0) {
-        snprintf(
-            message,
-            sizeof(message),
-            "%s() requires a non-empty MCP host.",
-            function_name
-        );
-        king_set_error(message);
-        return FAILURE;
-    }
-
-    if (port < 1 || port > 65535) {
-        snprintf(
-            message,
-            sizeof(message),
-            "%s() requires an MCP port between 1 and 65535.",
-            function_name
-        );
-        king_set_error(message);
-        return FAILURE;
-    }
-
-    if (
-        config != NULL
-        && Z_TYPE_P(config) != IS_NULL
-        && king_fetch_config(config) == NULL
-    ) {
-        snprintf(
-            message,
-            sizeof(message),
-            "%s() config must be null or King\\\\Config.",
-            function_name
-        );
-        king_set_error(message);
-        return FAILURE;
-    }
-
-    return SUCCESS;
-}
-
-static king_mcp_state *king_mcp_state_create(
-    const char *host,
-    size_t host_len,
-    zend_long port,
-    zval *config,
-    const char *function_name)
-{
-    king_mcp_state *state;
-
-    if (king_mcp_state_validate_inputs(host, host_len, port, config, function_name) != SUCCESS) {
-        return NULL;
-    }
-
-    state = ecalloc(1, sizeof(*state));
-    state->host = zend_string_init(host, host_len, 0);
-    ZVAL_UNDEF(&state->config);
-    zend_hash_init(&state->transfers, 0, NULL, ZVAL_PTR_DTOR, 0);
-    if (config != NULL && Z_TYPE_P(config) != IS_NULL) {
-        ZVAL_COPY(&state->config, config);
-    }
-    state->port = port;
-    state->closed = false;
-    king_set_error("");
-
-    return state;
-}
-
+/* Native transitions: delegated to src/mcp/mcp.c */
 static king_mcp_state *king_mcp_fetch_state(zval *zconnection, uint32_t arg_num)
 {
     if (
@@ -454,8 +328,7 @@ PHP_FUNCTION(king_mcp_connect)
         host,
         host_len,
         port,
-        config,
-        "king_mcp_connect"
+        config
     );
     if (state == NULL) {
         RETURN_FALSE;
@@ -590,14 +463,11 @@ PHP_FUNCTION(king_mcp_upload_from_stream)
         RETURN_FALSE;
     }
 
-    king_mcp_state_store_transfer(
+    king_mcp_transfer_store(
         state,
         service_name,
-        service_name_len,
         method_name,
-        method_name_len,
         stream_identifier,
-        stream_identifier_len,
         payload
     );
 
@@ -658,14 +528,11 @@ PHP_FUNCTION(king_mcp_download_to_stream)
         RETURN_THROWS();
     }
 
-    payload = king_mcp_state_find_transfer(
+    payload = king_mcp_transfer_find(
         state,
         service_name,
-        service_name_len,
         method_name,
-        method_name_len,
-        request_payload,
-        request_payload_len
+        request_payload
     );
     if (payload == NULL) {
         king_set_error(
@@ -709,8 +576,7 @@ PHP_METHOD(King_MCP, __construct)
         host,
         host_len,
         port,
-        config,
-        "MCP::__construct"
+        config
     );
     if (state == NULL) {
         zend_throw_exception_ex(
@@ -886,14 +752,11 @@ PHP_METHOD(King_MCP, uploadFromStream)
         RETURN_THROWS();
     }
 
-    king_mcp_state_store_transfer(
+    king_mcp_transfer_store(
         state,
         service,
-        service_len,
         method,
-        method_len,
         stream_identifier,
-        stream_identifier_len,
         payload
     );
 
@@ -949,14 +812,11 @@ PHP_METHOD(King_MCP, downloadToStream)
         RETURN_THROWS();
     }
 
-    payload = king_mcp_state_find_transfer(
+    payload = king_mcp_transfer_find(
         state,
         service,
-        service_len,
         method,
-        method_len,
-        ZSTR_VAL(request_payload),
-        ZSTR_LEN(request_payload)
+        ZSTR_VAL(request_payload)
     );
     if (payload == NULL) {
         king_set_error(

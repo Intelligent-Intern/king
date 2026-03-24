@@ -460,6 +460,9 @@ src/semantic_dns/state.lo: /home/jochen/projects/king.site/king/extension/src/se
 -include src/object_store/object_store.dep
 src/object_store/object_store.lo: /home/jochen/projects/king.site/king/extension/src/object_store/object_store.c
 	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/object_store/object_store.c -o src/object_store/object_store.lo  -MMD -MF src/object_store/object_store.dep -MT src/object_store/object_store.lo
+-include src/mcp/mcp.dep
+src/mcp/mcp.lo: /home/jochen/projects/king.site/king/extension/src/mcp/mcp.c
+	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/mcp/mcp.c -o src/mcp/mcp.lo  -MMD -MF src/mcp/mcp.dep -MT src/mcp/mcp.lo
 -include src/server/admin_api.dep
 src/server/admin_api.lo: /home/jochen/projects/king.site/king/extension/src/server/admin_api.c
 	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/server/admin_api.c -o src/server/admin_api.lo  -MMD -MF src/server/admin_api.dep -MT src/server/admin_api.lo
