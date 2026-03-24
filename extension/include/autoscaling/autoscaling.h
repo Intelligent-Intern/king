@@ -80,5 +80,6 @@ int king_autoscaling_evaluate_scaling_decision(const king_load_metrics_t *metric
 int king_autoscaling_provision_instances(uint32_t count);
 int king_autoscaling_terminate_instances(uint32_t count);
 void king_autoscaling_update_resource_sharing(void);
+extern uint32_t king_current_instances;
 
 #endif /* KING_AUTOSCALING_H */

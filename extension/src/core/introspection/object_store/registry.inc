@@ -28,8 +28,8 @@ PHP_FUNCTION(king_object_store_put)
         RETURN_THROWS();
     }
 
-    if (ZSTR_LEN(object_id) == 0) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID cannot be empty");
+    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID must be between 1 and 127 bytes.");
         RETURN_THROWS();
     }
 
@@ -86,8 +86,8 @@ PHP_FUNCTION(king_object_store_get)
         Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
 
-    if (ZSTR_LEN(object_id) == 0) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID cannot be empty");
+    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID must be between 1 and 127 bytes.");
         RETURN_THROWS();
     }
 
@@ -98,6 +98,9 @@ PHP_FUNCTION(king_object_store_get)
     }
 
     zend_string *ret_str = zend_string_init(data, data_size, 0);
+    if (data_size > 0) {
+        memset(data, 0, data_size);
+    }
     pefree(data, 1);
     RETURN_STR(ret_str);
 }
@@ -110,8 +113,8 @@ PHP_FUNCTION(king_object_store_delete)
         Z_PARAM_STR(object_id)
     ZEND_PARSE_PARAMETERS_END();
 
-    if (ZSTR_LEN(object_id) == 0) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID cannot be empty");
+    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID must be between 1 and 127 bytes.");
         RETURN_THROWS();
     }
 

@@ -15,48 +15,50 @@
 
 ## Current Next Leaf
 
-- [x] Port MCP runtime out of the local lifecycle-only slice into `extension/src/mcp/`
-  `extension/src/mcp/`
+- [ ] Reconcile the full PHPT matrix back to green after the current runtime/hardening merge
+  build: `pass`
+  audit: `pass`
+  tests: `239/269`
 
 ## Active Fronts
 
 ### 1. Semantic DNS and routing
 
-All checked!
+- [x] Keep register/discover/update routing leaves green
+- [ ] Restore `king_semantic_dns_init()` / `king_semantic_dns_start_server()` runtime and validation parity
+- [ ] Reconcile Semantic DNS core-server expectations with the active local runtime surface
 
 ### 2. Object store and CDN runtime
 
 - [x] Replace local registry behavior with a real object-store backend core
-- [x] Implement concrete store backends and capacity boundaries
-- [x] Add durable persistence paths
-- [x] Port CDN cache and distribution logic into the active runtime
-- [x] Add edge-state, TTL, invalidation, and distribution behavior
-- [x] Add backend and end-to-end verification
-- [x] Implement cloud-native backup and high-availability hooks
-- [x] Complete CDN edge-state and distribution behavior (multi-node)
-- [x] End-to-end regression across all backends (S3, Memcached)
+- [ ] Restore object-store miss, init-validation, and capacity-boundary regression parity
+- [ ] Restore durable persistence and metadata rehydration regression parity
+- [ ] Restore CDN cache/invalidation/TTL/distribution regression parity
+- [ ] Restore HA, multi-backend, and stress-path regression parity
+- [ ] Re-run object-store/CDN end-to-end verification to green
 
 ### 3. MCP and orchestration
 
 - [x] Port MCP runtime out of the local lifecycle-only slice into `extension/src/mcp/`
-- [x] Bind MCP request transport to real session and QUIC-backed paths (simulated)
-- [x] Replace local upload and download storage with real backends (Object Store integration)
-- [x] Add MCP transport and mock-service end-to-end tests (Verifying Object Store persistence)
-- [x] Activate the pipeline orchestrator core and tool registry
-- [x] Add focused orchestrator tests
+- [ ] Restore MCP lifecycle/request parity against the current PHPT surface
+- [ ] Restore MCP upload/download helper parity and validation contracts
+- [ ] Restore MCP Object Store-backed transfer persistence end-to-end
+- [ ] Restore pipeline orchestrator runtime/test parity
 
 ### 4. Telemetry, autoscaling, and system integration
 
 - [x] Port telemetry runtime beyond snapshots into active span, log, and context handling
 - [x] Activate metrics aggregation, flush, and export paths
-- [ ] Port autoscaling monitoring, decision, and provisioning loops
-- [ ] Port system integration runtime and component orchestration state
-- [ ] Add reusable end-to-end harnesses for these subsystems
+- [x] Port autoscaling monitoring, decision, and provisioning loops
+- [x] Port system integration runtime and component orchestration state
+- [x] Add reusable end-to-end harnesses for these subsystems
 
 ### 5. Security, performance, CI, and release
 
-- [ ] Zeroize secrets and tighten ownership around TLS-adjacent buffers
-- [ ] Harden public input paths for bounds and type handling
+- [x] Add security policy enforcement for userland config overrides
+- [x] Zeroize secrets and tighten ownership around TLS-adjacent buffers
+- [x] Harden public input paths for bounds and type handling
+- [ ] Reconcile session, HTTP, and exception-hierarchy contract regressions after hardening
 - [ ] Add fuzz, stress, and edge-case coverage
 - [ ] Build benchmark harnesses for session, proto, store, and Semantic DNS paths
 - [ ] Wire CI to the canonical `build-skeleton`, `test-skeleton`, and `audit-skeleton-surface` scripts

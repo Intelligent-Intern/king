@@ -9,8 +9,8 @@ static king_client_session_t *king_client_session_open(
     king_client_session_t *session;
     time_t now;
 
-    if (host_len == 0) {
-        king_set_error("king_connect() requires a non-empty host.");
+    if (host_len == 0 || host_len > 255) {
+        king_set_error("king_connect() requires a valid host name (1-255 bytes).");
         return NULL;
     }
 
@@ -30,6 +30,15 @@ static king_client_session_t *king_client_session_open(
 
     if (config != NULL && Z_TYPE_P(config) != IS_NULL) {
         if (Z_TYPE_P(config) == IS_ARRAY) {
+            if (!king_globals.is_userland_override_allowed && zend_hash_num_elements(Z_ARRVAL_P(config)) > 0) {
+                king_client_session_free(session);
+                zend_throw_exception_ex(
+                    king_ce_runtime_exception,
+                    0,
+                    "Configuration override is disabled by system policy."
+                );
+                return NULL;
+            }
             session->config_binding = "inline_array";
             session->config_option_count = zend_hash_num_elements(Z_ARRVAL_P(config));
         } else {

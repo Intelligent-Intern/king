@@ -119,6 +119,9 @@ zend_string *king_mcp_transfer_find(
         
         if (king_object_store_read_object(object_id, &data, &data_size, &meta) == SUCCESS) {
             zend_string *res = zend_string_init(data, data_size, 0);
+            if (data_size > 0) {
+                memset(data, 0, data_size);
+            }
             pefree(data, 1); /* Allocated by pecalloc(..., 1) in read_object */
             return res;
         }

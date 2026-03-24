@@ -1,5 +1,5 @@
 --TEST--
-King system status functions expose a stable skeleton shape
+King system status functions expose health and runtime lifecycle state
 --FILE--
 <?php
 $health = king_system_health_check();
@@ -11,19 +11,19 @@ var_dump($health['config_override_allowed']);
 
 $status = king_system_get_status();
 var_dump(array_keys($status));
-var_dump(array_keys($status['system_info']));
-var_dump($status['system_info']['status']);
-var_dump($status['system_info']['build']);
-var_dump($status['system_info']['version']);
-var_dump($status['system_info']['php_version'] === PHP_VERSION);
-var_dump(array_keys($status['configuration']));
-var_dump($status['configuration']['config_override_allowed']);
-var_dump(array_keys($status['autoscaling']));
-var_dump($status['autoscaling']['provider']);
-var_dump($status['autoscaling']['region']);
-var_dump($status['autoscaling']['min_nodes']);
-var_dump($status['autoscaling']['max_nodes']);
-var_dump($status['autoscaling']['scale_up_policy']);
+var_dump($status['initialized']);
+var_dump($status['component_count']);
+
+var_dump(king_system_init([]));
+$status = king_system_get_status();
+var_dump(array_keys($status));
+var_dump($status['initialized']);
+var_dump($status['component_count'] > 0);
+
+var_dump(king_system_shutdown());
+$status = king_system_get_status();
+var_dump($status['initialized']);
+var_dump($status['component_count']);
 ?>
 --EXPECT--
 array(4) {
@@ -40,47 +40,23 @@ bool(true)
 string(8) "skeleton"
 string(5) "0.1.0"
 bool(false)
-array(3) {
+array(2) {
   [0]=>
-  string(11) "system_info"
+  string(11) "initialized"
   [1]=>
-  string(13) "configuration"
-  [2]=>
-  string(11) "autoscaling"
-}
-array(4) {
-  [0]=>
-  string(6) "status"
-  [1]=>
-  string(5) "build"
-  [2]=>
-  string(7) "version"
-  [3]=>
-  string(11) "php_version"
-}
-string(2) "ok"
-string(8) "skeleton"
-string(5) "0.1.0"
-bool(true)
-array(1) {
-  [0]=>
-  string(23) "config_override_allowed"
+  string(15) "component_count"
 }
 bool(false)
-array(5) {
+int(0)
+bool(true)
+array(2) {
   [0]=>
-  string(8) "provider"
+  string(11) "initialized"
   [1]=>
-  string(6) "region"
-  [2]=>
-  string(9) "min_nodes"
-  [3]=>
-  string(9) "max_nodes"
-  [4]=>
-  string(15) "scale_up_policy"
+  string(15) "component_count"
 }
-string(0) ""
-string(0) ""
-int(1)
-int(1)
-string(11) "add_nodes:1"
+bool(true)
+bool(true)
+bool(true)
+bool(false)
+int(0)

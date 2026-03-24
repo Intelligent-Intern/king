@@ -9,38 +9,6 @@ PHP_FUNCTION(king_system_health_check)
     king_add_config_policy_info(return_value);
 }
 
-PHP_FUNCTION(king_system_get_status)
-{
-    zval system_info;
-    zval configuration;
-    zval autoscaling;
-
-    ZEND_PARSE_PARAMETERS_NONE();
-
-    array_init(return_value);
-
-    array_init(&system_info);
-    king_add_system_build_info(&system_info);
-    add_assoc_zval(return_value, "system_info", &system_info);
-
-    array_init(&configuration);
-    king_add_config_policy_info(&configuration);
-    add_assoc_zval(return_value, "configuration", &configuration);
-
-    array_init(&autoscaling);
-    add_assoc_string(&autoscaling, "provider",
-        king_safe_string(king_cloud_autoscale_config.provider));
-    add_assoc_string(&autoscaling, "region",
-        king_safe_string(king_cloud_autoscale_config.region));
-    add_assoc_long(&autoscaling, "min_nodes",
-        king_cloud_autoscale_config.min_nodes);
-    add_assoc_long(&autoscaling, "max_nodes",
-        king_cloud_autoscale_config.max_nodes);
-    add_assoc_string(&autoscaling, "scale_up_policy",
-        king_safe_string(king_cloud_autoscale_config.scale_up_policy));
-    add_assoc_zval(return_value, "autoscaling", &autoscaling);
-}
-
 PHP_FUNCTION(king_system_get_metrics)
 {
     zval resource_metrics;

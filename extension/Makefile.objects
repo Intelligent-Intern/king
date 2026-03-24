@@ -430,6 +430,15 @@ src/iibin/iibin.lo: /home/jochen/projects/king.site/king/extension/src/iibin/iib
 -include src/iibin/iibin_api.dep
 src/iibin/iibin_api.lo: /home/jochen/projects/king.site/king/extension/src/iibin/iibin_api.c
 	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/iibin/iibin_api.c -o src/iibin/iibin_api.lo  -MMD -MF src/iibin/iibin_api.dep -MT src/iibin/iibin_api.lo
+-include src/autoscaling/autoscaling.dep
+src/autoscaling/autoscaling.lo: /home/jochen/projects/king.site/king/extension/src/autoscaling/autoscaling.c
+	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/autoscaling/autoscaling.c -o src/autoscaling/autoscaling.lo  -MMD -MF src/autoscaling/autoscaling.dep -MT src/autoscaling/autoscaling.lo
+-include src/autoscaling/provisioning.dep
+src/autoscaling/provisioning.lo: /home/jochen/projects/king.site/king/extension/src/autoscaling/provisioning.c
+	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/autoscaling/provisioning.c -o src/autoscaling/provisioning.lo  -MMD -MF src/autoscaling/provisioning.dep -MT src/autoscaling/provisioning.lo
+-include src/integration/system_integration.dep
+src/integration/system_integration.lo: /home/jochen/projects/king.site/king/extension/src/integration/system_integration.c
+	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/integration/system_integration.c -o src/integration/system_integration.lo  -MMD -MF src/integration/system_integration.dep -MT src/integration/system_integration.lo
 -include src/iibin/iibin_registry.dep
 src/iibin/iibin_registry.lo: /home/jochen/projects/king.site/king/extension/src/iibin/iibin_registry.c
 	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/iibin/iibin_registry.c -o src/iibin/iibin_registry.lo  -MMD -MF src/iibin/iibin_registry.dep -MT src/iibin/iibin_registry.lo
@@ -463,6 +472,12 @@ src/object_store/object_store.lo: /home/jochen/projects/king.site/king/extension
 -include src/mcp/mcp.dep
 src/mcp/mcp.lo: /home/jochen/projects/king.site/king/extension/src/mcp/mcp.c
 	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/mcp/mcp.c -o src/mcp/mcp.lo  -MMD -MF src/mcp/mcp.dep -MT src/mcp/mcp.lo
+-include src/pipeline_orchestrator/tool_registry.dep
+src/pipeline_orchestrator/tool_registry.lo: /home/jochen/projects/king.site/king/extension/src/pipeline_orchestrator/tool_registry.c
+	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/pipeline_orchestrator/tool_registry.c -o src/pipeline_orchestrator/tool_registry.lo  -MMD -MF src/pipeline_orchestrator/tool_registry.dep -MT src/pipeline_orchestrator/tool_registry.lo
+-include src/pipeline_orchestrator/orchestrator.dep
+src/pipeline_orchestrator/orchestrator.lo: /home/jochen/projects/king.site/king/extension/src/pipeline_orchestrator/orchestrator.c
+	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/pipeline_orchestrator/orchestrator.c -o src/pipeline_orchestrator/orchestrator.lo  -MMD -MF src/pipeline_orchestrator/orchestrator.dep -MT src/pipeline_orchestrator/orchestrator.lo
 -include src/server/admin_api.dep
 src/server/admin_api.lo: /home/jochen/projects/king.site/king/extension/src/server/admin_api.c
 	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/server/admin_api.c -o src/server/admin_api.lo  -MMD -MF src/server/admin_api.dep -MT src/server/admin_api.lo
@@ -493,6 +508,12 @@ src/server/open_telemetry.lo: /home/jochen/projects/king.site/king/extension/src
 -include src/server/session.dep
 src/server/session.lo: /home/jochen/projects/king.site/king/extension/src/server/session.c
 	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/server/session.c -o src/server/session.lo  -MMD -MF src/server/session.dep -MT src/server/session.lo
+-include src/telemetry/telemetry.dep
+src/telemetry/telemetry.lo: /home/jochen/projects/king.site/king/extension/src/telemetry/telemetry.c
+	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/telemetry/telemetry.c -o src/telemetry/telemetry.lo  -MMD -MF src/telemetry/telemetry.dep -MT src/telemetry/telemetry.lo
+-include src/telemetry/metrics.dep
+src/telemetry/metrics.lo: /home/jochen/projects/king.site/king/extension/src/telemetry/metrics.c
+	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/telemetry/metrics.c -o src/telemetry/metrics.lo  -MMD -MF src/telemetry/metrics.dep -MT src/telemetry/metrics.lo
 -include src/server/tls.dep
 src/server/tls.lo: /home/jochen/projects/king.site/king/extension/src/server/tls.c
 	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/server/tls.c -o src/server/tls.lo  -MMD -MF src/server/tls.dep -MT src/server/tls.lo

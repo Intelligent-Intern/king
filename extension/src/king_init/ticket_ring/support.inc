@@ -1,13 +1,3 @@
-static void king_secure_zero(void *buffer, size_t len)
-{
-    volatile unsigned char *cursor = (volatile unsigned char *) buffer;
-    size_t i;
-
-    for (i = 0; i < len; ++i) {
-        cursor[i] = 0;
-    }
-}
-
 static void king_best_effort_random_fill(void *buffer, size_t len)
 {
     unsigned char *cursor = (unsigned char *) buffer;

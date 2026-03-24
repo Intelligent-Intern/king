@@ -114,10 +114,21 @@ int king_telemetry_log_internal(king_telemetry_level_t level, const char *logger
 
 /* --- PHP Entry Points --- */
 
+#include "include/king_globals.h"
+
 PHP_FUNCTION(king_telemetry_init)
 {
     zval *config_arr;
     if (zend_parse_parameters(1, "a", &config_arr) == FAILURE) RETURN_FALSE;
+
+    if (!king_globals.is_userland_override_allowed && zend_hash_num_elements(Z_ARRVAL_P(config_arr)) > 0) {
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "Configuration override is disabled by system policy."
+        );
+        RETURN_THROWS();
+    }
 
     king_telemetry_config_t config;
     memset(&config, 0, sizeof(config));
@@ -141,6 +152,12 @@ PHP_FUNCTION(king_telemetry_start_span)
         Z_PARAM_ARRAY_OR_NULL(attrs)
         Z_PARAM_STRING_OR_NULL(parent_id, parent_id_len)
     ZEND_PARSE_PARAMETERS_END();
+    
+    if (op_name_len == 0 || op_name_len > 127) {
+        /* Truncate op_name or throw? Truncating is already handled by strncpy in create_span, 
+           but returning false for empty or obviously malicious long names is better. */
+        if (op_name_len == 0) RETURN_FALSE;
+    }
 
     king_trace_context_t *span = king_telemetry_create_span(op_name, KING_SPAN_KIND_INTERNAL, parent_id);
     if (!span) RETURN_FALSE;

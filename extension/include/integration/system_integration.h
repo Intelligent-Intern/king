@@ -14,13 +14,13 @@
 #include <time.h>
 
 /* Component headers used by the system layer. */
-#include "config/config.h"
-#include "semantic_dns/semantic_dns.h"
-#include "object_store/object_store.h"
-#include "telemetry/telemetry.h"
-#include "autoscaling/autoscaling.h"
-#include "mcp/mcp.h"
-#include "iibin/iibin.h"
+#include "include/config/config.h"
+#include "include/semantic_dns/semantic_dns.h"
+#include "include/object_store/object_store.h"
+#include "include/telemetry/telemetry.h"
+#include "include/autoscaling/autoscaling.h"
+#include "include/mcp/mcp.h"
+#include "include/iibin/iibin.h"
 
 /* --- System Integration Types --- */
 

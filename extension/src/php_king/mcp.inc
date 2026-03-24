@@ -1,5 +1,7 @@
 #include "main/php_streams.h"
 #include "include/mcp/mcp.h"
+#include "include/config/mcp_and_orchestrator/base_layer.h"
+#include "include/config/mcp_and_orchestrator/default.h"
 
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_MCP___construct, 0, 0, 2)
@@ -106,13 +108,23 @@ static zend_result king_mcp_validate_transfer_args(
         return king_mcp_set_transfer_error(exception_ce, message);
     }
 
-    if (identifier_value_len == 0) {
+    if (identifier_value_len == 0 || identifier_value_len > 256) {
         snprintf(
             message,
             sizeof(message),
-            "%s() requires a non-empty %s.",
+            "%s() requires a valid %s (1-256 bytes).",
             function_name,
             identifier_name
+        );
+        return king_mcp_set_transfer_error(exception_ce, message);
+    }
+
+    if (service_name_len > 128 || method_name_len > 128) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() service/method names exceed the maximum length (128 bytes).",
+            function_name
         );
         return king_mcp_set_transfer_error(exception_ce, message);
     }
@@ -157,6 +169,22 @@ static zend_string *king_mcp_read_stream_payload(
         bytes_read = php_stream_read(stream, chunk, sizeof(chunk));
         if (bytes_read > 0) {
             size_t next_used = used + (size_t) bytes_read;
+
+            if (king_mcp_orchestrator_config.mcp_max_message_size_bytes > 0 &&
+                next_used > (size_t) king_mcp_orchestrator_config.mcp_max_message_size_bytes) {
+                if (buffer != NULL) {
+                    zend_string_release(buffer);
+                }
+                snprintf(
+                    message,
+                    sizeof(message),
+                    "%s() failed: maximum message size (%ld bytes) exceeded.",
+                    function_name,
+                    king_mcp_orchestrator_config.mcp_max_message_size_bytes
+                );
+                king_mcp_set_transfer_error(exception_ce, message);
+                return NULL;
+            }
 
             if (buffer == NULL) {
                 buffer = zend_string_alloc(next_used, 0);
@@ -305,6 +333,8 @@ static zend_result king_mcp_state_require_open(
     return FAILURE;
 }
 
+#include "include/king_globals.h"
+
 PHP_FUNCTION(king_mcp_connect)
 {
     char *host = NULL;
@@ -321,6 +351,17 @@ PHP_FUNCTION(king_mcp_connect)
         Z_PARAM_OPTIONAL
         Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
+
+    if (Z_TYPE_P(config) == IS_ARRAY) {
+        if (!king_globals.is_userland_override_allowed && zend_hash_num_elements(Z_ARRVAL_P(config)) > 0) {
+            zend_throw_exception_ex(
+                king_ce_runtime_exception,
+                0,
+                "Configuration override is disabled by system policy."
+            );
+            RETURN_THROWS();
+        }
+    }
 
     (void) options;
 
@@ -592,6 +633,8 @@ PHP_METHOD(King_MCP, request)
     size_t method_len = 0;
     zend_string *response_payload;
     king_mcp_state *state;
+    zend_string *payload;
+    zval *cancel = NULL;
 
     ZEND_PARSE_PARAMETERS_START(3, 4)
         Z_PARAM_STRING(service, service_len)

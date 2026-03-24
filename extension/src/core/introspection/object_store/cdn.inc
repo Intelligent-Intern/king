@@ -69,6 +69,9 @@ PHP_FUNCTION(king_cdn_cache_object)
         RETURN_FALSE;
     }
     if (data) {
+        if (data_size > 0) {
+            memset(data, 0, data_size);
+        }
         pefree(data, 1);
     }
 

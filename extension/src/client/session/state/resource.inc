@@ -127,6 +127,9 @@ void king_client_session_free(void *session_ptr)
     }
 
     if (session->tls_session_ticket != NULL) {
+        if (ZSTR_LEN(session->tls_session_ticket) > 0) {
+            king_secure_zero(ZSTR_VAL(session->tls_session_ticket), ZSTR_LEN(session->tls_session_ticket));
+        }
         zend_string_release(session->tls_session_ticket);
     }
 

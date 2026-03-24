@@ -450,6 +450,8 @@ static bool king_semantic_dns_runtime_require_initialized(const char *function_n
     return false;
 }
 
+#include "include/king_globals.h"
+
 PHP_FUNCTION(king_semantic_dns_init)
 {
     zval *config;
@@ -458,6 +460,15 @@ PHP_FUNCTION(king_semantic_dns_init)
     ZEND_PARSE_PARAMETERS_START(1, 1)
         Z_PARAM_ARRAY(config)
     ZEND_PARSE_PARAMETERS_END();
+
+    if (!king_globals.is_userland_override_allowed && zend_hash_num_elements(Z_ARRVAL_P(config)) > 0) {
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "Configuration override is disabled by system policy."
+        );
+        RETURN_THROWS();
+    }
 
     if (!king_semantic_dns_parse_init_config(config, &parsed)) {
         RETURN_THROWS();

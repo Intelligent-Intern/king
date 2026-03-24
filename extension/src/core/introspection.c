@@ -14,7 +14,6 @@
 #include "introspection/prelude.inc"
 #include "introspection/telemetry.inc"
 #include "introspection/object_store.inc"
-#include "introspection/autoscaling.inc"
 #include "introspection/semantic_dns.inc"
 #include "introspection/proto_api.inc"
 #include "introspection/system.inc"

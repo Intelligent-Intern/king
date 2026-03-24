@@ -8,8 +8,6 @@
 #include "php_king.h"
 #include "include/autoscaling/autoscaling.h"
 
-extern uint32_t king_current_instances;
-
 int king_autoscaling_provision_instances(uint32_t count)
 {
     /* Simulation: mock instance provisioning */

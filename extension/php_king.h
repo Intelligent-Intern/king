@@ -305,6 +305,11 @@ const char *king_get_stubbed_api_summary(void);
 /* -----------------------------------------------------------------------------
  * Inline Helpers for Accessing Native Resources
  */
+static inline void king_secure_zero(void *v, size_t n)
+{
+    volatile unsigned char *p = (volatile unsigned char *) v;
+    while (n--) *p++ = 0;
+}
 static inline king_config_object *
 php_king_config_obj_from_zend(zend_object *obj)
 {

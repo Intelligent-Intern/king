@@ -12,7 +12,7 @@
 static king_autoscaling_config_t king_autoscaling_runtime_config;
 static bool king_autoscaling_initialized = false;
 static bool king_autoscaling_monitoring_active = false;
-static uint32_t king_current_instances = 1;
+uint32_t king_current_instances = 1;
 
 int king_autoscaling_init_system(king_autoscaling_config_t *config)
 {
@@ -62,10 +62,21 @@ int king_autoscaling_evaluate_scaling_decision(const king_load_metrics_t *metric
 
 /* --- PHP Entry Points --- */
 
+#include "include/king_globals.h"
+
 PHP_FUNCTION(king_autoscaling_init)
 {
     zval *config_arr;
     if (zend_parse_parameters(1, "a", &config_arr) == FAILURE) RETURN_FALSE;
+
+    if (!king_globals.is_userland_override_allowed && zend_hash_num_elements(Z_ARRVAL_P(config_arr)) > 0) {
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "Configuration override is disabled by system policy."
+        );
+        RETURN_THROWS();
+    }
 
     king_autoscaling_config_t config;
     memset(&config, 0, sizeof(config));

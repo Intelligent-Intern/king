@@ -1,15 +1,12 @@
 --TEST--
-King telemetry and storage status functions expose config-backed defaults
+King telemetry runtime status and storage status functions expose live defaults
 --FILE--
 <?php
 $telemetry = king_telemetry_get_status();
 var_dump(array_keys($telemetry));
-var_dump($telemetry['system_status']['enabled']);
-var_dump($telemetry['system_status']['service_name']);
-var_dump($telemetry['system_status']['exporter_endpoint']);
-var_dump($telemetry['system_status']['exporter_protocol']);
-var_dump($telemetry['feature_status']['metrics_enable']);
-var_dump($telemetry['feature_status']['logs_enable']);
+var_dump($telemetry['initialized']);
+var_dump($telemetry['flush_count']);
+var_dump($telemetry['active_metrics']);
 
 $storage = king_object_store_get_stats();
 var_dump(array_keys($storage));
@@ -22,7 +19,6 @@ var_dump($storage['object_store']['node_discovery_mode']);
 var_dump($storage['object_store']['metadata_cache_enabled']);
 var_dump($storage['object_store']['metadata_cache_ttl_sec']);
 var_dump($storage['object_store']['directstorage_enabled']);
-var_dump($storage['object_store']['local_registry_initialized']);
 var_dump($storage['object_store']['object_count']);
 var_dump($storage['object_store']['stored_bytes']);
 var_dump($storage['object_store']['latest_object_at']);
@@ -42,18 +38,17 @@ var_dump($storage['cdn']['cached_bytes']);
 var_dump($storage['cdn']['latest_cached_at']);
 ?>
 --EXPECT--
-array(2) {
+array(3) {
   [0]=>
-  string(13) "system_status"
+  string(11) "initialized"
   [1]=>
-  string(14) "feature_status"
+  string(11) "flush_count"
+  [2]=>
+  string(14) "active_metrics"
 }
-bool(true)
-string(16) "king_application"
-string(21) "http://localhost:4317"
-string(4) "grpc"
-bool(true)
 bool(false)
+int(0)
+int(0)
 array(2) {
   [0]=>
   string(12) "object_store"
@@ -69,7 +64,6 @@ string(6) "static"
 bool(true)
 int(60)
 bool(false)
-bool(true)
 int(0)
 int(0)
 NULL

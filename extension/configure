@@ -4880,6 +4880,9 @@ printf "%s\n" "$PHP_VERSION" >&6; }
         src/client/http3.c \
         src/iibin/iibin.c \
         src/iibin/iibin_api.c \
+        src/autoscaling/autoscaling.c \
+        src/autoscaling/provisioning.c \
+        src/integration/system_integration.c \
         src/iibin/iibin_registry.c \
         src/iibin/iibin_schema.c \
         src/iibin/iibin_schema_compiler.c \
@@ -4891,6 +4894,8 @@ printf "%s\n" "$PHP_VERSION" >&6; }
         src/semantic_dns/state.c \
         src/object_store/object_store.c \
         src/mcp/mcp.c \
+        src/pipeline_orchestrator/tool_registry.c \
+        src/pipeline_orchestrator/orchestrator.c \
         src/server/admin_api.c \
         src/server/cancel.c \
         src/server/cors.c \
@@ -4901,6 +4906,8 @@ printf "%s\n" "$PHP_VERSION" >&6; }
         src/server/index.c \
         src/server/open_telemetry.c \
         src/server/session.c \
+        src/telemetry/telemetry.c \
+        src/telemetry/metrics.c \
         src/server/tls.c \
         src/server/websocket.c \
         src/core/version.c       \
