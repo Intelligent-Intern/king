@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Keeps the skeleton introspection runtime in one translation unit while
+ * Keeps the runtime introspection runtime in one translation unit while
  * splitting the former monolith into bounded, domain-focused fragments.
  * This preserves the current runtime behavior and static helper visibility
  * without letting a single source file grow without bound.

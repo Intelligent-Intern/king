@@ -1,5 +1,5 @@
 --TEST--
-King semantic DNS discovery exposes a stable empty snapshot in the skeleton build
+King semantic DNS discovery exposes a stable empty snapshot in the current runtime
 --FILE--
 <?php
 $result = king_semantic_dns_discover_service('any');

@@ -1,5 +1,5 @@
 --TEST--
-King proto schema inventory returns a stable empty list in the skeleton build
+King proto schema inventory returns a stable empty list in the current runtime
 --FILE--
 <?php
 $schemas = king_proto_get_defined_schemas();

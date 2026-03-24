@@ -6,7 +6,7 @@
  * PURPOSE:
  * Reserved arginfo aggregation point for autoscaling PHP entry points.
  *
- * No autoscaling-specific arginfo blocks are emitted in the current skeleton
+ * No autoscaling-specific arginfo blocks are emitted in the current runtime
  * build, but the guarded header keeps the include graph explicit.
  * =========================================================================
  */

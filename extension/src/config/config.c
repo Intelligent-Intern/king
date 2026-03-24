@@ -7,9 +7,9 @@
  * PURPOSE:
  * Implements the master King\Config resource lifecycle.
  *
- * SKELETON STATUS:
+ * RUNTIME STATUS:
  * king_config_new_from_options() allocates a real composed king_cfg_t
- * snapshot from the active module globals. In the current skeleton build it
+ * snapshot from the active module globals. In the current runtime it
  * materializes the safe per-resource override surface that is already wired
  * for network, data/observability, autoscale, MCP/orchestrator, geometry,
  * smart-contract, and SSH-gateway config families. king_connect() can

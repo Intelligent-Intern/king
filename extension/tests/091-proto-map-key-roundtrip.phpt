@@ -1,5 +1,5 @@
 --TEST--
-King proto map bool and 32-bit integer keys roundtrip through the skeleton runtime subset
+King proto map bool and 32-bit integer keys roundtrip through the runtime subset
 --FILE--
 <?php
 var_dump(king_proto_define_schema('Child', [

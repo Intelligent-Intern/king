@@ -1,5 +1,5 @@
 --TEST--
-King semantic DNS optimal-route getter exposes a stable no-hit snapshot in the skeleton build
+King semantic DNS optimal-route getter exposes a stable no-hit snapshot in the current runtime
 --FILE--
 <?php
 $route = king_semantic_dns_get_optimal_route('api');

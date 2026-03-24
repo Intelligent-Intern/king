@@ -1,5 +1,5 @@
 --TEST--
-King telemetry inject-context leaves headers unchanged in the skeleton build
+King telemetry inject-context leaves headers unchanged in the current runtime
 --FILE--
 <?php
 var_dump(king_telemetry_inject_context());

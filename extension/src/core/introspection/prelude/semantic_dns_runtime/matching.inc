@@ -96,7 +96,7 @@ static bool king_semantic_dns_matches_criteria(
         }
 
         /*
-         * The current skeleton registry only matches scalar top-level service
+         * The current runtime registry only matches scalar top-level service
          * fields and scalar attributes. Deeper client/location structures are
          * intentionally ignored until locality-aware routing exists.
          */

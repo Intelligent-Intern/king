@@ -1,5 +1,5 @@
 --TEST--
-King MCP OO wrapper shares the local skeleton connection state
+King MCP OO wrapper shares the local runtime connection state
 --FILE--
 <?php
 $mcp = new King\MCP('127.0.0.1', 8443);

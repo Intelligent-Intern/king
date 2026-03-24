@@ -11,7 +11,7 @@
 /**
  * @brief Materializes a validated WebSocket client handle.
  *
- * The active skeleton build validates the target URL, snapshots the effective
+ * The active runtime validates the target URL, snapshots the effective
  * WebSocket defaults from the global/runtime config plus optional
  * `connection_config`, and returns a local `King\WebSocket` resource. It does
  * not yet perform an on-wire handshake, but the same local runtime now backs

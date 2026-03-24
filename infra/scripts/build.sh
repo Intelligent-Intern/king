@@ -17,9 +17,13 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-# Initialize and update submodules
-echo -e "${YELLOW}Initializing submodules...${NC}"
-git submodule update --init --recursive
+# Restore or refresh the external quiche checkout
+echo -e "${YELLOW}Preparing quiche checkout...${NC}"
+if [ -d "quiche/.git" ]; then
+    git -C quiche submodule update --init --recursive quiche/deps/boringssl
+else
+    git clone --recursive https://github.com/cloudflare/quiche.git quiche
+fi
 
 # Build quiche
 echo -e "${YELLOW}Building quiche...${NC}"

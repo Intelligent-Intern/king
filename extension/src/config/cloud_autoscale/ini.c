@@ -21,6 +21,8 @@ static ZEND_INI_MH(OnUpdateAutoscalePositiveLong)
         king_cloud_autoscale_config.min_nodes = val;
     } else if (zend_string_equals_literal(entry->name, "king.cluster_autoscale_max_nodes")) {
         king_cloud_autoscale_config.max_nodes = val;
+    } else if (zend_string_equals_literal(entry->name, "king.cluster_autoscale_max_scale_step")) {
+        king_cloud_autoscale_config.max_scale_step = val;
     } else if (zend_string_equals_literal(entry->name, "king.cluster_autoscale_cooldown_period_sec")) {
         king_cloud_autoscale_config.cooldown_period_sec = val;
     } else if (zend_string_equals_literal(entry->name, "king.cluster_autoscale_idle_node_timeout_sec")) {
@@ -79,9 +81,19 @@ PHP_INI_BEGIN()
     ZEND_INI_ENTRY_EX("king.cluster_autoscale_provider", "", PHP_INI_SYSTEM, OnUpdateAutoscaleProvider, NULL)
     STD_PHP_INI_ENTRY("king.cluster_autoscale_region", "", PHP_INI_SYSTEM, OnUpdateString, region, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
     STD_PHP_INI_ENTRY("king.cluster_autoscale_credentials_path", "", PHP_INI_SYSTEM, OnUpdateString, credentials_path, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
+    STD_PHP_INI_ENTRY("king.cluster_autoscale_api_endpoint", "https://api.hetzner.cloud/v1", PHP_INI_SYSTEM, OnUpdateString, api_endpoint, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
+    STD_PHP_INI_ENTRY("king.cluster_autoscale_state_path", "", PHP_INI_SYSTEM, OnUpdateString, state_path, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
+    STD_PHP_INI_ENTRY("king.cluster_autoscale_server_name_prefix", "king-node", PHP_INI_SYSTEM, OnUpdateString, server_name_prefix, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
+    STD_PHP_INI_ENTRY("king.cluster_autoscale_bootstrap_user_data", "", PHP_INI_SYSTEM, OnUpdateString, bootstrap_user_data, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
+    STD_PHP_INI_ENTRY("king.cluster_autoscale_firewall_ids", "", PHP_INI_SYSTEM, OnUpdateString, firewall_ids, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
+    STD_PHP_INI_ENTRY("king.cluster_autoscale_placement_group_id", "", PHP_INI_SYSTEM, OnUpdateString, placement_group_id, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
+    STD_PHP_INI_ENTRY("king.cluster_autoscale_prepared_release_url", "", PHP_INI_SYSTEM, OnUpdateString, prepared_release_url, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
+    STD_PHP_INI_ENTRY("king.cluster_autoscale_join_endpoint", "", PHP_INI_SYSTEM, OnUpdateString, join_endpoint, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
+    STD_PHP_INI_ENTRY("king.cluster_autoscale_hetzner_api_token", "", PHP_INI_SYSTEM, OnUpdateString, hetzner_api_token, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
 
     ZEND_INI_ENTRY_EX("king.cluster_autoscale_min_nodes", "1", PHP_INI_SYSTEM, OnUpdateAutoscalePositiveLong, NULL)
-    ZEND_INI_ENTRY_EX("king.cluster_autoscale_max_nodes", "1", PHP_INI_SYSTEM, OnUpdateAutoscalePositiveLong, NULL)
+    ZEND_INI_ENTRY_EX("king.cluster_autoscale_max_nodes", "10", PHP_INI_SYSTEM, OnUpdateAutoscalePositiveLong, NULL)
+    ZEND_INI_ENTRY_EX("king.cluster_autoscale_max_scale_step", "1", PHP_INI_SYSTEM, OnUpdateAutoscalePositiveLong, NULL)
     ZEND_INI_ENTRY_EX("king.cluster_autoscale_scale_up_cpu_threshold_percent", "80", PHP_INI_SYSTEM, OnUpdateAutoscalePercent, NULL)
     ZEND_INI_ENTRY_EX("king.cluster_autoscale_scale_down_cpu_threshold_percent", "20", PHP_INI_SYSTEM, OnUpdateAutoscalePercent, NULL)
     STD_PHP_INI_ENTRY("king.cluster_autoscale_scale_up_policy", "add_nodes:1", PHP_INI_SYSTEM, OnUpdateString, scale_up_policy, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)

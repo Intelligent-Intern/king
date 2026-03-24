@@ -1,5 +1,5 @@
 --TEST--
-King proto nested zero-field messages ignore unknown child fields in the skeleton runtime subset
+King proto nested zero-field messages ignore unknown child fields in the runtime subset
 --FILE--
 <?php
 var_dump(king_proto_define_schema('Child', []));

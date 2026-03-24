@@ -1,5 +1,5 @@
 --TEST--
-King proto decode rejects out-of-range integer payloads in the skeleton primitive subset
+King proto decode rejects out-of-range integer payloads in the runtime primitive subset
 --FILE--
 <?php
 var_dump(king_proto_define_schema('I32', [

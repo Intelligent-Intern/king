@@ -1,5 +1,5 @@
 --TEST--
-King proto encode raises a stable schema-not-defined exception in the skeleton build
+King proto encode raises a stable schema-not-defined exception in the current runtime
 --FILE--
 <?php
 try {

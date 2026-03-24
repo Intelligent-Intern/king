@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Minimal live HTTP/2 client runtime for the active skeleton build. The
+ * Minimal live HTTP/2 client runtime for the active runtime. The
  * transport path stays honest about current limits: clear-text h2c over
  * absolute `http://` URLs and TLS-backed HTTPS/ALPN over absolute `https://`
  * URLs are active, while HTTP/3 remains a separate work item. The

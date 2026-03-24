@@ -1,5 +1,5 @@
 --TEST--
-King object-store init applies stable local runtime defaults in the skeleton build
+King object-store init applies stable local runtime defaults in the current runtime
 --FILE--
 <?php
 $stats = king_object_store_get_stats();

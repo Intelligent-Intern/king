@@ -9,9 +9,9 @@
  */
 
 /**
- * @brief Starts the local skeleton admin listener slice for a running server session.
+ * @brief Starts the local runtime admin listener slice for a running server session.
  *
- * The active skeleton build accepts an open `King\Session` resource or object
+ * The active runtime accepts an open `King\Session` resource or object
  * plus either `null`, an inline array, or a `King\Config` snapshot. The
  * function validates the local admin bind/auth/TLS snapshot and records the
  * resulting listener state on that session.

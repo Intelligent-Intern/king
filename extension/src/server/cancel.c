@@ -5,7 +5,7 @@
  *
  * PURPOSE:
  * Activates a first local server-side cancel-handler runtime over the shared
- * King\Session skeleton. Handlers are registered per stream and are invoked
+ * King\Session runtime. Handlers are registered per stream and are invoked
  * once when the same local session records a stream cancellation.
  * =========================================================================
  */

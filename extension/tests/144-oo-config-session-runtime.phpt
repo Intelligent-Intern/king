@@ -1,5 +1,5 @@
 --TEST--
-King Config and Session OO wrappers share the active skeleton runtime
+King Config and Session OO wrappers share the active runtime
 --FILE--
 <?php
 $config = new King\Config();

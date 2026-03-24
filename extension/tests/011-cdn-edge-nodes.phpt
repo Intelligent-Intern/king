@@ -1,5 +1,5 @@
 --TEST--
-King CDN edge-node getter returns a stable empty list in the skeleton build
+King CDN edge-node getter returns a stable empty list in the current runtime
 --FILE--
 <?php
 $nodes = king_cdn_get_edge_nodes();

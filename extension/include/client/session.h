@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Shared native session structure and helpers for the active skeleton client
+ * Shared native session structure and helpers for the active runtime client
  * runtime. This stays transport-free for now, but owns the real
  * King\Session resource lifecycle, config snapshots, and local stream-cancel
  * state used by the current build.

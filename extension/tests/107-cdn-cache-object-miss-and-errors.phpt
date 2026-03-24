@@ -1,5 +1,5 @@
 --TEST--
-King CDN cache-object preserves miss and validation contracts in the skeleton build
+King CDN cache-object preserves miss and validation contracts in the current runtime
 --FILE--
 <?php
 var_dump(king_cdn_cache_object('missing-object'));

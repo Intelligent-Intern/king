@@ -1,5 +1,5 @@
 --TEST--
-King base OO classes are runtime-registered in the skeleton build
+King base OO classes are runtime-registered in the current runtime
 --FILE--
 <?php
 $classes = [

@@ -53,6 +53,14 @@ jobs:
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Restore external quiche checkout
+        run: |
+          if [[ -d quiche/.git ]]; then
+            git -C quiche submodule update --init --recursive quiche/deps/boringssl
+          else
+            git clone --recursive https://github.com/cloudflare/quiche.git quiche
+          fi
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -90,9 +98,9 @@ jobs:
         working-directory: extension
         run: ./scripts/static-checks.sh
 
-      - name: Audit active skeleton surface
+      - name: Audit active runtime surface
         working-directory: extension
-        run: ./scripts/audit-skeleton-surface.sh
+        run: ./scripts/audit-runtime-surface.sh
 
       - name: Build canonical release profile
         working-directory: extension
@@ -100,7 +108,7 @@ jobs:
 
       - name: Run canonical PHPT suite
         working-directory: extension
-        run: ./scripts/test-skeleton.sh
+        run: ./scripts/test-extension.sh
 
       - name: Run final go-live readiness checks
         working-directory: extension
@@ -156,6 +164,14 @@ jobs:
 
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore external quiche checkout
+        run: |
+          if [[ -d quiche/.git ]]; then
+            git -C quiche submodule update --init --recursive quiche/deps/boringssl
+          else
+            git clone --recursive https://github.com/cloudflare/quiche.git quiche
+          fi
 
       - name: Cache cargo registry
         uses: actions/cache@v4

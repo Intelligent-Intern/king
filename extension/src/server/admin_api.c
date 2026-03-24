@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Activates a first local Admin API listener slice for the skeleton build.
+ * Activates a first local Admin API listener slice for the current runtime.
  * This is intentionally an in-memory control-plane contract: it validates
  * the local bind/auth/TLS snapshot for an admin endpoint and records that
  * state on the unified King\Session runtime. A real network listener,

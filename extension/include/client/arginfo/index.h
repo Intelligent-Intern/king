@@ -6,7 +6,7 @@
  * PURPOSE:
  * Reserved arginfo aggregation point for client-side PHP entry points.
  *
- * The current skeleton build relies on shared stub arginfo from php_king.c,
+ * The current runtime relies on shared stub arginfo from php_king.c,
  * so this header intentionally carries no declarations yet.
  * =========================================================================
  */

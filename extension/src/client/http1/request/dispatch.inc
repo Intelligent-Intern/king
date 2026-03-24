@@ -104,7 +104,7 @@ zend_result king_http1_request_dispatch(
         if (strcasecmp(ZSTR_VAL(parsed_url->scheme), "https") == 0) {
             king_http1_throw(
                 king_ce_tls_exception,
-                "%s() HTTPS requests are not available in the active skeleton HTTP/1 runtime.",
+                "%s() HTTPS requests are not available in the active runtime HTTP/1 runtime.",
                 function_name
             );
             goto cleanup;

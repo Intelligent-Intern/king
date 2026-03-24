@@ -1,5 +1,5 @@
 --TEST--
-King object-store init validates local runtime config input in the skeleton build
+King object-store init validates local runtime config input in the current runtime
 --INI--
 king.security_allow_config_override=1
 --FILE--

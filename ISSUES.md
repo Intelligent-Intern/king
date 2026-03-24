@@ -15,58 +15,61 @@
 
 ## Current Next Leaf
 
-- none
-  repo-local execution queue clear at the current verified baseline
+- [ ] Add operator-facing spend and quota warnings for the honest Hetzner autoscaling path
+  why this blocks `10/10`: live telemetry-driven decisions, cooldown/hysteresis, and Hetzner lifecycle guards are now verified, but operators still lack first-class visibility into approaching spend/quota limits before the controller provisions more nodes
+  done when: the Hetzner path exposes stable warning signals for configured spend/quota thresholds, surfaces them through status/introspection, degrades safely when provider budget APIs are unavailable, and is verified under warning/no-warning/error scenarios without making spend APIs the only hard-stop mechanism
 
 ## Active Fronts
 
-### 1. Semantic DNS and routing
+### 1. Real external backends
 
-- [x] Keep register/discover/update routing leaves green
-- [x] Restore `king_semantic_dns_init()` / `king_semantic_dns_start_server()` runtime and validation parity
-- [x] Reconcile Semantic DNS core-server expectations with the active local runtime surface
+- [x] Keep a generic autoscaling provider contract with Hetzner as the first and only honest backend implementation
+- [x] Add controller-only Hetzner credentials and config loading from `php.ini`, without replicating the cloud API token onto scaled nodes
+- [x] Serialize Hetzner network, labels, placement-group, firewall, and bootstrap metadata into honest create-server payloads
+- [x] Persist Hetzner scale actions, instance identity, and recovery state so controller restarts do not orphan live nodes
+- [x] Document clearly that non-Hetzner providers may exist behind the same interface but are currently simulated; "production-honest in-tree today means Hetzner only"
+- [x] Complete Hetzner node admission and retirement with register, readiness, and drain instead of treating provider success as immediate service readiness
+- [ ] Verify end-to-end release/bootstrap rollout onto freshly provisioned Hetzner nodes instead of stopping at provider payload and controller lifecycle honesty
+- [ ] Replace simulated object-store cloud adapters with explicit backend contracts and stable failure semantics
+- [ ] Add backup/restore and import/export paths for object-store payloads plus `.meta` state
+- [ ] Add crash-recovery and restart rehydration verification for persisted backends
 
-### 2. Object store and CDN runtime
+### 2. Distributed MCP and orchestrator depth
 
-- [x] Replace local registry behavior with a real object-store backend core
-- [x] Restore object-store miss, init-validation, and capacity-boundary regression parity
-- [x] Restore durable persistence and metadata rehydration regression parity
-- [x] Restore CDN cache/invalidation/TTL/distribution regression parity
-- [x] Restore HA, multi-backend, and stress-path regression parity
-- [x] Re-run object-store/CDN end-to-end verification to green
+- [ ] Move orchestrator execution beyond the purely local runtime path and define a real worker/backend boundary
+- [ ] Persist tool-registry and pipeline-run state across restart and recovery
+- [ ] Add bounded concurrency, deadline, and cancellation propagation across MCP request/upload/download and orchestrator execution
+- [ ] Add a multi-process end-to-end harness for remote MCP/orchestrator topology instead of single-process local-only verification
 
-### 3. MCP and orchestration
+### 3. Observability, autoscaling, and lifecycle operations
 
-- [x] Port MCP runtime out of the local lifecycle-only slice into `extension/src/mcp/`
-- [x] Restore MCP lifecycle/request parity against the current PHPT surface
-- [x] Restore MCP upload/download helper parity and validation contracts
-- [x] Restore MCP Object Store-backed transfer persistence end-to-end
-- [x] Restore pipeline orchestrator runtime/test parity
+- [ ] Add a real telemetry export queue and exporter semantics instead of local-only flush counters
+- [x] Drive autoscaling decisions from live telemetry/system metrics with hysteresis, cooldown, saturation coverage, and Hetzner-specific scale-step guards
+- [ ] Add operator-facing spend and quota warnings for the Hetzner path; do not make provider spend APIs the sole hard-stop mechanism
+- [ ] Add rolling restart, drain, and readiness transitions to system integration instead of immediate local lifecycle flips
+- [ ] Add failover/chaos harnesses for telemetry, autoscaling, and coordinated system recovery
 
-### 4. Telemetry, autoscaling, and system integration
+### 4. Realtime and server runtime depth
 
-- [x] Port telemetry runtime beyond snapshots into active span, log, and context handling
-- [x] Activate metrics aggregation, flush, and export paths
-- [x] Port autoscaling monitoring, decision, and provisioning loops
-- [x] Port system integration runtime and component orchestration state
-- [x] Add reusable end-to-end harnesses for these subsystems
+- [ ] Replace local-only WebSocket handshake/runtime assumptions with on-wire client and server verification
+- [ ] Give `King\WebSocket\Server` an honest public runtime surface or retire it from the exported API
+- [ ] Add long-lived server/session soak coverage for upgrade, early-hints, TLS reload, admin API, and close/drain flows
+- [ ] Verify multi-connection backpressure and fairness semantics under HTTP/2, HTTP/3, and WebSocket churn
 
-### 5. Security, performance, CI, and release
+### 5. Performance, compatibility, and release confidence
 
-- [x] Add security policy enforcement for userland config overrides
-- [x] Zeroize secrets and tighten ownership around TLS-adjacent buffers
-- [x] Harden public input paths for bounds and type handling
-- [x] Reconcile session, HTTP, and exception-hierarchy contract regressions after hardening
-- [x] Add fuzz, stress, and edge-case coverage
-- [x] Build benchmark harnesses for session, proto, store, and Semantic DNS paths
-- [x] Wire CI to the canonical `build-skeleton`, `test-skeleton`, and `audit-skeleton-surface` scripts
-- [x] Add static checks and explicit debug, ASan, UBSan, and release profiles
-- [x] Define reproducible release packaging
-- [x] Reduce remaining stub surface subsystem by subsystem
-- [x] Add final parity, end-to-end, and go-live readiness checks
+- [ ] Put benchmark baselines under CI with explicit per-case regression budgets
+- [ ] Turn the QUIC backend bootstrap into a deterministic pinned dependency path instead of relying on a locally resurrected external `quiche/` checkout
+- [ ] Add package install/smoke matrix coverage for clean hosts and supported PHP/API combinations
+- [ ] Verify upgrade/downgrade compatibility for release artifacts and persisted object-store metadata/state
+- [ ] Add long-duration ASan/UBSan soak gates with archived diagnostics on failure
+
+## Verified Baseline Already Closed
+
+- [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `273/273`
+  tests: `278/278`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -77,6 +80,12 @@
   package-verify: `pass`
   go-live-readiness: `pass`
   stubbed-api-groups: `0`
+- [x] Autoscaling provider contract now has an honest Hetzner backend and verified controller recovery
+  targeted PHPTs: `012`, `280`, `295`, `296`, `297`
+  coverage: real HTTP provider calls against a local mock Hetzner API, controller-only token path, explicit `register -> ready -> drain -> delete` lifecycle gating, persisted state reload, and readonly worker-mode behavior without a cloud token
+- [x] Autoscaling controller decisions now consume live telemetry/system signals with cooldown, hysteresis, and Hetzner step guards
+  targeted PHPTs: `012`, `013`, `280`, `298`, `299`
+  coverage: live telemetry-backed CPU/queue/RPS/latency signals, system-memory fallback, cooldown enforcement across same-second ticks, capped scale-up policy resolution, pending-node guards on the Hetzner path, and drain-before-delete automatic scale-down behavior
 
 ## How To Use This File
 

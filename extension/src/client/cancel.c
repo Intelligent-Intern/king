@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Local stream-cancel runtime for the active skeleton client-session build.
+ * Local stream-cancel runtime for the active runtime client-session build.
  * This records cancel intents on a real King\Session resource even before the
  * transport backend is wired in.
  * =========================================================================
@@ -50,7 +50,7 @@ static void king_cancel_stream_internal(
         snprintf(
             message,
             sizeof(message),
-            "%s() requires a King\\Session resource in the skeleton build.",
+            "%s() requires a King\\Session resource in the current runtime.",
             function_name
         );
         king_set_error(message);

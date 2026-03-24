@@ -261,7 +261,7 @@ subsystems.
 ### Epic 11: Product Hardening
 
 **Goal**
-Raise the whole system from “broad skeleton with real slices” to a production
+Raise the whole system from “broad runtime with real slices” to a production
 platform with hard guarantees.
 
 **Includes**

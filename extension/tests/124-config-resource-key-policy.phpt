@@ -27,4 +27,4 @@ try {
 string(24) "InvalidArgumentException"
 string(45) "Configuration overrides must use string keys."
 string(24) "InvalidArgumentException"
-string(155) "Duplicate skeleton config override 'cc_algorithm' resolves to normalized key 'cc_algorithm', which was already provided. Use one canonical key per setting."
+string(154) "Duplicate runtime config override 'cc_algorithm' resolves to normalized key 'cc_algorithm', which was already provided. Use one canonical key per setting."

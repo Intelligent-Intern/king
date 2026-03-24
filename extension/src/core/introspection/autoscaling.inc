@@ -36,7 +36,7 @@ PHP_FUNCTION(king_autoscaling_get_metrics)
     ZEND_PARSE_PARAMETERS_NONE();
 
     /*
-     * The skeleton build has autoscaling policy/config state, but no active
+     * The current runtime has autoscaling policy/config state, but no active
      * metrics collector, sample history, or monitoring thread. Expose a stable
      * empty list instead of FALSE until real runtime metrics exist.
      */

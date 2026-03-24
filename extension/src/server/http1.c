@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Activates a first local HTTP/1 listener leaf for the skeleton build. This
+ * Activates a first local HTTP/1 listener leaf for the current runtime. This
  * is intentionally a single-dispatch in-memory contract: it validates the
  * listener inputs, materializes a local King\Session snapshot, invokes the
  * handler once with a normalized HTTP/1-style request array, and validates

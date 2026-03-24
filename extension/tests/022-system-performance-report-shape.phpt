@@ -1,5 +1,5 @@
 --TEST--
-King system performance report exposes a stable skeleton snapshot shape
+King system performance report exposes a stable runtime snapshot shape
 --FILE--
 <?php
 $report = king_system_get_performance_report();

@@ -11,19 +11,19 @@ QUICHE_SERVER="${EXT_DIR}/../quiche/target/release/quiche-server"
 
 if [[ ! -f "${EXT_SO}" ]]; then
     echo "Missing extension binary: ${EXT_SO}" >&2
-    echo "Run ./scripts/build-skeleton.sh first." >&2
+    echo "Run ./scripts/build-extension.sh first." >&2
     exit 1
 fi
 
 if [[ ! -f "${QUICHE_LIB}" ]]; then
     echo "Missing libquiche runtime: ${QUICHE_LIB}" >&2
-    echo "Run ./scripts/build-skeleton.sh first." >&2
+    echo "Run ./scripts/build-extension.sh first." >&2
     exit 1
 fi
 
 if [[ ! -x "${QUICHE_SERVER}" ]]; then
     echo "Missing quiche-server binary: ${QUICHE_SERVER}" >&2
-    echo "Run ./scripts/build-skeleton.sh first." >&2
+    echo "Run ./scripts/build-extension.sh first." >&2
     exit 1
 fi
 
@@ -37,20 +37,11 @@ if [[ "$#" -gt 0 ]]; then
     exec "${PHP_BIN}" run-tests.php -q -d "extension=${EXT_SO}" "$@"
 fi
 
-TEST_FILES=(
-    tests/120-object-store-stress-throughput.phpt
-    tests/290-object-store-stress-edge-cases.phpt
-    tests/291-proto-seeded-fuzz-stability.phpt
-    tests/292-semantic-dns-seeded-churn.phpt
-    tests/293-mcp-transfer-churn-and-boundary-validation.phpt
-    tests/294-orchestrator-seeded-registry-churn.phpt
-)
+mapfile -t TEST_FILES < <(find tests -type f -name '*.phpt' | LC_ALL=C sort)
 
-for test_file in "${TEST_FILES[@]}"; do
-    if [[ ! -f "${test_file}" ]]; then
-        echo "Missing fuzz/stress test file: ${test_file}" >&2
-        exit 1
-    fi
-done
+if [[ "${#TEST_FILES[@]}" -eq 0 ]]; then
+    echo "No PHPT files found under ${EXT_DIR}/tests." >&2
+    exit 1
+fi
 
 exec "${PHP_BIN}" run-tests.php -q -d "extension=${EXT_SO}" "${TEST_FILES[@]}"

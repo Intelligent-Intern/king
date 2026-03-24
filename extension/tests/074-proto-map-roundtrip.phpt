@@ -1,5 +1,5 @@
 --TEST--
-King proto map<string, scalar|enum|message> fields roundtrip through the skeleton runtime subset
+King proto map<string, scalar|enum|message> fields roundtrip through the runtime subset
 --FILE--
 <?php
 var_dump(king_proto_define_enum('Status', [

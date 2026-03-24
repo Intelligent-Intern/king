@@ -1,5 +1,5 @@
 --TEST--
-King system metrics exposes a stable skeleton snapshot shape
+King system metrics exposes a stable runtime snapshot shape
 --FILE--
 <?php
 $metrics = king_system_get_metrics();

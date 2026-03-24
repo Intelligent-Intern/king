@@ -22,11 +22,11 @@ static void king_config_object_throw_unsupported_key(
     const char *function_name,
     zend_string *key)
 {
-    king_set_error("Unsupported skeleton config override.");
+    king_set_error("Unsupported runtime config override.");
     zend_throw_exception_ex(
         spl_ce_InvalidArgumentException,
         0,
-        "Unsupported skeleton config override '%s'. Use namespaced keys under quic., tls., http2., tcp., autoscale., mcp., orchestrator., geometry., smartcontract., ssh., storage., cdn., dns., or otel.",
+        "Unsupported runtime config override '%s'. Use namespaced keys under quic., tls., http2., tcp., autoscale., mcp., orchestrator., geometry., smartcontract., ssh., storage., cdn., dns., or otel.",
         ZSTR_VAL(key)
     );
 }
@@ -751,7 +751,7 @@ PHP_METHOD(King_Config, get)
     zend_throw_exception_ex(
         spl_ce_InvalidArgumentException,
         0,
-        "Config::get() does not yet expose skeleton key '%s' outside the active OO parity slice.",
+        "Config::get() does not yet expose runtime key '%s' outside the active OO parity slice.",
         ZSTR_VAL(canonical_key)
     );
     zend_string_release(canonical_key);

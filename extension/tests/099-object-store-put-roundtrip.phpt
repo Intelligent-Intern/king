@@ -1,5 +1,5 @@
 --TEST--
-King object-store put/get/list/delete roundtrip through the local skeleton registry
+King object-store put/get/list/delete roundtrip through the local runtime registry
 --FILE--
 <?php
 var_dump(king_object_store_put('obj-1', 'alpha'));

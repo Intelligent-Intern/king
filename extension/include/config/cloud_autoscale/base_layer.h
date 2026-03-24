@@ -21,10 +21,20 @@ typedef struct _kg_cloud_autoscale_config_t {
     char *provider;
     char *region;
     char *credentials_path;
+    char *api_endpoint;
+    char *state_path;
+    char *server_name_prefix;
+    char *bootstrap_user_data;
+    char *firewall_ids;
+    char *placement_group_id;
+    char *prepared_release_url;
+    char *join_endpoint;
+    char *hetzner_api_token;
 
     /* --- Scaling Triggers & Policy --- */
     zend_long min_nodes;
     zend_long max_nodes;
+    zend_long max_scale_step;
     zend_long scale_up_cpu_threshold_percent;
     zend_long scale_down_cpu_threshold_percent;
     char *scale_up_policy;

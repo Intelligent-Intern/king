@@ -47,21 +47,21 @@ Build:
 
 ```bash
 cd extension
-./scripts/build-skeleton.sh
+./scripts/build-extension.sh
 ```
 
 Test:
 
 ```bash
 cd extension
-./scripts/test-skeleton.sh
+./scripts/test-extension.sh
 ```
 
 Audit the active build surface:
 
 ```bash
 cd extension
-./scripts/audit-skeleton-surface.sh
+./scripts/audit-runtime-surface.sh
 ```
 
 Run the repo-local static checks:
@@ -75,7 +75,7 @@ Run the canonical fuzz, stress, and edge-case subset:
 
 ```bash
 cd extension
-./scripts/fuzz-skeleton.sh
+./scripts/fuzz-runtime.sh
 ```
 
 Check the public PHP stubs against the live runtime:
@@ -159,7 +159,7 @@ is `benchmarks/run-canonical.sh`, and `make benchmark` is expected to delegate
 to it directly. The same rule now applies to static checks and profile builds:
 the canonical repo-local paths are `extension/scripts/static-checks.sh`,
 `extension/scripts/build-profile.sh`, `extension/scripts/smoke-profile.sh`,
-`extension/scripts/fuzz-skeleton.sh`,
+`extension/scripts/fuzz-runtime.sh`,
 `extension/scripts/check-stub-parity.sh`,
 `extension/scripts/package-release.sh`,
 `extension/scripts/verify-release-package.sh`, and

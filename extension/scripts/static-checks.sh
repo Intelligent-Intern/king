@@ -18,15 +18,19 @@ bash -n benchmarks/run-canonical.sh
 bash -n infra/scripts/fuzz.sh
 bash -n infra/scripts/go-live.sh
 bash -n infra/scripts/package.sh
-bash -n extension/scripts/audit-skeleton-surface.sh
+bash -n extension/scripts/audit-runtime-surface.sh
+bash -n extension/scripts/audit-runtime-surface.sh
+bash -n extension/scripts/build-extension.sh
 bash -n extension/scripts/build-profile.sh
-bash -n extension/scripts/build-skeleton.sh
+bash -n extension/scripts/build-extension.sh
 bash -n extension/scripts/check-stub-parity.sh
-bash -n extension/scripts/fuzz-skeleton.sh
+bash -n extension/scripts/fuzz-runtime.sh
+bash -n extension/scripts/fuzz-runtime.sh
 bash -n extension/scripts/go-live-readiness.sh
 bash -n extension/scripts/package-release.sh
 bash -n extension/scripts/smoke-profile.sh
 bash -n extension/scripts/static-checks.sh
+bash -n extension/scripts/test-extension.sh
 bash -n extension/scripts/verify-release-package.sh
 
 echo "Checking GitHub Actions workflow syntax..."

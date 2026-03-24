@@ -72,7 +72,7 @@ static int king_config_add_override_to_bucket(
         zend_throw_exception_ex(
             spl_ce_InvalidArgumentException,
             0,
-            "Duplicate skeleton config override '%s' resolves to normalized key '%s', which was already provided. Use one canonical key per setting.",
+            "Duplicate runtime config override '%s' resolves to normalized key '%s', which was already provided. Use one canonical key per setting.",
             ZSTR_VAL(source_key),
             ZSTR_VAL(normalized_key)
         );

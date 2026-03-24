@@ -1,7 +1,7 @@
 static void king_add_system_build_info(zval *target)
 {
     add_assoc_string(target, "status", "ok");
-    add_assoc_string(target, "build", "skeleton");
+    add_assoc_string(target, "build", "v1");
     add_assoc_string(target, "version", PHP_KING_VERSION);
     add_assoc_string(target, "php_version", PHP_VERSION);
 }
@@ -23,7 +23,7 @@ static void king_component_info_init(
 {
     array_init(target);
     add_assoc_string(target, "name", (char *) name);
-    add_assoc_string(target, "build", "skeleton");
+    add_assoc_string(target, "build", "v1");
     add_assoc_string(target, "version", PHP_KING_VERSION);
     add_assoc_string(target, "implementation", (char *) implementation);
 }
@@ -35,7 +35,7 @@ static void king_component_info_finish(zval *target, zval *configuration)
 }
 
 /*
- * The skeleton build maintains a single shared error buffer today. Reuse it
+ * The current runtime maintains a single shared error buffer today. Reuse it
  * across the generic, WebSocket, and MCP entry points until subsystem-local
  * runtime state exists.
  */

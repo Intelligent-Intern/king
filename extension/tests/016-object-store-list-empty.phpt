@@ -1,5 +1,5 @@
 --TEST--
-King object-store list returns a stable empty list in the skeleton build
+King object-store list returns a stable empty list in the current runtime
 --FILE--
 <?php
 $objects = king_object_store_list();

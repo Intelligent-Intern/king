@@ -1,5 +1,5 @@
 --TEST--
-King proto encode rejects out-of-range integer values in the skeleton primitive subset
+King proto encode rejects out-of-range integer values in the runtime primitive subset
 --FILE--
 <?php
 var_dump(king_proto_define_schema('I32', [

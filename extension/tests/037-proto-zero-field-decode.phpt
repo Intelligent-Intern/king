@@ -1,5 +1,5 @@
 --TEST--
-King proto zero-field schemas decode empty and unknown-field payloads in the skeleton build
+King proto zero-field schemas decode empty and unknown-field payloads in the current runtime
 --FILE--
 <?php
 var_dump(king_proto_define_schema('EmptyMessage', []));

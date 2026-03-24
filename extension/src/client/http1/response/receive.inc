@@ -20,7 +20,7 @@ static zend_result king_http1_recv_response(
             if (ZSTR_LEN(response_buffer->s) > KING_HTTP1_MAX_RESPONSE_BYTES) {
                 king_http1_throw(
                     king_ce_protocol_exception,
-                    "%s() exceeded the HTTP/1 skeleton response size cap.",
+                    "%s() exceeded the HTTP/1 runtime response size cap.",
                     function_name
                 );
                 return FAILURE;
@@ -183,7 +183,7 @@ static zend_result king_http1_request_context_recv(
             ) {
                 king_http1_throw(
                     king_ce_protocol_exception,
-                    "%s() exceeded the HTTP/1 skeleton response size cap.",
+                    "%s() exceeded the HTTP/1 runtime response size cap.",
                     function_name
                 );
                 return FAILURE;
@@ -344,7 +344,7 @@ static zend_result king_http1_request_context_decode_chunked(
             ) {
                 king_http1_throw(
                     king_ce_protocol_exception,
-                    "%s() exceeded the HTTP/1 skeleton response size cap.",
+                    "%s() exceeded the HTTP/1 runtime response size cap.",
                     function_name
                 );
                 return FAILURE;

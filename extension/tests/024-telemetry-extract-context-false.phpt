@@ -1,5 +1,5 @@
 --TEST--
-King telemetry extract-context returns false in the skeleton build
+King telemetry extract-context returns false in the current runtime
 --FILE--
 <?php
 var_dump(king_telemetry_extract_context([]));

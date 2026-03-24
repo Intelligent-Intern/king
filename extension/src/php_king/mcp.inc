@@ -376,7 +376,7 @@ static zend_result king_mcp_validate_request_cancel(
     snprintf(
         message,
         sizeof(message),
-        "%s() cancel tokens are not yet wired in the active skeleton MCP runtime.",
+        "%s() cancel tokens are not yet wired in the active runtime MCP runtime.",
         function_name
     );
     king_set_error(message);

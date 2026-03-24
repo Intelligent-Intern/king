@@ -4,7 +4,7 @@ declare(strict_types=1);
 /**
  * King PHP Extension Stubs
  *
- * IDE/type stubs mirroring the current procedural/resource skeleton API.
+ * IDE/type stubs mirroring the current procedural/resource runtime API.
  * Keep in sync with C arginfo (generated stubs).
  *
  * @api
@@ -13,7 +13,7 @@ declare(strict_types=1);
 
 namespace {
     /**
-     * Establish a local skeleton QUIC session handle backed by a real
+     * Establish a local runtime QUIC session handle backed by a real
      * non-blocking UDP socket and return a `King\Session` resource.
      * Accepts either an inline config array or a `King\Config` resource.
      * @param mixed $config
@@ -24,13 +24,13 @@ namespace {
 
     /**
      * Close a low-level session handle.
-     * The current skeleton build keeps the resource readable so stats can
+     * The current runtime keeps the resource readable so stats can
      * still report a closed snapshot after shutdown.
      */
     function king_close($session): bool {}
 
     /**
-     * Send a one-shot client request through the active skeleton dispatcher.
+     * Send a one-shot client request through the active runtime dispatcher.
      * The current build routes real traffic only onto the active HTTP/1
      * runtime for absolute `http://` URLs and returns a normalized response
      * snapshot with `status`, `status_line`, `headers`, `body`, `protocol`,
@@ -108,7 +108,7 @@ namespace {
 
     /**
      * Direct live HTTP/1 one-shot request path over a native TCP socket.
-     * Only absolute `http://` URLs are live in the current skeleton build;
+     * Only absolute `http://` URLs are live in the current runtime;
      * chunked responses are decoded, redirects can be followed via
      * `follow_redirects` plus `max_redirects`, and self-delimited
      * same-origin HTTP/1.1 responses may reuse a request-scoped
@@ -179,7 +179,7 @@ namespace {
 
     /**
      * Materialize a local validated WebSocket connection-state resource.
-     * The current skeleton build accepts absolute `ws://` and `wss://` URLs,
+     * The current runtime accepts absolute `ws://` and `wss://` URLs,
      * snapshots optional handshake headers plus `connection_config`,
      * `max_payload_size`, `ping_interval_ms`, and `handshake_timeout_ms`,
      * and returns a `King\WebSocket` resource. The same local runtime also
@@ -254,7 +254,7 @@ namespace {
 
     /**
      * Drain a PHP stream into the active local MCP transfer store.
-     * The current skeleton build keeps the bytes per connection under the
+     * The current runtime keeps the bytes per connection under the
      * `(service, method, stream_identifier)` tuple instead of sending them to
      * a live MCP backend.
      * @param mixed $connection
@@ -265,7 +265,7 @@ namespace {
     /**
      * Resolve a previously uploaded local MCP transfer by treating
      * `$request_payload` as the opaque transfer identifier in the active
-     * skeleton build, then stream the bytes into the destination stream.
+     * current runtime, then stream the bytes into the destination stream.
      * @param mixed $connection
      * @param resource $stream
      */
@@ -280,7 +280,7 @@ namespace {
 
     /**
      * Drive events on a low-level session handle.
-     * In the current skeleton build this waits on the active UDP socket via
+     * In the current runtime this waits on the active UDP socket via
      * `poll(2)`, updates transport counters, may emit a controlled probe
      * datagram when the configured QUIC ping interval is forced to `0`, and
      * drains received datagrams into the local session snapshot.
@@ -291,7 +291,7 @@ namespace {
 
     /**
      * Record a local stream-cancel intent on a `King\Session` resource.
-     * The current skeleton build does not have a live transport backend yet,
+     * The current runtime does not have a live transport backend yet,
      * but it stores cancel state, rejects duplicate stream IDs per session,
      * and exposes the result via `king_get_stats()`.
      * @param mixed $session
@@ -300,14 +300,14 @@ namespace {
 
     /**
      * Client-facing alias for `king_cancel_stream()` with the same local
-     * skeleton semantics.
+     * runtime semantics.
      * @param mixed $session
      */
     function king_client_stream_cancel(int $stream_id, string $how = 'both', mixed $session = null): bool {}
 
     /**
      * Validate and store the default CA file path for the active local
-     * skeleton TLS runtime.
+     * runtime TLS runtime.
      */
     function king_set_ca_file(string $path): bool {}
 
@@ -318,7 +318,7 @@ namespace {
 
     /**
      * Validate and store the default client certificate and key paths for the
-     * active local skeleton TLS runtime.
+     * active local runtime TLS runtime.
      */
     function king_set_client_cert(string $cert, string $key): bool {}
 
@@ -329,7 +329,7 @@ namespace {
 
     /**
      * Export the current session-local ticket blob from the active client
-     * skeleton runtime.
+     * runtime.
      * @param mixed $session
      */
     function king_export_session_ticket(mixed $session): string {}
@@ -341,7 +341,7 @@ namespace {
     function king_client_tls_export_session_ticket(mixed $session): string {}
 
     /**
-     * Import a session ticket into the active client skeleton runtime and
+     * Import a session ticket into the active client runtime and
      * publish it into the shared ticket ring.
      * @param mixed $session
      */
@@ -389,7 +389,7 @@ namespace {
      * Resolves `null`, inline config arrays, and `King\Config` handles,
      * chooses HTTP/3 when TCP is disabled, otherwise HTTP/2 when
      * `http2.enable` is active, otherwise HTTP/1, and forwards to the
-     * selected listener leaf. In the current skeleton build, HTTP/1, HTTP/2,
+     * selected listener leaf. In the current runtime, HTTP/1, HTTP/2,
      * and HTTP/3 are active local single-dispatch leaves.
      * @param mixed $config
      */
@@ -407,7 +407,7 @@ namespace {
     /**
      * Validate and normalize a local server-side Early Hints batch for one
      * stream on an open `King\Session` resource or object.
-     * The current skeleton build stores the normalized header pairs on the
+     * The current runtime stores the normalized header pairs on the
      * session snapshot and exposes the last batch plus counters via
      * `king_get_stats()`.
      * @param mixed $session
@@ -418,7 +418,7 @@ namespace {
     /**
      * Materialize a local server-side `King\WebSocket` resource for one
      * stream on an open `King\Session` resource or object.
-     * The current skeleton build records upgrade metadata on the session
+     * The current runtime records upgrade metadata on the session
      * snapshot, derives a local `ws://` or `wss://` URL from the active
      * listener/session state, and rejects duplicate or locally cancelled
      * stream IDs.
@@ -430,7 +430,7 @@ namespace {
     /**
      * Validate and apply a local server-side TLS reload snapshot on an open
      * `King\Session` resource or object.
-     * The current skeleton build requires readable replacement certificate
+     * The current runtime requires readable replacement certificate
      * and key paths, also requires the configured `tls_ticket_key_file` to
      * be readable when set, and stores the last local server-TLS snapshot
      * plus apply/reload counters on the shared session stats.
@@ -465,7 +465,7 @@ namespace {
     /**
      * Validate and materialize a local admin-listener snapshot for an open
      * server `King\Session` resource or object.
-     * The current skeleton build resolves `null`, inline config arrays, and
+     * The current runtime resolves `null`, inline config arrays, and
      * `King\Config` handles, requires explicit enablement plus readable
      * `mtls` material, and stores the last bind/auth snapshot plus reload
      * counters on the shared session stats.
@@ -481,7 +481,7 @@ namespace {
 
     /**
      * Create a King\Config resource from optional overrides.
-     * The canonical skeleton-build override surface uses namespaced keys
+     * The canonical runtime-build override surface uses namespaced keys
      * under `quic.`, `tls.`, `http2.`, `tcp.`, `autoscale.`, `mcp.`,
      * `orchestrator.`, `geometry.`, `smartcontract.`, `ssh.`,
      * `storage.`, `cdn.`, `dns.`, and `otel.`.
@@ -509,26 +509,26 @@ namespace {
     function king_health(): array {}
 
     /**
-     * Last error message from the shared skeleton error buffer
+     * Last error message from the shared runtime error buffer
      * (prefer exceptions).
      */
     function king_get_last_error(): string {}
 
     /**
-     * Compatibility alias for the shared skeleton error buffer used by the
+     * Compatibility alias for the shared runtime error buffer used by the
      * active local WebSocket runtime.
      */
     function king_client_websocket_get_last_error(): string {}
 
     /**
      * Compatibility alias for the shared error buffer used by the current
-     * local MCP skeleton runtime.
+     * local MCP runtime.
      */
     function king_mcp_get_error(): string {}
 
     /**
      * Transport stats for a low-level handle.
-     * The current skeleton build returns a stable local snapshot with
+     * The current runtime returns a stable local snapshot with
      * `build`, `transport`, `host`, `port`, `state`, `connected_at`,
      * `last_activity_at`, `poll_calls`, `last_poll_timeout_ms`,
      * `cancel_calls`, `canceled_stream_count`, `last_canceled_stream_id`,
@@ -546,14 +546,14 @@ namespace {
      * `transport_last_errno`, `transport_error_scope`,
      * `transport_rx_datagram_count`, `transport_rx_bytes`,
      * `transport_tx_datagram_count`, `transport_tx_bytes`,
-     * config binding fields for the currently attached skeleton config,
+     * config binding fields for the currently attached runtime config,
      * and `config_option_count`.
      * @return array<string,mixed>|false
      */
     function king_get_stats($session): array|false {}
 
     /**
-     * Initializes local skeleton runtime settings for the object-store/CDN
+     * Initializes local runtime settings for the object-store/CDN
      * layer without replacing the extension-wide INI configuration.
      * Supported keys are `primary_backend`, `storage_root_path`,
      * `max_storage_size_bytes`, `replication_factor`, `chunk_size_kb`,
@@ -565,33 +565,33 @@ namespace {
     function king_object_store_init(array $config): bool {}
 
     /**
-     * Stores an object in the local skeleton object-store registry.
+     * Stores an object in the local runtime object-store registry.
      * @param array<string,mixed>|null $options
      * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
      */
     function king_object_store_put(string $object_id, string $data, ?array $options = null): bool {}
 
     /**
-     * Stable object-store inventory snapshot for the skeleton build.
+     * Stable object-store inventory snapshot for the current runtime.
      * @return list<array<string,mixed>>
      */
     function king_object_store_list(): array {}
 
     /**
-     * Object-store lookup for the skeleton build.
+     * Object-store lookup for the current runtime.
      * Returns the stored payload for local registry hits and `false` on miss.
      * @param array<string,mixed>|null $options
      */
     function king_object_store_get(string $object_id, ?array $options = null): string|false {}
 
     /**
-     * Object-store delete for the skeleton build.
+     * Object-store delete for the current runtime.
      * Returns `true` on local registry hits and `false` on miss.
      */
     function king_object_store_delete(string $object_id): bool {}
 
     /**
-     * Runs a no-op maintenance pass over the local skeleton object-store
+     * Runs a no-op maintenance pass over the local runtime object-store
      * registry and returns a small summary.
      * @return array{
      *   mode:string,
@@ -620,13 +620,13 @@ namespace {
     function king_object_store_get_metadata(string $object_id): array|false {}
 
     /**
-     * Stable schema inventory snapshot for the skeleton build.
+     * Stable schema inventory snapshot for the current runtime.
      * @return list<string>
      */
     function king_proto_get_defined_schemas(): array {}
 
     /**
-     * Registers an enum name for the active skeleton runtime.
+     * Registers an enum name for the active runtime.
      * Successful registrations become visible via the proto lookup helpers.
      * @param array<string,int> $enum_values
      * @throws \King\ValidationException|\King\SystemException
@@ -634,8 +634,8 @@ namespace {
     function king_proto_define_enum(string $enum_name, array $enum_values): bool {}
 
     /**
-     * Registers a schema name for the active skeleton runtime.
-     * The skeleton build validates the top-level field shape and stores the
+     * Registers a schema name for the active runtime.
+     * The current runtime validates the top-level field shape and stores the
      * declared shape for lookup/introspection plus a minimal primitive and
      * numeric enum encode/decode subset, including floating-point and
      * fixed-width primitives, nested message fields whose child schemas are
@@ -648,7 +648,7 @@ namespace {
      * `oneof => 'group'`. Packable repeated numeric/enum fields may opt into
      * packed encode with `packed => true`, and packed decode is accepted for
      * those wire-compatible fields, but message fields and maps are never
-     * packed and the skeleton still does not build a compiled backend.
+     * packed and the runtime still does not build a compiled backend.
      * Optional, non-repeated scalar/enum fields may also define `default`,
      * which is applied only during decode when the field is absent from the
      * payload. Map fields use `type => 'map<key,T>'` with the supported key
@@ -662,14 +662,14 @@ namespace {
     function king_proto_define_schema(string $schema_name, array $schema_definition): bool {}
 
     /**
-     * Stable enum inventory snapshot for the skeleton build.
+     * Stable enum inventory snapshot for the current runtime.
      * @return list<string>
      */
     function king_proto_get_defined_enums(): array {}
 
     /**
      * Encodes user data using a named IIBIN schema.
-     * Unknown schemas throw immediately. The skeleton build currently supports
+     * Unknown schemas throw immediately. The current runtime supports
      * registered zero-field schemas plus a minimal primitive and numeric enum
      * subset, including floating-point and fixed-width primitives, nested
      * message fields whose child schemas are already runtime-supported,
@@ -692,7 +692,7 @@ namespace {
 
     /**
      * Decodes an IIBIN payload using a named schema.
-     * Unknown schemas throw immediately. The skeleton build currently supports
+     * Unknown schemas throw immediately. The current runtime supports
      * registered zero-field schemas plus a minimal primitive and numeric enum
      * subset, including floating-point and fixed-width primitives, nested
      * message fields whose child schemas are already runtime-supported,
@@ -722,19 +722,19 @@ namespace {
 
     /**
      * Checks whether any schema or enum entry is currently registered.
-     * Registrations are name-only in the active skeleton runtime.
+     * Registrations are name-only in the active runtime.
      */
     function king_proto_is_defined(string $name): bool {}
 
     /**
      * Checks whether a schema is currently registered.
-     * Registrations are name-only in the active skeleton runtime.
+     * Registrations are name-only in the active runtime.
      */
     function king_proto_is_schema_defined(string $schema_name): bool {}
 
     /**
      * Checks whether an enum is currently registered.
-     * Registrations are name-only in the active skeleton runtime.
+     * Registrations are name-only in the active runtime.
      */
     function king_proto_is_enum_defined(string $enum_name): bool {}
 
@@ -792,7 +792,7 @@ namespace {
     function king_telemetry_log(string $level, string $message, ?array $attributes = null): bool {}
 
     /**
-     * Flushes pending telemetry data for the skeleton build.
+     * Flushes pending telemetry data for the current runtime.
      * The active build has no exporter queues yet, so all exported counts are
      * currently zero.
      * @return array{
@@ -806,13 +806,13 @@ namespace {
 
     /**
      * Current telemetry trace context for the active runtime.
-     * Returns null until the skeleton build has a live span runtime.
+     * Returns null until the current runtime has a live span runtime.
      * @return array<string,mixed>|null
      */
     function king_telemetry_get_trace_context(): ?array {}
 
     /**
-     * Returns the provided headers unchanged until the skeleton build has a
+     * Returns the provided headers unchanged until the current runtime has a
      * live span runtime to inject.
      * @param array<string,string>|null $headers
      * @return array<string,string>
@@ -820,7 +820,7 @@ namespace {
     function king_telemetry_inject_context(?array $headers = null): array {}
 
     /**
-     * Returns false until the skeleton build has a tracing runtime that can
+     * Returns false until the current runtime has a tracing runtime that can
      * accept extracted context.
      * @param array<string,string> $headers
      */
@@ -875,7 +875,7 @@ namespace {
     function king_object_store_get_stats(): array {}
 
     /**
-     * Caches an existing local object-store entry in the skeleton CDN cache.
+     * Caches an existing local object-store entry in the runtime CDN cache.
      * Returns `false` when the object does not exist in the local object store.
      * @param array{ttl_sec?:int}|null $options
      * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
@@ -883,52 +883,78 @@ namespace {
     function king_cdn_cache_object(string $object_id, ?array $options = null): bool {}
 
     /**
-     * Invalidates one cached object or clears the full local skeleton CDN cache.
+     * Invalidates one cached object or clears the full local runtime CDN cache.
      * Returns the number of removed cache entries.
      * @throws \King\ValidationException|\King\RuntimeException
      */
     function king_cdn_invalidate_cache(?string $object_id = null): int {}
 
     /**
-     * CDN edge-node inventory for the active skeleton runtime.
+     * CDN edge-node inventory for the active runtime.
      * @return list<array<string,mixed>>
      */
     function king_cdn_get_edge_nodes(): array {}
 
     /**
-     * Autoscaling policy status from active config.
+     * Autoscaling runtime status for the active controller/process.
+     * `provider_mode` is honest about current depth:
+     * `hetzner_active` when a controller token is configured,
+     * `hetzner_readonly` when the Hetzner backend is selected without a token,
+     * and simulated modes for every non-Hetzner provider path.
      * @return array{
+     *   initialized:bool,
+     *   monitoring_active:bool,
+     *   current_instances:int,
      *   provider:string,
-     *   region:string,
-     *   min_nodes:int,
-     *   max_nodes:int,
-     *   scale_up_cpu_threshold_percent:int,
-     *   scale_down_cpu_threshold_percent:int,
-     *   scale_up_policy:string,
-     *   cooldown_period_sec:int,
-     *   idle_node_timeout_sec:int,
-     *   instance_type:string,
-     *   instance_image_id:string,
-     *   network_config:string,
-     *   instance_tags:string
+     *   provider_mode:string,
+     *   controller_token_configured:bool,
+     *   managed_nodes:int,
+     *   active_managed_nodes:int,
+     *   provisioned_managed_nodes:int,
+     *   registered_managed_nodes:int,
+     *   draining_managed_nodes:int,
+     *   cooldown_remaining_sec:int,
+     *   last_monitor_tick_at:int,
+     *   action_count:int,
+     *   api_endpoint:string,
+     *   state_path:string,
+     *   last_action_kind:string,
+     *   last_signal_source:string,
+     *   last_decision_reason:string,
+     *   last_error:string,
+     *   last_warning:string
      * }
      */
     function king_autoscaling_get_status(): array {}
 
     /**
      * Autoscaling metrics collected by the active runtime.
-     * @return list<array<string,mixed>>
+     * @return array{
+     *   cpu_utilization:float,
+     *   memory_utilization:float,
+     *   active_connections:int,
+     *   requests_per_second:int,
+     *   response_time_ms:int,
+     *   queue_depth:int,
+     *   timestamp:int
+     * }
      */
     function king_autoscaling_get_metrics(): array {}
 
     /**
      * Initialize the active autoscaling runtime from an inline config array.
+     * The provider contract stays generic, but only the Hetzner path is
+     * production-honest in-tree today; other providers intentionally remain
+     * simulated behind the same interface. Cloud API tokens stay
+     * `php.ini`-only and are not accepted through this userland config.
      * @param array<string,mixed> $config
      */
     function king_autoscaling_init(array $config): bool {}
 
     /**
      * Start the active local autoscaling monitoring loop.
+     * In the current runtime each call also executes one synchronous
+     * controller tick because there is no detached background worker yet.
      */
     function king_autoscaling_start_monitoring(): bool {}
 
@@ -936,6 +962,25 @@ namespace {
      * Stop the active local autoscaling monitoring loop.
      */
     function king_autoscaling_stop_monitoring(): bool {}
+
+    /**
+     * Return the current managed-node inventory for the active autoscaling runtime.
+     * Hetzner nodes stay `provisioned` until they register back and only become
+     * traffic-bearing after an explicit ready transition.
+     * @return list<array{
+     *   server_id:int,
+     *   name:string,
+     *   provider_status:string,
+     *   lifecycle:string,
+     *   active:bool,
+     *   created_at:int,
+     *   registered_at:int,
+     *   ready_at:int,
+     *   draining_at:int,
+     *   deleted_at:int
+     * }>
+     */
+    function king_autoscaling_get_nodes(): array {}
 
     /**
      * Trigger a local autoscaling scale-up decision.
@@ -946,6 +991,21 @@ namespace {
      * Trigger a local autoscaling scale-down decision.
      */
     function king_autoscaling_scale_down(int $instances = 1): bool {}
+
+    /**
+     * Mark one provisioned managed node as registered with the controller.
+     */
+    function king_autoscaling_register_node(int $server_id, ?string $name = null): bool {}
+
+    /**
+     * Admit one registered managed node into the ready pool.
+     */
+    function king_autoscaling_mark_node_ready(int $server_id): bool {}
+
+    /**
+     * Drain one ready managed node before provider-side termination.
+     */
+    function king_autoscaling_drain_node(int $server_id): bool {}
 
     /**
      * Initializes the local semantic-DNS core/runtime config snapshot.
@@ -964,9 +1024,9 @@ namespace {
     function king_semantic_dns_start_server(): bool {}
 
     /**
-     * Semantic-DNS topology snapshot for the active skeleton runtime.
+     * Semantic-DNS topology snapshot for the active runtime.
      * Registered services and mother nodes are exposed from the local
-     * in-memory skeleton registries.
+     * in-memory runtime registries.
      * @return array{
      *   services:list<array<string,mixed>>,
      *   mother_nodes:list<array<string,mixed>>,
@@ -977,7 +1037,7 @@ namespace {
     function king_semantic_dns_get_service_topology(): array {}
 
     /**
-     * Registers a semantic-DNS service record in the active skeleton runtime.
+     * Registers a semantic-DNS service record in the active runtime.
      * Required keys: `service_id`, `service_name`, `service_type`, `hostname`,
      * and `port`. Optional keys: `status`, `current_load_percent`,
      * `active_connections`, `total_requests`, and scalar `attributes`.
@@ -987,7 +1047,7 @@ namespace {
     function king_semantic_dns_register_service(array $service_info): bool {}
 
     /**
-     * Registers a semantic-DNS mother node in the active skeleton runtime.
+     * Registers a semantic-DNS mother node in the active runtime.
      * Required keys: `node_id`, `hostname`, and `port`. Optional keys:
      * `status`, `managed_services_count`, and `trust_score`.
      * @param array<string,mixed> $mother_node_info
@@ -996,7 +1056,7 @@ namespace {
     function king_semantic_dns_register_mother_node(array $mother_node_info): bool {}
 
     /**
-     * Semantic-DNS service discovery snapshot for the active skeleton runtime.
+     * Semantic-DNS service discovery snapshot for the active runtime.
      * Returns routeable registered services that match the requested
      * `service_type` and any scalar criteria. When no routeable service is
      * registered, `services` is a stable empty list and `service_count` is `0`.
@@ -1011,7 +1071,7 @@ namespace {
     function king_semantic_dns_discover_service(string $service_type, ?array $criteria = null): array {}
 
     /**
-     * Semantic-DNS routing decision for the active skeleton runtime.
+     * Semantic-DNS routing decision for the active runtime.
      * Returns the best registered healthy/degraded service for the requested
      * name, or the stable no-route response when none matches.
      * @param array<string,mixed>|null $client_info
@@ -1021,7 +1081,7 @@ namespace {
 
     /**
      * Updates the status of a registered semantic-DNS service in the active
-     * skeleton runtime and may also patch live load counters.
+     * runtime and may also patch live load counters.
      * @param array{
      *   current_load_percent?:int,
      *   active_connections?:int,
@@ -1032,7 +1092,7 @@ namespace {
     function king_semantic_dns_update_service_status(string $service_id, string $status, ?array $metrics = null): bool {}
 
     /**
-     * System health summary for the active skeleton runtime.
+     * System health summary for the active runtime.
      * @return array{
      *   overall_healthy:bool,
      *   build:string,
@@ -1050,7 +1110,7 @@ namespace {
     function king_system_init(array $config): bool {}
 
     /**
-     * System status summary for the active skeleton runtime.
+     * System status summary for the active runtime.
      * @return array{
      *   system_info: array<string,mixed>,
      *   configuration: array<string,mixed>,
@@ -1060,7 +1120,7 @@ namespace {
     function king_system_get_status(): array {}
 
     /**
-     * System metrics snapshot for the active skeleton runtime.
+     * System metrics snapshot for the active runtime.
      * @return array{
      *   resource_metrics: array{
      *     memory_usage_bytes:int,
@@ -1072,7 +1132,7 @@ namespace {
     function king_system_get_metrics(): array {}
 
     /**
-     * Small system performance snapshot for the active skeleton runtime.
+     * Small system performance snapshot for the active runtime.
      * No-arg getter.
      * @return array{
      *   performance_overview: array{
@@ -1088,7 +1148,7 @@ namespace {
     function king_system_get_performance_report(): array {}
 
     /**
-     * Small per-component descriptor for the active skeleton runtime.
+     * Small per-component descriptor for the active runtime.
      * Accepted names currently mirror the archived component inventory:
      * `config`, `client`, `server`, `semantic_dns`, `object_store`, `cdn`,
      * `telemetry`, `autoscaling`, `mcp`, `iibin`, `pipeline_orchestrator`.

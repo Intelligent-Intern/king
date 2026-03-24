@@ -1,5 +1,5 @@
 --TEST--
-King proto decode skips unknown length-delimited fields in the skeleton primitive subset
+King proto decode skips unknown length-delimited fields in the runtime primitive subset
 --FILE--
 <?php
 var_dump(king_proto_define_schema('User', [

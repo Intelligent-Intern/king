@@ -1,5 +1,5 @@
 --TEST--
-King error accessors expose the shared skeleton error buffer
+King error accessors expose the shared runtime error buffer
 --FILE--
 <?php
 var_dump(king_get_last_error());

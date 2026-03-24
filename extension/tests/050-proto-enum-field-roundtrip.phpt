@@ -1,5 +1,5 @@
 --TEST--
-King proto enum fields are handled numerically in the skeleton runtime subset
+King proto enum fields are handled numerically in the runtime subset
 --FILE--
 <?php
 var_dump(king_proto_define_enum('Status', [

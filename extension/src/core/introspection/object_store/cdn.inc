@@ -108,7 +108,7 @@ PHP_FUNCTION(king_cdn_cache_object)
     }
 
     if (king_cdn_distribute_object(ZSTR_VAL(cache_entry->object_id), NULL, 1) != SUCCESS) {
-         /* Ignore distribution errors in the skeleton (not fatal for the local cache) */
+         /* Ignore distribution errors in the runtime (not fatal for the local cache) */
     }
 
     RETURN_TRUE;
@@ -155,7 +155,7 @@ PHP_FUNCTION(king_cdn_invalidate_cache)
  * Expose a live snapshot of the CDN runtime configuration as a list of
  * virtual edge node descriptors derived from the active object-store config.
  *
- * In the skeleton build there are no real distributed edge nodes, but we
+ * In the current runtime there are no real distributed edge nodes, but we
  * return a single synthetic entry when the CDN is configured and enabled, so
  * callers can rely on a stable non-empty list.
  */

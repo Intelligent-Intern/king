@@ -15,14 +15,14 @@ var_dump($health);
 bool(true)
 bool(true)
 bool(true)
-string(14) "0.1.0-skeleton"
+string(5) "1.0.0"
 array(8) {
   ["status"]=>
   string(2) "ok"
   ["build"]=>
-  string(8) "skeleton"
+  string(2) "v1"
   ["version"]=>
-  string(5) "0.1.0"
+  string(5) "1.0.0"
   ["config_override_allowed"]=>
   bool(false)
   ["active_runtime_count"]=>

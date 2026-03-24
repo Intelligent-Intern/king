@@ -1,5 +1,5 @@
 --TEST--
-King proto enum definitions populate the active skeleton registry
+King proto enum definitions populate the active runtime registry
 --FILE--
 <?php
 var_dump(king_proto_define_enum('Status', [

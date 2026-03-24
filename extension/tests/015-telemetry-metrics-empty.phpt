@@ -1,5 +1,5 @@
 --TEST--
-King telemetry metrics returns a stable empty list in the skeleton build
+King telemetry metrics returns a stable empty list in the current runtime
 --FILE--
 <?php
 $metrics = king_telemetry_get_metrics();

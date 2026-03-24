@@ -3,7 +3,7 @@ static void king_client_session_populate_stats(
     king_client_session_t *session)
 {
     array_init(return_value);
-    add_assoc_string(return_value, "build", "skeleton");
+    add_assoc_string(return_value, "build", "v1");
     add_assoc_string(return_value, "transport", "quic");
     add_assoc_str(return_value, "host", zend_string_copy(session->host));
     add_assoc_str(return_value, "alpn", zend_string_copy(session->negotiated_alpn));

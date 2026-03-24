@@ -591,14 +591,14 @@ static zend_result king_http2_multi_collect_transfer_meta(
         if (transfer->response.header_overflowed) {
             king_http2_throw(
                 king_ce_protocol_exception,
-                "%s() %s exceeded the active skeleton HTTP/2 response-header size limit.",
+                "%s() %s exceeded the active runtime HTTP/2 response-header size limit.",
                 function_name,
                 transfer_label
             );
         } else if (transfer->response.body_overflowed) {
             king_http2_throw(
                 king_ce_protocol_exception,
-                "%s() %s exceeded the active skeleton HTTP/2 response-body size limit.",
+                "%s() %s exceeded the active runtime HTTP/2 response-body size limit.",
                 function_name,
                 transfer_label
             );
@@ -619,7 +619,7 @@ static zend_result king_http2_multi_collect_transfer_meta(
     if (transfer->response.body_overflowed) {
         king_http2_throw(
             king_ce_protocol_exception,
-            "%s() %s exceeded the active skeleton HTTP/2 response-body size limit.",
+            "%s() %s exceeded the active runtime HTTP/2 response-body size limit.",
             function_name,
             transfer_label
         );
@@ -629,7 +629,7 @@ static zend_result king_http2_multi_collect_transfer_meta(
     if (transfer->response.header_overflowed) {
         king_http2_throw(
             king_ce_protocol_exception,
-            "%s() %s exceeded the active skeleton HTTP/2 response-header size limit.",
+            "%s() %s exceeded the active runtime HTTP/2 response-header size limit.",
             function_name,
             transfer_label
         );

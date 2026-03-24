@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Protocol-agnostic request dispatcher for the active client skeleton
+ * Protocol-agnostic request dispatcher for the active client runtime
  * runtime. The current build routes real request traffic onto the local
  * HTTP/1 runtime by default and can force the local libcurl-backed HTTP/2
  * path when requested explicitly.

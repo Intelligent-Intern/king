@@ -1,5 +1,5 @@
 --TEST--
-King proto decode raises a stable malformed key error in the skeleton primitive subset
+King proto decode raises a stable malformed key error in the runtime primitive subset
 --FILE--
 <?php
 var_dump(king_proto_define_schema('User', [

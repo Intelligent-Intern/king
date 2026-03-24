@@ -10,6 +10,7 @@
 #define KING_AUTOSCALING_H
 
 #include <php.h>
+#include "include/config/cloud_autoscale/base_layer.h"
 #include <stdint.h>
 #include <time.h>
 
@@ -24,29 +25,6 @@ typedef struct _king_load_metrics_t {
     uint64_t queue_depth;
     time_t timestamp;
 } king_load_metrics_t;
-
-typedef struct _king_scaling_thresholds_t {
-    double cpu_scale_up_threshold;
-    double cpu_scale_down_threshold;
-    double memory_scale_up_threshold;
-    double memory_scale_down_threshold;
-    uint64_t connections_scale_up_threshold;
-    uint64_t connections_scale_down_threshold;
-    uint64_t response_time_scale_up_threshold;
-    uint32_t scale_up_cooldown_seconds;
-    uint32_t scale_down_cooldown_seconds;
-    uint32_t min_instances;
-    uint32_t max_instances;
-} king_scaling_thresholds_t;
-
-typedef struct _king_autoscaling_config_t {
-    zend_bool enabled;
-    uint32_t monitoring_interval_ms;
-    uint32_t metrics_history_size;
-    king_scaling_thresholds_t thresholds;
-    char *provisioning_script_path;
-    zval mcp_coordinator_config; /* PHP array with MCP coordinator settings */
-} king_autoscaling_config_t;
 
 /* --- PHP Function Prototypes --- */
 
@@ -71,9 +49,21 @@ PHP_FUNCTION(king_autoscaling_scale_down);
 /* Returns current autoscaling status. */
 PHP_FUNCTION(king_autoscaling_get_status);
 
+/* Returns the managed node inventory. */
+PHP_FUNCTION(king_autoscaling_get_nodes);
+
+/* Marks one managed node as registered with the controller. */
+PHP_FUNCTION(king_autoscaling_register_node);
+
+/* Marks one managed node as ready for admission. */
+PHP_FUNCTION(king_autoscaling_mark_node_ready);
+
+/* Drains one ready managed node before termination. */
+PHP_FUNCTION(king_autoscaling_drain_node);
+
 /* --- Internal C API --- */
 
-int king_autoscaling_init_system(king_autoscaling_config_t *config);
+int king_autoscaling_init_system(const kg_cloud_autoscale_config_t *config);
 void king_autoscaling_shutdown_system(void);
 int king_autoscaling_collect_metrics(king_load_metrics_t *metrics);
 int king_autoscaling_evaluate_scaling_decision(const king_load_metrics_t *metrics);

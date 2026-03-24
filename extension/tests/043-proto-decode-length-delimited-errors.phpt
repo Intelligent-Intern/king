@@ -1,5 +1,5 @@
 --TEST--
-King proto decode raises stable length-delimited errors in the skeleton primitive subset
+King proto decode raises stable length-delimited errors in the runtime primitive subset
 --FILE--
 <?php
 var_dump(king_proto_define_schema('User', [

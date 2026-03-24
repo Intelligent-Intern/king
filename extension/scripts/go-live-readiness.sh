@@ -86,7 +86,7 @@ ensure_release_artifacts() {
 
     for path in "${required_paths[@]}"; do
         if [[ ! -e "${path}" ]]; then
-            "${SCRIPT_DIR}/build-skeleton.sh"
+            "${SCRIPT_DIR}/build-extension.sh"
             return 0
         fi
     done
@@ -97,16 +97,16 @@ mkdir -p "${OUTPUT_DIR}"
 if [[ "${SKIP_BASELINE}" != "1" ]]; then
     echo "Running canonical baseline..."
     "${SCRIPT_DIR}/static-checks.sh"
-    "${SCRIPT_DIR}/audit-skeleton-surface.sh"
-    "${SCRIPT_DIR}/build-skeleton.sh"
-    "${SCRIPT_DIR}/test-skeleton.sh"
+    "${SCRIPT_DIR}/audit-runtime-surface.sh"
+    "${SCRIPT_DIR}/build-extension.sh"
+    "${SCRIPT_DIR}/test-extension.sh"
 else
     echo "Skipping baseline commands; ensuring release artifacts exist..."
     ensure_release_artifacts
 fi
 
 echo "Running final readiness checks..."
-"${SCRIPT_DIR}/fuzz-skeleton.sh"
+"${SCRIPT_DIR}/fuzz-runtime.sh"
 "${SCRIPT_DIR}/check-stub-parity.sh"
 "${SCRIPT_DIR}/smoke-profile.sh" release
 "${ROOT_DIR}/benchmarks/run-canonical.sh" \

@@ -41,8 +41,8 @@ array(10) {
   string(18) "stubbed_api_groups"
 }
 string(2) "ok"
-string(8) "skeleton"
-string(5) "0.1.0"
+string(2) "v1"
+string(5) "1.0.0"
 bool(true)
 bool(true)
 bool(true)

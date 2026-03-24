@@ -145,7 +145,7 @@ int king_mcp_request(
     if (Z_ISUNDEF(state->v_session)) {
         /*
          * In a real build, we'd call king_client_session_new().
-         * For skeleton, we just mark it as "connected-simulated".
+         * For runtime, we just mark it as "connected-simulated".
          */
         ZVAL_TRUE(&state->v_session);
     }

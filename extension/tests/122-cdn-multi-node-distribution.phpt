@@ -30,7 +30,7 @@ king_cdn_cache_object('distributed_asset');
 
 $meta = king_object_store_get_metadata('distributed_asset');
 var_dump($meta['is_distributed']); // 1
-var_dump($meta['distribution_peer_count']); // 1 (in the skeleton we distribute to 1 local registry, metadata tracks it)
+var_dump($meta['distribution_peer_count']); // 1 (in the runtime we distribute to 1 local registry, metadata tracks it)
 
 // Cleanup
 foreach (scandir($dir) as $f) { if ($f !== '.' && $f !== '..') @unlink("$dir/$f"); }

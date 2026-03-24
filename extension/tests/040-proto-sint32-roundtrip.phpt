@@ -1,5 +1,5 @@
 --TEST--
-King proto sint32 schemas zigzag-encode and decode signed values in the skeleton build
+King proto sint32 schemas zigzag-encode and decode signed values in the current runtime
 --FILE--
 <?php
 var_dump(king_proto_define_schema('SignedMessage', [

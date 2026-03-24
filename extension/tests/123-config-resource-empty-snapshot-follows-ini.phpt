@@ -1,5 +1,5 @@
 --TEST--
-King\Config empty snapshots inherit current INI-backed module globals across the active skeleton surface
+King\Config empty snapshots inherit current INI-backed module globals across the active runtime surface
 --INI--
 king.transport_cc_algorithm=bbr
 king.tls_verify_peer=0

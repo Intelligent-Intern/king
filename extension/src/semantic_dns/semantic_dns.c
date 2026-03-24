@@ -5,7 +5,7 @@
  *
  * PURPOSE:
  * Provides the first active Semantic-DNS core/server-state slice in the
- * skeleton build. The richer registry/read-model runtime still lives under
+ * current runtime. The richer registry/read-model runtime still lives under
  * src/core/introspection/semantic_dns/*.inc; this file owns the local
  * config-backed init/start lifecycle and the internal C helper surface that
  * later mother-node and routing leaves will build on.

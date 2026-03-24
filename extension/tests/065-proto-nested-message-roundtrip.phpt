@@ -1,5 +1,5 @@
 --TEST--
-King proto non-repeated nested messages roundtrip through the skeleton runtime subset
+King proto non-repeated nested messages roundtrip through the runtime subset
 --FILE--
 <?php
 var_dump(king_proto_define_schema('Child', [

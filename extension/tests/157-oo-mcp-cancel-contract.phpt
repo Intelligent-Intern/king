@@ -28,4 +28,4 @@ try {
 string(21) "King\RuntimeException"
 string(64) "MCP::request() received a CancelToken that is already cancelled."
 string(25) "King\MCPProtocolException"
-string(82) "MCP::request() cancel tokens are not yet wired in the active skeleton MCP runtime."
+string(81) "MCP::request() cancel tokens are not yet wired in the active runtime MCP runtime."

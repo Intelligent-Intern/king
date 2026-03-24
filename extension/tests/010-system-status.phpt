@@ -37,8 +37,8 @@ array(4) {
   string(23) "config_override_allowed"
 }
 bool(true)
-string(8) "skeleton"
-string(5) "0.1.0"
+string(2) "v1"
+string(5) "1.0.0"
 bool(false)
 array(2) {
   [0]=>

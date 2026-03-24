@@ -18,7 +18,7 @@ $pipeline = [
 ];
 
 $result = king_pipeline_orchestrator_run($initial_data, $pipeline);
-var_dump($result === $initial_data); // Current skeleton just reflects initial data
+var_dump($result === $initial_data); // Current runtime just reflects initial data
 
 // 4. Try invalid tool registration
 try {

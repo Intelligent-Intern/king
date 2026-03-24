@@ -8,12 +8,12 @@
  * Main extension entry point. Defines the zend_module_entry, registers
  * all PHP functions, classes, exception hierarchy, and resource types.
  *
- * SKELETON STATUS:
+ * RUNTIME STATUS:
  * - MINIT wires all config modules and registers their INI directives
  * - No quiche_config created (no quiche dependency)
  * - Exception classes register in the correct hierarchy
  * - The first OO class entries now include active Config/Session wrappers
- *   over the same Skeleton resource runtime; broader method parity and the
+ *   over the same Runtime resource runtime; broader method parity and the
  *   remaining object-backed classes are still pending
  * - Resource type handles bootstrap as -1 until MINIT registers them
  * - Core health/version and a small config-backed introspection surface are real

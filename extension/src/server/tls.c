@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Activates a first local server-side TLS reload slice for the skeleton
+ * Activates a first local server-side TLS reload slice for the runtime
  * build. This is intentionally an in-memory lifecycle contract over the
  * unified King\Session runtime: it validates replacement certificate/key
  * files, reflects the applied snapshot into session stats, and keeps a

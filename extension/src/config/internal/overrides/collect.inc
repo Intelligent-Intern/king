@@ -24,7 +24,7 @@ static int king_config_collect_userland_overrides(
             zend_throw_exception_ex(
                 spl_ce_InvalidArgumentException,
                 0,
-                "Unsupported skeleton config override '%s'. Use namespaced keys under quic., tls., http2., tcp., autoscale., mcp., orchestrator., geometry., smartcontract., ssh., storage., cdn., dns., or otel.",
+                "Unsupported runtime config override '%s'. Use namespaced keys under quic., tls., http2., tcp., autoscale., mcp., orchestrator., geometry., smartcontract., ssh., storage., cdn., dns., or otel.",
                 ZSTR_VAL(key)
             );
             return FAILURE;
@@ -38,7 +38,7 @@ static int king_config_collect_userland_overrides(
             zend_throw_exception_ex(
                 spl_ce_RuntimeException,
                 0,
-                "Internal skeleton config routing error for override '%s'.",
+                "Internal runtime config routing error for override '%s'.",
                 ZSTR_VAL(key)
             );
             return FAILURE;

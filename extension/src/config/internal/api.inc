@@ -1,7 +1,7 @@
 /*
  * @brief Creates a new king_cfg_t from an optional PHP options array.
  *
- * In the skeleton: snapshots the active module globals and applies the safe
+ * In the runtime: snapshots the active module globals and applies the safe
  * explicit override surface that is already wired per resource.
  * In the full implementation: this will expand into the full 4-tier config
  * hierarchy.
@@ -44,7 +44,7 @@ void king_config_free(king_cfg_t *cfg)
     king_config_free_owned_overrides(cfg);
 
     /*
-     * The skeleton snapshot currently borrows the rest of its string members
+     * The runtime snapshot currently borrows the rest of its string members
      * from the module-global config surfaces and owns only explicit override
      * allocations plus the outer struct itself.
      */
@@ -70,7 +70,7 @@ void king_config_mark_frozen(king_cfg_t *cfg)
  *
  * PHP signature: king_new_config(?array $options = null): resource
  *
- * Skeleton: creates a new composed king_cfg_t resource snapshot.
+ * Runtime: creates a new composed king_cfg_t resource snapshot.
  */
 PHP_FUNCTION(king_new_config)
 {

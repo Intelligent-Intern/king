@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Internal local-listener CORS helpers for the active skeleton build. The
+ * Internal local-listener CORS helpers for the active runtime. The
  * current slice materializes config-backed CORS request metadata and applies
  * deterministic wildcard response defaults on the local server runtime.
  * =========================================================================

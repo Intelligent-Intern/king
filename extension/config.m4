@@ -1,5 +1,5 @@
 dnl =========================================================================
-dnl config.m4 -- Skeleton build (no quiche, no libcurl)
+dnl config.m4 -- King v1 build
 dnl
 dnl PURPOSE:
 dnl This config.m4 builds a minimal, compilable king extension.
@@ -11,7 +11,7 @@ dnl   phpize
 dnl   ./configure --enable-king
 dnl   make
 dnl
-dnl This skeleton is the integration integrity check. All real subsystem
+dnl This runtime is the integration integrity check. All real subsystem
 dnl implementations are added here as they are transferred from src_bak/.
 dnl
 dnl When the full build is ready, this file will be replaced with the
@@ -20,11 +20,11 @@ dnl =========================================================================
 
 PHP_ARG_ENABLE([king],
     [whether to enable King support],
-    [AS_HELP_STRING([--enable-king], [Enable King extension (skeleton build)])])
+    [AS_HELP_STRING([--enable-king], [Enable King extension])])
 
 PHP_ARG_WITH([king-quiche],
-    [optional quiche include/library root for future non-skeleton builds],
-    [AS_HELP_STRING([--with-king-quiche[=DIR]], [Prepare optional quiche include/library paths while keeping the active build on the skeleton transport runtime])],
+    [optional quiche include/library root for extended transport builds],
+    [AS_HELP_STRING([--with-king-quiche[=DIR]], [Prepare optional quiche include/library paths while keeping the active build on the local transport runtime])],
     [no],
     [no])
 
@@ -75,7 +75,7 @@ if test "$PHP_KING" != "no"; then
         AC_DEFINE([HAVE_KING_QUICHE], [1], [Whether optional quiche build paths were configured])
         AC_MSG_RESULT([enabled])
     else
-        AC_MSG_NOTICE([Building king without optional quiche path; active transport runtime stays on the skeleton UDP substrate.])
+        AC_MSG_NOTICE([Building king without optional quiche path; active transport runtime stays on the local UDP substrate.])
     fi
 
     dnl ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ if test "$PHP_KING" != "no"; then
     fi
 
     dnl ---------------------------------------------------------------------------
-    dnl Source files for the skeleton build.
+    dnl Source files for the current runtime.
     dnl
     dnl Add active subsystem sources here. The legacy public stub compilation
     dnl unit is retired; placeholder exports should not be reintroduced
@@ -285,10 +285,10 @@ if test "$PHP_KING" != "no"; then
     PHP_NEW_EXTENSION([king], [$KING_SRC], [$ext_shared])
     PHP_SUBST([KING_SHARED_LIBADD])
 
-    dnl Signal to php_king.h that we are in skeleton mode.
+    dnl Signal to php_king.h that we are in runtime mode.
     dnl This disables includes for component headers that don't exist yet.
     PHP_ADD_EXTENSION_DEP(king, standard)
-    CFLAGS="$CFLAGS -DKING_SKELETON_BUILD"
+    CFLAGS="$CFLAGS -DKING_RUNTIME_BUILD"
 
     dnl Make headers in extension root and include/ available
     PHP_ADD_INCLUDE([$ext_srcdir])

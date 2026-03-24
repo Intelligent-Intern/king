@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Activates a first local HTTP/2 listener leaf for the skeleton build. Like
+ * Activates a first local HTTP/2 listener leaf for the current runtime. Like
  * the HTTP/1 leaf, this is a single-dispatch in-memory contract over the
  * unified King\Session runtime: it invokes the user handler once with a
  * normalized HTTP/2-style request array and validates the response shape.

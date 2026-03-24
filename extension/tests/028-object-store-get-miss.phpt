@@ -1,5 +1,5 @@
 --TEST--
-King object-store lookup exposes a stable miss contract in the skeleton build
+King object-store lookup exposes a stable miss contract in the current runtime
 --FILE--
 <?php
 var_dump(king_object_store_get('missing-object'));

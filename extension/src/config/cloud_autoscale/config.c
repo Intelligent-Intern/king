@@ -37,10 +37,28 @@ int kg_config_cloud_autoscale_apply_userland_config_to(
             if (kg_validate_generic_string(value, &target->region) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "credentials_path")) {
             if (kg_validate_generic_string(value, &target->credentials_path) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "api_endpoint")) {
+            if (kg_validate_generic_string(value, &target->api_endpoint) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "state_path")) {
+            if (kg_validate_generic_string(value, &target->state_path) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "server_name_prefix")) {
+            if (kg_validate_generic_string(value, &target->server_name_prefix) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "bootstrap_user_data")) {
+            if (kg_validate_generic_string(value, &target->bootstrap_user_data) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "firewall_ids")) {
+            if (kg_validate_generic_string(value, &target->firewall_ids) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "placement_group_id")) {
+            if (kg_validate_generic_string(value, &target->placement_group_id) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "prepared_release_url")) {
+            if (kg_validate_generic_string(value, &target->prepared_release_url) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "join_endpoint")) {
+            if (kg_validate_generic_string(value, &target->join_endpoint) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "min_nodes")) {
             if (kg_validate_positive_long(value, &target->min_nodes) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "max_nodes")) {
             if (kg_validate_positive_long(value, &target->max_nodes) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "max_scale_step")) {
+            if (kg_validate_positive_long(value, &target->max_scale_step) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "scale_up_cpu_threshold_percent")) {
             if (kg_validate_long_range(value, 0, 100, &target->scale_up_cpu_threshold_percent) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "scale_down_cpu_threshold_percent")) {

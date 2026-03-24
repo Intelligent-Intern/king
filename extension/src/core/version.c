@@ -17,12 +17,11 @@
  *
  * PHP signature: king_version(): string
  *
- * Returns the extension version string, suffixed with "-skeleton" to
- * clearly signal that this is not a production build.
+ * Returns the public extension version string for the shipped v1 runtime.
  */
 PHP_FUNCTION(king_version)
 {
     ZEND_PARSE_PARAMETERS_NONE();
 
-    RETURN_STRING(PHP_KING_VERSION "-skeleton");
+    RETURN_STRING(PHP_KING_VERSION);
 }

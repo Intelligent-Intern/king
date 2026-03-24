@@ -1,5 +1,5 @@
 --TEST--
-King low-level session skeleton exposes a real resource lifecycle and stable stats
+King low-level session runtime exposes a real resource lifecycle and stable stats
 --INI--
 king.security_allow_config_override=1
 --FILE--
@@ -43,7 +43,7 @@ var_dump($afterClose['poll_calls']);
 --EXPECT--
 bool(true)
 string(12) "King\Session"
-string(8) "skeleton"
+string(2) "v1"
 string(4) "quic"
 string(9) "127.0.0.1"
 int(443)

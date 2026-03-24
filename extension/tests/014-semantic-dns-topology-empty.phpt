@@ -1,5 +1,5 @@
 --TEST--
-King semantic DNS topology exposes a stable empty snapshot in the skeleton build
+King semantic DNS topology exposes a stable empty snapshot in the current runtime
 --FILE--
 <?php
 $topology = king_semantic_dns_get_service_topology();

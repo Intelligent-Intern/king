@@ -56,6 +56,42 @@ int king_telemetry_record_metric_internal(const char *metric_name, king_metric_t
     return SUCCESS;
 }
 
+zend_bool king_telemetry_lookup_metric(
+    const char *metric_name,
+    double *value_out,
+    king_metric_type_t *type_out,
+    time_t *timestamp_out)
+{
+    zval *entry;
+    king_metric_data_t *metric;
+
+    if (!king_metrics_initialized || metric_name == NULL || metric_name[0] == '\0') {
+        return 0;
+    }
+
+    entry = zend_hash_str_find(&king_metrics_registry, metric_name, strlen(metric_name));
+    if (entry == NULL) {
+        return 0;
+    }
+
+    metric = Z_PTR_P(entry);
+    if (metric == NULL) {
+        return 0;
+    }
+
+    if (value_out != NULL) {
+        *value_out = metric->value;
+    }
+    if (type_out != NULL) {
+        *type_out = metric->metric_type;
+    }
+    if (timestamp_out != NULL) {
+        *timestamp_out = metric->timestamp;
+    }
+
+    return 1;
+}
+
 void king_telemetry_metrics_shutdown(void)
 {
     if (king_metrics_initialized) {

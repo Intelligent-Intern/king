@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Local unified server dispatcher for the active skeleton build. This slice
+ * Local unified server dispatcher for the active runtime. This slice
  * resolves the current config snapshot, selects the primary protocol listener
  * for that snapshot, and forwards the call into the protocol-specific server
  * entry point.

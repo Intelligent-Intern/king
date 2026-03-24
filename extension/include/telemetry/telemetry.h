@@ -144,6 +144,11 @@ int king_telemetry_finish_span(king_trace_context_t *span_context);
 int king_telemetry_add_span_attribute(king_trace_context_t *span_context, const char *key, const char *value);
 int king_telemetry_add_span_event(king_trace_context_t *span_context, const char *event_name, const char *event_data);
 int king_telemetry_record_metric_internal(const char *metric_name, king_metric_type_t metric_type, double value, zval *labels);
+zend_bool king_telemetry_lookup_metric(
+    const char *metric_name,
+    double *value_out,
+    king_metric_type_t *type_out,
+    time_t *timestamp_out);
 int king_telemetry_log_internal(king_telemetry_level_t level, const char *logger_name, const char *message, zval *attributes);
 char* king_telemetry_generate_trace_id(void);
 char* king_telemetry_generate_span_id(void);

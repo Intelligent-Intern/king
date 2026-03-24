@@ -45,7 +45,7 @@ static void king_throw_proto_schema_registered_but_unavailable(
     zend_throw_exception_ex(
         king_ce_runtime_exception,
         0,
-        "Schema '%s' is registered, but %s is not wired in the skeleton build.",
+        "Schema '%s' is registered, but %s is not wired in the current runtime.",
         ZSTR_VAL(schema_name),
         operation
     );

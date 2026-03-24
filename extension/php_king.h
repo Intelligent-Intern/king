@@ -29,7 +29,7 @@
  * Extension Version and Global Constants
  */
 #ifndef PHP_KING_VERSION
-#  define PHP_KING_VERSION      "0.1.0"
+#  define PHP_KING_VERSION      "1.0.0"
 #endif
 
 #ifndef KING_MAX_TICKET_SIZE
@@ -53,11 +53,10 @@
 #include "include/client/session.h"
 
 /*
- * Include the deeper transport/component headers only in full builds.
- * The current skeleton build keeps this header lightweight so the extension
- * can compile without the full native dependency graph.
+ * Keep this header lightweight for the current v1 runtime surface so the
+ * extension can compile without pulling in the full native dependency graph.
  */
-#ifndef KING_SKELETON_BUILD
+#ifndef KING_RUNTIME_BUILD
 #  include "include/client/cancel.h"
 #  include "include/client/tls.h"
 #  include "include/config/config.h"
@@ -65,7 +64,7 @@
 #  include "include/client/http3.h"
 #  include "include/poll/poll.h"
 #  include "include/websocket/websocket.h"
-#endif /* KING_SKELETON_BUILD */
+#endif /* KING_RUNTIME_BUILD */
 
 #include "include/mcp/mcp.h"
 

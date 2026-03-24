@@ -112,8 +112,12 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_autoscaling_stop_monitoring, arginfo_king_no_args)
     PHP_FE(king_autoscaling_get_metrics, arginfo_king_no_args)
     PHP_FE(king_autoscaling_get_status, arginfo_king_no_args)
+    PHP_FE(king_autoscaling_get_nodes, arginfo_king_no_args)
     PHP_FE(king_autoscaling_scale_up, arginfo_king_optional_instances)
     PHP_FE(king_autoscaling_scale_down, arginfo_king_optional_instances)
+    PHP_FE(king_autoscaling_register_node, arginfo_king_autoscaling_register_node)
+    PHP_FE(king_autoscaling_mark_node_ready, arginfo_king_one_long)
+    PHP_FE(king_autoscaling_drain_node, arginfo_king_one_long)
 
     PHP_FE(king_system_init, arginfo_king_config_array)
     PHP_FE(king_system_health_check, arginfo_king_no_args)

@@ -1,6 +1,6 @@
 /*
  * Splits the former proto-registry type/runtime helper block into focused
- * fragments without widening the compiled skeleton surface.
+ * fragments without widening the compiled runtime surface.
  */
 
 #include "types/resolve.inc"

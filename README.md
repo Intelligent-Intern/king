@@ -222,9 +222,17 @@ or migration sequencing, it does not.
 To build the extension from source:
 
 ```bash
-git submodule update --init --recursive
+git clone --recursive https://github.com/cloudflare/quiche.git quiche
 cd extension
-./scripts/build-skeleton.sh
+./scripts/build-extension.sh
+```
+
+For a fully runnable local release profile, including `libquiche.so` and
+`quiche-server`, use:
+
+```bash
+cd extension
+./scripts/build-profile.sh release
 ```
 
 The build entrypoint above is the repository build path.

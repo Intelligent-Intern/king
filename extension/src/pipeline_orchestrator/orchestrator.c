@@ -15,7 +15,7 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
     /* Clone initial data to return_value as starting point */
     ZVAL_COPY(return_value, initial_data);
 
-    /* Skeleton execution: loop through steps and log them */
+    /* Runtime execution: loop through steps and log them */
     HashTable *ht = Z_ARRVAL_P(pipeline_array);
     zval *step;
 

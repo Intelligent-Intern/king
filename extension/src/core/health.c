@@ -111,8 +111,8 @@ const char *king_get_stubbed_api_summary(void)
  * Returns:
  *   [
  *     'status'           => 'ok',
- *     'build'            => 'skeleton',
- *     'version'          => '0.1.0',
+ *     'build'            => 'v1',
+ *     'version'          => '1.0.0',
  *     'php_version'      => '8.4.x',
  *     'pid'              => 12345,
  *     'config_override'  => false,   // king_globals.is_userland_override_allowed
@@ -129,7 +129,7 @@ PHP_FUNCTION(king_health)
     array_init(return_value);
 
     add_assoc_string(return_value, "status",  "ok");
-    add_assoc_string(return_value, "build",   "skeleton");
+    add_assoc_string(return_value, "build",   "v1");
     add_assoc_string(return_value, "version", PHP_KING_VERSION);
     add_assoc_string(return_value, "php_version", PHP_VERSION);
     add_assoc_long(return_value,   "pid",     (zend_long)getpid());

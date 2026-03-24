@@ -6,7 +6,7 @@
  * PURPOSE:
  * Umbrella header placeholder for the autoscaling subsystem.
  *
- * The current skeleton build exposes no shared autoscaling declarations here
+ * The current runtime exposes no shared autoscaling declarations here
  * yet, but the guarded header keeps include sites stable as the subsystem
  * grows.
  * =========================================================================

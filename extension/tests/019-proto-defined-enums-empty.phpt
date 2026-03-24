@@ -1,5 +1,5 @@
 --TEST--
-King proto enum inventory returns a stable empty list in the skeleton build
+King proto enum inventory returns a stable empty list in the current runtime
 --FILE--
 <?php
 $enums = king_proto_get_defined_enums();

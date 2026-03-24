@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Activates a first local HTTP/3 listener leaf for the skeleton build. Like
+ * Activates a first local HTTP/3 listener leaf for the current runtime. Like
  * the active HTTP/1 and HTTP/2 leaves, this is intentionally a single-
  * dispatch in-memory contract over the unified King\Session runtime: it
  * invokes the user handler once with a normalized HTTP/3-style request array

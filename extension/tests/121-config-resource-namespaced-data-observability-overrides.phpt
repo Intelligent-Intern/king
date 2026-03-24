@@ -1,5 +1,5 @@
 --TEST--
-King\Config applies namespaced storage cdn dns and otel overrides across the bound skeleton session snapshot
+King\Config applies namespaced storage cdn dns and otel overrides across the bound runtime session snapshot
 --INI--
 king.security_allow_config_override=1
 --FILE--

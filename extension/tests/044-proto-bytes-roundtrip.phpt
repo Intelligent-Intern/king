@@ -1,5 +1,5 @@
 --TEST--
-King proto bytes fields preserve binary payloads in the skeleton primitive subset
+King proto bytes fields preserve binary payloads in the runtime primitive subset
 --FILE--
 <?php
 var_dump(king_proto_define_schema('BlobMessage', [

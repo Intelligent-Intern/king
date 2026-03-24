@@ -48,7 +48,7 @@
 
 #include <php.h>
 
-#if defined(KING_SKELETON_BUILD) && !defined(QUICHE_H)
+#if defined(KING_RUNTIME_BUILD) && !defined(QUICHE_H)
 typedef void quiche_config;
 #else
 #  include <quiche.h>

@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Minimal live HTTP/1 client runtime for the active skeleton build. This
+ * Minimal live HTTP/1 client runtime for the active runtime. This
  * implementation intentionally stays dependency-free and supports plain
  * `http://` requests over native TCP sockets with a bounded response parser.
  * =========================================================================

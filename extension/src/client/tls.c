@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Active skeleton TLS helpers for the client runtime. These functions do not
+ * Active runtime TLS helpers for the client runtime. These functions do not
  * yet configure a live TLS backend, but they own validated CA/cert defaults,
  * session-ticket import/export, and ticket-ring integration.
  * =========================================================================

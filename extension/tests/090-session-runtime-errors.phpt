@@ -1,5 +1,5 @@
 --TEST--
-King low-level session skeleton validates connect and poll error contracts
+King low-level session runtime validates connect and poll error contracts
 --FILE--
 <?php
 var_dump(king_connect('', 443));

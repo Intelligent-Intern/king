@@ -5,7 +5,7 @@
  *
  * PURPOSE:
  * Activates a first local server-side telemetry control leaf for the
- * skeleton build. The current runtime validates telemetry configuration for
+ * current runtime. The current runtime validates telemetry configuration for
  * an open King\Session, records an initialized snapshot on that session, and
  * tracks the last locally instrumented request after the handler returns.
  * =========================================================================

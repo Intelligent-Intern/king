@@ -217,10 +217,10 @@ PHP_MINFO_FUNCTION(king)
 {
     php_info_print_table_start();
     php_info_print_table_header(2, "King support", "enabled");
-    php_info_print_table_row(2, "Version", PHP_KING_VERSION "-skeleton");
-    php_info_print_table_row(2, "Build", "skeleton (runtime-loaded QUIC)");
+    php_info_print_table_row(2, "Version", PHP_KING_VERSION);
+    php_info_print_table_row(2, "Build", "v1 (runtime-loaded QUIC)");
     php_info_print_table_row(2, "QUIC backend", "runtime-loaded libquiche");
-    php_info_print_table_row(2, "Skeleton runtimes", king_get_active_runtime_summary());
+    php_info_print_table_row(2, "Active runtimes", king_get_active_runtime_summary());
     php_info_print_table_row(2, "Stubbed API groups", king_get_stubbed_api_summary());
     php_info_print_table_end();
     DISPLAY_INI_ENTRIES();

@@ -45,7 +45,7 @@ void king_telemetry_shutdown_system(void)
 char* king_telemetry_generate_trace_id(void)
 {
     static char trace_id[33];
-    /* Simulation: static trace ID for skeleton */
+    /* Simulation: static trace ID for runtime */
     strncpy(trace_id, "4bf92f3577b34da6a3ce929d0e0e4736", 32);
     trace_id[32] = '\0';
     return trace_id;
@@ -54,7 +54,7 @@ char* king_telemetry_generate_trace_id(void)
 char* king_telemetry_generate_span_id(void)
 {
     static char span_id[17];
-    /* Simulation: static span ID for skeleton */
+    /* Simulation: static span ID for runtime */
     strncpy(span_id, "00f067aa0ba902b7", 16);
     span_id[16] = '\0';
     return span_id;
@@ -163,7 +163,7 @@ PHP_FUNCTION(king_telemetry_start_span)
     if (!span) RETURN_FALSE;
     
     if (king_current_span) {
-        /* Support a simple stack of one span for now in the skeleton */
+        /* Support a simple stack of one span for now in the runtime */
         king_telemetry_span_free(king_current_span);
     }
     king_current_span = span;

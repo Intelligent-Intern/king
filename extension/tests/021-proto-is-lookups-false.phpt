@@ -1,5 +1,5 @@
 --TEST--
-King proto registry lookup helpers return false in the skeleton build
+King proto registry lookup helpers return false in the current runtime
 --FILE--
 <?php
 var_dump(king_proto_is_defined('Example'));

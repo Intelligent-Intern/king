@@ -39,9 +39,10 @@ esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ROOT_DIR="$(cd "${EXT_DIR}/.." && pwd)"
-QUICHE_DIR="$(cd "${ROOT_DIR}/quiche" && pwd)"
+QUICHE_DIR="${ROOT_DIR}/quiche"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
 JOBS="${JOBS:-$(nproc)}"
+QUICHE_REMOTE_URL="${KING_QUICHE_REMOTE_URL:-https://github.com/cloudflare/quiche.git}"
 
 BASE_CFLAGS="${CFLAGS:-}"
 BASE_CPPFLAGS="${CPPFLAGS:-}"
@@ -57,6 +58,7 @@ profile_ldflags="${BASE_LDFLAGS}"
 sanitizer_runtime=""
 cargo_target="release"
 cargo_args=(--release)
+cargo_lock_args=(--locked)
 
 case "${PROFILE}" in
     release)
@@ -91,8 +93,32 @@ if [[ -n "${BASE_CFLAGS}" ]]; then
     profile_cflags="${profile_cflags} ${BASE_CFLAGS}"
 fi
 
+ensure_quiche_checkout() {
+    if [[ -d "${QUICHE_DIR}/.git" ]]; then
+        return
+    fi
+
+    if [[ -e "${QUICHE_DIR}" ]]; then
+        echo "Existing path is blocking quiche checkout: ${QUICHE_DIR}" >&2
+        exit 1
+    fi
+
+    echo "Restoring external quiche checkout under ${QUICHE_DIR}" >&2
+    git clone --recursive "${QUICHE_REMOTE_URL}" "${QUICHE_DIR}"
+}
+
+ensure_quiche_checkout
+
 if [[ ! -f "${QUICHE_DIR}/quiche/deps/boringssl/CMakeLists.txt" ]]; then
     git -C "${QUICHE_DIR}" submodule update --init --recursive quiche/deps/boringssl
+fi
+
+if ! cargo metadata \
+    --manifest-path "${QUICHE_DIR}/quiche/Cargo.toml" \
+    --format-version 1 \
+    --locked >/dev/null 2>&1; then
+    echo "quiche Cargo.lock is out of sync; falling back to an unlocked local build." >&2
+    cargo_lock_args=()
 fi
 
 echo "Building King profile: ${PROFILE}"
@@ -102,13 +128,13 @@ echo "Jobs: ${JOBS}"
 cargo build \
     --manifest-path "${QUICHE_DIR}/quiche/Cargo.toml" \
     "${cargo_args[@]}" \
-    --locked \
+    "${cargo_lock_args[@]}" \
     --features ffi
 
 cargo build \
     --manifest-path "${QUICHE_DIR}/apps/Cargo.toml" \
     "${cargo_args[@]}" \
-    --locked \
+    "${cargo_lock_args[@]}" \
     --bin quiche-server
 
 cd "${EXT_DIR}"

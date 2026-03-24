@@ -24,7 +24,7 @@ PHP_FUNCTION(king_telemetry_get_trace_context)
     ZEND_PARSE_PARAMETERS_NONE();
 
     /*
-     * The active skeleton build wires telemetry config, but it has no live
+     * The active runtime wires telemetry config, but it has no live
      * span runtime or current-trace storage yet. Expose the current state as
      * NULL instead of FALSE so callers can treat this as a real nullable
      * snapshot API.
@@ -63,7 +63,7 @@ PHP_FUNCTION(king_telemetry_extract_context)
     ZEND_PARSE_PARAMETERS_END();
 
     /*
-     * The skeleton build does not maintain a distributed-tracing runtime or
+     * The current runtime does not maintain a distributed-tracing runtime or
      * current-span store. Parsing input headers would imply state that the
      * active build cannot honor yet, so extraction remains a stable false.
      */

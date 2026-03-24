@@ -4,7 +4,7 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Activates a first local server-side CORS helper slice for the skeleton
+ * Activates a first local server-side CORS helper slice for the runtime
  * build. The current runtime materializes the configured allowlist on local
  * listener request snapshots and applies deterministic wildcard response
  * defaults (`Access-Control-Allow-Origin: *`, `Vary: Origin`) when the

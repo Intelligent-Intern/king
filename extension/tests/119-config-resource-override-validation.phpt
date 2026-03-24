@@ -1,5 +1,5 @@
 --TEST--
-King\Config validates supported skeleton override keys and values
+King\Config validates supported runtime override keys and values
 --INI--
 king.security_allow_config_override=1
 --FILE--
@@ -24,4 +24,4 @@ try {
 string(24) "InvalidArgumentException"
 string(%d) "Configuration parameter 'tls_verify_peer' must be a boolean (true or false), string given."
 string(24) "InvalidArgumentException"
-string(%d) "Unsupported skeleton config override 'enable'. Use namespaced keys under quic., tls., http2., tcp., autoscale., mcp., orchestrator., geometry., smartcontract., ssh., storage., cdn., dns., or otel."
+string(%d) "Unsupported runtime config override 'enable'. Use namespaced keys under quic., tls., http2., tcp., autoscale., mcp., orchestrator., geometry., smartcontract., ssh., storage., cdn., dns., or otel."

@@ -12,19 +12,19 @@ QUICHE_SERVER="${ROOT_DIR}/quiche/target/release/quiche-server"
 
 if [[ ! -f "${EXT_SO}" ]]; then
     echo "Missing extension binary: ${EXT_SO}" >&2
-    echo "Run ./scripts/build-skeleton.sh first." >&2
+    echo "Run ./scripts/build-extension.sh first." >&2
     exit 1
 fi
 
 if [[ ! -f "${QUICHE_LIB}" ]]; then
     echo "Missing libquiche runtime: ${QUICHE_LIB}" >&2
-    echo "Run ./scripts/build-skeleton.sh first." >&2
+    echo "Run ./scripts/build-extension.sh first." >&2
     exit 1
 fi
 
 if [[ ! -x "${QUICHE_SERVER}" ]]; then
     echo "Missing quiche-server binary: ${QUICHE_SERVER}" >&2
-    echo "Run ./scripts/build-skeleton.sh first." >&2
+    echo "Run ./scripts/build-extension.sh first." >&2
     exit 1
 fi
 

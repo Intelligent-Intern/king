@@ -1,5 +1,5 @@
 --TEST--
-King system component info exposes stable skeleton descriptors
+King system component info exposes stable runtime descriptors
 --FILE--
 <?php
 $telemetry = king_system_get_component_info('telemetry');

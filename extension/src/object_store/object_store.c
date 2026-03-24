@@ -544,11 +544,11 @@ int king_object_store_local_fs_list(zval *return_array)
     return SUCCESS;
 }
 
-/* --- Replication (skeleton: local_fs single file = replica 1) --- */
+/* --- Replication (runtime: local_fs single file = replica 1) --- */
 
 int king_object_store_replicate_object(const char *object_id, uint32_t replication_factor)
 {
-    /* Skeleton hook: simulate replication to peer nodes */
+    /* Runtime hook: simulate replication to peer nodes */
     if (replication_factor == 0) {
         return SUCCESS;
     }
@@ -565,7 +565,7 @@ int king_object_store_replicate_object(const char *object_id, uint32_t replicati
 int king_object_store_backup_object(const char *object_id, king_storage_backend_t backup_backend)
 {
 
-    /* Skeleton hook: simulate sync to Cloud Backend (S3/GCS) */
+    /* Runtime hook: simulate sync to Cloud Backend (S3/GCS) */
     if (backup_backend == KING_STORAGE_BACKEND_LOCAL_FS) {
         return SUCCESS;
     }
@@ -608,7 +608,7 @@ int king_cdn_find_optimal_edge_node(const char *client_ip, king_storage_node_t *
     if (optimal_node != NULL) {
         *optimal_node = NULL;
     }
-    return FAILURE; /* skeleton: no provisioned edge nodes */
+    return FAILURE; /* runtime: no provisioned edge nodes */
 }
 
 void king_object_store_cleanup_expired_objects(void)
@@ -617,7 +617,7 @@ void king_object_store_cleanup_expired_objects(void)
     king_cdn_sweep_expired();
 }
 
-/* --- Backend-specific simulated drivers (Skeleton) --- */
+/* --- Backend-specific simulated drivers (Runtime) --- */
 
 static int king_object_store_s3_simulate_write(const char *object_id, const void *data, size_t data_size, const king_object_metadata_t *metadata)
 {

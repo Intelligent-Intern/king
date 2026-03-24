@@ -4,7 +4,7 @@ PHP_FUNCTION(king_system_health_check)
 
     array_init(return_value);
     add_assoc_bool(return_value, "overall_healthy", 1);
-    add_assoc_string(return_value, "build", "skeleton");
+    add_assoc_string(return_value, "build", "v1");
     add_assoc_string(return_value, "version", PHP_KING_VERSION);
     king_add_config_policy_info(return_value);
 }
@@ -25,7 +25,7 @@ PHP_FUNCTION(king_system_get_metrics)
     add_assoc_zval(return_value, "resource_metrics", &resource_metrics);
 
     /*
-     * Expose only runtime values the active skeleton can measure locally
+     * Expose only runtime values the active runtime can measure locally
      * today. The richer system report from src_bak depends on component state
      * and counters that are not wired into the current build.
      */
@@ -43,7 +43,7 @@ PHP_FUNCTION(king_system_get_performance_report)
     array_init(return_value);
 
     array_init(&performance_overview);
-    add_assoc_string(&performance_overview, "build", "skeleton");
+    add_assoc_string(&performance_overview, "build", "v1");
     add_assoc_long(&performance_overview, "memory_usage_mb",
         (zend_long) (zend_memory_usage(0) / (1024 * 1024)));
     add_assoc_long(&performance_overview, "memory_peak_mb",

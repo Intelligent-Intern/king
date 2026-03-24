@@ -1,5 +1,5 @@
 --TEST--
-King object-store delete exposes a stable no-op miss contract in the skeleton build
+King object-store delete exposes a stable no-op miss contract in the current runtime
 --FILE--
 <?php
 var_dump(king_object_store_delete('missing-object'));
