@@ -97,7 +97,7 @@ bool(false)
 string(%d) "king_http1_request_send() cannot issue an HTTP/1 request while tcp.enable is disabled."
 bool(false)
 string(%d) "king_http2_request_send() cannot issue an HTTP/2 request while http2.enable is disabled."
-string(17) "King\TlsException"
+string(21) "King\NetworkException"
 bool(true)
 bool(true)
 string(22) "King\ProtocolException"

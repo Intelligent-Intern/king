@@ -1,5 +1,7 @@
 --TEST--
 King low-level session skeleton exposes a real resource lifecycle and stable stats
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 $session = king_connect('127.0.0.1', 443, ['sni' => 'example.com', 'alpn' => ['h3']]);

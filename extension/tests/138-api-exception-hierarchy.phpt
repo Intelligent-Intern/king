@@ -1,5 +1,7 @@
 --TEST--
 King active validation surfaces expose specialized exception subclasses
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 $results = [];
@@ -11,8 +13,9 @@ foreach ([
     'semantic_dns_register_service' => static function (): void {
         king_semantic_dns_register_service([]);
     },
-    'object_store_init' => static function (): void {
-        king_object_store_init(['primary_backend' => 'unknown']);
+    'object_store_put' => static function (): void {
+        king_object_store_init([]);
+        king_object_store_put('', 'payload');
     },
     'cdn_cache_object' => static function (): void {
         king_cdn_cache_object('');
@@ -47,7 +50,7 @@ array (
     'is_validation' => true,
     'is_base' => true,
   ),
-  'object_store_init' => 
+  'object_store_put' => 
   array (
     'class' => 'King\\ValidationException',
     'is_validation' => true,

@@ -17,4 +17,4 @@ try {
 bool(false)
 bool(false)
 string(24) "King\ValidationException"
-string(25) "Object ID cannot be empty"
+string(42) "Object ID must be between 1 and 127 bytes."

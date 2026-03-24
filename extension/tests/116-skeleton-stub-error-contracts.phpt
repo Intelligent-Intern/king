@@ -16,7 +16,8 @@ var_dump(king_client_websocket_get_last_error());
 bool(true)
 bool(true)
 string(0) ""
-bool(false)
-string(%d) "king_pipeline_orchestrator_run() is not available in the skeleton build."
-string(%d) "king_pipeline_orchestrator_run() is not available in the skeleton build."
-string(%d) "king_pipeline_orchestrator_run() is not available in the skeleton build."
+array(0) {
+}
+string(0) ""
+string(0) ""
+string(0) ""

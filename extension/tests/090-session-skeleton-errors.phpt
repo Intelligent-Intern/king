@@ -28,7 +28,7 @@ var_dump(king_get_last_error());
 ?>
 --EXPECT--
 bool(false)
-string(41) "king_connect() requires a non-empty host."
+string(56) "king_connect() requires a valid host name (1-255 bytes)."
 bool(false)
 string(48) "king_connect() port must be between 1 and 65535."
 bool(true)
