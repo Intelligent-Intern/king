@@ -96,7 +96,7 @@ const connectionQuality = ref('Excellent')
 
 let localStream: MediaStream | null = null
 let peerConnection: RTCPeerConnection | null = null
-let callTimer: number | null = null
+let callTimer: ReturnType<typeof setInterval> | null = null
 
 const getStatusText = () => {
   switch (callStatus.value) {

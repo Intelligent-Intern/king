@@ -446,7 +446,7 @@ function finishStressTest() {
 }
 
 // Metrics and utilities
-let metricsInterval: number | null = null
+let metricsInterval: ReturnType<typeof setInterval> | null = null
 
 function startMetricsUpdate() {
   metricsInterval = setInterval(() => {
@@ -803,4 +803,4 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
   }
 }
-</
+</style>

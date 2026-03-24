@@ -1,0 +1,17 @@
+.git
+.github
+dist
+benchmarks/results
+demo/video-chat/node_modules
+extension/.libs
+extension/autom4te.cache
+extension/build/profiles
+extension/modules
+extension/tests/*.diff
+extension/tests/*.exp
+extension/tests/*.log
+extension/tests/*.out
+extension/tests/*.php
+extension/tests/*.sh
+quiche
+
