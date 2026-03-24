@@ -40,7 +40,7 @@ All checked!
 
 - [x] Port MCP runtime out of the local lifecycle-only slice into `extension/src/mcp/`
 - [ ] Bind MCP request transport to real session and QUIC-backed paths
-- [ ] Replace local upload and download storage with real backends
+- [x] Replace local upload and download storage with real backends (Object Store integration)
 - [ ] Add MCP transport and mock-service end-to-end tests
 - [ ] Activate the pipeline orchestrator core and tool registry
 - [ ] Add focused orchestrator tests

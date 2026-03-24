@@ -9,6 +9,7 @@
  * =========================================================================
  */
 #include "include/mcp/mcp.h"
+#include "include/object_store/object_store.h"
 #include <string.h>
 
 king_mcp_state *king_mcp_state_create(
@@ -70,10 +71,28 @@ int king_mcp_transfer_store(
     if (!state || state->closed) return FAILURE;
 
     zend_string *key = king_mcp_transfer_key_create(service, method, id);
-    zval val;
-    ZVAL_STR_COPY(&val, payload);
+    char object_id[256];
+    king_object_metadata_t meta;
+
+    /* REPLACING local HashTable storage with Object Store backend */
+    snprintf(object_id, sizeof(object_id), "mcp/%s", ZSTR_VAL(key));
     
+    memset(&meta, 0, sizeof(meta));
+    strncpy(meta.object_id, object_id, sizeof(meta.object_id) - 1);
+    meta.object_type = KING_OBJECT_TYPE_BINARY_DATA;
+    meta.content_length = ZSTR_LEN(payload);
+    meta.created_at = time(NULL);
+
+    if (king_object_store_write_object(object_id, ZSTR_VAL(payload), ZSTR_LEN(payload), &meta) != SUCCESS) {
+        zend_string_release(key);
+        return FAILURE;
+    }
+
+    /* Store the object_id in the registry for lookup parity */
+    zval val;
+    ZVAL_STR_COPY(&val, key); /* We use the key itself as a marker/ref for now */
     zend_hash_update(&state->transfers, key, &val);
+    
     zend_string_release(key);
     return SUCCESS;
 }
@@ -91,7 +110,18 @@ zend_string *king_mcp_transfer_find(
     zend_string_release(key);
 
     if (val && Z_TYPE_P(val) == IS_STRING) {
-        return Z_STR_P(val);
+        char object_id[256];
+        void *data = NULL;
+        size_t data_size = 0;
+        king_object_metadata_t meta;
+
+        snprintf(object_id, sizeof(object_id), "mcp/%s", ZSTR_VAL(Z_STR_P(val)));
+        
+        if (king_object_store_read_object(object_id, &data, &data_size, &meta) == SUCCESS) {
+            zend_string *res = zend_string_init(data, data_size, 0);
+            pefree(data, 1); /* Allocated by pecalloc(..., 1) in read_object */
+            return res;
+        }
     }
     return NULL;
 }

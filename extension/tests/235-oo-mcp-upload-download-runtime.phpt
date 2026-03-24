@@ -2,6 +2,7 @@
 King MCP OO wrapper exposes the active local upload and download transfer helpers
 --FILE--
 <?php
+king_object_store_init(['storage_root_path' => sys_get_temp_dir() . '/king_mcp_tests_oo']);
 $mcp = new King\MCP('127.0.0.1', 8443);
 $source = fopen('php://temp', 'w+');
 $destination = fopen('php://temp', 'w+');
