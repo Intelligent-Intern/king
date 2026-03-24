@@ -17,18 +17,19 @@ The repository now sits at a fully green verified baseline.
 As of 2026-03-24, the canonical audit, rebuild, and full PHPT matrix all pass
 against the current repository state, and the repo now has a canonical local
 benchmark harness for the four core runtime paths that were still uncovered,
-plus explicit local `release`, `debug`, `asan`, and `ubsan` build/smoke paths.
+explicit local `release`, `debug`, `asan`, and `ubsan` build/smoke paths, and
+a seeded local fuzz/stress subset for the highest-risk runtime surfaces.
 
-## Readiness Score: 8.8/10
+## Readiness Score: 8.9/10
 
 The system has clearly transitioned from a stub shell into a coordinated
 runtime. The limiting factor is no longer runtime parity; it is the remaining
-production-readiness work around deeper fuzz/stress depth, release packaging,
-and reducing the still-intentional skeleton surface.
+production-readiness work around release packaging and reducing the
+still-intentional skeleton surface.
 
 | Subsystem | Score | Status |
 |-----------|-------|--------|
-| **Build & Infrastructure** | 9.5/10 | Audit, static checks, release rebuild, full regression pass, canonical CI wiring, and debug/ASan/UBSan profile smoke present |
+| **Build & Infrastructure** | 9.6/10 | Audit, static checks, release rebuild, full regression pass, canonical CI wiring, debug/ASan/UBSan profile smoke, and canonical fuzz subset present |
 | **Config & Session** | 9/10 | Native ownership active; full PHPT parity green |
 | **HTTP Client Slices** | 10/10 | H1, H2, and H3 parity |
 | **IIBIN & Codecs** | 10/10 | Fully native, object hydration |
@@ -50,6 +51,7 @@ cd extension
 ./scripts/audit-skeleton-surface.sh
 ./scripts/build-skeleton.sh
 ./scripts/test-skeleton.sh
+./scripts/fuzz-skeleton.sh
 ./scripts/build-profile.sh release
 ./scripts/smoke-profile.sh release
 ./scripts/build-profile.sh debug
@@ -65,7 +67,7 @@ Repository facts from the current tree:
 - `extension/src`: 178 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 168 headers
-- `extension/tests`: 269 PHPT files
+- `extension/tests`: 273 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently verified regression baseline is:
@@ -74,7 +76,8 @@ The currently verified regression baseline is:
 - `./scripts/audit-skeleton-surface.sh`: passing
 - `./scripts/build-skeleton.sh`: passing
 - extension load smoke: passing
-- `./scripts/test-skeleton.sh`: `269/269` PHPT tests passing
+- `./scripts/test-skeleton.sh`: `273/273` PHPT tests passing
+- `./scripts/fuzz-skeleton.sh`: passing
 - `./scripts/build-profile.sh release`: passing
 - `./scripts/smoke-profile.sh release`: passing
 - `./scripts/build-profile.sh debug`: passing
@@ -114,7 +117,7 @@ The repo already has active native runtime slices for:
 The repo is still not a full production-grade implementation for:
 
 - real hardware-backed cloud provisioning (currently simulated)
-- deeper fuzz/stress depth, release packaging, and full go-live readiness
+- reproducible release packaging and full go-live readiness
 
 The biggest architectural caveat is simple:
 several areas already have honest local runtime slices, but the backend depth,
@@ -142,8 +145,7 @@ transport depth, or operational depth is still incomplete.
 
 ### Weak or Still Open
 
-- remaining fuzz/stress depth, release engineering, and final end-to-end
-  readiness
+- reproducible release packaging and final go-live readiness
 
 ## Source Of Truth Boundaries
 

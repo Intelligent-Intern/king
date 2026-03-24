@@ -7,7 +7,7 @@ unit:
 	bash infra/scripts/unit.sh || exit 0
 
 fuzz:
-	bash infra/scripts/fuzz.sh || exit 0
+	bash infra/scripts/fuzz.sh
 
 benchmark:
 	bash benchmarks/run-canonical.sh

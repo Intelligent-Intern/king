@@ -85,6 +85,7 @@ static zend_result king_mcp_validate_transfer_args(
     zend_class_entry *exception_ce)
 {
     char message[KING_ERR_LEN];
+    size_t backend_object_id_len;
 
     (void) identifier_value;
 
@@ -125,6 +126,21 @@ static zend_result king_mcp_validate_transfer_args(
             sizeof(message),
             "%s() service/method names exceed the maximum length (128 bytes).",
             function_name
+        );
+        return king_mcp_set_transfer_error(exception_ce, message);
+    }
+
+    backend_object_id_len = (sizeof("mcp-::") - 1)
+        + service_name_len
+        + method_name_len
+        + identifier_value_len;
+    if (backend_object_id_len > 127) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() combined service, method, and %s exceed the local Object Store key limit (127 bytes).",
+            function_name,
+            identifier_name
         );
         return king_mcp_set_transfer_error(exception_ce, message);
     }

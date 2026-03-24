@@ -14,9 +14,11 @@ php -l benchmarks/run.php
 
 echo "Checking shell-script syntax..."
 bash -n benchmarks/run-canonical.sh
+bash -n infra/scripts/fuzz.sh
 bash -n extension/scripts/audit-skeleton-surface.sh
 bash -n extension/scripts/build-profile.sh
 bash -n extension/scripts/build-skeleton.sh
+bash -n extension/scripts/fuzz-skeleton.sh
 bash -n extension/scripts/smoke-profile.sh
 bash -n extension/scripts/static-checks.sh
 

@@ -71,6 +71,13 @@ cd extension
 ./scripts/static-checks.sh
 ```
 
+Run the canonical fuzz, stress, and edge-case subset:
+
+```bash
+cd extension
+./scripts/fuzz-skeleton.sh
+```
+
 Benchmark the canonical runtime paths:
 
 ```bash
@@ -115,7 +122,8 @@ Do not revive `infra/scripts/benchmark.sh`; the canonical benchmark entrypoint
 is `benchmarks/run-canonical.sh`, and `make benchmark` is expected to delegate
 to it directly. The same rule now applies to static checks and profile builds:
 the canonical repo-local paths are `extension/scripts/static-checks.sh`,
-`extension/scripts/build-profile.sh`, and `extension/scripts/smoke-profile.sh`.
+`extension/scripts/build-profile.sh`, `extension/scripts/smoke-profile.sh`,
+and `extension/scripts/fuzz-skeleton.sh`.
 
 ## Workflow
 

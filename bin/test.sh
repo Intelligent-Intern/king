@@ -79,35 +79,13 @@ run_integration_tests() {
 # Run fuzz tests
 run_fuzz_tests() {
     echo -e "${YELLOW}🎯 Running fuzz tests...${NC}"
-    
-    if [ ! -d tests/fuzz ]; then
-        echo -e "${YELLOW}⚠️  Fuzz tests directory not found${NC}"
-        return 0
+
+    if [ ! -x infra/scripts/fuzz.sh ]; then
+        echo -e "${YELLOW}⚠️  Canonical fuzz script not found: infra/scripts/fuzz.sh${NC}"
+        return 1
     fi
-    
-    cd tests/fuzz
-    
-    # Build fuzz tests if needed
-    if [ -f Makefile ]; then
-        make all
-    fi
-    
-    # Run each fuzz test for a short duration
-    local fuzz_tests=(
-        "fuzz_websocket_test"
-        "fuzz_iibin_protocol"
-        "fuzz_semantic_dns"
-        "fuzz_object_store"
-    )
-    
-    for fuzz_test in "${fuzz_tests[@]}"; do
-        if [ -x "./$fuzz_test" ]; then
-            echo -e "${BLUE}Running fuzz test: $fuzz_test${NC}"
-            timeout 60 "./$fuzz_test" || echo "Fuzz test completed"
-        fi
-    done
-    
-    cd ../..
+
+    bash infra/scripts/fuzz.sh
 }
 
 # Run performance tests

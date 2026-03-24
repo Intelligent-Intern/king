@@ -15,12 +15,13 @@
 
 ## Current Next Leaf
 
-- [ ] Add fuzz, stress, and edge-case coverage
+- [ ] Define reproducible release packaging
   build: `pass`
   audit: `pass`
-  tests: `269/269`
+  tests: `273/273`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
+  fuzz: `pass`
 
 ## Active Fronts
 
@@ -61,7 +62,7 @@
 - [x] Zeroize secrets and tighten ownership around TLS-adjacent buffers
 - [x] Harden public input paths for bounds and type handling
 - [x] Reconcile session, HTTP, and exception-hierarchy contract regressions after hardening
-- [ ] Add fuzz, stress, and edge-case coverage
+- [x] Add fuzz, stress, and edge-case coverage
 - [x] Build benchmark harnesses for session, proto, store, and Semantic DNS paths
 - [x] Wire CI to the canonical `build-skeleton`, `test-skeleton`, and `audit-skeleton-surface` scripts
 - [x] Add static checks and explicit debug, ASan, UBSan, and release profiles
