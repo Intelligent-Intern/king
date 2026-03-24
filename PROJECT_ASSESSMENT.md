@@ -15,14 +15,15 @@ Autoscaling, Integration).
 
 The repository now sits at a fully green verified baseline.
 As of 2026-03-24, the canonical audit, rebuild, and full PHPT matrix all pass
-against the current repository state.
+against the current repository state, and the repo now has a canonical local
+benchmark harness for the four core runtime paths that were still uncovered.
 
 ## Readiness Score: 8.5/10
 
 The system has clearly transitioned from a stub shell into a coordinated
 runtime. The limiting factor is no longer runtime parity; it is the remaining
-production-readiness work around benchmarking, deeper CI hardening, release
-packaging, and reducing the still-intentional skeleton surface.
+production-readiness work around deeper CI hardening, release packaging,
+sanitizer/profile coverage, and reducing the still-intentional skeleton surface.
 
 | Subsystem | Score | Status |
 |-----------|-------|--------|
@@ -36,7 +37,7 @@ packaging, and reducing the still-intentional skeleton surface.
 | **Telemetry & Autoscale** | 8/10 | Active monitoring and metrics loops verified in current targeted coverage |
 | **System Integration** | 8/10 | Core lifecycle harness active and green in the full matrix |
 | **Security & Hardening** | 8/10 | Policy gated, zeroing active, and hardened contracts verified green |
-| **Performance/Bench** | 2/10 | Not yet implemented |
+| **Performance/Bench** | 7/10 | Canonical local harnesses and baseline-compare flow present; not CI-gated yet |
 
 ## Verified Baseline
 
@@ -64,6 +65,7 @@ The currently verified regression baseline is:
 - extension load smoke: passing
 - `./scripts/test-skeleton.sh`: `269/269` PHPT tests passing
 - `.github/workflows/ci.yml`: wired to the canonical audit/build/test path
+- `./benchmarks/run-canonical.sh`: passing locally
 
 There are currently no open PHPT failures in the canonical suite.
 
@@ -93,7 +95,7 @@ The repo already has active native runtime slices for:
 The repo is still not a full production-grade implementation for:
 
 - real hardware-backed cloud provisioning (currently simulated)
-- performance benchmark harnesses, deeper CI hardening, release packaging, and full go-live readiness
+- CI/profile hardening, release packaging, and full go-live readiness
 
 The biggest architectural caveat is simple:
 several areas already have honest local runtime slices, but the backend depth,
@@ -121,7 +123,8 @@ transport depth, or operational depth is still incomplete.
 
 ### Weak or Still Open
 
-- benchmark coverage, richer CI/profile coverage, release engineering, and final end-to-end readiness
+- richer CI/profile coverage, remaining fuzz/stress depth, release engineering,
+  and final end-to-end readiness
 
 ## Source Of Truth Boundaries
 

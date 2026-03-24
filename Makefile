@@ -10,7 +10,7 @@ fuzz:
 	bash infra/scripts/fuzz.sh || exit 0
 
 benchmark:
-	bash infra/scripts/benchmark.sh || exit 0
+	bash benchmarks/run-canonical.sh
 
 deploy:
 	bash infra/scripts/deploy.sh || exit 0

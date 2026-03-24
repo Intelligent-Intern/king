@@ -15,11 +15,12 @@
 
 ## Current Next Leaf
 
-- [ ] Add non-regression performance harnesses for session, proto, store, and Semantic DNS paths
+- [ ] Add static checks and explicit debug, ASan, UBSan, and release profiles
   build: `pass`
   audit: `pass`
   tests: `269/269`
   ci: `wired`
+  benchmarks: `local harness present`
 
 ## Active Fronts
 
@@ -61,7 +62,7 @@
 - [x] Harden public input paths for bounds and type handling
 - [x] Reconcile session, HTTP, and exception-hierarchy contract regressions after hardening
 - [ ] Add fuzz, stress, and edge-case coverage
-- [ ] Build benchmark harnesses for session, proto, store, and Semantic DNS paths
+- [x] Build benchmark harnesses for session, proto, store, and Semantic DNS paths
 - [x] Wire CI to the canonical `build-skeleton`, `test-skeleton`, and `audit-skeleton-surface` scripts
 - [ ] Add static checks and explicit debug, ASan, UBSan, and release profiles
 - [ ] Define reproducible release packaging

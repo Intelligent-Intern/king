@@ -7,6 +7,7 @@ zend_result king_iibin_define_schema(
 )
 {
     king_proto_runtime_schema *runtime_schema;
+    zend_string *persistent_schema_name;
 
     if (!king_proto_registries_initialized) {
         zend_throw_exception_ex(
@@ -36,7 +37,9 @@ zend_result king_iibin_define_schema(
         return FAILURE;
     }
 
-    if (zend_hash_add_ptr(&king_proto_schema_registry, schema_name, runtime_schema) == NULL) {
+    persistent_schema_name = zend_string_dup(schema_name, 1);
+    if (zend_hash_add_ptr(&king_proto_schema_registry, persistent_schema_name, runtime_schema) == NULL) {
+        zend_string_release_ex(persistent_schema_name, 1);
         king_proto_runtime_schema_free(runtime_schema);
         zend_throw_exception_ex(
             king_ce_system_exception,

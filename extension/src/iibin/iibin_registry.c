@@ -133,6 +133,7 @@ zend_result king_iibin_define_enum(
     king_proto_runtime_enum *runtime_enum;
     zend_string *member_name;
     zval *member_number;
+    zend_string *persistent_enum_name;
 
     if (!king_proto_registries_initialized) {
         zend_throw_exception_ex(
@@ -209,7 +210,9 @@ zend_result king_iibin_define_enum(
         }
     } ZEND_HASH_FOREACH_END();
 
-    if (zend_hash_add_ptr(&king_proto_enum_registry, enum_name, runtime_enum) == NULL) {
+    persistent_enum_name = zend_string_dup(enum_name, 1);
+    if (zend_hash_add_ptr(&king_proto_enum_registry, persistent_enum_name, runtime_enum) == NULL) {
+        zend_string_release_ex(persistent_enum_name, 1);
         king_proto_runtime_enum_free(runtime_enum);
         zend_throw_exception_ex(
             king_ce_system_exception,

@@ -64,6 +64,19 @@ cd extension
 ./scripts/audit-skeleton-surface.sh
 ```
 
+Benchmark the canonical runtime paths:
+
+```bash
+./benchmarks/run-canonical.sh
+```
+
+Write a local baseline and compare against it:
+
+```bash
+./benchmarks/run-canonical.sh --write-baseline benchmarks/results/local-baseline.json
+./benchmarks/run-canonical.sh --baseline benchmarks/results/local-baseline.json
+```
+
 If you touch the PHP stub surface, also run:
 
 ```bash
@@ -72,6 +85,9 @@ php -l stubs/king.php
 
 If CI drifts from these commands, fix the workflow to match the scripts instead
 of introducing another build entry point.
+Do not revive `infra/scripts/benchmark.sh`; the canonical benchmark entrypoint
+is `benchmarks/run-canonical.sh`, and `make benchmark` is expected to delegate
+to it directly.
 
 ## Workflow
 
