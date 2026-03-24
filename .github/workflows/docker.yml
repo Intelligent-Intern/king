@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['8.1', '8.2', '8.3', '8.4']
+        php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']
         include:
           - php-version: '8.1'
             platforms: linux/amd64,linux/arm64
@@ -32,10 +32,13 @@ jobs:
             latest: false
           - php-version: '8.3'
             platforms: linux/amd64,linux/arm64,linux/arm/v7
-            latest: true
+            latest: false
           - php-version: '8.4'
             platforms: linux/amd64,linux/arm64
             latest: false
+          - php-version: '8.5'
+            platforms: linux/amd64,linux/arm64
+            latest: true
     
     steps:
       - name: Checkout code
