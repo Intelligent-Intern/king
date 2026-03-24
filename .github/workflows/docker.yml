@@ -20,6 +20,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
         php-version: ['8.1', '8.2', '8.3', '8.4']
         include:
@@ -83,6 +84,7 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             PHP_VERSION=${{ matrix.php-version }}
+            BUILD_JOBS=4
             BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
             VCS_REF=${{ github.sha }}
 

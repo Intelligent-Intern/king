@@ -1,14 +1,19 @@
 # syntax=docker/dockerfile:1.7
 
 ARG PHP_VERSION=8.3
+ARG BUILD_JOBS=4
 
 FROM php:${PHP_VERSION}-cli-bookworm AS build
 
 ARG PHP_VERSION
+ARG BUILD_JOBS
 ENV DEBIAN_FRONTEND=noninteractive \
     CARGO_HOME=/root/.cargo \
+    CARGO_BUILD_JOBS=${BUILD_JOBS} \
     CARGO_INCREMENTAL=0 \
     CARGO_TERM_COLOR=always \
+    CMAKE_BUILD_PARALLEL_LEVEL=${BUILD_JOBS} \
+    JOBS=${BUILD_JOBS} \
     PATH=/root/.cargo/bin:${PATH}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -41,6 +46,7 @@ RUN ./scripts/build-profile.sh release \
 FROM php:${PHP_VERSION}-cli-bookworm AS runtime
 
 ARG PHP_VERSION
+ARG BUILD_JOBS
 ARG BUILD_DATE
 ARG VCS_REF
 

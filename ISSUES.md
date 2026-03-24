@@ -60,7 +60,7 @@
 
 - [ ] Put benchmark baselines under CI with explicit per-case regression budgets
 - [ ] Turn the QUIC backend bootstrap into a deterministic pinned dependency path instead of relying on a locally resurrected external `quiche/` checkout
-- [ ] Add package install/smoke matrix coverage for clean hosts and supported PHP/API combinations
+- [ ] Add package install/smoke matrix coverage for clean hosts, published container images, and supported PHP/API combinations
 - [ ] Verify upgrade/downgrade compatibility for release artifacts and persisted object-store metadata/state
 - [ ] Add long-duration ASan/UBSan soak gates with archived diagnostics on failure
 
@@ -86,6 +86,12 @@
 - [x] Autoscaling controller decisions now consume live telemetry/system signals with cooldown, hysteresis, and Hetzner step guards
   targeted PHPTs: `012`, `013`, `280`, `298`, `299`
   coverage: live telemetry-backed CPU/queue/RPS/latency signals, system-memory fallback, cooldown enforcement across same-second ticks, capped scale-up policy resolution, pending-node guards on the Hetzner path, and drain-before-delete automatic scale-down behavior
+- [x] Docker runtime and demo image build paths now point at real repo assets and build locally
+  workflow: `.github/workflows/docker.yml`
+  runtime image: `infra/php-runtime.Dockerfile`
+  demo image: `infra/demo-server/Dockerfile`
+  local verification: `docker build --build-arg PHP_VERSION=8.3 -f infra/php-runtime.Dockerfile .` and `docker build -f infra/demo-server/Dockerfile .`
+  coverage: the GHCR workflow no longer references nonexistent `infra/php8.x/` paths, the runtime image bootstraps required build dependencies including `quiche` and `uuid`, and the demo image now has a complete Vite entry surface that builds into a runnable nginx-served artifact
 
 ## How To Use This File
 

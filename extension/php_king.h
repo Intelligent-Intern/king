@@ -323,10 +323,45 @@ php_king_cancel_token_obj_from_zend(zend_object *obj)
         ((char*)obj - XtOffsetOf(king_cancel_token_object, std));
 }
 
+#if PHP_VERSION_ID < 80400
+static inline bool king_zend_string_equals_cstr_compat(
+    const zend_string *value,
+    const char *literal,
+    size_t literal_len)
+{
+    return value != NULL
+        && ZSTR_LEN(value) == literal_len
+        && memcmp(ZSTR_VAL(value), literal, literal_len) == 0;
+}
+
+#define zend_string_equals_cstr(value, literal, literal_len) \
+    king_zend_string_equals_cstr_compat((value), (literal), (literal_len))
+
+#define zend_string_starts_with_literal(value, literal) \
+    ((value) != NULL \
+        && ZSTR_LEN(value) >= (sizeof(literal) - 1) \
+        && memcmp(ZSTR_VAL(value), (literal), sizeof(literal) - 1) == 0)
+#endif
+
+static inline bool king_vm_interrupt_pending(void)
+{
+#if PHP_VERSION_ID >= 80200
+    return zend_atomic_bool_load_ex(&EG(vm_interrupt));
+#else
+    return EG(vm_interrupt);
+#endif
+}
+
 static inline void king_process_pending_interrupts(void)
 {
-    if (UNEXPECTED(zend_atomic_bool_load_ex(&EG(vm_interrupt)))) {
+    if (UNEXPECTED(king_vm_interrupt_pending())) {
+#if PHP_VERSION_ID >= 80400
         zend_fcall_interrupt(EG(current_execute_data));
+#else
+        if (zend_interrupt_function != NULL) {
+            zend_interrupt_function(EG(current_execute_data));
+        }
+#endif
     }
 }
 
