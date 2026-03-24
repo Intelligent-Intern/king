@@ -270,6 +270,8 @@ if test "$PHP_KING" != "no"; then
         src/server/index.c \
         src/server/open_telemetry.c \
         src/server/session.c \
+        src/telemetry/telemetry.c \
+        src/telemetry/metrics.c \
         src/server/tls.c \
         src/server/websocket.c \
         src/core/version.c       \
