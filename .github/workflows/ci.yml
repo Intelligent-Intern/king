@@ -102,6 +102,20 @@ jobs:
         working-directory: extension
         run: ./scripts/test-skeleton.sh
 
+      - name: Verify reproducible release packaging
+        working-directory: extension
+        run: ./scripts/package-release.sh --verify-reproducible --output-dir ../dist
+
+      - name: Upload release package artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: king-release-package
+          if-no-files-found: error
+          path: |
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256
+
       - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4

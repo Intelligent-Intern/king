@@ -15,13 +15,14 @@
 
 ## Current Next Leaf
 
-- [ ] Define reproducible release packaging
+- [ ] Reduce remaining stub surface subsystem by subsystem
   build: `pass`
   audit: `pass`
   tests: `273/273`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
+  package: `pass`
 
 ## Active Fronts
 
@@ -66,7 +67,7 @@
 - [x] Build benchmark harnesses for session, proto, store, and Semantic DNS paths
 - [x] Wire CI to the canonical `build-skeleton`, `test-skeleton`, and `audit-skeleton-surface` scripts
 - [x] Add static checks and explicit debug, ASan, UBSan, and release profiles
-- [ ] Define reproducible release packaging
+- [x] Define reproducible release packaging
 - [ ] Reduce remaining stub surface subsystem by subsystem
 - [ ] Add final parity, end-to-end, and go-live readiness checks
 

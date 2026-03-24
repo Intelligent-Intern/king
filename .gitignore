@@ -24,6 +24,7 @@ extension/tests/*.out
 extension/tests/*.php
 extension/tests/*.sh
 benchmarks/results/
+dist/
 .cache/
 __pycache__/
 .pytest_cache/

@@ -78,6 +78,20 @@ cd extension
 ./scripts/fuzz-skeleton.sh
 ```
 
+Build the canonical release package:
+
+```bash
+cd extension
+./scripts/package-release.sh
+```
+
+Verify that the release package is reproducible:
+
+```bash
+cd extension
+./scripts/package-release.sh --verify-reproducible
+```
+
 Benchmark the canonical runtime paths:
 
 ```bash
@@ -123,7 +137,8 @@ is `benchmarks/run-canonical.sh`, and `make benchmark` is expected to delegate
 to it directly. The same rule now applies to static checks and profile builds:
 the canonical repo-local paths are `extension/scripts/static-checks.sh`,
 `extension/scripts/build-profile.sh`, `extension/scripts/smoke-profile.sh`,
-and `extension/scripts/fuzz-skeleton.sh`.
+`extension/scripts/fuzz-skeleton.sh`, and
+`extension/scripts/package-release.sh`.
 
 ## Workflow
 
