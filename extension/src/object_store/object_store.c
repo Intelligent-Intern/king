@@ -463,6 +463,15 @@ int king_object_store_local_fs_remove(const char *object_id)
     /* Remove durable metadata sidecar */
     king_object_store_meta_remove(object_id);
 
+    /* Auto-invalidate matching CDN cache entry */
+    {
+        zend_string *zobj_id = zend_string_init(object_id, strlen(object_id), 0);
+        if (king_cdn_cache_registry_initialized) {
+            zend_hash_del(&king_cdn_cache_registry, zobj_id);
+        }
+        zend_string_release(zobj_id);
+    }
+
     return SUCCESS;
 }
 
@@ -553,7 +562,8 @@ int king_cdn_find_optimal_edge_node(const char *client_ip, king_storage_node_t *
 
 void king_object_store_cleanup_expired_objects(void)
 {
-    /* skeleton: noop */
+    /* Delegate CDN expiry sweep — called from PHP or periodic maintenance */
+    king_cdn_sweep_expired();
 }
 
 /* --- Backend-routing dispatch --- */

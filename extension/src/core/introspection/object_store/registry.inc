@@ -122,3 +122,15 @@ PHP_FUNCTION(king_object_store_list)
 
     king_object_store_local_fs_list(return_value);
 }
+
+PHP_FUNCTION(king_object_store_cleanup_expired_objects)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    if (!king_object_store_runtime.initialized) {
+        return;
+    }
+
+    king_object_store_cleanup_expired_objects();
+    RETURN_TRUE;
+}

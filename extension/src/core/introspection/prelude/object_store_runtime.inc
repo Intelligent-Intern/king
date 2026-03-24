@@ -85,6 +85,7 @@ static void king_cdn_collect_live_stats(
 )
 {
     zval *entry_zv;
+    time_t now = time(NULL);
 
     *cached_object_count = 0;
     *cached_bytes = 0;
@@ -107,6 +108,11 @@ static void king_cdn_collect_live_stats(
             continue;
         }
 
+        /* Skip expired entries in stats (they'll be evicted on next lookup) */
+        if (entry->expires_at > 0 && now > entry->expires_at) {
+            continue;
+        }
+
         (*cached_object_count)++;
         *cached_bytes += entry->payload_size;
 
@@ -115,4 +121,44 @@ static void king_cdn_collect_live_stats(
             *latest_cached_at = cached_at;
         }
     } ZEND_HASH_FOREACH_END();
+}
+
+/*
+ * Purge all expired CDN cache entries. Called by king_object_store_cleanup_expired_objects.
+ * We collect expired keys first, then delete them to avoid modifying the
+ * hash table during iteration.
+ */
+void king_cdn_sweep_expired(void)
+{
+    zval *entry_zv;
+    zend_string *key;
+    time_t now;
+    zend_string *expired_keys[256];
+    int expired_count = 0;
+    int i;
+
+    if (!king_cdn_cache_registry_initialized) {
+        return;
+    }
+
+    now = time(NULL);
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(&king_cdn_cache_registry, key, entry_zv) {
+        king_cdn_cache_entry *entry;
+
+        if (key == NULL || Z_TYPE_P(entry_zv) != IS_PTR) {
+            continue;
+        }
+        entry = (king_cdn_cache_entry *) Z_PTR_P(entry_zv);
+        if (entry != NULL && entry->expires_at > 0 && now > entry->expires_at) {
+            if (expired_count < 256) {
+                expired_keys[expired_count++] = zend_string_copy(key);
+            }
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    for (i = 0; i < expired_count; i++) {
+        zend_hash_del(&king_cdn_cache_registry, expired_keys[i]);
+        zend_string_release(expired_keys[i]);
+    }
 }

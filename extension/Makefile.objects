@@ -448,6 +448,18 @@ src/iibin/iibin_decoding.lo: /home/jochen/projects/king.site/king/extension/src/
 -include src/semantic_dns/semantic_dns.dep
 src/semantic_dns/semantic_dns.lo: /home/jochen/projects/king.site/king/extension/src/semantic_dns/semantic_dns.c
 	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/semantic_dns/semantic_dns.c -o src/semantic_dns/semantic_dns.lo  -MMD -MF src/semantic_dns/semantic_dns.dep -MT src/semantic_dns/semantic_dns.lo
+-include src/semantic_dns/mother_node_discovery.dep
+src/semantic_dns/mother_node_discovery.lo: /home/jochen/projects/king.site/king/extension/src/semantic_dns/mother_node_discovery.c
+	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/semantic_dns/mother_node_discovery.c -o src/semantic_dns/mother_node_discovery.lo  -MMD -MF src/semantic_dns/mother_node_discovery.dep -MT src/semantic_dns/mother_node_discovery.lo
+-include src/semantic_dns/routing.dep
+src/semantic_dns/routing.lo: /home/jochen/projects/king.site/king/extension/src/semantic_dns/routing.c
+	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/semantic_dns/routing.c -o src/semantic_dns/routing.lo  -MMD -MF src/semantic_dns/routing.dep -MT src/semantic_dns/routing.lo
+-include src/semantic_dns/state.dep
+src/semantic_dns/state.lo: /home/jochen/projects/king.site/king/extension/src/semantic_dns/state.c
+	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/semantic_dns/state.c -o src/semantic_dns/state.lo  -MMD -MF src/semantic_dns/state.dep -MT src/semantic_dns/state.lo
+-include src/object_store/object_store.dep
+src/object_store/object_store.lo: /home/jochen/projects/king.site/king/extension/src/object_store/object_store.c
+	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/object_store/object_store.c -o src/object_store/object_store.lo  -MMD -MF src/object_store/object_store.dep -MT src/object_store/object_store.lo
 -include src/server/admin_api.dep
 src/server/admin_api.lo: /home/jochen/projects/king.site/king/extension/src/server/admin_api.c
 	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/server/admin_api.c -o src/server/admin_api.lo  -MMD -MF src/server/admin_api.dep -MT src/server/admin_api.lo

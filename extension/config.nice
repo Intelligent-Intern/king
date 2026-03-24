@@ -3,5 +3,4 @@
 # Created by configure
 
 './configure' \
-'--enable-king' \
 "$@"

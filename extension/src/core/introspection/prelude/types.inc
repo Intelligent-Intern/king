@@ -17,13 +17,14 @@
 #include "include/config/smart_dns/base_layer.h"
 #include "include/iibin/iibin_internal.h"
 
-static HashTable king_semantic_dns_service_registry;
-static HashTable king_semantic_dns_mother_node_registry;
-static HashTable king_cdn_cache_registry;
-static HashTable king_telemetry_metric_registry;
-static bool king_semantic_dns_registry_initialized = false;
-static bool king_cdn_cache_registry_initialized = false;
-static bool king_telemetry_registry_initialized = false;
+HashTable king_semantic_dns_service_registry;
+HashTable king_semantic_dns_mother_node_registry;
+HashTable king_cdn_cache_registry;
+HashTable king_telemetry_metric_registry;
+
+bool king_semantic_dns_registry_initialized = false;
+bool king_cdn_cache_registry_initialized    = false;
+bool king_telemetry_registry_initialized    = false;
 
 typedef struct _king_semantic_dns_service {
     zend_string *service_id;
@@ -54,6 +55,9 @@ typedef struct _king_cdn_cache_entry {
     zend_long payload_size;
     time_t cached_at;
     time_t expires_at;
+    /* Edge-state tracking */
+    zend_long served_count;
+    time_t last_served_at;
 } king_cdn_cache_entry;
 
 

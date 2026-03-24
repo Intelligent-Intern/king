@@ -113,6 +113,7 @@ PHP_FUNCTION(king_semantic_dns_update_service_status);
 
 PHP_FUNCTION(king_object_store_init);
 PHP_FUNCTION(king_object_store_optimize);
+PHP_FUNCTION(king_object_store_cleanup_expired_objects);
 PHP_FUNCTION(king_cdn_cache_object);
 PHP_FUNCTION(king_cdn_invalidate_cache);
 

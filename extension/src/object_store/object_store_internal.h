@@ -11,7 +11,14 @@
 #ifndef KING_OBJECT_STORE_INTERNAL_H
 #define KING_OBJECT_STORE_INTERNAL_H
 
+#include <stdbool.h>
 #include "include/object_store/object_store.h"
+#include <zend_hash.h>
+
+/* CDN cache registry state (defined in prelude/object_store_runtime.inc via types.inc) */
+extern HashTable king_cdn_cache_registry;
+extern bool king_cdn_cache_registry_initialized;
+void king_cdn_sweep_expired(void);
 
 typedef struct _king_object_store_runtime_state {
     zend_bool initialized;
