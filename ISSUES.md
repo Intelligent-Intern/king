@@ -15,7 +15,7 @@
 
 ## Current Next Leaf
 
-- [ ] Port CDN cache and distribution logic into the active runtime
+- [ ] Add edge-state, TTL, invalidation, and distribution behavior
   `extension/src/object_store/`
 
 ## Active Fronts
@@ -29,7 +29,7 @@ All checked!
 - [x] Replace local registry behavior with a real object-store backend core
 - [x] Implement concrete store backends and capacity boundaries
 - [x] Add durable persistence paths
-- [ ] Port CDN cache and distribution logic into the active runtime
+- [x] Port CDN cache and distribution logic into the active runtime
 - [ ] Add edge-state, TTL, invalidation, and distribution behavior
 - [ ] Add backend and end-to-end verification
 

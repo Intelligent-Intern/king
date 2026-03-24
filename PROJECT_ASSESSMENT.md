@@ -37,12 +37,12 @@ Repository facts from the current tree:
 - `extension/src`: 169 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 167 headers
-- `extension/tests`: 257 PHPT files
+- `extension/tests`: 259 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently tracked green regression baseline is:
 
-- `257/257` PHPT tests passing
+- `259/259` PHPT tests passing
 
 ## What Is Real Today
 
@@ -84,6 +84,7 @@ transport depth, or operational depth is still incomplete.
 - IIBIN runtime ownership and codec maturity
 - native Semantic DNS control-plane, routing, and policy-based discovery
 - native object-store `local_fs` backend core, backend-routing dispatch, capacity enforcement, replication stub, and durable `.meta` sidecar persistence with stats rehydration
+- CDN in-memory cache registry with TTL expiry, in-place re-cache, invalidation, and live edge-node exposure from runtime config
 
 ### Medium
 

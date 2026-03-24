@@ -53,6 +53,7 @@ static king_cdn_cache_entry *king_cdn_cache_registry_get_entry(
 )
 {
     zval *entry_zv;
+    king_cdn_cache_entry *entry;
 
     if (!king_cdn_cache_registry_initialized) {
         return NULL;
@@ -63,7 +64,18 @@ static king_cdn_cache_entry *king_cdn_cache_registry_get_entry(
         return NULL;
     }
 
-    return (king_cdn_cache_entry *) Z_PTR_P(entry_zv);
+    entry = (king_cdn_cache_entry *) Z_PTR_P(entry_zv);
+    if (entry == NULL) {
+        return NULL;
+    }
+
+    /* TTL expiry: treat expired entries as cache misses and evict them */
+    if (entry->expires_at > 0 && time(NULL) > entry->expires_at) {
+        zend_hash_del(&king_cdn_cache_registry, object_id);
+        return NULL;
+    }
+
+    return entry;
 }
 
 static void king_cdn_collect_live_stats(
