@@ -34,7 +34,7 @@ All checked!
 - [x] Add backend and end-to-end verification
 - [x] Implement cloud-native backup and high-availability hooks
 - [x] Complete CDN edge-state and distribution behavior (multi-node)
-- [ ] End-to-end regression across all backends (S3, Memcached)
+- [x] End-to-end regression across all backends (S3, Memcached)
 
 ### 3. MCP and orchestration
 

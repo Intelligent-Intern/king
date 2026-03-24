@@ -13,7 +13,12 @@ PHP_FUNCTION(king_object_store_init)
     memset(&new_config, 0, sizeof(new_config));
     ZVAL_UNDEF(&new_config.cloud_credentials);
     
-    new_config.primary_backend = KING_STORAGE_BACKEND_LOCAL_FS;
+    value_zv = zend_hash_str_find(Z_ARRVAL_P(config), "primary_backend", sizeof("primary_backend") - 1);
+    if (value_zv != NULL && Z_TYPE_P(value_zv) == IS_LONG) {
+        new_config.primary_backend = (king_storage_backend_t) Z_LVAL_P(value_zv);
+    } else {
+        new_config.primary_backend = KING_STORAGE_BACKEND_LOCAL_FS;
+    }
 
     value_zv = zend_hash_str_find(Z_ARRVAL_P(config), "storage_root_path", sizeof("storage_root_path") - 1);
     if (value_zv != NULL && Z_TYPE_P(value_zv) == IS_STRING) {

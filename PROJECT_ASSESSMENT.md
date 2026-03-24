@@ -57,7 +57,7 @@ The repo already has active native runtime slices for:
 - server-side cancel, early hints, websocket upgrade, admin API, TLS reload, CORS, and telemetry-init helpers
 - IIBIN schema, enum, encode, decode, object hydration, and wire validation
 - native Semantic DNS registry, routing, state persistence, discovery, and mother-node tracking
-- native file-system object-store backend core with durable .meta sidecars, local CDN cache, multi-node distribution, and Cloud HA hooks (S3/Backup)
+- native file-system object-store backend core with durable .meta sidecars, local CDN cache, multi-node distribution, Cloud HA hooks (S3/Backup), and multi-backend routing (S3/Memcached simulated)
 - local MCP lifecycle and stream-upload/download parity surfaces
 
 ## What Is Not Finished
