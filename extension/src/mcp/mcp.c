@@ -75,7 +75,7 @@ int king_mcp_transfer_store(
     king_object_metadata_t meta;
 
     /* REPLACING local HashTable storage with Object Store backend */
-    snprintf(object_id, sizeof(object_id), "mcp/%s", ZSTR_VAL(key));
+    snprintf(object_id, sizeof(object_id), "mcp-%s", ZSTR_VAL(key));
     
     memset(&meta, 0, sizeof(meta));
     strncpy(meta.object_id, object_id, sizeof(meta.object_id) - 1);
@@ -115,7 +115,7 @@ zend_string *king_mcp_transfer_find(
         size_t data_size = 0;
         king_object_metadata_t meta;
 
-        snprintf(object_id, sizeof(object_id), "mcp/%s", ZSTR_VAL(Z_STR_P(val)));
+        snprintf(object_id, sizeof(object_id), "mcp-%s", ZSTR_VAL(Z_STR_P(val)));
         
         if (king_object_store_read_object(object_id, &data, &data_size, &meta) == SUCCESS) {
             zend_string *res = zend_string_init(data, data_size, 0);
