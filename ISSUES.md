@@ -47,8 +47,8 @@ All checked!
 
 ### 4. Telemetry, autoscaling, and system integration
 
-- [ ] Port telemetry runtime beyond snapshots into active span, log, and context handling
-- [ ] Activate metrics aggregation, flush, and export paths
+- [x] Port telemetry runtime beyond snapshots into active span, log, and context handling
+- [x] Activate metrics aggregation, flush, and export paths
 - [ ] Port autoscaling monitoring, decision, and provisioning loops
 - [ ] Port system integration runtime and component orchestration state
 - [ ] Add reusable end-to-end harnesses for these subsystems

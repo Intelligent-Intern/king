@@ -247,6 +247,9 @@ if test "$PHP_KING" != "no"; then
         src/client/http3.c \
         src/iibin/iibin.c \
         src/iibin/iibin_api.c \
+        src/autoscaling/autoscaling.c \
+        src/autoscaling/provisioning.c \
+        src/integration/system_integration.c \
         src/iibin/iibin_registry.c \
         src/iibin/iibin_schema.c \
         src/iibin/iibin_schema_compiler.c \
