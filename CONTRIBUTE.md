@@ -64,6 +64,13 @@ cd extension
 ./scripts/audit-skeleton-surface.sh
 ```
 
+Run the repo-local static checks:
+
+```bash
+cd extension
+./scripts/static-checks.sh
+```
+
 Benchmark the canonical runtime paths:
 
 ```bash
@@ -83,11 +90,32 @@ If you touch the PHP stub surface, also run:
 php -l stubs/king.php
 ```
 
+Explicit local build profiles are available through:
+
+```bash
+cd extension
+./scripts/build-profile.sh release
+./scripts/build-profile.sh debug
+./scripts/build-profile.sh asan
+./scripts/build-profile.sh ubsan
+```
+
+Smoke the staged profile artifact after each non-release build:
+
+```bash
+cd extension
+./scripts/smoke-profile.sh debug
+./scripts/smoke-profile.sh asan
+./scripts/smoke-profile.sh ubsan
+```
+
 If CI drifts from these commands, fix the workflow to match the scripts instead
 of introducing another build entry point.
 Do not revive `infra/scripts/benchmark.sh`; the canonical benchmark entrypoint
 is `benchmarks/run-canonical.sh`, and `make benchmark` is expected to delegate
-to it directly.
+to it directly. The same rule now applies to static checks and profile builds:
+the canonical repo-local paths are `extension/scripts/static-checks.sh`,
+`extension/scripts/build-profile.sh`, and `extension/scripts/smoke-profile.sh`.
 
 ## Workflow
 

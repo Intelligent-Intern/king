@@ -13,6 +13,7 @@ extension/config.log
 extension/configure~
 extension/modules/*.so
 extension/modules/*.la
+extension/build/profiles/
 extension/src/**/*.dep
 extension/src/**/*.lo
 extension/src/**/*.o

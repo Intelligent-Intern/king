@@ -17,6 +17,7 @@
  */
 
 #include "include/validation/config_param/validate_generic_string.h"
+#include <zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h> /* For spl_ce_InvalidArgumentException */
 
 /**

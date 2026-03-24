@@ -2,6 +2,11 @@
 #
 # Created by configure
 
+CFLAGS='-O2 -g -DNDEBUG' \
+CC='cc' \
+CXX='c++' \
 './configure' \
 '--enable-king' \
+'LDFLAGS=' \
+'CPPFLAGS=' \
 "$@"

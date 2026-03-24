@@ -7,6 +7,7 @@
 #include "include/validation/config_param/validate_positive_long.h"
 #include "include/validation/config_param/validate_string_from_allowlist.h"
 #include <ext/spl/spl_exceptions.h>
+#include <zend_exceptions.h>
 
 static int kg_validate_non_negative_long_local(zval *value, zend_long *target)
 {

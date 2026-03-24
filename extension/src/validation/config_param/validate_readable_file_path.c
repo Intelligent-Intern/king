@@ -20,6 +20,7 @@
 
 #include "include/validation/config_param/validate_readable_file_path.h"
 #include "main/php_streams.h"
+#include <zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h>
 
 int kg_validate_readable_file_path(zval *value, char **target)

@@ -1,4 +1,4 @@
-.PHONY: build unit fuzz benchmark deploy server-build help clean
+.PHONY: build unit fuzz benchmark deploy server-build help clean static-checks profile-release profile-debug profile-asan profile-ubsan profile-smoke-release profile-smoke-debug profile-smoke-asan profile-smoke-ubsan
 
 build:
 	sudo bash infra/scripts/build.sh || exit 0
@@ -11,6 +11,33 @@ fuzz:
 
 benchmark:
 	bash benchmarks/run-canonical.sh
+
+static-checks:
+	bash extension/scripts/static-checks.sh
+
+profile-release:
+	bash extension/scripts/build-profile.sh release
+
+profile-debug:
+	bash extension/scripts/build-profile.sh debug
+
+profile-asan:
+	bash extension/scripts/build-profile.sh asan
+
+profile-ubsan:
+	bash extension/scripts/build-profile.sh ubsan
+
+profile-smoke-release:
+	bash extension/scripts/smoke-profile.sh release
+
+profile-smoke-debug:
+	bash extension/scripts/smoke-profile.sh debug
+
+profile-smoke-asan:
+	bash extension/scripts/smoke-profile.sh asan
+
+profile-smoke-ubsan:
+	bash extension/scripts/smoke-profile.sh ubsan
 
 deploy:
 	bash infra/scripts/deploy.sh || exit 0

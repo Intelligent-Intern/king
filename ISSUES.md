@@ -15,12 +15,12 @@
 
 ## Current Next Leaf
 
-- [ ] Add static checks and explicit debug, ASan, UBSan, and release profiles
+- [ ] Add fuzz, stress, and edge-case coverage
   build: `pass`
   audit: `pass`
   tests: `269/269`
-  ci: `wired`
-  benchmarks: `local harness present`
+  static-checks: `pass`
+  profiles: `release/debug/asan/ubsan pass`
 
 ## Active Fronts
 
@@ -64,7 +64,7 @@
 - [ ] Add fuzz, stress, and edge-case coverage
 - [x] Build benchmark harnesses for session, proto, store, and Semantic DNS paths
 - [x] Wire CI to the canonical `build-skeleton`, `test-skeleton`, and `audit-skeleton-surface` scripts
-- [ ] Add static checks and explicit debug, ASan, UBSan, and release profiles
+- [x] Add static checks and explicit debug, ASan, UBSan, and release profiles
 - [ ] Define reproducible release packaging
 - [ ] Reduce remaining stub surface subsystem by subsystem
 - [ ] Add final parity, end-to-end, and go-live readiness checks

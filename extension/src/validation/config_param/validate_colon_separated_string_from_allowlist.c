@@ -17,6 +17,7 @@
  * =========================================================================
  */
 #include "include/validation/config_param/validate_colon_separated_string_from_allowlist.h"
+#include <zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h> /* spl_ce_InvalidArgumentException */
 
 int kg_validate_colon_separated_string_from_allowlist(zval *value, const char *allowed[], char **dest)

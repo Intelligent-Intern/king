@@ -18,6 +18,7 @@
  */
 
 #include "include/validation/config_param/validate_erasure_coding_shards_string.h"
+#include <zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h>
 #include <stdio.h>
 

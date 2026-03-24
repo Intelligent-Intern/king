@@ -18,6 +18,7 @@
  */
 
 #include "include/validation/config_param/validate_scheduler_policy.h"
+#include <zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h> /* For spl_ce_InvalidArgumentException */
 
 /**

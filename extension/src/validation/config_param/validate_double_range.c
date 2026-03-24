@@ -13,6 +13,7 @@
  */
 
 #include "include/validation/config_param/validate_double_range.h"
+#include <zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h>
 
 /**

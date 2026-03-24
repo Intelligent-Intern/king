@@ -69,6 +69,7 @@ jobs:
             automake \
             bison \
             build-essential \
+            clang \
             cmake \
             libssl-dev \
             libtool \
@@ -85,13 +86,17 @@ jobs:
       - name: Lint public PHP stub surface
         run: php -l stubs/king.php
 
+      - name: Run repo-local static checks
+        working-directory: extension
+        run: ./scripts/static-checks.sh
+
       - name: Audit active skeleton surface
         working-directory: extension
         run: ./scripts/audit-skeleton-surface.sh
 
-      - name: Build canonical skeleton
+      - name: Build canonical release profile
         working-directory: extension
-        run: ./scripts/build-skeleton.sh
+        run: ./scripts/build-profile.sh release
 
       - name: Run canonical PHPT suite
         working-directory: extension
@@ -105,6 +110,80 @@ jobs:
           if-no-files-found: ignore
           path: |
             extension/config.log
+            extension/tests/*.diff
+            extension/tests/*.exp
+            extension/tests/*.log
+            extension/tests/*.out
+
+  profile-smoke:
+    name: ${{ matrix.profile }} profile smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+          - debug
+          - asan
+          - ubsan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+          extensions: curl, mbstring, openssl, sockets
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('quiche/quiche/Cargo.lock', 'quiche/apps/Cargo.lock') }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            bison \
+            build-essential \
+            clang \
+            cmake \
+            libssl-dev \
+            libtool \
+            ninja-build \
+            pkg-config \
+            re2c
+
+      - name: Build profile
+        working-directory: extension
+        run: ./scripts/build-profile.sh "${{ matrix.profile }}"
+
+      - name: Smoke profile artifact
+        working-directory: extension
+        run: ./scripts/smoke-profile.sh "${{ matrix.profile }}"
+
+      - name: Upload profile failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: king-${{ matrix.profile }}-profile-failures
+          if-no-files-found: ignore
+          path: |
+            extension/config.log
+            extension/build/profiles/${{ matrix.profile }}/
             extension/tests/*.diff
             extension/tests/*.exp
             extension/tests/*.log

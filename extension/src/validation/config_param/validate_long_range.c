@@ -14,6 +14,7 @@
 
 #include "include/validation/config_param/validate_long_range.h"
 #include "php.h"
+#include <zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h>
 
 /**
