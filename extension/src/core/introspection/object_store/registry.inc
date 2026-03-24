@@ -14,6 +14,11 @@ PHP_FUNCTION(king_object_store_put)
         Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
 
+    memset(&metadata, 0, sizeof(metadata));
+    if (object_id) {
+        strncpy(metadata.object_id, ZSTR_VAL(object_id), sizeof(metadata.object_id) - 1);
+    }
+
     if (!king_object_store_runtime.initialized) {
         zend_throw_exception_ex(
             king_ce_runtime_exception,
@@ -31,8 +36,7 @@ PHP_FUNCTION(king_object_store_put)
     (void) options;
 
     if (king_object_store_runtime.config.max_storage_size_bytes > 0) {
-        zend_long effective_stored_bytes = king_object_store_runtime.current_stored_bytes + ZSTR_LEN(payload);
-        if ((uint64_t)effective_stored_bytes > king_object_store_runtime.config.max_storage_size_bytes) {
+        if ((uint64_t)(king_object_store_runtime.current_stored_bytes + ZSTR_LEN(payload)) > king_object_store_runtime.config.max_storage_size_bytes) {
             zend_throw_exception_ex(
                 king_ce_validation_exception,
                 0,
@@ -133,4 +137,29 @@ PHP_FUNCTION(king_object_store_cleanup_expired_objects)
 
     king_object_store_cleanup_expired_objects();
     RETURN_TRUE;
+}
+
+PHP_FUNCTION(king_object_store_get_metadata)
+{
+    zend_string *object_id;
+    king_object_metadata_t metadata;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(object_id)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (!king_object_store_runtime.initialized) {
+        return;
+    }
+
+    if (king_object_store_meta_read(ZSTR_VAL(object_id), &metadata) != SUCCESS) {
+        RETURN_NULL();
+    }
+
+    array_init(return_value);
+    add_assoc_string(return_value, "object_id",          metadata.object_id);
+    add_assoc_long  (return_value, "content_length",     (zend_long) metadata.content_length);
+    add_assoc_long  (return_value, "created_at",         (zend_long) metadata.created_at);
+    add_assoc_long  (return_value, "is_backed_up",       (zend_long) metadata.is_backed_up);
+    add_assoc_long  (return_value, "replication_status", (zend_long) metadata.replication_status);
 }

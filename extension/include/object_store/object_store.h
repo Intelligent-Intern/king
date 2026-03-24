@@ -54,8 +54,9 @@ typedef struct _king_object_metadata_t {
     king_object_type_t object_type;
     king_cache_policy_t cache_policy;
     uint32_t cache_ttl_seconds;
-    zval custom_headers; /* PHP array */
-    zval tags; /* PHP array for tagging */
+    /* Cloud-native HA state */
+    uint8_t is_backed_up;
+    uint8_t replication_status; /* 0: none, 1: pending, 2: completed, 3: failed */
 } king_object_metadata_t;
 
 typedef struct _king_storage_node_t {

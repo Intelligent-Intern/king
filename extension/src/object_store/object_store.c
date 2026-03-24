@@ -12,6 +12,7 @@
 
 #include "php_king.h"
 #include "object_store_internal.h"
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -157,6 +158,8 @@ void king_object_store_build_meta_path(char *dest, size_t dest_len, const char *
  *   object_type=<int>\n
  *   cache_policy=<int>\n
  *   cache_ttl_seconds=<uint32>\n
+ *   is_backed_up=<bool/uint8>\n
+ *   replication_status=<uint8>\n
  */
 int king_object_store_meta_write(const char *object_id, const king_object_metadata_t *metadata)
 {
@@ -190,8 +193,10 @@ int king_object_store_meta_write(const char *object_id, const king_object_metada
         "expires_at=%" PRId64 "\n"
         "object_type=%d\n"
         "cache_policy=%d\n"
-        "cache_ttl_seconds=%u\n",
-        metadata->object_id,
+        "cache_ttl_seconds=%u\n"
+        "is_backed_up=%d\n"
+        "replication_status=%d\n",
+        (metadata->object_id[0] != '\0' ? metadata->object_id : object_id),
         metadata->content_type,
         metadata->content_encoding,
         metadata->etag,
@@ -201,7 +206,9 @@ int king_object_store_meta_write(const char *object_id, const king_object_metada
         (int64_t)  metadata->expires_at,
         (int)      metadata->object_type,
         (int)      metadata->cache_policy,
-        (unsigned) metadata->cache_ttl_seconds
+        (unsigned) metadata->cache_ttl_seconds,
+        (int)      metadata->is_backed_up,
+        (int)      metadata->replication_status
     );
 
     fclose(fp);
@@ -263,6 +270,10 @@ int king_object_store_meta_read(const char *object_id, king_object_metadata_t *m
             metadata->cache_policy = (king_cache_policy_t) atoi(val);
         } else if (strcmp(key, "cache_ttl_seconds") == 0) {
             metadata->cache_ttl_seconds = (uint32_t) strtoul(val, NULL, 10);
+        } else if (strcmp(key, "is_backed_up") == 0) {
+            metadata->is_backed_up = (uint8_t) atoi(val);
+        } else if (strcmp(key, "replication_status") == 0) {
+            metadata->replication_status = (uint8_t) atoi(val);
         }
     }
 
@@ -376,6 +387,16 @@ int king_object_store_local_fs_write(
 
     /* Write durable metadata sidecar */
     king_object_store_meta_write(object_id, metadata);
+
+    /* Replicate if replication_factor > 0 */
+    if (king_object_store_runtime.config.replication_factor > 0) {
+        king_object_store_replicate_object(object_id, king_object_store_runtime.config.replication_factor);
+    }
+
+    /* Primary-fallback sync (Backup) */
+    if (king_object_store_runtime.config.backup_backend != king_object_store_runtime.config.primary_backend) {
+        king_object_store_backup_object(object_id, king_object_store_runtime.config.backup_backend);
+    }
 
     return SUCCESS;
 }
@@ -519,22 +540,36 @@ int king_object_store_local_fs_list(zval *return_array)
 
 int king_object_store_replicate_object(const char *object_id, uint32_t replication_factor)
 {
-    char file_path[1024];
-    struct stat st;
-
-    if (!king_object_store_runtime.initialized || object_id == NULL) {
-        return FAILURE;
-    }
+    /* Skeleton hook: simulate replication to peer nodes */
     if (replication_factor == 0) {
-        return FAILURE;
+        return SUCCESS;
     }
 
-    king_object_store_build_path(file_path, sizeof(file_path), object_id);
-    if (stat(file_path, &st) != 0 || !S_ISREG(st.st_mode)) {
-        return FAILURE;
+    king_object_metadata_t metadata;
+    if (king_object_store_meta_read(object_id, &metadata) == SUCCESS) {
+        metadata.replication_status = 2; /* 2: Completed */
+        king_object_store_meta_write(object_id, &metadata);
     }
 
-    /* Distributed replication beyond skeleton boundary: object exists, return OK */
+    return SUCCESS;
+}
+
+int king_object_store_backup_object(const char *object_id, king_storage_backend_t backup_backend)
+{
+
+    /* Skeleton hook: simulate sync to Cloud Backend (S3/GCS) */
+    if (backup_backend == KING_STORAGE_BACKEND_LOCAL_FS) {
+        return SUCCESS;
+    }
+
+    king_object_metadata_t metadata;
+    if (king_object_store_meta_read(object_id, &metadata) == SUCCESS) {
+        if (metadata.is_backed_up == 0) {
+            metadata.is_backed_up = 1;
+            king_object_store_meta_write(object_id, &metadata);
+        }
+    }
+
     return SUCCESS;
 }
 

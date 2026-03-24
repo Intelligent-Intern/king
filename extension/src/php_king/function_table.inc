@@ -90,6 +90,7 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_object_store_get_stats, arginfo_king_no_args)
     PHP_FE(king_object_store_optimize, arginfo_king_no_args)
     PHP_FE(king_object_store_cleanup_expired_objects, arginfo_king_no_args)
+    PHP_FE(king_object_store_get_metadata, arginfo_king_object_id)
     PHP_FE(king_cdn_cache_object, arginfo_king_object_lookup)
     PHP_FE(king_cdn_invalidate_cache, arginfo_king_optional_object_id)
     PHP_FE(king_cdn_get_edge_nodes, arginfo_king_no_args)

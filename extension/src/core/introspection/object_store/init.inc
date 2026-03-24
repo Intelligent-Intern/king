@@ -24,7 +24,12 @@ PHP_FUNCTION(king_object_store_init)
 
     value_zv = zend_hash_str_find(Z_ARRVAL_P(config), "max_storage_size_bytes", sizeof("max_storage_size_bytes") - 1);
     if (value_zv != NULL && Z_TYPE_P(value_zv) == IS_LONG && Z_LVAL_P(value_zv) >= 0) {
-        new_config.max_storage_size_bytes = Z_LVAL_P(value_zv);
+        new_config.max_storage_size_bytes = (uint64_t) Z_LVAL_P(value_zv);
+    }
+
+    value_zv = zend_hash_str_find(Z_ARRVAL_P(config), "backup_backend", sizeof("backup_backend") - 1);
+    if (value_zv != NULL && Z_TYPE_P(value_zv) == IS_LONG) {
+        new_config.backup_backend = (king_storage_backend_t) Z_LVAL_P(value_zv);
     }
 
     value_zv = zend_hash_str_find(Z_ARRVAL_P(config), "replication_factor", sizeof("replication_factor") - 1);

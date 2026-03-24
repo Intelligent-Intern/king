@@ -47,4 +47,7 @@ void king_object_store_meta_remove(const char *object_id);
 /* Rehydrate runtime stats from disk on init */
 void king_object_store_rehydrate_stats(void);
 
+/* Cloud-native HA hooks */
+int king_object_store_backup_object(const char *object_id, king_storage_backend_t backup_backend);
+
 #endif /* KING_OBJECT_STORE_INTERNAL_H */
