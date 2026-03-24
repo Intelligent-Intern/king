@@ -51,6 +51,11 @@ PHP_FUNCTION(king_object_store_init)
             new_config.cdn_config.enabled = (Z_TYPE_P(cdn_value_zv) == IS_TRUE) ? 1 : 0;
         }
 
+        cdn_value_zv = zend_hash_str_find(Z_ARRVAL_P(value_zv), "edge_node_count", sizeof("edge_node_count") - 1);
+        if (cdn_value_zv != NULL && Z_TYPE_P(cdn_value_zv) == IS_LONG && Z_LVAL_P(cdn_value_zv) >= 0) {
+            new_config.cdn_config.edge_node_count = (uint32_t) Z_LVAL_P(cdn_value_zv);
+        }
+
         cdn_value_zv = zend_hash_str_find(Z_ARRVAL_P(value_zv), "cache_size_mb", sizeof("cache_size_mb") - 1);
         if (cdn_value_zv != NULL && Z_TYPE_P(cdn_value_zv) == IS_LONG && Z_LVAL_P(cdn_value_zv) >= 0) {
             new_config.cdn_config.cache_size_mb = Z_LVAL_P(cdn_value_zv);

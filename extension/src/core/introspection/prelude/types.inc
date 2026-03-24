@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/stat.h>
 #include <zend_exceptions.h>
 #include <zend_hash.h>
 #include <zend_smart_str.h>

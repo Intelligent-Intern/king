@@ -104,6 +104,10 @@ PHP_FUNCTION(king_cdn_cache_object)
         RETURN_THROWS();
     }
 
+    if (king_cdn_distribute_object(ZSTR_VAL(cache_entry->object_id), NULL, 1) != SUCCESS) {
+         /* Ignore distribution errors in the skeleton (not fatal for the local cache) */
+    }
+
     RETURN_TRUE;
 }
 
@@ -163,16 +167,23 @@ PHP_FUNCTION(king_cdn_get_edge_nodes)
         return; /* CDN disabled or store not yet initialised */
     }
 
-    /* Synthetic origin/edge node representing this process */
-    zval node;
-    array_init(&node);
-    add_assoc_string(&node, "node_id",        "origin-0");
-    add_assoc_string(&node, "hostname",       "localhost");
-    add_assoc_long  (&node, "port",           0);
-    add_assoc_string(&node, "backend",        "local_fs");
-    add_assoc_bool  (&node, "is_cdn_edge",    1);
-    add_assoc_bool  (&node, "is_healthy",     1);
-    add_assoc_long  (&node, "cache_size_mb",  (zend_long) king_object_store_runtime.config.cdn_config.cache_size_mb);
-    add_assoc_long  (&node, "default_ttl_sec",(zend_long) king_object_store_runtime.config.cdn_config.default_ttl_seconds);
-    add_next_index_zval(return_value, &node);
+    uint32_t node_count = king_object_store_runtime.config.cdn_config.edge_node_count;
+    if (node_count == 0) node_count = 1;
+
+    for (uint32_t i = 0; i < node_count; i++) {
+        zval node;
+        char node_id[32];
+        snprintf(node_id, sizeof(node_id), "edge-%u", i);
+
+        array_init(&node);
+        add_assoc_string(&node, "node_id",        node_id);
+        add_assoc_string(&node, "hostname",       "localhost");
+        add_assoc_long  (&node, "port",           (zend_long)(8080 + i));
+        add_assoc_string(&node, "backend",        "local_fs");
+        add_assoc_bool  (&node, "is_cdn_edge",    1);
+        add_assoc_bool  (&node, "is_healthy",     1);
+        add_assoc_long  (&node, "cache_size_mb",  (zend_long) king_object_store_runtime.config.cdn_config.cache_size_mb);
+        add_assoc_long  (&node, "default_ttl_sec",(zend_long) king_object_store_runtime.config.cdn_config.default_ttl_seconds);
+        add_next_index_zval(return_value, &node);
+    }
 }

@@ -15,8 +15,8 @@
 
 ## Current Next Leaf
 
-- [ ] Complete CDN edge-state and distribution behavior (multi-node)
-  `extension/src/object_store/`
+- [ ] Port MCP runtime out of the local lifecycle-only slice into `extension/src/mcp/`
+  `extension/src/mcp/`
 
 ## Active Fronts
 
@@ -33,7 +33,7 @@ All checked!
 - [x] Add edge-state, TTL, invalidation, and distribution behavior
 - [x] Add backend and end-to-end verification
 - [x] Implement cloud-native backup and high-availability hooks
-- [ ] Complete CDN edge-state and distribution behavior (multi-node)
+- [x] Complete CDN edge-state and distribution behavior (multi-node)
 - [ ] End-to-end regression across all backends (S3, Memcached)
 
 ### 3. MCP and orchestration

@@ -131,7 +131,7 @@ void king_object_store_shutdown_system(void)
 
 /* --- local_fs backend --- */
 
-static void king_object_store_build_path(char *dest, size_t dest_len, const char *object_id)
+void king_object_store_build_path(char *dest, size_t dest_len, const char *object_id)
 {
     snprintf(dest, dest_len, "%s/%s",
         king_object_store_runtime.config.storage_root_path, object_id);
@@ -195,7 +195,9 @@ int king_object_store_meta_write(const char *object_id, const king_object_metada
         "cache_policy=%d\n"
         "cache_ttl_seconds=%u\n"
         "is_backed_up=%d\n"
-        "replication_status=%d\n",
+        "replication_status=%d\n"
+        "is_distributed=%d\n"
+        "distribution_peer_count=%u\n",
         (metadata->object_id[0] != '\0' ? metadata->object_id : object_id),
         metadata->content_type,
         metadata->content_encoding,
@@ -208,7 +210,9 @@ int king_object_store_meta_write(const char *object_id, const king_object_metada
         (int)      metadata->cache_policy,
         (unsigned) metadata->cache_ttl_seconds,
         (int)      metadata->is_backed_up,
-        (int)      metadata->replication_status
+        (int)      metadata->replication_status,
+        (int)      metadata->is_distributed,
+        (unsigned) metadata->distribution_peer_count
     );
 
     fclose(fp);
@@ -274,6 +278,10 @@ int king_object_store_meta_read(const char *object_id, king_object_metadata_t *m
             metadata->is_backed_up = (uint8_t) atoi(val);
         } else if (strcmp(key, "replication_status") == 0) {
             metadata->replication_status = (uint8_t) atoi(val);
+        } else if (strcmp(key, "is_distributed") == 0) {
+            metadata->is_distributed = (uint8_t) atoi(val);
+        } else if (strcmp(key, "distribution_peer_count") == 0) {
+            metadata->distribution_peer_count = (uint32_t) strtoul(val, NULL, 10);
         }
     }
 
@@ -580,10 +588,18 @@ int king_cdn_distribute_object(
     const king_storage_node_t *edge_nodes,
     uint32_t node_count)
 {
-    (void) object_id;
-    (void) edge_nodes;
-    (void) node_count;
-    return SUCCESS; /* skeleton: noop */
+    if (object_id == NULL || node_count == 0) {
+        return SUCCESS;
+    }
+
+    king_object_metadata_t metadata;
+    if (king_object_store_meta_read(object_id, &metadata) == SUCCESS) {
+        metadata.is_distributed = 1;
+        metadata.distribution_peer_count = node_count;
+        king_object_store_meta_write(object_id, &metadata);
+    }
+
+    return SUCCESS;
 }
 
 int king_cdn_find_optimal_edge_node(const char *client_ip, king_storage_node_t **optimal_node)

@@ -57,6 +57,9 @@ typedef struct _king_object_metadata_t {
     /* Cloud-native HA state */
     uint8_t is_backed_up;
     uint8_t replication_status; /* 0: none, 1: pending, 2: completed, 3: failed */
+    /* CDN distribution state */
+    uint8_t is_distributed;
+    uint32_t distribution_peer_count;
 } king_object_metadata_t;
 
 typedef struct _king_storage_node_t {

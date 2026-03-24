@@ -36,7 +36,20 @@ PHP_FUNCTION(king_object_store_put)
     (void) options;
 
     if (king_object_store_runtime.config.max_storage_size_bytes > 0) {
-        if ((uint64_t)(king_object_store_runtime.current_stored_bytes + ZSTR_LEN(payload)) > king_object_store_runtime.config.max_storage_size_bytes) {
+        uint64_t new_size = ZSTR_LEN(payload);
+        uint64_t current_total = king_object_store_runtime.current_stored_bytes;
+        
+        /* Check if it's an overwrite to avoid double counting */
+        char file_path[1024];
+        struct stat st_old;
+        king_object_store_build_path(file_path, sizeof(file_path), ZSTR_VAL(object_id));
+        if (stat(file_path, &st_old) == 0 && S_ISREG(st_old.st_mode)) {
+            if (current_total >= (uint64_t)st_old.st_size) {
+                current_total -= (uint64_t)st_old.st_size;
+            }
+        }
+
+        if (current_total + new_size > king_object_store_runtime.config.max_storage_size_bytes) {
             zend_throw_exception_ex(
                 king_ce_validation_exception,
                 0,
@@ -162,4 +175,6 @@ PHP_FUNCTION(king_object_store_get_metadata)
     add_assoc_long  (return_value, "created_at",         (zend_long) metadata.created_at);
     add_assoc_long  (return_value, "is_backed_up",       (zend_long) metadata.is_backed_up);
     add_assoc_long  (return_value, "replication_status", (zend_long) metadata.replication_status);
+    add_assoc_long  (return_value, "is_distributed",     (zend_long) metadata.is_distributed);
+    add_assoc_long  (return_value, "distribution_peer_count", (zend_long) metadata.distribution_peer_count);
 }
