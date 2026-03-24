@@ -78,6 +78,13 @@ cd extension
 ./scripts/fuzz-skeleton.sh
 ```
 
+Check the public PHP stubs against the live runtime:
+
+```bash
+cd extension
+./scripts/check-stub-parity.sh
+```
+
 Build the canonical release package:
 
 ```bash
@@ -90,6 +97,20 @@ Verify that the release package is reproducible:
 ```bash
 cd extension
 ./scripts/package-release.sh --verify-reproducible
+```
+
+Verify a generated release archive after extraction:
+
+```bash
+cd extension
+./scripts/verify-release-package.sh --archive ../dist/king-*.tar.gz
+```
+
+Run the final repo-local go-live readiness gate:
+
+```bash
+cd extension
+./scripts/go-live-readiness.sh
 ```
 
 Benchmark the canonical runtime paths:
@@ -108,7 +129,8 @@ Write a local baseline and compare against it:
 If you touch the PHP stub surface, also run:
 
 ```bash
-php -l stubs/king.php
+cd extension
+./scripts/check-stub-parity.sh
 ```
 
 Explicit local build profiles are available through:
@@ -137,8 +159,11 @@ is `benchmarks/run-canonical.sh`, and `make benchmark` is expected to delegate
 to it directly. The same rule now applies to static checks and profile builds:
 the canonical repo-local paths are `extension/scripts/static-checks.sh`,
 `extension/scripts/build-profile.sh`, `extension/scripts/smoke-profile.sh`,
-`extension/scripts/fuzz-skeleton.sh`, and
-`extension/scripts/package-release.sh`.
+`extension/scripts/fuzz-skeleton.sh`,
+`extension/scripts/check-stub-parity.sh`,
+`extension/scripts/package-release.sh`,
+`extension/scripts/verify-release-package.sh`, and
+`extension/scripts/go-live-readiness.sh`.
 
 ## Workflow
 

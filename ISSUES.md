@@ -15,15 +15,8 @@
 
 ## Current Next Leaf
 
-- [ ] Add final parity, end-to-end, and go-live readiness checks
-  build: `pass`
-  audit: `pass`
-  tests: `273/273`
-  static-checks: `pass`
-  profiles: `release/debug/asan/ubsan pass`
-  fuzz: `pass`
-  package: `pass`
-  stubbed-api-groups: `0`
+- none
+  repo-local execution queue clear at the current verified baseline
 
 ## Active Fronts
 
@@ -70,7 +63,20 @@
 - [x] Add static checks and explicit debug, ASan, UBSan, and release profiles
 - [x] Define reproducible release packaging
 - [x] Reduce remaining stub surface subsystem by subsystem
-- [ ] Add final parity, end-to-end, and go-live readiness checks
+- [x] Add final parity, end-to-end, and go-live readiness checks
+  build: `pass`
+  audit: `pass`
+  tests: `273/273`
+  static-checks: `pass`
+  profiles: `release/debug/asan/ubsan pass`
+  fuzz: `pass`
+  stub-parity: `pass`
+  release-smoke: `pass`
+  benchmark-smoke: `pass`
+  package: `pass`
+  package-verify: `pass`
+  go-live-readiness: `pass`
+  stubbed-api-groups: `0`
 
 ## How To Use This File
 

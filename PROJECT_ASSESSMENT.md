@@ -20,19 +20,24 @@ benchmark harness for the four core runtime paths that were still uncovered,
 explicit local `release`, `debug`, `asan`, and `ubsan` build/smoke paths, and
 a seeded local fuzz/stress subset for the highest-risk runtime surfaces, plus a
 reproducible release packaging path over the staged canonical release profile.
-The legacy public C stub compilation unit is now retired, and the runtime
-inventory reports zero residual stub API groups.
+The final repo-local go-live readiness gate is now in place and verifies public
+stub/runtime parity, release-profile smoke, benchmark smoke, reproducible
+packaging, and extracted-package readiness over the same current tree. The
+legacy public C stub compilation unit is now retired, the public `stubs/king.php`
+surface matches the live runtime exactly, and the runtime inventory reports
+zero residual stub API groups.
 
-## Readiness Score: 9.1/10
+## Readiness Score: 9.4/10
 
 The system has clearly transitioned from a stub shell into a coordinated
-runtime. The limiting factor is no longer runtime parity or public stub
-coverage; it is the remaining production-readiness work around final parity,
-end-to-end, and go-live checks.
+runtime. The limiting factor is no longer runtime parity, public stub coverage,
+or repo-local go-live verification; it is the remaining production-depth work
+outside the current local skeleton scope, especially around real external
+provisioning and deeper operational backends.
 
 | Subsystem | Score | Status |
 |-----------|-------|--------|
-| **Build & Infrastructure** | 9.7/10 | Audit, static checks, release rebuild, full regression pass, canonical CI wiring, debug/ASan/UBSan profile smoke, canonical fuzz subset, and reproducible release packaging present |
+| **Build & Infrastructure** | 9.9/10 | Audit, static checks, release rebuild, full regression pass, canonical CI wiring, final go-live readiness gate, debug/ASan/UBSan profile smoke, canonical fuzz subset, and reproducible package verification present |
 | **Config & Session** | 9/10 | Native ownership active; full PHPT parity green |
 | **HTTP Client Slices** | 10/10 | H1, H2, and H3 parity |
 | **IIBIN & Codecs** | 10/10 | Fully native, object hydration |
@@ -42,22 +47,16 @@ end-to-end, and go-live checks.
 | **Telemetry & Autoscale** | 8/10 | Active monitoring and metrics loops verified in current targeted coverage |
 | **System Integration** | 8/10 | Core lifecycle harness active and green in the full matrix |
 | **Security & Hardening** | 8/10 | Policy gated, zeroing active, and hardened contracts verified green |
-| **Performance/Bench** | 7/10 | Canonical local harnesses and baseline-compare flow present; not CI-gated yet |
+| **Performance/Bench** | 8/10 | Canonical local harnesses and baseline-compare flow present; benchmark smoke is now part of the final go-live gate |
 
 ## Verified Baseline
 
-The current repository baseline is anchored to the canonical extension scripts:
+The current repository baseline is anchored to the canonical extension scripts.
+The composed final gate is:
 
 ```bash
 cd extension
-./scripts/static-checks.sh
-./scripts/audit-skeleton-surface.sh
-./scripts/build-skeleton.sh
-./scripts/test-skeleton.sh
-./scripts/fuzz-skeleton.sh
-./scripts/package-release.sh --verify-reproducible
-./scripts/build-profile.sh release
-./scripts/smoke-profile.sh release
+./scripts/go-live-readiness.sh
 ./scripts/build-profile.sh debug
 ./scripts/smoke-profile.sh debug
 ./scripts/build-profile.sh asan
@@ -68,7 +67,7 @@ cd extension
 
 Repository facts from the current tree:
 
-- `extension/src`: 178 C files
+- `extension/src`: 177 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 168 headers
 - `extension/tests`: 273 PHPT files
@@ -82,7 +81,12 @@ The currently verified regression baseline is:
 - extension load smoke: passing
 - `./scripts/test-skeleton.sh`: `273/273` PHPT tests passing
 - `./scripts/fuzz-skeleton.sh`: passing
+- `./scripts/check-stub-parity.sh`: passing (`112` functions, `44` classes, `48` declared public methods)
+- `./scripts/smoke-profile.sh release`: passing
+- benchmark smoke (`session`, `proto`, `object_store`, `semantic_dns`): passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
+- `./scripts/verify-release-package.sh`: passing
+- `./scripts/go-live-readiness.sh`: passing
 - `./scripts/build-profile.sh release`: passing
 - `./scripts/smoke-profile.sh release`: passing
 - `./scripts/build-profile.sh debug`: passing
@@ -92,7 +96,7 @@ The currently verified regression baseline is:
 - `./scripts/build-profile.sh ubsan`: passing
 - `./scripts/smoke-profile.sh ubsan`: passing
 - `king_health()['stubbed_api_group_count']`: `0`
-- `.github/workflows/ci.yml`: wired to the canonical audit/build/test path
+- `.github/workflows/ci.yml`: wired to the canonical audit/build/test path plus the final go-live readiness step
 - `./benchmarks/run-canonical.sh`: passing locally
 
 There are currently no open PHPT failures in the canonical suite.
@@ -117,13 +121,13 @@ The repo already has active native runtime slices for:
 - native Autoscaling engine with monitoring, decision, and provisioning loops
 - native System Integration core coordinating component lifecycles and health
 - security policy enforcement for userland configuration overrides active across all entry points
+- a public PHP stub surface that is parity-checked against the live runtime before go-live claims are made
 
 ## What Is Not Finished
 
 The repo is still not a full production-grade implementation for:
 
 - real hardware-backed cloud provisioning (currently simulated)
-- full go-live readiness
 
 The biggest architectural caveat is simple:
 several areas already have honest local runtime slices, but the backend depth,
@@ -151,7 +155,7 @@ transport depth, or operational depth is still incomplete.
 
 ### Weak or Still Open
 
-- final parity, end-to-end, and go-live readiness
+- no open repo-local verification leaf; remaining limits are outside the current local runtime scope
 
 ## Source Of Truth Boundaries
 

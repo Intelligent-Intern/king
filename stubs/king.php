@@ -164,6 +164,20 @@ namespace {
     function king_http2_request_send_multi(array $requests, ?array $options = null): array|false {}
 
     /**
+     * Direct live HTTP/3 one-shot request path over the active QUIC runtime.
+     * Supports absolute `https://` URLs and returns the normalized response
+     * snapshot used across the active client leaves.
+     * @param array<string,mixed>|null $headers
+     * @param array<string,mixed>|null $options
+     * @return array<string,mixed>|false
+     * @throws \King\NetworkException
+     * @throws \King\TimeoutException
+     * @throws \King\TlsException
+     * @throws \King\ProtocolException
+     */
+    function king_http3_request_send(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): array|false {}
+
+    /**
      * Materialize a local validated WebSocket connection-state resource.
      * The current skeleton build accepts absolute `ws://` and `wss://` URLs,
      * snapshots optional handshake headers plus `connection_config`,
@@ -220,9 +234,9 @@ namespace {
     function king_websocket_send(mixed $websocket, string $data, bool $is_binary = false): bool {}
 
     /**
-     * Create a local MCP connection-state resource for the active skeleton
-     * runtime. This stores host, port, optional `King\Config`, and open/closed
-     * state, but does not yet open a live transport backend.
+     * Create a local MCP connection-state resource for the active runtime.
+     * This stores host, port, optional `King\Config`, plus open/closed state
+     * and the per-connection local transfer store used by the MCP helpers.
      * @param mixed $config
      * @param array<string,mixed>|null $options
      * @return resource|false
@@ -230,10 +244,8 @@ namespace {
     function king_mcp_connect(string $host, int $port, mixed $config, ?array $options = null) {}
 
     /**
-     * Validate the active local MCP connection state and request shape.
-     * The current skeleton build still has no live MCP request transport and
-     * therefore returns `false` with a stable unavailable error after
-     * successful validation.
+     * Validate the active local MCP connection state and request shape and
+     * return the normalized local response payload.
      * @param mixed $connection
      * @param array<string,mixed>|null $options
      * @return string|false
@@ -427,6 +439,30 @@ namespace {
     function king_server_reload_tls_config(mixed $session, string $cert_file_path, string $key_file_path): bool {}
 
     /**
+     * Initialize the local server-side telemetry snapshot on an open
+     * `King\Session` resource or object.
+     * Accepts `null`, inline config arrays, and `King\Config` handles.
+     * @param mixed $session
+     * @param mixed $config
+     */
+    function king_server_init_telemetry(mixed $session, mixed $config): bool {}
+
+    /**
+     * Return the normalized peer-certificate subject snapshot for a live
+     * server-capable session when the provided capability matches.
+     * @param mixed $session
+     * @return array<string,mixed>|false
+     */
+    function king_session_get_peer_cert_subject(mixed $session, int $capability): array|false {}
+
+    /**
+     * Mark a live server-capable session as closed by the server side when
+     * the provided capability matches the active session snapshot.
+     * @param mixed $session
+     */
+    function king_session_close_server_initiated(mixed $session, int $capability, int $error_code = 0, string $reason = ''): bool {}
+
+    /**
      * Validate and materialize a local admin-listener snapshot for an open
      * server `King\Session` resource or object.
      * The current skeleton build resolves `null`, inline config arrays, and
@@ -568,6 +604,20 @@ namespace {
      * @throws \King\RuntimeException
      */
     function king_object_store_optimize(): array {}
+
+    /**
+     * Remove expired local object-store entries and return a maintenance
+     * summary for the active runtime.
+     * @return array<string,mixed>
+     */
+    function king_object_store_cleanup_expired_objects(): array {}
+
+    /**
+     * Return the stored metadata snapshot for one object-store entry, or
+     * `false` when the object is absent.
+     * @return array<string,mixed>|false
+     */
+    function king_object_store_get_metadata(string $object_id): array|false {}
 
     /**
      * Stable schema inventory snapshot for the skeleton build.
@@ -712,6 +762,36 @@ namespace {
     function king_telemetry_get_metrics(): array {}
 
     /**
+     * Initialize the active telemetry runtime from an inline config array.
+     * @param array<string,mixed> $config
+     */
+    function king_telemetry_init(array $config): bool {}
+
+    /**
+     * Start one local telemetry span and return its active span identifier.
+     * @param array<string,mixed>|null $attributes
+     */
+    function king_telemetry_start_span(string $operation_name, ?array $attributes = null, ?string $parent_span_id = null): string {}
+
+    /**
+     * End one local telemetry span and optionally merge final attributes.
+     * @param array<string,mixed>|null $final_attributes
+     */
+    function king_telemetry_end_span(string $span_id, ?array $final_attributes = null): bool {}
+
+    /**
+     * Record one metric datapoint in the active telemetry runtime.
+     * @param array<string,string>|null $labels
+     */
+    function king_telemetry_record_metric(string $metric_name, float $value, ?array $labels = null, string $metric_type = 'gauge'): bool {}
+
+    /**
+     * Record one structured log entry in the active telemetry runtime.
+     * @param array<string,mixed>|null $attributes
+     */
+    function king_telemetry_log(string $level, string $message, ?array $attributes = null): bool {}
+
+    /**
      * Flushes pending telemetry data for the skeleton build.
      * The active build has no exporter queues yet, so all exported counts are
      * currently zero.
@@ -842,6 +922,32 @@ namespace {
     function king_autoscaling_get_metrics(): array {}
 
     /**
+     * Initialize the active autoscaling runtime from an inline config array.
+     * @param array<string,mixed> $config
+     */
+    function king_autoscaling_init(array $config): bool {}
+
+    /**
+     * Start the active local autoscaling monitoring loop.
+     */
+    function king_autoscaling_start_monitoring(): bool {}
+
+    /**
+     * Stop the active local autoscaling monitoring loop.
+     */
+    function king_autoscaling_stop_monitoring(): bool {}
+
+    /**
+     * Trigger a local autoscaling scale-up decision.
+     */
+    function king_autoscaling_scale_up(int $instances = 1): bool {}
+
+    /**
+     * Trigger a local autoscaling scale-down decision.
+     */
+    function king_autoscaling_scale_down(int $instances = 1): bool {}
+
+    /**
      * Initializes the local semantic-DNS core/runtime config snapshot.
      * Supported keys include bind/port, TTL/discovery limits, semantic mode,
      * mother-node sync hints, and optional `routing_policies`.
@@ -937,6 +1043,13 @@ namespace {
     function king_system_health_check(): array {}
 
     /**
+     * Initialize the active system-integration runtime from an inline config
+     * array and materialize the coordinated component snapshot.
+     * @param array<string,mixed> $config
+     */
+    function king_system_init(array $config): bool {}
+
+    /**
      * System status summary for the active skeleton runtime.
      * @return array{
      *   system_info: array<string,mixed>,
@@ -989,39 +1102,55 @@ namespace {
      * }|false
      */
     function king_system_get_component_info(string $name): array|false {}
-}
-
-/* OO surface stubs remain the main shape reference for the remaining object
- * API. The current skeleton build now has active wrappers for Config,
- * Session, Stream, Response and HttpClient over the same native runtime
- * kernels, including the live HTTP/3 request path via Http3Client, but
- * broader parity for MCP transport-backed upload/download, WebSocket objects,
- * and transport-wide
- * cancellation is still pending.
- */
-namespace King {
-    /* ===========================
-     * Error model
-     * =========================== */
-
-    enum ErrorCode: int {
-        case TIMEOUT   = 1;
-        case TLS       = 2;
-        case QUIC      = 3;
-        case VALIDATION= 4;
-        case NETWORK   = 5;
-        case PROTOCOL  = 6;
-        case STREAM    = 7;
-        case SYSTEM    = 8;
-    }
 
     /**
-     * Base exception for all King errors.
-     * @property-read ?ErrorCode $codeEnum
+     * Process one normalized request payload through the active system
+     * integration runtime.
+     * @param array<string,mixed> $request_data
+     * @return array<string,mixed>
      */
-    class Exception extends \Exception {
-        public ?ErrorCode $codeEnum = null;
-    }
+    function king_system_process_request(array $request_data): array {}
+
+    /**
+     * Restart one named local system component inside the active runtime.
+     */
+    function king_system_restart_component(string $name): bool {}
+
+    /**
+     * Shut down the active system-integration runtime and coordinated
+     * component snapshots.
+     */
+    function king_system_shutdown(): bool {}
+
+    /**
+     * Execute the current local pipeline-orchestrator runtime over the
+     * provided initial data and normalized step list.
+     * @param array<int,array<string,mixed>> $pipeline
+     * @param array<string,mixed>|null $exec_options
+     * @return array<string,mixed>
+     */
+    function king_pipeline_orchestrator_run(mixed $initial_data, array $pipeline, ?array $exec_options = null): array {}
+
+    /**
+     * Register or replace one tool definition in the active pipeline
+     * orchestrator registry.
+     * @param array<string,mixed> $config
+     */
+    function king_pipeline_orchestrator_register_tool(string $tool_name, array $config): bool {}
+
+    /**
+     * Configure the active pipeline-orchestrator logging snapshot.
+     * @param array<string,mixed> $config
+     */
+    function king_pipeline_orchestrator_configure_logging(array $config): bool {}
+}
+
+/* The OO surface below mirrors the currently exported runtime classes. */
+namespace King {
+    /**
+     * Base exception for all King errors.
+     */
+    class Exception extends \Exception {}
 
     class RuntimeException    extends Exception {}
     class SystemException     extends Exception {}
@@ -1153,7 +1282,7 @@ namespace King {
     }
 
     final class Stream {
-        /** The active skeleton runtime currently returns null until a real response path exists; a cancelled token stops the local stream. */
+        /** Receive the active local response object for this stream and honor optional cancel state. */
         public function receiveResponse(?int $timeout_ms = null, ?CancelToken $cancel = null): ?Response {}
 
         /** Buffer a request body chunk on the local stream runtime; returns bytes accepted and honors local cancel state. */
@@ -1192,7 +1321,6 @@ namespace King {
         /**
          * Materialize the local MCP connection-state wrapper for host, port,
          * optional `King\Config`, and the explicit open/closed lifecycle.
-         * The active skeleton build does not open a transport here yet.
          * @throws ValidationException
          */
         public function __construct(string $host, int $port, ?Config $config = null) {}
@@ -1200,8 +1328,8 @@ namespace King {
         /**
          * Unary RPC call over the local MCP connection-state wrapper.
          * Closed connections and already cancelled tokens fail deterministically;
-         * otherwise the active skeleton build still raises the stable
-         * "unavailable" protocol error until a real MCP backend exists.
+         * otherwise the active runtime returns the normalized local response
+         * payload for the requested service and method.
          * @throws RuntimeException|ValidationException|MCPProtocolException
          */
         public function request(string $service, string $method, string $payload, ?CancelToken $cancel = null): string {}
@@ -1259,47 +1387,6 @@ namespace King {
         public static function getDefinedEnums(): array {}
     }
 
-    /* ===========================
-     * Cluster Supervisor
-     * =========================== */
-    final class Cluster {
-        public function __construct(string $worker_script, string $payload = "{}", ?Config $config = null) {}
-
-        /** Blocking run; returns when workers exit or stop() called. */
-        public function run(?CancelToken $cancel = null): void {}
-
-        /** Graceful stop with timeout. */
-        public function stop(int $grace_ms = 30000): void {}
-
-        /**
-         * Register lifecycle hooks: 'worker_start','worker_exit','error'.
-         * @param callable(array<string,mixed>):void $handler
-         */
-        public function on(string $event, callable $handler): void {}
-    }
-
-    /* ===========================
-     * Pipeline Orchestrator
-     * =========================== */
-    final class PipelineOrchestrator {
-        /**
-         * @param array<string,mixed> $pipeline
-         * @throws ValidationException
-         */
-        public static function run(mixed $input, array $pipeline, ?CancelToken $cancel = null): PipelineResult {}
-
-        /** @param callable(array<string,mixed>):mixed $handler */
-        public static function registerToolHandler(string $tool_name, callable $handler): void {}
-    }
-
-    final class PipelineResult {
-        public function isSuccess(): bool {}
-        public function getFinalOutput(): mixed {}
-        public function getErrorMessage(): ?string {}
-
-        /** @return array<string,mixed> step timings/results */
-        public function getTrace(): array {}
-    }
 }
 
 /* ===========================
@@ -1329,486 +1416,10 @@ namespace King\Client {
 }
 
 /* ===========================
- * HTTP Servers (1/2/3) + Early Hints + Admin API
- * =========================== */
-namespace King\Server {
-    use King\CancelToken;
-    use King\Config;
-
-    final class Request {
-        public function method(): string {}
-        public function path(): string {}
-        /** @return array<string,string[]> */
-        public function headers(): array {}
-        public function body(): string {}
-        public function remoteAddr(): string {}
-        public function protocol(): string {} // "h1","h2","h3"
-    }
-
-    final class Responder {
-        /**
-         * Send final response.
-         * @param array<string,string|string[]> $headers
-         */
-        public function send(int $status, array $headers = [], string $body = ''): void {}
-
-        /**
-         * Send HTTP 103 Early Hints (e.g. Link: rel=preload) prior to final response.
-         * @param array<string,string|string[]> $linkHeaders
-         */
-        public function sendEarlyHints(array $linkHeaders): void {}
-
-        /** Flush buffered data (if applicable). */
-        public function flush(): void {}
-    }
-
-    abstract class HttpServer {
-        public function __construct(string $host, int $port, ?Config $config = null) {}
-
-        /** @param callable(Request,Responder):void $handler */
-        public function onRequest(callable $handler): void {}
-
-        public function run(?CancelToken $cancel = null): void {}
-        public function stop(int $grace_ms = 30000): void {}
-    }
-
-    final class Http1Server extends HttpServer {}
-    final class Http2Server extends HttpServer {}
-    final class Http3Server extends HttpServer {}
-
-    final class EarlyHints {
-        /**
-         * Build a set of Link headers for 103 Early Hints from a simple asset array.
-         * @param array<int,array{href:string, rel?:string, as?:string, type?:string, crossorigin?:string}> $assets
-         * @return array<string,string|string[]>
-         */
-        public static function buildLinkHeaders(array $assets): array {}
-    }
-
-    /** Control-plane HTTP server for runtime admin/ops. */
-    final class AdminAPI {
-        public function __construct(string $host = "127.0.0.1", int $port = 2019, ?Config $config = null) {}
-        public function run(?CancelToken $cancel = null): void {}
-        public function stop(int $grace_ms = 10000): void {}
-
-        /**
-         * Programmatic control entrypoint (implementation-defined commands).
-         * @param array<string,mixed> $payload
-         * @return array<string,mixed>
-         */
-        public function command(string $name, array $payload = []): array {}
-    }
-}
-
-/* ===========================
- * ObjectStore (RAM-first, erasure-coded, training-aware)
- * =========================== */
-namespace King\ObjectStore {
-    use King\CancelToken;
-    use King\Config;
-    use King\Exception;
-
-    /* Errors */
-    class ObjectStoreException extends Exception {}
-    class NotFoundException extends ObjectStoreException {}
-    class QuorumException extends ObjectStoreException {}
-    class PlacementException extends ObjectStoreException {}
-    class RepairInProgressException extends ObjectStoreException {}
-    class NodeUnavailableException extends ObjectStoreException {}
-    class ValidationException extends ObjectStoreException {}
-
-    /* Tiers & policies */
-    enum Tier: string { case RAM='ram'; case SSD='ssd'; case DISK='disk'; case REMOTE='remote'; }
-
-    /** Erasure coding: k data + m parity; N=k+m. */
-    final class ErasureScheme {
-        public function __construct(
-            public readonly int $k,
-            public readonly int $m,
-            public readonly int $stripeSize,
-            public readonly string $algo = 'rs' // 'rs' (Reed–Solomon), 'rq' (RaptorQ)
-        ) {}
-    }
-
-    /** Placement constraints & anti-affinity. */
-    final class PlacementPolicy {
-        /**
-         * @param array<string,string> $affinityTags e.g. ["dataset"=>"imagenet"]
-         */
-        public function __construct(
-            public readonly int $minZones = 3,
-            public readonly bool $rackAware = true,
-            public readonly int $maxShardsPerNode = 1,
-            public readonly array $affinityTags = []
-        ) {}
-    }
-
-    /** Consistency quorum. */
-    final class Quorum {
-        public function __construct(
-            public readonly int $n, // total shards placed (k+m)
-            public readonly int $w, // write quorum (>=k recommended)
-            public readonly int $r  // read quorum (>=k recommended)
-        ) {}
-    }
-
-    final class Client {
-        /**
-         * Recommended config keys (via Config::new([...])):
-         *  - cluster_endpoints: list<string> (quic://node:port)
-         *  - default_scheme: ErasureScheme
-         *  - default_quorum: Quorum
-         *  - default_policy: PlacementPolicy
-         *  - timeouts: array{connect_ms?:int, io_ms?:int}
-         *  - verify_peer?: bool
-         *  - compression?: 'none'|'zstd'
-         */
-        public function __construct(Config $config) {}
-
-        /**
-         * Store an object with erasure coding and intelligent placement.
-         * @param array{
-         *   metadata?: array<string,string>,
-         *   tier?: Tier,
-         *   ttl_secs?: int,                 // pin in RAM hot set
-         *   scheme?: ErasureScheme,
-         *   quorum?: Quorum,
-         *   policy?: PlacementPolicy,
-         *   compress?: bool,
-         *   hints?: array<string,string>    // e.g. ["dataset"=>"foo","epoch"=>"12"]
-         * } $opts
-         */
-        public function put(string $key, string $data, array $opts = [], ?CancelToken $cancel = null): PutResult {}
-
-        /** Fetch metadata only. */
-        public function head(string $key): HeadResult {}
-
-        /**
-         * Reconstruct and fetch object (reads any k shards).
-         * @param array{as_stream?:bool, prefer_local?:bool} $opts
-         */
-        public function get(string $key, array $opts = [], ?CancelToken $cancel = null): GetResult {}
-
-        /** Efficient range read (offset/length) using stripe maps. */
-        public function getRange(string $key, int $offset, int $length, array $opts = [], ?CancelToken $cancel = null): GetResult {}
-
-        /** Logical delete (background GC/repair will clean shards). */
-        public function delete(string $key): bool {}
-
-        /** Pin/unpin in RAM hot set (with TTL). */
-        public function pin(string $key, int $ttlSeconds): bool {}
-        public function unpin(string $key): bool {}
-
-        /**
-         * Schedule prefetch of multiple objects/shards into a tier; returns count scheduled.
-         * @param list<string> $keys
-         */
-        public function prefetch(array $keys, Tier $tier = Tier::RAM): int {}
-
-        /**
-         * List keys with prefix/paging.
-         * @param array{prefix?:string, limit?:int, cursor?:string} $opts
-         */
-        public function list(array $opts = []): ListResult {}
-
-        /* Training-aware planning */
-
-        /**
-         * Build a distributed read plan (node→keys/stripes) favoring locality & RAM.
-         * @param list<string> $keys
-         * @param array{
-         *   world_size:int, local_rank:int,
-         *   max_concurrency?:int,
-         *   shard_granularity?:'object'|'stripe',
-         *   prefer_zone_local?:bool
-         * } $opts
-         */
-        public function planRead(array $keys, array $opts): ReadPlan {}
-
-        /** Short leases to avoid hot-set thrash. */
-        public function acquireLease(string $key, int $ttl_ms = 5000): Lease {}
-        public function renewLease(Lease $lease): bool {}
-        public function releaseLease(Lease $lease): void {}
-
-        /* Health, repair, rebalancing */
-
-        public function clusterInfo(): ClusterInfo {}
-        public function nodeInfo(string $nodeId): NodeInfo {}
-
-        public function repairStatus(string $key): RepairStatus {}
-        public function triggerRepair(string $key): bool {}
-        public function rebalance(?PlacementPolicy $policy = null): bool {}
-    }
-
-    /* DTOs */
-
-    final class PutResult {
-        public function key(): string {}
-        public function version(): int {}
-        public function size(): int {}
-        public function scheme(): ErasureScheme {}
-        public function quorum(): Quorum {}
-        /** @return list<ShardLocation> */
-        public function shards(): array {}
-        /** @return array<string,string> */
-        public function metadata(): array {}
-        public function hotTtlSeconds(): ?int {}
-    }
-
-    final class HeadResult {
-        public function exists(): bool {}
-        public function key(): string {}
-        public function version(): int {}
-        public function size(): int {}
-        public function scheme(): ErasureScheme {}
-        public function quorum(): Quorum {}
-        public function primaryTier(): Tier {}
-        /** @return array<string,string> */
-        public function metadata(): array {}
-        /** @return list<ShardLocation> */
-        public function shards(): array {}
-        public function lastModified(): int {}
-    }
-
-    final class GetResult {
-        public function statusCode(): int {}         // 200/206
-        public function body(): string {}            // empty if as_stream=true
-        /** @return resource|null */
-        public function stream() {}
-        public function contentRange(): ?string {}
-        public function size(): int {}
-        /** @return array<string,string> */
-        public function headers(): array {}
-    }
-
-    final class ListResult {
-        /** @return list<string> */
-        public function keys(): array {}
-        public function isTruncated(): bool {}
-        public function nextCursor(): ?string {}
-    }
-
-    final class Lease {
-        public function key(): string {}
-        public function holder(): string {}
-        public function expiresAtMs(): int {}
-        public function token(): string {}
-    }
-
-    final class ShardLocation {
-        public function key(): string {}
-        public function index(): int {}       // 0..(k+m-1)
-        public function nodeId(): string {}
-        public function zone(): string {}
-        public function tier(): Tier {}
-        public function checksum(): string {} // e.g. sha256 hex
-        public function size(): int {}
-        public function isParity(): bool {}
-        public function isLocal(): bool {}
-    }
-
-    final class RepairStatus {
-        public function key(): string {}
-        public function neededShards(): int {}
-        public function repairedShards(): int {}
-        public function progressPercent(): float {}
-        public function lastError(): ?string {}
-        public function active(): bool {}
-    }
-
-    final class ClusterInfo {
-        /** @return list<NodeInfo> */
-        public function nodes(): array {}
-        public function zones(): int {}
-        public function totalRamBytes(): int {}
-        public function totalSsdBytes(): int {}
-        public function totalDiskBytes(): int {}
-    }
-
-    final class NodeInfo {
-        public function id(): string {}
-        public function zone(): string {}
-        public function healthy(): bool {}
-        public function cpuLoad(): float {}
-        public function memUsedBytes(): int {}
-        public function memTotalBytes(): int {}
-        public function ssdUsedBytes(): int {}
-        public function ssdTotalBytes(): int {}
-        public function diskUsedBytes(): int {}
-        public function diskTotalBytes(): int {}
-        public function hotSetObjects(): int {}
-        public function shardsHeld(): int {}
-    }
-
-    final class ReadPlan {
-        /** @return list<Assignment> */
-        public function assignments(): array {}
-        public function worldSize(): int {}
-        public function localRank(): int {}
-        public function concurrency(): int {}
-        public function estimatedBytes(): int {}
-        /** @return array<string,mixed> */
-        public function costModel(): array {}
-    }
-
-    final class Assignment {
-        public function nodeId(): string {}
-        /** @return list<string> keys or stripe IDs */
-        public function keys(): array {}
-        public function preferLocal(): bool {}
-    }
-}
-
-/* ===========================
- * Semantic DNS
- * =========================== */
-namespace King\SemanticDNS {
-    use King\Config;
-
-    final class Resolver {
-        public function __construct(?Config $config = null) {}
-
-        /**
-         * Resolve a service by semantic attributes.
-         * @param array<string,string> $attributes
-         * @return list<ServiceRecord>
-         */
-        public function resolve(string $service, array $attributes = []): array {}
-
-        public function motherNodeDiscovery(string $namespace): MotherNode {}
-    }
-
-    final class ServiceRecord {
-        public function host(): string {}
-        public function port(): int {}
-        /** @return array<string,string> */
-        public function meta(): array {}
-        public function protocol(): string {} // e.g. "h3","quic","grpc"
-        public function weight(): int {}
-    }
-
-    final class RouteDecision {
-        public function selected(): ServiceRecord {}
-        /** @return list<ServiceRecord> */
-        public function alternatives(): array {}
-    }
-
-    final class MotherNode {
-        public function address(): string {}
-        public function id(): string {}
-        /** @return array<string,string> */
-        public function attributes(): array {}
-    }
-}
-
-/* ===========================
- * Telemetry (Metrics + Tracing)
- * =========================== */
-namespace King\Telemetry {
-    use King\Config;
-
-    final class Metrics {
-        public function __construct(?Config $config = null) {}
-        public function counter(string $name, string $description = ''): Counter {}
-        public function gauge(string $name, string $description = ''): Gauge {}
-        public function histogram(string $name, string $description = ''): Histogram {}
-        /** Export snapshot (e.g. Prometheus/OpenMetrics). */
-        public function export(): string {}
-    }
-
-    interface Metric {}
-
-    final class Counter implements Metric {
-        /** @param array<string,string> $labels */
-        public function add(float $value = 1.0, array $labels = []): void {}
-    }
-
-    final class Gauge implements Metric {
-        /** @param array<string,string> $labels */
-        public function set(float $value, array $labels = []): void {}
-    }
-
-    final class Histogram implements Metric {
-        /** @param array<string,string> $labels */
-        public function observe(float $value, array $labels = []): void {}
-    }
-
-    final class Tracer {
-        public function __construct(?Config $config = null) {}
-        /** @param array<string,mixed> $attrs */
-        public function startSpan(string $name, array $attrs = []): Span {}
-        public function exporter(): ?OTelExporter {}
-    }
-
-    final class Span {
-        /** @param array<string,mixed> $attrs */
-        public function setAttributes(array $attrs): void {}
-        /** @param array<string,mixed> $attrs */
-        public function addEvent(string $name, array $attrs = []): void {}
-        public function end(): void {}
-    }
-
-    /** OpenTelemetry exporter (protocol depends on build). */
-    final class OTelExporter {
-        /** @param array<string,mixed> $resourceAttrs */
-        public function configure(string $endpoint, array $resourceAttrs = []): void {}
-        public function forceFlush(): void {}
-    }
-}
-
-/* ===========================
- * Autoscaling
- * =========================== */
-namespace King\Autoscaling {
-    use King\Config;
-
-    final class Supervisor {
-        public function __construct(?Config $config = null) {}
-        public function setPolicy(Policy $policy): void {}
-        public function evaluate(Resources $current): Decision {}
-    }
-
-    final class Resources {
-        public function __construct(float $cpuLoad, float $memLoad, int $rqps, int $conns) {}
-        public function cpuLoad(): float {}
-        public function memLoad(): float {}
-        public function requestsPerSec(): int {}
-        public function connections(): int {}
-    }
-
-    interface Policy {
-        public function decide(Resources $r): Decision;
-    }
-
-    final class DefaultPolicy implements Policy {
-        public function __construct(
-            float $scaleUpCpu = 0.80,
-            float $scaleDownCpu = 0.30,
-            int $minWorkers = 1,
-            int $maxWorkers = 0 /* 0 = cores */
-        ) {}
-        public function decide(Resources $r): Decision {}
-    }
-
-    final class Decision {
-        public function desiredWorkers(): int {}
-        public function reason(): string {}
-    }
-}
-
-/* ===========================
  * WebSocket over HTTP/3
  * =========================== */
 namespace King\WebSocket {
-    use King\CancelToken;
-    use King\Config;
-
     final class Server {
-        public function __construct(string $host, int $port, ?Config $config = null) {}
-        /** Events: "connect","message","close","error". */
-        public function on(string $event, callable $handler): void {}
-        public function run(?CancelToken $cancel = null): void {}
-        public function stop(int $grace_ms = 30000): void {}
     }
 
     final class Connection {

@@ -1,4 +1,4 @@
-.PHONY: build unit fuzz benchmark deploy server-build help clean static-checks profile-release profile-debug profile-asan profile-ubsan profile-smoke-release profile-smoke-debug profile-smoke-asan profile-smoke-ubsan release-package release-package-verify
+.PHONY: build unit fuzz benchmark stub-parity go-live-readiness deploy server-build help clean static-checks profile-release profile-debug profile-asan profile-ubsan profile-smoke-release profile-smoke-debug profile-smoke-asan profile-smoke-ubsan release-package release-package-verify
 
 build:
 	sudo bash infra/scripts/build.sh || exit 0
@@ -11,6 +11,12 @@ fuzz:
 
 benchmark:
 	bash benchmarks/run-canonical.sh
+
+stub-parity:
+	bash extension/scripts/check-stub-parity.sh
+
+go-live-readiness:
+	bash infra/scripts/go-live.sh
 
 static-checks:
 	bash extension/scripts/static-checks.sh

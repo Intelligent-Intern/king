@@ -33,7 +33,7 @@ env:
 
 jobs:
   canonical-baseline:
-    name: Audit, Build, Test
+    name: Audit, Build, Test, Go-Live
     runs-on: ubuntu-24.04
     timeout-minutes: 60
 
@@ -102,9 +102,9 @@ jobs:
         working-directory: extension
         run: ./scripts/test-skeleton.sh
 
-      - name: Verify reproducible release packaging
+      - name: Run final go-live readiness checks
         working-directory: extension
-        run: ./scripts/package-release.sh --verify-reproducible --output-dir ../dist
+        run: ./scripts/go-live-readiness.sh --skip-baseline --output-dir ../dist --benchmark-iterations 250 --benchmark-warmup 25
 
       - name: Upload release package artifact
         if: github.event_name == 'workflow_dispatch'
