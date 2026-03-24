@@ -114,6 +114,8 @@ int king_object_store_init_system(king_object_store_config_t *config)
         king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_MEMORY_CACHE) {
         if (king_object_store_runtime.config.storage_root_path[0] != '\0') {
             mkdir(king_object_store_runtime.config.storage_root_path, 0755);
+            /* Rehydrate live stats from any existing on-disk objects */
+            king_object_store_rehydrate_stats();
         }
     }
 
@@ -132,6 +134,198 @@ static void king_object_store_build_path(char *dest, size_t dest_len, const char
 {
     snprintf(dest, dest_len, "%s/%s",
         king_object_store_runtime.config.storage_root_path, object_id);
+}
+
+/* --- Durable metadata sidecar helpers --- */
+
+void king_object_store_build_meta_path(char *dest, size_t dest_len, const char *object_id)
+{
+    snprintf(dest, dest_len, "%s/%s.meta",
+        king_object_store_runtime.config.storage_root_path, object_id);
+}
+
+/*
+ * Simple text key=value format, one entry per line:
+ *   object_id=<str>\n
+ *   content_type=<str>\n
+ *   content_encoding=<str>\n
+ *   etag=<str>\n
+ *   content_length=<uint64>\n
+ *   created_at=<int64>\n
+ *   modified_at=<int64>\n
+ *   expires_at=<int64>\n
+ *   object_type=<int>\n
+ *   cache_policy=<int>\n
+ *   cache_ttl_seconds=<uint32>\n
+ */
+int king_object_store_meta_write(const char *object_id, const king_object_metadata_t *metadata)
+{
+    FILE *fp;
+    char meta_path[1024];
+    king_object_metadata_t scratch;
+
+    king_object_store_build_meta_path(meta_path, sizeof(meta_path), object_id);
+
+    fp = fopen(meta_path, "w");
+    if (fp == NULL) {
+        return FAILURE;
+    }
+
+    if (metadata == NULL) {
+        /* Write a minimal stub so the file always exists */
+        memset(&scratch, 0, sizeof(scratch));
+        strncpy(scratch.object_id, object_id, sizeof(scratch.object_id) - 1);
+        scratch.created_at = time(NULL);
+        metadata = &scratch;
+    }
+
+    fprintf(fp,
+        "object_id=%s\n"
+        "content_type=%s\n"
+        "content_encoding=%s\n"
+        "etag=%s\n"
+        "content_length=%" PRIu64 "\n"
+        "created_at=%" PRId64 "\n"
+        "modified_at=%" PRId64 "\n"
+        "expires_at=%" PRId64 "\n"
+        "object_type=%d\n"
+        "cache_policy=%d\n"
+        "cache_ttl_seconds=%u\n",
+        metadata->object_id,
+        metadata->content_type,
+        metadata->content_encoding,
+        metadata->etag,
+        (uint64_t) metadata->content_length,
+        (int64_t)  metadata->created_at,
+        (int64_t)  metadata->modified_at,
+        (int64_t)  metadata->expires_at,
+        (int)      metadata->object_type,
+        (int)      metadata->cache_policy,
+        (unsigned) metadata->cache_ttl_seconds
+    );
+
+    fclose(fp);
+    return SUCCESS;
+}
+
+int king_object_store_meta_read(const char *object_id, king_object_metadata_t *metadata)
+{
+    FILE *fp;
+    char meta_path[1024];
+    char line[640];
+
+    if (metadata == NULL) {
+        return FAILURE;
+    }
+
+    king_object_store_build_meta_path(meta_path, sizeof(meta_path), object_id);
+
+    fp = fopen(meta_path, "r");
+    if (fp == NULL) {
+        return FAILURE;
+    }
+
+    memset(metadata, 0, sizeof(*metadata));
+
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        char *eq = strchr(line, '=');
+        if (eq == NULL) {
+            continue;
+        }
+        *eq = '\0';
+        char *key = line;
+        char *val = eq + 1;
+        /* strip trailing newline */
+        size_t vlen = strlen(val);
+        if (vlen > 0 && val[vlen - 1] == '\n') {
+            val[vlen - 1] = '\0';
+        }
+
+        if (strcmp(key, "object_id") == 0) {
+            strncpy(metadata->object_id, val, sizeof(metadata->object_id) - 1);
+        } else if (strcmp(key, "content_type") == 0) {
+            strncpy(metadata->content_type, val, sizeof(metadata->content_type) - 1);
+        } else if (strcmp(key, "content_encoding") == 0) {
+            strncpy(metadata->content_encoding, val, sizeof(metadata->content_encoding) - 1);
+        } else if (strcmp(key, "etag") == 0) {
+            strncpy(metadata->etag, val, sizeof(metadata->etag) - 1);
+        } else if (strcmp(key, "content_length") == 0) {
+            metadata->content_length = (uint64_t) strtoull(val, NULL, 10);
+        } else if (strcmp(key, "created_at") == 0) {
+            metadata->created_at = (time_t) strtoll(val, NULL, 10);
+        } else if (strcmp(key, "modified_at") == 0) {
+            metadata->modified_at = (time_t) strtoll(val, NULL, 10);
+        } else if (strcmp(key, "expires_at") == 0) {
+            metadata->expires_at = (time_t) strtoll(val, NULL, 10);
+        } else if (strcmp(key, "object_type") == 0) {
+            metadata->object_type = (king_object_type_t) atoi(val);
+        } else if (strcmp(key, "cache_policy") == 0) {
+            metadata->cache_policy = (king_cache_policy_t) atoi(val);
+        } else if (strcmp(key, "cache_ttl_seconds") == 0) {
+            metadata->cache_ttl_seconds = (uint32_t) strtoul(val, NULL, 10);
+        }
+    }
+
+    fclose(fp);
+    return SUCCESS;
+}
+
+void king_object_store_meta_remove(const char *object_id)
+{
+    char meta_path[1024];
+    king_object_store_build_meta_path(meta_path, sizeof(meta_path), object_id);
+    unlink(meta_path);
+}
+
+/*
+ * Rehydrate live stats from disk by scanning the storage root.
+ * Called after init_system so the runtime counters match the actual
+ * on-disk state even across process restarts.
+ */
+void king_object_store_rehydrate_stats(void)
+{
+    DIR *dir;
+    struct dirent *ent;
+    struct stat st;
+    char file_path[1024];
+
+    king_object_store_runtime.current_object_count = 0;
+    king_object_store_runtime.current_stored_bytes  = 0;
+    king_object_store_runtime.latest_object_at      = 0;
+
+    if (king_object_store_runtime.config.storage_root_path[0] == '\0') {
+        return;
+    }
+
+    dir = opendir(king_object_store_runtime.config.storage_root_path);
+    if (dir == NULL) {
+        return;
+    }
+
+    while ((ent = readdir(dir)) != NULL) {
+        size_t nlen;
+        if (ent->d_name[0] == '.') {
+            continue;
+        }
+        nlen = strlen(ent->d_name);
+        /* Skip .meta sidecar files — count only object files */
+        if (nlen > 5 && strcmp(ent->d_name + nlen - 5, ".meta") == 0) {
+            continue;
+        }
+
+        snprintf(file_path, sizeof(file_path), "%s/%s",
+            king_object_store_runtime.config.storage_root_path, ent->d_name);
+
+        if (stat(file_path, &st) == 0 && S_ISREG(st.st_mode)) {
+            king_object_store_runtime.current_object_count++;
+            king_object_store_runtime.current_stored_bytes += (uint64_t) st.st_size;
+            if (st.st_mtime > king_object_store_runtime.latest_object_at) {
+                king_object_store_runtime.latest_object_at = st.st_mtime;
+            }
+        }
+    }
+
+    closedir(dir);
 }
 
 int king_object_store_local_fs_write(
@@ -180,7 +374,9 @@ int king_object_store_local_fs_write(
     king_object_store_runtime.current_stored_bytes += data_size;
     king_object_store_runtime.latest_object_at = time(NULL);
 
-    (void) metadata;
+    /* Write durable metadata sidecar */
+    king_object_store_meta_write(object_id, metadata);
+
     return SUCCESS;
 }
 
@@ -228,10 +424,13 @@ int king_object_store_local_fs_read(
     fclose(fp);
 
     if (metadata != NULL) {
-        memset(metadata, 0, sizeof(*metadata));
-        strncpy(metadata->object_id, object_id, sizeof(metadata->object_id) - 1);
-        metadata->content_length = *data_size;
-        metadata->created_at     = st.st_mtime;
+        /* Try to load durable metadata from sidecar; fall back to stat-derived values */
+        if (king_object_store_meta_read(object_id, metadata) != SUCCESS) {
+            memset(metadata, 0, sizeof(*metadata));
+            strncpy(metadata->object_id, object_id, sizeof(metadata->object_id) - 1);
+            metadata->content_length = *data_size;
+            metadata->created_at     = st.st_mtime;
+        }
     }
 
     return SUCCESS;
@@ -261,6 +460,9 @@ int king_object_store_local_fs_remove(const char *object_id)
         return FAILURE;
     }
 
+    /* Remove durable metadata sidecar */
+    king_object_store_meta_remove(object_id);
+
     return SUCCESS;
 }
 
@@ -287,6 +489,11 @@ int king_object_store_local_fs_list(zval *return_array)
         }
         king_object_store_build_path(file_path, sizeof(file_path), ent->d_name);
         if (stat(file_path, &st) == 0 && S_ISREG(st.st_mode)) {
+            /* Skip .meta sidecar files from the object listing */
+            size_t nlen = strlen(ent->d_name);
+            if (nlen > 5 && strcmp(ent->d_name + nlen - 5, ".meta") == 0) {
+                continue;
+            }
             array_init(&exported_entry);
             add_assoc_string(&exported_entry, "object_id", ent->d_name);
             add_assoc_long(&exported_entry, "size_bytes", (zend_long) st.st_size);
