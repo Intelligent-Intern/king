@@ -4913,7 +4913,6 @@ printf "%s\n" "$PHP_VERSION" >&6; }
         src/core/version.c       \
         src/core/health.c        \
         src/core/introspection.c \
-        src/stubs/all_stubs.c \
     "
 
 

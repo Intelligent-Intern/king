@@ -1,5 +1,5 @@
 --TEST--
-King server shutdown state, active local server controls, and remaining server stubs keep a stable contract
+King server shutdown state and active local server controls keep a stable contract
 --FILE--
 <?php
 $shutdownSession = king_connect('127.0.0.1', 443);
@@ -150,7 +150,7 @@ string(9) "127.0.0.1"
 int(2019)
 string(4) "mtls"
 bool(true)
-string(15) "partial_runtime"
+string(13) "local_runtime"
 array(0) {
 }
 bool(true)

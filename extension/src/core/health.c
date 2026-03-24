@@ -42,27 +42,15 @@ static const char *const king_active_runtime_names[] = {
     "semantic_dns_server_runtime",
     "object_store_registry",
     "cdn_cache_registry",
-    "telemetry_snapshots",
-    "autoscaling_snapshots",
-    "system_introspection"
-};
-
-static const char *const king_stubbed_api_names[] = {
-    "core_client_io",
-    "client_helpers",
-    "server_runtime",
     "mcp_runtime",
-    "pipeline_orchestrator",
-    "telemetry_write_path",
-    "autoscaling_engine",
-    "system_integration"
+    "pipeline_orchestrator_runtime",
+    "telemetry_runtime",
+    "autoscaling_runtime",
+    "system_integration_runtime"
 };
 
 #define KING_ACTIVE_RUNTIME_COUNT \
     ((size_t) (sizeof(king_active_runtime_names) / sizeof(king_active_runtime_names[0])))
-
-#define KING_STUBBED_API_COUNT \
-    ((size_t) (sizeof(king_stubbed_api_names) / sizeof(king_stubbed_api_names[0])))
 
 static void king_add_string_list(
     zval *target,
@@ -88,8 +76,8 @@ void king_add_runtime_surface(zval *target)
     king_add_string_list(&active_runtimes, king_active_runtime_names, KING_ACTIVE_RUNTIME_COUNT);
     add_assoc_zval(target, "active_runtimes", &active_runtimes);
 
-    add_assoc_long(target, "stubbed_api_group_count", (zend_long) KING_STUBBED_API_COUNT);
-    king_add_string_list(&stubbed_api_groups, king_stubbed_api_names, KING_STUBBED_API_COUNT);
+    add_assoc_long(target, "stubbed_api_group_count", 0);
+    array_init(&stubbed_api_groups);
     add_assoc_zval(target, "stubbed_api_groups", &stubbed_api_groups);
 }
 
@@ -104,18 +92,15 @@ const char *king_get_active_runtime_summary(void)
         "server_early_hints_runtime, server_websocket_upgrade_runtime, "
         "server_admin_api_runtime, server_tls_runtime, "
         "server_cors_runtime, server_open_telemetry_runtime, "
-        "iibin_proto, "
-        "semantic_dns_registry, semantic_dns_server_runtime, "
-        "object_store_registry, cdn_cache_registry, telemetry_snapshots, "
-        "autoscaling_snapshots, system_introspection";
+        "iibin_proto, semantic_dns_registry, semantic_dns_server_runtime, "
+        "object_store_registry, cdn_cache_registry, mcp_runtime, "
+        "pipeline_orchestrator_runtime, telemetry_runtime, "
+        "autoscaling_runtime, system_integration_runtime";
 }
 
 const char *king_get_stubbed_api_summary(void)
 {
-    return "core_client_io, client_helpers, "
-        "server_runtime, mcp_runtime, pipeline_orchestrator, "
-        "telemetry_write_path, autoscaling_engine, "
-        "system_integration";
+    return "none";
 }
 
 /*
@@ -131,9 +116,9 @@ const char *king_get_stubbed_api_summary(void)
  *     'php_version'      => '8.4.x',
  *     'pid'              => 12345,
  *     'config_override'  => false,   // king_globals.is_userland_override_allowed
- *     'active_runtime_count' => 27,
+ *     'active_runtime_count' => 30,
  *     'active_runtimes'  => [...],
- *     'stubbed_api_group_count' => 9,
+ *     'stubbed_api_group_count' => 0,
  *     'stubbed_api_groups' => [...],
  *   ]
  */

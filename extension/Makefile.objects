@@ -529,9 +529,6 @@ src/core/health.lo: /home/jochen/projects/king.site/king/extension/src/core/heal
 -include src/core/introspection.dep
 src/core/introspection.lo: /home/jochen/projects/king.site/king/extension/src/core/introspection.c
 	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/core/introspection.c -o src/core/introspection.lo  -MMD -MF src/core/introspection.dep -MT src/core/introspection.lo
--include src/stubs/all_stubs.dep
-src/stubs/all_stubs.lo: /home/jochen/projects/king.site/king/extension/src/stubs/all_stubs.c
-	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/home/jochen/projects/king.site/king/extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /home/jochen/projects/king.site/king/extension/src/stubs/all_stubs.c -o src/stubs/all_stubs.lo  -MMD -MF src/stubs/all_stubs.dep -MT src/stubs/all_stubs.lo
 $(phplibdir)/king.la: ./king.la
 	$(LIBTOOL) --tag=CC --mode=install cp ./king.la $(phplibdir)
 

@@ -1,5 +1,5 @@
 --TEST--
-King health exposes the active runtime and stubbed API inventory
+King health exposes the active runtime inventory without residual stub groups
 --FILE--
 <?php
 $health = king_health();
@@ -10,8 +10,8 @@ var_dump($health['stubbed_api_group_count']);
 var_dump($health['stubbed_api_groups']);
 ?>
 --EXPECT--
-int(28)
-array(28) {
+int(30)
+array(30) {
   [0]=>
   string(6) "config"
   [1]=>
@@ -63,28 +63,16 @@ array(28) {
   [24]=>
   string(18) "cdn_cache_registry"
   [25]=>
-  string(19) "telemetry_snapshots"
-  [26]=>
-  string(21) "autoscaling_snapshots"
-  [27]=>
-  string(20) "system_introspection"
-}
-int(8)
-array(8) {
-  [0]=>
-  string(14) "core_client_io"
-  [1]=>
-  string(14) "client_helpers"
-  [2]=>
-  string(14) "server_runtime"
-  [3]=>
   string(11) "mcp_runtime"
-  [4]=>
-  string(21) "pipeline_orchestrator"
-  [5]=>
-  string(20) "telemetry_write_path"
-  [6]=>
-  string(18) "autoscaling_engine"
-  [7]=>
-  string(18) "system_integration"
+  [26]=>
+  string(29) "pipeline_orchestrator_runtime"
+  [27]=>
+  string(17) "telemetry_runtime"
+  [28]=>
+  string(19) "autoscaling_runtime"
+  [29]=>
+  string(26) "system_integration_runtime"
+}
+int(0)
+array(0) {
 }

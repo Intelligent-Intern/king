@@ -1,5 +1,5 @@
 --TEST--
-King active websocket frames, MCP error aliases, and remaining skeleton stubs share a stable error contract
+King active websocket frames, MCP error aliases, and orchestrator runtime share a stable error contract
 --FILE--
 <?php
 $websocket = king_client_websocket_connect('ws://127.0.0.1/');

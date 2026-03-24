@@ -1,5 +1,5 @@
 --TEST--
-King MCP procedural skeleton runtime exposes local connection lifecycle and stable unavailable errors
+King MCP procedural local runtime exposes connection lifecycle and closed-connection errors
 --FILE--
 <?php
 $conn = king_mcp_connect('127.0.0.1', 8443, null);

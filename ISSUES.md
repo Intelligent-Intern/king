@@ -15,7 +15,7 @@
 
 ## Current Next Leaf
 
-- [ ] Reduce remaining stub surface subsystem by subsystem
+- [ ] Add final parity, end-to-end, and go-live readiness checks
   build: `pass`
   audit: `pass`
   tests: `273/273`
@@ -23,6 +23,7 @@
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
   package: `pass`
+  stubbed-api-groups: `0`
 
 ## Active Fronts
 
@@ -68,7 +69,7 @@
 - [x] Wire CI to the canonical `build-skeleton`, `test-skeleton`, and `audit-skeleton-surface` scripts
 - [x] Add static checks and explicit debug, ASan, UBSan, and release profiles
 - [x] Define reproducible release packaging
-- [ ] Reduce remaining stub surface subsystem by subsystem
+- [x] Reduce remaining stub surface subsystem by subsystem
 - [ ] Add final parity, end-to-end, and go-live readiness checks
 
 ## How To Use This File

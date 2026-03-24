@@ -26,9 +26,9 @@ array(8) {
   ["config_override_allowed"]=>
   bool(false)
   ["active_runtime_count"]=>
-  int(28)
+  int(30)
   ["active_runtimes"]=>
-  array(28) {
+  array(30) {
     [0]=>
     string(6) "config"
     [1]=>
@@ -80,31 +80,19 @@ array(8) {
     [24]=>
     string(18) "cdn_cache_registry"
     [25]=>
-    string(19) "telemetry_snapshots"
+    string(11) "mcp_runtime"
     [26]=>
-    string(21) "autoscaling_snapshots"
+    string(29) "pipeline_orchestrator_runtime"
     [27]=>
-    string(20) "system_introspection"
+    string(17) "telemetry_runtime"
+    [28]=>
+    string(19) "autoscaling_runtime"
+    [29]=>
+    string(26) "system_integration_runtime"
   }
   ["stubbed_api_group_count"]=>
-  int(8)
+  int(0)
   ["stubbed_api_groups"]=>
-  array(8) {
-    [0]=>
-    string(14) "core_client_io"
-    [1]=>
-    string(14) "client_helpers"
-    [2]=>
-    string(14) "server_runtime"
-    [3]=>
-    string(11) "mcp_runtime"
-    [4]=>
-    string(21) "pipeline_orchestrator"
-    [5]=>
-    string(20) "telemetry_write_path"
-    [6]=>
-    string(18) "autoscaling_engine"
-    [7]=>
-    string(18) "system_integration"
+  array(0) {
   }
 }

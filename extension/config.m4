@@ -97,9 +97,9 @@ if test "$PHP_KING" != "no"; then
     dnl ---------------------------------------------------------------------------
     dnl Source files for the skeleton build.
     dnl
-    dnl To add a real subsystem implementation:
-    dnl   1. Remove the functions from src/stubs/all_stubs.c
-    dnl   2. Add the new .c files here
+    dnl Add active subsystem sources here. The legacy public stub compilation
+    dnl unit is retired; placeholder exports should not be reintroduced
+    dnl silently.
     dnl ---------------------------------------------------------------------------
 
     KING_SRC=" \
@@ -280,7 +280,6 @@ if test "$PHP_KING" != "no"; then
         src/core/version.c       \
         src/core/health.c        \
         src/core/introspection.c \
-        src/stubs/all_stubs.c \
     "
 
     PHP_NEW_EXTENSION([king], [$KING_SRC], [$ext_shared])

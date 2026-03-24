@@ -181,7 +181,7 @@ PHP_FUNCTION(king_system_get_component_info)
         zend_string_equals_literal(component_name, "client") ||
         zend_string_equals_literal(component_name, "server")
     ) {
-        king_component_info_init(return_value, ZSTR_VAL(component_name), "partial_runtime");
+        king_component_info_init(return_value, ZSTR_VAL(component_name), "local_runtime");
         array_init(&configuration);
     } else {
         RETURN_FALSE;

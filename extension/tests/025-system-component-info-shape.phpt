@@ -53,10 +53,10 @@ array(6) {
 }
 bool(true)
 bool(true)
-string(15) "partial_runtime"
+string(13) "local_runtime"
 array(0) {
 }
-string(15) "partial_runtime"
+string(13) "local_runtime"
 array(0) {
 }
 bool(false)

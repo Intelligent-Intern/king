@@ -41,15 +41,11 @@ while IFS= read -r include_root; do
 done < <(find include -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
 
 echo "Stubbed entry points:"
-if [[ -f "src/stubs/all_stubs.c" ]]; then
-    stubbed_entry_points="$(rg '^PHP_FUNCTION\(([^)]+)\)' -or '$1' src/stubs/all_stubs.c || true)"
-    if [[ -n "${stubbed_entry_points}" ]]; then
-        printf '%s\n' "${stubbed_entry_points}" | sed 's/^/ - /'
-    else
-        echo " - none"
-    fi
+stubbed_entry_points="$(rg '^PHP_FUNCTION\(([^)]+)\)' -or '$1' src/stubs 2>/dev/null || true)"
+if [[ -n "${stubbed_entry_points}" ]]; then
+    printf '%s\n' "${stubbed_entry_points}" | sed 's/^/ - /'
 else
-    echo " - src/stubs/all_stubs.c missing"
+    echo " - none"
 fi
 
 if [[ "${missing_sources}" -ne 0 ]]; then

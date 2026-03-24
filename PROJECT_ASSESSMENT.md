@@ -20,13 +20,15 @@ benchmark harness for the four core runtime paths that were still uncovered,
 explicit local `release`, `debug`, `asan`, and `ubsan` build/smoke paths, and
 a seeded local fuzz/stress subset for the highest-risk runtime surfaces, plus a
 reproducible release packaging path over the staged canonical release profile.
+The legacy public C stub compilation unit is now retired, and the runtime
+inventory reports zero residual stub API groups.
 
-## Readiness Score: 9.0/10
+## Readiness Score: 9.1/10
 
 The system has clearly transitioned from a stub shell into a coordinated
-runtime. The limiting factor is no longer runtime parity; it is the remaining
-production-readiness work around reducing the still-intentional skeleton
-surface and finishing final go-live checks.
+runtime. The limiting factor is no longer runtime parity or public stub
+coverage; it is the remaining production-readiness work around final parity,
+end-to-end, and go-live checks.
 
 | Subsystem | Score | Status |
 |-----------|-------|--------|
@@ -89,6 +91,7 @@ The currently verified regression baseline is:
 - `./scripts/smoke-profile.sh asan`: passing
 - `./scripts/build-profile.sh ubsan`: passing
 - `./scripts/smoke-profile.sh ubsan`: passing
+- `king_health()['stubbed_api_group_count']`: `0`
 - `.github/workflows/ci.yml`: wired to the canonical audit/build/test path
 - `./benchmarks/run-canonical.sh`: passing locally
 
@@ -148,7 +151,7 @@ transport depth, or operational depth is still incomplete.
 
 ### Weak or Still Open
 
-- remaining stub-surface reduction and final go-live readiness
+- final parity, end-to-end, and go-live readiness
 
 ## Source Of Truth Boundaries
 
