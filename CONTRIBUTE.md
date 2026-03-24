@@ -40,6 +40,8 @@ without a real backend behind it, it is the wrong change.
 
 The canonical extension workflow is inside `extension/`.
 Do not treat ad-hoc local commands or legacy wrappers as the source of truth.
+The GitHub Actions baseline in `.github/workflows/ci.yml` is expected to run
+the same workflow, not a separate approximation.
 
 Build:
 
@@ -67,6 +69,9 @@ If you touch the PHP stub surface, also run:
 ```bash
 php -l stubs/king.php
 ```
+
+If CI drifts from these commands, fix the workflow to match the scripts instead
+of introducing another build entry point.
 
 ## Workflow
 

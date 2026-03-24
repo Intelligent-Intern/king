@@ -21,12 +21,12 @@ against the current repository state.
 
 The system has clearly transitioned from a stub shell into a coordinated
 runtime. The limiting factor is no longer runtime parity; it is the remaining
-production-readiness work around benchmarking, CI hardening, release packaging,
-and reducing the still-intentional skeleton surface.
+production-readiness work around benchmarking, deeper CI hardening, release
+packaging, and reducing the still-intentional skeleton surface.
 
 | Subsystem | Score | Status |
 |-----------|-------|--------|
-| **Build & Infrastructure** | 9/10 | Audit, rebuild, and full regression pass |
+| **Build & Infrastructure** | 9/10 | Audit, rebuild, full regression pass, and canonical CI wiring present |
 | **Config & Session** | 9/10 | Native ownership active; full PHPT parity green |
 | **HTTP Client Slices** | 10/10 | H1, H2, and H3 parity |
 | **IIBIN & Codecs** | 10/10 | Fully native, object hydration |
@@ -63,6 +63,7 @@ The currently verified regression baseline is:
 - `./scripts/build-skeleton.sh`: passing
 - extension load smoke: passing
 - `./scripts/test-skeleton.sh`: `269/269` PHPT tests passing
+- `.github/workflows/ci.yml`: wired to the canonical audit/build/test path
 
 There are currently no open PHPT failures in the canonical suite.
 
@@ -92,7 +93,7 @@ The repo already has active native runtime slices for:
 The repo is still not a full production-grade implementation for:
 
 - real hardware-backed cloud provisioning (currently simulated)
-- performance benchmark harnesses, CI hardening, release packaging, and full go-live readiness
+- performance benchmark harnesses, deeper CI hardening, release packaging, and full go-live readiness
 
 The biggest architectural caveat is simple:
 several areas already have honest local runtime slices, but the backend depth,
@@ -120,7 +121,7 @@ transport depth, or operational depth is still incomplete.
 
 ### Weak or Still Open
 
-- release engineering, benchmark coverage, and final end-to-end readiness
+- benchmark coverage, richer CI/profile coverage, release engineering, and final end-to-end readiness
 
 ## Source Of Truth Boundaries
 

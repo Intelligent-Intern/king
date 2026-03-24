@@ -15,10 +15,11 @@
 
 ## Current Next Leaf
 
-- [ ] Wire the verified baseline into CI and add non-regression performance harnesses
+- [ ] Add non-regression performance harnesses for session, proto, store, and Semantic DNS paths
   build: `pass`
   audit: `pass`
   tests: `269/269`
+  ci: `wired`
 
 ## Active Fronts
 
@@ -61,7 +62,7 @@
 - [x] Reconcile session, HTTP, and exception-hierarchy contract regressions after hardening
 - [ ] Add fuzz, stress, and edge-case coverage
 - [ ] Build benchmark harnesses for session, proto, store, and Semantic DNS paths
-- [ ] Wire CI to the canonical `build-skeleton`, `test-skeleton`, and `audit-skeleton-surface` scripts
+- [x] Wire CI to the canonical `build-skeleton`, `test-skeleton`, and `audit-skeleton-surface` scripts
 - [ ] Add static checks and explicit debug, ASan, UBSan, and release profiles
 - [ ] Define reproducible release packaging
 - [ ] Reduce remaining stub surface subsystem by subsystem
