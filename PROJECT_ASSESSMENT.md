@@ -37,12 +37,12 @@ Repository facts from the current tree:
 - `extension/src`: 169 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 167 headers
-- `extension/tests`: 259 PHPT files
+- `extension/tests`: 260 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently tracked green regression baseline is:
 
-- `259/259` PHPT tests passing
+- `260/260` PHPT tests passing
 
 ## What Is Real Today
 

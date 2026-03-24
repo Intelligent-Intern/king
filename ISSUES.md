@@ -15,7 +15,7 @@
 
 ## Current Next Leaf
 
-- [ ] Add edge-state, TTL, invalidation, and distribution behavior
+- [ ] Complete CDN edge-state and distribution behavior (multi-node)
   `extension/src/object_store/`
 
 ## Active Fronts
@@ -30,8 +30,11 @@ All checked!
 - [x] Implement concrete store backends and capacity boundaries
 - [x] Add durable persistence paths
 - [x] Port CDN cache and distribution logic into the active runtime
-- [ ] Add edge-state, TTL, invalidation, and distribution behavior
-- [ ] Add backend and end-to-end verification
+- [x] Add edge-state, TTL, invalidation, and distribution behavior
+- [x] Add backend and end-to-end verification
+- [x] Implement cloud-native backup and high-availability hooks
+- [ ] Complete CDN edge-state and distribution behavior (multi-node)
+- [ ] End-to-end regression across all backends (S3, Memcached)
 
 ### 3. MCP and orchestration
 
