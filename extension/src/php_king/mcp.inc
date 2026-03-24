@@ -333,6 +333,41 @@ static zend_result king_mcp_state_require_open(
     return FAILURE;
 }
 
+static zend_result king_mcp_validate_request_cancel(
+    zval *cancel,
+    const char *function_name)
+{
+    king_cancel_token_object *cancel_intern;
+    char message[KING_ERR_LEN];
+
+    if (cancel == NULL || Z_TYPE_P(cancel) == IS_NULL) {
+        return SUCCESS;
+    }
+
+    cancel_intern = php_king_cancel_token_obj_from_zend(Z_OBJ_P(cancel));
+    if (cancel_intern->cancelled) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() received a CancelToken that is already cancelled.",
+            function_name
+        );
+        king_set_error(message);
+        zend_throw_exception_ex(king_ce_runtime_exception, 0, "%s", message);
+        return FAILURE;
+    }
+
+    snprintf(
+        message,
+        sizeof(message),
+        "%s() cancel tokens are not yet wired in the active skeleton MCP runtime.",
+        function_name
+    );
+    king_set_error(message);
+    zend_throw_exception_ex(king_ce_mcp_protocol_error, 0, "%s", message);
+    return FAILURE;
+}
+
 #include "include/king_globals.h"
 
 PHP_FUNCTION(king_mcp_connect)
@@ -406,10 +441,16 @@ PHP_FUNCTION(king_mcp_request)
         RETURN_THROWS();
     }
 
+    if (state->closed) {
+        king_set_error("king_mcp_request() cannot run on a closed MCP connection.");
+        RETURN_FALSE;
+    }
+
     if (king_mcp_request(state, service_name, method_name, request_payload_str, &response_payload) != SUCCESS) {
         RETURN_FALSE;
     }
-    
+
+    king_set_error("");
     RETURN_STR(response_payload);
 }
 
@@ -490,13 +531,17 @@ PHP_FUNCTION(king_mcp_upload_from_stream)
         RETURN_FALSE;
     }
 
-    king_mcp_transfer_store(
+    if (king_mcp_transfer_store(
         state,
         service_name,
         method_name,
         stream_identifier,
         payload
-    );
+    ) != SUCCESS) {
+        zend_string_release(payload);
+        king_set_error("king_mcp_upload_from_stream() failed to persist the local MCP transfer.");
+        RETURN_FALSE;
+    }
 
     king_set_error("");
     RETURN_TRUE;
@@ -653,10 +698,15 @@ PHP_METHOD(King_MCP, request)
         RETURN_THROWS();
     }
 
+    if (king_mcp_validate_request_cancel(cancel, "MCP::request") != SUCCESS) {
+        RETURN_THROWS();
+    }
+
     if (king_mcp_request(state, service, method, payload, &response_payload) != SUCCESS) {
         RETURN_THROWS();
     }
-    
+
+    king_set_error("");
     RETURN_STR(response_payload);
 }
 
@@ -734,13 +784,22 @@ PHP_METHOD(King_MCP, uploadFromStream)
         RETURN_THROWS();
     }
 
-    king_mcp_transfer_store(
+    if (king_mcp_transfer_store(
         state,
         service,
         method,
         stream_identifier,
         payload
-    );
+    ) != SUCCESS) {
+        zend_string_release(payload);
+        king_set_error("MCP::uploadFromStream() failed to persist the local MCP transfer.");
+        zend_throw_exception_ex(
+            king_ce_mcp_data_error,
+            0,
+            "MCP::uploadFromStream() failed to persist the local MCP transfer."
+        );
+        RETURN_THROWS();
+    }
 
     king_set_error("");
 }

@@ -1,5 +1,7 @@
 --TEST--
 King semantic DNS init and start-server validate local runtime state and config
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 try {

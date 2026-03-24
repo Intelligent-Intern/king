@@ -1,5 +1,7 @@
 --TEST--
 King semantic DNS init and start-server expose a local core server runtime
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 var_dump(king_semantic_dns_init([

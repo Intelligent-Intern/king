@@ -1,5 +1,7 @@
 --TEST--
 King object-store HA: replication and cloud backup hooks
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 

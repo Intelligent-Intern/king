@@ -13,28 +13,29 @@ kernels across config, session, client transport, local server slices, IIBIN,
 local WebSocket handling, and all major control-plane subsystems (MCP, Telemetry,
 Autoscaling, Integration).
 
-That said, the repository is not currently at a fully green verified baseline.
-As of 2026-03-24, the canonical audit and rebuild scripts pass, the extension
-loads successfully, but the full PHPT matrix is only partially green.
+The repository now sits at a fully green verified baseline.
+As of 2026-03-24, the canonical audit, rebuild, and full PHPT matrix all pass
+against the current repository state.
 
-## Readiness Score: 6.5/10
+## Readiness Score: 8.5/10
 
 The system has clearly transitioned from a stub shell into a coordinated
-runtime. The limiting factor is no longer "nothing is wired", but unresolved
-regression gaps across a handful of subsystems.
+runtime. The limiting factor is no longer runtime parity; it is the remaining
+production-readiness work around benchmarking, CI hardening, release packaging,
+and reducing the still-intentional skeleton surface.
 
 | Subsystem | Score | Status |
 |-----------|-------|--------|
-| **Build & Infrastructure** | 8/10 | Audit and rebuild pass; full regression not yet green |
-| **Config & Session** | 8/10 | Native ownership active; some contract regressions remain |
+| **Build & Infrastructure** | 9/10 | Audit, rebuild, and full regression pass |
+| **Config & Session** | 9/10 | Native ownership active; full PHPT parity green |
 | **HTTP Client Slices** | 10/10 | H1, H2, and H3 parity |
 | **IIBIN & Codecs** | 10/10 | Fully native, object hydration |
-| **Semantic DNS** | 7/10 | Register/discover/update paths active; init/start-server parity still failing |
-| **Object Store & CDN** | 5/10 | Active backend/runtime present; major regression cluster still open |
-| **MCP & Orchestrator** | 5/10 | Core runtime present; lifecycle/transfer/parity regressions still open |
+| **Semantic DNS** | 9/10 | Register/discover/update/init/start-server parity green |
+| **Object Store & CDN** | 9/10 | Runtime, persistence, HA, multi-backend, and stress parity green |
+| **MCP & Orchestrator** | 8/10 | Runtime/request/transfer parity green; still skeleton-oriented underneath |
 | **Telemetry & Autoscale** | 8/10 | Active monitoring and metrics loops verified in current targeted coverage |
-| **System Integration** | 7/10 | Core lifecycle harness active; broader repo state still mixed |
-| **Security & Hardening** | 6/10 | Policy gated; zeroing active; contract cleanup still pending |
+| **System Integration** | 8/10 | Core lifecycle harness active and green in the full matrix |
+| **Security & Hardening** | 8/10 | Policy gated, zeroing active, and hardened contracts verified green |
 | **Performance/Bench** | 2/10 | Not yet implemented |
 
 ## Verified Baseline
@@ -61,15 +62,9 @@ The currently verified regression baseline is:
 - `./scripts/audit-skeleton-surface.sh`: passing
 - `./scripts/build-skeleton.sh`: passing
 - extension load smoke: passing
-- `./scripts/test-skeleton.sh`: `239/269` PHPT tests passing
+- `./scripts/test-skeleton.sh`: `269/269` PHPT tests passing
 
-The currently open PHPT failures are concentrated in:
-
-- object store and CDN runtime/parity, persistence, HA, multi-backend, and stress leaves
-- MCP lifecycle/upload/download/object-store persistence leaves
-- pipeline orchestrator runtime parity
-- semantic DNS init/start-server runtime parity
-- a small set of session/error-contract and exception-hierarchy leaves
+There are currently no open PHPT failures in the canonical suite.
 
 ## What Is Real Today
 
@@ -94,9 +89,8 @@ The repo already has active native runtime slices for:
 
 ## What Is Not Finished
 
-The repo is not yet a full production-grade implementation for:
+The repo is still not a full production-grade implementation for:
 
-- a fully green PHPT regression baseline across the active runtime surface
 - real hardware-backed cloud provisioning (currently simulated)
 - performance benchmark harnesses, CI hardening, release packaging, and full go-live readiness
 
@@ -126,9 +120,6 @@ transport depth, or operational depth is still incomplete.
 
 ### Weak or Still Open
 
-- object-store/CDN regression parity across persistence, stress, and multi-backend coverage
-- MCP transfer/runtime parity and Object Store-backed end-to-end coverage
-- semantic DNS init/start-server parity
 - release engineering, benchmark coverage, and final end-to-end readiness
 
 ## Source Of Truth Boundaries

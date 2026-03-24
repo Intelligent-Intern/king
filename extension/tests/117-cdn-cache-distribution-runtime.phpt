@@ -1,5 +1,7 @@
 --TEST--
 King CDN cache object, TTL contract, invalidation, and edge-node exposure
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 

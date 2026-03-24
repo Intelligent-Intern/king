@@ -1,8 +1,11 @@
 --TEST--
 King MCP upload and download helpers validate local transfer arguments and missing payloads
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
-king_object_store_init(['storage_root_path' => sys_get_temp_dir() . '/king_mcp_validation_tests']);
+$storagePath = sys_get_temp_dir() . '/king_mcp_validation_tests_' . getmypid();
+king_object_store_init(['storage_root_path' => $storagePath]);
 $connection = king_mcp_connect('127.0.0.1', 8443, null);
 $source = fopen('php://temp', 'w+');
 $destination = fopen('php://temp', 'w+');
@@ -29,6 +32,15 @@ try {
 } catch (Throwable $e) {
     var_dump(get_class($e));
     var_dump($e->getMessage());
+}
+
+if (is_dir($storagePath)) {
+    foreach (scandir($storagePath) as $file) {
+        if ($file !== '.' && $file !== '..') {
+            @unlink($storagePath . '/' . $file);
+        }
+    }
+    @rmdir($storagePath);
 }
 ?>
 --EXPECTF--

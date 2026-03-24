@@ -15,35 +15,35 @@
 
 ## Current Next Leaf
 
-- [ ] Reconcile the full PHPT matrix back to green after the current runtime/hardening merge
+- [ ] Wire the verified baseline into CI and add non-regression performance harnesses
   build: `pass`
   audit: `pass`
-  tests: `239/269`
+  tests: `269/269`
 
 ## Active Fronts
 
 ### 1. Semantic DNS and routing
 
 - [x] Keep register/discover/update routing leaves green
-- [ ] Restore `king_semantic_dns_init()` / `king_semantic_dns_start_server()` runtime and validation parity
-- [ ] Reconcile Semantic DNS core-server expectations with the active local runtime surface
+- [x] Restore `king_semantic_dns_init()` / `king_semantic_dns_start_server()` runtime and validation parity
+- [x] Reconcile Semantic DNS core-server expectations with the active local runtime surface
 
 ### 2. Object store and CDN runtime
 
 - [x] Replace local registry behavior with a real object-store backend core
-- [ ] Restore object-store miss, init-validation, and capacity-boundary regression parity
-- [ ] Restore durable persistence and metadata rehydration regression parity
-- [ ] Restore CDN cache/invalidation/TTL/distribution regression parity
-- [ ] Restore HA, multi-backend, and stress-path regression parity
-- [ ] Re-run object-store/CDN end-to-end verification to green
+- [x] Restore object-store miss, init-validation, and capacity-boundary regression parity
+- [x] Restore durable persistence and metadata rehydration regression parity
+- [x] Restore CDN cache/invalidation/TTL/distribution regression parity
+- [x] Restore HA, multi-backend, and stress-path regression parity
+- [x] Re-run object-store/CDN end-to-end verification to green
 
 ### 3. MCP and orchestration
 
 - [x] Port MCP runtime out of the local lifecycle-only slice into `extension/src/mcp/`
-- [ ] Restore MCP lifecycle/request parity against the current PHPT surface
-- [ ] Restore MCP upload/download helper parity and validation contracts
-- [ ] Restore MCP Object Store-backed transfer persistence end-to-end
-- [ ] Restore pipeline orchestrator runtime/test parity
+- [x] Restore MCP lifecycle/request parity against the current PHPT surface
+- [x] Restore MCP upload/download helper parity and validation contracts
+- [x] Restore MCP Object Store-backed transfer persistence end-to-end
+- [x] Restore pipeline orchestrator runtime/test parity
 
 ### 4. Telemetry, autoscaling, and system integration
 
@@ -58,7 +58,7 @@
 - [x] Add security policy enforcement for userland config overrides
 - [x] Zeroize secrets and tighten ownership around TLS-adjacent buffers
 - [x] Harden public input paths for bounds and type handling
-- [ ] Reconcile session, HTTP, and exception-hierarchy contract regressions after hardening
+- [x] Reconcile session, HTTP, and exception-hierarchy contract regressions after hardening
 - [ ] Add fuzz, stress, and edge-case coverage
 - [ ] Build benchmark harnesses for session, proto, store, and Semantic DNS paths
 - [ ] Wire CI to the canonical `build-skeleton`, `test-skeleton`, and `audit-skeleton-surface` scripts

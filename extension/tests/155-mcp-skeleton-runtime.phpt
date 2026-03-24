@@ -14,7 +14,7 @@ var_dump(king_mcp_get_error());
 ?>
 --EXPECT--
 bool(true)
-string(15) "{"res":"{}"}"
+string(12) "{"res":"{}"}"
 string(0) ""
 bool(true)
 bool(false)

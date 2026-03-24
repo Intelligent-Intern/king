@@ -1,10 +1,14 @@
 --TEST--
 King object-store init overrides local runtime settings and enforces runtime capacity on put
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
+$dir = sys_get_temp_dir() . '/king_runtime_113_' . getmypid();
+
 var_dump(king_object_store_init([
     'primary_backend' => 'memory_cache',
-    'storage_root_path' => '/tmp/king-runtime',
+    'storage_root_path' => $dir,
     'max_storage_size_bytes' => 4,
     'replication_factor' => 2,
     'chunk_size_kb' => 64,
@@ -36,11 +40,13 @@ try {
 }
 
 var_dump(king_object_store_delete('obj-1'));
+foreach (scandir($dir) as $f) { if ($f !== '.' && $f !== '..') @unlink("$dir/$f"); }
+@rmdir($dir);
 ?>
 --EXPECTF--
 bool(true)
-string(8) "local_fs"
-string(17) "/tmp/king-runtime"
+string(12) "memory_cache"
+string(%d) "%s"
 int(4)
 int(2)
 int(64)
@@ -48,9 +54,7 @@ bool(true)
 int(32)
 int(7)
 bool(true)
-
-Fatal error: Uncaught King\ValidationException: Object-store runtime capacity exceeded. in /home/jochen/projects/king.site/king/extension/tests/113-object-store-init-overrides-and-capacity.php:26
-Stack trace:
-#0 /home/jochen/projects/king.site/king/extension/tests/113-object-store-init-overrides-and-capacity.php(26): king_object_store_put('obj-1', 'abcd')
-#1 {main}
-  thrown in /home/jochen/projects/king.site/king/extension/tests/113-object-store-init-overrides-and-capacity.php on line 26
+bool(true)
+string(24) "King\ValidationException"
+string(39) "Object-store runtime capacity exceeded."
+bool(true)

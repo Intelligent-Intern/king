@@ -1,5 +1,7 @@
 --TEST--
 King CDN invalidate-cache flushes the full local cache registry when called without an object id
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 $dir = sys_get_temp_dir() . '/king_cdn_108_' . getmypid();

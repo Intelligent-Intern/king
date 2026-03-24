@@ -1,5 +1,7 @@
 --TEST--
 King CDN: multi-node edge state and distribution metadata
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 

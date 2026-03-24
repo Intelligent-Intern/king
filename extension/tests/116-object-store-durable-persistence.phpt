@@ -1,5 +1,7 @@
 --TEST--
 King object-store metadata survives a re-init (durable persistence)
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 

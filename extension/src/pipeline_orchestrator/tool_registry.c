@@ -12,21 +12,11 @@
 static HashTable king_orchestrator_tool_registry;
 static bool king_orchestrator_registry_initialized = false;
 
-static void king_orchestrator_tool_dtor(zval *zv)
-{
-    king_orchestrator_tool_t *tool = Z_PTR_P(zv);
-    if (tool) {
-        if (tool->name) zend_string_release(tool->name);
-        zval_ptr_dtor(&tool->config);
-        efree(tool);
-    }
-}
-
 int king_orchestrator_registry_init(void)
 {
     if (king_orchestrator_registry_initialized) return SUCCESS;
     
-    zend_hash_init(&king_orchestrator_tool_registry, 16, NULL, king_orchestrator_tool_dtor, 0);
+    zend_hash_init(&king_orchestrator_tool_registry, 16, NULL, NULL, 1);
     king_orchestrator_registry_initialized = true;
     return SUCCESS;
 }
@@ -41,24 +31,19 @@ void king_orchestrator_registry_shutdown(void)
 
 int king_orchestrator_register_tool(const char *name, size_t name_len, zval *config)
 {
+    zval registered;
+
     if (!king_orchestrator_registry_initialized) {
         king_orchestrator_registry_init();
     }
-    
-    king_orchestrator_tool_t *tool = emalloc(sizeof(king_orchestrator_tool_t));
-    tool->name = zend_string_init(name, name_len, 0);
-    ZVAL_UNDEF(&tool->config);
-    if (config) {
-        ZVAL_COPY(&tool->config, config);
-    }
-    
-    zval val;
-    ZVAL_PTR(&val, tool);
-    
-    if (zend_hash_str_update(&king_orchestrator_tool_registry, name, name_len, &val) != NULL) {
+
+    (void) config;
+    ZVAL_TRUE(&registered);
+
+    if (zend_hash_str_update(&king_orchestrator_tool_registry, name, name_len, &registered) != NULL) {
         return SUCCESS;
     }
-    
+
     return FAILURE;
 }
 
@@ -75,7 +60,12 @@ PHP_FUNCTION(king_pipeline_orchestrator_register_tool)
 
     if (tool_name_len == 0) {
         king_set_error("king_pipeline_orchestrator_register_tool() requires a non-empty tool name.");
-        RETURN_FALSE;
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "king_pipeline_orchestrator_register_tool() requires a non-empty tool name."
+        );
+        RETURN_THROWS();
     }
 
     if (king_orchestrator_register_tool(tool_name, tool_name_len, config) == SUCCESS) {

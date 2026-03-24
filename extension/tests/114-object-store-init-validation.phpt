@@ -1,5 +1,7 @@
 --TEST--
 King object-store init validates local runtime config input in the skeleton build
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 try {
@@ -45,3 +47,15 @@ try {
 }
 ?>
 --EXPECTF--
+string(24) "King\ValidationException"
+string(70) "Object-store config 'primary_backend' must be a valid storage backend."
+string(24) "King\ValidationException"
+string(67) "Object-store config 'storage_root_path' must be a non-empty string."
+string(24) "King\ValidationException"
+string(76) "Object-store config 'max_storage_size_bytes' must be a non-negative integer."
+string(24) "King\ValidationException"
+string(68) "Object-store config 'replication_factor' must be a positive integer."
+string(24) "King\ValidationException"
+string(63) "Object-store config 'chunk_size_kb' must be a positive integer."
+string(24) "King\ValidationException"
+string(84) "Object-store config 'cdn_config.default_ttl_seconds' must be a non-negative integer."

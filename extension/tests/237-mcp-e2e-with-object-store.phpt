@@ -1,8 +1,10 @@
 --TEST--
 King MCP end-to-end verification: ensure connections use Object Store persistence for stream data
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
-$storage_path = sys_get_temp_dir() . '/king_e2e_mcp';
+$storage_path = sys_get_temp_dir() . '/king_e2e_mcp_' . getmypid();
 king_object_store_init(['storage_root_path' => $storage_path]);
 
 $connection = king_mcp_connect('127.0.0.1', 8443, null);
@@ -26,6 +28,15 @@ rewind($dest);
 var_dump(strlen(stream_get_contents($dest)));
 
 king_mcp_close($connection);
+
+if (is_dir($storage_path)) {
+    foreach (scandir($storage_path) as $file) {
+        if ($file !== '.' && $file !== '..') {
+            @unlink($storage_path . '/' . $file);
+        }
+    }
+    @rmdir($storage_path);
+}
 ?>
 --EXPECT--
 bool(true)

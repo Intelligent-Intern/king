@@ -1,5 +1,7 @@
 --TEST--
 King: Object Store Stress and Edge Cases (Capacity, Churn, Persistence)
+--INI--
+king.security_allow_config_override=1
 --SKIPIF--
 <?php if (!extension_loaded("king")) print "skip"; ?>
 --FILE--

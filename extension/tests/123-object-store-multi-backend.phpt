@@ -1,5 +1,7 @@
 --TEST--
 King object-store: multi-backend regression (S3, Memcached)
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 

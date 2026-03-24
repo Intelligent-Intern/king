@@ -1,5 +1,7 @@
 --TEST--
 King object-store end-to-end: capacity, rehydration, CDN consistency, and metadata
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 

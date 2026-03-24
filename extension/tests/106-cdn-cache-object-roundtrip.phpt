@@ -1,5 +1,7 @@
 --TEST--
 King CDN cache-object writes into the local CDN cache registry and invalidate removes it again
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 $dir = sys_get_temp_dir() . '/king_cdn_106_' . getmypid();

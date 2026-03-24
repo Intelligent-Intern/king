@@ -1,5 +1,7 @@
 --TEST--
 King CDN edge-state, TTL=0 no-expiry, auto-invalidation on delete, and cleanup sweep
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 

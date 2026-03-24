@@ -155,10 +155,7 @@ int king_mcp_request(
      * If service is 'svc', return payload reflected.
      */
     if (strcmp(service, "svc") == 0) {
-        size_t len = 6 + ZSTR_LEN(payload); /* {"res":...} */
-        *response_out = zend_string_alloc(len, 0);
-        snprintf(ZSTR_VAL(*response_out), len + 1, "{\"res\":\"%s\"}", ZSTR_VAL(payload));
-        ZSTR_LEN(*response_out) = len;
+        *response_out = strpprintf(0, "{\"res\":\"%s\"}", ZSTR_VAL(payload));
         return SUCCESS;
     }
 
