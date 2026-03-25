@@ -1,9 +1,11 @@
 --TEST--
 King object-store and CDN APIs reject identifier traversal attempts
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 $root = sys_get_temp_dir() . '/king_obj_id_traversal_' . getmypid();
-$outside = '/tmp/king_obj_id_traversal_' . getmypid();
+$outside = sys_get_temp_dir() . '/king_obj_id_traversal_outside_' . getmypid();
 $marker = $outside . '-target';
 
 @unlink($outside);
@@ -64,29 +66,29 @@ foreach (scandir($root) as $file) {
 @rmdir($root);
 --EXPECT--
 bool(true)
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
 bool(false)
 bool(false)
