@@ -153,12 +153,78 @@ static void king_object_store_set_backend_runtime_result(
     const char *error
 )
 {
+    int operation_succeeded = (success == SUCCESS);
     const char *contract = king_object_store_backend_contract_to_string(backend);
-    const char *status = success ? king_object_store_initial_backend_status(backend) : king_object_store_adapter_status_failed;
-    if (!success && (error == NULL || error[0] == '\0')) {
+    const char *status = operation_succeeded ? king_object_store_initial_backend_status(backend) : king_object_store_adapter_status_failed;
+    if (!operation_succeeded && (error == NULL || error[0] == '\0')) {
         error = "Object-store backend operation failed.";
     }
     king_object_store_set_runtime_adapter_status(scope, status, contract, error);
+}
+
+static int king_object_store_backend_is_local(king_storage_backend_t backend)
+{
+    return backend == KING_STORAGE_BACKEND_LOCAL_FS ||
+           backend == KING_STORAGE_BACKEND_MEMORY_CACHE;
+}
+
+static int king_object_store_require_honest_backend(
+    const char *scope,
+    king_storage_backend_t backend,
+    const char *operation
+)
+{
+    const char *backend_name;
+    const char *contract;
+    char message[256];
+
+    if (king_object_store_backend_is_local(backend) == 1) {
+        return SUCCESS;
+    }
+
+    if (operation == NULL || operation[0] == '\0') {
+        operation = "an operation";
+    }
+
+    backend_name = king_storage_backend_to_string(backend);
+    contract = king_object_store_backend_contract_to_string(backend);
+
+    if (backend == KING_STORAGE_BACKEND_CLOUD_S3 ||
+        backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
+        backend == KING_STORAGE_BACKEND_CLOUD_AZURE) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s backend '%s' is simulated-only and unavailable for %s.",
+            contract,
+            backend_name,
+            operation
+        );
+    } else if (backend == KING_STORAGE_BACKEND_DISTRIBUTED) {
+        snprintf(
+            message,
+            sizeof(message),
+            "distributed backend is simulated-only and unavailable for %s.",
+            operation
+        );
+    } else {
+        snprintf(
+            message,
+            sizeof(message),
+            "object-store backend '%s' is unavailable for %s.",
+            backend_name,
+            operation
+        );
+    }
+
+    king_object_store_set_runtime_adapter_status(
+        scope,
+        king_object_store_adapter_status_failed,
+        contract,
+        message
+    );
+
+    return FAILURE;
 }
 
 const char *king_object_store_object_id_validate(const char *object_id)
@@ -271,42 +337,38 @@ int king_object_store_init_system(king_object_store_config_t *config)
     king_object_store_runtime.initialized = true;
     king_object_store_initialize_adapter_statuses();
 
-    if (strstr(king_object_store_runtime.primary_adapter_contract, "local") == NULL &&
-        king_object_store_runtime.config.primary_backend != KING_STORAGE_BACKEND_DISTRIBUTED &&
-        king_object_store_runtime.config.primary_backend != KING_STORAGE_BACKEND_CLOUD_S3 &&
-        king_object_store_runtime.config.primary_backend != KING_STORAGE_BACKEND_CLOUD_GCS &&
-        king_object_store_runtime.config.primary_backend != KING_STORAGE_BACKEND_CLOUD_AZURE) {
-        king_object_store_set_runtime_adapter_status(
-            "primary",
-            king_object_store_adapter_status_unimplemented,
-            king_object_store_backend_contract_to_string(king_object_store_runtime.config.primary_backend),
-            "Unsupported primary object-store backend."
-        );
-    }
+    if (!king_object_store_backend_is_local(king_object_store_runtime.config.primary_backend)) {
+        const char *message = "Primary backend is simulated-only and unavailable in this runtime.";
+        if ((king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_S3 ||
+             king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
+             king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_AZURE) &&
+            Z_TYPE(king_object_store_runtime.config.cloud_credentials) == IS_UNDEF) {
+            message = "Cloud credentials are required to enable native cloud backend operation.";
+        }
 
-    if ((king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_S3 ||
-         king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
-         king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_AZURE) &&
-        Z_TYPE(king_object_store_runtime.config.cloud_credentials) == IS_UNDEF) {
         king_object_store_set_runtime_adapter_status(
             "primary",
             king_object_store_adapter_status_simulated,
             king_object_store_backend_contract_to_string(king_object_store_runtime.config.primary_backend),
-            "Cloud credentials not configured; operations will run under simulated adapter contract."
+            message
         );
     }
 
-    if (king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_S3 ||
-        king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
-        king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_AZURE) {
-        if (Z_TYPE(king_object_store_runtime.config.cloud_credentials) == IS_UNDEF) {
-            king_object_store_set_runtime_adapter_status(
-                "backup",
-                king_object_store_adapter_status_simulated,
-                king_object_store_backend_contract_to_string(king_object_store_runtime.config.backup_backend),
-                "Cloud credentials not configured; backup status set to simulated adapter contract."
-            );
+    if (!king_object_store_backend_is_local(king_object_store_runtime.config.backup_backend)) {
+        const char *message = "Backup backend is simulated-only and unavailable in this runtime.";
+        if ((king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_S3 ||
+             king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
+             king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_AZURE) &&
+            Z_TYPE(king_object_store_runtime.config.cloud_credentials) == IS_UNDEF) {
+            message = "Cloud credentials are required to enable native cloud backup backends.";
         }
+
+        king_object_store_set_runtime_adapter_status(
+            "backup",
+            king_object_store_adapter_status_simulated,
+            king_object_store_backend_contract_to_string(king_object_store_runtime.config.backup_backend),
+            message
+        );
     }
 
     /* Ensure storage root exists for local_fs / memory_cache backends */
@@ -818,6 +880,13 @@ int king_object_store_backup_object(const char *object_id, king_storage_backend_
         return SUCCESS;
     }
 
+    if (king_object_store_require_honest_backend(
+            "backup",
+            backup_backend,
+            "object backup") == FAILURE) {
+        return FAILURE;
+    }
+
     switch (backup_backend) {
         case KING_STORAGE_BACKEND_DISTRIBUTED:
         case KING_STORAGE_BACKEND_CLOUD_S3:
@@ -1150,22 +1219,17 @@ int king_object_store_write_object(
         return FAILURE;
     }
 
+    if (king_object_store_require_honest_backend(
+            "primary",
+            king_object_store_runtime.config.primary_backend,
+            "put operations") == FAILURE) {
+        return FAILURE;
+    }
+
     switch (king_object_store_runtime.config.primary_backend) {
         case KING_STORAGE_BACKEND_LOCAL_FS:
         case KING_STORAGE_BACKEND_MEMORY_CACHE:
             rc = king_object_store_local_fs_write(object_id, data, data_size, metadata);
-            break;
-        case KING_STORAGE_BACKEND_DISTRIBUTED:
-            rc = king_object_store_memcached_simulate_write(object_id, data, data_size, metadata);
-            break;
-        case KING_STORAGE_BACKEND_CLOUD_S3:
-            rc = king_object_store_s3_simulate_write(object_id, data, data_size, metadata);
-            break;
-        case KING_STORAGE_BACKEND_CLOUD_GCS:
-            rc = king_object_store_gcs_simulate_write(object_id, data, data_size, metadata);
-            break;
-        case KING_STORAGE_BACKEND_CLOUD_AZURE:
-            rc = king_object_store_azure_simulate_write(object_id, data, data_size, metadata);
             break;
         default:
             king_object_store_set_backend_runtime_result(
@@ -1182,6 +1246,20 @@ int king_object_store_write_object(
         rc,
         rc == SUCCESS ? NULL : "Primary object-store backend write failed."
     );
+
+    if (rc == SUCCESS &&
+        king_object_store_runtime.config.backup_backend != king_object_store_runtime.config.primary_backend) {
+        if (king_object_store_backup_object(object_id, king_object_store_runtime.config.backup_backend) != SUCCESS) {
+            king_object_store_set_backend_runtime_result(
+                "primary",
+                king_object_store_runtime.config.primary_backend,
+                FAILURE,
+                "Primary object-store write failed because backup operation failed."
+            );
+            return FAILURE;
+        }
+    }
+
     return rc;
 }
 
@@ -1202,22 +1280,17 @@ int king_object_store_read_object(
         return FAILURE;
     }
 
+    if (king_object_store_require_honest_backend(
+            "primary",
+            king_object_store_runtime.config.primary_backend,
+            "get operations") == FAILURE) {
+        return FAILURE;
+    }
+
     switch (king_object_store_runtime.config.primary_backend) {
         case KING_STORAGE_BACKEND_LOCAL_FS:
         case KING_STORAGE_BACKEND_MEMORY_CACHE:
             rc = king_object_store_local_fs_read(object_id, data, data_size, metadata);
-            break;
-        case KING_STORAGE_BACKEND_DISTRIBUTED:
-            rc = king_object_store_distributed_simulate_read(object_id, data, data_size);
-            break;
-        case KING_STORAGE_BACKEND_CLOUD_S3:
-            rc = king_object_store_s3_simulate_read(object_id, data, data_size);
-            break;
-        case KING_STORAGE_BACKEND_CLOUD_GCS:
-            rc = king_object_store_gcs_simulate_read(object_id, data, data_size);
-            break;
-        case KING_STORAGE_BACKEND_CLOUD_AZURE:
-            rc = king_object_store_azure_simulate_read(object_id, data, data_size);
             break;
         default:
             king_object_store_set_backend_runtime_result(
@@ -1250,22 +1323,17 @@ int king_object_store_remove_object(const char *object_id)
         return FAILURE;
     }
 
+    if (king_object_store_require_honest_backend(
+            "primary",
+            king_object_store_runtime.config.primary_backend,
+            "delete operations") == FAILURE) {
+        return FAILURE;
+    }
+
     switch (king_object_store_runtime.config.primary_backend) {
         case KING_STORAGE_BACKEND_LOCAL_FS:
         case KING_STORAGE_BACKEND_MEMORY_CACHE:
             rc = king_object_store_local_fs_remove(object_id);
-            break;
-        case KING_STORAGE_BACKEND_DISTRIBUTED:
-            rc = king_object_store_distributed_simulate_remove(object_id);
-            break;
-        case KING_STORAGE_BACKEND_CLOUD_S3:
-            rc = king_object_store_s3_simulate_remove(object_id);
-            break;
-        case KING_STORAGE_BACKEND_CLOUD_GCS:
-            rc = king_object_store_gcs_simulate_remove(object_id);
-            break;
-        case KING_STORAGE_BACKEND_CLOUD_AZURE:
-            rc = king_object_store_azure_simulate_remove(object_id);
             break;
         default:
             king_object_store_set_backend_runtime_result(
@@ -1288,22 +1356,18 @@ int king_object_store_remove_object(const char *object_id)
 int king_object_store_list_object(zval *return_array)
 {
     int rc = FAILURE;
+
+    if (king_object_store_require_honest_backend(
+            "primary",
+            king_object_store_runtime.config.primary_backend,
+            "list operations") == FAILURE) {
+        return FAILURE;
+    }
+
     switch (king_object_store_runtime.config.primary_backend) {
         case KING_STORAGE_BACKEND_LOCAL_FS:
         case KING_STORAGE_BACKEND_MEMORY_CACHE:
             rc = king_object_store_local_fs_list(return_array);
-            break;
-        case KING_STORAGE_BACKEND_DISTRIBUTED:
-            rc = king_object_store_distributed_simulate_list(return_array);
-            break;
-        case KING_STORAGE_BACKEND_CLOUD_S3:
-            rc = king_object_store_s3_simulate_list(return_array);
-            break;
-        case KING_STORAGE_BACKEND_CLOUD_GCS:
-            rc = king_object_store_gcs_simulate_list(return_array);
-            break;
-        case KING_STORAGE_BACKEND_CLOUD_AZURE:
-            rc = king_object_store_azure_simulate_list(return_array);
             break;
         default:
             king_object_store_set_backend_runtime_result(

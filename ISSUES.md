@@ -15,9 +15,9 @@
 
 ## Current Next Leaf
 
-- [ ] Replace simulated object-store cloud adapters with explicit backend contracts and stable failure semantics
-  why this blocks `8/10`: object-store currently uses simulated backends that don't persist or fail realistically; real production use requires explicit contracts for S3, GCS, Azure Blob, and local filesystem with proper error handling and recovery.
-  done when: object-store has explicit backend implementations with stable failure semantics, configuration for multiple backends, and proper error propagation to PHP userland.
+- [ ] Add backup/restore and import/export paths for object-store payloads plus `.meta` state
+  why this blocks `8/10`: object-store still lacks resilient persisted-backend portability and recovery.
+  done when: import/export + backup/restore operations are implemented for persisted object payloads, with verified failure semantics and `.meta` consistency.
 
 ## Active Fronts
 
@@ -33,7 +33,8 @@
   completed: 2026-03-25
 - [x] Harden MCP transfer identifiers to prevent object-store path traversal
   completed: 2026-03-25
-- [ ] Replace simulated object-store cloud adapters with explicit backend contracts and stable failure semantics
+- [x] Replace simulated object-store cloud adapters with explicit backend contracts and stable failure semantics
+  completed: 2026-03-25
 - [ ] Add backup/restore and import/export paths for object-store payloads plus `.meta` state
 - [ ] Add crash-recovery and restart rehydration verification for persisted backends
 
