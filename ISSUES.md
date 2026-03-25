@@ -15,9 +15,28 @@
 
 ## Current Next Leaf
 
-- [ ] Add operator-facing spend and quota warnings for the honest Hetzner autoscaling path
+- [x] Add operator-facing spend and quota warnings for the honest Hetzner autoscaling path
   why this blocks `10/10`: live telemetry-driven decisions, cooldown/hysteresis, and Hetzner lifecycle guards are now verified, but operators still lack first-class visibility into approaching spend/quota limits before the controller provisions more nodes
   done when: the Hetzner path exposes stable warning signals for configured spend/quota thresholds, surfaces them through status/introspection, degrades safely when provider budget APIs are unavailable, and is verified under warning/no-warning/error scenarios without making spend APIs the only hard-stop mechanism
+  completed: 2026-03-25
+
+- [ ] Verify PHP 8.5 transport bootstrap in full matrix after curl/wirefilter hardening
+  why this blocks `10/10`: the local fix must be proven in container CI for PHP 8.5 as well; current evidence is from local bootstrap + smoke on current host PHP (8.4).
+  done when: GitHub matrix for 8.1, 8.2, 8.3, 8.4, and 8.5 runs `./scripts/build-profile.sh release` and smoke on clean architecture-labeled workers without `curl/curl.h` or wirefilter revision failures.
+
+- [x] Verify end-to-end release/bootstrap rollout onto freshly provisioned Hetzner nodes
+  why this blocks `10/10`: the provisioning lifecycle is now honest, but there is still no verified end-to-end control-plane test proving the controller can propagate releases and bootstrap onto newly created workers under fleet conditions.
+  done when: at least one release propagation scenario proves code/asset rollout, registration, readiness, and stable behavior across worker joins after an autoscaling-driven create path.
+  completed: 2026-03-25
+
+- [ ] Replace simulated object-store cloud adapters with explicit backend contracts and stable failure semantics
+  why this blocks `10/10`: object-store cloud adapters are still simulated, which leaves production migration and provider-specific failure modes unverified.
+  done when: explicit backend contracts and stable failure semantics are in place for all adapters plus explicit adapter status/error propagation in object-store operations.
+
+- [x] Harden multi-architecture build-profile bootstrap for missing `quiche` and `libcurl` header layouts
+  why this blocks `10/10`: clean-host matrix builds can still fail when `quiche` or `libcurl` header/layout assumptions diverge across CI workers.
+  done when: bootstrap normalization is deterministic across clean and cross-architecture checkouts and container matrix builds succeed without host-local assumptions.
+  completed: 2026-03-25
 
 ## Active Fronts
 
@@ -29,7 +48,10 @@
 - [x] Persist Hetzner scale actions, instance identity, and recovery state so controller restarts do not orphan live nodes
 - [x] Document clearly that non-Hetzner providers may exist behind the same interface but are currently simulated; "production-honest in-tree today means Hetzner only"
 - [x] Complete Hetzner node admission and retirement with register, readiness, and drain instead of treating provider success as immediate service readiness
-- [ ] Verify end-to-end release/bootstrap rollout onto freshly provisioned Hetzner nodes instead of stopping at provider payload and controller lifecycle honesty
+- [x] Verify end-to-end release/bootstrap rollout onto freshly provisioned Hetzner nodes
+  why this blocks `10/10`: the provisioning lifecycle is now honest, but there is still no verified end-to-end control-plane test proving the controller can propagate releases and bootstrap onto newly created workers under fleet conditions.
+  done when: at least one release propagation scenario proves code/asset rollout, registration, readiness, and stable behavior across worker joins after an autoscaling-driven create path.
+  completed: 2026-03-25
 - [ ] Replace simulated object-store cloud adapters with explicit backend contracts and stable failure semantics
 - [ ] Add backup/restore and import/export paths for object-store payloads plus `.meta` state
 - [ ] Add crash-recovery and restart rehydration verification for persisted backends
@@ -45,7 +67,7 @@
 
 - [ ] Add a real telemetry export queue and exporter semantics instead of local-only flush counters
 - [x] Drive autoscaling decisions from live telemetry/system metrics with hysteresis, cooldown, saturation coverage, and Hetzner-specific scale-step guards
-- [ ] Add operator-facing spend and quota warnings for the Hetzner path; do not make provider spend APIs the sole hard-stop mechanism
+- [x] Add operator-facing spend and quota warnings for the Hetzner path; do not make provider spend APIs the sole hard-stop mechanism
 - [ ] Add rolling restart, drain, and readiness transitions to system integration instead of immediate local lifecycle flips
 - [ ] Add failover/chaos harnesses for telemetry, autoscaling, and coordinated system recovery
 
@@ -59,6 +81,10 @@
 ### 5. Performance, compatibility, and release confidence
 
 - [ ] Put benchmark baselines under CI with explicit per-case regression budgets
+- [x] Harden multi-architecture build-profile bootstrap for missing `quiche` and `libcurl` header layouts
+  why this blocks `10/10`: release image and CI builds can still fail on clean hosts when `quiche`/`libcurl` are missing or live in architecture-specific include paths.
+  done when: `./scripts/build-profile.sh` recovers/reuses external transport/layouts deterministically and container matrix builds succeed from a clean checkout.
+  completed: 2026-03-25
 - [ ] Turn the QUIC backend bootstrap into a deterministic pinned dependency path instead of relying on a locally resurrected external `quiche/` checkout
 - [ ] Add package install/smoke matrix coverage for clean hosts, published container images, and supported PHP/API combinations
 - [ ] Verify upgrade/downgrade compatibility for release artifacts and persisted object-store metadata/state
@@ -69,7 +95,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `278/278`
+  tests: `279/279`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`

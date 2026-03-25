@@ -49,6 +49,7 @@ BASE_CPPFLAGS="${CPPFLAGS:-}"
 BASE_LDFLAGS="${LDFLAGS:-}"
 BASE_CC="${CC:-}"
 BASE_CXX="${CXX:-}"
+export CARGO_NET_GIT_FETCH_WITH_CLI="${CARGO_NET_GIT_FETCH_WITH_CLI:-true}"
 export CARGO_HOME="${CARGO_HOME:-${ROOT_DIR}/.cargo}"
 mkdir -p "${CARGO_HOME}"
 
@@ -103,17 +104,27 @@ normalize_wirefilter_dependency() {
         return
     fi
 
-    if grep -q 'wirefilter-engine = { git = "https://github.com/cloudflare/wirefilter.git", rev=' "${manifest_path}"; then
+    if ! grep -Eq '^[[:space:]]*wirefilter-engine[[:space:]]*=.*branch[[:space:]]*=' "${manifest_path}"; then
         if perl -0pi -e \
-            's/wirefilter-engine = \{ git = "https:\/\/github.com\/cloudflare\/wirefilter\.git",\s*rev="[^"]+"\s*\}/wirefilter-engine = { git = "https:\/\/github.com\/cloudflare\/wirefilter.git", branch = "master" }/' \
+            's/wirefilter-engine\s*=\s*\{[^\n]*\}/wirefilter-engine = { git = "https:\/\/github.com\/cloudflare\/wirefilter.git", branch = "master" }/g' \
             "${manifest_path}"; then
             echo "Patched qlog-dancer wirefilter dependency to branch 'master' in ${manifest_path}." >&2
             cargo_lock_args=()
-            rm -rf "${CARGO_HOME}/git/db/wirefilter-"*
+            cleanup_wirefilter_git_cache
         else
             echo "Failed to patch wirefilter dependency in ${manifest_path}; keeping upstream lockfile." >&2
         fi
     fi
+}
+
+cleanup_wirefilter_git_cache() {
+    if [[ ! -d "${CARGO_HOME}/git" ]]; then
+        return
+    fi
+
+    rm -rf "${CARGO_HOME}/git/db/wirefilter-"* \
+        "${CARGO_HOME}/git/checkouts/wirefilter-"* \
+        "${CARGO_HOME}/git/checkouts/.tmp-*wirefilter"* || true
 }
 
 validate_curl_headers() {
@@ -127,19 +138,109 @@ validate_curl_headers() {
     fi
 
     if ! pkg-config --exists libcurl; then
+        local system_include
+        system_include="$(find_system_curl_include)"
+        if [[ -n "${system_include}" ]]; then
+            return
+        fi
         echo "Build requires curl headers. Install a libcurl dev package (for example libcurl4-openssl-dev) or restore vendored libcurl." >&2
         exit 1
     fi
 }
 
+ensure_system_curl_include_path() {
+    local system_include
+    if [[ -f "${ROOT_DIR}/libcurl/include/curl/curl.h" ]]; then
+        return
+    fi
+
+    system_include="$(find_system_curl_include)"
+    if [[ -n "${system_include}" ]]; then
+        profile_cflags="${profile_cflags} -I${system_include}"
+        profile_cppflags="${profile_cppflags} -I${system_include}"
+    fi
+}
+
+find_system_curl_include() {
+    local multiarch
+
+    if [[ -f /usr/include/curl/curl.h ]]; then
+        echo "/usr/include"
+        return
+    fi
+
+    multiarch="$(cc -print-multiarch 2>/dev/null || true)"
+    if [[ -n "${multiarch}" && -f "/usr/include/${multiarch}/curl/curl.h" ]]; then
+        echo "/usr/include/${multiarch}"
+        return
+    fi
+
+    if [[ -f /usr/include/x86_64-linux-gnu/curl/curl.h ]]; then
+        echo "/usr/include/x86_64-linux-gnu"
+        return
+    fi
+
+    if [[ -f /usr/include/arm-linux-gnu/curl/curl.h ]]; then
+        echo "/usr/include/arm-linux-gnu"
+        return
+    fi
+
+    if [[ -f /usr/include/aarch64-linux-gnu/curl/curl.h ]]; then
+        echo "/usr/include/aarch64-linux-gnu"
+        return
+    fi
+
+    if [[ -f /usr/local/include/curl/curl.h ]]; then
+        echo "/usr/local/include"
+        return
+    fi
+
+    echo ""
+}
+
+apply_pkg_config_curl_flags() {
+    local curl_cppflags;
+    local curl_ldflags;
+
+    if command -v pkg-config >/dev/null 2>&1; then
+        curl_cppflags="$(pkg-config --cflags libcurl || true)"
+        curl_ldflags="$(pkg-config --libs libcurl || true)"
+    else
+        curl_cppflags=""
+        curl_ldflags=""
+    fi
+
+    if [[ -n "${curl_cppflags}" ]]; then
+        profile_cflags="${profile_cflags} ${curl_cppflags}"
+        profile_cppflags="${profile_cppflags} ${curl_cppflags}";
+    fi
+
+    if [[ -n "${curl_ldflags}" ]]; then
+        profile_ldflags="${profile_ldflags} ${curl_ldflags}"
+    fi
+
+    if [[ -z "${curl_cppflags}" ]] || ! grep -q -- "-I" <<<"${curl_cppflags}"; then
+        ensure_system_curl_include_path
+    fi
+}
+
 ensure_quiche_checkout() {
+    if [[ -d "${QUICHE_DIR}" && ! -d "${QUICHE_DIR}/.git" ]]; then
+        if [[ -d "${QUICHE_DIR}" && -f "${QUICHE_DIR}/quiche/Cargo.toml" && -d "${QUICHE_DIR}/apps" ]]; then
+            return
+        fi
+        rm -rf "${QUICHE_DIR}"
+    fi
+
     if [[ -d "${QUICHE_DIR}/.git" ]]; then
         return
     fi
 
-    if [[ -e "${QUICHE_DIR}" ]]; then
-        echo "Existing path is blocking quiche checkout: ${QUICHE_DIR}" >&2
-        exit 1
+    if [[ -d "${QUICHE_DIR}" ]]; then
+        if [[ -f "${QUICHE_DIR}/quiche/Cargo.toml" && -d "${QUICHE_DIR}/apps" ]]; then
+            return
+        fi
+        rm -rf "${QUICHE_DIR}"
     fi
 
     echo "Restoring external quiche checkout under ${QUICHE_DIR}" >&2
@@ -153,31 +254,55 @@ if [[ ! -f "${QUICHE_DIR}/quiche/deps/boringssl/CMakeLists.txt" ]]; then
 fi
 
 normalize_wirefilter_dependency
+cleanup_wirefilter_git_cache
 validate_curl_headers
-
-if ! cargo metadata \
-    --manifest-path "${QUICHE_DIR}/quiche/Cargo.toml" \
-    --format-version 1 \
-    --locked >/dev/null 2>&1; then
-    echo "quiche Cargo.lock is out of sync; falling back to an unlocked local build." >&2
-    cargo_lock_args=()
-fi
+apply_pkg_config_curl_flags
 
 echo "Building King profile: ${PROFILE}"
 echo "Compiler: ${profile_cc}"
 echo "Jobs: ${JOBS}"
 
-cargo build \
+if ! cargo build \
     --manifest-path "${QUICHE_DIR}/quiche/Cargo.toml" \
+    --package quiche \
     "${cargo_args[@]}" \
     "${cargo_lock_args[@]}" \
     --features ffi
+then
+    if [[ "${#cargo_lock_args[@]}" -gt 0 ]]; then
+        echo "Locked quiche build failed; retrying unlocked to recover from stale lock or git cache state." >&2
+        cargo_lock_args=()
+        cleanup_wirefilter_git_cache
+        cargo build \
+            --manifest-path "${QUICHE_DIR}/quiche/Cargo.toml" \
+            --package quiche \
+            "${cargo_args[@]}" \
+            --features ffi
+    else
+        echo "Locked quiche build failed without lock available; check upstream cargo failures." >&2
+        exit 1
+    fi
+fi
 
-cargo build \
+if ! cargo build \
     --manifest-path "${QUICHE_DIR}/apps/Cargo.toml" \
     "${cargo_args[@]}" \
     "${cargo_lock_args[@]}" \
     --bin quiche-server
+then
+    if [[ "${#cargo_lock_args[@]}" -gt 0 ]]; then
+        echo "Locked quiche-server build failed; retrying unlocked to recover from stale lock or git cache state." >&2
+        cargo_lock_args=()
+        cleanup_wirefilter_git_cache
+        cargo build \
+            --manifest-path "${QUICHE_DIR}/apps/Cargo.toml" \
+            "${cargo_args[@]}" \
+            --bin quiche-server
+    else
+        echo "Locked quiche-server build failed without lock available; check upstream cargo failures." >&2
+        exit 1
+    fi
+fi
 
 cd "${EXT_DIR}"
 
