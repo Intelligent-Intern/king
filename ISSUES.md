@@ -15,9 +15,9 @@
 
 ## Current Next Leaf
 
-- [ ] Add crash-recovery and restart rehydration verification for persisted backends
-  why this blocks `8/10`: persisted backends do not yet verify restart-time rehydration and recovery semantics.
-  done when: restart/recover path verifies object metadata and payload integrity for local and verified simulated backends.
+- [ ] Move orchestrator execution beyond the purely local runtime path and define a real worker/backend boundary
+  why this blocks `8/10`: no distributed execution path is verified; worker-process isolation and remote orchestration remains local-only.
+  done when: orchestrator dispatches MCP requests across a real boundary and end-to-end coverage confirms local/remote handoff behavior.
 
 ## Active Fronts
 
@@ -37,7 +37,8 @@
   completed: 2026-03-25
 - [x] Add backup/restore and import/export paths for object-store payloads plus `.meta` state
   completed: 2026-03-25
-- [ ] Add crash-recovery and restart rehydration verification for persisted backends
+- [x] Add crash-recovery and restart rehydration verification for persisted backends
+  completed: 2026-03-25
 
 ### 2. Distributed MCP and orchestrator depth
 
