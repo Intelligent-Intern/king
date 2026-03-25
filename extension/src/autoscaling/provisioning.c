@@ -19,6 +19,7 @@
 #include <time.h>
 
 #define KING_AUTOSCALING_HTTP_TIMEOUT_MS 15000L
+#define KING_AUTOSCALING_HTTP_MAX_RESPONSE_SIZE (10 * 1024 * 1024) /* 10 MiB */
 
 typedef struct _king_autoscaling_http_buffer_t {
     smart_str data;
@@ -177,6 +178,12 @@ static size_t king_autoscaling_http_write_callback(
 {
     size_t bytes = size * nmemb;
     king_autoscaling_http_buffer_t *buffer = userdata;
+
+    /* Enforce response size limit to prevent memory exhaustion DoS */
+    if (buffer->bytes + bytes > KING_AUTOSCALING_HTTP_MAX_RESPONSE_SIZE) {
+        /* Return 0 to signal error and abort the transfer */
+        return 0;
+    }
 
     smart_str_appendl(&buffer->data, contents, bytes);
     buffer->bytes += bytes;
@@ -1111,6 +1118,7 @@ static zend_result king_autoscaling_http_request(
     king_autoscaling_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HTTPHEADER, headers);
     king_autoscaling_libcurl.curl_easy_setopt_fn(easy, CURLOPT_TIMEOUT_MS, KING_AUTOSCALING_HTTP_TIMEOUT_MS);
     king_autoscaling_libcurl.curl_easy_setopt_fn(easy, CURLOPT_NOSIGNAL, 1L);
+    king_autoscaling_libcurl.curl_easy_setopt_fn(easy, CURLOPT_MAXFILESIZE_LARGE, (curl_off_t)KING_AUTOSCALING_HTTP_MAX_RESPONSE_SIZE);
     king_autoscaling_libcurl.curl_easy_setopt_fn(
         easy,
         CURLOPT_WRITEFUNCTION,
