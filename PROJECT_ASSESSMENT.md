@@ -128,7 +128,7 @@ The repo already has active native runtime slices for:
 - server-side cancel, early hints, websocket upgrade, admin API, TLS reload, CORS, and telemetry-init helpers
 - IIBIN schema, enum, encode, decode, object hydration, and wire validation
 - native Semantic DNS registry, routing, state persistence, discovery, and mother-node tracking
-- native file-system object-store backend core with durable .meta sidecars, local CDN cache, multi-node distribution, Cloud HA hooks (S3/Backup), and multi-backend routing (S3/Memcached simulated)
+- native file-system object-store backend core with durable .meta sidecars, local CDN cache, multi-node distribution, and explicit contract/status failure semantics for non-local backends (distributed/S3/GCS/Azure simulated).
 - native MCP runtime in `src/mcp/` with stateful session tracking, flattened ID persistence in Object Store, and full request/upload/download parity
 - native Pipeline Orchestrator and Tool Registry in `src/pipeline_orchestrator/`
 - native Telemetry runtime with active span lifecycle, metrics aggregation, flush paths, and context propagation
