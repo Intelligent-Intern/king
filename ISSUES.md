@@ -15,9 +15,9 @@
 
 ## Current Next Leaf
 
-- [ ] Move orchestrator execution beyond the purely local runtime path and define a real worker/backend boundary
-  why this blocks `8/10`: no distributed execution path is verified; worker-process isolation and remote orchestration remains local-only.
-  done when: orchestrator dispatches MCP requests across a real boundary and end-to-end coverage confirms local/remote handoff behavior.
+- [ ] Persist tool-registry and pipeline-run state across restart and recovery
+  why this blocks `8/10`: orchestrator restarts currently lose tool registries and pipeline state that should survive warm controller handoff.
+  done when: registry/tool metadata and running pipelines survive restart via persisted snapshots, and recovery assertions are covered in an E2E harness.
 
 ## Active Fronts
 
@@ -54,7 +54,8 @@
 - [x] Drive autoscaling decisions from live telemetry/system metrics with hysteresis, cooldown, saturation coverage, and Hetzner-specific scale-step guards
 - [x] Add operator-facing spend and quota warnings for the Hetzner path; do not make provider spend APIs the sole hard-stop mechanism
   completed: 2026-03-25
-- [ ] Add rolling restart, drain, and readiness transitions to system integration instead of immediate local lifecycle flips
+- [x] Add rolling restart, drain, and readiness transitions to system integration instead of immediate local lifecycle flips
+  completed: 2026-03-25
 - [ ] Add failover/chaos harnesses for telemetry, autoscaling, and coordinated system recovery
 
 ### 4. Realtime and server runtime depth

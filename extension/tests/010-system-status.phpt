@@ -40,20 +40,36 @@ bool(true)
 string(2) "v1"
 string(5) "1.0.0"
 bool(false)
-array(2) {
+array(6) {
   [0]=>
   string(11) "initialized"
   [1]=>
   string(15) "component_count"
+  [2]=>
+  string(10) "components"
+  [3]=>
+  string(16) "components_ready"
+  [4]=>
+  string(19) "components_draining"
+  [5]=>
+  string(29) "health_check_interval_seconds"
 }
 bool(false)
 int(0)
 bool(true)
-array(2) {
+array(6) {
   [0]=>
   string(11) "initialized"
   [1]=>
   string(15) "component_count"
+  [2]=>
+  string(10) "components"
+  [3]=>
+  string(16) "components_ready"
+  [4]=>
+  string(19) "components_draining"
+  [5]=>
+  string(29) "health_check_interval_seconds"
 }
 bool(true)
 bool(true)
