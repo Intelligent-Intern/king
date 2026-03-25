@@ -32,6 +32,14 @@ PHP_FUNCTION(king_object_store_put)
         zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID must be between 1 and 127 bytes.");
         RETURN_THROWS();
     }
+    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Object ID is invalid for object-store paths."
+        );
+        RETURN_THROWS();
+    }
 
     (void) options;
 
@@ -90,6 +98,14 @@ PHP_FUNCTION(king_object_store_get)
         zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID must be between 1 and 127 bytes.");
         RETURN_THROWS();
     }
+    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Object ID is invalid for object-store paths."
+        );
+        RETURN_THROWS();
+    }
 
     (void) options;
 
@@ -117,6 +133,14 @@ PHP_FUNCTION(king_object_store_delete)
         zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID must be between 1 and 127 bytes.");
         RETURN_THROWS();
     }
+    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Object ID is invalid for object-store paths."
+        );
+        RETURN_THROWS();
+    }
 
     if (!king_object_store_runtime.initialized) {
         zend_throw_exception_ex(
@@ -140,7 +164,7 @@ PHP_FUNCTION(king_object_store_list)
         return;
     }
 
-    king_object_store_local_fs_list(return_value);
+    king_object_store_list_object(return_value);
 }
 
 PHP_FUNCTION(king_object_store_cleanup_expired_objects)
@@ -165,6 +189,12 @@ PHP_FUNCTION(king_object_store_get_metadata)
     ZEND_PARSE_PARAMETERS_END();
 
     if (!king_object_store_runtime.initialized) {
+        return;
+    }
+    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
+        return;
+    }
+    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
         return;
     }
 

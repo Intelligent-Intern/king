@@ -29,6 +29,14 @@ typedef struct _king_object_store_runtime_state {
     uint64_t current_stored_bytes;
     time_t latest_object_at;
 
+    /* Adapter health/error telemetry */
+    char primary_adapter_contract[16];
+    char primary_adapter_status[24];
+    char primary_adapter_error[512];
+    char backup_adapter_contract[16];
+    char backup_adapter_status[24];
+    char backup_adapter_error[512];
+
 } king_object_store_runtime_state;
 
 extern king_object_store_runtime_state king_object_store_runtime;
@@ -37,6 +45,8 @@ int king_object_store_local_fs_write(const char *object_id, const void *data, si
 int king_object_store_local_fs_read(const char *object_id, void **data, size_t *data_size, king_object_metadata_t *metadata);
 int king_object_store_local_fs_remove(const char *object_id);
 int king_object_store_local_fs_list(zval *return_array);
+int king_object_store_list_object(zval *return_array);
+const char *king_object_store_object_id_validate(const char *object_id);
 
 /* Durable metadata sidecar */
 void king_object_store_build_path(char *dest, size_t dest_len, const char *object_id);
@@ -50,5 +60,13 @@ void king_object_store_rehydrate_stats(void);
 
 /* Cloud-native HA hooks */
 int king_object_store_backup_object(const char *object_id, king_storage_backend_t backup_backend);
+void king_object_store_initialize_adapter_statuses(void);
+void king_object_store_set_runtime_adapter_status(
+    const char *scope,
+    const char *status,
+    const char *contract,
+    const char *error
+);
+const char *king_object_store_backend_contract_to_string(king_storage_backend_t backend);
 
 #endif /* KING_OBJECT_STORE_INTERNAL_H */

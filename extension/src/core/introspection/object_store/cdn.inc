@@ -22,6 +22,14 @@ PHP_FUNCTION(king_cdn_cache_object)
         zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID cannot be empty");
         RETURN_THROWS();
     }
+    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Object ID is invalid for object-store paths."
+        );
+        RETURN_THROWS();
+    }
 
     if (!king_cdn_cache_registry_initialized) {
         zend_throw_exception_ex(
@@ -141,6 +149,15 @@ PHP_FUNCTION(king_cdn_invalidate_cache)
         zend_long removed_count = (zend_long) zend_hash_num_elements(&king_cdn_cache_registry);
         zend_hash_clean(&king_cdn_cache_registry);
         RETURN_LONG(removed_count);
+    }
+
+    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Object ID is invalid for object-store paths."
+        );
+        RETURN_THROWS();
     }
 
     /* Single-object invalidation */

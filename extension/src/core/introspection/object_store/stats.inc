@@ -27,10 +27,17 @@ PHP_FUNCTION(king_object_store_get_stats)
     /* Use native runtime variables directly from the new C core */
     add_assoc_bool(&object_store, "runtime_initialized", king_object_store_runtime.initialized ? 1 : 0);
     add_assoc_string(&object_store, "runtime_primary_backend", (char *) king_storage_backend_to_string(king_object_store_runtime.config.primary_backend));
+    add_assoc_string(&object_store, "runtime_primary_backend_contract", king_object_store_runtime.primary_adapter_contract[0] == '\0' ? "unknown" : king_object_store_runtime.primary_adapter_contract);
     add_assoc_string(&object_store, "runtime_storage_root_path", king_safe_string(king_object_store_runtime.config.storage_root_path));
     add_assoc_long(&object_store, "runtime_max_storage_size_bytes", king_object_store_runtime.config.max_storage_size_bytes);
     add_assoc_long(&object_store, "runtime_replication_factor", king_object_store_runtime.config.replication_factor);
     add_assoc_long(&object_store, "runtime_chunk_size_kb", king_object_store_runtime.config.chunk_size_kb);
+    add_assoc_string(&object_store, "runtime_backup_backend", (char *) king_storage_backend_to_string(king_object_store_runtime.config.backup_backend));
+    add_assoc_string(&object_store, "runtime_backup_adapter_contract", king_object_store_runtime.backup_adapter_contract[0] == '\0' ? "unknown" : king_object_store_runtime.backup_adapter_contract);
+    add_assoc_string(&object_store, "runtime_primary_adapter_status", king_object_store_runtime.primary_adapter_status[0] == '\0' ? "unknown" : king_object_store_runtime.primary_adapter_status);
+    add_assoc_string(&object_store, "runtime_primary_adapter_error", king_object_store_runtime.primary_adapter_error[0] == '\0' ? "" : king_object_store_runtime.primary_adapter_error);
+    add_assoc_string(&object_store, "runtime_backup_adapter_status", king_object_store_runtime.backup_adapter_status[0] == '\0' ? "unknown" : king_object_store_runtime.backup_adapter_status);
+    add_assoc_string(&object_store, "runtime_backup_adapter_error", king_object_store_runtime.backup_adapter_error[0] == '\0' ? "" : king_object_store_runtime.backup_adapter_error);
     add_assoc_long(&object_store, "object_count", king_object_store_runtime.current_object_count);
     add_assoc_long(&object_store, "stored_bytes", king_object_store_runtime.current_stored_bytes);
     

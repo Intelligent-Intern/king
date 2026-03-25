@@ -135,6 +135,19 @@ PHP_FUNCTION(king_object_store_init)
         }
     }
 
+    value_zv = zend_hash_str_find(Z_ARRVAL_P(config), "cloud_credentials", sizeof("cloud_credentials") - 1);
+    if (value_zv != NULL) {
+        if (Z_TYPE_P(value_zv) != IS_ARRAY) {
+            zend_throw_exception_ex(
+                king_ce_validation_exception,
+                0,
+                "Object-store config 'cloud_credentials' must be an array."
+            );
+            RETURN_THROWS();
+        }
+        ZVAL_COPY(&new_config.cloud_credentials, value_zv);
+    }
+
     value_zv = zend_hash_str_find(Z_ARRVAL_P(config), "replication_factor", sizeof("replication_factor") - 1);
     if (value_zv != NULL) {
         if (Z_TYPE_P(value_zv) != IS_LONG || Z_LVAL_P(value_zv) <= 0) {

@@ -1,21 +1,38 @@
 --TEST--
-King object-store delete exposes a stable no-op miss contract in the current runtime
+King object-store delete exposes validation for invalid identifiers and miss behavior
 --FILE--
 <?php
-var_dump(king_object_store_delete('missing-object'));
-var_dump(king_object_store_delete('pipeline/object'));
-
 try {
-    king_object_store_delete('');
-    var_dump('no-exception');
+    king_object_store_delete('missing-object');
+    echo "unexpected_uninitialized_miss\n";
 } catch (Throwable $e) {
     var_dump(get_class($e));
     var_dump($e->getMessage());
 }
+
+$dir = sys_get_temp_dir() . '/king_os_delete_' . getmypid();
+king_object_store_init(['storage_root_path' => $dir]);
+
+var_dump(king_object_store_delete('missing-object'));
+
+try {
+    king_object_store_delete('pipeline/object');
+    echo "unexpected_invalid_delete\n";
+} catch (Throwable $e) {
+    var_dump(get_class($e));
+    var_dump($e->getMessage());
+}
+
+foreach (scandir($dir) as $f) {
+    if ($f !== '.' && $f !== '..') {
+        @unlink("$dir/$f");
+    }
+}
+@rmdir($dir);
 ?>
---EXPECTF--
-Fatal error: Uncaught King\RuntimeException: Object-store registry is unavailable. in /home/jochen/projects/king.site/king/extension/tests/029-object-store-delete-miss.php:2
-Stack trace:
-#0 /home/jochen/projects/king.site/king/extension/tests/029-object-store-delete-miss.php(2): king_object_store_delete('missing-object')
-#1 {main}
-  thrown in /home/jochen/projects/king.site/king/extension/tests/029-object-store-delete-miss.php on line 2
+--EXPECT--
+string(24) "King\\RuntimeException"
+string(42) "Object-store registry is unavailable."
+bool(false)
+string(24) "King\\ValidationException"
+string(34) "Object ID is invalid for object-store paths."
