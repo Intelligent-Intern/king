@@ -25,19 +25,19 @@ jobs:
         php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']
         include:
           - php-version: '8.1'
-            platforms: linux/amd64,linux/arm64
-            latest: false
-          - php-version: '8.2'
-            platforms: linux/amd64,linux/arm64
-            latest: false
-          - php-version: '8.3'
             platforms: linux/amd64,linux/arm64,linux/arm/v7
             latest: false
+          - php-version: '8.2'
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
+            latest: false
+          - php-version: '8.3'
+            platforms: linux/amd64,linux/arm64  # Skip arm/v7 due to Quiche wirefilter-engine build issues
+            latest: false
           - php-version: '8.4'
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
             latest: false
           - php-version: '8.5'
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
             latest: true
     
     steps:
