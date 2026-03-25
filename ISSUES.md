@@ -15,9 +15,9 @@
 
 ## Current Next Leaf
 
-- [ ] Add a real telemetry export queue and exporter semantics instead of local-only flush counters
-  why this blocks `9/10`: telemetry currently only accumulates locally and flushes to void; real observability requires export to backends like OTLP, Prometheus, or custom collectors.
-  done when: telemetry flush sends metrics/spans/logs to configured exporters, supports batching/queueing, and has proper error handling for export failures.
+- [ ] Replace simulated object-store cloud adapters with explicit backend contracts and stable failure semantics
+  why this blocks `8/10`: object-store currently uses simulated backends that don't persist or fail realistically; real production use requires explicit contracts for S3, GCS, Azure Blob, and local filesystem with proper error handling and recovery.
+  done when: object-store has explicit backend implementations with stable failure semantics, configuration for multiple backends, and proper error propagation to PHP userland.
 
 ## Active Fronts
 
@@ -46,7 +46,8 @@
 
 ### 3. Observability, autoscaling, and lifecycle operations
 
-- [ ] Add a real telemetry export queue and exporter semantics instead of local-only flush counters
+- [x] Add a real telemetry export queue and exporter semantics instead of local-only flush counters
+  completed: 2026-03-25
 - [x] Drive autoscaling decisions from live telemetry/system metrics with hysteresis, cooldown, saturation coverage, and Hetzner-specific scale-step guards
 - [x] Add operator-facing spend and quota warnings for the Hetzner path; do not make provider spend APIs the sole hard-stop mechanism
   completed: 2026-03-25
