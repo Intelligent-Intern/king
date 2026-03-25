@@ -37,14 +37,12 @@ hysteresis, honors capped scale-up policy resolution, and blocks unsafe
 follow-up Hetzner scale-ups while nodes are still pending registration,
 readiness, or drain.
 
-One important caveat was also exposed during local recovery work: the QUIC/HTTP/3
-path is real and green, but its backend provenance is still weaker than a true
-`10/10` bootstrap story. A missing local `quiche/` tree can be restored and the
-runtime becomes green again, but that recovery still depends on an external
-checkout and may require an unlocked Cargo refresh if upstream `Cargo.lock`
-state has drifted. That is acceptable for the current repo-local v1 baseline,
-but it is not yet the same thing as a fully pinned, self-rehydrating source
-tree.
+One important caveat remains in the QUIC/HTTP/3 bootstrap path. The runtime is
+real and green, and build tooling now avoids the two common CI breakage modes:
+missing host curl headers and stale/non-resolvable `wirefilter` git pins. Fresh
+hosts now recover deterministically from local fallback behavior, but the path is
+still not fully pinned and reproducibly rehydrated because parts of the dependency
+pinning still rely on branch fallback during bootstrap.
 
 ## Readiness Model
 
@@ -145,7 +143,7 @@ The repo is still not a full production-grade implementation for:
 - operator-facing spend and quota warnings are still missing on the Hetzner autoscaling path
 - autoscaling node bootstrap exists at the payload/lifecycle layer, but end-to-end code rollout and release propagation onto freshly provisioned Hetzner nodes is still not verified as a real fleet operation
 - multi-provider cloud provisioning beyond the Hetzner path; non-Hetzner providers still remain simulated by design
-- QUIC/HTTP/3 backend provenance is still weaker than ideal: the runtime depends on an external local `quiche/` tree, and clean-room rehydration is not yet a fully tracked deterministic bootstrap path
+- QUIC/HTTP/3 backend provenance is still weaker than ideal: the runtime depends on an external local `quiche/` tree, and clean-room rehydration is still not yet a fully tracked deterministic bootstrap path for release-grade builds
 - object-store cloud adapters remain simulated beyond the local filesystem core, and backup/restore plus restart rehydration of persisted backend state is still open
 - real telemetry export delivery instead of local-only flush accounting
 - remote/distributed MCP and orchestrator execution instead of local-first kernels

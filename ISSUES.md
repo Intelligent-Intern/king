@@ -92,6 +92,8 @@
   demo image: `infra/demo-server/Dockerfile`
   local verification: `docker build --build-arg PHP_VERSION=8.3 -f infra/php-runtime.Dockerfile .` and `docker build -f infra/demo-server/Dockerfile .`
   coverage: the GHCR workflow no longer references nonexistent `infra/php8.x/` paths, the runtime image bootstraps required build dependencies including `quiche` and `uuid`, and the demo image now has a complete Vite entry surface that builds into a runnable nginx-served artifact
+- [x] CI transport bootstrap is stabilized for curl/wirefilter failures in fresh hosts
+  coverage: `./scripts/build-profile.sh` now validates curl headers for system builds, normalizes the qlog-dancer `wirefilter` dependency pin to a resolvable branch fallback, and avoids stale cargo git cache fragments before cargo metadata/build.
 
 ## How To Use This File
 

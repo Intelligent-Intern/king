@@ -292,7 +292,11 @@ if test "$PHP_KING" != "no"; then
 
     dnl Make headers in extension root and include/ available
     PHP_ADD_INCLUDE([$ext_srcdir])
-    PHP_ADD_INCLUDE([$ext_srcdir/../libcurl/include])
+    AC_CHECK_FILE([$ext_srcdir/../libcurl/include/curl/curl.h], [
+        PHP_ADD_INCLUDE([$ext_srcdir/../libcurl/include])
+    ], [
+        AC_MSG_WARN([curl headers are not available under ../libcurl/include; this build will fall back to installed libcurl headers.])
+    ])
     PHP_ADD_INCLUDE([$ext_srcdir/../quiche/quiche/include])
     PHP_ADD_LIBRARY([dl], [1], [KING_SHARED_LIBADD])
 

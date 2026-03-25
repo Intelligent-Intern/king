@@ -49,6 +49,8 @@ BASE_CPPFLAGS="${CPPFLAGS:-}"
 BASE_LDFLAGS="${LDFLAGS:-}"
 BASE_CC="${CC:-}"
 BASE_CXX="${CXX:-}"
+export CARGO_HOME="${CARGO_HOME:-${ROOT_DIR}/.cargo}"
+mkdir -p "${CARGO_HOME}"
 
 profile_cc=""
 profile_cxx=""
@@ -93,6 +95,43 @@ if [[ -n "${BASE_CFLAGS}" ]]; then
     profile_cflags="${profile_cflags} ${BASE_CFLAGS}"
 fi
 
+normalize_wirefilter_dependency() {
+    local manifest_path="${QUICHE_DIR}/qlog-dancer/Cargo.toml"
+
+    if [[ ! -f "${manifest_path}" ]]; then
+        echo "No qlog-dancer manifest found at ${manifest_path}; using upstream lockfile as-is." >&2
+        return
+    fi
+
+    if grep -q 'wirefilter-engine = { git = "https://github.com/cloudflare/wirefilter.git", rev=' "${manifest_path}"; then
+        if perl -0pi -e \
+            's/wirefilter-engine = \{ git = "https:\/\/github.com\/cloudflare\/wirefilter\.git",\s*rev="[^"]+"\s*\}/wirefilter-engine = { git = "https:\/\/github.com\/cloudflare\/wirefilter.git", branch = "master" }/' \
+            "${manifest_path}"; then
+            echo "Patched qlog-dancer wirefilter dependency to branch 'master' in ${manifest_path}." >&2
+            cargo_lock_args=()
+            rm -rf "${CARGO_HOME}/git/db/wirefilter-"*
+        else
+            echo "Failed to patch wirefilter dependency in ${manifest_path}; keeping upstream lockfile." >&2
+        fi
+    fi
+}
+
+validate_curl_headers() {
+    if [[ -f "${ROOT_DIR}/libcurl/include/curl/curl.h" ]]; then
+        return
+    fi
+
+    if ! command -v pkg-config >/dev/null 2>&1; then
+        echo "curl/curl.h is not available from vendored libcurl and pkg-config is not present." >&2
+        exit 1
+    fi
+
+    if ! pkg-config --exists libcurl; then
+        echo "Build requires curl headers. Install a libcurl dev package (for example libcurl4-openssl-dev) or restore vendored libcurl." >&2
+        exit 1
+    fi
+}
+
 ensure_quiche_checkout() {
     if [[ -d "${QUICHE_DIR}/.git" ]]; then
         return
@@ -112,6 +151,9 @@ ensure_quiche_checkout
 if [[ ! -f "${QUICHE_DIR}/quiche/deps/boringssl/CMakeLists.txt" ]]; then
     git -C "${QUICHE_DIR}" submodule update --init --recursive quiche/deps/boringssl
 fi
+
+normalize_wirefilter_dependency
+validate_curl_headers
 
 if ! cargo metadata \
     --manifest-path "${QUICHE_DIR}/quiche/Cargo.toml" \

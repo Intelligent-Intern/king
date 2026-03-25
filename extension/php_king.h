@@ -323,6 +323,7 @@ php_king_cancel_token_obj_from_zend(zend_object *obj)
         ((char*)obj - XtOffsetOf(king_cancel_token_object, std));
 }
 
+#ifndef zend_string_starts_with_literal
 #if PHP_VERSION_ID < 80200
 static inline bool king_zend_string_equals_cstr_compat(
     const zend_string *value,
@@ -342,6 +343,7 @@ static inline bool king_zend_string_equals_cstr_compat(
         && ZSTR_LEN(value) >= (sizeof(literal) - 1) \
         && memcmp(ZSTR_VAL(value), (literal), sizeof(literal) - 1) == 0)
 #endif
+#endif
 
 static inline bool king_vm_interrupt_pending(void)
 {
@@ -355,9 +357,14 @@ static inline bool king_vm_interrupt_pending(void)
 static inline void king_process_pending_interrupts(void)
 {
     if (UNEXPECTED(king_vm_interrupt_pending())) {
-#if PHP_VERSION_ID >= 80400
+#if defined(zend_fcall_interrupt)
         zend_fcall_interrupt(EG(current_execute_data));
+#elif PHP_VERSION_ID < 80400
+        if (zend_interrupt_function != NULL) {
+            zend_interrupt_function(EG(current_execute_data));
+        }
 #else
+        /* Older PHP 8.4+ compatibility path keeps this symbol undefined in some build matrices. */
         if (zend_interrupt_function != NULL) {
             zend_interrupt_function(EG(current_execute_data));
         }
