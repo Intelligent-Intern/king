@@ -68,6 +68,9 @@
 - [ ] Put benchmark baselines under CI with explicit per-case regression budgets
 - [x] Harden multi-architecture build-profile bootstrap for missing `quiche` and `libcurl` header layouts
   completed: 2026-03-25
+- [x] Drop ARMv7 from the Docker publish matrix until Quiche wirefilter bootstrap is stable there
+  completed: 2026-03-25
+  note: `.github/workflows/docker.yml` now builds php-runtime images for `linux/amd64` and `linux/arm64` across all active PHP versions.
 - [ ] Turn the QUIC backend bootstrap into a deterministic pinned dependency path instead of relying on a locally resurrected external `quiche/` checkout
 - [ ] Add package install/smoke matrix coverage for clean hosts, published container images, and supported PHP/API combinations
 - [ ] Verify upgrade/downgrade compatibility for release artifacts and persisted object-store metadata/state
