@@ -323,7 +323,7 @@ php_king_cancel_token_obj_from_zend(zend_object *obj)
         ((char*)obj - XtOffsetOf(king_cancel_token_object, std));
 }
 
-#if PHP_VERSION_ID < 80400
+#if PHP_VERSION_ID < 80200
 static inline bool king_zend_string_equals_cstr_compat(
     const zend_string *value,
     const char *literal,

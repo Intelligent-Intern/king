@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     curl \
     git \
+    libcurl4-openssl-dev \
     libssl-dev \
     libtool \
     ninja-build \
@@ -57,6 +58,7 @@ LABEL org.opencontainers.image.title="king" \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    libcurl4 \
     libuuid1 \
     && rm -rf /var/lib/apt/lists/*
 
