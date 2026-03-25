@@ -1,6 +1,6 @@
 # King Project Assessment
 
-> Stand: 2026-03-24
+> Stand: 2026-03-25
 > Scope: verified v1 runtime reach inside this repository
 > This file tracks the moving verified state of King v1.
 > `README.md` describes the target system. This file describes the system that is actually here now.
@@ -14,7 +14,7 @@ handling, and all major control-plane subsystems (MCP, Telemetry, Autoscaling,
 Integration).
 
 The repository now sits at a fully green verified baseline.
-As of 2026-03-24, the canonical audit, rebuild, and full PHPT matrix all pass
+As of 2026-03-25, the canonical audit, rebuild, and full PHPT matrix all pass
 against the current repository state, and the repo now has a canonical local
 benchmark harness for the four core runtime paths that were still uncovered,
 explicit local `release`, `debug`, `asan`, and `ubsan` build/smoke paths, and
@@ -59,7 +59,7 @@ performance/compatibility gates.
 | **External QUIC backend bootstrap** | **Incomplete** | HTTP/3 and QUIC are green locally, but `quiche` recovery and dependency pinning are still weaker than a fully tracked, deterministic bootstrap path |
 | **External autoscaling provisioning** | **Partially production-honest** | Hetzner is real, controller-owned, persisted, and telemetry-driven; other providers intentionally stay simulated behind the generic contract |
 | **Distributed control plane** | **Local-first** | MCP and Orchestrator are real in-tree kernels but are still not deep remote/distributed production backends |
-| **Operational backend depth** | **Incomplete** | exporter depth, spend/quota warnings, failover, long-haul soak, and compatibility budgets are still open |
+| **Operational backend depth** | **Incomplete** | exporter depth, failover, long-haul soak, and compatibility budgets are still open |
 
 ## Verified Baseline
 
@@ -82,7 +82,7 @@ Repository facts from the current tree:
 - `extension/src`: 177 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 168 headers
-- `extension/tests`: 278 PHPT files
+- `extension/tests`: 279 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently verified regression baseline is:
@@ -91,7 +91,7 @@ The currently verified regression baseline is:
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
 - extension load smoke: passing
-- `./scripts/test-extension.sh`: `278/278` PHPT tests passing
+- `./scripts/test-extension.sh`: `279/279` PHPT tests passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing (`112` functions, `44` classes, `48` declared public methods)
 - `./scripts/smoke-profile.sh release`: passing
@@ -132,6 +132,7 @@ The repo already has active native runtime slices for:
 - native Pipeline Orchestrator and Tool Registry in `src/pipeline_orchestrator/`
 - native Telemetry runtime with active span lifecycle, metrics aggregation, flush paths, and context propagation
 - native Autoscaling engine with monitoring, live telemetry/system-backed decisioning, cooldown/hysteresis enforcement, capped scale-step policy resolution, pluggable provider routing, controller-only Hetzner token loading from `php.ini`, honest Hetzner create/delete HTTP calls, restart-safe controller state persistence, explicit managed-node inventory APIs, and `register -> ready -> drain -> delete` lifecycle control plus pending-node safeguards on the honest Hetzner path while non-Hetzner providers stay simulated behind the same contract
+- operator-facing spend/quota budget warning/hard-limit surfaces in `king_autoscaling_get_status`, with warning-only behavior on probe/API degrade and hard-stop enforcement on configured hard limits
 - native System Integration core coordinating component lifecycles and health
 - security policy enforcement for userland configuration overrides active across all entry points
 - a public PHP stub surface that is parity-checked against the live runtime before go-live claims are made
@@ -140,11 +141,11 @@ The repo already has active native runtime slices for:
 
 The repo is still not a full production-grade implementation for:
 
-- operator-facing spend and quota warnings are still missing on the Hetzner autoscaling path
 - autoscaling node bootstrap exists at the payload/lifecycle layer, but end-to-end code rollout and release propagation onto freshly provisioned Hetzner nodes is still not verified as a real fleet operation
 - multi-provider cloud provisioning beyond the Hetzner path; non-Hetzner providers still remain simulated by design
 - QUIC/HTTP/3 backend provenance is still weaker than ideal: the runtime depends on an external local `quiche/` tree, and clean-room rehydration is still not yet a fully tracked deterministic bootstrap path for release-grade builds
 - object-store cloud adapters remain simulated beyond the local filesystem core, and backup/restore plus restart rehydration of persisted backend state is still open
+- release/container profile builds remain sensitive to missing `quiche`/`libcurl` layouts in clean or cross-arch environments until bootstrap normalization is fully deterministic and independent of local host headers
 - real telemetry export delivery instead of local-only flush accounting
 - remote/distributed MCP and orchestrator execution instead of local-first kernels
 - rolling-restart, failover, and crash-recovery operational depth
@@ -165,10 +166,9 @@ transport depth, or operational depth is still incomplete.
 
 ### 2. Autoscaling Needs Operational Depth, Not Just Provider Honesty
 
-- Hetzner provisioning is honest and controller-owned, but spend/quota warnings are still missing from the operator surface.
-- The controller can create, register, ready, drain, and delete nodes, but the project still lacks a verified end-to-end rollout story for code/release deployment onto newly provisioned machines.
+- Hetzner provisioning is honest and controller-owned, but the project still lacks a verified end-to-end rollout story for code/release deployment onto newly provisioned machines.
 - The current verification is still fundamentally controller-local; it does not yet prove multi-node fleet behavior under real rollout, drain, rollback, or provider-error recovery pressure.
-- A real `10/10` state here means: warning surfaces, verified release propagation/bootstrap on new nodes, and recovery behavior that survives provider/API turbulence without manual babysitting.
+- A real `10/10` state here means: verified release propagation/bootstrap on new nodes and recovery behavior that survives provider/API turbulence without manual babysitting.
 
 ### 3. Object Store And Persistence Are Strong Locally But Not Finished Externally
 
@@ -200,6 +200,7 @@ transport depth, or operational depth is still incomplete.
 - Benchmark harnesses exist, but CI-enforced regression budgets are still missing.
 - Upgrade/downgrade compatibility for release artifacts and persisted state is still not proven as a first-class gate.
 - Long-duration ASan/UBSan soak coverage and archived diagnostics on failure remain open.
+- Release profile/tooling bootstrap still depends on host/repo path normalization for external `quiche/` and `curl` layouts, which can stall container matrix builds on clean or unusual hosts.
 
 ## Current Assessment
 
@@ -223,7 +224,7 @@ transport depth, or operational depth is still incomplete.
 
 ### Weak or Still Open
 
-- multi-provider external backend depth and operator/exporter depth around autoscaling
+- multi-provider external backend depth and exporter depth around autoscaling
 - remote/distributed orchestration depth
 - operational recovery, failover, and exporter depth
 - hard performance, compatibility, and soak gates
