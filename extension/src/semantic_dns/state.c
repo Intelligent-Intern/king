@@ -46,6 +46,11 @@ int king_semantic_dns_state_save(void)
         return FAILURE;
     }
 
+    if (fchmod(fd, 0600) != 0) {
+        close(fd);
+        return FAILURE;
+    }
+
     fp = fdopen(fd, "wb");
     if (fp == NULL) {
         close(fd);
