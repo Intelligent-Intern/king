@@ -199,7 +199,7 @@ PHP_FUNCTION(king_telemetry_flush)
         zend_hash_clean(&king_metrics_registry);
         
         /* Attempt immediate export */
-        king_telemetry_export_batch();
+        king_telemetry_process_export_queue();
         
         king_telemetry_flush_count++;
     }
