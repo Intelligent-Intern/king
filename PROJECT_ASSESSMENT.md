@@ -145,7 +145,7 @@ The repo is still not a full production-grade implementation for:
 - autoscaling node bootstrap exists at the payload/lifecycle layer, but end-to-end code rollout and release propagation onto freshly provisioned Hetzner nodes is still not verified as a real fleet operation
 - multi-provider cloud provisioning beyond the Hetzner path; non-Hetzner providers still remain simulated by design
 - QUIC/HTTP/3 backend provenance is still weaker than ideal: the runtime depends on an external local `quiche/` tree, and clean-room rehydration is still not yet a fully tracked deterministic bootstrap path for release-grade builds
-- object-store cloud adapters remain simulated beyond the local filesystem core, and backup/restore plus restart rehydration of persisted backend state is still open
+- object-store cloud adapters remain simulated beyond the local filesystem core, and restart rehydration of persisted backend state remains open
 - release/container profile builds remain sensitive to missing `quiche`/`libcurl` layouts in clean or cross-arch environments until bootstrap normalization is fully deterministic and independent of local host headers
 - real telemetry export delivery instead of local-only flush accounting
 - remote/distributed MCP and orchestrator execution instead of local-first kernels
@@ -174,7 +174,7 @@ transport depth, or operational depth is still incomplete.
 ### 3. Object Store And Persistence Are Strong Locally But Not Finished Externally
 
 - The local filesystem object-store core is real and well tested, but cloud adapters remain simulated in the current tree.
-- Backup/restore, import/export, and post-crash rehydration of persisted payload and `.meta` state still need explicit verified paths.
+- Local filesystem backup/restore, import/export, and `.meta` sidecar persistence are now implemented and verified in PHPT (including restart path coverage for primary local backend rehydration). Restart rehydration guarantees for cloud-distributed profiles remain open.
 - That leaves a gap between "local runtime is correct" and "operators can trust the state layer across restart, migration, and backend substitution".
 
 ### 4. MCP And Orchestrator Are Still Local-First

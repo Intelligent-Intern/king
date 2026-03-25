@@ -59,7 +59,11 @@ void king_object_store_meta_remove(const char *object_id);
 void king_object_store_rehydrate_stats(void);
 
 /* Cloud-native HA hooks */
-int king_object_store_backup_object(const char *object_id, king_storage_backend_t backup_backend);
+/* File-backed persistence backup/restore and recovery paths */
+int king_object_store_backup_object(const char *object_id, const char *destination_path);
+int king_object_store_restore_object(const char *object_id, const char *source_path);
+int king_object_store_backup_all_objects(const char *destination_directory);
+int king_object_store_restore_all_objects(const char *source_directory);
 void king_object_store_initialize_adapter_statuses(void);
 void king_object_store_set_runtime_adapter_status(
     const char *scope,

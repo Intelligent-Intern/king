@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -30,6 +31,11 @@ static const char *king_object_store_adapter_status_unknown = "unknown";
 static const char *king_object_store_adapter_contract_local = "local";
 static const char *king_object_store_adapter_contract_simulated = "simulated";
 static const char *king_object_store_adapter_contract_unconfigured = "unconfigured";
+
+static int king_object_store_mkdir_parents(const char *path);
+static int king_object_store_read_file_contents(const char *source_path, void **data, size_t *data_size);
+static int king_object_store_atomic_write_file(const char *target_path, const void *data, size_t data_size);
+static int king_object_store_backup_object_to_backend(const char *object_id, king_storage_backend_t backup_backend);
 
 static void king_object_store_append_adapter_error(char *destination, size_t destination_size, const char *message)
 {
@@ -405,106 +411,235 @@ void king_object_store_build_path(char *dest, size_t dest_len, const char *objec
         king_object_store_runtime.config.storage_root_path, object_id);
 }
 
-/* --- Durable metadata sidecar helpers --- */
-
-void king_object_store_build_meta_path(char *dest, size_t dest_len, const char *object_id)
+static int king_object_store_build_path_in_directory(
+    char *dest,
+    size_t dest_len,
+    const char *directory,
+    const char *object_id,
+    const char *suffix
+)
 {
-    snprintf(dest, dest_len, "%s/%s.meta",
-        king_object_store_runtime.config.storage_root_path, object_id);
-}
+    int written;
 
-/*
- * Simple text key=value format, one entry per line:
- *   object_id=<str>\n
- *   content_type=<str>\n
- *   content_encoding=<str>\n
- *   etag=<str>\n
- *   content_length=<uint64>\n
- *   created_at=<int64>\n
- *   modified_at=<int64>\n
- *   expires_at=<int64>\n
- *   object_type=<int>\n
- *   cache_policy=<int>\n
- *   cache_ttl_seconds=<uint32>\n
- *   is_backed_up=<bool/uint8>\n
- *   replication_status=<uint8>\n
- */
-int king_object_store_meta_write(const char *object_id, const king_object_metadata_t *metadata)
-{
-    FILE *fp;
-    char meta_path[1024];
-    king_object_metadata_t scratch;
-
+    if (dest == NULL || directory == NULL || object_id == NULL) {
+        return FAILURE;
+    }
     if (king_object_store_object_id_validate(object_id) != NULL) {
         return FAILURE;
     }
+    if (suffix == NULL) {
+        suffix = "";
+    }
 
-    king_object_store_build_meta_path(meta_path, sizeof(meta_path), object_id);
+    written = snprintf(dest, dest_len, "%s/%s%s", directory, object_id, suffix);
+    return (written >= 0 && (size_t) written < dest_len) ? SUCCESS : FAILURE;
+}
 
-    fp = fopen(meta_path, "w");
-    if (fp == NULL) {
+static int king_object_store_is_directory(const char *path)
+{
+    struct stat st;
+    if (path == NULL || path[0] == '\0') {
+        return 0;
+    }
+    if (stat(path, &st) != 0) {
+        return 0;
+    }
+    return S_ISDIR(st.st_mode) ? 1 : 0;
+}
+
+static int king_object_store_ensure_directory(const char *path)
+{
+    if (path == NULL || path[0] == '\0') {
         return FAILURE;
     }
 
-    if (metadata == NULL) {
-        /* Write a minimal stub so the file always exists */
-        memset(&scratch, 0, sizeof(scratch));
-        strncpy(scratch.object_id, object_id, sizeof(scratch.object_id) - 1);
-        scratch.created_at = time(NULL);
-        metadata = &scratch;
+    if (mkdir(path, 0755) == 0 || errno == EEXIST) {
+        return king_object_store_is_directory(path) ? SUCCESS : FAILURE;
     }
 
-    fprintf(fp,
-        "object_id=%s\n"
-        "content_type=%s\n"
-        "content_encoding=%s\n"
-        "etag=%s\n"
-        "content_length=%" PRIu64 "\n"
-        "created_at=%" PRId64 "\n"
-        "modified_at=%" PRId64 "\n"
-        "expires_at=%" PRId64 "\n"
-        "object_type=%d\n"
-        "cache_policy=%d\n"
-        "cache_ttl_seconds=%u\n"
-        "is_backed_up=%d\n"
-        "replication_status=%d\n"
-        "is_distributed=%d\n"
-        "distribution_peer_count=%u\n",
-        (metadata->object_id[0] != '\0' ? metadata->object_id : object_id),
-        metadata->content_type,
-        metadata->content_encoding,
-        metadata->etag,
-        (uint64_t) metadata->content_length,
-        (int64_t)  metadata->created_at,
-        (int64_t)  metadata->modified_at,
-        (int64_t)  metadata->expires_at,
-        (int)      metadata->object_type,
-        (int)      metadata->cache_policy,
-        (unsigned) metadata->cache_ttl_seconds,
-        (int)      metadata->is_backed_up,
-        (int)      metadata->replication_status,
-        (int)      metadata->is_distributed,
-        (unsigned) metadata->distribution_peer_count
-    );
+    return FAILURE;
+}
 
+static int king_object_store_atomic_write_file(const char *target_path, const void *data, size_t data_size)
+{
+    FILE *fp;
+    int temp_fd;
+    char temp_path[1024];
+
+    if (target_path == NULL || data == NULL) {
+        return FAILURE;
+    }
+
+    if (snprintf(temp_path, sizeof(temp_path), "%s.XXXXXX", target_path) >= (int) sizeof(temp_path)) {
+        return FAILURE;
+    }
+
+    temp_fd = mkstemp(temp_path);
+    if (temp_fd < 0) {
+        return FAILURE;
+    }
+
+    fp = fdopen(temp_fd, "wb");
+    if (fp == NULL) {
+        close(temp_fd);
+        unlink(temp_path);
+        return FAILURE;
+    }
+
+    if (data_size > 0) {
+        if (fwrite(data, 1, data_size, fp) != data_size) {
+            fclose(fp);
+            unlink(temp_path);
+            return FAILURE;
+        }
+    }
+
+    if (fclose(fp) != 0) {
+        unlink(temp_path);
+        return FAILURE;
+    }
+
+    if (rename(temp_path, target_path) != 0) {
+        unlink(temp_path);
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static int king_object_store_copy_file_to_path(
+    const char *source_path,
+    const char *target_path
+)
+{
+    void *data = NULL;
+    size_t data_size = 0;
+
+    if (source_path == NULL || target_path == NULL) {
+        return FAILURE;
+    }
+
+    if (king_object_store_read_file_contents(source_path, &data, &data_size) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (king_object_store_mkdir_parents(target_path) != SUCCESS) {
+        pefree(data, 1);
+        return FAILURE;
+    }
+
+    if (king_object_store_atomic_write_file(target_path, data, data_size) != SUCCESS) {
+        pefree(data, 1);
+        return FAILURE;
+    }
+
+    pefree(data, 1);
+    return SUCCESS;
+}
+
+static int king_object_store_mkdir_parents(const char *path)
+{
+    size_t len;
+    size_t i;
+    size_t slash_count = 0;
+    char current[1024];
+
+    if (path == NULL || path[0] == '\0') {
+        return FAILURE;
+    }
+    if (strlen(path) >= sizeof(current)) {
+        return FAILURE;
+    }
+    memcpy(current, path, strlen(path) + 1);
+
+    len = strlen(current);
+    if (len == 0) {
+        return FAILURE;
+    }
+    if (current[len - 1] == '/' && len > 1) {
+        current[len - 1] = '\0';
+        len--;
+    }
+    if (len == 0) {
+        return FAILURE;
+    }
+
+    for (i = 0; i < len; i++) {
+        if (current[i] == '/') {
+            slash_count++;
+        }
+    }
+    if (slash_count == 0) {
+        return SUCCESS;
+    }
+
+    for (i = 1; i < len; i++) {
+        if (current[i] == '/') {
+            char old = current[i];
+            current[i] = '\0';
+            if (mkdir(current, 0755) != 0 && errno != EEXIST) {
+                if (!king_object_store_is_directory(current)) {
+                    current[i] = old;
+                    return FAILURE;
+                }
+            }
+            current[i] = old;
+        }
+    }
+
+    return SUCCESS;
+}
+
+static int king_object_store_read_file_contents(
+    const char *source_path,
+    void **data,
+    size_t *data_size
+)
+{
+    FILE *fp;
+    struct stat st;
+
+    if (source_path == NULL || data == NULL || data_size == NULL) {
+        return FAILURE;
+    }
+
+    if (stat(source_path, &st) != 0 || !S_ISREG(st.st_mode)) {
+        return FAILURE;
+    }
+
+    *data_size = (size_t) st.st_size;
+    *data = pemalloc(*data_size + 1, 1);
+    if (*data == NULL) {
+        *data_size = 0;
+        return FAILURE;
+    }
+
+    fp = fopen(source_path, "rb");
+    if (fp == NULL) {
+        pefree(*data, 1);
+        *data = NULL;
+        *data_size = 0;
+        return FAILURE;
+    }
+
+    if (*data_size > 0 && fread(*data, 1, *data_size, fp) != *data_size) {
+        fclose(fp);
+        pefree(*data, 1);
+        *data = NULL;
+        *data_size = 0;
+        return FAILURE;
+    }
+
+    ((char *) *data)[*data_size] = '\0';
     fclose(fp);
     return SUCCESS;
 }
 
-int king_object_store_meta_read(const char *object_id, king_object_metadata_t *metadata)
+static int king_object_store_metadata_parse_stream(FILE *fp, king_object_metadata_t *metadata)
 {
-    FILE *fp;
-    char meta_path[1024];
     char line[640];
 
-    if (king_object_store_object_id_validate(object_id) != NULL || metadata == NULL) {
-        return FAILURE;
-    }
-
-    king_object_store_build_meta_path(meta_path, sizeof(meta_path), object_id);
-
-    fp = fopen(meta_path, "r");
-    if (fp == NULL) {
+    if (fp == NULL || metadata == NULL) {
         return FAILURE;
     }
 
@@ -515,11 +650,13 @@ int king_object_store_meta_read(const char *object_id, king_object_metadata_t *m
         if (eq == NULL) {
             continue;
         }
+
         *eq = '\0';
         char *key = line;
         char *val = eq + 1;
-        /* strip trailing newline */
-        size_t vlen = strlen(val);
+        size_t vlen;
+
+        vlen = strlen(val);
         if (vlen > 0 && val[vlen - 1] == '\n') {
             val[vlen - 1] = '\0';
         }
@@ -557,8 +694,152 @@ int king_object_store_meta_read(const char *object_id, king_object_metadata_t *m
         }
     }
 
+    return SUCCESS;
+}
+
+static int king_object_store_meta_write_to_path(const char *path, const king_object_metadata_t *metadata)
+{
+    FILE *fp;
+    king_object_metadata_t scratch;
+
+    if (path == NULL || path[0] == '\0') {
+        return FAILURE;
+    }
+
+    fp = fopen(path, "w");
+    if (fp == NULL) {
+        return FAILURE;
+    }
+
+    if (metadata == NULL) {
+        memset(&scratch, 0, sizeof(scratch));
+        scratch.created_at = time(NULL);
+        metadata = &scratch;
+    }
+
+    fprintf(fp,
+        "object_id=%s\n"
+        "content_type=%s\n"
+        "content_encoding=%s\n"
+        "etag=%s\n"
+        "content_length=%" PRIu64 "\n"
+        "created_at=%" PRId64 "\n"
+        "modified_at=%" PRId64 "\n"
+        "expires_at=%" PRId64 "\n"
+        "object_type=%d\n"
+        "cache_policy=%d\n"
+        "cache_ttl_seconds=%u\n"
+        "is_backed_up=%d\n"
+        "replication_status=%d\n"
+        "is_distributed=%d\n"
+        "distribution_peer_count=%u\n",
+        metadata->object_id,
+        metadata->content_type,
+        metadata->content_encoding,
+        metadata->etag,
+        (uint64_t) metadata->content_length,
+        (int64_t)  metadata->created_at,
+        (int64_t)  metadata->modified_at,
+        (int64_t)  metadata->expires_at,
+        (int)      metadata->object_type,
+        (int)      metadata->cache_policy,
+        (unsigned) metadata->cache_ttl_seconds,
+        (int)      metadata->is_backed_up,
+        (int)      metadata->replication_status,
+        (int)      metadata->is_distributed,
+        (unsigned) metadata->distribution_peer_count
+    );
+
     fclose(fp);
     return SUCCESS;
+}
+
+static int king_object_store_meta_read_from_path(const char *path, king_object_metadata_t *metadata)
+{
+    FILE *fp;
+
+    if (path == NULL || metadata == NULL) {
+        return FAILURE;
+    }
+
+    fp = fopen(path, "r");
+    if (fp == NULL) {
+        return FAILURE;
+    }
+
+    if (king_object_store_metadata_parse_stream(fp, metadata) != SUCCESS) {
+        fclose(fp);
+        return FAILURE;
+    }
+
+    fclose(fp);
+    return SUCCESS;
+}
+
+/* --- Durable metadata sidecar helpers --- */
+
+void king_object_store_build_meta_path(char *dest, size_t dest_len, const char *object_id)
+{
+    snprintf(dest, dest_len, "%s/%s.meta",
+        king_object_store_runtime.config.storage_root_path, object_id);
+}
+
+/*
+ * Simple text key=value format, one entry per line:
+ *   object_id=<str>\n
+ *   content_type=<str>\n
+ *   content_encoding=<str>\n
+ *   etag=<str>\n
+ *   content_length=<uint64>\n
+ *   created_at=<int64>\n
+ *   modified_at=<int64>\n
+ *   expires_at=<int64>\n
+ *   object_type=<int>\n
+ *   cache_policy=<int>\n
+ *   cache_ttl_seconds=<uint32>\n
+ *   is_backed_up=<bool/uint8>\n
+ *   replication_status=<uint8>\n
+ */
+int king_object_store_meta_write(const char *object_id, const king_object_metadata_t *metadata)
+{
+    char meta_path[1024];
+    king_object_metadata_t scratch;
+    king_object_metadata_t final_metadata = {0};
+    const king_object_metadata_t *metadata_source = NULL;
+
+    if (metadata == NULL) {
+        memset(&scratch, 0, sizeof(scratch));
+        metadata_source = &scratch;
+    } else {
+        final_metadata = *metadata;
+        metadata_source = &final_metadata;
+    }
+    if (metadata_source->object_id[0] == '\0' && object_id != NULL) {
+        strncpy(final_metadata.object_id, object_id, sizeof(final_metadata.object_id) - 1);
+        metadata_source = &final_metadata;
+    }
+    if (object_id == NULL) {
+        return FAILURE;
+    }
+
+    if (king_object_store_object_id_validate(object_id) != NULL) {
+        return FAILURE;
+    }
+
+    king_object_store_build_meta_path(meta_path, sizeof(meta_path), object_id);
+    return king_object_store_meta_write_to_path(meta_path, metadata_source);
+}
+
+int king_object_store_meta_read(const char *object_id, king_object_metadata_t *metadata)
+{
+    char meta_path[1024];
+
+    if (king_object_store_object_id_validate(object_id) != NULL || metadata == NULL) {
+        return FAILURE;
+    }
+
+    king_object_store_build_meta_path(meta_path, sizeof(meta_path), object_id);
+    return king_object_store_meta_read_from_path(meta_path, metadata);
 }
 
 void king_object_store_meta_remove(const char *object_id)
@@ -682,7 +963,7 @@ int king_object_store_local_fs_write(
 
     /* Primary-fallback sync (Backup) */
     if (king_object_store_runtime.config.backup_backend != king_object_store_runtime.config.primary_backend) {
-        king_object_store_backup_object(object_id, king_object_store_runtime.config.backup_backend);
+        king_object_store_backup_object_to_backend(object_id, king_object_store_runtime.config.backup_backend);
     }
 
     return SUCCESS;
@@ -829,6 +1110,320 @@ int king_object_store_local_fs_list(zval *return_array)
     return SUCCESS;
 }
 
+static int king_object_store_is_meta_filename(const char *name)
+{
+    size_t name_len;
+
+    if (name == NULL || name[0] == '\0' || name[0] == '.') {
+        return 1;
+    }
+
+    name_len = strlen(name);
+    if (name_len > 5 && strcmp(name + name_len - 5, ".meta") == 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
+static void king_object_store_fill_fallback_metadata(
+    king_object_metadata_t *metadata,
+    const char *object_id,
+    uint64_t content_length,
+    time_t fallback_timestamp)
+{
+    if (metadata == NULL || object_id == NULL) {
+        return;
+    }
+
+    memset(metadata, 0, sizeof(*metadata));
+    strncpy(metadata->object_id, object_id, sizeof(metadata->object_id) - 1);
+    metadata->content_length = content_length;
+    metadata->created_at = fallback_timestamp;
+    metadata->modified_at = fallback_timestamp;
+}
+
+static int king_object_store_apply_local_fs_counters_for_rewrite(
+    const char *object_id,
+    uint64_t new_size,
+    int had_old,
+    uint64_t old_size
+)
+{
+    if (had_old) {
+        if (king_object_store_runtime.current_stored_bytes >= old_size) {
+            king_object_store_runtime.current_stored_bytes -= old_size;
+        }
+    } else {
+        king_object_store_runtime.current_object_count++;
+    }
+
+    king_object_store_runtime.current_stored_bytes += new_size;
+    king_object_store_runtime.latest_object_at = time(NULL);
+
+    return SUCCESS;
+}
+
+static int king_object_store_export_object(const char *object_id, const char *destination_directory)
+{
+    char source_path[1024];
+    char destination_path[1024];
+    char source_meta_path[1024];
+    char destination_meta_path[1024];
+    struct stat source_stat;
+    king_object_metadata_t metadata;
+
+    if (!king_object_store_runtime.initialized) {
+        return FAILURE;
+    }
+    if (king_object_store_object_id_validate(object_id) != NULL || destination_directory == NULL || destination_directory[0] == '\0') {
+        return FAILURE;
+    }
+    if (king_object_store_require_honest_backend(
+            "primary",
+            king_object_store_runtime.config.primary_backend,
+            "object export") == FAILURE) {
+        return FAILURE;
+    }
+
+    king_object_store_build_path(source_path, sizeof(source_path), object_id);
+    if (stat(source_path, &source_stat) != 0 || !S_ISREG(source_stat.st_mode)) {
+        return FAILURE;
+    }
+
+    if (king_object_store_ensure_directory(destination_directory) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (king_object_store_build_path_in_directory(destination_path, sizeof(destination_path), destination_directory, object_id, NULL) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_object_store_build_path_in_directory(
+        source_meta_path,
+        sizeof(source_meta_path),
+        king_object_store_runtime.config.storage_root_path,
+        object_id,
+        ".meta"
+    ) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_object_store_build_path_in_directory(
+        destination_meta_path,
+        sizeof(destination_meta_path),
+        destination_directory,
+        object_id,
+        ".meta"
+    ) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (king_object_store_copy_file_to_path(source_path, destination_path) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (king_object_store_copy_file_to_path(source_meta_path, destination_meta_path) != SUCCESS) {
+        if (king_object_store_meta_read(object_id, &metadata) != SUCCESS) {
+            king_object_store_fill_fallback_metadata(&metadata, object_id, (uint64_t) source_stat.st_size, source_stat.st_mtime);
+        }
+        if (king_object_store_meta_write_to_path(destination_meta_path, &metadata) != SUCCESS) {
+            unlink(destination_path);
+            return FAILURE;
+        }
+    }
+
+    return SUCCESS;
+}
+
+static int king_object_store_import_object(const char *object_id, const char *source_directory)
+{
+    char source_path[1024];
+    char destination_path[1024];
+    char source_meta_path[1024];
+    char destination_meta_path[1024];
+    struct stat source_stat;
+    int had_old = 0;
+    uint64_t old_size = 0;
+    struct stat destination_old_stat;
+    king_object_metadata_t metadata;
+
+    if (!king_object_store_runtime.initialized) {
+        return FAILURE;
+    }
+    if (king_object_store_object_id_validate(object_id) != NULL || source_directory == NULL || source_directory[0] == '\0') {
+        return FAILURE;
+    }
+    if (king_object_store_require_honest_backend(
+            "primary",
+            king_object_store_runtime.config.primary_backend,
+            "object import") == FAILURE) {
+        return FAILURE;
+    }
+
+    if (king_object_store_build_path_in_directory(source_path, sizeof(source_path), source_directory, object_id, NULL) != SUCCESS) {
+        return FAILURE;
+    }
+    if (stat(source_path, &source_stat) != 0 || !S_ISREG(source_stat.st_mode)) {
+        return FAILURE;
+    }
+
+    king_object_store_build_path(destination_path, sizeof(destination_path), object_id);
+    if (stat(destination_path, &destination_old_stat) == 0 && S_ISREG(destination_old_stat.st_mode)) {
+        had_old = 1;
+        old_size = (uint64_t) destination_old_stat.st_size;
+    }
+
+    if (king_object_store_build_path_in_directory(
+        source_meta_path,
+        sizeof(source_meta_path),
+        source_directory,
+        object_id,
+        ".meta"
+    ) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_object_store_build_path_in_directory(
+        destination_meta_path,
+        sizeof(destination_meta_path),
+        king_object_store_runtime.config.storage_root_path,
+        object_id,
+        ".meta"
+    ) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (king_object_store_copy_file_to_path(source_path, destination_path) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (king_object_store_copy_file_to_path(source_meta_path, destination_meta_path) != SUCCESS) {
+        if (king_object_store_meta_read_from_path(source_meta_path, &metadata) == SUCCESS) {
+            /* Keep source-side metadata sidecar when it exists and is valid. */
+        } else if (king_object_store_meta_read(object_id, &metadata) == SUCCESS) {
+            /* Fallback to active runtime metadata when import source is incomplete. */
+            if (metadata.object_id[0] == '\0') {
+                strncpy(metadata.object_id, object_id, sizeof(metadata.object_id) - 1);
+            }
+            if (metadata.content_length == 0) {
+                metadata.content_length = (uint64_t) source_stat.st_size;
+            }
+        } else {
+            king_object_store_fill_fallback_metadata(&metadata, object_id, (uint64_t) source_stat.st_size, source_stat.st_mtime);
+        }
+
+        if (king_object_store_meta_write(object_id, &metadata) != SUCCESS) {
+            if (!had_old) {
+                unlink(destination_path);
+            }
+            return FAILURE;
+        }
+    }
+
+    return king_object_store_apply_local_fs_counters_for_rewrite(object_id, (uint64_t) source_stat.st_size, had_old, old_size);
+}
+
+int king_object_store_backup_object(const char *object_id, const char *destination_path)
+{
+    return king_object_store_export_object(object_id, destination_path);
+}
+
+int king_object_store_restore_object(const char *object_id, const char *source_path)
+{
+    return king_object_store_import_object(object_id, source_path);
+}
+
+int king_object_store_backup_all_objects(const char *destination_directory)
+{
+    DIR *dir;
+    struct dirent *ent;
+    struct stat st;
+    char source_path[1024];
+
+    if (!king_object_store_runtime.initialized || destination_directory == NULL || destination_directory[0] == '\0') {
+        return FAILURE;
+    }
+    if (king_object_store_require_honest_backend(
+            "primary",
+            king_object_store_runtime.config.primary_backend,
+            "batch object export") == FAILURE) {
+        return FAILURE;
+    }
+
+    if (king_object_store_ensure_directory(destination_directory) != SUCCESS) {
+        return FAILURE;
+    }
+
+    dir = opendir(king_object_store_runtime.config.storage_root_path);
+    if (dir == NULL) {
+        return FAILURE;
+    }
+
+    while ((ent = readdir(dir)) != NULL) {
+        if (ent->d_name[0] == '.') {
+            continue;
+        }
+        if (king_object_store_is_meta_filename(ent->d_name)) {
+            continue;
+        }
+        if (king_object_store_object_id_validate(ent->d_name) != NULL) {
+            closedir(dir);
+            return FAILURE;
+        }
+        king_object_store_build_path(source_path, sizeof(source_path), ent->d_name);
+        if (stat(source_path, &st) != 0 || !S_ISREG(st.st_mode)) {
+            closedir(dir);
+            return FAILURE;
+        }
+        if (king_object_store_backup_object(ent->d_name, destination_directory) != SUCCESS) {
+            closedir(dir);
+            return FAILURE;
+        }
+    }
+
+    closedir(dir);
+    return SUCCESS;
+}
+
+int king_object_store_restore_all_objects(const char *source_directory)
+{
+    DIR *dir;
+    struct dirent *ent;
+
+    if (!king_object_store_runtime.initialized || source_directory == NULL || source_directory[0] == '\0') {
+        return FAILURE;
+    }
+    if (king_object_store_require_honest_backend(
+            "primary",
+            king_object_store_runtime.config.primary_backend,
+            "batch object import") == FAILURE) {
+        return FAILURE;
+    }
+
+    dir = opendir(source_directory);
+    if (dir == NULL) {
+        return FAILURE;
+    }
+
+    while ((ent = readdir(dir)) != NULL) {
+        if (ent->d_name[0] == '.') {
+            continue;
+        }
+        if (king_object_store_is_meta_filename(ent->d_name)) {
+            continue;
+        }
+        if (king_object_store_object_id_validate(ent->d_name) != NULL) {
+            closedir(dir);
+            return FAILURE;
+        }
+        if (king_object_store_restore_object(ent->d_name, source_directory) != SUCCESS) {
+            closedir(dir);
+            return FAILURE;
+        }
+    }
+
+    closedir(dir);
+    return SUCCESS;
+}
+
 /* --- Replication (runtime: local_fs single file = replica 1) --- */
 
 int king_object_store_replicate_object(const char *object_id, uint32_t replication_factor)
@@ -847,7 +1442,7 @@ int king_object_store_replicate_object(const char *object_id, uint32_t replicati
     return SUCCESS;
 }
 
-int king_object_store_backup_object(const char *object_id, king_storage_backend_t backup_backend)
+static int king_object_store_backup_object_to_backend(const char *object_id, king_storage_backend_t backup_backend)
 {
     if (object_id == NULL || object_id[0] == '\0') {
         king_object_store_set_backend_runtime_result(
@@ -1249,7 +1844,7 @@ int king_object_store_write_object(
 
     if (rc == SUCCESS &&
         king_object_store_runtime.config.backup_backend != king_object_store_runtime.config.primary_backend) {
-        if (king_object_store_backup_object(object_id, king_object_store_runtime.config.backup_backend) != SUCCESS) {
+        if (king_object_store_backup_object_to_backend(object_id, king_object_store_runtime.config.backup_backend) != SUCCESS) {
             king_object_store_set_backend_runtime_result(
                 "primary",
                 king_object_store_runtime.config.primary_backend,

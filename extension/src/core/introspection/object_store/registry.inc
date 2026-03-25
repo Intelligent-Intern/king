@@ -18,6 +18,9 @@ PHP_FUNCTION(king_object_store_put)
     if (object_id) {
         strncpy(metadata.object_id, ZSTR_VAL(object_id), sizeof(metadata.object_id) - 1);
     }
+    metadata.content_length = ZSTR_LEN(payload);
+    metadata.created_at = time(NULL);
+    metadata.modified_at = metadata.created_at;
 
     if (!king_object_store_runtime.initialized) {
         zend_throw_exception_ex(
@@ -210,4 +213,168 @@ PHP_FUNCTION(king_object_store_get_metadata)
     add_assoc_long  (return_value, "replication_status", (zend_long) metadata.replication_status);
     add_assoc_long  (return_value, "is_distributed",     (zend_long) metadata.is_distributed);
     add_assoc_long  (return_value, "distribution_peer_count", (zend_long) metadata.distribution_peer_count);
+}
+
+PHP_FUNCTION(king_object_store_backup_object)
+{
+    zend_string *object_id;
+    zend_string *destination_path;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_STR(object_id)
+        Z_PARAM_STR(destination_path)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Object ID must be between 1 and 127 bytes."
+        );
+        RETURN_THROWS();
+    }
+    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Object ID is invalid for object-store paths."
+        );
+        RETURN_THROWS();
+    }
+    if (ZSTR_LEN(destination_path) == 0) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Destination path must be a non-empty string."
+        );
+        RETURN_THROWS();
+    }
+
+    if (!king_object_store_runtime.initialized) {
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "Object-store registry is unavailable."
+        );
+        RETURN_THROWS();
+    }
+
+    RETURN_BOOL(
+        king_object_store_backup_object(
+            ZSTR_VAL(object_id),
+            ZSTR_VAL(destination_path)
+        ) == SUCCESS
+    );
+}
+
+PHP_FUNCTION(king_object_store_restore_object)
+{
+    zend_string *object_id;
+    zend_string *source_path;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_STR(object_id)
+        Z_PARAM_STR(source_path)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Object ID must be between 1 and 127 bytes."
+        );
+        RETURN_THROWS();
+    }
+    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Object ID is invalid for object-store paths."
+        );
+        RETURN_THROWS();
+    }
+    if (ZSTR_LEN(source_path) == 0) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Source path must be a non-empty string."
+        );
+        RETURN_THROWS();
+    }
+
+    if (!king_object_store_runtime.initialized) {
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "Object-store registry is unavailable."
+        );
+        RETURN_THROWS();
+    }
+
+    RETURN_BOOL(
+        king_object_store_restore_object(
+            ZSTR_VAL(object_id),
+            ZSTR_VAL(source_path)
+        ) == SUCCESS
+    );
+}
+
+PHP_FUNCTION(king_object_store_backup_all_objects)
+{
+    zend_string *destination_path;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(destination_path)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (ZSTR_LEN(destination_path) == 0) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Destination path must be a non-empty string."
+        );
+        RETURN_THROWS();
+    }
+    if (!king_object_store_runtime.initialized) {
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "Object-store registry is unavailable."
+        );
+        RETURN_THROWS();
+    }
+
+    RETURN_BOOL(
+        king_object_store_backup_all_objects(ZSTR_VAL(destination_path)) == SUCCESS
+    );
+}
+
+PHP_FUNCTION(king_object_store_restore_all_objects)
+{
+    zend_string *source_path;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(source_path)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (ZSTR_LEN(source_path) == 0) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Source path must be a non-empty string."
+        );
+        RETURN_THROWS();
+    }
+    if (!king_object_store_runtime.initialized) {
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "Object-store registry is unavailable."
+        );
+        RETURN_THROWS();
+    }
+
+    RETURN_BOOL(
+        king_object_store_restore_all_objects(ZSTR_VAL(source_path)) == SUCCESS
+    );
 }

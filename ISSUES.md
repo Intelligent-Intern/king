@@ -15,9 +15,9 @@
 
 ## Current Next Leaf
 
-- [ ] Add backup/restore and import/export paths for object-store payloads plus `.meta` state
-  why this blocks `8/10`: object-store still lacks resilient persisted-backend portability and recovery.
-  done when: import/export + backup/restore operations are implemented for persisted object payloads, with verified failure semantics and `.meta` consistency.
+- [ ] Add crash-recovery and restart rehydration verification for persisted backends
+  why this blocks `8/10`: persisted backends do not yet verify restart-time rehydration and recovery semantics.
+  done when: restart/recover path verifies object metadata and payload integrity for local and verified simulated backends.
 
 ## Active Fronts
 
@@ -35,7 +35,8 @@
   completed: 2026-03-25
 - [x] Replace simulated object-store cloud adapters with explicit backend contracts and stable failure semantics
   completed: 2026-03-25
-- [ ] Add backup/restore and import/export paths for object-store payloads plus `.meta` state
+- [x] Add backup/restore and import/export paths for object-store payloads plus `.meta` state
+  completed: 2026-03-25
 - [ ] Add crash-recovery and restart rehydration verification for persisted backends
 
 ### 2. Distributed MCP and orchestrator depth

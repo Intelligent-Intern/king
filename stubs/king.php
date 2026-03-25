@@ -591,6 +591,37 @@ namespace {
     function king_object_store_delete(string $object_id): bool {}
 
     /**
+     * Exports one object and its `.meta` sidecar to a filesystem directory.
+     * The destination directory is created when missing.
+     * @return bool
+     * @throws \King\RuntimeException|\King\SystemException
+     */
+    function king_object_store_backup_object(string $object_id, string $destination_path): bool {}
+
+    /**
+     * Imports one object (and optional `.meta`) from a filesystem directory.
+     * Source path points to the backup export directory containing payload and
+     * matching `<object_id>`/`<object_id>.meta` files.
+     * @return bool
+     * @throws \King\RuntimeException|\King\SystemException
+     */
+    function king_object_store_restore_object(string $object_id, string $source_path): bool {}
+
+    /**
+     * Exports all objects and sidecar metadata from the active object-store.
+     * @return bool
+     * @throws \King\RuntimeException|\King\SystemException
+     */
+    function king_object_store_backup_all_objects(string $path): bool {}
+
+    /**
+     * Imports all object payload/metadata files from a filesystem backup directory.
+     * @return bool
+     * @throws \King\RuntimeException|\King\SystemException
+     */
+    function king_object_store_restore_all_objects(string $path): bool {}
+
+    /**
      * Runs a no-op maintenance pass over the local runtime object-store
      * registry and returns a small summary.
      * @return array{
