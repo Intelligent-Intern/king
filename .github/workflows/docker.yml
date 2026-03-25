@@ -31,7 +31,7 @@ jobs:
             platforms: linux/amd64,linux/arm64
             latest: false
           - php-version: '8.3'
-            platforms: linux/amd64,linux/arm64  # Temporarily removed linux/arm/v7 due to Quiche build issues
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
             latest: false
           - php-version: '8.4'
             platforms: linux/amd64,linux/arm64
