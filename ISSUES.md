@@ -15,9 +15,9 @@
 
 ## Current Next Leaf
 
-- [ ] Verify PHP 8.5 transport bootstrap in full matrix after curl/wirefilter hardening
-  why this blocks `10/10`: the local fix must be proven in container CI for PHP 8.5 as well; current evidence is from local bootstrap + smoke on current host PHP (8.4).
-  done when: GitHub matrix for 8.1, 8.2, 8.3, 8.4, and 8.5 runs `./scripts/build-profile.sh release` and smoke on clean architecture-labeled workers without `curl/curl.h` or wirefilter revision failures.
+- [ ] Add a real telemetry export queue and exporter semantics instead of local-only flush counters
+  why this blocks `9/10`: telemetry currently only accumulates locally and flushes to void; real observability requires export to backends like OTLP, Prometheus, or custom collectors.
+  done when: telemetry flush sends metrics/spans/logs to configured exporters, supports batching/queueing, and has proper error handling for export failures.
 
 ## Active Fronts
 

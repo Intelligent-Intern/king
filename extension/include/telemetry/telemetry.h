@@ -100,6 +100,14 @@ typedef struct _king_log_record_t {
     zval exception_info;  /* PHP array with exception details */
 } king_log_record_t;
 
+typedef struct _king_telemetry_batch_t {
+    zval metrics;      /* Array of metric data */
+    zval spans;        /* Array of span data */
+    zval logs;         /* Array of log data */
+    time_t created_at;
+    struct _king_telemetry_batch_t *next;
+} king_telemetry_batch_t;
+
 /* --- PHP Function Prototypes --- */
 
 /* Initializes telemetry from a PHP config array. */
@@ -159,6 +167,21 @@ int king_telemetry_set_current_span(king_trace_context_t *span_context);
 const char* king_telemetry_level_to_string(king_telemetry_level_t level);
 const char* king_metric_type_to_string(king_metric_type_t type);
 const char* king_span_kind_to_string(king_span_kind_t kind);
+
+/* Export queue functions */
+king_telemetry_batch_t* king_telemetry_create_batch(void);
+int king_telemetry_queue_batch(king_telemetry_batch_t *batch);
+void king_telemetry_cleanup_export_queue(void);
+
+/* OTLP export functions */
+int king_telemetry_export_metrics_otlp(zval *metrics);
+int king_telemetry_export_spans_otlp(zval *spans);
+int king_telemetry_export_logs_otlp(zval *logs);
+
+/* Export queue statistics */
+extern uint32_t king_telemetry_queue_size;
+extern uint32_t king_telemetry_export_success_count;
+extern uint32_t king_telemetry_export_failure_count;
 
 /* --- Auto-Instrumentation Hooks --- */
 int king_telemetry_instrument_http_request(const char *method, const char *url, const char *user_agent);

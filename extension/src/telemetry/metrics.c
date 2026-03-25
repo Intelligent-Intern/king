@@ -164,9 +164,43 @@ PHP_FUNCTION(king_telemetry_flush)
 {
     ZEND_PARSE_PARAMETERS_NONE();
     
-    if (king_metrics_initialized) {
-        /* Simulate Export by clearing the registry */
+    if (king_metrics_initialized && zend_hash_num_elements(&king_metrics_registry) > 0) {
+        /* Create export batch with current metrics */
+        king_telemetry_batch_t *batch = king_telemetry_create_batch();
+        
+        /* Copy all metrics to batch */
+        king_metric_data_t *metric;
+        zend_string *key;
+        zval *entry;
+        
+        ZEND_HASH_FOREACH_STR_KEY_VAL(&king_metrics_registry, key, entry) {
+            metric = Z_PTR_P(entry);
+            zval m_info;
+            array_init(&m_info);
+            
+            add_assoc_string(&m_info, "name", metric->metric_name);
+            add_assoc_double(&m_info, "value", metric->value);
+            add_assoc_long(&m_info, "timestamp", (zend_long)metric->timestamp);
+            add_assoc_long(&m_info, "type", (zend_long)metric->metric_type);
+            
+            /* Add labels if present */
+            if (Z_TYPE(metric->labels) == IS_ARRAY) {
+                Z_ADDREF(metric->labels);
+                add_assoc_zval(&m_info, "labels", &metric->labels);
+            }
+            
+            add_next_index_zval(&batch->metrics, &m_info);
+        } ZEND_HASH_FOREACH_END();
+        
+        /* Queue batch for export */
+        king_telemetry_queue_batch(batch);
+        
+        /* Clear local registry after queuing */
         zend_hash_clean(&king_metrics_registry);
+        
+        /* Attempt immediate export */
+        king_telemetry_export_batch();
+        
         king_telemetry_flush_count++;
     }
     
@@ -181,4 +215,7 @@ PHP_FUNCTION(king_telemetry_get_status)
     add_assoc_bool(return_value, "initialized", king_metrics_initialized);
     add_assoc_long(return_value, "flush_count", (zend_long)king_telemetry_flush_count);
     add_assoc_long(return_value, "active_metrics", king_metrics_initialized ? zend_hash_num_elements(&king_metrics_registry) : 0);
+    add_assoc_long(return_value, "queue_size", (zend_long)king_telemetry_queue_size);
+    add_assoc_long(return_value, "export_success_count", (zend_long)king_telemetry_export_success_count);
+    add_assoc_long(return_value, "export_failure_count", (zend_long)king_telemetry_export_failure_count);
 }

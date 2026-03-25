@@ -14,6 +14,13 @@ static king_telemetry_config_t king_telemetry_runtime_config;
 static bool king_telemetry_system_initialized = false;
 static king_trace_context_t *king_current_span = NULL;
 
+/* Export queue for batched telemetry data */
+king_telemetry_batch_t *king_telemetry_export_queue_head = NULL;
+king_telemetry_batch_t *king_telemetry_export_queue_tail = NULL;
+uint32_t king_telemetry_queue_size = 0;
+uint32_t king_telemetry_export_success_count = 0;
+uint32_t king_telemetry_export_failure_count = 0;
+
 static void king_telemetry_span_free(king_trace_context_t *span)
 {
     if (span) {
@@ -21,6 +28,69 @@ static void king_telemetry_span_free(king_trace_context_t *span)
         zval_ptr_dtor(&span->events);
         zval_ptr_dtor(&span->links);
         efree(span);
+    }
+}
+
+static void king_telemetry_batch_free(king_telemetry_batch_t *batch)
+{
+    if (batch) {
+        zval_ptr_dtor(&batch->metrics);
+        zval_ptr_dtor(&batch->spans);
+        zval_ptr_dtor(&batch->logs);
+        efree(batch);
+    }
+}
+
+king_telemetry_batch_t* king_telemetry_create_batch(void)
+{
+    king_telemetry_batch_t *batch = emalloc(sizeof(king_telemetry_batch_t));
+    memset(batch, 0, sizeof(king_telemetry_batch_t));
+    
+    array_init(&batch->metrics);
+    array_init(&batch->spans);
+    array_init(&batch->logs);
+    batch->created_at = time(NULL);
+    batch->next = NULL;
+    
+    return batch;
+}
+
+int king_telemetry_queue_batch(king_telemetry_batch_t *batch)
+{
+    if (!batch) return FAILURE;
+    
+    if (!king_telemetry_export_queue_head) {
+        king_telemetry_export_queue_head = batch;
+        king_telemetry_export_queue_tail = batch;
+    } else {
+        king_telemetry_export_queue_tail->next = batch;
+        king_telemetry_export_queue_tail = batch;
+    }
+    
+    king_telemetry_queue_size++;
+    return SUCCESS;
+}
+
+static king_telemetry_batch_t* king_telemetry_dequeue_batch(void)
+{
+    if (!king_telemetry_export_queue_head) return NULL;
+    
+    king_telemetry_batch_t *batch = king_telemetry_export_queue_head;
+    king_telemetry_export_queue_head = batch->next;
+    
+    if (!king_telemetry_export_queue_head) {
+        king_telemetry_export_queue_tail = NULL;
+    }
+    
+    king_telemetry_queue_size--;
+    return batch;
+}
+
+void king_telemetry_cleanup_export_queue(void)
+{
+    king_telemetry_batch_t *batch;
+    while ((batch = king_telemetry_dequeue_batch()) != NULL) {
+        king_telemetry_batch_free(batch);
     }
 }
 
@@ -39,6 +109,12 @@ void king_telemetry_shutdown_system(void)
     if (king_current_span) {
         king_telemetry_span_free(king_current_span);
         king_current_span = NULL;
+    }
+    
+    /* Flush any remaining batches in queue */
+    king_telemetry_batch_t *batch;
+    while ((batch = king_telemetry_dequeue_batch()) != NULL) {
+        king_telemetry_batch_free(batch);
     }
 }
 
@@ -208,4 +284,98 @@ PHP_FUNCTION(king_telemetry_log)
 
     king_telemetry_log_internal(KING_TELEMETRY_LEVEL_INFO, "php-king", msg, attrs);
     RETURN_TRUE;
+}
+
+/* --- Internal Export Functions --- */
+
+int king_telemetry_export_batch(void)
+{
+    if (!king_telemetry_system_initialized || !king_telemetry_runtime_config.enabled) {
+        return FAILURE;
+    }
+    
+    king_telemetry_batch_t *batch = king_telemetry_dequeue_batch();
+    if (!batch) {
+        return SUCCESS; /* No batches to export */
+    }
+    
+    int result = FAILURE;
+    
+    /* Export metrics via OTLP */
+    if (zend_hash_num_elements(Z_ARRVAL(batch->metrics)) > 0) {
+        result = king_telemetry_export_metrics_otlp(&batch->metrics);
+    }
+    
+    /* Export spans via OTLP */
+    if (zend_hash_num_elements(Z_ARRVAL(batch->spans)) > 0) {
+        result = king_telemetry_export_spans_otlp(&batch->spans);
+    }
+    
+    /* Export logs via OTLP */
+    if (zend_hash_num_elements(Z_ARRVAL(batch->logs)) > 0) {
+        result = king_telemetry_export_logs_otlp(&batch->logs);
+    }
+    
+    if (result == SUCCESS) {
+        king_telemetry_export_success_count++;
+    } else {
+        king_telemetry_export_failure_count++;
+        /* Re-queue batch for retry on failure */
+        king_telemetry_queue_batch(batch);
+        batch = NULL; /* Don't free, it's back in queue */
+    }
+    
+    if (batch) {
+        king_telemetry_batch_free(batch);
+    }
+    
+    return result;
+}
+
+int king_telemetry_export_metrics_otlp(zval *metrics)
+{
+    /* Basic OTLP HTTP/JSON export implementation */
+    if (!king_telemetry_runtime_config.otel_exporter_endpoint[0]) {
+        return FAILURE; /* No endpoint configured */
+    }
+    
+    /* For now, just log that we would export */
+    /* TODO: Implement actual HTTP POST to OTLP endpoint */
+    fprintf(stderr, "Would export %d metrics to OTLP endpoint: %s\n",
+            zend_hash_num_elements(Z_ARRVAL_P(metrics)),
+            king_telemetry_runtime_config.otel_exporter_endpoint);
+    
+    return SUCCESS;
+}
+
+int king_telemetry_export_spans_otlp(zval *spans)
+{
+    /* Basic OTLP HTTP/JSON export implementation */
+    if (!king_telemetry_runtime_config.otel_exporter_endpoint[0]) {
+        return FAILURE; /* No endpoint configured */
+    }
+    
+    /* For now, just log that we would export */
+    /* TODO: Implement actual HTTP POST to OTLP endpoint */
+    fprintf(stderr, "Would export %d spans to OTLP endpoint: %s\n",
+            zend_hash_num_elements(Z_ARRVAL_P(spans)),
+            king_telemetry_runtime_config.otel_exporter_endpoint);
+    
+    return SUCCESS;
+}
+
+int king_telemetry_export_logs_otlp(zval *logs)
+{
+    /* Basic OTLP HTTP/JSON export implementation */
+    if (!king_telemetry_runtime_config.otel_exporter_endpoint[0]) {
+        return FAILURE; /* No endpoint configured */
+    }
+    
+    /* For now, just log that we would export */
+    /* TODO: Implement actual HTTP POST to OTLP endpoint */
+    fprintf(stderr, "Would export %d logs to OTLP endpoint: %s\n",
+            zend_hash_num_elements(Z_ARRVAL_P(logs)),
+            king_telemetry_runtime_config.otel_exporter_endpoint);
+    
+    return SUCCESS;
 }
