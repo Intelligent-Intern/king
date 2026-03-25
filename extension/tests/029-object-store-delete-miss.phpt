@@ -1,5 +1,7 @@
 --TEST--
 King object-store delete exposes validation for invalid identifiers and miss behavior
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
 try {
@@ -31,8 +33,8 @@ foreach (scandir($dir) as $f) {
 @rmdir($dir);
 ?>
 --EXPECT--
-string(24) "King\\RuntimeException"
-string(42) "Object-store registry is unavailable."
+string(21) "King\RuntimeException"
+string(37) "Object-store registry is unavailable."
 bool(false)
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."

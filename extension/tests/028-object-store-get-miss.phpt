@@ -21,7 +21,7 @@ try {
 ?>
 --EXPECT--
 bool(false)
-string(24) "King\\ValidationException"
-string(34) "Object ID is invalid for object-store paths."
-string(24) "King\\ValidationException"
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
 string(42) "Object ID must be between 1 and 127 bytes."

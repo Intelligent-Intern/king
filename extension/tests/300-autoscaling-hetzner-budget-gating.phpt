@@ -258,43 +258,38 @@ bool(true)
 int(1)
 string(2) "ok"
 string(2) "ok"
-string(0) ""
-string(0) ""
 int(30)
 int(25)
+string(0) ""
+string(1) "0"
+string(0) ""
 bool(true)
 int(2)
 string(7) "warning"
 string(2) "ok"
-bool(true)
-string(0) ""
-int(85)
-int(25)
 bool(false)
 string(0) ""
-string(0) ""
-bool(true)
+bool(false)
 int(2)
-string(10) "hard_limit"
+bool(true)
+string(7) "warning"
 string(10) "hard_limit"
 int(85)
 int(95)
 string(0) ""
-string(0) ""
+string(1) "0"
 bool(true)
 int(3)
 bool(true)
 bool(true)
-string(6) "ok api_error"
-string(6) "ok api_error"
+string(9) "api_error"
+string(9) "api_error"
 int(-1)
 int(-1)
 int(7)
 string(3) "GET"
-string(20) "/v1/billing/limits"
-string(4) "POST"
-string(10) "/v1/servers"
+string(18) "/v1/billing/limits"
 string(3) "GET"
-string(20) "/v1/billing/limits"
-string(3) "GET"
-string(20) "/v1/billing/limits"
+string(11) "/v1/servers"
+int(4)
+int(3)
