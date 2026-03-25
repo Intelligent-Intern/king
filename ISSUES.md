@@ -33,6 +33,11 @@
   why this blocks `10/10`: object-store cloud adapters are still simulated, which leaves production migration and provider-specific failure modes unverified.
   done when: explicit backend contracts and stable failure semantics are in place for all adapters plus explicit adapter status/error propagation in object-store operations.
 
+- [x] Harden MCP transfer identifiers to prevent object-store path traversal
+  why this blocks `10/10`: MCP transfer helpers could write and read traversal-contaminated identifiers directly into object-store object IDs, enabling filesystem path escape with the local backend.
+  done when: `king_mcp_validate_transfer_args()` rejects path separator characters in `service`, `method`, and transfer identifiers before storage/read paths are materialized; regression coverage includes traversal cases and regression test `236-mcp-upload-download-validation.phpt` passes.
+  completed: 2026-03-25
+
 - [x] Harden multi-architecture build-profile bootstrap for missing `quiche` and `libcurl` header layouts
   why this blocks `10/10`: clean-host matrix builds can still fail when `quiche` or `libcurl` header/layout assumptions diverge across CI workers.
   done when: bootstrap normalization is deterministic across clean and cross-architecture checkouts and container matrix builds succeed without host-local assumptions.

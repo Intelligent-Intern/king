@@ -86,8 +86,7 @@ static zend_result king_mcp_validate_transfer_args(
 {
     char message[KING_ERR_LEN];
     size_t backend_object_id_len;
-
-    (void) identifier_value;
+    const char *invalid_sep = NULL;
 
     if (service_name_len == 0) {
         snprintf(
@@ -126,6 +125,40 @@ static zend_result king_mcp_validate_transfer_args(
             sizeof(message),
             "%s() service/method names exceed the maximum length (128 bytes).",
             function_name
+        );
+        return king_mcp_set_transfer_error(exception_ce, message);
+    }
+
+    invalid_sep = strpbrk(service_name, "/\\");
+    if (invalid_sep != NULL) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() service name must not contain path separator characters.",
+            function_name
+        );
+        return king_mcp_set_transfer_error(exception_ce, message);
+    }
+
+    invalid_sep = strpbrk(method_name, "/\\");
+    if (invalid_sep != NULL) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() method name must not contain path separator characters.",
+            function_name
+        );
+        return king_mcp_set_transfer_error(exception_ce, message);
+    }
+
+    invalid_sep = strpbrk(identifier_value, "/\\");
+    if (invalid_sep != NULL) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() %s must not contain path separator characters.",
+            function_name,
+            identifier_name
         );
         return king_mcp_set_transfer_error(exception_ce, message);
     }
