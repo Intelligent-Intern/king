@@ -149,6 +149,7 @@ zend_bool king_telemetry_lookup_metric(
     double *value_out,
     king_metric_type_t *type_out,
     time_t *timestamp_out);
+void king_telemetry_metrics_shutdown(void);
 int king_telemetry_log_internal(king_telemetry_level_t level, const char *logger_name, const char *message, zval *attributes);
 char* king_telemetry_generate_trace_id(void);
 char* king_telemetry_generate_span_id(void);
