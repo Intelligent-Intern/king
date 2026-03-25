@@ -53,6 +53,8 @@ int kg_config_cloud_autoscale_apply_userland_config_to(
             if (kg_validate_generic_string(value, &target->prepared_release_url) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "join_endpoint")) {
             if (kg_validate_generic_string(value, &target->join_endpoint) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "hetzner_budget_path")) {
+            if (kg_validate_generic_string(value, &target->hetzner_budget_path) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "min_nodes")) {
             if (kg_validate_positive_long(value, &target->min_nodes) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "max_nodes")) {
@@ -65,6 +67,14 @@ int kg_config_cloud_autoscale_apply_userland_config_to(
             if (kg_validate_long_range(value, 0, 100, &target->scale_down_cpu_threshold_percent) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "scale_up_policy")) {
             if (kg_validate_generic_string(value, &target->scale_up_policy) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "spend_warning_threshold_percent")) {
+            if (kg_validate_long_range(value, 0, 100, &target->spend_warning_threshold_percent) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "spend_hard_limit_percent")) {
+            if (kg_validate_long_range(value, 0, 100, &target->spend_hard_limit_percent) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "quota_warning_threshold_percent")) {
+            if (kg_validate_long_range(value, 0, 100, &target->quota_warning_threshold_percent) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "quota_hard_limit_percent")) {
+            if (kg_validate_long_range(value, 0, 100, &target->quota_hard_limit_percent) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "cooldown_period_sec")) {
             if (kg_validate_positive_long(value, &target->cooldown_period_sec) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "idle_node_timeout_sec")) {

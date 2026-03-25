@@ -17,6 +17,14 @@ typedef enum _king_autoscaling_node_lifecycle_t {
     KING_AUTOSCALING_NODE_DELETED
 } king_autoscaling_node_lifecycle_t;
 
+typedef enum _king_autoscaling_budget_status_t {
+    KING_AUTOSCALING_BUDGET_STATUS_DISABLED = 0,
+    KING_AUTOSCALING_BUDGET_STATUS_OK = 1,
+    KING_AUTOSCALING_BUDGET_STATUS_WARNING = 2,
+    KING_AUTOSCALING_BUDGET_STATUS_HARD_LIMIT = 3,
+    KING_AUTOSCALING_BUDGET_STATUS_API_ERROR = 4
+} king_autoscaling_budget_status_t;
+
 typedef struct _king_autoscaling_managed_node_t {
     zend_long server_id;
     char name[128];
@@ -46,6 +54,11 @@ typedef struct _king_autoscaling_runtime_state_t {
     char last_decision_reason[256];
     char last_error[256];
     char last_warning[256];
+    king_autoscaling_budget_status_t spend_status;
+    king_autoscaling_budget_status_t quota_status;
+    zend_long spend_usage_percent;
+    zend_long quota_usage_percent;
+    char budget_probe_error[256];
     king_autoscaling_managed_node_t *managed_nodes;
     size_t managed_node_count;
     size_t managed_node_capacity;

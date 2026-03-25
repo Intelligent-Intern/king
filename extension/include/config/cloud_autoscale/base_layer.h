@@ -30,6 +30,7 @@ typedef struct _kg_cloud_autoscale_config_t {
     char *prepared_release_url;
     char *join_endpoint;
     char *hetzner_api_token;
+    char *hetzner_budget_path;
 
     /* --- Scaling Triggers & Policy --- */
     zend_long min_nodes;
@@ -40,6 +41,12 @@ typedef struct _kg_cloud_autoscale_config_t {
     char *scale_up_policy;
     zend_long cooldown_period_sec;
     zend_long idle_node_timeout_sec;
+
+    /* --- Budget / Quota Watch --- */
+    zend_long spend_warning_threshold_percent;
+    zend_long spend_hard_limit_percent;
+    zend_long quota_warning_threshold_percent;
+    zend_long quota_hard_limit_percent;
 
     /* --- Node Provisioning --- */
     char *instance_type;

@@ -51,6 +51,29 @@ static ZEND_INI_MH(OnUpdateAutoscalePercent)
     return SUCCESS;
 }
 
+static ZEND_INI_MH(OnUpdateAutoscaleOptionalPercent)
+{
+    zend_long val = ZEND_STRTOL(ZSTR_VAL(new_value), NULL, 10);
+
+    if (val < 0 || val > 100) {
+        zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0,
+            "Invalid value for an autoscale threshold directive. An integer between 0 and 100 is required.");
+        return FAILURE;
+    }
+
+    if (zend_string_equals_literal(entry->name, "king.cluster_autoscale_spend_warning_threshold_percent")) {
+        king_cloud_autoscale_config.spend_warning_threshold_percent = val;
+    } else if (zend_string_equals_literal(entry->name, "king.cluster_autoscale_spend_hard_limit_percent")) {
+        king_cloud_autoscale_config.spend_hard_limit_percent = val;
+    } else if (zend_string_equals_literal(entry->name, "king.cluster_autoscale_quota_warning_threshold_percent")) {
+        king_cloud_autoscale_config.quota_warning_threshold_percent = val;
+    } else if (zend_string_equals_literal(entry->name, "king.cluster_autoscale_quota_hard_limit_percent")) {
+        king_cloud_autoscale_config.quota_hard_limit_percent = val;
+    }
+
+    return SUCCESS;
+}
+
 static ZEND_INI_MH(OnUpdateAutoscaleProvider)
 {
     /* Empty string keeps the provider unset, which is the default. */
@@ -90,6 +113,7 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("king.cluster_autoscale_prepared_release_url", "", PHP_INI_SYSTEM, OnUpdateString, prepared_release_url, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
     STD_PHP_INI_ENTRY("king.cluster_autoscale_join_endpoint", "", PHP_INI_SYSTEM, OnUpdateString, join_endpoint, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
     STD_PHP_INI_ENTRY("king.cluster_autoscale_hetzner_api_token", "", PHP_INI_SYSTEM, OnUpdateString, hetzner_api_token, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
+    STD_PHP_INI_ENTRY("king.cluster_autoscale_hetzner_budget_path", "", PHP_INI_SYSTEM, OnUpdateString, hetzner_budget_path, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
 
     ZEND_INI_ENTRY_EX("king.cluster_autoscale_min_nodes", "1", PHP_INI_SYSTEM, OnUpdateAutoscalePositiveLong, NULL)
     ZEND_INI_ENTRY_EX("king.cluster_autoscale_max_nodes", "10", PHP_INI_SYSTEM, OnUpdateAutoscalePositiveLong, NULL)
@@ -97,6 +121,10 @@ PHP_INI_BEGIN()
     ZEND_INI_ENTRY_EX("king.cluster_autoscale_scale_up_cpu_threshold_percent", "80", PHP_INI_SYSTEM, OnUpdateAutoscalePercent, NULL)
     ZEND_INI_ENTRY_EX("king.cluster_autoscale_scale_down_cpu_threshold_percent", "20", PHP_INI_SYSTEM, OnUpdateAutoscalePercent, NULL)
     STD_PHP_INI_ENTRY("king.cluster_autoscale_scale_up_policy", "add_nodes:1", PHP_INI_SYSTEM, OnUpdateString, scale_up_policy, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
+    ZEND_INI_ENTRY_EX("king.cluster_autoscale_spend_warning_threshold_percent", "80", PHP_INI_SYSTEM, OnUpdateAutoscaleOptionalPercent, NULL)
+    ZEND_INI_ENTRY_EX("king.cluster_autoscale_spend_hard_limit_percent", "95", PHP_INI_SYSTEM, OnUpdateAutoscaleOptionalPercent, NULL)
+    ZEND_INI_ENTRY_EX("king.cluster_autoscale_quota_warning_threshold_percent", "80", PHP_INI_SYSTEM, OnUpdateAutoscaleOptionalPercent, NULL)
+    ZEND_INI_ENTRY_EX("king.cluster_autoscale_quota_hard_limit_percent", "95", PHP_INI_SYSTEM, OnUpdateAutoscaleOptionalPercent, NULL)
     ZEND_INI_ENTRY_EX("king.cluster_autoscale_cooldown_period_sec", "300", PHP_INI_SYSTEM, OnUpdateAutoscalePositiveLong, NULL)
     ZEND_INI_ENTRY_EX("king.cluster_autoscale_idle_node_timeout_sec", "600", PHP_INI_SYSTEM, OnUpdateAutoscalePositiveLong, NULL)
 

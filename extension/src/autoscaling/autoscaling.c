@@ -76,6 +76,7 @@ static void king_autoscaling_free_runtime_config(kg_cloud_autoscale_config_t *co
     pefree(config->prepared_release_url, 1);
     pefree(config->join_endpoint, 1);
     pefree(config->hetzner_api_token, 1);
+    pefree(config->hetzner_budget_path, 1);
     pefree(config->scale_up_policy, 1);
     pefree(config->instance_type, 1);
     pefree(config->instance_image_id, 1);
@@ -83,6 +84,15 @@ static void king_autoscaling_free_runtime_config(kg_cloud_autoscale_config_t *co
     pefree(config->instance_tags, 1);
 
     memset(config, 0, sizeof(*config));
+}
+
+static void king_autoscaling_reset_budget_runtime_state(void)
+{
+    king_autoscaling_runtime.spend_status = KING_AUTOSCALING_BUDGET_STATUS_DISABLED;
+    king_autoscaling_runtime.quota_status = KING_AUTOSCALING_BUDGET_STATUS_DISABLED;
+    king_autoscaling_runtime.spend_usage_percent = -1;
+    king_autoscaling_runtime.quota_usage_percent = -1;
+    king_autoscaling_runtime.budget_probe_error[0] = '\0';
 }
 
 static void king_autoscaling_copy_runtime_config(
@@ -103,6 +113,7 @@ static void king_autoscaling_copy_runtime_config(
     target->prepared_release_url = king_autoscaling_strdup_persistent(source->prepared_release_url);
     target->join_endpoint = king_autoscaling_strdup_persistent(source->join_endpoint);
     target->hetzner_api_token = king_autoscaling_strdup_persistent(source->hetzner_api_token);
+    target->hetzner_budget_path = king_autoscaling_strdup_persistent(source->hetzner_budget_path);
     target->scale_up_policy = king_autoscaling_strdup_persistent(source->scale_up_policy);
     target->instance_type = king_autoscaling_strdup_persistent(source->instance_type);
     target->instance_image_id = king_autoscaling_strdup_persistent(source->instance_image_id);
@@ -114,6 +125,10 @@ static void king_autoscaling_copy_runtime_config(
     target->max_scale_step = source->max_scale_step;
     target->scale_up_cpu_threshold_percent = source->scale_up_cpu_threshold_percent;
     target->scale_down_cpu_threshold_percent = source->scale_down_cpu_threshold_percent;
+    target->spend_warning_threshold_percent = source->spend_warning_threshold_percent;
+    target->spend_hard_limit_percent = source->spend_hard_limit_percent;
+    target->quota_warning_threshold_percent = source->quota_warning_threshold_percent;
+    target->quota_hard_limit_percent = source->quota_hard_limit_percent;
     target->cooldown_period_sec = source->cooldown_period_sec;
     target->idle_node_timeout_sec = source->idle_node_timeout_sec;
 }
@@ -179,6 +194,63 @@ static void king_autoscaling_normalize_runtime_limits(void)
 
     if (king_autoscaling_runtime.config.max_scale_step <= 0) {
         king_autoscaling_runtime.config.max_scale_step = 1;
+    }
+
+    if (king_autoscaling_runtime.config.spend_warning_threshold_percent < 0) {
+        king_autoscaling_runtime.config.spend_warning_threshold_percent = 0;
+    }
+    if (king_autoscaling_runtime.config.spend_warning_threshold_percent > 100) {
+        king_autoscaling_runtime.config.spend_warning_threshold_percent = 100;
+    }
+    if (king_autoscaling_runtime.config.spend_hard_limit_percent < 0) {
+        king_autoscaling_runtime.config.spend_hard_limit_percent = 100;
+    }
+    if (king_autoscaling_runtime.config.spend_hard_limit_percent > 100) {
+        king_autoscaling_runtime.config.spend_hard_limit_percent = 100;
+    }
+    if (king_autoscaling_runtime.config.quota_warning_threshold_percent < 0) {
+        king_autoscaling_runtime.config.quota_warning_threshold_percent = 0;
+    }
+    if (king_autoscaling_runtime.config.quota_warning_threshold_percent > 100) {
+        king_autoscaling_runtime.config.quota_warning_threshold_percent = 100;
+    }
+    if (king_autoscaling_runtime.config.quota_hard_limit_percent < 0) {
+        king_autoscaling_runtime.config.quota_hard_limit_percent = 100;
+    }
+    if (king_autoscaling_runtime.config.quota_hard_limit_percent > 100) {
+        king_autoscaling_runtime.config.quota_hard_limit_percent = 100;
+    }
+
+    if (
+        king_autoscaling_runtime.config.spend_warning_threshold_percent > 0
+        && king_autoscaling_runtime.config.spend_hard_limit_percent < king_autoscaling_runtime.config.spend_warning_threshold_percent
+    ) {
+        king_autoscaling_runtime.config.spend_hard_limit_percent = king_autoscaling_runtime.config.spend_warning_threshold_percent;
+    }
+
+    if (
+        king_autoscaling_runtime.config.quota_warning_threshold_percent > 0
+        && king_autoscaling_runtime.config.quota_hard_limit_percent < king_autoscaling_runtime.config.quota_warning_threshold_percent
+    ) {
+        king_autoscaling_runtime.config.quota_hard_limit_percent = king_autoscaling_runtime.config.quota_warning_threshold_percent;
+    }
+}
+
+static const char *king_autoscaling_budget_status_to_string(
+    king_autoscaling_budget_status_t status)
+{
+    switch (status) {
+        case KING_AUTOSCALING_BUDGET_STATUS_WARNING:
+            return "warning";
+        case KING_AUTOSCALING_BUDGET_STATUS_HARD_LIMIT:
+            return "hard_limit";
+        case KING_AUTOSCALING_BUDGET_STATUS_API_ERROR:
+            return "api_error";
+        case KING_AUTOSCALING_BUDGET_STATUS_OK:
+            return "ok";
+        case KING_AUTOSCALING_BUDGET_STATUS_DISABLED:
+        default:
+            return "disabled";
     }
 }
 
@@ -957,6 +1029,7 @@ void king_autoscaling_runtime_reset(void)
         king_autoscaling_runtime.last_warning,
         sizeof(king_autoscaling_runtime.last_warning)
     );
+    king_autoscaling_reset_budget_runtime_state();
 
     king_current_instances = 1;
 }
@@ -1400,6 +1473,54 @@ PHP_FUNCTION(king_autoscaling_get_status)
     add_assoc_string(return_value, "last_decision_reason", king_autoscaling_runtime.last_decision_reason);
     add_assoc_string(return_value, "last_error", king_autoscaling_runtime.last_error);
     add_assoc_string(return_value, "last_warning", king_autoscaling_runtime.last_warning);
+    add_assoc_string(
+        return_value,
+        "hetzner_budget_path",
+        king_autoscaling_runtime.config.hetzner_budget_path != NULL
+            ? king_autoscaling_runtime.config.hetzner_budget_path
+            : ""
+    );
+    add_assoc_long(
+        return_value,
+        "spend_warning_threshold_percent",
+        king_autoscaling_runtime.config.spend_warning_threshold_percent
+    );
+    add_assoc_long(
+        return_value,
+        "spend_hard_limit_percent",
+        king_autoscaling_runtime.config.spend_hard_limit_percent
+    );
+    add_assoc_long(
+        return_value,
+        "quota_warning_threshold_percent",
+        king_autoscaling_runtime.config.quota_warning_threshold_percent
+    );
+    add_assoc_long(
+        return_value,
+        "quota_hard_limit_percent",
+        king_autoscaling_runtime.config.quota_hard_limit_percent
+    );
+    add_assoc_long(
+        return_value,
+        "spend_usage_percent",
+        king_autoscaling_runtime.spend_usage_percent
+    );
+    add_assoc_long(
+        return_value,
+        "quota_usage_percent",
+        king_autoscaling_runtime.quota_usage_percent
+    );
+    add_assoc_string(
+        return_value,
+        "spend_status",
+        (char *) king_autoscaling_budget_status_to_string(king_autoscaling_runtime.spend_status)
+    );
+    add_assoc_string(
+        return_value,
+        "quota_status",
+        (char *) king_autoscaling_budget_status_to_string(king_autoscaling_runtime.quota_status)
+    );
+    add_assoc_string(return_value, "budget_probe_error", king_autoscaling_runtime.budget_probe_error);
 }
 
 static zend_bool king_autoscaling_finalize_node_update(const char *action_kind)
