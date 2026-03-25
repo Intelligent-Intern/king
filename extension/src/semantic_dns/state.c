@@ -11,8 +11,10 @@
  */
 
 #include "semantic_dns_internal.h"
+#include <fcntl.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
 
@@ -22,7 +24,8 @@
 
 int king_semantic_dns_state_save(void)
 {
-    FILE *fp;
+    FILE *fp = NULL;
+    int fd;
     uint32_t magic = KING_SEMANTIC_DNS_STATE_MAGIC;
     uint32_t version = KING_SEMANTIC_DNS_STATE_VERSION;
 
@@ -30,8 +33,22 @@ int king_semantic_dns_state_save(void)
         return FAILURE;
     }
 
-    fp = fopen(KING_SEMANTIC_DNS_STATE_FILE, "wb");
+    fd = open(
+        KING_SEMANTIC_DNS_STATE_FILE,
+        O_WRONLY | O_CREAT | O_TRUNC
+#ifdef O_NOFOLLOW
+        | O_NOFOLLOW
+#endif
+        ,
+        0600
+    );
+    if (fd < 0) {
+        return FAILURE;
+    }
+
+    fp = fdopen(fd, "wb");
     if (fp == NULL) {
+        close(fd);
         return FAILURE;
     }
 
@@ -54,21 +71,40 @@ int king_semantic_dns_state_save(void)
 
 int king_semantic_dns_state_load(void)
 {
-    FILE *fp;
+    FILE *fp = NULL;
+    int fd;
     uint32_t magic, version, node_count;
     
     if (!king_semantic_dns_runtime.initialized) {
         return FAILURE;
     }
 
-    fp = fopen(KING_SEMANTIC_DNS_STATE_FILE, "rb");
-    if (fp == NULL) {
+    fd = open(
+        KING_SEMANTIC_DNS_STATE_FILE,
+        O_RDONLY
+#ifdef O_NOFOLLOW
+        | O_NOFOLLOW
+#endif
+    );
+    if (fd < 0) {
         return FAILURE; /* expected on first run */
+    }
+
+    struct stat state_stat;
+    if (fstat(fd, &state_stat) != 0 || !S_ISREG(state_stat.st_mode)) {
+        close(fd);
+        return FAILURE;
+    }
+
+    fp = fdopen(fd, "rb");
+    if (fp == NULL) {
+        close(fd);
+        return FAILURE;
     }
 
     if (fread(&magic, sizeof(magic), 1, fp) != 1 || magic != KING_SEMANTIC_DNS_STATE_MAGIC) {
         fclose(fp);
-        return FAILURE;
+        return FAILURE; /* expected on first run */
     }
 
     if (fread(&version, sizeof(version), 1, fp) != 1 || version != KING_SEMANTIC_DNS_STATE_VERSION) {
