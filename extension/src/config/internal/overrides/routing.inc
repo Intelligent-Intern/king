@@ -63,102 +63,102 @@ static king_config_override_module_t king_config_route_override_key(
     zend_string *key,
     zend_string **normalized_key)
 {
-    if (zend_string_starts_with_literal(key, "tls.")) {
+    if (king_zend_string_starts_with_cstr(key, "tls.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("tls.") - 1, "tls_");
         return KING_CONFIG_OVERRIDE_TLS;
     }
 
-    if (zend_string_starts_with_literal(key, "quic.")) {
+    if (king_zend_string_starts_with_cstr(key, "quic.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("quic.") - 1, "");
         return KING_CONFIG_OVERRIDE_QUIC;
     }
 
-    if (zend_string_starts_with_literal(key, "http2.")) {
+    if (king_zend_string_starts_with_cstr(key, "http2.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("http2.") - 1, "");
         return KING_CONFIG_OVERRIDE_HTTP2;
     }
 
-    if (zend_string_starts_with_literal(key, "tcp.")) {
+    if (king_zend_string_starts_with_cstr(key, "tcp.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("tcp.") - 1, "tcp_");
         return KING_CONFIG_OVERRIDE_TCP;
     }
 
-    if (zend_string_starts_with_literal(key, "autoscale.")) {
+    if (king_zend_string_starts_with_cstr(key, "autoscale.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("autoscale.") - 1, "");
         return KING_CONFIG_OVERRIDE_AUTOSCALE;
     }
 
-    if (zend_string_starts_with_literal(key, "mcp.")) {
+    if (king_zend_string_starts_with_cstr(key, "mcp.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("mcp.") - 1, "mcp_");
         return KING_CONFIG_OVERRIDE_MCP_ORCHESTRATOR;
     }
 
-    if (zend_string_starts_with_literal(key, "orchestrator.")) {
+    if (king_zend_string_starts_with_cstr(key, "orchestrator.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("orchestrator.") - 1, "orchestrator_");
         return KING_CONFIG_OVERRIDE_MCP_ORCHESTRATOR;
     }
 
-    if (zend_string_starts_with_literal(key, "geometry.")) {
+    if (king_zend_string_starts_with_cstr(key, "geometry.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("geometry.") - 1, "");
         return KING_CONFIG_OVERRIDE_GEOMETRY;
     }
 
-    if (zend_string_starts_with_literal(key, "smartcontract.")) {
+    if (king_zend_string_starts_with_cstr(key, "smartcontract.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("smartcontract.") - 1, "");
         return KING_CONFIG_OVERRIDE_SMART_CONTRACT;
     }
 
-    if (zend_string_starts_with_literal(key, "ssh.")) {
+    if (king_zend_string_starts_with_cstr(key, "ssh.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("ssh.") - 1, "ssh_");
         return KING_CONFIG_OVERRIDE_SSH;
     }
 
-    if (zend_string_starts_with_literal(key, "tls_")) {
+    if (king_zend_string_starts_with_cstr(key, "tls_")) {
         *normalized_key = zend_string_copy(key);
         return KING_CONFIG_OVERRIDE_TLS;
     }
 
-    if (zend_string_starts_with_literal(key, "tcp_")) {
+    if (king_zend_string_starts_with_cstr(key, "tcp_")) {
         *normalized_key = zend_string_copy(key);
         return KING_CONFIG_OVERRIDE_TCP;
     }
 
-    if (zend_string_starts_with_literal(key, "storage.")) {
+    if (king_zend_string_starts_with_cstr(key, "storage.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("storage.") - 1, "");
         return KING_CONFIG_OVERRIDE_STORAGE;
     }
 
-    if (zend_string_starts_with_literal(key, "cdn.")) {
+    if (king_zend_string_starts_with_cstr(key, "cdn.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("cdn.") - 1, "");
         return KING_CONFIG_OVERRIDE_CDN;
     }
 
-    if (zend_string_starts_with_literal(key, "dns.")) {
+    if (king_zend_string_starts_with_cstr(key, "dns.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("dns.") - 1, "dns_");
         return KING_CONFIG_OVERRIDE_DNS;
     }
 
-    if (zend_string_starts_with_literal(key, "otel.")) {
+    if (king_zend_string_starts_with_cstr(key, "otel.")) {
         *normalized_key = king_config_normalize_suffix_key(key, sizeof("otel.") - 1, "");
         return KING_CONFIG_OVERRIDE_OTEL;
     }
 
-    if (zend_string_starts_with_literal(key, "storage_")) {
+    if (king_zend_string_starts_with_cstr(key, "storage_")) {
         *normalized_key = zend_string_copy(key);
         return KING_CONFIG_OVERRIDE_STORAGE;
     }
 
-    if (zend_string_starts_with_literal(key, "cdn_")) {
+    if (king_zend_string_starts_with_cstr(key, "cdn_")) {
         *normalized_key = zend_string_copy(key);
         return KING_CONFIG_OVERRIDE_CDN;
     }
 
-    if (zend_string_starts_with_literal(key, "dns_")) {
+    if (king_zend_string_starts_with_cstr(key, "dns_")) {
         *normalized_key = zend_string_copy(key);
         return KING_CONFIG_OVERRIDE_DNS;
     }
 
-    if (zend_string_starts_with_literal(key, "otel_")) {
+    if (king_zend_string_starts_with_cstr(key, "otel_")) {
         *normalized_key = zend_string_copy(key);
         return KING_CONFIG_OVERRIDE_OTEL;
     }

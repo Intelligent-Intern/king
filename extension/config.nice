@@ -2,11 +2,11 @@
 #
 # Created by configure
 
-CFLAGS='-O2 -g -DNDEBUG' \
+CFLAGS='-O2 -g -DNDEBUG -I/usr/include/x86_64-linux-gnu ' \
+CPPFLAGS=' -I/usr/include/x86_64-linux-gnu ' \
+LDFLAGS=' -lcurl ' \
 CC='cc' \
 CXX='c++' \
 './configure' \
 '--enable-king' \
-'LDFLAGS=' \
-'CPPFLAGS=' \
 "$@"

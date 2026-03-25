@@ -1,6 +1,7 @@
 libcurl
 quiche
 node_modules
+.cargo/
 
 # Archived source snapshots
 extension/src_bak/

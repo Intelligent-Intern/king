@@ -5227,6 +5227,27 @@ then :
 fi
 done
 
+    as_ac_File=`printf "%s\n" "ac_cv_file_$ext_srcdir/../libcurl/include/curl/curl.h" | $as_tr_sh`
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ext_srcdir/../libcurl/include/curl/curl.h" >&5
+printf %s "checking for $ext_srcdir/../libcurl/include/curl/curl.h... " >&6; }
+if eval test \${$as_ac_File+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  test "$cross_compiling" = yes &&
+  as_fn_error $? "cannot check for file existence when cross compiling" "$LINENO" 5
+if test -r "$ext_srcdir/../libcurl/include/curl/curl.h"; then
+  eval "$as_ac_File=yes"
+else
+  eval "$as_ac_File=no"
+fi
+fi
+eval ac_res=\$$as_ac_File
+	       { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+printf "%s\n" "$ac_res" >&6; }
+if eval test \"x\$"$as_ac_File"\" = x"yes"
+then :
+
 
 for include_path in $ext_srcdir/../libcurl/include; do
   if test "$include_path" != "/usr/include"
@@ -5260,6 +5281,14 @@ then :
 
 fi
 done
+
+
+else $as_nop
+
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: curl headers are not available under ../libcurl/include; this build will fall back to installed libcurl headers." >&5
+printf "%s\n" "$as_me: WARNING: curl headers are not available under ../libcurl/include; this build will fall back to installed libcurl headers." >&2;}
+
+fi
 
 
 for include_path in $ext_srcdir/../quiche/quiche/include; do
