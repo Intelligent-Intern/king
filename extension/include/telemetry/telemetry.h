@@ -172,6 +172,7 @@ const char* king_span_kind_to_string(king_span_kind_t kind);
 king_telemetry_batch_t* king_telemetry_create_batch(void);
 int king_telemetry_queue_batch(king_telemetry_batch_t *batch);
 void king_telemetry_cleanup_export_queue(void);
+int king_telemetry_process_export_queue(void);
 
 /* OTLP export functions */
 int king_telemetry_export_metrics_otlp(zval *metrics);

@@ -82,7 +82,7 @@ Repository facts from the current tree:
 - `extension/src`: 177 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 168 headers
-- `extension/tests`: 279 PHPT files
+- `extension/tests`: 283 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently verified regression baseline is:
@@ -91,10 +91,11 @@ The currently verified regression baseline is:
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
 - extension load smoke: passing
-- `./scripts/test-extension.sh`: `279/279` PHPT tests passing
+- `./scripts/test-extension.sh`: `283/283` PHPT tests passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing (`112` functions, `44` classes, `48` declared public methods)
 - `./scripts/smoke-profile.sh release`: passing
+- `./scripts/smoke-profile.sh asan`: passing
 - benchmark smoke (`session`, `proto`, `object_store`, `semantic_dns`): passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
 - `./scripts/verify-release-package.sh`: passing
