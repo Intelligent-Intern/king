@@ -1234,7 +1234,10 @@ namespace {
      * This local path is unavailable when
      * `king.orchestrator_execution_backend=file_worker`; in that mode the
      * run must be queued via `king_pipeline_orchestrator_dispatch()` and
-     * consumed by `king_pipeline_orchestrator_worker_run_next()`.
+     * consumed by `king_pipeline_orchestrator_worker_run_next()`. When
+     * `king.orchestrator_execution_backend=remote_peer`, the controller
+     * sends the run to the configured remote host/port worker peer and
+     * still persists the run snapshot locally.
      * @param array<int,array<string,mixed>> $pipeline
      * @param array<string,mixed>|null $exec_options
      * @return array<string,mixed>

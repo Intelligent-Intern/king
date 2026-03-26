@@ -231,6 +231,12 @@ static int king_orchestrator_backend_is_file_worker(void)
         && strcmp(king_mcp_orchestrator_config.orchestrator_execution_backend, "file_worker") == 0;
 }
 
+static int king_orchestrator_backend_is_remote_peer(void)
+{
+    return king_mcp_orchestrator_config.orchestrator_execution_backend != NULL
+        && strcmp(king_mcp_orchestrator_config.orchestrator_execution_backend, "remote_peer") == 0;
+}
+
 static int king_orchestrator_state_path_is_configured(void)
 {
     return king_mcp_orchestrator_config.orchestrator_state_path != NULL
@@ -2073,6 +2079,7 @@ void king_orchestrator_append_component_info(zval *configuration)
     zend_string *tool_name;
     const char *execution_backend;
     const char *topology_scope = "local_in_process";
+    const char *scheduler_policy = "in_process_linear";
 
     if (configuration == NULL || Z_TYPE_P(configuration) != IS_ARRAY) {
         return;
@@ -2083,6 +2090,10 @@ void king_orchestrator_append_component_info(zval *configuration)
         : "";
     if (strcmp(execution_backend, "file_worker") == 0) {
         topology_scope = "same_host_file_worker";
+        scheduler_policy = "claimed_recovery_then_fifo_run_id";
+    } else if (king_orchestrator_backend_is_remote_peer()) {
+        topology_scope = "tcp_host_port_execution_peer";
+        scheduler_policy = "controller_direct_remote_run";
     }
 
     add_assoc_string(
@@ -2103,7 +2114,7 @@ void king_orchestrator_append_component_info(zval *configuration)
         execution_backend
     );
     add_assoc_string(configuration, "topology_scope", topology_scope);
-    add_assoc_string(configuration, "scheduler_policy", "claimed_recovery_then_fifo_run_id");
+    add_assoc_string(configuration, "scheduler_policy", scheduler_policy);
     add_assoc_string(configuration, "retry_policy", "single_attempt");
     add_assoc_string(configuration, "idempotency_policy", "caller_managed");
     add_assoc_string(
@@ -2112,6 +2123,18 @@ void king_orchestrator_append_component_info(zval *configuration)
         king_mcp_orchestrator_config.orchestrator_worker_queue_path != NULL
             ? king_mcp_orchestrator_config.orchestrator_worker_queue_path
             : ""
+    );
+    add_assoc_string(
+        configuration,
+        "remote_host",
+        king_mcp_orchestrator_config.orchestrator_remote_host != NULL
+            ? king_mcp_orchestrator_config.orchestrator_remote_host
+            : ""
+    );
+    add_assoc_long(
+        configuration,
+        "remote_port",
+        king_mcp_orchestrator_config.orchestrator_remote_port
     );
     add_assoc_bool(
         configuration,

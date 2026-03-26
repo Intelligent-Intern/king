@@ -33,6 +33,8 @@ typedef struct _kg_mcp_orchestrator_config_t {
     bool orchestrator_enable_distributed_tracing;
     char *orchestrator_execution_backend;
     char *orchestrator_worker_queue_path;
+    char *orchestrator_remote_host;
+    zend_long orchestrator_remote_port;
     char *orchestrator_state_path;
 
 } kg_mcp_orchestrator_config_t;

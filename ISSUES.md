@@ -21,42 +21,39 @@
 
 ## Current Next Leaf
 
-- [ ] Implement a real multi-host backend boundary for pipeline orchestrator beyond the current same-host file-worker scope.
+- [ ] Validate Smart DNS registration, routing, mother-node synchronization, and recovery against larger or distributed topologies.
 
 ## Active Executable Items
 
 ### 1. Control Plane, Routing, and Distributed Execution
 
-1. [ ] Implement a real multi-host backend boundary for pipeline orchestrator beyond the current same-host file-worker scope.
-   done when: controller and worker behavior is proven across machine boundaries rather than only local processes, local filesystem queue state, or explicit same-host execution contracts.
-
-2. [ ] Validate Smart DNS registration, routing, mother-node synchronization, and recovery against larger or distributed topologies.
+1. [ ] Validate Smart DNS registration, routing, mother-node synchronization, and recovery against larger or distributed topologies.
    done when: service discovery and semantic routing stay coherent under parallel updates, restart, and failover rather than only local happy-path flows.
 
-3. [ ] Finalize the honest v1 object-store backend contract.
+2. [ ] Finalize the honest v1 object-store backend contract.
    done when: either at least one non-local backend is real and verified, or the public contract is explicitly locked to `local_fs` plus simulated adapters with no stronger claim.
 
 ### 2. Observability and Fleet Operations
 
-6. [ ] Validate autoscaling behavior under degraded telemetry and provider conditions, including rollback for failed bootstrap, registration, and readiness.
-    done when: controller decisions remain safe and explainable while inputs or provider calls are missing, degraded, or partially failed.
+3. [ ] Validate autoscaling behavior under degraded telemetry and provider conditions, including rollback for failed bootstrap, registration, and readiness.
+   done when: controller decisions remain safe and explainable while inputs or provider calls are missing, degraded, or partially failed.
 
-7. [ ] Validate OTLP traces and logs export against real collectors, including non-2xx, timeout, size-limit, and outage-recovery behavior.
-    done when: all exported telemetry signal types are verified against honest collectors instead of metrics-only local coverage.
+4. [ ] Validate OTLP traces and logs export against real collectors, including non-2xx, timeout, size-limit, and outage-recovery behavior.
+   done when: all exported telemetry signal types are verified against honest collectors instead of metrics-only local coverage.
 
-8. [ ] Prove telemetry export semantics under sustained degraded conditions, including replay or explicit non-replay guarantees after restart.
-    done when: long-haul exporter outage and recovery do not leave delivery semantics ambiguous.
+5. [ ] Prove telemetry export semantics under sustained degraded conditions, including replay or explicit non-replay guarantees after restart.
+   done when: long-haul exporter outage and recovery do not leave delivery semantics ambiguous.
 
 ### 3. Build, Release, and Compatibility Confidence
 
-9. [ ] Turn the QUIC backend bootstrap into a deterministic pinned dependency path.
-    done when: `quiche` and related build inputs rehydrate reproducibly on clean hosts without ad hoc branch fallbacks or local resurrection tricks.
+6. [ ] Turn the QUIC backend bootstrap into a deterministic pinned dependency path.
+   done when: `quiche` and related build inputs rehydrate reproducibly on clean hosts without ad hoc branch fallbacks or local resurrection tricks.
 
-10. [ ] Add clean-host and published-container install/smoke matrix coverage across supported PHP and API combinations, then lock upgrade/downgrade release gates behind it.
-    done when: fresh-host package installs and published images are verified in CI instead of only local source builds.
+7. [ ] Add clean-host and published-container install/smoke matrix coverage across supported PHP and API combinations, then lock upgrade/downgrade release gates behind it.
+   done when: fresh-host package installs and published images are verified in CI instead of only local source builds.
 
-11. [ ] Add long-duration ASan, UBSan, and leak-oriented soak gates with archived diagnostics.
-    done when: sanitizer and soak regressions produce retained failure artifacts and block release-grade claims automatically.
+8. [ ] Add long-duration ASan, UBSan, and leak-oriented soak gates with archived diagnostics.
+   done when: sanitizer and soak regressions produce retained failure artifacts and block release-grade claims automatically.
 
 ## Notes
 
@@ -64,6 +61,6 @@
 - Router/loadbalancer is now treated as an explicit `config_backed` control-plane component with no stronger forwarding-runtime claim in v1.
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs; the remaining DNS work is topology and wire-depth, not more local config cleanup.
 - MCP request, upload, and download now talk to a real TCP host/port remote peer with propagated timeout, deadline, and cancellation controls, plus verified IPv4 and IPv6 peer targeting, 1 MiB payload roundtrips, parallel-transfer backpressure isolation, explicit single-flight reentry guards per connection handle, same-host partial-failure recovery, persisted remote-state restart recovery, and an explicit `topology_scope=tcp_host_port_peer` contract in system component info; the remaining MCP gaps are richer distributed failure semantics and broader multi-host validation depth, not a false same-host-only transport claim.
-- File-worker orchestration now persists honest `queued -> running -> completed|failed|cancelled` transitions, exposes explicit `single_attempt` retry and `caller_managed` idempotency, surfaces `topology_scope=local_in_process` for the local backend versus `same_host_file_worker` for file-worker mode, advertises `scheduler_policy=claimed_recovery_then_fifo_run_id`, keeps concurrent workers from double-claiming one active run, verifies exact once-only recovery after worker loss, and verifies sustained queue fairness under repeated parallel-worker contention; the remaining orchestrator gap is a real multi-host backend boundary beyond the same-host filesystem queue.
+- Pipeline orchestration now has three honest backend scopes: `local_in_process`, `same_host_file_worker`, and `tcp_host_port_execution_peer`. The new `remote_peer` backend executes runs over a real TCP host/port worker boundary, persists local run snapshots, and records both successful and failed remote execution outcomes. Remaining orchestrator work is deeper distributed execution semantics, restart continuation, richer error classification, observability depth, and compensation/rollback where publicly claimed.
 - Everything else from `READYNESS_TRACKER.md` is either already verified, derivative of these leaves, or still too broad to be the active queue.
 - If an item is not listed here, it is not the current repo-local priority.

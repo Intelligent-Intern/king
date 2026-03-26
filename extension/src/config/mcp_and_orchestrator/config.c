@@ -30,6 +30,7 @@ int kg_config_mcp_and_orchestrator_apply_userland_config_to(
     static const char *const orchestrator_backend_allowed[] = {
         "local",
         "file_worker",
+        "remote_peer",
         NULL
     };
 
@@ -109,6 +110,14 @@ int kg_config_mcp_and_orchestrator_apply_userland_config_to(
             }
         } else if (zend_string_equals_literal(key, "orchestrator_worker_queue_path")) {
             if (kg_validate_generic_string(value, &target->orchestrator_worker_queue_path) != SUCCESS) {
+                return FAILURE;
+            }
+        } else if (zend_string_equals_literal(key, "orchestrator_remote_host")) {
+            if (kg_validate_generic_string(value, &target->orchestrator_remote_host) != SUCCESS) {
+                return FAILURE;
+            }
+        } else if (zend_string_equals_literal(key, "orchestrator_remote_port")) {
+            if (kg_validate_positive_long(value, &target->orchestrator_remote_port) != SUCCESS) {
                 return FAILURE;
             }
         } else if (zend_string_equals_literal(key, "orchestrator_state_path")) {

@@ -43,6 +43,8 @@ static ZEND_INI_MH(OnUpdateMcpPositiveLong)
         king_mcp_orchestrator_config.orchestrator_max_recursion_depth = val;
     } else if (zend_string_equals_literal(entry->name, "king.orchestrator_loop_concurrency_default")) {
         king_mcp_orchestrator_config.orchestrator_loop_concurrency_default = val;
+    } else if (zend_string_equals_literal(entry->name, "king.orchestrator_remote_port")) {
+        king_mcp_orchestrator_config.orchestrator_remote_port = val;
     }
 
     return SUCCESS;
@@ -53,11 +55,12 @@ static ZEND_INI_MH(OnUpdateOrchestratorExecutionBackend)
     if (
         !zend_string_equals_literal(new_value, "local")
         && !zend_string_equals_literal(new_value, "file_worker")
+        && !zend_string_equals_literal(new_value, "remote_peer")
     ) {
         zend_throw_exception_ex(
             spl_ce_InvalidArgumentException,
             0,
-            "Invalid orchestrator execution backend. Allowed values: local, file_worker"
+            "Invalid orchestrator execution backend. Allowed values: local, file_worker, remote_peer"
         );
         return FAILURE;
     }
@@ -84,6 +87,8 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("king.orchestrator_enable_distributed_tracing", "1", PHP_INI_SYSTEM, OnUpdateBool, orchestrator_enable_distributed_tracing, kg_mcp_orchestrator_config_t, king_mcp_orchestrator_config)
     ZEND_INI_ENTRY_EX("king.orchestrator_execution_backend", "local", PHP_INI_SYSTEM, OnUpdateOrchestratorExecutionBackend, NULL)
     STD_PHP_INI_ENTRY("king.orchestrator_worker_queue_path", "", PHP_INI_SYSTEM, OnUpdateString, orchestrator_worker_queue_path, kg_mcp_orchestrator_config_t, king_mcp_orchestrator_config)
+    STD_PHP_INI_ENTRY("king.orchestrator_remote_host", "", PHP_INI_SYSTEM, OnUpdateString, orchestrator_remote_host, kg_mcp_orchestrator_config_t, king_mcp_orchestrator_config)
+    ZEND_INI_ENTRY("king.orchestrator_remote_port", "9444", PHP_INI_SYSTEM, OnUpdateMcpPositiveLong)
     STD_PHP_INI_ENTRY("king.orchestrator_state_path", "", PHP_INI_SYSTEM, OnUpdateString, orchestrator_state_path, kg_mcp_orchestrator_config_t, king_mcp_orchestrator_config)
 PHP_INI_END()
 

@@ -10,6 +10,9 @@
 #include "php_king.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"
 #include "include/pipeline_orchestrator/orchestrator.h"
+#include "ext/standard/base64.h"
+#include "ext/standard/php_var.h"
+#include "zend_smart_str.h"
 #include <unistd.h>
 
 typedef struct _king_orchestrator_exec_control {
@@ -27,9 +30,206 @@ static int king_orchestrator_backend_is_file_worker(void)
         && strcmp(king_mcp_orchestrator_config.orchestrator_execution_backend, "file_worker") == 0;
 }
 
+static int king_orchestrator_backend_is_remote_peer(void)
+{
+    return king_mcp_orchestrator_config.orchestrator_execution_backend != NULL
+        && strcmp(king_mcp_orchestrator_config.orchestrator_execution_backend, "remote_peer") == 0;
+}
+
+static zend_string *king_orchestrator_remote_serialize_zval(zval *value)
+{
+    smart_str buffer = {0};
+    php_serialize_data_t var_hash;
+
+    PHP_VAR_SERIALIZE_INIT(var_hash);
+    php_var_serialize(&buffer, value, &var_hash);
+    PHP_VAR_SERIALIZE_DESTROY(var_hash);
+    smart_str_0(&buffer);
+
+    return buffer.s;
+}
+
+static zend_string *king_orchestrator_remote_encode_zval_base64(zval *value)
+{
+    zend_string *serialized;
+    zend_string *encoded;
+
+    if (value == NULL) {
+        zval null_value;
+
+        ZVAL_NULL(&null_value);
+        serialized = king_orchestrator_remote_serialize_zval(&null_value);
+    } else {
+        serialized = king_orchestrator_remote_serialize_zval(value);
+    }
+
+    if (serialized == NULL) {
+        return NULL;
+    }
+
+    encoded = php_base64_encode(
+        (const unsigned char *) ZSTR_VAL(serialized),
+        ZSTR_LEN(serialized)
+    );
+    zend_string_release(serialized);
+
+    return encoded;
+}
+
+static zend_result king_orchestrator_remote_decode_base64_zval(
+    zend_string *encoded_value,
+    zval *return_value
+)
+{
+    zend_string *decoded_payload;
+    const unsigned char *cursor;
+    php_unserialize_data_t var_hash;
+
+    if (encoded_value == NULL || return_value == NULL) {
+        return FAILURE;
+    }
+
+    decoded_payload = php_base64_decode(
+        (const unsigned char *) ZSTR_VAL(encoded_value),
+        ZSTR_LEN(encoded_value)
+    );
+    if (decoded_payload == NULL) {
+        return FAILURE;
+    }
+
+    cursor = (const unsigned char *) ZSTR_VAL(decoded_payload);
+    ZVAL_NULL(return_value);
+
+    PHP_VAR_UNSERIALIZE_INIT(var_hash);
+    if (!php_var_unserialize(
+            return_value,
+            &cursor,
+            cursor + ZSTR_LEN(decoded_payload),
+            &var_hash)) {
+        PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
+        zend_string_release(decoded_payload);
+        zval_ptr_dtor(return_value);
+        ZVAL_NULL(return_value);
+        return FAILURE;
+    }
+    PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
+    zend_string_release(decoded_payload);
+
+    return SUCCESS;
+}
+
+static zend_string *king_orchestrator_remote_build_target(void)
+{
+    const char *host;
+    size_t host_len;
+    bool needs_brackets;
+
+    if (
+        king_mcp_orchestrator_config.orchestrator_remote_host == NULL
+        || king_mcp_orchestrator_config.orchestrator_remote_host[0] == '\0'
+    ) {
+        return NULL;
+    }
+
+    host = king_mcp_orchestrator_config.orchestrator_remote_host;
+    host_len = strlen(host);
+    needs_brackets =
+        memchr(host, ':', host_len) != NULL
+        && !(host_len >= 2 && host[0] == '[' && host[host_len - 1] == ']');
+
+    if (needs_brackets) {
+        return strpprintf(
+            0,
+            "tcp://[%s]:%ld",
+            host,
+            king_mcp_orchestrator_config.orchestrator_remote_port
+        );
+    }
+
+    return strpprintf(
+        0,
+        "tcp://%s:%ld",
+        host,
+        king_mcp_orchestrator_config.orchestrator_remote_port
+    );
+}
+
+static zend_long king_orchestrator_remote_line_limit(void)
+{
+    if (king_mcp_orchestrator_config.mcp_max_message_size_bytes > 0) {
+        return king_mcp_orchestrator_config.mcp_max_message_size_bytes;
+    }
+
+    return 4194304;
+}
+
 static uint64_t king_orchestrator_monotonic_time_ms(void)
 {
     return (uint64_t) (zend_hrtime() / 1000000ULL);
+}
+
+static zend_long king_orchestrator_control_timeout_budget_ms(
+    king_orchestrator_exec_control_t *control
+)
+{
+    uint64_t elapsed_ms;
+
+    if (control == NULL || control->timeout_ms <= 0) {
+        return 0;
+    }
+
+    elapsed_ms = king_orchestrator_monotonic_time_ms() - control->started_at_ms;
+    if (elapsed_ms >= (uint64_t) control->timeout_ms) {
+        return 0;
+    }
+
+    return (zend_long) ((uint64_t) control->timeout_ms - elapsed_ms);
+}
+
+static zend_long king_orchestrator_control_deadline_budget_ms(
+    king_orchestrator_exec_control_t *control
+)
+{
+    uint64_t now_ms;
+
+    if (control == NULL || control->deadline_ms == 0) {
+        return 0;
+    }
+
+    now_ms = king_orchestrator_monotonic_time_ms();
+    if (now_ms >= control->deadline_ms) {
+        return 0;
+    }
+
+    return (zend_long) (control->deadline_ms - now_ms);
+}
+
+static zend_long king_orchestrator_control_effective_budget_ms(
+    king_orchestrator_exec_control_t *control
+)
+{
+    zend_long timeout_budget_ms;
+    zend_long deadline_budget_ms;
+
+    timeout_budget_ms = king_orchestrator_control_timeout_budget_ms(control);
+    deadline_budget_ms = king_orchestrator_control_deadline_budget_ms(control);
+
+    if (timeout_budget_ms > 0 && deadline_budget_ms > 0) {
+        return timeout_budget_ms < deadline_budget_ms
+            ? timeout_budget_ms
+            : deadline_budget_ms;
+    }
+    if (timeout_budget_ms > 0) {
+        return timeout_budget_ms;
+    }
+    if (deadline_budget_ms > 0) {
+        return deadline_budget_ms;
+    }
+    if (king_mcp_orchestrator_config.orchestrator_default_pipeline_timeout_ms > 0) {
+        return king_mcp_orchestrator_config.orchestrator_default_pipeline_timeout_ms;
+    }
+
+    return 30000;
 }
 
 static void king_orchestrator_exec_control_cleanup(
@@ -411,6 +611,182 @@ static zend_result king_orchestrator_enforce_max_concurrency(
     );
 }
 
+static zend_result king_orchestrator_remote_prepare_stream(
+    php_stream *stream,
+    zend_long timeout_ms
+)
+{
+    struct timeval timeout;
+
+    if (stream == NULL) {
+        return FAILURE;
+    }
+
+    if (timeout_ms <= 0) {
+        timeout_ms = 30000;
+    }
+
+    timeout.tv_sec = timeout_ms / 1000;
+    timeout.tv_usec = (timeout_ms % 1000) * 1000;
+
+    php_stream_set_option(stream, PHP_STREAM_OPTION_BLOCKING, 1, NULL);
+    php_stream_set_option(
+        stream,
+        PHP_STREAM_OPTION_READ_TIMEOUT,
+        0,
+        &timeout
+    );
+
+    return SUCCESS;
+}
+
+static zend_result king_orchestrator_remote_write_all(
+    php_stream *stream,
+    const char *buffer,
+    size_t buffer_len,
+    const char *function_name
+)
+{
+    size_t written = 0;
+
+    if (stream == NULL || buffer == NULL) {
+        return FAILURE;
+    }
+
+    (void) function_name;
+
+    while (written < buffer_len) {
+        ssize_t chunk = php_stream_write(
+            stream,
+            buffer + written,
+            buffer_len - written
+        );
+
+        if (chunk <= 0) {
+            king_set_error("king_pipeline_orchestrator_run() failed while writing the remote peer request.");
+            return FAILURE;
+        }
+
+        written += (size_t) chunk;
+    }
+
+    return SUCCESS;
+}
+
+static zend_string *king_orchestrator_remote_read_line(
+    php_stream *stream,
+    const char *function_name
+)
+{
+    char *buffer;
+    size_t buffer_len;
+    size_t used = 0;
+
+    if (stream == NULL) {
+        return NULL;
+    }
+
+    (void) function_name;
+
+    buffer_len = (size_t) king_orchestrator_remote_line_limit();
+    buffer = emalloc(buffer_len);
+    buffer[0] = '\0';
+
+    while (used + 1 < buffer_len) {
+        char *newline;
+        ssize_t chunk = php_stream_read(stream, buffer + used, (buffer_len - used) - 1);
+        size_t line_len;
+
+        if (chunk <= 0) {
+            efree(buffer);
+            king_set_error("king_pipeline_orchestrator_run() did not receive a complete remote peer response.");
+            return NULL;
+        }
+
+        used += (size_t) chunk;
+        buffer[used] = '\0';
+        newline = memchr(buffer, '\n', used);
+        if (newline == NULL) {
+            continue;
+        }
+
+        line_len = (size_t) (newline - buffer);
+        if (line_len > 0 && buffer[line_len - 1] == '\r') {
+            line_len--;
+        }
+
+        {
+            zend_string *result = zend_string_init(buffer, line_len, 0);
+            efree(buffer);
+            return result;
+        }
+    }
+
+    efree(buffer);
+    king_set_error("king_pipeline_orchestrator_run() received an oversized remote peer response.");
+    return NULL;
+}
+
+static zend_result king_orchestrator_remote_expect_result(
+    php_stream *stream,
+    const char *function_name,
+    zval *return_value
+)
+{
+    zend_string *line;
+    char *tab;
+    zend_string *decoded_error;
+    zend_string *payload;
+
+    line = king_orchestrator_remote_read_line(stream, function_name);
+    if (line == NULL) {
+        return FAILURE;
+    }
+
+    tab = strchr(ZSTR_VAL(line), '\t');
+    if (tab == NULL) {
+        zend_string_release(line);
+        king_set_error("king_pipeline_orchestrator_run() received an invalid acknowledgement from the remote peer.");
+        return FAILURE;
+    }
+
+    *tab = '\0';
+    payload = zend_string_init(tab + 1, strlen(tab + 1), 0);
+
+    if (strcmp(ZSTR_VAL(line), "OK") == 0) {
+        zend_string_release(line);
+        if (king_orchestrator_remote_decode_base64_zval(payload, return_value) != SUCCESS) {
+            zend_string_release(payload);
+            king_set_error("king_pipeline_orchestrator_run() received an invalid serialized result from the remote peer.");
+            return FAILURE;
+        }
+        zend_string_release(payload);
+        king_set_error("");
+        return SUCCESS;
+    }
+
+    if (strcmp(ZSTR_VAL(line), "ERR") == 0) {
+        decoded_error = php_base64_decode(
+            (const unsigned char *) ZSTR_VAL(payload),
+            ZSTR_LEN(payload)
+        );
+        zend_string_release(line);
+        zend_string_release(payload);
+        if (decoded_error == NULL) {
+            king_set_error("king_pipeline_orchestrator_run() received an invalid error payload from the remote peer.");
+            return FAILURE;
+        }
+        king_set_error(ZSTR_VAL(decoded_error));
+        zend_string_release(decoded_error);
+        return FAILURE;
+    }
+
+    zend_string_release(line);
+    zend_string_release(payload);
+    king_set_error("king_pipeline_orchestrator_run() received an unknown response opcode from the remote peer.");
+    return FAILURE;
+}
+
 static zval *king_orchestrator_prepare_persisted_options(zval *options, zval *sanitized_options)
 {
     if (sanitized_options == NULL) {
@@ -553,6 +929,285 @@ static zend_result king_orchestrator_validate_pipeline_step(
         index,
         throw_on_error
     );
+}
+
+static zend_result king_orchestrator_validate_pipeline_definition(
+    zval *pipeline_array,
+    const char *function_name,
+    zend_bool throw_on_error)
+{
+    HashTable *ht;
+    zval *step;
+    uint32_t index = 0;
+
+    if (pipeline_array == NULL || Z_TYPE_P(pipeline_array) != IS_ARRAY) {
+        return king_orchestrator_raise_error(
+            "king_pipeline_orchestrator_run() requires an array pipeline definition.",
+            king_ce_validation_exception,
+            throw_on_error
+        );
+    }
+
+    ht = Z_ARRVAL_P(pipeline_array);
+    ZEND_HASH_FOREACH_VAL(ht, step) {
+        if (king_orchestrator_validate_pipeline_step(step, index, throw_on_error) != SUCCESS) {
+            return FAILURE;
+        }
+        index++;
+    } ZEND_HASH_FOREACH_END();
+
+    (void) function_name;
+    return SUCCESS;
+}
+
+static int king_orchestrator_execute_remote_run(
+    zend_string *run_id,
+    zval *initial_data,
+    zval *pipeline_array,
+    zval *options,
+    zval *return_value,
+    king_orchestrator_exec_control_t *control,
+    const char *function_name,
+    zend_bool throw_on_error)
+{
+    php_stream *stream = NULL;
+    zend_string *target = NULL;
+    zend_string *encoded_run_id = NULL;
+    zend_string *encoded_initial = NULL;
+    zend_string *encoded_pipeline = NULL;
+    zend_string *encoded_options = NULL;
+    smart_str command = {0};
+    zend_long timeout_budget_ms;
+    zend_long deadline_budget_ms;
+    struct timeval timeout;
+    zend_string *transport_error = NULL;
+    int transport_error_code = 0;
+    zend_bool cancelled = 0;
+    const char *error_message;
+
+    if (control != NULL) {
+        control->run_id = run_id;
+    }
+
+    if (king_orchestrator_exec_control_check(control, function_name, throw_on_error, &cancelled) != SUCCESS) {
+        king_orchestrator_mark_interrupted_run(run_id, cancelled);
+        ZVAL_FALSE(return_value);
+        return FAILURE;
+    }
+
+    if (king_orchestrator_validate_pipeline_definition(pipeline_array, function_name, throw_on_error) != SUCCESS) {
+        ZVAL_FALSE(return_value);
+        (void) king_orchestrator_pipeline_run_fail(run_id, king_get_error());
+        return FAILURE;
+    }
+
+    target = king_orchestrator_remote_build_target();
+    if (target == NULL) {
+        error_message = "king_pipeline_orchestrator_run() requires a non-empty orchestrator_remote_host when orchestrator_execution_backend=remote_peer.";
+        king_set_error(error_message);
+        ZVAL_FALSE(return_value);
+        (void) king_orchestrator_pipeline_run_fail(run_id, error_message);
+        return king_orchestrator_raise_error(
+            error_message,
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+
+    timeout_budget_ms = king_orchestrator_control_effective_budget_ms(control);
+    if (timeout_budget_ms <= 0) {
+        zend_string_release(target);
+        ZVAL_FALSE(return_value);
+        return king_orchestrator_raise_error(
+            "king_pipeline_orchestrator_run() exceeded the active orchestrator timeout budget.",
+            king_ce_timeout_exception,
+            throw_on_error
+        );
+    }
+
+    timeout.tv_sec = timeout_budget_ms / 1000;
+    timeout.tv_usec = (timeout_budget_ms % 1000) * 1000;
+
+    stream = php_stream_xport_create(
+        ZSTR_VAL(target),
+        ZSTR_LEN(target),
+        0,
+        STREAM_XPORT_CLIENT | STREAM_XPORT_CONNECT,
+        NULL,
+        &timeout,
+        NULL,
+        &transport_error,
+        &transport_error_code
+    );
+    zend_string_release(target);
+    target = NULL;
+
+    if (stream == NULL) {
+        if (transport_error != NULL) {
+            king_set_error(ZSTR_VAL(transport_error));
+            zend_string_release(transport_error);
+        } else {
+            char message[KING_ERR_LEN];
+
+            snprintf(
+                message,
+                sizeof(message),
+                "king_pipeline_orchestrator_run() failed to connect to the remote execution peer (code %d).",
+                transport_error_code
+            );
+            king_set_error(message);
+        }
+        error_message = king_get_error();
+        ZVAL_FALSE(return_value);
+        (void) king_orchestrator_pipeline_run_fail(run_id, error_message);
+        return king_orchestrator_raise_error(
+            error_message,
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+
+    if (king_orchestrator_remote_prepare_stream(stream, timeout_budget_ms) != SUCCESS) {
+        php_stream_close(stream);
+        ZVAL_FALSE(return_value);
+        (void) king_orchestrator_pipeline_run_fail(
+            run_id,
+            "king_pipeline_orchestrator_run() could not configure the remote execution peer stream."
+        );
+        return king_orchestrator_raise_error(
+            "king_pipeline_orchestrator_run() could not configure the remote execution peer stream.",
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+
+    encoded_run_id = php_base64_encode(
+        (const unsigned char *) ZSTR_VAL(run_id),
+        ZSTR_LEN(run_id)
+    );
+    encoded_initial = king_orchestrator_remote_encode_zval_base64(initial_data);
+    encoded_pipeline = king_orchestrator_remote_encode_zval_base64(pipeline_array);
+    encoded_options = king_orchestrator_remote_encode_zval_base64(options);
+    if (
+        encoded_run_id == NULL
+        || encoded_initial == NULL
+        || encoded_pipeline == NULL
+        || encoded_options == NULL
+    ) {
+        php_stream_close(stream);
+        if (encoded_run_id != NULL) {
+            zend_string_release(encoded_run_id);
+        }
+        if (encoded_initial != NULL) {
+            zend_string_release(encoded_initial);
+        }
+        if (encoded_pipeline != NULL) {
+            zend_string_release(encoded_pipeline);
+        }
+        if (encoded_options != NULL) {
+            zend_string_release(encoded_options);
+        }
+        ZVAL_FALSE(return_value);
+        (void) king_orchestrator_pipeline_run_fail(
+            run_id,
+            "king_pipeline_orchestrator_run() failed while encoding the remote execution payload."
+        );
+        return king_orchestrator_raise_error(
+            "king_pipeline_orchestrator_run() failed while encoding the remote execution payload.",
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+
+    deadline_budget_ms = king_orchestrator_control_deadline_budget_ms(control);
+    smart_str_appends(&command, "RUN\t");
+    smart_str_append(&command, encoded_run_id);
+    smart_str_appendc(&command, '\t');
+    smart_str_append(&command, encoded_initial);
+    smart_str_appendc(&command, '\t');
+    smart_str_append(&command, encoded_pipeline);
+    smart_str_appendc(&command, '\t');
+    smart_str_append(&command, encoded_options);
+    smart_str_append_printf(&command, "\t%ld\t%ld\n", timeout_budget_ms, deadline_budget_ms);
+    smart_str_0(&command);
+
+    zend_string_release(encoded_run_id);
+    zend_string_release(encoded_initial);
+    zend_string_release(encoded_pipeline);
+    zend_string_release(encoded_options);
+
+    if (command.s == NULL) {
+        php_stream_close(stream);
+        ZVAL_FALSE(return_value);
+        (void) king_orchestrator_pipeline_run_fail(
+            run_id,
+            "king_pipeline_orchestrator_run() failed while materializing the remote execution payload."
+        );
+        return king_orchestrator_raise_error(
+            "king_pipeline_orchestrator_run() failed while materializing the remote execution payload.",
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+
+    if (king_orchestrator_exec_control_check(control, function_name, throw_on_error, &cancelled) != SUCCESS) {
+        smart_str_free(&command);
+        php_stream_close(stream);
+        ZVAL_FALSE(return_value);
+        king_orchestrator_mark_interrupted_run(run_id, cancelled);
+        return FAILURE;
+    }
+
+    if (king_orchestrator_remote_write_all(stream, ZSTR_VAL(command.s), ZSTR_LEN(command.s), function_name) != SUCCESS) {
+        smart_str_free(&command);
+        php_stream_close(stream);
+        error_message = king_get_error();
+        ZVAL_FALSE(return_value);
+        (void) king_orchestrator_pipeline_run_fail(run_id, error_message);
+        return king_orchestrator_raise_error(
+            error_message,
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+    smart_str_free(&command);
+
+    if (king_orchestrator_exec_control_check(control, function_name, throw_on_error, &cancelled) != SUCCESS) {
+        php_stream_close(stream);
+        ZVAL_FALSE(return_value);
+        king_orchestrator_mark_interrupted_run(run_id, cancelled);
+        return FAILURE;
+    }
+
+    if (king_orchestrator_remote_expect_result(stream, function_name, return_value) != SUCCESS) {
+        php_stream_close(stream);
+        error_message = king_get_error();
+        if (error_message == NULL || error_message[0] == '\0') {
+            error_message = "king_pipeline_orchestrator_run() failed while waiting for the remote execution result.";
+            king_set_error(error_message);
+        }
+        ZVAL_FALSE(return_value);
+        (void) king_orchestrator_pipeline_run_fail(run_id, error_message);
+        return king_orchestrator_raise_error(
+            error_message,
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+
+    php_stream_close(stream);
+
+    if (king_orchestrator_pipeline_run_complete(run_id, return_value) != SUCCESS) {
+        zval_ptr_dtor(return_value);
+        ZVAL_FALSE(return_value);
+        return king_orchestrator_raise_error(
+            "king_pipeline_orchestrator_run() failed to persist the completed run snapshot.",
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+
+    return SUCCESS;
 }
 
 static int king_orchestrator_execute_existing_run(
@@ -740,10 +1395,6 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
 
     persisted_options = king_orchestrator_prepare_persisted_options(options, &sanitized_options);
     run_id = king_orchestrator_pipeline_run_begin(initial_data, pipeline_array, persisted_options, "running");
-    if (persisted_options == &sanitized_options) {
-        zval_ptr_dtor(&sanitized_options);
-        ZVAL_UNDEF(&sanitized_options);
-    }
     if (run_id == NULL) {
         rc = king_orchestrator_raise_error(
             "king_pipeline_orchestrator_run() failed to persist the initial run snapshot.",
@@ -753,15 +1404,28 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
         goto cleanup;
     }
 
-    rc = king_orchestrator_execute_existing_run(
-        run_id,
-        initial_data,
-        pipeline_array,
-        return_value,
-        &control,
-        "king_pipeline_orchestrator_run",
-        1
-    );
+    if (king_orchestrator_backend_is_remote_peer()) {
+        rc = king_orchestrator_execute_remote_run(
+            run_id,
+            initial_data,
+            pipeline_array,
+            persisted_options,
+            return_value,
+            &control,
+            "king_pipeline_orchestrator_run",
+            1
+        );
+    } else {
+        rc = king_orchestrator_execute_existing_run(
+            run_id,
+            initial_data,
+            pipeline_array,
+            return_value,
+            &control,
+            "king_pipeline_orchestrator_run",
+            1
+        );
+    }
     zend_string_release(run_id);
 cleanup:
     if (!Z_ISUNDEF(sanitized_options)) {
@@ -830,10 +1494,6 @@ int king_orchestrator_dispatch(zval *initial_data, zval *pipeline_array, zval *o
 
     persisted_options = king_orchestrator_prepare_persisted_options(options, &sanitized_options);
     run_id = king_orchestrator_pipeline_run_begin(initial_data, pipeline_array, persisted_options, "queued");
-    if (persisted_options == &sanitized_options) {
-        zval_ptr_dtor(&sanitized_options);
-        ZVAL_UNDEF(&sanitized_options);
-    }
     if (run_id == NULL) {
         rc = king_orchestrator_raise_error(
             "king_pipeline_orchestrator_dispatch() failed to persist the initial run snapshot.",

@@ -115,6 +115,7 @@ static void king_config_free_mcp_orchestrator_strings(kg_mcp_orchestrator_config
 {
     pefree(mcp->orchestrator_execution_backend, 1);
     pefree(mcp->orchestrator_worker_queue_path, 1);
+    pefree(mcp->orchestrator_remote_host, 1);
     pefree(mcp->orchestrator_state_path, 1);
 }
 
@@ -210,6 +211,7 @@ static void king_config_clone_owned_strings(king_cfg_t *cfg)
 
     cfg->mcp.orchestrator_execution_backend = king_config_clone_persistent_string(cfg->mcp.orchestrator_execution_backend);
     cfg->mcp.orchestrator_worker_queue_path = king_config_clone_persistent_string(cfg->mcp.orchestrator_worker_queue_path);
+    cfg->mcp.orchestrator_remote_host = king_config_clone_persistent_string(cfg->mcp.orchestrator_remote_host);
     cfg->mcp.orchestrator_state_path = king_config_clone_persistent_string(cfg->mcp.orchestrator_state_path);
     cfg->owns_mcp_orchestrator_strings = 1;
 

@@ -7,7 +7,7 @@ Status note:
 - Checked boxes below mean the current tree already verifies that slice directly in code, tests, or an honest fenced v1 contract.
 - Unchecked boxes are still open, intentionally fenced out of the current v1 slice, or broader than the proof that exists in this repository today.
 - This file is the long-form closure tracker, not the active execution queue. `ISSUES.md` stays the narrow working backlog.
-- Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, and sustained fairness under contention are now verified; the remaining open boxes below are the broader continuation, observability, and multi-host slices.
+- Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, and real TCP host/port `remote_peer` execution with persisted success/failure snapshots are now verified; the remaining open boxes below are the broader continuation, observability, and multi-host slices.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -122,6 +122,7 @@ Status note:
 ## D. Pipeline Orchestrator
 
 - [x] Move orchestrator from local kernel execution to real worker/backend boundaries
+- [x] Validate orchestrator execution over a real remote TCP host/port worker peer
 - [x] Persist tool registry state
 - [x] Rehydrate tool registry state after restart
 - [x] Persist pipeline run state

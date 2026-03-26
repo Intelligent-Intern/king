@@ -488,6 +488,33 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "orchestrator.remote_host",
+            sizeof("orchestrator.remote_host") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->mcp.orchestrator_remote_host != NULL
+                ? cfg->mcp.orchestrator_remote_host
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "orchestrator.remote_port",
+            sizeof("orchestrator.remote_port") - 1
+        )
+    ) {
+        ZVAL_LONG(return_value, cfg->mcp.orchestrator_remote_port);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "orchestrator.state_path",
             sizeof("orchestrator.state_path") - 1
         )
@@ -635,6 +662,16 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
         target,
         "orchestrator.worker_queue_path",
         cfg->mcp.orchestrator_worker_queue_path != NULL ? cfg->mcp.orchestrator_worker_queue_path : ""
+    );
+    add_assoc_string(
+        target,
+        "orchestrator.remote_host",
+        cfg->mcp.orchestrator_remote_host != NULL ? cfg->mcp.orchestrator_remote_host : ""
+    );
+    add_assoc_long(
+        target,
+        "orchestrator.remote_port",
+        cfg->mcp.orchestrator_remote_port
     );
     add_assoc_string(
         target,
