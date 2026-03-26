@@ -114,7 +114,7 @@ Status note:
 - [ ] Enforce MCP concurrency and bounded-concurrency guarantees
 - [x] Enforce MCP deadline propagation
 - [x] Validate MCP upload/download under large payloads
-- [ ] Validate MCP backpressure under parallel transfers
+- [x] Validate MCP backpressure under parallel transfers
 - [ ] Validate MCP recovery after controller / worker restart
 - [x] Validate MCP recovery after partial failures
 
