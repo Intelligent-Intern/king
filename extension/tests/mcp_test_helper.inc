@@ -1,24 +1,26 @@
 <?php
 
-function king_mcp_test_start_server(): array
+function king_mcp_test_start_server(?int $port = null): array
 {
-    $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-    if ($probe === false) {
-        throw new RuntimeException("failed to reserve MCP test port: $errstr");
+    if ($port === null) {
+        $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        if ($probe === false) {
+            throw new RuntimeException("failed to reserve MCP test port: $errstr");
+        }
+
+        $serverName = stream_socket_get_name($probe, false);
+        fclose($probe);
+        [, $port] = explode(':', $serverName, 2);
     }
 
-    $serverName = stream_socket_get_name($probe, false);
-    fclose($probe);
-    [, $port] = explode(':', $serverName, 2);
-
     $capture = tempnam(sys_get_temp_dir(), 'king-mcp-capture-');
-    $command = escapeshellarg(PHP_BINARY)
-        . ' -n '
-        . escapeshellarg(__DIR__ . '/mcp_test_server.inc')
-        . ' '
-        . escapeshellarg($capture)
-        . ' '
-        . (int) $port;
+    $command = [
+        PHP_BINARY,
+        '-n',
+        __DIR__ . '/mcp_test_server.inc',
+        $capture,
+        (string) ((int) $port),
+    ];
 
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
@@ -49,25 +51,22 @@ function king_mcp_test_start_server(): array
     ];
 }
 
-function king_mcp_test_stop_server(array $server): array
+function king_mcp_test_finalize_server(array $server): array
 {
-    $stop = @stream_socket_client(
-        'tcp://127.0.0.1:' . $server['port'],
-        $errno,
-        $errstr,
-        0.5
-    );
-    if (is_resource($stop)) {
-        fwrite($stop, "STOP\n");
-        fflush($stop);
-        fclose($stop);
+    if (isset($server['pipes'][1]) && is_resource($server['pipes'][1])) {
+        stream_set_blocking($server['pipes'][1], false);
+    }
+    if (isset($server['pipes'][2]) && is_resource($server['pipes'][2])) {
+        stream_set_blocking($server['pipes'][2], false);
     }
 
     $stdout = isset($server['pipes'][1]) ? stream_get_contents($server['pipes'][1]) : '';
     $stderr = isset($server['pipes'][2]) ? stream_get_contents($server['pipes'][2]) : '';
 
     foreach ($server['pipes'] as $pipe) {
-        fclose($pipe);
+        if (is_resource($pipe)) {
+            fclose($pipe);
+        }
     }
 
     $exitCode = proc_close($server['process']);
@@ -89,6 +88,41 @@ function king_mcp_test_stop_server(array $server): array
     }
 
     return $capture;
+}
+
+function king_mcp_test_stop_server(array $server): array
+{
+    $stop = @stream_socket_client(
+        'tcp://127.0.0.1:' . $server['port'],
+        $errno,
+        $errstr,
+        0.5
+    );
+    if (is_resource($stop)) {
+        fwrite($stop, "STOP\n");
+        fflush($stop);
+        fclose($stop);
+    }
+
+    return king_mcp_test_finalize_server($server);
+}
+
+function king_mcp_test_crash_server(array $server, int $signal = 9): array
+{
+    if (is_resource($server['process'])) {
+        proc_terminate($server['process'], $signal);
+    }
+
+    $deadline = microtime(true) + 2.0;
+    while (microtime(true) < $deadline) {
+        $status = proc_get_status($server['process']);
+        if (!is_array($status) || !$status['running']) {
+            break;
+        }
+        usleep(10000);
+    }
+
+    return king_mcp_test_finalize_server($server);
 }
 
 function king_mcp_schedule_cancel_signal(

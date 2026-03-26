@@ -30,6 +30,20 @@ stream_set_blocking($server, true);
 fwrite(STDOUT, "READY\n");
 fflush(STDOUT);
 
+function king_mcp_test_persist_capture(array $capture, string $capturePath): void
+{
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+}
+
+function king_mcp_test_capture_event(array &$capture, string $capturePath, array $event): void
+{
+    $capture['events'][] = $event;
+    king_mcp_test_persist_capture($capture, $capturePath);
+}
+
 function king_mcp_test_transfer_key(string $service, string $method, string $id): string
 {
     return $service . "\n" . $method . "\n" . $id;
@@ -161,6 +175,13 @@ function king_mcp_test_handle_request(
         }
     }
 
+    if ($service === 'svc' && $method === 'drop-request') {
+        $event['remote_error'] = 'forced_request_disconnect';
+        $event['peer_observed_cancel'] = true;
+        $event['peer_cancel_reason'] = 'forced_disconnect';
+        return null;
+    }
+
     if ($service === 'svc' && $method === 'fail') {
         king_mcp_test_write_error($stream, 'Remote MCP peer forced request failure.');
         $event['remote_error'] = 'forced_request_failure';
@@ -182,6 +203,8 @@ function king_mcp_test_handle_request(
 
 $nextConnectionId = 1;
 $shouldStop = false;
+
+king_mcp_test_persist_capture($capture, $capturePath);
 
 while (!$shouldStop) {
     $client = @stream_socket_accept($server, 5);
@@ -206,10 +229,10 @@ while (!$shouldStop) {
         }
 
         if ($line === 'STOP') {
-            $capture['events'][] = [
+            king_mcp_test_capture_event($capture, $capturePath, [
                 'connection_id' => $connectionId,
                 'operation' => 'stop',
-            ];
+            ]);
             king_mcp_test_write_line($client, 'OK');
             $shouldStop = true;
             break;
@@ -251,9 +274,12 @@ while (!$shouldStop) {
                 $event
             );
             $event['response_length'] = is_string($response) ? strlen($response) : 0;
-            $capture['events'][] = $event;
+            king_mcp_test_capture_event($capture, $capturePath, $event);
             if (!is_string($response)) {
-                if (($event['peer_cancel_reason'] ?? null) === 'disconnect') {
+                if (
+                    ($event['peer_cancel_reason'] ?? null) === 'disconnect'
+                    || ($event['peer_cancel_reason'] ?? null) === 'forced_disconnect'
+                ) {
                     break;
                 }
                 continue;
@@ -289,9 +315,17 @@ while (!$shouldStop) {
 
             if ($method === 'fail-upload') {
                 $event['remote_error'] = 'forced_upload_failure';
-                $capture['events'][] = $event;
+                king_mcp_test_capture_event($capture, $capturePath, $event);
                 king_mcp_test_write_error($client, 'Remote MCP peer forced upload failure.');
                 continue;
+            }
+
+            if ($method === 'drop-upload') {
+                $event['remote_error'] = 'forced_upload_disconnect';
+                $event['peer_observed_cancel'] = true;
+                $event['peer_cancel_reason'] = 'forced_disconnect';
+                king_mcp_test_capture_event($capture, $capturePath, $event);
+                break;
             }
 
             if ($method === 'slow-upload') {
@@ -303,23 +337,23 @@ while (!$shouldStop) {
                     $event
                 );
                 if ($delayResult === 'cancelled') {
-                    $capture['events'][] = $event;
+                    king_mcp_test_capture_event($capture, $capturePath, $event);
                     break;
                 }
                 if ($delayResult === 'timeout') {
-                    $capture['events'][] = $event;
+                    king_mcp_test_capture_event($capture, $capturePath, $event);
                     king_mcp_test_write_error($client, 'Remote MCP peer exceeded the propagated timeout budget.');
                     continue;
                 }
                 if ($delayResult === 'deadline') {
-                    $capture['events'][] = $event;
+                    king_mcp_test_capture_event($capture, $capturePath, $event);
                     king_mcp_test_write_error($client, 'Remote MCP peer exceeded the propagated deadline budget.');
                     continue;
                 }
             }
 
             $transfers[king_mcp_test_transfer_key($service, $method, $identifier)] = $payload;
-            $capture['events'][] = $event;
+            king_mcp_test_capture_event($capture, $capturePath, $event);
             king_mcp_test_write_line($client, 'OK');
             continue;
         }
@@ -353,13 +387,21 @@ while (!$shouldStop) {
 
             if ($method === 'fail-download') {
                 $event['remote_error'] = 'forced_download_failure';
-                $capture['events'][] = $event;
+                king_mcp_test_capture_event($capture, $capturePath, $event);
                 king_mcp_test_write_error($client, 'Remote MCP peer forced download failure.');
                 continue;
             }
 
+            if ($method === 'drop-download') {
+                $event['remote_error'] = 'forced_download_disconnect';
+                $event['peer_observed_cancel'] = true;
+                $event['peer_cancel_reason'] = 'forced_disconnect';
+                king_mcp_test_capture_event($capture, $capturePath, $event);
+                break;
+            }
+
             if (!is_string($payload)) {
-                $capture['events'][] = $event;
+                king_mcp_test_capture_event($capture, $capturePath, $event);
                 king_mcp_test_write_line($client, 'MISS');
                 continue;
             }
@@ -373,22 +415,22 @@ while (!$shouldStop) {
                     $event
                 );
                 if ($delayResult === 'cancelled') {
-                    $capture['events'][] = $event;
+                    king_mcp_test_capture_event($capture, $capturePath, $event);
                     break;
                 }
                 if ($delayResult === 'timeout') {
-                    $capture['events'][] = $event;
+                    king_mcp_test_capture_event($capture, $capturePath, $event);
                     king_mcp_test_write_error($client, 'Remote MCP peer exceeded the propagated timeout budget.');
                     continue;
                 }
                 if ($delayResult === 'deadline') {
-                    $capture['events'][] = $event;
+                    king_mcp_test_capture_event($capture, $capturePath, $event);
                     king_mcp_test_write_error($client, 'Remote MCP peer exceeded the propagated deadline budget.');
                     continue;
                 }
             }
 
-            $capture['events'][] = $event;
+            king_mcp_test_capture_event($capture, $capturePath, $event);
             king_mcp_test_write_line($client, 'OK' . "\t" . base64_encode($payload));
             continue;
         }
@@ -400,7 +442,4 @@ while (!$shouldStop) {
 }
 
 fclose($server);
-file_put_contents(
-    $capturePath,
-    json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
-);
+king_mcp_test_persist_capture($capture, $capturePath);

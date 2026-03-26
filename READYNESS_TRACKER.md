@@ -113,10 +113,10 @@ Status note:
 - [ ] Validate MCP multi-host operation
 - [ ] Enforce MCP concurrency and bounded-concurrency guarantees
 - [x] Enforce MCP deadline propagation
-- [ ] Validate MCP upload/download under large payloads
+- [x] Validate MCP upload/download under large payloads
 - [ ] Validate MCP backpressure under parallel transfers
 - [ ] Validate MCP recovery after controller / worker restart
-- [ ] Validate MCP recovery after partial failures
+- [x] Validate MCP recovery after partial failures
 
 ## D. Pipeline Orchestrator
 
