@@ -116,7 +116,7 @@ Repository facts from the current tree:
 - `extension/src`: 177 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 168 headers
-- `extension/tests`: 294 PHPT files
+- `extension/tests`: 295 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently verified regression baseline is:
@@ -125,7 +125,7 @@ The currently verified regression baseline is:
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
 - extension load smoke: passing
-- `./scripts/test-extension.sh`: `294/294` PHPT tests passing
+- `./scripts/test-extension.sh`: `295/295` PHPT tests passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing (`124` functions, `43` classes, `48` declared public methods)
 - `./scripts/smoke-profile.sh release`: passing
@@ -149,6 +149,7 @@ The currently verified regression baseline is:
 - targeted file-worker cross-process cancellation verification (`309`, `311`, `314`): passing
 - targeted multiprocess controller/observer/worker topology verification (`307`, `309`, `314`, `315`): passing
 - targeted object-store path-hardening verification (`302`, `305`, `313`): passing
+- targeted telemetry export retry hardening verification (`031`, `260`, `316`): passing
 - `king_health()['stubbed_api_group_count']`: `0`
 - `.github/workflows/ci.yml`: wired to the canonical audit/build/test path plus the final go-live readiness step with the committed benchmark budget gate
 - `./benchmarks/run-canonical.sh`: passing locally
@@ -171,7 +172,7 @@ The repo already has active native runtime slices for:
 - native file-system object-store backend core with durable .meta sidecars, local CDN cache, multi-node distribution, explicit contract/status failure semantics for non-local backends (distributed/S3/GCS/Azure simulated), and backup/restore/import/export directory confinement to the active storage root
 - native MCP runtime in `src/mcp/` with stateful session tracking, flattened ID persistence in Object Store, full request/upload/download parity, and verified `timeout_ms` / monotonic `deadline_ms` / `cancel` control handling across both procedural and OO APIs
 - native Pipeline Orchestrator and Tool Registry in `src/pipeline_orchestrator/`, including restart-safe tool registry, logging snapshot persistence, completed run history, in-flight run rehydration, a config-selectable `local` versus `file_worker` execution backend with persisted cross-process dispatch, controller-driven post-claim cancellation and stale-claim recovery, a dedicated controller/observer/worker multiprocess topology harness, and verified `timeout_ms` / `overall_timeout_ms` / `deadline_ms` / `max_concurrency` enforcement across local runs plus resumed worker execution
-- native Telemetry runtime with active span lifecycle, metrics aggregation, flush paths, and context propagation
+- native Telemetry runtime with active span lifecycle, metrics aggregation, bounded retry queueing, flush paths, and context propagation
 - native Autoscaling engine with monitoring, live telemetry/system-backed decisioning, cooldown/hysteresis enforcement, capped scale-step policy resolution, pluggable provider routing, controller-only Hetzner token loading from `php.ini`, honest Hetzner create/delete HTTP calls, restart-safe controller state persistence, explicit managed-node inventory APIs, and `register -> ready -> drain -> delete` lifecycle control plus pending-node safeguards on the honest Hetzner path while non-Hetzner providers stay simulated behind the same contract
 - operator-facing spend/quota budget warning/hard-limit surfaces in `king_autoscaling_get_status`, with warning-only behavior on probe/API degrade and hard-stop enforcement on configured hard limits
 - native System Integration core coordinating component lifecycles and health
@@ -187,7 +188,7 @@ The repo is still not a full production-grade implementation for:
 - QUIC/HTTP/3 backend provenance is still weaker than ideal: the runtime depends on an external local `quiche/` tree, and clean-room rehydration is still not yet a fully tracked deterministic bootstrap path for release-grade builds
 - object-store cloud adapters remain simulated beyond the local filesystem core; local persisted backend restart rehydration is verified, but distributed/cloud durability guarantees are still open
 - release/container profile builds remain sensitive to missing `quiche`/`libcurl` layouts in clean or cross-arch environments until bootstrap normalization is fully deterministic and independent of local host headers
-- long-haul telemetry exporter hardening, failover behavior, and queue/backpressure guarantees under degraded conditions
+- long-haul telemetry exporter failover behavior and queue/backpressure guarantees under degraded conditions
 - remote/distributed MCP execution and deeper orchestrator distribution beyond the current local file-worker boundary; restart-safe persistence, bounded timeout/deadline semantics, cross-process worker handoff, persisted post-claim cancellation, and local multiprocess topology verification are verified, but remote topology and broader backend depth are still open
 - coordinated multi-node rolling-restart, failover, and crash-recovery operational depth
 - installability matrix and long-duration sanitizer soak coverage
@@ -225,7 +226,7 @@ transport depth, or operational depth is still incomplete.
 
 ### 5. Telemetry And System Operations Still Need Real Export And Recovery Semantics
 
-- Telemetry aggregation, queueing, and export contracts are real, but long-haul delivery guarantees, failure handling, and degraded-mode behavior are not yet production-deep.
+- Telemetry aggregation, queueing, and export contracts are real, and repeated failed exports now preserve an acyclic retry queue, but long-haul delivery guarantees and degraded-mode behavior are not yet production-deep.
 - System integration currently verifies local lifecycle composition, not rolling restart, coordinated drain, failover, or chaos recovery across nodes.
 - The missing part is not shape or API parity; it is operational truth under degraded conditions.
 

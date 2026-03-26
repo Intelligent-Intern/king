@@ -197,11 +197,16 @@ PHP_FUNCTION(king_telemetry_flush)
         
         /* Clear local registry after queuing */
         zend_hash_clean(&king_metrics_registry);
-        
-        /* Attempt immediate export */
-        king_telemetry_process_export_queue();
-        
+
         king_telemetry_flush_count++;
+    }
+
+    /*
+     * Flush attempts exactly one queued export batch per call. Failed batches
+     * stay queued for retry instead of being silently discarded.
+     */
+    if (king_telemetry_queue_size > 0) {
+        (void) king_telemetry_export_batch();
     }
     
     RETURN_TRUE;

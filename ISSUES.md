@@ -62,6 +62,8 @@
 
 - [x] Add a real telemetry export queue and exporter semantics instead of local-only flush counters
   completed: 2026-03-25
+- [x] Harden telemetry export retry queue semantics so repeated export failures cannot create cyclic batches or shutdown-time memory corruption
+  completed: 2026-03-26
 - [x] Drive autoscaling decisions from live telemetry/system metrics with hysteresis, cooldown, saturation coverage, and Hetzner-specific scale-step guards
 - [x] Add operator-facing spend and quota warnings for the Hetzner path; do not make provider spend APIs the sole hard-stop mechanism
   completed: 2026-03-25
@@ -96,7 +98,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `294/294`
+  tests: `295/295`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -144,6 +146,9 @@
   budget file: `benchmarks/budgets/canonical-ci.json`
   local verification: `./benchmarks/run-canonical.sh --iterations=5000 --warmup=500 --budget-file=benchmarks/budgets/canonical-ci.json` and `./scripts/go-live-readiness.sh --skip-baseline --benchmark-iterations 5000 --benchmark-warmup 500 --benchmark-budget-file benchmarks/budgets/canonical-ci.json`
   coverage: explicit per-case `max_ns_per_iteration` ceilings for `session`, `proto`, `object_store`, and `semantic_dns`, plus the same budget gate wired into the canonical CI go-live path.
+- [x] Telemetry failed-export retries now keep the queue acyclic and shutdown-safe
+  targeted PHPTs: `031`, `260`, `316`
+  coverage: dequeued telemetry batches now detach stale `next` pointers before requeue, repeated failed flushes keep retry order intact instead of creating cyclic lists, and shutdown cleanup remains safe after multiple exporter failures with queued batches still pending.
 - [x] The exported WebSocket OO surface now only exposes the honest `Connection` runtime
   targeted PHPTs: `143`, `227`, `228`, `312`
   coverage: the empty `King\WebSocket\Server` placeholder is retired from the stub and runtime registration, class-registration parity remains green, and the OO WebSocket surface now matches the actual implemented connection runtime instead of advertising a no-op server shell.

@@ -61,6 +61,9 @@ king_telemetry_batch_t* king_telemetry_create_batch(void)
 int king_telemetry_queue_batch(king_telemetry_batch_t *batch)
 {
     if (!batch) return FAILURE;
+
+    /* Always detach before enqueue so retries cannot retain stale links. */
+    batch->next = NULL;
     
     if (!king_telemetry_export_queue_head) {
         king_telemetry_export_queue_head = batch;
@@ -76,10 +79,13 @@ int king_telemetry_queue_batch(king_telemetry_batch_t *batch)
 
 static king_telemetry_batch_t* king_telemetry_dequeue_batch(void)
 {
+    king_telemetry_batch_t *batch;
+
     if (!king_telemetry_export_queue_head) return NULL;
     
-    king_telemetry_batch_t *batch = king_telemetry_export_queue_head;
+    batch = king_telemetry_export_queue_head;
     king_telemetry_export_queue_head = batch->next;
+    batch->next = NULL;
     
     if (!king_telemetry_export_queue_head) {
         king_telemetry_export_queue_tail = NULL;
