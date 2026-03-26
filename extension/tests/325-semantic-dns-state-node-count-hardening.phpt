@@ -1,13 +1,13 @@
 --TEST--
-King semantic-dns durable state save stays inside the private runtime directory
+King semantic-dns durable state rejects oversized mother-node counts without crashing
 --INI--
 king.security_allow_config_override=1
 --FILE--
 <?php
 $state_dir = '/tmp/king_semantic_dns_state';
 $state_file = $state_dir . '/durable_state.bin';
-$target_file = sys_get_temp_dir() . '/king_sdns_state_target_' . getmypid();
-$marker = 'ORIGINAL';
+$extension_path = dirname(__DIR__) . '/modules/king.so';
+$child_script = sys_get_temp_dir() . '/king_sdns_state_oversized_child_' . getmypid() . '.php';
 
 $state_dir_existed = is_dir($state_dir);
 $state_backup = null;
@@ -16,20 +16,28 @@ if ($state_was_file) {
     $state_backup = file_get_contents($state_file);
 }
 
-$extension_path = dirname(__DIR__) . '/modules/king.so';
-$child_script = sys_get_temp_dir() . '/king_sdns_state_child_' . getmypid() . '.php';
-
-file_put_contents($target_file, $marker);
 if (!$state_dir_existed) {
     mkdir($state_dir, 0700, true);
 }
 chmod($state_dir, 0700);
-@unlink($state_file);
-symlink($target_file, $state_file);
+
+$payload = pack('LLL', 0x53444e53, 1, 0xFFFFFFFF) . str_repeat("\0", PHP_INT_SIZE * 2);
+file_put_contents($state_file, $payload);
 
 file_put_contents(
     $child_script,
-    "<?php\nking_semantic_dns_init([\n    'enabled' => true,\n    'dns_port' => 5353,\n    'bind_address' => '127.0.0.1',\n]);\n"
+    <<<'PHP'
+<?php
+var_dump(king_semantic_dns_init([
+    'enabled' => true,
+    'dns_port' => 5354,
+    'bind_address' => '127.0.0.1',
+    'semantic_mode_enable' => true,
+]));
+var_dump(king_semantic_dns_start_server());
+$topology = king_semantic_dns_get_service_topology();
+var_dump($topology['statistics']['mother_nodes']);
+PHP
 );
 
 $cmd = sprintf(
@@ -41,14 +49,9 @@ $cmd = sprintf(
 
 exec($cmd, $cmd_output, $cmd_status);
 var_dump($cmd_status);
-var_dump(file_exists($target_file));
-var_dump(file_get_contents($target_file) === $marker);
-var_dump(is_file($state_file));
-var_dump(!is_link($state_file));
+var_dump(count(array_filter($cmd_output, static fn($line) => $line === 'bool(true)')) === 2);
+var_dump(in_array('int(0)', $cmd_output, true));
 
-if (is_link($state_file)) {
-    unlink($state_file);
-}
 if ($state_was_file) {
     file_put_contents($state_file, $state_backup);
 } else {
@@ -59,11 +62,8 @@ if (!$state_dir_existed) {
 }
 
 @unlink($child_script);
-@unlink($target_file);
 ?>
 --EXPECT--
 int(0)
-bool(true)
-bool(true)
 bool(true)
 bool(true)

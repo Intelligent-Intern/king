@@ -105,7 +105,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `303/303`
+  tests: `304/304`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -160,6 +160,9 @@
 - [x] Orchestrator state snapshots now stay on system-owned paths and use symlink-safe load/save handling
   targeted PHPTs: `307`, `308`, `324`
   coverage: `orchestrator.state_path` is no longer accepted through `King\Config` userland overrides, persisted snapshots now use private `mkstemp` staging instead of predictable temp names, state load refuses symlinked paths, and a symlinked state target no longer gets overwritten during tool-registry persistence.
+- [x] Semantic DNS durable state now stays in a private runtime directory and rejects oversized topology snapshots
+  targeted PHPTs: `253`, `303`, `325`
+  coverage: semantic-dns state now persists under a private `0700` runtime directory instead of a shared `/tmp` file, save uses private `mkstemp` staging, load refuses insecure state-directory setups, oversized persisted `mother_node_count` values are rejected before allocation, and malicious snapshots no longer crash startup.
 - [x] Multiprocess control-plane topology is now verified across independent controller observer and worker processes
   targeted PHPTs: `307`, `309`, `314`, `315`
   coverage: fresh controller processes persist tool state and queued runs, fresh observer processes rehydrate and inspect live/cancelled/completed snapshots, and fresh workers complete both live-claim and stale-claim recovery paths without falling back to single-process assumptions.
