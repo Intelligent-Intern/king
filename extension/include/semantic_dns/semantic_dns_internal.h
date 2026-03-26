@@ -33,5 +33,7 @@ extern king_semantic_dns_runtime_state king_semantic_dns_runtime;
 
 int king_semantic_dns_state_load(void);
 int king_semantic_dns_state_save(void);
+int king_semantic_dns_export_state_payload(zval *return_value);
+int king_semantic_dns_import_state_payload(zval *payload);
 
 #endif /* KING_SEMANTIC_DNS_INTERNAL_H */

@@ -37,7 +37,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `334/334` passing
+- `./scripts/test-extension.sh`: `335/335` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
@@ -51,7 +51,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `334` PHPT files
+- `extension/tests`: `335` PHPT files
 - public stub parity: `125` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -71,7 +71,7 @@ The current tree already proves:
 - server-side `king_server_upgrade_to_websocket()` both as an honest local marker slice for local listeners and as a real on-wire HTTP/1 one-shot upgrade path with frame flow, handler ownership, and close/drain coverage
 - repeated server/session soak coverage for local upgrade, early hints, admin API, TLS reload, and on-wire websocket close/drain cycles
 - IIBIN schema, registry, encode/decode, object hydration, and wire validation
-- Semantic DNS register/discover/update routing plus private-directory durable state handling
+- Semantic DNS register/discover/update routing, persisted registration plus mother-node rehydration across restart, and private-directory durable state handling
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs
 - router/loadbalancer is now exposed as an explicit config-backed system component with honest policy/discovery-only introspection
 - object-store local filesystem persistence, `.meta` sidecars, CDN cache/runtime behavior, and confined backup/restore/import/export paths
@@ -95,7 +95,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 
 - Router/loadbalancer is now honestly fenced to a config-backed control-plane surface; it is not presented as a forwarding dataplane runtime.
 - Smart-DNS public config and init surfaces are now honest for the current local semantic/service-discovery runtime.
-- The remaining Smart-DNS work is larger-topology, mother-node, and failover verification rather than more local config cleanup.
+- The remaining Smart-DNS work is larger-topology parallel update coverage, richer mother-node synchronization depth, and failover verification rather than more local config cleanup or restart-state basics.
 
 ### Object Store Scope
 

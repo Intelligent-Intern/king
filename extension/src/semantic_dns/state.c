@@ -11,6 +11,7 @@
  */
 
 #include "semantic_dns/semantic_dns_internal.h"
+#include <ext/standard/php_var.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -19,12 +20,68 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
+#include <zend_smart_str.h>
 
 #define KING_SEMANTIC_DNS_STATE_DIR "/tmp/king_semantic_dns_state"
 #define KING_SEMANTIC_DNS_STATE_FILE KING_SEMANTIC_DNS_STATE_DIR "/durable_state.bin"
 #define KING_SEMANTIC_DNS_STATE_MAGIC 0x53444e53 /* 'SDNS' */
 #define KING_SEMANTIC_DNS_STATE_VERSION 1
 #define KING_SEMANTIC_DNS_STATE_MAX_MOTHER_NODES 1024U
+#define KING_SEMANTIC_DNS_STATE_MAX_PAYLOAD_BYTES (16U * 1024U * 1024U)
+
+static zend_string *king_semantic_dns_state_serialize_zval(zval *value)
+{
+    smart_str buffer = {0};
+    php_serialize_data_t var_hash;
+
+    if (value == NULL) {
+        return NULL;
+    }
+
+    PHP_VAR_SERIALIZE_INIT(var_hash);
+    php_var_serialize(&buffer, value, &var_hash);
+    PHP_VAR_SERIALIZE_DESTROY(var_hash);
+    smart_str_0(&buffer);
+
+    return buffer.s;
+}
+
+static int king_semantic_dns_state_unserialize_zval(
+    const unsigned char *buffer,
+    size_t buffer_len,
+    zval *return_value
+)
+{
+    const unsigned char *cursor = buffer;
+    php_unserialize_data_t var_hash;
+
+    if (buffer == NULL || return_value == NULL) {
+        return FAILURE;
+    }
+
+    ZVAL_NULL(return_value);
+    PHP_VAR_UNSERIALIZE_INIT(var_hash);
+    if (!php_var_unserialize(
+            return_value,
+            &cursor,
+            buffer + buffer_len,
+            &var_hash
+        )) {
+        PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
+        zval_ptr_dtor(return_value);
+        ZVAL_NULL(return_value);
+        return FAILURE;
+    }
+    PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
+
+    if (cursor != buffer + buffer_len) {
+        zval_ptr_dtor(return_value);
+        ZVAL_NULL(return_value);
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
 
 static int king_semantic_dns_state_dir_is_secure(const struct stat *st)
 {
@@ -72,6 +129,11 @@ int king_semantic_dns_state_save(void)
     char tmp_template[PATH_MAX];
     uint32_t magic = KING_SEMANTIC_DNS_STATE_MAGIC;
     uint32_t version = KING_SEMANTIC_DNS_STATE_VERSION;
+    uint32_t payload_len = 0;
+    zval state_payload;
+    zend_string *serialized_payload = NULL;
+
+    ZVAL_UNDEF(&state_payload);
 
     if (!king_semantic_dns_runtime.initialized) {
         return FAILURE;
@@ -148,6 +210,38 @@ int king_semantic_dns_state_save(void)
         return FAILURE;
     }
 
+    if (king_semantic_dns_export_state_payload(&state_payload) != SUCCESS) {
+        fclose(fp);
+        unlink(tmp_template);
+        return FAILURE;
+    }
+
+    serialized_payload = king_semantic_dns_state_serialize_zval(&state_payload);
+    zval_ptr_dtor(&state_payload);
+    if (
+        serialized_payload == NULL
+        || ZSTR_LEN(serialized_payload) > KING_SEMANTIC_DNS_STATE_MAX_PAYLOAD_BYTES
+    ) {
+        if (serialized_payload != NULL) {
+            zend_string_release(serialized_payload);
+        }
+        fclose(fp);
+        unlink(tmp_template);
+        return FAILURE;
+    }
+
+    payload_len = (uint32_t) ZSTR_LEN(serialized_payload);
+    if (
+        fwrite(&payload_len, sizeof(payload_len), 1, fp) != 1
+        || (payload_len > 0 && fwrite(ZSTR_VAL(serialized_payload), 1, payload_len, fp) != payload_len)
+    ) {
+        zend_string_release(serialized_payload);
+        fclose(fp);
+        unlink(tmp_template);
+        return FAILURE;
+    }
+    zend_string_release(serialized_payload);
+
     if (fclose(fp) != 0) {
         unlink(tmp_template);
         return FAILURE;
@@ -171,6 +265,12 @@ int king_semantic_dns_state_load(void)
     zend_long loaded_last_discovered = 0;
     zend_long loaded_last_synced = 0;
     uint32_t magic, version, node_count;
+    uint32_t payload_len = 0;
+    unsigned char *payload_buffer = NULL;
+    zval state_payload;
+    zend_bool has_state_payload = 0;
+
+    ZVAL_UNDEF(&state_payload);
 
     if (!king_semantic_dns_runtime.initialized) {
         return FAILURE;
@@ -250,6 +350,46 @@ int king_semantic_dns_state_load(void)
         return FAILURE;
     }
 
+    if (fread(&payload_len, sizeof(payload_len), 1, fp) == 1) {
+        if (payload_len > KING_SEMANTIC_DNS_STATE_MAX_PAYLOAD_BYTES) {
+            if (loaded_mother_nodes != NULL) {
+                pefree(loaded_mother_nodes, 1);
+            }
+            fclose(fp);
+            return FAILURE;
+        }
+
+        if (payload_len > 0) {
+            payload_buffer = emalloc(payload_len);
+            if (fread(payload_buffer, 1, payload_len, fp) != payload_len) {
+                efree(payload_buffer);
+                if (loaded_mother_nodes != NULL) {
+                    pefree(loaded_mother_nodes, 1);
+                }
+                fclose(fp);
+                return FAILURE;
+            }
+
+            if (king_semantic_dns_state_unserialize_zval(payload_buffer, payload_len, &state_payload) != SUCCESS) {
+                efree(payload_buffer);
+                if (loaded_mother_nodes != NULL) {
+                    pefree(loaded_mother_nodes, 1);
+                }
+                fclose(fp);
+                return FAILURE;
+            }
+
+            efree(payload_buffer);
+            has_state_payload = 1;
+        }
+    } else if (!feof(fp)) {
+        if (loaded_mother_nodes != NULL) {
+            pefree(loaded_mother_nodes, 1);
+        }
+        fclose(fp);
+        return FAILURE;
+    }
+
     fclose(fp);
 
     if (king_semantic_dns_runtime.config.mother_nodes != NULL) {
@@ -260,6 +400,14 @@ int king_semantic_dns_state_load(void)
     king_semantic_dns_runtime.config.mother_node_count = loaded_mother_node_count;
     king_semantic_dns_runtime.last_discovered_node_count = loaded_last_discovered;
     king_semantic_dns_runtime.last_synced_node_count = loaded_last_synced;
+
+    if (has_state_payload) {
+        if (king_semantic_dns_import_state_payload(&state_payload) != SUCCESS) {
+            zval_ptr_dtor(&state_payload);
+            return FAILURE;
+        }
+        zval_ptr_dtor(&state_payload);
+    }
 
     return SUCCESS;
 }

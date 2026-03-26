@@ -6,6 +6,23 @@ king.security_allow_config_override=1
 <?php
 mt_srand(292);
 
+$stateDir = '/tmp/king_semantic_dns_state';
+$statePath = $stateDir . '/durable_state.bin';
+$backupPath = $stateDir . '/durable_state.bin.testbackup.' . getmypid();
+
+if (is_file($statePath)) {
+    @rename($statePath, $backupPath);
+}
+
+register_shutdown_function(static function () use ($statePath, $backupPath): void {
+    if (is_file($statePath)) {
+        @unlink($statePath);
+    }
+    if (is_file($backupPath)) {
+        @rename($backupPath, $statePath);
+    }
+});
+
 var_dump(king_semantic_dns_init([
     'enabled' => true,
     'bind_address' => '127.0.0.1',

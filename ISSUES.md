@@ -21,14 +21,14 @@
 
 ## Current Next Leaf
 
-- [ ] Validate Smart DNS registration, routing, mother-node synchronization, and recovery against larger or distributed topologies.
+- [ ] Validate Smart DNS registration, routing, and mother-node synchronization under larger parallel topologies.
 
 ## Active Executable Items
 
 ### 1. Control Plane, Routing, and Distributed Execution
 
-1. [ ] Validate Smart DNS registration, routing, mother-node synchronization, and recovery against larger or distributed topologies.
-   done when: service discovery and semantic routing stay coherent under parallel updates, restart, and failover rather than only local happy-path flows.
+1. [ ] Validate Smart DNS registration, routing, and mother-node synchronization under larger parallel topologies.
+   done when: service discovery and semantic routing stay coherent under higher-cardinality parallel updates and mother-node churn rather than only restart-safe local happy-path flows.
 
 2. [ ] Finalize the honest v1 object-store backend contract.
    done when: either at least one non-local backend is real and verified, or the public contract is explicitly locked to `local_fs` plus simulated adapters with no stronger claim.
@@ -59,7 +59,7 @@
 
 - HTTP/2 shared-session fairness under mixed slow/fast streams, HTTP/3 timeout-vs-recovery churn isolation, and multi-client WebSocket close/reconnect churn on one local server are now verified.
 - Router/loadbalancer is now treated as an explicit `config_backed` control-plane component with no stronger forwarding-runtime claim in v1.
-- Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs; the remaining DNS work is topology and wire-depth, not more local config cleanup.
+- Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs, and Semantic-DNS now persists and rehydrates registered services plus mother-node topology across restart. The remaining DNS work is larger-topology parallelism, richer mother-node synchronization depth, and wire-level scope, not more local config cleanup or restart-state ambiguity.
 - MCP request, upload, and download now talk to a real TCP host/port remote peer with propagated timeout, deadline, and cancellation controls, plus verified IPv4 and IPv6 peer targeting, 1 MiB payload roundtrips, parallel-transfer backpressure isolation, explicit single-flight reentry guards per connection handle, same-host partial-failure recovery, persisted remote-state restart recovery, and an explicit `topology_scope=tcp_host_port_peer` contract in system component info; the remaining MCP gaps are richer distributed failure semantics and broader multi-host validation depth, not a false same-host-only transport claim.
 - Pipeline orchestration now has three honest backend scopes: `local_in_process`, `same_host_file_worker`, and `tcp_host_port_execution_peer`. The new `remote_peer` backend executes runs over a real TCP host/port worker boundary, persists local run snapshots, and records both successful and failed remote execution outcomes. Remaining orchestrator work is deeper distributed execution semantics, restart continuation, richer error classification, observability depth, and compensation/rollback where publicly claimed.
 - Everything else from `READYNESS_TRACKER.md` is either already verified, derivative of these leaves, or still too broad to be the active queue.

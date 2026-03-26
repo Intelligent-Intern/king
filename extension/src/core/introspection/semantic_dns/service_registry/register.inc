@@ -32,5 +32,9 @@ PHP_FUNCTION(king_semantic_dns_register_service)
         RETURN_THROWS();
     }
 
+    if (king_semantic_dns_runtime.initialized && king_semantic_dns_runtime.config.semantic_mode_enable) {
+        (void) king_semantic_dns_state_save();
+    }
+
     RETURN_TRUE;
 }

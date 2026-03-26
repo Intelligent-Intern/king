@@ -230,8 +230,8 @@ Status note:
 - [ ] Validate routing decisions against real load / health data
 - [ ] Validate service discovery under parallel updates
 - [ ] Validate status updates under concurrent writes
-- [ ] Implement persistence for registration data
-- [ ] Implement rehydration of registration data after restart
+- [x] Implement persistence for registration data
+- [x] Implement rehydration of registration data after restart
 - [ ] Validate consistency after split-brain / partial-failure scenarios where publicly claimed
 - [ ] Validate topology generation under large service counts
 - [ ] Validate DNS failure and recovery behavior
