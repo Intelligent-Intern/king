@@ -3,6 +3,7 @@
 #include "include/king_globals.h"
 
 #include "include/validation/config_param/validate_bool.h"
+#include "include/validation/config_param/validate_generic_string.h"
 #include "include/validation/config_param/validate_positive_long.h"
 
 #include "php.h"
@@ -91,6 +92,10 @@ int kg_config_mcp_and_orchestrator_apply_userland_config_to(
                     value,
                     "orchestrator_enable_distributed_tracing",
                     &target->orchestrator_enable_distributed_tracing) != SUCCESS) {
+                return FAILURE;
+            }
+        } else if (zend_string_equals_literal(key, "orchestrator_state_path")) {
+            if (kg_validate_generic_string(value, &target->orchestrator_state_path) != SUCCESS) {
                 return FAILURE;
             }
         }

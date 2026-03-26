@@ -15,6 +15,7 @@ static void king_config_snapshot_globals(king_cfg_t *cfg)
     cfg->owns_tls_strings = 0;
     cfg->owns_tcp_strings = 0;
     cfg->owns_quic_cc_algorithm = 0;
+    cfg->owns_mcp_orchestrator_strings = 0;
 
     cfg->app_protocols = king_app_protocols_config;
     cfg->bare_metal = king_bare_metal_config;

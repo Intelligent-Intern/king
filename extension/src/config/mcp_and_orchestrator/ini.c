@@ -51,6 +51,7 @@ PHP_INI_BEGIN()
     ZEND_INI_ENTRY("king.orchestrator_max_recursion_depth", "10", PHP_INI_SYSTEM, OnUpdateMcpPositiveLong)
     ZEND_INI_ENTRY("king.orchestrator_loop_concurrency_default", "50", PHP_INI_SYSTEM, OnUpdateMcpPositiveLong)
     STD_PHP_INI_ENTRY("king.orchestrator_enable_distributed_tracing", "1", PHP_INI_SYSTEM, OnUpdateBool, orchestrator_enable_distributed_tracing, kg_mcp_orchestrator_config_t, king_mcp_orchestrator_config)
+    STD_PHP_INI_ENTRY("king.orchestrator_state_path", "", PHP_INI_SYSTEM, OnUpdateString, orchestrator_state_path, kg_mcp_orchestrator_config_t, king_mcp_orchestrator_config)
 PHP_INI_END()
 
 extern int king_ini_module_number;

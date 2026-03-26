@@ -16,9 +16,9 @@
 
 ## Current Next Leaf
 
-- [ ] Persist tool-registry and pipeline-run state across restart and recovery
-  why this blocks `8/10`: orchestrator restarts currently lose tool registries and pipeline state that should survive warm controller handoff.
-  done when: registry/tool metadata and running pipelines survive restart via persisted snapshots, and recovery assertions are covered in an E2E harness.
+- [ ] Move orchestrator execution beyond the purely local runtime path and define a real worker/backend boundary
+  why this blocks `8/10`: the orchestrator now survives restart locally, but execution still terminates inside the same process instead of crossing an honest worker/backend boundary.
+  done when: tool execution no longer depends on the same local process boundary, and the repo proves a real control-plane handoff path beyond in-process placeholder execution.
 
 ## Active Fronts
 
@@ -44,7 +44,8 @@
 ### 2. Distributed MCP and orchestrator depth
 
 - [ ] Move orchestrator execution beyond the purely local runtime path and define a real worker/backend boundary
-- [ ] Persist tool-registry and pipeline-run state across restart and recovery
+- [x] Persist tool-registry and pipeline-run state across restart and recovery
+  completed: 2026-03-26
 - [ ] Add bounded concurrency, deadline, and cancellation propagation across MCP request/upload/download and orchestrator execution
 - [ ] Add a multi-process end-to-end harness for remote MCP/orchestrator topology instead of single-process local-only verification
 
@@ -84,7 +85,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `285/285`
+  tests: `287/287`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -109,6 +110,9 @@
   coverage: the GHCR workflow no longer references nonexistent `infra/php8.x/` paths, the runtime image bootstraps required build dependencies including `quiche` and `uuid`, and the demo image now has a complete Vite entry surface that builds into a runnable nginx-served artifact
 - [x] CI transport bootstrap is stabilized for curl/wirefilter failures in fresh hosts
   coverage: `./scripts/build-profile.sh` now validates curl headers for system builds, normalizes the qlog-dancer `wirefilter` dependency pin to a resolvable branch fallback, and avoids stale cargo git cache fragments before cargo metadata/build.
+- [x] Orchestrator registry and pipeline-run snapshots now survive restart and recovery
+  targeted PHPTs: `250`, `294`, `307`, `308`
+  coverage: persistent tool registry, logging snapshot persistence, completed-run history recovery, running-snapshot rehydration, restart-safe `king_system_get_component_info('pipeline_orchestrator')`, and continued pipeline execution after a recovered warm start.
 
 ## How To Use This File
 

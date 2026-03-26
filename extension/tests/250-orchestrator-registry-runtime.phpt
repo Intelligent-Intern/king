@@ -20,6 +20,13 @@ $pipeline = [
 $result = king_pipeline_orchestrator_run($initial_data, $pipeline);
 var_dump($result === $initial_data); // Current runtime just reflects initial data
 
+$info = king_system_get_component_info('pipeline_orchestrator');
+var_dump($info['configuration']['tool_count']);
+var_dump($info['configuration']['run_history_count']);
+var_dump($info['configuration']['active_run_count']);
+var_dump($info['configuration']['last_run_status']);
+var_dump($info['configuration']['registered_tools']);
+
 // 4. Try invalid tool registration
 try {
    king_pipeline_orchestrator_register_tool('', []);
@@ -32,4 +39,12 @@ try {
 bool(true)
 bool(true)
 bool(true)
+int(1)
+int(1)
+int(0)
+string(9) "completed"
+array(1) {
+  [0]=>
+  string(10) "summarizer"
+}
 caught invalid name

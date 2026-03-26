@@ -456,6 +456,20 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "orchestrator.state_path",
+            sizeof("orchestrator.state_path") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->mcp.orchestrator_state_path != NULL ? cfg->mcp.orchestrator_state_path : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "geometry.default_vector_dimensions",
             sizeof("geometry.default_vector_dimensions") - 1
         )
@@ -579,6 +593,11 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
         target,
         "orchestrator.enable_distributed_tracing",
         cfg->mcp.orchestrator_enable_distributed_tracing
+    );
+    add_assoc_string(
+        target,
+        "orchestrator.state_path",
+        cfg->mcp.orchestrator_state_path != NULL ? cfg->mcp.orchestrator_state_path : ""
     );
     add_assoc_long(
         target,

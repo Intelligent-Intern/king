@@ -166,6 +166,7 @@ PHP_FUNCTION(king_system_get_component_info)
             king_mcp_orchestrator_config.orchestrator_loop_concurrency_default);
         add_assoc_bool(&configuration, "distributed_tracing_enabled",
             king_mcp_orchestrator_config.orchestrator_enable_distributed_tracing ? 1 : 0);
+        king_orchestrator_append_component_info(&configuration);
     } else if (zend_string_equals_literal(component_name, "iibin")) {
         king_component_info_init(return_value, "iibin", "config_backed");
         array_init(&configuration);

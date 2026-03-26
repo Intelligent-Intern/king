@@ -31,6 +31,7 @@ typedef struct _kg_mcp_orchestrator_config_t {
     zend_long orchestrator_max_recursion_depth;
     zend_long orchestrator_loop_concurrency_default;
     bool orchestrator_enable_distributed_tracing;
+    char *orchestrator_state_path;
 
 } kg_mcp_orchestrator_config_t;
 

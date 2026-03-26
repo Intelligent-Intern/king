@@ -11,6 +11,7 @@
  * =========================================================================
  */
 
+#include "include/pipeline_orchestrator/orchestrator.h"
 #include "introspection/prelude.inc"
 #include "introspection/telemetry.inc"
 #include "introspection/object_store.inc"
