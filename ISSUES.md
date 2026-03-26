@@ -21,14 +21,14 @@
 
 ## Current Next Leaf
 
-- [ ] Extend orchestrator and MCP verification from same-host multiprocess coverage to multi-host topology coverage.
+- [ ] Implement real multi-host backend boundaries for MCP and pipeline orchestrator beyond the current same-host topology scope.
 
 ## Active Executable Items
 
 ### 1. Control Plane, Routing, and Distributed Execution
 
-1. [ ] Extend orchestrator and MCP verification from same-host multiprocess coverage to multi-host topology coverage.
-   done when: controller, worker, and remote peer behavior is proven across machine boundaries rather than only separate local processes.
+1. [ ] Implement real multi-host backend boundaries for MCP and pipeline orchestrator beyond the current same-host topology scope.
+   done when: controller, worker, and remote peer behavior is proven across machine boundaries rather than only separate local processes or explicit same-host topology contracts.
 
 2. [ ] Validate worker failure handling, queue fairness, and scheduler behavior under sustained pipeline load.
    done when: active runs survive worker loss correctly and queue progression remains fair under contention.
@@ -66,7 +66,7 @@
 - HTTP/2 shared-session fairness under mixed slow/fast streams, HTTP/3 timeout-vs-recovery churn isolation, and multi-client WebSocket close/reconnect churn on one local server are now verified.
 - Router/loadbalancer is now treated as an explicit `config_backed` control-plane component with no stronger forwarding-runtime claim in v1.
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs; the remaining DNS work is topology and wire-depth, not more local config cleanup.
-- MCP request, upload, and download now talk to a real same-host remote peer with propagated timeout, deadline, and cancellation controls, plus verified 1 MiB payload roundtrips, parallel-transfer backpressure isolation, explicit single-flight reentry guards per connection handle, same-host partial-failure recovery, and persisted remote-state restart recovery; the remaining MCP gap is multi-host coverage plus richer distributed failure semantics.
-- File-worker orchestration now persists honest `queued -> running -> completed|failed|cancelled` transitions, exposes explicit `single_attempt` retry and `caller_managed` idempotency policy in component info, and short-circuits queued cancellation before worker claim; the remaining orchestrator gap is multi-host execution depth plus heavier scheduler/failure semantics.
+- MCP request, upload, and download now talk to a real same-host remote peer with propagated timeout, deadline, and cancellation controls, plus verified 1 MiB payload roundtrips, parallel-transfer backpressure isolation, explicit single-flight reentry guards per connection handle, same-host partial-failure recovery, persisted remote-state restart recovery, and an explicit `topology_scope=same_host_remote_peer` contract in system component info; the remaining MCP gap is real multi-host coverage plus richer distributed failure semantics.
+- File-worker orchestration now persists honest `queued -> running -> completed|failed|cancelled` transitions, exposes explicit `single_attempt` retry and `caller_managed` idempotency, and surfaces `topology_scope=local_in_process` for the local backend versus `same_host_file_worker` for file-worker mode; the remaining orchestrator gap is real multi-host execution depth plus heavier scheduler/failure semantics.
 - Everything else from `READYNESS_TRACKER.md` is either already verified, derivative of these leaves, or still too broad to be the active queue.
 - If an item is not listed here, it is not the current repo-local priority.

@@ -214,7 +214,7 @@ array(6) {
 }
 string(3) "mcp"
 string(13) "config_backed"
-array(4) {
+array(5) {
   [0]=>
   string(26) "default_request_timeout_ms"
   [1]=>
@@ -223,6 +223,8 @@ array(4) {
   string(23) "request_caching_enabled"
   [3]=>
   string(21) "request_cache_ttl_sec"
+  [4]=>
+  string(14) "topology_scope"
 }
 bool(true)
 array(6) {
@@ -241,7 +243,7 @@ array(6) {
 }
 string(21) "pipeline_orchestrator"
 string(13) "config_backed"
-array(18) {
+array(19) {
   [0]=>
   string(27) "default_pipeline_timeout_ms"
   [1]=>
@@ -257,26 +259,28 @@ array(18) {
   [6]=>
   string(17) "execution_backend"
   [7]=>
-  string(12) "retry_policy"
+  string(14) "topology_scope"
   [8]=>
-  string(18) "idempotency_policy"
+  string(12) "retry_policy"
   [9]=>
-  string(17) "worker_queue_path"
+  string(18) "idempotency_policy"
   [10]=>
-  string(20) "recovered_from_state"
+  string(17) "worker_queue_path"
   [11]=>
-  string(10) "tool_count"
+  string(20) "recovered_from_state"
   [12]=>
-  string(17) "run_history_count"
+  string(10) "tool_count"
   [13]=>
-  string(16) "active_run_count"
+  string(17) "run_history_count"
   [14]=>
-  string(16) "queued_run_count"
+  string(16) "active_run_count"
   [15]=>
-  string(11) "last_run_id"
+  string(16) "queued_run_count"
   [16]=>
-  string(15) "last_run_status"
+  string(11) "last_run_id"
   [17]=>
+  string(15) "last_run_status"
+  [18]=>
   string(16) "registered_tools"
 }
 bool(true)

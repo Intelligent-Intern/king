@@ -208,6 +208,7 @@ PHP_FUNCTION(king_system_get_component_info)
             king_mcp_orchestrator_config.mcp_enable_request_caching ? 1 : 0);
         add_assoc_long(&configuration, "request_cache_ttl_sec",
             king_mcp_orchestrator_config.mcp_request_cache_ttl_sec);
+        add_assoc_string(&configuration, "topology_scope", "same_host_remote_peer");
     } else if (zend_string_equals_literal(component_name, "pipeline_orchestrator")) {
         king_component_info_init(return_value, "pipeline_orchestrator", "config_backed");
         array_init(&configuration);

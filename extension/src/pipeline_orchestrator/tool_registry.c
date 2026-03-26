@@ -1624,9 +1624,18 @@ void king_orchestrator_append_component_info(zval *configuration)
 {
     zval registered_tools;
     zend_string *tool_name;
+    const char *execution_backend;
+    const char *topology_scope = "local_in_process";
 
     if (configuration == NULL || Z_TYPE_P(configuration) != IS_ARRAY) {
         return;
+    }
+
+    execution_backend = king_mcp_orchestrator_config.orchestrator_execution_backend != NULL
+        ? king_mcp_orchestrator_config.orchestrator_execution_backend
+        : "";
+    if (strcmp(execution_backend, "file_worker") == 0) {
+        topology_scope = "same_host_file_worker";
     }
 
     add_assoc_string(
@@ -1644,10 +1653,9 @@ void king_orchestrator_append_component_info(zval *configuration)
     add_assoc_string(
         configuration,
         "execution_backend",
-        king_mcp_orchestrator_config.orchestrator_execution_backend != NULL
-            ? king_mcp_orchestrator_config.orchestrator_execution_backend
-            : ""
+        execution_backend
     );
+    add_assoc_string(configuration, "topology_scope", topology_scope);
     add_assoc_string(configuration, "retry_policy", "single_attempt");
     add_assoc_string(configuration, "idempotency_policy", "caller_managed");
     add_assoc_string(
