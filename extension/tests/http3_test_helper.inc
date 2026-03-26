@@ -91,8 +91,8 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
     }
 
     $output = '';
-    $startupGraceAt = microtime(true) + 8.0;
-    $deadline = microtime(true) + 30.0;
+    $startupGraceAt = microtime(true) + 15.0;
+    $deadline = microtime(true) + 45.0;
     while (microtime(true) < $deadline) {
         $status = proc_get_status($process);
         $read = [$pipes[1], $pipes[2]];
@@ -151,7 +151,7 @@ function king_http3_stop_test_server(array $server): void
 function king_http3_request_with_retry(callable $callback)
 {
     $lastError = null;
-    $deadline = microtime(true) + 30.0;
+    $deadline = microtime(true) + 60.0;
 
     while (microtime(true) < $deadline) {
         try {

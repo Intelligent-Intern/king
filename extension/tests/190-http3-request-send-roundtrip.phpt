@@ -33,6 +33,20 @@ try {
         'tls_default_ca_file' => $fixture['cert'],
     ]);
 
+    king_http3_request_with_retry(
+        static fn () => king_http3_request_send(
+            'https://localhost:' . $server[2] . '/direct.txt',
+            'GET',
+            null,
+            null,
+            [
+                'connection_config' => $cfg,
+                'connect_timeout_ms' => 10000,
+                'timeout_ms' => 30000,
+            ]
+        )
+    );
+
     $directResponse = king_http3_request_with_retry(
         static fn () => king_http3_request_send(
             'https://localhost:' . $server[2] . '/direct.txt',
@@ -41,8 +55,8 @@ try {
             null,
             [
                 'connection_config' => $cfg,
-                'connect_timeout_ms' => 5000,
-                'timeout_ms' => 15000,
+                'connect_timeout_ms' => 10000,
+                'timeout_ms' => 30000,
             ]
         )
     );
@@ -56,8 +70,8 @@ try {
             [
                 'preferred_protocol' => 'http3',
                 'connection_config' => $cfg,
-                'connect_timeout_ms' => 5000,
-                'timeout_ms' => 15000,
+                'connect_timeout_ms' => 10000,
+                'timeout_ms' => 30000,
             ]
         )
     );

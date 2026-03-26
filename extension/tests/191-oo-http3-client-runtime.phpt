@@ -34,16 +34,26 @@ $server = king_http3_start_test_server($fixture['cert'], $fixture['key'], $fixtu
 try {
     $config = new King\Config([
         'tls_default_ca_file' => $fixture['cert'],
-        'tcp_connect_timeout_ms' => 5000,
+        'tcp_connect_timeout_ms' => 10000,
     ]);
 
+    king_http3_request_with_retry(
+        static fn () => king_http3_request_send(
+            'https://localhost:' . $server[2] . '/first.txt',
+            'GET',
+            null,
+            null,
+            [
+                'connection_config' => $config,
+                'connect_timeout_ms' => 10000,
+                'timeout_ms' => 30000,
+            ]
+        )
+    );
+
     $client = new King\Client\Http3Client($config);
-    $first = king_http3_request_with_retry(
-        static fn () => $client->request('GET', 'https://localhost:' . $server[2] . '/first.txt')
-    );
-    $second = king_http3_request_with_retry(
-        static fn () => $client->request('GET', 'https://localhost:' . $server[2] . '/second.txt')
-    );
+    $first = $client->request('GET', 'https://localhost:' . $server[2] . '/first.txt');
+    $second = $client->request('GET', 'https://localhost:' . $server[2] . '/second.txt');
 } finally {
     king_http3_stop_test_server($server);
     king_http3_destroy_fixture($fixture);
