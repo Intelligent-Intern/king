@@ -1,301 +1,141 @@
 # King Project Assessment
 
 > Stand: 2026-03-26
-> Scope: verified v1 runtime reach inside this repository
-> This file tracks the moving verified state of King v1.
-> `README.md` describes the target system. This file describes the system that is actually here now.
+> Scope: verified repo-local v1 state inside this repository
+> This file records what is actually verified now.
+> `README.md` stays product-level.
+> `ISSUES.md` is the single moving roadmap and execution queue.
 
 ## Executive Summary
 
-King now ships as a repo-local v1 runtime.
-Within this repository, that v1 line is treated as the final release line, not
-as a beta placeholder.
-The repository contains a real, test-backed native implementation across
-config, session, client transport, local server slices, IIBIN, local WebSocket
-handling, and all major control-plane subsystems (MCP, Telemetry, Autoscaling,
-Integration).
+King currently sits at a green repo-local v1 baseline.
+The active extension builds, audits, packages, and passes the full PHPT suite,
+and the public stub surface matches the live runtime.
 
-The repository now sits at a fully green verified baseline.
-As of 2026-03-26, the canonical audit, rebuild, and full PHPT matrix all pass
-against the current repository state, and the repo now has a canonical local
-benchmark harness for the four core runtime paths that were still uncovered,
-explicit local `release`, `debug`, `asan`, and `ubsan` build/smoke paths, and
-a seeded local fuzz/stress subset for the highest-risk runtime surfaces, plus a
-reproducible release packaging path over the staged canonical release profile.
-The final repo-local go-live readiness gate is now in place and verifies public
-stub/runtime parity, release-profile smoke, benchmark smoke, reproducible
-packaging, and extracted-package readiness over the same current tree. The
-legacy public C stub compilation unit is now retired, the public `stubs/king.php`
-surface matches the live runtime exactly, and the runtime inventory reports
-zero residual stub API groups.
-The canonical benchmark harness is no longer smoke-only in CI: the repository
-now commits an explicit per-case budget file for the canonical `session`,
-`proto`, `object_store`, and `semantic_dns` cases, and the final CI go-live
-path enforces those ceilings as part of the release-grade gate.
-Autoscaling has also moved past the purely simulated provisioning path: the
-generic provider contract now ships with a controller-only Hetzner backend that
-drives honest HTTP provider calls, persists controller state across restart,
-gates admission with explicit `register -> ready -> drain -> delete` node
-lifecycle transitions, and keeps non-Hetzner providers explicitly simulated
-behind the same interface. The autoscaling controller itself now consumes live
-telemetry and system signals for scale decisions, enforces cooldown and
-hysteresis, honors capped scale-up policy resolution, and blocks unsafe
-follow-up Hetzner scale-ups while nodes are still pending registration,
-readiness, or drain.
-The local control-plane depth has also advanced again: the pipeline
-orchestrator now persists tool-registry state, logging configuration, completed
-run history, and in-flight run snapshots across restart, and the recovery path
-is verified by dedicated cross-process PHPT coverage. That local control plane
-now also crosses an honest backend boundary: the orchestrator supports a
-config-selectable `file_worker` execution backend that persists queued runs,
-hands them off across processes, proves worker-side completion against the
-same recovered run ledger, and now honors persisted controller-side cancel
-requests even after a worker has already claimed or recovered the job. MCP
-request/upload/download helpers now enforce
-`timeout_ms`, monotonic `deadline_ms`, and `cancel` budgets in both the
-procedural and OO surfaces, while the orchestrator now enforces
-`timeout_ms`/`overall_timeout_ms`, `deadline_ms`, and bounded
-`max_concurrency` on both the local path and resumed `file_worker` runs. Live
-`CancelToken` propagation across the `file_worker` process boundary remains
-explicitly unsupported today and is rejected honestly instead of being claimed
-as implemented. The control-plane verification path is also no longer confined
-to single-process assumptions: the repository now carries a dedicated
-multiprocess topology harness that drives fresh controller, observer, and
-worker processes through dispatch, post-claim cancellation, and stale-claim
-recovery against the same persisted queue/state boundary, while the queue
-boundary itself now requires a private real directory and uses symlink-safe
-job/cancel file handling instead of raw truncating `fopen()` calls, and the
-orchestrator state snapshot path itself now stays system-owned with private
-`mkstemp` staging plus symlink-safe load/save behavior.
-The exported realtime OO surface was also tightened for v1 honesty: the empty
-`King\WebSocket\Server` placeholder is now gone, leaving only the implemented
-`King\WebSocket\Connection` runtime in the public WebSocket OO API.
-The local object-store persistence surface is also tighter now: backup,
-restore, import, and export paths remain available for v1, but they are now
-confined to directories inside the active `storage_root_path` so those APIs no
-longer double as arbitrary host file read/write helpers.
+That does not yet mean "final 10/10".
+The remaining gaps are no longer about broad runtime parity or placeholder
+surfaces inside the local tree.
+They are concentrated in five areas:
 
-One important caveat remains in the QUIC/HTTP/3 bootstrap path. The runtime is
-real and green, and build tooling now avoids the two common CI breakage modes:
-missing host curl headers and stale/non-resolvable `wirefilter` git pins. Fresh
-hosts now recover deterministically from local fallback behavior, but the path is
-still not fully pinned and reproducibly rehydrated because parts of the dependency
-pinning still rely on branch fallback during bootstrap.
+- wire-truth for server and WebSocket behavior
+- remote MCP and deeper distributed orchestration
+- long-haul telemetry, exporter, and fleet recovery depth
+- deterministic QUIC bootstrap and clean-host installation confidence
+- compatibility, sanitizer soak, and release-grade upgrade guarantees
 
-## Readiness Model
+The long-form completion checklist has been distilled into a smaller active
+queue. If an open v1 item is not in `ISSUES.md`, it is not part of the current
+repo-local execution plan.
 
-The limiting factor is no longer runtime parity, public stub coverage, or
-repo-local go-live verification. The remaining work is production-depth work
-outside the local verified baseline: real external provisioning breadth,
-deeper operational backends, remote orchestration depth, and hard
-performance/compatibility gates.
+## Verified Baseline Snapshot
 
-| Area | State | Meaning |
-|------|-------|---------|
-| **Repo-local runtime baseline** | **Verified** | Audit, build, static checks, full PHPT matrix, fuzz subset, profile smokes, benchmark smoke, reproducible packaging, and go-live readiness all pass |
-| **Public API and runtime parity** | **Verified** | `stubs/king.php` matches the live extension surface and zero stubbed API groups remain in the runtime inventory |
-| **External QUIC backend bootstrap** | **Incomplete** | HTTP/3 and QUIC are green locally, but `quiche` recovery and dependency pinning are still weaker than a fully tracked, deterministic bootstrap path |
-| **External autoscaling provisioning** | **Partially production-honest** | Hetzner is real, controller-owned, persisted, and telemetry-driven; other providers intentionally stay simulated behind the generic contract |
-| **Distributed control plane** | **Cross-process local boundary with bounded runtime controls, cancellation, and multiprocess verification** | MCP is still local-first, and the orchestrator now has a real persisted file-worker handoff path plus verified timeout/deadline/max-concurrency controls, persisted post-claim cancellation, and a dedicated multiprocess topology harness, but deeper remote/distributed backends are still open |
-| **Operational backend depth** | **Locally chaos-tested, externally incomplete** | exporter outage recovery and local controller/system restart turbulence are now verified, but long-haul soak, multi-node failover depth, and compatibility budgets are still open |
-
-## Verified Baseline
-
-The current repository baseline is anchored to the canonical extension scripts.
-The composed final gate is:
-
-```bash
-cd extension
-./scripts/go-live-readiness.sh
-./scripts/build-profile.sh debug
-./scripts/smoke-profile.sh debug
-./scripts/build-profile.sh asan
-./scripts/smoke-profile.sh asan
-./scripts/build-profile.sh ubsan
-./scripts/smoke-profile.sh ubsan
-```
-
-Repository facts from the current tree:
-
-- `extension/src`: 177 C files
-- `extension/src_bak`: 177 archived C files
-- `extension/include`: 168 headers
-- `extension/tests`: 307 PHPT files
-- `stubs/`: 1 public PHP stub surface
-
-The currently verified regression baseline is:
+The currently verified baseline is:
 
 - `./scripts/static-checks.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- extension load smoke: passing
-- `./scripts/test-extension.sh`: `307/307` PHPT tests passing
+- `./scripts/test-extension.sh`: `307/307` passing
 - `./scripts/fuzz-runtime.sh`: passing
-- `./scripts/check-stub-parity.sh`: passing (`124` functions, `43` classes, `48` declared public methods)
-- `./scripts/smoke-profile.sh release`: passing
-- `./scripts/smoke-profile.sh asan`: passing
-- benchmark smoke (`session`, `proto`, `object_store`, `semantic_dns`): passing
-- benchmark budget gate (`benchmarks/budgets/canonical-ci.json`): passing
+- `./scripts/check-stub-parity.sh`: passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
 - `./scripts/verify-release-package.sh`: passing
 - `./scripts/go-live-readiness.sh`: passing
-- `./scripts/build-profile.sh release`: passing
-- `./scripts/smoke-profile.sh release`: passing
-- `./scripts/build-profile.sh debug`: passing
-- `./scripts/smoke-profile.sh debug`: passing
-- `./scripts/build-profile.sh asan`: passing
-- `./scripts/smoke-profile.sh asan`: passing
-- `./scripts/build-profile.sh ubsan`: passing
-- `./scripts/smoke-profile.sh ubsan`: passing
-- targeted HTTP/3 runtime verification (`190`, `191`, `204`, `232`): passing
-- targeted HTTP/1 chunked oversized-size hardening verification (`158`, `159`, `169`, `318`): passing
-- targeted orchestrator persistence and backend-boundary verification (`250`, `294`, `307`, `308`, `309`): passing
-- targeted MCP/orchestrator runtime-control verification (`157`, `234`, `235`, `236`, `309`, `310`, `311`): passing
-- targeted orchestrator cancel-option lifetime hardening verification (`311`, `322`): passing
-- targeted file-worker queue hardening verification (`309`, `311`, `314`, `315`, `323`): passing
-- targeted orchestrator state-path hardening verification (`307`, `308`, `324`): passing
-- targeted MCP repeated-upload memory-regression verification (`234`, `235`, `317`): passing
-- targeted file-worker cross-process cancellation verification (`309`, `311`, `314`): passing
-- targeted multiprocess controller/observer/worker topology verification (`307`, `309`, `314`, `315`): passing
-- targeted object-store path-hardening verification (`302`, `305`, `313`): passing
-- targeted telemetry export retry hardening verification (`031`, `260`, `316`, `328`): passing
-- targeted telemetry OTLP metrics export hardening verification (`031`, `260`, `316`, `319`): passing
-- targeted telemetry/autoscaling/system chaos-recovery verification (`320`, `321`): passing
+- `./scripts/build-profile.sh release|debug|asan|ubsan`: passing
+- `./scripts/smoke-profile.sh release|debug|asan|ubsan`: passing
+- benchmark smoke and committed CI budget gate: passing
+
+Current tree facts:
+
+- `extension/src`: `177` C files
+- `extension/include`: `168` headers
+- `extension/tests`: `307` PHPT files
+- public stub parity: `124` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
-- `.github/workflows/ci.yml`: wired to the canonical audit/build/test path plus the final go-live readiness step with the committed benchmark budget gate
-- `./benchmarks/run-canonical.sh`: passing locally
 
-There are currently no open PHPT failures in the canonical suite.
+## What Is Verified And Real Today
 
-## What Is Real Today
+The current tree already proves:
 
-The repo already has active native runtime slices for:
+- explicit config and session ownership through `King\Config` and `King\Session`
+- real HTTP/1, HTTP/2, and HTTP/3 client request paths, including reuse, streaming, and cancel/timeout contracts
+- local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3
+- local WebSocket client/runtime plus honest OO `King\WebSocket\Connection` parity
+- IIBIN schema, registry, encode/decode, object hydration, and wire validation
+- Semantic DNS register/discover/update routing plus private-directory durable state handling
+- object-store local filesystem persistence, `.meta` sidecars, CDN cache/runtime behavior, and confined backup/restore/import/export paths
+- MCP request/upload/download parity with bounded timeout, deadline, and local cancellation controls
+- orchestrator persistence, local/file-worker backend boundary, cross-process cancellation, and multiprocess controller/observer/worker verification
+- telemetry batch queueing, bounded retry behavior, OTLP metrics export hardening, and local exporter failover/recovery coverage
+- telemetry-driven Hetzner autoscaling with controller-owned credentials, persisted recovery state, and `register -> ready -> drain -> delete` lifecycle gating
+- system integration lifecycle coordination, restart-state visibility, and chaos/recovery harness coverage for the local control plane
 
-- `King\Config`, `King\Session`, `King\Stream`, `King\Response`, and `King\CancelToken`
-- HTTP/1, HTTP/2, and HTTP/3 client request paths
-- HTTP/1 streaming receive and response bridging
-- HTTP/2 HTTPS/ALPN, multiplexing, and push capture
-- local WebSocket connect, frame, ping, close, and OO `Connection` parity
-- local server dispatch, local HTTP/1, HTTP/2, and HTTP/3 listener leaves
-- server-side cancel, early hints, websocket upgrade, admin API, TLS reload, CORS, and telemetry-init helpers
-- IIBIN schema, enum, encode, decode, object hydration, and wire validation
-- native Semantic DNS registry, routing, private-directory state persistence, bounded topology snapshot loading, discovery, and mother-node tracking
-- native file-system object-store backend core with durable .meta sidecars, local CDN cache, multi-node distribution, explicit contract/status failure semantics for non-local backends (distributed/S3/GCS/Azure simulated), and backup/restore/import/export directory confinement to the active storage root
-- native MCP runtime in `src/mcp/` with stateful session tracking, flattened ID persistence in Object Store, full request/upload/download parity, and verified `timeout_ms` / monotonic `deadline_ms` / `cancel` control handling across both procedural and OO APIs
-- native Pipeline Orchestrator and Tool Registry in `src/pipeline_orchestrator/`, including restart-safe tool registry, logging snapshot persistence, completed run history, in-flight run rehydration, a config-selectable `local` versus `file_worker` execution backend with persisted cross-process dispatch, private symlink-safe queue persistence, system-owned symlink-safe state snapshot persistence, controller-driven post-claim cancellation and stale-claim recovery, owned CancelToken lifetime across persisted option sanitizing, a dedicated controller/observer/worker multiprocess topology harness, and verified `timeout_ms` / `overall_timeout_ms` / `deadline_ms` / `max_concurrency` enforcement across local runs plus resumed worker execution
-- native Telemetry runtime with active span lifecycle, metrics aggregation, bounded retry queueing with explicit drop accounting, flush paths, context propagation, OTLP metrics export that safely normalizes packed metric batches plus enum-backed metric types, and a verified local failover path that preserves queued batches across exporter outage and recovery
-- native Autoscaling engine with monitoring, live telemetry/system-backed decisioning, cooldown/hysteresis enforcement, capped scale-step policy resolution, pluggable provider routing, controller-only Hetzner token loading from `php.ini`, honest Hetzner create/delete HTTP calls, restart-safe controller state persistence, explicit managed-node inventory APIs, and `register -> ready -> drain -> delete` lifecycle control plus pending-node safeguards on the honest Hetzner path while non-Hetzner providers stay simulated behind the same contract
-- operator-facing spend/quota budget warning/hard-limit surfaces in `king_autoscaling_get_status`, with warning-only behavior on probe/API degrade and hard-stop enforcement on configured hard limits
-- native System Integration core coordinating component lifecycles and health
-- security policy enforcement for userland configuration overrides active across all entry points
-- a public PHP stub surface that is parity-checked against the live runtime before go-live claims are made
+## What Is Still Not Finished
 
-## What Is Not Finished
+The repo is still short of a "nothing left to caveat" v1 in these areas:
 
-The repo is still not a full production-grade implementation for:
+### Realtime and Server Wire Depth
 
-- multi-node rollout, rollback, and provider-error recovery under sustained fleet pressure beyond the now-verified Hetzner bootstrap/release handoff path
-- multi-provider cloud provisioning beyond the Hetzner path; non-Hetzner providers still remain simulated by design
-- QUIC/HTTP/3 backend provenance is still weaker than ideal: the runtime depends on an external local `quiche/` tree, and clean-room rehydration is still not yet a fully tracked deterministic bootstrap path for release-grade builds
-- object-store cloud adapters remain simulated beyond the local filesystem core; local persisted backend restart rehydration is verified, but distributed/cloud durability guarantees are still open
-- release/container profile builds remain sensitive to missing `quiche`/`libcurl` layouts in clean or cross-arch environments until bootstrap normalization is fully deterministic and independent of local host headers
-- long-haul telemetry exporter behavior and queue/backpressure guarantees under sustained degraded conditions
-- remote/distributed MCP execution and deeper orchestrator distribution beyond the current local file-worker boundary; restart-safe persistence, bounded timeout/deadline semantics, cross-process worker handoff, persisted post-claim cancellation, and local multiprocess topology verification are verified, but remote topology and broader backend depth are still open
-- coordinated multi-node rolling-restart, cross-node failover, and crash-recovery operational depth
-- installability matrix and long-duration sanitizer soak coverage
+- WebSocket client and server behavior still need more on-wire proof.
+- Long-lived server/session behavior, close/drain flows, and fairness under churn still need stronger verification.
+- Server listener slices are real locally, but the repo still leans too much on local ownership tests instead of network-truth tests.
 
-The biggest architectural caveat is simple:
-several areas already have honest local runtime slices, but the backend depth,
-transport depth, or operational depth is still incomplete.
+### Remote Control Plane Depth
 
-## What Still Blocks A Solid 10/10
+- MCP remains local-first in practice.
+- The orchestrator has a real cross-process file-worker boundary, but not yet a verified multi-host boundary.
+- Retry, idempotency, and exact remote/distributed execution guarantees are still thinner than a final release bar.
 
-### 1. Dependency Provenance And Bootstrap
+### Object Store Scope
 
-- The repo can run HTTP/3 and QUIC locally, but the `quiche` backend is still an external working-tree dependency rather than a fully pinned and self-rehydrating tracked artifact path.
-- Local recovery from an empty or accidentally cleaned workspace is not yet a one-command deterministic bootstrap; restoring `quiche` currently depends on fetching external source again.
-- The release-profile build is now resilient enough to recover locally when upstream `Cargo.lock` drift is encountered, but that fallback is convenience, not strong supply-chain control.
-- A real `10/10` state here means: pinned backend revision, deterministic bootstrap from the repo workflow itself, and clean-host verification that does not rely on ad hoc dependency resurrection.
+- The local filesystem backend is honest and verified.
+- Non-local object-store backends are still simulated.
+- The remaining work is either to implement at least one honest non-local backend or to freeze the v1 public contract around `local_fs` without ambiguity.
 
-### 2. Autoscaling Needs Operational Depth, Not Just Provider Honesty
+### Observability and Fleet Operations
 
-- Hetzner provisioning is honest and controller-owned, and the bootstrap/release handoff path is verified, but the project still lacks full multi-node fleet rollout and rollback proof.
-- The current verification is still fundamentally controller-local; it does not yet prove sustained fleet behavior under real rollout, drain, rollback, or provider-error recovery pressure.
-- A real `10/10` state here means: verified release propagation/bootstrap on new nodes and recovery behavior that survives provider/API turbulence without manual babysitting.
+- Metrics export is ahead of traces/logs export in verification depth.
+- Telemetry queueing is now bounded, but long-haul degraded exporter behavior still needs more proof.
+- Autoscaling and system recovery are chaos-tested locally, but multi-node rolling restart and failover depth are still open.
 
-### 3. Object Store And Persistence Are Strong Locally But Not Finished Externally
+### Build, Compatibility, and Release Confidence
 
-- The local filesystem object-store core is real and well tested, but cloud adapters remain simulated in the current tree.
-- Local filesystem backup/restore, import/export, and `.meta` sidecar persistence are now implemented and verified in PHPT (including restart path coverage for primary local backend rehydration and path confinement to the active storage root). Restart rehydration guarantees for cloud-distributed profiles remain open.
-- That leaves a gap between "local runtime is correct" and "operators can trust the state layer across restart, migration, and backend substitution".
+- QUIC and HTTP/3 are green locally, but `quiche` bootstrap is still not pinned and deterministic enough for a "done forever" claim.
+- Clean-host install and container smoke matrices are still missing as first-class gates.
+- Upgrade/downgrade compatibility for release artifacts and persisted state is still not proven.
+- Long-duration ASan/UBSan/leak soaks with archived diagnostics are still open.
 
-### 4. MCP And Orchestrator Are Still Local-First
+## Current Remaining Work Model
 
-- MCP request/upload/download behavior is real inside the repo-local runtime, but remote/distributed execution depth is still missing.
-- The orchestrator has a real native kernel, survives restart with persisted tool registry, logging state, completed runs, and running snapshots, now owns local CancelToken lifetime cleanly across persisted option sanitizing, and crosses a persisted file-worker boundary with verified post-claim cancellation and stale-claim recovery. `CancelToken` handoff is still honestly rejected across the `file_worker` process boundary, and deeper remote topology is still open.
-- A real multi-process topology harness now exists for the local controller/worker boundary, but there is still no multi-host verification harness proving these control-plane slices once execution leaves the local machine.
+The repo no longer treats every imaginable future check as the active queue.
 
-### 5. Telemetry And System Operations Still Need Real Export And Recovery Semantics
+The model is now:
 
-- Telemetry aggregation, queueing, and export contracts are real, repeated failed exports now preserve an acyclic retry queue, OTLP metrics export now safely handles packed metric batches and enum-backed metric types, and a local failover harness now proves queue preservation across exporter outage and recovery, but long-haul delivery guarantees are not yet production-deep.
-- System integration now verifies local component restart degradation and recovery, plus controller restart rehydration for autoscaling, but not rolling restart, coordinated drain, or failover across nodes.
-- The missing part is not shape or API parity; it is operational truth under degraded conditions.
+- `EPIC.md`
+  stable charter, pillars, and exit criteria
+- `ISSUES.md`
+  the 20 active executable open items
+- `PROJECT_ASSESSMENT.md`
+  verified state and caveats
 
-### 6. Realtime And Server Depth Need More On-Wire And Long-Lived Verification
-
-- WebSocket and server flows are strong locally, but the stack still lacks enough on-wire verification for server-side realtime behavior; the empty `King\WebSocket\Server` placeholder has been retired rather than being misrepresented as implemented runtime depth.
-- Long-lived soak coverage for upgrade flows, TLS reload, admin API, session churn, and multi-connection fairness remains thin relative to a true production-grade claim.
-- HTTP/2, HTTP/3, and WebSocket backpressure/fairness under sustained churn are still not closed out as hard guarantees.
-
-### 7. Release, Compatibility, And Confidence Gates Are Not Maxed Out Yet
-
-- The repo has reproducible packaging and profile smokes, but not a real clean-host install/smoke matrix across supported PHP/API combinations.
-- Benchmark harnesses and CI-enforced regression budgets now exist, but there is still no clean-host install/smoke matrix across supported PHP/API combinations.
-- Upgrade/downgrade compatibility for release artifacts and persisted state is still not proven as a first-class gate.
-- Long-duration ASan/UBSan soak coverage and archived diagnostics on failure remain open.
-- Release profile/tooling bootstrap still depends on host/repo path normalization for external `quiche/` and `curl` layouts, which can stall container matrix builds on clean or unusual hosts.
-
-## Current Assessment
-
-### Strong
-
-- audit and rebuild discipline around the active runtime surface
-- explicit ownership-oriented config and session runtime
-- HTTP client protocol breadth inside the current runtime scope
-- local server control and dispatch slices
-- IIBIN runtime ownership and codec maturity
-- native Semantic DNS register/discover/update control-plane slices
-- native Telemetry, Autoscaling, and System Integration coordination
-- security-gated userland configuration surface
-
-### Medium
-
-- local WebSocket runtime
-- object-store and CDN backend/runtime reach
-- MCP and pipeline orchestrator runtime reach
-- OO/procedural parity over shared native kernels
-
-### Weak or Still Open
-
-- multi-provider external backend depth and exporter depth around autoscaling
-- remote/distributed orchestration depth
-- operational recovery, failover, and exporter depth
-- hard performance, compatibility, and soak gates
+If a task is broad, vague, or derivative, it does not belong in the active
+queue until it is split into a repo-local executable leaf.
 
 ## Source Of Truth Boundaries
 
 Use the root documents like this:
 
 - `README.md`
-  Permanent target-system description
+  stable product description
 - `EPIC.md`
-  Strategic delivery decomposition
+  stable charter and release bar
 - `ISSUES.md`
-  Active open execution queue
+  single moving roadmap and open execution queue
+- `PROJECT_ASSESSMENT.md`
+  verified current state and caveats
 - `CONTRIBUTE.md`
-  Workflow and contribution rules
+  workflow and verification discipline
 - `stubs/king.php`
-  Public PHP signature surface
+  public PHP signature surface
 
-If a statement is volatile, verified, or tied to the current implementation
-reach, it belongs here instead of in `README.md`.
+If a statement is about what is verified right now, it belongs here rather than
+in `README.md`.

@@ -11,15 +11,19 @@ Use the repository docs like this:
 - `README.md`
   Permanent target-system description.
 - `EPIC.md`
-  Strategic delivery decomposition.
+  Stable charter and exit criteria.
 - `PROJECT_ASSESSMENT.md`
   Verified current implementation state.
 - `ISSUES.md`
-  Active repo-local execution queue.
+  Single moving roadmap and execution queue.
 - `CONTRIBUTE.md`
   Contribution and workflow rules.
 - `stubs/king.php`
   Public PHP signature surface.
+
+Raw or personal checklists are inputs, not source-of-truth repo planning.
+If open work matters, distill it into `ISSUES.md` as a small verifiable leaf
+instead of duplicating it across multiple docs.
 
 ## Working Standard
 
@@ -172,9 +176,9 @@ the canonical repo-local paths are `extension/scripts/static-checks.sh`,
 Before changing code, align the change against the right file:
 
 - product meaning or permanent system description: `README.md`
-- strategic decomposition: `EPIC.md`
+- stable charter or exit criteria: `EPIC.md`
 - current verified implementation state: `PROJECT_ASSESSMENT.md`
-- active work queue: `ISSUES.md`
+- active roadmap and execution queue: `ISSUES.md`
 - actual code and tests: `extension/` and `stubs/`
 
 ### 2. Change the kernel first
@@ -213,18 +217,17 @@ If information is volatile, it belongs somewhere else.
 
 ### EPIC
 
-`EPIC.md` is the strategic layer.
+`EPIC.md` is the stable charter layer.
 Update it only when:
 
-- the program decomposition changes
-- ordering constraints change
-- the definition of done changes
+- the program charter changes
+- the release-level exit criteria change
 - the product boundary changes
 
 ### ISSUES
 
-`ISSUES.md` is the active queue.
-This is where current open fronts, next leaves, and execution priorities belong.
+`ISSUES.md` is the single moving roadmap and active queue.
+This is where current open fronts, prioritized leaves, and execution sequencing belong.
 
 ### PROJECT_ASSESSMENT
 

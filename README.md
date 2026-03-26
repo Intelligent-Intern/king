@@ -7,9 +7,9 @@
 > It describes the target system, not the moving implementation state.
 > It is not a changelog, migration log, issue list, or verification report.
 > Public API signatures live in [`stubs/king.php`](stubs/king.php).
-> Strategic program structure lives in [`EPIC.md`](EPIC.md).
+> Stable program charter and exit criteria live in [`EPIC.md`](EPIC.md).
 > Current implementation state lives in [`PROJECT_ASSESSMENT.md`](PROJECT_ASSESSMENT.md).
-> Active repo-local execution work lives in [`ISSUES.md`](ISSUES.md).
+> The single moving roadmap and execution queue live in [`ISSUES.md`](ISSUES.md).
 
 ## What King Is
 
@@ -177,13 +177,15 @@ It is supposed to look like one native system with a PHP-facing control surface.
 - [`stubs/`](stubs/)
   Public PHP signature surface and IDE-facing type stubs.
 - [`EPIC.md`](EPIC.md)
-  Strategic delivery map.
+  Stable charter and release bar.
 - [`PROJECT_ASSESSMENT.md`](PROJECT_ASSESSMENT.md)
   Verified current implementation reach.
 - [`ISSUES.md`](ISSUES.md)
-  Active repo-local execution queue.
+  Single moving roadmap and execution queue.
 - [`CONTRIBUTE.md`](CONTRIBUTE.md)
   Contribution rules and development expectations.
+- `documentation/`
+  Examples and focused subsystem walkthroughs.
 - `benchmarks/`
   Performance-oriented fixtures and measurements.
 - `demo/`
@@ -203,11 +205,11 @@ Other documents serve different purposes:
 - [`README.md`](README.md)
   Permanent target-system description.
 - [`EPIC.md`](EPIC.md)
-  Strategic delivery decomposition and ordering.
+  Stable charter and release-level exit criteria.
 - [`PROJECT_ASSESSMENT.md`](PROJECT_ASSESSMENT.md)
   Verified current implementation state and reach.
 - [`ISSUES.md`](ISSUES.md)
-  Open repo-local execution queue.
+  Single moving roadmap and open execution queue.
 - [`CONTRIBUTE.md`](CONTRIBUTE.md)
   Contribution and workflow rules.
 - [`stubs/king.php`](stubs/king.php)
@@ -222,7 +224,15 @@ or migration sequencing, it does not.
 To build the extension from source:
 
 ```bash
-git clone --recursive https://github.com/cloudflare/quiche.git quiche
+git clone --recursive https://github.com/Intelligent-Intern/king.git
+cd king/extension
+./scripts/build-extension.sh
+```
+
+If the repo is already cloned without submodules:
+
+```bash
+git submodule update --init --recursive
 cd extension
 ./scripts/build-extension.sh
 ```

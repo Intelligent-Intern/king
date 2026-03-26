@@ -1,323 +1,108 @@
 # King Program EPIC
 
-> This document is the strategic delivery map for King.
-> It sits between the permanent product description in `README.md` and the
-> granular execution backlog in `ISSUES.md`.
-> It is not a changelog, not a test report, and not a line-by-line migration log.
+> This file is intentionally short.
+> It is the stable charter for King v1, not the moving roadmap.
+> All concrete remaining work, including strategic ordering, now lives in
+> `ISSUES.md`.
 
 ## Purpose
 
-King is being built as a native systems platform for PHP:
+King is meant to ship as one coherent native systems runtime for PHP rather
+than a bag of partially wired helper surfaces.
 
-- transport-aware client and server runtime
-- QUIC, HTTP/1, HTTP/2, HTTP/3, TLS, streaming, cancellation, and upgrades
-- Semantic DNS and service-routing control plane
-- IIBIN binary serialization
-- MCP and orchestration primitives
-- object-store and CDN capabilities
-- telemetry, admin, autoscaling, and operational control surfaces
+`EPIC.md` now exists only to hold the parts of that goal that should stay
+stable while execution moves:
 
-The purpose of this EPIC is to define the major delivery tracks required to turn
-that target system into a production-grade implementation.
+- the product boundary
+- the non-negotiable engineering rules
+- the release-level exit criteria
 
-## Document Boundaries
+If a statement is a live priority, a current leaf, or a decomposed task, it no
+longer belongs here.
 
-Use the documents in this way:
+## Product Boundary
 
-- `README.md`
-  Permanent target-system description. This should stay stable.
-- `EPIC.md`
-  Strategic delivery decomposition and ordering.
-- `PROJECT_ASSESSMENT.md`
-  Verified implementation state and current reach.
-- `ISSUES.md`
-  Active execution queue with verifiable leaves.
+King v1 is only real when the exported surface behaves like one system:
 
-If a statement is about what King is supposed to become, it belongs in
-`README.md`. If it is about how the program is decomposed and delivered, it
-belongs here. If it is about what is open right now, it belongs in
-`ISSUES.md`.
+- transport, client, and server paths share coherent lifecycle semantics
+- procedural and OO APIs are parallel surfaces over the same native kernels
+- control-plane subsystems are stateful, policy-driven, and restart-aware
+- operational surfaces describe real live behavior rather than static snapshots
+- build, packaging, tests, and docs describe the same system
 
-## North Star
-
-King is done when it behaves like one coherent native runtime rather than a
-collection of partially wired helper surfaces.
-
-That means:
-
-- the transport stack is real, reusable, and protocol-correct
-- client and server paths share explicit session, stream, config, and lifecycle semantics
-- OO and procedural APIs are parallel surfaces over the same kernels
-- the control plane is transport-aware, stateful, and policy-driven
-- data-plane subsystems are backed by real runtime implementations, not local placeholders
-- telemetry, admin, and operational controls are production-usable
-- the build, docs, test matrix, and error contracts describe reality
-
-## Delivery Rules
-
-Every epic follows the same quality bar:
+## Non-Negotiables
 
 - native runtime first, wrappers second
 - one kernel, multiple API surfaces
-- explicit ownership and teardown
-- deterministic policy and validation
-- no claimed capability without build and test proof
-- docs move with the runtime, not ahead of it
+- explicit ownership, teardown, and failure semantics
+- no capability claim without build and test proof
+- no permanent doc drift between target, verified state, and open work
+- no simulated or local-only behavior presented as fully real
 
-A major area is only complete when:
+## Strategic Pillars
 
-- the relevant native path is active in the build
-- the exposed API surface reaches that path directly
-- error contracts are explicit and stable
-- targeted tests exist
-- full build and suite verification stay green
+### 1. Runtime Truth
 
-## Epic Map
+Config, session, transport, server, and data-plane behavior must be backed by
+real kernels with explicit lifecycle and error contracts.
 
-### Epic 1: Truth, Hygiene, and Build Discipline
+### 2. Wire Truth
 
-**Goal**
-Keep the repository honest so strategic work is measured against the real build,
-real docs, and real test surface.
+Anything claimed as a transport or listener capability must be verified on-wire
+against real peers, not only through local runtime shims.
 
-**Includes**
+### 3. Durable Control Plane
 
-- separating target-system docs from current-state docs
-- keeping build inputs, generated artifacts, and archived sources distinct
-- surfacing active runtime versus stubbed surface clearly
-- preventing documentation drift
+MCP, orchestration, storage, and routing must survive restart, failure, and
+process boundaries honestly. Local-only convenience is not enough.
 
-**Done when**
+### 4. Operational Truth
 
-- the build surface is explicit
-- generated noise is controlled
-- status docs stop overstating or understating reality
+Telemetry, autoscaling, admin, readiness, drain, and recovery behavior must be
+observable, bounded, and failure-aware under degraded conditions.
 
-### Epic 2: Runtime Foundation
+### 5. Release Truth
 
-**Goal**
-Establish the irreducible native base: config snapshots, session state, TLS
-state, ticket lifecycle, shutdown semantics, and transport ownership.
+Build, bootstrap, packaging, compatibility, and sanitizer/soak coverage must be
+deterministic enough that release confidence does not depend on one lucky local
+machine.
 
-**Includes**
+## Exit Criteria
 
-- `King\Config` as real composed runtime state
-- `King\Session` lifecycle and native state ownership
-- TLS defaults, material loading, and session-ticket handling
-- transport bootstrap and core socket/runtime primitives
+King can only be treated as a truly finished v1 line when all of the following
+are true:
 
-**Done when**
+- every exported capability is either fully real and verified or removed from the public surface
+- wire-facing claims are backed by on-wire verification
+- restart, recovery, and lifecycle semantics are explicit and test-backed
+- build and packaging paths are deterministic on clean hosts
+- compatibility and persisted-state guarantees are written down and validated
+- `PROJECT_ASSESSMENT.md` has no material caveats left for the shipped surface
+- `ISSUES.md` no longer carries open v1 blockers
 
-- config, session, and TLS are not placeholders
-- lifecycle rules are explicit and shared by all upper layers
+## Document Model
 
-### Epic 3: Client Transport and Protocol Runtime
+Use the root documents like this:
 
-**Goal**
-Deliver a real client stack across HTTP/1, HTTP/2, HTTP/3, streaming, reuse,
-timeouts, cancellation, and upgrade-oriented flows.
+- `README.md`
+  stable product description
+- `EPIC.md`
+  stable charter and exit criteria
+- `ISSUES.md`
+  single moving roadmap and execution queue
+- `PROJECT_ASSESSMENT.md`
+  verified implementation state and current caveats
+- `CONTRIBUTE.md`
+  workflow and change discipline
 
-**Includes**
+## When To Change This File
 
-- direct and dispatched request paths
-- receive and streaming semantics
-- protocol-specific reuse and multiplexing
-- redirect, retry, early hints, push, and cancel behavior
-- WebSocket and related realtime client paths
+Only update `EPIC.md` when one of these changes:
 
-**Done when**
+- the product boundary
+- the non-negotiable engineering rules
+- the release-level exit criteria
+- the document model itself
 
-- protocol clients are real kernels, not adapter shells
-- transport-backed behavior is consistent across direct, dispatcher, and OO paths
-
-### Epic 4: Server Runtime and Control Surface
-
-**Goal**
-Deliver a real server-side runtime around listener dispatch, request/session
-state, upgrades, control hooks, admin, TLS reload, and operational helpers.
-
-**Includes**
-
-- listener and dispatcher runtime
-- server session semantics
-- HTTP/1, HTTP/2, HTTP/3 listener paths
-- cancel, early hints, websocket upgrade
-- admin and TLS control surfaces
-- telemetry and CORS server helpers
-
-**Done when**
-
-- server paths are not just config normalization or local snapshots
-- listeners, session state, and control hooks represent real runtime ownership
-
-### Epic 5: Public API Parity
-
-**Goal**
-Make the exposed PHP API reflect one runtime model rather than separate
-procedural and OO islands.
-
-**Includes**
-
-- object handlers and wrappers
-- procedural and OO parity over shared kernels
-- arginfo, signatures, and reflection correctness
-- typed exception hierarchy and stable validation/runtime/system boundaries
-
-**Done when**
-
-- OO and procedural surfaces are two views over the same state machines
-- signature and exception contracts are trustworthy
-
-### Epic 6: IIBIN and Binary Data Plane
-
-**Goal**
-Ship IIBIN as a real schema-driven binary runtime, not a partial proto toy.
-
-**Includes**
-
-- schema and enum registry
-- compiler-backed schema metadata
-- encode and decode runtime
-- object hydration
-- wire-compatibility behavior
-
-**Done when**
-
-- schema, codec, and object-hydration behavior are backend-owned
-- the procedural and `King\IIBIN` surfaces share the same runtime
-
-### Epic 7: Semantic DNS and Routing Control Plane
-
-**Goal**
-Turn local registry/read-model behavior into a real discovery and routing
-subsystem.
-
-**Includes**
-
-- init and server-state lifecycle
-- mother-node/control-node coordination
-- routing and scoring policy
-- durable or replicated state behavior
-- network-backed and end-to-end validation
-
-**Done when**
-
-- Semantic DNS is not just local registration plus lookup snapshots
-- discovery and route selection are driven by real state and policy
-
-### Epic 8: Object Store and CDN Runtime
-
-**Goal**
-Turn local store/cache behavior into backend-backed storage and distribution
-primitives.
-
-**Includes**
-
-- object-store backend abstraction
-- local and remote persistence
-- CDN cache and edge-state logic
-- TTL, invalidation, and distribution behavior
-- end-to-end storage and cache verification
-
-**Done when**
-
-- storage is durable or backend-backed
-- CDN behavior is more than local registry bookkeeping
-
-### Epic 9: MCP and Orchestration Runtime
-
-**Goal**
-Deliver MCP and orchestration as actual transport-aware runtime subsystems.
-
-**Includes**
-
-- MCP request transport
-- stream upload and download backends
-- protocol correctness and service interaction
-- pipeline orchestration and tool registry runtime
-
-**Done when**
-
-- MCP is not limited to local lifecycle and transfer placeholders
-- orchestrator execution is runtime-backed and testable
-
-### Epic 10: Telemetry, Autoscaling, and System Control
-
-**Goal**
-Move operational surfaces from snapshot-style status APIs to real active
-subsystems.
-
-**Includes**
-
-- telemetry spans, metrics, and export
-- autoscaling loop and provisioning behavior
-- system-level control and component management
-- observability and operator-facing runtime hooks
-
-**Done when**
-
-- operational APIs reflect live behavior rather than static summaries
-
-### Epic 11: Product Hardening
-
-**Goal**
-Raise the whole system from “broad runtime with real slices” to a production
-platform with hard guarantees.
-
-**Includes**
-
-- end-to-end and cross-protocol tests
-- real backend integration coverage
-- performance validation
-- security and policy hardening
-- failure-mode and lifecycle stress verification
-- packaging and build reproducibility
-
-**Done when**
-
-- subsystem-local correctness is matched by whole-system correctness
-- performance, safety, and operational expectations are backed by proof
-
-## Ordering Constraints
-
-The epics are not independent. The real dependency chain is:
-
-1. Truth and build hygiene
-2. Config, session, TLS, and lifecycle foundation
-3. Client and server transport/runtime kernels
-4. API parity over shared kernels
-5. Data-plane and control-plane subsystems
-6. Operational subsystems
-7. Product hardening across the whole stack
-
-In practice:
-
-- no serious API-parity work should outrun kernel ownership
-- no control-plane claim should outrun runtime state
-- no product claim should outrun E2E and failure testing
-
-## Release-Level Exit Criteria
-
-King can be treated as a production-grade 1.0 system only when all of the
-following are true:
-
-- the primary transport and protocol stack is real and reusable
-- client and server behavior share coherent lifecycle semantics
-- the public API surface is parity-correct and reflection-clean
-- Semantic DNS, storage/CDN, MCP, and telemetry are backend-backed
-- performance and operational claims are validated, not aspirational
-- documentation cleanly separates target system, execution queue, and verified state
-
-## Execution Notes
-
-Granular work decomposition, checkboxes, and current leaves belong in
-`ISSUES.md`. That file is expected to move frequently.
-
-This EPIC should change only when:
-
-- the program decomposition changes
-- epic ordering changes
-- the definition of “done” changes
-- the product boundary changes
-
-Everything else is execution detail.
+If the change is a priority shift, a new task, a split leaf, or a current
+blocker, it belongs in `ISSUES.md` instead.
