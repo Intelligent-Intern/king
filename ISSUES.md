@@ -16,9 +16,9 @@
 
 ## Current Next Leaf
 
-- [ ] Move orchestrator execution beyond the purely local runtime path and define a real worker/backend boundary
-  why this blocks `8/10`: the orchestrator now survives restart locally, but execution still terminates inside the same process instead of crossing an honest worker/backend boundary.
-  done when: tool execution no longer depends on the same local process boundary, and the repo proves a real control-plane handoff path beyond in-process placeholder execution.
+- [ ] Add bounded concurrency, deadline, and cancellation propagation across MCP request/upload/download and orchestrator execution
+  why this blocks `8/10`: the control plane now crosses a real file-worker boundary, but it still lacks hard runtime control over fan-out, deadline exhaustion, and cancellation once work is in flight.
+  done when: the repo enforces explicit concurrency and deadline ceilings and proves cancellation propagation across MCP helpers plus both orchestrator execution backends.
 
 ## Active Fronts
 
@@ -43,7 +43,8 @@
 
 ### 2. Distributed MCP and orchestrator depth
 
-- [ ] Move orchestrator execution beyond the purely local runtime path and define a real worker/backend boundary
+- [x] Move orchestrator execution beyond the purely local runtime path and define a real worker/backend boundary
+  completed: 2026-03-26
 - [x] Persist tool-registry and pipeline-run state across restart and recovery
   completed: 2026-03-26
 - [ ] Add bounded concurrency, deadline, and cancellation propagation across MCP request/upload/download and orchestrator execution
@@ -85,7 +86,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `287/287`
+  tests: `288/288`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -113,6 +114,9 @@
 - [x] Orchestrator registry and pipeline-run snapshots now survive restart and recovery
   targeted PHPTs: `250`, `294`, `307`, `308`
   coverage: persistent tool registry, logging snapshot persistence, completed-run history recovery, running-snapshot rehydration, restart-safe `king_system_get_component_info('pipeline_orchestrator')`, and continued pipeline execution after a recovered warm start.
+- [x] Orchestrator execution now crosses a real file-worker backend boundary
+  targeted PHPTs: `250`, `307`, `308`, `309`
+  coverage: config-selectable `local` versus `file_worker` execution backend, persisted run dispatch, cross-process queue claim and execution, worker-side run snapshot readback, local-path refusal when the file-worker backend is active, and live `queued_run_count` introspection in component info.
 
 ## How To Use This File
 

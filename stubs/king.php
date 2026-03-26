@@ -1216,11 +1216,25 @@ namespace {
     /**
      * Execute the current local pipeline-orchestrator runtime over the
      * provided initial data and normalized step list.
+     * This local path is unavailable when
+     * `king.orchestrator_execution_backend=file_worker`; in that mode the
+     * run must be queued via `king_pipeline_orchestrator_dispatch()` and
+     * consumed by `king_pipeline_orchestrator_worker_run_next()`.
      * @param array<int,array<string,mixed>> $pipeline
      * @param array<string,mixed>|null $exec_options
      * @return array<string,mixed>
      */
     function king_pipeline_orchestrator_run(mixed $initial_data, array $pipeline, ?array $exec_options = null): array {}
+
+    /**
+     * Queue one pipeline run onto the configured file-worker backend.
+     * Requires `king.orchestrator_execution_backend=file_worker` plus a
+     * non-empty `king.orchestrator_worker_queue_path`.
+     * @param array<int,array<string,mixed>> $pipeline
+     * @param array<string,mixed>|null $exec_options
+     * @return array<string,mixed>
+     */
+    function king_pipeline_orchestrator_dispatch(mixed $initial_data, array $pipeline, ?array $exec_options = null): array {}
 
     /**
      * Register or replace one tool definition in the active pipeline
@@ -1234,6 +1248,20 @@ namespace {
      * @param array<string,mixed> $config
      */
     function king_pipeline_orchestrator_configure_logging(array $config): bool {}
+
+    /**
+     * Claim and execute the next queued file-worker run from the configured
+     * orchestrator queue. Returns `false` when the queue is empty.
+     * @return array<string,mixed>|false
+     */
+    function king_pipeline_orchestrator_worker_run_next(): array|false {}
+
+    /**
+     * Read one persisted pipeline-run snapshot from the active orchestrator
+     * state registry.
+     * @return array<string,mixed>|false
+     */
+    function king_pipeline_orchestrator_get_run(string $run_id): array|false {}
 }
 
 /* The OO surface below mirrors the currently exported runtime classes. */

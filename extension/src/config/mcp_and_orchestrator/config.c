@@ -5,6 +5,7 @@
 #include "include/validation/config_param/validate_bool.h"
 #include "include/validation/config_param/validate_generic_string.h"
 #include "include/validation/config_param/validate_positive_long.h"
+#include "include/validation/config_param/validate_string_from_allowlist.h"
 
 #include "php.h"
 #include "zend_exceptions.h"
@@ -26,6 +27,11 @@ int kg_config_mcp_and_orchestrator_apply_userland_config_to(
 {
     zval *value;
     zend_string *key;
+    static const char *const orchestrator_backend_allowed[] = {
+        "local",
+        "file_worker",
+        NULL
+    };
 
     if (target == NULL || Z_TYPE_P(config_arr) != IS_ARRAY) {
         zend_throw_exception_ex(
@@ -92,6 +98,17 @@ int kg_config_mcp_and_orchestrator_apply_userland_config_to(
                     value,
                     "orchestrator_enable_distributed_tracing",
                     &target->orchestrator_enable_distributed_tracing) != SUCCESS) {
+                return FAILURE;
+            }
+        } else if (zend_string_equals_literal(key, "orchestrator_execution_backend")) {
+            if (kg_validate_string_from_allowlist(
+                    value,
+                    orchestrator_backend_allowed,
+                    &target->orchestrator_execution_backend) != SUCCESS) {
+                return FAILURE;
+            }
+        } else if (zend_string_equals_literal(key, "orchestrator_worker_queue_path")) {
+            if (kg_validate_generic_string(value, &target->orchestrator_worker_queue_path) != SUCCESS) {
                 return FAILURE;
             }
         } else if (zend_string_equals_literal(key, "orchestrator_state_path")) {

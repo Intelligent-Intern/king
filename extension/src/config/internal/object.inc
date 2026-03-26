@@ -456,6 +456,38 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "orchestrator.execution_backend",
+            sizeof("orchestrator.execution_backend") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->mcp.orchestrator_execution_backend != NULL
+                ? cfg->mcp.orchestrator_execution_backend
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "orchestrator.worker_queue_path",
+            sizeof("orchestrator.worker_queue_path") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->mcp.orchestrator_worker_queue_path != NULL
+                ? cfg->mcp.orchestrator_worker_queue_path
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "orchestrator.state_path",
             sizeof("orchestrator.state_path") - 1
         )
@@ -593,6 +625,16 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
         target,
         "orchestrator.enable_distributed_tracing",
         cfg->mcp.orchestrator_enable_distributed_tracing
+    );
+    add_assoc_string(
+        target,
+        "orchestrator.execution_backend",
+        cfg->mcp.orchestrator_execution_backend != NULL ? cfg->mcp.orchestrator_execution_backend : ""
+    );
+    add_assoc_string(
+        target,
+        "orchestrator.worker_queue_path",
+        cfg->mcp.orchestrator_worker_queue_path != NULL ? cfg->mcp.orchestrator_worker_queue_path : ""
     );
     add_assoc_string(
         target,

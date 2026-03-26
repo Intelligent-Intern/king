@@ -298,6 +298,10 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_pipeline_register_tool, 0, 0, 2)
     ZEND_ARG_TYPE_INFO(0, config, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_pipeline_get_run, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, run_id, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_telemetry_start_span, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, operation_name, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, attributes, IS_ARRAY, 1, "null")

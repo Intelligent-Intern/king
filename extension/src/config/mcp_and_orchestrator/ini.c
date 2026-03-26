@@ -6,6 +6,15 @@
 #include <ext/spl/spl_exceptions.h>
 #include <zend_ini.h>
 
+static void king_mcp_orchestrator_replace_string(char **target, zend_string *new_value)
+{
+    if (*target != NULL) {
+        pefree(*target, 1);
+    }
+
+    *target = pestrdup(ZSTR_VAL(new_value), 1);
+}
+
 static ZEND_INI_MH(OnUpdateMcpPositiveLong)
 {
     zend_long val = ZEND_STRTOL(ZSTR_VAL(new_value), NULL, 10);
@@ -39,6 +48,28 @@ static ZEND_INI_MH(OnUpdateMcpPositiveLong)
     return SUCCESS;
 }
 
+static ZEND_INI_MH(OnUpdateOrchestratorExecutionBackend)
+{
+    if (
+        !zend_string_equals_literal(new_value, "local")
+        && !zend_string_equals_literal(new_value, "file_worker")
+    ) {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "Invalid orchestrator execution backend. Allowed values: local, file_worker"
+        );
+        return FAILURE;
+    }
+
+    king_mcp_orchestrator_replace_string(
+        &king_mcp_orchestrator_config.orchestrator_execution_backend,
+        new_value
+    );
+
+    return SUCCESS;
+}
+
 PHP_INI_BEGIN()
     ZEND_INI_ENTRY("king.mcp_default_request_timeout_ms", "30000", PHP_INI_SYSTEM, OnUpdateMcpPositiveLong)
     ZEND_INI_ENTRY("king.mcp_max_message_size_bytes", "4194304", PHP_INI_SYSTEM, OnUpdateMcpPositiveLong)
@@ -51,6 +82,8 @@ PHP_INI_BEGIN()
     ZEND_INI_ENTRY("king.orchestrator_max_recursion_depth", "10", PHP_INI_SYSTEM, OnUpdateMcpPositiveLong)
     ZEND_INI_ENTRY("king.orchestrator_loop_concurrency_default", "50", PHP_INI_SYSTEM, OnUpdateMcpPositiveLong)
     STD_PHP_INI_ENTRY("king.orchestrator_enable_distributed_tracing", "1", PHP_INI_SYSTEM, OnUpdateBool, orchestrator_enable_distributed_tracing, kg_mcp_orchestrator_config_t, king_mcp_orchestrator_config)
+    ZEND_INI_ENTRY_EX("king.orchestrator_execution_backend", "local", PHP_INI_SYSTEM, OnUpdateOrchestratorExecutionBackend, NULL)
+    STD_PHP_INI_ENTRY("king.orchestrator_worker_queue_path", "", PHP_INI_SYSTEM, OnUpdateString, orchestrator_worker_queue_path, kg_mcp_orchestrator_config_t, king_mcp_orchestrator_config)
     STD_PHP_INI_ENTRY("king.orchestrator_state_path", "", PHP_INI_SYSTEM, OnUpdateString, orchestrator_state_path, kg_mcp_orchestrator_config_t, king_mcp_orchestrator_config)
 PHP_INI_END()
 

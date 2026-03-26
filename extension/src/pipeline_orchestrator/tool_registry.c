@@ -13,9 +13,11 @@
 #include "ext/standard/php_var.h"
 #include "zend_smart_str.h"
 
+#include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <zend_hash.h>
 
@@ -196,6 +198,111 @@ static size_t king_orchestrator_count_active_runs(void)
     } ZEND_HASH_FOREACH_END();
 
     return active_runs;
+}
+
+static int king_orchestrator_backend_is_file_worker(void)
+{
+    return king_mcp_orchestrator_config.orchestrator_execution_backend != NULL
+        && strcmp(king_mcp_orchestrator_config.orchestrator_execution_backend, "file_worker") == 0;
+}
+
+static int king_orchestrator_queue_path_is_configured(void)
+{
+    return king_mcp_orchestrator_config.orchestrator_worker_queue_path != NULL
+        && king_mcp_orchestrator_config.orchestrator_worker_queue_path[0] != '\0';
+}
+
+static int king_orchestrator_queue_name_is_job(const char *name)
+{
+    size_t name_len;
+
+    if (name == NULL || strncmp(name, "queued-", sizeof("queued-") - 1) != 0) {
+        return 0;
+    }
+
+    name_len = strlen(name);
+    return name_len > sizeof("queued-.job") - 1
+        && strcmp(name + name_len - (sizeof(".job") - 1), ".job") == 0;
+}
+
+static int king_orchestrator_decode_base64_zval(zend_string *encoded_value, zval *return_value)
+{
+    zend_string *decoded_payload;
+    const unsigned char *cursor;
+    php_unserialize_data_t var_hash;
+
+    if (encoded_value == NULL) {
+        ZVAL_NULL(return_value);
+        return SUCCESS;
+    }
+
+    decoded_payload = php_base64_decode(
+        (const unsigned char *) ZSTR_VAL(encoded_value),
+        ZSTR_LEN(encoded_value)
+    );
+    if (decoded_payload == NULL) {
+        return FAILURE;
+    }
+
+    cursor = (const unsigned char *) ZSTR_VAL(decoded_payload);
+    ZVAL_NULL(return_value);
+
+    PHP_VAR_UNSERIALIZE_INIT(var_hash);
+    if (!php_var_unserialize(
+            return_value,
+            &cursor,
+            cursor + ZSTR_LEN(decoded_payload),
+            &var_hash)) {
+        PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
+        zend_string_release(decoded_payload);
+        zval_ptr_dtor(return_value);
+        ZVAL_NULL(return_value);
+        return FAILURE;
+    }
+    PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
+    zend_string_release(decoded_payload);
+
+    return SUCCESS;
+}
+
+static int king_orchestrator_queue_ensure_directory(void)
+{
+    const char *queue_path = king_mcp_orchestrator_config.orchestrator_worker_queue_path;
+
+    if (!king_orchestrator_queue_path_is_configured()) {
+        return FAILURE;
+    }
+
+    if (mkdir(queue_path, 0755) != 0 && errno != EEXIST) {
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static size_t king_orchestrator_count_queued_runs(void)
+{
+    DIR *dir;
+    struct dirent *entry;
+    size_t queued_runs = 0;
+
+    if (!king_orchestrator_queue_path_is_configured()) {
+        return 0;
+    }
+
+    dir = opendir(king_mcp_orchestrator_config.orchestrator_worker_queue_path);
+    if (dir == NULL) {
+        return 0;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (king_orchestrator_queue_name_is_job(entry->d_name)) {
+            queued_runs++;
+        }
+    }
+
+    closedir(dir);
+    return queued_runs;
 }
 
 static int king_orchestrator_persist_state(void)
@@ -443,6 +550,235 @@ static king_orchestrator_run_state_t *king_orchestrator_find_run(zend_string *ru
     }
 
     return (king_orchestrator_run_state_t *) Z_PTR_P(entry);
+}
+
+int king_orchestrator_load_run_payload(
+    zend_string *run_id,
+    zval *initial_data,
+    zval *pipeline,
+    zval *options)
+{
+    king_orchestrator_run_state_t *run_state;
+
+    if (initial_data == NULL || pipeline == NULL || options == NULL) {
+        return FAILURE;
+    }
+
+    ZVAL_NULL(initial_data);
+    ZVAL_NULL(pipeline);
+    ZVAL_NULL(options);
+
+    run_state = king_orchestrator_find_run(run_id);
+    if (run_state == NULL) {
+        return FAILURE;
+    }
+
+    if (
+        king_orchestrator_decode_base64_zval(run_state->initial_data_b64, initial_data) != SUCCESS
+        || king_orchestrator_decode_base64_zval(run_state->pipeline_b64, pipeline) != SUCCESS
+        || king_orchestrator_decode_base64_zval(run_state->options_b64, options) != SUCCESS
+    ) {
+        zval_ptr_dtor(initial_data);
+        zval_ptr_dtor(pipeline);
+        zval_ptr_dtor(options);
+        ZVAL_NULL(initial_data);
+        ZVAL_NULL(pipeline);
+        ZVAL_NULL(options);
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
+{
+    king_orchestrator_run_state_t *run_state;
+    zval initial_data;
+    zval pipeline;
+    zval options;
+    zval result;
+    zval error;
+
+    ZVAL_NULL(&initial_data);
+    ZVAL_NULL(&pipeline);
+    ZVAL_NULL(&options);
+    ZVAL_NULL(&result);
+    ZVAL_NULL(&error);
+
+    run_state = king_orchestrator_find_run(run_id);
+    if (run_state == NULL) {
+        return FAILURE;
+    }
+
+    if (
+        king_orchestrator_decode_base64_zval(run_state->initial_data_b64, &initial_data) != SUCCESS
+        || king_orchestrator_decode_base64_zval(run_state->pipeline_b64, &pipeline) != SUCCESS
+        || king_orchestrator_decode_base64_zval(run_state->options_b64, &options) != SUCCESS
+        || king_orchestrator_decode_base64_zval(run_state->result_b64, &result) != SUCCESS
+        || king_orchestrator_decode_base64_zval(run_state->error_b64, &error) != SUCCESS
+    ) {
+        zval_ptr_dtor(&initial_data);
+        zval_ptr_dtor(&pipeline);
+        zval_ptr_dtor(&options);
+        zval_ptr_dtor(&result);
+        zval_ptr_dtor(&error);
+        return FAILURE;
+    }
+
+    array_init(return_value);
+    add_assoc_stringl(return_value, "run_id", ZSTR_VAL(run_state->run_id), ZSTR_LEN(run_state->run_id));
+    add_assoc_stringl(return_value, "status", ZSTR_VAL(run_state->status), ZSTR_LEN(run_state->status));
+    add_assoc_long(return_value, "started_at", (zend_long) run_state->started_at);
+    add_assoc_long(return_value, "finished_at", (zend_long) run_state->finished_at);
+    add_assoc_zval(return_value, "initial_data", &initial_data);
+    add_assoc_zval(return_value, "pipeline", &pipeline);
+    add_assoc_zval(return_value, "options", &options);
+    add_assoc_zval(return_value, "result", &result);
+    add_assoc_zval(return_value, "error", &error);
+
+    return SUCCESS;
+}
+
+int king_orchestrator_enqueue_run(zend_string *run_id, zval *return_value)
+{
+    char queue_file_path[1024];
+    FILE *stream;
+
+    if (!king_orchestrator_backend_is_file_worker() || !king_orchestrator_queue_path_is_configured()) {
+        return FAILURE;
+    }
+
+    if (king_orchestrator_queue_ensure_directory() != SUCCESS) {
+        return FAILURE;
+    }
+
+    snprintf(
+        queue_file_path,
+        sizeof(queue_file_path),
+        "%s/queued-%s.job",
+        king_mcp_orchestrator_config.orchestrator_worker_queue_path,
+        ZSTR_VAL(run_id)
+    );
+
+    stream = fopen(queue_file_path, "wb");
+    if (stream == NULL) {
+        return FAILURE;
+    }
+
+    if (fprintf(stream, "%s\n", ZSTR_VAL(run_id)) < 0) {
+        fclose(stream);
+        unlink(queue_file_path);
+        return FAILURE;
+    }
+
+    if (fclose(stream) != 0) {
+        unlink(queue_file_path);
+        return FAILURE;
+    }
+
+    array_init(return_value);
+    add_assoc_stringl(return_value, "run_id", ZSTR_VAL(run_id), ZSTR_LEN(run_id));
+    add_assoc_string(return_value, "backend", "file_worker");
+    add_assoc_string(return_value, "status", "queued");
+    add_assoc_long(return_value, "enqueued_at", (zend_long) time(NULL));
+
+    return SUCCESS;
+}
+
+int king_orchestrator_claim_next_run(zend_string **run_id_out, char *claimed_path, size_t claimed_path_len)
+{
+    DIR *dir;
+    FILE *stream;
+    struct dirent *entry;
+    char queued_path[1024];
+    char selected_name[256];
+    char run_id_buffer[256];
+    char *newline;
+
+    if (run_id_out == NULL || claimed_path == NULL || claimed_path_len == 0) {
+        return FAILURE;
+    }
+
+    *run_id_out = NULL;
+    claimed_path[0] = '\0';
+
+    if (!king_orchestrator_backend_is_file_worker() || !king_orchestrator_queue_path_is_configured()) {
+        return FAILURE;
+    }
+
+    dir = opendir(king_mcp_orchestrator_config.orchestrator_worker_queue_path);
+    if (dir == NULL) {
+        if (errno == ENOENT) {
+            return SUCCESS;
+        }
+        return FAILURE;
+    }
+
+    selected_name[0] = '\0';
+    while ((entry = readdir(dir)) != NULL) {
+        if (king_orchestrator_queue_name_is_job(entry->d_name)) {
+            strncpy(selected_name, entry->d_name, sizeof(selected_name) - 1);
+            selected_name[sizeof(selected_name) - 1] = '\0';
+            break;
+        }
+    }
+
+    closedir(dir);
+
+    if (selected_name[0] == '\0') {
+        return SUCCESS;
+    }
+
+    snprintf(
+        queued_path,
+        sizeof(queued_path),
+        "%s/%s",
+        king_mcp_orchestrator_config.orchestrator_worker_queue_path,
+        selected_name
+    );
+    snprintf(
+        claimed_path,
+        claimed_path_len,
+        "%s/claimed-%ld-%s",
+        king_mcp_orchestrator_config.orchestrator_worker_queue_path,
+        (long) getpid(),
+        selected_name
+    );
+
+    if (rename(queued_path, claimed_path) != 0) {
+        claimed_path[0] = '\0';
+        return FAILURE;
+    }
+
+    stream = fopen(claimed_path, "rb");
+    if (stream == NULL) {
+        unlink(claimed_path);
+        claimed_path[0] = '\0';
+        return FAILURE;
+    }
+
+    if (fgets(run_id_buffer, sizeof(run_id_buffer), stream) == NULL) {
+        fclose(stream);
+        unlink(claimed_path);
+        claimed_path[0] = '\0';
+        return FAILURE;
+    }
+
+    fclose(stream);
+
+    newline = strpbrk(run_id_buffer, "\r\n");
+    if (newline != NULL) {
+        *newline = '\0';
+    }
+
+    if (run_id_buffer[0] == '\0') {
+        unlink(claimed_path);
+        claimed_path[0] = '\0';
+        return FAILURE;
+    }
+
+    *run_id_out = zend_string_init(run_id_buffer, strlen(run_id_buffer), 0);
+    return SUCCESS;
 }
 
 int king_orchestrator_registry_init(void)
@@ -745,6 +1081,20 @@ void king_orchestrator_append_component_info(zval *configuration)
         "logging_configured",
         king_orchestrator_logging_config_b64 != NULL ? 1 : 0
     );
+    add_assoc_string(
+        configuration,
+        "execution_backend",
+        king_mcp_orchestrator_config.orchestrator_execution_backend != NULL
+            ? king_mcp_orchestrator_config.orchestrator_execution_backend
+            : ""
+    );
+    add_assoc_string(
+        configuration,
+        "worker_queue_path",
+        king_mcp_orchestrator_config.orchestrator_worker_queue_path != NULL
+            ? king_mcp_orchestrator_config.orchestrator_worker_queue_path
+            : ""
+    );
     add_assoc_bool(
         configuration,
         "recovered_from_state",
@@ -764,6 +1114,11 @@ void king_orchestrator_append_component_info(zval *configuration)
         configuration,
         "active_run_count",
         (zend_long) king_orchestrator_count_active_runs()
+    );
+    add_assoc_long(
+        configuration,
+        "queued_run_count",
+        (zend_long) king_orchestrator_count_queued_runs()
     );
 
     if (king_orchestrator_last_run_id != NULL) {
@@ -829,4 +1184,29 @@ PHP_FUNCTION(king_pipeline_orchestrator_register_tool)
         "king_pipeline_orchestrator_register_tool() failed to persist the tool registry snapshot."
     );
     RETURN_THROWS();
+}
+
+PHP_FUNCTION(king_pipeline_orchestrator_get_run)
+{
+    zend_string *run_id;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(run_id)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (ZSTR_LEN(run_id) == 0) {
+        king_set_error("king_pipeline_orchestrator_get_run() requires a non-empty run id.");
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "king_pipeline_orchestrator_get_run() requires a non-empty run id."
+        );
+        RETURN_THROWS();
+    }
+
+    if (king_orchestrator_get_run_snapshot(run_id, return_value) == SUCCESS) {
+        return;
+    }
+
+    RETURN_FALSE;
 }

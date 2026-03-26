@@ -19,5 +19,7 @@ void kg_config_mcp_and_orchestrator_defaults_load(void)
     king_mcp_orchestrator_config.orchestrator_max_recursion_depth = 10;
     king_mcp_orchestrator_config.orchestrator_loop_concurrency_default = 50;
     king_mcp_orchestrator_config.orchestrator_enable_distributed_tracing = true;
+    king_mcp_orchestrator_config.orchestrator_execution_backend = king_persistent_strdup("local");
+    king_mcp_orchestrator_config.orchestrator_worker_queue_path = king_persistent_strdup("");
     king_mcp_orchestrator_config.orchestrator_state_path = king_persistent_strdup("");
 }
