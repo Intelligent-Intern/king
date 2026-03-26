@@ -9,23 +9,7 @@ if (!is_string($library) || $library === '' || !is_file($library)) {
 ?>
 --FILE--
 <?php
-function king_http3_start_silent_udp_server(): array
-{
-    $server = stream_socket_server('udp://127.0.0.1:0', $errno, $errstr, STREAM_SERVER_BIND);
-    if ($server === false) {
-        throw new RuntimeException("failed to reserve silent UDP test port: $errstr");
-    }
-
-    $serverName = stream_socket_get_name($server, false);
-    [, $port] = explode(':', $serverName, 2);
-
-    return [$server, (int) $port];
-}
-
-function king_http3_stop_silent_udp_server(array $server): void
-{
-    fclose($server[0]);
-}
+require __DIR__ . '/http3_test_helper.inc';
 
 $server = king_http3_start_silent_udp_server();
 try {

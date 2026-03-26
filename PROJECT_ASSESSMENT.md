@@ -17,9 +17,9 @@ The remaining gaps are no longer about broad runtime parity or placeholder
 surfaces inside the local tree.
 They are concentrated in six areas:
 
-- multi-connection fairness and backpressure under realtime churn
 - remote MCP and deeper distributed orchestration
 - larger Smart-DNS topology and distributed routing verification beyond the local slice
+- honest non-local object-store backend scope versus a locked `local_fs` v1 contract
 - long-haul telemetry, exporter, and fleet recovery depth
 - deterministic QUIC bootstrap and clean-host installation confidence
 - compatibility, sanitizer soak, and release-grade upgrade guarantees
@@ -36,7 +36,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `315/315` passing
+- `./scripts/test-extension.sh`: `318/318` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
@@ -50,7 +50,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `315` PHPT files
+- `extension/tests`: `318` PHPT files
 - public stub parity: `125` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -62,8 +62,11 @@ The current tree already proves:
 
 - explicit config and session ownership through `King\Config` and `King\Session`
 - real HTTP/1, HTTP/2, and HTTP/3 client request paths, including reuse, streaming, and cancel/timeout contracts
+- HTTP/2 shared-session fairness under mixed slow and fast concurrent streams
+- HTTP/3 one-shot churn isolation across repeated timeout and healthy-recovery cycles
 - local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3
 - on-wire WebSocket client handshake/frame/close runtime plus honest OO `King\WebSocket\Connection` parity
+- multi-client WebSocket close/reconnect churn on one server without cross-client starvation or corruption
 - server-side `king_server_upgrade_to_websocket()` both as an honest local marker slice for local listeners and as a real on-wire HTTP/1 one-shot upgrade path with frame flow, handler ownership, and close/drain coverage
 - repeated server/session soak coverage for local upgrade, early hints, admin API, TLS reload, and on-wire websocket close/drain cycles
 - IIBIN schema, registry, encode/decode, object hydration, and wire validation
@@ -80,12 +83,6 @@ The current tree already proves:
 ## What Is Still Not Finished
 
 The repo is still short of a "nothing left to caveat" v1 in these areas:
-
-### Realtime and Server Wire Depth
-
-- WebSocket client behavior, the narrow HTTP/1 server-side upgrade path, and repeated server/session soak coverage are now proven.
-- Multi-connection fairness and backpressure under HTTP/2, HTTP/3, and WebSocket churn still need stronger verification.
-- Server listener slices are real locally, but the repo still leans too much on local ownership tests instead of network-truth tests.
 
 ### Remote Control Plane Depth
 
