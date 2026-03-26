@@ -90,7 +90,8 @@ int king_mcp_transfer_store(
 
     /* Store the object_id in the registry for lookup parity */
     zval val;
-    ZVAL_STR_COPY(&val, key); /* We use the key itself as a marker/ref for now */
+    /* The hash key already identifies the persisted transfer; value is presence-only. */
+    ZVAL_TRUE(&val);
     zend_hash_update(&state->transfers, key, &val);
     
     zend_string_release(key);
@@ -107,15 +108,14 @@ zend_string *king_mcp_transfer_find(
 
     zend_string *key = king_mcp_transfer_key_create(service, method, id);
     zval *val = zend_hash_find(&state->transfers, key);
-    zend_string_release(key);
 
-    if (val && Z_TYPE_P(val) == IS_STRING) {
+    if (val != NULL) {
         char object_id[256];
         void *data = NULL;
         size_t data_size = 0;
         king_object_metadata_t meta;
 
-        snprintf(object_id, sizeof(object_id), "mcp-%s", ZSTR_VAL(Z_STR_P(val)));
+        snprintf(object_id, sizeof(object_id), "mcp-%s", ZSTR_VAL(key));
         
         if (king_object_store_read_object(object_id, &data, &data_size, &meta) == SUCCESS) {
             zend_string *res = zend_string_init(data, data_size, 0);
@@ -123,9 +123,11 @@ zend_string *king_mcp_transfer_find(
                 memset(data, 0, data_size);
             }
             pefree(data, 1); /* Allocated by pecalloc(..., 1) in read_object */
+            zend_string_release(key);
             return res;
         }
     }
+    zend_string_release(key);
     return NULL;
 }
 

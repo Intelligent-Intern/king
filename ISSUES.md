@@ -98,7 +98,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `295/295`
+  tests: `296/296`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -135,6 +135,9 @@
 - [x] MCP and orchestrator runtime controls now enforce deadline/timeout ceilings and bounded local concurrency
   targeted PHPTs: `157`, `234`, `235`, `236`, `309`, `310`, `311`
   coverage: MCP request/upload/download `timeout_ms`/`deadline_ms`/`cancel` handling, OO and procedural parity, orchestrator `timeout_ms`/`overall_timeout_ms`/`deadline_ms`/`max_concurrency`, persisted worker-side control recovery, and explicit refusal to pretend that live `CancelToken` propagation already works across the `file_worker` boundary.
+- [x] MCP upload helpers now prove repeated stream-upload teardown does not accumulate per-call payload ownership
+  targeted PHPTs: `234`, `235`, `317`
+  coverage: procedural and OO MCP upload paths both release caller-owned payload buffers after persistence, repeated connection teardown stays bounded under a low `memory_limit`, and the transfer registry no longer duplicates persisted transfer keys as zval string payloads.
 - [x] File-worker orchestrator runs now honor persisted cross-process cancellation after claim and during stale-claim recovery
   targeted PHPTs: `309`, `311`, `314`
   coverage: controller-side `king_pipeline_orchestrator_cancel_run()` requests persist into claimed runs, workers convert live and recovered claimed jobs into durable `cancelled` snapshots instead of fatal-only exits, and stale `claimed-*.job` recovery now stays cancellable across restart-safe queue handoff.
