@@ -7,7 +7,7 @@ king.http2_max_concurrent_streams=32
 king.tcp_enable=0
 king.storage_default_redundancy_mode=replication
 king.cdn_cache_mode=memory
-king.dns_mode=authoritative
+king.dns_mode=service_discovery
 king.otel_service_name=king_assessment
 king.cluster_autoscale_provider=hetzner
 king.cluster_autoscale_max_nodes=5
@@ -61,7 +61,7 @@ int(32)
 bool(false)
 string(11) "replication"
 string(6) "memory"
-string(13) "authoritative"
+string(17) "service_discovery"
 string(15) "king_assessment"
 string(7) "hetzner"
 int(5)

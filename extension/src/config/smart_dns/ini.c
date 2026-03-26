@@ -6,6 +6,15 @@
 #include <zend_ini.h>
 #include <zend_exceptions.h>
 
+static void king_smart_dns_replace_string(char **target, zend_string *value)
+{
+    if (*target != NULL) {
+        pefree(*target, 1);
+    }
+
+    *target = pestrdup(ZSTR_VAL(value), 1);
+}
+
 static ZEND_INI_MH(OnUpdateDnsPositiveLong)
 {
     zend_long val = ZEND_STRTOL(ZSTR_VAL(new_value), NULL, 10);
@@ -33,18 +42,13 @@ static ZEND_INI_MH(OnUpdateDnsPositiveLong)
 
 static ZEND_INI_MH(OnUpdateDnsModeString)
 {
-    const char *allowed[] = {"authoritative", "recursive_resolver", "service_discovery", NULL};
-    int i;
-
-    for (i = 0; allowed[i]; ++i) {
-        if (strcmp(ZSTR_VAL(new_value), allowed[i]) == 0) {
-            king_smart_dns_config.mode = pestrdup(ZSTR_VAL(new_value), 1);
-            return SUCCESS;
-        }
+    if (zend_string_equals_literal(new_value, "service_discovery")) {
+        king_smart_dns_replace_string(&king_smart_dns_config.mode, new_value);
+        return SUCCESS;
     }
 
     zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0,
-        "Invalid dns_mode specified for Smart-DNS module.");
+        "Smart-DNS v1 currently only supports dns_mode=service_discovery.");
     return FAILURE;
 }
 

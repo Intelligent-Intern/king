@@ -187,6 +187,8 @@ PHP_FUNCTION(king_system_get_component_info)
             king_safe_string(king_smart_dns_config.server_bind_host));
         add_assoc_long(&configuration, "server_port",
             king_smart_dns_config.server_port);
+        add_assoc_string(&configuration, "mode",
+            king_safe_string(king_smart_dns_config.mode));
         add_assoc_bool(&configuration, "semantic_mode_enable",
             king_smart_dns_config.semantic_mode_enable ? 1 : 0);
         add_assoc_string(&configuration, "mothernode_uri",

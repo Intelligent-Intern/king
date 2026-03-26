@@ -21,7 +21,32 @@ static int kg_smart_dns_apply_bool_field(zval *value, const char *name, bool *ta
     return SUCCESS;
 }
 
-static const char *k_smart_dns_mode_allowed[] = {"authoritative", "recursive_resolver", "service_discovery", NULL};
+static int kg_smart_dns_validate_mode(zval *value, char **target)
+{
+    if (Z_TYPE_P(value) != IS_STRING) {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "Invalid type provided. A string is required."
+        );
+        return FAILURE;
+    }
+
+    if (!zend_string_equals_literal(Z_STR_P(value), "service_discovery")) {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "Smart-DNS v1 currently only supports dns.mode=service_discovery."
+        );
+        return FAILURE;
+    }
+
+    if (*target != NULL) {
+        pefree(*target, 1);
+    }
+    *target = pestrdup(Z_STRVAL_P(value), 1);
+    return SUCCESS;
+}
 
 int kg_config_smart_dns_apply_userland_config_to(
     kg_smart_dns_config_t *target,
@@ -78,7 +103,7 @@ int kg_config_smart_dns_apply_userland_config_to(
                 return FAILURE;
             }
         } else if (zend_string_equals_literal(key, "dns_mode")) {
-            if (kg_validate_string_from_allowlist(value, k_smart_dns_mode_allowed, &target->mode) != SUCCESS) {
+            if (kg_smart_dns_validate_mode(value, &target->mode) != SUCCESS) {
                 return FAILURE;
             }
         } else if (zend_string_equals_literal(key, "dns_server_bind_host")) {

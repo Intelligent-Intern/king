@@ -10,7 +10,7 @@ $cfg = king_new_config([
     'cdn.enable' => true,
     'cdn.cache_mode' => 'memory',
     'dns.server_enable' => true,
-    'dns.mode' => 'authoritative',
+    'dns.mode' => 'service_discovery',
     'otel.enable' => false,
     'otel.service_name' => 'king_assessment',
 ]);
@@ -34,7 +34,7 @@ string(11) "replication"
 bool(true)
 string(6) "memory"
 bool(true)
-string(13) "authoritative"
+string(17) "service_discovery"
 bool(false)
 string(15) "king_assessment"
 int(8)
