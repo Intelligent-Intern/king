@@ -178,13 +178,11 @@ namespace {
     function king_http3_request_send(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): array|false {}
 
     /**
-     * Materialize a local validated WebSocket connection-state resource.
+     * Materialize an on-wire validated WebSocket client connection resource.
      * The current runtime accepts absolute `ws://` and `wss://` URLs,
-     * snapshots optional handshake headers plus `connection_config`,
-     * `max_payload_size`, `ping_interval_ms`, and `handshake_timeout_ms`,
-     * and returns a `King\WebSocket` resource. The same local runtime also
-     * backs send/receive/ping/status/close; only an on-wire handshake,
-     * transport backend, and OO parity remain outside the active leaf.
+     * performs a real client handshake, snapshots optional handshake headers
+     * plus `connection_config`, `max_payload_size`, `ping_interval_ms`, and
+     * `handshake_timeout_ms`, and returns a `King\WebSocket` resource.
      * @param array<string,mixed>|null $headers
      * @param array<string,mixed>|null $options
      * @return resource|false
@@ -192,43 +190,46 @@ namespace {
     function king_client_websocket_connect(string $url, ?array $headers = null, ?array $options = null) {}
 
     /**
-     * Queue a local WebSocket text or binary frame on an active
-     * `King\WebSocket` resource.
+     * Send a WebSocket text or binary frame on an active `King\WebSocket`
+     * resource.
+     * Client-created resources use a live socket; server-upgrade resources
+     * still use the local server-side runtime slice in v1.
      * @param mixed $websocket
      */
     function king_client_websocket_send(mixed $websocket, string $data, bool $is_binary = false): bool {}
 
     /**
-     * Receive the next queued local frame payload from an active
-     * `King\WebSocket` resource. Returns `""` when the local queue is empty
-     * and the connection remains open.
+     * Receive the next available frame payload from an active
+     * `King\WebSocket` resource. Returns `""` when no payload is currently
+     * queued and the connection remains open.
      * @param mixed $websocket
      * @return string|false
      */
     function king_client_websocket_receive(mixed $websocket, int $timeout_ms = -1): string|false {}
 
     /**
-     * Record a local WebSocket ping on an active `King\WebSocket` resource.
+     * Send a WebSocket ping on an active `King\WebSocket` resource.
      * @param mixed $websocket
      */
     function king_client_websocket_ping(mixed $websocket, string $payload = ""): bool {}
 
     /**
-     * Return the current numeric local connection state for an active
+     * Return the current numeric connection state for an active
      * `King\WebSocket` resource.
      * @param mixed $websocket
      */
     function king_client_websocket_get_status(mixed $websocket): int {}
 
     /**
-     * Close the local `King\WebSocket` resource immediately with optional
-     * close metadata. The local queue remains drainable until empty.
+     * Close the active `King\WebSocket` resource with optional close metadata.
+     * Client-created resources send a real close frame and keep already
+     * received payloads drainable until empty.
      * @param mixed $websocket
      */
     function king_client_websocket_close(mixed $websocket, int $status_code = 1000, string $reason = ""): bool {}
 
     /**
-     * Alias for `king_client_websocket_send()` over the same local runtime.
+     * Alias for `king_client_websocket_send()` over the same runtime.
      * @param mixed $websocket
      */
     function king_websocket_send(mixed $websocket, string $data, bool $is_binary = false): bool {}
@@ -426,8 +427,8 @@ namespace {
      * stream on an open `King\Session` resource or object.
      * The current runtime records upgrade metadata on the session
      * snapshot, derives a local `ws://` or `wss://` URL from the active
-     * listener/session state, and rejects duplicate or locally cancelled
-     * stream IDs.
+     * listener/session state, keeps the resource inside the local server-side
+     * runtime slice, and rejects duplicate or locally cancelled stream IDs.
      * @param mixed $session
      * @return resource|false
      */

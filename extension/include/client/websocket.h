@@ -13,9 +13,8 @@
  *
  * The active runtime validates the target URL, snapshots the effective
  * WebSocket defaults from the global/runtime config plus optional
- * `connection_config`, and returns a local `King\WebSocket` resource. It does
- * not yet perform an on-wire handshake, but the same local runtime now backs
- * send/receive/ping/status/close over that validated state.
+ * `connection_config`, performs a real client handshake, and returns a
+ * `King\WebSocket` resource.
  *
  * @param url_str The WebSocket URL.
  * @param url_len The length of `url_str`.
@@ -43,9 +42,8 @@ PHP_FUNCTION(king_client_websocket_send);
  * @param websocket_resource The WebSocket resource.
  * @param timeout_ms Wait timeout in milliseconds. `0` returns immediately,
  * `-1` waits indefinitely.
- * @return The next queued local payload string, an empty string when the
- * local queue is empty and the connection remains open, or FALSE on close or
- * error.
+ * @return The next queued payload string, an empty string when the queue is
+ * empty and the connection remains open, or FALSE on close or error.
  */
 PHP_FUNCTION(king_client_websocket_receive);
 

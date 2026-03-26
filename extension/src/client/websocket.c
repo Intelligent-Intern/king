@@ -5,16 +5,29 @@
 #include "include/config/app_http3_websockets_webtransport/base_layer.h"
 
 #include "Zend/zend_smart_str.h"
+#include "ext/standard/base64.h"
+#include "ext/standard/sha1.h"
 #include "zend_exceptions.h"
 #include "ext/standard/url.h"
 
+#include <stdint.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
+#include <time.h>
 
 #define KING_WS_PING_MAX_PAYLOAD_LEN 125
 #define KING_WS_CLOSE_REASON_MAX_LEN 123
+#define KING_WS_HTTP_LINE_MAX 4096
+#define KING_WS_OPCODE_TEXT 0x1
+#define KING_WS_OPCODE_BINARY 0x2
+#define KING_WS_OPCODE_CLOSE 0x8
+#define KING_WS_OPCODE_PING 0x9
+#define KING_WS_OPCODE_PONG 0xA
+
+static const char *king_websocket_accept_magic =
+    "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_WebSocket_Connection___construct, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, url, IS_STRING, 0)
@@ -216,6 +229,992 @@ static king_ws_message *king_websocket_message_queue_shift(
 
     message->next = NULL;
     return message;
+}
+
+static void king_websocket_trim_line(char *line, size_t *line_len)
+{
+    while (*line_len > 0) {
+        char c = line[*line_len - 1];
+
+        if (c != '\r' && c != '\n') {
+            break;
+        }
+
+        (*line_len)--;
+    }
+
+    line[*line_len] = '\0';
+}
+
+static const char *king_websocket_skip_ascii_space(const char *value)
+{
+    while (*value == ' ' || *value == '\t') {
+        value++;
+    }
+
+    return value;
+}
+
+static zend_string *king_websocket_build_authority(king_ws_state *state)
+{
+    bool default_port =
+        (!state->secure && state->port == 80)
+        || (state->secure && state->port == 443);
+    const char *host = ZSTR_VAL(state->host);
+    size_t host_len = ZSTR_LEN(state->host);
+    bool needs_brackets =
+        memchr(host, ':', host_len) != NULL
+        && !(host_len >= 2 && host[0] == '[' && host[host_len - 1] == ']');
+
+    if (default_port) {
+        if (needs_brackets) {
+            return strpprintf(0, "[%s]", host);
+        }
+
+        return zend_string_copy(state->host);
+    }
+
+    if (needs_brackets) {
+        return strpprintf(0, "[%s]:%ld", host, state->port);
+    }
+
+    return strpprintf(0, "%s:%ld", host, state->port);
+}
+
+static zend_string *king_websocket_build_transport_target(king_ws_state *state)
+{
+    const char *transport = state->secure ? "ssl" : "tcp";
+    const char *host = ZSTR_VAL(state->host);
+    size_t host_len = ZSTR_LEN(state->host);
+    bool needs_brackets =
+        memchr(host, ':', host_len) != NULL
+        && !(host_len >= 2 && host[0] == '[' && host[host_len - 1] == ']');
+
+    if (needs_brackets) {
+        return strpprintf(0, "%s://[%s]:%ld", transport, host, state->port);
+    }
+
+    return strpprintf(0, "%s://%s:%ld", transport, host, state->port);
+}
+
+static zend_string *king_websocket_generate_client_key(king_ws_state *state)
+{
+    unsigned char bytes[16];
+    uint64_t seed =
+        ((uint64_t) (uintptr_t) state >> 4)
+        ^ ((uint64_t) state->port << 17)
+        ^ (uint64_t) time(NULL)
+        ^ (uint64_t) ZSTR_LEN(state->url);
+    size_t i;
+
+    for (i = 0; i < sizeof(bytes); ++i) {
+        seed = (seed * 6364136223846793005ULL) + 1ULL;
+        bytes[i] = (unsigned char) (seed >> 32);
+    }
+
+    return php_base64_encode(bytes, sizeof(bytes));
+}
+
+static zend_string *king_websocket_compute_expected_accept(zend_string *client_key)
+{
+    PHP_SHA1_CTX context;
+    unsigned char digest[20];
+
+    PHP_SHA1Init(&context);
+    PHP_SHA1Update(
+        &context,
+        (const unsigned char *) ZSTR_VAL(client_key),
+        ZSTR_LEN(client_key)
+    );
+    PHP_SHA1Update(
+        &context,
+        (const unsigned char *) king_websocket_accept_magic,
+        strlen(king_websocket_accept_magic)
+    );
+    PHP_SHA1Final(digest, &context);
+
+    return php_base64_encode(digest, sizeof(digest));
+}
+
+static void king_websocket_apply_timeout(
+    king_ws_state *state,
+    zend_long timeout_ms
+)
+{
+    struct timeval timeout;
+
+    if (state->transport_stream == NULL) {
+        return;
+    }
+
+    if (timeout_ms == 0) {
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 0;
+        php_stream_set_option(
+            state->transport_stream,
+            PHP_STREAM_OPTION_BLOCKING,
+            0,
+            NULL
+        );
+        php_stream_set_option(
+            state->transport_stream,
+            PHP_STREAM_OPTION_READ_TIMEOUT,
+            0,
+            &timeout
+        );
+        return;
+    }
+
+    php_stream_set_option(
+        state->transport_stream,
+        PHP_STREAM_OPTION_BLOCKING,
+        1,
+        NULL
+    );
+
+    if (timeout_ms > 0) {
+        timeout.tv_sec = timeout_ms / 1000;
+        timeout.tv_usec = (timeout_ms % 1000) * 1000;
+        php_stream_set_option(
+            state->transport_stream,
+            PHP_STREAM_OPTION_READ_TIMEOUT,
+            0,
+            &timeout
+        );
+    }
+}
+
+static zend_result king_websocket_write_all(
+    king_ws_state *state,
+    const unsigned char *buffer,
+    size_t buffer_len,
+    const char *function_name
+)
+{
+    size_t written = 0;
+
+    while (written < buffer_len) {
+        ssize_t chunk = php_stream_write(
+            state->transport_stream,
+            (const char *) buffer + written,
+            buffer_len - written
+        );
+
+        if (chunk <= 0) {
+            king_websocket_set_error(
+                "%s() failed to write the active WebSocket frame to the socket.",
+                function_name
+            );
+            return FAILURE;
+        }
+
+        written += (size_t) chunk;
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_websocket_read_exact(
+    king_ws_state *state,
+    unsigned char *buffer,
+    size_t buffer_len,
+    zend_long timeout_ms,
+    bool *timed_out,
+    const char *function_name
+)
+{
+    size_t total = 0;
+
+    *timed_out = false;
+    king_websocket_apply_timeout(state, timeout_ms);
+
+    while (total < buffer_len) {
+        ssize_t chunk = php_stream_read(
+            state->transport_stream,
+            (char *) buffer + total,
+            buffer_len - total
+        );
+
+        if (chunk > 0) {
+            total += (size_t) chunk;
+            continue;
+        }
+
+        if (php_stream_eof(state->transport_stream)) {
+            king_websocket_set_error(
+                "%s() lost the active WebSocket socket before the frame was fully read.",
+                function_name
+            );
+            return FAILURE;
+        }
+
+        if (total == 0) {
+            *timed_out = true;
+            return SUCCESS;
+        }
+
+        king_websocket_set_error(
+            "%s() received a partial WebSocket frame from the socket.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_websocket_send_frame(
+    king_ws_state *state,
+    unsigned char opcode,
+    const unsigned char *payload,
+    size_t payload_len,
+    const char *function_name
+)
+{
+    unsigned char header[14];
+    unsigned char masking_key[4];
+    zend_string *masked_payload = NULL;
+    uint64_t mask_seed;
+    size_t header_len = 0;
+    size_t i;
+
+    if (state->transport_stream == NULL) {
+        return king_websocket_message_queue_push(
+            state,
+            (const char *) payload,
+            payload_len,
+            opcode == KING_WS_OPCODE_BINARY
+        );
+    }
+
+    if (payload_len > ((size_t) -1 >> 1)) {
+        king_websocket_set_error(
+            "%s() payload size %zu is too large for the active WebSocket frame writer.",
+            function_name,
+            payload_len
+        );
+        return FAILURE;
+    }
+
+    header[header_len++] = (unsigned char) (0x80 | (opcode & 0x0f));
+    if (payload_len <= 125) {
+        header[header_len++] = (unsigned char) (0x80 | payload_len);
+    } else if (payload_len <= 0xffff) {
+        header[header_len++] = 0x80 | 126;
+        header[header_len++] = (unsigned char) ((payload_len >> 8) & 0xff);
+        header[header_len++] = (unsigned char) (payload_len & 0xff);
+    } else {
+        uint64_t extended_len = (uint64_t) payload_len;
+
+        header[header_len++] = 0x80 | 127;
+        for (i = 0; i < 8; ++i) {
+            header[header_len++] = (unsigned char) (
+                (extended_len >> ((7 - i) * 8)) & 0xff
+            );
+        }
+    }
+
+    mask_seed =
+        ((uint64_t) (uintptr_t) state >> 3)
+        ^ ((uint64_t) payload_len << 9)
+        ^ (uint64_t) time(NULL)
+        ^ (uint64_t) opcode;
+    for (i = 0; i < sizeof(masking_key); ++i) {
+        mask_seed = (mask_seed * 1103515245ULL) + 12345ULL;
+        masking_key[i] = (unsigned char) (mask_seed >> 24);
+        header[header_len++] = masking_key[i];
+    }
+
+    if (king_websocket_write_all(state, header, header_len, function_name) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (payload_len == 0) {
+        return SUCCESS;
+    }
+
+    masked_payload = zend_string_alloc(payload_len, 0);
+    for (i = 0; i < payload_len; ++i) {
+        ZSTR_VAL(masked_payload)[i] =
+            (char) (payload[i] ^ masking_key[i % sizeof(masking_key)]);
+    }
+    ZSTR_VAL(masked_payload)[payload_len] = '\0';
+
+    if (
+        king_websocket_write_all(
+            state,
+            (const unsigned char *) ZSTR_VAL(masked_payload),
+            payload_len,
+            function_name
+        ) != SUCCESS
+    ) {
+        zend_string_release(masked_payload);
+        return FAILURE;
+    }
+
+    zend_string_release(masked_payload);
+    return SUCCESS;
+}
+
+static void king_websocket_store_close_reason(
+    king_ws_state *state,
+    const unsigned char *payload,
+    size_t payload_len
+)
+{
+    zend_long close_code = 1000;
+    const char *reason = "";
+    size_t reason_len = 0;
+
+    if (payload_len >= 2) {
+        close_code = ((zend_long) payload[0] << 8) | (zend_long) payload[1];
+        reason = (const char *) payload + 2;
+        reason_len = payload_len - 2;
+    }
+
+    if (state->last_close_reason != NULL) {
+        zend_string_release(state->last_close_reason);
+    }
+    state->last_close_reason = zend_string_init(reason, reason_len, 0);
+    state->last_close_status_code = close_code;
+}
+
+static void king_websocket_mark_transport_closed(king_ws_state *state)
+{
+    if (state->transport_stream != NULL) {
+        php_stream_close(state->transport_stream);
+        state->transport_stream = NULL;
+    }
+
+    state->state = KING_WS_STATE_CLOSED;
+    state->closed = true;
+}
+
+static zend_result king_websocket_receive_one_frame(
+    king_ws_state *state,
+    zend_long timeout_ms,
+    bool *message_ready,
+    bool *timed_out,
+    const char *function_name
+)
+{
+    unsigned char header[2];
+    unsigned char extended_len[8];
+    unsigned char *payload_buffer = NULL;
+    size_t payload_len = 0;
+    unsigned char opcode;
+    bool masked;
+
+    *message_ready = false;
+    *timed_out = false;
+
+    if (
+        king_websocket_read_exact(
+            state,
+            header,
+            sizeof(header),
+            timeout_ms,
+            timed_out,
+            function_name
+        ) != SUCCESS
+    ) {
+        return FAILURE;
+    }
+
+    if (*timed_out) {
+        return SUCCESS;
+    }
+
+    if ((header[0] & 0x80) == 0) {
+        king_websocket_set_error(
+            "%s() received a fragmented WebSocket frame that v1 does not support.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    opcode = (unsigned char) (header[0] & 0x0f);
+    masked = (header[1] & 0x80) != 0;
+    if (masked) {
+        king_websocket_set_error(
+            "%s() received an invalid masked server WebSocket frame.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    payload_len = (size_t) (header[1] & 0x7f);
+    if (payload_len == 126) {
+        bool length_timed_out = false;
+
+        if (
+            king_websocket_read_exact(
+                state,
+                extended_len,
+                2,
+                0,
+                &length_timed_out,
+                function_name
+            ) != SUCCESS
+        ) {
+            return FAILURE;
+        }
+
+        if (length_timed_out) {
+            king_websocket_set_error(
+                "%s() received an incomplete extended WebSocket frame length.",
+                function_name
+            );
+            return FAILURE;
+        }
+
+        payload_len = ((size_t) extended_len[0] << 8) | (size_t) extended_len[1];
+    } else if (payload_len == 127) {
+        uint64_t extended_payload_len = 0;
+        bool length_timed_out = false;
+
+        if (
+            king_websocket_read_exact(
+                state,
+                extended_len,
+                8,
+                0,
+                &length_timed_out,
+                function_name
+            ) != SUCCESS
+        ) {
+            return FAILURE;
+        }
+
+        if (length_timed_out) {
+            king_websocket_set_error(
+                "%s() received an incomplete extended WebSocket frame length.",
+                function_name
+            );
+            return FAILURE;
+        }
+
+        for (size_t i = 0; i < 8; ++i) {
+            extended_payload_len = (extended_payload_len << 8) | extended_len[i];
+        }
+
+        if (extended_payload_len > (uint64_t) SIZE_MAX) {
+            king_websocket_set_error(
+                "%s() received a WebSocket frame that exceeds native size limits.",
+                function_name
+            );
+            return FAILURE;
+        }
+
+        payload_len = (size_t) extended_payload_len;
+    }
+
+    if (
+        (opcode == KING_WS_OPCODE_TEXT || opcode == KING_WS_OPCODE_BINARY)
+        && payload_len > (size_t) state->max_payload_size
+    ) {
+        king_websocket_set_error(
+            "%s() received a WebSocket frame payload %zu larger than max_payload_size %ld.",
+            function_name,
+            payload_len,
+            state->max_payload_size
+        );
+        return FAILURE;
+    }
+
+    if (payload_len > 0) {
+        bool payload_timed_out = false;
+
+        payload_buffer = (unsigned char *) safe_emalloc(payload_len, 1, 0);
+        if (
+            king_websocket_read_exact(
+                state,
+                payload_buffer,
+                payload_len,
+                0,
+                &payload_timed_out,
+                function_name
+            ) != SUCCESS
+        ) {
+            efree(payload_buffer);
+            return FAILURE;
+        }
+
+        if (payload_timed_out) {
+            efree(payload_buffer);
+            king_websocket_set_error(
+                "%s() received an incomplete WebSocket frame payload.",
+                function_name
+            );
+            return FAILURE;
+        }
+    }
+
+    switch (opcode) {
+        case KING_WS_OPCODE_TEXT:
+        case KING_WS_OPCODE_BINARY:
+            if (
+                king_websocket_message_queue_push(
+                    state,
+                    (const char *) payload_buffer,
+                    payload_len,
+                    opcode == KING_WS_OPCODE_BINARY
+                ) != SUCCESS
+            ) {
+                if (payload_buffer != NULL) {
+                    efree(payload_buffer);
+                }
+                king_websocket_set_error(
+                    "%s() failed to queue a WebSocket frame received from the socket.",
+                    function_name
+                );
+                return FAILURE;
+            }
+            *message_ready = true;
+            break;
+
+        case KING_WS_OPCODE_PING:
+            if (
+                king_websocket_send_frame(
+                    state,
+                    KING_WS_OPCODE_PONG,
+                    payload_buffer,
+                    payload_len,
+                    function_name
+                ) != SUCCESS
+            ) {
+                if (payload_buffer != NULL) {
+                    efree(payload_buffer);
+                }
+                return FAILURE;
+            }
+            break;
+
+        case KING_WS_OPCODE_PONG:
+            break;
+
+        case KING_WS_OPCODE_CLOSE:
+            if (payload_buffer != NULL) {
+                king_websocket_store_close_reason(state, payload_buffer, payload_len);
+            } else {
+                king_websocket_store_close_reason(
+                    state,
+                    (const unsigned char *) "",
+                    0
+                );
+            }
+
+            if (!state->close_frame_sent) {
+                if (
+                    king_websocket_send_frame(
+                        state,
+                        KING_WS_OPCODE_CLOSE,
+                        payload_buffer,
+                        payload_len,
+                        function_name
+                    ) == SUCCESS
+                ) {
+                    state->close_frame_sent = true;
+                }
+            }
+
+            king_websocket_mark_transport_closed(state);
+            break;
+
+        default:
+            if (payload_buffer != NULL) {
+                efree(payload_buffer);
+            }
+            king_websocket_set_error(
+                "%s() received an unsupported WebSocket opcode %u.",
+                function_name,
+                (unsigned int) opcode
+            );
+            return FAILURE;
+    }
+
+    if (payload_buffer != NULL) {
+        efree(payload_buffer);
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_websocket_pump_transport(
+    king_ws_state *state,
+    zend_long timeout_ms,
+    const char *function_name
+)
+{
+    bool timed_out = false;
+    bool message_ready = false;
+    zend_long current_timeout = timeout_ms;
+
+    if (state->transport_stream == NULL) {
+        return SUCCESS;
+    }
+
+    do {
+        if (
+            king_websocket_receive_one_frame(
+                state,
+                current_timeout,
+                &message_ready,
+                &timed_out,
+                function_name
+            ) != SUCCESS
+        ) {
+            if (!state->closed) {
+                king_websocket_mark_transport_closed(state);
+            }
+            return FAILURE;
+        }
+
+        if (timed_out || message_ready || state->closed) {
+            return SUCCESS;
+        }
+
+        current_timeout = 0;
+    } while (1);
+}
+
+static void king_websocket_drain_transport(
+    king_ws_state *state,
+    const char *function_name
+)
+{
+    bool timed_out = false;
+    bool message_ready = false;
+
+    if (state->transport_stream == NULL) {
+        return;
+    }
+
+    while (!state->closed) {
+        if (
+            king_websocket_receive_one_frame(
+                state,
+                0,
+                &message_ready,
+                &timed_out,
+                function_name
+            ) != SUCCESS
+        ) {
+            if (!state->closed) {
+                king_websocket_mark_transport_closed(state);
+            }
+            return;
+        }
+
+        if (timed_out) {
+            return;
+        }
+    }
+}
+
+static zend_result king_websocket_validate_header_pair(
+    zend_string *header_name,
+    zend_string *header_value,
+    const char *function_name
+)
+{
+    if (header_name == NULL || ZSTR_LEN(header_name) == 0) {
+        king_websocket_set_error(
+            "%s() handshake header names must be non-empty strings.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    if (
+        king_websocket_string_has_crlf(
+            ZSTR_VAL(header_name),
+            ZSTR_LEN(header_name)
+        )
+        || king_websocket_string_has_crlf(
+            ZSTR_VAL(header_value),
+            ZSTR_LEN(header_value)
+        )
+    ) {
+        king_websocket_set_error(
+            "%s() handshake headers must not contain CRLF bytes.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_websocket_append_handshake_headers(
+    smart_str *request,
+    king_ws_state *state,
+    const char *function_name
+)
+{
+    zend_string *header_name;
+    zval *header_value;
+
+    if (Z_ISUNDEF(state->headers) || Z_TYPE(state->headers) != IS_ARRAY) {
+        return SUCCESS;
+    }
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL(state->headers), header_name, header_value)
+    {
+        if (header_name == NULL) {
+            continue;
+        }
+
+        if (Z_TYPE_P(header_value) == IS_ARRAY) {
+            zval *entry;
+
+            ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(header_value), entry)
+            {
+                zend_string *value = zval_get_string(entry);
+
+                if (
+                    king_websocket_validate_header_pair(
+                        header_name,
+                        value,
+                        function_name
+                    ) != SUCCESS
+                ) {
+                    zend_string_release(value);
+                    return FAILURE;
+                }
+
+                smart_str_append(request, header_name);
+                smart_str_appends(request, ": ");
+                smart_str_append(request, value);
+                smart_str_appends(request, "\r\n");
+                zend_string_release(value);
+            }
+            ZEND_HASH_FOREACH_END();
+            continue;
+        }
+
+        zend_string *value = zval_get_string(header_value);
+
+        if (
+            king_websocket_validate_header_pair(
+                header_name,
+                value,
+                function_name
+            ) != SUCCESS
+        ) {
+            zend_string_release(value);
+            return FAILURE;
+        }
+
+        smart_str_append(request, header_name);
+        smart_str_appends(request, ": ");
+        smart_str_append(request, value);
+        smart_str_appends(request, "\r\n");
+        zend_string_release(value);
+    }
+    ZEND_HASH_FOREACH_END();
+
+    return SUCCESS;
+}
+
+static zend_result king_websocket_complete_handshake(
+    king_ws_state *state,
+    const char *function_name
+)
+{
+    struct timeval timeout;
+    zend_string *transport_target = NULL;
+    zend_string *authority = NULL;
+    zend_string *client_key = NULL;
+    zend_string *expected_accept = NULL;
+    zend_string *transport_error = NULL;
+    php_stream *stream = NULL;
+    smart_str request = {0};
+    char line[KING_WS_HTTP_LINE_MAX];
+    size_t line_len = 0;
+    int transport_error_code = 0;
+    const char *accept_value = NULL;
+
+    transport_target = king_websocket_build_transport_target(state);
+    authority = king_websocket_build_authority(state);
+    client_key = king_websocket_generate_client_key(state);
+    expected_accept = king_websocket_compute_expected_accept(client_key);
+
+    timeout.tv_sec = state->handshake_timeout_ms / 1000;
+    timeout.tv_usec = (state->handshake_timeout_ms % 1000) * 1000;
+
+    stream = php_stream_xport_create(
+        ZSTR_VAL(transport_target),
+        ZSTR_LEN(transport_target),
+        0,
+        STREAM_XPORT_CLIENT | STREAM_XPORT_CONNECT,
+        NULL,
+        &timeout,
+        NULL,
+        &transport_error,
+        &transport_error_code
+    );
+    if (stream == NULL) {
+        if (transport_error != NULL) {
+            king_websocket_set_error(
+                "%s() failed to connect the WebSocket socket: %s",
+                function_name,
+                ZSTR_VAL(transport_error)
+            );
+        } else {
+            king_websocket_set_error(
+                "%s() failed to connect the WebSocket socket (code %d).",
+                function_name,
+                transport_error_code
+            );
+        }
+        if (transport_error != NULL) {
+            zend_string_release(transport_error);
+        }
+        zend_string_release(expected_accept);
+        zend_string_release(client_key);
+        zend_string_release(authority);
+        zend_string_release(transport_target);
+        return FAILURE;
+    }
+
+    state->transport_stream = stream;
+    php_stream_set_option(stream, PHP_STREAM_OPTION_BLOCKING, 1, NULL);
+    php_stream_set_option(stream, PHP_STREAM_OPTION_READ_TIMEOUT, 0, &timeout);
+
+    smart_str_appends(&request, "GET ");
+    smart_str_append(&request, state->request_target);
+    smart_str_appends(&request, " HTTP/1.1\r\nHost: ");
+    smart_str_append(&request, authority);
+    smart_str_appends(&request, "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ");
+    smart_str_append(&request, client_key);
+    smart_str_appends(&request, "\r\nSec-WebSocket-Version: 13\r\n");
+
+    if (
+        king_websocket_append_handshake_headers(
+            &request,
+            state,
+            function_name
+        ) != SUCCESS
+    ) {
+        smart_str_free(&request);
+        king_websocket_mark_transport_closed(state);
+        zend_string_release(expected_accept);
+        zend_string_release(client_key);
+        zend_string_release(authority);
+        zend_string_release(transport_target);
+        return FAILURE;
+    }
+
+    smart_str_appends(&request, "\r\n");
+    smart_str_0(&request);
+
+    if (
+        king_websocket_write_all(
+            state,
+            (const unsigned char *) ZSTR_VAL(request.s),
+            ZSTR_LEN(request.s),
+            function_name
+        ) != SUCCESS
+    ) {
+        smart_str_free(&request);
+        king_websocket_mark_transport_closed(state);
+        zend_string_release(expected_accept);
+        zend_string_release(client_key);
+        zend_string_release(authority);
+        zend_string_release(transport_target);
+        return FAILURE;
+    }
+
+    if (
+        php_stream_get_line(
+            state->transport_stream,
+            line,
+            sizeof(line),
+            &line_len
+        ) == NULL
+    ) {
+        smart_str_free(&request);
+        king_websocket_mark_transport_closed(state);
+        king_websocket_set_error(
+            "%s() did not receive a WebSocket handshake status line from the peer.",
+            function_name
+        );
+        zend_string_release(expected_accept);
+        zend_string_release(client_key);
+        zend_string_release(authority);
+        zend_string_release(transport_target);
+        return FAILURE;
+    }
+
+    king_websocket_trim_line(line, &line_len);
+    if (strncmp(line, "HTTP/1.1 101", 12) != 0 && strncmp(line, "HTTP/1.0 101", 12) != 0) {
+        smart_str_free(&request);
+        king_websocket_mark_transport_closed(state);
+        king_websocket_set_error(
+            "%s() expected an HTTP 101 WebSocket upgrade response but received '%s'.",
+            function_name,
+            line
+        );
+        zend_string_release(expected_accept);
+        zend_string_release(client_key);
+        zend_string_release(authority);
+        zend_string_release(transport_target);
+        return FAILURE;
+    }
+
+    while (
+        php_stream_get_line(
+            state->transport_stream,
+            line,
+            sizeof(line),
+            &line_len
+        ) != NULL
+    ) {
+        char *colon;
+
+        king_websocket_trim_line(line, &line_len);
+        if (line_len == 0) {
+            break;
+        }
+
+        colon = strchr(line, ':');
+        if (colon == NULL) {
+            continue;
+        }
+
+        *colon = '\0';
+        if (strcasecmp(line, "Sec-WebSocket-Accept") == 0) {
+            accept_value = king_websocket_skip_ascii_space(colon + 1);
+        }
+    }
+
+    smart_str_free(&request);
+
+    if (accept_value == NULL || strcmp(accept_value, ZSTR_VAL(expected_accept)) != 0) {
+        king_websocket_mark_transport_closed(state);
+        king_websocket_set_error(
+            "%s() received an invalid Sec-WebSocket-Accept handshake header.",
+            function_name
+        );
+        zend_string_release(expected_accept);
+        zend_string_release(client_key);
+        zend_string_release(authority);
+        zend_string_release(transport_target);
+        return FAILURE;
+    }
+
+    state->state = KING_WS_STATE_OPEN;
+    state->handshake_complete = true;
+    state->closed = false;
+    state->close_frame_sent = false;
+    king_set_error("");
+
+    zend_string_release(expected_accept);
+    zend_string_release(client_key);
+    zend_string_release(authority);
+    zend_string_release(transport_target);
+    return SUCCESS;
 }
 
 static zend_result king_websocket_require_open(
@@ -579,10 +1578,11 @@ static king_ws_state *king_websocket_state_create(
     state->host = zend_string_copy(parsed_url->host);
     state->request_target = request_target;
     state->port = king_websocket_resolve_default_port(parsed_url);
-    state->state = KING_WS_STATE_OPEN;
+    state->state = KING_WS_STATE_CONNECTING;
     state->last_close_status_code = 1000;
     state->secure = strcasecmp(ZSTR_VAL(parsed_url->scheme), "wss") == 0;
     state->handshake_complete = false;
+    state->close_frame_sent = false;
     state->closed = false;
     ZVAL_UNDEF(&state->config);
     ZVAL_UNDEF(&state->headers);
@@ -604,6 +1604,11 @@ static king_ws_state *king_websocket_state_create(
     }
 
     php_url_free(parsed_url);
+    if (king_websocket_complete_handshake(state, function_name) != SUCCESS) {
+        king_ws_state_free(state);
+        return NULL;
+    }
+
     king_set_error("");
     return state;
 }
@@ -625,6 +1630,10 @@ void king_ws_state_free(king_ws_state *state)
     }
     if (state->request_target != NULL) {
         zend_string_release(state->request_target);
+    }
+    if (state->transport_stream != NULL) {
+        php_stream_close(state->transport_stream);
+        state->transport_stream = NULL;
     }
     if (state->last_close_reason != NULL) {
         zend_string_release(state->last_close_reason);
@@ -743,17 +1752,17 @@ static zend_result king_websocket_object_send_internal(
     }
 
     if (
-        king_websocket_message_queue_push(
+        king_websocket_send_frame(
             state,
-            ZSTR_VAL(payload),
+            is_binary ? KING_WS_OPCODE_BINARY : KING_WS_OPCODE_TEXT,
+            (const unsigned char *) ZSTR_VAL(payload),
             ZSTR_LEN(payload),
-            is_binary
+            function_name
         ) != SUCCESS
     ) {
-        king_websocket_set_error("%s() failed to queue the local WebSocket frame.", function_name);
         king_websocket_throw_last_error(
             king_ce_system_exception,
-            "Failed to queue the local WebSocket frame."
+            "Failed to send the active WebSocket frame."
         );
         return FAILURE;
     }
@@ -882,6 +1891,26 @@ PHP_METHOD(King_WebSocket_Connection, ping)
     state->last_ping_payload = payload_str != NULL
         ? zend_string_copy(payload_str)
         : zend_string_init("", 0, 0);
+
+    if (
+        state->transport_stream != NULL
+        && king_websocket_send_frame(
+            state,
+            KING_WS_OPCODE_PING,
+            payload_str != NULL
+                ? (const unsigned char *) ZSTR_VAL(payload_str)
+                : (const unsigned char *) "",
+            payload_str != NULL ? ZSTR_LEN(payload_str) : 0,
+            "WebSocket\\Connection::ping"
+        ) != SUCCESS
+    ) {
+        king_websocket_throw_last_error(
+            king_ce_ws_connection_error,
+            "Failed to send the active WebSocket ping frame."
+        );
+        RETURN_THROWS();
+    }
+
     king_set_error("");
 }
 
@@ -928,8 +1957,43 @@ PHP_METHOD(King_WebSocket_Connection, close)
         ? zend_string_copy(reason)
         : zend_string_init("", 0, 0);
     state->last_close_status_code = status_code;
-    state->state = KING_WS_STATE_CLOSED;
-    state->closed = true;
+
+    if (state->transport_stream != NULL) {
+        unsigned char close_payload[2 + KING_WS_CLOSE_REASON_MAX_LEN];
+        size_t close_payload_len = 2 + (reason != NULL ? ZSTR_LEN(reason) : 0);
+
+        close_payload[0] = (unsigned char) ((status_code >> 8) & 0xff);
+        close_payload[1] = (unsigned char) (status_code & 0xff);
+        if (reason != NULL && ZSTR_LEN(reason) > 0) {
+            memcpy(close_payload + 2, ZSTR_VAL(reason), ZSTR_LEN(reason));
+        }
+
+        if (
+            king_websocket_send_frame(
+                state,
+                KING_WS_OPCODE_CLOSE,
+                close_payload,
+                close_payload_len,
+                "WebSocket\\Connection::close"
+        ) != SUCCESS
+        ) {
+            king_websocket_throw_last_error(
+                king_ce_ws_connection_error,
+                "Failed to send the active WebSocket close frame."
+            );
+            RETURN_THROWS();
+        }
+
+        state->close_frame_sent = true;
+        king_websocket_drain_transport(state, "WebSocket\\Connection::close");
+        if (!state->closed) {
+            king_websocket_mark_transport_closed(state);
+        }
+    } else {
+        state->state = KING_WS_STATE_CLOSED;
+        state->closed = true;
+    }
+
     king_set_error("");
 }
 
@@ -1016,16 +2080,14 @@ PHP_FUNCTION(king_client_websocket_send)
     }
 
     if (
-        king_websocket_message_queue_push(
+        king_websocket_send_frame(
             state,
-            data,
+            is_binary ? KING_WS_OPCODE_BINARY : KING_WS_OPCODE_TEXT,
+            (const unsigned char *) data,
             data_len,
-            is_binary != 0
+            "king_client_websocket_send"
         ) != SUCCESS
     ) {
-        king_websocket_set_error(
-            "king_client_websocket_send() failed to queue the local WebSocket frame."
-        );
         RETURN_FALSE;
     }
 
@@ -1072,16 +2134,14 @@ PHP_FUNCTION(king_websocket_send)
     }
 
     if (
-        king_websocket_message_queue_push(
+        king_websocket_send_frame(
             state,
-            message,
+            is_binary ? KING_WS_OPCODE_BINARY : KING_WS_OPCODE_TEXT,
+            (const unsigned char *) message,
             message_len,
-            is_binary != 0
+            "king_websocket_send"
         ) != SUCCESS
     ) {
-        king_websocket_set_error(
-            "king_websocket_send() failed to queue the local WebSocket frame."
-        );
         RETURN_FALSE;
     }
 
@@ -1123,7 +2183,30 @@ PHP_FUNCTION(king_client_websocket_receive)
         RETURN_STR(payload);
     }
 
-    if (state->state == KING_WS_STATE_OPEN && !state->closed) {
+    if (state->transport_stream != NULL && !state->closed) {
+        if (
+            king_websocket_pump_transport(
+                state,
+                timeout_ms,
+                "king_client_websocket_receive"
+            ) != SUCCESS
+        ) {
+            RETURN_FALSE;
+        }
+
+        message = king_websocket_message_queue_shift(state);
+        if (message != NULL) {
+            payload = message->payload;
+            efree(message);
+            king_set_error("");
+            RETURN_STR(payload);
+        }
+    }
+
+    if (
+        (state->state == KING_WS_STATE_OPEN || state->state == KING_WS_STATE_CONNECTING)
+        && !state->closed
+    ) {
         king_set_error("");
         RETURN_EMPTY_STRING();
     }
@@ -1173,6 +2256,19 @@ PHP_FUNCTION(king_client_websocket_ping)
         zend_string_release(state->last_ping_payload);
     }
     state->last_ping_payload = zend_string_init(payload, payload_len, 0);
+
+    if (
+        state->transport_stream != NULL
+        && king_websocket_send_frame(
+            state,
+            KING_WS_OPCODE_PING,
+            (const unsigned char *) payload,
+            payload_len,
+            "king_client_websocket_ping"
+        ) != SUCCESS
+    ) {
+        RETURN_FALSE;
+    }
 
     king_set_error("");
     RETURN_TRUE;
@@ -1236,8 +2332,37 @@ PHP_FUNCTION(king_client_websocket_close)
     }
     state->last_close_reason = zend_string_init(reason, reason_len, 0);
     state->last_close_status_code = status_code;
-    state->state = KING_WS_STATE_CLOSED;
-    state->closed = true;
+
+    if (state->transport_stream != NULL) {
+        unsigned char close_payload[2 + KING_WS_CLOSE_REASON_MAX_LEN];
+
+        close_payload[0] = (unsigned char) ((status_code >> 8) & 0xff);
+        close_payload[1] = (unsigned char) (status_code & 0xff);
+        if (reason_len > 0) {
+            memcpy(close_payload + 2, reason, reason_len);
+        }
+
+        if (
+            king_websocket_send_frame(
+                state,
+                KING_WS_OPCODE_CLOSE,
+                close_payload,
+                reason_len + 2,
+                "king_client_websocket_close"
+            ) != SUCCESS
+        ) {
+            RETURN_FALSE;
+        }
+
+        state->close_frame_sent = true;
+        king_websocket_drain_transport(state, "king_client_websocket_close");
+        if (!state->closed) {
+            king_websocket_mark_transport_closed(state);
+        }
+    } else {
+        state->state = KING_WS_STATE_CLOSED;
+        state->closed = true;
+    }
 
     king_set_error("");
     RETURN_TRUE;

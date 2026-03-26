@@ -1,7 +1,9 @@
 --TEST--
-King WebSocket frames validate resource handles payload limits and close semantics
+King WebSocket frames validate resource handles payload limits and close semantics on an active socket
 --FILE--
 <?php
+require __DIR__ . '/websocket_test_helper.inc';
+
 $typeErrors = [];
 
 foreach ([
@@ -21,33 +23,39 @@ foreach ([
 var_export($typeErrors);
 echo "\n";
 
-$websocket = king_client_websocket_connect(
-    'ws://127.0.0.1/chat',
-    null,
-    ['max_payload_size' => 4]
-);
+$server = king_websocket_test_start_server();
 
-var_dump(king_client_websocket_send($websocket, 'hello'));
-var_dump(king_client_websocket_get_last_error());
+try {
+    $websocket = king_client_websocket_connect(
+        'ws://127.0.0.1:' . $server['port'] . '/chat',
+        null,
+        ['max_payload_size' => 4]
+    );
 
-var_dump(king_client_websocket_ping($websocket, str_repeat('a', 126)));
-var_dump(king_client_websocket_get_last_error());
+    var_dump(king_client_websocket_send($websocket, 'hello'));
+    var_dump(king_client_websocket_get_last_error());
 
-var_dump(king_client_websocket_receive($websocket, -2));
-var_dump(king_client_websocket_get_last_error());
+    var_dump(king_client_websocket_ping($websocket, str_repeat('a', 126)));
+    var_dump(king_client_websocket_get_last_error());
 
-var_dump(king_client_websocket_close($websocket, 999));
-var_dump(king_client_websocket_get_last_error());
+    var_dump(king_client_websocket_receive($websocket, -2));
+    var_dump(king_client_websocket_get_last_error());
 
-var_dump(king_client_websocket_close($websocket, 1000, str_repeat('b', 124)));
-var_dump(king_client_websocket_get_last_error());
+    var_dump(king_client_websocket_close($websocket, 999));
+    var_dump(king_client_websocket_get_last_error());
 
-var_dump(king_client_websocket_close($websocket, 1000, 'done'));
-var_dump(king_client_websocket_send($websocket, 'ok'));
-var_dump(king_client_websocket_get_last_error());
+    var_dump(king_client_websocket_close($websocket, 1000, str_repeat('b', 124)));
+    var_dump(king_client_websocket_get_last_error());
 
-var_dump(king_client_websocket_ping($websocket, 'ok'));
-var_dump(king_client_websocket_get_last_error());
+    var_dump(king_client_websocket_close($websocket, 1000, 'done'));
+    var_dump(king_client_websocket_send($websocket, 'ok'));
+    var_dump(king_client_websocket_get_last_error());
+
+    var_dump(king_client_websocket_ping($websocket, 'ok'));
+    var_dump(king_client_websocket_get_last_error());
+} finally {
+    king_websocket_test_stop_server($server);
+}
 ?>
 --EXPECTF--
 array (

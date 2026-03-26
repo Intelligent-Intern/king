@@ -1,7 +1,9 @@
 --TEST--
-King WebSocket Connection OO wrapper validates construction and frame semantics
+King WebSocket Connection OO wrapper validates construction and frame semantics on a live socket
 --FILE--
 <?php
+require __DIR__ . '/websocket_test_helper.inc';
+
 try {
     new King\WebSocket\Connection('http://example.test/socket');
     echo "no-exception-1\n";
@@ -26,47 +28,53 @@ try {
 
 fclose($invalidConfig);
 
-$websocket = new King\WebSocket\Connection(
-    'ws://127.0.0.1/chat',
-    null,
-    ['max_payload_size' => 4]
-);
+$server = king_websocket_test_start_server();
 
 try {
-    $websocket->send('hello');
-    echo "no-exception-3\n";
-} catch (Throwable $e) {
-    var_dump(get_class($e));
-    var_dump($e->getMessage());
+    $websocket = new King\WebSocket\Connection(
+        'ws://127.0.0.1:' . $server['port'] . '/chat',
+        null,
+        ['max_payload_size' => 4]
+    );
+
+    try {
+        $websocket->send('hello');
+        echo "no-exception-3\n";
+    } catch (Throwable $e) {
+        var_dump(get_class($e));
+        var_dump($e->getMessage());
+    }
+
+    try {
+        $websocket->ping(str_repeat('a', 126));
+        echo "no-exception-4\n";
+    } catch (Throwable $e) {
+        var_dump(get_class($e));
+        var_dump($e->getMessage());
+    }
+
+    try {
+        $websocket->close(999);
+        echo "no-exception-5\n";
+    } catch (Throwable $e) {
+        var_dump(get_class($e));
+        var_dump($e->getMessage());
+    }
+
+    $websocket->close(1000, 'done');
+
+    try {
+        $websocket->send('ok');
+        echo "no-exception-6\n";
+    } catch (Throwable $e) {
+        var_dump(get_class($e));
+        var_dump($e->getMessage());
+    }
+
+    var_dump(king_client_websocket_get_last_error());
+} finally {
+    king_websocket_test_stop_server($server);
 }
-
-try {
-    $websocket->ping(str_repeat('a', 126));
-    echo "no-exception-4\n";
-} catch (Throwable $e) {
-    var_dump(get_class($e));
-    var_dump($e->getMessage());
-}
-
-try {
-    $websocket->close(999);
-    echo "no-exception-5\n";
-} catch (Throwable $e) {
-    var_dump(get_class($e));
-    var_dump($e->getMessage());
-}
-
-$websocket->close(1000, 'done');
-
-try {
-    $websocket->send('ok');
-    echo "no-exception-6\n";
-} catch (Throwable $e) {
-    var_dump(get_class($e));
-    var_dump($e->getMessage());
-}
-
-var_dump(king_client_websocket_get_last_error());
 ?>
 --EXPECTF--
 string(24) "King\ValidationException"

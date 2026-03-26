@@ -147,6 +147,7 @@ typedef struct _king_ws_state {
     zend_string *scheme;
     zend_string *host;
     zend_string *request_target;
+    php_stream *transport_stream;
     zval config;
     zval headers;
     zend_long port;
@@ -161,6 +162,7 @@ typedef struct _king_ws_state {
     zend_string *last_ping_payload;
     bool secure;
     bool handshake_complete;
+    bool close_frame_sent;
     bool closed;
 } king_ws_state;
 

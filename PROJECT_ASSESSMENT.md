@@ -17,7 +17,7 @@ The remaining gaps are no longer about broad runtime parity or placeholder
 surfaces inside the local tree.
 They are concentrated in six areas:
 
-- wire-truth for server and WebSocket behavior
+- wire-truth for server-side upgrade behavior and longer-lived realtime server flows
 - remote MCP and deeper distributed orchestration
 - larger Smart-DNS topology and distributed routing verification beyond the local slice
 - long-haul telemetry, exporter, and fleet recovery depth
@@ -63,7 +63,7 @@ The current tree already proves:
 - explicit config and session ownership through `King\Config` and `King\Session`
 - real HTTP/1, HTTP/2, and HTTP/3 client request paths, including reuse, streaming, and cancel/timeout contracts
 - local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3
-- local WebSocket client/runtime plus honest OO `King\WebSocket\Connection` parity
+- on-wire WebSocket client handshake/frame/close runtime plus honest OO `King\WebSocket\Connection` parity
 - IIBIN schema, registry, encode/decode, object hydration, and wire validation
 - Semantic DNS register/discover/update routing plus private-directory durable state handling
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs
@@ -74,6 +74,7 @@ The current tree already proves:
 - telemetry batch queueing, bounded retry behavior, OTLP metrics export hardening, and local exporter failover/recovery coverage
 - telemetry-driven Hetzner autoscaling with controller-owned credentials, persisted recovery state, and `register -> ready -> drain -> delete` lifecycle gating
 - system integration lifecycle coordination, restart-state visibility, and chaos/recovery harness coverage for the local control plane
+- server-side `king_server_upgrade_to_websocket()` remains explicitly local-only in v1; the unresolved gap is wire-truth for that listener-side path rather than client parity
 
 ## What Is Still Not Finished
 
@@ -81,7 +82,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 
 ### Realtime and Server Wire Depth
 
-- WebSocket client and server behavior still need more on-wire proof.
+- WebSocket client behavior is now proven on-wire; the remaining gap is server-side upgrade/listener proof.
 - Long-lived server/session behavior, close/drain flows, and fairness under churn still need stronger verification.
 - Server listener slices are real locally, but the repo still leans too much on local ownership tests instead of network-truth tests.
 

@@ -5,9 +5,11 @@
  *
  * PURPOSE:
  * Activates a first local server-side WebSocket-upgrade slice on top of the
- * shared King\Session and King\WebSocket runtimes. The current build models
- * the post-upgrade local state, validates stream/session constraints, and
- * records the upgrade on the session snapshot.
+ * shared King\Session and King\WebSocket runtimes. Client-side WebSocket
+ * connections are now verified on-wire; this file remains the honest local
+ * v1 server-side upgrade slice that models post-upgrade state, validates
+ * stream/session constraints, and records the upgrade on the session
+ * snapshot.
  * =========================================================================
  */
 
