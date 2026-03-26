@@ -17,6 +17,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/file.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -402,6 +403,71 @@ static int king_orchestrator_queue_name_is_claimed_job(const char *name)
     name_len = strlen(name);
     return name_len > sizeof("claimed-.job") - 1
         && strcmp(name + name_len - (sizeof(".job") - 1), ".job") == 0;
+}
+
+static zend_long king_orchestrator_queue_entry_sequence(const char *name)
+{
+    const char *run_start;
+    char *endptr;
+    zend_long sequence;
+
+    if (name == NULL) {
+        return 0;
+    }
+
+    run_start = strstr(name, "run-");
+    if (run_start == NULL) {
+        return 0;
+    }
+
+    run_start += sizeof("run-") - 1;
+    if (*run_start == '\0') {
+        return 0;
+    }
+
+    errno = 0;
+    sequence = ZEND_STRTOL(run_start, &endptr, 10);
+    if (errno != 0 || endptr == run_start || sequence <= 0) {
+        return 0;
+    }
+
+    if (strcmp(endptr, ".job") != 0) {
+        return 0;
+    }
+
+    return sequence;
+}
+
+static int king_orchestrator_queue_entry_is_better_candidate(
+    const char *candidate_name,
+    zend_long candidate_sequence,
+    const char *selected_name,
+    zend_long selected_sequence
+)
+{
+    if (candidate_name == NULL || candidate_name[0] == '\0') {
+        return 0;
+    }
+
+    if (selected_name == NULL || selected_name[0] == '\0') {
+        return 1;
+    }
+
+    if (candidate_sequence > 0) {
+        if (selected_sequence <= 0) {
+            return 1;
+        }
+        if (candidate_sequence < selected_sequence) {
+            return 1;
+        }
+        if (candidate_sequence > selected_sequence) {
+            return 0;
+        }
+    } else if (selected_sequence > 0) {
+        return 0;
+    }
+
+    return strcmp(candidate_name, selected_name) < 0;
 }
 
 static int king_orchestrator_build_cancel_marker_path(
@@ -1113,16 +1179,19 @@ int king_orchestrator_request_run_cancel(zend_string *run_id)
     return SUCCESS;
 }
 
-int king_orchestrator_claim_next_run(zend_string **run_id_out, char *claimed_path, size_t claimed_path_len)
+int king_orchestrator_claim_next_run(
+    zend_string **run_id_out,
+    char *claimed_path,
+    size_t claimed_path_len,
+    int *claimed_fd_out
+)
 {
-    DIR *dir;
-    FILE *stream;
-    struct dirent *entry;
-    char queued_path[1024];
-    char selected_name[256];
+    int claimed_fd = -1;
     char run_id_buffer[256];
     char *newline;
-    int selected_is_claimed = 0;
+    unsigned int attempt = 0;
+    char busy_names[64][256];
+    size_t busy_count = 0;
 
     if (run_id_out == NULL || claimed_path == NULL || claimed_path_len == 0) {
         return FAILURE;
@@ -1131,137 +1200,242 @@ int king_orchestrator_claim_next_run(zend_string **run_id_out, char *claimed_pat
     *run_id_out = NULL;
     claimed_path[0] = '\0';
 
+    if (claimed_fd_out != NULL) {
+        *claimed_fd_out = -1;
+    }
+
     if (!king_orchestrator_backend_is_file_worker() || !king_orchestrator_queue_path_is_configured()) {
         return FAILURE;
     }
 
-    dir = opendir(king_mcp_orchestrator_config.orchestrator_worker_queue_path);
-    if (dir == NULL) {
-        if (errno == ENOENT) {
+    for (;;) {
+        DIR *dir;
+        struct dirent *entry;
+        char queued_path[1024];
+        char selected_name[256];
+        zend_long selected_sequence = 0;
+        int selected_is_claimed = 0;
+
+        dir = opendir(king_mcp_orchestrator_config.orchestrator_worker_queue_path);
+        if (dir == NULL) {
+            if (errno == ENOENT) {
+                return SUCCESS;
+            }
+            return FAILURE;
+        }
+
+        selected_name[0] = '\0';
+        while ((entry = readdir(dir)) != NULL) {
+            if (king_orchestrator_queue_name_is_claimed_job(entry->d_name)) {
+                char entry_path[1024];
+                zend_long entry_sequence;
+                size_t busy_idx;
+                int skip_entry = 0;
+
+                for (busy_idx = 0; busy_idx < busy_count; busy_idx++) {
+                    if (strcmp(entry->d_name, busy_names[busy_idx]) == 0) {
+                        skip_entry = 1;
+                        break;
+                    }
+                }
+                if (skip_entry) {
+                    continue;
+                }
+
+                if (
+                    king_orchestrator_build_queue_entry_path(
+                        entry->d_name,
+                        entry_path,
+                        sizeof(entry_path)
+                    ) != SUCCESS
+                    || !king_orchestrator_queue_entry_is_regular_file(entry_path)
+                ) {
+                    continue;
+                }
+
+                entry_sequence = king_orchestrator_queue_entry_sequence(entry->d_name);
+                if (!king_orchestrator_queue_entry_is_better_candidate(
+                        entry->d_name,
+                        entry_sequence,
+                        selected_name,
+                        selected_sequence
+                    )) {
+                    continue;
+                }
+
+                strncpy(selected_name, entry->d_name, sizeof(selected_name) - 1);
+                selected_name[sizeof(selected_name) - 1] = '\0';
+                selected_sequence = entry_sequence;
+                selected_is_claimed = 1;
+            }
+        }
+
+        if (selected_name[0] == '\0') {
+            rewinddir(dir);
+
+            while ((entry = readdir(dir)) != NULL) {
+                if (king_orchestrator_queue_name_is_job(entry->d_name)) {
+                    char entry_path[1024];
+                    zend_long entry_sequence;
+
+                    if (
+                        king_orchestrator_build_queue_entry_path(
+                            entry->d_name,
+                            entry_path,
+                            sizeof(entry_path)
+                        ) != SUCCESS
+                        || !king_orchestrator_queue_entry_is_regular_file(entry_path)
+                    ) {
+                        continue;
+                    }
+
+                    entry_sequence = king_orchestrator_queue_entry_sequence(entry->d_name);
+                    if (!king_orchestrator_queue_entry_is_better_candidate(
+                            entry->d_name,
+                            entry_sequence,
+                            selected_name,
+                            selected_sequence
+                        )) {
+                        continue;
+                    }
+
+                    strncpy(selected_name, entry->d_name, sizeof(selected_name) - 1);
+                    selected_name[sizeof(selected_name) - 1] = '\0';
+                    selected_sequence = entry_sequence;
+                }
+            }
+        }
+
+        closedir(dir);
+
+        if (selected_name[0] == '\0') {
             return SUCCESS;
         }
-        return FAILURE;
-    }
 
-    selected_name[0] = '\0';
-    while ((entry = readdir(dir)) != NULL) {
-        if (king_orchestrator_queue_name_is_claimed_job(entry->d_name)) {
-            char entry_path[1024];
+        if (selected_is_claimed) {
+            snprintf(
+                claimed_path,
+                claimed_path_len,
+                "%s/%s",
+                king_mcp_orchestrator_config.orchestrator_worker_queue_path,
+                selected_name
+            );
+        } else {
+            snprintf(
+                queued_path,
+                sizeof(queued_path),
+                "%s/%s",
+                king_mcp_orchestrator_config.orchestrator_worker_queue_path,
+                selected_name
+            );
+            snprintf(
+                claimed_path,
+                claimed_path_len,
+                "%s/claimed-%ld-%s",
+                king_mcp_orchestrator_config.orchestrator_worker_queue_path,
+                (long) getpid(),
+                selected_name
+            );
 
-            if (
-                king_orchestrator_build_queue_entry_path(
-                    entry->d_name,
-                    entry_path,
-                    sizeof(entry_path)
-                ) != SUCCESS
-                || !king_orchestrator_queue_entry_is_regular_file(entry_path)
-            ) {
+            if (rename(queued_path, claimed_path) != 0) {
+                claimed_path[0] = '\0';
+                if (errno != ENOENT && errno != EEXIST) {
+                    return FAILURE;
+                }
+
+                attempt++;
+                if (attempt >= 64) {
+                    return SUCCESS;
+                }
                 continue;
             }
-
-            strncpy(selected_name, entry->d_name, sizeof(selected_name) - 1);
-            selected_name[sizeof(selected_name) - 1] = '\0';
-            selected_is_claimed = 1;
-            break;
         }
-    }
 
-    if (selected_name[0] == '\0') {
-        rewinddir(dir);
-    }
+        claimed_fd = open(claimed_path, O_RDONLY);
+        if (claimed_fd < 0) {
+            if (!selected_is_claimed) {
+                unlink(claimed_path);
+            }
+            claimed_path[0] = '\0';
+            if (errno != ENOENT) {
+                return FAILURE;
+            }
+            attempt++;
+            if (attempt >= 64) {
+                return SUCCESS;
+            }
+            continue;
+        }
 
-    while (selected_name[0] == '\0' && (entry = readdir(dir)) != NULL) {
-        if (king_orchestrator_queue_name_is_job(entry->d_name)) {
-            char entry_path[1024];
+        if (flock(claimed_fd, LOCK_EX | LOCK_NB) != 0) {
+            int lock_errno = errno;
 
-            if (
-                king_orchestrator_build_queue_entry_path(
-                    entry->d_name,
-                    entry_path,
-                    sizeof(entry_path)
-                ) != SUCCESS
-                || !king_orchestrator_queue_entry_is_regular_file(entry_path)
-            ) {
-                continue;
+            close(claimed_fd);
+            claimed_fd = -1;
+            claimed_path[0] = '\0';
+
+            if (lock_errno != EWOULDBLOCK && lock_errno != EAGAIN) {
+                return FAILURE;
             }
 
-            strncpy(selected_name, entry->d_name, sizeof(selected_name) - 1);
-            selected_name[sizeof(selected_name) - 1] = '\0';
-            break;
+            if (busy_count < (sizeof(busy_names) / sizeof(busy_names[0]))) {
+                strncpy(busy_names[busy_count], selected_name, sizeof(busy_names[busy_count]) - 1);
+                busy_names[busy_count][sizeof(busy_names[busy_count]) - 1] = '\0';
+                busy_count++;
+            }
+
+            attempt++;
+            if (attempt >= 64) {
+                return SUCCESS;
+            }
+            continue;
         }
-    }
 
-    closedir(dir);
-
-    if (selected_name[0] == '\0') {
-        return SUCCESS;
-    }
-
-    if (selected_is_claimed) {
-        snprintf(
-            claimed_path,
-            claimed_path_len,
-            "%s/%s",
-            king_mcp_orchestrator_config.orchestrator_worker_queue_path,
-            selected_name
-        );
-    } else {
-        snprintf(
-            queued_path,
-            sizeof(queued_path),
-            "%s/%s",
-            king_mcp_orchestrator_config.orchestrator_worker_queue_path,
-            selected_name
-        );
-        snprintf(
-            claimed_path,
-            claimed_path_len,
-            "%s/claimed-%ld-%s",
-            king_mcp_orchestrator_config.orchestrator_worker_queue_path,
-            (long) getpid(),
-            selected_name
-        );
-
-        if (rename(queued_path, claimed_path) != 0) {
+        if (lseek(claimed_fd, 0, SEEK_SET) < 0) {
+            close(claimed_fd);
+            claimed_fd = -1;
+            if (!selected_is_claimed) {
+                unlink(claimed_path);
+            }
             claimed_path[0] = '\0';
             return FAILURE;
         }
+
+        {
+            ssize_t bytes_read = read(claimed_fd, run_id_buffer, sizeof(run_id_buffer) - 1);
+
+            if (bytes_read <= 0) {
+                close(claimed_fd);
+                claimed_fd = -1;
+                unlink(claimed_path);
+                claimed_path[0] = '\0';
+                return FAILURE;
+            }
+
+            run_id_buffer[bytes_read] = '\0';
+        }
+
+        newline = strpbrk(run_id_buffer, "\r\n");
+        if (newline != NULL) {
+            *newline = '\0';
+        }
+
+        if (run_id_buffer[0] == '\0') {
+            close(claimed_fd);
+            claimed_fd = -1;
+            unlink(claimed_path);
+            claimed_path[0] = '\0';
+            return FAILURE;
+        }
+
+        *run_id_out = zend_string_init(run_id_buffer, strlen(run_id_buffer), 0);
+        if (claimed_fd_out != NULL) {
+            *claimed_fd_out = claimed_fd;
+        } else {
+            close(claimed_fd);
+        }
+        return SUCCESS;
     }
-
-    stream = king_orchestrator_open_nofollow_stream(
-        claimed_path,
-        O_RDONLY,
-        0,
-        "rb"
-    );
-    if (stream == NULL) {
-        unlink(claimed_path);
-        claimed_path[0] = '\0';
-        return FAILURE;
-    }
-
-    if (fgets(run_id_buffer, sizeof(run_id_buffer), stream) == NULL) {
-        fclose(stream);
-        unlink(claimed_path);
-        claimed_path[0] = '\0';
-        return FAILURE;
-    }
-
-    fclose(stream);
-
-    newline = strpbrk(run_id_buffer, "\r\n");
-    if (newline != NULL) {
-        *newline = '\0';
-    }
-
-    if (run_id_buffer[0] == '\0') {
-        unlink(claimed_path);
-        claimed_path[0] = '\0';
-        return FAILURE;
-    }
-
-    *run_id_out = zend_string_init(run_id_buffer, strlen(run_id_buffer), 0);
-    return SUCCESS;
 }
 
 int king_orchestrator_registry_init(void)
@@ -1656,6 +1830,7 @@ void king_orchestrator_append_component_info(zval *configuration)
         execution_backend
     );
     add_assoc_string(configuration, "topology_scope", topology_scope);
+    add_assoc_string(configuration, "scheduler_policy", "claimed_recovery_then_fifo_run_id");
     add_assoc_string(configuration, "retry_policy", "single_attempt");
     add_assoc_string(configuration, "idempotency_policy", "caller_managed");
     add_assoc_string(

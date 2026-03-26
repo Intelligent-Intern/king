@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- [ ] Implement real multi-host backend boundaries for MCP and pipeline orchestrator beyond the current same-host topology scope.
+- [ ] Validate worker failure handling during active file-worker execution, including claimed-run recovery after worker loss.
 
 ## Active Executable Items
 
@@ -30,35 +30,38 @@
 1. [ ] Implement real multi-host backend boundaries for MCP and pipeline orchestrator beyond the current same-host topology scope.
    done when: controller, worker, and remote peer behavior is proven across machine boundaries rather than only separate local processes or explicit same-host topology contracts.
 
-2. [ ] Validate worker failure handling, queue fairness, and scheduler behavior under sustained pipeline load.
-   done when: active runs survive worker loss correctly and queue progression remains fair under contention.
+2. [ ] Validate worker failure handling during active file-worker execution, including claimed-run recovery after worker loss.
+   done when: a run interrupted mid-step can be resumed, retired, or failed exactly once after worker loss without duplicate completion, leaked claims, or ambiguous terminal state.
 
-3. [ ] Validate Smart DNS registration, routing, mother-node synchronization, and recovery against larger or distributed topologies.
+3. [ ] Validate file-worker queue fairness under sustained contention and parallel workers.
+   done when: queue progression remains fair and starvation-free under repeated concurrent claims rather than only deterministic FIFO and claimed-recovery ordering.
+
+4. [ ] Validate Smart DNS registration, routing, mother-node synchronization, and recovery against larger or distributed topologies.
    done when: service discovery and semantic routing stay coherent under parallel updates, restart, and failover rather than only local happy-path flows.
 
-4. [ ] Finalize the honest v1 object-store backend contract.
+5. [ ] Finalize the honest v1 object-store backend contract.
    done when: either at least one non-local backend is real and verified, or the public contract is explicitly locked to `local_fs` plus simulated adapters with no stronger claim.
 
 ### 2. Observability and Fleet Operations
 
-5. [ ] Validate autoscaling behavior under degraded telemetry and provider conditions, including rollback for failed bootstrap, registration, and readiness.
+6. [ ] Validate autoscaling behavior under degraded telemetry and provider conditions, including rollback for failed bootstrap, registration, and readiness.
     done when: controller decisions remain safe and explainable while inputs or provider calls are missing, degraded, or partially failed.
 
-6. [ ] Validate OTLP traces and logs export against real collectors, including non-2xx, timeout, size-limit, and outage-recovery behavior.
+7. [ ] Validate OTLP traces and logs export against real collectors, including non-2xx, timeout, size-limit, and outage-recovery behavior.
     done when: all exported telemetry signal types are verified against honest collectors instead of metrics-only local coverage.
 
-7. [ ] Prove telemetry export semantics under sustained degraded conditions, including replay or explicit non-replay guarantees after restart.
+8. [ ] Prove telemetry export semantics under sustained degraded conditions, including replay or explicit non-replay guarantees after restart.
     done when: long-haul exporter outage and recovery do not leave delivery semantics ambiguous.
 
 ### 3. Build, Release, and Compatibility Confidence
 
-8. [ ] Turn the QUIC backend bootstrap into a deterministic pinned dependency path.
+9. [ ] Turn the QUIC backend bootstrap into a deterministic pinned dependency path.
     done when: `quiche` and related build inputs rehydrate reproducibly on clean hosts without ad hoc branch fallbacks or local resurrection tricks.
 
-9. [ ] Add clean-host and published-container install/smoke matrix coverage across supported PHP and API combinations, then lock upgrade/downgrade release gates behind it.
+10. [ ] Add clean-host and published-container install/smoke matrix coverage across supported PHP and API combinations, then lock upgrade/downgrade release gates behind it.
     done when: fresh-host package installs and published images are verified in CI instead of only local source builds.
 
-10. [ ] Add long-duration ASan, UBSan, and leak-oriented soak gates with archived diagnostics.
+11. [ ] Add long-duration ASan, UBSan, and leak-oriented soak gates with archived diagnostics.
     done when: sanitizer and soak regressions produce retained failure artifacts and block release-grade claims automatically.
 
 ## Notes
@@ -67,6 +70,6 @@
 - Router/loadbalancer is now treated as an explicit `config_backed` control-plane component with no stronger forwarding-runtime claim in v1.
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs; the remaining DNS work is topology and wire-depth, not more local config cleanup.
 - MCP request, upload, and download now talk to a real same-host remote peer with propagated timeout, deadline, and cancellation controls, plus verified 1 MiB payload roundtrips, parallel-transfer backpressure isolation, explicit single-flight reentry guards per connection handle, same-host partial-failure recovery, persisted remote-state restart recovery, and an explicit `topology_scope=same_host_remote_peer` contract in system component info; the remaining MCP gap is real multi-host coverage plus richer distributed failure semantics.
-- File-worker orchestration now persists honest `queued -> running -> completed|failed|cancelled` transitions, exposes explicit `single_attempt` retry and `caller_managed` idempotency, and surfaces `topology_scope=local_in_process` for the local backend versus `same_host_file_worker` for file-worker mode; the remaining orchestrator gap is real multi-host execution depth plus heavier scheduler/failure semantics.
+- File-worker orchestration now persists honest `queued -> running -> completed|failed|cancelled` transitions, exposes explicit `single_attempt` retry and `caller_managed` idempotency, surfaces `topology_scope=local_in_process` for the local backend versus `same_host_file_worker` for file-worker mode, advertises `scheduler_policy=claimed_recovery_then_fifo_run_id`, and keeps concurrent workers from double-claiming one active run; the remaining orchestrator gap is real multi-host execution depth plus active-worker failure and sustained fairness semantics.
 - Everything else from `READYNESS_TRACKER.md` is either already verified, derivative of these leaves, or still too broad to be the active queue.
 - If an item is not listed here, it is not the current repo-local priority.

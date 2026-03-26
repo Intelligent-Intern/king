@@ -872,6 +872,7 @@ int king_orchestrator_worker_run_next(zval *return_value)
 {
     zend_string *run_id = NULL;
     char claimed_path[1024];
+    int claimed_fd = -1;
     int rc;
 
     if (!king_orchestrator_backend_is_file_worker()) {
@@ -893,7 +894,7 @@ int king_orchestrator_worker_run_next(zval *return_value)
         );
     }
 
-    if (king_orchestrator_claim_next_run(&run_id, claimed_path, sizeof(claimed_path)) != SUCCESS) {
+    if (king_orchestrator_claim_next_run(&run_id, claimed_path, sizeof(claimed_path), &claimed_fd) != SUCCESS) {
         return king_orchestrator_raise_error(
             "king_pipeline_orchestrator_worker_run_next() could not claim a queued run.",
             king_ce_runtime_exception,
@@ -902,6 +903,9 @@ int king_orchestrator_worker_run_next(zval *return_value)
     }
 
     if (run_id == NULL) {
+        if (claimed_fd >= 0) {
+            close(claimed_fd);
+        }
         ZVAL_FALSE(return_value);
         return SUCCESS;
     }
@@ -909,6 +913,9 @@ int king_orchestrator_worker_run_next(zval *return_value)
     if (king_orchestrator_pipeline_run_is_terminal(run_id)) {
         if (claimed_path[0] != '\0') {
             unlink(claimed_path);
+        }
+        if (claimed_fd >= 0) {
+            close(claimed_fd);
         }
         if (king_orchestrator_get_run_snapshot(run_id, return_value) != SUCCESS) {
             zend_string_release(run_id);
@@ -926,6 +933,9 @@ int king_orchestrator_worker_run_next(zval *return_value)
         if (claimed_path[0] != '\0') {
             unlink(claimed_path);
         }
+        if (claimed_fd >= 0) {
+            close(claimed_fd);
+        }
         zend_string_release(run_id);
         return king_orchestrator_raise_error(
             "king_pipeline_orchestrator_worker_run_next() could not persist the claimed running snapshot.",
@@ -941,6 +951,10 @@ int king_orchestrator_worker_run_next(zval *return_value)
 
     if (claimed_path[0] != '\0') {
         unlink(claimed_path);
+    }
+    if (claimed_fd >= 0) {
+        close(claimed_fd);
+        claimed_fd = -1;
     }
 
     if (rc != SUCCESS) {

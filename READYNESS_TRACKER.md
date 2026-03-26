@@ -7,6 +7,7 @@ Status note:
 - Checked boxes below mean the current tree already verifies that slice directly in code, tests, or an honest fenced v1 contract.
 - Unchecked boxes are still open, intentionally fenced out of the current v1 slice, or broader than the proof that exists in this repository today.
 - This file is the long-form closure tracker, not the active execution queue. `ISSUES.md` stays the narrow working backlog.
+- Recent orchestrator closure: deterministic file-worker claimed-run recovery order and concurrent claim locking are now verified, but the broader worker-failure and fairness-under-load boxes remain intentionally open below.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
