@@ -68,7 +68,8 @@
 ### 4. Realtime and server runtime depth
 
 - [ ] Replace local-only WebSocket handshake/runtime assumptions with on-wire client and server verification
-- [ ] Give `King\WebSocket\Server` an honest public runtime surface or retire it from the exported API
+- [x] Give `King\WebSocket\Server` an honest public runtime surface or retire it from the exported API
+  completed: 2026-03-26
 - [ ] Add long-lived server/session soak coverage for upgrade, early-hints, TLS reload, admin API, and close/drain flows
 - [ ] Verify multi-connection backpressure and fairness semantics under HTTP/2, HTTP/3, and WebSocket churn
 
@@ -91,7 +92,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `290/290`
+  tests: `291/291`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -130,6 +131,9 @@
   budget file: `benchmarks/budgets/canonical-ci.json`
   local verification: `./benchmarks/run-canonical.sh --iterations=5000 --warmup=500 --budget-file=benchmarks/budgets/canonical-ci.json` and `./scripts/go-live-readiness.sh --skip-baseline --benchmark-iterations 5000 --benchmark-warmup 500 --benchmark-budget-file benchmarks/budgets/canonical-ci.json`
   coverage: explicit per-case `max_ns_per_iteration` ceilings for `session`, `proto`, `object_store`, and `semantic_dns`, plus the same budget gate wired into the canonical CI go-live path.
+- [x] The exported WebSocket OO surface now only exposes the honest `Connection` runtime
+  targeted PHPTs: `143`, `227`, `228`, `312`
+  coverage: the empty `King\WebSocket\Server` placeholder is retired from the stub and runtime registration, class-registration parity remains green, and the OO WebSocket surface now matches the actual implemented connection runtime instead of advertising a no-op server shell.
 
 ## How To Use This File
 

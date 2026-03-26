@@ -163,12 +163,6 @@ PHP_MINIT_FUNCTION(king)
         NULL,
         ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
     );
-    king_ce_ws_server = king_register_class_with_flags(
-        "King\\WebSocket\\Server",
-        NULL,
-        NULL,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
     king_ce_ws_connection = king_register_class_with_flags(
         "King\\WebSocket\\Connection",
         NULL,

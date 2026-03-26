@@ -57,6 +57,9 @@ procedural and OO surfaces, while the orchestrator now enforces
 `CancelToken` propagation across the `file_worker` process boundary remains
 explicitly unsupported today and is rejected honestly instead of being claimed
 as implemented.
+The exported realtime OO surface was also tightened for v1 honesty: the empty
+`King\WebSocket\Server` placeholder is now gone, leaving only the implemented
+`King\WebSocket\Connection` runtime in the public WebSocket OO API.
 
 One important caveat remains in the QUIC/HTTP/3 bootstrap path. The runtime is
 real and green, and build tooling now avoids the two common CI breakage modes:
@@ -103,7 +106,7 @@ Repository facts from the current tree:
 - `extension/src`: 177 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 168 headers
-- `extension/tests`: 290 PHPT files
+- `extension/tests`: 291 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently verified regression baseline is:
@@ -112,9 +115,9 @@ The currently verified regression baseline is:
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
 - extension load smoke: passing
-- `./scripts/test-extension.sh`: `290/290` PHPT tests passing
+- `./scripts/test-extension.sh`: `291/291` PHPT tests passing
 - `./scripts/fuzz-runtime.sh`: passing
-- `./scripts/check-stub-parity.sh`: passing (`123` functions, `44` classes, `48` declared public methods)
+- `./scripts/check-stub-parity.sh`: passing (`123` functions, `43` classes, `48` declared public methods)
 - `./scripts/smoke-profile.sh release`: passing
 - `./scripts/smoke-profile.sh asan`: passing
 - benchmark smoke (`session`, `proto`, `object_store`, `semantic_dns`): passing
@@ -147,7 +150,7 @@ The repo already has active native runtime slices for:
 - HTTP/1, HTTP/2, and HTTP/3 client request paths
 - HTTP/1 streaming receive and response bridging
 - HTTP/2 HTTPS/ALPN, multiplexing, and push capture
-- local WebSocket connect, frame, ping, close, and OO parity
+- local WebSocket connect, frame, ping, close, and OO `Connection` parity
 - local server dispatch, local HTTP/1, HTTP/2, and HTTP/3 listener leaves
 - server-side cancel, early hints, websocket upgrade, admin API, TLS reload, CORS, and telemetry-init helpers
 - IIBIN schema, enum, encode, decode, object hydration, and wire validation
@@ -215,7 +218,7 @@ transport depth, or operational depth is still incomplete.
 
 ### 6. Realtime And Server Depth Need More On-Wire And Long-Lived Verification
 
-- WebSocket and server flows are strong locally, but the stack still lacks enough on-wire verification for server-side realtime behavior.
+- WebSocket and server flows are strong locally, but the stack still lacks enough on-wire verification for server-side realtime behavior; the empty `King\WebSocket\Server` placeholder has been retired rather than being misrepresented as implemented runtime depth.
 - Long-lived soak coverage for upgrade flows, TLS reload, admin API, session churn, and multi-connection fairness remains thin relative to a true production-grade claim.
 - HTTP/2, HTTP/3, and WebSocket backpressure/fairness under sustained churn are still not closed out as hard guarantees.
 

@@ -1544,9 +1544,6 @@ namespace King\Client {
  * WebSocket over HTTP/3
  * =========================== */
 namespace King\WebSocket {
-    final class Server {
-    }
-
     final class Connection {
         public function __construct(string $url, ?array $headers = null, ?array $options = null) {}
         public function send(string $message): void {}

@@ -49,7 +49,6 @@ zend_class_entry *king_ce_client_http          = NULL;
 zend_class_entry *king_ce_client_http1         = NULL;
 zend_class_entry *king_ce_client_http2         = NULL;
 zend_class_entry *king_ce_client_http3         = NULL;
-zend_class_entry *king_ce_ws_server            = NULL;
 zend_class_entry *king_ce_ws_connection        = NULL;
 static zend_object_handlers king_cancel_token_object_handlers;
 static zend_object_handlers king_config_object_handlers;

@@ -116,7 +116,6 @@ extern zend_class_entry
     *king_ce_client_http1,
     *king_ce_client_http2,
     *king_ce_client_http3,
-    *king_ce_ws_server,
     *king_ce_ws_connection;
 
 /* -----------------------------------------------------------------------------
