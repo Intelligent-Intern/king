@@ -23,7 +23,8 @@ primitives in one native runtime:
 - QUIC, HTTP/1, HTTP/2, HTTP/3, TLS, streaming, cancellation, and upgrade flows
 - client and server APIs over explicit session and stream state
 - WebSocket and WebTransport-class realtime communication
-- Semantic DNS for service discovery and routing
+- Smart DNS / Semantic DNS for service discovery and routing
+- router and load-balancer control-plane primitives
 - IIBIN for schema-defined native binary encoding and decoding
 - MCP for agent and tool protocol integration
 - object-store and CDN primitives
@@ -89,9 +90,10 @@ King targets symmetric client and server operation:
 
 King includes a native control-plane model around:
 
-- Semantic DNS service registration
+- Smart DNS and Semantic DNS service registration
 - topology awareness
 - route selection
+- router/loadbalancer backend discovery and policy
 - mother-node or control-node coordination
 - policy-aware service discovery
 - control and telemetry endpoints
@@ -173,7 +175,9 @@ It is supposed to look like one native system with a PHP-facing control surface.
 ## Repository Map
 
 - `extension/`
-  Native extension sources, headers, build scripts, and PHPT coverage.
+  Native extension sources, canonical project headers, build scripts, and PHPT coverage.
+- `extension/include/`
+  Canonical home of project-owned C headers; generated `extension/config.h` is the build-time exception.
 - [`stubs/`](stubs/)
   Public PHP signature surface and IDE-facing type stubs.
 - [`EPIC.md`](EPIC.md)

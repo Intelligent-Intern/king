@@ -15,10 +15,11 @@ and the public stub surface matches the live runtime.
 That does not yet mean "final 10/10".
 The remaining gaps are no longer about broad runtime parity or placeholder
 surfaces inside the local tree.
-They are concentrated in five areas:
+They are concentrated in six areas:
 
 - wire-truth for server and WebSocket behavior
 - remote MCP and deeper distributed orchestration
+- router/loadbalancer honesty and full Smart DNS scope
 - long-haul telemetry, exporter, and fleet recovery depth
 - deterministic QUIC bootstrap and clean-host installation confidence
 - compatibility, sanitizer soak, and release-grade upgrade guarantees
@@ -47,10 +48,11 @@ The currently verified baseline is:
 Current tree facts:
 
 - `extension/src`: `177` C files
-- `extension/include`: `168` headers
+- `extension/include`: `172` headers
 - `extension/tests`: `307` PHPT files
 - public stub parity: `124` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
+- project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
 
 ## What Is Verified And Real Today
 
@@ -62,6 +64,7 @@ The current tree already proves:
 - local WebSocket client/runtime plus honest OO `King\WebSocket\Connection` parity
 - IIBIN schema, registry, encode/decode, object hydration, and wire validation
 - Semantic DNS register/discover/update routing plus private-directory durable state handling
+- router/loadbalancer and Smart DNS config surfaces are present and initialized as first-class config modules
 - object-store local filesystem persistence, `.meta` sidecars, CDN cache/runtime behavior, and confined backup/restore/import/export paths
 - MCP request/upload/download parity with bounded timeout, deadline, and local cancellation controls
 - orchestrator persistence, local/file-worker backend boundary, cross-process cancellation, and multiprocess controller/observer/worker verification
@@ -84,6 +87,12 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 - MCP remains local-first in practice.
 - The orchestrator has a real cross-process file-worker boundary, but not yet a verified multi-host boundary.
 - Retry, idempotency, and exact remote/distributed execution guarantees are still thinner than a final release bar.
+
+### Routing and DNS Scope
+
+- Router/loadbalancer currently exists mostly as a config surface; there is no equally honest runtime or system-component story yet.
+- Smart DNS is broader at the config layer than the currently verified semantic-DNS runtime slice.
+- The remaining work is to either implement and verify those broader routing and DNS claims or to shrink the public contract to what is actually real.
 
 ### Object Store Scope
 
@@ -113,7 +122,7 @@ The model is now:
 - `EPIC.md`
   stable charter, pillars, and exit criteria
 - `ISSUES.md`
-  the 20 active executable open items
+  the 20 active executable open items distilled from the larger completion tracker
 - `PROJECT_ASSESSMENT.md`
   verified state and caveats
 

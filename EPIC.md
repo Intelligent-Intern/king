@@ -27,6 +27,7 @@ King v1 is only real when the exported surface behaves like one system:
 - transport, client, and server paths share coherent lifecycle semantics
 - procedural and OO APIs are parallel surfaces over the same native kernels
 - control-plane subsystems are stateful, policy-driven, and restart-aware
+- routing, load-balancing, and DNS surfaces are either backed by real kernels or explicitly excluded from the v1 contract
 - operational surfaces describe real live behavior rather than static snapshots
 - build, packaging, tests, and docs describe the same system
 
@@ -53,7 +54,7 @@ against real peers, not only through local runtime shims.
 
 ### 3. Durable Control Plane
 
-MCP, orchestration, storage, and routing must survive restart, failure, and
+MCP, orchestration, storage, routing, load-balancing, and DNS must survive restart, failure, and
 process boundaries honestly. Local-only convenience is not enough.
 
 ### 4. Operational Truth

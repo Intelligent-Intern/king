@@ -186,6 +186,16 @@ Before changing code, align the change against the right file:
 When a feature has both procedural and OO entry points, the native kernel comes
 first. Wrappers, aliases, arginfo, and docs move after the kernel is real.
 
+### 2a. Keep headers where they belong
+
+Project-owned C headers belong under `extension/include/`.
+Do not park new runtime headers under `extension/` or `extension/src/` just
+because the local compiler can find them.
+
+The only normal exception is generated `extension/config.h`.
+If a change adds or moves headers, update the build and packaging paths in the
+same change so `extension/include/` stays the canonical include root.
+
 ### 3. Move docs with reality
 
 If runtime behavior changes, update the relevant repo-local docs in the same
