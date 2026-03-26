@@ -1,6 +1,6 @@
 # King Project Assessment
 
-> Stand: 2026-03-25
+> Stand: 2026-03-26
 > Scope: verified v1 runtime reach inside this repository
 > This file tracks the moving verified state of King v1.
 > `README.md` describes the target system. This file describes the system that is actually here now.
@@ -8,13 +8,15 @@
 ## Executive Summary
 
 King now ships as a repo-local v1 runtime.
+Within this repository, that v1 line is treated as the final release line, not
+as a beta placeholder.
 The repository contains a real, test-backed native implementation across
 config, session, client transport, local server slices, IIBIN, local WebSocket
 handling, and all major control-plane subsystems (MCP, Telemetry, Autoscaling,
 Integration).
 
 The repository now sits at a fully green verified baseline.
-As of 2026-03-25, the canonical audit, rebuild, and full PHPT matrix all pass
+As of 2026-03-26, the canonical audit, rebuild, and full PHPT matrix all pass
 against the current repository state, and the repo now has a canonical local
 benchmark harness for the four core runtime paths that were still uncovered,
 explicit local `release`, `debug`, `asan`, and `ubsan` build/smoke paths, and
@@ -82,7 +84,7 @@ Repository facts from the current tree:
 - `extension/src`: 177 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 168 headers
-- `extension/tests`: 283 PHPT files
+- `extension/tests`: 285 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently verified regression baseline is:
@@ -91,7 +93,7 @@ The currently verified regression baseline is:
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
 - extension load smoke: passing
-- `./scripts/test-extension.sh`: `283/283` PHPT tests passing
+- `./scripts/test-extension.sh`: `285/285` PHPT tests passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing (`112` functions, `44` classes, `48` declared public methods)
 - `./scripts/smoke-profile.sh release`: passing
@@ -142,14 +144,14 @@ The repo already has active native runtime slices for:
 
 The repo is still not a full production-grade implementation for:
 
-- autoscaling node bootstrap exists at the payload/lifecycle layer, but end-to-end code rollout and release propagation onto freshly provisioned Hetzner nodes is still not verified as a real fleet operation
+- multi-node rollout, rollback, and provider-error recovery under sustained fleet pressure beyond the now-verified Hetzner bootstrap/release handoff path
 - multi-provider cloud provisioning beyond the Hetzner path; non-Hetzner providers still remain simulated by design
 - QUIC/HTTP/3 backend provenance is still weaker than ideal: the runtime depends on an external local `quiche/` tree, and clean-room rehydration is still not yet a fully tracked deterministic bootstrap path for release-grade builds
-- object-store cloud adapters remain simulated beyond the local filesystem core, and restart rehydration of persisted backend state remains open
+- object-store cloud adapters remain simulated beyond the local filesystem core; local persisted backend restart rehydration is verified, but distributed/cloud durability guarantees are still open
 - release/container profile builds remain sensitive to missing `quiche`/`libcurl` layouts in clean or cross-arch environments until bootstrap normalization is fully deterministic and independent of local host headers
-- real telemetry export delivery instead of local-only flush accounting
+- long-haul telemetry exporter hardening, failover behavior, and queue/backpressure guarantees under degraded conditions
 - remote/distributed MCP and orchestrator execution instead of local-first kernels
-- rolling-restart, failover, and crash-recovery operational depth
+- coordinated multi-node rolling-restart, failover, and crash-recovery operational depth
 - CI-enforced benchmark budgets, installability matrix, and long-duration sanitizer soak coverage
 
 The biggest architectural caveat is simple:
@@ -167,8 +169,8 @@ transport depth, or operational depth is still incomplete.
 
 ### 2. Autoscaling Needs Operational Depth, Not Just Provider Honesty
 
-- Hetzner provisioning is honest and controller-owned, but the project still lacks a verified end-to-end rollout story for code/release deployment onto newly provisioned machines.
-- The current verification is still fundamentally controller-local; it does not yet prove multi-node fleet behavior under real rollout, drain, rollback, or provider-error recovery pressure.
+- Hetzner provisioning is honest and controller-owned, and the bootstrap/release handoff path is verified, but the project still lacks full multi-node fleet rollout and rollback proof.
+- The current verification is still fundamentally controller-local; it does not yet prove sustained fleet behavior under real rollout, drain, rollback, or provider-error recovery pressure.
 - A real `10/10` state here means: verified release propagation/bootstrap on new nodes and recovery behavior that survives provider/API turbulence without manual babysitting.
 
 ### 3. Object Store And Persistence Are Strong Locally But Not Finished Externally
@@ -185,7 +187,7 @@ transport depth, or operational depth is still incomplete.
 
 ### 5. Telemetry And System Operations Still Need Real Export And Recovery Semantics
 
-- Telemetry aggregation and flush contracts are real, but exporter delivery, queueing, backpressure, retry, and drop semantics are not yet production-deep.
+- Telemetry aggregation, queueing, and export contracts are real, but long-haul delivery guarantees, failure handling, and degraded-mode behavior are not yet production-deep.
 - System integration currently verifies local lifecycle composition, not rolling restart, coordinated drain, failover, or chaos recovery across nodes.
 - The missing part is not shape or API parity; it is operational truth under degraded conditions.
 

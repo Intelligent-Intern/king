@@ -106,6 +106,7 @@ function king_http3_start_oo_test_server(string $certFile, string $keyFile, stri
     }
 
     $output = '';
+    $startupGraceAt = microtime(true) + 1.0;
     $deadline = microtime(true) + 10.0;
     while (microtime(true) < $deadline) {
         $status = proc_get_status($process);
@@ -133,6 +134,10 @@ function king_http3_start_oo_test_server(string $certFile, string $keyFile, stri
         if (!$status['running']) {
             break;
         }
+
+        if (microtime(true) >= $startupGraceAt) {
+            return [$process, $pipes, (int) $port];
+        }
     }
 
     foreach ($pipes as $pipe) {
@@ -145,6 +150,24 @@ function king_http3_start_oo_test_server(string $certFile, string $keyFile, stri
     proc_terminate($process);
     proc_close($process);
     throw new RuntimeException('local HTTP/3 OO test server failed: ' . trim($output));
+}
+
+function king_http3_oo_request_with_retry(callable $callback)
+{
+    $attempt = 0;
+    $lastError = null;
+
+    while ($attempt < 20) {
+        try {
+            return $callback();
+        } catch (Throwable $e) {
+            $lastError = $e;
+            usleep(100000);
+            $attempt++;
+        }
+    }
+
+    throw $lastError ?? new RuntimeException('HTTP/3 OO request retry exhausted without an exception.');
 }
 
 function king_http3_stop_oo_test_server(array $server): void
@@ -166,8 +189,12 @@ try {
     ]);
 
     $client = new King\Client\Http3Client($config);
-    $first = $client->request('GET', 'https://localhost:' . $server[2] . '/first.txt');
-    $second = $client->request('GET', 'https://localhost:' . $server[2] . '/second.txt');
+    $first = king_http3_oo_request_with_retry(
+        static fn () => $client->request('GET', 'https://localhost:' . $server[2] . '/first.txt')
+    );
+    $second = king_http3_oo_request_with_retry(
+        static fn () => $client->request('GET', 'https://localhost:' . $server[2] . '/second.txt')
+    );
 } finally {
     king_http3_stop_oo_test_server($server);
     king_http3_destroy_oo_fixture($fixture);

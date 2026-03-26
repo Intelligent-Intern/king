@@ -4,6 +4,7 @@
 > It tracks what is still open in this repository after the current verified
 > baseline in `PROJECT_ASSESSMENT.md`.
 > `README.md` stays stable. `EPIC.md` stays strategic. This file is allowed to move.
+> v1 here means the final repo-local release line, not a beta placeholder.
 
 ## Working Rules
 
@@ -83,7 +84,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `279/279`
+  tests: `285/285`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`

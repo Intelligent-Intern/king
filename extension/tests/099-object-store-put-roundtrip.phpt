@@ -1,7 +1,13 @@
 --TEST--
 King object-store put/get/list/delete roundtrip through the local runtime registry
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
+$storagePath = sys_get_temp_dir() . '/king-object-store-roundtrip-' . bin2hex(random_bytes(6));
+mkdir($storagePath);
+king_object_store_init(['storage_root_path' => $storagePath]);
+
 var_dump(king_object_store_put('obj-1', 'alpha'));
 var_dump(king_object_store_get('obj-1'));
 
@@ -14,10 +20,18 @@ var_dump(is_int($objects[0]['stored_at']));
 var_dump(king_object_store_delete('obj-1'));
 var_dump(king_object_store_get('obj-1'));
 var_dump(king_object_store_list());
+
+@unlink($storagePath . '/obj-1.meta');
+@rmdir($storagePath);
 ?>
---EXPECTF--
-Fatal error: Uncaught King\RuntimeException: Object-store registry is unavailable. in /home/jochen/projects/king.site/king/extension/tests/099-object-store-put-roundtrip.php:2
-Stack trace:
-#0 /home/jochen/projects/king.site/king/extension/tests/099-object-store-put-roundtrip.php(2): king_object_store_put('obj-1', 'alpha')
-#1 {main}
-  thrown in /home/jochen/projects/king.site/king/extension/tests/099-object-store-put-roundtrip.php on line 2
+--EXPECT--
+bool(true)
+string(5) "alpha"
+int(1)
+string(5) "obj-1"
+int(5)
+bool(true)
+bool(true)
+bool(false)
+array(0) {
+}

@@ -106,6 +106,7 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
     }
 
     $output = '';
+    $startupGraceAt = microtime(true) + 1.0;
     $deadline = microtime(true) + 10.0;
     while (microtime(true) < $deadline) {
         $status = proc_get_status($process);
@@ -133,6 +134,10 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
         if (!$status['running']) {
             break;
         }
+
+        if (microtime(true) >= $startupGraceAt) {
+            return [$process, $pipes, (int) $port];
+        }
     }
 
     foreach ($pipes as $pipe) {
@@ -145,6 +150,24 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
     proc_terminate($process);
     proc_close($process);
     throw new RuntimeException('local HTTP/3 test server failed: ' . trim($output));
+}
+
+function king_http3_request_with_retry(callable $callback)
+{
+    $attempt = 0;
+    $lastError = null;
+
+    while ($attempt < 20) {
+        try {
+            return $callback();
+        } catch (Throwable $e) {
+            $lastError = $e;
+            usleep(100000);
+            $attempt++;
+        }
+    }
+
+    throw $lastError ?? new RuntimeException('HTTP/3 request retry exhausted without an exception.');
 }
 
 function king_http3_stop_test_server(array $server): void
@@ -165,29 +188,33 @@ try {
         'tls_default_ca_file' => $fixture['cert'],
     ]);
 
-    $directResponse = king_http3_request_send(
-        'https://localhost:' . $server[2] . '/direct.txt',
-        'GET',
-        null,
-        null,
-        [
-            'connection_config' => $cfg,
-            'connect_timeout_ms' => 1000,
-            'timeout_ms' => 5000,
-        ]
+    $directResponse = king_http3_request_with_retry(
+        static fn () => king_http3_request_send(
+            'https://localhost:' . $server[2] . '/direct.txt',
+            'GET',
+            null,
+            null,
+            [
+                'connection_config' => $cfg,
+                'connect_timeout_ms' => 1000,
+                'timeout_ms' => 5000,
+            ]
+        )
     );
 
-    $dispatcherResponse = king_client_send_request(
-        'https://localhost:' . $server[2] . '/dispatch.txt',
-        'GET',
-        null,
-        null,
-        [
-            'preferred_protocol' => 'http3',
-            'connection_config' => $cfg,
-            'connect_timeout_ms' => 1000,
-            'timeout_ms' => 5000,
-        ]
+    $dispatcherResponse = king_http3_request_with_retry(
+        static fn () => king_client_send_request(
+            'https://localhost:' . $server[2] . '/dispatch.txt',
+            'GET',
+            null,
+            null,
+            [
+                'preferred_protocol' => 'http3',
+                'connection_config' => $cfg,
+                'connect_timeout_ms' => 1000,
+                'timeout_ms' => 5000,
+            ]
+        )
     );
 } finally {
     king_http3_stop_test_server($server);

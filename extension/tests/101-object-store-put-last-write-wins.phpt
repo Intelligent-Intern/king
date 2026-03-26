@@ -1,7 +1,13 @@
 --TEST--
 King object-store put uses last-write-wins for the same object id
+--INI--
+king.security_allow_config_override=1
 --FILE--
 <?php
+$storagePath = sys_get_temp_dir() . '/king-object-store-last-write-' . bin2hex(random_bytes(6));
+mkdir($storagePath);
+king_object_store_init(['storage_root_path' => $storagePath]);
+
 var_dump(king_object_store_put('obj-1', 'alpha'));
 var_dump(king_object_store_put('obj-1', 'beta'));
 var_dump(king_object_store_get('obj-1'));
@@ -13,10 +19,17 @@ var_dump($objects[0]['size_bytes']);
 
 var_dump(king_object_store_delete('obj-1'));
 var_dump(king_object_store_list());
+
+@unlink($storagePath . '/obj-1.meta');
+@rmdir($storagePath);
 ?>
---EXPECTF--
-Fatal error: Uncaught King\RuntimeException: Object-store registry is unavailable. in /home/jochen/projects/king.site/king/extension/tests/101-object-store-put-last-write-wins.php:2
-Stack trace:
-#0 /home/jochen/projects/king.site/king/extension/tests/101-object-store-put-last-write-wins.php(2): king_object_store_put('obj-1', 'alpha')
-#1 {main}
-  thrown in /home/jochen/projects/king.site/king/extension/tests/101-object-store-put-last-write-wins.php on line 2
+--EXPECT--
+bool(true)
+bool(true)
+string(4) "beta"
+int(1)
+string(5) "obj-1"
+int(4)
+bool(true)
+array(0) {
+}
