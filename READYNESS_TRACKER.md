@@ -111,7 +111,7 @@ Status note:
 - [ ] Finalize MCP error mapping for backend failures
 - [ ] Validate MCP multi-process operation
 - [ ] Validate MCP multi-host operation
-- [ ] Enforce MCP concurrency and bounded-concurrency guarantees
+- [x] Enforce MCP concurrency and bounded-concurrency guarantees
 - [x] Enforce MCP deadline propagation
 - [x] Validate MCP upload/download under large payloads
 - [x] Validate MCP backpressure under parallel transfers

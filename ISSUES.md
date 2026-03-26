@@ -21,14 +21,14 @@
 
 ## Current Next Leaf
 
-- [ ] Validate MCP bounded concurrency and restart recovery beyond the same-host peer-restart slice.
+- [ ] Validate MCP restart recovery beyond the same-host peer-restart slice.
 
 ## Active Executable Items
 
 ### 1. Control Plane, Routing, and Distributed Execution
 
-1. [ ] Validate MCP bounded concurrency and restart recovery beyond the same-host peer-restart slice.
-   done when: stressed remote transfer paths keep explicit concurrency guarantees and recover cleanly across controller/worker-style restart scenarios, not just same-host peer reconnects.
+1. [ ] Validate MCP restart recovery beyond the same-host peer-restart slice.
+   done when: stressed remote transfer paths recover cleanly across controller/worker-style restart scenarios, not just same-host peer reconnects.
 
 2. [ ] Finalize orchestrator retry, idempotency, and exact queued/running/failed/cancelled/completed state transitions.
    done when: pipeline reruns, worker retries, and failure classification are explicit, test-backed, and stable.
@@ -72,6 +72,6 @@
 - HTTP/2 shared-session fairness under mixed slow/fast streams, HTTP/3 timeout-vs-recovery churn isolation, and multi-client WebSocket close/reconnect churn on one local server are now verified.
 - Router/loadbalancer is now treated as an explicit `config_backed` control-plane component with no stronger forwarding-runtime claim in v1.
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs; the remaining DNS work is topology and wire-depth, not more local config cleanup.
-- MCP request, upload, and download now talk to a real same-host remote peer with propagated timeout, deadline, and cancellation controls, plus verified 1 MiB payload roundtrips, parallel-transfer backpressure isolation, and same-host partial-failure/peer-restart recovery; the remaining MCP gap is bounded concurrency, deeper restart semantics, and multi-host coverage.
+- MCP request, upload, and download now talk to a real same-host remote peer with propagated timeout, deadline, and cancellation controls, plus verified 1 MiB payload roundtrips, parallel-transfer backpressure isolation, same-host partial-failure/peer-restart recovery, and explicit single-flight reentry guards per connection handle; the remaining MCP gap is deeper restart semantics and multi-host coverage.
 - Everything else from `READYNESS_TRACKER.md` is either already verified, derivative of these leaves, or still too broad to be the active queue.
 - If an item is not listed here, it is not the current repo-local priority.

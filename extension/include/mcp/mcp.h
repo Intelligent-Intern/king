@@ -20,6 +20,7 @@ typedef struct _king_mcp_state {
     zval config; /* King\Config object */
     php_stream *transport_stream;
     bool closed;
+    bool operation_active;
 } king_mcp_state;
 
 typedef struct _king_mcp_runtime_control {

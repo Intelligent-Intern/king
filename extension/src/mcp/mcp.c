@@ -47,6 +47,34 @@ static void king_mcp_mark_transport_closed(king_mcp_state *state)
     state->transport_stream = NULL;
 }
 
+static zend_result king_mcp_begin_operation(
+    king_mcp_state *state,
+    const char *operation_name
+)
+{
+    if (state == NULL || state->closed) {
+        return FAILURE;
+    }
+
+    if (state->operation_active) {
+        king_mcp_set_errorf(
+            "%s cannot start while another MCP operation is already active on this connection.",
+            operation_name
+        );
+        return FAILURE;
+    }
+
+    state->operation_active = true;
+    return SUCCESS;
+}
+
+static void king_mcp_end_operation(king_mcp_state *state)
+{
+    if (state != NULL) {
+        state->operation_active = false;
+    }
+}
+
 static zend_string *king_mcp_build_transport_target(king_mcp_state *state)
 {
     const char *host;
@@ -833,6 +861,7 @@ king_mcp_state *king_mcp_state_create(
         ZVAL_COPY(&state->config, config);
     }
     state->closed = false;
+    state->operation_active = false;
 
     return state;
 }
@@ -844,6 +873,7 @@ void king_mcp_state_close(king_mcp_state *state)
     }
 
     state->closed = true;
+    state->operation_active = false;
     king_mcp_mark_transport_closed(state);
 }
 
@@ -869,12 +899,18 @@ int king_mcp_transfer_store(
     zend_string *payload,
     king_mcp_runtime_control_t *control)
 {
+    int status = FAILURE;
+
     if (!state || state->closed || payload == NULL) {
         return FAILURE;
     }
 
-    if (king_mcp_remote_connect(state, "MCP upload", control) != SUCCESS) {
+    if (king_mcp_begin_operation(state, "MCP upload") != SUCCESS) {
         return FAILURE;
+    }
+
+    if (king_mcp_remote_connect(state, "MCP upload", control) != SUCCESS) {
+        goto cleanup;
     }
 
     if (king_mcp_remote_send_command(
@@ -887,10 +923,14 @@ int king_mcp_transfer_store(
             payload,
             control
         ) != SUCCESS) {
-        return FAILURE;
+        goto cleanup;
     }
 
-    return king_mcp_remote_expect_ok(state, "MCP upload", control);
+    status = king_mcp_remote_expect_ok(state, "MCP upload", control);
+
+cleanup:
+    king_mcp_end_operation(state);
+    return status;
 }
 
 zend_string *king_mcp_transfer_find(
@@ -907,8 +947,12 @@ zend_string *king_mcp_transfer_find(
         return NULL;
     }
 
-    if (king_mcp_remote_connect(state, "MCP download", control) != SUCCESS) {
+    if (king_mcp_begin_operation(state, "MCP download") != SUCCESS) {
         return NULL;
+    }
+
+    if (king_mcp_remote_connect(state, "MCP download", control) != SUCCESS) {
+        goto cleanup;
     }
 
     if (king_mcp_remote_send_command(
@@ -921,7 +965,7 @@ zend_string *king_mcp_transfer_find(
             NULL,
             control
         ) != SUCCESS) {
-        return NULL;
+        goto cleanup;
     }
 
     if (king_mcp_remote_expect_payload(
@@ -931,10 +975,19 @@ zend_string *king_mcp_transfer_find(
             &missing,
             control
         ) != SUCCESS) {
+        goto cleanup;
+    }
+
+cleanup:
+    king_mcp_end_operation(state);
+    if (missing) {
+        if (payload != NULL) {
+            zend_string_release(payload);
+        }
         return NULL;
     }
 
-    return missing ? NULL : payload;
+    return payload;
 }
 
 int king_mcp_request(
@@ -945,14 +998,20 @@ int king_mcp_request(
     zend_string **response_out,
     king_mcp_runtime_control_t *control)
 {
+    int status = FAILURE;
+
     if (!state || state->closed || payload == NULL || response_out == NULL) {
         return FAILURE;
     }
 
     *response_out = NULL;
 
-    if (king_mcp_remote_connect(state, "MCP request", control) != SUCCESS) {
+    if (king_mcp_begin_operation(state, "MCP request") != SUCCESS) {
         return FAILURE;
+    }
+
+    if (king_mcp_remote_connect(state, "MCP request", control) != SUCCESS) {
+        goto cleanup;
     }
 
     if (king_mcp_remote_send_command(
@@ -965,14 +1024,18 @@ int king_mcp_request(
             payload,
             control
         ) != SUCCESS) {
-        return FAILURE;
+        goto cleanup;
     }
 
-    return king_mcp_remote_expect_payload(
+    status = king_mcp_remote_expect_payload(
         state,
         "MCP request",
         response_out,
         NULL,
         control
     );
+
+cleanup:
+    king_mcp_end_operation(state);
+    return status;
 }
