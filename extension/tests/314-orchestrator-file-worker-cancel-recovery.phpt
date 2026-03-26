@@ -13,7 +13,7 @@ $cancelScript = tempnam(sys_get_temp_dir(), 'king-orchestrator-cancel-run-');
 $workerScript = tempnam(sys_get_temp_dir(), 'king-orchestrator-cancel-worker-');
 
 @unlink($statePath);
-@mkdir($queuePath, 0777, true);
+@mkdir($queuePath, 0700, true);
 
 file_put_contents($dispatchLiveScript, <<<'PHP'
 <?php

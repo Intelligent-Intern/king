@@ -59,6 +59,8 @@
   completed: 2026-03-26
 - [x] Harden orchestrator cancel-option ownership so persisted option sanitizing cannot dangle CancelToken references or mutate caller arrays
   completed: 2026-03-26
+- [x] Harden file-worker queue persistence so worker queue paths require a private real directory and queued/cancel files cannot follow symlinks
+  completed: 2026-03-26
 
 ### 3. Observability, autoscaling, and lifecycle operations
 
@@ -101,7 +103,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `301/301`
+  tests: `302/302`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -150,6 +152,9 @@
 - [x] Orchestrator exec controls now own CancelToken lifetime across persisted-option sanitizing
   targeted PHPTs: `311`, `322`
   coverage: local orchestrator runs now copy `options['cancel']` into owned exec-control state before sanitizing persisted options, the sanitized snapshot separates its array storage before deleting `cancel`, caller option arrays stay unchanged, and the same `CancelToken` remains usable for a later run instead of becoming a dangling pointer.
+- [x] File-worker queue persistence now rejects unsafe queue directories and symlinked job/cancel targets
+  targeted PHPTs: `309`, `311`, `314`, `315`, `323`
+  coverage: file-worker queues now require a real non-group/world-writable directory, queued job creation uses exclusive no-follow opens, cancel markers use no-follow writes, worker claim scans ignore non-regular queue entries, and a preplanted `queued-run-1.job` symlink no longer overwrites its target.
 - [x] Multiprocess control-plane topology is now verified across independent controller observer and worker processes
   targeted PHPTs: `307`, `309`, `314`, `315`
   coverage: fresh controller processes persist tool state and queued runs, fresh observer processes rehydrate and inspect live/cancelled/completed snapshots, and fresh workers complete both live-claim and stale-claim recovery paths without falling back to single-process assumptions.

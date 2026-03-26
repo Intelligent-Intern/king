@@ -42,7 +42,7 @@ $extensionPath = dirname(__DIR__) . '/modules/king.so';
 $controllerScript = tempnam(sys_get_temp_dir(), 'king-orchestrator-controls-controller-');
 
 @unlink($statePath);
-@mkdir($queuePath, 0777, true);
+@mkdir($queuePath, 0700, true);
 
 file_put_contents($controllerScript, <<<'PHP'
 <?php

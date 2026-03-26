@@ -15,6 +15,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -214,6 +215,104 @@ static int king_orchestrator_queue_path_is_configured(void)
         && king_mcp_orchestrator_config.orchestrator_worker_queue_path[0] != '\0';
 }
 
+static int king_orchestrator_build_queue_entry_path(
+    const char *entry_name,
+    char *path,
+    size_t path_len
+)
+{
+    if (
+        entry_name == NULL
+        || path == NULL
+        || path_len == 0
+        || !king_orchestrator_queue_path_is_configured()
+    ) {
+        return FAILURE;
+    }
+
+    if (snprintf(
+            path,
+            path_len,
+            "%s/%s",
+            king_mcp_orchestrator_config.orchestrator_worker_queue_path,
+            entry_name
+        ) >= (int) path_len) {
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static int king_orchestrator_queue_entry_is_regular_file(const char *path)
+{
+    struct stat st;
+
+    if (path == NULL) {
+        return 0;
+    }
+
+    return lstat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static int king_orchestrator_queue_is_safe_directory(void)
+{
+    struct stat st;
+    const char *queue_path = king_mcp_orchestrator_config.orchestrator_worker_queue_path;
+
+    if (!king_orchestrator_queue_path_is_configured()) {
+        return FAILURE;
+    }
+
+    if (lstat(queue_path, &st) != 0) {
+        return FAILURE;
+    }
+
+    if (!S_ISDIR(st.st_mode)) {
+        return FAILURE;
+    }
+
+    if ((st.st_mode & (S_IWGRP | S_IWOTH)) != 0) {
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static FILE *king_orchestrator_open_queue_stream(
+    const char *path,
+    int flags,
+    mode_t mode,
+    const char *stream_mode
+)
+{
+    int fd;
+    FILE *stream;
+
+    if (path == NULL || stream_mode == NULL) {
+        return NULL;
+    }
+
+#ifdef O_CLOEXEC
+    flags |= O_CLOEXEC;
+#endif
+#ifdef O_NOFOLLOW
+    flags |= O_NOFOLLOW;
+#endif
+
+    fd = open(path, flags, mode);
+    if (fd < 0) {
+        return NULL;
+    }
+
+    stream = fdopen(fd, stream_mode);
+    if (stream == NULL) {
+        close(fd);
+        return NULL;
+    }
+
+    return stream;
+}
+
 static int king_orchestrator_queue_name_is_job(const char *name)
 {
     size_t name_len;
@@ -327,7 +426,11 @@ static int king_orchestrator_queue_ensure_directory(void)
         return FAILURE;
     }
 
-    if (mkdir(queue_path, 0755) != 0 && errno != EEXIST) {
+    if (mkdir(queue_path, 0700) != 0 && errno != EEXIST) {
+        return FAILURE;
+    }
+
+    if (king_orchestrator_queue_is_safe_directory() != SUCCESS) {
         return FAILURE;
     }
 
@@ -350,8 +453,19 @@ static size_t king_orchestrator_count_queued_runs(void)
     }
 
     while ((entry = readdir(dir)) != NULL) {
+        char entry_path[1024];
+
         if (king_orchestrator_queue_name_is_job(entry->d_name)) {
-            queued_runs++;
+            if (
+                king_orchestrator_build_queue_entry_path(
+                    entry->d_name,
+                    entry_path,
+                    sizeof(entry_path)
+                ) == SUCCESS
+                && king_orchestrator_queue_entry_is_regular_file(entry_path)
+            ) {
+                queued_runs++;
+            }
         }
     }
 
@@ -721,7 +835,12 @@ int king_orchestrator_enqueue_run(zend_string *run_id, zval *return_value)
         ZSTR_VAL(run_id)
     );
 
-    stream = fopen(queue_file_path, "wb");
+    stream = king_orchestrator_open_queue_stream(
+        queue_file_path,
+        O_WRONLY | O_CREAT | O_EXCL,
+        0600,
+        "wb"
+    );
     if (stream == NULL) {
         return FAILURE;
     }
@@ -749,13 +868,12 @@ int king_orchestrator_enqueue_run(zend_string *run_id, zval *return_value)
 int king_orchestrator_run_cancel_requested(zend_string *run_id)
 {
     char marker_path[1024];
-    struct stat st;
 
     if (king_orchestrator_build_cancel_marker_path(run_id, marker_path, sizeof(marker_path)) != SUCCESS) {
         return 0;
     }
 
-    return stat(marker_path, &st) == 0 && S_ISREG(st.st_mode);
+    return king_orchestrator_queue_entry_is_regular_file(marker_path);
 }
 
 void king_orchestrator_clear_run_cancel_request(zend_string *run_id)
@@ -807,7 +925,12 @@ int king_orchestrator_request_run_cancel(zend_string *run_id)
         return FAILURE;
     }
 
-    stream = fopen(marker_path, "wb");
+    stream = king_orchestrator_open_queue_stream(
+        marker_path,
+        O_WRONLY | O_CREAT | O_TRUNC,
+        0600,
+        "wb"
+    );
     if (stream == NULL) {
         run_state->cancel_requested = previous_cancel_requested;
         (void) king_orchestrator_persist_state();
@@ -865,6 +988,19 @@ int king_orchestrator_claim_next_run(zend_string **run_id_out, char *claimed_pat
     selected_name[0] = '\0';
     while ((entry = readdir(dir)) != NULL) {
         if (king_orchestrator_queue_name_is_claimed_job(entry->d_name)) {
+            char entry_path[1024];
+
+            if (
+                king_orchestrator_build_queue_entry_path(
+                    entry->d_name,
+                    entry_path,
+                    sizeof(entry_path)
+                ) != SUCCESS
+                || !king_orchestrator_queue_entry_is_regular_file(entry_path)
+            ) {
+                continue;
+            }
+
             strncpy(selected_name, entry->d_name, sizeof(selected_name) - 1);
             selected_name[sizeof(selected_name) - 1] = '\0';
             selected_is_claimed = 1;
@@ -878,6 +1014,19 @@ int king_orchestrator_claim_next_run(zend_string **run_id_out, char *claimed_pat
 
     while (selected_name[0] == '\0' && (entry = readdir(dir)) != NULL) {
         if (king_orchestrator_queue_name_is_job(entry->d_name)) {
+            char entry_path[1024];
+
+            if (
+                king_orchestrator_build_queue_entry_path(
+                    entry->d_name,
+                    entry_path,
+                    sizeof(entry_path)
+                ) != SUCCESS
+                || !king_orchestrator_queue_entry_is_regular_file(entry_path)
+            ) {
+                continue;
+            }
+
             strncpy(selected_name, entry->d_name, sizeof(selected_name) - 1);
             selected_name[sizeof(selected_name) - 1] = '\0';
             break;
@@ -921,7 +1070,12 @@ int king_orchestrator_claim_next_run(zend_string **run_id_out, char *claimed_pat
         }
     }
 
-    stream = fopen(claimed_path, "rb");
+    stream = king_orchestrator_open_queue_stream(
+        claimed_path,
+        O_RDONLY,
+        0,
+        "rb"
+    );
     if (stream == NULL) {
         unlink(claimed_path);
         claimed_path[0] = '\0';

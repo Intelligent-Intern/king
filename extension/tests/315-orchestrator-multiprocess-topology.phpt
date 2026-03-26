@@ -15,7 +15,7 @@ $cancelWorkerScript = tempnam(sys_get_temp_dir(), 'king-orchestrator-topology-ca
 $completeWorkerScript = tempnam(sys_get_temp_dir(), 'king-orchestrator-topology-complete-worker-');
 
 @unlink($statePath);
-@mkdir($queuePath, 0777, true);
+@mkdir($queuePath, 0700, true);
 
 file_put_contents($controllerLiveScript, <<<'PHP'
 <?php
