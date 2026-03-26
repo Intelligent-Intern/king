@@ -16,9 +16,9 @@
 
 ## Current Next Leaf
 
-- [ ] Add a multi-process end-to-end harness for remote MCP/orchestrator topology instead of single-process local-only verification
-  why this blocks `8/10`: the local file-worker boundary is now honest, persisted, cancellable, and recovery-safe, but the repo still does not prove end-to-end control-plane behavior once orchestration spans multiple cooperating processes with remote-style topology semantics.
-  done when: the test harness drives controller and worker processes independently, covers dispatch/recovery/cancel flows through the persisted topology boundary, and stops relying on single-process local assumptions for the control-plane verification path.
+- [ ] Add failover/chaos harnesses for telemetry, autoscaling, and coordinated system recovery
+  why this blocks `8/10`: the local control plane is now persisted, cross-process, cancellable, and topology-tested, but the repo still does not prove that telemetry export, autoscaling state, and component lifecycle recovery stay honest under injected turbulence.
+  done when: dedicated harnesses inject exporter failure, controller restarts, and degraded lifecycle transitions, and the status/recovery surfaces remain correct through chaos and recovery instead of only on clean-path execution.
 
 ## Active Fronts
 
@@ -55,7 +55,8 @@
   completed: 2026-03-26
 - [x] Add a real cross-process cancellation channel for claimed file-worker orchestrator runs
   completed: 2026-03-26
-- [ ] Add a multi-process end-to-end harness for remote MCP/orchestrator topology instead of single-process local-only verification
+- [x] Add a multi-process end-to-end harness for remote MCP/orchestrator topology instead of single-process local-only verification
+  completed: 2026-03-26
 
 ### 3. Observability, autoscaling, and lifecycle operations
 
@@ -95,7 +96,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `293/293`
+  tests: `294/294`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -135,6 +136,9 @@
 - [x] File-worker orchestrator runs now honor persisted cross-process cancellation after claim and during stale-claim recovery
   targeted PHPTs: `309`, `311`, `314`
   coverage: controller-side `king_pipeline_orchestrator_cancel_run()` requests persist into claimed runs, workers convert live and recovered claimed jobs into durable `cancelled` snapshots instead of fatal-only exits, and stale `claimed-*.job` recovery now stays cancellable across restart-safe queue handoff.
+- [x] Multiprocess control-plane topology is now verified across independent controller observer and worker processes
+  targeted PHPTs: `307`, `309`, `314`, `315`
+  coverage: fresh controller processes persist tool state and queued runs, fresh observer processes rehydrate and inspect live/cancelled/completed snapshots, and fresh workers complete both live-claim and stale-claim recovery paths without falling back to single-process assumptions.
 - [x] Canonical benchmark budgets now gate CI and final go-live readiness
   workflow: `.github/workflows/ci.yml`
   budget file: `benchmarks/budgets/canonical-ci.json`
