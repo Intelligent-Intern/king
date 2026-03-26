@@ -1,6 +1,6 @@
 # King Project Assessment
 
-> Stand: 2026-03-26
+> Stand: 2026-03-27
 > Scope: verified repo-local v1 state inside this repository
 > This file records what is actually verified now.
 > `README.md` stays product-level.
@@ -36,7 +36,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `337/337` passing
+- `./scripts/test-extension.sh`: `339/339` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
@@ -50,7 +50,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `337` PHPT files
+- `extension/tests`: `339` PHPT files
 - public stub parity: `125` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -77,7 +77,7 @@ The current tree already proves:
 - MCP request/upload/download parity against a real TCP host/port remote peer with propagated timeout, deadline, cancellation controls, IPv4 and IPv6 peer targeting coverage, 1 MiB payload roundtrips, parallel-transfer backpressure isolation, explicit single-flight reentry guards, same-host partial-failure recovery, persisted remote-state restart recovery coverage, and explicit `topology_scope=tcp_host_port_peer` introspection
 - orchestrator persistence, honest `queued -> running -> completed|failed|cancelled` run transitions, explicit `single_attempt` retry plus `caller_managed` idempotency contract, explicit `topology_scope=local_in_process|same_host_file_worker|tcp_host_port_execution_peer` introspection by backend mode, deterministic `claimed_recovery_then_fifo_run_id` scheduling, exclusive claimed-file locking across concurrent workers, recovery of an already-running claimed run exactly once after worker loss, sustained queue fairness under repeated parallel-worker contention, local/file-worker backend boundaries, real TCP host/port `remote_peer` execution with persisted success/failure snapshots, cross-process cancellation, and multiprocess controller/observer/worker verification
 - telemetry batch queueing, bounded retry behavior, OTLP metrics export hardening, and local exporter failover/recovery coverage
-- telemetry-driven Hetzner autoscaling with controller-owned credentials, persisted recovery state, and `register -> ready -> drain -> delete` lifecycle gating
+- telemetry-driven Hetzner autoscaling with controller-owned credentials, persisted recovery state, `register -> ready -> drain -> delete` lifecycle gating, and stale pending-node rollback for failed bootstrap, registration, and readiness with explicit provider-delete failure reporting
 - system integration lifecycle coordination, restart-state visibility, and chaos/recovery harness coverage for the local control plane
 
 ## What Is Still Not Finished
@@ -100,7 +100,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 
 - Metrics export is ahead of traces/logs export in verification depth.
 - Telemetry queueing is now bounded, but long-haul degraded exporter behavior still needs more proof.
-- Autoscaling and system recovery are chaos-tested locally, but multi-node rolling restart and failover depth are still open.
+- Autoscaling now rolls stale Hetzner pending nodes back safely even when telemetry is missing or degraded, and provider-side rollback failures are surfaced explicitly. Multi-node rolling restart, real-load decision depth, and broader fleet failover behavior are still open.
 
 ### Build, Compatibility, and Release Confidence
 

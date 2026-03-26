@@ -1318,6 +1318,129 @@ static size_t king_autoscaling_runtime_count_deletable_nodes(void)
     return deletable_nodes;
 }
 
+static zend_bool king_autoscaling_runtime_has_bootstrap_rollout_intent(void)
+{
+    if (
+        king_autoscaling_runtime.config.bootstrap_user_data != NULL
+        && king_autoscaling_runtime.config.bootstrap_user_data[0] != '\0'
+    ) {
+        return 1;
+    }
+
+    return king_autoscaling_runtime.config.prepared_release_url != NULL
+        && king_autoscaling_runtime.config.prepared_release_url[0] != '\0'
+        && king_autoscaling_runtime.config.join_endpoint != NULL
+        && king_autoscaling_runtime.config.join_endpoint[0] != '\0';
+}
+
+static time_t king_autoscaling_pending_node_anchor(
+    const king_autoscaling_managed_node_t *node)
+{
+    if (node == NULL) {
+        return 0;
+    }
+
+    if (node->lifecycle_state == KING_AUTOSCALING_NODE_REGISTERED) {
+        return node->registered_at > 0 ? node->registered_at : node->created_at;
+    }
+
+    return node->created_at;
+}
+
+static const char *king_autoscaling_pending_node_phase(
+    const king_autoscaling_managed_node_t *node)
+{
+    if (node == NULL) {
+        return "unknown";
+    }
+
+    if (node->lifecycle_state == KING_AUTOSCALING_NODE_REGISTERED) {
+        return "readiness";
+    }
+
+    return king_autoscaling_runtime_has_bootstrap_rollout_intent()
+        ? "bootstrap"
+        : "registration";
+}
+
+static const char *king_autoscaling_pending_node_rollback_status(
+    const char *phase)
+{
+    if (phase != NULL && strcmp(phase, "bootstrap") == 0) {
+        return "rollback_bootstrap";
+    }
+    if (phase != NULL && strcmp(phase, "readiness") == 0) {
+        return "rollback_readiness";
+    }
+
+    return "rollback_registration";
+}
+
+static king_autoscaling_managed_node_t *king_autoscaling_runtime_pick_stale_pending_node(
+    time_t now,
+    const char **phase_out,
+    time_t *anchor_out)
+{
+    size_t index;
+    time_t timeout;
+    king_autoscaling_managed_node_t *selected = NULL;
+    time_t selected_anchor = 0;
+
+    if (phase_out != NULL) {
+        *phase_out = NULL;
+    }
+    if (anchor_out != NULL) {
+        *anchor_out = 0;
+    }
+
+    if (king_autoscaling_runtime.config.idle_node_timeout_sec <= 0) {
+        return NULL;
+    }
+
+    timeout = (time_t) king_autoscaling_runtime.config.idle_node_timeout_sec;
+    for (index = 0; index < king_autoscaling_runtime.managed_node_count; index++) {
+        king_autoscaling_managed_node_t *node = &king_autoscaling_runtime.managed_nodes[index];
+        time_t anchor;
+
+        if (
+            node->deleted_at > 0
+            || node->lifecycle_state == KING_AUTOSCALING_NODE_DELETED
+            || node->lifecycle_state == KING_AUTOSCALING_NODE_READY
+            || node->lifecycle_state == KING_AUTOSCALING_NODE_DRAINING
+        ) {
+            continue;
+        }
+
+        if (
+            node->lifecycle_state != KING_AUTOSCALING_NODE_PROVISIONED
+            && node->lifecycle_state != KING_AUTOSCALING_NODE_REGISTERED
+        ) {
+            continue;
+        }
+
+        anchor = king_autoscaling_pending_node_anchor(node);
+        if (anchor <= 0 || now < anchor || (now - anchor) < timeout) {
+            continue;
+        }
+
+        if (selected == NULL || anchor < selected_anchor) {
+            selected = node;
+            selected_anchor = anchor;
+        }
+    }
+
+    if (selected != NULL) {
+        if (phase_out != NULL) {
+            *phase_out = king_autoscaling_pending_node_phase(selected);
+        }
+        if (anchor_out != NULL) {
+            *anchor_out = selected_anchor;
+        }
+    }
+
+    return selected;
+}
+
 static king_autoscaling_managed_node_t *king_autoscaling_runtime_pick_delete_candidate(void)
 {
     size_t index = king_autoscaling_runtime.managed_node_count;
@@ -1342,6 +1465,78 @@ static king_autoscaling_managed_node_t *king_autoscaling_runtime_pick_delete_can
     }
 
     return NULL;
+}
+
+static zend_result king_autoscaling_hetzner_delete_node(
+    king_autoscaling_managed_node_t *node,
+    const char *error_context)
+{
+    char url[512];
+    long http_code = 0;
+    smart_str response = {0};
+    const char *token = king_autoscaling_runtime.config.hetzner_api_token;
+
+    if (node == NULL) {
+        return FAILURE;
+    }
+
+    if (token == NULL || token[0] == '\0') {
+        snprintf(
+            king_autoscaling_runtime.last_error,
+            sizeof(king_autoscaling_runtime.last_error),
+            "Hetzner autoscaling requires king.cluster_autoscale_hetzner_api_token on the controller node."
+        );
+        return FAILURE;
+    }
+
+    snprintf(
+        url,
+        sizeof(url),
+        "%s/servers/%ld",
+        king_autoscaling_runtime.config.api_endpoint,
+        (long) node->server_id
+    );
+
+    if (king_autoscaling_http_request("DELETE", url, token, NULL, &http_code, &response) != SUCCESS) {
+        smart_str_free(&response);
+        return FAILURE;
+    }
+
+    smart_str_free(&response);
+
+    if (http_code < 200 || http_code >= 300) {
+        snprintf(
+            king_autoscaling_runtime.last_error,
+            sizeof(king_autoscaling_runtime.last_error),
+            "%s for %ld returned HTTP %ld.",
+            error_context != NULL ? error_context : "Hetzner delete server request",
+            (long) node->server_id,
+            http_code
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static void king_autoscaling_runtime_mark_node_deleted(
+    king_autoscaling_managed_node_t *node,
+    time_t deleted_at,
+    const char *provider_status)
+{
+    if (node == NULL) {
+        return;
+    }
+
+    node->active = 0;
+    node->lifecycle_state = KING_AUTOSCALING_NODE_DELETED;
+    node->deleted_at = deleted_at > 0 ? deleted_at : time(NULL);
+    snprintf(
+        node->provider_status,
+        sizeof(node->provider_status),
+        "%s",
+        provider_status != NULL ? provider_status : "deleted"
+    );
 }
 
 static uint32_t king_autoscaling_cap_scale_up(uint32_t requested)
@@ -1552,60 +1747,100 @@ static zend_result king_autoscaling_hetzner_scale_up(uint32_t count)
 static zend_result king_autoscaling_hetzner_scale_down(uint32_t count)
 {
     uint32_t index;
-    const char *token = king_autoscaling_runtime.config.hetzner_api_token;
-
-    if (token == NULL || token[0] == '\0') {
-        snprintf(
-            king_autoscaling_runtime.last_error,
-            sizeof(king_autoscaling_runtime.last_error),
-            "Hetzner autoscaling requires king.cluster_autoscale_hetzner_api_token on the controller node."
-        );
-        return FAILURE;
-    }
 
     for (index = 0; index < count; index++) {
-        char url[512];
-        long http_code = 0;
-        smart_str response = {0};
         king_autoscaling_managed_node_t *node = king_autoscaling_runtime_pick_delete_candidate();
 
         if (node == NULL) {
             break;
         }
 
-        snprintf(
-            url,
-            sizeof(url),
-            "%s/servers/%ld",
-            king_autoscaling_runtime.config.api_endpoint,
-            (long) node->server_id
-        );
-
-        if (king_autoscaling_http_request("DELETE", url, token, NULL, &http_code, &response) != SUCCESS) {
-            smart_str_free(&response);
+        if (king_autoscaling_hetzner_delete_node(node, "Hetzner delete server request") != SUCCESS) {
             return FAILURE;
         }
 
-        smart_str_free(&response);
-
-        if (http_code < 200 || http_code >= 300) {
-            snprintf(
-                king_autoscaling_runtime.last_error,
-                sizeof(king_autoscaling_runtime.last_error),
-                "Hetzner delete server request for %ld returned HTTP %ld.",
-                (long) node->server_id,
-                http_code
-            );
-            return FAILURE;
-        }
-
-        node->active = 0;
-        node->lifecycle_state = KING_AUTOSCALING_NODE_DELETED;
-        node->deleted_at = time(NULL);
-        snprintf(node->provider_status, sizeof(node->provider_status), "%s", "deleted");
+        king_autoscaling_runtime_mark_node_deleted(node, time(NULL), "deleted");
     }
 
     return SUCCESS;
+}
+
+int king_autoscaling_provider_rollback_stale_pending_node(time_t now)
+{
+    const char *phase = NULL;
+    const char *rollback_status;
+    char message[256];
+    time_t anchor = 0;
+    king_autoscaling_managed_node_t *node;
+
+    if (
+        king_autoscaling_runtime.provider_kind != KING_AUTOSCALING_PROVIDER_HETZNER
+        || king_autoscaling_runtime.config.idle_node_timeout_sec <= 0
+    ) {
+        return 0;
+    }
+
+    node = king_autoscaling_runtime_pick_stale_pending_node(now, &phase, &anchor);
+    if (node == NULL) {
+        return 0;
+    }
+
+    snprintf(
+        message,
+        sizeof(message),
+        "Stale Hetzner node %ld exceeded the %ld second pending-node timeout while waiting for %s.",
+        (long) node->server_id,
+        (long) king_autoscaling_runtime.config.idle_node_timeout_sec,
+        phase != NULL ? phase : "pending lifecycle completion"
+    );
+    snprintf(
+        king_autoscaling_runtime.last_decision_reason,
+        sizeof(king_autoscaling_runtime.last_decision_reason),
+        "%s",
+        message
+    );
+    snprintf(
+        king_autoscaling_runtime.last_warning,
+        sizeof(king_autoscaling_runtime.last_warning),
+        "%s Rolling the node back before another automatic decision.",
+        message
+    );
+
+    if (
+        king_autoscaling_hetzner_delete_node(
+            node,
+            "Hetzner rollback delete server request"
+        ) != SUCCESS
+    ) {
+        return -1;
+    }
+
+    rollback_status = king_autoscaling_pending_node_rollback_status(phase);
+    king_autoscaling_runtime_mark_node_deleted(node, now, rollback_status);
+    king_autoscaling_runtime.action_count++;
+    king_autoscaling_runtime.last_scale_down_at = now;
+    king_autoscaling_runtime_sync_instance_count();
+    if (king_autoscaling_runtime_persist_state() != SUCCESS) {
+        if (king_autoscaling_runtime.last_error[0] == '\0') {
+            snprintf(
+                king_autoscaling_runtime.last_error,
+                sizeof(king_autoscaling_runtime.last_error),
+                "Failed to persist autoscaling state after rolling back stale Hetzner node %ld.",
+                (long) node->server_id
+            );
+        }
+        return -1;
+    }
+
+    snprintf(
+        king_autoscaling_runtime.last_action_kind,
+        sizeof(king_autoscaling_runtime.last_action_kind),
+        "%s",
+        "rollback_pending_node"
+    );
+
+    (void) anchor;
+    return 1;
 }
 
 int king_autoscaling_provider_scale_up(uint32_t count)

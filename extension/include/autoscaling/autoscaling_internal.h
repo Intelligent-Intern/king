@@ -83,5 +83,6 @@ king_autoscaling_managed_node_t *king_autoscaling_runtime_pick_active_node(void)
 king_autoscaling_managed_node_t *king_autoscaling_runtime_pick_draining_node(void);
 int king_autoscaling_provider_scale_up(uint32_t count);
 int king_autoscaling_provider_scale_down(uint32_t count);
+int king_autoscaling_provider_rollback_stale_pending_node(time_t now);
 
 #endif

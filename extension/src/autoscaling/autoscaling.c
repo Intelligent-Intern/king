@@ -772,6 +772,7 @@ static zend_bool king_autoscaling_monitor_tick(void)
     king_autoscaling_signal_snapshot_t snapshot;
     char reason_buffer[256];
     int decision;
+    int rollback_result;
     time_t now;
     time_t cooldown_remaining;
 
@@ -793,6 +794,17 @@ static zend_bool king_autoscaling_monitor_tick(void)
         sizeof(king_autoscaling_runtime.last_warning)
     );
     king_autoscaling_reset_message(reason_buffer, sizeof(reason_buffer));
+
+    now = time(NULL);
+    king_autoscaling_runtime.last_monitor_tick_at = now;
+
+    rollback_result = king_autoscaling_provider_rollback_stale_pending_node(now);
+    if (rollback_result < 0) {
+        return 0;
+    }
+    if (rollback_result > 0) {
+        return 1;
+    }
 
     if (king_autoscaling_collect_live_signal_snapshot(&snapshot) != SUCCESS) {
         snprintf(

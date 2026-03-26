@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate autoscaling behavior under degraded telemetry and provider conditions, including rollback for failed bootstrap, registration, and readiness.
+- [ ] Validate OTLP traces and logs export against real collectors, including non-2xx, timeout, size-limit, and outage-recovery behavior.
 
 ## Active Executable Items
 
@@ -29,13 +29,10 @@
 
 ### 2. Observability and Fleet Operations
 
-1. [ ] Validate autoscaling behavior under degraded telemetry and provider conditions, including rollback for failed bootstrap, registration, and readiness.
-   done when: controller decisions remain safe and explainable while inputs or provider calls are missing, degraded, or partially failed.
-
-2. [ ] Validate OTLP traces and logs export against real collectors, including non-2xx, timeout, size-limit, and outage-recovery behavior.
+1. [ ] Validate OTLP traces and logs export against real collectors, including non-2xx, timeout, size-limit, and outage-recovery behavior.
    done when: all exported telemetry signal types are verified against honest collectors instead of metrics-only local coverage.
 
-3. [ ] Prove telemetry export semantics under sustained degraded conditions, including replay or explicit non-replay guarantees after restart.
+2. [ ] Prove telemetry export semantics under sustained degraded conditions, including replay or explicit non-replay guarantees after restart.
    done when: long-haul exporter outage and recovery do not leave delivery semantics ambiguous.
 
 ### 3. Build, Release, and Compatibility Confidence
@@ -57,5 +54,6 @@
 - Object-store v1 is now explicitly frozen to the honest `local_fs` contract. `memory_cache` is only a compatibility alias to the same local backend, and `distributed` plus cloud adapters remain explicitly simulated/unavailable instead of implying a stronger non-local storage claim.
 - MCP request, upload, and download now talk to a real TCP host/port remote peer with propagated timeout, deadline, and cancellation controls, plus verified IPv4 and IPv6 peer targeting, 1 MiB payload roundtrips, parallel-transfer backpressure isolation, explicit single-flight reentry guards per connection handle, same-host partial-failure recovery, persisted remote-state restart recovery, and an explicit `topology_scope=tcp_host_port_peer` contract in system component info; the remaining MCP gaps are richer distributed failure semantics and broader multi-host validation depth, not a false same-host-only transport claim.
 - Pipeline orchestration now has three honest backend scopes: `local_in_process`, `same_host_file_worker`, and `tcp_host_port_execution_peer`. The new `remote_peer` backend executes runs over a real TCP host/port worker boundary, persists local run snapshots, and records both successful and failed remote execution outcomes. Remaining orchestrator work is deeper distributed execution semantics, restart continuation, richer error classification, observability depth, and compensation/rollback where publicly claimed.
+- Hetzner autoscaling now rolls stale `provisioned` and `registered` nodes back before the next monitor decision when bootstrap, registration, or readiness stall past `idle_node_timeout_sec`, and it reports provider-side delete failures explicitly instead of silently wedging pending capacity under degraded telemetry or provider conditions.
 - Everything else from `READYNESS_TRACKER.md` is either already verified, derivative of these leaves, or still too broad to be the active queue.
 - If an item is not listed here, it is not the current repo-local priority.

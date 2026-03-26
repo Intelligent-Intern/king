@@ -289,9 +289,9 @@ Status note:
 - [ ] Validate scale-up policy limits under burst load
 - [ ] Validate scale-down policy limits under active traffic
 - [ ] Finalize autoscaling metrics and decision explanations
-- [ ] Finalize autoscaling failure behavior when telemetry is missing
-- [ ] Finalize autoscaling failure behavior when telemetry is degraded
-- [ ] Finalize autoscaling failure behavior when provider is degraded
+- [x] Finalize autoscaling failure behavior when telemetry is missing
+- [x] Finalize autoscaling failure behavior when telemetry is degraded
+- [x] Finalize autoscaling failure behavior when provider is degraded
 - [x] Validate autoscaling recovery after controller restart
 - [ ] Validate autoscaling recovery after partial fleet-state loss
 
@@ -309,9 +309,9 @@ Status note:
 - [ ] Classify and handle provider quota limits
 - [ ] Securely load and rotate provider credentials where publicly claimed
 - [ ] Validate firewalls / placement / labels / networks against real provider APIs
-- [ ] Implement rollback for failed bootstrap
-- [ ] Implement rollback for failed registration
-- [ ] Implement rollback for failed readiness
+- [x] Implement rollback for failed bootstrap
+- [x] Implement rollback for failed registration
+- [x] Implement rollback for failed readiness
 - [ ] Keep multi-provider support only if all documented providers are real
 - [ ] Remove or fully implement all remaining simulated provider paths
 
