@@ -62,7 +62,7 @@ export LC_ALL=C
 export TZ=UTC
 
 resolve_version() {
-    sed -n 's/^#  define PHP_KING_VERSION[[:space:]]*"\(.*\)"/\1/p' "${EXT_DIR}/php_king.h" | head -n 1
+    sed -n 's/^#  define PHP_KING_VERSION[[:space:]]*"\(.*\)"/\1/p' "${EXT_DIR}/include/php_king.h" | head -n 1
 }
 
 resolve_git_short() {
@@ -94,7 +94,7 @@ resolve_dirty_state() {
 
 VERSION="$(resolve_version)"
 if [[ -z "${VERSION}" ]]; then
-    echo "Failed to resolve PHP_KING_VERSION from ${EXT_DIR}/php_king.h." >&2
+    echo "Failed to resolve PHP_KING_VERSION from ${EXT_DIR}/include/php_king.h." >&2
     exit 1
 fi
 

@@ -11,7 +11,7 @@
  */
 
 #include "php_king.h"
-#include "object_store_internal.h"
+#include "object_store/object_store_internal.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>

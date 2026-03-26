@@ -9,7 +9,7 @@
  * =========================================================================
  */
 
-#include "semantic_dns_internal.h"
+#include "semantic_dns/semantic_dns_internal.h"
 #include <stdlib.h>
 #include <string.h>
 

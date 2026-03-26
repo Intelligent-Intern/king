@@ -1,4 +1,4 @@
-#include "src/object_store/object_store_internal.h"
+#include "object_store/object_store_internal.h"
 
 PHP_FUNCTION(king_object_store_put)
 {

@@ -9,7 +9,7 @@
  * =========================================================================
  */
 
-#include "semantic_dns_internal.h"
+#include "semantic_dns/semantic_dns_internal.h"
 #include <string.h>
 
 int king_semantic_dns_calculate_service_score(

@@ -1,4 +1,4 @@
-#include "src/object_store/object_store_internal.h"
+#include "object_store/object_store_internal.h"
 
 #include "include/king_globals.h"
 

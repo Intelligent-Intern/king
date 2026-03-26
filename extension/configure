@@ -5227,6 +5227,40 @@ then :
 fi
 done
 
+
+for include_path in $ext_srcdir/include; do
+  if test "$include_path" != "/usr/include"
+then :
+
+
+  if test -z "$include_path" || echo "$include_path" | grep '^/' >/dev/null ; then
+    ai_p=$include_path
+  else
+
+    ep_dir=$(echo $include_path|$SED 's%/*[^/][^/]*/*$%%')
+
+    if test -z $ep_dir ; then
+      ep_realdir=$(pwd)
+    else
+      ep_realdir=$(cd "$ep_dir" && pwd)
+    fi
+    ai_p="$ep_realdir"/$(basename "$include_path")
+  fi
+
+
+
+  unique=$(echo $ai_p|$SED 's/[^a-zA-Z0-9]/_/g')
+
+  cmd="echo $ac_n \"\$INCLUDEPATH$unique$ac_c\""
+  if test -n "$unique" && test "$(eval $cmd)" = "" ; then
+    eval "INCLUDEPATH$unique=set"
+    INCLUDES="$INCLUDES -I$ai_p"
+  fi
+
+
+fi
+done
+
     as_ac_File=`printf "%s\n" "ac_cv_file_$ext_srcdir/../libcurl/include/curl/curl.h" | $as_tr_sh`
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ext_srcdir/../libcurl/include/curl/curl.h" >&5
 printf %s "checking for $ext_srcdir/../libcurl/include/curl/curl.h... " >&6; }

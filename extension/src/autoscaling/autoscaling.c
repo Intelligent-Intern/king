@@ -8,7 +8,7 @@
 #include "include/config/cloud_autoscale/config.h"
 #include "include/king_globals.h"
 #include "include/telemetry/telemetry.h"
-#include "src/autoscaling/autoscaling_internal.h"
+#include "autoscaling/autoscaling_internal.h"
 
 #include <errno.h>
 #include <stdio.h>

@@ -21,7 +21,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "semantic_dns_internal.h"
+#include "semantic_dns/semantic_dns_internal.h"
 
 king_semantic_dns_runtime_state king_semantic_dns_runtime;
 

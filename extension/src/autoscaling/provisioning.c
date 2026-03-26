@@ -4,7 +4,7 @@
  */
 #include "php_king.h"
 #include "include/autoscaling/autoscaling.h"
-#include "src/autoscaling/autoscaling_internal.h"
+#include "autoscaling/autoscaling_internal.h"
 
 #include "Zend/zend_smart_str.h"
 

@@ -10,7 +10,7 @@
  * =========================================================================
  */
 
-#include "semantic_dns_internal.h"
+#include "semantic_dns/semantic_dns_internal.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>

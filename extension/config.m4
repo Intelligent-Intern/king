@@ -292,6 +292,7 @@ if test "$PHP_KING" != "no"; then
 
     dnl Make headers in extension root and include/ available
     PHP_ADD_INCLUDE([$ext_srcdir])
+    PHP_ADD_INCLUDE([$ext_srcdir/include])
     AC_CHECK_FILE([$ext_srcdir/../libcurl/include/curl/curl.h], [
         PHP_ADD_INCLUDE([$ext_srcdir/../libcurl/include])
     ], [
