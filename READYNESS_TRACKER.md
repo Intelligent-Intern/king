@@ -104,15 +104,15 @@ Status note:
 - [ ] Make MCP transfer identifiers permanently safe and collision-free
 - [ ] Persist MCP transfer state
 - [ ] Rehydrate MCP transfer state after restart
-- [ ] Validate MCP request timeouts over real network paths
-- [ ] Propagate MCP cancellation through real remote execution
+- [x] Validate MCP request timeouts over real network paths
+- [x] Propagate MCP cancellation through real remote execution
 - [ ] Finalize MCP error mapping for remote protocol failures
 - [ ] Finalize MCP error mapping for transport failures
 - [ ] Finalize MCP error mapping for backend failures
 - [ ] Validate MCP multi-process operation
 - [ ] Validate MCP multi-host operation
 - [ ] Enforce MCP concurrency and bounded-concurrency guarantees
-- [ ] Enforce MCP deadline propagation
+- [x] Enforce MCP deadline propagation
 - [ ] Validate MCP upload/download under large payloads
 - [ ] Validate MCP backpressure under parallel transfers
 - [ ] Validate MCP recovery after controller / worker restart

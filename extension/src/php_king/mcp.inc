@@ -37,13 +37,6 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_MCP_downloadToStream,
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
 
-typedef struct _king_mcp_runtime_control {
-    zend_long timeout_ms;
-    uint64_t deadline_ms;
-    uint64_t started_at_ms;
-    zval *cancel_token;
-} king_mcp_runtime_control_t;
-
 static zend_result king_mcp_set_transfer_error(
     zend_class_entry *exception_ce,
     const char *message)
@@ -702,7 +695,15 @@ PHP_FUNCTION(king_mcp_request)
         RETURN_FALSE;
     }
 
-    if (king_mcp_request(state, service_name, method_name, request_payload_str, &response_payload) != SUCCESS) {
+    if (king_mcp_request(state, service_name, method_name, request_payload_str, &response_payload, &control) != SUCCESS) {
+        if (king_mcp_runtime_control_check(
+                &control,
+                "king_mcp_request",
+                NULL,
+                NULL
+            ) != SUCCESS) {
+            RETURN_FALSE;
+        }
         RETURN_FALSE;
     }
 
@@ -826,9 +827,18 @@ PHP_FUNCTION(king_mcp_upload_from_stream)
         service_name,
         method_name,
         stream_identifier,
-        payload
+        payload,
+        &control
     ) != SUCCESS) {
         zend_string_release(payload);
+        if (king_mcp_runtime_control_check(
+                &control,
+                "king_mcp_upload_from_stream",
+                NULL,
+                NULL
+            ) != SUCCESS) {
+            RETURN_FALSE;
+        }
         if (king_get_error()[0] == '\0') {
             king_set_error("king_mcp_upload_from_stream() failed to persist the remote MCP transfer.");
         }
@@ -920,9 +930,18 @@ PHP_FUNCTION(king_mcp_download_to_stream)
         state,
         service_name,
         method_name,
-        request_payload
+        request_payload,
+        &control
     );
     if (payload == NULL) {
+        if (king_mcp_runtime_control_check(
+                &control,
+                "king_mcp_download_to_stream",
+                NULL,
+                NULL
+            ) != SUCCESS) {
+            RETURN_FALSE;
+        }
         if (king_get_error()[0] == '\0') {
             king_set_error(
                 "king_mcp_download_to_stream() could not find a remote MCP transfer for the requested payload identifier."
@@ -1042,7 +1061,15 @@ PHP_METHOD(King_MCP, request)
         RETURN_THROWS();
     }
 
-    if (king_mcp_request(state, service, method, payload, &response_payload) != SUCCESS) {
+    if (king_mcp_request(state, service, method, payload, &response_payload, &control) != SUCCESS) {
+        if (king_mcp_runtime_control_check(
+                &control,
+                "MCP::request",
+                king_ce_mcp_timeout,
+                king_ce_runtime_exception
+            ) != SUCCESS) {
+            RETURN_THROWS();
+        }
         zend_throw_exception_ex(
             king_ce_mcp_connection_error,
             0,
@@ -1173,9 +1200,18 @@ PHP_METHOD(King_MCP, uploadFromStream)
         service,
         method,
         stream_identifier,
-        payload
+        payload,
+        &control
     ) != SUCCESS) {
         zend_string_release(payload);
+        if (king_mcp_runtime_control_check(
+                &control,
+                "MCP::uploadFromStream",
+                king_ce_mcp_timeout,
+                king_ce_mcp_data_error
+            ) != SUCCESS) {
+            RETURN_THROWS();
+        }
         if (king_get_error()[0] == '\0') {
             king_set_error("MCP::uploadFromStream() failed to persist the remote MCP transfer.");
         }
@@ -1268,9 +1304,18 @@ PHP_METHOD(King_MCP, downloadToStream)
         state,
         service,
         method,
-        ZSTR_VAL(request_payload)
+        ZSTR_VAL(request_payload),
+        &control
     );
     if (payload == NULL) {
+        if (king_mcp_runtime_control_check(
+                &control,
+                "MCP::downloadToStream",
+                king_ce_mcp_timeout,
+                king_ce_mcp_data_error
+            ) != SUCCESS) {
+            RETURN_THROWS();
+        }
         if (king_get_error()[0] == '\0') {
             king_set_error(
                 "MCP::downloadToStream() could not find a remote MCP transfer for the requested payload identifier."

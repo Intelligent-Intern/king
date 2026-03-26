@@ -90,3 +90,33 @@ function king_mcp_test_stop_server(array $server): array
 
     return $capture;
 }
+
+function king_mcp_schedule_cancel_signal(
+    King\CancelToken $token,
+    int $delayUs = 100000,
+    int $signal = SIGUSR1
+): int {
+    pcntl_async_signals(true);
+    pcntl_signal($signal, static function () use ($token): void {
+        $token->cancel();
+    });
+
+    $pid = pcntl_fork();
+    if ($pid < 0) {
+        throw new RuntimeException('failed to fork MCP cancel helper');
+    }
+
+    if ($pid === 0) {
+        usleep($delayUs);
+        posix_kill(posix_getppid(), $signal);
+        exit(0);
+    }
+
+    return $pid;
+}
+
+function king_mcp_wait_cancel_signal(int $pid, int $signal = SIGUSR1): void
+{
+    pcntl_waitpid($pid, $status);
+    pcntl_signal($signal, SIG_DFL);
+}

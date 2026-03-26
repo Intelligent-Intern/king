@@ -22,16 +22,40 @@ typedef struct _king_mcp_state {
     bool closed;
 } king_mcp_state;
 
+typedef struct _king_mcp_runtime_control {
+    zend_long timeout_ms;
+    uint64_t deadline_ms;
+    uint64_t started_at_ms;
+    zval *cancel_token;
+} king_mcp_runtime_control_t;
+
 /* Runtime Management */
 king_mcp_state *king_mcp_state_create(const char *host, size_t host_len, zend_long port, zval *config);
 void king_mcp_state_close(king_mcp_state *state);
 void king_mcp_state_free(king_mcp_state *state);
 
 /* Remote Transfer Operations */
-int king_mcp_transfer_store(king_mcp_state *state, const char *service, const char *method, const char *id, zend_string *payload);
-zend_string *king_mcp_transfer_find(king_mcp_state *state, const char *service, const char *method, const char *id);
+int king_mcp_transfer_store(
+    king_mcp_state *state,
+    const char *service,
+    const char *method,
+    const char *id,
+    zend_string *payload,
+    king_mcp_runtime_control_t *control);
+zend_string *king_mcp_transfer_find(
+    king_mcp_state *state,
+    const char *service,
+    const char *method,
+    const char *id,
+    king_mcp_runtime_control_t *control);
 
 /* Request Transport */
-int king_mcp_request(king_mcp_state *state, const char *service, const char *method, zend_string *payload, zend_string **response_out);
+int king_mcp_request(
+    king_mcp_state *state,
+    const char *service,
+    const char *method,
+    zend_string *payload,
+    zend_string **response_out,
+    king_mcp_runtime_control_t *control);
 
 #endif /* KING_MCP_H */
