@@ -5,6 +5,7 @@
 > This file records what is actually verified now.
 > `README.md` stays product-level.
 > `ISSUES.md` is the single moving roadmap and execution queue.
+> `READYNESS_TRACKER.md` is the long-form closure tracker.
 
 ## Executive Summary
 
@@ -125,6 +126,8 @@ The model is now:
   stable charter, pillars, and exit criteria
 - `ISSUES.md`
   the active executable open items distilled from the larger completion tracker
+- `READYNESS_TRACKER.md`
+  the broad long-form completion checklist with verified checks and still-open closure gates
 - `PROJECT_ASSESSMENT.md`
   verified state and caveats
 
@@ -141,6 +144,8 @@ Use the root documents like this:
   stable charter and release bar
 - `ISSUES.md`
   single moving roadmap and open execution queue
+- `READYNESS_TRACKER.md`
+  long-form completion tracker and broad closure reference
 - `PROJECT_ASSESSMENT.md`
   verified current state and caveats
 - `CONTRIBUTE.md`

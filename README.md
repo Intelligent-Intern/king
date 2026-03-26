@@ -10,6 +10,7 @@
 > Stable program charter and exit criteria live in [`EPIC.md`](EPIC.md).
 > Current implementation state lives in [`PROJECT_ASSESSMENT.md`](PROJECT_ASSESSMENT.md).
 > The single moving roadmap and execution queue live in [`ISSUES.md`](ISSUES.md).
+> The long-form completion tracker lives in [`READYNESS_TRACKER.md`](READYNESS_TRACKER.md).
 
 ## What King Is
 
@@ -186,6 +187,8 @@ It is supposed to look like one native system with a PHP-facing control surface.
   Verified current implementation reach.
 - [`ISSUES.md`](ISSUES.md)
   Single moving roadmap and execution queue.
+- [`READYNESS_TRACKER.md`](READYNESS_TRACKER.md)
+  Long-form completion tracker derived from the verified tree; not the active queue.
 - [`CONTRIBUTE.md`](CONTRIBUTE.md)
   Contribution rules and development expectations.
 - `documentation/`
@@ -214,6 +217,8 @@ Other documents serve different purposes:
   Verified current implementation state and reach.
 - [`ISSUES.md`](ISSUES.md)
   Single moving roadmap and open execution queue.
+- [`READYNESS_TRACKER.md`](READYNESS_TRACKER.md)
+  Long-form completion tracker and broad closure reference.
 - [`CONTRIBUTE.md`](CONTRIBUTE.md)
   Contribution and workflow rules.
 - [`stubs/king.php`](stubs/king.php)

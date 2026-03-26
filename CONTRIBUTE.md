@@ -16,14 +16,18 @@ Use the repository docs like this:
   Verified current implementation state.
 - `ISSUES.md`
   Single moving roadmap and execution queue.
+- `READYNESS_TRACKER.md`
+  Long-form completion tracker and closure reference.
 - `CONTRIBUTE.md`
   Contribution and workflow rules.
 - `stubs/king.php`
   Public PHP signature surface.
 
 Raw or personal checklists are inputs, not source-of-truth repo planning.
-If open work matters, distill it into `ISSUES.md` as a small verifiable leaf
-instead of duplicating it across multiple docs.
+The tracked `READYNESS_TRACKER.md` is the only repo-owned long-form checklist,
+and it is still not the active backlog. If open work matters, distill it into
+`ISSUES.md` as a small verifiable leaf instead of duplicating it across
+multiple docs.
 
 ## Working Standard
 
@@ -179,6 +183,7 @@ Before changing code, align the change against the right file:
 - stable charter or exit criteria: `EPIC.md`
 - current verified implementation state: `PROJECT_ASSESSMENT.md`
 - active roadmap and execution queue: `ISSUES.md`
+- long-form completion tracker: `READYNESS_TRACKER.md`
 - actual code and tests: `extension/` and `stubs/`
 
 ### 2. Change the kernel first
@@ -244,6 +249,12 @@ This is where current open fronts, prioritized leaves, and execution sequencing 
 `PROJECT_ASSESSMENT.md` is the current-state document.
 This is where verified implementation reach, current limits, and the last known
 green baseline belong.
+
+### READYNESS_TRACKER
+
+`READYNESS_TRACKER.md` is the long-form closure tracker.
+It can keep broad completion criteria and checked-vs-open slices, but it does
+not replace `ISSUES.md` as the narrow execution queue.
 
 ## Code and Review Expectations
 
