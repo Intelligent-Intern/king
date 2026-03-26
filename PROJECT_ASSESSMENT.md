@@ -28,6 +28,10 @@ packaging, and extracted-package readiness over the same current tree. The
 legacy public C stub compilation unit is now retired, the public `stubs/king.php`
 surface matches the live runtime exactly, and the runtime inventory reports
 zero residual stub API groups.
+The canonical benchmark harness is no longer smoke-only in CI: the repository
+now commits an explicit per-case budget file for the canonical `session`,
+`proto`, `object_store`, and `semantic_dns` cases, and the final CI go-live
+path enforces those ceilings as part of the release-grade gate.
 Autoscaling has also moved past the purely simulated provisioning path: the
 generic provider contract now ships with a controller-only Hetzner backend that
 drives honest HTTP provider calls, persists controller state across restart,
@@ -114,6 +118,7 @@ The currently verified regression baseline is:
 - `./scripts/smoke-profile.sh release`: passing
 - `./scripts/smoke-profile.sh asan`: passing
 - benchmark smoke (`session`, `proto`, `object_store`, `semantic_dns`): passing
+- benchmark budget gate (`benchmarks/budgets/canonical-ci.json`): passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
 - `./scripts/verify-release-package.sh`: passing
 - `./scripts/go-live-readiness.sh`: passing
@@ -129,7 +134,7 @@ The currently verified regression baseline is:
 - targeted orchestrator persistence and backend-boundary verification (`250`, `294`, `307`, `308`, `309`): passing
 - targeted MCP/orchestrator runtime-control verification (`157`, `234`, `235`, `236`, `309`, `310`, `311`): passing
 - `king_health()['stubbed_api_group_count']`: `0`
-- `.github/workflows/ci.yml`: wired to the canonical audit/build/test path plus the final go-live readiness step
+- `.github/workflows/ci.yml`: wired to the canonical audit/build/test path plus the final go-live readiness step with the committed benchmark budget gate
 - `./benchmarks/run-canonical.sh`: passing locally
 
 There are currently no open PHPT failures in the canonical suite.
@@ -169,7 +174,7 @@ The repo is still not a full production-grade implementation for:
 - long-haul telemetry exporter hardening, failover behavior, and queue/backpressure guarantees under degraded conditions
 - remote/distributed MCP execution and deeper orchestrator distribution beyond the current local file-worker boundary; restart-safe persistence, bounded timeout/deadline semantics, and cross-process worker handoff are verified, but live cross-process cancellation, remote topology, and broader backend depth are still open
 - coordinated multi-node rolling-restart, failover, and crash-recovery operational depth
-- CI-enforced benchmark budgets, installability matrix, and long-duration sanitizer soak coverage
+- installability matrix and long-duration sanitizer soak coverage
 
 The biggest architectural caveat is simple:
 several areas already have honest local runtime slices, but the backend depth,
@@ -217,7 +222,7 @@ transport depth, or operational depth is still incomplete.
 ### 7. Release, Compatibility, And Confidence Gates Are Not Maxed Out Yet
 
 - The repo has reproducible packaging and profile smokes, but not a real clean-host install/smoke matrix across supported PHP/API combinations.
-- Benchmark harnesses exist, but CI-enforced regression budgets are still missing.
+- Benchmark harnesses and CI-enforced regression budgets now exist, but there is still no clean-host install/smoke matrix across supported PHP/API combinations.
 - Upgrade/downgrade compatibility for release artifacts and persisted state is still not proven as a first-class gate.
 - Long-duration ASan/UBSan soak coverage and archived diagnostics on failure remain open.
 - Release profile/tooling bootstrap still depends on host/repo path normalization for external `quiche/` and `curl` layouts, which can stall container matrix builds on clean or unusual hosts.

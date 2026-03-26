@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/go-live-readiness.sh [--skip-baseline] [--output-dir DIR] [--benchmark-iterations N] [--benchmark-warmup N]
+Usage: ./scripts/go-live-readiness.sh [--skip-baseline] [--output-dir DIR] [--benchmark-iterations N] [--benchmark-warmup N] [--benchmark-budget-file PATH]
 
 Runs the final repo-local go-live readiness gate:
   - static checks, audit, release rebuild, and canonical PHPT suite
@@ -19,6 +19,8 @@ Options:
   --output-dir DIR         Output directory for packaged release artifacts
   --benchmark-iterations N Iterations for benchmark smoke
   --benchmark-warmup N     Warmup iterations for benchmark smoke
+  --benchmark-budget-file PATH
+                           Optional per-case benchmark budget file
   -h, --help               Show this help
 EOF
 }
@@ -30,6 +32,7 @@ OUTPUT_DIR="${ROOT_DIR}/dist"
 SKIP_BASELINE=0
 BENCHMARK_ITERATIONS=250
 BENCHMARK_WARMUP=25
+BENCHMARK_BUDGET_FILE=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -59,6 +62,14 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             BENCHMARK_WARMUP="$2"
+            shift 2
+            ;;
+        --benchmark-budget-file)
+            if [[ $# -lt 2 ]]; then
+                echo "Missing value for --benchmark-budget-file." >&2
+                exit 1
+            fi
+            BENCHMARK_BUDGET_FILE="$2"
             shift 2
             ;;
         -h|--help)
@@ -109,9 +120,16 @@ echo "Running final readiness checks..."
 "${SCRIPT_DIR}/fuzz-runtime.sh"
 "${SCRIPT_DIR}/check-stub-parity.sh"
 "${SCRIPT_DIR}/smoke-profile.sh" release
-"${ROOT_DIR}/benchmarks/run-canonical.sh" \
-    --iterations="${BENCHMARK_ITERATIONS}" \
+benchmark_args=(
+    --iterations="${BENCHMARK_ITERATIONS}"
     --warmup="${BENCHMARK_WARMUP}"
+)
+
+if [[ -n "${BENCHMARK_BUDGET_FILE}" ]]; then
+    benchmark_args+=(--budget-file="${BENCHMARK_BUDGET_FILE}")
+fi
+
+"${ROOT_DIR}/benchmarks/run-canonical.sh" "${benchmark_args[@]}"
 
 package_output="$("${SCRIPT_DIR}/package-release.sh" --verify-reproducible --output-dir "${OUTPUT_DIR}")"
 printf '%s\n' "${package_output}"

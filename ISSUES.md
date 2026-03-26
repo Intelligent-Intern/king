@@ -74,7 +74,8 @@
 
 ### 5. Performance, compatibility, and release confidence
 
-- [ ] Put benchmark baselines under CI with explicit per-case regression budgets
+- [x] Put benchmark baselines under CI with explicit per-case regression budgets
+  completed: 2026-03-26
 - [x] Harden multi-architecture build-profile bootstrap for missing `quiche` and `libcurl` header layouts
   completed: 2026-03-25
 - [x] Drop ARMv7 from the Docker publish matrix until Quiche wirefilter bootstrap is stable there
@@ -124,6 +125,11 @@
 - [x] MCP and orchestrator runtime controls now enforce deadline/timeout ceilings and bounded local concurrency
   targeted PHPTs: `157`, `234`, `235`, `236`, `309`, `310`, `311`
   coverage: MCP request/upload/download `timeout_ms`/`deadline_ms`/`cancel` handling, OO and procedural parity, orchestrator `timeout_ms`/`overall_timeout_ms`/`deadline_ms`/`max_concurrency`, persisted worker-side control recovery, and explicit refusal to pretend that live `CancelToken` propagation already works across the `file_worker` boundary.
+- [x] Canonical benchmark budgets now gate CI and final go-live readiness
+  workflow: `.github/workflows/ci.yml`
+  budget file: `benchmarks/budgets/canonical-ci.json`
+  local verification: `./benchmarks/run-canonical.sh --iterations=5000 --warmup=500 --budget-file=benchmarks/budgets/canonical-ci.json` and `./scripts/go-live-readiness.sh --skip-baseline --benchmark-iterations 5000 --benchmark-warmup 500 --benchmark-budget-file benchmarks/budgets/canonical-ci.json`
+  coverage: explicit per-case `max_ns_per_iteration` ceilings for `session`, `proto`, `object_store`, and `semantic_dns`, plus the same budget gate wired into the canonical CI go-live path.
 
 ## How To Use This File
 

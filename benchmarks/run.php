@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 const KING_BENCHMARK_SCHEMA_VERSION = 1;
+const KING_BENCHMARK_BUDGET_SCHEMA_VERSION = 1;
 const KING_BENCHMARK_DEFAULT_MAX_SLOWDOWN = 1.35;
 
 main($argv);
@@ -51,6 +52,7 @@ function main(array $argv): void
     ];
 
     $comparison = null;
+    $budgetComparison = null;
     if ($options['baseline'] !== null) {
         $comparison = compare_against_baseline(
             $payload,
@@ -60,6 +62,14 @@ function main(array $argv): void
         $payload['comparison'] = $comparison;
     }
 
+    if ($options['budget_file'] !== null) {
+        $budgetComparison = compare_against_budget(
+            $payload,
+            load_budget_file($options['budget_file'])
+        );
+        $payload['budget_comparison'] = $budgetComparison;
+    }
+
     if ($options['write_baseline'] !== null) {
         write_json_file($options['write_baseline'], $payload);
     }
@@ -67,10 +77,14 @@ function main(array $argv): void
     if ($options['json']) {
         echo json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL;
     } else {
-        print_human_report($payload, $comparison, $options);
+        print_human_report($payload, $comparison, $budgetComparison, $options);
     }
 
     if ($comparison !== null && !$comparison['all_passed']) {
+        exit(2);
+    }
+
+    if ($budgetComparison !== null && !$budgetComparison['all_passed']) {
         exit(2);
     }
 }
@@ -283,6 +297,7 @@ function parse_options(array $argv, array $availableCases): array
         'iterations' => null,
         'warmup' => null,
         'baseline' => null,
+        'budget_file' => null,
         'write_baseline' => null,
         'max_slowdown' => KING_BENCHMARK_DEFAULT_MAX_SLOWDOWN,
         'json' => false,
@@ -333,6 +348,10 @@ function parse_options(array $argv, array $availableCases): array
 
             case '--baseline':
                 $options['baseline'] = $value;
+                break;
+
+            case '--budget-file':
+                $options['budget_file'] = $value;
                 break;
 
             case '--write-baseline':
@@ -499,6 +518,50 @@ function compare_against_baseline(array $currentPayload, array $baselinePayload,
     ];
 }
 
+function compare_against_budget(array $currentPayload, array $budgetPayload): array
+{
+    if (($budgetPayload['schema_version'] ?? null) !== KING_BENCHMARK_BUDGET_SCHEMA_VERSION) {
+        fail('The provided benchmark budget file uses an unsupported schema version.');
+    }
+
+    if (!isset($budgetPayload['cases']) || !is_array($budgetPayload['cases'])) {
+        fail('The provided benchmark budget file does not define any cases.');
+    }
+
+    $caseResults = [];
+    $allPassed = true;
+
+    foreach ($currentPayload['selected_cases'] as $caseName) {
+        if (!isset($budgetPayload['cases'][$caseName]) || !is_array($budgetPayload['cases'][$caseName])) {
+            fail(sprintf('The benchmark budget file is missing case "%s".', $caseName));
+        }
+
+        $currentNs = case_ns_per_iteration($currentPayload['cases'][$caseName]);
+        $maxNs = (float) ($budgetPayload['cases'][$caseName]['max_ns_per_iteration'] ?? 0.0);
+
+        if ($maxNs <= 0.0) {
+            fail(sprintf('The benchmark budget for case "%s" must define a positive max_ns_per_iteration.', $caseName));
+        }
+
+        $passed = $currentNs <= $maxNs;
+        $allPassed = $allPassed && $passed;
+
+        $caseResults[$caseName] = [
+            'current_ns_per_iteration' => $currentNs,
+            'max_ns_per_iteration' => $maxNs,
+            'utilization_ratio' => $currentNs / $maxNs,
+            'passed' => $passed,
+        ];
+    }
+
+    return [
+        'budget_generated_at' => $budgetPayload['generated_at'] ?? null,
+        'budget_target' => $budgetPayload['target'] ?? null,
+        'cases' => $caseResults,
+        'all_passed' => $allPassed,
+    ];
+}
+
 function case_ns_per_iteration(array $case): float
 {
     if (isset($case['elapsed_ns'], $case['iterations']) && (int) $case['iterations'] > 0) {
@@ -526,6 +589,20 @@ function load_baseline(string $path): array
     return $decoded;
 }
 
+function load_budget_file(string $path): array
+{
+    if (!is_file($path)) {
+        fail(sprintf('Benchmark budget file does not exist: %s', $path));
+    }
+
+    $decoded = json_decode((string) file_get_contents($path), true);
+    if (!is_array($decoded)) {
+        fail(sprintf('Benchmark budget file is not valid JSON: %s', $path));
+    }
+
+    return $decoded;
+}
+
 function write_json_file(string $path, array $payload): void
 {
     $directory = dirname($path);
@@ -537,7 +614,7 @@ function write_json_file(string $path, array $payload): void
     }
 }
 
-function print_human_report(array $payload, ?array $comparison, array $options): void
+function print_human_report(array $payload, ?array $comparison, ?array $budgetComparison, array $options): void
 {
     echo 'King benchmark results' . PHP_EOL;
     echo 'generated_at: ' . $payload['generated_at'] . PHP_EOL;
@@ -590,6 +667,29 @@ function print_human_report(array $payload, ?array $comparison, array $options):
             $comparisonRows
         ) . PHP_EOL;
     }
+
+    if ($budgetComparison !== null) {
+        echo PHP_EOL;
+        echo 'Budget comparison' . PHP_EOL;
+        echo 'budget_generated_at: ' . ($budgetComparison['budget_generated_at'] ?? 'unknown') . PHP_EOL;
+        echo 'budget_target:       ' . ($budgetComparison['budget_target'] ?? 'unknown') . PHP_EOL;
+
+        $budgetRows = [];
+        foreach ($budgetComparison['cases'] as $caseName => $caseBudget) {
+            $budgetRows[] = [
+                $caseName,
+                number_format((float) $caseBudget['max_ns_per_iteration'], 3, '.', ''),
+                number_format((float) $caseBudget['current_ns_per_iteration'], 3, '.', ''),
+                number_format((float) $caseBudget['utilization_ratio'], 3, '.', '') . 'x',
+                $caseBudget['passed'] ? 'pass' : 'regression',
+            ];
+        }
+
+        echo format_table(
+            ['case', 'max ns/iter', 'current ns/iter', 'utilization', 'status'],
+            $budgetRows
+        ) . PHP_EOL;
+    }
 }
 
 function format_table(array $headers, array $rows): string
@@ -633,6 +733,7 @@ function print_help(array $availableCases): void
     echo '  --iterations=<n>         Override iterations for all selected cases' . PHP_EOL;
     echo '  --warmup=<n>             Override warmup iterations for all selected cases' . PHP_EOL;
     echo '  --baseline=<path>        Compare against a previous JSON baseline' . PHP_EOL;
+    echo '  --budget-file=<path>     Enforce per-case ns/iteration budgets from a JSON file' . PHP_EOL;
     echo '  --write-baseline=<path>  Write the current run to a JSON baseline file' . PHP_EOL;
     echo '  --max-slowdown=<ratio>   Allowed slowdown ratio before exiting non-zero (default 1.35)' . PHP_EOL;
     echo '  --json                   Print JSON instead of the human report' . PHP_EOL;

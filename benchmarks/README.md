@@ -45,12 +45,26 @@ Very low `--iterations` values are useful for smoke checks, but they are too
 noisy for meaningful non-regression gates; use the defaults or higher counts
 when writing and comparing baselines.
 
+For CI or release gating, enforce explicit per-case budgets:
+
+```bash
+./benchmarks/run-canonical.sh \
+  --iterations=5000 \
+  --warmup=500 \
+  --budget-file=benchmarks/budgets/canonical-ci.json
+```
+
+The committed budget file stores a conservative `max_ns_per_iteration` ceiling
+per canonical case so CI can fail on real regressions without depending on a
+host-specific raw baseline snapshot.
+
 ## Useful Flags
 
 - `--case=session,proto`
 - `--iterations=500`
 - `--warmup=25`
 - `--baseline=<path>`
+- `--budget-file=<path>`
 - `--write-baseline=<path>`
 - `--max-slowdown=1.20`
 - `--json`
