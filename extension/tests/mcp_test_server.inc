@@ -1,7 +1,7 @@
 <?php
 
 if ($argc < 3) {
-    fwrite(STDERR, "usage: mcp_test_server.php <capture-path> <port>\n");
+    fwrite(STDERR, "usage: mcp_test_server.php <capture-path> <port> [transfer-state-path]\n");
     exit(1);
 }
 
@@ -10,6 +10,7 @@ const KING_MCP_TEST_DELAY_SLICE_US = 10000;
 
 $capturePath = $argv[1];
 $port = (int) $argv[2];
+$transferStatePath = $argv[3] ?? null;
 $capture = [
     'connections' => [],
     'events' => [],
@@ -35,6 +36,50 @@ function king_mcp_test_persist_capture(array $capture, string $capturePath): voi
     file_put_contents(
         $capturePath,
         json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+}
+
+function king_mcp_test_load_transfers(?string $transferStatePath): array
+{
+    $encoded = [];
+    $transfers = [];
+
+    if ($transferStatePath === null || $transferStatePath === '' || !is_file($transferStatePath)) {
+        return [];
+    }
+
+    $encoded = json_decode((string) file_get_contents($transferStatePath), true);
+    if (!is_array($encoded)) {
+        return [];
+    }
+
+    foreach ($encoded as $encodedKey => $encodedPayload) {
+        $key = base64_decode((string) $encodedKey, true);
+        $payload = base64_decode((string) $encodedPayload, true);
+        if ($key === false || $payload === false) {
+            continue;
+        }
+        $transfers[$key] = $payload;
+    }
+
+    return $transfers;
+}
+
+function king_mcp_test_persist_transfers(array $transfers, ?string $transferStatePath): void
+{
+    $encoded = [];
+
+    if ($transferStatePath === null || $transferStatePath === '') {
+        return;
+    }
+
+    foreach ($transfers as $key => $payload) {
+        $encoded[base64_encode((string) $key)] = base64_encode((string) $payload);
+    }
+
+    file_put_contents(
+        $transferStatePath,
+        json_encode($encoded, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
     );
 }
 
@@ -203,6 +248,7 @@ function king_mcp_test_handle_request(
 
 $nextConnectionId = 1;
 $shouldStop = false;
+$transfers = king_mcp_test_load_transfers($transferStatePath);
 
 king_mcp_test_persist_capture($capture, $capturePath);
 
@@ -353,6 +399,7 @@ while (!$shouldStop) {
             }
 
             $transfers[king_mcp_test_transfer_key($service, $method, $identifier)] = $payload;
+            king_mcp_test_persist_transfers($transfers, $transferStatePath);
             king_mcp_test_capture_event($capture, $capturePath, $event);
             king_mcp_test_write_line($client, 'OK');
             continue;

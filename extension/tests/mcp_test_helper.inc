@@ -1,6 +1,6 @@
 <?php
 
-function king_mcp_test_start_server_script(string $scriptPath, ?int $port = null): array
+function king_mcp_test_start_server_script(string $scriptPath, ?int $port = null, array $extraArgs = []): array
 {
     if ($port === null) {
         $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
@@ -21,6 +21,9 @@ function king_mcp_test_start_server_script(string $scriptPath, ?int $port = null
         $capture,
         (string) ((int) $port),
     ];
+    foreach ($extraArgs as $arg) {
+        $command[] = (string) $arg;
+    }
 
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
@@ -59,6 +62,15 @@ function king_mcp_test_start_server(?int $port = null): array
 function king_mcp_test_start_parallel_server(?int $port = null): array
 {
     return king_mcp_test_start_server_script(__DIR__ . '/mcp_parallel_test_server.inc', $port);
+}
+
+function king_mcp_test_start_persisted_server(string $statePath, ?int $port = null): array
+{
+    return king_mcp_test_start_server_script(
+        __DIR__ . '/mcp_test_server.inc',
+        $port,
+        [$statePath]
+    );
 }
 
 function king_mcp_test_finalize_server(array $server): array
