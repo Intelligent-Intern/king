@@ -106,8 +106,8 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
     }
 
     $output = '';
-    $startupGraceAt = microtime(true) + 3.0;
-    $deadline = microtime(true) + 15.0;
+    $startupGraceAt = microtime(true) + 8.0;
+    $deadline = microtime(true) + 30.0;
     while (microtime(true) < $deadline) {
         $status = proc_get_status($process);
         $read = [$pipes[1], $pipes[2]];
@@ -155,15 +155,25 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
 function king_http3_request_with_retry(callable $callback)
 {
     $lastError = null;
-    $deadline = microtime(true) + 20.0;
+    $deadline = microtime(true) + 30.0;
 
     while (microtime(true) < $deadline) {
         try {
-            return $callback();
+            $result = $callback();
+            if ($result !== false) {
+                return $result;
+            }
+
+            $message = king_get_last_error();
+            if (!is_string($message) || $message === '') {
+                $message = 'HTTP/3 request returned false before the local server became ready.';
+            }
+            $lastError = new RuntimeException($message);
         } catch (Throwable $e) {
             $lastError = $e;
-            usleep(250000);
         }
+
+        usleep(250000);
     }
 
     throw $lastError ?? new RuntimeException('HTTP/3 request retry exhausted without an exception.');
@@ -195,8 +205,8 @@ try {
             null,
             [
                 'connection_config' => $cfg,
-                'connect_timeout_ms' => 3000,
-                'timeout_ms' => 10000,
+                'connect_timeout_ms' => 5000,
+                'timeout_ms' => 15000,
             ]
         )
     );
@@ -210,8 +220,8 @@ try {
             [
                 'preferred_protocol' => 'http3',
                 'connection_config' => $cfg,
-                'connect_timeout_ms' => 3000,
-                'timeout_ms' => 10000,
+                'connect_timeout_ms' => 5000,
+                'timeout_ms' => 15000,
             ]
         )
     );

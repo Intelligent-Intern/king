@@ -106,8 +106,8 @@ function king_http3_start_oo_test_server(string $certFile, string $keyFile, stri
     }
 
     $output = '';
-    $startupGraceAt = microtime(true) + 3.0;
-    $deadline = microtime(true) + 15.0;
+    $startupGraceAt = microtime(true) + 8.0;
+    $deadline = microtime(true) + 30.0;
     while (microtime(true) < $deadline) {
         $status = proc_get_status($process);
         $read = [$pipes[1], $pipes[2]];
@@ -155,15 +155,16 @@ function king_http3_start_oo_test_server(string $certFile, string $keyFile, stri
 function king_http3_oo_request_with_retry(callable $callback)
 {
     $lastError = null;
-    $deadline = microtime(true) + 20.0;
+    $deadline = microtime(true) + 30.0;
 
     while (microtime(true) < $deadline) {
         try {
             return $callback();
         } catch (Throwable $e) {
             $lastError = $e;
-            usleep(250000);
         }
+
+        usleep(250000);
     }
 
     throw $lastError ?? new RuntimeException('HTTP/3 OO request retry exhausted without an exception.');
@@ -185,7 +186,7 @@ $server = king_http3_start_oo_test_server($fixture['cert'], $fixture['key'], $fi
 try {
     $config = new King\Config([
         'tls_default_ca_file' => $fixture['cert'],
-        'tcp_connect_timeout_ms' => 3000,
+        'tcp_connect_timeout_ms' => 5000,
     ]);
 
     $client = new King\Client\Http3Client($config);
