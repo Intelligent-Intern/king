@@ -49,7 +49,8 @@ static bool king_orchestrator_registry_initialized = false;
 static bool king_orchestrator_recovered_from_state = false;
 static zend_long king_orchestrator_next_run_id = 1;
 static king_orchestrator_run_state_t *king_orchestrator_find_run(zend_string *run_id);
-static int king_orchestrator_persist_state(void);
+static int king_orchestrator_persist_state_locked(void);
+static int king_orchestrator_load_state(void);
 
 static void king_orchestrator_persistent_string_zval_dtor(zval *zv)
 {
@@ -230,10 +231,160 @@ static int king_orchestrator_backend_is_file_worker(void)
         && strcmp(king_mcp_orchestrator_config.orchestrator_execution_backend, "file_worker") == 0;
 }
 
+static int king_orchestrator_state_path_is_configured(void)
+{
+    return king_mcp_orchestrator_config.orchestrator_state_path != NULL
+        && king_mcp_orchestrator_config.orchestrator_state_path[0] != '\0';
+}
+
 static int king_orchestrator_queue_path_is_configured(void)
 {
     return king_mcp_orchestrator_config.orchestrator_worker_queue_path != NULL
         && king_mcp_orchestrator_config.orchestrator_worker_queue_path[0] != '\0';
+}
+
+static void king_orchestrator_runtime_clear_state(void)
+{
+    zend_hash_clean(&king_orchestrator_tool_registry);
+    zend_hash_clean(&king_orchestrator_pipeline_runs);
+
+    if (king_orchestrator_logging_config_b64 != NULL) {
+        zend_string_release_ex(king_orchestrator_logging_config_b64, 1);
+        king_orchestrator_logging_config_b64 = NULL;
+    }
+    if (king_orchestrator_last_run_id != NULL) {
+        zend_string_release_ex(king_orchestrator_last_run_id, 1);
+        king_orchestrator_last_run_id = NULL;
+    }
+    if (king_orchestrator_last_run_status != NULL) {
+        zend_string_release_ex(king_orchestrator_last_run_status, 1);
+        king_orchestrator_last_run_status = NULL;
+    }
+
+    king_orchestrator_recovered_from_state = false;
+    king_orchestrator_next_run_id = 1;
+}
+
+static int king_orchestrator_build_state_lock_path(
+    const char *state_path,
+    char *lock_path,
+    size_t lock_path_len
+)
+{
+    if (
+        state_path == NULL
+        || state_path[0] == '\0'
+        || lock_path == NULL
+        || lock_path_len == 0
+    ) {
+        return FAILURE;
+    }
+
+    if (snprintf(lock_path, lock_path_len, "%s.lock", state_path) >= (int) lock_path_len) {
+        return FAILURE;
+    }
+
+    if (php_check_open_basedir(lock_path) != 0) {
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static int king_orchestrator_state_lock_acquire(int *lock_fd_out)
+{
+    char lock_path[1024];
+    int flags = O_RDWR | O_CREAT;
+    int fd;
+
+    if (lock_fd_out == NULL) {
+        return FAILURE;
+    }
+
+    *lock_fd_out = -1;
+
+    if (!king_orchestrator_state_path_is_configured()) {
+        return SUCCESS;
+    }
+
+    if (king_orchestrator_build_state_lock_path(
+            king_mcp_orchestrator_config.orchestrator_state_path,
+            lock_path,
+            sizeof(lock_path)
+        ) != SUCCESS) {
+        return FAILURE;
+    }
+
+#ifdef O_CLOEXEC
+    flags |= O_CLOEXEC;
+#endif
+#ifdef O_NOFOLLOW
+    flags |= O_NOFOLLOW;
+#endif
+
+    fd = open(lock_path, flags, 0600);
+    if (fd < 0) {
+        return FAILURE;
+    }
+
+    if (fchmod(fd, 0600) != 0) {
+        close(fd);
+        return FAILURE;
+    }
+
+    if (flock(fd, LOCK_EX) != 0) {
+        close(fd);
+        return FAILURE;
+    }
+
+    *lock_fd_out = fd;
+    return SUCCESS;
+}
+
+static void king_orchestrator_state_lock_release(int lock_fd)
+{
+    if (lock_fd < 0) {
+        return;
+    }
+
+    (void) flock(lock_fd, LOCK_UN);
+    close(lock_fd);
+}
+
+static int king_orchestrator_state_refresh_locked(void)
+{
+    if (!king_orchestrator_state_path_is_configured()) {
+        return SUCCESS;
+    }
+
+    return king_orchestrator_load_state();
+}
+
+static int king_orchestrator_state_transaction_begin(int *lock_fd_out)
+{
+    if (lock_fd_out == NULL) {
+        return FAILURE;
+    }
+
+    *lock_fd_out = -1;
+
+    if (!king_orchestrator_registry_initialized) {
+        if (king_orchestrator_registry_init() != SUCCESS) {
+            return FAILURE;
+        }
+    }
+
+    if (king_orchestrator_state_lock_acquire(lock_fd_out) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (king_orchestrator_state_refresh_locked() != SUCCESS) {
+        king_orchestrator_state_lock_release(*lock_fd_out);
+        *lock_fd_out = -1;
+        return FAILURE;
+    }
+
+    return SUCCESS;
 }
 
 static int king_orchestrator_build_queue_entry_path(
@@ -632,7 +783,7 @@ static size_t king_orchestrator_count_queued_runs(void)
     return queued_runs;
 }
 
-static int king_orchestrator_persist_state(void)
+static int king_orchestrator_persist_state_locked(void)
 {
     char tmp_path[1024];
     FILE *stream;
@@ -759,6 +910,8 @@ static int king_orchestrator_load_state(void)
     char line[16384];
     const char *state_path = king_mcp_orchestrator_config.orchestrator_state_path;
     struct stat st;
+
+    king_orchestrator_runtime_clear_state();
 
     if (state_path == NULL || state_path[0] == '\0') {
         king_orchestrator_recovered_from_state = false;
@@ -940,6 +1093,7 @@ int king_orchestrator_load_run_payload(
     zval *options)
 {
     king_orchestrator_run_state_t *run_state;
+    int lock_fd = -1;
 
     if (initial_data == NULL || pipeline == NULL || options == NULL) {
         return FAILURE;
@@ -949,8 +1103,13 @@ int king_orchestrator_load_run_payload(
     ZVAL_NULL(pipeline);
     ZVAL_NULL(options);
 
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
+
     run_state = king_orchestrator_find_run(run_id);
     if (run_state == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
@@ -965,9 +1124,11 @@ int king_orchestrator_load_run_payload(
         ZVAL_NULL(initial_data);
         ZVAL_NULL(pipeline);
         ZVAL_NULL(options);
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
+    king_orchestrator_state_lock_release(lock_fd);
     return SUCCESS;
 }
 
@@ -979,6 +1140,7 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     zval options;
     zval result;
     zval error;
+    int lock_fd = -1;
 
     ZVAL_NULL(&initial_data);
     ZVAL_NULL(&pipeline);
@@ -986,8 +1148,13 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     ZVAL_NULL(&result);
     ZVAL_NULL(&error);
 
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
+
     run_state = king_orchestrator_find_run(run_id);
     if (run_state == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
@@ -1003,6 +1170,7 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
         zval_ptr_dtor(&options);
         zval_ptr_dtor(&result);
         zval_ptr_dtor(&error);
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
@@ -1018,6 +1186,7 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     add_assoc_zval(return_value, "result", &result);
     add_assoc_zval(return_value, "error", &error);
 
+    king_orchestrator_state_lock_release(lock_fd);
     return SUCCESS;
 }
 
@@ -1101,6 +1270,8 @@ int king_orchestrator_request_run_cancel(zend_string *run_id)
     char queued_path[1024];
     FILE *stream;
     zend_bool previous_cancel_requested;
+    int lock_fd = -1;
+    int rc;
 
     if (
         run_id == NULL
@@ -1110,12 +1281,18 @@ int king_orchestrator_request_run_cancel(zend_string *run_id)
         return FAILURE;
     }
 
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
+
     run_state = king_orchestrator_find_run(run_id);
     if (run_state == NULL || king_orchestrator_run_state_is_terminal(run_state)) {
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
     if (run_state->cancel_requested) {
+        king_orchestrator_state_lock_release(lock_fd);
         return SUCCESS;
     }
 
@@ -1125,27 +1302,47 @@ int king_orchestrator_request_run_cancel(zend_string *run_id)
         && king_orchestrator_build_run_queue_path(run_id, queued_path, sizeof(queued_path)) == SUCCESS
         && king_orchestrator_queue_entry_is_regular_file(queued_path)
     ) {
+        zend_string *error_b64;
+
         if (unlink(queued_path) != 0) {
+            king_orchestrator_state_lock_release(lock_fd);
             return FAILURE;
         }
 
-        return king_orchestrator_pipeline_run_cancelled(
-            run_id,
+        error_b64 = king_orchestrator_encode_error_message_base64(
             "king_pipeline_orchestrator_cancel_run() cancelled the queued run before worker claim."
         );
+        king_orchestrator_replace_runtime_string(
+            &run_state->status,
+            zend_string_init("cancelled", sizeof("cancelled") - 1, 1)
+        );
+        run_state->finished_at = time(NULL);
+        run_state->cancel_requested = 1;
+        if (error_b64 != NULL) {
+            king_orchestrator_replace_runtime_string(&run_state->error_b64, zend_string_dup(error_b64, 1));
+            zend_string_release(error_b64);
+        }
+        king_orchestrator_set_last_run(run_state->run_id, "cancelled");
+
+        rc = king_orchestrator_persist_state_locked();
+        king_orchestrator_state_lock_release(lock_fd);
+        return rc;
     }
 
     if (king_orchestrator_queue_ensure_directory() != SUCCESS) {
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
     if (king_orchestrator_build_cancel_marker_path(run_id, marker_path, sizeof(marker_path)) != SUCCESS) {
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
     previous_cancel_requested = run_state->cancel_requested;
     run_state->cancel_requested = 1;
-    if (king_orchestrator_persist_state() != SUCCESS) {
+    if (king_orchestrator_persist_state_locked() != SUCCESS) {
         run_state->cancel_requested = previous_cancel_requested;
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
@@ -1157,7 +1354,8 @@ int king_orchestrator_request_run_cancel(zend_string *run_id)
     );
     if (stream == NULL) {
         run_state->cancel_requested = previous_cancel_requested;
-        (void) king_orchestrator_persist_state();
+        (void) king_orchestrator_persist_state_locked();
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
@@ -1165,17 +1363,20 @@ int king_orchestrator_request_run_cancel(zend_string *run_id)
         fclose(stream);
         unlink(marker_path);
         run_state->cancel_requested = previous_cancel_requested;
-        (void) king_orchestrator_persist_state();
+        (void) king_orchestrator_persist_state_locked();
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
     if (fclose(stream) != 0) {
         unlink(marker_path);
         run_state->cancel_requested = previous_cancel_requested;
-        (void) king_orchestrator_persist_state();
+        (void) king_orchestrator_persist_state_locked();
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
+    king_orchestrator_state_lock_release(lock_fd);
     return SUCCESS;
 }
 
@@ -1500,15 +1701,16 @@ int king_orchestrator_register_tool(const char *name, size_t name_len, zval *con
     zend_string *config_b64;
     zend_string *persistent_name;
     zval stored_config;
+    int lock_fd = -1;
+    int rc;
 
-    if (!king_orchestrator_registry_initialized) {
-        if (king_orchestrator_registry_init() != SUCCESS) {
-            return FAILURE;
-        }
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
     }
 
     config_b64 = king_orchestrator_encode_zval_base64(config);
     if (config_b64 == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
@@ -1518,30 +1720,46 @@ int king_orchestrator_register_tool(const char *name, size_t name_len, zval *con
     zend_string_release_ex(persistent_name, 1);
     zend_string_release(config_b64);
 
-    return king_orchestrator_persist_state();
+    rc = king_orchestrator_persist_state_locked();
+    king_orchestrator_state_lock_release(lock_fd);
+
+    return rc;
 }
 
 zval *king_orchestrator_lookup_tool(const char *name, size_t name_len)
 {
+    int lock_fd = -1;
+    zval *entry;
+
     if (!king_orchestrator_registry_initialized) {
+        if (king_orchestrator_registry_init() != SUCCESS) {
+            return NULL;
+        }
+    }
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
         return NULL;
     }
 
-    return zend_hash_str_find(&king_orchestrator_tool_registry, name, name_len);
+    entry = zend_hash_str_find(&king_orchestrator_tool_registry, name, name_len);
+    king_orchestrator_state_lock_release(lock_fd);
+
+    return entry;
 }
 
 int king_orchestrator_configure_logging(zval *config)
 {
     zend_string *config_b64;
+    int lock_fd = -1;
+    int rc;
 
-    if (!king_orchestrator_registry_initialized) {
-        if (king_orchestrator_registry_init() != SUCCESS) {
-            return FAILURE;
-        }
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
     }
 
     config_b64 = king_orchestrator_encode_zval_base64(config);
     if (config_b64 == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
@@ -1551,7 +1769,10 @@ int king_orchestrator_configure_logging(zval *config)
     );
     zend_string_release(config_b64);
 
-    return king_orchestrator_persist_state();
+    rc = king_orchestrator_persist_state_locked();
+    king_orchestrator_state_lock_release(lock_fd);
+
+    return rc;
 }
 
 zend_string *king_orchestrator_pipeline_run_begin(
@@ -1568,11 +1789,10 @@ zend_string *king_orchestrator_pipeline_run_begin(
     zend_string *result_b64;
     zend_string *error_b64;
     zend_string *run_id;
+    int lock_fd = -1;
 
-    if (!king_orchestrator_registry_initialized) {
-        if (king_orchestrator_registry_init() != SUCCESS) {
-            return NULL;
-        }
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return NULL;
     }
 
     initial_data_b64 = king_orchestrator_encode_zval_base64(initial_data);
@@ -1609,6 +1829,7 @@ zend_string *king_orchestrator_pipeline_run_begin(
         if (error_b64 != NULL) {
             zend_string_release(error_b64);
         }
+        king_orchestrator_state_lock_release(lock_fd);
         return NULL;
     }
 
@@ -1646,21 +1867,30 @@ zend_string *king_orchestrator_pipeline_run_begin(
     }
     king_orchestrator_set_last_run(run_state->run_id, initial_status);
 
-    if (king_orchestrator_persist_state() != SUCCESS) {
+    if (king_orchestrator_persist_state_locked() != SUCCESS) {
         zend_hash_del(&king_orchestrator_pipeline_runs, run_state->run_id);
+        king_orchestrator_state_lock_release(lock_fd);
         zend_string_release(run_id);
         return NULL;
     }
 
+    king_orchestrator_state_lock_release(lock_fd);
     return run_id;
 }
 
 int king_orchestrator_pipeline_run_mark_running(zend_string *run_id)
 {
     king_orchestrator_run_state_t *run_state;
+    int lock_fd = -1;
+    int rc;
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
 
     run_state = king_orchestrator_find_run(run_id);
     if (run_state == NULL || run_state->status == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
@@ -1668,6 +1898,7 @@ int king_orchestrator_pipeline_run_mark_running(zend_string *run_id)
         king_orchestrator_run_state_is_terminal(run_state)
         || zend_string_equals_literal(run_state->status, "running")
     ) {
+        king_orchestrator_state_lock_release(lock_fd);
         return SUCCESS;
     }
 
@@ -1678,12 +1909,25 @@ int king_orchestrator_pipeline_run_mark_running(zend_string *run_id)
     run_state->finished_at = 0;
     king_orchestrator_set_last_run(run_state->run_id, "running");
 
-    return king_orchestrator_persist_state();
+    rc = king_orchestrator_persist_state_locked();
+    king_orchestrator_state_lock_release(lock_fd);
+
+    return rc;
 }
 
 int king_orchestrator_pipeline_run_is_terminal(zend_string *run_id)
 {
-    return king_orchestrator_run_state_is_terminal(king_orchestrator_find_run(run_id));
+    int lock_fd = -1;
+    int is_terminal;
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return 0;
+    }
+
+    is_terminal = king_orchestrator_run_state_is_terminal(king_orchestrator_find_run(run_id));
+    king_orchestrator_state_lock_release(lock_fd);
+
+    return is_terminal;
 }
 
 int king_orchestrator_pipeline_run_complete(zend_string *run_id, zval *result)
@@ -1692,14 +1936,22 @@ int king_orchestrator_pipeline_run_complete(zend_string *run_id, zval *result)
     zend_string *error_b64;
     zend_string *result_b64;
     zval null_value;
+    int lock_fd = -1;
+    int rc;
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
 
     run_state = king_orchestrator_find_run(run_id);
     if (run_state == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
     result_b64 = king_orchestrator_encode_zval_base64(result);
     if (result_b64 == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
@@ -1707,6 +1959,7 @@ int king_orchestrator_pipeline_run_complete(zend_string *run_id, zval *result)
     error_b64 = king_orchestrator_encode_zval_base64(&null_value);
     if (error_b64 == NULL) {
         zend_string_release(result_b64);
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
@@ -1722,7 +1975,9 @@ int king_orchestrator_pipeline_run_complete(zend_string *run_id, zval *result)
     zend_string_release(error_b64);
     king_orchestrator_set_last_run(run_state->run_id, "completed");
 
-    if (king_orchestrator_persist_state() != SUCCESS) {
+    rc = king_orchestrator_persist_state_locked();
+    king_orchestrator_state_lock_release(lock_fd);
+    if (rc != SUCCESS) {
         return FAILURE;
     }
 
@@ -1734,9 +1989,16 @@ int king_orchestrator_pipeline_run_fail(zend_string *run_id, const char *error_m
 {
     king_orchestrator_run_state_t *run_state;
     zend_string *error_b64;
+    int lock_fd = -1;
+    int rc;
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
 
     run_state = king_orchestrator_find_run(run_id);
     if (run_state == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
@@ -1754,7 +2016,9 @@ int king_orchestrator_pipeline_run_fail(zend_string *run_id, const char *error_m
     }
     king_orchestrator_set_last_run(run_state->run_id, "failed");
 
-    if (king_orchestrator_persist_state() != SUCCESS) {
+    rc = king_orchestrator_persist_state_locked();
+    king_orchestrator_state_lock_release(lock_fd);
+    if (rc != SUCCESS) {
         return FAILURE;
     }
 
@@ -1766,9 +2030,16 @@ int king_orchestrator_pipeline_run_cancelled(zend_string *run_id, const char *er
 {
     king_orchestrator_run_state_t *run_state;
     zend_string *error_b64;
+    int lock_fd = -1;
+    int rc;
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
 
     run_state = king_orchestrator_find_run(run_id);
     if (run_state == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }
 
@@ -1786,7 +2057,9 @@ int king_orchestrator_pipeline_run_cancelled(zend_string *run_id, const char *er
     }
     king_orchestrator_set_last_run(run_state->run_id, "cancelled");
 
-    if (king_orchestrator_persist_state() != SUCCESS) {
+    rc = king_orchestrator_persist_state_locked();
+    king_orchestrator_state_lock_release(lock_fd);
+    if (rc != SUCCESS) {
         return FAILURE;
     }
 

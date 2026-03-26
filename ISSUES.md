@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate file-worker queue fairness under sustained contention and parallel workers.
+- [ ] Implement real multi-host backend boundaries for MCP and pipeline orchestrator beyond the current same-host topology scope.
 
 ## Active Executable Items
 
@@ -30,13 +30,10 @@
 1. [ ] Implement real multi-host backend boundaries for MCP and pipeline orchestrator beyond the current same-host topology scope.
    done when: controller, worker, and remote peer behavior is proven across machine boundaries rather than only separate local processes or explicit same-host topology contracts.
 
-2. [ ] Validate file-worker queue fairness under sustained contention and parallel workers.
-   done when: queue progression remains fair and starvation-free under repeated concurrent claims rather than only deterministic FIFO and claimed-recovery ordering.
-
-3. [ ] Validate Smart DNS registration, routing, mother-node synchronization, and recovery against larger or distributed topologies.
+2. [ ] Validate Smart DNS registration, routing, mother-node synchronization, and recovery against larger or distributed topologies.
    done when: service discovery and semantic routing stay coherent under parallel updates, restart, and failover rather than only local happy-path flows.
 
-4. [ ] Finalize the honest v1 object-store backend contract.
+3. [ ] Finalize the honest v1 object-store backend contract.
    done when: either at least one non-local backend is real and verified, or the public contract is explicitly locked to `local_fs` plus simulated adapters with no stronger claim.
 
 ### 2. Observability and Fleet Operations
@@ -67,6 +64,6 @@
 - Router/loadbalancer is now treated as an explicit `config_backed` control-plane component with no stronger forwarding-runtime claim in v1.
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs; the remaining DNS work is topology and wire-depth, not more local config cleanup.
 - MCP request, upload, and download now talk to a real same-host remote peer with propagated timeout, deadline, and cancellation controls, plus verified 1 MiB payload roundtrips, parallel-transfer backpressure isolation, explicit single-flight reentry guards per connection handle, same-host partial-failure recovery, persisted remote-state restart recovery, and an explicit `topology_scope=same_host_remote_peer` contract in system component info; the remaining MCP gap is real multi-host coverage plus richer distributed failure semantics.
-- File-worker orchestration now persists honest `queued -> running -> completed|failed|cancelled` transitions, exposes explicit `single_attempt` retry and `caller_managed` idempotency, surfaces `topology_scope=local_in_process` for the local backend versus `same_host_file_worker` for file-worker mode, advertises `scheduler_policy=claimed_recovery_then_fifo_run_id`, keeps concurrent workers from double-claiming one active run, and now verifies that a run already marked `running` can be recovered exactly once after worker loss; the remaining orchestrator gap is real multi-host execution depth plus sustained fairness under contention.
+- File-worker orchestration now persists honest `queued -> running -> completed|failed|cancelled` transitions, exposes explicit `single_attempt` retry and `caller_managed` idempotency, surfaces `topology_scope=local_in_process` for the local backend versus `same_host_file_worker` for file-worker mode, advertises `scheduler_policy=claimed_recovery_then_fifo_run_id`, keeps concurrent workers from double-claiming one active run, verifies exact once-only recovery after worker loss, and now verifies sustained queue fairness under repeated parallel-worker contention; the remaining orchestrator gap is real multi-host execution depth.
 - Everything else from `READYNESS_TRACKER.md` is either already verified, derivative of these leaves, or still too broad to be the active queue.
 - If an item is not listed here, it is not the current repo-local priority.

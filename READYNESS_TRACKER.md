@@ -7,7 +7,7 @@ Status note:
 - Checked boxes below mean the current tree already verifies that slice directly in code, tests, or an honest fenced v1 contract.
 - Unchecked boxes are still open, intentionally fenced out of the current v1 slice, or broader than the proof that exists in this repository today.
 - This file is the long-form closure tracker, not the active execution queue. `ISSUES.md` stays the narrow working backlog.
-- Recent orchestrator closure: deterministic file-worker claimed-run recovery order and concurrent claim locking are now verified, but the broader worker-failure and fairness-under-load boxes remain intentionally open below.
+- Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, and sustained fairness under contention are now verified; the remaining open boxes below are the broader continuation, observability, and multi-host slices.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -136,7 +136,7 @@ Status note:
 - [ ] Define and implement rollback / compensation semantics where publicly claimed
 - [ ] Validate distributed tool execution across multiple workers
 - [x] Validate worker failure during active pipeline execution
-- [ ] Validate queue / scheduler fairness under load
+- [x] Validate queue / scheduler fairness under load
 - [x] Finalize exact queued/running/failed/cancelled/completed state transitions
 - [ ] Fully integrate observability for pipeline execution
 - [x] Build end-to-end multi-process harness
