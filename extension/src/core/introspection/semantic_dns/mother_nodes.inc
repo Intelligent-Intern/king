@@ -131,6 +131,9 @@ PHP_FUNCTION(king_semantic_dns_register_mother_node)
     }
 
     if (king_semantic_dns_runtime.initialized && king_semantic_dns_runtime.config.semantic_mode_enable) {
+        (void) king_semantic_dns_refresh_runtime_mother_nodes_from_registry();
+        (void) king_semantic_dns_discover_mother_nodes();
+        (void) king_semantic_dns_sync_with_mother_nodes();
         (void) king_semantic_dns_state_save();
     }
 

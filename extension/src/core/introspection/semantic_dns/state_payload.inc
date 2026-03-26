@@ -73,6 +73,89 @@ static bool king_semantic_dns_state_assign_attributes(
     return true;
 }
 
+static king_service_status_t king_semantic_dns_state_status_to_enum(
+    const zend_string *status
+)
+{
+    if (status == NULL) {
+        return KING_SERVICE_STATUS_UNKNOWN;
+    }
+
+    if (zend_string_equals_literal(status, "healthy")) {
+        return KING_SERVICE_STATUS_HEALTHY;
+    }
+    if (zend_string_equals_literal(status, "degraded")) {
+        return KING_SERVICE_STATUS_DEGRADED;
+    }
+    if (zend_string_equals_literal(status, "unhealthy")) {
+        return KING_SERVICE_STATUS_UNHEALTHY;
+    }
+    if (zend_string_equals_literal(status, "maintenance")) {
+        return KING_SERVICE_STATUS_MAINTENANCE;
+    }
+
+    return KING_SERVICE_STATUS_UNKNOWN;
+}
+
+int king_semantic_dns_refresh_runtime_mother_nodes_from_registry(void)
+{
+    king_mother_node_t *runtime_nodes = NULL;
+    uint32_t count;
+    uint32_t index = 0;
+    zval *entry;
+
+    if (!king_semantic_dns_registry_initialized) {
+        return FAILURE;
+    }
+
+    count = (uint32_t) zend_hash_num_elements(&king_semantic_dns_mother_node_registry);
+    if (count == 0) {
+        return SUCCESS;
+    }
+
+    runtime_nodes = pecalloc(count, sizeof(*runtime_nodes), 1);
+    if (runtime_nodes == NULL) {
+        return FAILURE;
+    }
+
+    ZEND_HASH_FOREACH_VAL(&king_semantic_dns_mother_node_registry, entry) {
+        king_semantic_dns_mother_node *mother_node;
+
+        if (Z_TYPE_P(entry) != IS_PTR) {
+            continue;
+        }
+
+        mother_node = (king_semantic_dns_mother_node *) Z_PTR_P(entry);
+        if (mother_node == NULL) {
+            continue;
+        }
+
+        strncpy(
+            runtime_nodes[index].node_id,
+            ZSTR_VAL(mother_node->node_id),
+            sizeof(runtime_nodes[index].node_id) - 1
+        );
+        runtime_nodes[index].node_id[sizeof(runtime_nodes[index].node_id) - 1] = '\0';
+        runtime_nodes[index].port = (uint16_t) mother_node->port;
+        runtime_nodes[index].managed_services_count = (uint32_t) mother_node->managed_services_count;
+        runtime_nodes[index].status = king_semantic_dns_state_status_to_enum(mother_node->status);
+        runtime_nodes[index].trust_score = mother_node->trust_score;
+        runtime_nodes[index].last_heartbeat = mother_node->registered_at;
+        index++;
+    } ZEND_HASH_FOREACH_END();
+
+    count = index;
+
+    if (king_semantic_dns_runtime.config.mother_nodes != NULL) {
+        pefree(king_semantic_dns_runtime.config.mother_nodes, 1);
+    }
+
+    king_semantic_dns_runtime.config.mother_nodes = runtime_nodes;
+    king_semantic_dns_runtime.config.mother_node_count = count;
+
+    return SUCCESS;
+}
+
 static king_semantic_dns_service *king_semantic_dns_service_create_from_state_entry(zval *entry)
 {
     HashTable *source;

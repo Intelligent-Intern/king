@@ -28,7 +28,7 @@ bool(true)
 array(0) {
 }
 bool(true)
-array(5) {
+array(7) {
   ["total_services"]=>
   int(0)
   ["healthy_services"]=>
@@ -38,6 +38,10 @@ array(5) {
   ["unhealthy_services"]=>
   int(0)
   ["mother_nodes"]=>
+  int(0)
+  ["discovered_mother_nodes"]=>
+  int(0)
+  ["synced_mother_nodes"]=>
   int(0)
 }
 bool(true)

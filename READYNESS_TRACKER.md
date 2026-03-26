@@ -233,7 +233,7 @@ Status note:
 - [x] Implement persistence for registration data
 - [x] Implement rehydration of registration data after restart
 - [ ] Validate consistency after split-brain / partial-failure scenarios where publicly claimed
-- [ ] Validate topology generation under large service counts
+- [x] Validate topology generation under large service counts
 - [ ] Validate DNS failure and recovery behavior
 
 ## J. Telemetry Core
