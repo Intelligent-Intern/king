@@ -247,6 +247,8 @@ namespace {
      * Validate the active local MCP connection state and request shape and
      * return the normalized local response payload.
      * @param mixed $connection
+     * `options` may include `timeout_ms`, `deadline_ms` (monotonic deadline
+     * in milliseconds), and `cancel`.
      * @param array<string,mixed>|null $options
      * @return string|false
      */
@@ -257,19 +259,23 @@ namespace {
      * The current runtime keeps the bytes per connection under the
      * `(service, method, stream_identifier)` tuple instead of sending them to
      * a live MCP backend.
+     * `options` may include `timeout_ms`, `deadline_ms` (monotonic deadline
+     * in milliseconds), and `cancel`.
      * @param mixed $connection
      * @param resource $stream
      */
-    function king_mcp_upload_from_stream(mixed $connection, string $service_name, string $method_name, string $stream_identifier, $stream): bool {}
+    function king_mcp_upload_from_stream(mixed $connection, string $service_name, string $method_name, string $stream_identifier, $stream, ?array $options = null): bool {}
 
     /**
      * Resolve a previously uploaded local MCP transfer by treating
      * `$request_payload` as the opaque transfer identifier in the active
      * current runtime, then stream the bytes into the destination stream.
+     * `options` may include `timeout_ms`, `deadline_ms` (monotonic deadline
+     * in milliseconds), and `cancel`.
      * @param mixed $connection
      * @param resource $stream
      */
-    function king_mcp_download_to_stream(mixed $connection, string $service_name, string $method_name, string $request_payload, $stream): bool {}
+    function king_mcp_download_to_stream(mixed $connection, string $service_name, string $method_name, string $request_payload, $stream, ?array $options = null): bool {}
 
     /**
      * Close a local MCP connection-state resource.
@@ -1451,7 +1457,7 @@ namespace King {
          * payload for the requested service and method.
          * @throws RuntimeException|ValidationException|MCPProtocolException
          */
-        public function request(string $service, string $method, string $payload, ?CancelToken $cancel = null): string {}
+        public function request(string $service, string $method, string $payload, ?CancelToken $cancel = null, ?array $options = null): string {}
 
         /**
          * Drain a source stream into the local MCP transfer store keyed by
@@ -1459,7 +1465,7 @@ namespace King {
          * @param resource $stream
          * @throws RuntimeException|ValidationException|MCPDataException
          */
-        public function uploadFromStream(string $service, string $method, string $streamIdentifier, $stream): void {}
+        public function uploadFromStream(string $service, string $method, string $streamIdentifier, $stream, ?array $options = null): void {}
 
         /**
          * Resolve a previously uploaded local MCP transfer by treating
@@ -1468,7 +1474,7 @@ namespace King {
          * @param resource $stream
          * @throws RuntimeException|ValidationException|MCPDataException
          */
-        public function downloadToStream(string $service, string $method, string $payload, $stream): void {}
+        public function downloadToStream(string $service, string $method, string $payload, $stream, ?array $options = null): void {}
 
         /** Close the local MCP connection state. */
         public function close(): void {}

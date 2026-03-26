@@ -15,17 +15,9 @@ try {
 }
 
 $pending = new King\CancelToken();
-
-try {
-    $mcp->request('svc', 'ping', '{}', $pending);
-    echo "no-exception-2\n";
-} catch (Throwable $e) {
-    var_dump(get_class($e));
-    var_dump($e->getMessage());
-}
+var_dump($mcp->request('svc', 'ping', '{}', $pending) === '{"res":"{}"}');
 ?>
 --EXPECT--
 string(21) "King\RuntimeException"
-string(64) "MCP::request() received a CancelToken that is already cancelled."
-string(25) "King\MCPProtocolException"
-string(81) "MCP::request() cancel tokens are not yet wired in the active runtime MCP runtime."
+string(66) "MCP::request() cancelled the active MCP operation via CancelToken."
+bool(true)

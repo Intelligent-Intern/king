@@ -22,6 +22,7 @@ void king_orchestrator_registry_shutdown(void);
 int king_orchestrator_register_tool(const char *name, size_t name_len, zval *config);
 zval *king_orchestrator_lookup_tool(const char *name, size_t name_len);
 int king_orchestrator_configure_logging(zval *config);
+size_t king_orchestrator_count_active_runs(void);
 void king_orchestrator_append_component_info(zval *configuration);
 int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value);
 int king_orchestrator_load_run_payload(

@@ -16,9 +16,9 @@
 
 ## Current Next Leaf
 
-- [ ] Add bounded concurrency, deadline, and cancellation propagation across MCP request/upload/download and orchestrator execution
-  why this blocks `8/10`: the control plane now crosses a real file-worker boundary, but it still lacks hard runtime control over fan-out, deadline exhaustion, and cancellation once work is in flight.
-  done when: the repo enforces explicit concurrency and deadline ceilings and proves cancellation propagation across MCP helpers plus both orchestrator execution backends.
+- [ ] Add a real cross-process cancellation channel for claimed file-worker orchestrator runs
+  why this blocks `8/10`: MCP helpers and orchestrator timeout/deadline ceilings are now enforced, and local concurrency is bounded, but live cancellation still stops at the process boundary because the file-worker backend can only reject `CancelToken` handoff honestly.
+  done when: controller-side cancel requests persist into claimed runs, workers honor them during execution and restart recovery, and PHPT coverage proves cancel-after-dispatch behavior without falling back to fake local-only semantics.
 
 ## Active Fronts
 
@@ -47,7 +47,11 @@
   completed: 2026-03-26
 - [x] Persist tool-registry and pipeline-run state across restart and recovery
   completed: 2026-03-26
-- [ ] Add bounded concurrency, deadline, and cancellation propagation across MCP request/upload/download and orchestrator execution
+- [x] Enforce timeout/deadline/cancel budgets across MCP request/upload/download helpers
+  completed: 2026-03-26
+- [x] Enforce timeout/deadline/max_concurrency controls across orchestrator run/dispatch and worker-side recovery, with honest rejection of unsupported live `CancelToken` propagation on `file_worker`
+  completed: 2026-03-26
+- [ ] Add a real cross-process cancellation channel for claimed file-worker orchestrator runs
 - [ ] Add a multi-process end-to-end harness for remote MCP/orchestrator topology instead of single-process local-only verification
 
 ### 3. Observability, autoscaling, and lifecycle operations
@@ -86,7 +90,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `288/288`
+  tests: `290/290`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -117,6 +121,9 @@
 - [x] Orchestrator execution now crosses a real file-worker backend boundary
   targeted PHPTs: `250`, `307`, `308`, `309`
   coverage: config-selectable `local` versus `file_worker` execution backend, persisted run dispatch, cross-process queue claim and execution, worker-side run snapshot readback, local-path refusal when the file-worker backend is active, and live `queued_run_count` introspection in component info.
+- [x] MCP and orchestrator runtime controls now enforce deadline/timeout ceilings and bounded local concurrency
+  targeted PHPTs: `157`, `234`, `235`, `236`, `309`, `310`, `311`
+  coverage: MCP request/upload/download `timeout_ms`/`deadline_ms`/`cancel` handling, OO and procedural parity, orchestrator `timeout_ms`/`overall_timeout_ms`/`deadline_ms`/`max_concurrency`, persisted worker-side control recovery, and explicit refusal to pretend that live `CancelToken` propagation already works across the `file_worker` boundary.
 
 ## How To Use This File
 

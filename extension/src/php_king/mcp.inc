@@ -15,6 +15,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_MCP_request, 0, 3, IS
     ZEND_ARG_TYPE_INFO(0, method, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO(0, payload, IS_STRING, 0)
     ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, cancel, King\\CancelToken, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_MCP_close, 0, 0, IS_VOID, 0)
@@ -25,6 +26,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_MCP_uploadFromStream,
     ZEND_ARG_TYPE_INFO(0, method, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO(0, streamIdentifier, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO(0, stream, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_MCP_downloadToStream, 0, 4, IS_VOID, 0)
@@ -32,7 +34,15 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_MCP_downloadToStream,
     ZEND_ARG_TYPE_INFO(0, method, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO(0, payload, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO(0, stream, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
+
+typedef struct _king_mcp_runtime_control {
+    zend_long timeout_ms;
+    uint64_t deadline_ms;
+    uint64_t started_at_ms;
+    zval *cancel_token;
+} king_mcp_runtime_control_t;
 
 static zend_result king_mcp_set_transfer_error(
     zend_class_entry *exception_ce,
@@ -45,6 +55,199 @@ static zend_result king_mcp_set_transfer_error(
     }
 
     return FAILURE;
+}
+
+static uint64_t king_monotonic_time_ms(void)
+{
+    return (uint64_t) (zend_hrtime() / 1000000ULL);
+}
+
+static zend_result king_mcp_validate_runtime_control_option(
+    zval *value,
+    const char *option_name,
+    zend_long *target,
+    const char *function_name,
+    zend_class_entry *exception_ce)
+{
+    char message[KING_ERR_LEN];
+
+    if (Z_TYPE_P(value) != IS_LONG) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() option '%s' must be provided as an integer.",
+            function_name,
+            option_name
+        );
+        return king_mcp_set_transfer_error(exception_ce, message);
+    }
+
+    if (Z_LVAL_P(value) <= 0) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() option '%s' must be > 0.",
+            function_name,
+            option_name
+        );
+        return king_mcp_set_transfer_error(exception_ce, message);
+    }
+
+    *target = Z_LVAL_P(value);
+    return SUCCESS;
+}
+
+static zend_result king_mcp_runtime_control_parse(
+    zval *options,
+    zval *explicit_cancel,
+    const char *function_name,
+    zend_class_entry *exception_ce,
+    king_mcp_runtime_control_t *control)
+{
+    zval *option_value;
+    zval *options_cancel = NULL;
+    char message[KING_ERR_LEN];
+    zend_long deadline_ms = 0;
+
+    if (control == NULL) {
+        return FAILURE;
+    }
+
+    control->timeout_ms = king_mcp_orchestrator_config.mcp_default_request_timeout_ms > 0
+        ? king_mcp_orchestrator_config.mcp_default_request_timeout_ms
+        : 0;
+    control->deadline_ms = 0;
+    control->started_at_ms = king_monotonic_time_ms();
+    control->cancel_token = NULL;
+
+    if (options != NULL && Z_TYPE_P(options) == IS_ARRAY) {
+        option_value = zend_hash_str_find(
+            Z_ARRVAL_P(options),
+            "timeout_ms",
+            sizeof("timeout_ms") - 1
+        );
+        if (option_value != NULL && Z_TYPE_P(option_value) != IS_NULL) {
+            if (king_mcp_validate_runtime_control_option(
+                    option_value,
+                    "timeout_ms",
+                    &control->timeout_ms,
+                    function_name,
+                    exception_ce
+                ) != SUCCESS) {
+                return FAILURE;
+            }
+        }
+
+        option_value = zend_hash_str_find(
+            Z_ARRVAL_P(options),
+            "deadline_ms",
+            sizeof("deadline_ms") - 1
+        );
+        if (option_value != NULL && Z_TYPE_P(option_value) != IS_NULL) {
+            if (king_mcp_validate_runtime_control_option(
+                    option_value,
+                    "deadline_ms",
+                    &deadline_ms,
+                    function_name,
+                    exception_ce
+                ) != SUCCESS) {
+                return FAILURE;
+            }
+            control->deadline_ms = (uint64_t) deadline_ms;
+        }
+
+        option_value = zend_hash_str_find(
+            Z_ARRVAL_P(options),
+            "cancel",
+            sizeof("cancel") - 1
+        );
+        if (option_value != NULL && Z_TYPE_P(option_value) != IS_NULL) {
+            if (
+                Z_TYPE_P(option_value) != IS_OBJECT
+                || !instanceof_function(Z_OBJCE_P(option_value), king_ce_cancel_token)
+            ) {
+                snprintf(
+                    message,
+                    sizeof(message),
+                    "%s() option 'cancel' must be null or King\\CancelToken.",
+                    function_name
+                );
+                return king_mcp_set_transfer_error(exception_ce, message);
+            }
+
+            options_cancel = option_value;
+        }
+    }
+
+    if (explicit_cancel != NULL && Z_TYPE_P(explicit_cancel) != IS_NULL) {
+        if (options_cancel != NULL) {
+            snprintf(
+                message,
+                sizeof(message),
+                "%s() must not receive a CancelToken in both the dedicated argument and options['cancel'].",
+                function_name
+            );
+            return king_mcp_set_transfer_error(exception_ce, message);
+        }
+
+        control->cancel_token = explicit_cancel;
+    } else {
+        control->cancel_token = options_cancel;
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_mcp_runtime_control_check(
+    king_mcp_runtime_control_t *control,
+    const char *function_name,
+    zend_class_entry *timeout_exception_ce,
+    zend_class_entry *cancel_exception_ce)
+{
+    char message[KING_ERR_LEN];
+    uint64_t now_ms;
+
+    if (control == NULL) {
+        return SUCCESS;
+    }
+
+    king_process_pending_interrupts();
+
+    if (king_transport_cancel_token_is_cancelled(control->cancel_token)) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() cancelled the active MCP operation via CancelToken.",
+            function_name
+        );
+        return king_mcp_set_transfer_error(cancel_exception_ce, message);
+    }
+
+    now_ms = king_monotonic_time_ms();
+    if (
+        control->timeout_ms > 0
+        && now_ms - control->started_at_ms >= (uint64_t) control->timeout_ms
+    ) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() exceeded the active MCP timeout budget.",
+            function_name
+        );
+        return king_mcp_set_transfer_error(timeout_exception_ce, message);
+    }
+
+    if (control->deadline_ms > 0 && now_ms >= control->deadline_ms) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() exceeded the active MCP deadline budget.",
+            function_name
+        );
+        return king_mcp_set_transfer_error(timeout_exception_ce, message);
+    }
+
+    return SUCCESS;
 }
 
 static zend_string *king_mcp_transfer_key_create(
@@ -206,7 +409,9 @@ static php_stream *king_mcp_fetch_stream_resource(zval *stream_zv, uint32_t arg_
 static zend_string *king_mcp_read_stream_payload(
     php_stream *stream,
     const char *function_name,
-    zend_class_entry *exception_ce)
+    zend_class_entry *timeout_exception_ce,
+    zend_class_entry *cancel_exception_ce,
+    king_mcp_runtime_control_t *control)
 {
     char chunk[8192];
     ssize_t bytes_read = 0;
@@ -214,7 +419,18 @@ static zend_string *king_mcp_read_stream_payload(
     zend_string *buffer = NULL;
     char message[KING_ERR_LEN];
 
+    if (king_mcp_runtime_control_check(control, function_name, timeout_exception_ce, cancel_exception_ce) != SUCCESS) {
+        return NULL;
+    }
+
     do {
+        if (king_mcp_runtime_control_check(control, function_name, timeout_exception_ce, cancel_exception_ce) != SUCCESS) {
+            if (buffer != NULL) {
+                zend_string_release(buffer);
+            }
+            return NULL;
+        }
+
         bytes_read = php_stream_read(stream, chunk, sizeof(chunk));
         if (bytes_read > 0) {
             size_t next_used = used + (size_t) bytes_read;
@@ -231,7 +447,7 @@ static zend_string *king_mcp_read_stream_payload(
                     function_name,
                     king_mcp_orchestrator_config.mcp_max_message_size_bytes
                 );
-                king_mcp_set_transfer_error(exception_ce, message);
+                king_mcp_set_transfer_error(cancel_exception_ce, message);
                 return NULL;
             }
 
@@ -256,7 +472,7 @@ static zend_string *king_mcp_read_stream_payload(
             "%s() failed while reading the source stream.",
             function_name
         );
-        king_mcp_set_transfer_error(exception_ce, message);
+        king_mcp_set_transfer_error(cancel_exception_ce, message);
         return NULL;
     }
 
@@ -274,13 +490,19 @@ static zend_result king_mcp_write_payload_to_stream(
     php_stream *stream,
     zend_string *payload,
     const char *function_name,
-    zend_class_entry *exception_ce)
+    zend_class_entry *timeout_exception_ce,
+    zend_class_entry *cancel_exception_ce,
+    king_mcp_runtime_control_t *control)
 {
     size_t offset = 0;
     ssize_t bytes_written = 0;
     char message[KING_ERR_LEN];
 
     while (offset < ZSTR_LEN(payload)) {
+        if (king_mcp_runtime_control_check(control, function_name, timeout_exception_ce, cancel_exception_ce) != SUCCESS) {
+            return FAILURE;
+        }
+
         bytes_written = php_stream_write(
             stream,
             ZSTR_VAL(payload) + offset,
@@ -294,7 +516,7 @@ static zend_result king_mcp_write_payload_to_stream(
                 "%s() failed while writing to the destination stream.",
                 function_name
             );
-            return king_mcp_set_transfer_error(exception_ce, message);
+            return king_mcp_set_transfer_error(cancel_exception_ce, message);
         }
 
         offset += (size_t) bytes_written;
@@ -382,41 +604,6 @@ static zend_result king_mcp_state_require_open(
     return FAILURE;
 }
 
-static zend_result king_mcp_validate_request_cancel(
-    zval *cancel,
-    const char *function_name)
-{
-    king_cancel_token_object *cancel_intern;
-    char message[KING_ERR_LEN];
-
-    if (cancel == NULL || Z_TYPE_P(cancel) == IS_NULL) {
-        return SUCCESS;
-    }
-
-    cancel_intern = php_king_cancel_token_obj_from_zend(Z_OBJ_P(cancel));
-    if (cancel_intern->cancelled) {
-        snprintf(
-            message,
-            sizeof(message),
-            "%s() received a CancelToken that is already cancelled.",
-            function_name
-        );
-        king_set_error(message);
-        zend_throw_exception_ex(king_ce_runtime_exception, 0, "%s", message);
-        return FAILURE;
-    }
-
-    snprintf(
-        message,
-        sizeof(message),
-        "%s() cancel tokens are not yet wired in the active runtime MCP runtime.",
-        function_name
-    );
-    king_set_error(message);
-    zend_throw_exception_ex(king_ce_mcp_protocol_error, 0, "%s", message);
-    return FAILURE;
-}
-
 #include "include/king_globals.h"
 
 PHP_FUNCTION(king_mcp_connect)
@@ -473,6 +660,7 @@ PHP_FUNCTION(king_mcp_request)
     zend_string *response_payload;
     zval *options = NULL;
     king_mcp_state *state;
+    king_mcp_runtime_control_t control;
 
     ZEND_PARSE_PARAMETERS_START(4, 5)
         Z_PARAM_ZVAL(connection)
@@ -495,7 +683,36 @@ PHP_FUNCTION(king_mcp_request)
         RETURN_FALSE;
     }
 
+    if (king_mcp_runtime_control_parse(
+            options,
+            NULL,
+            "king_mcp_request",
+            NULL,
+            &control
+        ) != SUCCESS) {
+        RETURN_FALSE;
+    }
+
+    if (king_mcp_runtime_control_check(
+            &control,
+            "king_mcp_request",
+            NULL,
+            NULL
+        ) != SUCCESS) {
+        RETURN_FALSE;
+    }
+
     if (king_mcp_request(state, service_name, method_name, request_payload_str, &response_payload) != SUCCESS) {
+        RETURN_FALSE;
+    }
+
+    if (king_mcp_runtime_control_check(
+            &control,
+            "king_mcp_request",
+            NULL,
+            NULL
+        ) != SUCCESS) {
+        zend_string_release(response_payload);
         RETURN_FALSE;
     }
 
@@ -532,16 +749,20 @@ PHP_FUNCTION(king_mcp_upload_from_stream)
     size_t method_name_len = 0;
     size_t stream_identifier_len = 0;
     zval *stream_zv;
+    zval *options = NULL;
     king_mcp_state *state;
     php_stream *stream;
     zend_string *payload;
+    king_mcp_runtime_control_t control;
 
-    ZEND_PARSE_PARAMETERS_START(5, 5)
+    ZEND_PARSE_PARAMETERS_START(5, 6)
         Z_PARAM_ZVAL(connection)
         Z_PARAM_STRING(service_name, service_name_len)
         Z_PARAM_STRING(method_name, method_name_len)
         Z_PARAM_STRING(stream_identifier, stream_identifier_len)
         Z_PARAM_ZVAL(stream_zv)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
 
     state = king_mcp_fetch_state(connection, 1);
@@ -575,8 +796,28 @@ PHP_FUNCTION(king_mcp_upload_from_stream)
         RETURN_THROWS();
     }
 
-    payload = king_mcp_read_stream_payload(stream, "king_mcp_upload_from_stream", NULL);
+    if (king_mcp_runtime_control_parse(
+            options,
+            NULL,
+            "king_mcp_upload_from_stream",
+            NULL,
+            &control
+        ) != SUCCESS) {
+        RETURN_FALSE;
+    }
+
+    payload = king_mcp_read_stream_payload(stream, "king_mcp_upload_from_stream", NULL, NULL, &control);
     if (payload == NULL) {
+        RETURN_FALSE;
+    }
+
+    if (king_mcp_runtime_control_check(
+            &control,
+            "king_mcp_upload_from_stream",
+            NULL,
+            NULL
+        ) != SUCCESS) {
+        zend_string_release(payload);
         RETURN_FALSE;
     }
 
@@ -592,6 +833,7 @@ PHP_FUNCTION(king_mcp_upload_from_stream)
         RETURN_FALSE;
     }
 
+    zend_string_release(payload);
     king_set_error("");
     RETURN_TRUE;
 }
@@ -606,16 +848,20 @@ PHP_FUNCTION(king_mcp_download_to_stream)
     size_t method_name_len = 0;
     size_t request_payload_len = 0;
     zval *stream_zv;
+    zval *options = NULL;
     king_mcp_state *state;
     php_stream *stream;
     zend_string *payload;
+    king_mcp_runtime_control_t control;
 
-    ZEND_PARSE_PARAMETERS_START(5, 5)
+    ZEND_PARSE_PARAMETERS_START(5, 6)
         Z_PARAM_ZVAL(connection)
         Z_PARAM_STRING(service_name, service_name_len)
         Z_PARAM_STRING(method_name, method_name_len)
         Z_PARAM_STRING(request_payload, request_payload_len)
         Z_PARAM_ZVAL(stream_zv)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
 
     state = king_mcp_fetch_state(connection, 1);
@@ -649,6 +895,25 @@ PHP_FUNCTION(king_mcp_download_to_stream)
         RETURN_THROWS();
     }
 
+    if (king_mcp_runtime_control_parse(
+            options,
+            NULL,
+            "king_mcp_download_to_stream",
+            NULL,
+            &control
+        ) != SUCCESS) {
+        RETURN_FALSE;
+    }
+
+    if (king_mcp_runtime_control_check(
+            &control,
+            "king_mcp_download_to_stream",
+            NULL,
+            NULL
+        ) != SUCCESS) {
+        RETURN_FALSE;
+    }
+
     payload = king_mcp_transfer_find(
         state,
         service_name,
@@ -667,12 +932,16 @@ PHP_FUNCTION(king_mcp_download_to_stream)
             stream,
             payload,
             "king_mcp_download_to_stream",
-            NULL
+            NULL,
+            NULL,
+            &control
         ) != SUCCESS
     ) {
+        zend_string_release(payload);
         RETURN_FALSE;
     }
 
+    zend_string_release(payload);
     king_set_error("");
     RETURN_TRUE;
 }
@@ -729,13 +998,16 @@ PHP_METHOD(King_MCP, request)
     king_mcp_state *state;
     zend_string *payload;
     zval *cancel = NULL;
+    zval *options = NULL;
+    king_mcp_runtime_control_t control;
 
-    ZEND_PARSE_PARAMETERS_START(3, 4)
+    ZEND_PARSE_PARAMETERS_START(3, 5)
         Z_PARAM_STRING(service, service_len)
         Z_PARAM_STRING(method, method_len)
         Z_PARAM_STR(payload)
         Z_PARAM_OPTIONAL
         Z_PARAM_OBJECT_OF_CLASS_OR_NULL(cancel, king_ce_cancel_token)
+        Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
 
     state = king_mcp_object_fetch_state(ZEND_THIS, "MCP::request");
@@ -747,11 +1019,36 @@ PHP_METHOD(King_MCP, request)
         RETURN_THROWS();
     }
 
-    if (king_mcp_validate_request_cancel(cancel, "MCP::request") != SUCCESS) {
+    if (king_mcp_runtime_control_parse(
+            options,
+            cancel,
+            "MCP::request",
+            king_ce_validation_exception,
+            &control
+        ) != SUCCESS) {
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_runtime_control_check(
+            &control,
+            "MCP::request",
+            king_ce_mcp_timeout,
+            king_ce_runtime_exception
+        ) != SUCCESS) {
         RETURN_THROWS();
     }
 
     if (king_mcp_request(state, service, method, payload, &response_payload) != SUCCESS) {
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_runtime_control_check(
+            &control,
+            "MCP::request",
+            king_ce_mcp_timeout,
+            king_ce_runtime_exception
+        ) != SUCCESS) {
+        zend_string_release(response_payload);
         RETURN_THROWS();
     }
 
@@ -783,15 +1080,19 @@ PHP_METHOD(King_MCP, uploadFromStream)
     size_t method_len = 0;
     size_t stream_identifier_len = 0;
     zval *stream_zv;
+    zval *options = NULL;
     king_mcp_state *state;
     php_stream *stream;
     zend_string *payload;
+    king_mcp_runtime_control_t control;
 
-    ZEND_PARSE_PARAMETERS_START(4, 4)
+    ZEND_PARSE_PARAMETERS_START(4, 5)
         Z_PARAM_STRING(service, service_len)
         Z_PARAM_STRING(method, method_len)
         Z_PARAM_STRING(stream_identifier, stream_identifier_len)
         Z_PARAM_ZVAL(stream_zv)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
 
     state = king_mcp_object_fetch_state(ZEND_THIS, "MCP::uploadFromStream");
@@ -824,12 +1125,34 @@ PHP_METHOD(King_MCP, uploadFromStream)
         RETURN_THROWS();
     }
 
+    if (king_mcp_runtime_control_parse(
+            options,
+            NULL,
+            "MCP::uploadFromStream",
+            king_ce_validation_exception,
+            &control
+        ) != SUCCESS) {
+        RETURN_THROWS();
+    }
+
     payload = king_mcp_read_stream_payload(
         stream,
         "MCP::uploadFromStream",
-        king_ce_mcp_data_error
+        king_ce_mcp_timeout,
+        king_ce_mcp_data_error,
+        &control
     );
     if (payload == NULL) {
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_runtime_control_check(
+            &control,
+            "MCP::uploadFromStream",
+            king_ce_mcp_timeout,
+            king_ce_mcp_data_error
+        ) != SUCCESS) {
+        zend_string_release(payload);
         RETURN_THROWS();
     }
 
@@ -850,6 +1173,7 @@ PHP_METHOD(King_MCP, uploadFromStream)
         RETURN_THROWS();
     }
 
+    zend_string_release(payload);
     king_set_error("");
 }
 
@@ -861,15 +1185,19 @@ PHP_METHOD(King_MCP, downloadToStream)
     size_t method_len = 0;
     zend_string *request_payload;
     zval *stream_zv;
+    zval *options = NULL;
     king_mcp_state *state;
     php_stream *stream;
     zend_string *payload;
+    king_mcp_runtime_control_t control;
 
-    ZEND_PARSE_PARAMETERS_START(4, 4)
+    ZEND_PARSE_PARAMETERS_START(4, 5)
         Z_PARAM_STRING(service, service_len)
         Z_PARAM_STRING(method, method_len)
         Z_PARAM_STR(request_payload)
         Z_PARAM_ZVAL(stream_zv)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
 
     state = king_mcp_object_fetch_state(ZEND_THIS, "MCP::downloadToStream");
@@ -902,6 +1230,25 @@ PHP_METHOD(King_MCP, downloadToStream)
         RETURN_THROWS();
     }
 
+    if (king_mcp_runtime_control_parse(
+            options,
+            NULL,
+            "MCP::downloadToStream",
+            king_ce_validation_exception,
+            &control
+        ) != SUCCESS) {
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_runtime_control_check(
+            &control,
+            "MCP::downloadToStream",
+            king_ce_mcp_timeout,
+            king_ce_mcp_data_error
+        ) != SUCCESS) {
+        RETURN_THROWS();
+    }
+
     payload = king_mcp_transfer_find(
         state,
         service,
@@ -925,12 +1272,16 @@ PHP_METHOD(King_MCP, downloadToStream)
             stream,
             payload,
             "MCP::downloadToStream",
-            king_ce_mcp_data_error
+            king_ce_mcp_timeout,
+            king_ce_mcp_data_error,
+            &control
         ) != SUCCESS
     ) {
+        zend_string_release(payload);
         RETURN_THROWS();
     }
 
+    zend_string_release(payload);
     king_set_error("");
 }
 

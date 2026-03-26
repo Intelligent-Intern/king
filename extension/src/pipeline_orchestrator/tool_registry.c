@@ -175,7 +175,7 @@ static zend_long king_orchestrator_extract_run_sequence(const zend_string *run_i
     return ZEND_STRTOL(raw, NULL, 10);
 }
 
-static size_t king_orchestrator_count_active_runs(void)
+size_t king_orchestrator_count_active_runs(void)
 {
     zval *entry;
     size_t active_runs = 0;
