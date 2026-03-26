@@ -116,7 +116,7 @@ Repository facts from the current tree:
 - `extension/src`: 177 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 168 headers
-- `extension/tests`: 296 PHPT files
+- `extension/tests`: 297 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently verified regression baseline is:
@@ -125,7 +125,7 @@ The currently verified regression baseline is:
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
 - extension load smoke: passing
-- `./scripts/test-extension.sh`: `296/296` PHPT tests passing
+- `./scripts/test-extension.sh`: `297/297` PHPT tests passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing (`124` functions, `43` classes, `48` declared public methods)
 - `./scripts/smoke-profile.sh release`: passing
@@ -144,6 +144,7 @@ The currently verified regression baseline is:
 - `./scripts/build-profile.sh ubsan`: passing
 - `./scripts/smoke-profile.sh ubsan`: passing
 - targeted HTTP/3 runtime verification (`190`, `191`, `204`, `232`): passing
+- targeted HTTP/1 chunked oversized-size hardening verification (`158`, `159`, `169`, `318`): passing
 - targeted orchestrator persistence and backend-boundary verification (`250`, `294`, `307`, `308`, `309`): passing
 - targeted MCP/orchestrator runtime-control verification (`157`, `234`, `235`, `236`, `309`, `310`, `311`): passing
 - targeted MCP repeated-upload memory-regression verification (`234`, `235`, `317`): passing

@@ -98,7 +98,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `296/296`
+  tests: `297/297`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -138,6 +138,9 @@
 - [x] MCP upload helpers now prove repeated stream-upload teardown does not accumulate per-call payload ownership
   targeted PHPTs: `234`, `235`, `317`
   coverage: procedural and OO MCP upload paths both release caller-owned payload buffers after persistence, repeated connection teardown stays bounded under a low `memory_limit`, and the transfer registry no longer duplicates persisted transfer keys as zval string payloads.
+- [x] HTTP/1 chunked parsing now rejects oversized chunk-size lines before CRLF accounting can overflow
+  targeted PHPTs: `158`, `159`, `169`, `318`
+  coverage: direct HTTP/1 requests, dispatcher requests, and response_stream mode now reject SIZE_MAX-style chunk-size lines as oversized during parse, so chunk payload bounds checks and terminator indexing never execute on wrapped `chunk_size + 2` arithmetic.
 - [x] File-worker orchestrator runs now honor persisted cross-process cancellation after claim and during stale-claim recovery
   targeted PHPTs: `309`, `311`, `314`
   coverage: controller-side `king_pipeline_orchestrator_cancel_run()` requests persist into claimed runs, workers convert live and recovered claimed jobs into durable `cancelled` snapshots instead of fatal-only exits, and stale `claimed-*.job` recovery now stays cancellable across restart-safe queue handoff.

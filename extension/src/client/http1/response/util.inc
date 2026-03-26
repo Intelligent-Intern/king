@@ -125,6 +125,20 @@ static zend_result king_http1_parse_chunk_size(
         return FAILURE;
     }
 
+    /*
+     * Downstream chunk parsing always accounts for the terminating CRLF
+     * after the payload. Reject sizes that would overflow chunk_size + 2
+     * before any bounds checks, cursor indexing, or buffer copies.
+     */
+    if (value > (((size_t) -1) - 2)) {
+        king_http1_throw(
+            king_ce_protocol_exception,
+            "%s() received an oversized HTTP/1 chunk size.",
+            function_name
+        );
+        return FAILURE;
+    }
+
     *chunk_size = value;
     return SUCCESS;
 }
