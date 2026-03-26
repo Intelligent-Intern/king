@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate OTLP traces and logs export against real collectors, including non-2xx, timeout, size-limit, and outage-recovery behavior.
+- [ ] Prove telemetry export semantics under sustained degraded conditions, including replay or explicit non-replay guarantees after restart.
 
 ## Active Executable Items
 
@@ -29,21 +29,18 @@
 
 ### 2. Observability and Fleet Operations
 
-1. [ ] Validate OTLP traces and logs export against real collectors, including non-2xx, timeout, size-limit, and outage-recovery behavior.
-   done when: all exported telemetry signal types are verified against honest collectors instead of metrics-only local coverage.
-
-2. [ ] Prove telemetry export semantics under sustained degraded conditions, including replay or explicit non-replay guarantees after restart.
+1. [ ] Prove telemetry export semantics under sustained degraded conditions, including replay or explicit non-replay guarantees after restart.
    done when: long-haul exporter outage and recovery do not leave delivery semantics ambiguous.
 
 ### 3. Build, Release, and Compatibility Confidence
 
-4. [ ] Turn the QUIC backend bootstrap into a deterministic pinned dependency path.
+2. [ ] Turn the QUIC backend bootstrap into a deterministic pinned dependency path.
    done when: `quiche` and related build inputs rehydrate reproducibly on clean hosts without ad hoc branch fallbacks or local resurrection tricks.
 
-5. [ ] Add clean-host and published-container install/smoke matrix coverage across supported PHP and API combinations, then lock upgrade/downgrade release gates behind it.
+3. [ ] Add clean-host and published-container install/smoke matrix coverage across supported PHP and API combinations, then lock upgrade/downgrade release gates behind it.
    done when: fresh-host package installs and published images are verified in CI instead of only local source builds.
 
-6. [ ] Add long-duration ASan, UBSan, and leak-oriented soak gates with archived diagnostics.
+4. [ ] Add long-duration ASan, UBSan, and leak-oriented soak gates with archived diagnostics.
    done when: sanitizer and soak regressions produce retained failure artifacts and block release-grade claims automatically.
 
 ## Notes
@@ -54,6 +51,7 @@
 - Object-store v1 is now explicitly frozen to the honest `local_fs` contract. `memory_cache` is only a compatibility alias to the same local backend, and `distributed` plus cloud adapters remain explicitly simulated/unavailable instead of implying a stronger non-local storage claim.
 - MCP request, upload, and download now talk to a real TCP host/port remote peer with propagated timeout, deadline, and cancellation controls, plus verified IPv4 and IPv6 peer targeting, 1 MiB payload roundtrips, parallel-transfer backpressure isolation, explicit single-flight reentry guards per connection handle, same-host partial-failure recovery, persisted remote-state restart recovery, and an explicit `topology_scope=tcp_host_port_peer` contract in system component info; the remaining MCP gaps are richer distributed failure semantics and broader multi-host validation depth, not a false same-host-only transport claim.
 - Pipeline orchestration now has three honest backend scopes: `local_in_process`, `same_host_file_worker`, and `tcp_host_port_execution_peer`. The new `remote_peer` backend executes runs over a real TCP host/port worker boundary, persists local run snapshots, and records both successful and failed remote execution outcomes. Remaining orchestrator work is deeper distributed execution semantics, restart continuation, richer error classification, observability depth, and compensation/rollback where publicly claimed.
+- OTLP metrics, traces, and logs now share the same bounded batch/retry path and are validated against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices. The remaining telemetry work is long-haul degraded behavior, restart/replay semantics, richer delivery guarantees, and stronger diagnostics rather than metrics-only collector coverage gaps.
 - Hetzner autoscaling now rolls stale `provisioned` and `registered` nodes back before the next monitor decision when bootstrap, registration, or readiness stall past `idle_node_timeout_sec`, and it reports provider-side delete failures explicitly instead of silently wedging pending capacity under degraded telemetry or provider conditions.
 - Everything else from `READYNESS_TRACKER.md` is either already verified, derivative of these leaves, or still too broad to be the active queue.
 - If an item is not listed here, it is not the current repo-local priority.

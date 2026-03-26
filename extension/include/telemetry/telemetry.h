@@ -175,6 +175,8 @@ void king_telemetry_free_batch(king_telemetry_batch_t *batch);
 int king_telemetry_queue_batch(king_telemetry_batch_t *batch);
 void king_telemetry_cleanup_export_queue(void);
 int king_telemetry_process_export_queue(void);
+zend_bool king_telemetry_has_pending_signals(void);
+void king_telemetry_append_pending_signals(king_telemetry_batch_t *batch);
 
 /* OTLP export functions */
 int king_telemetry_export_metrics_otlp(zval *metrics);

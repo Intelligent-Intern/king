@@ -8,6 +8,7 @@ Status note:
 - Unchecked boxes are still open, intentionally fenced out of the current v1 slice, or broader than the proof that exists in this repository today.
 - This file is the long-form closure tracker, not the active execution queue. `ISSUES.md` stays the narrow working backlog.
 - Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, and real TCP host/port `remote_peer` execution with persisted success/failure snapshots are now verified; the remaining open boxes below are the broader continuation, observability, and multi-host slices.
+- Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path and are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices; the remaining open boxes below are long-haul delivery semantics, restart replay, and richer diagnostics.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -262,13 +263,13 @@ Status note:
 - [ ] Validate OTLP metrics export fully against real collectors
 - [ ] Validate OTLP traces export fully against real collectors
 - [ ] Validate OTLP logs export fully against real collectors
-- [ ] Validate success / failure / retry behavior against real endpoints
+- [x] Validate success / failure / retry behavior against real endpoints
 - [ ] Correctly handle response-size / request-size limits
-- [ ] Correctly handle non-2xx responses
-- [ ] Correctly handle transient network failures
+- [x] Correctly handle non-2xx responses
+- [x] Correctly handle transient network failures
 - [ ] Correctly handle permanent network failures
-- [ ] Correctly handle export timeout behavior
-- [ ] Implement queue replay after collector outage
+- [x] Correctly handle export timeout behavior
+- [x] Implement queue replay after collector outage
 - [ ] Implement queue replay after process restart where required
 - [ ] Define export ordering and idempotency correctly
 - [ ] Finalize batch formation behavior

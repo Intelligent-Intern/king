@@ -178,43 +178,55 @@ PHP_FUNCTION(king_telemetry_get_metrics)
 
 PHP_FUNCTION(king_telemetry_flush)
 {
+    zend_bool has_metrics = 0;
+    zend_bool has_pending_signals = 0;
+
     ZEND_PARSE_PARAMETERS_NONE();
-    
-    if (king_metrics_initialized && zend_hash_num_elements(&king_metrics_registry) > 0) {
+
+    has_metrics = king_metrics_initialized && zend_hash_num_elements(&king_metrics_registry) > 0;
+    has_pending_signals = king_telemetry_has_pending_signals();
+
+    if (has_metrics || has_pending_signals) {
         /* Create export batch with current metrics */
         king_telemetry_batch_t *batch = king_telemetry_create_batch();
-        
-        /* Copy all metrics to batch */
-        king_metric_data_t *metric;
-        zend_string *key;
-        zval *entry;
-        
-        ZEND_HASH_FOREACH_STR_KEY_VAL(&king_metrics_registry, key, entry) {
-            metric = Z_PTR_P(entry);
-            zval m_info;
-            array_init(&m_info);
-            
-            add_assoc_string(&m_info, "name", metric->metric_name);
-            add_assoc_double(&m_info, "value", metric->value);
-            add_assoc_long(&m_info, "timestamp", (zend_long)metric->timestamp);
-            add_assoc_long(&m_info, "type", (zend_long)metric->metric_type);
-            
-            /* Add labels if present */
-            if (Z_TYPE(metric->labels) == IS_ARRAY) {
-                Z_ADDREF(metric->labels);
-                add_assoc_zval(&m_info, "labels", &metric->labels);
-            }
-            
-            add_next_index_zval(&batch->metrics, &m_info);
-        } ZEND_HASH_FOREACH_END();
-        
+
+        if (has_metrics) {
+            /* Copy all metrics to batch */
+            king_metric_data_t *metric;
+            zend_string *key;
+            zval *entry;
+
+            ZEND_HASH_FOREACH_STR_KEY_VAL(&king_metrics_registry, key, entry) {
+                metric = Z_PTR_P(entry);
+                zval m_info;
+                array_init(&m_info);
+
+                add_assoc_string(&m_info, "name", metric->metric_name);
+                add_assoc_double(&m_info, "value", metric->value);
+                add_assoc_long(&m_info, "timestamp", (zend_long)metric->timestamp);
+                add_assoc_long(&m_info, "type", (zend_long)metric->metric_type);
+
+                /* Add labels if present */
+                if (Z_TYPE(metric->labels) == IS_ARRAY) {
+                    Z_ADDREF(metric->labels);
+                    add_assoc_zval(&m_info, "labels", &metric->labels);
+                }
+
+                add_next_index_zval(&batch->metrics, &m_info);
+            } ZEND_HASH_FOREACH_END();
+        }
+
+        king_telemetry_append_pending_signals(batch);
+
         /* Queue batch for export or drop it when the retry queue is saturated. */
         if (king_telemetry_queue_batch(batch) != SUCCESS) {
             king_telemetry_free_batch(batch);
         }
-        
+
         /* Clear local registry after queuing */
-        zend_hash_clean(&king_metrics_registry);
+        if (has_metrics) {
+            zend_hash_clean(&king_metrics_registry);
+        }
 
         king_telemetry_flush_count++;
     }

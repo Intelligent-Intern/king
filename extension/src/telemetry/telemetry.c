@@ -17,6 +17,12 @@
 static king_telemetry_config_t king_telemetry_runtime_config;
 static bool king_telemetry_system_initialized = false;
 static king_trace_context_t *king_current_span = NULL;
+static zval king_telemetry_pending_spans;
+static zval king_telemetry_pending_logs;
+static bool king_telemetry_pending_buffers_initialized = false;
+
+#define KING_TELEMETRY_HTTP_TIMEOUT_FALLBACK_MS 10000U
+#define KING_TELEMETRY_MAX_RESPONSE_SIZE (1024 * 1024) /* 1 MiB */
 
 /* Export queue for batched telemetry data */
 king_telemetry_batch_t *king_telemetry_export_queue_head = NULL;
@@ -45,6 +51,118 @@ static uint32_t king_telemetry_runtime_max_queue_size(void)
     return king_telemetry_default_max_queue_size();
 }
 
+static void king_telemetry_pending_buffers_ensure(void)
+{
+    if (king_telemetry_pending_buffers_initialized) {
+        return;
+    }
+
+    array_init(&king_telemetry_pending_spans);
+    array_init(&king_telemetry_pending_logs);
+    king_telemetry_pending_buffers_initialized = true;
+}
+
+static void king_telemetry_pending_buffers_destroy(void)
+{
+    if (!king_telemetry_pending_buffers_initialized) {
+        return;
+    }
+
+    zval_ptr_dtor(&king_telemetry_pending_spans);
+    zval_ptr_dtor(&king_telemetry_pending_logs);
+    ZVAL_UNDEF(&king_telemetry_pending_spans);
+    ZVAL_UNDEF(&king_telemetry_pending_logs);
+    king_telemetry_pending_buffers_initialized = false;
+}
+
+static zend_bool king_telemetry_buffer_has_entries(zval *buffer)
+{
+    return buffer != NULL
+        && Z_TYPE_P(buffer) == IS_ARRAY
+        && zend_hash_num_elements(Z_ARRVAL_P(buffer)) > 0;
+}
+
+static void king_telemetry_buffer_move_entries(zval *target, zval *source)
+{
+    zval *entry;
+
+    if (target == NULL || source == NULL) {
+        return;
+    }
+    if (Z_TYPE_P(target) != IS_ARRAY || Z_TYPE_P(source) != IS_ARRAY) {
+        return;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(source), entry) {
+        Z_TRY_ADDREF_P(entry);
+        add_next_index_zval(target, entry);
+    } ZEND_HASH_FOREACH_END();
+
+    zend_hash_clean(Z_ARRVAL_P(source));
+}
+
+static const char *king_telemetry_level_name(king_telemetry_level_t level)
+{
+    switch (level) {
+        case KING_TELEMETRY_LEVEL_ERROR:
+            return "error";
+        case KING_TELEMETRY_LEVEL_WARN:
+            return "warn";
+        case KING_TELEMETRY_LEVEL_DEBUG:
+            return "debug";
+        case KING_TELEMETRY_LEVEL_TRACE:
+            return "trace";
+        case KING_TELEMETRY_LEVEL_INFO:
+        case KING_TELEMETRY_LEVEL_NONE:
+        default:
+            return "info";
+    }
+}
+
+static uint32_t king_telemetry_runtime_timeout_ms(void)
+{
+    if (king_telemetry_runtime_config.batch_timeout_ms > 0) {
+        return king_telemetry_runtime_config.batch_timeout_ms;
+    }
+    if (king_open_telemetry_config.exporter_timeout_ms > 0
+        && king_open_telemetry_config.exporter_timeout_ms <= UINT32_MAX) {
+        return (uint32_t) king_open_telemetry_config.exporter_timeout_ms;
+    }
+
+    return KING_TELEMETRY_HTTP_TIMEOUT_FALLBACK_MS;
+}
+
+static void king_telemetry_json_append_zval_as_string(smart_str *buffer, zval *value)
+{
+    zend_string *str;
+
+    if (buffer == NULL || value == NULL) {
+        return;
+    }
+
+    str = zval_get_string(value);
+    smart_str_append_escaped(buffer, ZSTR_VAL(str), ZSTR_LEN(str));
+    zend_string_release(str);
+}
+
+static zend_bool king_telemetry_export_array_succeeded(int result, zval *payload)
+{
+    return result == SUCCESS
+        && payload != NULL
+        && Z_TYPE_P(payload) == IS_ARRAY
+        && zend_hash_num_elements(Z_ARRVAL_P(payload)) > 0;
+}
+
+static zend_bool king_telemetry_batch_signal_complete(zval *payload, int result)
+{
+    if (!king_telemetry_export_array_succeeded(result, payload)) {
+        return 0;
+    }
+
+    zend_hash_clean(Z_ARRVAL_P(payload));
+    return 1;
+}
+
 static void king_telemetry_span_free(king_trace_context_t *span)
 {
     if (span) {
@@ -53,6 +171,88 @@ static void king_telemetry_span_free(king_trace_context_t *span)
         zval_ptr_dtor(&span->links);
         efree(span);
     }
+}
+
+static king_telemetry_level_t king_telemetry_level_from_string(const char *level_str)
+{
+    if (level_str == NULL) {
+        return KING_TELEMETRY_LEVEL_INFO;
+    }
+
+    if (strcmp(level_str, "error") == 0) {
+        return KING_TELEMETRY_LEVEL_ERROR;
+    }
+    if (strcmp(level_str, "warn") == 0 || strcmp(level_str, "warning") == 0) {
+        return KING_TELEMETRY_LEVEL_WARN;
+    }
+    if (strcmp(level_str, "debug") == 0) {
+        return KING_TELEMETRY_LEVEL_DEBUG;
+    }
+    if (strcmp(level_str, "trace") == 0) {
+        return KING_TELEMETRY_LEVEL_TRACE;
+    }
+
+    return KING_TELEMETRY_LEVEL_INFO;
+}
+
+static zend_long king_telemetry_span_kind_to_otlp_kind(zval *kind_zval)
+{
+    zend_long kind;
+
+    if (kind_zval == NULL) {
+        return 1;
+    }
+
+    kind = zval_get_long(kind_zval);
+    switch ((king_span_kind_t) kind) {
+        case KING_SPAN_KIND_SERVER:
+            return 2;
+        case KING_SPAN_KIND_CLIENT:
+            return 3;
+        case KING_SPAN_KIND_PRODUCER:
+            return 4;
+        case KING_SPAN_KIND_CONSUMER:
+            return 5;
+        case KING_SPAN_KIND_INTERNAL:
+        default:
+            return 1;
+    }
+}
+
+static void king_telemetry_json_append_attributes(
+    smart_str *json_payload,
+    zval *attributes_zval)
+{
+    zval *attr_value;
+    zend_string *attr_key;
+    int first_attr = 1;
+
+    if (json_payload == NULL
+        || attributes_zval == NULL
+        || Z_TYPE_P(attributes_zval) != IS_ARRAY) {
+        return;
+    }
+
+    smart_str_appends(json_payload, ",\"attributes\":[");
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(attributes_zval), attr_key, attr_value) {
+        if (attr_key == NULL) {
+            continue;
+        }
+
+        if (!first_attr) {
+            smart_str_appends(json_payload, ",");
+        }
+        first_attr = 0;
+
+        smart_str_appends(json_payload, "{\"key\":\"");
+        smart_str_append_escaped(json_payload, ZSTR_VAL(attr_key), ZSTR_LEN(attr_key));
+        smart_str_appends(json_payload, "\",\"value\":{\"stringValue\":\"");
+        king_telemetry_json_append_zval_as_string(json_payload, attr_value);
+        smart_str_appends(json_payload, "\"}}");
+    } ZEND_HASH_FOREACH_END();
+
+    smart_str_appends(json_payload, "]");
 }
 
 static void king_telemetry_config_apply_inline_array(
@@ -124,6 +324,21 @@ static void king_telemetry_config_apply_inline_array(
             config->max_queue_size = queue_limit > UINT32_MAX
                 ? UINT32_MAX
                 : (uint32_t) queue_limit;
+        }
+    }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "exporter_timeout_ms",
+        sizeof("exporter_timeout_ms") - 1
+    );
+    if (value != NULL) {
+        zend_long timeout_ms = zval_get_long(value);
+
+        if (timeout_ms > 0) {
+            config->batch_timeout_ms = timeout_ms > UINT32_MAX
+                ? UINT32_MAX
+                : (uint32_t) timeout_ms;
         }
     }
 }
@@ -229,6 +444,25 @@ void king_telemetry_cleanup_export_queue(void)
     }
 }
 
+zend_bool king_telemetry_has_pending_signals(void)
+{
+    king_telemetry_pending_buffers_ensure();
+
+    return king_telemetry_buffer_has_entries(&king_telemetry_pending_spans)
+        || king_telemetry_buffer_has_entries(&king_telemetry_pending_logs);
+}
+
+void king_telemetry_append_pending_signals(king_telemetry_batch_t *batch)
+{
+    if (batch == NULL) {
+        return;
+    }
+
+    king_telemetry_pending_buffers_ensure();
+    king_telemetry_buffer_move_entries(&batch->spans, &king_telemetry_pending_spans);
+    king_telemetry_buffer_move_entries(&batch->logs, &king_telemetry_pending_logs);
+}
+
 int king_telemetry_process_export_queue(void)
 {
     king_telemetry_batch_t *batch;
@@ -241,6 +475,7 @@ int king_telemetry_process_export_queue(void)
         /* Export metrics if present */
         if (zend_hash_num_elements(Z_ARRVAL(batch->metrics)) > 0) {
             if (king_telemetry_export_metrics_otlp(&batch->metrics) == SUCCESS) {
+                zend_hash_clean(Z_ARRVAL(batch->metrics));
                 total_success++;
             } else {
                 king_telemetry_export_failure_count++;
@@ -250,6 +485,7 @@ int king_telemetry_process_export_queue(void)
         /* Export spans if present */
         if (zend_hash_num_elements(Z_ARRVAL(batch->spans)) > 0) {
             if (king_telemetry_export_spans_otlp(&batch->spans) == SUCCESS) {
+                zend_hash_clean(Z_ARRVAL(batch->spans));
                 total_success++;
             } else {
                 king_telemetry_export_failure_count++;
@@ -259,6 +495,7 @@ int king_telemetry_process_export_queue(void)
         /* Export logs if present */
         if (zend_hash_num_elements(Z_ARRVAL(batch->logs)) > 0) {
             if (king_telemetry_export_logs_otlp(&batch->logs) == SUCCESS) {
+                zend_hash_clean(Z_ARRVAL(batch->logs));
                 total_success++;
             } else {
                 king_telemetry_export_failure_count++;
@@ -280,6 +517,7 @@ int king_telemetry_init_system(king_telemetry_config_t *config)
         if (king_telemetry_runtime_config.max_queue_size == 0) {
             king_telemetry_runtime_config.max_queue_size = king_telemetry_default_max_queue_size();
         }
+        king_telemetry_pending_buffers_ensure();
         king_telemetry_system_initialized = true;
     }
     return SUCCESS;
@@ -298,6 +536,8 @@ void king_telemetry_shutdown_system(void)
     while ((batch = king_telemetry_dequeue_batch()) != NULL) {
         king_telemetry_free_batch(batch);
     }
+
+    king_telemetry_pending_buffers_destroy();
 }
 
 char* king_telemetry_generate_trace_id(void)
@@ -345,7 +585,7 @@ int king_telemetry_finish_span(king_trace_context_t *span_context)
 {
     if (span_context) {
         span_context->end_time = time(NULL);
-        /* In a real build, we'd export/queue the span here */
+        king_telemetry_pending_buffers_ensure();
         return SUCCESS;
     }
     return FAILURE;
@@ -354,6 +594,7 @@ int king_telemetry_finish_span(king_trace_context_t *span_context)
 int king_telemetry_log_internal(king_telemetry_level_t level, const char *logger_name, const char *message, zval *attributes)
 {
     king_log_record_t log;
+    zval log_entry;
     memset(&log, 0, sizeof(log));
     
     log.timestamp = time(NULL);
@@ -365,8 +606,26 @@ int king_telemetry_log_internal(king_telemetry_level_t level, const char *logger
         strncpy(log.trace_id, king_current_span->trace_id, 32);
         strncpy(log.span_id, king_current_span->span_id, 16);
     }
-    
-    /* Simulate logging output */
+
+    king_telemetry_pending_buffers_ensure();
+    array_init(&log_entry);
+    add_assoc_string(&log_entry, "logger_name", log.logger_name);
+    add_assoc_string(&log_entry, "message", log.message);
+    add_assoc_string(&log_entry, "level", (char *) king_telemetry_level_name(level));
+    add_assoc_long(&log_entry, "timestamp", (zend_long) log.timestamp);
+    if (log.trace_id[0] != '\0') {
+        add_assoc_string(&log_entry, "trace_id", log.trace_id);
+    }
+    if (log.span_id[0] != '\0') {
+        add_assoc_string(&log_entry, "span_id", log.span_id);
+    }
+    if (attributes != NULL && Z_TYPE_P(attributes) == IS_ARRAY) {
+        zval attrs_copy;
+        ZVAL_COPY(&attrs_copy, attributes);
+        add_assoc_zval(&log_entry, "attributes", &attrs_copy);
+    }
+
+    add_next_index_zval(&king_telemetry_pending_logs, &log_entry);
     return SUCCESS;
 }
 
@@ -444,7 +703,39 @@ PHP_FUNCTION(king_telemetry_end_span)
     ZEND_PARSE_PARAMETERS_END();
 
     if (king_current_span && strcmp(king_current_span->span_id, span_id) == 0) {
+        zval span_entry;
+
+        if (final_attrs != NULL && Z_TYPE_P(final_attrs) == IS_ARRAY) {
+            zend_string *attr_key;
+            zval *attr_value;
+
+            ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(final_attrs), attr_key, attr_value) {
+                if (attr_key == NULL) {
+                    continue;
+                }
+                Z_TRY_ADDREF_P(attr_value);
+                zend_hash_update(Z_ARRVAL(king_current_span->attributes), attr_key, attr_value);
+            } ZEND_HASH_FOREACH_END();
+        }
+
         king_telemetry_finish_span(king_current_span);
+        array_init(&span_entry);
+        add_assoc_string(&span_entry, "name", king_current_span->operation_name);
+        add_assoc_string(&span_entry, "trace_id", king_current_span->trace_id);
+        add_assoc_string(&span_entry, "span_id", king_current_span->span_id);
+        if (king_current_span->parent_span_id[0] != '\0') {
+            add_assoc_string(&span_entry, "parent_span_id", king_current_span->parent_span_id);
+        }
+        add_assoc_long(&span_entry, "start_time", (zend_long) king_current_span->start_time);
+        add_assoc_long(&span_entry, "end_time", (zend_long) king_current_span->end_time);
+        add_assoc_long(&span_entry, "kind", (zend_long) king_current_span->span_kind);
+        if (Z_TYPE(king_current_span->attributes) == IS_ARRAY) {
+            zval attrs_copy;
+            ZVAL_COPY(&attrs_copy, &king_current_span->attributes);
+            add_assoc_zval(&span_entry, "attributes", &attrs_copy);
+        }
+        king_telemetry_pending_buffers_ensure();
+        add_next_index_zval(&king_telemetry_pending_spans, &span_entry);
         king_telemetry_span_free(king_current_span);
         king_current_span = NULL;
         RETURN_TRUE;
@@ -466,14 +757,11 @@ PHP_FUNCTION(king_telemetry_log)
         Z_PARAM_ARRAY_OR_NULL(attrs)
     ZEND_PARSE_PARAMETERS_END();
 
-    king_telemetry_log_internal(KING_TELEMETRY_LEVEL_INFO, "php-king", msg, attrs);
+    king_telemetry_log_internal(king_telemetry_level_from_string(level_str), "php-king", msg, attrs);
     RETURN_TRUE;
 }
 
 /* --- Internal Export Functions --- */
-
-#define KING_TELEMETRY_HTTP_TIMEOUT_MS 10000L
-#define KING_TELEMETRY_MAX_RESPONSE_SIZE (1024 * 1024) /* 1 MiB */
 
 typedef struct _king_telemetry_http_response_t {
     smart_str data;
@@ -523,7 +811,7 @@ static int king_telemetry_http_post(const char *url, const char *json_payload, k
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, king_telemetry_http_write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, response);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, KING_TELEMETRY_HTTP_TIMEOUT_MS);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long) king_telemetry_runtime_timeout_ms());
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L); /* Prevent signals in multi-threaded apps */
     
     /* Perform the request */
@@ -550,6 +838,12 @@ static int king_telemetry_http_post(const char *url, const char *json_payload, k
 
 int king_telemetry_export_batch(void)
 {
+    int metrics_result = SUCCESS;
+    int spans_result = SUCCESS;
+    int logs_result = SUCCESS;
+    zend_bool attempted = 0;
+    zend_bool failed = 0;
+
     if (!king_telemetry_system_initialized || !king_telemetry_runtime_config.enabled) {
         return FAILURE;
     }
@@ -559,37 +853,60 @@ int king_telemetry_export_batch(void)
         return SUCCESS; /* No batches to export */
     }
     
-    int result = FAILURE;
-    
     /* Export metrics via OTLP */
     if (zend_hash_num_elements(Z_ARRVAL(batch->metrics)) > 0) {
-        result = king_telemetry_export_metrics_otlp(&batch->metrics);
+        attempted = 1;
+        metrics_result = king_telemetry_export_metrics_otlp(&batch->metrics);
+        if (!king_telemetry_batch_signal_complete(&batch->metrics, metrics_result)) {
+            failed = 1;
+        }
     }
     
     /* Export spans via OTLP */
     if (zend_hash_num_elements(Z_ARRVAL(batch->spans)) > 0) {
-        result = king_telemetry_export_spans_otlp(&batch->spans);
+        attempted = 1;
+        spans_result = king_telemetry_export_spans_otlp(&batch->spans);
+        if (!king_telemetry_batch_signal_complete(&batch->spans, spans_result)) {
+            failed = 1;
+        }
     }
     
     /* Export logs via OTLP */
     if (zend_hash_num_elements(Z_ARRVAL(batch->logs)) > 0) {
-        result = king_telemetry_export_logs_otlp(&batch->logs);
+        attempted = 1;
+        logs_result = king_telemetry_export_logs_otlp(&batch->logs);
+        if (!king_telemetry_batch_signal_complete(&batch->logs, logs_result)) {
+            failed = 1;
+        }
     }
-    
-    if (result == SUCCESS) {
+
+    if (!attempted) {
+        king_telemetry_free_batch(batch);
+        return SUCCESS;
+    }
+
+    if (!failed) {
         king_telemetry_export_success_count++;
     } else {
         king_telemetry_export_failure_count++;
-        /* Re-queue batch for retry on failure */
-        king_telemetry_queue_batch(batch);
-        batch = NULL; /* Don't free, it's back in queue */
+        /* Re-queue only the signals that still failed. */
+        if (king_telemetry_queue_batch(batch) == SUCCESS) {
+            batch = NULL; /* Don't free, it's back in queue */
+        }
     }
     
     if (batch) {
         king_telemetry_free_batch(batch);
     }
     
-    return result;
+    if (failed) {
+        return FAILURE;
+    }
+
+    (void) metrics_result;
+    (void) spans_result;
+    (void) logs_result;
+    return SUCCESS;
 }
 
 int king_telemetry_export_metrics_otlp(zval *metrics)
@@ -738,75 +1055,94 @@ int king_telemetry_export_spans_otlp(zval *spans)
     int first_span = 1;
     
     ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(spans), span_data) {
+        zval *name_zval;
+        zval *trace_id_zval;
+        zval *span_id_zval;
+        zval *parent_span_id_zval;
+        zval *start_time_zval;
+        zval *end_time_zval;
+        zval *kind_zval;
+        zval *attributes_zval;
+        char start_time_str[32];
+        char end_time_str[32];
+
+        if (Z_TYPE_P(span_data) != IS_ARRAY) {
+            continue;
+        }
+
+        name_zval = zend_hash_str_find(Z_ARRVAL_P(span_data), "name", sizeof("name") - 1);
+        trace_id_zval = zend_hash_str_find(Z_ARRVAL_P(span_data), "trace_id", sizeof("trace_id") - 1);
+        span_id_zval = zend_hash_str_find(Z_ARRVAL_P(span_data), "span_id", sizeof("span_id") - 1);
+        parent_span_id_zval = zend_hash_str_find(
+            Z_ARRVAL_P(span_data),
+            "parent_span_id",
+            sizeof("parent_span_id") - 1
+        );
+        start_time_zval = zend_hash_str_find(Z_ARRVAL_P(span_data), "start_time", sizeof("start_time") - 1);
+        end_time_zval = zend_hash_str_find(Z_ARRVAL_P(span_data), "end_time", sizeof("end_time") - 1);
+        kind_zval = zend_hash_str_find(Z_ARRVAL_P(span_data), "kind", sizeof("kind") - 1);
+        attributes_zval = zend_hash_str_find(Z_ARRVAL_P(span_data), "attributes", sizeof("attributes") - 1);
+
+        if (name_zval == NULL
+            || trace_id_zval == NULL
+            || span_id_zval == NULL
+            || start_time_zval == NULL
+            || end_time_zval == NULL
+            || Z_TYPE_P(name_zval) != IS_STRING
+            || Z_TYPE_P(trace_id_zval) != IS_STRING
+            || Z_TYPE_P(span_id_zval) != IS_STRING
+            || Z_STRLEN_P(name_zval) == 0
+            || Z_STRLEN_P(trace_id_zval) == 0
+            || Z_STRLEN_P(span_id_zval) == 0) {
+            continue;
+        }
+
         if (!first_span) {
             smart_str_appends(&json_payload, ",");
         }
         first_span = 0;
-        
-        /* Extract span data */
-        zval *name_zval = zend_hash_str_find(Z_ARRVAL_P(span_data), "name", sizeof("name")-1);
-        zval *start_time_zval = zend_hash_str_find(Z_ARRVAL_P(span_data), "start_time", sizeof("start_time")-1);
-        zval *end_time_zval = zend_hash_str_find(Z_ARRVAL_P(span_data), "end_time", sizeof("end_time")-1);
-        zval *attributes_zval = zend_hash_str_find(Z_ARRVAL_P(span_data), "attributes", sizeof("attributes")-1);
-        
-        if (!name_zval || !start_time_zval || !end_time_zval) continue;
-        
-        /* Generate span ID and trace ID */
-        uint64_t span_id = ((uint64_t)rand() << 32) | rand();
-        uint64_t trace_id = ((uint64_t)rand() << 32) | rand();
-        
-        /* Build span JSON */
+
+        snprintf(
+            start_time_str,
+            sizeof(start_time_str),
+            "%lld%09ld",
+            (long long) zval_get_long(start_time_zval),
+            0L
+        );
+        snprintf(
+            end_time_str,
+            sizeof(end_time_str),
+            "%lld%09ld",
+            (long long) zval_get_long(end_time_zval),
+            0L
+        );
+
         smart_str_appends(&json_payload, "{\"traceId\":\"");
-        char trace_id_str[33];
-        snprintf(trace_id_str, sizeof(trace_id_str), "%016llx%016llx", 
-                (unsigned long long)(trace_id >> 32), (unsigned long long)(trace_id & 0xFFFFFFFF));
-        smart_str_appends(&json_payload, trace_id_str);
+        smart_str_append_escaped(&json_payload, Z_STRVAL_P(trace_id_zval), Z_STRLEN_P(trace_id_zval));
         smart_str_appends(&json_payload, "\",\"spanId\":\"");
-        
-        char span_id_str[17];
-        snprintf(span_id_str, sizeof(span_id_str), "%016llx", (unsigned long long)span_id);
-        smart_str_appends(&json_payload, span_id_str);
+        smart_str_append_escaped(&json_payload, Z_STRVAL_P(span_id_zval), Z_STRLEN_P(span_id_zval));
         smart_str_appends(&json_payload, "\",\"name\":\"");
-        smart_str_append(&json_payload, Z_STR_P(name_zval));
+        smart_str_append_escaped(&json_payload, Z_STRVAL_P(name_zval), Z_STRLEN_P(name_zval));
         smart_str_appends(&json_payload, "\",\"startTimeUnixNano\":\"");
-        
-        /* Convert start time to nanoseconds */
-        char start_time_str[32];
-        snprintf(start_time_str, sizeof(start_time_str), "%lld%09ld", 
-                (long long)Z_LVAL_P(start_time_zval), 0L);
         smart_str_appends(&json_payload, start_time_str);
         smart_str_appends(&json_payload, "\",\"endTimeUnixNano\":\"");
-        
-        /* Convert end time to nanoseconds */
-        char end_time_str[32];
-        snprintf(end_time_str, sizeof(end_time_str), "%lld%09ld", 
-                (long long)Z_LVAL_P(end_time_zval), 0L);
         smart_str_appends(&json_payload, end_time_str);
-        smart_str_appends(&json_payload, "\",\"kind\":1");
-        
-        /* Add attributes if present */
-        if (attributes_zval && Z_TYPE_P(attributes_zval) == IS_ARRAY) {
-            smart_str_appends(&json_payload, ",\"attributes\":[");
-            zval *attr_value;
-            zend_string *attr_key;
-            int first_attr = 1;
-            
-            ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(attributes_zval), attr_key, attr_value) {
-                if (!first_attr) {
-                    smart_str_appends(&json_payload, ",");
-                }
-                first_attr = 0;
-                
-                smart_str_appends(&json_payload, "{\"key\":\"");
-                smart_str_append(&json_payload, attr_key);
-                smart_str_appends(&json_payload, "\",\"value\":{\"stringValue\":\"");
-                smart_str_append(&json_payload, Z_STR_P(attr_value));
-                smart_str_appends(&json_payload, "\"}}");
-            } ZEND_HASH_FOREACH_END();
-            
-            smart_str_appends(&json_payload, "]");
+        smart_str_appends(&json_payload, "\",\"kind\":");
+        smart_str_append_long(&json_payload, king_telemetry_span_kind_to_otlp_kind(kind_zval));
+
+        if (parent_span_id_zval != NULL
+            && Z_TYPE_P(parent_span_id_zval) == IS_STRING
+            && Z_STRLEN_P(parent_span_id_zval) > 0) {
+            smart_str_appends(&json_payload, ",\"parentSpanId\":\"");
+            smart_str_append_escaped(
+                &json_payload,
+                Z_STRVAL_P(parent_span_id_zval),
+                Z_STRLEN_P(parent_span_id_zval)
+            );
+            smart_str_appends(&json_payload, "\"");
         }
-        
+
+        king_telemetry_json_append_attributes(&json_payload, attributes_zval);
         smart_str_appends(&json_payload, "}");
     } ZEND_HASH_FOREACH_END();
     
@@ -851,88 +1187,105 @@ int king_telemetry_export_logs_otlp(zval *logs)
     int first_log = 1;
     
     ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(logs), log_data) {
+        zval *message_zval;
+        zval *level_zval;
+        zval *timestamp_zval;
+        zval *attributes_zval;
+        zval *trace_id_zval;
+        zval *span_id_zval;
+        char timestamp_str[32];
+        const char *level_name = "info";
+        int severity_number = 9; /* INFO */
+
+        if (Z_TYPE_P(log_data) != IS_ARRAY) {
+            continue;
+        }
+
+        message_zval = zend_hash_str_find(Z_ARRVAL_P(log_data), "message", sizeof("message") - 1);
+        level_zval = zend_hash_str_find(Z_ARRVAL_P(log_data), "level", sizeof("level") - 1);
+        timestamp_zval = zend_hash_str_find(Z_ARRVAL_P(log_data), "timestamp", sizeof("timestamp") - 1);
+        attributes_zval = zend_hash_str_find(Z_ARRVAL_P(log_data), "attributes", sizeof("attributes") - 1);
+        trace_id_zval = zend_hash_str_find(Z_ARRVAL_P(log_data), "trace_id", sizeof("trace_id") - 1);
+        span_id_zval = zend_hash_str_find(Z_ARRVAL_P(log_data), "span_id", sizeof("span_id") - 1);
+
+        if (message_zval == NULL || level_zval == NULL) {
+            continue;
+        }
+
+        if (Z_TYPE_P(level_zval) == IS_STRING && Z_STRLEN_P(level_zval) > 0) {
+            level_name = Z_STRVAL_P(level_zval);
+        }
+
+        if (strcmp(level_name, "error") == 0) {
+            severity_number = 17;
+        } else if (strcmp(level_name, "warn") == 0) {
+            severity_number = 13;
+        } else if (strcmp(level_name, "debug") == 0) {
+            severity_number = 5;
+        } else if (strcmp(level_name, "trace") == 0) {
+            severity_number = 1;
+        }
+
         if (!first_log) {
             smart_str_appends(&json_payload, ",");
         }
         first_log = 0;
-        
-        /* Extract log data */
-        zval *message_zval = zend_hash_str_find(Z_ARRVAL_P(log_data), "message", sizeof("message")-1);
-        zval *level_zval = zend_hash_str_find(Z_ARRVAL_P(log_data), "level", sizeof("level")-1);
-        zval *timestamp_zval = zend_hash_str_find(Z_ARRVAL_P(log_data), "timestamp", sizeof("timestamp")-1);
-        zval *attributes_zval = zend_hash_str_find(Z_ARRVAL_P(log_data), "attributes", sizeof("attributes")-1);
-        
-        if (!message_zval || !level_zval) continue;
-        
-        /* Build log record JSON */
+
         smart_str_appends(&json_payload, "{\"timeUnixNano\":\"");
-        
-        /* Add timestamp */
-        if (timestamp_zval) {
-            char timestamp_str[32];
-            snprintf(timestamp_str, sizeof(timestamp_str), "%lld%09ld", 
-                    (long long)Z_LVAL_P(timestamp_zval), 0L);
-            smart_str_appends(&json_payload, timestamp_str);
+
+        if (timestamp_zval != NULL) {
+            snprintf(
+                timestamp_str,
+                sizeof(timestamp_str),
+                "%lld%09ld",
+                (long long) zval_get_long(timestamp_zval),
+                0L
+            );
         } else {
-            /* Use current time if no timestamp provided */
             struct timespec ts;
             clock_gettime(CLOCK_REALTIME, &ts);
-            char timestamp_str[32];
-            snprintf(timestamp_str, sizeof(timestamp_str), "%lld%09ld", 
-                    (long long)ts.tv_sec, ts.tv_nsec);
-            smart_str_appends(&json_payload, timestamp_str);
+            snprintf(
+                timestamp_str,
+                sizeof(timestamp_str),
+                "%lld%09ld",
+                (long long) ts.tv_sec,
+                ts.tv_nsec
+            );
         }
-        
+        smart_str_appends(&json_payload, timestamp_str);
         smart_str_appends(&json_payload, "\",\"severityNumber\":");
-        
-        /* Map log level to OTLP severity number */
-        int severity_number = 9; /* INFO */
-        if (strcmp(Z_STRVAL_P(level_zval), "error") == 0) {
-            severity_number = 17; /* ERROR */
-        } else if (strcmp(Z_STRVAL_P(level_zval), "warn") == 0) {
-            severity_number = 13; /* WARN */
-        } else if (strcmp(Z_STRVAL_P(level_zval), "debug") == 0) {
-            severity_number = 5; /* DEBUG */
-        } else if (strcmp(Z_STRVAL_P(level_zval), "trace") == 0) {
-            severity_number = 1; /* TRACE */
-        }
-        
         smart_str_append_long(&json_payload, severity_number);
         smart_str_appends(&json_payload, ",\"severityText\":\"");
-        smart_str_append(&json_payload, Z_STR_P(level_zval));
+        smart_str_append_escaped(&json_payload, level_name, strlen(level_name));
         smart_str_appends(&json_payload, "\",\"body\":{\"stringValue\":\"");
-        
-        /* Escape JSON in message - use smart_str_append_escaped */
-        smart_str escaped_msg = {0};
-        smart_str_append_escaped(&escaped_msg, Z_STRVAL_P(message_zval), Z_STRLEN_P(message_zval));
-        smart_str_append_smart_str(&json_payload, &escaped_msg);
-        smart_str_free(&escaped_msg);
-        
+        king_telemetry_json_append_zval_as_string(&json_payload, message_zval);
         smart_str_appends(&json_payload, "\"}");
-        
-        /* Add attributes if present */
-        if (attributes_zval && Z_TYPE_P(attributes_zval) == IS_ARRAY) {
-            smart_str_appends(&json_payload, ",\"attributes\":[");
-            zval *attr_value;
-            zend_string *attr_key;
-            int first_attr = 1;
-            
-            ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(attributes_zval), attr_key, attr_value) {
-                if (!first_attr) {
-                    smart_str_appends(&json_payload, ",");
-                }
-                first_attr = 0;
-                
-                smart_str_appends(&json_payload, "{\"key\":\"");
-                smart_str_append(&json_payload, attr_key);
-                smart_str_appends(&json_payload, "\",\"value\":{\"stringValue\":\"");
-                smart_str_append(&json_payload, Z_STR_P(attr_value));
-                smart_str_appends(&json_payload, "\"}}");
-            } ZEND_HASH_FOREACH_END();
-            
-            smart_str_appends(&json_payload, "]");
+
+        if (trace_id_zval != NULL
+            && Z_TYPE_P(trace_id_zval) == IS_STRING
+            && Z_STRLEN_P(trace_id_zval) > 0) {
+            smart_str_appends(&json_payload, ",\"traceId\":\"");
+            smart_str_append_escaped(
+                &json_payload,
+                Z_STRVAL_P(trace_id_zval),
+                Z_STRLEN_P(trace_id_zval)
+            );
+            smart_str_appends(&json_payload, "\"");
         }
-        
+
+        if (span_id_zval != NULL
+            && Z_TYPE_P(span_id_zval) == IS_STRING
+            && Z_STRLEN_P(span_id_zval) > 0) {
+            smart_str_appends(&json_payload, ",\"spanId\":\"");
+            smart_str_append_escaped(
+                &json_payload,
+                Z_STRVAL_P(span_id_zval),
+                Z_STRLEN_P(span_id_zval)
+            );
+            smart_str_appends(&json_payload, "\"");
+        }
+
+        king_telemetry_json_append_attributes(&json_payload, attributes_zval);
         smart_str_appends(&json_payload, "}");
     } ZEND_HASH_FOREACH_END();
     
