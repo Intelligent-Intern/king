@@ -44,6 +44,15 @@ static int king_object_store_atomic_write_file(const char *target_path, const vo
 static int king_object_store_backup_object_to_backend(const char *object_id, king_storage_backend_t backup_backend);
 static int king_object_store_directory_is_within_storage_root(const char *directory_path, int allow_missing_path);
 
+static king_storage_backend_t king_object_store_normalize_backend(king_storage_backend_t backend)
+{
+    if (backend == KING_STORAGE_BACKEND_MEMORY_CACHE) {
+        return KING_STORAGE_BACKEND_LOCAL_FS;
+    }
+
+    return backend;
+}
+
 static int king_object_store_path_is_within_root(const char *candidate_path, const char *root_path)
 {
     size_t root_len;
@@ -220,9 +229,10 @@ static void king_object_store_append_adapter_error(char *destination, size_t des
 
 const char *king_object_store_backend_contract_to_string(king_storage_backend_t backend)
 {
+    backend = king_object_store_normalize_backend(backend);
+
     switch (backend) {
         case KING_STORAGE_BACKEND_LOCAL_FS:
-        case KING_STORAGE_BACKEND_MEMORY_CACHE:
             return king_object_store_adapter_contract_local;
         case KING_STORAGE_BACKEND_DISTRIBUTED:
         case KING_STORAGE_BACKEND_CLOUD_S3:
@@ -236,9 +246,10 @@ const char *king_object_store_backend_contract_to_string(king_storage_backend_t 
 
 static const char *king_object_store_initial_backend_status(king_storage_backend_t backend)
 {
+    backend = king_object_store_normalize_backend(backend);
+
     switch (backend) {
         case KING_STORAGE_BACKEND_LOCAL_FS:
-        case KING_STORAGE_BACKEND_MEMORY_CACHE:
             return king_object_store_adapter_status_ok;
         case KING_STORAGE_BACKEND_DISTRIBUTED:
         case KING_STORAGE_BACKEND_CLOUD_S3:
@@ -330,8 +341,8 @@ static void king_object_store_set_backend_runtime_result(
 
 static int king_object_store_backend_is_local(king_storage_backend_t backend)
 {
-    return backend == KING_STORAGE_BACKEND_LOCAL_FS ||
-           backend == KING_STORAGE_BACKEND_MEMORY_CACHE;
+    backend = king_object_store_normalize_backend(backend);
+    return backend == KING_STORAGE_BACKEND_LOCAL_FS;
 }
 
 static int king_object_store_require_honest_backend(
@@ -434,8 +445,8 @@ static void king_object_store_config_copy(
 {
     memset(target, 0, sizeof(*target));
     ZVAL_UNDEF(&target->cloud_credentials);
-    target->primary_backend       = source->primary_backend;
-    target->backup_backend        = source->backup_backend;
+    target->primary_backend       = king_object_store_normalize_backend(source->primary_backend);
+    target->backup_backend        = king_object_store_normalize_backend(source->backup_backend);
     strncpy(target->storage_root_path, source->storage_root_path, sizeof(target->storage_root_path) - 1);
     target->max_storage_size_bytes = source->max_storage_size_bytes;
     target->replication_factor    = source->replication_factor;
@@ -450,13 +461,14 @@ static void king_object_store_config_copy(
 
 const char *king_storage_backend_to_string(king_storage_backend_t backend)
 {
+    backend = king_object_store_normalize_backend(backend);
+
     switch (backend) {
         case KING_STORAGE_BACKEND_LOCAL_FS:     return "local_fs";
         case KING_STORAGE_BACKEND_DISTRIBUTED:  return "distributed";
         case KING_STORAGE_BACKEND_CLOUD_S3:     return "cloud_s3";
         case KING_STORAGE_BACKEND_CLOUD_GCS:    return "cloud_gcs";
         case KING_STORAGE_BACKEND_CLOUD_AZURE:  return "cloud_azure";
-        case KING_STORAGE_BACKEND_MEMORY_CACHE: return "memory_cache";
         default:                                return "unknown";
     }
 }

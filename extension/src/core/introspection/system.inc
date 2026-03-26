@@ -160,6 +160,9 @@ PHP_FUNCTION(king_system_get_component_info)
         king_component_info_init(return_value, "object_store", "config_backed");
         array_init(&configuration);
         add_assoc_bool(&configuration, "enabled", king_native_object_store_config.enable ? 1 : 0);
+        add_assoc_string(&configuration, "storage_contract", "local_fs_only");
+        add_assoc_string(&configuration, "legacy_backend_alias", "memory_cache->local_fs");
+        add_assoc_string(&configuration, "simulated_backends", "distributed,cloud_s3,cloud_gcs,cloud_azure");
         add_assoc_string(&configuration, "redundancy_mode",
             king_safe_string(king_native_object_store_config.default_redundancy_mode));
         add_assoc_long(&configuration, "replication_factor",

@@ -45,7 +45,7 @@ foreach (scandir($dir) as $f) { if ($f !== '.' && $f !== '..') @unlink("$dir/$f"
 ?>
 --EXPECTF--
 bool(true)
-string(12) "memory_cache"
+string(8) "local_fs"
 string(%d) "%s"
 int(4)
 int(2)

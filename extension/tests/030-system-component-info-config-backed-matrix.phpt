@@ -123,14 +123,20 @@ array(6) {
 }
 string(12) "object_store"
 string(13) "config_backed"
-array(4) {
+array(7) {
   [0]=>
   string(7) "enabled"
   [1]=>
-  string(15) "redundancy_mode"
+  string(16) "storage_contract"
   [2]=>
-  string(18) "replication_factor"
+  string(20) "legacy_backend_alias"
   [3]=>
+  string(18) "simulated_backends"
+  [4]=>
+  string(15) "redundancy_mode"
+  [5]=>
+  string(18) "replication_factor"
+  [6]=>
   string(13) "chunk_size_mb"
 }
 bool(true)

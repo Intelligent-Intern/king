@@ -16,11 +16,10 @@ and the public stub surface matches the live runtime.
 That does not yet mean "final 10/10".
 The remaining gaps are no longer about broad runtime parity or placeholder
 surfaces inside the local tree.
-They are concentrated in six areas:
+They are concentrated in five areas:
 
 - higher-scale MCP and deeper distributed orchestration
 - larger Smart-DNS distributed topology, failover, and real load-routing verification beyond the local slice
-- honest non-local object-store backend scope versus a locked `local_fs` v1 contract
 - long-haul telemetry, exporter, and fleet recovery depth
 - deterministic QUIC bootstrap and clean-host installation confidence
 - compatibility, sanitizer soak, and release-grade upgrade guarantees
@@ -37,7 +36,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `336/336` passing
+- `./scripts/test-extension.sh`: `337/337` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
@@ -51,7 +50,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `336` PHPT files
+- `extension/tests`: `337` PHPT files
 - public stub parity: `125` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -74,7 +73,7 @@ The current tree already proves:
 - Semantic DNS register/discover/update routing, larger-topology local churn coherence, registry-backed mother-node sync statistics, persisted registration plus mother-node rehydration across restart, and private-directory durable state handling
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs
 - router/loadbalancer is now exposed as an explicit config-backed system component with honest policy/discovery-only introspection
-- object-store local filesystem persistence, `.meta` sidecars, CDN cache/runtime behavior, and confined backup/restore/import/export paths
+- object-store local filesystem persistence, explicit `local_fs_only` runtime/system contract, `memory_cache -> local_fs` compatibility aliasing, simulated non-local adapter fencing, `.meta` sidecars, CDN cache/runtime behavior, and confined backup/restore/import/export paths
 - MCP request/upload/download parity against a real TCP host/port remote peer with propagated timeout, deadline, cancellation controls, IPv4 and IPv6 peer targeting coverage, 1 MiB payload roundtrips, parallel-transfer backpressure isolation, explicit single-flight reentry guards, same-host partial-failure recovery, persisted remote-state restart recovery coverage, and explicit `topology_scope=tcp_host_port_peer` introspection
 - orchestrator persistence, honest `queued -> running -> completed|failed|cancelled` run transitions, explicit `single_attempt` retry plus `caller_managed` idempotency contract, explicit `topology_scope=local_in_process|same_host_file_worker|tcp_host_port_execution_peer` introspection by backend mode, deterministic `claimed_recovery_then_fifo_run_id` scheduling, exclusive claimed-file locking across concurrent workers, recovery of an already-running claimed run exactly once after worker loss, sustained queue fairness under repeated parallel-worker contention, local/file-worker backend boundaries, real TCP host/port `remote_peer` execution with persisted success/failure snapshots, cross-process cancellation, and multiprocess controller/observer/worker verification
 - telemetry batch queueing, bounded retry behavior, OTLP metrics export hardening, and local exporter failover/recovery coverage
@@ -96,12 +95,6 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 - Router/loadbalancer is now honestly fenced to a config-backed control-plane surface; it is not presented as a forwarding dataplane runtime.
 - Smart-DNS public config and init surfaces are now honest for the current local semantic/service-discovery runtime.
 - The remaining Smart-DNS work is real distributed topology validation, richer mother-node synchronization beyond the local registry-backed slice, routing verification against real load and health signals, and failover behavior rather than more local config cleanup or restart-state basics.
-
-### Object Store Scope
-
-- The local filesystem backend is honest and verified.
-- Non-local object-store backends are still simulated.
-- The remaining work is either to implement at least one honest non-local backend or to freeze the v1 public contract around `local_fs` without ambiguity.
 
 ### Observability and Fleet Operations
 

@@ -145,7 +145,7 @@ Status note:
 
 ## E. Object Store Core
 
-- [ ] Explicitly and finally specify the object-store backend contract
+- [x] Explicitly and finally specify the object-store backend contract
 - [ ] Replace all currently simulated object-store backends with real implementations
 - [ ] Establish uniform failure semantics across all backends
 - [ ] Establish consistent metadata semantics across all backends
@@ -158,20 +158,20 @@ Status note:
 - [ ] Define consistent quota / capacity semantics
 - [ ] Define per-object integrity validation semantics
 - [ ] Define per-backend recovery semantics
-- [ ] Validate object-store initialization across all target backends
-- [ ] Validate object-store put across all target backends
-- [ ] Validate object-store get across all target backends
-- [ ] Validate object-store delete across all target backends
-- [ ] Validate object-store list across all target backends
-- [ ] Validate object-store metadata reads across all target backends
-- [ ] Validate object-store optimize / cleanup paths across all target backends
+- [x] Validate object-store initialization across all target backends
+- [x] Validate object-store put across all target backends
+- [x] Validate object-store get across all target backends
+- [x] Validate object-store delete across all target backends
+- [x] Validate object-store list across all target backends
+- [x] Validate object-store metadata reads across all target backends
+- [x] Validate object-store optimize / cleanup paths across all target backends
 
 ## F. Object Store Cloud Backends
 
 - [ ] Implement real S3 backend
 - [ ] Implement real GCS backend where publicly claimed
 - [ ] Implement real Azure Blob backend where publicly claimed
-- [ ] Finalize local filesystem backend as the reference backend
+- [x] Finalize local filesystem backend as the reference backend
 - [ ] Validate multi-backend routing with real backends
 - [ ] Validate backend failover on primary backend outage
 - [ ] Validate partial backend failures under replication

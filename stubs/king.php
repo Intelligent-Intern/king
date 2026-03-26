@@ -570,10 +570,13 @@ namespace {
     /**
      * Initializes local runtime settings for the object-store/CDN
      * layer without replacing the extension-wide INI configuration.
-     * Supported keys are `primary_backend`, `storage_root_path`,
-     * `max_storage_size_bytes`, `replication_factor`, `chunk_size_kb`,
-     * and `cdn_config` with `enabled`, `cache_size_mb`,
-     * `default_ttl_seconds`.
+     * The verified v1 storage contract is `local_fs` only; `memory_cache`
+     * is accepted as a compatibility alias that resolves to the same
+     * local filesystem backend, and non-local backends remain
+     * simulated/unavailable. Supported keys are `primary_backend`,
+     * `storage_root_path`, `max_storage_size_bytes`,
+     * `replication_factor`, `chunk_size_kb`, and `cdn_config` with
+     * `enabled`, `cache_size_mb`, `default_ttl_seconds`.
      * @param array<string,mixed> $config
      * @throws \King\ValidationException
      */
