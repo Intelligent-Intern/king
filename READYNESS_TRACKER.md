@@ -135,7 +135,7 @@ Status note:
 - [ ] Finalize per-step error classification
 - [ ] Define and implement rollback / compensation semantics where publicly claimed
 - [ ] Validate distributed tool execution across multiple workers
-- [ ] Validate worker failure during active pipeline execution
+- [x] Validate worker failure during active pipeline execution
 - [ ] Validate queue / scheduler fairness under load
 - [x] Finalize exact queued/running/failed/cancelled/completed state transitions
 - [ ] Fully integrate observability for pipeline execution
