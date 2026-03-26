@@ -215,12 +215,12 @@ bool(true)
 string(11) "file_worker"
 int(1)
 int(1)
-string(7) "running"
+string(6) "queued"
 array(1) {
   [0]=>
   string(10) "summarizer"
 }
-string(7) "running"
+string(6) "queued"
 bool(false)
 NULL
 bool(true)

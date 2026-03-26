@@ -32,6 +32,8 @@ $run = king_pipeline_orchestrator_get_run($dispatch['run_id']);
 var_dump($run['status']);
 $info = king_system_get_component_info('pipeline_orchestrator');
 var_dump($info['configuration']['execution_backend']);
+var_dump($info['configuration']['retry_policy']);
+var_dump($info['configuration']['idempotency_policy']);
 var_dump($info['configuration']['queued_run_count']);
 
 try {
@@ -97,8 +99,10 @@ bool(true)
 string(11) "file_worker"
 string(6) "queued"
 bool(true)
-string(7) "running"
+string(6) "queued"
 string(11) "file_worker"
+string(14) "single_attempt"
+string(14) "caller_managed"
 int(1)
 string(21) "King\RuntimeException"
 int(0)

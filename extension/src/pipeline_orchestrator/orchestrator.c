@@ -739,7 +739,7 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
     }
 
     persisted_options = king_orchestrator_prepare_persisted_options(options, &sanitized_options);
-    run_id = king_orchestrator_pipeline_run_begin(initial_data, pipeline_array, persisted_options);
+    run_id = king_orchestrator_pipeline_run_begin(initial_data, pipeline_array, persisted_options, "running");
     if (persisted_options == &sanitized_options) {
         zval_ptr_dtor(&sanitized_options);
         ZVAL_UNDEF(&sanitized_options);
@@ -829,7 +829,7 @@ int king_orchestrator_dispatch(zval *initial_data, zval *pipeline_array, zval *o
     }
 
     persisted_options = king_orchestrator_prepare_persisted_options(options, &sanitized_options);
-    run_id = king_orchestrator_pipeline_run_begin(initial_data, pipeline_array, persisted_options);
+    run_id = king_orchestrator_pipeline_run_begin(initial_data, pipeline_array, persisted_options, "queued");
     if (persisted_options == &sanitized_options) {
         zval_ptr_dtor(&sanitized_options);
         ZVAL_UNDEF(&sanitized_options);
@@ -906,6 +906,34 @@ int king_orchestrator_worker_run_next(zval *return_value)
         return SUCCESS;
     }
 
+    if (king_orchestrator_pipeline_run_is_terminal(run_id)) {
+        if (claimed_path[0] != '\0') {
+            unlink(claimed_path);
+        }
+        if (king_orchestrator_get_run_snapshot(run_id, return_value) != SUCCESS) {
+            zend_string_release(run_id);
+            return king_orchestrator_raise_error(
+                "king_pipeline_orchestrator_worker_run_next() could not read back the persisted terminal run snapshot.",
+                king_ce_runtime_exception,
+                1
+            );
+        }
+        zend_string_release(run_id);
+        return SUCCESS;
+    }
+
+    if (king_orchestrator_pipeline_run_mark_running(run_id) != SUCCESS) {
+        if (claimed_path[0] != '\0') {
+            unlink(claimed_path);
+        }
+        zend_string_release(run_id);
+        return king_orchestrator_raise_error(
+            "king_pipeline_orchestrator_worker_run_next() could not persist the claimed running snapshot.",
+            king_ce_runtime_exception,
+            1
+        );
+    }
+
     ZVAL_NULL(return_value);
     rc = king_orchestrator_resume_run(run_id, return_value);
     zval_ptr_dtor(return_value);
@@ -952,6 +980,9 @@ int king_orchestrator_worker_run_next(zval *return_value)
                     return SUCCESS;
                 }
                 zval_ptr_dtor(&cancelled_snapshot);
+            }
+            if (!king_orchestrator_pipeline_run_is_terminal(run_id)) {
+                (void) king_orchestrator_pipeline_run_fail(run_id, error_message);
             }
             zend_string_release(run_id);
             return FAILURE;

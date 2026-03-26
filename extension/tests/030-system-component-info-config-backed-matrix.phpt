@@ -241,7 +241,7 @@ array(6) {
 }
 string(21) "pipeline_orchestrator"
 string(13) "config_backed"
-array(16) {
+array(18) {
   [0]=>
   string(27) "default_pipeline_timeout_ms"
   [1]=>
@@ -257,22 +257,26 @@ array(16) {
   [6]=>
   string(17) "execution_backend"
   [7]=>
-  string(17) "worker_queue_path"
+  string(12) "retry_policy"
   [8]=>
-  string(20) "recovered_from_state"
+  string(18) "idempotency_policy"
   [9]=>
-  string(10) "tool_count"
+  string(17) "worker_queue_path"
   [10]=>
-  string(17) "run_history_count"
+  string(20) "recovered_from_state"
   [11]=>
-  string(16) "active_run_count"
+  string(10) "tool_count"
   [12]=>
-  string(16) "queued_run_count"
+  string(17) "run_history_count"
   [13]=>
-  string(11) "last_run_id"
+  string(16) "active_run_count"
   [14]=>
-  string(15) "last_run_status"
+  string(16) "queued_run_count"
   [15]=>
+  string(11) "last_run_id"
+  [16]=>
+  string(15) "last_run_status"
+  [17]=>
   string(16) "registered_tools"
 }
 bool(true)

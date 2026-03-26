@@ -130,13 +130,13 @@ Status note:
 - [x] Enforce bounded concurrency for pipeline execution
 - [x] Enforce per-step deadline handling
 - [x] Propagate cancellation across step / worker boundaries
-- [ ] Define and implement retry / idempotency semantics per step
+- [x] Define and implement retry / idempotency semantics per step
 - [ ] Finalize per-step error classification
 - [ ] Define and implement rollback / compensation semantics where publicly claimed
 - [ ] Validate distributed tool execution across multiple workers
 - [ ] Validate worker failure during active pipeline execution
 - [ ] Validate queue / scheduler fairness under load
-- [ ] Finalize exact queued/running/failed/cancelled/completed state transitions
+- [x] Finalize exact queued/running/failed/cancelled/completed state transitions
 - [ ] Fully integrate observability for pipeline execution
 - [x] Build end-to-end multi-process harness
 - [ ] Build end-to-end multi-host harness

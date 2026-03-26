@@ -59,12 +59,14 @@ $first = king_pipeline_orchestrator_dispatch(
 var_dump($first['status']);
 
 try {
-    king_pipeline_orchestrator_dispatch(
+    $second = king_pipeline_orchestrator_dispatch(
         ['text' => 'blocked'],
         [['tool' => 'summarizer']],
         ['max_concurrency' => 1]
     );
-    echo "no-exception-3\n";
+    var_dump($second['status']);
+    $info = king_system_get_component_info('pipeline_orchestrator');
+    var_dump($info['configuration']['queued_run_count']);
 } catch (Throwable $e) {
     var_dump(get_class($e));
     var_dump($e->getMessage());
@@ -106,5 +108,5 @@ string(%d) "king_pipeline_orchestrator_run() exceeded the active orchestrator de
 int(0)
 bool(true)
 string(6) "queued"
-string(21) "King\RuntimeException"
-string(%d) "king_pipeline_orchestrator_dispatch() cannot exceed the active orchestrator max_concurrency of 1 while 1 run(s) are already in flight."
+string(6) "queued"
+int(2)

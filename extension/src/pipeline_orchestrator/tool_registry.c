@@ -48,6 +48,7 @@ static bool king_orchestrator_registry_initialized = false;
 static bool king_orchestrator_recovered_from_state = false;
 static zend_long king_orchestrator_next_run_id = 1;
 static king_orchestrator_run_state_t *king_orchestrator_find_run(zend_string *run_id);
+static int king_orchestrator_persist_state(void);
 
 static void king_orchestrator_persistent_string_zval_dtor(zval *zv)
 {
@@ -131,6 +132,23 @@ static zend_string *king_orchestrator_encode_zval_base64(zval *value)
     );
     zend_string_release(serialized);
 
+    return encoded;
+}
+
+static zend_string *king_orchestrator_encode_error_message_base64(const char *error_message)
+{
+    zend_string *encoded;
+    zend_object *saved_exception;
+    zval error_value;
+
+    saved_exception = EG(exception);
+    EG(exception) = NULL;
+
+    ZVAL_STRING(&error_value, error_message != NULL ? error_message : "");
+    encoded = king_orchestrator_encode_zval_base64(&error_value);
+    zval_ptr_dtor(&error_value);
+
+    EG(exception) = saved_exception;
     return encoded;
 }
 
@@ -405,6 +423,34 @@ static int king_orchestrator_build_cancel_marker_path(
             path,
             path_len,
             "%s/cancel-%s.sig",
+            king_mcp_orchestrator_config.orchestrator_worker_queue_path,
+            ZSTR_VAL(run_id)
+        ) >= (int) path_len) {
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static int king_orchestrator_build_run_queue_path(
+    const zend_string *run_id,
+    char *path,
+    size_t path_len
+)
+{
+    if (
+        run_id == NULL
+        || path == NULL
+        || path_len == 0
+        || !king_orchestrator_queue_path_is_configured()
+    ) {
+        return FAILURE;
+    }
+
+    if (snprintf(
+            path,
+            path_len,
+            "%s/queued-%s.job",
             king_mcp_orchestrator_config.orchestrator_worker_queue_path,
             ZSTR_VAL(run_id)
         ) >= (int) path_len) {
@@ -986,6 +1032,7 @@ int king_orchestrator_request_run_cancel(zend_string *run_id)
 {
     king_orchestrator_run_state_t *run_state;
     char marker_path[1024];
+    char queued_path[1024];
     FILE *stream;
     zend_bool previous_cancel_requested;
 
@@ -1004,6 +1051,22 @@ int king_orchestrator_request_run_cancel(zend_string *run_id)
 
     if (run_state->cancel_requested) {
         return SUCCESS;
+    }
+
+    if (
+        run_state->status != NULL
+        && zend_string_equals_literal(run_state->status, "queued")
+        && king_orchestrator_build_run_queue_path(run_id, queued_path, sizeof(queued_path)) == SUCCESS
+        && king_orchestrator_queue_entry_is_regular_file(queued_path)
+    ) {
+        if (unlink(queued_path) != 0) {
+            return FAILURE;
+        }
+
+        return king_orchestrator_pipeline_run_cancelled(
+            run_id,
+            "king_pipeline_orchestrator_cancel_run() cancelled the queued run before worker claim."
+        );
     }
 
     if (king_orchestrator_queue_ensure_directory() != SUCCESS) {
@@ -1320,7 +1383,8 @@ int king_orchestrator_configure_logging(zval *config)
 zend_string *king_orchestrator_pipeline_run_begin(
     zval *initial_data,
     zval *pipeline,
-    zval *options)
+    zval *options,
+    const char *initial_status)
 {
     king_orchestrator_run_state_t *run_state;
     zval stored_run;
@@ -1374,12 +1438,16 @@ zend_string *king_orchestrator_pipeline_run_begin(
         return NULL;
     }
 
+    if (initial_status == NULL || initial_status[0] == '\0') {
+        initial_status = "running";
+    }
+
     run_id = strpprintf(0, "run-%ld", king_orchestrator_next_run_id++);
     run_state = pemalloc(sizeof(*run_state), 1);
     memset(run_state, 0, sizeof(*run_state));
 
     run_state->run_id = zend_string_dup(run_id, 1);
-    run_state->status = zend_string_init("running", sizeof("running") - 1, 1);
+    run_state->status = zend_string_init(initial_status, strlen(initial_status), 1);
     run_state->started_at = time(NULL);
     run_state->finished_at = 0;
     run_state->cancel_requested = 0;
@@ -1402,7 +1470,7 @@ zend_string *king_orchestrator_pipeline_run_begin(
         zend_hash_update(&king_orchestrator_pipeline_runs, persistent_key, &stored_run);
         zend_string_release_ex(persistent_key, 1);
     }
-    king_orchestrator_set_last_run(run_state->run_id, "running");
+    king_orchestrator_set_last_run(run_state->run_id, initial_status);
 
     if (king_orchestrator_persist_state() != SUCCESS) {
         zend_hash_del(&king_orchestrator_pipeline_runs, run_state->run_id);
@@ -1411,6 +1479,37 @@ zend_string *king_orchestrator_pipeline_run_begin(
     }
 
     return run_id;
+}
+
+int king_orchestrator_pipeline_run_mark_running(zend_string *run_id)
+{
+    king_orchestrator_run_state_t *run_state;
+
+    run_state = king_orchestrator_find_run(run_id);
+    if (run_state == NULL || run_state->status == NULL) {
+        return FAILURE;
+    }
+
+    if (
+        king_orchestrator_run_state_is_terminal(run_state)
+        || zend_string_equals_literal(run_state->status, "running")
+    ) {
+        return SUCCESS;
+    }
+
+    king_orchestrator_replace_runtime_string(
+        &run_state->status,
+        zend_string_init("running", sizeof("running") - 1, 1)
+    );
+    run_state->finished_at = 0;
+    king_orchestrator_set_last_run(run_state->run_id, "running");
+
+    return king_orchestrator_persist_state();
+}
+
+int king_orchestrator_pipeline_run_is_terminal(zend_string *run_id)
+{
+    return king_orchestrator_run_state_is_terminal(king_orchestrator_find_run(run_id));
 }
 
 int king_orchestrator_pipeline_run_complete(zend_string *run_id, zval *result)
@@ -1461,19 +1560,13 @@ int king_orchestrator_pipeline_run_fail(zend_string *run_id, const char *error_m
 {
     king_orchestrator_run_state_t *run_state;
     zend_string *error_b64;
-    zval error_value;
 
     run_state = king_orchestrator_find_run(run_id);
     if (run_state == NULL) {
         return FAILURE;
     }
 
-    ZVAL_STRING(&error_value, error_message != NULL ? error_message : "");
-    error_b64 = king_orchestrator_encode_zval_base64(&error_value);
-    zval_ptr_dtor(&error_value);
-    if (error_b64 == NULL) {
-        return FAILURE;
-    }
+    error_b64 = king_orchestrator_encode_error_message_base64(error_message);
 
     king_orchestrator_replace_runtime_string(
         &run_state->status,
@@ -1481,8 +1574,10 @@ int king_orchestrator_pipeline_run_fail(zend_string *run_id, const char *error_m
     );
     run_state->finished_at = time(NULL);
     run_state->cancel_requested = 0;
-    king_orchestrator_replace_runtime_string(&run_state->error_b64, zend_string_dup(error_b64, 1));
-    zend_string_release(error_b64);
+    if (error_b64 != NULL) {
+        king_orchestrator_replace_runtime_string(&run_state->error_b64, zend_string_dup(error_b64, 1));
+        zend_string_release(error_b64);
+    }
     king_orchestrator_set_last_run(run_state->run_id, "failed");
 
     if (king_orchestrator_persist_state() != SUCCESS) {
@@ -1497,19 +1592,13 @@ int king_orchestrator_pipeline_run_cancelled(zend_string *run_id, const char *er
 {
     king_orchestrator_run_state_t *run_state;
     zend_string *error_b64;
-    zval error_value;
 
     run_state = king_orchestrator_find_run(run_id);
     if (run_state == NULL) {
         return FAILURE;
     }
 
-    ZVAL_STRING(&error_value, error_message != NULL ? error_message : "");
-    error_b64 = king_orchestrator_encode_zval_base64(&error_value);
-    zval_ptr_dtor(&error_value);
-    if (error_b64 == NULL) {
-        return FAILURE;
-    }
+    error_b64 = king_orchestrator_encode_error_message_base64(error_message);
 
     king_orchestrator_replace_runtime_string(
         &run_state->status,
@@ -1517,8 +1606,10 @@ int king_orchestrator_pipeline_run_cancelled(zend_string *run_id, const char *er
     );
     run_state->finished_at = time(NULL);
     run_state->cancel_requested = 1;
-    king_orchestrator_replace_runtime_string(&run_state->error_b64, zend_string_dup(error_b64, 1));
-    zend_string_release(error_b64);
+    if (error_b64 != NULL) {
+        king_orchestrator_replace_runtime_string(&run_state->error_b64, zend_string_dup(error_b64, 1));
+        zend_string_release(error_b64);
+    }
     king_orchestrator_set_last_run(run_state->run_id, "cancelled");
 
     if (king_orchestrator_persist_state() != SUCCESS) {
@@ -1557,6 +1648,8 @@ void king_orchestrator_append_component_info(zval *configuration)
             ? king_mcp_orchestrator_config.orchestrator_execution_backend
             : ""
     );
+    add_assoc_string(configuration, "retry_policy", "single_attempt");
+    add_assoc_string(configuration, "idempotency_policy", "caller_managed");
     add_assoc_string(
         configuration,
         "worker_queue_path",

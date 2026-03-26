@@ -41,8 +41,11 @@ void king_orchestrator_clear_run_cancel_request(zend_string *run_id);
 zend_string *king_orchestrator_pipeline_run_begin(
     zval *initial_data,
     zval *pipeline,
-    zval *options
+    zval *options,
+    const char *initial_status
 );
+int king_orchestrator_pipeline_run_mark_running(zend_string *run_id);
+int king_orchestrator_pipeline_run_is_terminal(zend_string *run_id);
 int king_orchestrator_pipeline_run_complete(zend_string *run_id, zval *result);
 int king_orchestrator_pipeline_run_fail(zend_string *run_id, const char *error_message);
 int king_orchestrator_pipeline_run_cancelled(zend_string *run_id, const char *error_message);
