@@ -51,6 +51,7 @@ typedef struct _king_telemetry_config_t {
     uint32_t batch_timeout_ms;
     uint32_t max_batch_size;
     uint32_t max_export_batch_size;
+    uint32_t max_queue_size;
     zend_bool enable_auto_instrumentation;
     zend_bool enable_distributed_tracing;
     zend_bool enable_metrics_collection;
@@ -170,6 +171,7 @@ const char* king_span_kind_to_string(king_span_kind_t kind);
 
 /* Export queue functions */
 king_telemetry_batch_t* king_telemetry_create_batch(void);
+void king_telemetry_free_batch(king_telemetry_batch_t *batch);
 int king_telemetry_queue_batch(king_telemetry_batch_t *batch);
 void king_telemetry_cleanup_export_queue(void);
 int king_telemetry_process_export_queue(void);
@@ -181,6 +183,7 @@ int king_telemetry_export_logs_otlp(zval *logs);
 
 /* Export queue statistics */
 extern uint32_t king_telemetry_queue_size;
+extern uint32_t king_telemetry_queue_drop_count;
 extern uint32_t king_telemetry_export_success_count;
 extern uint32_t king_telemetry_export_failure_count;
 

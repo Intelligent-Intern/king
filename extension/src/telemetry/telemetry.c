@@ -12,6 +12,7 @@
 #include <curl/curl.h>
 #include <ext/json/php_json.h>
 #include "zend_smart_str.h"
+#include "include/config/open_telemetry/base_layer.h"
 
 static king_telemetry_config_t king_telemetry_runtime_config;
 static bool king_telemetry_system_initialized = false;
@@ -21,8 +22,28 @@ static king_trace_context_t *king_current_span = NULL;
 king_telemetry_batch_t *king_telemetry_export_queue_head = NULL;
 king_telemetry_batch_t *king_telemetry_export_queue_tail = NULL;
 uint32_t king_telemetry_queue_size = 0;
+uint32_t king_telemetry_queue_drop_count = 0;
 uint32_t king_telemetry_export_success_count = 0;
 uint32_t king_telemetry_export_failure_count = 0;
+
+static uint32_t king_telemetry_default_max_queue_size(void)
+{
+    if (king_open_telemetry_config.batch_processor_max_queue_size > 0
+        && king_open_telemetry_config.batch_processor_max_queue_size <= UINT32_MAX) {
+        return (uint32_t) king_open_telemetry_config.batch_processor_max_queue_size;
+    }
+
+    return 2048;
+}
+
+static uint32_t king_telemetry_runtime_max_queue_size(void)
+{
+    if (king_telemetry_runtime_config.max_queue_size > 0) {
+        return king_telemetry_runtime_config.max_queue_size;
+    }
+
+    return king_telemetry_default_max_queue_size();
+}
 
 static void king_telemetry_span_free(king_trace_context_t *span)
 {
@@ -90,6 +111,21 @@ static void king_telemetry_config_apply_inline_array(
             Z_STRVAL_P(value)
         );
     }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "batch_processor_max_queue_size",
+        sizeof("batch_processor_max_queue_size") - 1
+    );
+    if (value != NULL) {
+        zend_long queue_limit = zval_get_long(value);
+
+        if (queue_limit > 0) {
+            config->max_queue_size = queue_limit > UINT32_MAX
+                ? UINT32_MAX
+                : (uint32_t) queue_limit;
+        }
+    }
 }
 
 static const char *king_telemetry_metric_type_from_zval(zval *type_zval)
@@ -116,7 +152,7 @@ static const char *king_telemetry_metric_type_from_zval(zval *type_zval)
     return NULL;
 }
 
-static void king_telemetry_batch_free(king_telemetry_batch_t *batch)
+void king_telemetry_free_batch(king_telemetry_batch_t *batch)
 {
     if (batch) {
         zval_ptr_dtor(&batch->metrics);
@@ -142,10 +178,18 @@ king_telemetry_batch_t* king_telemetry_create_batch(void)
 
 int king_telemetry_queue_batch(king_telemetry_batch_t *batch)
 {
+    uint32_t max_queue_size;
+
     if (!batch) return FAILURE;
 
     /* Always detach before enqueue so retries cannot retain stale links. */
     batch->next = NULL;
+
+    max_queue_size = king_telemetry_runtime_max_queue_size();
+    if (max_queue_size > 0 && king_telemetry_queue_size >= max_queue_size) {
+        king_telemetry_queue_drop_count++;
+        return FAILURE;
+    }
     
     if (!king_telemetry_export_queue_head) {
         king_telemetry_export_queue_head = batch;
@@ -181,7 +225,7 @@ void king_telemetry_cleanup_export_queue(void)
 {
     king_telemetry_batch_t *batch;
     while ((batch = king_telemetry_dequeue_batch()) != NULL) {
-        king_telemetry_batch_free(batch);
+        king_telemetry_free_batch(batch);
     }
 }
 
@@ -222,7 +266,7 @@ int king_telemetry_process_export_queue(void)
         }
         
         /* Free the batch */
-        king_telemetry_batch_free(batch);
+        king_telemetry_free_batch(batch);
     }
     
     king_telemetry_export_success_count += total_success;
@@ -233,6 +277,9 @@ int king_telemetry_init_system(king_telemetry_config_t *config)
 {
     if (config) {
         memcpy(&king_telemetry_runtime_config, config, sizeof(king_telemetry_config_t));
+        if (king_telemetry_runtime_config.max_queue_size == 0) {
+            king_telemetry_runtime_config.max_queue_size = king_telemetry_default_max_queue_size();
+        }
         king_telemetry_system_initialized = true;
     }
     return SUCCESS;
@@ -249,7 +296,7 @@ void king_telemetry_shutdown_system(void)
     /* Flush any remaining batches in queue */
     king_telemetry_batch_t *batch;
     while ((batch = king_telemetry_dequeue_batch()) != NULL) {
-        king_telemetry_batch_free(batch);
+        king_telemetry_free_batch(batch);
     }
 }
 
@@ -344,6 +391,7 @@ PHP_FUNCTION(king_telemetry_init)
     king_telemetry_config_t config;
     memset(&config, 0, sizeof(config));
     config.enabled = true;
+    config.max_queue_size = king_telemetry_default_max_queue_size();
     king_telemetry_config_apply_inline_array(&config, config_arr);
     
     king_telemetry_init_system(&config);
@@ -538,7 +586,7 @@ int king_telemetry_export_batch(void)
     }
     
     if (batch) {
-        king_telemetry_batch_free(batch);
+        king_telemetry_free_batch(batch);
     }
     
     return result;

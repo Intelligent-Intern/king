@@ -38,7 +38,7 @@ var_dump($storage['cdn']['cached_bytes']);
 var_dump($storage['cdn']['latest_cached_at']);
 ?>
 --EXPECT--
-array(6) {
+array(7) {
   [0]=>
   string(11) "initialized"
   [1]=>
@@ -51,6 +51,8 @@ array(6) {
   string(20) "export_success_count"
   [5]=>
   string(20) "export_failure_count"
+  [6]=>
+  string(16) "queue_drop_count"
 }
 bool(false)
 int(0)

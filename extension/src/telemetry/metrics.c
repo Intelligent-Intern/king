@@ -208,8 +208,10 @@ PHP_FUNCTION(king_telemetry_flush)
             add_next_index_zval(&batch->metrics, &m_info);
         } ZEND_HASH_FOREACH_END();
         
-        /* Queue batch for export */
-        king_telemetry_queue_batch(batch);
+        /* Queue batch for export or drop it when the retry queue is saturated. */
+        if (king_telemetry_queue_batch(batch) != SUCCESS) {
+            king_telemetry_free_batch(batch);
+        }
         
         /* Clear local registry after queuing */
         zend_hash_clean(&king_metrics_registry);
@@ -239,4 +241,5 @@ PHP_FUNCTION(king_telemetry_get_status)
     add_assoc_long(return_value, "queue_size", (zend_long)king_telemetry_queue_size);
     add_assoc_long(return_value, "export_success_count", (zend_long)king_telemetry_export_success_count);
     add_assoc_long(return_value, "export_failure_count", (zend_long)king_telemetry_export_failure_count);
+    add_assoc_long(return_value, "queue_drop_count", (zend_long)king_telemetry_queue_drop_count);
 }

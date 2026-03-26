@@ -70,6 +70,8 @@
   completed: 2026-03-25
 - [x] Harden telemetry export retry queue semantics so repeated export failures cannot create cyclic batches or shutdown-time memory corruption
   completed: 2026-03-26
+- [x] Bound telemetry retry queue growth under sustained exporter failures so failed batches cannot exhaust process memory
+  completed: 2026-03-26
 - [x] Drive autoscaling decisions from live telemetry/system metrics with hysteresis, cooldown, saturation coverage, and Hetzner-specific scale-step guards
 - [x] Add operator-facing spend and quota warnings for the Hetzner path; do not make provider spend APIs the sole hard-stop mechanism
   completed: 2026-03-25
@@ -105,7 +107,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `306/306`
+  tests: `307/307`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -177,9 +179,9 @@
   budget file: `benchmarks/budgets/canonical-ci.json`
   local verification: `./benchmarks/run-canonical.sh --iterations=5000 --warmup=500 --budget-file=benchmarks/budgets/canonical-ci.json` and `./scripts/go-live-readiness.sh --skip-baseline --benchmark-iterations 5000 --benchmark-warmup 500 --benchmark-budget-file benchmarks/budgets/canonical-ci.json`
   coverage: explicit per-case `max_ns_per_iteration` ceilings for `session`, `proto`, `object_store`, and `semantic_dns`, plus the same budget gate wired into the canonical CI go-live path.
-- [x] Telemetry failed-export retries now keep the queue acyclic and shutdown-safe
-  targeted PHPTs: `031`, `260`, `316`
-  coverage: dequeued telemetry batches now detach stale `next` pointers before requeue, repeated failed flushes keep retry order intact instead of creating cyclic lists, and shutdown cleanup remains safe after multiple exporter failures with queued batches still pending.
+- [x] Telemetry failed-export retries now keep the queue acyclic, bounded, and shutdown-safe
+  targeted PHPTs: `031`, `260`, `316`, `328`
+  coverage: dequeued telemetry batches now detach stale `next` pointers before requeue, repeated failed flushes keep retry order intact instead of creating cyclic lists, retry queue growth now stops at the configured `batch_processor_max_queue_size` ceiling with explicit drop accounting, and shutdown cleanup remains safe after multiple exporter failures with queued batches still pending.
 - [x] Telemetry OTLP metrics export now handles packed metric batches and enum metric types without crashing
   targeted PHPTs: `031`, `260`, `316`, `319`
   coverage: `king_telemetry_init()` can seed a local OTLP endpoint for export-path verification, the exporter now reads metric names from batch payloads instead of assuming string hash keys, enum-backed metric `type` longs are normalized safely, and counter plus gauge metrics export successfully through a local mock OTLP collector.
