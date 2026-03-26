@@ -16,9 +16,9 @@
 
 ## Current Next Leaf
 
-- [ ] Add a real cross-process cancellation channel for claimed file-worker orchestrator runs
-  why this blocks `8/10`: MCP helpers and orchestrator timeout/deadline ceilings are now enforced, and local concurrency is bounded, but live cancellation still stops at the process boundary because the file-worker backend can only reject `CancelToken` handoff honestly.
-  done when: controller-side cancel requests persist into claimed runs, workers honor them during execution and restart recovery, and PHPT coverage proves cancel-after-dispatch behavior without falling back to fake local-only semantics.
+- [ ] Add a multi-process end-to-end harness for remote MCP/orchestrator topology instead of single-process local-only verification
+  why this blocks `8/10`: the local file-worker boundary is now honest, persisted, cancellable, and recovery-safe, but the repo still does not prove end-to-end control-plane behavior once orchestration spans multiple cooperating processes with remote-style topology semantics.
+  done when: the test harness drives controller and worker processes independently, covers dispatch/recovery/cancel flows through the persisted topology boundary, and stops relying on single-process local assumptions for the control-plane verification path.
 
 ## Active Fronts
 
@@ -53,7 +53,8 @@
   completed: 2026-03-26
 - [x] Enforce timeout/deadline/max_concurrency controls across orchestrator run/dispatch and worker-side recovery, with honest rejection of unsupported live `CancelToken` propagation on `file_worker`
   completed: 2026-03-26
-- [ ] Add a real cross-process cancellation channel for claimed file-worker orchestrator runs
+- [x] Add a real cross-process cancellation channel for claimed file-worker orchestrator runs
+  completed: 2026-03-26
 - [ ] Add a multi-process end-to-end harness for remote MCP/orchestrator topology instead of single-process local-only verification
 
 ### 3. Observability, autoscaling, and lifecycle operations
@@ -94,7 +95,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `292/292`
+  tests: `293/293`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -131,6 +132,9 @@
 - [x] MCP and orchestrator runtime controls now enforce deadline/timeout ceilings and bounded local concurrency
   targeted PHPTs: `157`, `234`, `235`, `236`, `309`, `310`, `311`
   coverage: MCP request/upload/download `timeout_ms`/`deadline_ms`/`cancel` handling, OO and procedural parity, orchestrator `timeout_ms`/`overall_timeout_ms`/`deadline_ms`/`max_concurrency`, persisted worker-side control recovery, and explicit refusal to pretend that live `CancelToken` propagation already works across the `file_worker` boundary.
+- [x] File-worker orchestrator runs now honor persisted cross-process cancellation after claim and during stale-claim recovery
+  targeted PHPTs: `309`, `311`, `314`
+  coverage: controller-side `king_pipeline_orchestrator_cancel_run()` requests persist into claimed runs, workers convert live and recovered claimed jobs into durable `cancelled` snapshots instead of fatal-only exits, and stale `claimed-*.job` recovery now stays cancellable across restart-safe queue handoff.
 - [x] Canonical benchmark budgets now gate CI and final go-live readiness
   workflow: `.github/workflows/ci.yml`
   budget file: `benchmarks/budgets/canonical-ci.json`

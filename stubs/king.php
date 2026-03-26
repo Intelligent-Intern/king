@@ -1268,6 +1268,12 @@ namespace {
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_get_run(string $run_id): array|false {}
+
+    /**
+     * Request cancellation for one persisted file-worker pipeline run.
+     * Returns `false` when the run cannot be cancelled anymore.
+     */
+    function king_pipeline_orchestrator_cancel_run(string $run_id): bool {}
 }
 
 /* The OO surface below mirrors the currently exported runtime classes. */

@@ -33,6 +33,9 @@ int king_orchestrator_load_run_payload(
 );
 int king_orchestrator_enqueue_run(zend_string *run_id, zval *return_value);
 int king_orchestrator_claim_next_run(zend_string **run_id_out, char *claimed_path, size_t claimed_path_len);
+int king_orchestrator_request_run_cancel(zend_string *run_id);
+int king_orchestrator_run_cancel_requested(zend_string *run_id);
+void king_orchestrator_clear_run_cancel_request(zend_string *run_id);
 
 /* Pipeline Execution */
 zend_string *king_orchestrator_pipeline_run_begin(
@@ -42,6 +45,7 @@ zend_string *king_orchestrator_pipeline_run_begin(
 );
 int king_orchestrator_pipeline_run_complete(zend_string *run_id, zval *result);
 int king_orchestrator_pipeline_run_fail(zend_string *run_id, const char *error_message);
+int king_orchestrator_pipeline_run_cancelled(zend_string *run_id, const char *error_message);
 int king_orchestrator_run(zval *initial_data, zval *pipeline, zval *options, zval *return_value);
 int king_orchestrator_dispatch(zval *initial_data, zval *pipeline, zval *options, zval *return_value);
 int king_orchestrator_resume_run(zend_string *run_id, zval *return_value);

@@ -10,6 +10,7 @@
 #include "php_king.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"
 #include "include/pipeline_orchestrator/orchestrator.h"
+#include <unistd.h>
 
 typedef struct _king_orchestrator_exec_control {
     zend_long timeout_ms;
@@ -17,6 +18,7 @@ typedef struct _king_orchestrator_exec_control {
     uint64_t deadline_ms;
     uint64_t started_at_ms;
     zval *cancel_token;
+    zend_string *run_id;
 } king_orchestrator_exec_control_t;
 
 static int king_orchestrator_backend_is_file_worker(void)
@@ -42,6 +44,30 @@ static zend_result king_orchestrator_raise_error(
     }
 
     return FAILURE;
+}
+
+static zend_bool king_orchestrator_exception_message_contains(const char *needle)
+{
+    zval rv;
+    zval *message;
+
+    if (needle == NULL || needle[0] == '\0' || EG(exception) == NULL) {
+        return 0;
+    }
+
+    message = zend_read_property(
+        zend_ce_exception,
+        EG(exception),
+        "message",
+        sizeof("message") - 1,
+        1,
+        &rv
+    );
+    if (message == NULL || Z_TYPE_P(message) != IS_STRING) {
+        return 0;
+    }
+
+    return strstr(Z_STRVAL_P(message), needle) != NULL;
 }
 
 static zend_result king_orchestrator_validate_positive_long_option(
@@ -110,6 +136,7 @@ static zend_result king_orchestrator_exec_control_parse(
     control->deadline_ms = 0;
     control->started_at_ms = king_orchestrator_monotonic_time_ms();
     control->cancel_token = NULL;
+    control->run_id = NULL;
 
     if (options == NULL || Z_TYPE_P(options) != IS_ARRAY) {
         return SUCCESS;
@@ -234,7 +261,8 @@ static zend_result king_orchestrator_exec_control_parse(
 static zend_result king_orchestrator_exec_control_check(
     king_orchestrator_exec_control_t *control,
     const char *function_name,
-    zend_bool throw_on_error)
+    zend_bool throw_on_error,
+    zend_bool *cancelled_out)
 {
     char message[KING_ERR_LEN];
     uint64_t now_ms;
@@ -245,6 +273,10 @@ static zend_result king_orchestrator_exec_control_check(
 
     king_process_pending_interrupts();
 
+    if (cancelled_out != NULL) {
+        *cancelled_out = 0;
+    }
+
     if (king_transport_cancel_token_is_cancelled(control->cancel_token)) {
         snprintf(
             message,
@@ -252,6 +284,30 @@ static zend_result king_orchestrator_exec_control_check(
             "%s() cancelled the active orchestrator run via CancelToken.",
             function_name
         );
+        if (cancelled_out != NULL) {
+            *cancelled_out = 1;
+        }
+        return king_orchestrator_raise_error(
+            message,
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+
+    if (
+        control->run_id != NULL
+        && king_orchestrator_run_cancel_requested(control->run_id)
+    ) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() cancelled the active orchestrator run via the persisted file-worker cancel channel.",
+            function_name
+        );
+        if (cancelled_out != NULL) {
+            *cancelled_out = 1;
+        }
+        (void) king_orchestrator_pipeline_run_cancelled(control->run_id, message);
         return king_orchestrator_raise_error(
             message,
             king_ce_runtime_exception,
@@ -292,6 +348,19 @@ static zend_result king_orchestrator_exec_control_check(
     }
 
     return SUCCESS;
+}
+
+static void king_orchestrator_mark_interrupted_run(zend_string *run_id, zend_bool cancelled)
+{
+    if (run_id == NULL) {
+        return;
+    }
+
+    if (cancelled) {
+        (void) king_orchestrator_pipeline_run_cancelled(run_id, king_get_error());
+    } else {
+        (void) king_orchestrator_pipeline_run_fail(run_id, king_get_error());
+    }
 }
 
 static zend_result king_orchestrator_enforce_max_concurrency(
@@ -347,6 +416,80 @@ static zval *king_orchestrator_prepare_persisted_options(zval *options, zval *sa
     return sanitized_options;
 }
 
+static zend_result king_orchestrator_validate_non_negative_step_delay(
+    zval *value,
+    uint32_t index,
+    zend_bool throw_on_error)
+{
+    char message[KING_ERR_LEN];
+
+    if (value == NULL || Z_TYPE_P(value) == IS_NULL) {
+        return SUCCESS;
+    }
+
+    if (Z_TYPE_P(value) != IS_LONG || Z_LVAL_P(value) < 0) {
+        snprintf(
+            message,
+            sizeof(message),
+            "king_pipeline_orchestrator_run() step %u option 'delay_ms' must be provided as an integer >= 0.",
+            (unsigned) index
+        );
+        return king_orchestrator_raise_error(
+            message,
+            king_ce_validation_exception,
+            throw_on_error
+        );
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_orchestrator_execute_step_delay(
+    zval *step,
+    uint32_t index,
+    king_orchestrator_exec_control_t *control,
+    const char *function_name,
+    zend_bool throw_on_error,
+    zend_bool *cancelled_out)
+{
+    zval *delay_value;
+    zend_long delay_ms;
+    uint64_t started_at_ms;
+
+    if (step == NULL || Z_TYPE_P(step) != IS_ARRAY) {
+        return SUCCESS;
+    }
+
+    delay_value = zend_hash_str_find(Z_ARRVAL_P(step), "delay_ms", sizeof("delay_ms") - 1);
+    if (king_orchestrator_validate_non_negative_step_delay(delay_value, index, throw_on_error) != SUCCESS) {
+        return FAILURE;
+    }
+    if (delay_value == NULL || Z_TYPE_P(delay_value) == IS_NULL || Z_LVAL_P(delay_value) == 0) {
+        return SUCCESS;
+    }
+
+    delay_ms = Z_LVAL_P(delay_value);
+    started_at_ms = king_orchestrator_monotonic_time_ms();
+
+    while (king_orchestrator_monotonic_time_ms() - started_at_ms < (uint64_t) delay_ms) {
+        uint64_t elapsed_ms = king_orchestrator_monotonic_time_ms() - started_at_ms;
+        uint64_t remaining_ms = (uint64_t) delay_ms > elapsed_ms
+            ? (uint64_t) delay_ms - elapsed_ms
+            : 0;
+        useconds_t sleep_chunk = (useconds_t) ((remaining_ms > 10 ? 10 : remaining_ms) * 1000U);
+
+        if (king_orchestrator_exec_control_check(control, function_name, throw_on_error, cancelled_out) != SUCCESS) {
+            return FAILURE;
+        }
+        if (sleep_chunk == 0) {
+            break;
+        }
+        usleep(sleep_chunk);
+    }
+
+    return king_orchestrator_exec_control_check(control, function_name, throw_on_error, cancelled_out);
+}
+
 static zend_result king_orchestrator_validate_pipeline_step(
     zval *step,
     uint32_t index,
@@ -388,7 +531,11 @@ static zend_result king_orchestrator_validate_pipeline_step(
         );
     }
 
-    return SUCCESS;
+    return king_orchestrator_validate_non_negative_step_delay(
+        zend_hash_str_find(Z_ARRVAL_P(step), "delay_ms", sizeof("delay_ms") - 1),
+        index,
+        throw_on_error
+    );
 }
 
 static int king_orchestrator_execute_existing_run(
@@ -403,6 +550,7 @@ static int king_orchestrator_execute_existing_run(
     HashTable *ht;
     zval *step;
     uint32_t index = 0;
+    zend_bool cancelled = 0;
 
     if (initial_data == NULL || pipeline_array == NULL || Z_TYPE_P(pipeline_array) != IS_ARRAY) {
         return king_orchestrator_raise_error(
@@ -412,10 +560,12 @@ static int king_orchestrator_execute_existing_run(
         );
     }
 
-    if (king_orchestrator_exec_control_check(control, function_name, throw_on_error) != SUCCESS) {
-        if (run_id != NULL) {
-            (void) king_orchestrator_pipeline_run_fail(run_id, king_get_error());
-        }
+    if (control != NULL) {
+        control->run_id = run_id;
+    }
+
+    if (king_orchestrator_exec_control_check(control, function_name, throw_on_error, &cancelled) != SUCCESS) {
+        king_orchestrator_mark_interrupted_run(run_id, cancelled);
         ZVAL_FALSE(return_value);
         return FAILURE;
     }
@@ -425,10 +575,11 @@ static int king_orchestrator_execute_existing_run(
 
     ht = Z_ARRVAL_P(pipeline_array);
     ZEND_HASH_FOREACH_VAL(ht, step) {
-        if (king_orchestrator_exec_control_check(control, function_name, throw_on_error) != SUCCESS) {
+        cancelled = 0;
+        if (king_orchestrator_exec_control_check(control, function_name, throw_on_error, &cancelled) != SUCCESS) {
             zval_ptr_dtor(return_value);
             ZVAL_FALSE(return_value);
-            (void) king_orchestrator_pipeline_run_fail(run_id, king_get_error());
+            king_orchestrator_mark_interrupted_run(run_id, cancelled);
             return FAILURE;
         }
 
@@ -438,13 +589,28 @@ static int king_orchestrator_execute_existing_run(
             (void) king_orchestrator_pipeline_run_fail(run_id, king_get_error());
             return FAILURE;
         }
+        cancelled = 0;
+        if (king_orchestrator_execute_step_delay(
+                step,
+                index,
+                control,
+                function_name,
+                throw_on_error,
+                &cancelled
+            ) != SUCCESS) {
+            zval_ptr_dtor(return_value);
+            ZVAL_FALSE(return_value);
+            king_orchestrator_mark_interrupted_run(run_id, cancelled);
+            return FAILURE;
+        }
         index++;
     } ZEND_HASH_FOREACH_END();
 
-    if (king_orchestrator_exec_control_check(control, function_name, throw_on_error) != SUCCESS) {
+    cancelled = 0;
+    if (king_orchestrator_exec_control_check(control, function_name, throw_on_error, &cancelled) != SUCCESS) {
         zval_ptr_dtor(return_value);
         ZVAL_FALSE(return_value);
-        (void) king_orchestrator_pipeline_run_fail(run_id, king_get_error());
+        king_orchestrator_mark_interrupted_run(run_id, cancelled);
         return FAILURE;
     }
 
@@ -539,7 +705,7 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
         return FAILURE;
     }
 
-    if (king_orchestrator_exec_control_check(&control, "king_pipeline_orchestrator_run", 1) != SUCCESS) {
+    if (king_orchestrator_exec_control_check(&control, "king_pipeline_orchestrator_run", 1, NULL) != SUCCESS) {
         return FAILURE;
     }
 
@@ -618,7 +784,7 @@ int king_orchestrator_dispatch(zval *initial_data, zval *pipeline_array, zval *o
         );
     }
 
-    if (king_orchestrator_exec_control_check(&control, "king_pipeline_orchestrator_dispatch", 1) != SUCCESS) {
+    if (king_orchestrator_exec_control_check(&control, "king_pipeline_orchestrator_dispatch", 1, NULL) != SUCCESS) {
         return FAILURE;
     }
 
@@ -705,10 +871,47 @@ int king_orchestrator_worker_run_next(zval *return_value)
     }
 
     if (rc != SUCCESS) {
-        zend_string_release(run_id);
         if (EG(exception) != NULL) {
+            zval cancelled_snapshot;
+            zval *status;
+            const char *error_message = king_get_error();
+
+            if (
+                king_orchestrator_run_cancel_requested(run_id)
+                || (
+                    error_message != NULL
+                    && strstr(error_message, "persisted file-worker cancel channel") != NULL
+                )
+                || king_orchestrator_exception_message_contains(
+                    "persisted file-worker cancel channel"
+                )
+            ) {
+                (void) king_orchestrator_pipeline_run_cancelled(run_id, error_message);
+            }
+
+            ZVAL_NULL(&cancelled_snapshot);
+            if (king_orchestrator_get_run_snapshot(run_id, &cancelled_snapshot) == SUCCESS) {
+                status = zend_hash_str_find(
+                    Z_ARRVAL(cancelled_snapshot),
+                    "status",
+                    sizeof("status") - 1
+                );
+                if (
+                    status != NULL
+                    && Z_TYPE_P(status) == IS_STRING
+                    && zend_string_equals_literal(Z_STR_P(status), "cancelled")
+                ) {
+                    zend_clear_exception();
+                    zend_string_release(run_id);
+                    ZVAL_COPY_VALUE(return_value, &cancelled_snapshot);
+                    return SUCCESS;
+                }
+                zval_ptr_dtor(&cancelled_snapshot);
+            }
+            zend_string_release(run_id);
             return FAILURE;
         }
+        zend_string_release(run_id);
         return king_orchestrator_raise_error(
             "king_pipeline_orchestrator_worker_run_next() failed while executing the claimed run.",
             king_ce_runtime_exception,

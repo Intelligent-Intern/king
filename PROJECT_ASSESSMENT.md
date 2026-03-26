@@ -48,8 +48,10 @@ run history, and in-flight run snapshots across restart, and the recovery path
 is verified by dedicated cross-process PHPT coverage. That local control plane
 now also crosses an honest backend boundary: the orchestrator supports a
 config-selectable `file_worker` execution backend that persists queued runs,
-hands them off across processes, and proves worker-side completion against the
-same recovered run ledger. MCP request/upload/download helpers now enforce
+hands them off across processes, proves worker-side completion against the
+same recovered run ledger, and now honors persisted controller-side cancel
+requests even after a worker has already claimed or recovered the job. MCP
+request/upload/download helpers now enforce
 `timeout_ms`, monotonic `deadline_ms`, and `cancel` budgets in both the
 procedural and OO surfaces, while the orchestrator now enforces
 `timeout_ms`/`overall_timeout_ms`, `deadline_ms`, and bounded
@@ -86,7 +88,7 @@ performance/compatibility gates.
 | **Public API and runtime parity** | **Verified** | `stubs/king.php` matches the live extension surface and zero stubbed API groups remain in the runtime inventory |
 | **External QUIC backend bootstrap** | **Incomplete** | HTTP/3 and QUIC are green locally, but `quiche` recovery and dependency pinning are still weaker than a fully tracked, deterministic bootstrap path |
 | **External autoscaling provisioning** | **Partially production-honest** | Hetzner is real, controller-owned, persisted, and telemetry-driven; other providers intentionally stay simulated behind the generic contract |
-| **Distributed control plane** | **Cross-process local boundary with bounded runtime controls** | MCP is still local-first, and the orchestrator now has a real persisted file-worker handoff path plus verified timeout/deadline/max-concurrency controls, but live cross-process cancellation and deeper remote/distributed backends are still open |
+| **Distributed control plane** | **Cross-process local boundary with bounded runtime controls and cancellation** | MCP is still local-first, and the orchestrator now has a real persisted file-worker handoff path plus verified timeout/deadline/max-concurrency controls and persisted post-claim cancellation, but deeper remote/distributed backends are still open |
 | **Operational backend depth** | **Incomplete** | exporter depth, failover, long-haul soak, and compatibility budgets are still open |
 
 ## Verified Baseline
@@ -110,7 +112,7 @@ Repository facts from the current tree:
 - `extension/src`: 177 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 168 headers
-- `extension/tests`: 292 PHPT files
+- `extension/tests`: 293 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently verified regression baseline is:
@@ -119,9 +121,9 @@ The currently verified regression baseline is:
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
 - extension load smoke: passing
-- `./scripts/test-extension.sh`: `292/292` PHPT tests passing
+- `./scripts/test-extension.sh`: `293/293` PHPT tests passing
 - `./scripts/fuzz-runtime.sh`: passing
-- `./scripts/check-stub-parity.sh`: passing (`123` functions, `43` classes, `48` declared public methods)
+- `./scripts/check-stub-parity.sh`: passing (`124` functions, `43` classes, `48` declared public methods)
 - `./scripts/smoke-profile.sh release`: passing
 - `./scripts/smoke-profile.sh asan`: passing
 - benchmark smoke (`session`, `proto`, `object_store`, `semantic_dns`): passing
@@ -140,6 +142,7 @@ The currently verified regression baseline is:
 - targeted HTTP/3 runtime verification (`190`, `191`, `204`, `232`): passing
 - targeted orchestrator persistence and backend-boundary verification (`250`, `294`, `307`, `308`, `309`): passing
 - targeted MCP/orchestrator runtime-control verification (`157`, `234`, `235`, `236`, `309`, `310`, `311`): passing
+- targeted file-worker cross-process cancellation verification (`309`, `311`, `314`): passing
 - targeted object-store path-hardening verification (`302`, `305`, `313`): passing
 - `king_health()['stubbed_api_group_count']`: `0`
 - `.github/workflows/ci.yml`: wired to the canonical audit/build/test path plus the final go-live readiness step with the committed benchmark budget gate
@@ -162,7 +165,7 @@ The repo already has active native runtime slices for:
 - native Semantic DNS registry, routing, state persistence, discovery, and mother-node tracking
 - native file-system object-store backend core with durable .meta sidecars, local CDN cache, multi-node distribution, explicit contract/status failure semantics for non-local backends (distributed/S3/GCS/Azure simulated), and backup/restore/import/export directory confinement to the active storage root
 - native MCP runtime in `src/mcp/` with stateful session tracking, flattened ID persistence in Object Store, full request/upload/download parity, and verified `timeout_ms` / monotonic `deadline_ms` / `cancel` control handling across both procedural and OO APIs
-- native Pipeline Orchestrator and Tool Registry in `src/pipeline_orchestrator/`, including restart-safe tool registry, logging snapshot persistence, completed run history, in-flight run rehydration, a config-selectable `local` versus `file_worker` execution backend with persisted cross-process dispatch, and verified `timeout_ms` / `overall_timeout_ms` / `deadline_ms` / `max_concurrency` enforcement across local runs plus resumed worker execution
+- native Pipeline Orchestrator and Tool Registry in `src/pipeline_orchestrator/`, including restart-safe tool registry, logging snapshot persistence, completed run history, in-flight run rehydration, a config-selectable `local` versus `file_worker` execution backend with persisted cross-process dispatch, controller-driven post-claim cancellation and stale-claim recovery, and verified `timeout_ms` / `overall_timeout_ms` / `deadline_ms` / `max_concurrency` enforcement across local runs plus resumed worker execution
 - native Telemetry runtime with active span lifecycle, metrics aggregation, flush paths, and context propagation
 - native Autoscaling engine with monitoring, live telemetry/system-backed decisioning, cooldown/hysteresis enforcement, capped scale-step policy resolution, pluggable provider routing, controller-only Hetzner token loading from `php.ini`, honest Hetzner create/delete HTTP calls, restart-safe controller state persistence, explicit managed-node inventory APIs, and `register -> ready -> drain -> delete` lifecycle control plus pending-node safeguards on the honest Hetzner path while non-Hetzner providers stay simulated behind the same contract
 - operator-facing spend/quota budget warning/hard-limit surfaces in `king_autoscaling_get_status`, with warning-only behavior on probe/API degrade and hard-stop enforcement on configured hard limits
@@ -180,7 +183,7 @@ The repo is still not a full production-grade implementation for:
 - object-store cloud adapters remain simulated beyond the local filesystem core; local persisted backend restart rehydration is verified, but distributed/cloud durability guarantees are still open
 - release/container profile builds remain sensitive to missing `quiche`/`libcurl` layouts in clean or cross-arch environments until bootstrap normalization is fully deterministic and independent of local host headers
 - long-haul telemetry exporter hardening, failover behavior, and queue/backpressure guarantees under degraded conditions
-- remote/distributed MCP execution and deeper orchestrator distribution beyond the current local file-worker boundary; restart-safe persistence, bounded timeout/deadline semantics, and cross-process worker handoff are verified, but live cross-process cancellation, remote topology, and broader backend depth are still open
+- remote/distributed MCP execution and deeper orchestrator distribution beyond the current local file-worker boundary; restart-safe persistence, bounded timeout/deadline semantics, cross-process worker handoff, and persisted post-claim cancellation are verified, but remote topology and broader backend depth are still open
 - coordinated multi-node rolling-restart, failover, and crash-recovery operational depth
 - installability matrix and long-duration sanitizer soak coverage
 
@@ -212,7 +215,7 @@ transport depth, or operational depth is still incomplete.
 ### 4. MCP And Orchestrator Are Still Local-First
 
 - MCP request/upload/download behavior is real inside the repo-local runtime, but remote/distributed execution depth is still missing.
-- The orchestrator has a real native kernel, survives restart with persisted tool registry, logging state, completed runs, and running snapshots, and now crosses a persisted file-worker boundary. Timeout/deadline handling and bounded local concurrency are verified, but live cancellation still stops at the process boundary because `file_worker` honestly rejects `CancelToken` handoff, and deeper remote topology is still open.
+- The orchestrator has a real native kernel, survives restart with persisted tool registry, logging state, completed runs, and running snapshots, and now crosses a persisted file-worker boundary with verified post-claim cancellation and stale-claim recovery. `CancelToken` handoff is still honestly rejected across the `file_worker` process boundary, and deeper remote topology is still open.
 - There is still no multi-process or multi-host verification harness proving that these control-plane slices behave correctly once execution leaves the local process.
 
 ### 5. Telemetry And System Operations Still Need Real Export And Recovery Semantics
