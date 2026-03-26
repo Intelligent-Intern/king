@@ -31,10 +31,6 @@ static ZEND_INI_MH(OnUpdateDnsPositiveLong)
         king_smart_dns_config.default_record_ttl_sec = val;
     } else if (zend_string_equals_literal(entry->name, "king.dns_service_discovery_max_ips_per_response")) {
         king_smart_dns_config.service_discovery_max_ips_per_response = val;
-    } else if (zend_string_equals_literal(entry->name, "king.dns_edns_udp_payload_size")) {
-        king_smart_dns_config.edns_udp_payload_size = val;
-    } else if (zend_string_equals_literal(entry->name, "king.dns_mothernode_sync_interval_sec")) {
-        king_smart_dns_config.mothernode_sync_interval_sec = val;
     }
 
     return SUCCESS;
@@ -59,30 +55,16 @@ PHP_INI_BEGIN()
         OnUpdateString, server_bind_host, kg_smart_dns_config_t, king_smart_dns_config)
     STD_PHP_INI_ENTRY("king.dns_server_port", "53", PHP_INI_SYSTEM,
         OnUpdateDnsPositiveLong, server_port, kg_smart_dns_config_t, king_smart_dns_config)
-    STD_PHP_INI_ENTRY("king.dns_server_enable_tcp", "1", PHP_INI_SYSTEM,
-        OnUpdateBool, server_enable_tcp, kg_smart_dns_config_t, king_smart_dns_config)
     STD_PHP_INI_ENTRY("king.dns_default_record_ttl_sec", "60", PHP_INI_SYSTEM,
         OnUpdateDnsPositiveLong, default_record_ttl_sec, kg_smart_dns_config_t, king_smart_dns_config)
     STD_PHP_INI_ENTRY("king.dns_mode", "service_discovery", PHP_INI_SYSTEM,
         OnUpdateDnsModeString, mode, kg_smart_dns_config_t, king_smart_dns_config)
-    STD_PHP_INI_ENTRY("king.dns_static_zone_file_path", "/etc/quicpro/dns/zones.db", PHP_INI_SYSTEM,
-        OnUpdateString, static_zone_file_path, kg_smart_dns_config_t, king_smart_dns_config)
-    STD_PHP_INI_ENTRY("king.dns_recursive_forwarders", "", PHP_INI_SYSTEM,
-        OnUpdateString, recursive_forwarders, kg_smart_dns_config_t, king_smart_dns_config)
-    STD_PHP_INI_ENTRY("king.dns_health_agent_mcp_endpoint", "127.0.0.1:9998", PHP_INI_SYSTEM,
-        OnUpdateString, health_agent_mcp_endpoint, kg_smart_dns_config_t, king_smart_dns_config)
     STD_PHP_INI_ENTRY("king.dns_service_discovery_max_ips_per_response", "8", PHP_INI_SYSTEM,
         OnUpdateDnsPositiveLong, service_discovery_max_ips_per_response, kg_smart_dns_config_t, king_smart_dns_config)
-    STD_PHP_INI_ENTRY("king.dns_enable_dnssec_validation", "1", PHP_INI_SYSTEM,
-        OnUpdateBool, enable_dnssec_validation, kg_smart_dns_config_t, king_smart_dns_config)
-    STD_PHP_INI_ENTRY("king.dns_edns_udp_payload_size", "1232", PHP_INI_SYSTEM,
-        OnUpdateDnsPositiveLong, edns_udp_payload_size, kg_smart_dns_config_t, king_smart_dns_config)
     STD_PHP_INI_ENTRY("king.dns_semantic_mode_enable", "0", PHP_INI_SYSTEM,
         OnUpdateBool, semantic_mode_enable, kg_smart_dns_config_t, king_smart_dns_config)
     STD_PHP_INI_ENTRY("king.dns_mothernode_uri", "", PHP_INI_SYSTEM,
         OnUpdateString, mothernode_uri, kg_smart_dns_config_t, king_smart_dns_config)
-    STD_PHP_INI_ENTRY("king.dns_mothernode_sync_interval_sec", "86400", PHP_INI_SYSTEM,
-        OnUpdateDnsPositiveLong, mothernode_sync_interval_sec, kg_smart_dns_config_t, king_smart_dns_config)
 PHP_INI_END()
 
 extern int king_ini_module_number;

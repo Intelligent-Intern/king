@@ -163,7 +163,6 @@ esac
             "service_discovery_max_ips_per_response" => 5,
             "semantic_mode_enable" => true,
             "mothernode_uri" => "mother://profile-smoke",
-            "mothernode_sync_interval_sec" => 60,
             "routing_policies" => ["mode" => "local"],
         ])) {
             fwrite(STDERR, "Semantic-DNS init smoke failed.\n");

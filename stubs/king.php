@@ -1047,7 +1047,7 @@ namespace {
     /**
      * Initializes the local semantic-DNS core/runtime config snapshot.
      * Supported keys include bind/port, TTL/discovery limits, semantic mode,
-     * mother-node sync hints, and optional `routing_policies`.
+     * mother-node URI, and optional `routing_policies`.
      * @param array<string,mixed> $config
      * @throws \King\ValidationException|\King\SystemException
      */

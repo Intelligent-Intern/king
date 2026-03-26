@@ -48,9 +48,6 @@ static void king_config_free_dns_strings(kg_smart_dns_config_t *dns)
 {
     pefree(dns->server_bind_host, 1);
     pefree(dns->mode, 1);
-    pefree(dns->static_zone_file_path, 1);
-    pefree(dns->recursive_forwarders, 1);
-    pefree(dns->health_agent_mcp_endpoint, 1);
     pefree(dns->mothernode_uri, 1);
 }
 
@@ -160,9 +157,6 @@ static void king_config_clone_owned_strings(king_cfg_t *cfg)
 
     cfg->dns.server_bind_host = king_config_clone_persistent_string(cfg->dns.server_bind_host);
     cfg->dns.mode = king_config_clone_persistent_string(cfg->dns.mode);
-    cfg->dns.static_zone_file_path = king_config_clone_persistent_string(cfg->dns.static_zone_file_path);
-    cfg->dns.recursive_forwarders = king_config_clone_persistent_string(cfg->dns.recursive_forwarders);
-    cfg->dns.health_agent_mcp_endpoint = king_config_clone_persistent_string(cfg->dns.health_agent_mcp_endpoint);
     cfg->dns.mothernode_uri = king_config_clone_persistent_string(cfg->dns.mothernode_uri);
     cfg->owns_dns_strings = 1;
 

@@ -14,7 +14,6 @@ var_dump(king_semantic_dns_init([
     'service_discovery_max_ips_per_response' => 16,
     'semantic_mode_enable' => true,
     'mothernode_uri' => 'mother://seeded-fuzz',
-    'mothernode_sync_interval_sec' => 60,
     'routing_policies' => ['mode' => 'local'],
 ]));
 var_dump(king_semantic_dns_start_server());

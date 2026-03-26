@@ -53,7 +53,7 @@ static void king_semantic_dns_config_assign_defaults(king_semantic_dns_config_t 
         && king_smart_dns_config.server_port <= 65535)
         ? (uint16_t) king_smart_dns_config.server_port
         : 5353;
-    config->server_enable_tcp = king_smart_dns_config.server_enable_tcp ? 1 : 0;
+    config->server_enable_tcp = 0;
     config->health_check_interval_ms = 30000;
     config->service_ttl_seconds = king_smart_dns_config.default_record_ttl_sec > 0
         ? (uint32_t) king_smart_dns_config.default_record_ttl_sec
@@ -62,9 +62,7 @@ static void king_semantic_dns_config_assign_defaults(king_semantic_dns_config_t 
         ? (uint32_t) king_smart_dns_config.service_discovery_max_ips_per_response
         : 8;
     config->semantic_mode_enable = king_smart_dns_config.semantic_mode_enable ? 1 : 0;
-    config->mothernode_sync_interval_sec = king_smart_dns_config.mothernode_sync_interval_sec > 0
-        ? (uint32_t) king_smart_dns_config.mothernode_sync_interval_sec
-        : 60;
+    config->mothernode_sync_interval_sec = 0;
     config->service_discovery_max_ips_per_response = config->max_services_per_type;
 
     if (king_smart_dns_config.server_bind_host != NULL
@@ -311,6 +309,25 @@ static bool king_semantic_dns_require_non_empty_string_option(
     return true;
 }
 
+static bool king_semantic_dns_reject_unsupported_option(
+    zval *config,
+    const char *option_name,
+    size_t option_name_len
+)
+{
+    if (zend_hash_str_exists(Z_ARRVAL_P(config), option_name, option_name_len)) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Semantic-DNS v1 does not support init option '%s'.",
+            option_name
+        );
+        return false;
+    }
+
+    return true;
+}
+
 static bool king_semantic_dns_parse_init_config(
     zval *config,
     king_semantic_dns_config_t *parsed
@@ -319,6 +336,25 @@ static bool king_semantic_dns_parse_init_config(
     zval *value_zv;
 
     king_semantic_dns_config_assign_defaults(parsed);
+
+    if (!king_semantic_dns_reject_unsupported_option(
+            config,
+            "server_enable_tcp",
+            sizeof("server_enable_tcp") - 1
+        )
+        || !king_semantic_dns_reject_unsupported_option(
+            config,
+            "health_check_interval_ms",
+            sizeof("health_check_interval_ms") - 1
+        )
+        || !king_semantic_dns_reject_unsupported_option(
+            config,
+            "mothernode_sync_interval_sec",
+            sizeof("mothernode_sync_interval_sec") - 1
+        )) {
+        king_semantic_dns_config_clear(parsed);
+        return false;
+    }
 
     if (!king_semantic_dns_require_bool_option(
             config,
@@ -345,23 +381,6 @@ static bool king_semantic_dns_parse_init_config(
             parsed->bind_address,
             sizeof(parsed->bind_address)
         )
-        || !king_semantic_dns_require_bool_option(
-            config,
-            "server_enable_tcp",
-            sizeof("server_enable_tcp") - 1,
-            NULL,
-            0,
-            &parsed->server_enable_tcp
-        )
-        || !king_semantic_dns_require_positive_long_option(
-            config,
-            "health_check_interval_ms",
-            sizeof("health_check_interval_ms") - 1,
-            NULL,
-            0,
-            &parsed->health_check_interval_ms,
-            0
-        )
         || !king_semantic_dns_require_positive_long_option(
             config,
             "default_record_ttl_sec",
@@ -387,15 +406,6 @@ static bool king_semantic_dns_parse_init_config(
             NULL,
             0,
             &parsed->semantic_mode_enable
-        )
-        || !king_semantic_dns_require_positive_long_option(
-            config,
-            "mothernode_sync_interval_sec",
-            sizeof("mothernode_sync_interval_sec") - 1,
-            NULL,
-            0,
-            &parsed->mothernode_sync_interval_sec,
-            0
         )
         || !king_semantic_dns_require_non_empty_string_option(
             config,

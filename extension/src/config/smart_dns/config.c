@@ -4,7 +4,6 @@
 
 #include "include/validation/config_param/validate_bool.h"
 #include "include/validation/config_param/validate_positive_long.h"
-#include "include/validation/config_param/validate_string_from_allowlist.h"
 #include "include/validation/config_param/validate_string.h"
 
 #include "php.h"
@@ -48,6 +47,17 @@ static int kg_smart_dns_validate_mode(zval *value, char **target)
     return SUCCESS;
 }
 
+static int kg_smart_dns_reject_unsupported_setting(const char *setting_name)
+{
+    zend_throw_exception_ex(
+        spl_ce_InvalidArgumentException,
+        0,
+        "Smart-DNS v1 does not support %s.",
+        setting_name
+    );
+    return FAILURE;
+}
+
 int kg_config_smart_dns_apply_userland_config_to(
     kg_smart_dns_config_t *target,
     zval *config_arr)
@@ -71,13 +81,9 @@ int kg_config_smart_dns_apply_userland_config_to(
                 return FAILURE;
             }
         } else if (zend_string_equals_literal(key, "dns_server_enable_tcp")) {
-            if (kg_smart_dns_apply_bool_field(value, "dns_server_enable_tcp", &target->server_enable_tcp) != SUCCESS) {
-                return FAILURE;
-            }
+            return kg_smart_dns_reject_unsupported_setting("dns.server_enable_tcp");
         } else if (zend_string_equals_literal(key, "dns_enable_dnssec_validation")) {
-            if (kg_smart_dns_apply_bool_field(value, "dns_enable_dnssec_validation", &target->enable_dnssec_validation) != SUCCESS) {
-                return FAILURE;
-            }
+            return kg_smart_dns_reject_unsupported_setting("dns.enable_dnssec_validation");
         } else if (zend_string_equals_literal(key, "dns_semantic_mode_enable")) {
             if (kg_smart_dns_apply_bool_field(value, "dns_semantic_mode_enable", &target->semantic_mode_enable) != SUCCESS) {
                 return FAILURE;
@@ -95,13 +101,9 @@ int kg_config_smart_dns_apply_userland_config_to(
                 return FAILURE;
             }
         } else if (zend_string_equals_literal(key, "dns_edns_udp_payload_size")) {
-            if (kg_validate_positive_long(value, &target->edns_udp_payload_size) != SUCCESS) {
-                return FAILURE;
-            }
+            return kg_smart_dns_reject_unsupported_setting("dns.edns_udp_payload_size");
         } else if (zend_string_equals_literal(key, "dns_mothernode_sync_interval_sec")) {
-            if (kg_validate_positive_long(value, &target->mothernode_sync_interval_sec) != SUCCESS) {
-                return FAILURE;
-            }
+            return kg_smart_dns_reject_unsupported_setting("dns.mothernode_sync_interval_sec");
         } else if (zend_string_equals_literal(key, "dns_mode")) {
             if (kg_smart_dns_validate_mode(value, &target->mode) != SUCCESS) {
                 return FAILURE;
@@ -111,17 +113,11 @@ int kg_config_smart_dns_apply_userland_config_to(
                 return FAILURE;
             }
         } else if (zend_string_equals_literal(key, "dns_static_zone_file_path")) {
-            if (kg_validate_string(value, &target->static_zone_file_path) != SUCCESS) {
-                return FAILURE;
-            }
+            return kg_smart_dns_reject_unsupported_setting("dns.static_zone_file_path");
         } else if (zend_string_equals_literal(key, "dns_recursive_forwarders")) {
-            if (kg_validate_string(value, &target->recursive_forwarders) != SUCCESS) {
-                return FAILURE;
-            }
+            return kg_smart_dns_reject_unsupported_setting("dns.recursive_forwarders");
         } else if (zend_string_equals_literal(key, "dns_health_agent_mcp_endpoint")) {
-            if (kg_validate_string(value, &target->health_agent_mcp_endpoint) != SUCCESS) {
-                return FAILURE;
-            }
+            return kg_smart_dns_reject_unsupported_setting("dns.health_agent_mcp_endpoint");
         } else if (zend_string_equals_literal(key, "dns_mothernode_uri")) {
             if (kg_validate_string(value, &target->mothernode_uri) != SUCCESS) {
                 return FAILURE;

@@ -179,7 +179,7 @@ array(6) {
 }
 string(12) "semantic_dns"
 string(13) "config_backed"
-array(6) {
+array(8) {
   [0]=>
   string(13) "server_enable"
   [1]=>
@@ -189,8 +189,12 @@ array(6) {
   [3]=>
   string(4) "mode"
   [4]=>
-  string(20) "semantic_mode_enable"
+  string(22) "default_record_ttl_sec"
   [5]=>
+  string(38) "service_discovery_max_ips_per_response"
+  [6]=>
+  string(20) "semantic_mode_enable"
+  [7]=>
   string(14) "mothernode_uri"
 }
 bool(true)

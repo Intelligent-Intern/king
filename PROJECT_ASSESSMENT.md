@@ -19,7 +19,7 @@ They are concentrated in six areas:
 
 - wire-truth for server and WebSocket behavior
 - remote MCP and deeper distributed orchestration
-- remaining Smart DNS config scope beyond the fenced `service_discovery`/semantic slice
+- larger Smart-DNS topology and distributed routing verification beyond the local slice
 - long-haul telemetry, exporter, and fleet recovery depth
 - deterministic QUIC bootstrap and clean-host installation confidence
 - compatibility, sanitizer soak, and release-grade upgrade guarantees
@@ -36,7 +36,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `309/309` passing
+- `./scripts/test-extension.sh`: `310/310` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
@@ -50,7 +50,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `309` PHPT files
+- `extension/tests`: `310` PHPT files
 - public stub parity: `124` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -66,9 +66,8 @@ The current tree already proves:
 - local WebSocket client/runtime plus honest OO `King\WebSocket\Connection` parity
 - IIBIN schema, registry, encode/decode, object hydration, and wire validation
 - Semantic DNS register/discover/update routing plus private-directory durable state handling
-- Smart-DNS mode selection is now honestly fenced to `service_discovery`
+- Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs
 - router/loadbalancer is now exposed as an explicit config-backed system component with honest policy/discovery-only introspection
-- Smart DNS config surfaces are present and initialized as first-class config modules
 - object-store local filesystem persistence, `.meta` sidecars, CDN cache/runtime behavior, and confined backup/restore/import/export paths
 - MCP request/upload/download parity with bounded timeout, deadline, and local cancellation controls
 - orchestrator persistence, local/file-worker backend boundary, cross-process cancellation, and multiprocess controller/observer/worker verification
@@ -95,9 +94,8 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 ### Routing and DNS Scope
 
 - Router/loadbalancer is now honestly fenced to a config-backed control-plane surface; it is not presented as a forwarding dataplane runtime.
-- Smart-DNS mode selection is now honestly fenced to `service_discovery`, which matches the active semantic/service-discovery runtime.
-- Smart DNS is still broader at the config layer than the currently verified semantic/service-discovery runtime slice in the remaining knobs such as recursive forwarders and static-zone settings.
-- The remaining work is to either implement and verify those broader Smart DNS claims or to shrink the public contract further to what is actually real.
+- Smart-DNS public config and init surfaces are now honest for the current local semantic/service-discovery runtime.
+- The remaining Smart-DNS work is larger-topology, mother-node, and failover verification rather than more local config cleanup.
 
 ### Object Store Scope
 
@@ -127,7 +125,7 @@ The model is now:
 - `EPIC.md`
   stable charter, pillars, and exit criteria
 - `ISSUES.md`
-  the 20 active executable open items distilled from the larger completion tracker
+  the active executable open items distilled from the larger completion tracker
 - `PROJECT_ASSESSMENT.md`
   verified state and caveats
 
