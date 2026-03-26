@@ -1,7 +1,7 @@
 <?php
 
-if ($argc < 3) {
-    fwrite(STDERR, "usage: mcp_test_server.php <capture-path> <port> [transfer-state-path]\n");
+if ($argc < 4) {
+    fwrite(STDERR, "usage: mcp_test_server.php <capture-path> <port> <bind-host> [transfer-state-path]\n");
     exit(1);
 }
 
@@ -10,7 +10,8 @@ const KING_MCP_TEST_DELAY_SLICE_US = 10000;
 
 $capturePath = $argv[1];
 $port = (int) $argv[2];
-$transferStatePath = $argv[3] ?? null;
+$bindHost = (string) $argv[3];
+$transferStatePath = $argv[4] ?? null;
 $capture = [
     'connections' => [],
     'events' => [],
@@ -18,7 +19,9 @@ $capture = [
 $transfers = [];
 
 $server = stream_socket_server(
-    'tcp://127.0.0.1:' . $port,
+    str_contains($bindHost, ':') && !preg_match('/^\[.*\]$/', $bindHost)
+        ? 'tcp://[' . $bindHost . ']:' . $port
+        : 'tcp://' . $bindHost . ':' . $port,
     $errno,
     $errstr
 );

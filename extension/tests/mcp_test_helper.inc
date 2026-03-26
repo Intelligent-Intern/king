@@ -1,16 +1,40 @@
 <?php
 
-function king_mcp_test_start_server_script(string $scriptPath, ?int $port = null, array $extraArgs = []): array
+function king_mcp_test_format_tcp_endpoint(string $host, int $port): string
+{
+    if (strpos($host, ':') !== false && !preg_match('/^\[.*\]$/', $host)) {
+        return 'tcp://[' . $host . ']:' . $port;
+    }
+
+    return 'tcp://' . $host . ':' . $port;
+}
+
+function king_mcp_test_start_server_script(
+    string $scriptPath,
+    ?int $port = null,
+    array $extraArgs = [],
+    string $bindHost = '127.0.0.1'
+): array
 {
     if ($port === null) {
-        $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        $probe = stream_socket_server(
+            king_mcp_test_format_tcp_endpoint($bindHost, 0),
+            $errno,
+            $errstr
+        );
         if ($probe === false) {
             throw new RuntimeException("failed to reserve MCP test port: $errstr");
         }
 
         $serverName = stream_socket_get_name($probe, false);
         fclose($probe);
-        [, $port] = explode(':', $serverName, 2);
+        if (preg_match('/^\[.*\]:(\d+)$/', $serverName, $matches) === 1) {
+            $port = (int) $matches[1];
+        } elseif (preg_match('/^.*:(\d+)$/', $serverName, $matches) === 1) {
+            $port = (int) $matches[1];
+        } else {
+            throw new RuntimeException('failed to parse MCP test port from reserved socket name');
+        }
     }
 
     $capture = tempnam(sys_get_temp_dir(), 'king-mcp-capture-');
@@ -20,6 +44,7 @@ function king_mcp_test_start_server_script(string $scriptPath, ?int $port = null
         $scriptPath,
         $capture,
         (string) ((int) $port),
+        $bindHost,
     ];
     foreach ($extraArgs as $arg) {
         $command[] = (string) $arg;
@@ -51,25 +76,31 @@ function king_mcp_test_start_server_script(string $scriptPath, ?int $port = null
         'pipes' => $pipes,
         'capture' => $capture,
         'port' => (int) $port,
+        'host' => $bindHost,
     ];
 }
 
-function king_mcp_test_start_server(?int $port = null): array
+function king_mcp_test_start_server(?int $port = null, string $bindHost = '127.0.0.1'): array
 {
-    return king_mcp_test_start_server_script(__DIR__ . '/mcp_test_server.inc', $port);
+    return king_mcp_test_start_server_script(__DIR__ . '/mcp_test_server.inc', $port, [], $bindHost);
 }
 
-function king_mcp_test_start_parallel_server(?int $port = null): array
+function king_mcp_test_start_parallel_server(?int $port = null, string $bindHost = '127.0.0.1'): array
 {
-    return king_mcp_test_start_server_script(__DIR__ . '/mcp_parallel_test_server.inc', $port);
+    return king_mcp_test_start_server_script(__DIR__ . '/mcp_parallel_test_server.inc', $port, [], $bindHost);
 }
 
-function king_mcp_test_start_persisted_server(string $statePath, ?int $port = null): array
+function king_mcp_test_start_persisted_server(
+    string $statePath,
+    ?int $port = null,
+    string $bindHost = '127.0.0.1'
+): array
 {
     return king_mcp_test_start_server_script(
         __DIR__ . '/mcp_test_server.inc',
         $port,
-        [$statePath]
+        [$statePath],
+        $bindHost
     );
 }
 
@@ -115,7 +146,10 @@ function king_mcp_test_finalize_server(array $server): array
 function king_mcp_test_stop_server(array $server): array
 {
     $stop = @stream_socket_client(
-        'tcp://127.0.0.1:' . $server['port'],
+        king_mcp_test_format_tcp_endpoint(
+            (string) ($server['host'] ?? '127.0.0.1'),
+            (int) $server['port']
+        ),
         $errno,
         $errstr,
         0.5

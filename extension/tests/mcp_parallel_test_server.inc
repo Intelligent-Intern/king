@@ -1,7 +1,7 @@
 <?php
 
-if ($argc < 3) {
-    fwrite(STDERR, "usage: mcp_parallel_test_server.php <capture-path> <port>\n");
+if ($argc < 4) {
+    fwrite(STDERR, "usage: mcp_parallel_test_server.php <capture-path> <port> <bind-host>\n");
     exit(1);
 }
 
@@ -9,13 +9,16 @@ const KING_MCP_PARALLEL_MAX_LINE_BYTES = 8 * 1024 * 1024;
 
 $capturePath = $argv[1];
 $port = (int) $argv[2];
+$bindHost = (string) $argv[3];
 $capture = [
     'connections' => [],
     'events' => [],
 ];
 
 $server = stream_socket_server(
-    'tcp://127.0.0.1:' . $port,
+    str_contains($bindHost, ':') && !preg_match('/^\[.*\]$/', $bindHost)
+        ? 'tcp://[' . $bindHost . ']:' . $port
+        : 'tcp://' . $bindHost . ':' . $port,
     $errno,
     $errstr
 );
