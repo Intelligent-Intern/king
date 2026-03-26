@@ -1,6 +1,6 @@
 <?php
 
-function king_server_websocket_wire_start_server(string $mode): array
+function king_server_websocket_wire_start_server(string $mode, int $iterations = 1): array
 {
     $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
     if ($probe === false) {
@@ -14,14 +14,15 @@ function king_server_websocket_wire_start_server(string $mode): array
     $capture = tempnam(sys_get_temp_dir(), 'king-server-websocket-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';
     $command = sprintf(
-        '%s -n -d %s -d %s %s %s %d %s',
+        '%s -n -d %s -d %s %s %s %d %s %d',
         escapeshellarg(PHP_BINARY),
         escapeshellarg('extension=' . $extensionPath),
         escapeshellarg('king.security_allow_config_override=1'),
         escapeshellarg(__DIR__ . '/server_websocket_wire_server.inc'),
         escapeshellarg($capture),
         (int) $port,
-        escapeshellarg($mode)
+        escapeshellarg($mode),
+        max(1, $iterations)
     );
 
     $process = proc_open($command, [
