@@ -20,6 +20,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <limits.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 king_object_store_runtime_state king_object_store_runtime;
 
@@ -33,9 +38,164 @@ static const char *king_object_store_adapter_contract_simulated = "simulated";
 static const char *king_object_store_adapter_contract_unconfigured = "unconfigured";
 
 static int king_object_store_mkdir_parents(const char *path);
+static int king_object_store_ensure_directory_recursive(const char *path);
 static int king_object_store_read_file_contents(const char *source_path, void **data, size_t *data_size);
 static int king_object_store_atomic_write_file(const char *target_path, const void *data, size_t data_size);
 static int king_object_store_backup_object_to_backend(const char *object_id, king_storage_backend_t backup_backend);
+static int king_object_store_directory_is_within_storage_root(const char *directory_path, int allow_missing_path);
+
+static int king_object_store_path_is_within_root(const char *candidate_path, const char *root_path)
+{
+    size_t root_len;
+
+    if (candidate_path == NULL || root_path == NULL) {
+        return 0;
+    }
+
+    root_len = strlen(root_path);
+    if (root_len == 0) {
+        return 0;
+    }
+
+    if (strncmp(candidate_path, root_path, root_len) != 0) {
+        return 0;
+    }
+
+    return candidate_path[root_len] == '\0' || candidate_path[root_len] == '/';
+}
+
+static int king_object_store_expand_to_absolute_path(
+    const char *input_path,
+    char *output_path,
+    size_t output_path_size
+)
+{
+    char cwd[PATH_MAX];
+    int written;
+
+    if (input_path == NULL || input_path[0] == '\0' ||
+        output_path == NULL || output_path_size == 0) {
+        return FAILURE;
+    }
+
+    if (input_path[0] == '/') {
+        written = snprintf(output_path, output_path_size, "%s", input_path);
+        return (written >= 0 && (size_t) written < output_path_size) ? SUCCESS : FAILURE;
+    }
+
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+        return FAILURE;
+    }
+
+    written = snprintf(output_path, output_path_size, "%s/%s", cwd, input_path);
+    return (written >= 0 && (size_t) written < output_path_size) ? SUCCESS : FAILURE;
+}
+
+static int king_object_store_find_existing_ancestor(
+    const char *path,
+    char *ancestor_path,
+    size_t ancestor_path_size
+)
+{
+    struct stat st;
+    size_t len;
+
+    if (path == NULL || path[0] == '\0' ||
+        ancestor_path == NULL || ancestor_path_size == 0) {
+        return FAILURE;
+    }
+
+    if (snprintf(ancestor_path, ancestor_path_size, "%s", path) >= (int) ancestor_path_size) {
+        return FAILURE;
+    }
+
+    len = strlen(ancestor_path);
+    while (len > 1 && ancestor_path[len - 1] == '/') {
+        ancestor_path[len - 1] = '\0';
+        len--;
+    }
+
+    while (1) {
+        if (stat(ancestor_path, &st) == 0) {
+            return S_ISDIR(st.st_mode) ? SUCCESS : FAILURE;
+        }
+
+        if (strcmp(ancestor_path, "/") == 0) {
+            return FAILURE;
+        }
+
+        {
+            char *slash = strrchr(ancestor_path, '/');
+            if (slash == NULL) {
+                return FAILURE;
+            }
+            if (slash == ancestor_path) {
+                ancestor_path[1] = '\0';
+            } else {
+                *slash = '\0';
+            }
+        }
+    }
+}
+
+static int king_object_store_directory_is_within_storage_root(
+    const char *directory_path,
+    int allow_missing_path
+)
+{
+    char absolute_directory[PATH_MAX];
+    char existing_ancestor[PATH_MAX];
+    char resolved_directory[PATH_MAX];
+    char resolved_root[PATH_MAX];
+    struct stat st;
+
+    if (directory_path == NULL || directory_path[0] == '\0') {
+        return FAILURE;
+    }
+    if (king_object_store_runtime.config.storage_root_path[0] == '\0') {
+        return FAILURE;
+    }
+    if (realpath(king_object_store_runtime.config.storage_root_path, resolved_root) == NULL) {
+        return FAILURE;
+    }
+    if (stat(resolved_root, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        return FAILURE;
+    }
+    if (king_object_store_expand_to_absolute_path(
+            directory_path,
+            absolute_directory,
+            sizeof(absolute_directory)
+        ) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (stat(absolute_directory, &st) == 0) {
+        if (!S_ISDIR(st.st_mode)) {
+            return FAILURE;
+        }
+        if (realpath(absolute_directory, resolved_directory) == NULL) {
+            return FAILURE;
+        }
+    } else {
+        if (!allow_missing_path) {
+            return FAILURE;
+        }
+        if (king_object_store_find_existing_ancestor(
+                absolute_directory,
+                existing_ancestor,
+                sizeof(existing_ancestor)
+            ) != SUCCESS) {
+            return FAILURE;
+        }
+        if (realpath(existing_ancestor, resolved_directory) == NULL) {
+            return FAILURE;
+        }
+    }
+
+    return king_object_store_path_is_within_root(resolved_directory, resolved_root)
+        ? SUCCESS
+        : FAILURE;
+}
 
 static void king_object_store_append_adapter_error(char *destination, size_t destination_size, const char *message)
 {
@@ -458,6 +618,19 @@ static int king_object_store_ensure_directory(const char *path)
     }
 
     return FAILURE;
+}
+
+static int king_object_store_ensure_directory_recursive(const char *path)
+{
+    if (path == NULL || path[0] == '\0') {
+        return FAILURE;
+    }
+
+    if (king_object_store_mkdir_parents(path) != SUCCESS) {
+        return FAILURE;
+    }
+
+    return king_object_store_ensure_directory(path);
 }
 
 static int king_object_store_atomic_write_file(const char *target_path, const void *data, size_t data_size)
@@ -1185,13 +1358,19 @@ static int king_object_store_export_object(const char *object_id, const char *de
             "object export") == FAILURE) {
         return FAILURE;
     }
+    if (king_object_store_directory_is_within_storage_root(destination_directory, 1) != SUCCESS) {
+        return FAILURE;
+    }
 
     king_object_store_build_path(source_path, sizeof(source_path), object_id);
     if (stat(source_path, &source_stat) != 0 || !S_ISREG(source_stat.st_mode)) {
         return FAILURE;
     }
 
-    if (king_object_store_ensure_directory(destination_directory) != SUCCESS) {
+    if (king_object_store_ensure_directory_recursive(destination_directory) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_object_store_directory_is_within_storage_root(destination_directory, 0) != SUCCESS) {
         return FAILURE;
     }
 
@@ -1256,6 +1435,9 @@ static int king_object_store_import_object(const char *object_id, const char *so
             "primary",
             king_object_store_runtime.config.primary_backend,
             "object import") == FAILURE) {
+        return FAILURE;
+    }
+    if (king_object_store_directory_is_within_storage_root(source_directory, 0) != SUCCESS) {
         return FAILURE;
     }
 
@@ -1347,8 +1529,14 @@ int king_object_store_backup_all_objects(const char *destination_directory)
             "batch object export") == FAILURE) {
         return FAILURE;
     }
+    if (king_object_store_directory_is_within_storage_root(destination_directory, 1) != SUCCESS) {
+        return FAILURE;
+    }
 
-    if (king_object_store_ensure_directory(destination_directory) != SUCCESS) {
+    if (king_object_store_ensure_directory_recursive(destination_directory) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_object_store_directory_is_within_storage_root(destination_directory, 0) != SUCCESS) {
         return FAILURE;
     }
 
@@ -1369,9 +1557,12 @@ int king_object_store_backup_all_objects(const char *destination_directory)
             return FAILURE;
         }
         king_object_store_build_path(source_path, sizeof(source_path), ent->d_name);
-        if (stat(source_path, &st) != 0 || !S_ISREG(st.st_mode)) {
+        if (stat(source_path, &st) != 0) {
             closedir(dir);
             return FAILURE;
+        }
+        if (!S_ISREG(st.st_mode)) {
+            continue;
         }
         if (king_object_store_backup_object(ent->d_name, destination_directory) != SUCCESS) {
             closedir(dir);
@@ -1387,6 +1578,8 @@ int king_object_store_restore_all_objects(const char *source_directory)
 {
     DIR *dir;
     struct dirent *ent;
+    char source_path[1024];
+    struct stat st;
 
     if (!king_object_store_runtime.initialized || source_directory == NULL || source_directory[0] == '\0') {
         return FAILURE;
@@ -1395,6 +1588,9 @@ int king_object_store_restore_all_objects(const char *source_directory)
             "primary",
             king_object_store_runtime.config.primary_backend,
             "batch object import") == FAILURE) {
+        return FAILURE;
+    }
+    if (king_object_store_directory_is_within_storage_root(source_directory, 0) != SUCCESS) {
         return FAILURE;
     }
 
@@ -1413,6 +1609,17 @@ int king_object_store_restore_all_objects(const char *source_directory)
         if (king_object_store_object_id_validate(ent->d_name) != NULL) {
             closedir(dir);
             return FAILURE;
+        }
+        if (king_object_store_build_path_in_directory(source_path, sizeof(source_path), source_directory, ent->d_name, NULL) != SUCCESS) {
+            closedir(dir);
+            return FAILURE;
+        }
+        if (stat(source_path, &st) != 0) {
+            closedir(dir);
+            return FAILURE;
+        }
+        if (!S_ISREG(st.st_mode)) {
+            continue;
         }
         if (king_object_store_restore_object(ent->d_name, source_directory) != SUCCESS) {
             closedir(dir);

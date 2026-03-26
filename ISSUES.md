@@ -38,6 +38,8 @@
   completed: 2026-03-25
 - [x] Add backup/restore and import/export paths for object-store payloads plus `.meta` state
   completed: 2026-03-25
+- [x] Constrain object-store backup/restore directories to the active storage root and reject external import/export paths
+  completed: 2026-03-26
 - [x] Add crash-recovery and restart rehydration verification for persisted backends
   completed: 2026-03-25
 
@@ -92,7 +94,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `291/291`
+  tests: `292/292`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -115,6 +117,9 @@
   demo image: `infra/demo-server/Dockerfile`
   local verification: `docker build --build-arg PHP_VERSION=8.3 -f infra/php-runtime.Dockerfile .` and `docker build -f infra/demo-server/Dockerfile .`
   coverage: the GHCR workflow no longer references nonexistent `infra/php8.x/` paths, the runtime image bootstraps required build dependencies including `quiche` and `uuid`, and the demo image now has a complete Vite entry surface that builds into a runnable nginx-served artifact
+- [x] Object-store backup/restore and import/export now stay confined to the active storage root
+  targeted PHPTs: `302`, `305`, `313`
+  coverage: export/import reject directories outside `storage_root_path`, positive in-root bundle backup/restore remains green, and batch backup/restore now tolerates in-root bundle directories without treating them as broken object entries.
 - [x] CI transport bootstrap is stabilized for curl/wirefilter failures in fresh hosts
   coverage: `./scripts/build-profile.sh` now validates curl headers for system builds, normalizes the qlog-dancer `wirefilter` dependency pin to a resolvable branch fallback, and avoids stale cargo git cache fragments before cargo metadata/build.
 - [x] Orchestrator registry and pipeline-run snapshots now survive restart and recovery

@@ -60,6 +60,10 @@ as implemented.
 The exported realtime OO surface was also tightened for v1 honesty: the empty
 `King\WebSocket\Server` placeholder is now gone, leaving only the implemented
 `King\WebSocket\Connection` runtime in the public WebSocket OO API.
+The local object-store persistence surface is also tighter now: backup,
+restore, import, and export paths remain available for v1, but they are now
+confined to directories inside the active `storage_root_path` so those APIs no
+longer double as arbitrary host file read/write helpers.
 
 One important caveat remains in the QUIC/HTTP/3 bootstrap path. The runtime is
 real and green, and build tooling now avoids the two common CI breakage modes:
@@ -106,7 +110,7 @@ Repository facts from the current tree:
 - `extension/src`: 177 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 168 headers
-- `extension/tests`: 291 PHPT files
+- `extension/tests`: 292 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently verified regression baseline is:
@@ -115,7 +119,7 @@ The currently verified regression baseline is:
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
 - extension load smoke: passing
-- `./scripts/test-extension.sh`: `291/291` PHPT tests passing
+- `./scripts/test-extension.sh`: `292/292` PHPT tests passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing (`123` functions, `43` classes, `48` declared public methods)
 - `./scripts/smoke-profile.sh release`: passing
@@ -136,6 +140,7 @@ The currently verified regression baseline is:
 - targeted HTTP/3 runtime verification (`190`, `191`, `204`, `232`): passing
 - targeted orchestrator persistence and backend-boundary verification (`250`, `294`, `307`, `308`, `309`): passing
 - targeted MCP/orchestrator runtime-control verification (`157`, `234`, `235`, `236`, `309`, `310`, `311`): passing
+- targeted object-store path-hardening verification (`302`, `305`, `313`): passing
 - `king_health()['stubbed_api_group_count']`: `0`
 - `.github/workflows/ci.yml`: wired to the canonical audit/build/test path plus the final go-live readiness step with the committed benchmark budget gate
 - `./benchmarks/run-canonical.sh`: passing locally
@@ -155,7 +160,7 @@ The repo already has active native runtime slices for:
 - server-side cancel, early hints, websocket upgrade, admin API, TLS reload, CORS, and telemetry-init helpers
 - IIBIN schema, enum, encode, decode, object hydration, and wire validation
 - native Semantic DNS registry, routing, state persistence, discovery, and mother-node tracking
-- native file-system object-store backend core with durable .meta sidecars, local CDN cache, multi-node distribution, and explicit contract/status failure semantics for non-local backends (distributed/S3/GCS/Azure simulated).
+- native file-system object-store backend core with durable .meta sidecars, local CDN cache, multi-node distribution, explicit contract/status failure semantics for non-local backends (distributed/S3/GCS/Azure simulated), and backup/restore/import/export directory confinement to the active storage root
 - native MCP runtime in `src/mcp/` with stateful session tracking, flattened ID persistence in Object Store, full request/upload/download parity, and verified `timeout_ms` / monotonic `deadline_ms` / `cancel` control handling across both procedural and OO APIs
 - native Pipeline Orchestrator and Tool Registry in `src/pipeline_orchestrator/`, including restart-safe tool registry, logging snapshot persistence, completed run history, in-flight run rehydration, a config-selectable `local` versus `file_worker` execution backend with persisted cross-process dispatch, and verified `timeout_ms` / `overall_timeout_ms` / `deadline_ms` / `max_concurrency` enforcement across local runs plus resumed worker execution
 - native Telemetry runtime with active span lifecycle, metrics aggregation, flush paths, and context propagation
@@ -201,7 +206,7 @@ transport depth, or operational depth is still incomplete.
 ### 3. Object Store And Persistence Are Strong Locally But Not Finished Externally
 
 - The local filesystem object-store core is real and well tested, but cloud adapters remain simulated in the current tree.
-- Local filesystem backup/restore, import/export, and `.meta` sidecar persistence are now implemented and verified in PHPT (including restart path coverage for primary local backend rehydration). Restart rehydration guarantees for cloud-distributed profiles remain open.
+- Local filesystem backup/restore, import/export, and `.meta` sidecar persistence are now implemented and verified in PHPT (including restart path coverage for primary local backend rehydration and path confinement to the active storage root). Restart rehydration guarantees for cloud-distributed profiles remain open.
 - That leaves a gap between "local runtime is correct" and "operators can trust the state layer across restart, migration, and backend substitution".
 
 ### 4. MCP And Orchestrator Are Still Local-First

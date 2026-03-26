@@ -7,16 +7,34 @@ king.security_allow_config_override=1
 
 $primary = sys_get_temp_dir() . '/king_object_store_backup_primary_' . getmypid();
 $secondary = sys_get_temp_dir() . '/king_object_store_backup_secondary_' . getmypid();
-$backup = sys_get_temp_dir() . '/king_object_store_backup_bundle_' . getmypid();
+$backup = $primary . '/backups';
+
+function remove_tree(string $path): void
+{
+    if (!is_dir($path)) {
+        return;
+    }
+
+    foreach (scandir($path) as $file) {
+        if ($file === '.' || $file === '..') {
+            continue;
+        }
+
+        $full = $path . '/' . $file;
+        if (is_dir($full)) {
+            remove_tree($full);
+            continue;
+        }
+
+        @unlink($full);
+    }
+
+    @rmdir($path);
+}
 
 foreach ([$primary, $secondary, $backup] as $path) {
     if (is_dir($path)) {
-        foreach (scandir($path) as $file) {
-            if ($file !== '.' && $file !== '..') {
-                @unlink($path . '/' . $file);
-            }
-        }
-        @rmdir($path);
+        remove_tree($path);
     }
     mkdir($path, 0700);
 }
@@ -54,7 +72,14 @@ var_dump(file_exists($backup_all . '/asset-2'));
 @unlink($secondary . '/asset-2.meta');
 king_object_store_init(['storage_root_path' => $secondary]);
 var_dump(king_object_store_get('asset-1'));
-var_dump(king_object_store_restore_all_objects($backup_all));
+$secondary_import = $secondary . '/import-all';
+mkdir($secondary_import, 0700);
+foreach (scandir($backup_all) as $file) {
+    if ($file !== '.' && $file !== '..') {
+        copy($backup_all . '/' . $file, $secondary_import . '/' . $file);
+    }
+}
+var_dump(king_object_store_restore_all_objects($secondary_import));
 var_dump(king_object_store_get('asset-1'));
 var_dump(king_object_store_get('asset-2'));
 
@@ -64,12 +89,7 @@ sort($all);
 var_dump($all);
 
 foreach ([$primary, $secondary, $backup] as $path) {
-    foreach (scandir($path) as $file) {
-        if ($file !== '.' && $file !== '..') {
-            @unlink($path . '/' . $file);
-        }
-    }
-    @rmdir($path);
+    remove_tree($path);
 }
 ?>
 --EXPECT--
