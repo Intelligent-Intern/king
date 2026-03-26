@@ -16,9 +16,9 @@
 
 ## Current Next Leaf
 
-- [ ] Add failover/chaos harnesses for telemetry, autoscaling, and coordinated system recovery
-  why this blocks `8/10`: the local control plane is now persisted, cross-process, cancellable, and topology-tested, but the repo still does not prove that telemetry export, autoscaling state, and component lifecycle recovery stay honest under injected turbulence.
-  done when: dedicated harnesses inject exporter failure, controller restarts, and degraded lifecycle transitions, and the status/recovery surfaces remain correct through chaos and recovery instead of only on clean-path execution.
+- [ ] Replace local-only WebSocket handshake/runtime assumptions with on-wire client and server verification
+  why this blocks `8/10`: the local control plane and recovery paths are now chaos-tested, but the realtime/server story still leans on local-only assumptions instead of exercised wire behavior.
+  done when: dedicated on-wire harnesses verify handshake, frame flow, close semantics, and server-side upgrade behavior over real sockets rather than only local runtime shims.
 
 ## Active Fronts
 
@@ -69,7 +69,8 @@
   completed: 2026-03-25
 - [x] Add rolling restart, drain, and readiness transitions to system integration instead of immediate local lifecycle flips
   completed: 2026-03-25
-- [ ] Add failover/chaos harnesses for telemetry, autoscaling, and coordinated system recovery
+- [x] Add failover/chaos harnesses for telemetry, autoscaling, and coordinated system recovery
+  completed: 2026-03-26
 
 ### 4. Realtime and server runtime depth
 
@@ -98,7 +99,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `298/298`
+  tests: `300/300`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -158,6 +159,9 @@
 - [x] Telemetry OTLP metrics export now handles packed metric batches and enum metric types without crashing
   targeted PHPTs: `031`, `260`, `316`, `319`
   coverage: `king_telemetry_init()` can seed a local OTLP endpoint for export-path verification, the exporter now reads metric names from batch payloads instead of assuming string hash keys, enum-backed metric `type` longs are normalized safely, and counter plus gauge metrics export successfully through a local mock OTLP collector.
+- [x] Failover and chaos recovery are now verified for telemetry export, autoscaling controller state, and system lifecycle transitions
+  targeted PHPTs: `320`, `321`
+  coverage: telemetry keeps failed batches queued across exporter outage and drains the same batch after endpoint recovery, system components expose `shutting_down -> initializing -> running` transitions with request gating during recovery, and the Hetzner controller rehydrates persisted managed-node state after restart instead of losing admission progress.
 - [x] The exported WebSocket OO surface now only exposes the honest `Connection` runtime
   targeted PHPTs: `143`, `227`, `228`, `312`
   coverage: the empty `King\WebSocket\Server` placeholder is retired from the stub and runtime registration, class-registration parity remains green, and the OO WebSocket surface now matches the actual implemented connection runtime instead of advertising a no-op server shell.
