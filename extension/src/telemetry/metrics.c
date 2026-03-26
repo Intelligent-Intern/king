@@ -92,6 +92,22 @@ zend_bool king_telemetry_lookup_metric(
     return 1;
 }
 
+const char* king_metric_type_to_string(king_metric_type_t type)
+{
+    switch (type) {
+        case KING_METRIC_TYPE_COUNTER:
+            return "counter";
+        case KING_METRIC_TYPE_GAUGE:
+            return "gauge";
+        case KING_METRIC_TYPE_HISTOGRAM:
+            return "histogram";
+        case KING_METRIC_TYPE_SUMMARY:
+            return "summary";
+        default:
+            return NULL;
+    }
+}
+
 void king_telemetry_metrics_shutdown(void)
 {
     if (king_metrics_initialized) {

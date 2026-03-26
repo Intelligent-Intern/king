@@ -98,7 +98,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `297/297`
+  tests: `298/298`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -155,6 +155,9 @@
 - [x] Telemetry failed-export retries now keep the queue acyclic and shutdown-safe
   targeted PHPTs: `031`, `260`, `316`
   coverage: dequeued telemetry batches now detach stale `next` pointers before requeue, repeated failed flushes keep retry order intact instead of creating cyclic lists, and shutdown cleanup remains safe after multiple exporter failures with queued batches still pending.
+- [x] Telemetry OTLP metrics export now handles packed metric batches and enum metric types without crashing
+  targeted PHPTs: `031`, `260`, `316`, `319`
+  coverage: `king_telemetry_init()` can seed a local OTLP endpoint for export-path verification, the exporter now reads metric names from batch payloads instead of assuming string hash keys, enum-backed metric `type` longs are normalized safely, and counter plus gauge metrics export successfully through a local mock OTLP collector.
 - [x] The exported WebSocket OO surface now only exposes the honest `Connection` runtime
   targeted PHPTs: `143`, `227`, `228`, `312`
   coverage: the empty `King\WebSocket\Server` placeholder is retired from the stub and runtime registration, class-registration parity remains green, and the OO WebSocket surface now matches the actual implemented connection runtime instead of advertising a no-op server shell.

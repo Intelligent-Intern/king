@@ -34,6 +34,88 @@ static void king_telemetry_span_free(king_trace_context_t *span)
     }
 }
 
+static void king_telemetry_config_apply_inline_array(
+    king_telemetry_config_t *config,
+    zval *config_arr)
+{
+    zval *value;
+
+    if (config == NULL || config_arr == NULL || Z_TYPE_P(config_arr) != IS_ARRAY) {
+        return;
+    }
+
+    value = zend_hash_str_find(Z_ARRVAL_P(config_arr), "enabled", sizeof("enabled") - 1);
+    if (value != NULL) {
+        config->enabled = zend_is_true(value) ? 1 : 0;
+    }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "otel_exporter_endpoint",
+        sizeof("otel_exporter_endpoint") - 1
+    );
+    if (value != NULL && Z_TYPE_P(value) == IS_STRING) {
+        snprintf(
+            config->otel_exporter_endpoint,
+            sizeof(config->otel_exporter_endpoint),
+            "%s",
+            Z_STRVAL_P(value)
+        );
+    }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "otel_exporter_protocol",
+        sizeof("otel_exporter_protocol") - 1
+    );
+    if (value != NULL && Z_TYPE_P(value) == IS_STRING) {
+        snprintf(
+            config->otel_exporter_protocol,
+            sizeof(config->otel_exporter_protocol),
+            "%s",
+            Z_STRVAL_P(value)
+        );
+    }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "service_name",
+        sizeof("service_name") - 1
+    );
+    if (value != NULL && Z_TYPE_P(value) == IS_STRING) {
+        snprintf(
+            config->service_name,
+            sizeof(config->service_name),
+            "%s",
+            Z_STRVAL_P(value)
+        );
+    }
+}
+
+static const char *king_telemetry_metric_type_from_zval(zval *type_zval)
+{
+    if (type_zval == NULL) {
+        return NULL;
+    }
+
+    if (Z_TYPE_P(type_zval) == IS_LONG) {
+        return king_metric_type_to_string((king_metric_type_t) Z_LVAL_P(type_zval));
+    }
+
+    if (Z_TYPE_P(type_zval) == IS_STRING) {
+        const char *type_str = Z_STRVAL_P(type_zval);
+
+        if (strcmp(type_str, "counter") == 0
+            || strcmp(type_str, "gauge") == 0
+            || strcmp(type_str, "histogram") == 0
+            || strcmp(type_str, "summary") == 0) {
+            return type_str;
+        }
+    }
+
+    return NULL;
+}
+
 static void king_telemetry_batch_free(king_telemetry_batch_t *batch)
 {
     if (batch) {
@@ -262,6 +344,7 @@ PHP_FUNCTION(king_telemetry_init)
     king_telemetry_config_t config;
     memset(&config, 0, sizeof(config));
     config.enabled = true;
+    king_telemetry_config_apply_inline_array(&config, config_arr);
     
     king_telemetry_init_system(&config);
     RETURN_TRUE;
@@ -481,43 +564,85 @@ int king_telemetry_export_metrics_otlp(zval *metrics)
     
     /* Convert each metric to OTLP format */
     zval *metric_data;
-    zend_string *metric_name;
     int first_metric = 1;
     
-    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(metrics), metric_name, metric_data) {
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(metrics), metric_data) {
+        zval *name_zval;
+        zval *value_zval;
+        zval *type_zval;
+        zval *timestamp_zval;
+        const char *metric_type;
+        double metric_value;
+        zend_long metric_timestamp = 0;
+
+        if (Z_TYPE_P(metric_data) != IS_ARRAY) {
+            continue;
+        }
+
+        name_zval = zend_hash_str_find(Z_ARRVAL_P(metric_data), "name", sizeof("name") - 1);
+        value_zval = zend_hash_str_find(Z_ARRVAL_P(metric_data), "value", sizeof("value") - 1);
+        type_zval = zend_hash_str_find(Z_ARRVAL_P(metric_data), "type", sizeof("type") - 1);
+        timestamp_zval = zend_hash_str_find(Z_ARRVAL_P(metric_data), "timestamp", sizeof("timestamp") - 1);
+
+        if (name_zval == NULL
+            || value_zval == NULL
+            || type_zval == NULL
+            || Z_TYPE_P(name_zval) != IS_STRING
+            || Z_STRLEN_P(name_zval) == 0) {
+            continue;
+        }
+
+        metric_type = king_telemetry_metric_type_from_zval(type_zval);
+        if (metric_type == NULL) {
+            continue;
+        }
+
+        metric_value = zval_get_double(value_zval);
+        if (timestamp_zval != NULL) {
+            metric_timestamp = zval_get_long(timestamp_zval);
+        }
+
         if (!first_metric) {
             smart_str_appends(&json_payload, ",");
         }
         first_metric = 0;
-        
-        /* Extract metric data */
-        zval *value_zval = zend_hash_str_find(Z_ARRVAL_P(metric_data), "value", sizeof("value")-1);
-        zval *type_zval = zend_hash_str_find(Z_ARRVAL_P(metric_data), "type", sizeof("type")-1);
-        
-        if (!value_zval || !type_zval) continue;
-        
-        /* Build metric JSON */
+
         smart_str_appends(&json_payload, "{\"name\":\"");
-        smart_str_append(&json_payload, metric_name);
+        smart_str_append(&json_payload, Z_STR_P(name_zval));
         smart_str_appends(&json_payload, "\",\"data\":{\"dataPoints\":[{\"timeUnixNano\":\"");
         
         /* Add timestamp */
-        struct timespec ts;
-        clock_gettime(CLOCK_REALTIME, &ts);
         char timestamp_str[32];
-        snprintf(timestamp_str, sizeof(timestamp_str), "%lld%09ld", 
-                (long long)ts.tv_sec, ts.tv_nsec);
+        if (metric_timestamp > 0) {
+            snprintf(
+                timestamp_str,
+                sizeof(timestamp_str),
+                "%lld%09ld",
+                (long long) metric_timestamp,
+                0L
+            );
+        } else {
+            struct timespec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            snprintf(
+                timestamp_str,
+                sizeof(timestamp_str),
+                "%lld%09ld",
+                (long long) ts.tv_sec,
+                ts.tv_nsec
+            );
+        }
         smart_str_appends(&json_payload, timestamp_str);
         smart_str_appends(&json_payload, "\",");
         
         /* Add value based on type */
-        if (strcmp(Z_STRVAL_P(type_zval), "counter") == 0) {
+        if (strcmp(metric_type, "counter") == 0) {
             smart_str_appends(&json_payload, "\"asInt\":\"");
-            smart_str_append_long(&json_payload, (long)Z_DVAL_P(value_zval));
+            smart_str_append_long(&json_payload, (zend_long) metric_value);
             smart_str_appends(&json_payload, "\"");
         } else {
             smart_str_appends(&json_payload, "\"asDouble\":\"");
-            smart_str_append_double(&json_payload, Z_DVAL_P(value_zval), 6, 0);
+            smart_str_append_double(&json_payload, metric_value, 6, 0);
             smart_str_appends(&json_payload, "\"");
         }
         

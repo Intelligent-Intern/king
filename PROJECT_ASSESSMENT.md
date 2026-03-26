@@ -116,7 +116,7 @@ Repository facts from the current tree:
 - `extension/src`: 177 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 168 headers
-- `extension/tests`: 297 PHPT files
+- `extension/tests`: 298 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently verified regression baseline is:
@@ -125,7 +125,7 @@ The currently verified regression baseline is:
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
 - extension load smoke: passing
-- `./scripts/test-extension.sh`: `297/297` PHPT tests passing
+- `./scripts/test-extension.sh`: `298/298` PHPT tests passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing (`124` functions, `43` classes, `48` declared public methods)
 - `./scripts/smoke-profile.sh release`: passing
@@ -152,6 +152,7 @@ The currently verified regression baseline is:
 - targeted multiprocess controller/observer/worker topology verification (`307`, `309`, `314`, `315`): passing
 - targeted object-store path-hardening verification (`302`, `305`, `313`): passing
 - targeted telemetry export retry hardening verification (`031`, `260`, `316`): passing
+- targeted telemetry OTLP metrics export hardening verification (`031`, `260`, `316`, `319`): passing
 - `king_health()['stubbed_api_group_count']`: `0`
 - `.github/workflows/ci.yml`: wired to the canonical audit/build/test path plus the final go-live readiness step with the committed benchmark budget gate
 - `./benchmarks/run-canonical.sh`: passing locally
@@ -174,7 +175,7 @@ The repo already has active native runtime slices for:
 - native file-system object-store backend core with durable .meta sidecars, local CDN cache, multi-node distribution, explicit contract/status failure semantics for non-local backends (distributed/S3/GCS/Azure simulated), and backup/restore/import/export directory confinement to the active storage root
 - native MCP runtime in `src/mcp/` with stateful session tracking, flattened ID persistence in Object Store, full request/upload/download parity, and verified `timeout_ms` / monotonic `deadline_ms` / `cancel` control handling across both procedural and OO APIs
 - native Pipeline Orchestrator and Tool Registry in `src/pipeline_orchestrator/`, including restart-safe tool registry, logging snapshot persistence, completed run history, in-flight run rehydration, a config-selectable `local` versus `file_worker` execution backend with persisted cross-process dispatch, controller-driven post-claim cancellation and stale-claim recovery, a dedicated controller/observer/worker multiprocess topology harness, and verified `timeout_ms` / `overall_timeout_ms` / `deadline_ms` / `max_concurrency` enforcement across local runs plus resumed worker execution
-- native Telemetry runtime with active span lifecycle, metrics aggregation, bounded retry queueing, flush paths, and context propagation
+- native Telemetry runtime with active span lifecycle, metrics aggregation, bounded retry queueing, flush paths, context propagation, and OTLP metrics export that safely normalizes packed metric batches plus enum-backed metric types
 - native Autoscaling engine with monitoring, live telemetry/system-backed decisioning, cooldown/hysteresis enforcement, capped scale-step policy resolution, pluggable provider routing, controller-only Hetzner token loading from `php.ini`, honest Hetzner create/delete HTTP calls, restart-safe controller state persistence, explicit managed-node inventory APIs, and `register -> ready -> drain -> delete` lifecycle control plus pending-node safeguards on the honest Hetzner path while non-Hetzner providers stay simulated behind the same contract
 - operator-facing spend/quota budget warning/hard-limit surfaces in `king_autoscaling_get_status`, with warning-only behavior on probe/API degrade and hard-stop enforcement on configured hard limits
 - native System Integration core coordinating component lifecycles and health
@@ -228,7 +229,7 @@ transport depth, or operational depth is still incomplete.
 
 ### 5. Telemetry And System Operations Still Need Real Export And Recovery Semantics
 
-- Telemetry aggregation, queueing, and export contracts are real, and repeated failed exports now preserve an acyclic retry queue, but long-haul delivery guarantees and degraded-mode behavior are not yet production-deep.
+- Telemetry aggregation, queueing, and export contracts are real, repeated failed exports now preserve an acyclic retry queue, and OTLP metrics export now safely handles packed metric batches and enum-backed metric types, but long-haul delivery guarantees and degraded-mode behavior are not yet production-deep.
 - System integration currently verifies local lifecycle composition, not rolling restart, coordinated drain, failover, or chaos recovery across nodes.
 - The missing part is not shape or API parity; it is operational truth under degraded conditions.
 
