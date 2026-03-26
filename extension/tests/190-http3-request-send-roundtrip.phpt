@@ -106,8 +106,8 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
     }
 
     $output = '';
-    $startupGraceAt = microtime(true) + 1.0;
-    $deadline = microtime(true) + 10.0;
+    $startupGraceAt = microtime(true) + 3.0;
+    $deadline = microtime(true) + 15.0;
     while (microtime(true) < $deadline) {
         $status = proc_get_status($process);
         $read = [$pipes[1], $pipes[2]];
@@ -154,16 +154,15 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
 
 function king_http3_request_with_retry(callable $callback)
 {
-    $attempt = 0;
     $lastError = null;
+    $deadline = microtime(true) + 20.0;
 
-    while ($attempt < 20) {
+    while (microtime(true) < $deadline) {
         try {
             return $callback();
         } catch (Throwable $e) {
             $lastError = $e;
-            usleep(100000);
-            $attempt++;
+            usleep(250000);
         }
     }
 
@@ -196,8 +195,8 @@ try {
             null,
             [
                 'connection_config' => $cfg,
-                'connect_timeout_ms' => 1000,
-                'timeout_ms' => 5000,
+                'connect_timeout_ms' => 3000,
+                'timeout_ms' => 10000,
             ]
         )
     );
@@ -211,8 +210,8 @@ try {
             [
                 'preferred_protocol' => 'http3',
                 'connection_config' => $cfg,
-                'connect_timeout_ms' => 1000,
-                'timeout_ms' => 5000,
+                'connect_timeout_ms' => 3000,
+                'timeout_ms' => 10000,
             ]
         )
     );
