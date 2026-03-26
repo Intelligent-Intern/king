@@ -24,7 +24,7 @@ primitives in one native runtime:
 - client and server APIs over explicit session and stream state
 - WebSocket and WebTransport-class realtime communication
 - Smart DNS / Semantic DNS for service discovery and routing
-- router and load-balancer control-plane primitives
+- router and load-balancer control-plane configuration and policy
 - IIBIN for schema-defined native binary encoding and decoding
 - MCP for agent and tool protocol integration
 - object-store and CDN primitives
@@ -93,7 +93,7 @@ King includes a native control-plane model around:
 - Smart DNS and Semantic DNS service registration
 - topology awareness
 - route selection
-- router/loadbalancer backend discovery and policy
+- router/loadbalancer backend discovery, configuration, and policy
 - mother-node or control-node coordination
 - policy-aware service discovery
 - control and telemetry endpoints

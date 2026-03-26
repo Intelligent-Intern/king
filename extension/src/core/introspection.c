@@ -11,6 +11,7 @@
  * =========================================================================
  */
 
+#include "include/config/router_and_loadbalancer/base_layer.h"
 #include "include/pipeline_orchestrator/orchestrator.h"
 #include "introspection/prelude.inc"
 #include "introspection/telemetry.inc"

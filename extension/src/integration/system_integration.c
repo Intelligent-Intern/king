@@ -21,6 +21,9 @@ static const king_system_component_name_entry_t king_system_component_names[] = 
     {KING_COMPONENT_CONFIG, "config"},
     {KING_COMPONENT_CLIENT, "client"},
     {KING_COMPONENT_SERVER, "server"},
+    {KING_COMPONENT_ROUTER_LOADBALANCER, "router"},
+    {KING_COMPONENT_ROUTER_LOADBALANCER, "loadbalancer"},
+    {KING_COMPONENT_ROUTER_LOADBALANCER, "router_loadbalancer"},
     {KING_COMPONENT_MCP, "mcp"},
     {KING_COMPONENT_OBJECT_STORE, "object_store"},
     {KING_COMPONENT_CDN, "cdn"},
@@ -319,6 +322,11 @@ int king_system_init_all_components(king_system_config_t *config)
     king_system_register_component(KING_COMPONENT_CONFIG, "config", "1.0.0");
     king_system_register_component(KING_COMPONENT_CLIENT, "client", "1.0.0");
     king_system_register_component(KING_COMPONENT_SERVER, "server", "1.0.0");
+    king_system_register_component(
+        KING_COMPONENT_ROUTER_LOADBALANCER,
+        "router_loadbalancer",
+        "1.0.0"
+    );
     king_system_register_component(KING_COMPONENT_MCP, "mcp", "1.0.0");
     king_system_register_component(KING_COMPONENT_TELEMETRY, "telemetry", "1.0.0");
     king_system_register_component(KING_COMPONENT_AUTOSCALING, "autoscaling", "1.0.0");

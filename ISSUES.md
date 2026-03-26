@@ -21,17 +21,17 @@
 
 ## Current Next Leaf
 
-- [ ] Make router/loadbalancer either a real runtime surface or explicitly reduce it to config-only truth.
+- [ ] Fence unsupported Smart DNS modes so the v1 contract matches the current semantic/service-discovery runtime.
 
 ## Top 20 Executable Items
 
 ### 1. Runtime Surface Discipline
 
-1. [ ] Make router/loadbalancer either a real runtime surface or explicitly reduce it to config-only truth.
-   done when: runtime behavior, system component info, tests, and docs all describe the same honest contract.
+1. [ ] Fence unsupported Smart DNS modes so the v1 contract matches the current semantic/service-discovery runtime.
+   done when: unsupported `authoritative` and `recursive_resolver` claims are removed or rejected consistently across config, runtime, tests, and docs.
 
-2. [ ] Make Smart DNS honest across its full public config surface, not only the current semantic-DNS slice.
-   done when: unsupported modes are removed or fenced off, and supported modes have real kernels plus matching docs.
+2. [ ] Make Smart DNS honest across its remaining public config surface, not only the current semantic-DNS slice.
+   done when: the surviving Smart DNS config knobs describe only what the active semantic/service-discovery runtime can actually honor.
 
 ### 2. Realtime and Server Wire Truth
 
@@ -97,5 +97,6 @@
 
 ## Notes
 
+- Router/loadbalancer is now treated as an explicit `config_backed` control-plane component with no stronger forwarding-runtime claim in v1.
 - Everything else from `READYNESS_TRACKER.md` is either already verified, derivative of these leaves, or still too broad to be the active queue.
 - If an item is not listed here, it is not the current repo-local priority.

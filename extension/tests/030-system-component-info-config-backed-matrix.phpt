@@ -13,6 +13,7 @@ function dump_component(string $name): void {
 
 dump_component('config');
 dump_component('autoscaling');
+dump_component('router_loadbalancer');
 dump_component('object_store');
 dump_component('cdn');
 dump_component('semantic_dns');
@@ -69,6 +70,41 @@ array(5) {
   string(9) "max_nodes"
   [4]=>
   string(15) "scale_up_policy"
+}
+bool(true)
+array(6) {
+  [0]=>
+  string(4) "name"
+  [1]=>
+  string(5) "build"
+  [2]=>
+  string(7) "version"
+  [3]=>
+  string(14) "implementation"
+  [4]=>
+  string(13) "configuration"
+  [5]=>
+  string(17) "info_generated_at"
+}
+string(19) "router_loadbalancer"
+string(13) "config_backed"
+array(8) {
+  [0]=>
+  string(18) "router_mode_enable"
+  [1]=>
+  string(17) "hashing_algorithm"
+  [2]=>
+  string(22) "backend_discovery_mode"
+  [3]=>
+  string(19) "backend_static_list"
+  [4]=>
+  string(20) "backend_mcp_endpoint"
+  [5]=>
+  string(29) "backend_mcp_poll_interval_sec"
+  [6]=>
+  string(18) "max_forwarding_pps"
+  [7]=>
+  string(19) "forwarding_contract"
 }
 bool(true)
 array(6) {

@@ -109,6 +109,53 @@ PHP_FUNCTION(king_system_get_component_info)
             king_cloud_autoscale_config.max_nodes);
         add_assoc_string(&configuration, "scale_up_policy",
             king_safe_string(king_cloud_autoscale_config.scale_up_policy));
+    } else if (
+        zend_string_equals_literal(component_name, "router") ||
+        zend_string_equals_literal(component_name, "loadbalancer") ||
+        zend_string_equals_literal(component_name, "router_loadbalancer")
+    ) {
+        king_component_info_init(
+            return_value,
+            "router_loadbalancer",
+            "config_backed"
+        );
+        array_init(&configuration);
+        add_assoc_bool(
+            &configuration,
+            "router_mode_enable",
+            king_router_loadbalancer_config.router_mode_enable ? 1 : 0
+        );
+        add_assoc_string(
+            &configuration,
+            "hashing_algorithm",
+            king_safe_string(king_router_loadbalancer_config.hashing_algorithm)
+        );
+        add_assoc_string(
+            &configuration,
+            "backend_discovery_mode",
+            king_safe_string(king_router_loadbalancer_config.backend_discovery_mode)
+        );
+        add_assoc_string(
+            &configuration,
+            "backend_static_list",
+            king_safe_string(king_router_loadbalancer_config.backend_static_list)
+        );
+        add_assoc_string(
+            &configuration,
+            "backend_mcp_endpoint",
+            king_safe_string(king_router_loadbalancer_config.backend_mcp_endpoint)
+        );
+        add_assoc_long(
+            &configuration,
+            "backend_mcp_poll_interval_sec",
+            king_router_loadbalancer_config.backend_mcp_poll_interval_sec
+        );
+        add_assoc_long(
+            &configuration,
+            "max_forwarding_pps",
+            king_router_loadbalancer_config.max_forwarding_pps
+        );
+        add_assoc_string(&configuration, "forwarding_contract", "config_only");
     } else if (zend_string_equals_literal(component_name, "object_store")) {
         king_component_info_init(return_value, "object_store", "config_backed");
         array_init(&configuration);
