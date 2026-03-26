@@ -61,6 +61,8 @@
   completed: 2026-03-26
 - [x] Harden file-worker queue persistence so worker queue paths require a private real directory and queued/cancel files cannot follow symlinks
   completed: 2026-03-26
+- [x] Harden orchestrator state snapshot persistence so `orchestrator_state_path` stays system-owned and state load/save refuses symlinked paths
+  completed: 2026-03-26
 
 ### 3. Observability, autoscaling, and lifecycle operations
 
@@ -103,7 +105,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `302/302`
+  tests: `303/303`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -155,6 +157,9 @@
 - [x] File-worker queue persistence now rejects unsafe queue directories and symlinked job/cancel targets
   targeted PHPTs: `309`, `311`, `314`, `315`, `323`
   coverage: file-worker queues now require a real non-group/world-writable directory, queued job creation uses exclusive no-follow opens, cancel markers use no-follow writes, worker claim scans ignore non-regular queue entries, and a preplanted `queued-run-1.job` symlink no longer overwrites its target.
+- [x] Orchestrator state snapshots now stay on system-owned paths and use symlink-safe load/save handling
+  targeted PHPTs: `307`, `308`, `324`
+  coverage: `orchestrator.state_path` is no longer accepted through `King\Config` userland overrides, persisted snapshots now use private `mkstemp` staging instead of predictable temp names, state load refuses symlinked paths, and a symlinked state target no longer gets overwritten during tool-registry persistence.
 - [x] Multiprocess control-plane topology is now verified across independent controller observer and worker processes
   targeted PHPTs: `307`, `309`, `314`, `315`
   coverage: fresh controller processes persist tool state and queued runs, fresh observer processes rehydrate and inspect live/cancelled/completed snapshots, and fresh workers complete both live-claim and stale-claim recovery paths without falling back to single-process assumptions.

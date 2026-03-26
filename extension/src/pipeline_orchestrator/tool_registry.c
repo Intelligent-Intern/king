@@ -11,11 +11,13 @@
 
 #include "ext/standard/base64.h"
 #include "ext/standard/php_var.h"
+#include "main/fopen_wrappers.h"
 #include "zend_smart_str.h"
 
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -278,7 +280,7 @@ static int king_orchestrator_queue_is_safe_directory(void)
     return SUCCESS;
 }
 
-static FILE *king_orchestrator_open_queue_stream(
+static FILE *king_orchestrator_open_nofollow_stream(
     const char *path,
     int flags,
     mode_t mode,
@@ -311,6 +313,51 @@ static FILE *king_orchestrator_open_queue_stream(
     }
 
     return stream;
+}
+
+static int king_orchestrator_state_path_validate_existing(const char *state_path)
+{
+    struct stat st;
+
+    if (state_path == NULL || state_path[0] == '\0') {
+        return FAILURE;
+    }
+
+    if (php_check_open_basedir(state_path) != 0) {
+        return FAILURE;
+    }
+
+    if (lstat(state_path, &st) != 0) {
+        return errno == ENOENT ? SUCCESS : FAILURE;
+    }
+
+    return S_ISREG(st.st_mode) ? SUCCESS : FAILURE;
+}
+
+static int king_orchestrator_build_state_tmp_template(
+    const char *state_path,
+    char *tmp_path,
+    size_t tmp_path_len
+)
+{
+    if (
+        state_path == NULL
+        || state_path[0] == '\0'
+        || tmp_path == NULL
+        || tmp_path_len == 0
+    ) {
+        return FAILURE;
+    }
+
+    if (snprintf(tmp_path, tmp_path_len, "%s.tmp.XXXXXX", state_path) >= (int) tmp_path_len) {
+        return FAILURE;
+    }
+
+    if (php_check_open_basedir(tmp_path) != 0) {
+        return FAILURE;
+    }
+
+    return SUCCESS;
 }
 
 static int king_orchestrator_queue_name_is_job(const char *name)
@@ -487,7 +534,32 @@ static int king_orchestrator_persist_state(void)
     }
 
     snprintf(tmp_path, sizeof(tmp_path), "%s.tmp.%ld", state_path, (long) getpid());
-    stream = fopen(tmp_path, "wb");
+    if (king_orchestrator_state_path_validate_existing(state_path) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (king_orchestrator_build_state_tmp_template(state_path, tmp_path, sizeof(tmp_path)) != SUCCESS) {
+        return FAILURE;
+    }
+
+    {
+        int fd = mkstemp(tmp_path);
+        if (fd < 0) {
+            return FAILURE;
+        }
+        if (fchmod(fd, 0600) != 0) {
+            close(fd);
+            unlink(tmp_path);
+            return FAILURE;
+        }
+        stream = fdopen(fd, "wb");
+        if (stream == NULL) {
+            close(fd);
+            unlink(tmp_path);
+            return FAILURE;
+        }
+    }
+
     if (stream == NULL) {
         return FAILURE;
     }
@@ -556,6 +628,11 @@ static int king_orchestrator_persist_state(void)
         return FAILURE;
     }
 
+    if (king_orchestrator_state_path_validate_existing(state_path) != SUCCESS) {
+        unlink(tmp_path);
+        return FAILURE;
+    }
+
     if (rename(tmp_path, state_path) != 0) {
         unlink(tmp_path);
         return FAILURE;
@@ -569,19 +646,37 @@ static int king_orchestrator_load_state(void)
     FILE *stream;
     char line[16384];
     const char *state_path = king_mcp_orchestrator_config.orchestrator_state_path;
+    struct stat st;
 
     if (state_path == NULL || state_path[0] == '\0') {
         king_orchestrator_recovered_from_state = false;
         return SUCCESS;
     }
 
-    stream = fopen(state_path, "rb");
-    if (stream == NULL) {
+    if (php_check_open_basedir(state_path) != 0) {
+        return FAILURE;
+    }
+
+    if (lstat(state_path, &st) != 0) {
         if (errno == ENOENT) {
             king_orchestrator_recovered_from_state = false;
             return SUCCESS;
         }
 
+        return FAILURE;
+    }
+
+    if (!S_ISREG(st.st_mode)) {
+        return FAILURE;
+    }
+
+    stream = king_orchestrator_open_nofollow_stream(
+        state_path,
+        O_RDONLY,
+        0,
+        "rb"
+    );
+    if (stream == NULL) {
         return FAILURE;
     }
 
@@ -835,7 +930,7 @@ int king_orchestrator_enqueue_run(zend_string *run_id, zval *return_value)
         ZSTR_VAL(run_id)
     );
 
-    stream = king_orchestrator_open_queue_stream(
+    stream = king_orchestrator_open_nofollow_stream(
         queue_file_path,
         O_WRONLY | O_CREAT | O_EXCL,
         0600,
@@ -925,7 +1020,7 @@ int king_orchestrator_request_run_cancel(zend_string *run_id)
         return FAILURE;
     }
 
-    stream = king_orchestrator_open_queue_stream(
+    stream = king_orchestrator_open_nofollow_stream(
         marker_path,
         O_WRONLY | O_CREAT | O_TRUNC,
         0600,
@@ -1070,7 +1165,7 @@ int king_orchestrator_claim_next_run(zend_string **run_id_out, char *claimed_pat
         }
     }
 
-    stream = king_orchestrator_open_queue_stream(
+    stream = king_orchestrator_open_nofollow_stream(
         claimed_path,
         O_RDONLY,
         0,

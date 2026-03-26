@@ -112,9 +112,12 @@ int kg_config_mcp_and_orchestrator_apply_userland_config_to(
                 return FAILURE;
             }
         } else if (zend_string_equals_literal(key, "orchestrator_state_path")) {
-            if (kg_validate_generic_string(value, &target->orchestrator_state_path) != SUCCESS) {
-                return FAILURE;
-            }
+            zend_throw_exception_ex(
+                spl_ce_InvalidArgumentException,
+                0,
+                "Configuration override 'orchestrator.state_path' is only supported through the system INI king.orchestrator_state_path."
+            );
+            return FAILURE;
         }
     } ZEND_HASH_FOREACH_END();
 
