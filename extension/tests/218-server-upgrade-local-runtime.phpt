@@ -28,7 +28,11 @@ var_dump(king_http3_server_listen(
         $websocket = king_server_upgrade_to_websocket($session, 4);
         var_dump(is_resource($websocket));
         var_dump(king_websocket_send($websocket, 'h3-push'));
+        $sendError = king_get_last_error();
         $payload = king_client_websocket_receive($websocket);
+        $receiveError = king_get_last_error();
+        var_dump(king_client_websocket_ping($websocket, 'ok'));
+        $pingError = king_get_last_error();
         var_dump(king_client_websocket_close($websocket, 1000, 'listener-done'));
 
         var_dump(king_cancel_stream($request['stream_id'], 'both', $session));
@@ -36,6 +40,9 @@ var_dump(king_http3_server_listen(
         $stats = king_get_stats($session);
         $captured = [
             'payload' => $payload,
+            'send_error' => $sendError,
+            'receive_error' => $receiveError,
+            'ping_error' => $pingError,
             'cancelled_stream' => $GLOBALS['king_server_listener_cancelled_stream'],
             'server_last_early_hints' => $stats['server_last_early_hints'],
             'server_last_websocket_url' => $stats['server_last_websocket_url'],
@@ -63,14 +70,21 @@ var_dump([
 bool(true)
 bool(true)
 bool(true)
-bool(true)
+bool(false)
+bool(false)
 bool(true)
 bool(true)
 bool(true)
 string(0) ""
-array(6) {
+array(9) {
   ["payload"]=>
-  string(7) "h3-push"
+  bool(false)
+  ["send_error"]=>
+  string(97) "king_websocket_send() cannot exchange frames on a local-only server-side WebSocket upgrade in v1."
+  ["receive_error"]=>
+  string(107) "king_client_websocket_receive() cannot exchange frames on a local-only server-side WebSocket upgrade in v1."
+  ["ping_error"]=>
+  string(104) "king_client_websocket_ping() cannot exchange frames on a local-only server-side WebSocket upgrade in v1."
   ["cancelled_stream"]=>
   int(0)
   ["server_last_early_hints"]=>

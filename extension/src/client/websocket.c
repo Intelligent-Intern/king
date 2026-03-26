@@ -336,6 +336,24 @@ static zend_string *king_websocket_compute_expected_accept(zend_string *client_k
     return php_base64_encode(digest, sizeof(digest));
 }
 
+static zend_bool king_websocket_uses_local_server_runtime(king_ws_state *state)
+{
+    return state != NULL
+        && state->server_local_only
+        && state->transport_stream == NULL;
+}
+
+static zend_result king_websocket_reject_local_server_frame_io(
+    const char *function_name
+)
+{
+    king_websocket_set_error(
+        "%s() cannot exchange frames on a local-only server-side WebSocket upgrade in v1.",
+        function_name
+    );
+    return FAILURE;
+}
+
 static void king_websocket_apply_timeout(
     king_ws_state *state,
     zend_long timeout_ms
@@ -479,6 +497,10 @@ static zend_result king_websocket_send_frame(
     size_t i;
 
     if (state->transport_stream == NULL) {
+        if (king_websocket_uses_local_server_runtime(state)) {
+            return king_websocket_reject_local_server_frame_io(function_name);
+        }
+
         return king_websocket_message_queue_push(
             state,
             (const char *) payload,
@@ -1885,6 +1907,17 @@ PHP_METHOD(King_WebSocket_Connection, ping)
         RETURN_THROWS();
     }
 
+    if (king_websocket_uses_local_server_runtime(state)) {
+        king_websocket_reject_local_server_frame_io(
+            "WebSocket\\Connection::ping"
+        );
+        king_websocket_throw_last_error(
+            king_ce_ws_connection_error,
+            "Failed to send the active WebSocket ping frame."
+        );
+        RETURN_THROWS();
+    }
+
     if (state->last_ping_payload != NULL) {
         zend_string_release(state->last_ping_payload);
     }
@@ -2183,6 +2216,13 @@ PHP_FUNCTION(king_client_websocket_receive)
         RETURN_STR(payload);
     }
 
+    if (king_websocket_uses_local_server_runtime(state)) {
+        king_websocket_reject_local_server_frame_io(
+            "king_client_websocket_receive"
+        );
+        RETURN_FALSE;
+    }
+
     if (state->transport_stream != NULL && !state->closed) {
         if (
             king_websocket_pump_transport(
@@ -2248,6 +2288,13 @@ PHP_FUNCTION(king_client_websocket_ping)
         king_websocket_set_error(
             "king_client_websocket_ping() ping payload cannot exceed %d bytes.",
             KING_WS_PING_MAX_PAYLOAD_LEN
+        );
+        RETURN_FALSE;
+    }
+
+    if (king_websocket_uses_local_server_runtime(state)) {
+        king_websocket_reject_local_server_frame_io(
+            "king_client_websocket_ping"
         );
         RETURN_FALSE;
     }

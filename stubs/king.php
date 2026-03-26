@@ -428,7 +428,10 @@ namespace {
      * The current runtime records upgrade metadata on the session
      * snapshot, derives a local `ws://` or `wss://` URL from the active
      * listener/session state, keeps the resource inside the local server-side
-     * runtime slice, and rejects duplicate or locally cancelled stream IDs.
+     * runtime slice, supports close/status metadata locally, rejects
+     * duplicate or locally cancelled stream IDs, and intentionally refuses
+     * server-side frame I/O until a real listener-backed upgrade runtime
+     * exists.
      * @param mixed $session
      * @return resource|false
      */

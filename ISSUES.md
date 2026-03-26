@@ -21,14 +21,14 @@
 
 ## Current Next Leaf
 
-- [ ] Add on-wire WebSocket upgrade coverage from HTTP/1 plus honest server-side close and drain behavior.
+- [ ] Add true on-wire server-side WebSocket upgrade coverage from HTTP/1, including frame flow, handler ownership, close, and drain semantics.
 
 ## Active Executable Items
 
 ### 1. Realtime and Server Wire Truth
 
-1. [ ] Add on-wire WebSocket upgrade coverage from HTTP/1 plus honest server-side close and drain behavior.
-   done when: upgrade, handler ownership, shutdown, and drain semantics are exercised against a real listener instead of only local shims.
+1. [ ] Add true on-wire server-side WebSocket upgrade coverage from HTTP/1, including frame flow, handler ownership, close, and drain semantics.
+   done when: upgrade, frame flow, handler ownership, shutdown, and drain semantics are exercised against a real listener instead of only local shims.
 
 2. [ ] Add long-lived server/session soak coverage for upgrade, early-hints, TLS reload, admin API, and close/drain flows.
    done when: sustained listener tests prove lifecycle stability over time instead of only short request-response passes.
@@ -86,7 +86,7 @@
 
 ## Notes
 
-- WebSocket client connect/send/receive/ping/close is now verified on-wire against a real local peer; the remaining WebSocket work is the server-side upgrade/listener path plus longer-lived churn coverage.
+- WebSocket client connect/send/receive/ping/close is now verified on-wire against a real local peer, and server-side `king_server_upgrade_to_websocket()` is now honestly fenced to a local-only close/status marker slice. The remaining WebSocket work is the real listener-backed server upgrade path plus longer-lived churn coverage.
 - Router/loadbalancer is now treated as an explicit `config_backed` control-plane component with no stronger forwarding-runtime claim in v1.
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs; the remaining DNS work is topology and wire-depth, not more local config cleanup.
 - Everything else from `READYNESS_TRACKER.md` is either already verified, derivative of these leaves, or still too broad to be the active queue.

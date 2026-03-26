@@ -149,6 +149,7 @@ PHP_FUNCTION(king_server_upgrade_to_websocket)
     state->last_close_status_code = 1000;
     state->state = KING_WS_STATE_OPEN;
     state->secure = secure != 0;
+    state->server_local_only = true;
     state->handshake_complete = true;
     state->closed = false;
     ZVAL_UNDEF(&state->config);
