@@ -235,9 +235,9 @@ namespace {
     function king_websocket_send(mixed $websocket, string $data, bool $is_binary = false): bool {}
 
     /**
-     * Create a local MCP connection-state resource for the active runtime.
-     * This stores host, port, optional `King\Config`, plus open/closed state
-     * and the per-connection local transfer store used by the MCP helpers.
+     * Create an MCP connection-state resource for the active runtime.
+     * This stores host, port, optional `King\Config`, and the explicit
+     * open/closed lifecycle for the active remote peer socket.
      * @param mixed $config
      * @param array<string,mixed>|null $options
      * @return resource|false
@@ -245,8 +245,9 @@ namespace {
     function king_mcp_connect(string $host, int $port, mixed $config, ?array $options = null) {}
 
     /**
-     * Validate the active local MCP connection state and request shape and
-     * return the normalized local response payload.
+     * Validate the active MCP connection state and request shape, then
+     * exchange a unary request with the configured remote peer and return the
+     * normalized response payload.
      * @param mixed $connection
      * `options` may include `timeout_ms`, `deadline_ms` (monotonic deadline
      * in milliseconds), and `cancel`.
@@ -256,10 +257,8 @@ namespace {
     function king_mcp_request(mixed $connection, string $service_name, string $method_name, string $request_payload, ?array $options = null): string|false {}
 
     /**
-     * Drain a PHP stream into the active local MCP transfer store.
-     * The current runtime keeps the bytes per connection under the
-     * `(service, method, stream_identifier)` tuple instead of sending them to
-     * a live MCP backend.
+     * Drain a PHP stream and upload the bytes to the active remote MCP peer
+     * under the `(service, method, stream_identifier)` tuple.
      * `options` may include `timeout_ms`, `deadline_ms` (monotonic deadline
      * in milliseconds), and `cancel`.
      * @param mixed $connection
@@ -268,9 +267,9 @@ namespace {
     function king_mcp_upload_from_stream(mixed $connection, string $service_name, string $method_name, string $stream_identifier, $stream, ?array $options = null): bool {}
 
     /**
-     * Resolve a previously uploaded local MCP transfer by treating
-     * `$request_payload` as the opaque transfer identifier in the active
-     * current runtime, then stream the bytes into the destination stream.
+     * Resolve a previously uploaded remote MCP transfer by treating
+     * `$request_payload` as the opaque transfer identifier, then stream the
+     * fetched bytes into the destination stream.
      * `options` may include `timeout_ms`, `deadline_ms` (monotonic deadline
      * in milliseconds), and `cancel`.
      * @param mixed $connection
@@ -279,8 +278,8 @@ namespace {
     function king_mcp_download_to_stream(mixed $connection, string $service_name, string $method_name, string $request_payload, $stream, ?array $options = null): bool {}
 
     /**
-     * Close a local MCP connection-state resource.
-     * The resource remains readable for stable post-close validation.
+     * Close an MCP connection-state resource and the active remote peer
+     * socket. The resource remains readable for stable post-close validation.
      * @param mixed $connection
      */
     function king_mcp_close(mixed $connection): bool {}
@@ -539,10 +538,7 @@ namespace {
      */
     function king_client_websocket_get_last_error(): string {}
 
-    /**
-     * Compatibility alias for the shared error buffer used by the current
-     * local MCP runtime.
-     */
+    /** Compatibility alias for the shared error buffer used by the MCP runtime. */
     function king_mcp_get_error(): string {}
 
     /**
@@ -1463,23 +1459,24 @@ namespace King {
      * =========================== */
     final class MCP {
         /**
-         * Materialize the local MCP connection-state wrapper for host, port,
-         * optional `King\Config`, and the explicit open/closed lifecycle.
+         * Materialize the MCP connection-state wrapper for host, port,
+         * optional `King\Config`, and the explicit open/closed lifecycle over
+         * the active remote peer socket.
          * @throws ValidationException
          */
         public function __construct(string $host, int $port, ?Config $config = null) {}
 
         /**
-         * Unary RPC call over the local MCP connection-state wrapper.
+         * Unary RPC call over the MCP connection-state wrapper.
          * Closed connections and already cancelled tokens fail deterministically;
-         * otherwise the active runtime returns the normalized local response
-         * payload for the requested service and method.
+         * otherwise the active runtime exchanges the request with the remote
+         * peer and returns the normalized response payload.
          * @throws RuntimeException|ValidationException|MCPProtocolException
          */
         public function request(string $service, string $method, string $payload, ?CancelToken $cancel = null, ?array $options = null): string {}
 
         /**
-         * Drain a source stream into the local MCP transfer store keyed by
+         * Drain a source stream into the remote MCP transfer store keyed by
          * `(service, method, streamIdentifier)`.
          * @param resource $stream
          * @throws RuntimeException|ValidationException|MCPDataException
@@ -1487,15 +1484,15 @@ namespace King {
         public function uploadFromStream(string $service, string $method, string $streamIdentifier, $stream, ?array $options = null): void {}
 
         /**
-         * Resolve a previously uploaded local MCP transfer by treating
-         * `$payload` as the transfer identifier and write the bytes into the
-         * provided destination stream.
+         * Resolve a previously uploaded remote MCP transfer by treating
+         * `$payload` as the transfer identifier and write the fetched bytes
+         * into the provided destination stream.
          * @param resource $stream
          * @throws RuntimeException|ValidationException|MCPDataException
          */
         public function downloadToStream(string $service, string $method, string $payload, $stream, ?array $options = null): void {}
 
-        /** Close the local MCP connection state. */
+        /** Close the MCP connection state and active remote peer socket. */
         public function close(): void {}
     }
 

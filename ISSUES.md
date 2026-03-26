@@ -21,56 +21,53 @@
 
 ## Current Next Leaf
 
-- [ ] Move MCP beyond local-first helper state into a real remote backend path.
+- [ ] Verify MCP request, upload, and download against a real remote peer with timeout, deadline, and cancellation propagation.
 
 ## Active Executable Items
 
 ### 1. Control Plane, Routing, and Distributed Execution
 
-1. [ ] Move MCP beyond local-first helper state into a real remote backend path.
-   done when: request, upload, and download leave the current purely local boundary and talk to an actual counterpart.
-
-2. [ ] Verify MCP request, upload, and download against a real remote peer with timeout, deadline, and cancellation propagation.
+1. [ ] Verify MCP request, upload, and download against a real remote peer with timeout, deadline, and cancellation propagation.
    done when: targeted end-to-end harnesses cover success, timeout, cancellation, and remote failure behavior.
 
-3. [ ] Validate MCP large-payload transfer, bounded concurrency, backpressure, and restart/partial-failure recovery.
+2. [ ] Validate MCP large-payload transfer, bounded concurrency, backpressure, and restart/partial-failure recovery.
    done when: stressed transfer paths stay bounded and recover cleanly after interruption.
 
-4. [ ] Finalize orchestrator retry, idempotency, and exact queued/running/failed/cancelled/completed state transitions.
+3. [ ] Finalize orchestrator retry, idempotency, and exact queued/running/failed/cancelled/completed state transitions.
    done when: pipeline reruns, worker retries, and failure classification are explicit, test-backed, and stable.
 
-5. [ ] Extend orchestrator and MCP verification from same-host multiprocess coverage to multi-host topology coverage.
+4. [ ] Extend orchestrator and MCP verification from same-host multiprocess coverage to multi-host topology coverage.
    done when: controller, worker, and remote peer behavior is proven across machine boundaries rather than only separate local processes.
 
-6. [ ] Validate worker failure handling, queue fairness, and scheduler behavior under sustained pipeline load.
+5. [ ] Validate worker failure handling, queue fairness, and scheduler behavior under sustained pipeline load.
    done when: active runs survive worker loss correctly and queue progression remains fair under contention.
 
-7. [ ] Validate Smart DNS registration, routing, mother-node synchronization, and recovery against larger or distributed topologies.
+6. [ ] Validate Smart DNS registration, routing, mother-node synchronization, and recovery against larger or distributed topologies.
    done when: service discovery and semantic routing stay coherent under parallel updates, restart, and failover rather than only local happy-path flows.
 
-8. [ ] Finalize the honest v1 object-store backend contract.
+7. [ ] Finalize the honest v1 object-store backend contract.
    done when: either at least one non-local backend is real and verified, or the public contract is explicitly locked to `local_fs` plus simulated adapters with no stronger claim.
 
 ### 2. Observability and Fleet Operations
 
-9. [ ] Validate autoscaling behavior under degraded telemetry and provider conditions, including rollback for failed bootstrap, registration, and readiness.
+8. [ ] Validate autoscaling behavior under degraded telemetry and provider conditions, including rollback for failed bootstrap, registration, and readiness.
     done when: controller decisions remain safe and explainable while inputs or provider calls are missing, degraded, or partially failed.
 
-10. [ ] Validate OTLP traces and logs export against real collectors, including non-2xx, timeout, size-limit, and outage-recovery behavior.
+9. [ ] Validate OTLP traces and logs export against real collectors, including non-2xx, timeout, size-limit, and outage-recovery behavior.
     done when: all exported telemetry signal types are verified against honest collectors instead of metrics-only local coverage.
 
-11. [ ] Prove telemetry export semantics under sustained degraded conditions, including replay or explicit non-replay guarantees after restart.
+10. [ ] Prove telemetry export semantics under sustained degraded conditions, including replay or explicit non-replay guarantees after restart.
     done when: long-haul exporter outage and recovery do not leave delivery semantics ambiguous.
 
 ### 3. Build, Release, and Compatibility Confidence
 
-12. [ ] Turn the QUIC backend bootstrap into a deterministic pinned dependency path.
+11. [ ] Turn the QUIC backend bootstrap into a deterministic pinned dependency path.
     done when: `quiche` and related build inputs rehydrate reproducibly on clean hosts without ad hoc branch fallbacks or local resurrection tricks.
 
-13. [ ] Add clean-host and published-container install/smoke matrix coverage across supported PHP and API combinations, then lock upgrade/downgrade release gates behind it.
+12. [ ] Add clean-host and published-container install/smoke matrix coverage across supported PHP and API combinations, then lock upgrade/downgrade release gates behind it.
     done when: fresh-host package installs and published images are verified in CI instead of only local source builds.
 
-14. [ ] Add long-duration ASan, UBSan, and leak-oriented soak gates with archived diagnostics.
+13. [ ] Add long-duration ASan, UBSan, and leak-oriented soak gates with archived diagnostics.
     done when: sanitizer and soak regressions produce retained failure artifacts and block release-grade claims automatically.
 
 ## Notes
@@ -78,5 +75,6 @@
 - HTTP/2 shared-session fairness under mixed slow/fast streams, HTTP/3 timeout-vs-recovery churn isolation, and multi-client WebSocket close/reconnect churn on one local server are now verified.
 - Router/loadbalancer is now treated as an explicit `config_backed` control-plane component with no stronger forwarding-runtime claim in v1.
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs; the remaining DNS work is topology and wire-depth, not more local config cleanup.
+- MCP request, upload, and download now talk to a real same-host remote peer instead of only local helper state; the remaining MCP gap is deadline/cancel propagation and deeper failure coverage.
 - Everything else from `READYNESS_TRACKER.md` is either already verified, derivative of these leaves, or still too broad to be the active queue.
 - If an item is not listed here, it is not the current repo-local priority.

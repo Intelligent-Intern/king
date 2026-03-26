@@ -74,7 +74,7 @@ The current tree already proves:
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs
 - router/loadbalancer is now exposed as an explicit config-backed system component with honest policy/discovery-only introspection
 - object-store local filesystem persistence, `.meta` sidecars, CDN cache/runtime behavior, and confined backup/restore/import/export paths
-- MCP request/upload/download parity with bounded timeout, deadline, and local cancellation controls
+- MCP request/upload/download parity against a real remote peer with bounded timeout, deadline, and local cancellation controls
 - orchestrator persistence, local/file-worker backend boundary, cross-process cancellation, and multiprocess controller/observer/worker verification
 - telemetry batch queueing, bounded retry behavior, OTLP metrics export hardening, and local exporter failover/recovery coverage
 - telemetry-driven Hetzner autoscaling with controller-owned credentials, persisted recovery state, and `register -> ready -> drain -> delete` lifecycle gating
@@ -86,7 +86,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 
 ### Remote Control Plane Depth
 
-- MCP remains local-first in practice.
+- MCP now uses a real remote peer path, but timeout/deadline/cancel controls are still enforced only in the local wrapper rather than propagated through the peer protocol.
 - The orchestrator has a real cross-process file-worker boundary, but not yet a verified multi-host boundary.
 - Retry, idempotency, and exact remote/distributed execution guarantees are still thinner than a final release bar.
 

@@ -1,41 +1,37 @@
 --TEST--
-King MCP OO wrapper exposes the active local upload and download transfer helpers
+King MCP OO wrapper exposes the active remote upload and download transfer helpers
 --INI--
 king.security_allow_config_override=1
 --FILE--
 <?php
-$storagePath = sys_get_temp_dir() . '/king_mcp_tests_oo_' . getmypid();
-king_object_store_init(['storage_root_path' => $storagePath]);
-$mcp = new King\MCP('127.0.0.1', 8443);
-$source = fopen('php://temp', 'w+');
-$destination = fopen('php://temp', 'w+');
+require __DIR__ . '/mcp_test_helper.inc';
 
-fwrite($source, "payload-42");
-rewind($source);
-
-$mcp->uploadFromStream('svc', 'blob', 'asset-2', $source);
-$mcp->downloadToStream('svc', 'blob', 'asset-2', $destination);
-
-rewind($destination);
-var_dump(stream_get_contents($destination));
-
-$mcp->close();
-
+$server = king_mcp_test_start_server();
 try {
-    $mcp->downloadToStream('svc', 'blob', 'asset-2', fopen('php://temp', 'w+'));
-    echo "no-exception\n";
-} catch (Throwable $e) {
-    var_dump(get_class($e));
-    var_dump($e->getMessage());
-}
+    $mcp = new King\MCP('127.0.0.1', $server['port']);
+    $source = fopen('php://temp', 'w+');
+    $destination = fopen('php://temp', 'w+');
 
-if (is_dir($storagePath)) {
-    foreach (scandir($storagePath) as $file) {
-        if ($file !== '.' && $file !== '..') {
-            @unlink($storagePath . '/' . $file);
-        }
+    fwrite($source, "payload-42");
+    rewind($source);
+
+    $mcp->uploadFromStream('svc', 'blob', 'asset-2', $source);
+    $mcp->downloadToStream('svc', 'blob', 'asset-2', $destination);
+
+    rewind($destination);
+    var_dump(stream_get_contents($destination));
+
+    $mcp->close();
+
+    try {
+        $mcp->downloadToStream('svc', 'blob', 'asset-2', fopen('php://temp', 'w+'));
+        echo "no-exception\n";
+    } catch (Throwable $e) {
+        var_dump(get_class($e));
+        var_dump($e->getMessage());
     }
-    @rmdir($storagePath);
+} finally {
+    king_mcp_test_stop_server($server);
 }
 ?>
 --EXPECTF--

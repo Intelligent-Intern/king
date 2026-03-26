@@ -1,19 +1,26 @@
 --TEST--
-King MCP OO wrapper shares the local runtime connection state
+King MCP OO wrapper shares the remote MCP runtime connection state
 --FILE--
 <?php
-$mcp = new King\MCP('127.0.0.1', 8443);
+require __DIR__ . '/mcp_test_helper.inc';
 
-var_dump($mcp->request('svc', 'ping', '{}'));
-
-$mcp->close();
-
+$server = king_mcp_test_start_server();
 try {
-    $mcp->request('svc', 'ping', '{}');
-    echo "no-exception-2\n";
-} catch (Throwable $e) {
-    var_dump(get_class($e));
-    var_dump($e->getMessage());
+    $mcp = new King\MCP('127.0.0.1', $server['port']);
+
+    var_dump($mcp->request('svc', 'ping', '{}'));
+
+    $mcp->close();
+
+    try {
+        $mcp->request('svc', 'ping', '{}');
+        echo "no-exception-2\n";
+    } catch (Throwable $e) {
+        var_dump(get_class($e));
+        var_dump($e->getMessage());
+    }
+} finally {
+    king_mcp_test_stop_server($server);
 }
 ?>
 --EXPECT--

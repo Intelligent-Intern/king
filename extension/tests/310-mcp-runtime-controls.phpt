@@ -4,9 +4,10 @@ King MCP runtime controls enforce deadline and cancel budgets across request and
 king.security_allow_config_override=1
 --FILE--
 <?php
-$storagePath = sys_get_temp_dir() . '/king_mcp_control_tests_' . getmypid();
-king_object_store_init(['storage_root_path' => $storagePath]);
-$connection = king_mcp_connect('127.0.0.1', 8443, null);
+require __DIR__ . '/mcp_test_helper.inc';
+
+$server = king_mcp_test_start_server();
+$connection = king_mcp_connect('127.0.0.1', $server['port'], null);
 $cancelled = new King\CancelToken();
 $cancelled->cancel();
 
@@ -49,9 +50,11 @@ var_dump(king_mcp_download_to_stream(
 ));
 var_dump(king_mcp_get_error());
 
-$mcp = new King\MCP('127.0.0.1', 8443);
+king_mcp_close($connection);
+
+$mcp = new King\MCP('127.0.0.1', $server['port']);
 $pending = new King\CancelToken();
-var_dump($mcp->request('svc', 'ping', '{}', $pending, ['timeout_ms' => 50]) === '{"res":"{}"}');
+var_dump($mcp->request('svc', 'ping', '{}', $pending, ['timeout_ms' => 500]) === '{"res":"{}"}');
 
 try {
     $mcp->uploadFromStream(
@@ -81,14 +84,9 @@ try {
     var_dump($e->getMessage());
 }
 
-if (is_dir($storagePath)) {
-    foreach (scandir($storagePath) as $entry) {
-        if ($entry !== '.' && $entry !== '..') {
-            @unlink($storagePath . '/' . $entry);
-        }
-    }
-    @rmdir($storagePath);
-}
+var_dump(king_mcp_close($connection));
+$mcp->close();
+king_mcp_test_stop_server($server);
 ?>
 --EXPECTF--
 bool(false)
@@ -103,3 +101,4 @@ string(21) "King\MCPDataException"
 string(%d) "MCP::uploadFromStream() cancelled the active MCP operation via CancelToken."
 string(24) "King\MCPTimeoutException"
 string(%d) "MCP::downloadToStream() exceeded the active MCP deadline budget."
+bool(true)

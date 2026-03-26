@@ -1,46 +1,63 @@
 --TEST--
-King MCP end-to-end verification: ensure connections use Object Store persistence for stream data
+King MCP end-to-end verification exchanges request and transfer data with a remote peer
 --INI--
 king.security_allow_config_override=1
 --FILE--
 <?php
-$storage_path = sys_get_temp_dir() . '/king_e2e_mcp_' . getmypid();
-king_object_store_init(['storage_root_path' => $storage_path]);
+require __DIR__ . '/mcp_test_helper.inc';
 
-$connection = king_mcp_connect('127.0.0.1', 8443, null);
+$server = king_mcp_test_start_server();
+$capture = [];
 
-$source = fopen('php://temp', 'w+');
-fwrite($source, str_repeat("D", 100));
-rewind($source);
+try {
+    $connection = king_mcp_connect('127.0.0.1', $server['port'], null);
 
-// 1. Upload
-var_dump(king_mcp_upload_from_stream($connection, 'cloud', 'push', 'e2e-1', $source));
+    $source = fopen('php://temp', 'w+');
+    fwrite($source, str_repeat("D", 100));
+    rewind($source);
 
-// 2. Verify it exists in the Object Store manually
-$expected_file = $storage_path . '/mcp-cloud:push:e2e-1';
-var_dump(file_exists($expected_file));
-var_dump(filesize($expected_file));
+    var_dump(king_mcp_upload_from_stream($connection, 'cloud', 'push', 'e2e-1', $source));
 
-// 3. Download
-$dest = fopen('php://temp', 'w+');
-var_dump(king_mcp_download_to_stream($connection, 'cloud', 'push', 'e2e-1', $dest));
-rewind($dest);
-var_dump(strlen(stream_get_contents($dest)));
+    $dest = fopen('php://temp', 'w+');
+    var_dump(king_mcp_download_to_stream($connection, 'cloud', 'push', 'e2e-1', $dest));
+    rewind($dest);
+    var_dump(strlen(stream_get_contents($dest)));
 
-king_mcp_close($connection);
+    var_dump(king_mcp_request($connection, 'svc', 'ping', 'probe') === '{"res":"probe"}');
 
-if (is_dir($storage_path)) {
-    foreach (scandir($storage_path) as $file) {
-        if ($file !== '.' && $file !== '..') {
-            @unlink($storage_path . '/' . $file);
-        }
-    }
-    @rmdir($storage_path);
+    var_dump(king_mcp_close($connection));
+} finally {
+    $capture = king_mcp_test_stop_server($server);
 }
+
+$operations = array_map(
+    static fn(array $event): string => $event['operation'],
+    $capture['events'] ?? []
+);
+
+var_dump($operations);
+var_dump(($capture['connections'][0]['command_count'] ?? null) === 3);
+var_dump(($capture['events'][0]['payload_length'] ?? null) === 100);
+var_dump(($capture['events'][1]['payload_length'] ?? null) === 100);
+var_dump(($capture['events'][2]['response_length'] ?? null) === 15);
 ?>
 --EXPECT--
 bool(true)
 bool(true)
 int(100)
 bool(true)
-int(100)
+bool(true)
+array(4) {
+  [0]=>
+  string(6) "upload"
+  [1]=>
+  string(8) "download"
+  [2]=>
+  string(7) "request"
+  [3]=>
+  string(4) "stop"
+}
+bool(true)
+bool(true)
+bool(true)
+bool(true)

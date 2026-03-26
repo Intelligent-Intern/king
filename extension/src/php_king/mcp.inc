@@ -374,7 +374,7 @@ static zend_result king_mcp_validate_transfer_args(
         snprintf(
             message,
             sizeof(message),
-            "%s() combined service, method, and %s exceed the local Object Store key limit (127 bytes).",
+            "%s() combined service, method, and %s exceed the MCP transfer key limit (127 bytes).",
             function_name,
             identifier_name
         );
@@ -734,7 +734,7 @@ PHP_FUNCTION(king_mcp_close)
         RETURN_THROWS();
     }
 
-    state->closed = true;
+    king_mcp_state_close(state);
     king_set_error("");
     RETURN_TRUE;
 }
@@ -829,7 +829,9 @@ PHP_FUNCTION(king_mcp_upload_from_stream)
         payload
     ) != SUCCESS) {
         zend_string_release(payload);
-        king_set_error("king_mcp_upload_from_stream() failed to persist the local MCP transfer.");
+        if (king_get_error()[0] == '\0') {
+            king_set_error("king_mcp_upload_from_stream() failed to persist the remote MCP transfer.");
+        }
         RETURN_FALSE;
     }
 
@@ -921,9 +923,11 @@ PHP_FUNCTION(king_mcp_download_to_stream)
         request_payload
     );
     if (payload == NULL) {
-        king_set_error(
-            "king_mcp_download_to_stream() could not find a local MCP transfer for the requested payload identifier."
-        );
+        if (king_get_error()[0] == '\0') {
+            king_set_error(
+                "king_mcp_download_to_stream() could not find a remote MCP transfer for the requested payload identifier."
+            );
+        }
         RETURN_FALSE;
     }
 
@@ -1039,6 +1043,14 @@ PHP_METHOD(King_MCP, request)
     }
 
     if (king_mcp_request(state, service, method, payload, &response_payload) != SUCCESS) {
+        zend_throw_exception_ex(
+            king_ce_mcp_connection_error,
+            0,
+            "%s",
+            king_get_error()[0] != '\0'
+                ? king_get_error()
+                : "MCP::request() failed to exchange the remote MCP request."
+        );
         RETURN_THROWS();
     }
 
@@ -1067,7 +1079,7 @@ PHP_METHOD(King_MCP, close)
         RETURN_THROWS();
     }
 
-    state->closed = true;
+    king_mcp_state_close(state);
     king_set_error("");
 }
 
@@ -1164,11 +1176,14 @@ PHP_METHOD(King_MCP, uploadFromStream)
         payload
     ) != SUCCESS) {
         zend_string_release(payload);
-        king_set_error("MCP::uploadFromStream() failed to persist the local MCP transfer.");
+        if (king_get_error()[0] == '\0') {
+            king_set_error("MCP::uploadFromStream() failed to persist the remote MCP transfer.");
+        }
         zend_throw_exception_ex(
             king_ce_mcp_data_error,
             0,
-            "MCP::uploadFromStream() failed to persist the local MCP transfer."
+            "%s",
+            king_get_error()
         );
         RETURN_THROWS();
     }
@@ -1256,13 +1271,16 @@ PHP_METHOD(King_MCP, downloadToStream)
         ZSTR_VAL(request_payload)
     );
     if (payload == NULL) {
-        king_set_error(
-            "MCP::downloadToStream() could not find a local MCP transfer for the requested payload identifier."
-        );
+        if (king_get_error()[0] == '\0') {
+            king_set_error(
+                "MCP::downloadToStream() could not find a remote MCP transfer for the requested payload identifier."
+            );
+        }
         zend_throw_exception_ex(
             king_ce_mcp_data_error,
             0,
-            "MCP::downloadToStream() could not find a local MCP transfer for the requested payload identifier."
+            "%s",
+            king_get_error()
         );
         RETURN_THROWS();
     }
