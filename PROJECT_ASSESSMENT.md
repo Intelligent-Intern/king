@@ -33,6 +33,7 @@ repo-local execution plan.
 The currently verified baseline is:
 
 - `./scripts/static-checks.sh`: passing
+- `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
 - `./scripts/test-extension.sh`: `307/307` passing
@@ -53,6 +54,7 @@ Current tree facts:
 - public stub parity: `124` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
+- static and runtime-surface audits now enforce that include-tree discipline
 
 ## What Is Verified And Real Today
 

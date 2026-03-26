@@ -7,6 +7,8 @@ EXT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 cd "${EXT_DIR}"
 
+"${SCRIPT_DIR}/check-include-layout.sh"
+
 if rg -n 'src_bak/.*\.(c|lo|dep)' config.m4 Makefile Makefile.objects >/dev/null 2>&1; then
     echo "Active build files still reference src_bak/ sources." >&2
     rg -n 'src_bak/.*\.(c|lo|dep)' config.m4 Makefile Makefile.objects >&2
