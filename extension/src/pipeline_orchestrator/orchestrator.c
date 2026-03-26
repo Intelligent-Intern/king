@@ -17,7 +17,7 @@ typedef struct _king_orchestrator_exec_control {
     zend_long max_concurrency;
     uint64_t deadline_ms;
     uint64_t started_at_ms;
-    zval *cancel_token;
+    zval cancel_token;
     zend_string *run_id;
 } king_orchestrator_exec_control_t;
 
@@ -30,6 +30,22 @@ static int king_orchestrator_backend_is_file_worker(void)
 static uint64_t king_orchestrator_monotonic_time_ms(void)
 {
     return (uint64_t) (zend_hrtime() / 1000000ULL);
+}
+
+static void king_orchestrator_exec_control_cleanup(
+    king_orchestrator_exec_control_t *control
+)
+{
+    if (control == NULL) {
+        return;
+    }
+
+    if (!Z_ISUNDEF(control->cancel_token)) {
+        zval_ptr_dtor(&control->cancel_token);
+        ZVAL_UNDEF(&control->cancel_token);
+    }
+
+    control->run_id = NULL;
 }
 
 static zend_result king_orchestrator_raise_error(
@@ -135,7 +151,7 @@ static zend_result king_orchestrator_exec_control_parse(
         : 1;
     control->deadline_ms = 0;
     control->started_at_ms = king_orchestrator_monotonic_time_ms();
-    control->cancel_token = NULL;
+    ZVAL_UNDEF(&control->cancel_token);
     control->run_id = NULL;
 
     if (options == NULL || Z_TYPE_P(options) != IS_ARRAY) {
@@ -252,7 +268,7 @@ static zend_result king_orchestrator_exec_control_parse(
             );
         }
 
-        control->cancel_token = option_value;
+        ZVAL_COPY(&control->cancel_token, option_value);
     }
 
     return SUCCESS;
@@ -277,7 +293,7 @@ static zend_result king_orchestrator_exec_control_check(
         *cancelled_out = 0;
     }
 
-    if (king_transport_cancel_token_is_cancelled(control->cancel_token)) {
+    if (king_transport_cancel_token_is_cancelled(&control->cancel_token)) {
         snprintf(
             message,
             sizeof(message),
@@ -407,6 +423,7 @@ static zval *king_orchestrator_prepare_persisted_options(zval *options, zval *sa
     }
 
     ZVAL_COPY(sanitized_options, options);
+    SEPARATE_ARRAY(sanitized_options);
     zend_hash_str_del(
         Z_ARRVAL_P(sanitized_options),
         "cancel",
@@ -642,6 +659,8 @@ int king_orchestrator_resume_run(zend_string *run_id, zval *return_value)
     ZVAL_NULL(&initial_data);
     ZVAL_NULL(&pipeline);
     ZVAL_NULL(&options);
+    ZVAL_UNDEF(&control.cancel_token);
+    control.run_id = NULL;
 
     if (king_orchestrator_load_run_payload(run_id, &initial_data, &pipeline, &options) != SUCCESS) {
         return king_orchestrator_raise_error(
@@ -660,6 +679,7 @@ int king_orchestrator_resume_run(zend_string *run_id, zval *return_value)
         zval_ptr_dtor(&initial_data);
         zval_ptr_dtor(&pipeline);
         zval_ptr_dtor(&options);
+        king_orchestrator_exec_control_cleanup(&control);
         return FAILURE;
     }
 
@@ -676,6 +696,7 @@ int king_orchestrator_resume_run(zend_string *run_id, zval *return_value)
     zval_ptr_dtor(&initial_data);
     zval_ptr_dtor(&pipeline);
     zval_ptr_dtor(&options);
+    king_orchestrator_exec_control_cleanup(&control);
 
     return rc;
 }
@@ -686,7 +707,11 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
     zval sanitized_options;
     zval *persisted_options;
     king_orchestrator_exec_control_t control;
-    int rc;
+    int rc = FAILURE;
+
+    ZVAL_UNDEF(&sanitized_options);
+    ZVAL_UNDEF(&control.cancel_token);
+    control.run_id = NULL;
 
     if (king_orchestrator_backend_is_file_worker()) {
         return king_orchestrator_raise_error(
@@ -702,28 +727,30 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
             1,
             &control
         ) != SUCCESS) {
-        return FAILURE;
+        goto cleanup;
     }
 
     if (king_orchestrator_exec_control_check(&control, "king_pipeline_orchestrator_run", 1, NULL) != SUCCESS) {
-        return FAILURE;
+        goto cleanup;
     }
 
     if (king_orchestrator_enforce_max_concurrency(&control, "king_pipeline_orchestrator_run", 1) != SUCCESS) {
-        return FAILURE;
+        goto cleanup;
     }
 
     persisted_options = king_orchestrator_prepare_persisted_options(options, &sanitized_options);
     run_id = king_orchestrator_pipeline_run_begin(initial_data, pipeline_array, persisted_options);
     if (persisted_options == &sanitized_options) {
         zval_ptr_dtor(&sanitized_options);
+        ZVAL_UNDEF(&sanitized_options);
     }
     if (run_id == NULL) {
-        return king_orchestrator_raise_error(
+        rc = king_orchestrator_raise_error(
             "king_pipeline_orchestrator_run() failed to persist the initial run snapshot.",
             king_ce_runtime_exception,
             1
         );
+        goto cleanup;
     }
 
     rc = king_orchestrator_execute_existing_run(
@@ -736,7 +763,11 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
         1
     );
     zend_string_release(run_id);
-
+cleanup:
+    if (!Z_ISUNDEF(sanitized_options)) {
+        zval_ptr_dtor(&sanitized_options);
+    }
+    king_orchestrator_exec_control_cleanup(&control);
     return rc;
 }
 
@@ -746,7 +777,11 @@ int king_orchestrator_dispatch(zval *initial_data, zval *pipeline_array, zval *o
     zval sanitized_options;
     zval *persisted_options;
     king_orchestrator_exec_control_t control;
-    int rc;
+    int rc = FAILURE;
+
+    ZVAL_UNDEF(&sanitized_options);
+    ZVAL_UNDEF(&control.cancel_token);
+    control.run_id = NULL;
 
     if (!king_orchestrator_backend_is_file_worker()) {
         return king_orchestrator_raise_error(
@@ -773,36 +808,39 @@ int king_orchestrator_dispatch(zval *initial_data, zval *pipeline_array, zval *o
             1,
             &control
         ) != SUCCESS) {
-        return FAILURE;
+        goto cleanup;
     }
 
-    if (control.cancel_token != NULL) {
-        return king_orchestrator_raise_error(
+    if (!Z_ISUNDEF(control.cancel_token)) {
+        rc = king_orchestrator_raise_error(
             "king_pipeline_orchestrator_dispatch() does not support live CancelToken propagation on the file_worker backend.",
             king_ce_runtime_exception,
             1
         );
+        goto cleanup;
     }
 
     if (king_orchestrator_exec_control_check(&control, "king_pipeline_orchestrator_dispatch", 1, NULL) != SUCCESS) {
-        return FAILURE;
+        goto cleanup;
     }
 
     if (king_orchestrator_enforce_max_concurrency(&control, "king_pipeline_orchestrator_dispatch", 1) != SUCCESS) {
-        return FAILURE;
+        goto cleanup;
     }
 
     persisted_options = king_orchestrator_prepare_persisted_options(options, &sanitized_options);
     run_id = king_orchestrator_pipeline_run_begin(initial_data, pipeline_array, persisted_options);
     if (persisted_options == &sanitized_options) {
         zval_ptr_dtor(&sanitized_options);
+        ZVAL_UNDEF(&sanitized_options);
     }
     if (run_id == NULL) {
-        return king_orchestrator_raise_error(
+        rc = king_orchestrator_raise_error(
             "king_pipeline_orchestrator_dispatch() failed to persist the initial run snapshot.",
             king_ce_runtime_exception,
             1
         );
+        goto cleanup;
     }
 
     rc = king_orchestrator_enqueue_run(run_id, return_value);
@@ -812,15 +850,22 @@ int king_orchestrator_dispatch(zval *initial_data, zval *pipeline_array, zval *o
             "king_pipeline_orchestrator_dispatch() failed to enqueue the run for the file-worker backend."
         );
         zend_string_release(run_id);
-        return king_orchestrator_raise_error(
+        rc = king_orchestrator_raise_error(
             "king_pipeline_orchestrator_dispatch() failed to enqueue the run for the file-worker backend.",
             king_ce_runtime_exception,
             1
         );
+        goto cleanup;
     }
 
     zend_string_release(run_id);
-    return SUCCESS;
+    rc = SUCCESS;
+cleanup:
+    if (!Z_ISUNDEF(sanitized_options)) {
+        zval_ptr_dtor(&sanitized_options);
+    }
+    king_orchestrator_exec_control_cleanup(&control);
+    return rc;
 }
 
 int king_orchestrator_worker_run_next(zval *return_value)

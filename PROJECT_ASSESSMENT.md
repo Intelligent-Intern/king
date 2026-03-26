@@ -116,7 +116,7 @@ Repository facts from the current tree:
 - `extension/src`: 177 C files
 - `extension/src_bak`: 177 archived C files
 - `extension/include`: 168 headers
-- `extension/tests`: 300 PHPT files
+- `extension/tests`: 301 PHPT files
 - `stubs/`: 1 public PHP stub surface
 
 The currently verified regression baseline is:
@@ -125,7 +125,7 @@ The currently verified regression baseline is:
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
 - extension load smoke: passing
-- `./scripts/test-extension.sh`: `300/300` PHPT tests passing
+- `./scripts/test-extension.sh`: `301/301` PHPT tests passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing (`124` functions, `43` classes, `48` declared public methods)
 - `./scripts/smoke-profile.sh release`: passing
@@ -147,6 +147,7 @@ The currently verified regression baseline is:
 - targeted HTTP/1 chunked oversized-size hardening verification (`158`, `159`, `169`, `318`): passing
 - targeted orchestrator persistence and backend-boundary verification (`250`, `294`, `307`, `308`, `309`): passing
 - targeted MCP/orchestrator runtime-control verification (`157`, `234`, `235`, `236`, `309`, `310`, `311`): passing
+- targeted orchestrator cancel-option lifetime hardening verification (`311`, `322`): passing
 - targeted MCP repeated-upload memory-regression verification (`234`, `235`, `317`): passing
 - targeted file-worker cross-process cancellation verification (`309`, `311`, `314`): passing
 - targeted multiprocess controller/observer/worker topology verification (`307`, `309`, `314`, `315`): passing
@@ -175,7 +176,7 @@ The repo already has active native runtime slices for:
 - native Semantic DNS registry, routing, state persistence, discovery, and mother-node tracking
 - native file-system object-store backend core with durable .meta sidecars, local CDN cache, multi-node distribution, explicit contract/status failure semantics for non-local backends (distributed/S3/GCS/Azure simulated), and backup/restore/import/export directory confinement to the active storage root
 - native MCP runtime in `src/mcp/` with stateful session tracking, flattened ID persistence in Object Store, full request/upload/download parity, and verified `timeout_ms` / monotonic `deadline_ms` / `cancel` control handling across both procedural and OO APIs
-- native Pipeline Orchestrator and Tool Registry in `src/pipeline_orchestrator/`, including restart-safe tool registry, logging snapshot persistence, completed run history, in-flight run rehydration, a config-selectable `local` versus `file_worker` execution backend with persisted cross-process dispatch, controller-driven post-claim cancellation and stale-claim recovery, a dedicated controller/observer/worker multiprocess topology harness, and verified `timeout_ms` / `overall_timeout_ms` / `deadline_ms` / `max_concurrency` enforcement across local runs plus resumed worker execution
+- native Pipeline Orchestrator and Tool Registry in `src/pipeline_orchestrator/`, including restart-safe tool registry, logging snapshot persistence, completed run history, in-flight run rehydration, a config-selectable `local` versus `file_worker` execution backend with persisted cross-process dispatch, controller-driven post-claim cancellation and stale-claim recovery, owned CancelToken lifetime across persisted option sanitizing, a dedicated controller/observer/worker multiprocess topology harness, and verified `timeout_ms` / `overall_timeout_ms` / `deadline_ms` / `max_concurrency` enforcement across local runs plus resumed worker execution
 - native Telemetry runtime with active span lifecycle, metrics aggregation, bounded retry queueing, flush paths, context propagation, OTLP metrics export that safely normalizes packed metric batches plus enum-backed metric types, and a verified local failover path that preserves queued batches across exporter outage and recovery
 - native Autoscaling engine with monitoring, live telemetry/system-backed decisioning, cooldown/hysteresis enforcement, capped scale-step policy resolution, pluggable provider routing, controller-only Hetzner token loading from `php.ini`, honest Hetzner create/delete HTTP calls, restart-safe controller state persistence, explicit managed-node inventory APIs, and `register -> ready -> drain -> delete` lifecycle control plus pending-node safeguards on the honest Hetzner path while non-Hetzner providers stay simulated behind the same contract
 - operator-facing spend/quota budget warning/hard-limit surfaces in `king_autoscaling_get_status`, with warning-only behavior on probe/API degrade and hard-stop enforcement on configured hard limits
@@ -225,7 +226,7 @@ transport depth, or operational depth is still incomplete.
 ### 4. MCP And Orchestrator Are Still Local-First
 
 - MCP request/upload/download behavior is real inside the repo-local runtime, but remote/distributed execution depth is still missing.
-- The orchestrator has a real native kernel, survives restart with persisted tool registry, logging state, completed runs, and running snapshots, and now crosses a persisted file-worker boundary with verified post-claim cancellation and stale-claim recovery. `CancelToken` handoff is still honestly rejected across the `file_worker` process boundary, and deeper remote topology is still open.
+- The orchestrator has a real native kernel, survives restart with persisted tool registry, logging state, completed runs, and running snapshots, now owns local CancelToken lifetime cleanly across persisted option sanitizing, and crosses a persisted file-worker boundary with verified post-claim cancellation and stale-claim recovery. `CancelToken` handoff is still honestly rejected across the `file_worker` process boundary, and deeper remote topology is still open.
 - A real multi-process topology harness now exists for the local controller/worker boundary, but there is still no multi-host verification harness proving these control-plane slices once execution leaves the local machine.
 
 ### 5. Telemetry And System Operations Still Need Real Export And Recovery Semantics
