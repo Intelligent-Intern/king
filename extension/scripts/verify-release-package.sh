@@ -18,6 +18,102 @@ EOF
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARCHIVE_PATH=""
 PHP_BIN="${PHP_BIN:-php}"
+PACKAGE_DIR=""
+
+archive_entry_path_is_safe() {
+    local entry="$1"
+
+    if [[ -z "${entry}" ]]; then
+        return 1
+    fi
+
+    if [[ "${entry}" == /* ]]; then
+        return 1
+    fi
+
+    if [[ "${entry}" =~ (^|/)\.\.(/|$) ]]; then
+        return 1
+    fi
+
+    return 0
+}
+
+validate_archive_entries() {
+    local archive_entries_output=""
+    local archive_listing_output=""
+    local entry=""
+    local line=""
+    local entry_type=""
+
+    archive_entries_output="$(tar -tzf "${ARCHIVE_PATH}")" || return 1
+    archive_listing_output="$(tar -tvzf "${ARCHIVE_PATH}")" || return 1
+
+    while IFS= read -r entry; do
+        if ! archive_entry_path_is_safe "${entry}"; then
+            echo "Archive contains unsafe path entry: ${entry}" >&2
+            return 1
+        fi
+    done <<< "${archive_entries_output}"
+
+    while IFS= read -r line; do
+        entry_type="${line:0:1}"
+        case "${entry_type}" in
+            l|h)
+                echo "Archive contains disallowed link entry." >&2
+                return 1
+                ;;
+        esac
+    done <<< "${archive_listing_output}"
+
+    return 0
+}
+
+package_path_is_within_root() {
+    local path="$1"
+    local resolved_path=""
+    local resolved_root=""
+
+    resolved_path="$(realpath -e "${path}")" || return 1
+    resolved_root="$(realpath -e "${PACKAGE_DIR}")" || return 1
+
+    case "${resolved_path}" in
+        "${resolved_root}"|"${resolved_root}/"*)
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+assert_package_directory() {
+    local relative_path="$1"
+    local full_path="${PACKAGE_DIR}/${relative_path}"
+
+    if [[ -L "${full_path}" || ! -d "${full_path}" ]]; then
+        echo "Packaged directory is invalid: ${relative_path}" >&2
+        exit 1
+    fi
+
+    if ! package_path_is_within_root "${full_path}"; then
+        echo "Packaged directory escapes the extracted package root: ${relative_path}" >&2
+        exit 1
+    fi
+}
+
+assert_package_regular_file() {
+    local relative_path="$1"
+    local full_path="${PACKAGE_DIR}/${relative_path}"
+
+    if [[ -L "${full_path}" || ! -f "${full_path}" ]]; then
+        echo "Packaged file is invalid: ${relative_path}" >&2
+        exit 1
+    fi
+
+    if ! package_path_is_within_root "${full_path}"; then
+        echo "Packaged file escapes the extracted package root: ${relative_path}" >&2
+        exit 1
+    fi
+}
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -69,6 +165,9 @@ echo "Verifying archive checksum..."
     sha256sum -c "$(basename "${ARCHIVE_SHA_PATH}")"
 )
 
+echo "Validating archive entries..."
+validate_archive_entries
+
 echo "Extracting package..."
 tar -xzf "${ARCHIVE_PATH}" -C "${TEMP_DIR}"
 
@@ -76,12 +175,21 @@ shopt -s nullglob
 package_entries=("${TEMP_DIR}"/*)
 shopt -u nullglob
 
-if [[ "${#package_entries[@]}" -ne 1 || ! -d "${package_entries[0]}" ]]; then
+if [[ "${#package_entries[@]}" -ne 1 || -L "${package_entries[0]}" || ! -d "${package_entries[0]}" ]]; then
     echo "Expected exactly one extracted package directory." >&2
     exit 1
 fi
 
 PACKAGE_DIR="${package_entries[0]}"
+
+for required_dir in \
+    "bin" \
+    "docs" \
+    "modules" \
+    "runtime"
+do
+    assert_package_directory "${required_dir}"
+done
 
 for required_path in \
     "SHA256SUMS" \
@@ -92,10 +200,7 @@ for required_path in \
     "runtime/libquiche.so" \
     "runtime/quiche-server"
 do
-    if [[ ! -e "${PACKAGE_DIR}/${required_path}" ]]; then
-        echo "Missing packaged file: ${required_path}" >&2
-        exit 1
-    fi
+    assert_package_regular_file "${required_path}"
 done
 
 if [[ ! -x "${PACKAGE_DIR}/bin/smoke.sh" ]]; then
@@ -123,6 +228,12 @@ declare(strict_types=1);
 $packageDir = getenv('PACKAGE_DIR');
 if (!is_string($packageDir) || $packageDir === '') {
     fwrite(STDERR, "Missing PACKAGE_DIR environment variable.\n");
+    exit(1);
+}
+
+$resolvedPackageDir = realpath($packageDir);
+if (!is_string($resolvedPackageDir) || $resolvedPackageDir === '') {
+    fwrite(STDERR, "Failed to resolve extracted package directory.\n");
     exit(1);
 }
 
@@ -156,14 +267,33 @@ if (!is_array($files)) {
 }
 
 foreach ($files as $relativePath => $meta) {
+    if (
+        !is_string($relativePath)
+        || $relativePath === ''
+        || str_starts_with($relativePath, '/')
+        || preg_match('#(^|/)\.\.(/|$)#', $relativePath) === 1
+    ) {
+        fwrite(STDERR, "Manifest path is unsafe: {$relativePath}.\n");
+        exit(1);
+    }
+
     if (!is_array($meta)) {
         fwrite(STDERR, "Invalid manifest metadata entry for {$relativePath}.\n");
         exit(1);
     }
 
     $fullPath = $packageDir . '/' . $relativePath;
-    if (!is_file($fullPath)) {
+    if (is_link($fullPath) || !is_file($fullPath)) {
         fwrite(STDERR, "Manifest file is missing on disk: {$relativePath}.\n");
+        exit(1);
+    }
+
+    $resolvedPath = realpath($fullPath);
+    if (
+        !is_string($resolvedPath)
+        || !str_starts_with($resolvedPath, $resolvedPackageDir . DIRECTORY_SEPARATOR)
+    ) {
+        fwrite(STDERR, "Manifest file escapes the extracted package root: {$relativePath}.\n");
         exit(1);
     }
 

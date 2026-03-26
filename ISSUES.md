@@ -105,7 +105,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `304/304`
+  tests: `305/305`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -163,6 +163,9 @@
 - [x] Semantic DNS durable state now stays in a private runtime directory and rejects oversized topology snapshots
   targeted PHPTs: `253`, `303`, `325`
   coverage: semantic-dns state now persists under a private `0700` runtime directory instead of a shared `/tmp` file, save uses private `mkstemp` staging, load refuses insecure state-directory setups, oversized persisted `mother_node_count` values are rejected before allocation, and malicious snapshots no longer crash startup.
+- [x] Release-package verification now rejects unsafe archive traversal and link entries before extraction
+  targeted PHPTs: `326`
+  coverage: `verify-release-package.sh` now rejects archive members with absolute or parent-traversal paths before extraction, refuses tar link entries, validates extracted required files as in-tree regular files, and keeps manifest file checks confined to the extracted package root before any packaged smoke script executes.
 - [x] Multiprocess control-plane topology is now verified across independent controller observer and worker processes
   targeted PHPTs: `307`, `309`, `314`, `315`
   coverage: fresh controller processes persist tool state and queued runs, fresh observer processes rehydrate and inspect live/cancelled/completed snapshots, and fresh workers complete both live-claim and stale-claim recovery paths without falling back to single-process assumptions.
