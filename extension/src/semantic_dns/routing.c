@@ -39,6 +39,7 @@ int king_semantic_dns_calculate_service_score(
             score = 75;
             break;
         case KING_SERVICE_STATUS_UNHEALTHY:
+            return 0;
         default:
             score = 0;
             break;

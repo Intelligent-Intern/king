@@ -46,8 +46,12 @@ PHP_FUNCTION(king_semantic_dns_get_optimal_route)
                     native_record.status = KING_SERVICE_STATUS_HEALTHY;
                 } else if (zend_string_equals_literal(service->status, "degraded")) {
                     native_record.status = KING_SERVICE_STATUS_DEGRADED;
+                } else if (zend_string_equals_literal(service->status, "unhealthy")) {
+                    native_record.status = KING_SERVICE_STATUS_UNHEALTHY;
                 } else if (zend_string_equals_literal(service->status, "maintenance")) {
                     native_record.status = KING_SERVICE_STATUS_MAINTENANCE;
+                } else if (zend_string_equals_literal(service->status, "unknown")) {
+                    native_record.status = KING_SERVICE_STATUS_UNKNOWN;
                 } else {
                     native_record.status = KING_SERVICE_STATUS_UNKNOWN;
                 }

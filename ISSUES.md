@@ -105,7 +105,7 @@
 - [x] Canonical build, audit, test, fuzz, package, package-verify, and go-live-readiness gates
   build: `pass`
   audit: `pass`
-  tests: `305/305`
+  tests: `306/306`
   static-checks: `pass`
   profiles: `release/debug/asan/ubsan pass`
   fuzz: `pass`
@@ -166,6 +166,9 @@
 - [x] Release-package verification now rejects unsafe archive traversal and link entries before extraction
   targeted PHPTs: `326`
   coverage: `verify-release-package.sh` now rejects archive members with absolute or parent-traversal paths before extraction, refuses tar link entries, validates extracted required files as in-tree regular files, and keeps manifest file checks confined to the extracted package root before any packaged smoke script executes.
+- [x] Semantic DNS routing now maps `unhealthy` status explicitly and excludes it from optimal route selection
+  targeted PHPTs: `110`, `327`
+  coverage: runtime route scoring now maps `healthy`, `degraded`, `unhealthy`, `maintenance`, and `unknown` onto the intended native status enums, so an `unhealthy` service no longer falls through to `UNKNOWN` and can never win routing just because it is lightly loaded.
 - [x] Multiprocess control-plane topology is now verified across independent controller observer and worker processes
   targeted PHPTs: `307`, `309`, `314`, `315`
   coverage: fresh controller processes persist tool state and queued runs, fresh observer processes rehydrate and inspect live/cancelled/completed snapshots, and fresh workers complete both live-claim and stale-claim recovery paths without falling back to single-process assumptions.
