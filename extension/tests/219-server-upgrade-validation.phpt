@@ -54,10 +54,10 @@ bool(false)
 string(54) "king_server_send_early_hints() stream_id must be >= 0."
 bool(false)
 string(97) "king_server_send_early_hints() numeric early hint entries must provide a string name and a value."
-bool(true)
-string(0) ""
 bool(false)
-string(72) "king_server_upgrade_to_websocket() stream 8 is already upgraded locally."
+string(114) "king_server_upgrade_to_websocket() requires an active HTTP/1 websocket upgrade request on on-wire server sessions."
+bool(false)
+string(114) "king_server_upgrade_to_websocket() requires an active HTTP/1 websocket upgrade request on on-wire server sessions."
 bool(true)
 bool(false)
 string(77) "king_server_send_early_hints() cannot operate on locally cancelled stream 10."

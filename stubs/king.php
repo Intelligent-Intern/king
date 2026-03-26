@@ -371,6 +371,17 @@ namespace {
     function king_http1_server_listen(string $host, int $port, mixed $config, callable $handler): bool {}
 
     /**
+     * Active one-shot on-wire HTTP/1 listener leaf.
+     * Binds a real TCP socket, accepts exactly one request, materializes one
+     * `King\Session` snapshot over the accepted socket, invokes the handler,
+     * writes one HTTP/1 response when no websocket upgrade takes ownership,
+     * and then closes the listener/session. This is the narrow v1 wire leaf
+     * for real server-side websocket upgrade verification.
+     * @param mixed $config
+     */
+    function king_http1_server_listen_once(string $host, int $port, mixed $config, callable $handler): bool {}
+
+    /**
      * Active local HTTP/2 single-dispatch server leaf over the same
      * `King\Session` runtime.
      * The handler receives a normalized HTTP/2-style request array with
@@ -423,15 +434,13 @@ namespace {
     function king_server_send_early_hints(mixed $session, int $stream_id, array $hints): bool {}
 
     /**
-     * Materialize a local server-side `King\WebSocket` resource for one
-     * stream on an open `King\Session` resource or object.
-     * The current runtime records upgrade metadata on the session
-     * snapshot, derives a local `ws://` or `wss://` URL from the active
-     * listener/session state, keeps the resource inside the local server-side
-     * runtime slice, supports close/status metadata locally, rejects
-     * duplicate or locally cancelled stream IDs, and intentionally refuses
-     * server-side frame I/O until a real listener-backed upgrade runtime
-     * exists.
+     * Materialize a server-side `King\WebSocket` resource for one stream on
+     * an open `King\Session` resource or object.
+     * Local HTTP/1/2/3 listener leaves still produce a local-only marker
+     * resource with close/status metadata but no frame I/O. The on-wire
+     * `king_http1_server_listen_once()` leaf upgrades a real HTTP/1 websocket
+     * request, attaches socket-backed frame I/O, and keeps the resource
+     * handler-owned for the callback lifetime.
      * @param mixed $session
      * @return resource|false
      */

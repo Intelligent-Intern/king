@@ -213,6 +213,14 @@ void king_client_session_free(void *session_ptr)
         zend_string_release(session->server_last_websocket_url);
     }
 
+    if (session->server_pending_request_target != NULL) {
+        zend_string_release(session->server_pending_request_target);
+    }
+
+    if (session->server_pending_websocket_key != NULL) {
+        zend_string_release(session->server_pending_websocket_key);
+    }
+
     if (session->cancelled_streams_initialized) {
         zend_hash_destroy(&session->cancelled_streams);
     }

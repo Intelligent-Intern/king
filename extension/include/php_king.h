@@ -161,6 +161,7 @@ typedef struct _king_ws_state {
     zend_string *last_close_reason;
     zend_string *last_ping_payload;
     bool secure;
+    bool server_endpoint;
     bool server_local_only;
     bool handshake_complete;
     bool close_frame_sent;

@@ -72,6 +72,9 @@ void king_client_session_init_cancel_state(king_client_session_t *session)
     session->server_last_tls_key_file = zend_string_init("", 0, 0);
     session->server_last_tls_ticket_key_file = zend_string_init("", 0, 0);
     session->server_last_websocket_url = zend_string_init("", 0, 0);
+    session->server_pending_request_target = NULL;
+    session->server_pending_websocket_key = NULL;
+    session->server_pending_websocket_upgrade = false;
     ZVAL_UNDEF(&session->server_last_early_hints);
 }
 

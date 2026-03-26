@@ -11,15 +11,15 @@
  */
 
 /**
- * @brief Upgrades a request stream to local server-side WebSocket handling.
+ * @brief Upgrades a request stream to server-side WebSocket handling.
  *
  * @param session_resource The current session resource.
  * @param stream_id The stream that carried the request.
- * @return A local-only WebSocket resource on success, or NULL on failure.
+ * @return A WebSocket resource on success, or NULL on failure.
  *
- * The v1 server-side upgrade path records upgrade metadata and supports local
- * close/status handling, but it does not expose real frame I/O until the
- * listener runtime grows a true on-wire upgrade path.
+ * Local listener leaves still surface a local-only close/status marker
+ * resource. The one-shot on-wire HTTP/1 listener leaf upgrades real websocket
+ * requests and attaches socket-backed frame I/O for the callback lifetime.
  */
 PHP_FUNCTION(king_server_upgrade_to_websocket);
 
@@ -31,8 +31,8 @@ PHP_FUNCTION(king_server_upgrade_to_websocket);
  * @param message_str The payload to send.
  * @param message_len The length of the message payload.
  * @param is_binary TRUE for a binary frame, FALSE for text.
- * @return TRUE on success, FALSE on failure. Server-side local upgrade
- * resources reject frame exchange in v1.
+ * @return TRUE on success, FALSE on failure. Local-only server upgrade
+ * resources still reject frame exchange in v1.
  */
 PHP_FUNCTION(king_websocket_send);
 

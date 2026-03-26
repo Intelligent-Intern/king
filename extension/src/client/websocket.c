@@ -492,8 +492,10 @@ static zend_result king_websocket_send_frame(
     unsigned char header[14];
     unsigned char masking_key[4];
     zend_string *masked_payload = NULL;
+    const unsigned char *wire_payload = payload;
     uint64_t mask_seed;
     size_t header_len = 0;
+    bool mask_outgoing;
     size_t i;
 
     if (state->transport_stream == NULL) {
@@ -518,17 +520,19 @@ static zend_result king_websocket_send_frame(
         return FAILURE;
     }
 
+    mask_outgoing = !state->server_endpoint;
+
     header[header_len++] = (unsigned char) (0x80 | (opcode & 0x0f));
     if (payload_len <= 125) {
-        header[header_len++] = (unsigned char) (0x80 | payload_len);
+        header[header_len++] = (unsigned char) ((mask_outgoing ? 0x80 : 0x00) | payload_len);
     } else if (payload_len <= 0xffff) {
-        header[header_len++] = 0x80 | 126;
+        header[header_len++] = (unsigned char) ((mask_outgoing ? 0x80 : 0x00) | 126);
         header[header_len++] = (unsigned char) ((payload_len >> 8) & 0xff);
         header[header_len++] = (unsigned char) (payload_len & 0xff);
     } else {
         uint64_t extended_len = (uint64_t) payload_len;
 
-        header[header_len++] = 0x80 | 127;
+        header[header_len++] = (unsigned char) ((mask_outgoing ? 0x80 : 0x00) | 127);
         for (i = 0; i < 8; ++i) {
             header[header_len++] = (unsigned char) (
                 (extended_len >> ((7 - i) * 8)) & 0xff
@@ -536,15 +540,17 @@ static zend_result king_websocket_send_frame(
         }
     }
 
-    mask_seed =
-        ((uint64_t) (uintptr_t) state >> 3)
-        ^ ((uint64_t) payload_len << 9)
-        ^ (uint64_t) time(NULL)
-        ^ (uint64_t) opcode;
-    for (i = 0; i < sizeof(masking_key); ++i) {
-        mask_seed = (mask_seed * 1103515245ULL) + 12345ULL;
-        masking_key[i] = (unsigned char) (mask_seed >> 24);
-        header[header_len++] = masking_key[i];
+    if (mask_outgoing) {
+        mask_seed =
+            ((uint64_t) (uintptr_t) state >> 3)
+            ^ ((uint64_t) payload_len << 9)
+            ^ (uint64_t) time(NULL)
+            ^ (uint64_t) opcode;
+        for (i = 0; i < sizeof(masking_key); ++i) {
+            mask_seed = (mask_seed * 1103515245ULL) + 12345ULL;
+            masking_key[i] = (unsigned char) (mask_seed >> 24);
+            header[header_len++] = masking_key[i];
+        }
     }
 
     if (king_websocket_write_all(state, header, header_len, function_name) != SUCCESS) {
@@ -555,26 +561,33 @@ static zend_result king_websocket_send_frame(
         return SUCCESS;
     }
 
-    masked_payload = zend_string_alloc(payload_len, 0);
-    for (i = 0; i < payload_len; ++i) {
-        ZSTR_VAL(masked_payload)[i] =
-            (char) (payload[i] ^ masking_key[i % sizeof(masking_key)]);
+    if (mask_outgoing) {
+        masked_payload = zend_string_alloc(payload_len, 0);
+        for (i = 0; i < payload_len; ++i) {
+            ZSTR_VAL(masked_payload)[i] =
+                (char) (payload[i] ^ masking_key[i % sizeof(masking_key)]);
+        }
+        ZSTR_VAL(masked_payload)[payload_len] = '\0';
+        wire_payload = (const unsigned char *) ZSTR_VAL(masked_payload);
     }
-    ZSTR_VAL(masked_payload)[payload_len] = '\0';
 
     if (
         king_websocket_write_all(
             state,
-            (const unsigned char *) ZSTR_VAL(masked_payload),
+            wire_payload,
             payload_len,
             function_name
         ) != SUCCESS
     ) {
-        zend_string_release(masked_payload);
+        if (masked_payload != NULL) {
+            zend_string_release(masked_payload);
+        }
         return FAILURE;
     }
 
-    zend_string_release(masked_payload);
+    if (masked_payload != NULL) {
+        zend_string_release(masked_payload);
+    }
     return SUCCESS;
 }
 
@@ -622,10 +635,12 @@ static zend_result king_websocket_receive_one_frame(
 {
     unsigned char header[2];
     unsigned char extended_len[8];
+    unsigned char masking_key[4];
     unsigned char *payload_buffer = NULL;
     size_t payload_len = 0;
     unsigned char opcode;
     bool masked;
+    zend_long frame_part_timeout_ms;
 
     *message_ready = false;
     *timed_out = false;
@@ -655,9 +670,19 @@ static zend_result king_websocket_receive_one_frame(
         return FAILURE;
     }
 
+    frame_part_timeout_ms = timeout_ms > 0 ? timeout_ms : 100;
+
     opcode = (unsigned char) (header[0] & 0x0f);
     masked = (header[1] & 0x80) != 0;
-    if (masked) {
+    if (state->server_endpoint) {
+        if (!masked) {
+            king_websocket_set_error(
+                "%s() received an invalid unmasked client WebSocket frame.",
+                function_name
+            );
+            return FAILURE;
+        }
+    } else if (masked) {
         king_websocket_set_error(
             "%s() received an invalid masked server WebSocket frame.",
             function_name
@@ -674,7 +699,7 @@ static zend_result king_websocket_receive_one_frame(
                 state,
                 extended_len,
                 2,
-                0,
+                frame_part_timeout_ms,
                 &length_timed_out,
                 function_name
             ) != SUCCESS
@@ -700,7 +725,7 @@ static zend_result king_websocket_receive_one_frame(
                 state,
                 extended_len,
                 8,
-                0,
+                frame_part_timeout_ms,
                 &length_timed_out,
                 function_name
             ) != SUCCESS
@@ -731,6 +756,31 @@ static zend_result king_websocket_receive_one_frame(
         payload_len = (size_t) extended_payload_len;
     }
 
+    if (masked) {
+        bool mask_timed_out = false;
+
+        if (
+            king_websocket_read_exact(
+                state,
+                masking_key,
+                sizeof(masking_key),
+                frame_part_timeout_ms,
+                &mask_timed_out,
+                function_name
+            ) != SUCCESS
+        ) {
+            return FAILURE;
+        }
+
+        if (mask_timed_out) {
+            king_websocket_set_error(
+                "%s() received an incomplete WebSocket masking key.",
+                function_name
+            );
+            return FAILURE;
+        }
+    }
+
     if (
         (opcode == KING_WS_OPCODE_TEXT || opcode == KING_WS_OPCODE_BINARY)
         && payload_len > (size_t) state->max_payload_size
@@ -753,7 +803,7 @@ static zend_result king_websocket_receive_one_frame(
                 state,
                 payload_buffer,
                 payload_len,
-                0,
+                frame_part_timeout_ms,
                 &payload_timed_out,
                 function_name
             ) != SUCCESS
@@ -769,6 +819,12 @@ static zend_result king_websocket_receive_one_frame(
                 function_name
             );
             return FAILURE;
+        }
+
+        if (masked) {
+            for (size_t i = 0; i < payload_len; ++i) {
+                payload_buffer[i] ^= masking_key[i % sizeof(masking_key)];
+            }
         }
     }
 
@@ -902,11 +958,13 @@ static zend_result king_websocket_pump_transport(
 
 static void king_websocket_drain_transport(
     king_ws_state *state,
+    zend_long timeout_ms,
     const char *function_name
 )
 {
     bool timed_out = false;
     bool message_ready = false;
+    zend_long current_timeout = timeout_ms;
 
     if (state->transport_stream == NULL) {
         return;
@@ -916,7 +974,7 @@ static void king_websocket_drain_transport(
         if (
             king_websocket_receive_one_frame(
                 state,
-                0,
+                current_timeout,
                 &message_ready,
                 &timed_out,
                 function_name
@@ -931,6 +989,8 @@ static void king_websocket_drain_transport(
         if (timed_out) {
             return;
         }
+
+        current_timeout = 0;
     }
 }
 
@@ -2018,7 +2078,7 @@ PHP_METHOD(King_WebSocket_Connection, close)
         }
 
         state->close_frame_sent = true;
-        king_websocket_drain_transport(state, "WebSocket\\Connection::close");
+        king_websocket_drain_transport(state, 100, "WebSocket\\Connection::close");
         if (!state->closed) {
             king_websocket_mark_transport_closed(state);
         }
@@ -2402,7 +2462,7 @@ PHP_FUNCTION(king_client_websocket_close)
         }
 
         state->close_frame_sent = true;
-        king_websocket_drain_transport(state, "king_client_websocket_close");
+        king_websocket_drain_transport(state, 100, "king_client_websocket_close");
         if (!state->closed) {
             king_websocket_mark_transport_closed(state);
         }

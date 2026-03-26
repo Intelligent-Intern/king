@@ -37,15 +37,7 @@ var_dump(king_server_send_early_hints($session, 4, [
 var_dump(king_get_last_error());
 
 $websocket = king_server_upgrade_to_websocket($session, 6);
-var_dump(is_resource($websocket));
-var_dump(king_client_websocket_get_status($websocket));
-var_dump(king_websocket_send($websocket, 'server-frame'));
-var_dump(king_get_last_error());
-var_dump(king_client_websocket_receive($websocket));
-var_dump(king_get_last_error());
-var_dump(king_client_websocket_ping($websocket, 'ok'));
-var_dump(king_get_last_error());
-var_dump(king_client_websocket_close($websocket, 1001, 'done'));
+var_dump($websocket);
 var_dump(king_get_last_error());
 
 var_dump(king_cancel_stream(4, 'both', $session));
@@ -127,16 +119,8 @@ bool(true)
 string(0) ""
 bool(true)
 string(0) ""
-bool(true)
-int(1)
 bool(false)
-string(97) "king_websocket_send() cannot exchange frames on a local-only server-side WebSocket upgrade in v1."
-bool(false)
-string(107) "king_client_websocket_receive() cannot exchange frames on a local-only server-side WebSocket upgrade in v1."
-bool(false)
-string(104) "king_client_websocket_ping() cannot exchange frames on a local-only server-side WebSocket upgrade in v1."
-bool(true)
-string(0) ""
+string(114) "king_server_upgrade_to_websocket() requires an active HTTP/1 websocket upgrade request on on-wire server sessions."
 bool(true)
 string(0) ""
 int(4)
@@ -147,8 +131,8 @@ int(0)
 int(0)
 int(1)
 int(3)
-int(1)
-string(27) "ws://127.0.0.1:443/stream/6"
+int(0)
+string(0) ""
 bool(true)
 string(0) ""
 bool(true)

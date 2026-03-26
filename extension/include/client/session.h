@@ -62,6 +62,8 @@ typedef struct _king_client_session {
     zend_string *server_last_tls_key_file;
     zend_string *server_last_tls_ticket_key_file;
     zend_string *server_last_websocket_url;
+    zend_string *server_pending_request_target;
+    zend_string *server_pending_websocket_key;
     HashTable cancelled_streams;
     HashTable server_cancel_handlers;
     HashTable server_upgraded_streams;
@@ -159,6 +161,7 @@ typedef struct _king_client_session {
     bool server_tls_active;
     bool server_last_tls_ticket_key_loaded;
     bool server_last_websocket_secure;
+    bool server_pending_websocket_upgrade;
     bool is_closed;
 } king_client_session_t;
 

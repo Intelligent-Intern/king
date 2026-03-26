@@ -20,4 +20,14 @@
  */
 PHP_FUNCTION(king_http1_server_listen);
 
+/**
+ * @brief Starts a one-shot on-wire HTTP/1.1 listener.
+ *
+ * Binds a real TCP socket, accepts exactly one request, invokes the handler,
+ * and then tears the listener back down. This is the narrow v1 leaf used for
+ * true server-side websocket upgrade coverage without claiming a long-lived
+ * HTTP server runtime.
+ */
+PHP_FUNCTION(king_http1_server_listen_once);
+
 #endif // KING_SERVER_HTTP1_H

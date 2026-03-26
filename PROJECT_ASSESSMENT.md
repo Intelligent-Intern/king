@@ -17,7 +17,7 @@ The remaining gaps are no longer about broad runtime parity or placeholder
 surfaces inside the local tree.
 They are concentrated in six areas:
 
-- wire-truth for server-side upgrade behavior and longer-lived realtime server flows
+- longer-lived realtime server flows and multi-connection fairness under churn
 - remote MCP and deeper distributed orchestration
 - larger Smart-DNS topology and distributed routing verification beyond the local slice
 - long-haul telemetry, exporter, and fleet recovery depth
@@ -36,7 +36,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `311/311` passing
+- `./scripts/test-extension.sh`: `313/313` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
@@ -50,8 +50,8 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `311` PHPT files
-- public stub parity: `124` functions, `43` classes, `48` declared public methods
+- `extension/tests`: `313` PHPT files
+- public stub parity: `125` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
 - static and runtime-surface audits now enforce that include-tree discipline
@@ -64,7 +64,7 @@ The current tree already proves:
 - real HTTP/1, HTTP/2, and HTTP/3 client request paths, including reuse, streaming, and cancel/timeout contracts
 - local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3
 - on-wire WebSocket client handshake/frame/close runtime plus honest OO `King\WebSocket\Connection` parity
-- server-side `king_server_upgrade_to_websocket()` upgrade metadata plus honest local-only close/status fencing with frame I/O explicitly rejected in v1
+- server-side `king_server_upgrade_to_websocket()` both as an honest local marker slice for local listeners and as a real on-wire HTTP/1 one-shot upgrade path with frame flow, handler ownership, and close/drain coverage
 - IIBIN schema, registry, encode/decode, object hydration, and wire validation
 - Semantic DNS register/discover/update routing plus private-directory durable state handling
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs
@@ -75,7 +75,6 @@ The current tree already proves:
 - telemetry batch queueing, bounded retry behavior, OTLP metrics export hardening, and local exporter failover/recovery coverage
 - telemetry-driven Hetzner autoscaling with controller-owned credentials, persisted recovery state, and `register -> ready -> drain -> delete` lifecycle gating
 - system integration lifecycle coordination, restart-state visibility, and chaos/recovery harness coverage for the local control plane
-- server-side `king_server_upgrade_to_websocket()` remains explicitly local-only in v1; the unresolved gap is a real listener-backed frame/close/drain path rather than client parity or local honesty
 
 ## What Is Still Not Finished
 
@@ -83,7 +82,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 
 ### Realtime and Server Wire Depth
 
-- WebSocket client behavior is now proven on-wire, and the server-side local upgrade path is now honestly fenced; the remaining gap is true listener-backed server upgrade proof.
+- WebSocket client behavior and a narrow HTTP/1 server-side upgrade path are now proven on-wire.
 - Long-lived server/session behavior, close/drain flows, and fairness under churn still need stronger verification.
 - Server listener slices are real locally, but the repo still leans too much on local ownership tests instead of network-truth tests.
 
