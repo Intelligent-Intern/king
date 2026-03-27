@@ -20,7 +20,7 @@
 /**
  * @brief Validates if a zval is a string that exists in a predefined allow-list.
  */
-int kg_validate_string_from_allowlist(zval *value, const char *allowed_values[], char **target)
+int kg_validate_string_from_allowlist(zval *value, const char *const allowed_values[], char **target)
 {
     if (Z_TYPE_P(value) != IS_STRING) {
         zend_throw_exception_ex(

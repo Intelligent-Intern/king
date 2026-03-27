@@ -334,11 +334,11 @@ static zend_result king_autoscaling_parse_json_value_as_percent(
     } else {
         end = cursor;
         while (
-            *end != '\\0'
+            *end != '\0'
             && *end != ','
             && *end != '}'
-            && *end != '\\r'
-            && *end != '\\n'
+            && *end != '\r'
+            && *end != '\n'
             && !isspace((unsigned char) *end)
         ) {
             end++;
@@ -351,14 +351,14 @@ static zend_result king_autoscaling_parse_json_value_as_percent(
     }
 
     memcpy(value_raw, cursor, length);
-    value_raw[length] = '\\0';
+    value_raw[length] = '\0';
     trimmed = value_raw;
 
     while (
         *trimmed == ' '
-        || *trimmed == '\\t'
-        || *trimmed == '\\r'
-        || *trimmed == '\\n'
+        || *trimmed == '\t'
+        || *trimmed == '\r'
+        || *trimmed == '\n'
     ) {
         memmove(trimmed, trimmed + 1, strlen(trimmed));
     }
@@ -368,16 +368,16 @@ static zend_result king_autoscaling_parse_json_value_as_percent(
         length > 0
         && (
             trimmed[length - 1] == ' '
-            || trimmed[length - 1] == '\\t'
-            || trimmed[length - 1] == '\\r'
-            || trimmed[length - 1] == '\\n'
+            || trimmed[length - 1] == '\t'
+            || trimmed[length - 1] == '\r'
+            || trimmed[length - 1] == '\n'
         )
     ) {
-        trimmed[length - 1] = '\\0';
+        trimmed[length - 1] = '\0';
         length--;
     }
 
-    if (trimmed[0] == '\\0') {
+    if (trimmed[0] == '\0') {
         return FAILURE;
     }
 
@@ -397,7 +397,7 @@ static zend_result king_autoscaling_parse_json_value_as_percent(
         }
     }
 
-    if (*walk != '\\0') {
+    if (*walk != '\0') {
         return FAILURE;
     }
 
@@ -660,11 +660,11 @@ static king_autoscaling_hetzner_budget_decision_t king_autoscaling_check_hetzner
         king_autoscaling_runtime.quota_usage_percent = -1;
         king_autoscaling_runtime.spend_status = KING_AUTOSCALING_BUDGET_STATUS_DISABLED;
         king_autoscaling_runtime.quota_status = KING_AUTOSCALING_BUDGET_STATUS_DISABLED;
-        king_autoscaling_runtime.budget_probe_error[0] = '\\0';
+        king_autoscaling_runtime.budget_probe_error[0] = '\0';
         return KING_AUTOSCALING_HETZNER_BUDGET_DECISION_ALLOW;
     }
 
-    if (token == NULL || token[0] == '\\0') {
+    if (token == NULL || token[0] == '\0') {
         snprintf(
             king_autoscaling_runtime.budget_probe_error,
             sizeof(king_autoscaling_runtime.budget_probe_error),
@@ -682,12 +682,12 @@ static king_autoscaling_hetzner_budget_decision_t king_autoscaling_check_hetzner
         king_autoscaling_runtime.quota_status = KING_AUTOSCALING_BUDGET_STATUS_DISABLED;
         king_autoscaling_runtime.spend_usage_percent = -1;
         king_autoscaling_runtime.quota_usage_percent = -1;
-        king_autoscaling_runtime.budget_probe_error[0] = '\\0';
+        king_autoscaling_runtime.budget_probe_error[0] = '\0';
         return KING_AUTOSCALING_HETZNER_BUDGET_DECISION_ALLOW;
     }
 
     king_autoscaling_build_budget_probe_url(url, sizeof(url));
-    if (url[0] == '\\0') {
+    if (url[0] == '\0') {
         return KING_AUTOSCALING_HETZNER_BUDGET_DECISION_ALLOW;
     }
 
@@ -815,7 +815,7 @@ static king_autoscaling_hetzner_budget_decision_t king_autoscaling_check_hetzner
     }
 
     if (decision == KING_AUTOSCALING_HETZNER_BUDGET_DECISION_HARD_LIMIT) {
-        king_autoscaling_runtime.budget_probe_error[0] = '\\0';
+        king_autoscaling_runtime.budget_probe_error[0] = '\0';
         return decision;
     }
 
@@ -823,7 +823,7 @@ static king_autoscaling_hetzner_budget_decision_t king_autoscaling_check_hetzner
         decision != KING_AUTOSCALING_HETZNER_BUDGET_DECISION_WARNING
         && api_error == 1
     ) {
-        king_autoscaling_runtime.budget_probe_error[0] = '\\0';
+        king_autoscaling_runtime.budget_probe_error[0] = '\0';
         snprintf(
             king_autoscaling_runtime.budget_probe_error,
             sizeof(king_autoscaling_runtime.budget_probe_error),
@@ -832,7 +832,7 @@ static king_autoscaling_hetzner_budget_decision_t king_autoscaling_check_hetzner
         return KING_AUTOSCALING_HETZNER_BUDGET_DECISION_API_ERROR;
     }
 
-    king_autoscaling_runtime.budget_probe_error[0] = '\\0';
+    king_autoscaling_runtime.budget_probe_error[0] = '\0';
     return KING_AUTOSCALING_HETZNER_BUDGET_DECISION_ALLOW;
 }
 

@@ -225,6 +225,9 @@ function build_case_definitions(): array
             'default_iterations' => 50000,
             'operations_per_iteration' => 6,
             'bootstrap' => static function (): array {
+                $stateDir = '/tmp/king_semantic_dns_state';
+                delete_flat_directory($stateDir);
+
                 return [
                     'run' => static function (int $iteration): int {
                         $serviceId = 'api-bench';
@@ -238,7 +241,6 @@ function build_case_definitions(): array
                             'service_discovery_max_ips_per_response' => 5,
                             'semantic_mode_enable' => true,
                             'mothernode_uri' => 'mother://bench-node',
-                            'mothernode_sync_interval_sec' => 60,
                             'routing_policies' => ['mode' => 'local'],
                         ])) {
                             throw new RuntimeException('king_semantic_dns_init() failed during the benchmark.');
@@ -283,6 +285,9 @@ function build_case_definitions(): array
                         return (int) ($discovery['service_count'] ?? 0)
                             + (int) ($topology['statistics']['healthy_services'] ?? 0)
                             + strlen($serviceId);
+                    },
+                    'cleanup' => static function () use ($stateDir): void {
+                        delete_flat_directory($stateDir);
                     },
                 ];
             },

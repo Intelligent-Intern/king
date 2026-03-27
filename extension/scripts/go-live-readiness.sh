@@ -34,6 +34,26 @@ BENCHMARK_ITERATIONS=250
 BENCHMARK_WARMUP=25
 BENCHMARK_BUDGET_FILE=""
 
+resolve_existing_path() {
+    local candidate="$1"
+
+    if [[ -z "${candidate}" ]]; then
+        return 1
+    fi
+
+    if [[ -f "${candidate}" ]]; then
+        printf '%s\n' "$(cd "$(dirname "${candidate}")" && pwd)/$(basename "${candidate}")"
+        return 0
+    fi
+
+    if [[ -f "${ROOT_DIR}/${candidate}" ]]; then
+        printf '%s\n' "${ROOT_DIR}/${candidate}"
+        return 0
+    fi
+
+    return 1
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --skip-baseline)
@@ -83,6 +103,13 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ -n "${BENCHMARK_BUDGET_FILE}" ]]; then
+    BENCHMARK_BUDGET_FILE="$(resolve_existing_path "${BENCHMARK_BUDGET_FILE}")" || {
+        echo "Benchmark budget file does not exist: ${BENCHMARK_BUDGET_FILE}" >&2
+        exit 1
+    }
+fi
 
 ensure_release_artifacts() {
     local required_paths=(

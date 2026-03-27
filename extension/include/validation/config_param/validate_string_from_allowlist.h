@@ -24,6 +24,6 @@
  * @param target Receives the persistent copy on success.
  * @return `SUCCESS` on successful validation, `FAILURE` otherwise.
  */
-int kg_validate_string_from_allowlist(zval *value, const char *allowed_values[], char **target);
+int kg_validate_string_from_allowlist(zval *value, const char *const allowed_values[], char **target);
 
 #endif /* KING_VALIDATION_STRING_FROM_ALLOWLIST_H */

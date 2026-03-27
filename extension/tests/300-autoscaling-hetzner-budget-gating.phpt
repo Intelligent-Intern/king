@@ -261,7 +261,7 @@ string(2) "ok"
 int(30)
 int(25)
 string(0) ""
-string(1) "0"
+string(0) ""
 string(0) ""
 bool(true)
 int(2)
@@ -277,7 +277,7 @@ string(10) "hard_limit"
 int(85)
 int(95)
 string(0) ""
-string(1) "0"
+string(0) ""
 bool(true)
 int(3)
 bool(true)
