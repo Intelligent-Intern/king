@@ -2,6 +2,7 @@ PHP_FUNCTION(king_semantic_dns_register_service)
 {
     zval *service_info;
     king_semantic_dns_service *service;
+    king_semantic_dns_service *existing_service;
     zval stored_service;
 
     ZEND_PARSE_PARAMETERS_START(1, 1)
@@ -18,6 +19,12 @@ PHP_FUNCTION(king_semantic_dns_register_service)
     );
     if (service == NULL) {
         RETURN_THROWS();
+    }
+
+    existing_service = king_semantic_dns_registry_get_service(service->service_id);
+    if (existing_service != NULL && king_semantic_dns_service_equals(existing_service, service)) {
+        king_semantic_dns_service_free(service);
+        RETURN_TRUE;
     }
 
     ZVAL_PTR(&stored_service, service);

@@ -94,3 +94,93 @@ static bool king_semantic_dns_service_apply_metrics(
         &service->total_requests
     );
 }
+
+static bool king_semantic_dns_scalar_zval_equals(
+    const zval *left,
+    const zval *right
+)
+{
+    if (left == right) {
+        return true;
+    }
+
+    if (left == NULL || right == NULL || Z_TYPE_P(left) != Z_TYPE_P(right)) {
+        return false;
+    }
+
+    switch (Z_TYPE_P(left)) {
+        case IS_NULL:
+        case IS_FALSE:
+        case IS_TRUE:
+            return true;
+        case IS_LONG:
+            return Z_LVAL_P(left) == Z_LVAL_P(right);
+        case IS_DOUBLE:
+            return Z_DVAL_P(left) == Z_DVAL_P(right);
+        case IS_STRING:
+            return zend_string_equals(Z_STR_P(left), Z_STR_P(right));
+        default:
+            return false;
+    }
+}
+
+static bool king_semantic_dns_attribute_tables_equal(
+    const HashTable *left,
+    const HashTable *right
+)
+{
+    zend_string *attribute_name;
+    zval *attribute_value;
+
+    if (left == right) {
+        return true;
+    }
+
+    if (left == NULL || right == NULL) {
+        return false;
+    }
+
+    if (zend_hash_num_elements((HashTable *) left) != zend_hash_num_elements((HashTable *) right)) {
+        return false;
+    }
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL((HashTable *) left, attribute_name, attribute_value) {
+        zval *other_value;
+
+        if (attribute_name == NULL) {
+            return false;
+        }
+
+        other_value = zend_hash_find((HashTable *) right, attribute_name);
+        if (other_value == NULL || !king_semantic_dns_scalar_zval_equals(attribute_value, other_value)) {
+            return false;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return true;
+}
+
+static bool king_semantic_dns_service_equals(
+    const king_semantic_dns_service *left,
+    const king_semantic_dns_service *right
+)
+{
+    if (left == right) {
+        return true;
+    }
+
+    if (left == NULL || right == NULL) {
+        return false;
+    }
+
+    return zend_string_equals(left->service_id, right->service_id)
+        && zend_string_equals(left->service_name, right->service_name)
+        && zend_string_equals(left->service_type, right->service_type)
+        && zend_string_equals(left->hostname, right->hostname)
+        && zend_string_equals(left->status, right->status)
+        && left->port == right->port
+        && left->current_load_percent == right->current_load_percent
+        && left->active_connections == right->active_connections
+        && left->total_requests == right->total_requests
+        && king_semantic_dns_attribute_tables_equal(&left->attributes, &right->attributes);
+}
