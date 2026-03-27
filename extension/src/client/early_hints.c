@@ -183,10 +183,11 @@ static zend_result king_early_hints_parse_link_value(
     return SUCCESS;
 }
 
-static void king_early_hints_store_link_segment(
+static zend_result king_early_hints_store_link_segment(
     king_http1_request_context *context,
     const char *segment_start,
-    const char *segment_end)
+    const char *segment_end,
+    const char *function_name)
 {
     size_t segment_len;
     zval hint;
@@ -207,21 +208,22 @@ static void king_early_hints_store_link_segment(
 
     segment_len = (size_t) (segment_end - segment_start);
     if (segment_len == 0) {
-        return;
+        return SUCCESS;
     }
 
     ZVAL_UNDEF(&hint);
     if (king_early_hints_parse_link_value(segment_start, segment_len, &hint) != SUCCESS) {
-        return;
+        return SUCCESS;
     }
 
-    king_http1_request_context_append_early_hint(context, &hint);
+    return king_http1_request_context_append_early_hint(context, &hint, function_name);
 }
 
-static void king_early_hints_process_link_header(
+static zend_result king_early_hints_process_link_header(
     king_http1_request_context *context,
     const char *field_value,
-    size_t field_value_len)
+    size_t field_value_len,
+    const char *function_name)
 {
     const char *cursor = field_value;
     const char *segment_start = field_value;
@@ -257,37 +259,50 @@ static void king_early_hints_process_link_header(
         }
 
         if (*cursor == ',' && !in_uri) {
-            king_early_hints_store_link_segment(context, segment_start, cursor);
+            if (king_early_hints_store_link_segment(
+                    context,
+                    segment_start,
+                    cursor,
+                    function_name
+                ) != SUCCESS) {
+                return FAILURE;
+            }
             segment_start = cursor + 1;
         }
 
         cursor++;
     }
 
-    king_early_hints_store_link_segment(context, segment_start, end);
+    return king_early_hints_store_link_segment(
+        context,
+        segment_start,
+        end,
+        function_name
+    );
 }
 
-static void king_early_hints_process_header_value(
+static zend_result king_early_hints_process_header_value(
     king_http1_request_context *context,
-    zval *header_value)
+    zval *header_value,
+    const char *function_name)
 {
     zval *nested_value;
 
     if (header_value == NULL) {
-        return;
+        return SUCCESS;
     }
 
     if (Z_TYPE_P(header_value) == IS_STRING) {
-        king_early_hints_process_link_header(
+        return king_early_hints_process_link_header(
             context,
             Z_STRVAL_P(header_value),
-            Z_STRLEN_P(header_value)
+            Z_STRLEN_P(header_value),
+            function_name
         );
-        return;
     }
 
     if (Z_TYPE_P(header_value) != IS_ARRAY) {
-        return;
+        return SUCCESS;
     }
 
     ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(header_value), nested_value) {
@@ -295,17 +310,23 @@ static void king_early_hints_process_header_value(
             continue;
         }
 
-        king_early_hints_process_link_header(
-            context,
-            Z_STRVAL_P(nested_value),
-            Z_STRLEN_P(nested_value)
-        );
+        if (king_early_hints_process_link_header(
+                context,
+                Z_STRVAL_P(nested_value),
+                Z_STRLEN_P(nested_value),
+                function_name
+            ) != SUCCESS) {
+            return FAILURE;
+        }
     } ZEND_HASH_FOREACH_END();
+
+    return SUCCESS;
 }
 
-void king_client_early_hints_process_headers(
+zend_result king_client_early_hints_process_headers(
     king_http1_request_context *context,
-    zval *headers)
+    zval *headers,
+    const char *function_name)
 {
     zval *header_value;
     zend_string *header_name;
@@ -315,7 +336,7 @@ void king_client_early_hints_process_headers(
         || headers == NULL
         || Z_TYPE_P(headers) != IS_ARRAY
     ) {
-        return;
+        return SUCCESS;
     }
 
     ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(headers), header_name, header_value) {
@@ -326,8 +347,16 @@ void king_client_early_hints_process_headers(
             continue;
         }
 
-        king_early_hints_process_header_value(context, header_value);
+        if (king_early_hints_process_header_value(
+                context,
+                header_value,
+                function_name
+            ) != SUCCESS) {
+            return FAILURE;
+        }
     } ZEND_HASH_FOREACH_END();
+
+    return SUCCESS;
 }
 
 PHP_FUNCTION(king_client_early_hints_process)
@@ -346,7 +375,17 @@ PHP_FUNCTION(king_client_early_hints_process)
         RETURN_THROWS();
     }
 
-    king_client_early_hints_process_headers(context, headers);
+    if (king_client_early_hints_process_headers(
+            context,
+            headers,
+            "king_client_early_hints_process"
+        ) != SUCCESS) {
+        if (EG(exception) != NULL) {
+            RETURN_THROWS();
+        }
+
+        RETURN_FALSE;
+    }
 
     king_set_error("");
     RETURN_TRUE;

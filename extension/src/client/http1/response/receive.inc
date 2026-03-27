@@ -26,6 +26,67 @@ static void king_http1_response_buffer_discard_prefix(
     *buffer = compacted;
 }
 
+static zend_result king_http1_response_account_bytes(
+    size_t *total_bytes,
+    size_t delta,
+    const char *function_name)
+{
+    if (total_bytes == NULL || delta == 0) {
+        return SUCCESS;
+    }
+
+    if (
+        delta > KING_HTTP1_MAX_RESPONSE_BYTES
+        || *total_bytes > KING_HTTP1_MAX_RESPONSE_BYTES - delta
+    ) {
+        king_http1_throw(
+            king_ce_protocol_exception,
+            "%s() exceeded the HTTP/1 runtime response size cap.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    *total_bytes += delta;
+    return SUCCESS;
+}
+
+static size_t king_http1_early_hint_measure_bytes(zval *hint)
+{
+    size_t total = 0;
+    zend_string *key;
+    zval *value;
+
+    if (hint == NULL || Z_TYPE_P(hint) != IS_ARRAY) {
+        return 0;
+    }
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(hint), key, value) {
+        if (key != NULL) {
+            total += ZSTR_LEN(key);
+        }
+
+        switch (Z_TYPE_P(value)) {
+            case IS_STRING:
+                total += Z_STRLEN_P(value);
+                break;
+            case IS_TRUE:
+            case IS_FALSE:
+                total += 1;
+                break;
+            case IS_LONG:
+            case IS_DOUBLE:
+                total += 32;
+                break;
+            default:
+                total += 16;
+                break;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return total;
+}
+
 static zend_result king_http1_response_buffer_consume_interim_headers(
     smart_str *buffer,
     king_http1_request_context *context,
@@ -62,7 +123,14 @@ static zend_result king_http1_response_buffer_consume_interim_headers(
         }
 
         if (context != NULL && interim_meta.status_code == 103) {
-            king_client_early_hints_process_headers(context, &interim_meta.headers);
+            if (king_client_early_hints_process_headers(
+                    context,
+                    &interim_meta.headers,
+                    function_name
+                ) != SUCCESS) {
+                king_http1_response_meta_destroy(&interim_meta);
+                return FAILURE;
+            }
         }
 
         king_http1_response_meta_destroy(&interim_meta);
@@ -81,6 +149,7 @@ static zend_result king_http1_recv_response(
     const char *function_name)
 {
     bool headers_parsed = false;
+    size_t total_received_bytes = 0;
 
     while (1) {
         char chunk[4096];
@@ -88,6 +157,14 @@ static zend_result king_http1_recv_response(
 
         received = recv(fd, chunk, sizeof(chunk), 0);
         if (received > 0) {
+            if (king_http1_response_account_bytes(
+                    &total_received_bytes,
+                    (size_t) received,
+                    function_name
+                ) != SUCCESS) {
+                return FAILURE;
+            }
+
             smart_str_appendl(response_buffer, chunk, (size_t) received);
             smart_str_0(response_buffer);
 
@@ -311,6 +388,14 @@ static zend_result king_http1_request_context_recv(
 
         received = recv(context->fd, chunk, sizeof(chunk), 0);
         if (received > 0) {
+            if (king_http1_response_account_bytes(
+                    &context->total_received_bytes,
+                    (size_t) received,
+                    function_name
+                ) != SUCCESS) {
+                return FAILURE;
+            }
+
             smart_str_appendl(target_buffer, chunk, (size_t) received);
             smart_str_0(target_buffer);
 
@@ -964,18 +1049,37 @@ zend_result king_http1_request_context_get_body(
     return SUCCESS;
 }
 
-void king_http1_request_context_append_early_hint(
+zend_result king_http1_request_context_append_early_hint(
     king_http1_request_context *context,
-    zval *hint)
+    zval *hint,
+    const char *function_name)
 {
+    size_t hint_bytes;
+
     if (hint == NULL || Z_TYPE_P(hint) != IS_ARRAY) {
-        return;
+        return SUCCESS;
     }
 
     if (context == NULL) {
         zval_ptr_dtor(hint);
         ZVAL_UNDEF(hint);
-        return;
+        return SUCCESS;
+    }
+
+    hint_bytes = king_http1_early_hint_measure_bytes(hint);
+    if (
+        context->pending_early_hints_count >= KING_HTTP1_MAX_PENDING_EARLY_HINTS
+        || hint_bytes > KING_HTTP1_MAX_PENDING_EARLY_HINT_BYTES
+        || context->pending_early_hints_bytes > KING_HTTP1_MAX_PENDING_EARLY_HINT_BYTES - hint_bytes
+    ) {
+        zval_ptr_dtor(hint);
+        ZVAL_UNDEF(hint);
+        king_http1_throw(
+            king_ce_protocol_exception,
+            "%s() exceeded the HTTP/1 pending Early Hints budget.",
+            function_name
+        );
+        return FAILURE;
     }
 
     if (Z_ISUNDEF(context->pending_early_hints)) {
@@ -983,6 +1087,9 @@ void king_http1_request_context_append_early_hint(
     }
 
     add_next_index_zval(&context->pending_early_hints, hint);
+    context->pending_early_hints_count++;
+    context->pending_early_hints_bytes += hint_bytes;
+    return SUCCESS;
 }
 
 zend_result king_http1_request_context_get_pending_early_hints(

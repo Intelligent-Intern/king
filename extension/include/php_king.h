@@ -203,9 +203,10 @@ zend_result king_http1_request_context_get_body(
     zend_string **body_out,
     const char *function_name
 );
-void king_http1_request_context_append_early_hint(
+zend_result king_http1_request_context_append_early_hint(
     king_http1_request_context *context,
-    zval *hint
+    zval *hint,
+    const char *function_name
 );
 zend_result king_http1_request_context_get_pending_early_hints(
     king_http1_request_context *context,

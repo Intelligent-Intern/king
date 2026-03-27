@@ -46,6 +46,8 @@
 #define KING_HTTP1_DEFAULT_TIMEOUT_MS 15000L
 #define KING_HTTP1_MAX_RESPONSE_BYTES (8 * 1024 * 1024)
 #define KING_HTTP1_MAX_HEADER_BYTES   (64 * 1024)
+#define KING_HTTP1_MAX_PENDING_EARLY_HINTS 256
+#define KING_HTTP1_MAX_PENDING_EARLY_HINT_BYTES KING_HTTP1_MAX_HEADER_BYTES
 #define KING_HTTP1_MAX_IDLE_CONNECTIONS 16
 
 typedef struct _king_http1_request_options {
@@ -93,6 +95,9 @@ struct _king_http1_request_context {
     king_http1_response_meta_t meta;
     zend_long timeout_ms;
     size_t chunk_parse_offset;
+    size_t total_received_bytes;
+    size_t pending_early_hints_count;
+    size_t pending_early_hints_bytes;
     bool headers_parsed;
     bool response_complete;
     bool request_allows_keep_alive;

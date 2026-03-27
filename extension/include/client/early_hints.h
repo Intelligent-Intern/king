@@ -28,9 +28,10 @@ PHP_FUNCTION(king_client_early_hints_process);
  */
 PHP_FUNCTION(king_client_early_hints_get_pending);
 
-void king_client_early_hints_process_headers(
+zend_result king_client_early_hints_process_headers(
     king_http1_request_context *context,
-    zval *headers
+    zval *headers,
+    const char *function_name
 );
 
 #endif // KING_CLIENT_EARLY_HINTS_H

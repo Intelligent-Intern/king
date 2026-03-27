@@ -35,7 +35,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `374/374` passing
+- `./scripts/test-extension.sh`: `375/375` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/check-php-support-matrix.sh`: passing
@@ -57,7 +57,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `374` PHPT files
+- `extension/tests`: `375` PHPT files
 - public stub parity: `128` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -68,7 +68,7 @@ Current tree facts:
 The current tree already proves:
 
 - explicit config and session ownership through `King\Config` and `King\Session`
-- real HTTP/1, HTTP/2, and HTTP/3 client request paths, including reuse, repeated pooled HTTP/2 mixed-load bursts, streaming, bodiless-response handling, explicit HTTP/1 and HTTP/2 abort/reset failure mapping, explicit HTTP/3 handshake-failure and transport-close mapping, shared-ring HTTP/3 session-ticket reuse with direct and dispatcher recovery from stale ticket seeds, and cancel/timeout contracts
+- real HTTP/1, HTTP/2, and HTTP/3 client request paths, including reuse, repeated pooled HTTP/2 mixed-load bursts, streaming, bodiless-response handling, cumulative interim-response size-cap enforcement, bounded pending Early Hints storage, explicit HTTP/1 and HTTP/2 abort/reset failure mapping, explicit HTTP/3 handshake-failure and transport-close mapping, shared-ring HTTP/3 session-ticket reuse with direct and dispatcher recovery from stale ticket seeds, and cancel/timeout contracts
 - HTTP/2 shared-session fairness under mixed slow and fast concurrent streams
 - HTTP/3 one-shot churn isolation across repeated timeout and healthy-recovery cycles
 - local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3, plus real one-shot on-wire listener proof for HTTP/1, HTTP/2, and HTTP/3
