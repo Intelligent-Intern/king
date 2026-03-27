@@ -156,6 +156,7 @@ static zend_result king_telemetry_ensure_libcurl_ready(void)
         return FAILURE;
     }
 
+    /* Keep libcurl global state alive for the telemetry system lifetime. */
     if (king_telemetry_libcurl.curl_global_init_fn(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
         snprintf(
             king_telemetry_libcurl.load_error,
@@ -172,6 +173,7 @@ static zend_result king_telemetry_ensure_libcurl_ready(void)
 
 static void king_telemetry_shutdown_libcurl_runtime(void)
 {
+    /* libcurl teardown is process-scoped and must never happen per export call. */
     if (king_telemetry_libcurl.ready && king_telemetry_libcurl.curl_global_cleanup_fn != NULL) {
         king_telemetry_libcurl.curl_global_cleanup_fn();
     }
