@@ -76,6 +76,46 @@ static zend_string *king_orchestrator_remote_encode_zval_base64(zval *value)
     return encoded;
 }
 
+static zend_bool king_orchestrator_remote_value_tree_is_safe(
+    zval *value,
+    HashTable *seen_arrays
+)
+{
+    zval *entry;
+    zend_ulong array_key;
+
+    if (value == NULL) {
+        return 0;
+    }
+
+    switch (Z_TYPE_P(value)) {
+        case IS_NULL:
+        case IS_FALSE:
+        case IS_TRUE:
+        case IS_LONG:
+        case IS_DOUBLE:
+        case IS_STRING:
+            return 1;
+        case IS_ARRAY:
+            array_key = (zend_ulong) (uintptr_t) Z_ARR_P(value);
+            if (zend_hash_index_exists(seen_arrays, array_key)) {
+                return 1;
+            }
+            zend_hash_index_add_empty_element(seen_arrays, array_key);
+            ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(value), entry) {
+                if (!king_orchestrator_remote_value_tree_is_safe(entry, seen_arrays)) {
+                    return 0;
+                }
+            } ZEND_HASH_FOREACH_END();
+            return 1;
+        case IS_REFERENCE:
+        case IS_OBJECT:
+        case IS_RESOURCE:
+        default:
+            return 0;
+    }
+}
+
 static zend_result king_orchestrator_remote_decode_base64_zval(
     zend_string *encoded_value,
     zval *return_value
@@ -83,7 +123,11 @@ static zend_result king_orchestrator_remote_decode_base64_zval(
 {
     zend_string *decoded_payload;
     const unsigned char *cursor;
+    const unsigned char *end;
     php_unserialize_data_t var_hash;
+    HashTable allowed_classes;
+    HashTable seen_arrays;
+    zend_result result = FAILURE;
 
     if (encoded_value == NULL || return_value == NULL) {
         return FAILURE;
@@ -98,24 +142,40 @@ static zend_result king_orchestrator_remote_decode_base64_zval(
     }
 
     cursor = (const unsigned char *) ZSTR_VAL(decoded_payload);
+    end = cursor + ZSTR_LEN(decoded_payload);
     ZVAL_NULL(return_value);
 
     PHP_VAR_UNSERIALIZE_INIT(var_hash);
+    zend_hash_init(&allowed_classes, 0, NULL, NULL, 0);
+    php_var_unserialize_set_allowed_classes(var_hash, &allowed_classes);
     if (!php_var_unserialize(
             return_value,
             &cursor,
-            cursor + ZSTR_LEN(decoded_payload),
+            end,
             &var_hash)) {
-        PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
-        zend_string_release(decoded_payload);
+        goto cleanup;
+    }
+    if (cursor != end) {
+        goto cleanup;
+    }
+    zend_hash_init(&seen_arrays, 0, NULL, NULL, 0);
+    if (!king_orchestrator_remote_value_tree_is_safe(return_value, &seen_arrays)) {
+        zend_hash_destroy(&seen_arrays);
+        goto cleanup;
+    }
+    zend_hash_destroy(&seen_arrays);
+    result = SUCCESS;
+
+cleanup:
+    PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
+    zend_hash_destroy(&allowed_classes);
+    zend_string_release(decoded_payload);
+    if (result != SUCCESS) {
         zval_ptr_dtor(return_value);
         ZVAL_NULL(return_value);
-        return FAILURE;
     }
-    PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
-    zend_string_release(decoded_payload);
 
-    return SUCCESS;
+    return result;
 }
 
 static zend_string *king_orchestrator_remote_build_target(void)

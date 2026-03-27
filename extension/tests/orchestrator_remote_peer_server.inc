@@ -31,7 +31,7 @@ $decodeZval = static function (string $payload): mixed {
         throw new RuntimeException('invalid base64 payload');
     }
 
-    return unserialize($decoded);
+    return unserialize($decoded, ['allowed_classes' => false]);
 };
 
 echo "READY\n";
@@ -131,7 +131,17 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
     }
 
     if (!$failed) {
-        fwrite($client, $encodeResult($event['initial_data']));
+        $result = $event['initial_data'];
+        if (
+            is_array($event['pipeline'])
+            && isset($event['pipeline'][0])
+            && is_array($event['pipeline'][0])
+            && !empty($event['pipeline'][0]['remote_object_result'])
+        ) {
+            $result = (object) ['remote_object' => true];
+        }
+
+        fwrite($client, $encodeResult($result));
     }
 
     fclose($client);

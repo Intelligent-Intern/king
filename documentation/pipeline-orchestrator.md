@@ -215,6 +215,9 @@ sequenceDiagram
 
 This mode is the bridge between the orchestrator and the wider control plane. A
 controller can own the run history while execution happens on a different node.
+The remote result is decoded as a plain value tree. Network payloads that try
+to materialize PHP objects are rejected instead of being treated as executable
+runtime state.
 
 ## Timeout, Deadline, Concurrency, And Cancellation
 
