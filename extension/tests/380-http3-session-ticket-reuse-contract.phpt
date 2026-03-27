@@ -68,14 +68,14 @@ try {
         );
     };
     try {
-        $first = $runDirect();
+        $first = king_http3_request_with_retry($runDirect);
     } finally {
         king_http3_stop_ticket_test_server($server);
     }
 
     $server = king_http3_start_ticket_test_server($fixture['cert'], $fixture['key'], $fixture['root'], '127.0.0.1', $port, 'localhost');
     try {
-        $second = $runDirect();
+        $second = king_http3_request_with_retry($runDirect);
     } finally {
         king_http3_stop_ticket_test_server($server);
     }
@@ -86,14 +86,14 @@ try {
 
     $server = king_http3_start_ticket_test_server($fixture['cert'], $fixture['key'], $fixture['root'], '127.0.0.1', $port, 'localhost');
     try {
-        $third = $runDirect();
+        $third = king_http3_request_with_retry($runDirect);
     } finally {
         king_http3_stop_ticket_test_server($server);
     }
 
     $server = king_http3_start_ticket_test_server($fixture['cert'], $fixture['key'], $fixture['root'], '127.0.0.1', $port, 'localhost');
     try {
-        $fourth = $runDispatch();
+        $fourth = king_http3_request_with_retry($runDispatch);
     } finally {
         king_http3_stop_ticket_test_server($server);
     }

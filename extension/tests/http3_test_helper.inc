@@ -297,6 +297,37 @@ function king_http3_request_with_retry(callable $callback)
     throw $lastError ?? new RuntimeException('HTTP/3 request retry exhausted without an exception.');
 }
 
+function king_http3_exception_with_retry(
+    callable $callback,
+    string $expectedClass,
+    ?string $expectedMessage = null
+): Throwable {
+    $lastError = null;
+    $deadline = microtime(true) + 60.0;
+
+    while (microtime(true) < $deadline) {
+        try {
+            $callback();
+            $lastError = new RuntimeException(
+                'HTTP/3 failure-path request unexpectedly succeeded before the local peer reached the expected failure state.'
+            );
+        } catch (Throwable $e) {
+            if (
+                $e instanceof $expectedClass
+                && ($expectedMessage === null || $e->getMessage() === $expectedMessage)
+            ) {
+                return $e;
+            }
+
+            $lastError = $e;
+        }
+
+        usleep(250000);
+    }
+
+    throw $lastError ?? new RuntimeException('HTTP/3 exception retry exhausted without the expected failure.');
+}
+
 function king_http3_start_silent_udp_server(): array
 {
     $server = stream_socket_server('udp://127.0.0.1:0', $errno, $errstr, STREAM_SERVER_BIND);

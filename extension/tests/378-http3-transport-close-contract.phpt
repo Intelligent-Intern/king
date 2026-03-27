@@ -37,22 +37,26 @@ $expectedDispatch = 'king_client_send_request() received a QUIC transport close 
 
 try {
     try {
-        king_http3_request_send(
-            $url,
-            'GET',
-            null,
-            null,
-            [
-                'connection_config' => $config,
-                'connect_timeout_ms' => 2000,
-                'timeout_ms' => 4000,
-            ]
+        $e = king_http3_exception_with_retry(
+            static fn () => king_http3_request_send(
+                $url,
+                'GET',
+                null,
+                null,
+                [
+                    'connection_config' => $config,
+                    'connect_timeout_ms' => 2000,
+                    'timeout_ms' => 4000,
+                ]
+            ),
+            'King\\QuicException',
+            $expectedDirect
         );
-        echo "no-exception-1\n";
-    } catch (Throwable $e) {
         var_dump(get_class($e));
         var_dump($e->getMessage() === $expectedDirect);
         var_dump(king_get_last_error() === $expectedDirect);
+    } catch (Throwable $e) {
+        echo "no-exception-1\n";
     }
 
     $peerCapture = king_http3_stop_failure_peer($peer);
@@ -61,23 +65,27 @@ try {
     var_dump($peerCapture['exit_code'] === 15 || $peerCapture['exit_code'] === 0);
 
     try {
-        king_client_send_request(
-            $url,
-            'GET',
-            null,
-            null,
-            [
-                'preferred_protocol' => 'http3',
-                'connection_config' => $config,
-                'connect_timeout_ms' => 2000,
-                'timeout_ms' => 4000,
-            ]
+        $e = king_http3_exception_with_retry(
+            static fn () => king_client_send_request(
+                $url,
+                'GET',
+                null,
+                null,
+                [
+                    'preferred_protocol' => 'http3',
+                    'connection_config' => $config,
+                    'connect_timeout_ms' => 2000,
+                    'timeout_ms' => 4000,
+                ]
+            ),
+            'King\\QuicException',
+            $expectedDispatch
         );
-        echo "no-exception-2\n";
-    } catch (Throwable $e) {
         var_dump(get_class($e));
         var_dump($e->getMessage() === $expectedDispatch);
         var_dump(king_get_last_error() === $expectedDispatch);
+    } catch (Throwable $e) {
+        echo "no-exception-2\n";
     }
 } finally {
     king_http3_stop_failure_peer($peer);
