@@ -35,7 +35,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `354/354` passing
+- `./scripts/test-extension.sh`: `355/355` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
@@ -56,7 +56,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `354` PHPT files
+- `extension/tests`: `355` PHPT files
 - public stub parity: `125` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -67,7 +67,7 @@ Current tree facts:
 The current tree already proves:
 
 - explicit config and session ownership through `King\Config` and `King\Session`
-- real HTTP/1, HTTP/2, and HTTP/3 client request paths, including reuse, repeated pooled HTTP/2 mixed-load bursts, streaming, bodiless-response handling, abort mapping, and cancel/timeout contracts
+- real HTTP/1, HTTP/2, and HTTP/3 client request paths, including reuse, repeated pooled HTTP/2 mixed-load bursts, streaming, bodiless-response handling, explicit HTTP/1 and HTTP/2 abort/reset failure mapping, and cancel/timeout contracts
 - HTTP/2 shared-session fairness under mixed slow and fast concurrent streams
 - HTTP/3 one-shot churn isolation across repeated timeout and healthy-recovery cycles
 - local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3
@@ -102,7 +102,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 ### Transport And Listener Failure Depth
 
 - The current tree proves happy-path wire coverage and several sustained-load slices across HTTP/1, HTTP/2, HTTP/3, WebSocket, and local server/runtime control flows, but failure-depth is still uneven.
-- The next missing proof is concrete and repo-local: HTTP/2 stream-reset and connection-abort paths, real listener coverage for server HTTP/2 and HTTP/3, handshake/transport-abort cases for HTTP/3, connection reuse/ticket behavior, and more explicit WebSocket violation/abort handling.
+- The next missing proof is concrete and repo-local: real listener coverage for server HTTP/2 and HTTP/3, handshake/transport-abort cases for HTTP/3, connection reuse/ticket behavior, and more explicit WebSocket violation/abort handling.
 - These are no longer architectural unknowns; they are the next missing proof leaves on already-real kernels.
 
 ### Routing and DNS Scope
