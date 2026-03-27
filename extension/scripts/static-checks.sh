@@ -28,6 +28,7 @@ bash -n extension/scripts/build-profile.sh
 bash -n extension/scripts/bootstrap-quiche.sh
 bash -n extension/scripts/build-extension.sh
 bash -n extension/scripts/check-config-compatibility-matrix.sh
+bash -n extension/scripts/check-php-support-matrix.sh
 bash -n extension/scripts/check-quiche-bootstrap.sh
 bash -n extension/scripts/check-persistence-migration.sh
 bash -n extension/scripts/check-release-downgrade.sh
@@ -55,5 +56,8 @@ extension/scripts/check-include-layout.sh
 
 echo "Checking deterministic quiche bootstrap..."
 extension/scripts/check-quiche-bootstrap.sh
+
+echo "Checking supported PHP matrix alignment..."
+extension/scripts/check-php-support-matrix.sh
 
 echo "Static checks passed."

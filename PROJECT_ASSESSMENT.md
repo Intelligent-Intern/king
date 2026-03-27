@@ -38,6 +38,7 @@ The currently verified baseline is:
 - `./scripts/test-extension.sh`: `355/355` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
+- `./scripts/check-php-support-matrix.sh`: passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
 - `./scripts/install-package-matrix.sh --archive <release> --php-bins php8.4`: passing
 - `./scripts/check-release-upgrade.sh --from-ref HEAD^`: passing
@@ -120,7 +121,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 ### Build, Compatibility, and Release Confidence
 
 - QUIC and HTTP/3 now bootstrap from a pinned repo-owned dependency path instead of ad hoc local `quiche` resurrection or unlocked cargo retries.
-- Clean-host package install and published-container smoke are now first-class gates, with CI-driven host PHP `8.3`/`8.4`/`8.5` package verification and published-image builds narrowed to the same supported PHP matrix.
+- Clean-host package install and published-container smoke are first-class gates, and the repo-owned CI/workflow matrix now targets host/runtime PHP `8.1`/`8.2`/`8.3`/`8.4`/`8.5` instead of silently dropping older supported lines from those paths.
 - Upgrade and downgrade compatibility for release artifacts are now explicit script/CI gates that package a previous git ref, verify both archives, and smoke-test both install orders against the same install prefix.
 - Release-artifact upgrade, downgrade, representative persisted-state migration, and old/new configuration-state behavior are now all explicit script and CI gates.
 

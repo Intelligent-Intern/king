@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/container-smoke-matrix.sh [--php-versions 8.3,8.4,...] [--image-prefix NAME] [--build-jobs N]
+Usage: ./scripts/container-smoke-matrix.sh [--php-versions 8.1,8.2,8.3,...] [--image-prefix NAME] [--build-jobs N]
 
 Builds the runtime Docker image for the requested PHP versions and runs the
 packaged install smoke inside each built container image.
@@ -14,7 +14,7 @@ EOF
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ROOT_DIR="$(cd "${EXT_DIR}/.." && pwd)"
-PHP_VERSIONS_CSV="${PHP_VERSIONS:-8.3,8.4,8.5}"
+PHP_VERSIONS_CSV="${PHP_VERSIONS:-8.1,8.2,8.3,8.4,8.5}"
 IMAGE_PREFIX="${IMAGE_PREFIX:-king-install-smoke}"
 BUILD_JOBS="${BUILD_JOBS:-4}"
 

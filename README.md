@@ -258,6 +258,7 @@ The build entrypoint above is the repository build path.
 Canonical release-install verification then runs through
 `./scripts/package-release.sh`, `./scripts/install-package-matrix.sh`, and
 `./scripts/container-smoke-matrix.sh`.
+The supported host/runtime verification matrix spans PHP `8.1` through `8.5`.
 
 Implementation maturity and subsystem completeness are intentionally documented
 in [`PROJECT_ASSESSMENT.md`](PROJECT_ASSESSMENT.md) and [`ISSUES.md`](ISSUES.md),

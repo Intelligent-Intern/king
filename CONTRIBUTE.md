@@ -190,7 +190,7 @@ Run the published-container smoke matrix across supported runtime images:
 
 ```bash
 cd extension
-./scripts/container-smoke-matrix.sh --php-versions 8.3,8.4,8.5
+./scripts/container-smoke-matrix.sh --php-versions 8.1,8.2,8.3,8.4,8.5
 ```
 
 Run the final repo-local go-live readiness gate:
