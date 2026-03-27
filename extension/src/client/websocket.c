@@ -625,6 +625,72 @@ static void king_websocket_mark_transport_closed(king_ws_state *state)
     state->closed = true;
 }
 
+static bool king_websocket_opcode_is_control(unsigned char opcode)
+{
+    return opcode >= KING_WS_OPCODE_CLOSE;
+}
+
+static bool king_websocket_close_code_is_valid(zend_long close_code)
+{
+    if (close_code < 1000 || close_code >= 5000) {
+        return false;
+    }
+
+    switch (close_code) {
+        case 1004:
+        case 1005:
+        case 1006:
+        case 1015:
+            return false;
+        default:
+            break;
+    }
+
+    if (close_code >= 1016 && close_code <= 2999) {
+        return false;
+    }
+
+    return true;
+}
+
+static zend_result king_websocket_reject_received_protocol_violation(
+    king_ws_state *state,
+    const char *function_name,
+    const char *format,
+    ...
+)
+{
+    char message[KING_ERR_LEN];
+    unsigned char close_payload[2] = {0x03, 0xea};
+    va_list args;
+
+    va_start(args, format);
+    vsnprintf(message, sizeof(message), format, args);
+    va_end(args);
+
+    king_set_error(message);
+    king_websocket_store_close_reason(state, close_payload, sizeof(close_payload));
+
+    if (!state->close_frame_sent && state->transport_stream != NULL) {
+        if (
+            king_websocket_send_frame(
+                state,
+                KING_WS_OPCODE_CLOSE,
+                close_payload,
+                sizeof(close_payload),
+                function_name
+            ) == SUCCESS
+        ) {
+            state->close_frame_sent = true;
+        }
+
+        king_set_error(message);
+    }
+
+    king_websocket_mark_transport_closed(state);
+    return FAILURE;
+}
+
 static zend_result king_websocket_receive_one_frame(
     king_ws_state *state,
     zend_long timeout_ms,
@@ -662,12 +728,22 @@ static zend_result king_websocket_receive_one_frame(
         return SUCCESS;
     }
 
+    if ((header[0] & 0x70) != 0) {
+        return king_websocket_reject_received_protocol_violation(
+            state,
+            function_name,
+            "%s() received a WebSocket frame with unsupported RSV bits set.",
+            function_name
+        );
+    }
+
     if ((header[0] & 0x80) == 0) {
-        king_websocket_set_error(
+        return king_websocket_reject_received_protocol_violation(
+            state,
+            function_name,
             "%s() received a fragmented WebSocket frame that v1 does not support.",
             function_name
         );
-        return FAILURE;
     }
 
     frame_part_timeout_ms = timeout_ms > 0 ? timeout_ms : 100;
@@ -676,18 +752,20 @@ static zend_result king_websocket_receive_one_frame(
     masked = (header[1] & 0x80) != 0;
     if (state->server_endpoint) {
         if (!masked) {
-            king_websocket_set_error(
+            return king_websocket_reject_received_protocol_violation(
+                state,
+                function_name,
                 "%s() received an invalid unmasked client WebSocket frame.",
                 function_name
             );
-            return FAILURE;
         }
     } else if (masked) {
-        king_websocket_set_error(
+        return king_websocket_reject_received_protocol_violation(
+            state,
+            function_name,
             "%s() received an invalid masked server WebSocket frame.",
             function_name
         );
-        return FAILURE;
     }
 
     payload_len = (size_t) (header[1] & 0x7f);
@@ -754,6 +832,16 @@ static zend_result king_websocket_receive_one_frame(
         }
 
         payload_len = (size_t) extended_payload_len;
+    }
+
+    if (king_websocket_opcode_is_control(opcode) && payload_len > 125) {
+        return king_websocket_reject_received_protocol_violation(
+            state,
+            function_name,
+            "%s() received a control WebSocket frame payload %zu that exceeds 125 bytes.",
+            function_name,
+            payload_len
+        );
     }
 
     if (masked) {
@@ -872,6 +960,36 @@ static zend_result king_websocket_receive_one_frame(
             break;
 
         case KING_WS_OPCODE_CLOSE:
+            if (payload_len == 1) {
+                if (payload_buffer != NULL) {
+                    efree(payload_buffer);
+                }
+                return king_websocket_reject_received_protocol_violation(
+                    state,
+                    function_name,
+                    "%s() received an invalid one-byte WebSocket close payload.",
+                    function_name
+                );
+            }
+
+            if (payload_len >= 2) {
+                zend_long close_code =
+                    ((zend_long) payload_buffer[0] << 8) | (zend_long) payload_buffer[1];
+
+                if (!king_websocket_close_code_is_valid(close_code)) {
+                    if (payload_buffer != NULL) {
+                        efree(payload_buffer);
+                    }
+                    return king_websocket_reject_received_protocol_violation(
+                        state,
+                        function_name,
+                        "%s() received an invalid WebSocket close status code %ld.",
+                        function_name,
+                        close_code
+                    );
+                }
+            }
+
             if (payload_buffer != NULL) {
                 king_websocket_store_close_reason(state, payload_buffer, payload_len);
             } else {
@@ -903,12 +1021,13 @@ static zend_result king_websocket_receive_one_frame(
             if (payload_buffer != NULL) {
                 efree(payload_buffer);
             }
-            king_websocket_set_error(
+            return king_websocket_reject_received_protocol_violation(
+                state,
+                function_name,
                 "%s() received an unsupported WebSocket opcode %u.",
                 function_name,
                 (unsigned int) opcode
             );
-            return FAILURE;
     }
 
     if (payload_buffer != NULL) {

@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate WebSocket protocol-violation handling on-wire.
+- [ ] Validate WebSocket network-abort behavior on-wire.
 
 ## Active Executable Items
 
@@ -55,7 +55,7 @@
 10. [x] Validate HTTP/3 connection reuse and session-ticket behavior.
     done when: repeated direct and dispatcher requests prove reuse, ticket persistence, and healthy recovery instead of only one-shot success slices.
 
-11. [ ] Validate WebSocket protocol-violation handling on-wire.
+11. [x] Validate WebSocket protocol-violation handling on-wire.
     done when: malformed opcode, frame-shape, and close-sequence violations from real peers are rejected through stable public errors.
 
 12. [ ] Validate WebSocket network-abort behavior on-wire.
