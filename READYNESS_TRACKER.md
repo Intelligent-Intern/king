@@ -362,7 +362,7 @@ Status note:
 - [x] Run clean-host install matrix in CI
 - [x] Run container image install matrix in CI
 - [x] Run supported PHP/API combinations in CI
-- [ ] Check upgrade compatibility in CI
+- [x] Check upgrade compatibility in CI
 - [ ] Check downgrade compatibility in CI
 - [ ] Check persistence migration paths in CI
 - [x] Establish long-duration ASan soaks

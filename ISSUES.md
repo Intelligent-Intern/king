@@ -17,13 +17,13 @@
 
 ## Current Next Leaf
 
-- [ ] Add a release-artifact upgrade compatibility gate in CI.
+- [ ] Add a release-artifact downgrade compatibility gate in CI.
 
 ## Active Executable Items
 
 ### 1. Compatibility And Release Confidence
 
-1. [ ] Add a release-artifact upgrade compatibility gate in CI.
+1. [x] Add a release-artifact upgrade compatibility gate in CI.
    done when: a packaged artifact from the previous supported line is installed and smoke-tested against the current compatibility target automatically in CI.
 
 2. [ ] Add a release-artifact downgrade compatibility gate in CI.

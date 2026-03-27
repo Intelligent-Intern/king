@@ -144,6 +144,17 @@ cd extension
 Build one package per supported PHP/API combination and run the host install
 smoke against the matching runtime for that archive.
 
+Run the previous-release to current-release upgrade compatibility gate:
+
+```bash
+cd extension
+./scripts/check-release-upgrade.sh --from-ref HEAD^
+```
+
+This packages the previous git ref, verifies both archives, installs them into
+the same prefix one after the other, and runs the packaged smoke before and
+after the upgrade.
+
 Run the published-container smoke matrix across supported runtime images:
 
 ```bash
