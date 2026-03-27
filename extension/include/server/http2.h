@@ -21,5 +21,6 @@
  * @return TRUE on success, FALSE on failure.
  */
 PHP_FUNCTION(king_http2_server_listen);
+PHP_FUNCTION(king_http2_server_listen_once);
 
 #endif // KING_SERVER_HTTP2_H

@@ -391,6 +391,17 @@ namespace {
     function king_http2_server_listen(string $host, int $port, mixed $config, callable $handler): bool {}
 
     /**
+     * Active one-shot on-wire HTTP/2 listener leaf.
+     * Binds a real TCP socket, accepts exactly one h2c connection, reads one
+     * request stream, materializes one `King\Session` snapshot over the
+     * accepted socket, invokes the handler once with a normalized HTTP/2-style
+     * request array, writes one HTTP/2 response, sends a clean GOAWAY, and
+     * then closes the listener/session.
+     * @param mixed $config
+     */
+    function king_http2_server_listen_once(string $host, int $port, mixed $config, callable $handler): bool {}
+
+    /**
      * Active local HTTP/3 single-dispatch server leaf over the same
      * `King\Session` runtime.
      * The handler receives a normalized HTTP/3-style request array with

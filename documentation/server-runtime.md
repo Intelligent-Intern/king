@@ -55,10 +55,13 @@ receive traffic.
 `king_http1_server_listen()` runs one HTTP/1 server dispatch through the local
 server runtime. `king_http1_server_listen_once()` accepts one real on-wire
 HTTP/1 request on a bound TCP socket and handles that one request from start to
-finish. `king_http2_server_listen()` and `king_http3_server_listen()` run the
-same server model for HTTP/2 and HTTP/3 request shapes. `king_server_listen()`
-is the generic listener entry point that chooses the appropriate listener mode
-from configuration.
+finish. `king_http2_server_listen()` runs the same server model for an HTTP/2
+request shape in the local runtime, and `king_http2_server_listen_once()`
+accepts one real on-wire h2c connection, handles one request stream, sends one
+response, and closes the connection with a clean `GOAWAY`. `king_http3_server_listen()`
+runs the same model for HTTP/3 request shapes. `king_server_listen()` is the
+generic listener entry point that chooses the appropriate listener mode from
+configuration.
 
 The practical difference is not only protocol version. It is also about how
 directly the request reaches the listener and which transport shape surrounds
@@ -118,9 +121,14 @@ good match for focused HTTP/1 request handling, response generation, and
 server-side helper flows that do not need a custom accept loop.
 
 `king_http2_server_listen()` gives the same server shape over an HTTP/2-style
-request model. That matters when the application wants one coherent way to work
-with pseudo-header style metadata, stream semantics, and the rest of the
-HTTP/2-side request shape.
+request model in the local runtime. `king_http2_server_listen_once()` adds the
+network-backed sibling: it binds a real TCP socket, accepts one h2c client,
+parses the incoming request stream, materializes one server-side session over
+that accepted socket, invokes the handler, writes the response headers and
+body, sends `GOAWAY`, drains the last protocol traffic cleanly, and then closes
+the listener. That matters when the application wants one coherent way to work
+with pseudo-header style metadata, stream semantics, and a proven on-wire
+accept path instead of only a local dispatch slice.
 
 `king_http3_server_listen()` does the same for HTTP/3-style request handling in
 the server runtime. It keeps the server-side request model aligned with the rest
@@ -129,7 +137,7 @@ of the QUIC-aware platform.
 The important thing is that these are not three unrelated APIs. They are three
 protocol faces of one server runtime model.
 
-## The One-Shot HTTP/1 Listener
+## The One-Shot HTTP/1 And HTTP/2 Listeners
 
 `king_http1_server_listen_once()` deserves special attention because it is the
 most direct server accept path in the public surface. It binds a real TCP
@@ -141,6 +149,16 @@ This shape is especially useful when the application wants a tightly scoped,
 single-request listener flow. It is also the most direct entry point for
 workflows that need to observe one real HTTP/1 request and, when appropriate,
 upgrade it into a WebSocket channel.
+
+`king_http2_server_listen_once()` does the same kind of bounded work for h2c.
+The request still arrives as real protocol traffic rather than as a synthetic
+array. The runtime reads the HTTP/2 client preface and settings exchange,
+decodes the request headers and optional body for one stream, builds the same
+kind of normalized request array, invokes the handler once, writes one HTTP/2
+response, sends `GOAWAY`, and closes the accepted connection cleanly. This is
+the right one-shot leaf when the transport contract itself matters and the
+application wants proof against a real HTTP/2 client rather than only local
+dispatch behavior.
 
 The value of a one-shot listener is not that it is "small". The value is that
 the whole accept path is explicit and bounded.
@@ -422,8 +440,10 @@ sharing one handler model.
 Choose `king_http1_server_listen()` or `king_http1_server_listen_once()` when
 you want HTTP/1 request handling or a tightly scoped one-shot accept path.
 Choose `king_http2_server_listen()` when the surrounding traffic shape is better
-described as HTTP/2. Choose `king_http3_server_listen()` when the server path
-should sit inside the QUIC and HTTP/3 side of the runtime. Choose
+described as HTTP/2 and a local dispatch slice is enough. Choose
+`king_http2_server_listen_once()` when the accept path itself must be proven
+against a real h2c client. Choose `king_http3_server_listen()` when the server
+path should sit inside the QUIC and HTTP/3 side of the runtime. Choose
 `king_server_listen()` when configuration should decide the protocol mode.
 
 The important point is that protocol choice is not the same as abandoning one

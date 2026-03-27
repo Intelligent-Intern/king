@@ -42,6 +42,7 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_http1_server_listen, arginfo_king_server_listen)
     PHP_FE(king_http1_server_listen_once, arginfo_king_server_listen)
     PHP_FE(king_http2_server_listen, arginfo_king_server_listen)
+    PHP_FE(king_http2_server_listen_once, arginfo_king_server_listen)
     PHP_FE(king_http3_server_listen, arginfo_king_server_listen)
     PHP_FE(king_server_listen, arginfo_king_server_listen)
     PHP_FE(king_server_on_cancel, arginfo_king_server_on_cancel)

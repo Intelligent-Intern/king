@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate the HTTP/2 server listener as a real network listener.
+- [ ] Validate the HTTP/3 server listener as a real network listener.
 
 ## Active Executable Items
 
@@ -61,7 +61,7 @@
 12. [x] Validate WebSocket network-abort behavior on-wire.
     done when: peer disconnect, half-close, and abrupt socket-loss cases are exercised without leaks, hangs, or corrupted follow-up sessions.
 
-13. [ ] Validate the HTTP/2 server listener as a real network listener.
+13. [x] Validate the HTTP/2 server listener as a real network listener.
     done when: server-side HTTP/2 listener setup, request handling, response flow, and shutdown semantics are proven against real clients.
 
 14. [ ] Validate the HTTP/3 server listener as a real network listener.
