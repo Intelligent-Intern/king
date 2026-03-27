@@ -230,7 +230,9 @@ for ((iteration = 1; iteration <= ITERATIONS; iteration++)); do
     cleanup_test_artifacts
     current_log="${LOG_DIR}/iteration-${iteration}.log"
 
-    if "${PHP_BIN}" run-tests.php -q -d "extension=${EXT_SO}" "${TEST_FILES[@]}" >"${current_log}" 2>&1; then
+    # Keep sanitizer gates focused on King itself instead of whichever shared
+    # PHP extensions happen to be enabled on the host runner.
+    if "${PHP_BIN}" run-tests.php -q -n -d "extension=${EXT_SO}" "${TEST_FILES[@]}" >"${current_log}" 2>&1; then
         printf 'iteration=%d status=pass\n' "${iteration}" >> "${SUMMARY_FILE}"
         continue
     fi
