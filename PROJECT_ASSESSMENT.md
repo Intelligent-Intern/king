@@ -18,7 +18,7 @@ The remaining gaps are no longer about broad runtime parity or placeholder
 surfaces inside the local tree. They are now concentrated in four narrower
 areas:
 
-- deeper transport and listener failure-path verification across HTTP/1, HTTP/2, HTTP/3, and WebSocket
+- deeper transport and listener failure-path verification across HTTP/2, HTTP/3, and WebSocket
 - MCP transfer durability/error semantics and orchestrator continuation depth
 - larger Smart-DNS routing and concurrent-update correctness beyond the current local proof
 - stronger telemetry/autoscaling load-bound, cleanup, and recovery guarantees
@@ -35,7 +35,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `352/352` passing
+- `./scripts/test-extension.sh`: `353/353` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
@@ -56,7 +56,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `352` PHPT files
+- `extension/tests`: `353` PHPT files
 - public stub parity: `125` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -102,7 +102,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 ### Transport And Listener Failure Depth
 
 - The current tree proves happy-path wire coverage and several sustained-load slices across HTTP/1, HTTP/2, HTTP/3, WebSocket, and local server/runtime control flows, but failure-depth is still uneven.
-- The next missing proof is concrete and repo-local: HTTP/1 abort/reset paths, real listener coverage for server HTTP/2 and HTTP/3, handshake/transport-abort cases for HTTP/3, connection reuse/ticket behavior, and more explicit WebSocket violation/abort handling.
+- The next missing proof is concrete and repo-local: HTTP/2 pool lifecycle and abort/reset paths, real listener coverage for server HTTP/2 and HTTP/3, handshake/transport-abort cases for HTTP/3, connection reuse/ticket behavior, and more explicit WebSocket violation/abort handling.
 - These are no longer architectural unknowns; they are the next missing proof leaves on already-real kernels.
 
 ### Routing and DNS Scope

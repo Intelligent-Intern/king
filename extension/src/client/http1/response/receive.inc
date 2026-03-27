@@ -189,11 +189,20 @@ static zend_result king_http1_recv_response(
                     ZSTR_VAL(response_buffer->s),
                     ZSTR_LEN(response_buffer->s)
                 );
+                size_t expected_len = header_end + meta->content_length;
 
                 if (
                     header_end != 0
-                    && ZSTR_LEN(response_buffer->s) >= header_end + meta->content_length
+                    && ZSTR_LEN(response_buffer->s) >= expected_len
                 ) {
+                    if (ZSTR_LEN(response_buffer->s) > expected_len) {
+                        king_http1_throw(
+                            king_ce_protocol_exception,
+                            "%s() received more HTTP/1 body bytes than announced by Content-Length.",
+                            function_name
+                        );
+                        return FAILURE;
+                    }
                     return SUCCESS;
                 }
             }
@@ -237,6 +246,42 @@ static zend_result king_http1_recv_response(
             function_name
         );
         return FAILURE;
+    }
+
+    if (
+        expect_no_body
+        || king_http1_status_has_no_body(meta->status_code)
+    ) {
+        return SUCCESS;
+    }
+
+    if (response_buffer->s != NULL) {
+        size_t header_end = king_http1_find_header_end(
+            ZSTR_VAL(response_buffer->s),
+            ZSTR_LEN(response_buffer->s)
+        );
+
+        if (meta->chunked_transfer_encoding) {
+            king_http1_throw(
+                king_ce_protocol_exception,
+                "%s() peer closed the HTTP/1 chunked body stream before the terminating chunk was received.",
+                function_name
+            );
+            return FAILURE;
+        }
+
+        if (
+            meta->has_content_length
+            && header_end != 0
+            && ZSTR_LEN(response_buffer->s) < header_end + meta->content_length
+        ) {
+            king_http1_throw(
+                king_ce_protocol_exception,
+                "%s() peer closed the HTTP/1 body stream before Content-Length bytes were received.",
+                function_name
+            );
+            return FAILURE;
+        }
     }
 
     return SUCCESS;

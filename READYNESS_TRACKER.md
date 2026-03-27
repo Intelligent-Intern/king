@@ -21,7 +21,7 @@ Status note:
 - [x] Validate HTTP/1 streaming response path against real chunked responses
 - [x] Validate HTTP/1 bodiless responses against real servers
 - [x] Validate HTTP/1 Content-Length responses against real servers
-- [ ] Validate HTTP/1 failure paths against real connection aborts
+- [x] Validate HTTP/1 failure paths against real connection aborts
 - [x] Validate HTTP/1 timeout behavior against real slow servers
 - [ ] Validate HTTP/1 connection reuse limits under load
 - [ ] Validate HTTP/1 header normalization under real traffic
