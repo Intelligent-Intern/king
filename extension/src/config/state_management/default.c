@@ -3,6 +3,6 @@
 
 void kg_config_state_management_defaults_load(void)
 {
-    king_state_management_config.default_backend = pestrdup("memory", 1);
-    king_state_management_config.default_uri = pestrdup("", 1);
+    king_state_management_config.default_backend = NULL;
+    king_state_management_config.default_uri = NULL;
 }

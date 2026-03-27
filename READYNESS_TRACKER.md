@@ -363,15 +363,15 @@ Status note:
 - [ ] Check upgrade compatibility in CI
 - [ ] Check downgrade compatibility in CI
 - [ ] Check persistence migration paths in CI
-- [ ] Establish long-duration ASan soaks
-- [ ] Establish long-duration UBSan soaks
-- [ ] Establish long-duration memory / leak soaks
+- [x] Establish long-duration ASan soaks
+- [x] Establish long-duration UBSan soaks
+- [x] Establish long-duration memory / leak soaks
 - [ ] Expand fuzzing for high-risk surfaces
 - [ ] Expand fuzzing for transport surfaces
 - [ ] Expand fuzzing for object-store surfaces
 - [ ] Expand fuzzing for MCP / transfer surfaces
 - [ ] Expand negative test matrices for malformed input
-- [ ] Archive failure artifacts for every gate violation
+- [x] Archive failure artifacts for every gate violation
 - [ ] Emit automated regression diagnostics
 - [ ] Identify and eliminate flaky tests
 - [ ] Integrate soak / chaos / recovery gates into release decisions

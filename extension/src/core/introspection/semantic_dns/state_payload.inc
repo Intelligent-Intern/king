@@ -10,7 +10,7 @@ static zend_string *king_semantic_dns_state_dup_string_field(
         return NULL;
     }
 
-    return zend_string_dup(Z_STR_P(field), 1);
+    return king_semantic_dns_copy_persistent_string(Z_STR_P(field));
 }
 
 static bool king_semantic_dns_state_assign_non_negative_long(
@@ -65,7 +65,7 @@ static bool king_semantic_dns_state_assign_attributes(
 
         zend_hash_update(
             &service->attributes,
-            zend_string_copy(attribute_name),
+            king_semantic_dns_copy_persistent_string(attribute_name),
             &stored_value
         );
     } ZEND_HASH_FOREACH_END();

@@ -9,5 +9,5 @@ void kg_config_iibin_defaults_load(void)
     king_iibin_config.use_shared_memory_buffers = false;
     king_iibin_config.default_buffer_size_kb = 64;
     king_iibin_config.shm_total_memory_mb = 256;
-    king_iibin_config.shm_path = pestrdup("/king_io_shm", 1);
+    king_iibin_config.shm_path = NULL;
 }

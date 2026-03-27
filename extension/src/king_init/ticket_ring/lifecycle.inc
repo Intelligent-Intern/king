@@ -1,7 +1,7 @@
 static int king_ticket_ring_init(void)
 {
     king_ticket_ring_shared_t *ring;
-    pthread_rwlockattr_t attr;
+    pthread_mutexattr_t attr;
     bool created = false;
     int fd;
 
@@ -33,7 +33,14 @@ static int king_ticket_ring_init(void)
         return FAILURE;
     }
 
+    if (flock(fd, LOCK_EX) != 0) {
+        close(fd);
+        king_globals.ticket_ring_name[0] = '\0';
+        return FAILURE;
+    }
+
     if (created && ftruncate(fd, sizeof(king_ticket_ring_shared_t)) != 0) {
+        (void) flock(fd, LOCK_UN);
         close(fd);
         shm_unlink(king_globals.ticket_ring_name);
         king_globals.ticket_ring_name[0] = '\0';
@@ -49,6 +56,7 @@ static int king_ticket_ring_init(void)
         0
     );
     if (ring == MAP_FAILED) {
+        (void) flock(fd, LOCK_UN);
         if (created) {
             shm_unlink(king_globals.ticket_ring_name);
         }
@@ -57,9 +65,10 @@ static int king_ticket_ring_init(void)
         return FAILURE;
     }
 
-    if (created) {
+    if (created || ring->initialized != 1) {
         memset(ring, 0, sizeof(*ring));
-        if (pthread_rwlockattr_init(&attr) != 0) {
+        if (pthread_mutexattr_init(&attr) != 0) {
+            (void) flock(fd, LOCK_UN);
             munmap(ring, sizeof(*ring));
             shm_unlink(king_globals.ticket_ring_name);
             close(fd);
@@ -67,33 +76,55 @@ static int king_ticket_ring_init(void)
             return FAILURE;
         }
 
-        if (pthread_rwlockattr_setpshared(&attr, PTHREAD_PROCESS_SHARED) != 0) {
-            pthread_rwlockattr_destroy(&attr);
+        if (pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED) != 0) {
+            pthread_mutexattr_destroy(&attr);
             munmap(ring, sizeof(*ring));
+            (void) flock(fd, LOCK_UN);
             shm_unlink(king_globals.ticket_ring_name);
             close(fd);
             king_globals.ticket_ring_name[0] = '\0';
             return FAILURE;
         }
 
-        if (pthread_rwlock_init(&ring->lock, &attr) != 0) {
-            pthread_rwlockattr_destroy(&attr);
+#ifdef PTHREAD_MUTEX_ROBUST
+        if (pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST) != 0) {
+            pthread_mutexattr_destroy(&attr);
             munmap(ring, sizeof(*ring));
+            (void) flock(fd, LOCK_UN);
+            shm_unlink(king_globals.ticket_ring_name);
+            close(fd);
+            king_globals.ticket_ring_name[0] = '\0';
+            return FAILURE;
+        }
+#endif
+
+        if (pthread_mutex_init(&ring->lock, &attr) != 0) {
+            pthread_mutexattr_destroy(&attr);
+            munmap(ring, sizeof(*ring));
+            (void) flock(fd, LOCK_UN);
             shm_unlink(king_globals.ticket_ring_name);
             close(fd);
             king_globals.ticket_ring_name[0] = '\0';
             return FAILURE;
         }
 
-        pthread_rwlockattr_destroy(&attr);
+        pthread_mutexattr_destroy(&attr);
         ring->capacity = KING_TICKET_RING_SLOT_COUNT;
         ring->ttl_seconds = king_tls_and_crypto_config.tls_session_ticket_lifetime_sec;
         ring->initialized = 1;
     } else {
-        pthread_rwlock_wrlock(&ring->lock);
+        if (king_ticket_ring_lock(ring) != SUCCESS) {
+            munmap(ring, sizeof(*ring));
+            (void) flock(fd, LOCK_UN);
+            close(fd);
+            king_globals.ticket_ring_name[0] = '\0';
+            return FAILURE;
+        }
         ring->ttl_seconds = king_tls_and_crypto_config.tls_session_ticket_lifetime_sec;
-        pthread_rwlock_unlock(&ring->lock);
+        king_ticket_ring_unlock(ring);
     }
+
+    (void) flock(fd, LOCK_UN);
 
     king_globals.ticket_ring_fd = fd;
     king_globals.ticket_ring_size = sizeof(*ring);
@@ -111,14 +142,15 @@ static void king_ticket_ring_shutdown(void)
         return;
     }
 
-    pthread_rwlock_wrlock(&ring->lock);
-    for (i = 0; i < ring->capacity; ++i) {
-        king_ticket_ring_shred_slot(&ring->slots[i]);
+    if (king_ticket_ring_lock(ring) == SUCCESS) {
+        for (i = 0; i < ring->capacity; ++i) {
+            king_ticket_ring_shred_slot(&ring->slots[i]);
+        }
+        ring->count = 0;
+        ring->head = 0;
+        ring->tail = 0;
+        king_ticket_ring_unlock(ring);
     }
-    ring->count = 0;
-    ring->head = 0;
-    ring->tail = 0;
-    pthread_rwlock_unlock(&ring->lock);
 
     munmap(ring, king_globals.ticket_ring_size);
     if (king_globals.ticket_ring_fd >= 0) {
@@ -127,7 +159,6 @@ static void king_ticket_ring_shutdown(void)
     if (king_globals.ticket_ring_name[0] != '\0') {
         shm_unlink(king_globals.ticket_ring_name);
     }
-
     king_globals.ticket_ring_fd = -1;
     king_globals.ticket_ring_size = 0;
     king_globals.ticket_ring = NULL;

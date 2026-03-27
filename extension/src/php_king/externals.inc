@@ -4,6 +4,7 @@ int king_iibin_minit(void);
 int king_semantic_dns_registry_minit(void);
 void king_semantic_dns_registry_mshutdown(void);
 void king_semantic_dns_shutdown_system(void);
+void king_semantic_dns_request_shutdown(void);
 
 int king_cdn_cache_registry_minit(void);
 void king_cdn_cache_registry_mshutdown(void);

@@ -14,8 +14,6 @@ void kg_config_tcp_transport_defaults_load(void)
     king_tcp_transport_config.keepalive_time_sec = 7200;
     king_tcp_transport_config.keepalive_interval_sec = 75;
     king_tcp_transport_config.keepalive_probes = 9;
-    king_tcp_transport_config.tls_min_version_allowed = pestrdup("TLSv1.2", 1);
-    king_tcp_transport_config.tls_ciphers_tls12 = pestrdup(
-        "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384",
-        1);
+    king_tcp_transport_config.tls_min_version_allowed = NULL;
+    king_tcp_transport_config.tls_ciphers_tls12 = NULL;
 }

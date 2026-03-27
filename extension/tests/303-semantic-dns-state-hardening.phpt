@@ -29,7 +29,7 @@ symlink($target_file, $state_file);
 
 file_put_contents(
     $child_script,
-    "<?php\nking_semantic_dns_init([\n    'enabled' => true,\n    'dns_port' => 5353,\n    'bind_address' => '127.0.0.1',\n]);\n"
+    "<?php\nking_semantic_dns_init([\n    'enabled' => true,\n    'dns_port' => 5353,\n    'bind_address' => '127.0.0.1',\n    'semantic_mode_enable' => true,\n]);\n"
 );
 
 $cmd = sprintf(

@@ -7,7 +7,9 @@ void king_ticket_ring_put(const uint8_t *ticket, size_t len)
         return;
     }
 
-    pthread_rwlock_wrlock(&ring->lock);
+    if (king_ticket_ring_lock(ring) != SUCCESS) {
+        return;
+    }
     king_ticket_ring_prune_expired_locked(ring, time(NULL));
 
     slot = &ring->slots[ring->head];
@@ -25,7 +27,7 @@ void king_ticket_ring_put(const uint8_t *ticket, size_t len)
     }
 
     ring->head = (ring->head + 1U) % ring->capacity;
-    pthread_rwlock_unlock(&ring->lock);
+    king_ticket_ring_unlock(ring);
 }
 
 int king_ticket_ring_get(uint8_t *out, size_t *out_len)
@@ -42,7 +44,9 @@ int king_ticket_ring_get(uint8_t *out, size_t *out_len)
 
     now = time(NULL);
 
-    pthread_rwlock_wrlock(&ring->lock);
+    if (king_ticket_ring_lock(ring) != SUCCESS) {
+        return 0;
+    }
     ring->ttl_seconds = king_tls_and_crypto_config.tls_session_ticket_lifetime_sec;
     king_ticket_ring_prune_expired_locked(ring, now);
 
@@ -60,13 +64,13 @@ int king_ticket_ring_get(uint8_t *out, size_t *out_len)
     }
 
     if (selected == NULL) {
-        pthread_rwlock_unlock(&ring->lock);
+        king_ticket_ring_unlock(ring);
         return 0;
     }
 
     memcpy(out, selected->data, selected->len);
     *out_len = selected->len;
-    pthread_rwlock_unlock(&ring->lock);
+    king_ticket_ring_unlock(ring);
 
     return 1;
 }

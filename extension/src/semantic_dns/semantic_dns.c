@@ -558,8 +558,14 @@ int king_semantic_dns_init_system(king_semantic_dns_config_t *config)
 
 void king_semantic_dns_shutdown_system(void)
 {
-    king_semantic_dns_state_save();
     king_semantic_dns_runtime_reset();
+}
+
+void king_semantic_dns_request_shutdown(void)
+{
+    if (king_semantic_dns_runtime.initialized && king_semantic_dns_runtime.config.semantic_mode_enable) {
+        (void) king_semantic_dns_state_save();
+    }
 }
 
 int king_semantic_dns_process_query(

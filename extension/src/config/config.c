@@ -56,8 +56,87 @@ typedef enum _king_config_override_module_t {
     KING_CONFIG_OVERRIDE_OTEL
 } king_config_override_module_t;
 
+#define KING_CONFIG_FREE_PERSISTENT(field) \
+    do { \
+        if ((field) != NULL) { \
+            pefree((field), 1); \
+            (field) = NULL; \
+        } \
+    } while (0)
+
 #include "internal/owned_strings.inc"
 #include "internal/snapshot.inc"
 #include "internal/overrides.inc"
 #include "internal/api.inc"
 #include "internal/object.inc"
+
+void king_config_release_module_globals(void)
+{
+    KING_CONFIG_FREE_PERSISTENT(king_bare_metal_config.io_thread_cpu_affinity);
+    KING_CONFIG_FREE_PERSISTENT(king_bare_metal_config.io_thread_numa_node_policy);
+    memset(&king_bare_metal_config, 0, sizeof(king_bare_metal_config));
+
+    KING_CONFIG_FREE_PERSISTENT(king_cloud_autoscale_config.provider);
+    memset(&king_cloud_autoscale_config, 0, sizeof(king_cloud_autoscale_config));
+
+    memset(&king_cluster_config, 0, sizeof(king_cluster_config));
+
+    KING_CONFIG_FREE_PERSISTENT(king_dynamic_admin_api_config.auth_mode);
+    KING_CONFIG_FREE_PERSISTENT(king_dynamic_admin_api_config.ca_file);
+    KING_CONFIG_FREE_PERSISTENT(king_dynamic_admin_api_config.cert_file);
+    KING_CONFIG_FREE_PERSISTENT(king_dynamic_admin_api_config.key_file);
+    memset(&king_dynamic_admin_api_config, 0, sizeof(king_dynamic_admin_api_config));
+
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.gpu_default_backend);
+    memset(&king_high_perf_compute_ai_config, 0, sizeof(king_high_perf_compute_ai_config));
+
+    memset(&king_iibin_config, 0, sizeof(king_iibin_config));
+
+    KING_CONFIG_FREE_PERSISTENT(king_mcp_orchestrator_config.orchestrator_execution_backend);
+    memset(&king_mcp_orchestrator_config, 0, sizeof(king_mcp_orchestrator_config));
+
+    KING_CONFIG_FREE_PERSISTENT(king_native_cdn_config.cache_mode);
+    memset(&king_native_cdn_config, 0, sizeof(king_native_cdn_config));
+
+    KING_CONFIG_FREE_PERSISTENT(king_native_object_store_config.default_redundancy_mode);
+    KING_CONFIG_FREE_PERSISTENT(king_native_object_store_config.erasure_coding_shards);
+    KING_CONFIG_FREE_PERSISTENT(king_native_object_store_config.node_discovery_mode);
+    memset(&king_native_object_store_config, 0, sizeof(king_native_object_store_config));
+
+    KING_CONFIG_FREE_PERSISTENT(king_open_telemetry_config.exporter_protocol);
+    KING_CONFIG_FREE_PERSISTENT(king_open_telemetry_config.traces_sampler_type);
+    KING_CONFIG_FREE_PERSISTENT(king_open_telemetry_config.metrics_default_histogram_boundaries);
+    memset(&king_open_telemetry_config, 0, sizeof(king_open_telemetry_config));
+
+    KING_CONFIG_FREE_PERSISTENT(king_quic_transport_config.cc_algorithm);
+    memset(&king_quic_transport_config, 0, sizeof(king_quic_transport_config));
+
+    KING_CONFIG_FREE_PERSISTENT(king_router_loadbalancer_config.hashing_algorithm);
+    KING_CONFIG_FREE_PERSISTENT(king_router_loadbalancer_config.backend_discovery_mode);
+    memset(&king_router_loadbalancer_config, 0, sizeof(king_router_loadbalancer_config));
+
+    KING_CONFIG_FREE_PERSISTENT(king_security_config.cors_allowed_origins);
+    memset(&king_security_config, 0, sizeof(king_security_config));
+
+    memset(&king_semantic_geometry_config, 0, sizeof(king_semantic_geometry_config));
+
+    king_config_free_smart_contract_strings(&king_smart_contracts_config);
+    memset(&king_smart_contracts_config, 0, sizeof(king_smart_contracts_config));
+
+    KING_CONFIG_FREE_PERSISTENT(king_smart_dns_config.mode);
+    memset(&king_smart_dns_config, 0, sizeof(king_smart_dns_config));
+
+    king_config_free_ssh_strings(&king_ssh_over_quic_config);
+    memset(&king_ssh_over_quic_config, 0, sizeof(king_ssh_over_quic_config));
+
+    KING_CONFIG_FREE_PERSISTENT(king_state_management_config.default_backend);
+    memset(&king_state_management_config, 0, sizeof(king_state_management_config));
+
+    KING_CONFIG_FREE_PERSISTENT(king_tcp_transport_config.tls_min_version_allowed);
+    memset(&king_tcp_transport_config, 0, sizeof(king_tcp_transport_config));
+
+    king_config_free_tls_strings(&king_tls_and_crypto_config);
+    memset(&king_tls_and_crypto_config, 0, sizeof(king_tls_and_crypto_config));
+
+    memset(&king_app_protocols_config, 0, sizeof(king_app_protocols_config));
+}

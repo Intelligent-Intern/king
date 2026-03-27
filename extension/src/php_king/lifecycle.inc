@@ -202,6 +202,7 @@ PHP_RINIT_FUNCTION(king)
 
 PHP_RSHUTDOWN_FUNCTION(king)
 {
+    king_semantic_dns_request_shutdown();
     king_http1_pool_request_shutdown();
     king_http2_pool_request_shutdown();
     return king_request_shutdown(type, module_number);

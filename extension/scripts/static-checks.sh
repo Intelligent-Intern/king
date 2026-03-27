@@ -33,6 +33,7 @@ bash -n extension/scripts/fuzz-runtime.sh
 bash -n extension/scripts/go-live-readiness.sh
 bash -n extension/scripts/install-package-matrix.sh
 bash -n extension/scripts/package-release.sh
+bash -n extension/scripts/soak-runtime.sh
 bash -n extension/scripts/smoke-profile.sh
 bash -n extension/scripts/static-checks.sh
 bash -n extension/scripts/test-extension.sh

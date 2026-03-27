@@ -48,7 +48,7 @@ PHP_FUNCTION(king_semantic_dns_update_service_status)
 
     if (!zend_string_equals(service->status, status)) {
         zend_string_release_ex(service->status, 1);
-        service->status = zend_string_dup(status, 1);
+        service->status = king_semantic_dns_copy_persistent_string(status);
     }
 
     if (metrics != NULL && !king_semantic_dns_service_apply_metrics(

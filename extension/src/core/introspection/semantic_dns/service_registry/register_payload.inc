@@ -18,7 +18,7 @@ static bool king_semantic_dns_service_assign_required_string(
         return false;
     }
 
-    *target = zend_string_dup(Z_STR_P(field), 1);
+    *target = king_semantic_dns_copy_persistent_string(Z_STR_P(field));
     return true;
 }
 
@@ -65,7 +65,7 @@ static bool king_semantic_dns_service_assign_status(
         return false;
     }
 
-    service->status = zend_string_dup(Z_STR_P(field), 1);
+    service->status = king_semantic_dns_copy_persistent_string(Z_STR_P(field));
     return true;
 }
 
@@ -118,7 +118,7 @@ static bool king_semantic_dns_service_assign_attributes(
 
         zend_hash_update(
             &service->attributes,
-            zend_string_copy(attribute_name),
+            king_semantic_dns_copy_persistent_string(attribute_name),
             &stored_attribute_value
         );
     } ZEND_HASH_FOREACH_END();

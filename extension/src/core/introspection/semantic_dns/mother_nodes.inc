@@ -29,7 +29,7 @@ PHP_FUNCTION(king_semantic_dns_register_mother_node)
     }
 
     mother_node = pecalloc(1, sizeof(*mother_node), 1);
-    mother_node->node_id = zend_string_dup(Z_STR_P(field), 1);
+    mother_node->node_id = king_semantic_dns_copy_persistent_string(Z_STR_P(field));
 
     field = zend_hash_str_find(Z_ARRVAL_P(mother_node_info), "hostname", sizeof("hostname") - 1);
     if (field == NULL || Z_TYPE_P(field) != IS_STRING || Z_STRLEN_P(field) == 0) {
@@ -41,7 +41,7 @@ PHP_FUNCTION(king_semantic_dns_register_mother_node)
         );
         RETURN_THROWS();
     }
-    mother_node->hostname = zend_string_dup(Z_STR_P(field), 1);
+    mother_node->hostname = king_semantic_dns_copy_persistent_string(Z_STR_P(field));
 
     field = zend_hash_str_find(Z_ARRVAL_P(mother_node_info), "port", sizeof("port") - 1);
     if (field == NULL || Z_TYPE_P(field) != IS_LONG
@@ -68,7 +68,7 @@ PHP_FUNCTION(king_semantic_dns_register_mother_node)
         );
         RETURN_THROWS();
     } else {
-        mother_node->status = zend_string_dup(Z_STR_P(field), 1);
+        mother_node->status = king_semantic_dns_copy_persistent_string(Z_STR_P(field));
     }
 
     field = zend_hash_str_find(

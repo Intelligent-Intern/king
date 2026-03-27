@@ -44,6 +44,26 @@ Every change is expected to preserve these rules:
 If a change lowers clarity, weakens lifecycle guarantees, or widens the surface
 without a real backend behind it, it is the wrong change.
 
+## Non-Negotiable V1 Rule
+
+King v1 is not an MVP, a demo slice, or a "good enough for now" release.
+Treat it as the long-lived contract.
+
+That means:
+
+- do not narrow, fence off, or remove an important capability just because the
+  robust implementation is slower or harder to finish
+- do not turn a shared, remote, persistent, or stronger runtime contract into a
+  local or reduced one as an engineering shortcut
+- do not use documentation edits as a substitute for backend work when the
+  intended contract is already part of the product direction
+- if code and intent diverge, the default action is to build the missing
+  synchronization, persistence, recovery, protocol, or safety work that makes
+  the stronger contract correct
+
+Any true contract reduction is a product decision and requires explicit user
+approval. It is not a normal cleanup tool for making CI, tests, or docs easier.
+
 ## Canonical Build Path
 
 The canonical extension workflow is inside `extension/`.
@@ -184,6 +204,19 @@ cd extension
 ./scripts/smoke-profile.sh ubsan
 ```
 
+Run the long-duration sanitizer soak gates against the staged artifacts:
+
+```bash
+cd extension
+./scripts/soak-runtime.sh asan --iterations 5 --artifacts-dir ../soak-artifacts/asan
+./scripts/soak-runtime.sh ubsan --iterations 5 --artifacts-dir ../soak-artifacts/ubsan
+./scripts/soak-runtime.sh leak --iterations 3 --artifacts-dir ../soak-artifacts/leak
+```
+
+Each soak retains `summary.txt`, the exact PHPT subset, per-iteration logs, and
+failure diagnostics under the selected artifacts directory. CI uses the same
+entrypoint and uploads those retained artifacts when a soak gate fails.
+
 If CI drifts from these commands, fix the workflow to match the scripts instead
 of introducing another build entry point.
 Do not revive `infra/scripts/benchmark.sh`; the canonical benchmark entrypoint
@@ -196,6 +229,7 @@ the canonical repo-local paths are `extension/scripts/static-checks.sh`,
 `extension/scripts/package-release.sh`,
 `extension/scripts/install-package-matrix.sh`,
 `extension/scripts/container-smoke-matrix.sh`,
+`extension/scripts/soak-runtime.sh`,
 `extension/scripts/verify-release-package.sh`, and
 `extension/scripts/go-live-readiness.sh`.
 

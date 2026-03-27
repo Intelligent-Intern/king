@@ -17,6 +17,7 @@ static void king_config_free_autoscale_strings(kg_cloud_autoscale_config_t *auto
     pefree(autoscale->prepared_release_url, 1);
     pefree(autoscale->join_endpoint, 1);
     pefree(autoscale->hetzner_api_token, 1);
+    pefree(autoscale->hetzner_budget_path, 1);
     pefree(autoscale->scale_up_policy, 1);
     pefree(autoscale->instance_type, 1);
     pefree(autoscale->instance_image_id, 1);
@@ -133,6 +134,7 @@ static void king_config_clone_owned_strings(king_cfg_t *cfg)
     cfg->autoscale.prepared_release_url = king_config_clone_persistent_string(cfg->autoscale.prepared_release_url);
     cfg->autoscale.join_endpoint = king_config_clone_persistent_string(cfg->autoscale.join_endpoint);
     cfg->autoscale.hetzner_api_token = king_config_clone_persistent_string(cfg->autoscale.hetzner_api_token);
+    cfg->autoscale.hetzner_budget_path = king_config_clone_persistent_string(cfg->autoscale.hetzner_budget_path);
     cfg->autoscale.scale_up_policy = king_config_clone_persistent_string(cfg->autoscale.scale_up_policy);
     cfg->autoscale.instance_type = king_config_clone_persistent_string(cfg->autoscale.instance_type);
     cfg->autoscale.instance_image_id = king_config_clone_persistent_string(cfg->autoscale.instance_image_id);

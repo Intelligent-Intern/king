@@ -61,6 +61,9 @@ King follows a few hard rules:
 - The OO and procedural APIs are parallel surfaces over the same native kernels.
 - Security defaults stay conservative unless an operator explicitly loosens them.
 - Runtime policy beats convenience. There is no hidden global magic pool.
+- The target contract is not allowed to shrink just because the correct
+  implementation is harder. If a subsystem matters for v1, the work is to make
+  the stronger contract real, not to quietly redefine it downward.
 
 ## Target Subsystems
 

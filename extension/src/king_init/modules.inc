@@ -1,4 +1,6 @@
+#include "include/config/config.h"
 #include "include/pipeline_orchestrator/orchestrator.h"
+#include "include/telemetry/telemetry.h"
 
 int king_init_modules(int type, int module_number)
 {
@@ -73,6 +75,7 @@ int king_shutdown_modules(int type, int module_number)
     kg_config_tcp_transport_shutdown();
     kg_config_tls_and_crypto_shutdown();
     kg_config_security_and_traffic_shutdown();
+    king_config_release_module_globals();
 
     king_ini_module_number = 0;
 

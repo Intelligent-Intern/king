@@ -538,6 +538,7 @@ void king_telemetry_shutdown_system(void)
     }
 
     king_telemetry_pending_buffers_destroy();
+    memset(&king_telemetry_runtime_config, 0, sizeof(king_telemetry_runtime_config));
 }
 
 char* king_telemetry_generate_trace_id(void)
@@ -789,9 +790,15 @@ static int king_telemetry_http_post(const char *url, const char *json_payload, k
     CURL *curl = NULL;
     CURLcode res = CURLE_FAILED_INIT;
     struct curl_slist *headers = NULL;
-    
+    int result = FAILURE;
+
+    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
+        return FAILURE;
+    }
+
     curl = curl_easy_init();
     if (!curl) {
+        curl_global_cleanup();
         return FAILURE;
     }
     
@@ -827,13 +834,16 @@ static int king_telemetry_http_post(const char *url, const char *json_payload, k
     
     if (res != CURLE_OK) {
         smart_str_free(&response->data);
-        return FAILURE;
+        goto cleanup;
     }
     
     /* Null-terminate the response data */
     smart_str_0(&response->data);
-    
-    return SUCCESS;
+    result = SUCCESS;
+
+cleanup:
+    curl_global_cleanup();
+    return result;
 }
 
 int king_telemetry_export_batch(void)

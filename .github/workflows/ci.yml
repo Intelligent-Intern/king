@@ -292,3 +292,85 @@ jobs:
             dist/*.tar.gz
             dist/*.tar.gz.sha256
             extension/config.log
+
+  sanitizer-soak:
+    name: ${{ matrix.mode }} sanitizer soak
+    needs: canonical-baseline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: asan
+            profile: asan
+            iterations: 5
+          - mode: ubsan
+            profile: ubsan
+            iterations: 5
+          - mode: leak
+            profile: asan
+            iterations: 3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup PHP 8.5
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.5"
+          coverage: none
+          extensions: curl, mbstring, openssl, sockets
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('extension/scripts/quiche-bootstrap.lock', 'extension/scripts/bootstrap-quiche.sh', 'extension/scripts/build-profile.sh') }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            bison \
+            build-essential \
+            clang \
+            cmake \
+            libssl-dev \
+            libcurl4-openssl-dev \
+            libtool \
+            ninja-build \
+            pkg-config \
+            re2c
+
+      - name: Build sanitizer profile
+        working-directory: extension
+        run: ./scripts/build-profile.sh "${{ matrix.profile }}"
+
+      - name: Run sanitizer soak
+        working-directory: extension
+        run: ./scripts/soak-runtime.sh "${{ matrix.mode }}" --iterations "${{ matrix.iterations }}" --artifacts-dir ../soak-artifacts/${{ matrix.mode }}
+
+      - name: Upload sanitizer soak failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: king-${{ matrix.mode }}-soak-diagnostics
+          if-no-files-found: ignore
+          path: |
+            soak-artifacts/${{ matrix.mode }}/
+            extension/config.log
+            extension/tests/*.diff
+            extension/tests/*.exp
+            extension/tests/*.log
+            extension/tests/*.out

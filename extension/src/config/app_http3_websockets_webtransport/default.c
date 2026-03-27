@@ -4,7 +4,7 @@
 void kg_config_app_http3_websockets_webtransport_defaults_load(void)
 {
     king_app_protocols_config.http_advertise_h3_alt_svc = true;
-    king_app_protocols_config.http_auto_compress = pestrdup("brotli,gzip", 1);
+    king_app_protocols_config.http_auto_compress = NULL;
     king_app_protocols_config.h3_max_header_list_size = 65536;
     king_app_protocols_config.h3_qpack_max_table_capacity = 4096;
     king_app_protocols_config.h3_qpack_blocked_streams = 100;

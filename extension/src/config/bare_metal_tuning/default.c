@@ -13,6 +13,6 @@ void kg_config_bare_metal_tuning_defaults_load(void)
     king_bare_metal_config.socket_enable_busy_poll_us = 0;
     king_bare_metal_config.socket_enable_timestamping = true;
 
-    king_bare_metal_config.io_thread_cpu_affinity = pestrdup("", 1);
-    king_bare_metal_config.io_thread_numa_node_policy = pestrdup("default", 1);
+    king_bare_metal_config.io_thread_cpu_affinity = NULL;
+    king_bare_metal_config.io_thread_numa_node_policy = NULL;
 }

@@ -195,6 +195,11 @@ king_cfg_t* king_config_new_from_options(zval *zopts);
 void king_config_free(king_cfg_t *cfg);
 
 /**
+ * @brief Releases persistent module-global configuration strings at MSHUTDOWN.
+ */
+void king_config_release_module_globals(void);
+
+/**
  * @brief Marks a configuration object as immutable.
  *
  * @param cfg The configuration object to freeze.

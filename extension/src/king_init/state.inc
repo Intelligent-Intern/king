@@ -7,7 +7,7 @@ typedef struct _king_ticket_ring_slot_t {
 } king_ticket_ring_slot_t;
 
 typedef struct _king_ticket_ring_shared_t {
-    pthread_rwlock_t lock;
+    pthread_mutex_t lock;
     uint32_t capacity;
     uint32_t head;
     uint32_t tail;
