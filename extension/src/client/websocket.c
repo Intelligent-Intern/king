@@ -402,6 +402,9 @@ static void king_websocket_apply_timeout(
     }
 }
 
+static void king_websocket_mark_transport_closed(king_ws_state *state);
+static void king_websocket_mark_transport_aborted(king_ws_state *state);
+
 static zend_result king_websocket_write_all(
     king_ws_state *state,
     const unsigned char *buffer,
@@ -423,6 +426,7 @@ static zend_result king_websocket_write_all(
                 "%s() failed to write the active WebSocket frame to the socket.",
                 function_name
             );
+            king_websocket_mark_transport_aborted(state);
             return FAILURE;
         }
 
@@ -459,10 +463,19 @@ static zend_result king_websocket_read_exact(
         }
 
         if (php_stream_eof(state->transport_stream)) {
-            king_websocket_set_error(
-                "%s() lost the active WebSocket socket before the frame was fully read.",
-                function_name
-            );
+            if (total == 0) {
+                king_websocket_set_error(
+                    "%s() lost the active WebSocket socket before the frame was fully read.",
+                    function_name
+                );
+            } else {
+                king_websocket_set_error(
+                    "%s() received a partial WebSocket frame from the socket.",
+                    function_name
+                );
+            }
+
+            king_websocket_mark_transport_aborted(state);
             return FAILURE;
         }
 
@@ -475,6 +488,7 @@ static zend_result king_websocket_read_exact(
             "%s() received a partial WebSocket frame from the socket.",
             function_name
         );
+        king_websocket_mark_transport_aborted(state);
         return FAILURE;
     }
 
@@ -623,6 +637,17 @@ static void king_websocket_mark_transport_closed(king_ws_state *state)
 
     state->state = KING_WS_STATE_CLOSED;
     state->closed = true;
+}
+
+static void king_websocket_mark_transport_aborted(king_ws_state *state)
+{
+    if (state->last_close_reason != NULL) {
+        zend_string_release(state->last_close_reason);
+    }
+
+    state->last_close_reason = zend_string_init("", 0, 0);
+    state->last_close_status_code = 1006;
+    king_websocket_mark_transport_closed(state);
 }
 
 static bool king_websocket_opcode_is_control(unsigned char opcode)

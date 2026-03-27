@@ -68,7 +68,7 @@ Status note:
 - [x] Validate WebSocket ping/pong on-wire
 - [x] Validate WebSocket close handshake on-wire
 - [x] Validate WebSocket error paths for protocol violations
-- [ ] Validate WebSocket error paths for network aborts
+- [x] Validate WebSocket error paths for network aborts
 - [x] Validate long-lived WebSocket connections under continuous load
 - [ ] Validate WebSocket backpressure under many concurrent connections
 - [ ] Validate WebSocket fairness under many concurrent connections

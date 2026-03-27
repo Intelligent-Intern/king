@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate WebSocket network-abort behavior on-wire.
+- [ ] Validate the HTTP/2 server listener as a real network listener.
 
 ## Active Executable Items
 
@@ -58,7 +58,7 @@
 11. [x] Validate WebSocket protocol-violation handling on-wire.
     done when: malformed opcode, frame-shape, and close-sequence violations from real peers are rejected through stable public errors.
 
-12. [ ] Validate WebSocket network-abort behavior on-wire.
+12. [x] Validate WebSocket network-abort behavior on-wire.
     done when: peer disconnect, half-close, and abrupt socket-loss cases are exercised without leaks, hangs, or corrupted follow-up sessions.
 
 13. [ ] Validate the HTTP/2 server listener as a real network listener.
