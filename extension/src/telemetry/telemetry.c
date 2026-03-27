@@ -10,6 +10,7 @@
 #include <zend_hash.h>
 #include <uuid/uuid.h> /* assuming uuid-dev is available, otherwise simulated */
 #include <curl/curl.h>
+#include <dlfcn.h>
 #include <ext/json/php_json.h>
 #include "zend_smart_str.h"
 #include "include/config/open_telemetry/base_layer.h"
@@ -21,6 +22,23 @@ static zval king_telemetry_pending_spans;
 static zval king_telemetry_pending_logs;
 static bool king_telemetry_pending_buffers_initialized = false;
 
+typedef struct _king_telemetry_libcurl_api_t {
+    void *handle;
+    zend_bool ready;
+    zend_bool load_attempted;
+    char load_error[256];
+    CURLcode (*curl_global_init_fn)(long flags);
+    void (*curl_global_cleanup_fn)(void);
+    CURL *(*curl_easy_init_fn)(void);
+    void (*curl_easy_cleanup_fn)(CURL *easy_handle);
+    CURLcode (*curl_easy_setopt_fn)(CURL *easy_handle, CURLoption option, ...);
+    CURLcode (*curl_easy_perform_fn)(CURL *easy_handle);
+    CURLcode (*curl_easy_getinfo_fn)(CURL *easy_handle, CURLINFO info, ...);
+    const char *(*curl_easy_strerror_fn)(CURLcode);
+    struct curl_slist *(*curl_slist_append_fn)(struct curl_slist *, const char *);
+    void (*curl_slist_free_all_fn)(struct curl_slist *);
+} king_telemetry_libcurl_api_t;
+
 #define KING_TELEMETRY_HTTP_TIMEOUT_FALLBACK_MS 10000U
 #define KING_TELEMETRY_MAX_RESPONSE_SIZE (1024 * 1024) /* 1 MiB */
 
@@ -31,6 +49,136 @@ uint32_t king_telemetry_queue_size = 0;
 uint32_t king_telemetry_queue_drop_count = 0;
 uint32_t king_telemetry_export_success_count = 0;
 uint32_t king_telemetry_export_failure_count = 0;
+
+static king_telemetry_libcurl_api_t king_telemetry_libcurl = {0};
+
+static void king_telemetry_reset_libcurl_runtime_state(void)
+{
+    memset(&king_telemetry_libcurl, 0, sizeof(king_telemetry_libcurl));
+}
+
+static void king_telemetry_close_libcurl_runtime_handle(void)
+{
+    if (king_telemetry_libcurl.handle != NULL) {
+        dlclose(king_telemetry_libcurl.handle);
+        king_telemetry_libcurl.handle = NULL;
+    }
+}
+
+static zend_result king_telemetry_load_libcurl_symbol(void **target, const char *name)
+{
+    *target = dlsym(king_telemetry_libcurl.handle, name);
+    if (*target == NULL) {
+        snprintf(
+            king_telemetry_libcurl.load_error,
+            sizeof(king_telemetry_libcurl.load_error),
+            "Failed to load libcurl symbol '%s' for telemetry exports.",
+            name
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_telemetry_ensure_libcurl_ready(void)
+{
+    const char *const candidates[] = {"libcurl.so.4", "libcurl.so", NULL};
+    size_t index;
+
+    if (king_telemetry_libcurl.ready) {
+        return SUCCESS;
+    }
+
+    if (king_telemetry_libcurl.load_attempted) {
+        return FAILURE;
+    }
+
+    king_telemetry_libcurl.load_attempted = 1;
+
+    for (index = 0; candidates[index] != NULL; index++) {
+        king_telemetry_libcurl.handle = dlopen(candidates[index], RTLD_LAZY | RTLD_LOCAL);
+        if (king_telemetry_libcurl.handle != NULL) {
+            break;
+        }
+    }
+
+    if (king_telemetry_libcurl.handle == NULL) {
+        snprintf(
+            king_telemetry_libcurl.load_error,
+            sizeof(king_telemetry_libcurl.load_error),
+            "Failed to load libcurl.so.4 or libcurl.so for telemetry exports."
+        );
+        return FAILURE;
+    }
+
+    if (king_telemetry_load_libcurl_symbol(
+            (void **) &king_telemetry_libcurl.curl_global_init_fn,
+            "curl_global_init"
+        ) != SUCCESS
+        || king_telemetry_load_libcurl_symbol(
+            (void **) &king_telemetry_libcurl.curl_global_cleanup_fn,
+            "curl_global_cleanup"
+        ) != SUCCESS
+        || king_telemetry_load_libcurl_symbol(
+            (void **) &king_telemetry_libcurl.curl_easy_init_fn,
+            "curl_easy_init"
+        ) != SUCCESS
+        || king_telemetry_load_libcurl_symbol(
+            (void **) &king_telemetry_libcurl.curl_easy_cleanup_fn,
+            "curl_easy_cleanup"
+        ) != SUCCESS
+        || king_telemetry_load_libcurl_symbol(
+            (void **) &king_telemetry_libcurl.curl_easy_setopt_fn,
+            "curl_easy_setopt"
+        ) != SUCCESS
+        || king_telemetry_load_libcurl_symbol(
+            (void **) &king_telemetry_libcurl.curl_easy_perform_fn,
+            "curl_easy_perform"
+        ) != SUCCESS
+        || king_telemetry_load_libcurl_symbol(
+            (void **) &king_telemetry_libcurl.curl_easy_getinfo_fn,
+            "curl_easy_getinfo"
+        ) != SUCCESS
+        || king_telemetry_load_libcurl_symbol(
+            (void **) &king_telemetry_libcurl.curl_easy_strerror_fn,
+            "curl_easy_strerror"
+        ) != SUCCESS
+        || king_telemetry_load_libcurl_symbol(
+            (void **) &king_telemetry_libcurl.curl_slist_append_fn,
+            "curl_slist_append"
+        ) != SUCCESS
+        || king_telemetry_load_libcurl_symbol(
+            (void **) &king_telemetry_libcurl.curl_slist_free_all_fn,
+            "curl_slist_free_all"
+        ) != SUCCESS) {
+        king_telemetry_close_libcurl_runtime_handle();
+        return FAILURE;
+    }
+
+    if (king_telemetry_libcurl.curl_global_init_fn(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
+        snprintf(
+            king_telemetry_libcurl.load_error,
+            sizeof(king_telemetry_libcurl.load_error),
+            "curl_global_init() failed for telemetry exports."
+        );
+        king_telemetry_close_libcurl_runtime_handle();
+        return FAILURE;
+    }
+
+    king_telemetry_libcurl.ready = 1;
+    return SUCCESS;
+}
+
+static void king_telemetry_shutdown_libcurl_runtime(void)
+{
+    if (king_telemetry_libcurl.ready && king_telemetry_libcurl.curl_global_cleanup_fn != NULL) {
+        king_telemetry_libcurl.curl_global_cleanup_fn();
+    }
+
+    king_telemetry_close_libcurl_runtime_handle();
+    king_telemetry_reset_libcurl_runtime_state();
+}
 
 static uint32_t king_telemetry_default_max_queue_size(void)
 {
@@ -538,6 +686,7 @@ void king_telemetry_shutdown_system(void)
     }
 
     king_telemetry_pending_buffers_destroy();
+    king_telemetry_shutdown_libcurl_runtime();
     memset(&king_telemetry_runtime_config, 0, sizeof(king_telemetry_runtime_config));
 }
 
@@ -792,45 +941,44 @@ static int king_telemetry_http_post(const char *url, const char *json_payload, k
     struct curl_slist *headers = NULL;
     int result = FAILURE;
 
-    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
+    if (king_telemetry_ensure_libcurl_ready() != SUCCESS) {
         return FAILURE;
     }
 
-    curl = curl_easy_init();
+    curl = king_telemetry_libcurl.curl_easy_init_fn();
     if (!curl) {
-        curl_global_cleanup();
         return FAILURE;
     }
     
     /* Set up headers for OTLP HTTP/JSON */
-    headers = curl_slist_append(headers, "Content-Type: application/json");
-    headers = curl_slist_append(headers, "User-Agent: king-telemetry/1.0");
+    headers = king_telemetry_libcurl.curl_slist_append_fn(headers, "Content-Type: application/json");
+    headers = king_telemetry_libcurl.curl_slist_append_fn(headers, "User-Agent: king-telemetry/1.0");
     
     /* Initialize response buffer */
     memset(response, 0, sizeof(king_telemetry_http_response_t));
     smart_str_alloc(&response->data, 4096, 0);
     
     /* Configure curl request */
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_payload);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(json_payload));
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, king_telemetry_http_write_callback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, response);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long) king_telemetry_runtime_timeout_ms());
-    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L); /* Prevent signals in multi-threaded apps */
+    king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_URL, url);
+    king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_POST, 1L);
+    king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_POSTFIELDS, json_payload);
+    king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_POSTFIELDSIZE, strlen(json_payload));
+    king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_HTTPHEADER, headers);
+    king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_WRITEFUNCTION, king_telemetry_http_write_callback);
+    king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_WRITEDATA, response);
+    king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_TIMEOUT_MS, (long) king_telemetry_runtime_timeout_ms());
+    king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_NOSIGNAL, 1L); /* Prevent signals in multi-threaded apps */
     
     /* Perform the request */
-    res = curl_easy_perform(curl);
+    res = king_telemetry_libcurl.curl_easy_perform_fn(curl);
     
     if (res == CURLE_OK) {
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response->status_code);
+        king_telemetry_libcurl.curl_easy_getinfo_fn(curl, CURLINFO_RESPONSE_CODE, &response->status_code);
     }
     
     /* Clean up */
-    curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
+    king_telemetry_libcurl.curl_slist_free_all_fn(headers);
+    king_telemetry_libcurl.curl_easy_cleanup_fn(curl);
     
     if (res != CURLE_OK) {
         smart_str_free(&response->data);
@@ -842,7 +990,6 @@ static int king_telemetry_http_post(const char *url, const char *json_payload, k
     result = SUCCESS;
 
 cleanup:
-    curl_global_cleanup();
     return result;
 }
 

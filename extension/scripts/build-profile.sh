@@ -166,25 +166,18 @@ find_system_curl_include() {
     echo ""
 }
 
-apply_pkg_config_curl_flags() {
+apply_pkg_config_curl_cppflags() {
     local curl_cppflags;
-    local curl_ldflags;
 
     if command -v pkg-config >/dev/null 2>&1; then
         curl_cppflags="$(pkg-config --cflags libcurl || true)"
-        curl_ldflags="$(pkg-config --libs libcurl || true)"
     else
         curl_cppflags=""
-        curl_ldflags=""
     fi
 
     if [[ -n "${curl_cppflags}" ]]; then
         profile_cflags="${profile_cflags} ${curl_cppflags}"
         profile_cppflags="${profile_cppflags} ${curl_cppflags}";
-    fi
-
-    if [[ -n "${curl_ldflags}" ]]; then
-        profile_ldflags="${profile_ldflags} ${curl_ldflags}"
     fi
 
     if [[ -z "${curl_cppflags}" ]] || ! grep -q -- "-I" <<<"${curl_cppflags}"; then
@@ -193,7 +186,7 @@ apply_pkg_config_curl_flags() {
 }
 
 validate_curl_headers
-apply_pkg_config_curl_flags
+apply_pkg_config_curl_cppflags
 
 "${QUICHE_BOOTSTRAP_SCRIPT}"
 
