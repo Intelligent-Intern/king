@@ -162,6 +162,92 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
     throw new RuntimeException('local HTTP/3 test server failed: ' . trim($output));
 }
 
+function king_http3_ticket_server_binary(): string
+{
+    $root = dirname(dirname(__DIR__));
+    $manifest = __DIR__ . '/http3_ticket_server/Cargo.toml';
+    $source = __DIR__ . '/http3_ticket_server/src/main.rs';
+    $lock = __DIR__ . '/http3_ticket_server/Cargo.lock';
+    $binary = __DIR__ . '/http3_ticket_server/target/release/king-http3-ticket-server';
+
+    if (trim((string) shell_exec('command -v cargo')) === '') {
+        throw new RuntimeException('cargo is required to build the HTTP/3 ticket server helper');
+    }
+
+    if (
+        is_file($binary)
+        && filemtime($binary) >= filemtime($source)
+        && filemtime($binary) >= filemtime($manifest)
+        && (!is_file($lock) || filemtime($binary) >= filemtime($lock))
+    ) {
+        return $binary;
+    }
+
+    $command = sprintf(
+        'cargo build --manifest-path %s --release --locked 2>&1',
+        escapeshellarg($manifest)
+    );
+
+    exec($command, $output, $exitCode);
+    if ($exitCode !== 0 || !is_file($binary)) {
+        throw new RuntimeException(
+            "failed to build HTTP/3 ticket server helper:\n" . implode("\n", $output)
+        );
+    }
+
+    return $binary;
+}
+
+function king_http3_start_ticket_test_server(
+    string $certFile,
+    string $keyFile,
+    string $rootDir,
+    string $bindHost = '127.0.0.1',
+    ?int $port = null,
+    ?string $urlHost = null
+): array {
+    if ($port === null) {
+        $probe = stream_socket_server('udp://' . $bindHost . ':0', $errno, $errstr, STREAM_SERVER_BIND);
+        if ($probe === false) {
+            throw new RuntimeException("failed to reserve UDP test port: $errstr");
+        }
+
+        $serverName = stream_socket_get_name($probe, false);
+        fclose($probe);
+        [, $port] = king_http3_parse_socket_name($serverName);
+    }
+
+    $binary = king_http3_ticket_server_binary();
+    $urlHost ??= $bindHost === '127.0.0.1' ? 'localhost' : $bindHost;
+    $command = [$binary, $certFile, $keyFile, $rootDir, $bindHost, (string) $port];
+    $process = proc_open($command, [
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ], $pipes);
+
+    if (!is_resource($process)) {
+        throw new RuntimeException('failed to launch local HTTP/3 ticket test server');
+    }
+
+    $ready = fgets($pipes[1]);
+    if (!is_string($ready) || preg_match('/^READY (\d+)$/', trim($ready), $matches) !== 1) {
+        $stderr = stream_get_contents($pipes[2]);
+        foreach ($pipes as $pipe) {
+            fclose($pipe);
+        }
+        proc_close($process);
+        throw new RuntimeException('local HTTP/3 ticket test server failed: ' . trim($stderr));
+    }
+
+    return [
+        'process' => $process,
+        'pipes' => $pipes,
+        'port' => (int) $matches[1],
+        'host' => $urlHost,
+        'bind_host' => $bindHost,
+    ];
+}
+
 function king_http3_test_server_url(array $server, string $path): string
 {
     $host = $server['host'] ?? '127.0.0.1';
@@ -177,6 +263,11 @@ function king_http3_stop_test_server(array $server): void
     }
     @proc_terminate($process);
     proc_close($process);
+}
+
+function king_http3_stop_ticket_test_server(array $server): array
+{
+    return king_http3_finalize_failure_peer($server);
 }
 
 function king_http3_request_with_retry(callable $callback)

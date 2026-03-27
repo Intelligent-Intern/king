@@ -33,7 +33,7 @@
 #endif
 
 #ifndef KING_MAX_TICKET_SIZE
-#  define KING_MAX_TICKET_SIZE  512
+#  define KING_MAX_TICKET_SIZE  4096
 #endif
 
 #ifndef KING_TRANSPORT_INTERRUPT_SLICE_MS

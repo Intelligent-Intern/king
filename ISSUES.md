@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate HTTP/3 connection reuse and session-ticket behavior.
+- [ ] Validate WebSocket protocol-violation handling on-wire.
 
 ## Active Executable Items
 
@@ -52,7 +52,7 @@
 9. [x] Validate HTTP/3 failure paths on transport abort and handshake failure.
    done when: QUIC transport-close and handshake-failure cases are reproduced against real peers and mapped to stable runtime behavior.
 
-10. [ ] Validate HTTP/3 connection reuse and session-ticket behavior.
+10. [x] Validate HTTP/3 connection reuse and session-ticket behavior.
     done when: repeated direct and dispatcher requests prove reuse, ticket persistence, and healthy recovery instead of only one-shot success slices.
 
 11. [ ] Validate WebSocket protocol-violation handling on-wire.

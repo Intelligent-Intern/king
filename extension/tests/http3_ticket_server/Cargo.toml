@@ -1,0 +1,10 @@
+[package]
+name = "king-http3-ticket-server"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+mio = { version = "1", features = ["net", "os-poll"] }
+quiche = { path = "../../../quiche/quiche" }
+ring = "0.17"
