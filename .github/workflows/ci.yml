@@ -4,23 +4,9 @@ on:
   push:
     branches:
       - main
-    paths:
-      - ".github/workflows/ci.yml"
-      - "extension/**"
-      - "infra/**"
-      - "stubs/**"
-      - "quiche/**"
-      - "Makefile"
   pull_request:
     branches:
       - main
-    paths:
-      - ".github/workflows/ci.yml"
-      - "extension/**"
-      - "infra/**"
-      - "stubs/**"
-      - "quiche/**"
-      - "Makefile"
   workflow_dispatch:
 
 concurrency:
