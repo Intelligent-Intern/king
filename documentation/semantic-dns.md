@@ -274,6 +274,14 @@ When a service record includes attributes such as `health_check_path`,
 can refresh the active service record from a real HTTP endpoint before it
 answers discovery, topology, or route questions.
 
+When Semantic-DNS persistence is enabled, King also treats those writes as a
+shared control-plane state problem instead of a local array update. Concurrent
+service registration, status changes, and probe-driven refreshes are serialized
+through the durable-state lock, and each writer reloads the latest persisted
+snapshot before applying its own mutation. That is what keeps one worker from
+quietly deleting another worker's registration or status update when both touch
+the same Semantic-DNS state file at nearly the same time.
+
 ## Choosing The Optimal Route
 
 `king_semantic_dns_get_optimal_route()` answers the final routing question:

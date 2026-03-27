@@ -4,6 +4,8 @@ PHP_FUNCTION(king_semantic_dns_register_service)
     king_semantic_dns_service *service;
     king_semantic_dns_service *existing_service;
     zval stored_service;
+    int lock_fd = -1;
+    bool use_state_transaction = false;
 
     ZEND_PARSE_PARAMETERS_START(1, 1)
         Z_PARAM_ARRAY(service_info)
@@ -21,9 +23,23 @@ PHP_FUNCTION(king_semantic_dns_register_service)
         RETURN_THROWS();
     }
 
+    if (king_semantic_dns_runtime.initialized && king_semantic_dns_runtime.config.semantic_mode_enable) {
+        if (!king_semantic_dns_state_transaction_begin_or_throw(
+                "king_semantic_dns_register_service",
+                &lock_fd
+            )) {
+            king_semantic_dns_service_free(service);
+            RETURN_THROWS();
+        }
+        use_state_transaction = true;
+    }
+
     existing_service = king_semantic_dns_registry_get_service(service->service_id);
     if (existing_service != NULL && king_semantic_dns_service_equals(existing_service, service)) {
         king_semantic_dns_service_free(service);
+        if (use_state_transaction) {
+            king_semantic_dns_state_transaction_end(lock_fd);
+        }
         RETURN_TRUE;
     }
 
@@ -36,11 +52,22 @@ PHP_FUNCTION(king_semantic_dns_register_service)
             ZSTR_VAL(service->service_id)
         );
         king_semantic_dns_service_free(service);
+        if (use_state_transaction) {
+            king_semantic_dns_state_transaction_end(lock_fd);
+        }
         RETURN_THROWS();
     }
 
-    if (king_semantic_dns_runtime.initialized && king_semantic_dns_runtime.config.semantic_mode_enable) {
-        (void) king_semantic_dns_state_save();
+    if (use_state_transaction
+        && !king_semantic_dns_state_persist_locked_or_throw(
+            "king_semantic_dns_register_service"
+        )) {
+        king_semantic_dns_state_transaction_end(lock_fd);
+        RETURN_THROWS();
+    }
+
+    if (use_state_transaction) {
+        king_semantic_dns_state_transaction_end(lock_fd);
     }
 
     RETURN_TRUE;

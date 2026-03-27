@@ -4,6 +4,8 @@ PHP_FUNCTION(king_semantic_dns_register_mother_node)
     zval *field;
     king_semantic_dns_mother_node *mother_node;
     zval stored_mother_node;
+    int lock_fd = -1;
+    bool use_state_transaction = false;
 
     ZEND_PARSE_PARAMETERS_START(1, 1)
         Z_PARAM_ARRAY(mother_node_info)
@@ -118,6 +120,17 @@ PHP_FUNCTION(king_semantic_dns_register_mother_node)
 
     mother_node->registered_at = time(NULL);
 
+    if (king_semantic_dns_runtime.initialized && king_semantic_dns_runtime.config.semantic_mode_enable) {
+        if (!king_semantic_dns_state_transaction_begin_or_throw(
+                "king_semantic_dns_register_mother_node",
+                &lock_fd
+            )) {
+            king_semantic_dns_mother_node_free(mother_node);
+            RETURN_THROWS();
+        }
+        use_state_transaction = true;
+    }
+
     ZVAL_PTR(&stored_mother_node, mother_node);
     if (zend_hash_update(&king_semantic_dns_mother_node_registry, mother_node->node_id, &stored_mother_node) == NULL) {
         zend_throw_exception_ex(
@@ -127,14 +140,23 @@ PHP_FUNCTION(king_semantic_dns_register_mother_node)
             ZSTR_VAL(mother_node->node_id)
         );
         king_semantic_dns_mother_node_free(mother_node);
+        if (use_state_transaction) {
+            king_semantic_dns_state_transaction_end(lock_fd);
+        }
         RETURN_THROWS();
     }
 
-    if (king_semantic_dns_runtime.initialized && king_semantic_dns_runtime.config.semantic_mode_enable) {
+    if (use_state_transaction) {
         (void) king_semantic_dns_refresh_runtime_mother_nodes_from_registry();
         (void) king_semantic_dns_discover_mother_nodes();
         (void) king_semantic_dns_sync_with_mother_nodes();
-        (void) king_semantic_dns_state_save();
+        if (!king_semantic_dns_state_persist_locked_or_throw(
+                "king_semantic_dns_register_mother_node"
+            )) {
+            king_semantic_dns_state_transaction_end(lock_fd);
+            RETURN_THROWS();
+        }
+        king_semantic_dns_state_transaction_end(lock_fd);
     }
 
     RETURN_TRUE;

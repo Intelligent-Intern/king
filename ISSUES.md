@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate Smart-DNS service and status updates under concurrent writes.
+- [ ] Validate Smart-DNS mother-node synchronization under concurrent larger-topology churn.
 
 ## Active Executable Items
 
@@ -86,7 +86,7 @@
 19. [x] Validate Smart-DNS routing decisions against real load and health data.
     done when: route choice is proven against live health/load inputs rather than only registry-local score calculations.
 
-20. [ ] Validate Smart-DNS service and status updates under concurrent writes.
+20. [x] Validate Smart-DNS service and status updates under concurrent writes.
     done when: parallel registration/status churn preserves coherent discovery and routing results without stale or torn state.
 
 ## Next-Up Clusters After The Top 20

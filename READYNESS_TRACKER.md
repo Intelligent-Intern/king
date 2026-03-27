@@ -232,8 +232,8 @@ Status note:
 - [ ] Validate service registration against real distributed topology
 - [ ] Validate mother-node synchronization against real topology
 - [x] Validate routing decisions against real load / health data
-- [ ] Validate service discovery under parallel updates
-- [ ] Validate status updates under concurrent writes
+- [x] Validate service discovery under parallel updates
+- [x] Validate status updates under concurrent writes
 - [x] Implement persistence for registration data
 - [x] Implement rehydration of registration data after restart
 - [ ] Validate consistency after split-brain / partial-failure scenarios where publicly claimed

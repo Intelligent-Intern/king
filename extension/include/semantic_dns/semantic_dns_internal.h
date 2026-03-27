@@ -33,6 +33,10 @@ extern king_semantic_dns_runtime_state king_semantic_dns_runtime;
 
 int king_semantic_dns_state_load(void);
 int king_semantic_dns_state_save(void);
+int king_semantic_dns_state_has_regular_snapshot(void);
+int king_semantic_dns_state_transaction_begin(int *lock_fd_out);
+void king_semantic_dns_state_transaction_end(int lock_fd);
+int king_semantic_dns_state_persist_locked(void);
 int king_semantic_dns_export_state_payload(zval *return_value);
 int king_semantic_dns_import_state_payload(zval *payload);
 int king_semantic_dns_refresh_runtime_mother_nodes_from_registry(void);

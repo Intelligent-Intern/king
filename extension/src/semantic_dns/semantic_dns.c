@@ -563,9 +563,22 @@ void king_semantic_dns_shutdown_system(void)
 
 void king_semantic_dns_request_shutdown(void)
 {
-    if (king_semantic_dns_runtime.initialized && king_semantic_dns_runtime.config.semantic_mode_enable) {
-        (void) king_semantic_dns_state_save();
+    int lock_fd = -1;
+
+    if (!king_semantic_dns_runtime.initialized || !king_semantic_dns_runtime.config.semantic_mode_enable) {
+        return;
     }
+
+    if (king_semantic_dns_state_has_regular_snapshot()) {
+        return;
+    }
+
+    if (king_semantic_dns_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return;
+    }
+
+    (void) king_semantic_dns_state_persist_locked();
+    king_semantic_dns_state_transaction_end(lock_fd);
 }
 
 int king_semantic_dns_process_query(

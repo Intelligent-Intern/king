@@ -54,6 +54,18 @@ static bool king_semantic_dns_service_apply_metrics(
     const char *function_name,
     king_semantic_dns_service *service)
 {
+    zend_long current_load_percent;
+    zend_long active_connections;
+    zend_long total_requests;
+
+    if (service == NULL) {
+        return false;
+    }
+
+    current_load_percent = service->current_load_percent;
+    active_connections = service->active_connections;
+    total_requests = service->total_requests;
+
     if (!king_semantic_dns_service_apply_optional_metric(
         source,
         "current_load_percent",
@@ -63,7 +75,7 @@ static bool king_semantic_dns_service_apply_metrics(
         true,
         "between 0 and 100",
         function_name,
-        &service->current_load_percent
+        &current_load_percent
     )) {
         return false;
     }
@@ -77,12 +89,12 @@ static bool king_semantic_dns_service_apply_metrics(
         false,
         ">= 0",
         function_name,
-        &service->active_connections
+        &active_connections
     )) {
         return false;
     }
 
-    return king_semantic_dns_service_apply_optional_metric(
+    if (!king_semantic_dns_service_apply_optional_metric(
         source,
         "total_requests",
         sizeof("total_requests") - 1,
@@ -91,8 +103,51 @@ static bool king_semantic_dns_service_apply_metrics(
         false,
         ">= 0",
         function_name,
-        &service->total_requests
+        &total_requests
+    )) {
+        return false;
+    }
+
+    service->current_load_percent = current_load_percent;
+    service->active_connections = active_connections;
+    service->total_requests = total_requests;
+
+    return true;
+}
+
+static bool king_semantic_dns_state_transaction_begin_or_throw(
+    const char *function_name,
+    int *lock_fd_out
+)
+{
+    if (king_semantic_dns_state_transaction_begin(lock_fd_out) == SUCCESS) {
+        return true;
+    }
+
+    zend_throw_exception_ex(
+        king_ce_system_exception,
+        0,
+        "%s() could not open a coherent Semantic-DNS durable-state transaction.",
+        function_name
     );
+    return false;
+}
+
+static bool king_semantic_dns_state_persist_locked_or_throw(
+    const char *function_name
+)
+{
+    if (king_semantic_dns_state_persist_locked() == SUCCESS) {
+        return true;
+    }
+
+    zend_throw_exception_ex(
+        king_ce_system_exception,
+        0,
+        "%s() could not persist Semantic-DNS durable state.",
+        function_name
+    );
+    return false;
 }
 
 static bool king_semantic_dns_scalar_zval_equals(

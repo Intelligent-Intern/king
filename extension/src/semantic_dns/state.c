@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -24,6 +25,7 @@
 
 #define KING_SEMANTIC_DNS_STATE_DIR "/tmp/king_semantic_dns_state"
 #define KING_SEMANTIC_DNS_STATE_FILE KING_SEMANTIC_DNS_STATE_DIR "/durable_state.bin"
+#define KING_SEMANTIC_DNS_STATE_LOCK_FILE KING_SEMANTIC_DNS_STATE_DIR "/durable_state.bin.lock"
 #define KING_SEMANTIC_DNS_STATE_MAGIC 0x53444e53 /* 'SDNS' */
 #define KING_SEMANTIC_DNS_STATE_VERSION 1
 #define KING_SEMANTIC_DNS_STATE_MAX_MOTHER_NODES 1024U
@@ -120,6 +122,118 @@ static int king_semantic_dns_state_ensure_directory(void)
     }
 
     return king_semantic_dns_state_dir_is_secure(&st);
+}
+
+static int king_semantic_dns_state_path_is_regular_file(void)
+{
+    struct stat state_stat;
+
+    if (lstat(KING_SEMANTIC_DNS_STATE_FILE, &state_stat) != 0) {
+        return 0;
+    }
+
+    return S_ISREG(state_stat.st_mode) ? 1 : 0;
+}
+
+static int king_semantic_dns_state_lock_acquire(int *lock_fd_out)
+{
+    int flags = O_RDWR | O_CREAT;
+    int fd;
+    struct stat lock_stat;
+
+    if (lock_fd_out == NULL) {
+        return FAILURE;
+    }
+
+    *lock_fd_out = -1;
+
+    if (king_semantic_dns_state_ensure_directory() != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (php_check_open_basedir(KING_SEMANTIC_DNS_STATE_LOCK_FILE) != 0) {
+        return FAILURE;
+    }
+
+#ifdef O_CLOEXEC
+    flags |= O_CLOEXEC;
+#endif
+#ifdef O_NOFOLLOW
+    flags |= O_NOFOLLOW;
+#endif
+
+    fd = open(KING_SEMANTIC_DNS_STATE_LOCK_FILE, flags, 0600);
+    if (fd < 0) {
+        return FAILURE;
+    }
+
+    if (fstat(fd, &lock_stat) != 0 || !S_ISREG(lock_stat.st_mode)) {
+        close(fd);
+        return FAILURE;
+    }
+
+    if (flock(fd, LOCK_EX) != 0) {
+        close(fd);
+        return FAILURE;
+    }
+
+    *lock_fd_out = fd;
+    return SUCCESS;
+}
+
+static void king_semantic_dns_state_lock_release(int lock_fd)
+{
+    if (lock_fd < 0) {
+        return;
+    }
+
+    (void) flock(lock_fd, LOCK_UN);
+    close(lock_fd);
+}
+
+static int king_semantic_dns_state_refresh_locked(void)
+{
+    if (!king_semantic_dns_state_path_is_regular_file()) {
+        return SUCCESS;
+    }
+
+    return king_semantic_dns_state_load();
+}
+
+int king_semantic_dns_state_has_regular_snapshot(void)
+{
+    return king_semantic_dns_state_path_is_regular_file();
+}
+
+int king_semantic_dns_state_transaction_begin(int *lock_fd_out)
+{
+    if (lock_fd_out == NULL || !king_semantic_dns_runtime.initialized) {
+        return FAILURE;
+    }
+
+    *lock_fd_out = -1;
+
+    if (king_semantic_dns_state_lock_acquire(lock_fd_out) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (king_semantic_dns_state_refresh_locked() != SUCCESS) {
+        king_semantic_dns_state_lock_release(*lock_fd_out);
+        *lock_fd_out = -1;
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+void king_semantic_dns_state_transaction_end(int lock_fd)
+{
+    king_semantic_dns_state_lock_release(lock_fd);
+}
+
+int king_semantic_dns_state_persist_locked(void)
+{
+    return king_semantic_dns_state_save();
 }
 
 int king_semantic_dns_state_save(void)
