@@ -223,3 +223,118 @@ function king_http3_stop_silent_udp_server(array $server): void
 {
     fclose($server[0]);
 }
+
+function king_http3_failure_peer_binary(): string
+{
+    $root = dirname(dirname(__DIR__));
+    $manifest = $root . '/quiche/apps/Cargo.toml';
+    $source = $root . '/quiche/apps/src/bin/king-http3-failure-peer.rs';
+    $binary = $root . '/quiche/target/release/king-http3-failure-peer';
+
+    if (trim((string) shell_exec('command -v cargo')) === '') {
+        throw new RuntimeException('cargo is required to build the HTTP/3 failure peer helper');
+    }
+
+    if (is_file($binary) && filemtime($binary) >= filemtime($source)) {
+        return $binary;
+    }
+
+    $command = sprintf(
+        'cargo build --manifest-path %s --release --locked --bin king-http3-failure-peer 2>&1',
+        escapeshellarg($manifest)
+    );
+
+    exec($command, $output, $exitCode);
+    if ($exitCode !== 0 || !is_file($binary)) {
+        throw new RuntimeException(
+            "failed to build HTTP/3 failure peer helper:\n" . implode("\n", $output)
+        );
+    }
+
+    return $binary;
+}
+
+function king_http3_start_failure_peer(
+    string $mode,
+    string $certFile,
+    string $keyFile,
+    string $bindHost = '127.0.0.1',
+    ?string $urlHost = null
+): array {
+    $binary = king_http3_failure_peer_binary();
+    $urlHost ??= $bindHost === '127.0.0.1' ? 'localhost' : $bindHost;
+    $command = [$binary, $mode, $certFile, $keyFile, $bindHost];
+    $process = proc_open($command, [
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ], $pipes);
+
+    if (!is_resource($process)) {
+        throw new RuntimeException('failed to launch local HTTP/3 failure peer');
+    }
+
+    $ready = fgets($pipes[1]);
+    if (!is_string($ready) || preg_match('/^READY (\d+)$/', trim($ready), $matches) !== 1) {
+        $stderr = stream_get_contents($pipes[2]);
+        foreach ($pipes as $pipe) {
+            fclose($pipe);
+        }
+        proc_close($process);
+        throw new RuntimeException('local HTTP/3 failure peer failed: ' . trim($stderr));
+    }
+
+    return [
+        'process' => $process,
+        'pipes' => $pipes,
+        'port' => (int) $matches[1],
+        'host' => $urlHost,
+        'bind_host' => $bindHost,
+        'mode' => $mode,
+    ];
+}
+
+function king_http3_finalize_failure_peer(array $peer): array
+{
+    $deadline = microtime(true) + 2.0;
+    while (microtime(true) < $deadline) {
+        $status = proc_get_status($peer['process']);
+        if (!is_array($status) || !$status['running']) {
+            break;
+        }
+        usleep(10000);
+    }
+
+    $status = proc_get_status($peer['process']);
+    if (is_array($status) && $status['running']) {
+        @proc_terminate($peer['process']);
+    }
+
+    if (isset($peer['pipes'][1]) && is_resource($peer['pipes'][1])) {
+        stream_set_blocking($peer['pipes'][1], false);
+    }
+    if (isset($peer['pipes'][2]) && is_resource($peer['pipes'][2])) {
+        stream_set_blocking($peer['pipes'][2], false);
+    }
+
+    $stdout = isset($peer['pipes'][1]) ? stream_get_contents($peer['pipes'][1]) : '';
+    $stderr = isset($peer['pipes'][2]) ? stream_get_contents($peer['pipes'][2]) : '';
+
+    foreach ($peer['pipes'] as $pipe) {
+        if (is_resource($pipe)) {
+            fclose($pipe);
+        }
+    }
+
+    $exitCode = proc_close($peer['process']);
+
+    return [
+        'stdout' => $stdout,
+        'stderr' => $stderr,
+        'exit_code' => $exitCode,
+    ];
+}
+
+function king_http3_stop_failure_peer(array $peer): array
+{
+    return king_http3_finalize_failure_peer($peer);
+}

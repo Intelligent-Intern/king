@@ -40,8 +40,8 @@ Status note:
 - [x] Validate full HTTP/3 client behavior on-wire against real h3 servers
 - [x] Validate HTTP/3 request/response path against real QUIC connections
 - [x] Validate HTTP/3 header and body paths against real h3 endpoints
-- [ ] Validate HTTP/3 failure paths on transport abort
-- [ ] Validate HTTP/3 failure paths on handshake failure
+- [x] Validate HTTP/3 failure paths on transport abort
+- [x] Validate HTTP/3 failure paths on handshake failure
 - [ ] Validate HTTP/3 timeout behavior against real slow peers
 - [ ] Validate HTTP/3 connection reuse and session ticket paths
 - [ ] Validate HTTP/3 early-data / session-ticket behavior

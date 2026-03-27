@@ -163,6 +163,8 @@ typedef struct _king_http3_quiche_api {
     bool (*quiche_conn_is_established_fn)(const quiche_conn *);
     bool (*quiche_conn_is_closed_fn)(const quiche_conn *);
     int (*quiche_conn_close_fn)(quiche_conn *, bool, uint64_t, const uint8_t *, size_t);
+    bool (*quiche_conn_peer_error_fn)(const quiche_conn *, bool *, uint64_t *, const uint8_t **, size_t *);
+    bool (*quiche_conn_local_error_fn)(const quiche_conn *, bool *, uint64_t *, const uint8_t **, size_t *);
     void (*quiche_conn_free_fn)(quiche_conn *);
     quiche_h3_config *(*quiche_h3_config_new_fn)(void);
     void (*quiche_h3_config_free_fn)(quiche_h3_config *);
@@ -213,6 +215,218 @@ static void king_http3_throw(
         0,
         "%s",
         message
+    );
+}
+
+static void king_http3_format_close_reason(
+    const uint8_t *reason_bytes,
+    size_t reason_len,
+    char *buffer,
+    size_t buffer_len)
+{
+    size_t i;
+    size_t copy_len;
+
+    if (buffer_len == 0) {
+        return;
+    }
+
+    if (reason_bytes == NULL || reason_len == 0) {
+        buffer[0] = '\0';
+        return;
+    }
+
+    copy_len = reason_len;
+    if (copy_len > buffer_len - 1) {
+        copy_len = buffer_len - 1;
+    }
+
+    for (i = 0; i < copy_len; ++i) {
+        unsigned char c = reason_bytes[i];
+        buffer[i] = isprint(c) ? (char) c : '?';
+    }
+
+    buffer[copy_len] = '\0';
+}
+
+static void king_http3_throw_handshake_close(
+    const char *function_name,
+    const char *origin,
+    bool is_app,
+    uint64_t error_code,
+    const char *reason)
+{
+    if (reason != NULL && reason[0] != '\0') {
+        king_http3_throw(
+            is_app ? king_ce_protocol_exception : king_ce_quic_exception,
+            "%s() did not complete the QUIC handshake because %s closed it with a %s error (code %" PRIu64 ", reason \"%s\").",
+            function_name,
+            origin,
+            is_app ? "protocol" : "transport",
+            error_code,
+            reason
+        );
+        return;
+    }
+
+    king_http3_throw(
+        is_app ? king_ce_protocol_exception : king_ce_quic_exception,
+        "%s() did not complete the QUIC handshake because %s closed it with a %s error (code %" PRIu64 ").",
+        function_name,
+        origin,
+        is_app ? "protocol" : "transport",
+        error_code
+    );
+}
+
+static void king_http3_throw_closed_connection(
+    quiche_conn *conn,
+    const char *function_name)
+{
+    bool established = king_http3_quiche.quiche_conn_is_established_fn(conn);
+    bool is_app = false;
+    uint64_t error_code = 0;
+    const uint8_t *reason_bytes = NULL;
+    size_t reason_len = 0;
+    char reason[128];
+
+    memset(reason, 0, sizeof(reason));
+
+    if (king_http3_quiche.quiche_conn_peer_error_fn != NULL
+        && king_http3_quiche.quiche_conn_peer_error_fn(
+            conn,
+            &is_app,
+            &error_code,
+            &reason_bytes,
+            &reason_len
+        )) {
+        king_http3_format_close_reason(reason_bytes, reason_len, reason, sizeof(reason));
+
+        if (!established) {
+            king_http3_throw_handshake_close(
+                function_name,
+                "the peer",
+                is_app,
+                error_code,
+                reason
+            );
+            return;
+        }
+
+        if (reason[0] != '\0') {
+            king_http3_throw(
+                is_app ? king_ce_protocol_exception : king_ce_quic_exception,
+                "%s() received a %s close before the HTTP/3 response completed (code %" PRIu64 ", reason \"%s\").",
+                function_name,
+                is_app ? "protocol" : "QUIC transport",
+                error_code,
+                reason
+            );
+            return;
+        }
+
+        king_http3_throw(
+            is_app ? king_ce_protocol_exception : king_ce_quic_exception,
+            "%s() received a %s close before the HTTP/3 response completed (code %" PRIu64 ").",
+            function_name,
+            is_app ? "protocol" : "QUIC transport",
+            error_code
+        );
+        return;
+    }
+
+    if (king_http3_quiche.quiche_conn_local_error_fn != NULL
+        && king_http3_quiche.quiche_conn_local_error_fn(
+            conn,
+            &is_app,
+            &error_code,
+            &reason_bytes,
+            &reason_len
+        )) {
+        king_http3_format_close_reason(reason_bytes, reason_len, reason, sizeof(reason));
+
+        if (!established) {
+            king_http3_throw_handshake_close(
+                function_name,
+                "the local runtime",
+                is_app,
+                error_code,
+                reason
+            );
+            return;
+        }
+
+        if (reason[0] != '\0') {
+            king_http3_throw(
+                is_app ? king_ce_protocol_exception : king_ce_quic_exception,
+                "%s() closed the active %s connection before the HTTP/3 response completed (code %" PRIu64 ", reason \"%s\").",
+                function_name,
+                is_app ? "protocol" : "QUIC transport",
+                error_code,
+                reason
+            );
+            return;
+        }
+
+        king_http3_throw(
+            is_app ? king_ce_protocol_exception : king_ce_quic_exception,
+            "%s() closed the active %s connection before the HTTP/3 response completed (code %" PRIu64 ").",
+            function_name,
+            is_app ? "protocol" : "QUIC transport",
+            error_code
+        );
+        return;
+    }
+
+    if (!established) {
+        king_http3_throw(
+            king_ce_quic_exception,
+            "%s() did not complete the QUIC handshake.",
+            function_name
+        );
+        return;
+    }
+
+    king_http3_throw(
+        king_ce_quic_exception,
+        "%s() observed a closed QUIC connection before the HTTP/3 response completed.",
+        function_name
+    );
+}
+
+static void king_http3_throw_recv_error(
+    quiche_conn *conn,
+    const char *function_name,
+    ssize_t error_code)
+{
+    bool established = king_http3_quiche.quiche_conn_is_established_fn(conn);
+
+    if (!established
+        && (error_code == QUICHE_ERR_TLS_FAIL || error_code == QUICHE_ERR_CRYPTO_FAIL)) {
+        king_http3_throw(
+            king_ce_tls_exception,
+            "%s() failed during the QUIC/TLS handshake (%zd).",
+            function_name,
+            error_code
+        );
+        return;
+    }
+
+    if (!established) {
+        king_http3_throw(
+            king_ce_quic_exception,
+            "%s() did not complete the QUIC handshake (%zd).",
+            function_name,
+            error_code
+        );
+        return;
+    }
+
+    king_http3_throw(
+        king_ce_quic_exception,
+        "%s() failed while processing an incoming QUIC datagram (%zd).",
+        function_name,
+        error_code
     );
 }
 
@@ -527,6 +741,8 @@ static zend_result king_http3_ensure_quiche_ready(void)
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_is_established_fn, "quiche_conn_is_established") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_is_closed_fn, "quiche_conn_is_closed") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_close_fn, "quiche_conn_close") != SUCCESS
+        || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_peer_error_fn, "quiche_conn_peer_error") != SUCCESS
+        || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_local_error_fn, "quiche_conn_local_error") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_free_fn, "quiche_conn_free") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_h3_config_new_fn, "quiche_h3_config_new") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_h3_config_free_fn, "quiche_h3_config_free") != SUCCESS
@@ -1650,11 +1866,7 @@ static zend_result king_http3_execute_request(
         }
 
         if (king_http3_quiche.quiche_conn_is_closed_fn(runtime.conn)) {
-            king_http3_throw(
-                king_ce_quic_exception,
-                "%s() observed a closed QUIC connection before the HTTP/3 response completed.",
-                function_name
-            );
+            king_http3_throw_closed_connection(runtime.conn, function_name);
             goto failure;
         }
 
@@ -1747,12 +1959,7 @@ static zend_result king_http3_execute_request(
                         &recv_info
                     );
                     if (done < 0 && done != QUICHE_ERR_DONE) {
-                        king_http3_throw(
-                            king_ce_quic_exception,
-                            "%s() failed while processing an incoming QUIC datagram (%zd).",
-                            function_name,
-                            done
-                        );
+                        king_http3_throw_recv_error(runtime.conn, function_name, done);
                         goto failure;
                     }
                 }

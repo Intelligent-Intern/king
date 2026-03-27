@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate HTTP/3 failure paths on transport abort and handshake failure.
+- [ ] Validate HTTP/3 connection reuse and session-ticket behavior.
 
 ## Active Executable Items
 
@@ -49,8 +49,8 @@
 8. [x] Validate HTTP/2 failure paths on stream reset and connection abort.
    done when: `RST_STREAM` and whole-connection teardown paths are exercised against real peers and surfaced through stable client semantics.
 
-9. [ ] Validate HTTP/3 failure paths on transport abort and handshake failure.
-   done when: QUIC transport-close and handshake-reject cases are reproduced against real peers and mapped to stable runtime behavior.
+9. [x] Validate HTTP/3 failure paths on transport abort and handshake failure.
+   done when: QUIC transport-close and handshake-failure cases are reproduced against real peers and mapped to stable runtime behavior.
 
 10. [ ] Validate HTTP/3 connection reuse and session-ticket behavior.
     done when: repeated direct and dispatcher requests prove reuse, ticket persistence, and healthy recovery instead of only one-shot success slices.
