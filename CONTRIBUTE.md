@@ -175,6 +175,17 @@ cd extension
 This writes representative persisted state with the previous package and then
 verifies that the current package can rehydrate that state correctly.
 
+Run the old/new configuration-state compatibility matrix:
+
+```bash
+cd extension
+./scripts/check-config-compatibility-matrix.sh
+```
+
+This proves that the packaged runtime still accepts the representative legacy
+flat override aliases, the current namespaced override form, and the inherited
+system INI snapshot without state drift between those paths.
+
 Run the published-container smoke matrix across supported runtime images:
 
 ```bash

@@ -365,7 +365,7 @@ Status note:
 - [x] Check upgrade compatibility in CI
 - [x] Check downgrade compatibility in CI
 - [x] Check persistence migration paths in CI
-- [ ] Check old/new configuration-state compatibility in CI
+- [x] Check old/new configuration-state compatibility in CI
 - [x] Establish long-duration ASan soaks
 - [x] Establish long-duration UBSan soaks
 - [x] Establish long-duration memory / leak soaks

@@ -15,10 +15,9 @@ and the public stub surface matches the live runtime.
 
 That does not yet mean "final 10/10".
 The remaining gaps are no longer about broad runtime parity or placeholder
-surfaces inside the local tree. They are now concentrated in five narrower
+surfaces inside the local tree. They are now concentrated in four narrower
 areas:
 
-- release-grade configuration-state compatibility gates
 - deeper transport and listener failure-path verification across HTTP/1, HTTP/2, HTTP/3, and WebSocket
 - MCP transfer durability/error semantics and orchestrator continuation depth
 - larger Smart-DNS routing and concurrent-update correctness beyond the current local proof
@@ -36,7 +35,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `350/350` passing
+- `./scripts/test-extension.sh`: `351/351` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
@@ -44,6 +43,7 @@ The currently verified baseline is:
 - `./scripts/check-release-upgrade.sh --from-ref HEAD^`: passing
 - `./scripts/check-release-downgrade.sh --from-ref HEAD^`: passing
 - `./scripts/check-persistence-migration.sh --from-ref HEAD^`: passing
+- `./scripts/check-config-compatibility-matrix.sh`: passing
 - `./scripts/verify-release-package.sh`: passing
 - `./scripts/container-smoke-matrix.sh --php-versions 8.3`: passing
 - `./scripts/soak-runtime.sh asan|ubsan|leak --iterations 1`: passing
@@ -56,7 +56,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `350` PHPT files
+- `extension/tests`: `351` PHPT files
 - public stub parity: `125` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -122,8 +122,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 - QUIC and HTTP/3 now bootstrap from a pinned repo-owned dependency path instead of ad hoc local `quiche` resurrection or unlocked cargo retries.
 - Clean-host package install and published-container smoke are now first-class gates, with CI-driven host PHP `8.3`/`8.4`/`8.5` package verification and published-image builds narrowed to the same supported PHP matrix.
 - Upgrade and downgrade compatibility for release artifacts are now explicit script/CI gates that package a previous git ref, verify both archives, and smoke-test both install orders against the same install prefix.
-- Release-artifact upgrade, downgrade, and representative persisted-state migration are now explicit script and CI gates.
-- Old/new configuration-state behavior is still not yet under an explicit matrix gate.
+- Release-artifact upgrade, downgrade, representative persisted-state migration, and old/new configuration-state behavior are now all explicit script and CI gates.
 
 ## Current Remaining Work Model
 

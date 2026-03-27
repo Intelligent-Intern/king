@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Add an old/new configuration-state compatibility matrix.
+- [ ] Validate HTTP/1 bodiless responses against real servers.
 
 ## Active Executable Items
 
@@ -32,7 +32,7 @@
 3. [x] Add a persisted-state migration gate in CI.
    done when: representative persisted state is upgraded across supported versions and verified automatically instead of by local spot checks.
 
-4. [ ] Add an old/new configuration-state compatibility matrix.
+4. [x] Add an old/new configuration-state compatibility matrix.
    done when: the runtime is verified against representative old and new config snapshots and config drift becomes an explicit gate.
 
 ### 2. Transport And Listener Failure Depth

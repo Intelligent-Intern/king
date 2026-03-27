@@ -144,12 +144,12 @@ static king_config_override_module_t king_config_route_override_key(
     }
 
     if (king_zend_string_starts_with_cstr(key, "storage_")) {
-        *normalized_key = zend_string_copy(key);
+        *normalized_key = king_config_normalize_suffix_key(key, sizeof("storage_") - 1, "");
         return KING_CONFIG_OVERRIDE_STORAGE;
     }
 
     if (king_zend_string_starts_with_cstr(key, "cdn_")) {
-        *normalized_key = zend_string_copy(key);
+        *normalized_key = king_config_normalize_suffix_key(key, sizeof("cdn_") - 1, "");
         return KING_CONFIG_OVERRIDE_CDN;
     }
 
@@ -159,7 +159,7 @@ static king_config_override_module_t king_config_route_override_key(
     }
 
     if (king_zend_string_starts_with_cstr(key, "otel_")) {
-        *normalized_key = zend_string_copy(key);
+        *normalized_key = king_config_normalize_suffix_key(key, sizeof("otel_") - 1, "");
         return KING_CONFIG_OVERRIDE_OTEL;
     }
 

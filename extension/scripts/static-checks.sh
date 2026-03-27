@@ -12,6 +12,7 @@ echo "Linting PHP entry surfaces..."
 php -l stubs/king.php
 php -l benchmarks/run.php
 php -l extension/scripts/check-stub-parity.php
+php -l extension/scripts/runtime-config-compatibility.php
 php -l extension/scripts/runtime-install-smoke.php
 php -l extension/scripts/runtime-persistence-migration.php
 
@@ -26,6 +27,7 @@ bash -n extension/scripts/build-extension.sh
 bash -n extension/scripts/build-profile.sh
 bash -n extension/scripts/bootstrap-quiche.sh
 bash -n extension/scripts/build-extension.sh
+bash -n extension/scripts/check-config-compatibility-matrix.sh
 bash -n extension/scripts/check-quiche-bootstrap.sh
 bash -n extension/scripts/check-persistence-migration.sh
 bash -n extension/scripts/check-release-downgrade.sh
