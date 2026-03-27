@@ -77,7 +77,7 @@ if (!extension_loaded('king')) {
         . "Run this example with:\n"
         . "php8.4 -d extension=/home/jochen/projects/king.site/king/extension/modules/king.so "
         . "-d king.security_allow_config_override=1 "
-        . "documentation/01-telemetry-driven-autoscaling/controller_demo.php"
+        . "documentation/01-hetzner-self-bootstrapping-edge-cluster/controller_demo.php"
     );
 }
 
