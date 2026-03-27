@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdint.h>
 #include <zend_smart_str.h>
 
 #define KING_SEMANTIC_DNS_STATE_DIR "/tmp/king_semantic_dns_state"
@@ -48,6 +49,46 @@ static zend_string *king_semantic_dns_state_serialize_zval(zval *value)
     return buffer.s;
 }
 
+static zend_bool king_semantic_dns_state_value_tree_is_safe(
+    zval *value,
+    HashTable *seen_arrays
+)
+{
+    zval *entry;
+    zend_ulong array_key;
+
+    if (value == NULL) {
+        return 0;
+    }
+
+    switch (Z_TYPE_P(value)) {
+        case IS_NULL:
+        case IS_FALSE:
+        case IS_TRUE:
+        case IS_LONG:
+        case IS_DOUBLE:
+        case IS_STRING:
+            return 1;
+        case IS_ARRAY:
+            array_key = (zend_ulong) (uintptr_t) Z_ARR_P(value);
+            if (zend_hash_index_exists(seen_arrays, array_key)) {
+                return 1;
+            }
+            zend_hash_index_add_empty_element(seen_arrays, array_key);
+            ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(value), entry) {
+                if (!king_semantic_dns_state_value_tree_is_safe(entry, seen_arrays)) {
+                    return 0;
+                }
+            } ZEND_HASH_FOREACH_END();
+            return 1;
+        case IS_REFERENCE:
+        case IS_OBJECT:
+        case IS_RESOURCE:
+        default:
+            return 0;
+    }
+}
+
 static int king_semantic_dns_state_unserialize_zval(
     const unsigned char *buffer,
     size_t buffer_len,
@@ -55,7 +96,11 @@ static int king_semantic_dns_state_unserialize_zval(
 )
 {
     const unsigned char *cursor = buffer;
+    const unsigned char *end = buffer + buffer_len;
     php_unserialize_data_t var_hash;
+    HashTable allowed_classes;
+    HashTable seen_arrays;
+    zend_result result = FAILURE;
 
     if (buffer == NULL || return_value == NULL) {
         return FAILURE;
@@ -63,26 +108,36 @@ static int king_semantic_dns_state_unserialize_zval(
 
     ZVAL_NULL(return_value);
     PHP_VAR_UNSERIALIZE_INIT(var_hash);
+    zend_hash_init(&allowed_classes, 0, NULL, NULL, 0);
+    php_var_unserialize_set_allowed_classes(var_hash, &allowed_classes);
     if (!php_var_unserialize(
             return_value,
             &cursor,
-            buffer + buffer_len,
+            end,
             &var_hash
         )) {
-        PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
-        zval_ptr_dtor(return_value);
-        ZVAL_NULL(return_value);
-        return FAILURE;
+        goto cleanup;
     }
+    if (cursor != end) {
+        goto cleanup;
+    }
+    zend_hash_init(&seen_arrays, 0, NULL, NULL, 0);
+    if (!king_semantic_dns_state_value_tree_is_safe(return_value, &seen_arrays)) {
+        zend_hash_destroy(&seen_arrays);
+        goto cleanup;
+    }
+    zend_hash_destroy(&seen_arrays);
+    result = SUCCESS;
+
+cleanup:
     PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
-
-    if (cursor != buffer + buffer_len) {
+    zend_hash_destroy(&allowed_classes);
+    if (result != SUCCESS) {
         zval_ptr_dtor(return_value);
         ZVAL_NULL(return_value);
-        return FAILURE;
     }
 
-    return SUCCESS;
+    return result;
 }
 
 static int king_semantic_dns_state_dir_is_secure(const struct stat *st)
