@@ -375,6 +375,88 @@ jobs:
             extension/tests/*.log
             extension/tests/*.out
 
+  release-downgrade-compatibility:
+    name: Release Downgrade Compatibility
+    needs: canonical-baseline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup PHP 8.5
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.5"
+          coverage: none
+          extensions: curl, mbstring, openssl, sockets
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('extension/scripts/quiche-bootstrap.lock', 'extension/scripts/bootstrap-quiche.sh', 'extension/scripts/build-profile.sh') }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            bison \
+            build-essential \
+            clang \
+            cmake \
+            libssl-dev \
+            libcurl4-openssl-dev \
+            libtool \
+            ninja-build \
+            pkg-config \
+            re2c
+
+      - name: Resolve previous compatibility ref
+        id: previous
+        run: |
+          previous_ref=""
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            previous_ref="${{ github.event.pull_request.base.sha }}"
+          elif [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            previous_ref="${{ github.event.before }}"
+          fi
+
+          if [[ -z "${previous_ref}" || "${previous_ref}" =~ ^0+$ ]]; then
+            previous_ref="$(git rev-parse HEAD^)"
+          fi
+
+          echo "ref=${previous_ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Run release downgrade compatibility gate
+        working-directory: extension
+        run: ./scripts/check-release-downgrade.sh --from-ref "${{ steps.previous.outputs.ref }}" --artifacts-dir ../compat-artifacts/release-downgrade
+
+      - name: Upload release downgrade failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: king-release-downgrade-failures
+          if-no-files-found: ignore
+          path: |
+            compat-artifacts/release-downgrade/
+            extension/config.log
+            extension/tests/*.diff
+            extension/tests/*.exp
+            extension/tests/*.log
+            extension/tests/*.out
+
   sanitizer-soak:
     name: ${{ matrix.mode }} sanitizer soak
     needs: canonical-baseline

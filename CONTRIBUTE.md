@@ -155,6 +155,16 @@ This packages the previous git ref, verifies both archives, installs them into
 the same prefix one after the other, and runs the packaged smoke before and
 after the upgrade.
 
+Run the current-release to previous-release downgrade compatibility gate:
+
+```bash
+cd extension
+./scripts/check-release-downgrade.sh --from-ref HEAD^
+```
+
+This uses the same package pair and prefix model, but proves the reverse
+install order explicitly instead of assuming downgrade symmetry.
+
 Run the published-container smoke matrix across supported runtime images:
 
 ```bash

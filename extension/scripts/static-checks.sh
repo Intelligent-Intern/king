@@ -26,6 +26,7 @@ bash -n extension/scripts/build-profile.sh
 bash -n extension/scripts/bootstrap-quiche.sh
 bash -n extension/scripts/build-extension.sh
 bash -n extension/scripts/check-quiche-bootstrap.sh
+bash -n extension/scripts/check-release-downgrade.sh
 bash -n extension/scripts/check-release-upgrade.sh
 bash -n extension/scripts/check-include-layout.sh
 bash -n extension/scripts/check-stub-parity.sh

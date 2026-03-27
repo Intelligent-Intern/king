@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/check-release-upgrade.sh --from-ref REF [--current-archive PATH] [--php-bin BIN] [--artifacts-dir DIR]
+Usage: ./scripts/check-release-upgrade.sh --from-ref REF [--current-archive PATH] [--php-bin BIN] [--artifacts-dir DIR] [--direction upgrade|downgrade]
 
 Builds a packaged King release archive from a previous git ref, packages the
 current tree if needed, verifies both archives, installs them sequentially into
@@ -22,6 +22,7 @@ PHP_BIN="${PHP_BIN:-php}"
 ARTIFACTS_DIR=""
 SCRATCH_DIR=""
 PREVIOUS_WORKTREE=""
+DIRECTION="upgrade"
 
 resolve_existing_path() {
     local candidate="$1"
@@ -97,6 +98,14 @@ while [[ $# -gt 0 ]]; do
             ARTIFACTS_DIR="$2"
             shift 2
             ;;
+        --direction)
+            if [[ $# -lt 2 ]]; then
+                echo "Missing value for --direction." >&2
+                exit 1
+            fi
+            DIRECTION="$2"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -114,6 +123,15 @@ if [[ -z "${FROM_REF}" ]]; then
     usage >&2
     exit 1
 fi
+
+case "${DIRECTION}" in
+    upgrade|downgrade)
+        ;;
+    *)
+        echo "Unsupported --direction value: ${DIRECTION}" >&2
+        exit 1
+        ;;
+esac
 
 if ! command -v "${PHP_BIN}" >/dev/null 2>&1; then
     echo "Missing requested PHP binary: ${PHP_BIN}" >&2
@@ -213,14 +231,22 @@ verify_archive "${PREVIOUS_ARCHIVE}" "${PREVIOUS_BUILD_DIR}/verify.log"
 printf 'Verifying current archive\n'
 verify_archive "${CURRENT_ARCHIVE}" "${CURRENT_BUILD_DIR}/verify.log"
 
-printf 'Installing previous archive into upgrade prefix\n'
-install_archive_to_prefix "${PREVIOUS_ARCHIVE}" "${INSTALL_ROOT}" "${PREVIOUS_BUILD_DIR}/install-smoke.log"
+if [[ "${DIRECTION}" == "upgrade" ]]; then
+    printf 'Installing previous archive into upgrade prefix\n'
+    install_archive_to_prefix "${PREVIOUS_ARCHIVE}" "${INSTALL_ROOT}" "${PREVIOUS_BUILD_DIR}/install-smoke.log"
 
-printf 'Installing current archive into the same upgrade prefix\n'
-install_archive_to_prefix "${CURRENT_ARCHIVE}" "${INSTALL_ROOT}" "${CURRENT_BUILD_DIR}/install-smoke.log"
+    printf 'Installing current archive into the same upgrade prefix\n'
+    install_archive_to_prefix "${CURRENT_ARCHIVE}" "${INSTALL_ROOT}" "${CURRENT_BUILD_DIR}/install-smoke.log"
+else
+    printf 'Installing current archive into downgrade prefix\n'
+    install_archive_to_prefix "${CURRENT_ARCHIVE}" "${INSTALL_ROOT}" "${CURRENT_BUILD_DIR}/install-smoke.log"
+
+    printf 'Installing previous archive into the same downgrade prefix\n'
+    install_archive_to_prefix "${PREVIOUS_ARCHIVE}" "${INSTALL_ROOT}" "${PREVIOUS_BUILD_DIR}/install-smoke.log"
+fi
 
 cat > "${ARTIFACTS_DIR}/summary.txt" <<EOF
-release_upgrade_compatibility=ok
+release_${DIRECTION}_compatibility=ok
 previous_ref=${FROM_REF}
 previous_archive=${PREVIOUS_ARCHIVE}
 current_archive=${CURRENT_ARCHIVE}
@@ -228,4 +254,4 @@ php_bin=${PHP_BIN}
 install_root=${INSTALL_ROOT}
 EOF
 
-printf 'Release upgrade compatibility ok\n'
+printf 'Release %s compatibility ok\n' "${DIRECTION}"
