@@ -21,7 +21,7 @@ They are concentrated in five areas:
 - higher-scale MCP and deeper distributed orchestration
 - larger Smart-DNS distributed topology, failover, and real load-routing verification beyond the local slice
 - stronger telemetry delivery guarantees, diagnostics, and fleet recovery depth
-- deterministic QUIC bootstrap and clean-host installation confidence
+- clean-host installation confidence and published-container smoke coverage
 - compatibility, sanitizer soak, and release-grade upgrade guarantees
 
 The long-form completion checklist has been distilled into a smaller active
@@ -36,7 +36,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `344/344` passing
+- `./scripts/test-extension.sh`: `345/345` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
@@ -50,7 +50,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `344` PHPT files
+- `extension/tests`: `345` PHPT files
 - public stub parity: `125` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -74,6 +74,7 @@ The current tree already proves:
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs
 - router/loadbalancer is now exposed as an explicit config-backed system component with honest policy/discovery-only introspection
 - object-store local filesystem persistence, explicit `local_fs_only` runtime/system contract, `memory_cache -> local_fs` compatibility aliasing, simulated non-local adapter fencing, `.meta` sidecars, CDN cache/runtime behavior, and confined backup/restore/import/export paths
+- deterministic QUIC bootstrap through a tracked pinset for the `quiche` repo revision, BoringSSL submodule revision, pinned workspace lockfile, and pinned `wirefilter` git revision with fail-closed static and PHPT verification
 - MCP request/upload/download parity against a real TCP host/port remote peer with propagated timeout, deadline, cancellation controls, IPv4 and IPv6 peer targeting coverage, 1 MiB payload roundtrips, parallel-transfer backpressure isolation, explicit single-flight reentry guards, same-host partial-failure recovery, persisted remote-state restart recovery coverage, and explicit `topology_scope=tcp_host_port_peer` introspection
 - orchestrator persistence, honest `queued -> running -> completed|failed|cancelled` run transitions, explicit `single_attempt` retry plus `caller_managed` idempotency contract, explicit `topology_scope=local_in_process|same_host_file_worker|tcp_host_port_execution_peer` introspection by backend mode, deterministic `claimed_recovery_then_fifo_run_id` scheduling, exclusive claimed-file locking across concurrent workers, recovery of an already-running claimed run exactly once after worker loss, sustained queue fairness under repeated parallel-worker contention, local/file-worker backend boundaries, real TCP host/port `remote_peer` execution with persisted success/failure snapshots, cross-process cancellation, and multiprocess controller/observer/worker verification
 - telemetry batch queueing, bounded retry behavior, explicit `best_effort_bounded_retry` plus `process_local_non_persistent` delivery semantics, explicit `restart_replay=not_supported` and `drain_behavior=single_batch_per_flush` component contracts, OTLP metrics/traces/logs export hardening, and real local collector coverage for success plus non-2xx, timeout, response-size-limit, and outage recovery
@@ -104,7 +105,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 
 ### Build, Compatibility, and Release Confidence
 
-- QUIC and HTTP/3 are green locally, but `quiche` bootstrap is still not pinned and deterministic enough for a "done forever" claim.
+- QUIC and HTTP/3 now bootstrap from a pinned repo-owned dependency path instead of ad hoc local `quiche` resurrection or unlocked cargo retries.
 - Clean-host install and container smoke matrices are still missing as first-class gates.
 - Upgrade/downgrade compatibility for release artifacts and persisted state is still not proven.
 - Long-duration ASan/UBSan/leak soaks with archived diagnostics are still open.

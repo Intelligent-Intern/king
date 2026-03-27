@@ -22,7 +22,9 @@ bash -n extension/scripts/audit-runtime-surface.sh
 bash -n extension/scripts/audit-runtime-surface.sh
 bash -n extension/scripts/build-extension.sh
 bash -n extension/scripts/build-profile.sh
+bash -n extension/scripts/bootstrap-quiche.sh
 bash -n extension/scripts/build-extension.sh
+bash -n extension/scripts/check-quiche-bootstrap.sh
 bash -n extension/scripts/check-include-layout.sh
 bash -n extension/scripts/check-stub-parity.sh
 bash -n extension/scripts/fuzz-runtime.sh
@@ -39,5 +41,8 @@ ruby -e 'require "yaml"; YAML.load_file(ARGV[0])' .github/workflows/ci.yml
 
 echo "Checking extension include layout..."
 extension/scripts/check-include-layout.sh
+
+echo "Checking deterministic quiche bootstrap..."
+extension/scripts/check-quiche-bootstrap.sh
 
 echo "Static checks passed."

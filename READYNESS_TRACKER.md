@@ -9,6 +9,7 @@ Status note:
 - This file is the long-form closure tracker, not the active execution queue. `ISSUES.md` stays the narrow working backlog.
 - Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, and real TCP host/port `remote_peer` execution with persisted success/failure snapshots are now verified; the remaining open boxes below are the broader continuation, observability, and multi-host slices.
 - Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path, are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices, and now expose an explicit process-local non-persistent non-replay delivery contract across restart; the remaining open boxes below are richer ordering/idempotency guarantees, longer-haul characterization, and stronger diagnostics.
+- Recent QUIC bootstrap closure: the build path now rehydrates a pinned `quiche` commit, pinned BoringSSL submodule commit, tracked workspace lockfile, and pinned `wirefilter` revision without branch-based fallbacks or unlocked cargo retries.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -336,11 +337,11 @@ Status note:
 
 ## O. Build / Bootstrap / Determinism
 
-- [ ] Make QUIC backend bootstrap fully deterministic
-- [ ] Fully pin the `quiche` dependency
+- [x] Make QUIC backend bootstrap fully deterministic
+- [x] Fully pin the `quiche` dependency
 - [ ] Fully pin all external build dependencies
 - [ ] Enable clean-host rehydration in a single reproducible step
-- [ ] Eliminate branch-based fallbacks from critical bootstrap
+- [x] Eliminate branch-based fallbacks from critical bootstrap
 - [ ] Eliminate host-specific special cases from release builds
 - [ ] Eliminate host-specific special cases from debug / ASan / UBSan builds
 - [ ] Eliminate unstable Cargo / Git resolution paths from release builds

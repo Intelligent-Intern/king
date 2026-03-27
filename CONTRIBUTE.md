@@ -151,6 +151,13 @@ cd extension
 ./scripts/build-profile.sh ubsan
 ```
 
+These profile builds own the canonical QUIC bootstrap path.
+They bootstrap the pinned `quiche` checkout recorded in
+`extension/scripts/quiche-bootstrap.lock` and are expected to fail closed if
+that pinned dependency set cannot be rehydrated exactly.
+Do not reintroduce ad hoc local clones, branch-based dependency rewrites, or
+unlocked cargo fallbacks around them.
+
 Smoke the staged profile artifact after each non-release build:
 
 ```bash

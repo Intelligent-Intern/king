@@ -53,20 +53,13 @@ jobs:
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Restore external quiche checkout
-        run: |
-          if [[ -d quiche/.git ]]; then
-            git -C quiche submodule update --init --recursive quiche/deps/boringssl
-          else
-            git clone --recursive https://github.com/cloudflare/quiche.git quiche
-          fi
-
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-${{ hashFiles('quiche/quiche/Cargo.lock', 'quiche/apps/Cargo.lock') }}
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('extension/scripts/quiche-bootstrap.lock', 'extension/scripts/bootstrap-quiche.sh', 'extension/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -165,20 +158,13 @@ jobs:
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Restore external quiche checkout
-        run: |
-          if [[ -d quiche/.git ]]; then
-            git -C quiche submodule update --init --recursive quiche/deps/boringssl
-          else
-            git clone --recursive https://github.com/cloudflare/quiche.git quiche
-          fi
-
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-${{ hashFiles('quiche/quiche/Cargo.lock', 'quiche/apps/Cargo.lock') }}
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('extension/scripts/quiche-bootstrap.lock', 'extension/scripts/bootstrap-quiche.sh', 'extension/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |

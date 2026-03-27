@@ -233,16 +233,8 @@ or migration sequencing, it does not.
 To build the extension from source:
 
 ```bash
-git clone --recursive https://github.com/Intelligent-Intern/king.git
+git clone https://github.com/Intelligent-Intern/king.git
 cd king/extension
-./scripts/build-extension.sh
-```
-
-If the repo is already cloned without submodules:
-
-```bash
-git submodule update --init --recursive
-cd extension
 ./scripts/build-extension.sh
 ```
 
@@ -253,6 +245,11 @@ For a fully runnable local release profile, including `libquiche.so` and
 cd extension
 ./scripts/build-profile.sh release
 ```
+
+The build path above bootstraps the pinned QUIC dependency checkout recorded in
+[`extension/scripts/quiche-bootstrap.lock`](extension/scripts/quiche-bootstrap.lock)
+and normalizes the matching workspace lockfile before cargo is invoked. Do not
+replace it with ad hoc local `quiche` clones or unlocked cargo retries.
 
 The build entrypoint above is the repository build path.
 Implementation maturity and subsystem completeness are intentionally documented

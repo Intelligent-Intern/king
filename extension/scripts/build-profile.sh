@@ -40,9 +40,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ROOT_DIR="$(cd "${EXT_DIR}/.." && pwd)"
 QUICHE_DIR="${ROOT_DIR}/quiche"
+QUICHE_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-quiche.sh"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
 JOBS="${JOBS:-$(nproc)}"
-QUICHE_REMOTE_URL="${KING_QUICHE_REMOTE_URL:-https://github.com/cloudflare/quiche.git}"
 
 BASE_CFLAGS="${CFLAGS:-}"
 BASE_CPPFLAGS="${CPPFLAGS:-}"
@@ -61,7 +61,6 @@ profile_ldflags="${BASE_LDFLAGS}"
 sanitizer_runtime=""
 cargo_target="release"
 cargo_args=(--release)
-cargo_lock_args=(--locked)
 
 case "${PROFILE}" in
     release)
@@ -95,37 +94,6 @@ esac
 if [[ -n "${BASE_CFLAGS}" ]]; then
     profile_cflags="${profile_cflags} ${BASE_CFLAGS}"
 fi
-
-normalize_wirefilter_dependency() {
-    local manifest_path="${QUICHE_DIR}/qlog-dancer/Cargo.toml"
-
-    if [[ ! -f "${manifest_path}" ]]; then
-        echo "No qlog-dancer manifest found at ${manifest_path}; using upstream lockfile as-is." >&2
-        return
-    fi
-
-    if ! grep -Eq '^[[:space:]]*wirefilter-engine[[:space:]]*=.*branch[[:space:]]*=' "${manifest_path}"; then
-        if perl -0pi -e \
-            's/wirefilter-engine\s*=\s*\{[^\n]*\}/wirefilter-engine = { git = "https:\/\/github.com\/cloudflare\/wirefilter.git", branch = "master" }/g' \
-            "${manifest_path}"; then
-            echo "Patched qlog-dancer wirefilter dependency to branch 'master' in ${manifest_path}." >&2
-            cargo_lock_args=()
-            cleanup_wirefilter_git_cache
-        else
-            echo "Failed to patch wirefilter dependency in ${manifest_path}; keeping upstream lockfile." >&2
-        fi
-    fi
-}
-
-cleanup_wirefilter_git_cache() {
-    if [[ ! -d "${CARGO_HOME}/git" ]]; then
-        return
-    fi
-
-    rm -rf "${CARGO_HOME}/git/db/wirefilter-"* \
-        "${CARGO_HOME}/git/checkouts/wirefilter-"* \
-        "${CARGO_HOME}/git/checkouts/.tmp-*wirefilter"* || true
-}
 
 validate_curl_headers() {
     if [[ -f "${ROOT_DIR}/libcurl/include/curl/curl.h" ]]; then
@@ -224,85 +192,35 @@ apply_pkg_config_curl_flags() {
     fi
 }
 
-ensure_quiche_checkout() {
-    if [[ -d "${QUICHE_DIR}" && ! -d "${QUICHE_DIR}/.git" ]]; then
-        if [[ -d "${QUICHE_DIR}" && -f "${QUICHE_DIR}/quiche/Cargo.toml" && -d "${QUICHE_DIR}/apps" ]]; then
-            return
-        fi
-        rm -rf "${QUICHE_DIR}"
-    fi
-
-    if [[ -d "${QUICHE_DIR}/.git" ]]; then
-        return
-    fi
-
-    if [[ -d "${QUICHE_DIR}" ]]; then
-        if [[ -f "${QUICHE_DIR}/quiche/Cargo.toml" && -d "${QUICHE_DIR}/apps" ]]; then
-            return
-        fi
-        rm -rf "${QUICHE_DIR}"
-    fi
-
-    echo "Restoring external quiche checkout under ${QUICHE_DIR}" >&2
-    git clone --recursive "${QUICHE_REMOTE_URL}" "${QUICHE_DIR}"
-}
-
-ensure_quiche_checkout
-
-if [[ ! -f "${QUICHE_DIR}/quiche/deps/boringssl/CMakeLists.txt" ]]; then
-    git -C "${QUICHE_DIR}" submodule update --init --recursive quiche/deps/boringssl
-fi
-
-normalize_wirefilter_dependency
-cleanup_wirefilter_git_cache
 validate_curl_headers
 apply_pkg_config_curl_flags
+
+"${QUICHE_BOOTSTRAP_SCRIPT}"
 
 echo "Building King profile: ${PROFILE}"
 echo "Compiler: ${profile_cc}"
 echo "Jobs: ${JOBS}"
 
-if ! cargo build \
+cargo fetch \
+    --locked \
+    --manifest-path "${QUICHE_DIR}/quiche/Cargo.toml"
+
+cargo fetch \
+    --locked \
+    --manifest-path "${QUICHE_DIR}/apps/Cargo.toml"
+
+cargo build \
     --manifest-path "${QUICHE_DIR}/quiche/Cargo.toml" \
     --package quiche \
     "${cargo_args[@]}" \
-    "${cargo_lock_args[@]}" \
+    --locked \
     --features ffi
-then
-    if [[ "${#cargo_lock_args[@]}" -gt 0 ]]; then
-        echo "Locked quiche build failed; retrying unlocked to recover from stale lock or git cache state." >&2
-        cargo_lock_args=()
-        cleanup_wirefilter_git_cache
-        cargo build \
-            --manifest-path "${QUICHE_DIR}/quiche/Cargo.toml" \
-            --package quiche \
-            "${cargo_args[@]}" \
-            --features ffi
-    else
-        echo "Locked quiche build failed without lock available; check upstream cargo failures." >&2
-        exit 1
-    fi
-fi
 
-if ! cargo build \
+cargo build \
     --manifest-path "${QUICHE_DIR}/apps/Cargo.toml" \
     "${cargo_args[@]}" \
-    "${cargo_lock_args[@]}" \
+    --locked \
     --bin quiche-server
-then
-    if [[ "${#cargo_lock_args[@]}" -gt 0 ]]; then
-        echo "Locked quiche-server build failed; retrying unlocked to recover from stale lock or git cache state." >&2
-        cargo_lock_args=()
-        cleanup_wirefilter_git_cache
-        cargo build \
-            --manifest-path "${QUICHE_DIR}/apps/Cargo.toml" \
-            "${cargo_args[@]}" \
-            --bin quiche-server
-    else
-        echo "Locked quiche-server build failed without lock available; check upstream cargo failures." >&2
-        exit 1
-    fi
-fi
 
 cd "${EXT_DIR}"
 
