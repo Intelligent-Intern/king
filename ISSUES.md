@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate HTTP/2 session pooling under load.
+- [ ] Validate HTTP/2 failure paths on stream reset and connection abort.
 
 ## Active Executable Items
 
@@ -43,7 +43,7 @@
 6. [x] Validate HTTP/1 failure paths against real connection aborts.
    done when: mid-response connection close and early socket abort cases are reproduced on-wire and mapped to stable public failure behavior.
 
-7. [ ] Validate HTTP/2 session pooling under load.
+7. [x] Validate HTTP/2 session pooling under load.
    done when: repeated mixed-load request bursts prove reuse, fairness, and cleanup across pooled h2 sessions instead of one-shot multiplex-only slices.
 
 8. [ ] Validate HTTP/2 failure paths on stream reset and connection abort.

@@ -31,7 +31,7 @@ Status note:
 - [x] Validate HTTP/2 HTTPS/ALPN path against real TLS servers
 - [x] Validate HTTP/2 multiplexing against real parallel streams
 - [x] Validate HTTP/2 push capture against real push-capable servers
-- [ ] Validate HTTP/2 session pooling under load
+- [x] Validate HTTP/2 session pooling under load
 - [ ] Validate HTTP/2 failure paths on stream reset
 - [ ] Validate HTTP/2 failure paths on connection abort
 - [x] Validate HTTP/2 backpressure under real multi-stream traffic
