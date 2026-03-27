@@ -193,6 +193,7 @@ done
 
 for required_path in \
     "SHA256SUMS" \
+    "bin/smoke.php" \
     "bin/smoke.sh" \
     "docs/INSTALL.md" \
     "manifest.json" \

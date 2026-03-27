@@ -161,6 +161,7 @@ Platform: \`${OS_NAME}/${ARCH_NAME}\`
 - \`runtime/libquiche.so\`
 - \`runtime/quiche-server\`
 - \`bin/smoke.sh\`
+- \`bin/smoke.php\`
 - \`manifest.json\`
 - \`SHA256SUMS\`
 
@@ -189,6 +190,9 @@ Run the package-local smoke test after extraction:
 \`\`\`bash
 ./bin/smoke.sh
 \`\`\`
+
+The shell wrapper delegates to \`bin/smoke.php\`, which runs the same runtime
+install smoke used by the staged profile and published container checks.
 EOF
 }
 
@@ -210,17 +214,17 @@ export LD_LIBRARY_PATH="${PACKAGE_DIR}/runtime${LD_LIBRARY_PATH:+:${LD_LIBRARY_P
 
 exec "${PHP_BIN}" \
     -d "extension=${PACKAGE_DIR}/modules/king.so" \
-    -r '
-        if (!extension_loaded("king")) {
-            fwrite(STDERR, "failed to load king\n");
-            exit(1);
-        }
-
-        echo king_version(), PHP_EOL;
-    '
+    -d "king.security_allow_config_override=1" \
+    "${PACKAGE_DIR}/bin/smoke.php"
 EOF
 
     chmod 0755 "${target}"
+}
+
+install_runtime_smoke_script() {
+    local target="$1"
+
+    install -m 0644 "${SCRIPT_DIR}/runtime-install-smoke.php" "${target}"
 }
 
 generate_manifest() {
@@ -243,6 +247,7 @@ $files = [];
 
 foreach ([
     'SHA256SUMS',
+    'bin/smoke.php',
     'bin/smoke.sh',
     'docs/INSTALL.md',
     'modules/king.so',
@@ -284,6 +289,7 @@ write_inner_checksums() {
     (
         cd "${package_root}"
         sha256sum \
+            bin/smoke.php \
             bin/smoke.sh \
             docs/INSTALL.md \
             modules/king.so \
@@ -313,6 +319,7 @@ package_once() {
     install -m 0755 "${PROFILE_DIR}/quiche-server" "${package_root}/runtime/quiche-server"
 
     generate_smoke_script "${package_root}/bin/smoke.sh"
+    install_runtime_smoke_script "${package_root}/bin/smoke.php"
     generate_install_doc "${package_root}/docs/INSTALL.md"
     write_inner_checksums "${package_root}"
     generate_manifest "${package_root}"

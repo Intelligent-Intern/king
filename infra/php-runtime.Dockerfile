@@ -67,15 +67,17 @@ RUN mkdir -p /opt/king/runtime /workspace
 COPY --from=build /src/extension/build/profiles/release/king.so /opt/king/runtime/king.so
 COPY --from=build /src/extension/build/profiles/release/libquiche.so /opt/king/runtime/libquiche.so
 COPY --from=build /src/extension/build/profiles/release/quiche-server /opt/king/runtime/quiche-server
-
-RUN printf '%s\n' \
-    'extension=/opt/king/runtime/king.so' \
-    > /usr/local/etc/php/conf.d/zz-king.ini \
-    && php -m | grep -qx 'king'
+COPY extension/scripts/runtime-install-smoke.php /opt/king/runtime/smoke.php
 
 ENV KING_QUICHE_LIBRARY=/opt/king/runtime/libquiche.so \
     KING_QUICHE_SERVER=/opt/king/runtime/quiche-server \
     LD_LIBRARY_PATH=/opt/king/runtime
+
+RUN printf '%s\n' \
+    'extension=/opt/king/runtime/king.so' \
+    > /usr/local/etc/php/conf.d/zz-king.ini \
+    && php -m | grep -qx 'king' \
+    && php -d king.security_allow_config_override=1 /opt/king/runtime/smoke.php
 
 WORKDIR /workspace
 

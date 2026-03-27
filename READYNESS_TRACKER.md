@@ -340,7 +340,7 @@ Status note:
 - [x] Make QUIC backend bootstrap fully deterministic
 - [x] Fully pin the `quiche` dependency
 - [ ] Fully pin all external build dependencies
-- [ ] Enable clean-host rehydration in a single reproducible step
+- [x] Enable clean-host rehydration in a single reproducible step
 - [x] Eliminate branch-based fallbacks from critical bootstrap
 - [ ] Eliminate host-specific special cases from release builds
 - [ ] Eliminate host-specific special cases from debug / ASan / UBSan builds
@@ -357,9 +357,9 @@ Status note:
 
 - [x] Enforce benchmark budgets in CI
 - [x] Define and maintain per-case regression budgets
-- [ ] Run clean-host install matrix in CI
-- [ ] Run container image install matrix in CI
-- [ ] Run supported PHP/API combinations in CI
+- [x] Run clean-host install matrix in CI
+- [x] Run container image install matrix in CI
+- [x] Run supported PHP/API combinations in CI
 - [ ] Check upgrade compatibility in CI
 - [ ] Check downgrade compatibility in CI
 - [ ] Check persistence migration paths in CI

@@ -114,6 +114,23 @@ cd extension
 ./scripts/verify-release-package.sh --archive ../dist/king-*.tar.gz
 ```
 
+Run the clean-host package install matrix across supported PHP binaries:
+
+```bash
+cd extension
+./scripts/install-package-matrix.sh --archive ../dist/king-*.tar.gz --php-bins php
+```
+
+Build one package per supported PHP/API combination and run the host install
+smoke against the matching runtime for that archive.
+
+Run the published-container smoke matrix across supported runtime images:
+
+```bash
+cd extension
+./scripts/container-smoke-matrix.sh --php-versions 8.3,8.4,8.5
+```
+
 Run the final repo-local go-live readiness gate:
 
 ```bash
@@ -177,6 +194,8 @@ the canonical repo-local paths are `extension/scripts/static-checks.sh`,
 `extension/scripts/fuzz-runtime.sh`,
 `extension/scripts/check-stub-parity.sh`,
 `extension/scripts/package-release.sh`,
+`extension/scripts/install-package-matrix.sh`,
+`extension/scripts/container-smoke-matrix.sh`,
 `extension/scripts/verify-release-package.sh`, and
 `extension/scripts/go-live-readiness.sh`.
 

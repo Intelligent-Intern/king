@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/ci.yml"
       - "extension/**"
+      - "infra/**"
       - "stubs/**"
       - "quiche/**"
       - "Makefile"
@@ -16,6 +17,7 @@ on:
     paths:
       - ".github/workflows/ci.yml"
       - "extension/**"
+      - "infra/**"
       - "stubs/**"
       - "quiche/**"
       - "Makefile"
@@ -204,3 +206,89 @@ jobs:
             extension/tests/*.exp
             extension/tests/*.log
             extension/tests/*.out
+
+  install-package-matrix:
+    name: Package Install Smoke PHP ${{ matrix.php-version }}
+    needs: canonical-baseline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version:
+          - "8.3"
+          - "8.4"
+          - "8.5"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup PHP ${{ matrix.php-version }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "${{ matrix.php-version }}"
+          coverage: none
+          extensions: curl, mbstring, openssl, sockets
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('extension/scripts/quiche-bootstrap.lock', 'extension/scripts/bootstrap-quiche.sh', 'extension/scripts/build-profile.sh') }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            bison \
+            build-essential \
+            clang \
+            cmake \
+            libssl-dev \
+            libcurl4-openssl-dev \
+            libtool \
+            ninja-build \
+            pkg-config \
+            re2c
+
+      - name: Build canonical release profile
+        working-directory: extension
+        run: ./scripts/build-profile.sh release
+
+      - name: Package canonical release archive
+        id: package
+        working-directory: extension
+        run: |
+          output="$(./scripts/package-release.sh --output-dir ../dist)"
+          printf '%s\n' "${output}"
+          archive_path="$(printf '%s\n' "${output}" | sed -n 's/^Package created: //p' | tail -n 1)"
+          if [[ -z "${archive_path}" ]]; then
+            echo "Failed to resolve packaged archive path." >&2
+            exit 1
+          fi
+          echo "archive_path=${archive_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify packaged clean-host install path
+        working-directory: extension
+        run: ./scripts/install-package-matrix.sh --archive "${{ steps.package.outputs.archive_path }}" --php-bins php
+
+      - name: Upload package install failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: king-package-install-${{ matrix.php-version }}-failures
+          if-no-files-found: ignore
+          path: |
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256
+            extension/config.log

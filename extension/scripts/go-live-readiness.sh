@@ -140,7 +140,7 @@ if [[ -z "${archive_path}" ]]; then
     exit 1
 fi
 
-"${SCRIPT_DIR}/verify-release-package.sh" --archive "${archive_path}"
+"${SCRIPT_DIR}/install-package-matrix.sh" --archive "${archive_path}" --php-bins "${PHP_BIN:-php}"
 
 echo "Go-live readiness gate passed."
 echo "Packaged archive: ${archive_path}"

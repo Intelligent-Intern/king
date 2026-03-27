@@ -233,7 +233,7 @@ or migration sequencing, it does not.
 To build the extension from source:
 
 ```bash
-git clone https://github.com/Intelligent-Intern/king.git
+git clone --recurse-submodules https://github.com/Intelligent-Intern/king.git
 cd king/extension
 ./scripts/build-extension.sh
 ```
@@ -252,6 +252,10 @@ and normalizes the matching workspace lockfile before cargo is invoked. Do not
 replace it with ad hoc local `quiche` clones or unlocked cargo retries.
 
 The build entrypoint above is the repository build path.
+Canonical release-install verification then runs through
+`./scripts/package-release.sh`, `./scripts/install-package-matrix.sh`, and
+`./scripts/container-smoke-matrix.sh`.
+
 Implementation maturity and subsystem completeness are intentionally documented
 in [`PROJECT_ASSESSMENT.md`](PROJECT_ASSESSMENT.md) and [`ISSUES.md`](ISSUES.md),
 not in this file.

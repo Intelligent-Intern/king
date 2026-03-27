@@ -12,9 +12,8 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # Build multi-architecture Docker images
   build-and-push:
-    name: Build & Push Docker Images
+    name: Build, Smoke & Push Docker Images
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,14 +21,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']
+        php-version: ['8.3', '8.4', '8.5']
         include:
-          - php-version: '8.1'
-            platforms: linux/amd64,linux/arm64
-            latest: false
-          - php-version: '8.2'
-            platforms: linux/amd64,linux/arm64
-            latest: false
           - php-version: '8.3'
             platforms: linux/amd64,linux/arm64
             latest: false
