@@ -165,6 +165,16 @@ cd extension
 This uses the same package pair and prefix model, but proves the reverse
 install order explicitly instead of assuming downgrade symmetry.
 
+Run the persisted-state migration compatibility gate:
+
+```bash
+cd extension
+./scripts/check-persistence-migration.sh --from-ref HEAD^
+```
+
+This writes representative persisted state with the previous package and then
+verifies that the current package can rehydrate that state correctly.
+
 Run the published-container smoke matrix across supported runtime images:
 
 ```bash

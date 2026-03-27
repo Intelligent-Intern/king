@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Add a persisted-state migration gate in CI.
+- [ ] Add an old/new configuration-state compatibility matrix.
 
 ## Active Executable Items
 
@@ -29,7 +29,7 @@
 2. [x] Add a release-artifact downgrade compatibility gate in CI.
    done when: the current packaged artifact is exercised against the previous supported compatibility target and regressions block release confidence.
 
-3. [ ] Add a persisted-state migration gate in CI.
+3. [x] Add a persisted-state migration gate in CI.
    done when: representative persisted state is upgraded across supported versions and verified automatically instead of by local spot checks.
 
 4. [ ] Add an old/new configuration-state compatibility matrix.
