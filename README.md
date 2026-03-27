@@ -2,7 +2,7 @@
 **Systems-grade networking and infrastructure primitives for PHP**
 
 <p align="center">
-  <img src="king.jpg" alt="King mascot: the crowned elephant" width="320">
+  <img src="crowned-elephant-mascot.jpg" alt="King mascot: the crowned elephant" width="320">
 </p>
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
