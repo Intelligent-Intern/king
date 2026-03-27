@@ -131,7 +131,7 @@ Status note:
 - [x] Rehydrate tool registry state after restart
 - [x] Persist pipeline run state
 - [x] Rehydrate pipeline run state after restart
-- [ ] Implement pipeline continuation after process restart
+- [x] Implement pipeline continuation after process restart
 - [ ] Implement pipeline continuation after host restart
 - [x] Enforce bounded concurrency for pipeline execution
 - [x] Enforce per-step deadline handling

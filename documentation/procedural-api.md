@@ -322,6 +322,7 @@ cancellation.
 | `king_pipeline_orchestrator_register_tool()` | Registers or replaces one tool definition. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_configure_logging()` | Configures orchestrator logging. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_worker_run_next()` | Claims and executes the next queued worker run. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
+| `king_pipeline_orchestrator_resume_run()` | Continues one persisted `running` run after controller restart. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_get_run()` | Returns one persisted run snapshot. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_cancel_run()` | Requests cancellation for one persisted run. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 

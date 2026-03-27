@@ -56,7 +56,12 @@ int king_orchestrator_pipeline_run_fail(zend_string *run_id, const char *error_m
 int king_orchestrator_pipeline_run_cancelled(zend_string *run_id, const char *error_message);
 int king_orchestrator_run(zval *initial_data, zval *pipeline, zval *options, zval *return_value);
 int king_orchestrator_dispatch(zval *initial_data, zval *pipeline, zval *options, zval *return_value);
-int king_orchestrator_resume_run(zend_string *run_id, zval *return_value);
+int king_orchestrator_resume_run(
+    zend_string *run_id,
+    zval *return_value,
+    const char *function_name,
+    zend_bool throw_on_error
+);
 int king_orchestrator_worker_run_next(zval *return_value);
 
 #endif /* KING_PIPELINE_ORCHESTRATOR_H */

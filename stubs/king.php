@@ -1301,6 +1301,15 @@ namespace {
     function king_pipeline_orchestrator_worker_run_next(): array|false {}
 
     /**
+     * Resume one persisted non-terminal pipeline run after controller
+     * restart. This continuation path is for the local and `remote_peer`
+     * orchestrator backends. The file-worker backend continues work through
+     * `king_pipeline_orchestrator_worker_run_next()`.
+     * @return array<string,mixed>
+     */
+    function king_pipeline_orchestrator_resume_run(string $run_id): array {}
+
+    /**
      * Read one persisted pipeline-run snapshot from the active orchestrator
      * state registry.
      * @return array<string,mixed>|false

@@ -115,6 +115,7 @@ PHP_FUNCTION(king_pipeline_orchestrator_dispatch);
 PHP_FUNCTION(king_pipeline_orchestrator_register_tool);
 PHP_FUNCTION(king_pipeline_orchestrator_configure_logging);
 PHP_FUNCTION(king_pipeline_orchestrator_worker_run_next);
+PHP_FUNCTION(king_pipeline_orchestrator_resume_run);
 PHP_FUNCTION(king_pipeline_orchestrator_get_run);
 PHP_FUNCTION(king_pipeline_orchestrator_cancel_run);
 

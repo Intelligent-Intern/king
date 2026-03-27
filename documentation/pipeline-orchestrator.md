@@ -248,6 +248,15 @@ configuration, and run snapshots from this persisted state. Component info
 surfaces whether the orchestrator was `recovered_from_state`, which gives
 operators a direct way to confirm that restart recovery occurred.
 
+Recovery is not limited to inspection. A controller that restarts on the local
+or `remote_peer` backends can call
+`king_pipeline_orchestrator_resume_run()` for a persisted `running` run and let
+the orchestrator continue that run from the stored initial data, pipeline, and
+execution options. This is run-level continuation, not mid-step checkpointing.
+If the interrupted run had already crossed a remote boundary, the
+`caller_managed` idempotency policy still applies, which means the caller owns
+the decision to replay that run.
+
 ## Logging Configuration
 
 The orchestrator has its own logging snapshot, configured with
@@ -345,6 +354,11 @@ places it onto the configured file-worker queue.
 `king_pipeline_orchestrator_worker_run_next()` is the worker-side claim and
 execute entry point. It claims the next runnable queued job, resumes the stored
 run payload, and returns `false` when the queue is empty.
+
+`king_pipeline_orchestrator_resume_run()` continues one persisted `running` run
+after controller restart on the local or `remote_peer` backends. This function
+is intentionally separate from `worker_run_next()` because the file-worker
+backend already has its own claim and recovery path.
 
 `king_pipeline_orchestrator_get_run()` reads one persisted run snapshot by run
 ID.

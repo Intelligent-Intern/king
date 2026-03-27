@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Implement pipeline continuation after process restart.
+- [ ] Validate Smart-DNS routing decisions against real load and health data.
 
 ## Active Executable Items
 
@@ -78,7 +78,7 @@
 17. [x] Finalize MCP error mapping across protocol, transport, and backend failures.
     done when: remote protocol failures, socket/timeout failures, and local backend failures land in stable, distinguishable public error classes.
 
-18. [ ] Implement pipeline continuation after process restart.
+18. [x] Implement pipeline continuation after process restart.
     done when: an interrupted orchestrator run can resume from persisted state after controller restart instead of stopping at snapshot recovery only.
 
 ### 4. Smart-DNS Distributed Correctness

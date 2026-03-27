@@ -77,6 +77,7 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_pipeline_orchestrator_register_tool, arginfo_king_pipeline_register_tool)
     PHP_FE(king_pipeline_orchestrator_configure_logging, arginfo_king_config_array)
     PHP_FE(king_pipeline_orchestrator_worker_run_next, arginfo_king_no_args)
+    PHP_FE(king_pipeline_orchestrator_resume_run, arginfo_king_pipeline_get_run)
     PHP_FE(king_pipeline_orchestrator_get_run, arginfo_king_pipeline_get_run)
     PHP_FE(king_pipeline_orchestrator_cancel_run, arginfo_king_pipeline_get_run)
 
