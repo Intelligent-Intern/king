@@ -8,7 +8,7 @@ Status note:
 - Unchecked boxes are still open, intentionally fenced out of the current v1 slice, or broader than the proof that exists in this repository today.
 - This file is the long-form closure tracker, not the active execution queue. `ISSUES.md` stays the narrow working backlog.
 - Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, and real TCP host/port `remote_peer` execution with persisted success/failure snapshots are now verified; the remaining open boxes below are the broader continuation, observability, and multi-host slices.
-- Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path and are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices; the remaining open boxes below are long-haul delivery semantics, restart replay, and richer diagnostics.
+- Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path, are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices, and now expose an explicit process-local non-persistent non-replay delivery contract across restart; the remaining open boxes below are richer ordering/idempotency guarantees, longer-haul characterization, and stronger diagnostics.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -260,9 +260,9 @@ Status note:
 
 ## K. Telemetry Export / OTLP
 
-- [ ] Validate OTLP metrics export fully against real collectors
-- [ ] Validate OTLP traces export fully against real collectors
-- [ ] Validate OTLP logs export fully against real collectors
+- [x] Validate OTLP metrics export fully against real collectors
+- [x] Validate OTLP traces export fully against real collectors
+- [x] Validate OTLP logs export fully against real collectors
 - [x] Validate success / failure / retry behavior against real endpoints
 - [ ] Correctly handle response-size / request-size limits
 - [x] Correctly handle non-2xx responses
@@ -273,8 +273,8 @@ Status note:
 - [ ] Implement queue replay after process restart where required
 - [ ] Define export ordering and idempotency correctly
 - [ ] Finalize batch formation behavior
-- [ ] Finalize flush semantics
-- [ ] Finalize delivery semantics
+- [x] Finalize flush semantics
+- [x] Finalize delivery semantics
 - [ ] Validate OTLP JSON payloads against reference collectors
 - [ ] Provide complete export failure diagnostics
 - [ ] Finalize export endpoint / credential security boundaries

@@ -37,7 +37,7 @@ array(6) {
 }
 string(9) "telemetry"
 string(13) "config_backed"
-array(6) {
+array(10) {
   [0]=>
   string(7) "enabled"
   [1]=>
@@ -50,6 +50,14 @@ array(6) {
   string(14) "metrics_enable"
   [5]=>
   string(11) "logs_enable"
+  [6]=>
+  string(17) "delivery_contract"
+  [7]=>
+  string(17) "queue_persistence"
+  [8]=>
+  string(14) "restart_replay"
+  [9]=>
+  string(14) "drain_behavior"
 }
 bool(true)
 bool(true)
