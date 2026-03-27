@@ -10,6 +10,9 @@
 King is meant to ship as one coherent native systems runtime for PHP rather
 than a bag of partially wired helper surfaces.
 
+King v1 is the end-state contract for this line, not an MVP, demo slice, or
+"good enough for now" milestone.
+
 `EPIC.md` now exists only to hold the parts of that goal that should stay
 stable while execution moves:
 
@@ -39,6 +42,9 @@ King v1 is only real when the exported surface behaves like one system:
 - no capability claim without build and test proof
 - no permanent doc drift between target, verified state, and open work
 - no simulated or local-only behavior presented as fully real
+- no shrinking of an intended shared, remote, persistent, or otherwise stronger
+  contract just because the correct implementation is harder; any real scope
+  reduction requires explicit product approval, not engineering convenience
 
 ## Strategic Pillars
 

@@ -2,52 +2,103 @@
 
 > This file is the single moving roadmap and execution queue for repo-local
 > King v1.
-> It distills the long-form completion checklist down to the highest-signal
-> open items that are both still open and realistically executable in this
-> repository.
-> It is derived from the current verified tree plus `READYNESS_TRACKER.md`,
-> but only keeps leaves that are narrow enough to execute here.
+> It distills `READYNESS_TRACKER.md` down to the next `20` executable leaves
+> that are both still open and realistically implementable in this repository.
 > Closed work lives in `PROJECT_ASSESSMENT.md`.
-> `EPIC.md` now stays short and only carries the stable program charter and exit
-> criteria.
+> `EPIC.md` stays the stable charter and release bar.
 
 ## Working Rules
 
 - keep only open work here
 - every item must be narrow enough to implement and verify inside this repo
-- if a checklist item is too broad, split it before adding it here
+- if a tracker item is still too broad, split it before adding it here
 - when a leaf closes, update code, tests, docs, and `PROJECT_ASSESSMENT.md` in the same change
-- if a capability stays simulated, local-only, or intentionally unsupported, keep the public docs honest
+- do not shrink a meaningful v1 contract just to make tests, CI, or docs easier; if the intended contract matters, build the missing backend work or ask explicitly before reducing scope
 
 ## Current Next Leaf
 
-- [ ] Add upgrade/downgrade compatibility gates for release artifacts and persisted state on top of the new install/package/container matrix.
+- [ ] Add a release-artifact upgrade compatibility gate in CI.
 
 ## Active Executable Items
 
-### 1. Build, Release, and Compatibility Confidence
+### 1. Compatibility And Release Confidence
 
-1. [x] Add clean-host and published-container install/smoke matrix coverage across supported PHP and API combinations, then lock upgrade/downgrade release gates behind it.
-   done when: fresh-host package installs and published images are verified in CI instead of only local source builds.
+1. [ ] Add a release-artifact upgrade compatibility gate in CI.
+   done when: a packaged artifact from the previous supported line is installed and smoke-tested against the current compatibility target automatically in CI.
 
-2. [x] Add long-duration ASan, UBSan, and leak-oriented soak gates with archived diagnostics.
-   done when: sanitizer and soak regressions produce retained failure artifacts and block release-grade claims automatically.
+2. [ ] Add a release-artifact downgrade compatibility gate in CI.
+   done when: the current packaged artifact is exercised against the previous supported compatibility target and regressions block release confidence.
 
-3. [ ] Add upgrade/downgrade compatibility gates for release artifacts and persisted state on top of the new install/package/container matrix.
-   done when: release-grade compatibility claims are blocked on explicit cross-version artifact and persistence migration checks rather than on source-build confidence alone.
+3. [ ] Add a persisted-state migration gate in CI.
+   done when: representative persisted state is upgraded across supported versions and verified automatically instead of by local spot checks.
+
+4. [ ] Add an old/new configuration-state compatibility matrix.
+   done when: the runtime is verified against representative old and new config snapshots and config drift becomes an explicit gate.
+
+### 2. Transport And Listener Failure Depth
+
+5. [ ] Validate HTTP/1 bodiless responses against real servers.
+   done when: `1xx`, `204`, `304`, and `HEAD` response behavior are exercised on-wire against real peers without body-length ambiguity.
+
+6. [ ] Validate HTTP/1 failure paths against real connection aborts.
+   done when: mid-response connection close and early socket abort cases are reproduced on-wire and mapped to stable public failure behavior.
+
+7. [ ] Validate HTTP/2 session pooling under load.
+   done when: repeated mixed-load request bursts prove reuse, fairness, and cleanup across pooled h2 sessions instead of one-shot multiplex-only slices.
+
+8. [ ] Validate HTTP/2 failure paths on stream reset and connection abort.
+   done when: `RST_STREAM` and whole-connection teardown paths are exercised against real peers and surfaced through stable client semantics.
+
+9. [ ] Validate HTTP/3 failure paths on transport abort and handshake failure.
+   done when: QUIC transport-close and handshake-reject cases are reproduced against real peers and mapped to stable runtime behavior.
+
+10. [ ] Validate HTTP/3 connection reuse and session-ticket behavior.
+    done when: repeated direct and dispatcher requests prove reuse, ticket persistence, and healthy recovery instead of only one-shot success slices.
+
+11. [ ] Validate WebSocket protocol-violation handling on-wire.
+    done when: malformed opcode, frame-shape, and close-sequence violations from real peers are rejected through stable public errors.
+
+12. [ ] Validate WebSocket network-abort behavior on-wire.
+    done when: peer disconnect, half-close, and abrupt socket-loss cases are exercised without leaks, hangs, or corrupted follow-up sessions.
+
+13. [ ] Validate the HTTP/2 server listener as a real network listener.
+    done when: server-side HTTP/2 listener setup, request handling, response flow, and shutdown semantics are proven against real clients.
+
+14. [ ] Validate the HTTP/3 server listener as a real network listener.
+    done when: server-side HTTP/3 listener setup, request handling, response flow, and shutdown semantics are proven against real QUIC clients.
+
+### 3. MCP And Orchestrator Durability
+
+15. [ ] Make MCP transfer identifiers permanently safe and collision-free.
+    done when: transfer keys are encoded so path safety, separator ambiguity, and identifier collisions are impossible by construction.
+
+16. [ ] Persist and rehydrate MCP transfer state after restart.
+    done when: queued local transfer state survives restart with verified lookup, download, and cleanup semantics instead of process-local only behavior.
+
+17. [ ] Finalize MCP error mapping across protocol, transport, and backend failures.
+    done when: remote protocol failures, socket/timeout failures, and local backend failures land in stable, distinguishable public error classes.
+
+18. [ ] Implement pipeline continuation after process restart.
+    done when: an interrupted orchestrator run can resume from persisted state after controller restart instead of stopping at snapshot recovery only.
+
+### 4. Smart-DNS Distributed Correctness
+
+19. [ ] Validate Smart-DNS routing decisions against real load and health data.
+    done when: route choice is proven against live health/load inputs rather than only registry-local score calculations.
+
+20. [ ] Validate Smart-DNS service and status updates under concurrent writes.
+    done when: parallel registration/status churn preserves coherent discovery and routing results without stale or torn state.
+
+## Next-Up Clusters After The Top 20
+
+- telemetry cleanup, cross-request residue hardening, load bounds, self-metrics, and richer export diagnostics
+- autoscaling decision logic under real load, live drain-before-delete, and automated post-bootstrap registration/readiness
+- orchestrator continuation after host restart, richer error classification, multi-worker execution depth, and broader observability
+- Smart-DNS mother-node synchronization and failure/recovery depth on larger distributed topologies
+- broader QUIC lifecycle, stats, resumption, and recovery validation beyond the current HTTP/3 client slices
 
 ## Notes
 
-- HTTP/2 shared-session fairness under mixed slow/fast streams, HTTP/3 timeout-vs-recovery churn isolation, and multi-client WebSocket close/reconnect churn on one local server are now verified.
-- Router/loadbalancer is now treated as an explicit `config_backed` control-plane component with no stronger forwarding-runtime claim in v1.
-- Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs, and Semantic-DNS now persists and rehydrates registered services plus mother-node topology across restart while also verifying coherent discovery, routing, and mother-node sync statistics under larger local topology churn. The remaining DNS work is real distributed topology depth, richer mother-node synchronization beyond the local registry-backed slice, failover behavior, and wire-level scope, not more local config cleanup or restart-state ambiguity.
-- Object-store v1 is now explicitly frozen to the honest `local_fs` contract. `memory_cache` is only a compatibility alias to the same local backend, and `distributed` plus cloud adapters remain explicitly simulated/unavailable instead of implying a stronger non-local storage claim.
-- QUIC bootstrap is now fail-closed and pinned through `extension/scripts/quiche-bootstrap.lock`: the build path rehydrates the exact `quiche` commit, BoringSSL submodule commit, tracked workspace `Cargo.lock`, and pinned `wirefilter` git revision without branch-based rewrites or unlocked cargo retries.
-- Clean-host package verification and published-container smoke are now first-class gates: `runtime-install-smoke.php` is shared by staged profile smoke, packaged release smoke, and the runtime image; `install-package-matrix.sh` drives host-package verification; `container-smoke-matrix.sh` drives the runtime-image matrix; CI now runs clean-host package install jobs on PHP `8.3`, `8.4`, and `8.5`; and the published image workflow is narrowed to the same supported PHP matrix instead of implying wider version support.
-- Long-duration sanitizer soaks are now first-class CI gates as well: `soak-runtime.sh` drives retained ASan, UBSan, and leak-oriented iterations against the staged profile artifacts, writes per-iteration logs plus summaries under a dedicated artifacts root, and uploads those diagnostics automatically when the CI soak job fails.
-- MCP request, upload, and download now talk to a real TCP host/port remote peer with propagated timeout, deadline, and cancellation controls, plus verified IPv4 and IPv6 peer targeting, 1 MiB payload roundtrips, parallel-transfer backpressure isolation, explicit single-flight reentry guards per connection handle, same-host partial-failure recovery, persisted remote-state restart recovery, and an explicit `topology_scope=tcp_host_port_peer` contract in system component info; the remaining MCP gaps are richer distributed failure semantics and broader multi-host validation depth, not a false same-host-only transport claim.
-- Pipeline orchestration now has three honest backend scopes: `local_in_process`, `same_host_file_worker`, and `tcp_host_port_execution_peer`. The new `remote_peer` backend executes runs over a real TCP host/port worker boundary, persists local run snapshots, and records both successful and failed remote execution outcomes. Remaining orchestrator work is deeper distributed execution semantics, restart continuation, richer error classification, observability depth, and compensation/rollback where publicly claimed.
-- OTLP metrics, traces, and logs now share the same bounded batch/retry path and are validated against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices. Telemetry now also exposes an explicit `best_effort_bounded_retry` contract with a process-local non-persistent queue, single-batch-per-flush drain behavior, and no restart replay guarantee. The remaining telemetry work is stronger ordering/idempotency guarantees, richer diagnostics, and longer-haul degraded characterization rather than collector coverage or restart-semantics ambiguity.
-- Hetzner autoscaling now rolls stale `provisioned` and `registered` nodes back before the next monitor decision when bootstrap, registration, or readiness stall past `idle_node_timeout_sec`, and it reports provider-side delete failures explicitly instead of silently wedging pending capacity under degraded telemetry or provider conditions.
-- Everything else from `READYNESS_TRACKER.md` is either already verified, derivative of these leaves, or still too broad to be the active queue.
+- The active queue now intentionally carries the next `20` executable leaves instead of a one-item placeholder list.
+- Items still open in `READYNESS_TRACKER.md` but not listed here are either derivative of these leaves, already fenced honestly, or still too broad to be a useful execution item today.
 - If an item is not listed here, it is not the current repo-local priority.

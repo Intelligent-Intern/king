@@ -15,17 +15,18 @@ and the public stub surface matches the live runtime.
 
 That does not yet mean "final 10/10".
 The remaining gaps are no longer about broad runtime parity or placeholder
-surfaces inside the local tree.
-They are concentrated in four areas:
+surfaces inside the local tree. They are now concentrated in five narrower
+areas:
 
-- higher-scale MCP and deeper distributed orchestration
-- larger Smart-DNS distributed topology, failover, and real load-routing verification beyond the local slice
-- stronger telemetry delivery guarantees, diagnostics, and fleet recovery depth
-- compatibility and release-grade upgrade guarantees
+- release-grade upgrade, downgrade, persistence-migration, and config-state compatibility gates
+- deeper transport and listener failure-path verification across HTTP/1, HTTP/2, HTTP/3, and WebSocket
+- MCP transfer durability/error semantics and orchestrator continuation depth
+- larger Smart-DNS routing and concurrent-update correctness beyond the current local proof
+- stronger telemetry/autoscaling load-bound, cleanup, and recovery guarantees
 
-The long-form completion checklist has been distilled into a smaller active
-queue. If an open v1 item is not in `ISSUES.md`, it is not part of the current
-repo-local execution plan.
+The long-form completion checklist has now been distilled into the next `20`
+repo-local executable leaves. If an open v1 item is not in `ISSUES.md`, it is
+not part of the current execution queue yet.
 
 ## Verified Baseline Snapshot
 
@@ -35,7 +36,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `346/346` passing
+- `./scripts/test-extension.sh`: `347/347` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/package-release.sh --verify-reproducible`: passing
@@ -95,6 +96,12 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 - The orchestrator now has honest `local_in_process`, `same_host_file_worker`, and `tcp_host_port_execution_peer` backend scopes, plus verified success/failure execution over a real TCP host/port remote peer. Remaining gaps are broader distributed multi-worker execution depth, continuation after process or host restart, richer error classification, observability depth, compensation semantics where publicly claimed, and a broader true multi-host harness.
 - Retry and idempotency semantics are now explicit and test-backed for the current file-worker slice, including exact once-only recovery after worker loss during active execution and starvation-free queue progression under parallel-worker contention.
 
+### Transport And Listener Failure Depth
+
+- The current tree proves happy-path wire coverage and several sustained-load slices across HTTP/1, HTTP/2, HTTP/3, WebSocket, and local server/runtime control flows, but failure-depth is still uneven.
+- The next missing proof is concrete and repo-local: bodiless HTTP/1 responses, abort/reset paths, real listener coverage for server HTTP/2 and HTTP/3, handshake/transport-abort cases for HTTP/3, connection reuse/ticket behavior, and more explicit WebSocket violation/abort handling.
+- These are no longer architectural unknowns; they are the next missing proof leaves on already-real kernels.
+
 ### Routing and DNS Scope
 
 - Router/loadbalancer is now honestly fenced to a config-backed control-plane surface; it is not presented as a forwarding dataplane runtime.
@@ -111,7 +118,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 
 - QUIC and HTTP/3 now bootstrap from a pinned repo-owned dependency path instead of ad hoc local `quiche` resurrection or unlocked cargo retries.
 - Clean-host package install and published-container smoke are now first-class gates, with CI-driven host PHP `8.3`/`8.4`/`8.5` package verification and published-image builds narrowed to the same supported PHP matrix.
-- Upgrade/downgrade compatibility for release artifacts and persisted state is still not proven.
+- Upgrade/downgrade compatibility for release artifacts and persisted state is still not proven, and old/new configuration-state behavior is not yet under an explicit matrix gate.
 
 ## Current Remaining Work Model
 
