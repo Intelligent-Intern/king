@@ -445,6 +445,20 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "mcp.transfer_state_path",
+            sizeof("mcp.transfer_state_path") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->mcp.mcp_transfer_state_path != NULL ? cfg->mcp.mcp_transfer_state_path : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "orchestrator.enable_distributed_tracing",
             sizeof("orchestrator.enable_distributed_tracing") - 1
         )
@@ -647,6 +661,11 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
         target,
         "mcp.default_request_timeout_ms",
         cfg->mcp.mcp_default_request_timeout_ms
+    );
+    add_assoc_string(
+        target,
+        "mcp.transfer_state_path",
+        cfg->mcp.mcp_transfer_state_path != NULL ? cfg->mcp.mcp_transfer_state_path : ""
     );
     add_assoc_bool(
         target,

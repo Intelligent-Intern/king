@@ -70,7 +70,7 @@ try {
 bool(false)
 string(%d) "king_mcp_upload_from_stream() requires a non-empty service name."
 bool(false)
-string(%d) "king_mcp_download_to_stream() could not find a remote MCP transfer for the requested payload identifier."
+string(%d) "king_mcp_download_to_stream() could not find an MCP transfer for the requested payload identifier."
 bool(false)
 string(%d) "king_mcp_upload_from_stream() service name must not contain path separator characters."
 bool(false)
@@ -78,7 +78,7 @@ string(%d) "king_mcp_upload_from_stream() stream identifier must not contain pat
 string(24) "King\ValidationException"
 string(%d) "MCP::uploadFromStream() requires a non-empty service name."
 string(21) "King\MCPDataException"
-string(%d) "MCP::downloadToStream() could not find a remote MCP transfer for the requested payload identifier."
+string(%d) "MCP::downloadToStream() could not find an MCP transfer for the requested payload identifier."
 string(24) "King\ValidationException"
 string(%d) "MCP::uploadFromStream() service name must not contain path separator characters."
 string(24) "King\ValidationException"

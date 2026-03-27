@@ -220,7 +220,7 @@ array(6) {
 }
 string(3) "mcp"
 string(13) "config_backed"
-array(5) {
+array(8) {
   [0]=>
   string(26) "default_request_timeout_ms"
   [1]=>
@@ -230,6 +230,12 @@ array(5) {
   [3]=>
   string(21) "request_cache_ttl_sec"
   [4]=>
+  string(19) "transfer_state_path"
+  [5]=>
+  string(26) "transfer_queue_persistence"
+  [6]=>
+  string(23) "transfer_cleanup_policy"
+  [7]=>
   string(14) "topology_scope"
 }
 bool(true)

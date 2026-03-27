@@ -10,6 +10,7 @@ void kg_config_mcp_and_orchestrator_defaults_load(void)
     king_mcp_orchestrator_config.mcp_default_retry_backoff_ms_initial = 100;
     king_mcp_orchestrator_config.mcp_enable_request_caching = false;
     king_mcp_orchestrator_config.mcp_request_cache_ttl_sec = 60;
+    king_mcp_orchestrator_config.mcp_transfer_state_path = NULL;
     king_mcp_orchestrator_config.orchestrator_default_pipeline_timeout_ms = 120000;
     king_mcp_orchestrator_config.orchestrator_max_recursion_depth = 10;
     king_mcp_orchestrator_config.orchestrator_loop_concurrency_default = 50;

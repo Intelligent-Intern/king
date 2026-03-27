@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Persist and rehydrate MCP transfer state after restart.
+- [ ] Finalize MCP error mapping across protocol, transport, and backend failures.
 
 ## Active Executable Items
 
@@ -72,7 +72,7 @@
 15. [x] Make MCP transfer identifiers permanently safe and collision-free.
     done when: transfer keys are encoded so path safety, separator ambiguity, and identifier collisions are impossible by construction.
 
-16. [ ] Persist and rehydrate MCP transfer state after restart.
+16. [x] Persist and rehydrate MCP transfer state after restart.
     done when: queued local transfer state survives restart with verified lookup, download, and cleanup semantics instead of process-local only behavior.
 
 17. [ ] Finalize MCP error mapping across protocol, transport, and backend failures.

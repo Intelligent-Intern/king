@@ -55,6 +55,14 @@ zend_string *king_mcp_transfer_find(
     const char *id,
     size_t id_len,
     king_mcp_runtime_control_t *control);
+int king_mcp_transfer_acknowledge(
+    king_mcp_state *state,
+    const char *service,
+    size_t service_len,
+    const char *method,
+    size_t method_len,
+    const char *id,
+    size_t id_len);
 
 /* Request Transport */
 int king_mcp_request(

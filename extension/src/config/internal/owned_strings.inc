@@ -114,6 +114,7 @@ static void king_config_free_tcp_strings(kg_tcp_transport_config_t *tcp)
 
 static void king_config_free_mcp_orchestrator_strings(kg_mcp_orchestrator_config_t *mcp)
 {
+    pefree(mcp->mcp_transfer_state_path, 1);
     pefree(mcp->orchestrator_execution_backend, 1);
     pefree(mcp->orchestrator_worker_queue_path, 1);
     pefree(mcp->orchestrator_remote_host, 1);
@@ -211,6 +212,7 @@ static void king_config_clone_owned_strings(king_cfg_t *cfg)
     cfg->tcp.tls_ciphers_tls12 = king_config_clone_persistent_string(cfg->tcp.tls_ciphers_tls12);
     cfg->owns_tcp_strings = 1;
 
+    cfg->mcp.mcp_transfer_state_path = king_config_clone_persistent_string(cfg->mcp.mcp_transfer_state_path);
     cfg->mcp.orchestrator_execution_backend = king_config_clone_persistent_string(cfg->mcp.orchestrator_execution_backend);
     cfg->mcp.orchestrator_worker_queue_path = king_config_clone_persistent_string(cfg->mcp.orchestrator_worker_queue_path);
     cfg->mcp.orchestrator_remote_host = king_config_clone_persistent_string(cfg->mcp.orchestrator_remote_host);

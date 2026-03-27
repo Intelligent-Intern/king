@@ -945,7 +945,7 @@ PHP_FUNCTION(king_mcp_upload_from_stream)
             RETURN_FALSE;
         }
         if (king_get_error()[0] == '\0') {
-            king_set_error("king_mcp_upload_from_stream() failed to persist the remote MCP transfer.");
+            king_set_error("king_mcp_upload_from_stream() failed to persist the MCP transfer state.");
         }
         RETURN_FALSE;
     }
@@ -1052,7 +1052,7 @@ PHP_FUNCTION(king_mcp_download_to_stream)
         }
         if (king_get_error()[0] == '\0') {
             king_set_error(
-                "king_mcp_download_to_stream() could not find a remote MCP transfer for the requested payload identifier."
+                "king_mcp_download_to_stream() could not find an MCP transfer for the requested payload identifier."
             );
         }
         RETURN_FALSE;
@@ -1068,6 +1068,19 @@ PHP_FUNCTION(king_mcp_download_to_stream)
             &control
         ) != SUCCESS
     ) {
+        zend_string_release(payload);
+        RETURN_FALSE;
+    }
+
+    if (king_mcp_transfer_acknowledge(
+            state,
+            service_name,
+            service_name_len,
+            method_name,
+            method_name_len,
+            request_payload,
+            request_payload_len
+        ) != SUCCESS) {
         zend_string_release(payload);
         RETURN_FALSE;
     }
@@ -1333,7 +1346,7 @@ PHP_METHOD(King_MCP, uploadFromStream)
             RETURN_THROWS();
         }
         if (king_get_error()[0] == '\0') {
-            king_set_error("MCP::uploadFromStream() failed to persist the remote MCP transfer.");
+            king_set_error("MCP::uploadFromStream() failed to persist the MCP transfer state.");
         }
         zend_throw_exception_ex(
             king_ce_mcp_data_error,
@@ -1441,7 +1454,7 @@ PHP_METHOD(King_MCP, downloadToStream)
         }
         if (king_get_error()[0] == '\0') {
             king_set_error(
-                "MCP::downloadToStream() could not find a remote MCP transfer for the requested payload identifier."
+                "MCP::downloadToStream() could not find an MCP transfer for the requested payload identifier."
             );
         }
         zend_throw_exception_ex(
@@ -1464,6 +1477,25 @@ PHP_METHOD(King_MCP, downloadToStream)
         ) != SUCCESS
     ) {
         zend_string_release(payload);
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_transfer_acknowledge(
+            state,
+            service,
+            service_len,
+            method,
+            method_len,
+            ZSTR_VAL(request_payload),
+            ZSTR_LEN(request_payload)
+        ) != SUCCESS) {
+        zend_string_release(payload);
+        zend_throw_exception_ex(
+            king_ce_mcp_data_error,
+            0,
+            "%s",
+            king_get_error()
+        );
         RETURN_THROWS();
     }
 

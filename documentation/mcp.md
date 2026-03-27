@@ -151,6 +151,14 @@ service name, method name, and stream identifier.
 The point is not only "send some bytes". It is "send these bytes into a remote slot
 that has a known identity and can be referenced again later".
 
+King can also keep a local durable snapshot of uploaded transfer payloads when
+`king.mcp_transfer_state_path` is configured. That snapshot is not a second
+public API. It is a restart-recovery queue for the same transfer identities the
+runtime already understands. If the process restarts before the transfer is
+consumed, the next MCP connection can rehydrate that local queue, resolve the
+same transfer identifier again, and remove the queued payload only after a
+successful `downloadToStream()` write completes.
+
 ```php
 <?php
 
@@ -197,6 +205,12 @@ king_mcp_download_to_stream(
 
 This is useful when the application wants large payload movement without turning
 every transfer into a huge response string.
+
+The local durable transfer queue matters here too. If a process restarts after
+an upload has already been accepted, King can still resolve the transfer from
+the configured local queue even when the restarted peer no longer has the
+payload in its process memory. The queue is then consumed only after the
+download has been written successfully.
 
 ## Transfer Identity Matters
 

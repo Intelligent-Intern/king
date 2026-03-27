@@ -219,6 +219,20 @@ PHP_FUNCTION(king_system_get_component_info)
             king_mcp_orchestrator_config.mcp_enable_request_caching ? 1 : 0);
         add_assoc_long(&configuration, "request_cache_ttl_sec",
             king_mcp_orchestrator_config.mcp_request_cache_ttl_sec);
+        add_assoc_string(&configuration, "transfer_state_path",
+            king_safe_string(king_mcp_orchestrator_config.mcp_transfer_state_path));
+        add_assoc_string(
+            &configuration,
+            "transfer_queue_persistence",
+            (
+                king_mcp_orchestrator_config.mcp_transfer_state_path != NULL
+                && king_mcp_orchestrator_config.mcp_transfer_state_path[0] != '\0'
+            )
+                ? "restart_rehydratable_local_queue"
+                : "process_local_non_persistent"
+        );
+        add_assoc_string(&configuration, "transfer_cleanup_policy",
+            "consume_on_successful_download");
         add_assoc_string(&configuration, "topology_scope", "tcp_host_port_peer");
     } else if (zend_string_equals_literal(component_name, "pipeline_orchestrator")) {
         king_component_info_init(return_value, "pipeline_orchestrator", "config_backed");
