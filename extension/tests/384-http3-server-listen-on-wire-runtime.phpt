@@ -27,50 +27,60 @@ $directCapture = [];
 $dispatcherCapture = [];
 
 try {
-    $directServer = king_http3_server_wire_start_server($fixture['cert'], $fixture['key']);
+    $directRun = king_http3_one_shot_result_with_retry(
+        static fn () => king_http3_server_wire_start_server($fixture['cert'], $fixture['key']),
+        'king_http3_server_wire_stop_server',
+        static fn (array $server) => king_http3_request_send(
+            'https://localhost:' . $server['port'] . '/wire?room=alpha',
+            'POST',
+            [
+                'x-mode' => 'wire-h3',
+            ],
+            'payload',
+            [
+                'connection_config' => $cfg,
+                'connect_timeout_ms' => 10000,
+                'timeout_ms' => 30000,
+            ]
+        ),
+        static fn (array $response) => $response['status'] === 201
+            && $response['protocol'] === 'http/3'
+            && $response['transport_backend'] === 'quiche_h3'
+            && $response['response_complete'] === true
+            && ($response['headers']['x-reply-mode'] ?? null) === 'wire-h3'
+            && ($response['headers']['content-type'] ?? null) === 'text/plain'
+            && $response['body'] === 'reply:payload'
+    );
+    $directResponse = $directRun['result'];
+    $directCapture = $directRun['capture'];
 
-    try {
-        $directResponse = king_http3_request_with_retry(
-            static fn () => king_http3_request_send(
-                'https://localhost:' . $directServer['port'] . '/wire?room=alpha',
-                'POST',
-                [
-                    'x-mode' => 'wire-h3',
-                ],
-                'payload',
-                [
-                    'connection_config' => $cfg,
-                    'connect_timeout_ms' => 10000,
-                    'timeout_ms' => 30000,
-                ]
-            )
-        );
-    } finally {
-        $directCapture = king_http3_server_wire_stop_server($directServer);
-    }
-
-    $dispatcherServer = king_http3_server_wire_start_server($fixture['cert'], $fixture['key']);
-
-    try {
-        $dispatcherResponse = king_http3_request_with_retry(
-            static fn () => king_client_send_request(
-                'https://localhost:' . $dispatcherServer['port'] . '/wire?room=alpha',
-                'POST',
-                [
-                    'x-mode' => 'wire-h3',
-                ],
-                'payload',
-                [
-                    'preferred_protocol' => 'http3',
-                    'connection_config' => $cfg,
-                    'connect_timeout_ms' => 10000,
-                    'timeout_ms' => 30000,
-                ]
-            )
-        );
-    } finally {
-        $dispatcherCapture = king_http3_server_wire_stop_server($dispatcherServer);
-    }
+    $dispatcherRun = king_http3_one_shot_result_with_retry(
+        static fn () => king_http3_server_wire_start_server($fixture['cert'], $fixture['key']),
+        'king_http3_server_wire_stop_server',
+        static fn (array $server) => king_client_send_request(
+            'https://localhost:' . $server['port'] . '/wire?room=alpha',
+            'POST',
+            [
+                'x-mode' => 'wire-h3',
+            ],
+            'payload',
+            [
+                'preferred_protocol' => 'http3',
+                'connection_config' => $cfg,
+                'connect_timeout_ms' => 10000,
+                'timeout_ms' => 30000,
+            ]
+        ),
+        static fn (array $response) => $response['status'] === 201
+            && $response['protocol'] === 'http/3'
+            && $response['transport_backend'] === 'quiche_h3'
+            && $response['response_complete'] === true
+            && ($response['headers']['x-reply-mode'] ?? null) === 'wire-h3'
+            && ($response['headers']['content-type'] ?? null) === 'text/plain'
+            && $response['body'] === 'reply:payload'
+    );
+    $dispatcherResponse = $dispatcherRun['result'];
+    $dispatcherCapture = $dispatcherRun['capture'];
 } finally {
     king_http3_destroy_fixture($fixture);
 }

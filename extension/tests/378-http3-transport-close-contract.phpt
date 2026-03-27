@@ -27,19 +27,20 @@ $fixture = king_http3_create_fixture(
     ],
     'king-http3-transport-close-'
 );
-$peer = king_http3_start_failure_peer('transport_close', $fixture['cert'], $fixture['key']);
 $config = king_new_config([
     'tls_default_ca_file' => $fixture['cert'],
 ]);
-$url = 'https://' . $peer['host'] . ':' . $peer['port'] . '/x.txt';
 $expectedDirect = 'king_http3_request_send() received a QUIC transport close before the HTTP/3 response completed (code 4919, reason "test transport abort").';
 $expectedDispatch = 'king_client_send_request() received a QUIC transport close before the HTTP/3 response completed (code 4919, reason "test transport abort").';
+$direct = null;
 
 try {
     try {
-        $e = king_http3_exception_with_retry(
-            static fn () => king_http3_request_send(
-                $url,
+        $direct = king_http3_one_shot_exception_with_retry(
+            static fn () => king_http3_start_failure_peer('transport_close', $fixture['cert'], $fixture['key']),
+            'king_http3_stop_failure_peer',
+            static fn (array $peer) => king_http3_request_send(
+                'https://' . $peer['host'] . ':' . $peer['port'] . '/x.txt',
                 'GET',
                 null,
                 null,
@@ -52,6 +53,7 @@ try {
             'King\\QuicException',
             $expectedDirect
         );
+        $e = $direct['exception'];
         var_dump(get_class($e));
         var_dump($e->getMessage() === $expectedDirect);
         var_dump(king_get_last_error() === $expectedDirect);
@@ -59,15 +61,19 @@ try {
         echo "no-exception-1\n";
     }
 
-    $peerCapture = king_http3_stop_failure_peer($peer);
-    $peer = king_http3_start_failure_peer('transport_close', $fixture['cert'], $fixture['key']);
-    $url = 'https://' . $peer['host'] . ':' . $peer['port'] . '/x.txt';
-    var_dump($peerCapture['exit_code'] === 15 || $peerCapture['exit_code'] === 0);
+    if (is_array($direct)) {
+        $peerCapture = $direct['capture'];
+        var_dump($peerCapture['exit_code'] === 15 || $peerCapture['exit_code'] === 0);
+    } else {
+        echo "no-peer-capture\n";
+    }
 
     try {
-        $e = king_http3_exception_with_retry(
-            static fn () => king_client_send_request(
-                $url,
+        $dispatch = king_http3_one_shot_exception_with_retry(
+            static fn () => king_http3_start_failure_peer('transport_close', $fixture['cert'], $fixture['key']),
+            'king_http3_stop_failure_peer',
+            static fn (array $peer) => king_client_send_request(
+                'https://' . $peer['host'] . ':' . $peer['port'] . '/x.txt',
                 'GET',
                 null,
                 null,
@@ -81,6 +87,7 @@ try {
             'King\\QuicException',
             $expectedDispatch
         );
+        $e = $dispatch['exception'];
         var_dump(get_class($e));
         var_dump($e->getMessage() === $expectedDispatch);
         var_dump(king_get_last_error() === $expectedDispatch);
@@ -88,7 +95,6 @@ try {
         echo "no-exception-2\n";
     }
 } finally {
-    king_http3_stop_failure_peer($peer);
     king_http3_destroy_fixture($fixture);
 }
 ?>

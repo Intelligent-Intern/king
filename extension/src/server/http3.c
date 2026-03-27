@@ -1386,14 +1386,10 @@ static int king_server_http3_try_send_response(
     }
 
     if (response->goaway_sent && !response->close_sent) {
-        if (king_server_http3_quiche.quiche_conn_close_fn(runtime->conn, false, 0, NULL, 0) != 0) {
-            king_server_local_set_errorf(
-                "%s() failed to close the active QUIC connection after the response.",
-                function_name
-            );
-            return -1;
-        }
-
+        /* Once the full response and GOAWAY are on wire, closing the QUIC
+         * connection is best-effort: the peer may already be closing or the
+         * local transport may already be in the closed/draining state. */
+        (void) king_server_http3_quiche.quiche_conn_close_fn(runtime->conn, false, 0, NULL, 0);
         response->close_sent = true;
         response->close_grace_deadline_ms = king_server_http3_now_ms() + KING_SERVER_HTTP3_CLOSE_GRACE_MS;
     }

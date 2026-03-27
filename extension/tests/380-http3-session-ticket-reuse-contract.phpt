@@ -31,72 +31,136 @@ $config = king_new_config([
 ]);
 
 $port = null;
-$directUrl = null;
-$dispatchUrl = null;
 
 try {
-    $server = king_http3_start_ticket_test_server($fixture['cert'], $fixture['key'], $fixture['root']);
-    $port = $server['port'];
-    $directUrl = king_http3_test_server_url($server, '/direct.txt');
-    $dispatchUrl = king_http3_test_server_url($server, '/dispatch.txt');
-    $runDirect = static function () use ($directUrl, $config) {
-        return king_http3_request_send(
-            $directUrl,
-            'GET',
-            null,
-            null,
-            [
-                'connection_config' => $config,
-                'connect_timeout_ms' => 10000,
-                'timeout_ms' => 30000,
-            ]
-        );
-    };
+    $first = king_http3_one_shot_result_with_retry(
+        static function () use ($fixture, &$port) {
+            $server = king_http3_start_ticket_test_server(
+                $fixture['cert'],
+                $fixture['key'],
+                $fixture['root']
+            );
+            $port = $server['port'];
+            return $server;
+        },
+        'king_http3_stop_ticket_test_server',
+        static function (array $server) use ($config) {
+            return king_http3_request_send(
+                king_http3_test_server_url($server, '/direct.txt'),
+                'GET',
+                null,
+                null,
+                [
+                    'connection_config' => $config,
+                    'connect_timeout_ms' => 10000,
+                    'timeout_ms' => 30000,
+                ]
+            );
+        },
+        static fn (array $response) => $response['status'] === 200
+            && $response['tls_has_session_ticket']
+            && $response['tls_session_ticket_length'] > 0
+            && $response['tls_ticket_source'] === 'none'
+            && $response['tls_session_resumed'] === false
+    )['result'];
 
-    $runDispatch = static function () use ($dispatchUrl, $config) {
-        return king_client_send_request(
-            $dispatchUrl,
-            'GET',
-            null,
-            null,
-            [
-                'preferred_protocol' => 'http3',
-                'connection_config' => $config,
-                'connect_timeout_ms' => 10000,
-                'timeout_ms' => 30000,
-            ]
-        );
-    };
-    try {
-        $first = king_http3_request_with_retry($runDirect);
-    } finally {
-        king_http3_stop_ticket_test_server($server);
-    }
-
-    $server = king_http3_start_ticket_test_server($fixture['cert'], $fixture['key'], $fixture['root'], '127.0.0.1', $port, 'localhost');
-    try {
-        $second = king_http3_request_with_retry($runDirect);
-    } finally {
-        king_http3_stop_ticket_test_server($server);
-    }
+    $second = king_http3_one_shot_result_with_retry(
+        static function () use ($fixture, $port) {
+            return king_http3_start_ticket_test_server(
+                $fixture['cert'],
+                $fixture['key'],
+                $fixture['root'],
+                '127.0.0.1',
+                $port,
+                'localhost'
+            );
+        },
+        'king_http3_stop_ticket_test_server',
+        static function (array $server) use ($config) {
+            return king_http3_request_send(
+                king_http3_test_server_url($server, '/direct.txt'),
+                'GET',
+                null,
+                null,
+                [
+                    'connection_config' => $config,
+                    'connect_timeout_ms' => 10000,
+                    'timeout_ms' => 30000,
+                ]
+            );
+        },
+        static fn (array $response) => $response['status'] === 200
+            && $response['tls_has_session_ticket']
+            && $response['tls_ticket_source'] === 'ring'
+            && $response['tls_session_resumed'] === true
+    )['result'];
 
     $session = king_connect('127.0.0.1', 443);
     king_client_tls_import_session_ticket($session, 'stale-h3-ticket');
     king_close($session);
 
-    $server = king_http3_start_ticket_test_server($fixture['cert'], $fixture['key'], $fixture['root'], '127.0.0.1', $port, 'localhost');
-    try {
-        $third = king_http3_request_with_retry($runDirect);
-    } finally {
-        king_http3_stop_ticket_test_server($server);
-    }
+    $third = king_http3_one_shot_result_with_retry(
+        static function () use ($fixture, $port) {
+            return king_http3_start_ticket_test_server(
+                $fixture['cert'],
+                $fixture['key'],
+                $fixture['root'],
+                '127.0.0.1',
+                $port,
+                'localhost'
+            );
+        },
+        'king_http3_stop_ticket_test_server',
+        static function (array $server) use ($config) {
+            return king_http3_request_send(
+                king_http3_test_server_url($server, '/direct.txt'),
+                'GET',
+                null,
+                null,
+                [
+                    'connection_config' => $config,
+                    'connect_timeout_ms' => 10000,
+                    'timeout_ms' => 30000,
+                ]
+            );
+        },
+        static fn (array $response) => $response['status'] === 200
+            && $response['tls_has_session_ticket']
+            && $response['tls_ticket_source'] === 'none'
+            && $response['tls_session_resumed'] === false
+    )['result'];
 
-    $server = king_http3_start_ticket_test_server($fixture['cert'], $fixture['key'], $fixture['root'], '127.0.0.1', $port, 'localhost');
-    try {
-        $fourth = king_http3_request_with_retry($runDispatch);
-    } finally {
-        king_http3_stop_ticket_test_server($server);
-    }
+    $fourth = king_http3_one_shot_result_with_retry(
+        static function () use ($fixture, $port) {
+            return king_http3_start_ticket_test_server(
+                $fixture['cert'],
+                $fixture['key'],
+                $fixture['root'],
+                '127.0.0.1',
+                $port,
+                'localhost'
+            );
+        },
+        'king_http3_stop_ticket_test_server',
+        static function (array $server) use ($config) {
+            return king_client_send_request(
+                king_http3_test_server_url($server, '/dispatch.txt'),
+                'GET',
+                null,
+                null,
+                [
+                    'preferred_protocol' => 'http3',
+                    'connection_config' => $config,
+                    'connect_timeout_ms' => 10000,
+                    'timeout_ms' => 30000,
+                ]
+            );
+        },
+        static fn (array $response) => $response['status'] === 200
+            && $response['tls_has_session_ticket']
+            && $response['tls_ticket_source'] === 'ring'
+            && $response['tls_session_resumed'] === true
+    )['result'];
 } finally {
     king_http3_destroy_fixture($fixture);
 }
