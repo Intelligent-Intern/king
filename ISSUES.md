@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate the HTTP/3 server listener as a real network listener.
+- [ ] Make MCP transfer identifiers permanently safe and collision-free.
 
 ## Active Executable Items
 
@@ -64,7 +64,7 @@
 13. [x] Validate the HTTP/2 server listener as a real network listener.
     done when: server-side HTTP/2 listener setup, request handling, response flow, and shutdown semantics are proven against real clients.
 
-14. [ ] Validate the HTTP/3 server listener as a real network listener.
+14. [x] Validate the HTTP/3 server listener as a real network listener.
     done when: server-side HTTP/3 listener setup, request handling, response flow, and shutdown semantics are proven against real QUIC clients.
 
 ### 3. MCP And Orchestrator Durability

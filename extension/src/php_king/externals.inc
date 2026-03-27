@@ -93,6 +93,7 @@ PHP_FUNCTION(king_http1_server_listen_once);
 PHP_FUNCTION(king_http2_server_listen);
 PHP_FUNCTION(king_http2_server_listen_once);
 PHP_FUNCTION(king_http3_server_listen);
+PHP_FUNCTION(king_http3_server_listen_once);
 PHP_FUNCTION(king_server_listen);
 PHP_FUNCTION(king_server_on_cancel);
 PHP_FUNCTION(king_server_send_early_hints);

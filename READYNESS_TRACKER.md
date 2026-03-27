@@ -83,7 +83,7 @@ Status note:
 
 - [x] Validate HTTP/1 server listener as a real network listener
 - [x] Validate HTTP/2 server listener as a real network listener
-- [ ] Validate HTTP/3 server listener as a real network listener
+- [x] Validate HTTP/3 server listener as a real network listener
 - [x] Validate server dispatch under real network traffic
 - [ ] Validate server request normalization against real requests
 - [ ] Validate server response normalization against real clients

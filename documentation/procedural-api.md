@@ -167,6 +167,7 @@ telemetry setup, and server-side close behavior.
 | `king_http2_server_listen()` | Runs the HTTP/2 listener path. | [Server Runtime](./server-runtime.md) |
 | `king_http2_server_listen_once()` | Accepts and handles one on-wire h2c request. | [Server Runtime](./server-runtime.md) |
 | `king_http3_server_listen()` | Runs the HTTP/3 listener path. | [Server Runtime](./server-runtime.md) |
+| `king_http3_server_listen_once()` | Accepts and handles one on-wire HTTP/3 request over QUIC. | [Server Runtime](./server-runtime.md) |
 | `king_server_listen()` | Dispatches a generic server listener through the runtime index. | [Server Runtime](./server-runtime.md) |
 | `king_server_on_cancel()` | Registers a cancel callback for server-side work. | [Server Runtime](./server-runtime.md) |
 | `king_server_send_early_hints()` | Sends or records Early Hints on the server side. | [Server Runtime](./server-runtime.md) |

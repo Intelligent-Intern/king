@@ -21,5 +21,6 @@
  * @return TRUE on success, FALSE on failure.
  */
 PHP_FUNCTION(king_http3_server_listen);
+PHP_FUNCTION(king_http3_server_listen_once);
 
 #endif // KING_SERVER_HTTP3_H

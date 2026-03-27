@@ -35,7 +35,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `365/365` passing
+- `./scripts/test-extension.sh`: `366/366` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/check-php-support-matrix.sh`: passing
@@ -57,8 +57,8 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `365` PHPT files
-- public stub parity: `126` functions, `43` classes, `48` declared public methods
+- `extension/tests`: `366` PHPT files
+- public stub parity: `127` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
 - static and runtime-surface audits now enforce that include-tree discipline
@@ -71,7 +71,7 @@ The current tree already proves:
 - real HTTP/1, HTTP/2, and HTTP/3 client request paths, including reuse, repeated pooled HTTP/2 mixed-load bursts, streaming, bodiless-response handling, explicit HTTP/1 and HTTP/2 abort/reset failure mapping, explicit HTTP/3 handshake-failure and transport-close mapping, shared-ring HTTP/3 session-ticket reuse with direct and dispatcher recovery from stale ticket seeds, and cancel/timeout contracts
 - HTTP/2 shared-session fairness under mixed slow and fast concurrent streams
 - HTTP/3 one-shot churn isolation across repeated timeout and healthy-recovery cycles
-- local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3, plus real one-shot on-wire listener proof for HTTP/1 and HTTP/2
+- local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3, plus real one-shot on-wire listener proof for HTTP/1, HTTP/2, and HTTP/3
 - on-wire WebSocket client handshake/frame/close runtime, stable network-abort mapping for peer disconnect, half-close, and abrupt socket-loss, stable `1002` protocol-close handling for malformed opcode/frame-shape/close-sequence peer violations, and honest OO `King\WebSocket\Connection` parity
 - multi-client WebSocket close/reconnect churn on one server without cross-client starvation or corruption
 - server-side `king_server_upgrade_to_websocket()` both as an honest local marker slice for local listeners and as a real on-wire HTTP/1 one-shot upgrade path with frame flow, handler ownership, and close/drain coverage
@@ -103,8 +103,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 ### Transport And Listener Failure Depth
 
 - The current tree proves happy-path wire coverage and several sustained-load slices across HTTP/1, HTTP/2, HTTP/3, WebSocket, and local server/runtime control flows, but failure-depth is still uneven.
-- The next missing proof is concrete and repo-local: real listener coverage for server HTTP/3.
-- These are no longer architectural unknowns; they are the next missing proof leaves on already-real kernels.
+- These are no longer architectural unknowns; they are narrower remaining proof leaves on already-real kernels.
 
 ### Routing and DNS Scope
 

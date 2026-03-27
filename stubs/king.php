@@ -413,6 +413,17 @@ namespace {
     function king_http3_server_listen(string $host, int $port, mixed $config, callable $handler): bool {}
 
     /**
+     * Active one-shot on-wire HTTP/3 listener leaf.
+     * Binds a real UDP socket, accepts exactly one QUIC connection, drives one
+     * HTTP/3 request stream over the active `quiche` runtime, materializes one
+     * `King\Session` snapshot over the accepted socket, invokes the handler
+     * once with a normalized HTTP/3-style request array, writes one HTTP/3
+     * response, sends a clean `GOAWAY`, and then closes the listener/session.
+     * @param mixed $config
+     */
+    function king_http3_server_listen_once(string $host, int $port, mixed $config, callable $handler): bool {}
+
+    /**
      * Active local server-index dispatcher.
      * Resolves `null`, inline config arrays, and `King\Config` handles,
      * chooses HTTP/3 when TCP is disabled, otherwise HTTP/2 when
