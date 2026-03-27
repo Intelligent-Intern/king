@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate Smart-DNS routing decisions against real load and health data.
+- [ ] Validate Smart-DNS service and status updates under concurrent writes.
 
 ## Active Executable Items
 
@@ -83,7 +83,7 @@
 
 ### 4. Smart-DNS Distributed Correctness
 
-19. [ ] Validate Smart-DNS routing decisions against real load and health data.
+19. [x] Validate Smart-DNS routing decisions against real load and health data.
     done when: route choice is proven against live health/load inputs rather than only registry-local score calculations.
 
 20. [ ] Validate Smart-DNS service and status updates under concurrent writes.

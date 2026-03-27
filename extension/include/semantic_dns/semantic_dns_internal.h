@@ -36,5 +36,6 @@ int king_semantic_dns_state_save(void);
 int king_semantic_dns_export_state_payload(zval *return_value);
 int king_semantic_dns_import_state_payload(zval *payload);
 int king_semantic_dns_refresh_runtime_mother_nodes_from_registry(void);
+void king_semantic_dns_refresh_live_service_signals(void);
 
 #endif /* KING_SEMANTIC_DNS_INTERNAL_H */

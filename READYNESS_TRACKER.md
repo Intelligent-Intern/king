@@ -231,7 +231,7 @@ Status note:
 - [ ] Validate DNS protocol behavior on-wire where publicly claimed
 - [ ] Validate service registration against real distributed topology
 - [ ] Validate mother-node synchronization against real topology
-- [ ] Validate routing decisions against real load / health data
+- [x] Validate routing decisions against real load / health data
 - [ ] Validate service discovery under parallel updates
 - [ ] Validate status updates under concurrent writes
 - [x] Implement persistence for registration data

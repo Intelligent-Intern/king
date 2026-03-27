@@ -14,6 +14,8 @@ PHP_FUNCTION(king_semantic_dns_get_optimal_route)
         Z_PARAM_ARRAY_OR_NULL(client_info)
     ZEND_PARSE_PARAMETERS_END();
 
+    king_semantic_dns_health_check_services();
+
     /*
      * Build native score using the core scoring policy from routing.c
      */

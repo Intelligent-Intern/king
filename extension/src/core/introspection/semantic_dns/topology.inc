@@ -13,6 +13,8 @@ PHP_FUNCTION(king_semantic_dns_get_service_topology)
 
     ZEND_PARSE_PARAMETERS_NONE();
 
+    king_semantic_dns_health_check_services();
+
     array_init(return_value);
 
     array_init(&services);

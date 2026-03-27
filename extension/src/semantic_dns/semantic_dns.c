@@ -629,6 +629,8 @@ void king_semantic_dns_health_check_services(void)
     if (!king_semantic_dns_runtime.initialized) {
         return;
     }
+
+    king_semantic_dns_refresh_live_service_signals();
 }
 
 const char *king_service_type_to_string(king_service_type_t type)

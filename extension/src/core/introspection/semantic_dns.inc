@@ -1,5 +1,6 @@
 #include "include/semantic_dns/semantic_dns_internal.h"
 #include "semantic_dns/service_registry.inc"
+#include "semantic_dns/live_signals.inc"
 #include "semantic_dns/mother_nodes.inc"
 #include "semantic_dns/topology.inc"
 #include "semantic_dns/discovery.inc"

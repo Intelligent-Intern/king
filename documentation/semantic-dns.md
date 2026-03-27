@@ -268,6 +268,12 @@ If a service becomes unhealthy, that should affect route choice. If a service is
 still healthy but overloaded, that should also affect route choice. Without
 status and load updates, discovery quickly falls back to being a stale catalog.
 
+Those updates can come from direct application writes or from live probe data.
+When a service record includes attributes such as `health_check_path`,
+`health_check_host`, or `health_check_port`, the running Semantic-DNS server
+can refresh the active service record from a real HTTP endpoint before it
+answers discovery, topology, or route questions.
+
 ## Choosing The Optimal Route
 
 `king_semantic_dns_get_optimal_route()` answers the final routing question:
@@ -287,6 +293,13 @@ print_r($route);
 
 This is where the subsystem becomes more than a registry. It is no longer only
 returning a list of names. It is making a route decision from live state.
+
+That live state can be fed by direct status calls and by HTTP health probes.
+Probe responses can publish values such as `X-King-Service-Status`,
+`X-King-Load-Percent`, `X-King-Active-Connections`, and
+`X-King-Total-Requests`. The route layer can then score the current candidates
+from what the service is reporting now, not only from the values it had when it
+was first registered.
 
 ```mermaid
 sequenceDiagram
@@ -428,7 +441,11 @@ king_semantic_dns_register_service([
     'port' => 8443,
     'status' => 'healthy',
     'current_load_percent' => 24,
-    'attributes' => ['region' => 'eu-central', 'accelerator' => 'gpu'],
+    'attributes' => [
+        'region' => 'eu-central',
+        'accelerator' => 'gpu',
+        'health_check_path' => '/health',
+    ],
 ]);
 
 king_semantic_dns_register_service([
@@ -439,7 +456,11 @@ king_semantic_dns_register_service([
     'port' => 8443,
     'status' => 'healthy',
     'current_load_percent' => 61,
-    'attributes' => ['region' => 'eu-central', 'accelerator' => 'gpu'],
+    'attributes' => [
+        'region' => 'eu-central',
+        'accelerator' => 'gpu',
+        'health_check_path' => '/health',
+    ],
 ]);
 
 king_semantic_dns_update_service_status('infer-eu-2', 'degraded', [
