@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate HTTP/1 bodiless responses against real servers.
+- [ ] Validate HTTP/1 failure paths against real connection aborts.
 
 ## Active Executable Items
 
@@ -37,7 +37,7 @@
 
 ### 2. Transport And Listener Failure Depth
 
-5. [ ] Validate HTTP/1 bodiless responses against real servers.
+5. [x] Validate HTTP/1 bodiless responses against real servers.
    done when: `1xx`, `204`, `304`, and `HEAD` response behavior are exercised on-wire against real peers without body-length ambiguity.
 
 6. [ ] Validate HTTP/1 failure paths against real connection aborts.

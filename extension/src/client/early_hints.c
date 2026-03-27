@@ -303,22 +303,19 @@ static void king_early_hints_process_header_value(
     } ZEND_HASH_FOREACH_END();
 }
 
-PHP_FUNCTION(king_client_early_hints_process)
+void king_client_early_hints_process_headers(
+    king_http1_request_context *context,
+    zval *headers)
 {
-    zval *request_context;
-    zval *headers;
-    king_http1_request_context *context;
     zval *header_value;
     zend_string *header_name;
 
-    ZEND_PARSE_PARAMETERS_START(2, 2)
-        Z_PARAM_ZVAL(request_context)
-        Z_PARAM_ARRAY(headers)
-    ZEND_PARSE_PARAMETERS_END();
-
-    context = king_early_hints_fetch_request_context(request_context, 1);
-    if (context == NULL) {
-        RETURN_THROWS();
+    if (
+        context == NULL
+        || headers == NULL
+        || Z_TYPE_P(headers) != IS_ARRAY
+    ) {
+        return;
     }
 
     ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(headers), header_name, header_value) {
@@ -331,6 +328,25 @@ PHP_FUNCTION(king_client_early_hints_process)
 
         king_early_hints_process_header_value(context, header_value);
     } ZEND_HASH_FOREACH_END();
+}
+
+PHP_FUNCTION(king_client_early_hints_process)
+{
+    zval *request_context;
+    zval *headers;
+    king_http1_request_context *context;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_ZVAL(request_context)
+        Z_PARAM_ARRAY(headers)
+    ZEND_PARSE_PARAMETERS_END();
+
+    context = king_early_hints_fetch_request_context(request_context, 1);
+    if (context == NULL) {
+        RETURN_THROWS();
+    }
+
+    king_client_early_hints_process_headers(context, headers);
 
     king_set_error("");
     RETURN_TRUE;

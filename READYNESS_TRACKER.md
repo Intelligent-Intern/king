@@ -19,7 +19,7 @@ Status note:
 - [x] Validate HTTP/1 redirect following against real redirect chains
 - [x] Validate HTTP/1 keep-alive reuse against real servers
 - [x] Validate HTTP/1 streaming response path against real chunked responses
-- [ ] Validate HTTP/1 bodiless responses against real servers
+- [x] Validate HTTP/1 bodiless responses against real servers
 - [x] Validate HTTP/1 Content-Length responses against real servers
 - [ ] Validate HTTP/1 failure paths against real connection aborts
 - [x] Validate HTTP/1 timeout behavior against real slow servers

@@ -459,6 +459,12 @@ zend_result king_http1_request_dispatch(
 
         body_ptr = ZSTR_VAL(response_buffer.s) + header_end;
         body_len = ZSTR_LEN(response_buffer.s) - header_end;
+        if (
+            (expect_no_body || king_http1_status_has_no_body(response_meta.status_code))
+            && body_len > 0
+        ) {
+            keep_alive_reusable = false;
+        }
 
         array_init(return_value);
         add_assoc_long(return_value, "status", response_meta.status_code);
@@ -466,7 +472,9 @@ zend_result king_http1_request_dispatch(
         response_meta.status_line = NULL;
         add_assoc_zval(return_value, "headers", &response_meta.headers);
         response_meta.headers_initialized = false;
-        if (response_meta.chunked_transfer_encoding) {
+        if (expect_no_body || king_http1_status_has_no_body(response_meta.status_code)) {
+            add_assoc_string(return_value, "body", "");
+        } else if (response_meta.chunked_transfer_encoding) {
             if (king_http1_decode_chunked_body(
                     ZSTR_VAL(response_buffer.s),
                     ZSTR_LEN(response_buffer.s),

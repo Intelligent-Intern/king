@@ -1,3 +1,77 @@
+static void king_http1_response_buffer_discard_prefix(
+    smart_str *buffer,
+    size_t prefix_len)
+{
+    smart_str compacted = {0};
+    size_t total_len;
+
+    if (buffer == NULL || buffer->s == NULL || prefix_len == 0) {
+        return;
+    }
+
+    total_len = ZSTR_LEN(buffer->s);
+    if (prefix_len >= total_len) {
+        smart_str_free(buffer);
+        return;
+    }
+
+    smart_str_appendl(
+        &compacted,
+        ZSTR_VAL(buffer->s) + prefix_len,
+        total_len - prefix_len
+    );
+    smart_str_0(&compacted);
+
+    smart_str_free(buffer);
+    *buffer = compacted;
+}
+
+static zend_result king_http1_response_buffer_consume_interim_headers(
+    smart_str *buffer,
+    king_http1_request_context *context,
+    const char *function_name)
+{
+    while (buffer != NULL && buffer->s != NULL) {
+        king_http1_response_meta_t interim_meta;
+        size_t header_end = king_http1_find_header_end(
+            ZSTR_VAL(buffer->s),
+            ZSTR_LEN(buffer->s)
+        );
+
+        if (header_end == 0) {
+            return SUCCESS;
+        }
+
+        memset(&interim_meta, 0, sizeof(interim_meta));
+        if (king_http1_parse_response_headers(
+                ZSTR_VAL(buffer->s),
+                header_end,
+                &interim_meta,
+                function_name
+            ) != SUCCESS) {
+            return FAILURE;
+        }
+
+        if (
+            interim_meta.status_code < 100
+            || interim_meta.status_code >= 200
+            || interim_meta.status_code == 101
+        ) {
+            king_http1_response_meta_destroy(&interim_meta);
+            return SUCCESS;
+        }
+
+        if (context != NULL && interim_meta.status_code == 103) {
+            king_client_early_hints_process_headers(context, &interim_meta.headers);
+        }
+
+        king_http1_response_meta_destroy(&interim_meta);
+        king_http1_response_buffer_discard_prefix(buffer, header_end);
+    }
+
+    return SUCCESS;
+}
+
 static zend_result king_http1_recv_response(
     int fd,
     smart_str *response_buffer,
@@ -26,6 +100,18 @@ static zend_result king_http1_recv_response(
                 return FAILURE;
             }
 
+            if (king_http1_response_buffer_consume_interim_headers(
+                    response_buffer,
+                    NULL,
+                    function_name
+                ) != SUCCESS) {
+                return FAILURE;
+            }
+
+            if (response_buffer->s == NULL) {
+                continue;
+            }
+
             if (!headers_parsed) {
                 size_t header_end = king_http1_find_header_end(
                     ZSTR_VAL(response_buffer->s),
@@ -46,6 +132,13 @@ static zend_result king_http1_recv_response(
 
                     headers_parsed = true;
 
+                    if (
+                        expect_no_body
+                        || king_http1_status_has_no_body(meta->status_code)
+                    ) {
+                        return SUCCESS;
+                    }
+
                     if (meta->chunked_transfer_encoding) {
                         if (king_http1_find_chunked_message_end(
                                 ZSTR_VAL(response_buffer->s),
@@ -60,16 +153,16 @@ static zend_result king_http1_recv_response(
                         if (response_end != 0) {
                             return SUCCESS;
                         }
-                    } else if (
-                        !meta->has_content_length
-                        && (expect_no_body || king_http1_status_has_no_body(meta->status_code))
-                    ) {
-                        return SUCCESS;
                     }
                 }
             }
 
-            if (headers_parsed && meta->chunked_transfer_encoding) {
+            if (
+                headers_parsed
+                && (expect_no_body || king_http1_status_has_no_body(meta->status_code))
+            ) {
+                return SUCCESS;
+            } else if (headers_parsed && meta->chunked_transfer_encoding) {
                 size_t header_end = king_http1_find_header_end(
                     ZSTR_VAL(response_buffer->s),
                     ZSTR_LEN(response_buffer->s)
@@ -457,6 +550,18 @@ static zend_result king_http1_request_context_ensure_headers(
         bool peer_closed = false;
 
         if (context->header_buffer.s != NULL) {
+            if (king_http1_response_buffer_consume_interim_headers(
+                    &context->header_buffer,
+                    context,
+                    function_name
+                ) != SUCCESS) {
+                return FAILURE;
+            }
+
+            if (context->header_buffer.s == NULL) {
+                continue;
+            }
+
             header_end = king_http1_find_header_end(
                 ZSTR_VAL(context->header_buffer.s),
                 ZSTR_LEN(context->header_buffer.s)
@@ -479,7 +584,11 @@ static zend_result king_http1_request_context_ensure_headers(
             context->headers_parsed = true;
             body_ptr = ZSTR_VAL(context->header_buffer.s) + header_end;
             body_len = ZSTR_LEN(context->header_buffer.s) - header_end;
-            if (body_len > 0) {
+            if (
+                body_len > 0
+                && !context->expect_no_body
+                && !king_http1_status_has_no_body(context->meta.status_code)
+            ) {
                 if (context->meta.chunked_transfer_encoding) {
                     smart_str_appendl(&context->chunk_buffer, body_ptr, body_len);
                     smart_str_0(&context->chunk_buffer);
@@ -487,6 +596,8 @@ static zend_result king_http1_request_context_ensure_headers(
                     smart_str_appendl(&context->body_buffer, body_ptr, body_len);
                     smart_str_0(&context->body_buffer);
                 }
+            } else if (body_len > 0) {
+                context->request_allows_keep_alive = false;
             }
             smart_str_free(&context->header_buffer);
 

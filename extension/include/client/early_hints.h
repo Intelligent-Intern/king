@@ -3,6 +3,8 @@
 
 #include <php.h>
 
+typedef struct _king_http1_request_context king_http1_request_context;
+
 /**
  * @file extension/include/client/early_hints.h
  * @brief Client-side HTTP 103 Early Hints handling.
@@ -25,5 +27,10 @@ PHP_FUNCTION(king_client_early_hints_process);
  * @return The parsed hint list, or an empty array if none were received.
  */
 PHP_FUNCTION(king_client_early_hints_get_pending);
+
+void king_client_early_hints_process_headers(
+    king_http1_request_context *context,
+    zval *headers
+);
 
 #endif // KING_CLIENT_EARLY_HINTS_H
