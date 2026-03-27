@@ -38,6 +38,8 @@ try {
     $config = king_new_config([
         'tls_default_ca_file' => $fixture['cert'],
     ]);
+    $stableDirectUrl = king_http3_test_server_url($healthyServer, '/stable-direct.txt');
+    $stableDispatchUrl = king_http3_test_server_url($healthyServer, '/stable-dispatch.txt');
 
     for ($round = 0; $round < 3; $round++) {
         try {
@@ -58,7 +60,7 @@ try {
 
         $direct = king_http3_request_with_retry(
             static fn () => king_http3_request_send(
-                'https://localhost:' . $healthyServer[2] . '/stable-direct.txt',
+                $stableDirectUrl,
                 'GET',
                 null,
                 null,
@@ -89,7 +91,7 @@ try {
 
         $dispatch = king_http3_request_with_retry(
             static fn () => king_client_send_request(
-                'https://localhost:' . $healthyServer[2] . '/stable-dispatch.txt',
+                $stableDispatchUrl,
                 'GET',
                 null,
                 null,

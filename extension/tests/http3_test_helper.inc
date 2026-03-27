@@ -1,5 +1,19 @@
 <?php
 
+function king_http3_parse_socket_name(string $socketName): array
+{
+    if (preg_match('/^\[(.+)\]:(\d+)$/', $socketName, $matches) === 1) {
+        return [$matches[1], (int) $matches[2]];
+    }
+
+    $parts = explode(':', $socketName, 2);
+    if (count($parts) !== 2) {
+        throw new RuntimeException('failed to parse HTTP/3 socket name');
+    }
+
+    return [$parts[0], (int) $parts[1]];
+}
+
 function king_http3_create_fixture(array $files, string $prefix = 'king-http3-fixture-'): array
 {
     $dir = sys_get_temp_dir() . '/' . $prefix . bin2hex(random_bytes(5));
@@ -54,19 +68,19 @@ function king_http3_destroy_fixture(array $fixture): void
 
 function king_http3_start_test_server(string $certFile, string $keyFile, string $rootDir): array
 {
-    $probe = stream_socket_server('udp://127.0.0.1:0', $errno, $errstr, STREAM_SERVER_BIND);
+    $probe = stream_socket_server('udp://localhost:0', $errno, $errstr, STREAM_SERVER_BIND);
     if ($probe === false) {
         throw new RuntimeException("failed to reserve UDP test port: $errstr");
     }
 
     $serverName = stream_socket_get_name($probe, false);
     fclose($probe);
-    [$host, $port] = explode(':', $serverName, 2);
+    [, $port] = king_http3_parse_socket_name($serverName);
 
     $binary = getenv('KING_QUICHE_SERVER');
     $command = 'RUST_LOG=info '
         . escapeshellarg($binary)
-        . ' --listen ' . escapeshellarg($host . ':' . $port)
+        . ' --listen ' . escapeshellarg($serverName)
         . ' --cert ' . escapeshellarg($certFile)
         . ' --key ' . escapeshellarg($keyFile)
         . ' --root ' . escapeshellarg($rootDir)
@@ -91,7 +105,7 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
     }
 
     $output = '';
-    $startupGraceAt = microtime(true) + 15.0;
+    $startupGraceAt = microtime(true) + 1.0;
     $deadline = microtime(true) + 45.0;
     while (microtime(true) < $deadline) {
         $status = proc_get_status($process);
@@ -113,7 +127,12 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
         }
 
         if (str_contains($output, 'listening on')) {
-            return [$process, $pipes, (int) $port];
+            return [
+                'process' => $process,
+                'pipes' => $pipes,
+                'port' => (int) $port,
+                'host' => 'localhost',
+            ];
         }
 
         if (!$status['running']) {
@@ -121,7 +140,12 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
         }
 
         if (microtime(true) >= $startupGraceAt) {
-            return [$process, $pipes, (int) $port];
+            return [
+                'process' => $process,
+                'pipes' => $pipes,
+                'port' => (int) $port,
+                'host' => 'localhost',
+            ];
         }
     }
 
@@ -138,9 +162,16 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
     throw new RuntimeException('local HTTP/3 test server failed: ' . trim($output));
 }
 
+function king_http3_test_server_url(array $server, string $path): string
+{
+    $host = $server['host'] ?? '127.0.0.1';
+    return 'https://' . $host . ':' . $server['port'] . $path;
+}
+
 function king_http3_stop_test_server(array $server): void
 {
-    [$process, $pipes] = $server;
+    $process = $server['process'];
+    $pipes = $server['pipes'];
     foreach ($pipes as $pipe) {
         fclose($pipe);
     }

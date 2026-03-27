@@ -806,6 +806,7 @@ static zend_result king_http3_runtime_init(
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_family = AF_UNSPEC;
+    hints.ai_flags = AI_ADDRCONFIG;
 
     if (getaddrinfo(ZSTR_VAL(target->host), port_buffer, &hints, &result) != 0) {
         king_http3_throw(

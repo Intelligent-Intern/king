@@ -36,10 +36,12 @@ try {
         'tls_default_ca_file' => $fixture['cert'],
         'tcp_connect_timeout_ms' => 10000,
     ]);
+    $firstUrl = king_http3_test_server_url($server, '/first.txt');
+    $secondUrl = king_http3_test_server_url($server, '/second.txt');
 
     king_http3_request_with_retry(
         static fn () => king_http3_request_send(
-            'https://localhost:' . $server[2] . '/first.txt',
+            $firstUrl,
             'GET',
             null,
             null,
@@ -52,8 +54,8 @@ try {
     );
 
     $client = new King\Client\Http3Client($config);
-    $first = $client->request('GET', 'https://localhost:' . $server[2] . '/first.txt');
-    $second = $client->request('GET', 'https://localhost:' . $server[2] . '/second.txt');
+    $first = $client->request('GET', $firstUrl);
+    $second = $client->request('GET', $secondUrl);
 } finally {
     king_http3_stop_test_server($server);
     king_http3_destroy_fixture($fixture);

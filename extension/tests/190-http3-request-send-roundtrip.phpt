@@ -32,10 +32,12 @@ try {
     $cfg = king_new_config([
         'tls_default_ca_file' => $fixture['cert'],
     ]);
+    $directUrl = king_http3_test_server_url($server, '/direct.txt');
+    $dispatchUrl = king_http3_test_server_url($server, '/dispatch.txt');
 
     king_http3_request_with_retry(
         static fn () => king_http3_request_send(
-            'https://localhost:' . $server[2] . '/direct.txt',
+            $directUrl,
             'GET',
             null,
             null,
@@ -49,7 +51,7 @@ try {
 
     $directResponse = king_http3_request_with_retry(
         static fn () => king_http3_request_send(
-            'https://localhost:' . $server[2] . '/direct.txt',
+            $directUrl,
             'GET',
             null,
             null,
@@ -63,7 +65,7 @@ try {
 
     $dispatcherResponse = king_http3_request_with_retry(
         static fn () => king_client_send_request(
-            'https://localhost:' . $server[2] . '/dispatch.txt',
+            $dispatchUrl,
             'GET',
             null,
             null,
