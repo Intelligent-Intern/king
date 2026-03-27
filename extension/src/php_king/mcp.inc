@@ -1,4 +1,5 @@
 #include "main/php_streams.h"
+#include "ext/standard/base64.h"
 #include "include/mcp/mcp.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"
 #include "include/config/mcp_and_orchestrator/default.h"
@@ -243,6 +244,39 @@ static zend_result king_mcp_runtime_control_check(
     return SUCCESS;
 }
 
+static zend_string *king_mcp_base64url_encode_bytes(
+    const unsigned char *value,
+    size_t value_len)
+{
+    zend_string *encoded = php_base64_encode(value, value_len);
+    size_t read_index = 0;
+    size_t write_index = 0;
+
+    if (encoded == NULL) {
+        return NULL;
+    }
+
+    for (read_index = 0; read_index < ZSTR_LEN(encoded); read_index++) {
+        char current = ZSTR_VAL(encoded)[read_index];
+
+        if (current == '=') {
+            continue;
+        }
+        if (current == '+') {
+            current = '-';
+        } else if (current == '/') {
+            current = '_';
+        }
+
+        ZSTR_VAL(encoded)[write_index++] = current;
+    }
+
+    ZSTR_VAL(encoded)[write_index] = '\0';
+    ZSTR_LEN(encoded) = write_index;
+
+    return encoded;
+}
+
 static zend_string *king_mcp_transfer_key_create(
     const char *service_name,
     size_t service_name_len,
@@ -251,22 +285,67 @@ static zend_string *king_mcp_transfer_key_create(
     const char *transfer_id,
     size_t transfer_id_len)
 {
-    size_t key_len = service_name_len + 1 + method_name_len + 1 + transfer_id_len;
-    zend_string *key = zend_string_alloc(key_len, 0);
-    char *cursor = ZSTR_VAL(key);
+    zend_string *encoded_service = NULL;
+    zend_string *encoded_method = NULL;
+    zend_string *encoded_id = NULL;
+    size_t key_len;
+    zend_string *key = NULL;
+    char *cursor;
 
-    memcpy(cursor, service_name, service_name_len);
-    cursor += service_name_len;
-    *cursor++ = '\n';
+    encoded_service = king_mcp_base64url_encode_bytes((const unsigned char *) service_name, service_name_len);
+    encoded_method = king_mcp_base64url_encode_bytes((const unsigned char *) method_name, method_name_len);
+    encoded_id = king_mcp_base64url_encode_bytes((const unsigned char *) transfer_id, transfer_id_len);
+    if (encoded_service == NULL || encoded_method == NULL || encoded_id == NULL) {
+        if (encoded_service != NULL) {
+            zend_string_release(encoded_service);
+        }
+        if (encoded_method != NULL) {
+            zend_string_release(encoded_method);
+        }
+        if (encoded_id != NULL) {
+            zend_string_release(encoded_id);
+        }
+        return NULL;
+    }
 
-    memcpy(cursor, method_name, method_name_len);
-    cursor += method_name_len;
-    *cursor++ = '\n';
+    key_len = (sizeof("mcp.v1..") - 1)
+        + ZSTR_LEN(encoded_service)
+        + ZSTR_LEN(encoded_method)
+        + ZSTR_LEN(encoded_id);
+    key = zend_string_alloc(key_len, 0);
+    cursor = ZSTR_VAL(key);
 
-    memcpy(cursor, transfer_id, transfer_id_len);
+    memcpy(cursor, "mcp.v1.", sizeof("mcp.v1.") - 1);
+    cursor += sizeof("mcp.v1.") - 1;
+    memcpy(cursor, ZSTR_VAL(encoded_service), ZSTR_LEN(encoded_service));
+    cursor += ZSTR_LEN(encoded_service);
+    *cursor++ = '.';
+    memcpy(cursor, ZSTR_VAL(encoded_method), ZSTR_LEN(encoded_method));
+    cursor += ZSTR_LEN(encoded_method);
+    *cursor++ = '.';
+    memcpy(cursor, ZSTR_VAL(encoded_id), ZSTR_LEN(encoded_id));
     ZSTR_VAL(key)[key_len] = '\0';
 
+    zend_string_release(encoded_service);
+    zend_string_release(encoded_method);
+    zend_string_release(encoded_id);
+
     return key;
+}
+
+static bool king_mcp_contains_path_separator(
+    const char *value,
+    size_t value_len)
+{
+    size_t i;
+
+    for (i = 0; i < value_len; i++) {
+        if (value[i] == '/' || value[i] == '\\') {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 static zend_result king_mcp_validate_transfer_args(
@@ -282,7 +361,7 @@ static zend_result king_mcp_validate_transfer_args(
 {
     char message[KING_ERR_LEN];
     size_t backend_object_id_len;
-    const char *invalid_sep = NULL;
+    zend_string *encoded_key = NULL;
 
     if (service_name_len == 0) {
         snprintf(
@@ -325,8 +404,7 @@ static zend_result king_mcp_validate_transfer_args(
         return king_mcp_set_transfer_error(exception_ce, message);
     }
 
-    invalid_sep = strpbrk(service_name, "/\\");
-    if (invalid_sep != NULL) {
+    if (king_mcp_contains_path_separator(service_name, service_name_len)) {
         snprintf(
             message,
             sizeof(message),
@@ -336,8 +414,7 @@ static zend_result king_mcp_validate_transfer_args(
         return king_mcp_set_transfer_error(exception_ce, message);
     }
 
-    invalid_sep = strpbrk(method_name, "/\\");
-    if (invalid_sep != NULL) {
+    if (king_mcp_contains_path_separator(method_name, method_name_len)) {
         snprintf(
             message,
             sizeof(message),
@@ -347,8 +424,7 @@ static zend_result king_mcp_validate_transfer_args(
         return king_mcp_set_transfer_error(exception_ce, message);
     }
 
-    invalid_sep = strpbrk(identifier_value, "/\\");
-    if (invalid_sep != NULL) {
+    if (king_mcp_contains_path_separator(identifier_value, identifier_value_len)) {
         snprintf(
             message,
             sizeof(message),
@@ -359,11 +435,27 @@ static zend_result king_mcp_validate_transfer_args(
         return king_mcp_set_transfer_error(exception_ce, message);
     }
 
-    backend_object_id_len = (sizeof("mcp-::") - 1)
-        + service_name_len
-        + method_name_len
-        + identifier_value_len;
+    encoded_key = king_mcp_transfer_key_create(
+        service_name,
+        service_name_len,
+        method_name,
+        method_name_len,
+        identifier_value,
+        identifier_value_len
+    );
+    if (encoded_key == NULL) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() failed while encoding the MCP transfer identifier.",
+            function_name
+        );
+        return king_mcp_set_transfer_error(exception_ce, message);
+    }
+
+    backend_object_id_len = ZSTR_LEN(encoded_key);
     if (backend_object_id_len > 127) {
+        zend_string_release(encoded_key);
         snprintf(
             message,
             sizeof(message),
@@ -374,6 +466,7 @@ static zend_result king_mcp_validate_transfer_args(
         return king_mcp_set_transfer_error(exception_ce, message);
     }
 
+    zend_string_release(encoded_key);
     return SUCCESS;
 }
 
@@ -695,7 +788,16 @@ PHP_FUNCTION(king_mcp_request)
         RETURN_FALSE;
     }
 
-    if (king_mcp_request(state, service_name, method_name, request_payload_str, &response_payload, &control) != SUCCESS) {
+    if (king_mcp_request(
+            state,
+            service_name,
+            service_name_len,
+            method_name,
+            method_name_len,
+            request_payload_str,
+            &response_payload,
+            &control
+        ) != SUCCESS) {
         if (king_mcp_runtime_control_check(
                 &control,
                 "king_mcp_request",
@@ -825,8 +927,11 @@ PHP_FUNCTION(king_mcp_upload_from_stream)
     if (king_mcp_transfer_store(
         state,
         service_name,
+        service_name_len,
         method_name,
+        method_name_len,
         stream_identifier,
+        stream_identifier_len,
         payload,
         &control
     ) != SUCCESS) {
@@ -929,8 +1034,11 @@ PHP_FUNCTION(king_mcp_download_to_stream)
     payload = king_mcp_transfer_find(
         state,
         service_name,
+        service_name_len,
         method_name,
+        method_name_len,
         request_payload,
+        request_payload_len,
         &control
     );
     if (payload == NULL) {
@@ -1061,7 +1169,16 @@ PHP_METHOD(King_MCP, request)
         RETURN_THROWS();
     }
 
-    if (king_mcp_request(state, service, method, payload, &response_payload, &control) != SUCCESS) {
+    if (king_mcp_request(
+            state,
+            service,
+            service_len,
+            method,
+            method_len,
+            payload,
+            &response_payload,
+            &control
+        ) != SUCCESS) {
         if (king_mcp_runtime_control_check(
                 &control,
                 "MCP::request",
@@ -1198,8 +1315,11 @@ PHP_METHOD(King_MCP, uploadFromStream)
     if (king_mcp_transfer_store(
         state,
         service,
+        service_len,
         method,
+        method_len,
         stream_identifier,
+        stream_identifier_len,
         payload,
         &control
     ) != SUCCESS) {
@@ -1303,8 +1423,11 @@ PHP_METHOD(King_MCP, downloadToStream)
     payload = king_mcp_transfer_find(
         state,
         service,
+        service_len,
         method,
+        method_len,
         ZSTR_VAL(request_payload),
+        ZSTR_LEN(request_payload),
         &control
     );
     if (payload == NULL) {

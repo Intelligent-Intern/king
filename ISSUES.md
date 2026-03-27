@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Make MCP transfer identifiers permanently safe and collision-free.
+- [ ] Persist and rehydrate MCP transfer state after restart.
 
 ## Active Executable Items
 
@@ -69,7 +69,7 @@
 
 ### 3. MCP And Orchestrator Durability
 
-15. [ ] Make MCP transfer identifiers permanently safe and collision-free.
+15. [x] Make MCP transfer identifiers permanently safe and collision-free.
     done when: transfer keys are encoded so path safety, separator ambiguity, and identifier collisions are impossible by construction.
 
 16. [ ] Persist and rehydrate MCP transfer state after restart.

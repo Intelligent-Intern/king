@@ -207,7 +207,10 @@ the system drifts into undocumented naming rules.
 
 King prevents that by making the transfer identity explicit. The upload path is
 keyed by service, method, and stream identifier. The download path resolves a
-stored transfer by treating the request payload as the remote transfer ID.
+stored transfer by treating the request payload as the remote transfer ID. That
+tuple is encoded internally before it becomes a storage key, so newline-shaped
+components, binary-safe identifiers, and separator ambiguity do not collapse
+distinct transfers into one another.
 
 That means the control-plane API stays understandable even when the payload is
 too large to fit comfortably into one ordinary request body.

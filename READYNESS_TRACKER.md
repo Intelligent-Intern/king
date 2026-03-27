@@ -106,7 +106,7 @@ Status note:
 - [x] Validate MCP request path against a real remote server
 - [x] Validate MCP upload path against a real remote server
 - [x] Validate MCP download path against a real remote server
-- [ ] Make MCP transfer identifiers permanently safe and collision-free
+- [x] Make MCP transfer identifiers permanently safe and collision-free
 - [ ] Persist MCP transfer state
 - [ ] Rehydrate MCP transfer state after restart
 - [x] Validate MCP request timeouts over real network paths

@@ -258,7 +258,8 @@ namespace {
 
     /**
      * Drain a PHP stream and upload the bytes to the active remote MCP peer
-     * under the `(service, method, stream_identifier)` tuple.
+     * under the `(service, method, stream_identifier)` tuple. The tuple is
+     * encoded internally so binary-safe identifiers stay collision-free.
      * `options` may include `timeout_ms`, `deadline_ms` (monotonic deadline
      * in milliseconds), and `cancel`.
      * @param mixed $connection
@@ -268,8 +269,8 @@ namespace {
 
     /**
      * Resolve a previously uploaded remote MCP transfer by treating
-     * `$request_payload` as the opaque transfer identifier, then stream the
-     * fetched bytes into the destination stream.
+     * `$request_payload` as the opaque collision-free transfer identifier,
+     * then stream the fetched bytes into the destination stream.
      * `options` may include `timeout_ms`, `deadline_ms` (monotonic deadline
      * in milliseconds), and `cancel`.
      * @param mixed $connection
@@ -1505,7 +1506,8 @@ namespace King {
 
         /**
          * Drain a source stream into the remote MCP transfer store keyed by
-         * `(service, method, streamIdentifier)`.
+         * `(service, method, streamIdentifier)`. The tuple is encoded
+         * internally so binary-safe identifiers stay collision-free.
          * @param resource $stream
          * @throws RuntimeException|ValidationException|MCPDataException
          */
@@ -1513,8 +1515,8 @@ namespace King {
 
         /**
          * Resolve a previously uploaded remote MCP transfer by treating
-         * `$payload` as the transfer identifier and write the fetched bytes
-         * into the provided destination stream.
+         * `$payload` as the opaque collision-free transfer identifier and
+         * write the fetched bytes into the provided destination stream.
          * @param resource $stream
          * @throws RuntimeException|ValidationException|MCPDataException
          */

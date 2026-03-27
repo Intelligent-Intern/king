@@ -622,8 +622,11 @@ static zend_result king_mcp_remote_send_command(
     const char *operation_name,
     const char *opcode,
     const char *service,
+    size_t service_len,
     const char *method,
+    size_t method_len,
     const char *identifier,
+    size_t identifier_len,
     zend_string *payload,
     king_mcp_runtime_control_t *control
 )
@@ -639,16 +642,16 @@ static zend_result king_mcp_remote_send_command(
 
     encoded_service = php_base64_encode(
         (const unsigned char *) service,
-        strlen(service)
+        service_len
     );
     encoded_method = php_base64_encode(
         (const unsigned char *) method,
-        strlen(method)
+        method_len
     );
     if (identifier != NULL) {
         encoded_identifier = php_base64_encode(
             (const unsigned char *) identifier,
-            strlen(identifier)
+            identifier_len
         );
     }
     if (payload != NULL) {
@@ -894,8 +897,11 @@ void king_mcp_state_free(king_mcp_state *state)
 int king_mcp_transfer_store(
     king_mcp_state *state,
     const char *service,
+    size_t service_len,
     const char *method,
+    size_t method_len,
     const char *id,
+    size_t id_len,
     zend_string *payload,
     king_mcp_runtime_control_t *control)
 {
@@ -918,8 +924,11 @@ int king_mcp_transfer_store(
             "MCP upload",
             KING_MCP_REMOTE_OP_UPLOAD,
             service,
+            service_len,
             method,
+            method_len,
             id,
+            id_len,
             payload,
             control
         ) != SUCCESS) {
@@ -936,8 +945,11 @@ cleanup:
 zend_string *king_mcp_transfer_find(
     king_mcp_state *state,
     const char *service,
+    size_t service_len,
     const char *method,
+    size_t method_len,
     const char *id,
+    size_t id_len,
     king_mcp_runtime_control_t *control)
 {
     zend_string *payload = NULL;
@@ -960,8 +972,11 @@ zend_string *king_mcp_transfer_find(
             "MCP download",
             KING_MCP_REMOTE_OP_DOWNLOAD,
             service,
+            service_len,
             method,
+            method_len,
             id,
+            id_len,
             NULL,
             control
         ) != SUCCESS) {
@@ -993,7 +1008,9 @@ cleanup:
 int king_mcp_request(
     king_mcp_state *state,
     const char *service,
+    size_t service_len,
     const char *method,
+    size_t method_len,
     zend_string *payload,
     zend_string **response_out,
     king_mcp_runtime_control_t *control)
@@ -1019,8 +1036,11 @@ int king_mcp_request(
             "MCP request",
             KING_MCP_REMOTE_OP_REQUEST,
             service,
+            service_len,
             method,
+            method_len,
             NULL,
+            0,
             payload,
             control
         ) != SUCCESS) {

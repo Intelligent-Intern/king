@@ -39,22 +39,30 @@ void king_mcp_state_free(king_mcp_state *state);
 int king_mcp_transfer_store(
     king_mcp_state *state,
     const char *service,
+    size_t service_len,
     const char *method,
+    size_t method_len,
     const char *id,
+    size_t id_len,
     zend_string *payload,
     king_mcp_runtime_control_t *control);
 zend_string *king_mcp_transfer_find(
     king_mcp_state *state,
     const char *service,
+    size_t service_len,
     const char *method,
+    size_t method_len,
     const char *id,
+    size_t id_len,
     king_mcp_runtime_control_t *control);
 
 /* Request Transport */
 int king_mcp_request(
     king_mcp_state *state,
     const char *service,
+    size_t service_len,
     const char *method,
+    size_t method_len,
     zend_string *payload,
     zend_string **response_out,
     king_mcp_runtime_control_t *control);

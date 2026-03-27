@@ -53,6 +53,15 @@ function king_mcp_parallel_write_error($stream, string $message): void
     king_mcp_parallel_write_line($stream, 'ERR' . "\t" . base64_encode($message));
 }
 
+function king_mcp_parallel_transfer_key(string $service, string $method, string $identifier): string
+{
+    $encode = static function (string $value): string {
+        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+    };
+
+    return 'mcp.v1.' . $encode($service) . '.' . $encode($method) . '.' . $encode($identifier);
+}
+
 function king_mcp_parallel_delay_from_method(string $method, string $prefix, int $defaultMs): int
 {
     if ($method === $prefix) {
@@ -132,7 +141,7 @@ function king_mcp_parallel_handle_client($client): void
                 usleep($delayMs * 1000);
             }
 
-            $transfers[$service . "\n" . $method . "\n" . $identifier] = $payload;
+            $transfers[king_mcp_parallel_transfer_key($service, $method, $identifier)] = $payload;
             king_mcp_parallel_write_line($client, 'OK');
             continue;
         }
@@ -151,7 +160,7 @@ function king_mcp_parallel_handle_client($client): void
                 continue;
             }
 
-            $key = $service . "\n" . $method . "\n" . $identifier;
+            $key = king_mcp_parallel_transfer_key($service, $method, $identifier);
             $payload = $transfers[$key] ?? null;
             if (!is_string($payload)) {
                 king_mcp_parallel_write_line($client, 'MISS');

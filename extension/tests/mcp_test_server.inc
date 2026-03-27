@@ -94,7 +94,11 @@ function king_mcp_test_capture_event(array &$capture, string $capturePath, array
 
 function king_mcp_test_transfer_key(string $service, string $method, string $id): string
 {
-    return $service . "\n" . $method . "\n" . $id;
+    $encode = static function (string $value): string {
+        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+    };
+
+    return 'mcp.v1.' . $encode($service) . '.' . $encode($method) . '.' . $encode($id);
 }
 
 function king_mcp_test_decode_field(string $encoded): ?string
