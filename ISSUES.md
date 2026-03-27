@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Finalize MCP error mapping across protocol, transport, and backend failures.
+- [ ] Implement pipeline continuation after process restart.
 
 ## Active Executable Items
 
@@ -75,7 +75,7 @@
 16. [x] Persist and rehydrate MCP transfer state after restart.
     done when: queued local transfer state survives restart with verified lookup, download, and cleanup semantics instead of process-local only behavior.
 
-17. [ ] Finalize MCP error mapping across protocol, transport, and backend failures.
+17. [x] Finalize MCP error mapping across protocol, transport, and backend failures.
     done when: remote protocol failures, socket/timeout failures, and local backend failures land in stable, distinguishable public error classes.
 
 18. [ ] Implement pipeline continuation after process restart.

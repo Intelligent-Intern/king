@@ -1500,7 +1500,7 @@ namespace King {
          * Closed connections and already cancelled tokens fail deterministically;
          * otherwise the active runtime exchanges the request with the remote
          * peer and returns the normalized response payload.
-         * @throws RuntimeException|ValidationException|MCPProtocolException
+         * @throws RuntimeException|ValidationException|MCPConnectionException|MCPProtocolException|MCPTimeoutException
          */
         public function request(string $service, string $method, string $payload, ?CancelToken $cancel = null, ?array $options = null): string {}
 
@@ -1509,7 +1509,7 @@ namespace King {
          * `(service, method, streamIdentifier)`. The tuple is encoded
          * internally so binary-safe identifiers stay collision-free.
          * @param resource $stream
-         * @throws RuntimeException|ValidationException|MCPDataException
+         * @throws RuntimeException|ValidationException|MCPConnectionException|MCPProtocolException|MCPTimeoutException|MCPDataException
          */
         public function uploadFromStream(string $service, string $method, string $streamIdentifier, $stream, ?array $options = null): void {}
 
@@ -1518,7 +1518,7 @@ namespace King {
          * `$payload` as the opaque collision-free transfer identifier and
          * write the fetched bytes into the provided destination stream.
          * @param resource $stream
-         * @throws RuntimeException|ValidationException|MCPDataException
+         * @throws RuntimeException|ValidationException|MCPConnectionException|MCPProtocolException|MCPTimeoutException|MCPDataException
          */
         public function downloadToStream(string $service, string $method, string $payload, $stream, ?array $options = null): void {}
 

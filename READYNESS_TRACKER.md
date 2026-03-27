@@ -111,9 +111,9 @@ Status note:
 - [x] Rehydrate MCP transfer state after restart
 - [x] Validate MCP request timeouts over real network paths
 - [x] Propagate MCP cancellation through real remote execution
-- [ ] Finalize MCP error mapping for remote protocol failures
-- [ ] Finalize MCP error mapping for transport failures
-- [ ] Finalize MCP error mapping for backend failures
+- [x] Finalize MCP error mapping for remote protocol failures
+- [x] Finalize MCP error mapping for transport failures
+- [x] Finalize MCP error mapping for backend failures
 - [x] Validate MCP multi-process operation
 - [ ] Validate MCP multi-host operation
 - [x] Enforce MCP concurrency and bounded-concurrency guarantees

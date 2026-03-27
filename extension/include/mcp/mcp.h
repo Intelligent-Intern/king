@@ -14,6 +14,13 @@
 #include "php.h"
 #include <stdbool.h>
 
+typedef enum _king_mcp_error_kind {
+    KING_MCP_ERROR_NONE = 0,
+    KING_MCP_ERROR_TRANSPORT,
+    KING_MCP_ERROR_PROTOCOL,
+    KING_MCP_ERROR_BACKEND
+} king_mcp_error_kind_t;
+
 typedef struct _king_mcp_state {
     zend_string *host;
     zend_long port;
@@ -21,6 +28,7 @@ typedef struct _king_mcp_state {
     php_stream *transport_stream;
     bool closed;
     bool operation_active;
+    king_mcp_error_kind_t last_error_kind;
 } king_mcp_state;
 
 typedef struct _king_mcp_runtime_control {

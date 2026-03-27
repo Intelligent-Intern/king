@@ -42,6 +42,48 @@ static void king_mcp_set_errorf(const char *format, ...)
     king_set_error(message);
 }
 
+static void king_mcp_state_set_error_kind(
+    king_mcp_state *state,
+    king_mcp_error_kind_t kind
+)
+{
+    if (state != NULL) {
+        state->last_error_kind = kind;
+    }
+}
+
+static void king_mcp_state_clear_error_kind(king_mcp_state *state)
+{
+    king_mcp_state_set_error_kind(state, KING_MCP_ERROR_NONE);
+}
+
+static void king_mcp_state_set_error_message(
+    king_mcp_state *state,
+    king_mcp_error_kind_t kind,
+    const char *message
+)
+{
+    king_mcp_state_set_error_kind(state, kind);
+    king_set_error(message);
+}
+
+static void king_mcp_state_set_errorf(
+    king_mcp_state *state,
+    king_mcp_error_kind_t kind,
+    const char *format,
+    ...
+)
+{
+    char message[KING_ERR_LEN];
+    va_list args;
+
+    va_start(args, format);
+    vsnprintf(message, sizeof(message), format, args);
+    va_end(args);
+
+    king_mcp_state_set_error_message(state, kind, message);
+}
+
 static zend_string *king_mcp_base64url_encode_bytes(
     const unsigned char *value,
     size_t value_len
@@ -171,7 +213,10 @@ static int king_mcp_build_transfer_state_lock_path(
     return SUCCESS;
 }
 
-static int king_mcp_transfer_state_lock_acquire(int *lock_fd_out)
+static int king_mcp_transfer_state_lock_acquire(
+    king_mcp_state *state,
+    int *lock_fd_out
+)
 {
     char lock_path[1024];
     const char *state_path = king_mcp_transfer_state_path();
@@ -189,7 +234,11 @@ static int king_mcp_transfer_state_lock_acquire(int *lock_fd_out)
     }
 
     if (king_mcp_build_transfer_state_lock_path(state_path, lock_path, sizeof(lock_path)) != SUCCESS) {
-        king_mcp_set_errorf("MCP runtime could not build the local transfer state lock path.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime could not build the local transfer state lock path."
+        );
         return FAILURE;
     }
 
@@ -202,19 +251,31 @@ static int king_mcp_transfer_state_lock_acquire(int *lock_fd_out)
 
     fd = open(lock_path, flags, 0600);
     if (fd < 0) {
-        king_mcp_set_errorf("MCP runtime could not open the local transfer state lock file.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime could not open the local transfer state lock file."
+        );
         return FAILURE;
     }
 
     if (fchmod(fd, 0600) != 0) {
         close(fd);
-        king_mcp_set_errorf("MCP runtime could not secure the local transfer state lock file.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime could not secure the local transfer state lock file."
+        );
         return FAILURE;
     }
 
     if (flock(fd, LOCK_EX) != 0) {
         close(fd);
-        king_mcp_set_errorf("MCP runtime could not acquire the local transfer state lock.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime could not acquire the local transfer state lock."
+        );
         return FAILURE;
     }
 
@@ -313,6 +374,7 @@ static int king_mcp_build_transfer_state_tmp_template(
 }
 
 static zend_string *king_mcp_transfer_state_decode_payload(
+    king_mcp_state *state,
     const char *encoded,
     size_t encoded_len
 )
@@ -320,7 +382,11 @@ static zend_string *king_mcp_transfer_state_decode_payload(
     zend_string *decoded = php_base64_decode((const unsigned char *) encoded, encoded_len);
 
     if (decoded == NULL) {
-        king_mcp_set_errorf("MCP runtime encountered invalid persisted transfer payload data.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime encountered invalid persisted transfer payload data."
+        );
         return NULL;
     }
 
@@ -328,6 +394,7 @@ static zend_string *king_mcp_transfer_state_decode_payload(
 }
 
 static zend_result king_mcp_transfer_state_transaction_begin(
+    king_mcp_state *state,
     HashTable *transfers,
     int *lock_fd_out
 )
@@ -345,7 +412,7 @@ static zend_result king_mcp_transfer_state_transaction_begin(
     zend_hash_init(transfers, 8, NULL, ZVAL_PTR_DTOR, 0);
     *lock_fd_out = -1;
 
-    if (king_mcp_transfer_state_lock_acquire(lock_fd_out) != SUCCESS) {
+    if (king_mcp_transfer_state_lock_acquire(state, lock_fd_out) != SUCCESS) {
         zend_hash_destroy(transfers);
         return FAILURE;
     }
@@ -355,7 +422,11 @@ static zend_result king_mcp_transfer_state_transaction_begin(
     }
 
     if (king_mcp_transfer_state_path_validate_existing(state_path) != SUCCESS) {
-        king_mcp_set_errorf("MCP runtime refused the configured local transfer state path.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime refused the configured local transfer state path."
+        );
         goto failure;
     }
 
@@ -365,7 +436,11 @@ static zend_result king_mcp_transfer_state_transaction_begin(
             return SUCCESS;
         }
 
-        king_mcp_set_errorf("MCP runtime could not open the configured local transfer state file.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime could not open the configured local transfer state file."
+        );
         goto failure;
     }
 
@@ -395,13 +470,21 @@ static zend_result king_mcp_transfer_state_transaction_begin(
             zend_long version;
 
             if (version_text == NULL) {
-                king_mcp_set_errorf("MCP runtime encountered a malformed local transfer state header.");
+                king_mcp_state_set_errorf(
+                    state,
+                    KING_MCP_ERROR_BACKEND,
+                    "MCP runtime encountered a malformed local transfer state header."
+                );
                 goto failure;
             }
 
             version = ZEND_STRTOL(version_text, NULL, 10);
             if (version != KING_MCP_TRANSFER_STATE_VERSION) {
-                king_mcp_set_errorf("MCP runtime encountered an unsupported local transfer state version.");
+                king_mcp_state_set_errorf(
+                    state,
+                    KING_MCP_ERROR_BACKEND,
+                    "MCP runtime encountered an unsupported local transfer state version."
+                );
                 goto failure;
             }
             continue;
@@ -414,11 +497,15 @@ static zend_result king_mcp_transfer_state_transaction_begin(
         key = strtok_r(NULL, "\t", &saveptr);
         payload_b64 = strtok_r(NULL, "\t", &saveptr);
         if (key == NULL || payload_b64 == NULL || key[0] == '\0') {
-            king_mcp_set_errorf("MCP runtime encountered a malformed persisted transfer entry.");
+            king_mcp_state_set_errorf(
+                state,
+                KING_MCP_ERROR_BACKEND,
+                "MCP runtime encountered a malformed persisted transfer entry."
+            );
             goto failure;
         }
 
-        payload = king_mcp_transfer_state_decode_payload(payload_b64, strlen(payload_b64));
+        payload = king_mcp_transfer_state_decode_payload(state, payload_b64, strlen(payload_b64));
         if (payload == NULL) {
             goto failure;
         }
@@ -458,7 +545,10 @@ static void king_mcp_transfer_state_transaction_end(HashTable *transfers, int lo
     king_mcp_transfer_state_lock_release(lock_fd);
 }
 
-static zend_result king_mcp_transfer_state_persist_locked(HashTable *transfers)
+static zend_result king_mcp_transfer_state_persist_locked(
+    king_mcp_state *state,
+    HashTable *transfers
+)
 {
     const char *state_path = king_mcp_transfer_state_path();
     char tmp_path[1024];
@@ -476,12 +566,20 @@ static zend_result king_mcp_transfer_state_persist_locked(HashTable *transfers)
 
     if (zend_hash_num_elements(transfers) == 0) {
         if (king_mcp_transfer_state_path_validate_existing(state_path) != SUCCESS) {
-            king_mcp_set_errorf("MCP runtime refused the configured local transfer state path.");
+            king_mcp_state_set_errorf(
+                state,
+                KING_MCP_ERROR_BACKEND,
+                "MCP runtime refused the configured local transfer state path."
+            );
             return FAILURE;
         }
 
         if (unlink(state_path) != 0 && errno != ENOENT) {
-            king_mcp_set_errorf("MCP runtime could not clean up the local transfer state file.");
+            king_mcp_state_set_errorf(
+                state,
+                KING_MCP_ERROR_BACKEND,
+                "MCP runtime could not clean up the local transfer state file."
+            );
             return FAILURE;
         }
 
@@ -489,32 +587,52 @@ static zend_result king_mcp_transfer_state_persist_locked(HashTable *transfers)
     }
 
     if (king_mcp_transfer_state_path_validate_existing(state_path) != SUCCESS) {
-        king_mcp_set_errorf("MCP runtime refused the configured local transfer state path.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime refused the configured local transfer state path."
+        );
         return FAILURE;
     }
 
     if (king_mcp_build_transfer_state_tmp_template(state_path, tmp_path, sizeof(tmp_path)) != SUCCESS) {
-        king_mcp_set_errorf("MCP runtime could not build the local transfer state staging path.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime could not build the local transfer state staging path."
+        );
         return FAILURE;
     }
 
     {
         int fd = mkstemp(tmp_path);
         if (fd < 0) {
-            king_mcp_set_errorf("MCP runtime could not create the local transfer state staging file.");
+            king_mcp_state_set_errorf(
+                state,
+                KING_MCP_ERROR_BACKEND,
+                "MCP runtime could not create the local transfer state staging file."
+            );
             return FAILURE;
         }
         if (fchmod(fd, 0600) != 0) {
             close(fd);
             unlink(tmp_path);
-            king_mcp_set_errorf("MCP runtime could not secure the local transfer state staging file.");
+            king_mcp_state_set_errorf(
+                state,
+                KING_MCP_ERROR_BACKEND,
+                "MCP runtime could not secure the local transfer state staging file."
+            );
             return FAILURE;
         }
         stream = fdopen(fd, "wb");
         if (stream == NULL) {
             close(fd);
             unlink(tmp_path);
-            king_mcp_set_errorf("MCP runtime could not open the local transfer state staging stream.");
+            king_mcp_state_set_errorf(
+                state,
+                KING_MCP_ERROR_BACKEND,
+                "MCP runtime could not open the local transfer state staging stream."
+            );
             return FAILURE;
         }
     }
@@ -535,7 +653,11 @@ static zend_result king_mcp_transfer_state_persist_locked(HashTable *transfers)
         if (encoded_payload == NULL) {
             fclose(stream);
             unlink(tmp_path);
-            king_mcp_set_errorf("MCP runtime could not encode the persisted transfer payload.");
+            king_mcp_state_set_errorf(
+                state,
+                KING_MCP_ERROR_BACKEND,
+                "MCP runtime could not encode the persisted transfer payload."
+            );
             return FAILURE;
         }
 
@@ -545,19 +667,31 @@ static zend_result king_mcp_transfer_state_persist_locked(HashTable *transfers)
 
     if (fclose(stream) != 0) {
         unlink(tmp_path);
-        king_mcp_set_errorf("MCP runtime could not flush the local transfer state staging file.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime could not flush the local transfer state staging file."
+        );
         return FAILURE;
     }
 
     if (king_mcp_transfer_state_path_validate_existing(state_path) != SUCCESS) {
         unlink(tmp_path);
-        king_mcp_set_errorf("MCP runtime refused the configured local transfer state path.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime refused the configured local transfer state path."
+        );
         return FAILURE;
     }
 
     if (rename(tmp_path, state_path) != 0) {
         unlink(tmp_path);
-        king_mcp_set_errorf("MCP runtime could not publish the local transfer state snapshot.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime could not publish the local transfer state snapshot."
+        );
         return FAILURE;
     }
 
@@ -565,6 +699,7 @@ static zend_result king_mcp_transfer_state_persist_locked(HashTable *transfers)
 }
 
 static zend_result king_mcp_transfer_state_store_payload(
+    king_mcp_state *state,
     const char *service,
     size_t service_len,
     const char *method,
@@ -589,11 +724,15 @@ static zend_result king_mcp_transfer_state_store_payload(
 
     key = king_mcp_transfer_key_create(service, service_len, method, method_len, id, id_len);
     if (key == NULL) {
-        king_mcp_set_errorf("MCP runtime could not materialize the persisted transfer key.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime could not materialize the persisted transfer key."
+        );
         return FAILURE;
     }
 
-    if (king_mcp_transfer_state_transaction_begin(&transfers, &lock_fd) != SUCCESS) {
+    if (king_mcp_transfer_state_transaction_begin(state, &transfers, &lock_fd) != SUCCESS) {
         zend_string_release(key);
         return FAILURE;
     }
@@ -602,7 +741,7 @@ static zend_result king_mcp_transfer_state_store_payload(
     zend_hash_update(&transfers, key, &payload_zv);
     zend_string_release(key);
 
-    if (king_mcp_transfer_state_persist_locked(&transfers) != SUCCESS) {
+    if (king_mcp_transfer_state_persist_locked(state, &transfers) != SUCCESS) {
         king_mcp_transfer_state_transaction_end(&transfers, lock_fd);
         return FAILURE;
     }
@@ -612,6 +751,7 @@ static zend_result king_mcp_transfer_state_store_payload(
 }
 
 static zend_string *king_mcp_transfer_state_find_payload(
+    king_mcp_state *state,
     const char *service,
     size_t service_len,
     const char *method,
@@ -632,11 +772,15 @@ static zend_string *king_mcp_transfer_state_find_payload(
 
     key = king_mcp_transfer_key_create(service, service_len, method, method_len, id, id_len);
     if (key == NULL) {
-        king_mcp_set_errorf("MCP runtime could not materialize the persisted transfer key.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime could not materialize the persisted transfer key."
+        );
         return NULL;
     }
 
-    if (king_mcp_transfer_state_transaction_begin(&transfers, &lock_fd) != SUCCESS) {
+    if (king_mcp_transfer_state_transaction_begin(state, &transfers, &lock_fd) != SUCCESS) {
         zend_string_release(key);
         return NULL;
     }
@@ -653,6 +797,7 @@ static zend_string *king_mcp_transfer_state_find_payload(
 }
 
 static zend_result king_mcp_transfer_state_delete_payload(
+    king_mcp_state *state,
     const char *service,
     size_t service_len,
     const char *method,
@@ -671,11 +816,15 @@ static zend_result king_mcp_transfer_state_delete_payload(
 
     key = king_mcp_transfer_key_create(service, service_len, method, method_len, id, id_len);
     if (key == NULL) {
-        king_mcp_set_errorf("MCP runtime could not materialize the persisted transfer key.");
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_BACKEND,
+            "MCP runtime could not materialize the persisted transfer key."
+        );
         return FAILURE;
     }
 
-    if (king_mcp_transfer_state_transaction_begin(&transfers, &lock_fd) != SUCCESS) {
+    if (king_mcp_transfer_state_transaction_begin(state, &transfers, &lock_fd) != SUCCESS) {
         zend_string_release(key);
         return FAILURE;
     }
@@ -683,7 +832,7 @@ static zend_result king_mcp_transfer_state_delete_payload(
     (void) zend_hash_del(&transfers, key);
     zend_string_release(key);
 
-    if (king_mcp_transfer_state_persist_locked(&transfers) != SUCCESS) {
+    if (king_mcp_transfer_state_persist_locked(state, &transfers) != SUCCESS) {
         king_mcp_transfer_state_transaction_end(&transfers, lock_fd);
         return FAILURE;
     }
@@ -719,6 +868,7 @@ static zend_result king_mcp_begin_operation(
         return FAILURE;
     }
 
+    king_mcp_state_clear_error_kind(state);
     state->operation_active = true;
     return SUCCESS;
 }
@@ -948,7 +1098,9 @@ static zend_result king_mcp_remote_wait_socket(
             (void *) &socketd,
             1
         ) != SUCCESS) {
-        king_mcp_set_errorf(
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_TRANSPORT,
             "%s could not access the active remote MCP transport socket.",
             operation_name
         );
@@ -980,7 +1132,9 @@ static zend_result king_mcp_remote_wait_socket(
         if (now_ms >= deadline_ms) {
             king_mcp_mark_transport_closed(state);
             if (king_get_error()[0] == '\0') {
-                king_mcp_set_errorf(
+                king_mcp_state_set_errorf(
+                    state,
+                    KING_MCP_ERROR_TRANSPORT,
                     "%s timed out while waiting on the remote MCP peer socket during the %s phase.",
                     operation_name,
                     phase
@@ -1005,7 +1159,9 @@ static zend_result king_mcp_remote_wait_socket(
             }
 
             king_mcp_mark_transport_closed(state);
-            king_mcp_set_errorf(
+            king_mcp_state_set_errorf(
+                state,
+                KING_MCP_ERROR_TRANSPORT,
                 "%s failed while waiting on the remote MCP peer socket during the %s phase (errno %d).",
                 operation_name,
                 phase,
@@ -1016,7 +1172,9 @@ static zend_result king_mcp_remote_wait_socket(
 
         if ((poll_result & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
             king_mcp_mark_transport_closed(state);
-            king_mcp_set_errorf(
+            king_mcp_state_set_errorf(
+                state,
+                KING_MCP_ERROR_TRANSPORT,
                 "%s detected a remote MCP peer socket error during the %s phase.",
                 operation_name,
                 phase
@@ -1026,7 +1184,9 @@ static zend_result king_mcp_remote_wait_socket(
 
         if ((poll_result & events) == 0) {
             king_mcp_mark_transport_closed(state);
-            king_mcp_set_errorf(
+            king_mcp_state_set_errorf(
+                state,
+                KING_MCP_ERROR_TRANSPORT,
                 "%s did not observe the expected remote MCP socket readiness during the %s phase.",
                 operation_name,
                 phase
@@ -1065,7 +1225,11 @@ static zend_result king_mcp_remote_connect(
 
     target = king_mcp_build_transport_target(state);
     if (target == NULL) {
-        king_set_error("MCP runtime could not build the remote transport target.");
+        king_mcp_state_set_error_message(
+            state,
+            KING_MCP_ERROR_TRANSPORT,
+            "MCP runtime could not build the remote transport target."
+        );
         return FAILURE;
     }
 
@@ -1093,14 +1257,18 @@ static zend_result king_mcp_remote_connect(
 
     if (stream == NULL) {
         if (transport_error != NULL) {
-            king_mcp_set_errorf(
+            king_mcp_state_set_errorf(
+                state,
+                KING_MCP_ERROR_TRANSPORT,
                 "%s failed to connect to the remote MCP peer: %s",
                 operation_name,
                 ZSTR_VAL(transport_error)
             );
             zend_string_release(transport_error);
         } else {
-            king_mcp_set_errorf(
+            king_mcp_state_set_errorf(
+                state,
+                KING_MCP_ERROR_TRANSPORT,
                 "%s failed to connect to the remote MCP peer (code %d).",
                 operation_name,
                 transport_error_code
@@ -1112,7 +1280,9 @@ static zend_result king_mcp_remote_connect(
     state->transport_stream = stream;
     if (king_mcp_prepare_stream_transport(state, timeout_ms) != SUCCESS) {
         king_mcp_mark_transport_closed(state);
-        king_mcp_set_errorf(
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_TRANSPORT,
             "%s could not configure the active MCP transport socket.",
             operation_name
         );
@@ -1157,7 +1327,9 @@ static zend_result king_mcp_remote_write_all(
         if (chunk <= 0) {
             king_mcp_mark_transport_closed(state);
             if (king_get_error()[0] == '\0') {
-                king_mcp_set_errorf(
+                king_mcp_state_set_errorf(
+                    state,
+                    KING_MCP_ERROR_TRANSPORT,
                     "%s failed while writing the remote MCP command to the active peer socket.",
                     operation_name
                 );
@@ -1215,7 +1387,9 @@ static zend_string *king_mcp_remote_read_line(
             efree(buffer);
             king_mcp_mark_transport_closed(state);
             if (king_get_error()[0] == '\0') {
-                king_mcp_set_errorf(
+                king_mcp_state_set_errorf(
+                    state,
+                    KING_MCP_ERROR_TRANSPORT,
                     "%s did not receive a complete response line from the remote MCP peer.",
                     operation_name
                 );
@@ -1242,7 +1416,9 @@ static zend_string *king_mcp_remote_read_line(
 
     efree(buffer);
     king_mcp_mark_transport_closed(state);
-    king_mcp_set_errorf(
+    king_mcp_state_set_errorf(
+        state,
+        KING_MCP_ERROR_TRANSPORT,
         "%s received an oversized response line from the remote MCP peer.",
         operation_name
     );
@@ -1250,6 +1426,7 @@ static zend_string *king_mcp_remote_read_line(
 }
 
 static zend_string *king_mcp_base64_decode_field(
+    king_mcp_state *state,
     const char *encoded,
     size_t encoded_len,
     const char *operation_name
@@ -1262,7 +1439,9 @@ static zend_string *king_mcp_base64_decode_field(
         encoded_len
     );
     if (decoded == NULL) {
-        king_mcp_set_errorf(
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_PROTOCOL,
             "%s received invalid base64 payload data from the remote MCP peer.",
             operation_name
         );
@@ -1401,6 +1580,7 @@ static zend_result king_mcp_remote_expect_ok(
         *tab = '\0';
         if (strcmp(ZSTR_VAL(line), "ERR") == 0) {
             decoded_error = king_mcp_base64_decode_field(
+                state,
                 tab + 1,
                 strlen(tab + 1),
                 operation_name
@@ -1410,13 +1590,19 @@ static zend_result king_mcp_remote_expect_ok(
                 return FAILURE;
             }
 
-            king_set_error(ZSTR_VAL(decoded_error));
+            king_mcp_state_set_error_message(
+                state,
+                KING_MCP_ERROR_PROTOCOL,
+                ZSTR_VAL(decoded_error)
+            );
             zend_string_release(decoded_error);
             return FAILURE;
         }
     }
 
-    king_mcp_set_errorf(
+    king_mcp_state_set_errorf(
+        state,
+        KING_MCP_ERROR_PROTOCOL,
         "%s received an invalid acknowledgement from the remote MCP peer.",
         operation_name
     );
@@ -1464,6 +1650,7 @@ static zend_result king_mcp_remote_expect_payload(
         *tab = '\0';
         if (strcmp(ZSTR_VAL(line), "OK") == 0) {
             decoded = king_mcp_base64_decode_field(
+                state,
                 tab + 1,
                 strlen(tab + 1),
                 operation_name
@@ -1480,6 +1667,7 @@ static zend_result king_mcp_remote_expect_payload(
 
         if (strcmp(ZSTR_VAL(line), "ERR") == 0) {
             decoded = king_mcp_base64_decode_field(
+                state,
                 tab + 1,
                 strlen(tab + 1),
                 operation_name
@@ -1489,13 +1677,19 @@ static zend_result king_mcp_remote_expect_payload(
                 return FAILURE;
             }
 
-            king_set_error(ZSTR_VAL(decoded));
+            king_mcp_state_set_error_message(
+                state,
+                KING_MCP_ERROR_PROTOCOL,
+                ZSTR_VAL(decoded)
+            );
             zend_string_release(decoded);
             return FAILURE;
         }
     }
 
-    king_mcp_set_errorf(
+    king_mcp_state_set_errorf(
+        state,
+        KING_MCP_ERROR_PROTOCOL,
         "%s received an invalid payload response from the remote MCP peer.",
         operation_name
     );
@@ -1520,6 +1714,7 @@ king_mcp_state *king_mcp_state_create(
     }
     state->closed = false;
     state->operation_active = false;
+    state->last_error_kind = KING_MCP_ERROR_NONE;
 
     return state;
 }
@@ -1532,6 +1727,7 @@ void king_mcp_state_close(king_mcp_state *state)
 
     state->closed = true;
     state->operation_active = false;
+    state->last_error_kind = KING_MCP_ERROR_NONE;
     king_mcp_mark_transport_closed(state);
 }
 
@@ -1594,6 +1790,7 @@ int king_mcp_transfer_store(
     if (
         status == SUCCESS
         && king_mcp_transfer_state_store_payload(
+            state,
             service,
             service_len,
             method,
@@ -1669,6 +1866,7 @@ cleanup:
             zend_string_release(payload);
         }
         return king_mcp_transfer_state_find_payload(
+            state,
             service,
             service_len,
             method,
@@ -1695,6 +1893,7 @@ int king_mcp_transfer_acknowledge(
     }
 
     return king_mcp_transfer_state_delete_payload(
+        state,
         service,
         service_len,
         method,

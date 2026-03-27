@@ -114,7 +114,7 @@ bool(false)
 string(%d) "king_mcp_download_to_stream() exceeded the active MCP deadline budget."
 string(21) "King\MCPDataException"
 string(%d) "MCP::uploadFromStream() cancelled the active MCP operation via CancelToken."
-string(21) "King\MCPDataException"
+string(25) "King\MCPProtocolException"
 string(40) "Remote MCP peer forced download failure."
 bool(true)
 int(6)

@@ -690,6 +690,43 @@ static zend_result king_mcp_state_require_open(
     return FAILURE;
 }
 
+static zend_class_entry *king_mcp_exception_class_for_state_error(
+    king_mcp_state *state,
+    zend_class_entry *fallback_ce
+)
+{
+    if (state == NULL) {
+        return fallback_ce;
+    }
+
+    switch (state->last_error_kind) {
+        case KING_MCP_ERROR_TRANSPORT:
+            return king_ce_mcp_connection_error;
+        case KING_MCP_ERROR_PROTOCOL:
+            return king_ce_mcp_protocol_error;
+        case KING_MCP_ERROR_BACKEND:
+            return king_ce_mcp_data_error;
+        case KING_MCP_ERROR_NONE:
+        default:
+            return fallback_ce;
+    }
+}
+
+static void king_mcp_throw_state_error(
+    king_mcp_state *state,
+    zend_class_entry *fallback_ce,
+    const char *fallback_message
+)
+{
+    zend_class_entry *exception_ce = king_mcp_exception_class_for_state_error(state, fallback_ce);
+    const char *message =
+        king_get_error()[0] != '\0'
+            ? king_get_error()
+            : fallback_message;
+
+    zend_throw_exception_ex(exception_ce, 0, "%s", message);
+}
+
 #include "include/king_globals.h"
 
 PHP_FUNCTION(king_mcp_connect)
@@ -1200,13 +1237,10 @@ PHP_METHOD(King_MCP, request)
             ) != SUCCESS) {
             RETURN_THROWS();
         }
-        zend_throw_exception_ex(
+        king_mcp_throw_state_error(
+            state,
             king_ce_mcp_connection_error,
-            0,
-            "%s",
-            king_get_error()[0] != '\0'
-                ? king_get_error()
-                : "MCP::request() failed to exchange the remote MCP request."
+            "MCP::request() failed to exchange the remote MCP request."
         );
         RETURN_THROWS();
     }
@@ -1348,10 +1382,9 @@ PHP_METHOD(King_MCP, uploadFromStream)
         if (king_get_error()[0] == '\0') {
             king_set_error("MCP::uploadFromStream() failed to persist the MCP transfer state.");
         }
-        zend_throw_exception_ex(
+        king_mcp_throw_state_error(
+            state,
             king_ce_mcp_data_error,
-            0,
-            "%s",
             king_get_error()
         );
         RETURN_THROWS();
@@ -1457,10 +1490,9 @@ PHP_METHOD(King_MCP, downloadToStream)
                 "MCP::downloadToStream() could not find an MCP transfer for the requested payload identifier."
             );
         }
-        zend_throw_exception_ex(
+        king_mcp_throw_state_error(
+            state,
             king_ce_mcp_data_error,
-            0,
-            "%s",
             king_get_error()
         );
         RETURN_THROWS();
@@ -1490,11 +1522,12 @@ PHP_METHOD(King_MCP, downloadToStream)
             ZSTR_LEN(request_payload)
         ) != SUCCESS) {
         zend_string_release(payload);
-        zend_throw_exception_ex(
+        king_mcp_throw_state_error(
+            state,
             king_ce_mcp_data_error,
-            0,
-            "%s",
-            king_get_error()
+            king_get_error()[0] != '\0'
+                ? king_get_error()
+                : "MCP::downloadToStream() failed to finalize the local MCP transfer state."
         );
         RETURN_THROWS();
     }

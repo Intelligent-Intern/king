@@ -278,6 +278,13 @@ same as timeouts. A closed peer is not the same as a malformed request. The
 runtime keeps these distinctions explicit because operationally useful error
 handling depends on them.
 
+The OO surface makes that split concrete. `King\MCPConnectionException` means
+the socket path failed or the peer disappeared. `King\MCPProtocolException`
+means the peer answered with an explicit MCP error or sent an invalid MCP
+response. `King\MCPTimeoutException` means the active timeout or deadline was
+exhausted. `King\MCPDataException` means the local transfer side failed, such
+as persisted transfer-state rehydration or cleanup on the local node.
+
 ## MCP And The Object Store
 
 MCP and the object store belong close together even though they are different
