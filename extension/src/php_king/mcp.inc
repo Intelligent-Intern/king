@@ -846,6 +846,12 @@ PHP_FUNCTION(king_mcp_request)
         RETURN_FALSE;
     }
 
+    if (response_payload == NULL) {
+        state->last_error_kind = KING_MCP_ERROR_PROTOCOL;
+        king_set_error("king_mcp_request() received an invalid empty response payload from the remote MCP peer.");
+        RETURN_FALSE;
+    }
+
     if (king_mcp_runtime_control_check(
             &control,
             "king_mcp_request",
@@ -1241,6 +1247,17 @@ PHP_METHOD(King_MCP, request)
             state,
             king_ce_mcp_connection_error,
             "MCP::request() failed to exchange the remote MCP request."
+        );
+        RETURN_THROWS();
+    }
+
+    if (response_payload == NULL) {
+        state->last_error_kind = KING_MCP_ERROR_PROTOCOL;
+        king_set_error("MCP::request() received an invalid empty response payload from the remote MCP peer.");
+        king_mcp_throw_state_error(
+            state,
+            king_ce_mcp_protocol_error,
+            "MCP::request() received an invalid empty response payload from the remote MCP peer."
         );
         RETURN_THROWS();
     }

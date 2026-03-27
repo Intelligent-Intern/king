@@ -1639,10 +1639,19 @@ static zend_result king_mcp_remote_expect_payload(
     if (zend_string_equals_literal(line, "MISS")) {
         if (missing_out != NULL) {
             *missing_out = true;
+            zend_string_release(line);
+            king_set_error("");
+            return SUCCESS;
         }
+
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_PROTOCOL,
+            "%s received an unexpected missing-payload response from the remote MCP peer.",
+            operation_name
+        );
         zend_string_release(line);
-        king_set_error("");
-        return SUCCESS;
+        return FAILURE;
     }
 
     tab = strchr(ZSTR_VAL(line), '\t');
@@ -1952,6 +1961,14 @@ int king_mcp_request(
         NULL,
         control
     );
+    if (status == SUCCESS && *response_out == NULL) {
+        king_mcp_state_set_errorf(
+            state,
+            KING_MCP_ERROR_PROTOCOL,
+            "MCP request completed without a response payload from the remote MCP peer."
+        );
+        status = FAILURE;
+    }
 
 cleanup:
     king_mcp_end_operation(state);

@@ -317,6 +317,14 @@ while (!$shouldStop) {
                 'timeout_budget_ms' => $timeoutBudgetMs,
                 'deadline_budget_ms' => $deadlineBudgetMs,
             ];
+
+            if ($service === 'svc' && $method === 'miss-request') {
+                $event['remote_miss'] = true;
+                king_mcp_test_capture_event($capture, $capturePath, $event);
+                king_mcp_test_write_line($client, 'MISS');
+                continue;
+            }
+
             $response = king_mcp_test_handle_request(
                 $client,
                 $service,

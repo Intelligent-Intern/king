@@ -35,7 +35,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `377/377` passing
+- `./scripts/test-extension.sh`: `378/378` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/check-php-support-matrix.sh`: passing
@@ -57,7 +57,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `377` PHPT files
+- `extension/tests`: `378` PHPT files
 - public stub parity: `128` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -84,7 +84,7 @@ The current tree already proves:
 - deterministic QUIC bootstrap through a tracked pinset for the `quiche` repo revision, BoringSSL submodule revision, pinned workspace lockfile, and pinned `wirefilter` git revision with fail-closed static and PHPT verification
 - one shared runtime install smoke across staged profiles, packaged release artifacts, and published runtime containers, plus first-class clean-host package install and container smoke matrix entrypoints
 - long-duration ASan, UBSan, and leak-oriented soak gates with retained per-iteration logs and archived failure diagnostics under `extension/build/soak/` plus CI artifact upload on soak failure
-- MCP request/upload/download parity against a real TCP host/port remote peer with propagated timeout, deadline, cancellation controls, stable OO exception mapping across transport, protocol, timeout, and local backend failures, IPv4 and IPv6 peer targeting coverage, 1 MiB payload roundtrips, canonical collision-free transfer identifiers across newline-shaped and binary-safe tuple components, parallel-transfer backpressure isolation, explicit single-flight reentry guards, same-host partial-failure recovery, persisted remote-state restart recovery coverage, restart-rehydratable local transfer-state fallback with consume-on-successful-download cleanup semantics, and explicit `topology_scope=tcp_host_port_peer` introspection
+- MCP request/upload/download parity against a real TCP host/port remote peer with propagated timeout, deadline, cancellation controls, stable OO exception mapping across transport, protocol, timeout, and local backend failures, IPv4 and IPv6 peer targeting coverage, 1 MiB payload roundtrips, canonical collision-free transfer identifiers across newline-shaped and binary-safe tuple components, parallel-transfer backpressure isolation, explicit single-flight reentry guards, rejection of unexpected remote `MISS` request responses without `NULL` payload crashes, same-host partial-failure recovery, persisted remote-state restart recovery coverage, restart-rehydratable local transfer-state fallback with consume-on-successful-download cleanup semantics, and explicit `topology_scope=tcp_host_port_peer` introspection
 - orchestrator persistence, honest `queued -> running -> completed|failed|cancelled` run transitions, explicit `single_attempt` retry plus `caller_managed` idempotency contract, explicit `topology_scope=local_in_process|same_host_file_worker|tcp_host_port_execution_peer` introspection by backend mode, deterministic `claimed_recovery_then_fifo_run_id` scheduling, exclusive claimed-file locking across concurrent workers, recovery of an already-running claimed run exactly once after worker loss, explicit `king_pipeline_orchestrator_resume_run()` continuation of persisted `running` runs after controller restart on the local and `remote_peer` backends, sustained queue fairness under repeated parallel-worker contention, local/file-worker backend boundaries, real TCP host/port `remote_peer` execution with persisted success/failure snapshots, rejection of remote network object payloads during result decode, cross-process cancellation, and multiprocess controller/observer/worker verification
 - telemetry batch queueing, bounded retry behavior, explicit `best_effort_bounded_retry` plus `process_local_non_persistent` delivery semantics, process-scoped lazy libcurl lifetime without per-export global teardown, explicit `restart_replay=not_supported` and `drain_behavior=single_batch_per_flush` component contracts, OTLP metrics/traces/logs export hardening, and real local collector coverage for success plus non-2xx, timeout, response-size-limit, and outage recovery
 - telemetry-driven Hetzner autoscaling with controller-owned credentials, persisted recovery state, `register -> ready -> drain -> delete` lifecycle gating, and stale pending-node rollback for failed bootstrap, registration, and readiness with explicit provider-delete failure reporting
