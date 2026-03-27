@@ -387,6 +387,14 @@ together that route selection remains informed by both.
 In practice, mother-node synchronization is what helps a discovery system remain
 consistent when the topology is changing, not only when it is static.
 
+In the current runtime, that synchronization is guarded as one persisted-state
+transaction. When several local processes register or update mother nodes at
+nearly the same time, King refreshes the registry-backed topology, applies the
+new mother-node change, recalculates discovery and synchronization counters, and
+then persists the whole result while the state lock is still held. That is what
+keeps larger local topology churn from tearing the mother-node view away from
+the statistics that discovery and routing consume.
+
 ## How Semantic-DNS Fits With The Router And Load Balancer
 
 It is important to separate discovery from forwarding while still understanding

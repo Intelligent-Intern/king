@@ -12,6 +12,7 @@ Status note:
 - Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, and real TCP host/port `remote_peer` execution with persisted success/failure snapshots are now verified; the remaining open boxes below are the broader continuation, observability, and multi-host slices.
 - Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path, are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices, and now expose an explicit process-local non-persistent non-replay delivery contract across restart; the remaining open boxes below are richer ordering/idempotency guarantees, longer-haul characterization, and stronger diagnostics.
 - Recent QUIC bootstrap closure: the build path now rehydrates a pinned `quiche` commit, pinned BoringSSL submodule commit, tracked workspace lockfile, and pinned `wirefilter` revision without branch-based fallbacks or unlocked cargo retries.
+- Recent Smart-DNS closure: larger-topology mother-node churn now preserves coherent local persisted-state sync statistics across concurrent multiprocess writers; the broader real-topology and split-brain boxes below remain open.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 

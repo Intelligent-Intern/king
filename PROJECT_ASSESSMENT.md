@@ -20,7 +20,7 @@ areas:
 
 - deeper transport and listener failure-path verification across HTTP/2, HTTP/3, and WebSocket
 - orchestrator continuation depth and broader distributed control-plane recovery
-- richer Smart-DNS mother-node synchronization and distributed topology recovery beyond the current concurrent-write and live-signal proof
+- Smart-DNS split-brain, failure/recovery, and broader distributed-topology validation beyond the current concurrent-write, live-signal, and concurrent mother-node churn proof
 - stronger telemetry/autoscaling load-bound, cleanup, and recovery guarantees
 
 The long-form completion checklist has now been distilled into the next `20`
@@ -35,7 +35,7 @@ The currently verified baseline is:
 - `./scripts/check-include-layout.sh`: passing
 - `./scripts/audit-runtime-surface.sh`: passing
 - `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `372/372` passing
+- `./scripts/test-extension.sh`: `373/373` passing
 - `./scripts/fuzz-runtime.sh`: passing
 - `./scripts/check-stub-parity.sh`: passing
 - `./scripts/check-php-support-matrix.sh`: passing
@@ -57,7 +57,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `372` PHPT files
+- `extension/tests`: `373` PHPT files
 - public stub parity: `128` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -77,7 +77,7 @@ The current tree already proves:
 - server-side `king_server_upgrade_to_websocket()` both as an honest local marker slice for local listeners and as a real on-wire HTTP/1 one-shot upgrade path with frame flow, handler ownership, and close/drain coverage
 - repeated server/session soak coverage for local upgrade, early hints, admin API, TLS reload, and on-wire websocket close/drain cycles
 - IIBIN schema, registry, encode/decode, object hydration, and wire validation
-- Semantic DNS register/discover/update routing, live HTTP health-probe driven route and discovery refresh from service-owned health endpoints, idempotent repeated registration without redundant durable-state churn, coherent parallel service/status persistence through locked refresh-before-persist durable-state transactions, larger-topology local churn coherence, registry-backed mother-node sync statistics, persisted registration plus mother-node rehydration across restart, and private-directory durable state handling
+- Semantic DNS register/discover/update routing, live HTTP health-probe driven route and discovery refresh from service-owned health endpoints, idempotent repeated registration without redundant durable-state churn, coherent parallel service/status persistence through locked refresh-before-persist durable-state transactions, larger-topology local churn coherence, coherent concurrent larger-topology mother-node sync statistics across multiprocess writers in the local persisted-state slice, registry-backed mother-node sync statistics, persisted registration plus mother-node rehydration across restart, and private-directory durable state handling
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs
 - router/loadbalancer is now exposed as an explicit config-backed system component with honest policy/discovery-only introspection
 - object-store local filesystem persistence, explicit `local_fs_only` runtime/system contract, `memory_cache -> local_fs` compatibility aliasing, simulated non-local adapter fencing, `.meta` sidecars, CDN cache/runtime behavior, and confined backup/restore/import/export paths
@@ -109,7 +109,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 
 - Router/loadbalancer is now honestly fenced to a config-backed control-plane surface; it is not presented as a forwarding dataplane runtime.
 - Smart-DNS public config and init surfaces are now honest for the current local semantic/service-discovery runtime.
-- The remaining Smart-DNS work is real distributed topology validation, richer mother-node synchronization beyond the local registry-backed slice, and failover behavior rather than more local config cleanup, restart-state basics, or local concurrent-write correctness.
+- The remaining Smart-DNS work is split-brain and partial-failure recovery, real distributed topology validation beyond the local persisted-state slice, and broader failover behavior rather than more local config cleanup, restart-state basics, or local concurrent-write/mother-node churn correctness.
 
 ### Observability and Fleet Operations
 

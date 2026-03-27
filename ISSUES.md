@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate Smart-DNS mother-node synchronization under concurrent larger-topology churn.
+- [ ] Validate Smart-DNS split-brain and partial-failure recovery on the local persisted-state slice.
 
 ## Active Executable Items
 
@@ -94,7 +94,7 @@
 - telemetry cleanup, cross-request residue hardening, load bounds, self-metrics, and richer export diagnostics
 - autoscaling decision logic under real load, live drain-before-delete, and automated post-bootstrap registration/readiness
 - orchestrator continuation after host restart, richer error classification, multi-worker execution depth, and broader observability
-- Smart-DNS mother-node synchronization and failure/recovery depth on larger distributed topologies
+- Smart-DNS split-brain, failure/recovery, and broader distributed-topology depth
 - broader QUIC lifecycle, stats, resumption, and recovery validation beyond the current HTTP/3 client slices
 
 ## Notes
