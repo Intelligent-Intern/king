@@ -14,6 +14,15 @@ static zend_string *king_semantic_dns_copy_persistent_string(zend_string *source
     return zend_string_init(ZSTR_VAL(source), ZSTR_LEN(source), 1);
 }
 
+static zend_string *king_semantic_dns_copy_request_string(zend_string *source)
+{
+    if (source == NULL) {
+        return NULL;
+    }
+
+    return zend_string_init(ZSTR_VAL(source), ZSTR_LEN(source), 0);
+}
+
 static bool king_semantic_dns_copy_persistent_scalar_zval(zval *target, const zval *source)
 {
     switch (Z_TYPE_P(source)) {
@@ -59,7 +68,7 @@ static void king_semantic_dns_copy_request_scalar_zval(zval *target, const zval 
             ZVAL_DOUBLE(target, Z_DVAL_P(source));
             break;
         case IS_STRING:
-            ZVAL_STR(target, zend_string_copy(Z_STR_P(source)));
+            ZVAL_STR(target, king_semantic_dns_copy_request_string(Z_STR_P(source)));
             break;
         default:
             ZVAL_NULL(target);
