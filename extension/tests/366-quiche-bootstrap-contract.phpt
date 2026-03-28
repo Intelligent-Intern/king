@@ -2,7 +2,7 @@
 King QUIC bootstrap stays pinned and fail-closed
 --FILE--
 <?php
-$script = __DIR__ . '/../scripts/check-quiche-bootstrap.sh';
+$script = dirname(__DIR__, 2) . '/infra/scripts/check-quiche-bootstrap.sh';
 $output = [];
 $status = 1;
 

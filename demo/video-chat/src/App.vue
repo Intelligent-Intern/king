@@ -15,7 +15,7 @@
           <input 
             v-model="websocketUrl" 
             type="text" 
-            placeholder="ws://localhost:8080"
+            placeholder="ws://your-host:8080/ws"
             :disabled="isConnected"
           />
         </div>
@@ -209,8 +209,18 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { IIBINClient, MessageType, createTextMessage, compareWithJSON } from './lib/iibin'
 
+function resolveDefaultWebSocketUrl(): string {
+  if (typeof window === 'undefined') {
+    return 'ws://127.0.0.1:8080/ws'
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = window.location.host || '127.0.0.1:8080'
+  return `${protocol}//${host}/ws`
+}
+
 // Connection state
-const websocketUrl = ref('ws://localhost:8080')
+const websocketUrl = ref(resolveDefaultWebSocketUrl())
 const userName = ref('User' + Math.floor(Math.random() * 1000))
 const isConnected = ref(false)
 const isConnecting = ref(false)

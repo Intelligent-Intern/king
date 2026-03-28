@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/smoke-profile.sh <release|debug|asan|ubsan>
+Usage: ./infra/scripts/smoke-profile.sh <release|debug|asan|ubsan>
 
 Runs a focused smoke test against the staged profile artifact under:
   extension/build/profiles/<profile>/
@@ -29,7 +29,8 @@ case "${PROFILE}" in
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+EXT_DIR="${ROOT_DIR}/extension"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
 PHP_BIN="${PHP_BIN:-php}"
 EXT_SO="${PROFILE_DIR}/king.so"
@@ -57,7 +58,7 @@ resolve_sanitizer_runtime() {
 
 if [[ ! -f "${EXT_SO}" ]]; then
     echo "Missing staged extension for profile '${PROFILE}': ${EXT_SO}" >&2
-    echo "Run ./scripts/build-profile.sh ${PROFILE} first." >&2
+    echo "Run ./infra/scripts/build-profile.sh ${PROFILE} first." >&2
     exit 1
 fi
 

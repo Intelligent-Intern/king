@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/check-config-compatibility-matrix.sh [--archive PATH] [--php-bin BIN] [--artifacts-dir DIR]
+Usage: ./infra/scripts/check-config-compatibility-matrix.sh [--archive PATH] [--php-bin BIN] [--artifacts-dir DIR]
 
 Builds or reuses the current packaged King release archive, verifies it, and
 proves three representative configuration-state paths against the same packaged
@@ -17,8 +17,8 @@ EOF
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ROOT_DIR="$(cd "${EXT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+EXT_DIR="${ROOT_DIR}/extension"
 
 ARCHIVE_PATH=""
 PHP_BIN="${PHP_BIN:-php}"
@@ -135,7 +135,7 @@ package_tree() {
     package_output="$(
         (
             cd "${tree_root}/extension"
-            ./scripts/package-release.sh --output-dir "${output_dir}"
+            ./infra/scripts/package-release.sh --output-dir "${output_dir}"
         ) 2>&1 | tee "${log_path}"
     )"
 
@@ -154,7 +154,7 @@ verify_archive() {
 
     (
         cd "${EXT_DIR}"
-        PHP_BIN="${PHP_BIN}" ./scripts/verify-release-package.sh --archive "${archive_path}"
+        PHP_BIN="${PHP_BIN}" ./infra/scripts/verify-release-package.sh --archive "${archive_path}"
     ) 2>&1 | tee "${log_path}"
 }
 

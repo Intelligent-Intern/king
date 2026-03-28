@@ -1,11 +1,15 @@
 name: King Docker Build & Push
 
 on:
-  push:
-    branches: [ main, develop ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main ]
+  workflow_run:
+    workflows:
+      - King Canonical Baseline
+    types:
+      - completed
+
+concurrency:
+  group: king-docker-${{ github.event.workflow_run.id }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
@@ -15,6 +19,7 @@ env:
 jobs:
   build-and-push:
     name: Build, Smoke & Push Docker Images
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,12 +44,87 @@ jobs:
           - php-version: '8.5'
             platforms: linux/amd64,linux/arm64
             latest: true
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
-          submodules: recursive
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch --force --tags origin '+refs/tags/*:refs/tags/*'
+
+      - name: Download amd64 release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${{ github.event.workflow_run.id }}" \
+            --name "king-release-package-php${{ matrix.php-version }}-linux-amd64" \
+            --dir "dist/docker-packages/php${{ matrix.php-version }}/linux-amd64"
+
+      - name: Download arm64 release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${{ github.event.workflow_run.id }}" \
+            --name "king-release-package-php${{ matrix.php-version }}-linux-arm64" \
+            --dir "dist/docker-packages/php${{ matrix.php-version }}/linux-arm64"
+
+      - name: Prepare runtime image metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          image="${REGISTRY}/${IMAGE_NAME}"
+          revision="${{ github.event.workflow_run.head_sha }}"
+          short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
+          branch="${{ github.event.workflow_run.head_branch }}"
+          semver_tag=""
+
+          while IFS= read -r tag; do
+            if [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              semver_tag="${tag}"
+              break
+            fi
+          done < <(git tag --points-at "${revision}" | sort -Vr)
+
+          tags=(
+            "${image}:php${{ matrix.php-version }}"
+            "${image}:sha-${short_sha}-php${{ matrix.php-version }}"
+          )
+
+          if [[ "${{ matrix.latest }}" == "true" ]]; then
+            if [[ "${branch}" == "main" ]]; then
+              tags+=("${image}:main" "${image}:latest")
+            elif [[ "${branch}" == "develop" ]]; then
+              tags+=("${image}:develop")
+            fi
+
+            if [[ -n "${semver_tag}" ]]; then
+              version="${semver_tag#v}"
+              IFS='.' read -r major minor patch <<< "${version}"
+              tags+=(
+                "${image}:${version}"
+                "${image}:${major}.${minor}"
+                "${image}:${major}"
+              )
+            fi
+          fi
+
+          created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          {
+            printf 'tags<<EOF\n'
+            printf '%s\n' "${tags[@]}"
+            printf 'EOF\n'
+            printf 'labels<<EOF\n'
+            printf 'org.opencontainers.image.title=king\n'
+            printf 'org.opencontainers.image.description=King PHP extension runtime image\n'
+            printf 'org.opencontainers.image.created=%s\n' "${created_at}"
+            printf 'org.opencontainers.image.revision=%s\n' "${revision}"
+            printf 'org.opencontainers.image.source=https://github.com/%s\n' "${GITHUB_REPOSITORY}"
+            printf 'EOF\n'
+            printf 'created_at=%s\n' "${created_at}"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -53,26 +133,11 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=php${{ matrix.php-version }}
-            type=raw,value=latest,enable=${{ matrix.latest && github.ref == 'refs/heads/main' }}
 
       - name: Build and push King PHP ${{ matrix.php-version }}
         uses: docker/build-push-action@v7
@@ -80,49 +145,131 @@ jobs:
           context: .
           file: ./infra/php-runtime.Dockerfile
           platforms: ${{ matrix.platforms }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
             PHP_VERSION=${{ matrix.php-version }}
-            BUILD_JOBS=4
-            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-            VCS_REF=${{ github.sha }}
+            BUILD_DATE=${{ steps.meta.outputs.created_at }}
+            VCS_REF=${{ github.event.workflow_run.head_sha }}
 
-  # Build demo application image
   build-demo:
-    name: Build Demo Application
+    name: Build Demo Application PHP ${{ matrix.php-version }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']
+        include:
+          - php-version: '8.1'
+            latest: false
+          - php-version: '8.2'
+            latest: false
+          - php-version: '8.3'
+            latest: false
+          - php-version: '8.4'
+            latest: false
+          - php-version: '8.5'
+            latest: true
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch --force --tags origin '+refs/tags/*:refs/tags/*'
+
+      - name: Download amd64 release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${{ github.event.workflow_run.id }}" \
+            --name "king-release-package-php${{ matrix.php-version }}-linux-amd64" \
+            --dir "dist/docker-packages/php${{ matrix.php-version }}/linux-amd64"
+
+      - name: Download arm64 release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${{ github.event.workflow_run.id }}" \
+            --name "king-release-package-php${{ matrix.php-version }}-linux-arm64" \
+            --dir "dist/docker-packages/php${{ matrix.php-version }}/linux-arm64"
+
+      - name: Prepare demo image metadata
+        id: meta-demo
+        run: |
+          set -euo pipefail
+          image="${REGISTRY}/${IMAGE_NAME}-demo"
+          revision="${{ github.event.workflow_run.head_sha }}"
+          short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
+          branch="${{ github.event.workflow_run.head_branch }}"
+          semver_tag=""
+
+          while IFS= read -r tag; do
+            if [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              semver_tag="${tag}"
+              break
+            fi
+          done < <(git tag --points-at "${revision}" | sort -Vr)
+
+          tags=(
+            "${image}:php${{ matrix.php-version }}"
+            "${image}:sha-${short_sha}-php${{ matrix.php-version }}"
+          )
+
+          if [[ "${{ matrix.latest }}" == "true" ]]; then
+            if [[ "${branch}" == "main" ]]; then
+              tags+=("${image}:main" "${image}:latest")
+            elif [[ "${branch}" == "develop" ]]; then
+              tags+=("${image}:develop")
+            fi
+
+            if [[ -n "${semver_tag}" ]]; then
+              version="${semver_tag#v}"
+              IFS='.' read -r major minor patch <<< "${version}"
+              tags+=(
+                "${image}:${version}"
+                "${image}:${major}.${minor}"
+              )
+            fi
+          fi
+
+          created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          {
+            printf 'tags<<EOF\n'
+            printf '%s\n' "${tags[@]}"
+            printf 'EOF\n'
+            printf 'labels<<EOF\n'
+            printf 'org.opencontainers.image.title=king-demo-server\n'
+            printf 'org.opencontainers.image.description=King demo server runtime image\n'
+            printf 'org.opencontainers.image.created=%s\n' "${created_at}"
+            printf 'org.opencontainers.image.revision=%s\n' "${revision}"
+            printf 'org.opencontainers.image.source=https://github.com/%s\n' "${GITHUB_REPOSITORY}"
+            printf 'EOF\n'
+            printf 'created_at=%s\n' "${created_at}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for demo
-        id: meta-demo
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-demo
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push demo application
         uses: docker/build-push-action@v7
@@ -130,8 +277,12 @@ jobs:
           context: .
           file: ./infra/demo-server/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta-demo.outputs.tags }}
           labels: ${{ steps.meta-demo.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            PHP_VERSION=${{ matrix.php-version }}
+            BUILD_DATE=${{ steps.meta-demo.outputs.created_at }}
+            VCS_REF=${{ github.event.workflow_run.head_sha }}

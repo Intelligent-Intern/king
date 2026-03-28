@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/soak-runtime.sh <asan|ubsan|leak> [--iterations N] [--artifacts-dir DIR]
+Usage: ./infra/scripts/soak-runtime.sh <asan|ubsan|leak> [--iterations N] [--artifacts-dir DIR]
 
 Runs the long-duration sanitizer-oriented soak subset against a staged profile
 artifact under:
@@ -75,7 +75,8 @@ if ! [[ "${ITERATIONS}" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+EXT_DIR="${ROOT_DIR}/extension"
 CALLER_PWD="$(pwd)"
 PHP_BIN="${PHP_BIN:-php}"
 
@@ -124,7 +125,7 @@ require_profile_artifact() {
 
     if [[ ! -e "${path}" ]]; then
         echo "${message}: ${path}" >&2
-        echo "Run ./scripts/build-profile.sh ${PROFILE} first." >&2
+        echo "Run ./infra/scripts/build-profile.sh ${PROFILE} first." >&2
         exit 1
     fi
 }

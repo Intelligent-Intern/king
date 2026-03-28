@@ -66,79 +66,70 @@ approval. It is not a normal cleanup tool for making CI, tests, or docs easier.
 
 ## Canonical Build Path
 
-The canonical extension workflow is inside `extension/`.
-Do not treat ad-hoc local commands or legacy wrappers as the source of truth.
+The canonical repo entrypoints live under `infra/scripts/`.
+Callers, docs, and automation are expected to use the `infra/` entrypoints
+instead of reviving ad-hoc wrappers or a root `bin/` directory.
 The GitHub Actions baseline in `.github/workflows/ci.yml` is expected to run
 the same workflow, not a separate approximation.
 
 Build:
 
 ```bash
-cd extension
-./scripts/build-extension.sh
+./infra/scripts/build-extension.sh
 ```
 
 Test:
 
 ```bash
-cd extension
-./scripts/test-extension.sh
+./infra/scripts/test-extension.sh
 ```
 
 Audit the active build surface:
 
 ```bash
-cd extension
-./scripts/audit-runtime-surface.sh
+./infra/scripts/audit-runtime-surface.sh
 ```
 
 Run the repo-local static checks:
 
 ```bash
-cd extension
-./scripts/static-checks.sh
+./infra/scripts/static-checks.sh
 ```
 
 Run the canonical fuzz, stress, and edge-case subset:
 
 ```bash
-cd extension
-./scripts/fuzz-runtime.sh
+./infra/scripts/fuzz-runtime.sh
 ```
 
 Check the public PHP stubs against the live runtime:
 
 ```bash
-cd extension
-./scripts/check-stub-parity.sh
+./infra/scripts/check-stub-parity.sh
 ```
 
 Build the canonical release package:
 
 ```bash
-cd extension
-./scripts/package-release.sh
+./infra/scripts/package-release.sh
 ```
 
 Verify that the release package is reproducible:
 
 ```bash
-cd extension
-./scripts/package-release.sh --verify-reproducible
+./infra/scripts/package-release.sh --verify-reproducible
 ```
 
 Verify a generated release archive after extraction:
 
 ```bash
-cd extension
-./scripts/verify-release-package.sh --archive ../dist/king-*.tar.gz
+./infra/scripts/verify-release-package.sh --archive ../dist/king-*.tar.gz
 ```
 
 Run the clean-host package install matrix across supported PHP binaries:
 
 ```bash
-cd extension
-./scripts/install-package-matrix.sh --archive ../dist/king-*.tar.gz --php-bins php
+./infra/scripts/install-package-matrix.sh --archive ../dist/king-*.tar.gz --php-bins php
 ```
 
 Build one package per supported PHP/API combination and run the host install
@@ -147,8 +138,7 @@ smoke against the matching runtime for that archive.
 Run the previous-release to current-release upgrade compatibility gate:
 
 ```bash
-cd extension
-./scripts/check-release-upgrade.sh --from-ref HEAD^
+./infra/scripts/check-release-upgrade.sh --from-ref HEAD^
 ```
 
 This packages the previous git ref, verifies both archives, installs them into
@@ -158,8 +148,7 @@ after the upgrade.
 Run the current-release to previous-release downgrade compatibility gate:
 
 ```bash
-cd extension
-./scripts/check-release-downgrade.sh --from-ref HEAD^
+./infra/scripts/check-release-downgrade.sh --from-ref HEAD^
 ```
 
 This uses the same package pair and prefix model, but proves the reverse
@@ -168,8 +157,7 @@ install order explicitly instead of assuming downgrade symmetry.
 Run the persisted-state migration compatibility gate:
 
 ```bash
-cd extension
-./scripts/check-persistence-migration.sh --from-ref HEAD^
+./infra/scripts/check-persistence-migration.sh --from-ref HEAD^
 ```
 
 This writes representative persisted state with the previous package and then
@@ -178,8 +166,7 @@ verifies that the current package can rehydrate that state correctly.
 Run the old/new configuration-state compatibility matrix:
 
 ```bash
-cd extension
-./scripts/check-config-compatibility-matrix.sh
+./infra/scripts/check-config-compatibility-matrix.sh
 ```
 
 This proves that the packaged runtime still accepts the representative legacy
@@ -189,15 +176,21 @@ system INI snapshot without state drift between those paths.
 Run the published-container smoke matrix across supported runtime images:
 
 ```bash
-cd extension
-./scripts/container-smoke-matrix.sh --php-versions 8.1,8.2,8.3,8.4,8.5
+./infra/scripts/container-smoke-matrix.sh --php-versions 8.1,8.2,8.3,8.4,8.5
+```
+
+Run the full Docker-backed PHP matrix before a commit when you need real
+networked demo coverage plus an in-container PHPT pass across every supported
+PHP line:
+
+```bash
+./infra/scripts/php-version-docker-matrix.sh --php-versions 8.1,8.2,8.3,8.4,8.5
 ```
 
 Run the final repo-local go-live readiness gate:
 
 ```bash
-cd extension
-./scripts/go-live-readiness.sh
+./infra/scripts/go-live-readiness.sh
 ```
 
 Benchmark the canonical runtime paths:
@@ -216,23 +209,21 @@ Write a local baseline and compare against it:
 If you touch the PHP stub surface, also run:
 
 ```bash
-cd extension
-./scripts/check-stub-parity.sh
+./infra/scripts/check-stub-parity.sh
 ```
 
 Explicit local build profiles are available through:
 
 ```bash
-cd extension
-./scripts/build-profile.sh release
-./scripts/build-profile.sh debug
-./scripts/build-profile.sh asan
-./scripts/build-profile.sh ubsan
+./infra/scripts/build-profile.sh release
+./infra/scripts/build-profile.sh debug
+./infra/scripts/build-profile.sh asan
+./infra/scripts/build-profile.sh ubsan
 ```
 
 These profile builds own the canonical QUIC bootstrap path.
 They bootstrap the pinned `quiche` checkout recorded in
-`extension/scripts/quiche-bootstrap.lock` and are expected to fail closed if
+`infra/scripts/quiche-bootstrap.lock` and are expected to fail closed if
 that pinned dependency set cannot be rehydrated exactly.
 Do not reintroduce ad hoc local clones, branch-based dependency rewrites, or
 unlocked cargo fallbacks around them.
@@ -240,19 +231,17 @@ unlocked cargo fallbacks around them.
 Smoke the staged profile artifact after each non-release build:
 
 ```bash
-cd extension
-./scripts/smoke-profile.sh debug
-./scripts/smoke-profile.sh asan
-./scripts/smoke-profile.sh ubsan
+./infra/scripts/smoke-profile.sh debug
+./infra/scripts/smoke-profile.sh asan
+./infra/scripts/smoke-profile.sh ubsan
 ```
 
 Run the long-duration sanitizer soak gates against the staged artifacts:
 
 ```bash
-cd extension
-./scripts/soak-runtime.sh asan --iterations 5 --artifacts-dir ../soak-artifacts/asan
-./scripts/soak-runtime.sh ubsan --iterations 5 --artifacts-dir ../soak-artifacts/ubsan
-./scripts/soak-runtime.sh leak --iterations 3 --artifacts-dir ../soak-artifacts/leak
+./infra/scripts/soak-runtime.sh asan --iterations 5 --artifacts-dir ../soak-artifacts/asan
+./infra/scripts/soak-runtime.sh ubsan --iterations 5 --artifacts-dir ../soak-artifacts/ubsan
+./infra/scripts/soak-runtime.sh leak --iterations 3 --artifacts-dir ../soak-artifacts/leak
 ```
 
 Each soak retains `summary.txt`, the exact PHPT subset, per-iteration logs, and
@@ -264,16 +253,16 @@ of introducing another build entry point.
 Do not revive `infra/scripts/benchmark.sh`; the canonical benchmark entrypoint
 is `benchmarks/run-canonical.sh`, and `make benchmark` is expected to delegate
 to it directly. The same rule now applies to static checks and profile builds:
-the canonical repo-local paths are `extension/scripts/static-checks.sh`,
-`extension/scripts/build-profile.sh`, `extension/scripts/smoke-profile.sh`,
-`extension/scripts/fuzz-runtime.sh`,
-`extension/scripts/check-stub-parity.sh`,
-`extension/scripts/package-release.sh`,
-`extension/scripts/install-package-matrix.sh`,
-`extension/scripts/container-smoke-matrix.sh`,
-`extension/scripts/soak-runtime.sh`,
-`extension/scripts/verify-release-package.sh`, and
-`extension/scripts/go-live-readiness.sh`.
+the canonical repo-local paths are `infra/scripts/static-checks.sh`,
+`infra/scripts/build-profile.sh`, `infra/scripts/smoke-profile.sh`,
+`infra/scripts/fuzz-runtime.sh`,
+`infra/scripts/check-stub-parity.sh`,
+`infra/scripts/package-release.sh`,
+`infra/scripts/install-package-matrix.sh`,
+`infra/scripts/container-smoke-matrix.sh`,
+`infra/scripts/soak-runtime.sh`,
+`infra/scripts/verify-release-package.sh`, and
+`infra/scripts/go-live-readiness.sh`.
 
 ## Workflow
 

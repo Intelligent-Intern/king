@@ -22,6 +22,7 @@
 #include <string.h>
 #include <sys/file.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #define KING_MCP_REMOTE_LINE_OVERHEAD 4096
@@ -929,7 +930,10 @@ static size_t king_mcp_remote_line_limit(void)
 
 static uint64_t king_mcp_monotonic_time_ms(void)
 {
-    return (uint64_t) (zend_hrtime() / 1000000ULL);
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ((uint64_t) ts.tv_sec * 1000ULL) + ((uint64_t) ts.tv_nsec / 1000000ULL);
 }
 
 static zend_long king_mcp_control_timeout_budget_ms(const king_mcp_runtime_control_t *control)

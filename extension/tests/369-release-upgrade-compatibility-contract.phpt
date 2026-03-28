@@ -4,7 +4,7 @@ King release upgrade compatibility gate stays wired into scripts and CI
 <?php
 $extensionDir = dirname(__DIR__);
 $rootDir = dirname($extensionDir);
-$script = $extensionDir . '/scripts/check-release-upgrade.sh';
+$script = $rootDir . '/infra/scripts/check-release-upgrade.sh';
 $ciWorkflow = $rootDir . '/.github/workflows/ci.yml';
 
 $output = [];
@@ -13,7 +13,7 @@ exec('bash ' . escapeshellarg($script) . ' --help 2>&1', $output, $status);
 $help = implode("\n", $output);
 
 var_dump($status === 0);
-var_dump(str_contains($help, 'Usage: ./scripts/check-release-upgrade.sh --from-ref REF'));
+var_dump(str_contains($help, 'Usage: ./infra/scripts/check-release-upgrade.sh --from-ref REF'));
 var_dump(str_contains($help, '--current-archive PATH'));
 var_dump(str_contains($help, '--php-bin BIN'));
 var_dump(str_contains($help, '--artifacts-dir DIR'));
@@ -23,7 +23,7 @@ var_dump(str_contains($ci, 'release-upgrade-compatibility:'));
 var_dump(str_contains($ci, 'name: Release Upgrade Compatibility'));
 var_dump(str_contains($ci, 'fetch-depth: 0'));
 var_dump(str_contains($ci, 'github.event.before'));
-var_dump(str_contains($ci, './scripts/check-release-upgrade.sh --from-ref'));
+var_dump(str_contains($ci, '../infra/scripts/check-release-upgrade.sh --from-ref'));
 var_dump(str_contains($ci, 'compat-artifacts/release-upgrade/'));
 var_dump(str_contains($ci, 'king-release-upgrade-failures'));
 ?>

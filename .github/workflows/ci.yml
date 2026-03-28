@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+      - develop
+    tags:
+      - 'v*'
   pull_request:
     branches:
       - main
@@ -48,7 +51,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('extension/scripts/quiche-bootstrap.lock', 'extension/scripts/bootstrap-quiche.sh', 'extension/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -78,29 +81,28 @@ jobs:
 
       - name: Run repo-local static checks
         working-directory: extension
-        run: ./scripts/static-checks.sh
+        run: ../infra/scripts/static-checks.sh
 
       - name: Audit active runtime surface
         working-directory: extension
-        run: ./scripts/audit-runtime-surface.sh
+        run: ../infra/scripts/audit-runtime-surface.sh
 
       - name: Build canonical release profile
         working-directory: extension
-        run: ./scripts/build-profile.sh release
+        run: ../infra/scripts/build-profile.sh release
 
       - name: Run canonical PHPT suite
         working-directory: extension
-        run: ./scripts/test-extension.sh
+        run: ../infra/scripts/test-extension.sh
 
       - name: Run final go-live readiness checks
         working-directory: extension
-        run: ./scripts/go-live-readiness.sh --skip-baseline --output-dir ../dist --benchmark-iterations 5000 --benchmark-warmup 500 --benchmark-budget-file benchmarks/budgets/canonical-ci.json
+        run: ../infra/scripts/go-live-readiness.sh --skip-baseline --output-dir ../dist --benchmark-iterations 5000 --benchmark-warmup 500 --benchmark-budget-file benchmarks/budgets/canonical-ci.json
 
-      - name: Upload release package artifact
-        if: github.event_name == 'workflow_dispatch'
+      - name: Upload canonical release package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: king-release-package
+          name: king-release-package-php8.5-linux-amd64
           if-no-files-found: error
           path: |
             dist/*.tar.gz
@@ -153,7 +155,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('extension/scripts/quiche-bootstrap.lock', 'extension/scripts/bootstrap-quiche.sh', 'extension/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -174,11 +176,11 @@ jobs:
 
       - name: Build profile
         working-directory: extension
-        run: ./scripts/build-profile.sh "${{ matrix.profile }}"
+        run: ../infra/scripts/build-profile.sh "${{ matrix.profile }}"
 
       - name: Smoke profile artifact
         working-directory: extension
-        run: ./scripts/smoke-profile.sh "${{ matrix.profile }}"
+        run: ../infra/scripts/smoke-profile.sh "${{ matrix.profile }}"
 
       - name: Upload profile failure artifacts
         if: failure()
@@ -195,19 +197,41 @@ jobs:
             extension/tests/*.out
 
   install-package-matrix:
-    name: Package Install Smoke PHP ${{ matrix.php-version }}
+    name: Release Package Build & Install Smoke PHP ${{ matrix.php-version }} ${{ matrix.arch-label }}
     needs: canonical-baseline
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        php-version:
-          - "8.1"
-          - "8.2"
-          - "8.3"
-          - "8.4"
-          - "8.5"
+        include:
+          - php-version: "8.1"
+            runner: ubuntu-24.04
+            arch-label: linux-amd64
+          - php-version: "8.1"
+            runner: ubuntu-24.04-arm
+            arch-label: linux-arm64
+          - php-version: "8.2"
+            runner: ubuntu-24.04
+            arch-label: linux-amd64
+          - php-version: "8.2"
+            runner: ubuntu-24.04-arm
+            arch-label: linux-arm64
+          - php-version: "8.3"
+            runner: ubuntu-24.04
+            arch-label: linux-amd64
+          - php-version: "8.3"
+            runner: ubuntu-24.04-arm
+            arch-label: linux-arm64
+          - php-version: "8.4"
+            runner: ubuntu-24.04
+            arch-label: linux-amd64
+          - php-version: "8.4"
+            runner: ubuntu-24.04-arm
+            arch-label: linux-arm64
+          - php-version: "8.5"
+            runner: ubuntu-24.04-arm
+            arch-label: linux-arm64
 
     steps:
       - name: Checkout repository
@@ -231,7 +255,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('extension/scripts/quiche-bootstrap.lock', 'extension/scripts/bootstrap-quiche.sh', 'extension/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-${{ matrix.arch-label }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -252,13 +276,13 @@ jobs:
 
       - name: Build canonical release profile
         working-directory: extension
-        run: ./scripts/build-profile.sh release
+        run: ../infra/scripts/build-profile.sh release
 
       - name: Package canonical release archive
         id: package
         working-directory: extension
         run: |
-          output="$(./scripts/package-release.sh --output-dir ../dist)"
+          output="$(../infra/scripts/package-release.sh --output-dir ../dist)"
           printf '%s\n' "${output}"
           archive_path="$(printf '%s\n' "${output}" | sed -n 's/^Package created: //p' | tail -n 1)"
           if [[ -z "${archive_path}" ]]; then
@@ -269,13 +293,22 @@ jobs:
 
       - name: Verify packaged clean-host install path
         working-directory: extension
-        run: ./scripts/install-package-matrix.sh --archive "${{ steps.package.outputs.archive_path }}" --php-bins php
+        run: ../infra/scripts/install-package-matrix.sh --archive "${{ steps.package.outputs.archive_path }}" --php-bins php
+
+      - name: Upload release package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: king-release-package-php${{ matrix.php-version }}-${{ matrix.arch-label }}
+          if-no-files-found: error
+          path: |
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256
 
       - name: Upload package install failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: king-package-install-${{ matrix.php-version }}-failures
+          name: king-package-install-${{ matrix.php-version }}-${{ matrix.arch-label }}-failures
           if-no-files-found: ignore
           path: |
             dist/*.tar.gz
@@ -311,7 +344,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('extension/scripts/quiche-bootstrap.lock', 'extension/scripts/bootstrap-quiche.sh', 'extension/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -348,7 +381,7 @@ jobs:
 
       - name: Run release upgrade compatibility gate
         working-directory: extension
-        run: ./scripts/check-release-upgrade.sh --from-ref "${{ steps.previous.outputs.ref }}" --artifacts-dir ../compat-artifacts/release-upgrade
+        run: ../infra/scripts/check-release-upgrade.sh --from-ref "${{ steps.previous.outputs.ref }}" --artifacts-dir ../compat-artifacts/release-upgrade
 
       - name: Upload release upgrade failure artifacts
         if: failure()
@@ -393,7 +426,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('extension/scripts/quiche-bootstrap.lock', 'extension/scripts/bootstrap-quiche.sh', 'extension/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -430,7 +463,7 @@ jobs:
 
       - name: Run release downgrade compatibility gate
         working-directory: extension
-        run: ./scripts/check-release-downgrade.sh --from-ref "${{ steps.previous.outputs.ref }}" --artifacts-dir ../compat-artifacts/release-downgrade
+        run: ../infra/scripts/check-release-downgrade.sh --from-ref "${{ steps.previous.outputs.ref }}" --artifacts-dir ../compat-artifacts/release-downgrade
 
       - name: Upload release downgrade failure artifacts
         if: failure()
@@ -475,7 +508,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('extension/scripts/quiche-bootstrap.lock', 'extension/scripts/bootstrap-quiche.sh', 'extension/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -512,7 +545,7 @@ jobs:
 
       - name: Run release persistence migration gate
         working-directory: extension
-        run: ./scripts/check-persistence-migration.sh --from-ref "${{ steps.previous.outputs.ref }}" --artifacts-dir ../compat-artifacts/release-persistence-migration
+        run: ../infra/scripts/check-persistence-migration.sh --from-ref "${{ steps.previous.outputs.ref }}" --artifacts-dir ../compat-artifacts/release-persistence-migration
 
       - name: Upload release persistence migration failure artifacts
         if: failure()
@@ -556,7 +589,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('extension/scripts/quiche-bootstrap.lock', 'extension/scripts/bootstrap-quiche.sh', 'extension/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -577,7 +610,7 @@ jobs:
 
       - name: Run release config-state compatibility matrix
         working-directory: extension
-        run: ./scripts/check-config-compatibility-matrix.sh --artifacts-dir ../compat-artifacts/release-config-state
+        run: ../infra/scripts/check-config-compatibility-matrix.sh --artifacts-dir ../compat-artifacts/release-config-state
 
       - name: Upload release config-state failure artifacts
         if: failure()
@@ -634,7 +667,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('extension/scripts/quiche-bootstrap.lock', 'extension/scripts/bootstrap-quiche.sh', 'extension/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -655,11 +688,11 @@ jobs:
 
       - name: Build sanitizer profile
         working-directory: extension
-        run: ./scripts/build-profile.sh "${{ matrix.profile }}"
+        run: ../infra/scripts/build-profile.sh "${{ matrix.profile }}"
 
       - name: Run sanitizer soak
         working-directory: extension
-        run: ./scripts/soak-runtime.sh "${{ matrix.mode }}" --iterations "${{ matrix.iterations }}" --artifacts-dir ../soak-artifacts/${{ matrix.mode }}
+        run: ../infra/scripts/soak-runtime.sh "${{ matrix.mode }}" --iterations "${{ matrix.iterations }}" --artifacts-dir ../soak-artifacts/${{ matrix.mode }}
 
       - name: Upload sanitizer soak failure artifacts
         if: failure()

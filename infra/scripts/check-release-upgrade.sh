@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/check-release-upgrade.sh --from-ref REF [--current-archive PATH] [--php-bin BIN] [--artifacts-dir DIR] [--direction upgrade|downgrade]
+Usage: ./infra/scripts/check-release-upgrade.sh --from-ref REF [--current-archive PATH] [--php-bin BIN] [--artifacts-dir DIR] [--direction upgrade|downgrade]
 
 Builds a packaged King release archive from a previous git ref, packages the
 current tree if needed, verifies both archives, installs them sequentially into
@@ -13,8 +13,8 @@ EOF
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ROOT_DIR="$(cd "${EXT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+EXT_DIR="${ROOT_DIR}/extension"
 
 FROM_REF=""
 CURRENT_ARCHIVE=""
@@ -175,7 +175,7 @@ package_tree() {
     package_output="$(
         (
             cd "${tree_root}/extension"
-            ./scripts/package-release.sh --output-dir "${output_dir}"
+            ./infra/scripts/package-release.sh --output-dir "${output_dir}"
         ) 2>&1 | tee "${log_path}"
     )"
 
@@ -194,7 +194,7 @@ verify_archive() {
 
     (
         cd "${EXT_DIR}"
-        PHP_BIN="${PHP_BIN}" ./scripts/verify-release-package.sh --archive "${archive_path}"
+        PHP_BIN="${PHP_BIN}" ./infra/scripts/verify-release-package.sh --archive "${archive_path}"
     ) 2>&1 | tee "${log_path}"
 }
 

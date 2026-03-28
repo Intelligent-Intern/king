@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/go-live-readiness.sh [--skip-baseline] [--output-dir DIR] [--benchmark-iterations N] [--benchmark-warmup N] [--benchmark-budget-file PATH]
+Usage: ./infra/scripts/go-live-readiness.sh [--skip-baseline] [--output-dir DIR] [--benchmark-iterations N] [--benchmark-warmup N] [--benchmark-budget-file PATH]
 
 Runs the final repo-local go-live readiness gate:
   - static checks, audit, release rebuild, and canonical PHPT suite
@@ -26,8 +26,8 @@ EOF
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ROOT_DIR="$(cd "${EXT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+EXT_DIR="${ROOT_DIR}/extension"
 OUTPUT_DIR="${ROOT_DIR}/dist"
 SKIP_BASELINE=0
 BENCHMARK_ITERATIONS=250

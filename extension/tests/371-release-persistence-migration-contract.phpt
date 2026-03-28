@@ -4,8 +4,8 @@ King release persistence migration gate stays wired into scripts and CI
 <?php
 $extensionDir = dirname(__DIR__);
 $rootDir = dirname($extensionDir);
-$script = $extensionDir . '/scripts/check-persistence-migration.sh';
-$fixture = $extensionDir . '/scripts/runtime-persistence-migration.php';
+$script = $rootDir . '/infra/scripts/check-persistence-migration.sh';
+$fixture = $rootDir . '/infra/scripts/runtime-persistence-migration.php';
 $ciWorkflow = $rootDir . '/.github/workflows/ci.yml';
 
 $output = [];
@@ -14,7 +14,7 @@ exec('bash ' . escapeshellarg($script) . ' --help 2>&1', $output, $status);
 $help = implode("\n", $output);
 
 var_dump($status === 0);
-var_dump(str_contains($help, 'Usage: ./scripts/check-persistence-migration.sh --from-ref REF'));
+var_dump(str_contains($help, 'Usage: ./infra/scripts/check-persistence-migration.sh --from-ref REF'));
 var_dump(str_contains($help, '--current-archive PATH'));
 var_dump(str_contains($help, '--php-bin BIN'));
 var_dump(str_contains($help, '--artifacts-dir DIR'));
@@ -30,7 +30,7 @@ var_dump(str_contains($ci, 'release-persistence-migration:'));
 var_dump(str_contains($ci, 'name: Release Persistence Migration'));
 var_dump(str_contains($ci, 'fetch-depth: 0'));
 var_dump(str_contains($ci, 'github.event.before'));
-var_dump(str_contains($ci, './scripts/check-persistence-migration.sh --from-ref'));
+var_dump(str_contains($ci, '../infra/scripts/check-persistence-migration.sh --from-ref'));
 var_dump(str_contains($ci, 'compat-artifacts/release-persistence-migration/'));
 var_dump(str_contains($ci, 'king-release-persistence-migration-failures'));
 ?>

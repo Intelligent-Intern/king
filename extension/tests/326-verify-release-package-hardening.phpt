@@ -3,7 +3,7 @@ King release-package verifier rejects unsafe archive entries before extraction
 --FILE--
 <?php
 $root = sys_get_temp_dir() . '/king_verify_release_package_' . getmypid();
-$script = dirname(__DIR__) . '/scripts/verify-release-package.sh';
+$script = dirname(__DIR__, 2) . '/infra/scripts/verify-release-package.sh';
 $traversalArchive = $root . '/traversal.tar.gz';
 $symlinkArchive = $root . '/symlink.tar.gz';
 

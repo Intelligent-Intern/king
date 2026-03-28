@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/verify-release-package.sh --archive PATH
+Usage: ./infra/scripts/verify-release-package.sh --archive PATH
 
 Verifies a packaged King release archive by checking:
   - outer archive SHA256

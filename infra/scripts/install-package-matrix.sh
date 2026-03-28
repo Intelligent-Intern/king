@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/install-package-matrix.sh --archive PATH [--php-bins BIN1,BIN2,...]
+Usage: ./infra/scripts/install-package-matrix.sh --archive PATH [--php-bins BIN1,BIN2,...]
 
 Verifies a packaged King release archive against one or more host PHP binaries
 with the same PHP API by re-running the package verification and packaged smoke

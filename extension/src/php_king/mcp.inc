@@ -3,6 +3,7 @@
 #include "include/mcp/mcp.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"
 #include "include/config/mcp_and_orchestrator/default.h"
+#include <time.h>
 
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_MCP___construct, 0, 0, 2)
@@ -53,7 +54,10 @@ static zend_result king_mcp_set_transfer_error(
 
 static uint64_t king_monotonic_time_ms(void)
 {
-    return (uint64_t) (zend_hrtime() / 1000000ULL);
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ((uint64_t) ts.tv_sec * 1000ULL) + ((uint64_t) ts.tv_nsec / 1000000ULL);
 }
 
 static zend_result king_mcp_validate_runtime_control_option(

@@ -1,55 +1,30 @@
 # syntax=docker/dockerfile:1.7
 
 ARG PHP_VERSION=8.3
-ARG BUILD_JOBS=4
 
-FROM php:${PHP_VERSION}-cli-bookworm AS build
-
-ARG PHP_VERSION
-ARG BUILD_JOBS
-ENV DEBIAN_FRONTEND=noninteractive \
-    CARGO_HOME=/root/.cargo \
-    CARGO_BUILD_JOBS=${BUILD_JOBS} \
-    CARGO_INCREMENTAL=0 \
-    CARGO_TERM_COLOR=always \
-    CMAKE_BUILD_PARALLEL_LEVEL=${BUILD_JOBS} \
-    JOBS=${BUILD_JOBS} \
-    PATH=/root/.cargo/bin:${PATH}
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    autoconf \
-    automake \
-    bison \
-    build-essential \
-    ca-certificates \
-    clang \
-    cmake \
-    curl \
-    git \
-    libcurl4-openssl-dev \
-    libssl-dev \
-    libtool \
-    ninja-build \
-    pkg-config \
-    re2c \
-    uuid-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
-
-WORKDIR /src
-COPY . .
-
-WORKDIR /src/extension
-RUN ./scripts/build-profile.sh release \
-    && ./scripts/smoke-profile.sh release
-
-FROM php:${PHP_VERSION}-cli-bookworm AS runtime
+FROM debian:bookworm-slim AS package
 
 ARG PHP_VERSION
-ARG BUILD_JOBS
+ARG TARGETARCH
+
+RUN --mount=type=bind,source=dist/docker-packages,target=/mnt/packages,readonly \
+    set -eux; \
+    package_dir="/mnt/packages/php${PHP_VERSION}/linux-${TARGETARCH}"; \
+    test -d "${package_dir}"; \
+    mkdir -p /tmp/king-package-input /opt/king/package; \
+    cp -a "${package_dir}/." /tmp/king-package-input/; \
+    cd /tmp/king-package-input; \
+    sha256sum -c ./*.sha256; \
+    archive="$(find . -maxdepth 1 -type f -name '*.tar.gz' | head -n 1)"; \
+    test -n "${archive}"; \
+    tar -xzf "${archive}" -C /opt/king/package --strip-components=1
+
+FROM ubuntu:24.04 AS runtime
+
+ARG PHP_VERSION
 ARG BUILD_DATE
 ARG VCS_REF
+ENV DEBIAN_FRONTEND=noninteractive
 
 LABEL org.opencontainers.image.title="king" \
       org.opencontainers.image.description="King PHP extension runtime image" \
@@ -58,26 +33,43 @@ LABEL org.opencontainers.image.title="king" \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
-    libcurl4 \
+    curl \
+    gnupg \
+    libcurl3t64-gnutls \
     libuuid1 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /opt/king/runtime /workspace
+RUN mkdir -p /usr/share/keyrings \
+    && curl --retry 5 --retry-delay 2 --retry-connrefused --retry-all-errors -fsSL \
+        'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xB8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6' \
+        | gpg --dearmor -o /usr/share/keyrings/ondrej-php.gpg \
+    && . /etc/os-release \
+    && printf 'deb [signed-by=/usr/share/keyrings/ondrej-php.gpg] https://ppa.launchpadcontent.net/ondrej/php/ubuntu %s main\n' "${VERSION_CODENAME}" \
+        > /etc/apt/sources.list.d/ondrej-php.list \
+    && apt-get -o Acquire::Retries=5 update \
+    && apt-get install -y --no-install-recommends \
+        "php${PHP_VERSION}-cli" \
+        "php${PHP_VERSION}-curl" \
+        "php${PHP_VERSION}-mbstring" \
+        "php${PHP_VERSION}-sockets" \
+        "php${PHP_VERSION}-sqlite3" \
+        "php${PHP_VERSION}-xml" \
+    && ln -sf "/usr/bin/php${PHP_VERSION}" /usr/local/bin/php \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /src/extension/build/profiles/release/king.so /opt/king/runtime/king.so
-COPY --from=build /src/extension/build/profiles/release/libquiche.so /opt/king/runtime/libquiche.so
-COPY --from=build /src/extension/build/profiles/release/quiche-server /opt/king/runtime/quiche-server
-COPY extension/scripts/runtime-install-smoke.php /opt/king/runtime/smoke.php
+RUN mkdir -p /opt/king /workspace
 
-ENV KING_QUICHE_LIBRARY=/opt/king/runtime/libquiche.so \
-    KING_QUICHE_SERVER=/opt/king/runtime/quiche-server \
-    LD_LIBRARY_PATH=/opt/king/runtime
+COPY --from=package /opt/king/package /opt/king/package
+
+ENV KING_QUICHE_LIBRARY=/opt/king/package/runtime/libquiche.so \
+    KING_QUICHE_SERVER=/opt/king/package/runtime/quiche-server \
+    LD_LIBRARY_PATH=/opt/king/package/runtime
 
 RUN printf '%s\n' \
-    'extension=/opt/king/runtime/king.so' \
-    > /usr/local/etc/php/conf.d/zz-king.ini \
+    'extension=/opt/king/package/modules/king.so' \
+    > "/etc/php/${PHP_VERSION}/cli/conf.d/zz-king.ini" \
     && php -m | grep -qx 'king' \
-    && php -d king.security_allow_config_override=1 /opt/king/runtime/smoke.php
+    && PHP_BIN=php /opt/king/package/bin/smoke.sh
 
 WORKDIR /workspace
 

@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/build-profile.sh <release|debug|asan|ubsan>
+Usage: ./infra/scripts/build-profile.sh <release|debug|asan|ubsan>
 
 Builds the King extension and stages the resulting artifact under:
   extension/build/profiles/<profile>/
@@ -37,8 +37,8 @@ case "${PROFILE}" in
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ROOT_DIR="$(cd "${EXT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+EXT_DIR="${ROOT_DIR}/extension"
 QUICHE_DIR="${ROOT_DIR}/quiche"
 QUICHE_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-quiche.sh"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"

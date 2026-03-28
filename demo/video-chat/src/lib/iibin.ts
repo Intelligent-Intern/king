@@ -393,7 +393,7 @@ export class IIBINClient {
   connect(url: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.ws = new WebSocket(url, ['iibin'])
+        this.ws = new WebSocket(url)
         this.ws.binaryType = 'arraybuffer'
 
         this.ws.onopen = () => {

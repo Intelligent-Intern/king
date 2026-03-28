@@ -184,11 +184,27 @@ static void king_orchestrator_set_last_run(zend_string *run_id, const char *stat
     king_orchestrator_replace_runtime_string(&king_orchestrator_last_run_status, persistent_status);
 }
 
+static zend_bool king_orchestrator_run_id_has_prefix(
+    const zend_string *run_id,
+    const char *prefix
+)
+{
+    size_t prefix_len;
+
+    if (run_id == NULL || prefix == NULL) {
+        return 0;
+    }
+
+    prefix_len = strlen(prefix);
+    return ZSTR_LEN(run_id) >= prefix_len
+        && memcmp(ZSTR_VAL(run_id), prefix, prefix_len) == 0;
+}
+
 static zend_long king_orchestrator_extract_run_sequence(const zend_string *run_id)
 {
     const char *raw;
 
-    if (run_id == NULL || !zend_string_starts_with_literal(run_id, "run-")) {
+    if (!king_orchestrator_run_id_has_prefix(run_id, "run-")) {
         return 0;
     }
 

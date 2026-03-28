@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/package-release.sh [--output-dir DIR] [--rebuild] [--verify-reproducible]
+Usage: ./infra/scripts/package-release.sh [--output-dir DIR] [--rebuild] [--verify-reproducible]
 
 Packages the staged canonical release profile into a deterministic tarball under:
   dist/
@@ -18,8 +18,8 @@ EOF
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ROOT_DIR="$(cd "${EXT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+EXT_DIR="${ROOT_DIR}/extension"
 PROFILE_DIR="${EXT_DIR}/build/profiles/release"
 DEFAULT_OUTPUT_DIR="${ROOT_DIR}/dist"
 
@@ -305,6 +305,7 @@ package_once() {
     local package_root
     local tar_path
     local archive_path
+    local archive_name
 
     temp_dir="$(mktemp -d)"
     package_root="${temp_dir}/${PACKAGE_BASENAME}"
@@ -325,8 +326,9 @@ package_once() {
     generate_manifest "${package_root}"
 
     mkdir -p "${destination_dir}"
-    tar_path="${destination_dir}/${PACKAGE_BASENAME}.tar"
-    archive_path="${tar_path}.gz"
+    archive_name="${PACKAGE_BASENAME}.tar.gz"
+    tar_path="${temp_dir}/${PACKAGE_BASENAME}.tar"
+    archive_path="${temp_dir}/${archive_name}"
 
     tar \
         --sort=name \
@@ -340,12 +342,15 @@ package_once() {
     gzip -n -f "${tar_path}"
 
     (
-        cd "${destination_dir}"
-        sha256sum "$(basename "${archive_path}")" > "$(basename "${archive_path}").sha256"
+        cd "${temp_dir}"
+        sha256sum "${archive_name}" > "${archive_name}.sha256"
     )
 
+    cp -f "${archive_path}" "${destination_dir}/${archive_name}"
+    cp -f "${temp_dir}/${archive_name}.sha256" "${destination_dir}/${archive_name}.sha256"
+
     rm -rf "${temp_dir}"
-    printf '%s\n' "${archive_path}"
+    printf '%s\n' "${destination_dir}/${archive_name}"
 }
 
 verify_reproducible() {

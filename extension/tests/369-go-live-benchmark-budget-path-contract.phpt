@@ -4,7 +4,7 @@ King go-live readiness resolves benchmark budget files from the repo root contra
 <?php
 $extensionDir = dirname(__DIR__);
 $rootDir = dirname($extensionDir);
-$script = (string) file_get_contents($extensionDir . '/scripts/go-live-readiness.sh');
+$script = (string) file_get_contents($rootDir . '/infra/scripts/go-live-readiness.sh');
 $workflow = (string) file_get_contents($rootDir . '/.github/workflows/ci.yml');
 
 var_dump($script !== '');

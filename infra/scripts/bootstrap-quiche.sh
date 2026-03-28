@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/bootstrap-quiche.sh [--verify-lock|--verify-current]
+Usage: ./infra/scripts/bootstrap-quiche.sh [--verify-lock|--verify-current]
 
 Bootstraps the pinned QUIC dependency checkout used by King builds.
 Without flags, the script fetches the exact pinned quiche revision, syncs the
@@ -31,8 +31,8 @@ case "${MODE}" in
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ROOT_DIR="$(cd "${EXT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+EXT_DIR="${ROOT_DIR}/extension"
 LOCK_FILE="${SCRIPT_DIR}/quiche-bootstrap.lock"
 LOCK_TEMPLATE="${SCRIPT_DIR}/quiche-workspace.Cargo.lock"
 QUICHE_DIR="${KING_QUICHE_DIR:-${ROOT_DIR}/quiche}"

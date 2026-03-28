@@ -3,8 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ROOT_DIR="$(cd "${EXT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+EXT_DIR="${ROOT_DIR}/extension"
 
 EXPECTED_VERSIONS=("8.1" "8.2" "8.3" "8.4" "8.5")
 EXPECTED_CSV="8.1,8.2,8.3,8.4,8.5"
@@ -19,11 +19,14 @@ require_line() {
     fi
 }
 
-require_line "${ROOT_DIR}/extension/scripts/container-smoke-matrix.sh" \
+require_line "${ROOT_DIR}/infra/scripts/container-smoke-matrix.sh" \
     "PHP_VERSIONS_CSV=\"\${PHP_VERSIONS:-${EXPECTED_CSV}}\""
 
 require_line "${ROOT_DIR}/CONTRIBUTE.md" \
-    "./scripts/container-smoke-matrix.sh --php-versions ${EXPECTED_CSV}"
+    "./infra/scripts/container-smoke-matrix.sh --php-versions ${EXPECTED_CSV}"
+
+require_line "${ROOT_DIR}/CONTRIBUTE.md" \
+    "./infra/scripts/php-version-docker-matrix.sh --php-versions ${EXPECTED_CSV}"
 
 ruby - "${ROOT_DIR}" "${EXPECTED_CSV}" <<'RUBY'
 require "yaml"
@@ -37,7 +40,8 @@ docker_include = docker.dig("jobs", "build-and-push", "strategy", "matrix", "inc
 docker_include_versions = docker_include.map { |entry| entry["php-version"] }
 
 ci = YAML.load_file(File.join(root_dir, ".github/workflows/ci.yml"))
-ci_versions = ci.dig("jobs", "install-package-matrix", "strategy", "matrix", "php-version")
+ci_include = ci.dig("jobs", "install-package-matrix", "strategy", "matrix", "include")
+ci_versions = ci_include.map { |entry| entry["php-version"] }.uniq
 
 if docker_versions != expected
   abort("Docker workflow PHP matrix mismatch: expected #{expected.inspect}, got #{docker_versions.inspect}")

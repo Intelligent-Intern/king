@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/check-release-downgrade.sh --from-ref REF [--current-archive PATH] [--php-bin BIN] [--artifacts-dir DIR]
+Usage: ./infra/scripts/check-release-downgrade.sh --from-ref REF [--current-archive PATH] [--php-bin BIN] [--artifacts-dir DIR]
 
 Builds a packaged King release archive from a previous git ref, packages the
 current tree if needed, verifies both archives, installs the current archive

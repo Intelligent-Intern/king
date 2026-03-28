@@ -9,7 +9,7 @@ main();
 function main(): void
 {
     if (!extension_loaded('king')) {
-        fail('The king extension is not loaded. Use ./extension/scripts/check-stub-parity.sh.');
+        fail('The king extension is not loaded. Use ./infra/scripts/check-stub-parity.sh.');
     }
 
     if (!is_file(KING_STUB_PARITY_STUB_FILE)) {

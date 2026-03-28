@@ -31,26 +31,26 @@ not part of the current execution queue yet.
 
 The currently verified baseline is:
 
-- `./scripts/static-checks.sh`: passing
-- `./scripts/check-include-layout.sh`: passing
-- `./scripts/audit-runtime-surface.sh`: passing
-- `./scripts/build-extension.sh`: passing
-- `./scripts/test-extension.sh`: `381/381` passing
-- `./scripts/fuzz-runtime.sh`: passing
-- `./scripts/check-stub-parity.sh`: passing
-- `./scripts/check-php-support-matrix.sh`: passing
-- `./scripts/package-release.sh --verify-reproducible`: passing
-- `./scripts/install-package-matrix.sh --archive <release> --php-bins php8.4`: passing
-- `./scripts/check-release-upgrade.sh --from-ref HEAD^`: passing
-- `./scripts/check-release-downgrade.sh --from-ref HEAD^`: passing
-- `./scripts/check-persistence-migration.sh --from-ref HEAD^`: passing
-- `./scripts/check-config-compatibility-matrix.sh`: passing
-- `./scripts/verify-release-package.sh`: passing
-- `./scripts/container-smoke-matrix.sh --php-versions 8.3`: passing
-- `./scripts/soak-runtime.sh asan|ubsan|leak --iterations 1`: passing
-- `./scripts/go-live-readiness.sh`: passing
-- `./scripts/build-profile.sh release|debug|asan|ubsan`: passing
-- `./scripts/smoke-profile.sh release|debug|asan|ubsan`: passing
+- `./infra/scripts/static-checks.sh`: passing
+- `./infra/scripts/check-include-layout.sh`: passing
+- `./infra/scripts/audit-runtime-surface.sh`: passing
+- `./infra/scripts/build-extension.sh`: passing
+- `./infra/scripts/test-extension.sh`: `381/381` passing
+- `./infra/scripts/fuzz-runtime.sh`: passing
+- `./infra/scripts/check-stub-parity.sh`: passing
+- `./infra/scripts/check-php-support-matrix.sh`: passing
+- `./infra/scripts/package-release.sh --verify-reproducible`: passing
+- `./infra/scripts/install-package-matrix.sh --archive <release> --php-bins php8.4`: passing
+- `./infra/scripts/check-release-upgrade.sh --from-ref HEAD^`: passing
+- `./infra/scripts/check-release-downgrade.sh --from-ref HEAD^`: passing
+- `./infra/scripts/check-persistence-migration.sh --from-ref HEAD^`: passing
+- `./infra/scripts/check-config-compatibility-matrix.sh`: passing
+- `./infra/scripts/verify-release-package.sh`: passing
+- `./infra/scripts/container-smoke-matrix.sh --php-versions 8.3`: passing
+- `./infra/scripts/soak-runtime.sh asan|ubsan|leak --iterations 1`: passing
+- `./infra/scripts/go-live-readiness.sh`: passing
+- `./infra/scripts/build-profile.sh release|debug|asan|ubsan`: passing
+- `./infra/scripts/smoke-profile.sh release|debug|asan|ubsan`: passing
 - benchmark smoke and committed CI budget gate: passing
 
 Current tree facts:

@@ -12,8 +12,8 @@ matches its documented API, that the release package is internally consistent,
 that it installs cleanly across the supported PHP versions, and that the full
 quality gates still hold after packaging.
 
-That is why the scripts in `extension/scripts/` exist as a connected release
-toolchain rather than as unrelated helper files.
+That is why the public release entrypoints live in `infra/scripts/`. Operators,
+CI, and docs use the `infra/` layer as the stable toolchain surface.
 
 ```mermaid
 flowchart LR
@@ -60,20 +60,21 @@ easier to remember.
 
 | Script | The question it answers |
 | --- | --- |
-| `./scripts/static-checks.sh` | Is the source tree structurally sane before we build anything? |
-| `./scripts/check-stub-parity.sh` | Does the declared public API still match the compiled extension surface? |
-| `./scripts/audit-runtime-surface.sh` | Does the runtime or documentation surface drift from the expected contract? |
-| `./scripts/check-include-layout.sh` | Are project-owned headers still under `extension/include/` where they belong? |
-| `./scripts/check-php-support-matrix.sh` | Do CI and matrix scripts still claim the supported PHP versions honestly? |
-| `./scripts/check-quiche-bootstrap.sh` | Is the QUIC dependency bootstrap still pinned and deterministic? |
-| `./scripts/build-extension.sh` | Can the extension compile in the ordinary development path? |
-| `./scripts/build-profile.sh release` | Can the full release profile build from the pinned dependency set? |
-| `./scripts/test-extension.sh` | Does the PHPT runtime contract still pass? |
-| `./scripts/package-release.sh` | Can we assemble a reproducible release archive? |
-| `./scripts/verify-release-package.sh` | Is the release archive internally consistent and safe to trust? |
-| `./scripts/install-package-matrix.sh` | Does the packaged release install on every supported PHP version? |
-| `./scripts/container-smoke-matrix.sh` | Do the published runtime containers build and pass the common smoke checks? |
-| `./scripts/go-live-readiness.sh` | Does the complete release bar pass in one operator-facing command? |
+| `./infra/scripts/static-checks.sh` | Is the source tree structurally sane before we build anything? |
+| `./infra/scripts/check-stub-parity.sh` | Does the declared public API still match the compiled extension surface? |
+| `./infra/scripts/audit-runtime-surface.sh` | Does the runtime or documentation surface drift from the expected contract? |
+| `./infra/scripts/check-include-layout.sh` | Are project-owned headers still under `extension/include/` where they belong? |
+| `./infra/scripts/check-php-support-matrix.sh` | Do CI and matrix scripts still claim the supported PHP versions honestly? |
+| `./infra/scripts/check-quiche-bootstrap.sh` | Is the QUIC dependency bootstrap still pinned and deterministic? |
+| `./infra/scripts/build-extension.sh` | Can the extension compile in the ordinary development path? |
+| `./infra/scripts/build-profile.sh release` | Can the full release profile build from the pinned dependency set? |
+| `./infra/scripts/test-extension.sh` | Does the PHPT runtime contract still pass? |
+| `./infra/scripts/package-release.sh` | Can we assemble a reproducible release archive? |
+| `./infra/scripts/verify-release-package.sh` | Is the release archive internally consistent and safe to trust? |
+| `./infra/scripts/install-package-matrix.sh` | Does the packaged release install on every supported PHP version? |
+| `./infra/scripts/container-smoke-matrix.sh` | Do the published runtime containers build and pass the common smoke checks? |
+| `./infra/scripts/php-version-docker-matrix.sh` | Do the repo build, PHPT suite, runtime container smoke, and demo network probe stay green across every supported PHP version? |
+| `./infra/scripts/go-live-readiness.sh` | Does the complete release bar pass in one operator-facing command? |
 
 The scripts are meant to be composed. A release run does not pick one of them.
 It moves through them in order.
@@ -84,8 +85,7 @@ The fastest useful habit is to run the structural gates before asking the
 compiler or the test suite to do expensive work.
 
 ```bash
-cd extension
-./scripts/static-checks.sh
+./infra/scripts/static-checks.sh
 ```
 
 `static-checks.sh` is the front door. It runs the structural checks that are
@@ -97,12 +97,11 @@ If you want to run the most important structural gates one by one, the
 following commands are the usual manual path:
 
 ```bash
-cd extension
-./scripts/check-stub-parity.sh
-./scripts/audit-runtime-surface.sh
-./scripts/check-include-layout.sh
-./scripts/check-php-support-matrix.sh
-./scripts/check-quiche-bootstrap.sh
+./infra/scripts/check-stub-parity.sh
+./infra/scripts/audit-runtime-surface.sh
+./infra/scripts/check-include-layout.sh
+./infra/scripts/check-php-support-matrix.sh
+./infra/scripts/check-quiche-bootstrap.sh
 ```
 
 Each one answers a slightly different question. Stub parity checks that the
@@ -117,8 +116,7 @@ builds from depending on an unlocked or drifting dependency graph.
 The normal development build path is intentionally simple.
 
 ```bash
-cd extension
-./scripts/build-extension.sh
+./infra/scripts/build-extension.sh
 ```
 
 This script is the answer to the question, “Can I build the module in the
@@ -138,8 +136,7 @@ the module with the release-oriented settings, and assembles the runtime files
 used later by package verification and install smoke.
 
 ```bash
-cd extension
-./scripts/build-profile.sh release
+./infra/scripts/build-profile.sh release
 ```
 
 This is the build path that matters for release engineering. It is the command
@@ -165,16 +162,14 @@ behaves the way the documented public surface says it behaves. That is the job
 of the PHPT suite.
 
 ```bash
-cd extension
-./scripts/test-extension.sh
+./infra/scripts/test-extension.sh
 ```
 
 The full suite is the normal release gate. When you are working on one area,
 you can still run a targeted subset with explicit test files:
 
 ```bash
-cd extension
-./scripts/test-extension.sh tests/190-http3-request-send-roundtrip.phpt
+./infra/scripts/test-extension.sh tests/190-http3-request-send-roundtrip.phpt
 ```
 
 Targeted runs are useful for iteration. Full runs are what matter for release.
@@ -188,8 +183,7 @@ Packaging takes the release-profile output and turns it into the artifact a
 user or operator can actually install.
 
 ```bash
-cd extension
-./scripts/package-release.sh --verify-reproducible --output-dir ../dist
+./infra/scripts/package-release.sh --verify-reproducible --output-dir ../dist
 ```
 
 The package step builds the archive, manifest, checksums, runtime files, and
@@ -206,8 +200,7 @@ answers whether the archive is internally consistent and shaped like a real King
 release rather than an arbitrary tarball.
 
 ```bash
-cd extension
-./scripts/verify-release-package.sh ../dist/king-<version>.tar.gz
+./infra/scripts/verify-release-package.sh ../dist/king-<version>.tar.gz
 ```
 
 This script checks the archive checksum, validates the manifest, extracts the
@@ -240,8 +233,7 @@ A release archive is not ready until it proves that it installs on every
 supported PHP version. That is the role of the install matrix.
 
 ```bash
-cd extension
-./scripts/install-package-matrix.sh \
+./infra/scripts/install-package-matrix.sh \
   --archive ../dist/king-<version>.tar.gz \
   --php-bins php8.1,php8.2,php8.3,php8.4,php8.5
 ```
@@ -261,8 +253,7 @@ King also ships through containerized runtime paths, so the container build is
 not a cosmetic extra. It is part of the release contract.
 
 ```bash
-cd extension
-./scripts/container-smoke-matrix.sh --php-versions 8.1,8.2,8.3,8.4,8.5
+./infra/scripts/container-smoke-matrix.sh --php-versions 8.1,8.2,8.3,8.4,8.5
 ```
 
 This script builds the published runtime container variants and runs the common
@@ -275,7 +266,7 @@ runtime with the expected assets in place.
 Both the package-install matrix and the container-smoke matrix converge on the
 same runtime smoke path:
 
-`extension/scripts/runtime-install-smoke.php`
+`infra/scripts/runtime-install-smoke.php`
 
 That shared smoke path matters because it keeps the definition of “a working
 installed runtime” the same across host and container environments. When a host
@@ -310,8 +301,7 @@ to answer: “Can I run one command that performs the whole release-readiness
 check in the order that matters?”
 
 ```bash
-cd extension
-./scripts/go-live-readiness.sh \
+./infra/scripts/go-live-readiness.sh \
   --output-dir ../dist \
   --benchmark-budget-file ../benchmarks/budgets/canonical-ci.json
 ```
@@ -368,15 +358,14 @@ checked together.
 In command form, that usually looks like this:
 
 ```bash
-cd extension
-./scripts/static-checks.sh
-./scripts/build-profile.sh release
-./scripts/test-extension.sh
-./scripts/package-release.sh --verify-reproducible --output-dir ../dist
-./scripts/verify-release-package.sh ../dist/king-<version>.tar.gz
-./scripts/install-package-matrix.sh --archive ../dist/king-<version>.tar.gz --php-bins php8.1,php8.2,php8.3,php8.4,php8.5
-./scripts/container-smoke-matrix.sh --php-versions 8.1,8.2,8.3,8.4,8.5
-./scripts/go-live-readiness.sh --output-dir ../dist --benchmark-budget-file ../benchmarks/budgets/canonical-ci.json
+./infra/scripts/static-checks.sh
+./infra/scripts/build-profile.sh release
+./infra/scripts/test-extension.sh
+./infra/scripts/package-release.sh --verify-reproducible --output-dir ../dist
+./infra/scripts/verify-release-package.sh ../dist/king-<version>.tar.gz
+./infra/scripts/install-package-matrix.sh --archive ../dist/king-<version>.tar.gz --php-bins php8.1,php8.2,php8.3,php8.4,php8.5
+./infra/scripts/container-smoke-matrix.sh --php-versions 8.1,8.2,8.3,8.4,8.5
+./infra/scripts/go-live-readiness.sh --output-dir ../dist --benchmark-budget-file ../benchmarks/budgets/canonical-ci.json
 ```
 
 That sequence is longer than a one-command build because a release is larger

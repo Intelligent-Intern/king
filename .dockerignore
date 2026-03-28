@@ -1,6 +1,8 @@
 .git
 .github
-dist
+dist/*
+!dist/docker-packages/
+!dist/docker-packages/**
 benchmarks/results
 demo/video-chat/node_modules
 extension/.libs
@@ -14,4 +16,3 @@ extension/tests/*.out
 extension/tests/*.php
 extension/tests/*.sh
 quiche
-

@@ -4,8 +4,8 @@ King release install and container smoke matrices stay wired into the canonical 
 <?php
 $extensionDir = dirname(__DIR__);
 $rootDir = dirname($extensionDir);
-$installScript = $extensionDir . '/scripts/install-package-matrix.sh';
-$containerScript = $extensionDir . '/scripts/container-smoke-matrix.sh';
+$installScript = $rootDir . '/infra/scripts/install-package-matrix.sh';
+$containerScript = $rootDir . '/infra/scripts/container-smoke-matrix.sh';
 $ciWorkflow = $rootDir . '/.github/workflows/ci.yml';
 $dockerWorkflow = $rootDir . '/.github/workflows/docker.yml';
 $runtimeDockerfile = $rootDir . '/infra/php-runtime.Dockerfile';
@@ -24,23 +24,29 @@ var_dump(str_contains(implode("\n", $output), '--php-versions 8.1,8.2,8.3,...'))
 
 $ci = (string) file_get_contents($ciWorkflow);
 var_dump(str_contains($ci, 'install-package-matrix:'));
-var_dump(str_contains($ci, 'Package Install Smoke PHP ${{ matrix.php-version }}'));
-var_dump(str_contains($ci, './scripts/install-package-matrix.sh --archive'));
-var_dump(str_contains($ci, '"8.1"'));
-var_dump(str_contains($ci, '"8.2"'));
-var_dump(str_contains($ci, '"8.3"'));
-var_dump(str_contains($ci, '"8.4"'));
-var_dump(str_contains($ci, '"8.5"'));
+var_dump(str_contains($ci, 'Release Package Build & Install Smoke PHP ${{ matrix.php-version }} ${{ matrix.arch-label }}'));
+var_dump(str_contains($ci, '../infra/scripts/install-package-matrix.sh --archive'));
+var_dump(str_contains($ci, 'king-release-package-php8.5-linux-amd64'));
+var_dump(str_contains($ci, 'king-release-package-php${{ matrix.php-version }}-${{ matrix.arch-label }}'));
+var_dump(str_contains($ci, 'ubuntu-24.04-arm'));
 
 $docker = (string) file_get_contents($dockerWorkflow);
-var_dump(str_contains($docker, "php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']"));
+var_dump(str_contains($docker, 'workflow_run:'));
+var_dump(str_contains($docker, 'King Canonical Baseline'));
+var_dump(str_contains($docker, 'gh run download "${{ github.event.workflow_run.id }}"'));
+var_dump(str_contains($docker, 'king-release-package-php${{ matrix.php-version }}-linux-amd64'));
+var_dump(str_contains($docker, 'king-release-package-php${{ matrix.php-version }}-linux-arm64'));
 var_dump(str_contains($docker, 'Build, Smoke & Push Docker Images'));
 
 $runtime = (string) file_get_contents($runtimeDockerfile);
-var_dump(str_contains($runtime, 'COPY extension/scripts/runtime-install-smoke.php /opt/king/runtime/smoke.php'));
-var_dump(str_contains($runtime, 'php -d king.security_allow_config_override=1 /opt/king/runtime/smoke.php'));
+var_dump(str_contains($runtime, 'source=dist/docker-packages'));
+var_dump(str_contains($runtime, 'extension=/opt/king/package/modules/king.so'));
+var_dump(str_contains($runtime, 'PHP_BIN=php /opt/king/package/bin/smoke.sh'));
 ?>
 --EXPECT--
+bool(true)
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 bool(true)
