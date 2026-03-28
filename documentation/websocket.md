@@ -24,7 +24,10 @@ and start thinking in terms of "one long-lived channel carrying many messages".
 
 Those messages move as [frames](./glossary.md#frame). Some frames carry text.
 Some frames carry binary payloads. Some frames are control frames, such as
-ping, pong, or close.
+ping, pong, or close. Control frames are small protocol signals rather than
+general data carriers, so King treats oversized control-frame payloads as a
+protocol violation and closes the connection instead of reading or allocating
+them.
 
 ```mermaid
 sequenceDiagram

@@ -13,6 +13,7 @@ $supportedModes = [
     'bad_opcode',
     'bad_rsv_text',
     'bad_close_payload',
+    'oversized_ping',
 ];
 
 if (!in_array($mode, $supportedModes, true)) {
@@ -133,6 +134,9 @@ function king_ws_violation_build_frame(string $mode): string
 
         case 'bad_close_payload':
             return chr(0x88) . chr(0x01) . 'x';
+
+        case 'oversized_ping':
+            return chr(0x89) . chr(0x7f) . pack('N2', 0, 65536);
     }
 
     throw new RuntimeException('unreachable violation mode');

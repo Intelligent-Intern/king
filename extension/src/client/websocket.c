@@ -859,6 +859,7 @@ static zend_result king_websocket_receive_one_frame(
         payload_len = (size_t) extended_payload_len;
     }
 
+    /* Reject oversized control frames before any payload allocation or read. */
     if (king_websocket_opcode_is_control(opcode) && payload_len > 125) {
         return king_websocket_reject_received_protocol_violation(
             state,
