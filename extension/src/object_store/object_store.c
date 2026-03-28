@@ -12,11 +12,15 @@
 
 #include "php_king.h"
 #include "object_store/object_store_internal.h"
+#include "Zend/zend_smart_str.h"
+#include <curl/curl.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <dlfcn.h>
+#include <ctype.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -34,6 +38,7 @@ static const char *king_object_store_adapter_status_failed = "failed";
 static const char *king_object_store_adapter_status_unimplemented = "unimplemented";
 static const char *king_object_store_adapter_status_unknown = "unknown";
 static const char *king_object_store_adapter_contract_local = "local";
+static const char *king_object_store_adapter_contract_cloud = "cloud";
 static const char *king_object_store_adapter_contract_simulated = "simulated";
 static const char *king_object_store_adapter_contract_unconfigured = "unconfigured";
 
@@ -41,8 +46,28 @@ static int king_object_store_mkdir_parents(const char *path);
 static int king_object_store_ensure_directory_recursive(const char *path);
 static int king_object_store_read_file_contents(const char *source_path, void **data, size_t *data_size);
 static int king_object_store_atomic_write_file(const char *target_path, const void *data, size_t data_size);
-static int king_object_store_backup_object_to_backend(const char *object_id, king_storage_backend_t backup_backend);
+static int king_object_store_backup_object_to_backend(
+    const char *object_id,
+    const void *data,
+    size_t data_size,
+    const king_object_metadata_t *metadata,
+    king_storage_backend_t backup_backend
+);
 static int king_object_store_directory_is_within_storage_root(const char *directory_path, int allow_missing_path);
+static int king_object_store_s3_rehydrate_stats(char *error, size_t error_size);
+static int king_object_store_s3_write(
+    const char *object_id,
+    const void *data,
+    size_t data_size,
+    const king_object_metadata_t *metadata,
+    char *error,
+    size_t error_size,
+    zend_bool update_counters
+);
+static int king_object_store_s3_read(const char *object_id, void **data, size_t *data_size);
+static int king_object_store_s3_remove(const char *object_id);
+static int king_object_store_s3_list(zval *return_array);
+static void king_object_store_shutdown_libcurl_runtime(void);
 
 static king_storage_backend_t king_object_store_normalize_backend(king_storage_backend_t backend)
 {
@@ -234,8 +259,9 @@ const char *king_object_store_backend_contract_to_string(king_storage_backend_t 
     switch (backend) {
         case KING_STORAGE_BACKEND_LOCAL_FS:
             return king_object_store_adapter_contract_local;
-        case KING_STORAGE_BACKEND_DISTRIBUTED:
         case KING_STORAGE_BACKEND_CLOUD_S3:
+            return king_object_store_adapter_contract_cloud;
+        case KING_STORAGE_BACKEND_DISTRIBUTED:
         case KING_STORAGE_BACKEND_CLOUD_GCS:
         case KING_STORAGE_BACKEND_CLOUD_AZURE:
             return king_object_store_adapter_contract_simulated;
@@ -250,9 +276,9 @@ static const char *king_object_store_initial_backend_status(king_storage_backend
 
     switch (backend) {
         case KING_STORAGE_BACKEND_LOCAL_FS:
+        case KING_STORAGE_BACKEND_CLOUD_S3:
             return king_object_store_adapter_status_ok;
         case KING_STORAGE_BACKEND_DISTRIBUTED:
-        case KING_STORAGE_BACKEND_CLOUD_S3:
         case KING_STORAGE_BACKEND_CLOUD_GCS:
         case KING_STORAGE_BACKEND_CLOUD_AZURE:
             return king_object_store_adapter_status_simulated;
@@ -345,6 +371,13 @@ static int king_object_store_backend_is_local(king_storage_backend_t backend)
     return backend == KING_STORAGE_BACKEND_LOCAL_FS;
 }
 
+static int king_object_store_backend_is_real(king_storage_backend_t backend)
+{
+    backend = king_object_store_normalize_backend(backend);
+    return backend == KING_STORAGE_BACKEND_LOCAL_FS
+        || backend == KING_STORAGE_BACKEND_CLOUD_S3;
+}
+
 static int king_object_store_require_honest_backend(
     const char *scope,
     king_storage_backend_t backend,
@@ -355,7 +388,7 @@ static int king_object_store_require_honest_backend(
     const char *contract;
     char message[256];
 
-    if (king_object_store_backend_is_local(backend) == 1) {
+    if (king_object_store_backend_is_real(backend) == 1) {
         return SUCCESS;
     }
 
@@ -366,8 +399,7 @@ static int king_object_store_require_honest_backend(
     backend_name = king_storage_backend_to_string(backend);
     contract = king_object_store_backend_contract_to_string(backend);
 
-    if (backend == KING_STORAGE_BACKEND_CLOUD_S3 ||
-        backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
+    if (backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
         backend == KING_STORAGE_BACKEND_CLOUD_AZURE) {
         snprintf(
             message,
@@ -455,6 +487,9 @@ static void king_object_store_config_copy(
     target->enable_encryption     = source->enable_encryption;
     target->enable_compression    = source->enable_compression;
     target->cdn_config            = source->cdn_config;
+    if (Z_TYPE(source->cloud_credentials) != IS_UNDEF) {
+        ZVAL_COPY(&target->cloud_credentials, (zval *) &source->cloud_credentials);
+    }
 }
 
 /* --- String conversion helpers (satisfy include/object_store/object_store.h declarations) --- */
@@ -503,6 +538,8 @@ const char *king_cache_policy_to_string(king_cache_policy_t policy)
 
 int king_object_store_init_system(king_object_store_config_t *config)
 {
+    char error[256];
+
     if (config == NULL) {
         return FAILURE;
     }
@@ -515,10 +552,13 @@ int king_object_store_init_system(king_object_store_config_t *config)
     king_object_store_runtime.initialized = true;
     king_object_store_initialize_adapter_statuses();
 
-    if (!king_object_store_backend_is_local(king_object_store_runtime.config.primary_backend)) {
+    if (king_object_store_runtime.config.storage_root_path[0] != '\0') {
+        mkdir(king_object_store_runtime.config.storage_root_path, 0755);
+    }
+
+    if (!king_object_store_backend_is_real(king_object_store_runtime.config.primary_backend)) {
         const char *message = "Primary backend is simulated-only and unavailable in this runtime.";
-        if ((king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_S3 ||
-             king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
+        if ((king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
              king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_AZURE) &&
             Z_TYPE(king_object_store_runtime.config.cloud_credentials) == IS_UNDEF) {
             message = "Cloud credentials are required to enable native cloud backend operation.";
@@ -532,10 +572,9 @@ int king_object_store_init_system(king_object_store_config_t *config)
         );
     }
 
-    if (!king_object_store_backend_is_local(king_object_store_runtime.config.backup_backend)) {
+    if (!king_object_store_backend_is_real(king_object_store_runtime.config.backup_backend)) {
         const char *message = "Backup backend is simulated-only and unavailable in this runtime.";
-        if ((king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_S3 ||
-             king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
+        if ((king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
              king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_AZURE) &&
             Z_TYPE(king_object_store_runtime.config.cloud_credentials) == IS_UNDEF) {
             message = "Cloud credentials are required to enable native cloud backup backends.";
@@ -549,11 +588,27 @@ int king_object_store_init_system(king_object_store_config_t *config)
         );
     }
 
-    /* Ensure storage root exists for local_fs / memory_cache backends */
+    if (king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_S3) {
+        if (king_object_store_runtime.config.storage_root_path[0] == '\0') {
+            king_object_store_set_runtime_adapter_status(
+                "primary",
+                king_object_store_adapter_status_failed,
+                king_object_store_backend_contract_to_string(king_object_store_runtime.config.primary_backend),
+                "Missing required storage_root_path for cloud_s3 metadata sidecars."
+            );
+        } else if (king_object_store_s3_rehydrate_stats(error, sizeof(error)) != SUCCESS) {
+            king_object_store_set_runtime_adapter_status(
+                "primary",
+                king_object_store_adapter_status_failed,
+                king_object_store_backend_contract_to_string(king_object_store_runtime.config.primary_backend),
+                error
+            );
+        }
+    }
+
     if (king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_LOCAL_FS ||
         king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_MEMORY_CACHE) {
         if (king_object_store_runtime.config.storage_root_path[0] != '\0') {
-            mkdir(king_object_store_runtime.config.storage_root_path, 0755);
             /* Rehydrate live stats from any existing on-disk objects */
             king_object_store_rehydrate_stats();
         } else {
@@ -573,6 +628,7 @@ void king_object_store_shutdown_system(void)
 {
     king_object_store_config_clear(&king_object_store_runtime.config);
     memset(&king_object_store_runtime, 0, sizeof(king_object_store_runtime));
+    king_object_store_shutdown_libcurl_runtime();
 }
 
 /* --- local_fs backend --- */
@@ -1141,16 +1197,6 @@ int king_object_store_local_fs_write(
     /* Write durable metadata sidecar */
     king_object_store_meta_write(object_id, metadata);
 
-    /* Replicate if replication_factor > 0 */
-    if (king_object_store_runtime.config.replication_factor > 0) {
-        king_object_store_replicate_object(object_id, king_object_store_runtime.config.replication_factor);
-    }
-
-    /* Primary-fallback sync (Backup) */
-    if (king_object_store_runtime.config.backup_backend != king_object_store_runtime.config.primary_backend) {
-        king_object_store_backup_object_to_backend(object_id, king_object_store_runtime.config.backup_backend);
-    }
-
     return SUCCESS;
 }
 
@@ -1351,11 +1397,10 @@ static int king_object_store_apply_local_fs_counters_for_rewrite(
 
 static int king_object_store_export_object(const char *object_id, const char *destination_directory)
 {
-    char source_path[1024];
     char destination_path[1024];
-    char source_meta_path[1024];
     char destination_meta_path[1024];
-    struct stat source_stat;
+    void *data = NULL;
+    size_t data_size = 0;
     king_object_metadata_t metadata;
 
     if (!king_object_store_runtime.initialized) {
@@ -1374,11 +1419,6 @@ static int king_object_store_export_object(const char *object_id, const char *de
         return FAILURE;
     }
 
-    king_object_store_build_path(source_path, sizeof(source_path), object_id);
-    if (stat(source_path, &source_stat) != 0 || !S_ISREG(source_stat.st_mode)) {
-        return FAILURE;
-    }
-
     if (king_object_store_ensure_directory_recursive(destination_directory) != SUCCESS) {
         return FAILURE;
     }
@@ -1386,40 +1426,41 @@ static int king_object_store_export_object(const char *object_id, const char *de
         return FAILURE;
     }
 
-    if (king_object_store_build_path_in_directory(destination_path, sizeof(destination_path), destination_directory, object_id, NULL) != SUCCESS) {
-        return FAILURE;
-    }
-    if (king_object_store_build_path_in_directory(
-        source_meta_path,
-        sizeof(source_meta_path),
-        king_object_store_runtime.config.storage_root_path,
-        object_id,
-        ".meta"
-    ) != SUCCESS) {
-        return FAILURE;
-    }
-    if (king_object_store_build_path_in_directory(
-        destination_meta_path,
-        sizeof(destination_meta_path),
-        destination_directory,
-        object_id,
-        ".meta"
-    ) != SUCCESS) {
+    if (king_object_store_read_object(object_id, &data, &data_size, &metadata) != SUCCESS) {
         return FAILURE;
     }
 
-    if (king_object_store_copy_file_to_path(source_path, destination_path) != SUCCESS) {
+    if (metadata.object_id[0] == '\0') {
+        king_object_store_fill_fallback_metadata(&metadata, object_id, (uint64_t) data_size, time(NULL));
+    }
+
+    if (king_object_store_build_path_in_directory(destination_path, sizeof(destination_path), destination_directory, object_id, NULL) != SUCCESS
+        || king_object_store_build_path_in_directory(
+            destination_meta_path,
+            sizeof(destination_meta_path),
+            destination_directory,
+            object_id,
+            ".meta"
+        ) != SUCCESS) {
+        if (data != NULL) {
+            pefree(data, 1);
+        }
         return FAILURE;
     }
 
-    if (king_object_store_copy_file_to_path(source_meta_path, destination_meta_path) != SUCCESS) {
-        if (king_object_store_meta_read(object_id, &metadata) != SUCCESS) {
-            king_object_store_fill_fallback_metadata(&metadata, object_id, (uint64_t) source_stat.st_size, source_stat.st_mtime);
+    if (king_object_store_mkdir_parents(destination_path) != SUCCESS
+        || king_object_store_atomic_write_file(destination_path, data, data_size) != SUCCESS
+        || king_object_store_meta_write_to_path(destination_meta_path, &metadata) != SUCCESS) {
+        if (data != NULL) {
+            pefree(data, 1);
         }
-        if (king_object_store_meta_write_to_path(destination_meta_path, &metadata) != SUCCESS) {
-            unlink(destination_path);
-            return FAILURE;
-        }
+        unlink(destination_path);
+        unlink(destination_meta_path);
+        return FAILURE;
+    }
+
+    if (data != NULL) {
+        pefree(data, 1);
     }
 
     return SUCCESS;
@@ -1428,13 +1469,10 @@ static int king_object_store_export_object(const char *object_id, const char *de
 static int king_object_store_import_object(const char *object_id, const char *source_directory)
 {
     char source_path[1024];
-    char destination_path[1024];
     char source_meta_path[1024];
-    char destination_meta_path[1024];
     struct stat source_stat;
-    int had_old = 0;
-    uint64_t old_size = 0;
-    struct stat destination_old_stat;
+    void *data = NULL;
+    size_t data_size = 0;
     king_object_metadata_t metadata;
 
     if (!king_object_store_runtime.initialized) {
@@ -1460,59 +1498,40 @@ static int king_object_store_import_object(const char *object_id, const char *so
         return FAILURE;
     }
 
-    king_object_store_build_path(destination_path, sizeof(destination_path), object_id);
-    if (stat(destination_path, &destination_old_stat) == 0 && S_ISREG(destination_old_stat.st_mode)) {
-        had_old = 1;
-        old_size = (uint64_t) destination_old_stat.st_size;
-    }
-
     if (king_object_store_build_path_in_directory(
-        source_meta_path,
-        sizeof(source_meta_path),
-        source_directory,
-        object_id,
-        ".meta"
-    ) != SUCCESS) {
-        return FAILURE;
-    }
-    if (king_object_store_build_path_in_directory(
-        destination_meta_path,
-        sizeof(destination_meta_path),
-        king_object_store_runtime.config.storage_root_path,
-        object_id,
-        ".meta"
-    ) != SUCCESS) {
+            source_meta_path,
+            sizeof(source_meta_path),
+            source_directory,
+            object_id,
+            ".meta"
+        ) != SUCCESS
+        || king_object_store_read_file_contents(source_path, &data, &data_size) != SUCCESS) {
         return FAILURE;
     }
 
-    if (king_object_store_copy_file_to_path(source_path, destination_path) != SUCCESS) {
-        return FAILURE;
+    if (king_object_store_meta_read_from_path(source_meta_path, &metadata) != SUCCESS) {
+        king_object_store_fill_fallback_metadata(&metadata, object_id, (uint64_t) source_stat.st_size, source_stat.st_mtime);
     }
 
-    if (king_object_store_copy_file_to_path(source_meta_path, destination_meta_path) != SUCCESS) {
-        if (king_object_store_meta_read_from_path(source_meta_path, &metadata) == SUCCESS) {
-            /* Keep source-side metadata sidecar when it exists and is valid. */
-        } else if (king_object_store_meta_read(object_id, &metadata) == SUCCESS) {
-            /* Fallback to active runtime metadata when import source is incomplete. */
-            if (metadata.object_id[0] == '\0') {
-                strncpy(metadata.object_id, object_id, sizeof(metadata.object_id) - 1);
-            }
-            if (metadata.content_length == 0) {
-                metadata.content_length = (uint64_t) source_stat.st_size;
-            }
-        } else {
-            king_object_store_fill_fallback_metadata(&metadata, object_id, (uint64_t) source_stat.st_size, source_stat.st_mtime);
+    if (metadata.object_id[0] == '\0') {
+        strncpy(metadata.object_id, object_id, sizeof(metadata.object_id) - 1);
+    }
+    if (metadata.content_length == 0) {
+        metadata.content_length = (uint64_t) source_stat.st_size;
+    }
+
+    if (king_object_store_write_object(object_id, data, data_size, &metadata) != SUCCESS) {
+        if (data != NULL) {
+            pefree(data, 1);
         }
-
-        if (king_object_store_meta_write(object_id, &metadata) != SUCCESS) {
-            if (!had_old) {
-                unlink(destination_path);
-            }
-            return FAILURE;
-        }
+        return FAILURE;
     }
 
-    return king_object_store_apply_local_fs_counters_for_rewrite(object_id, (uint64_t) source_stat.st_size, had_old, old_size);
+    if (data != NULL) {
+        pefree(data, 1);
+    }
+
+    return SUCCESS;
 }
 
 int king_object_store_backup_object(const char *object_id, const char *destination_path)
@@ -1527,10 +1546,8 @@ int king_object_store_restore_object(const char *object_id, const char *source_p
 
 int king_object_store_backup_all_objects(const char *destination_directory)
 {
-    DIR *dir;
-    struct dirent *ent;
-    struct stat st;
-    char source_path[1024];
+    zval objects;
+    zval *entry;
 
     if (!king_object_store_runtime.initialized || destination_directory == NULL || destination_directory[0] == '\0') {
         return FAILURE;
@@ -1552,37 +1569,30 @@ int king_object_store_backup_all_objects(const char *destination_directory)
         return FAILURE;
     }
 
-    dir = opendir(king_object_store_runtime.config.storage_root_path);
-    if (dir == NULL) {
+    array_init(&objects);
+    if (king_object_store_list_object(&objects) != SUCCESS) {
+        zval_ptr_dtor(&objects);
         return FAILURE;
     }
 
-    while ((ent = readdir(dir)) != NULL) {
-        if (ent->d_name[0] == '.') {
-            continue;
-        }
-        if (king_object_store_is_meta_filename(ent->d_name)) {
-            continue;
-        }
-        if (king_object_store_object_id_validate(ent->d_name) != NULL) {
-            closedir(dir);
-            return FAILURE;
-        }
-        king_object_store_build_path(source_path, sizeof(source_path), ent->d_name);
-        if (stat(source_path, &st) != 0) {
-            closedir(dir);
-            return FAILURE;
-        }
-        if (!S_ISREG(st.st_mode)) {
-            continue;
-        }
-        if (king_object_store_backup_object(ent->d_name, destination_directory) != SUCCESS) {
-            closedir(dir);
-            return FAILURE;
-        }
-    }
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL(objects), entry) {
+        zval *object_id_zv;
 
-    closedir(dir);
+        if (Z_TYPE_P(entry) != IS_ARRAY) {
+            continue;
+        }
+        object_id_zv = zend_hash_str_find(Z_ARRVAL_P(entry), "object_id", sizeof("object_id") - 1);
+        if (object_id_zv == NULL || Z_TYPE_P(object_id_zv) != IS_STRING) {
+            continue;
+        }
+
+        if (king_object_store_backup_object(Z_STRVAL_P(object_id_zv), destination_directory) != SUCCESS) {
+            zval_ptr_dtor(&objects);
+            return FAILURE;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    zval_ptr_dtor(&objects);
     return SUCCESS;
 }
 
@@ -1661,14 +1671,23 @@ int king_object_store_replicate_object(const char *object_id, uint32_t replicati
     return SUCCESS;
 }
 
-static int king_object_store_backup_object_to_backend(const char *object_id, king_storage_backend_t backup_backend)
+static int king_object_store_backup_object_to_backend(
+    const char *object_id,
+    const void *data,
+    size_t data_size,
+    const king_object_metadata_t *metadata,
+    king_storage_backend_t backup_backend)
 {
-    if (object_id == NULL || object_id[0] == '\0') {
+    int rc = FAILURE;
+    king_object_metadata_t metadata_snapshot;
+    char backup_error[512] = {0};
+
+    if (object_id == NULL || object_id[0] == '\0' || data == NULL) {
         king_object_store_set_backend_runtime_result(
             "backup",
             backup_backend,
             FAILURE,
-            "Missing object id for backup operation."
+            "Missing object payload for backup operation."
         );
         return FAILURE;
     }
@@ -1683,17 +1702,6 @@ static int king_object_store_backup_object_to_backend(const char *object_id, kin
         return FAILURE;
     }
 
-    if (backup_backend == KING_STORAGE_BACKEND_LOCAL_FS ||
-        backup_backend == KING_STORAGE_BACKEND_MEMORY_CACHE) {
-        king_object_store_set_backend_runtime_result(
-            "backup",
-            backup_backend,
-            SUCCESS,
-            NULL
-        );
-        return SUCCESS;
-    }
-
     if (king_object_store_require_honest_backend(
             "backup",
             backup_backend,
@@ -1702,11 +1710,26 @@ static int king_object_store_backup_object_to_backend(const char *object_id, kin
     }
 
     switch (backup_backend) {
-        case KING_STORAGE_BACKEND_DISTRIBUTED:
         case KING_STORAGE_BACKEND_CLOUD_S3:
-        case KING_STORAGE_BACKEND_CLOUD_GCS:
-        case KING_STORAGE_BACKEND_CLOUD_AZURE:
+            rc = king_object_store_s3_write(
+                object_id,
+                data,
+                data_size,
+                metadata,
+                backup_error,
+                sizeof(backup_error),
+                0
+            );
             break;
+        case KING_STORAGE_BACKEND_LOCAL_FS:
+        case KING_STORAGE_BACKEND_MEMORY_CACHE:
+            king_object_store_set_backend_runtime_result(
+                "backup",
+                backup_backend,
+                FAILURE,
+                "Local backup backends are not implemented for a non-local primary object-store backend."
+            );
+            return FAILURE;
         default:
             king_object_store_set_backend_runtime_result(
                 "backup",
@@ -1717,28 +1740,30 @@ static int king_object_store_backup_object_to_backend(const char *object_id, kin
             return FAILURE;
     }
 
-    king_object_metadata_t metadata;
-    if (king_object_store_meta_read(object_id, &metadata) == SUCCESS) {
-        if (metadata.is_backed_up == 0) {
-            metadata.is_backed_up = 1;
-            king_object_store_meta_write(object_id, &metadata);
-        }
+    if (rc != SUCCESS) {
         king_object_store_set_backend_runtime_result(
             "backup",
             backup_backend,
-            SUCCESS,
-            NULL
+            FAILURE,
+            backup_error[0] == '\0' ? "Backup object-store backend write failed." : backup_error
         );
-        return SUCCESS;
+        return FAILURE;
+    }
+
+    if (king_object_store_backend_read_metadata(object_id, &metadata_snapshot) == SUCCESS) {
+        if (metadata_snapshot.is_backed_up == 0) {
+            metadata_snapshot.is_backed_up = 1;
+            king_object_store_meta_write(object_id, &metadata_snapshot);
+        }
     }
 
     king_object_store_set_backend_runtime_result(
         "backup",
         backup_backend,
-        FAILURE,
-        "Backup object-store metadata was unavailable."
+        SUCCESS,
+        NULL
     );
-    return FAILURE;
+    return SUCCESS;
 }
 
 /* --- CDN stubs --- */
@@ -2014,6 +2039,8 @@ static int king_object_store_azure_simulate_list(zval *return_array)
     return king_object_store_simulated_backend_list("azure", return_array);
 }
 
+#include "cloud_s3.inc"
+
 /* --- Backend-routing dispatch --- */
 
 int king_object_store_write_object(
@@ -2045,6 +2072,17 @@ int king_object_store_write_object(
         case KING_STORAGE_BACKEND_MEMORY_CACHE:
             rc = king_object_store_local_fs_write(object_id, data, data_size, metadata);
             break;
+        case KING_STORAGE_BACKEND_CLOUD_S3:
+            rc = king_object_store_s3_write(
+                object_id,
+                data,
+                data_size,
+                metadata,
+                king_object_store_runtime.primary_adapter_error,
+                sizeof(king_object_store_runtime.primary_adapter_error),
+                1
+            );
+            break;
         default:
             king_object_store_set_backend_runtime_result(
                 "primary",
@@ -2061,9 +2099,27 @@ int king_object_store_write_object(
         rc == SUCCESS ? NULL : "Primary object-store backend write failed."
     );
 
+    if (rc == SUCCESS && king_object_store_runtime.config.replication_factor > 0) {
+        if (king_object_store_replicate_object(object_id, king_object_store_runtime.config.replication_factor) != SUCCESS) {
+            king_object_store_set_backend_runtime_result(
+                "primary",
+                king_object_store_runtime.config.primary_backend,
+                FAILURE,
+                "Primary object-store write failed because replication hooks failed."
+            );
+            return FAILURE;
+        }
+    }
+
     if (rc == SUCCESS &&
         king_object_store_runtime.config.backup_backend != king_object_store_runtime.config.primary_backend) {
-        if (king_object_store_backup_object_to_backend(object_id, king_object_store_runtime.config.backup_backend) != SUCCESS) {
+        if (king_object_store_backup_object_to_backend(
+                object_id,
+                data,
+                data_size,
+                metadata,
+                king_object_store_runtime.config.backup_backend
+            ) != SUCCESS) {
             king_object_store_set_backend_runtime_result(
                 "primary",
                 king_object_store_runtime.config.primary_backend,
@@ -2105,6 +2161,12 @@ int king_object_store_read_object(
         case KING_STORAGE_BACKEND_LOCAL_FS:
         case KING_STORAGE_BACKEND_MEMORY_CACHE:
             rc = king_object_store_local_fs_read(object_id, data, data_size, metadata);
+            break;
+        case KING_STORAGE_BACKEND_CLOUD_S3:
+            rc = king_object_store_s3_read(object_id, data, data_size);
+            if (rc == SUCCESS && metadata != NULL) {
+                rc = king_object_store_backend_read_metadata(object_id, metadata);
+            }
             break;
         default:
             king_object_store_set_backend_runtime_result(
@@ -2149,6 +2211,9 @@ int king_object_store_remove_object(const char *object_id)
         case KING_STORAGE_BACKEND_MEMORY_CACHE:
             rc = king_object_store_local_fs_remove(object_id);
             break;
+        case KING_STORAGE_BACKEND_CLOUD_S3:
+            rc = king_object_store_s3_remove(object_id);
+            break;
         default:
             king_object_store_set_backend_runtime_result(
                 "primary",
@@ -2182,6 +2247,9 @@ int king_object_store_list_object(zval *return_array)
         case KING_STORAGE_BACKEND_LOCAL_FS:
         case KING_STORAGE_BACKEND_MEMORY_CACHE:
             rc = king_object_store_local_fs_list(return_array);
+            break;
+        case KING_STORAGE_BACKEND_CLOUD_S3:
+            rc = king_object_store_s3_list(return_array);
             break;
         default:
             king_object_store_set_backend_runtime_result(

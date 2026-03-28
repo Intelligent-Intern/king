@@ -173,7 +173,7 @@ Status note:
 
 ## F. Object Store Cloud Backends
 
-- [ ] Implement real S3 backend
+- [x] Implement real S3 backend
 - [ ] Implement real GCS backend where publicly claimed
 - [ ] Implement real Azure Blob backend where publicly claimed
 - [x] Finalize local filesystem backend as the reference backend
@@ -181,7 +181,8 @@ Status note:
 - [ ] Validate backend failover on primary backend outage
 - [ ] Validate partial backend failures under replication
 - [ ] Validate network failures for cloud backends
-- [ ] Validate credential failures for cloud backends
+- [x] Validate credential failures for the real `cloud_s3` backend
+- [ ] Validate credential failures for future real cloud backends
 - [ ] Validate throttling / rate-limit behavior for cloud backends
 - [ ] Validate object migration between backends
 - [ ] Validate data integrity after backend migration

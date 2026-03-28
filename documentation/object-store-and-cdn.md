@@ -433,6 +433,21 @@ The names are intentionally direct. The value of the subsystem is not that the
 surface is mysterious. The value is that the simple surface drives a coherent
 runtime underneath.
 
+Today that runtime has two honest backend slices:
+- `local_fs`, with `memory_cache` preserved as a compatibility alias onto the
+  same local filesystem path
+- `cloud_s3` for real S3-compatible payload transport, while metadata still
+  uses local `.meta` sidecars as the current reference contract
+
+`distributed`, `cloud_gcs`, and `cloud_azure` are still simulated and should be
+read that way in the current alpha.
+
+When the active `cloud_s3` credentials are rejected, `king_object_store_init()`
+keeps the runtime visible but marks the primary adapter as failed. The concrete
+reason is exposed through `king_object_store_get_stats()['object_store']` in
+`runtime_primary_adapter_status` and `runtime_primary_adapter_error`, and write
+failures surface the same adapter error in the thrown `King\SystemException`.
+
 ## A Full Example
 
 The following example shows a realistic object flow. A service writes a model

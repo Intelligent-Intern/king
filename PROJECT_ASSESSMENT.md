@@ -35,7 +35,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `381/381` passing
+- `./infra/scripts/test-extension.sh`: `386/386` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -57,7 +57,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `382` PHPT files
+- `extension/tests`: `386` PHPT files
 - public stub parity: `128` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -80,7 +80,7 @@ The current tree already proves:
 - Semantic DNS register/discover/update routing, live HTTP health-probe driven route and discovery refresh from service-owned health endpoints, idempotent repeated registration without redundant durable-state churn, coherent parallel service/status persistence through locked refresh-before-persist durable-state transactions, larger-topology local churn coherence, coherent concurrent larger-topology mother-node sync statistics across multiprocess writers in the local persisted-state slice, registry-backed mother-node sync statistics, persisted registration plus mother-node rehydration across restart, object-safe durable-state decode hardening, and private-directory durable state handling
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs
 - router/loadbalancer is now exposed as an explicit config-backed system component with honest policy/discovery-only introspection
-- object-store local filesystem persistence, explicit `local_fs_only` runtime/system contract, `memory_cache -> local_fs` compatibility aliasing, simulated non-local adapter fencing, `.meta` sidecars, CDN cache/runtime behavior, and confined backup/restore/import/export paths
+- object-store local filesystem persistence plus real `cloud_s3` payload transport with explicit `local_fs+cloud_s3_sidecars` runtime/system contract, `memory_cache -> local_fs` compatibility aliasing, `.meta` sidecars as the current metadata reference across the verified backends, explicit `cloud_s3` credential-rejection detection through runtime adapter status/error surfaces, simulated `distributed`/`cloud_gcs`/`cloud_azure` fencing, CDN cache/runtime behavior, and confined backup/restore/import/export paths
 - deterministic QUIC bootstrap through a tracked pinset for the `quiche` repo revision, BoringSSL submodule revision, pinned workspace lockfile, and pinned `wirefilter` git revision with fail-closed static and PHPT verification
 - one shared runtime install smoke across staged profiles, packaged release artifacts, and published runtime containers, plus first-class clean-host package install and container smoke matrix entrypoints
 - long-duration ASan, UBSan, and leak-oriented soak gates with retained per-iteration logs and archived failure diagnostics under `extension/build/soak/` plus CI artifact upload on soak failure

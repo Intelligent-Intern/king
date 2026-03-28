@@ -46,7 +46,9 @@ PHP_FUNCTION(king_object_store_put)
 
     (void) options;
 
-    if (king_object_store_runtime.config.max_storage_size_bytes > 0) {
+    if (king_object_store_runtime.config.max_storage_size_bytes > 0
+        && (king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_LOCAL_FS
+            || king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_MEMORY_CACHE)) {
         uint64_t new_size = ZSTR_LEN(payload);
         uint64_t current_total = king_object_store_runtime.current_stored_bytes;
         
@@ -74,8 +76,11 @@ PHP_FUNCTION(king_object_store_put)
         zend_throw_exception_ex(
             king_ce_system_exception,
             0,
-            "Failed to store object '%s'.",
-            ZSTR_VAL(object_id)
+            "Failed to store object '%s': %s",
+            ZSTR_VAL(object_id),
+            king_object_store_runtime.primary_adapter_error[0] != '\0'
+                ? king_object_store_runtime.primary_adapter_error
+                : "Primary object-store backend write failed."
         );
         RETURN_THROWS();
     }
@@ -201,7 +206,7 @@ PHP_FUNCTION(king_object_store_get_metadata)
         return;
     }
 
-    if (king_object_store_meta_read(ZSTR_VAL(object_id), &metadata) != SUCCESS) {
+    if (king_object_store_backend_read_metadata(ZSTR_VAL(object_id), &metadata) != SUCCESS) {
         RETURN_NULL();
     }
 

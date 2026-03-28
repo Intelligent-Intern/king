@@ -46,6 +46,7 @@ int king_object_store_local_fs_read(const char *object_id, void **data, size_t *
 int king_object_store_local_fs_remove(const char *object_id);
 int king_object_store_local_fs_list(zval *return_array);
 int king_object_store_list_object(zval *return_array);
+int king_object_store_backend_read_metadata(const char *object_id, king_object_metadata_t *metadata);
 const char *king_object_store_object_id_validate(const char *object_id);
 
 /* Durable metadata sidecar */

@@ -1,5 +1,5 @@
 --TEST--
-King object-store: backend failure semantics for non-local runtime backends
+King object-store: backend failure semantics for still-simulated runtime backends
 --INI--
 king.security_allow_config_override=1
 --FILE--
@@ -23,7 +23,7 @@ var_dump($stats['runtime_primary_backend']);
 var_dump($stats['runtime_primary_backend_contract']);
 var_dump($stats['runtime_primary_adapter_status']);
 
-$unsupportedBackends = ['distributed', 'cloud_s3', 'cloud_gcs', 'cloud_azure'];
+$unsupportedBackends = ['distributed', 'cloud_gcs', 'cloud_azure'];
 
 foreach ($unsupportedBackends as $backend) {
     king_object_store_init([
@@ -64,14 +64,6 @@ string(10) "local data"
 string(8) "local_fs"
 string(5) "local"
 string(2) "ok"
-string(9) "simulated"
-string(9) "simulated"
-bool(true)
-string(20) "King\SystemException"
-bool(false)
-bool(false)
-string(6) "failed"
-bool(true)
 string(9) "simulated"
 string(9) "simulated"
 bool(true)
