@@ -13,7 +13,6 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
@@ -75,7 +74,8 @@ jobs:
         id: meta
         run: |
           set -euo pipefail
-          image="${REGISTRY}/${IMAGE_NAME}"
+          image_name="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          image="${REGISTRY}/${image_name}"
           revision="${{ github.event.workflow_run.head_sha }}"
           short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
           branch="${{ github.event.workflow_run.head_branch }}"
@@ -208,7 +208,8 @@ jobs:
         id: meta-demo
         run: |
           set -euo pipefail
-          image="${REGISTRY}/${IMAGE_NAME}-demo"
+          image_name="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          image="${REGISTRY}/${image_name}-demo"
           revision="${{ github.event.workflow_run.head_sha }}"
           short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
           branch="${{ github.event.workflow_run.head_branch }}"
