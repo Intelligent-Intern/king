@@ -9,11 +9,8 @@ function king_object_store_s3_mock_format_endpoint(string $host, int $port): str
     return 'tcp://' . $host . ':' . $port;
 }
 
-function king_object_store_s3_mock_start_server(
-    ?string $stateDirectory = null,
-    string $bindHost = '127.0.0.1',
-    array $options = []
-): array {
+function king_object_store_s3_mock_reserve_unused_port(string $bindHost = '127.0.0.1'): int
+{
     $probe = stream_socket_server(
         king_object_store_s3_mock_format_endpoint($bindHost, 0),
         $errno,
@@ -25,13 +22,24 @@ function king_object_store_s3_mock_start_server(
 
     $serverName = stream_socket_get_name($probe, false);
     fclose($probe);
+
     if (preg_match('/^\[.*\]:(\d+)$/', $serverName, $matches) === 1) {
-        $port = (int) $matches[1];
-    } elseif (preg_match('/^.*:(\d+)$/', $serverName, $matches) === 1) {
-        $port = (int) $matches[1];
-    } else {
-        throw new RuntimeException('failed to parse object-store S3 mock port');
+        return (int) $matches[1];
     }
+
+    if (preg_match('/^.*:(\d+)$/', $serverName, $matches) === 1) {
+        return (int) $matches[1];
+    }
+
+    throw new RuntimeException('failed to parse object-store S3 mock port');
+}
+
+function king_object_store_s3_mock_start_server(
+    ?string $stateDirectory = null,
+    string $bindHost = '127.0.0.1',
+    array $options = []
+): array {
+    $port = king_object_store_s3_mock_reserve_unused_port($bindHost);
 
     if ($stateDirectory === null) {
         $stateDirectory = sys_get_temp_dir() . '/king-object-store-s3-mock-' . getmypid() . '-' . bin2hex(random_bytes(4));

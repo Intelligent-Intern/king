@@ -447,6 +447,8 @@ keeps the runtime visible but marks the primary adapter as failed. The concrete
 reason is exposed through `king_object_store_get_stats()['object_store']` in
 `runtime_primary_adapter_status` and `runtime_primary_adapter_error`, and write
 failures surface the same adapter error in the thrown `King\SystemException`.
+The same status/error surface is now also the stable contract for endpoint
+connectivity failures such as an unreachable `cloud_s3` API endpoint.
 
 ## A Full Example
 

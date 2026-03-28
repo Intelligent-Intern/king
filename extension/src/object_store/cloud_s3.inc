@@ -564,6 +564,65 @@ static void king_object_store_s3_format_status_error(
     );
 }
 
+static void king_object_store_s3_format_transport_error(
+    const char *method,
+    CURLcode curl_code,
+    char *error,
+    size_t error_size)
+{
+    const char *safe_method = method == NULL ? "request" : method;
+
+    if (error == NULL || error_size == 0) {
+        return;
+    }
+
+    switch (curl_code) {
+        case CURLE_COULDNT_RESOLVE_HOST:
+            snprintf(
+                error,
+                error_size,
+                "cloud_s3 %s request failed: could not resolve the configured endpoint host.",
+                safe_method
+            );
+            return;
+        case CURLE_COULDNT_CONNECT:
+            snprintf(
+                error,
+                error_size,
+                "cloud_s3 %s request failed: could not connect to the configured endpoint.",
+                safe_method
+            );
+            return;
+        case CURLE_OPERATION_TIMEDOUT:
+            snprintf(
+                error,
+                error_size,
+                "cloud_s3 %s request failed: timed out while contacting the configured endpoint.",
+                safe_method
+            );
+            return;
+        case CURLE_SEND_ERROR:
+        case CURLE_RECV_ERROR:
+        case CURLE_GOT_NOTHING:
+            snprintf(
+                error,
+                error_size,
+                "cloud_s3 %s request failed: network I/O with the configured endpoint failed.",
+                safe_method
+            );
+            return;
+        default:
+            snprintf(
+                error,
+                error_size,
+                "cloud_s3 %s request failed: %s",
+                safe_method,
+                king_object_store_libcurl.curl_easy_strerror_fn(curl_code)
+            );
+            return;
+    }
+}
+
 static zend_result king_object_store_s3_http_request(
     const king_object_store_s3_runtime_config_t *config,
     const char *method,
@@ -655,13 +714,7 @@ static zend_result king_object_store_s3_http_request(
         } else if (response->header_limit_exceeded) {
             snprintf(error, error_size, "cloud_s3 response headers exceeded the object-store size guard.");
         } else {
-            snprintf(
-                error,
-                error_size,
-                "cloud_s3 %s request failed: %s",
-                method,
-                king_object_store_libcurl.curl_easy_strerror_fn(curl_code)
-            );
+            king_object_store_s3_format_transport_error(method, curl_code, error, error_size);
         }
         king_object_store_libcurl.curl_slist_free_all_fn(headers);
         king_object_store_libcurl.curl_easy_cleanup_fn(easy);

@@ -180,8 +180,9 @@ Status note:
 - [ ] Validate multi-backend routing with real backends
 - [ ] Validate backend failover on primary backend outage
 - [ ] Validate partial backend failures under replication
-- [ ] Validate network failures for cloud backends
+- [x] Validate network failures for the real `cloud_s3` backend
 - [x] Validate credential failures for the real `cloud_s3` backend
+- [ ] Validate network failures for future real cloud backends
 - [ ] Validate credential failures for future real cloud backends
 - [ ] Validate throttling / rate-limit behavior for cloud backends
 - [ ] Validate object migration between backends
