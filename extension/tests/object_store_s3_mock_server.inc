@@ -159,6 +159,65 @@ function king_object_store_s3_mock_auth_error(array $headers, array $options): ?
     return null;
 }
 
+function king_object_store_s3_mock_reason_phrase(int $status): string
+{
+    return match ($status) {
+        200 => 'OK',
+        204 => 'No Content',
+        400 => 'Bad Request',
+        403 => 'Forbidden',
+        404 => 'Not Found',
+        405 => 'Method Not Allowed',
+        429 => 'Too Many Requests',
+        503 => 'Service Unavailable',
+        default => 'Error',
+    };
+}
+
+function king_object_store_s3_mock_take_forced_response(array &$options, string $method, string $target): ?array
+{
+    if (!isset($options['forced_responses']) || !is_array($options['forced_responses'])) {
+        return null;
+    }
+
+    foreach ($options['forced_responses'] as $index => $rule) {
+        if (!is_array($rule)) {
+            continue;
+        }
+
+        $expectedMethod = (string) ($rule['method'] ?? '');
+        $expectedTarget = (string) ($rule['target'] ?? '');
+        $remaining = isset($rule['times']) ? (int) $rule['times'] : -1;
+
+        if ($expectedMethod !== '' && strcasecmp($expectedMethod, $method) !== 0) {
+            continue;
+        }
+        if ($expectedTarget !== '' && $expectedTarget !== $target) {
+            continue;
+        }
+        if ($remaining === 0) {
+            continue;
+        }
+
+        if ($remaining > 0) {
+            $options['forced_responses'][$index]['times'] = $remaining - 1;
+        }
+
+        return $rule;
+    }
+
+    return null;
+}
+
+function king_object_store_s3_mock_error_body(string $code, string $message): string
+{
+    return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>"
+        . htmlspecialchars($code, ENT_XML1)
+        . "</Code><Message>"
+        . htmlspecialchars($message, ENT_XML1)
+        . "</Message></Error>";
+}
+
 function king_object_store_s3_mock_list_xml(string $objectsDirectory): string
 {
     $xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ListBucketResult>";
@@ -237,7 +296,33 @@ while (($conn = @stream_socket_accept($server, 10)) !== false) {
         $capture['events'][count($capture['events']) - 1]['received_access_key'] = $authError['received_access_key'];
         king_object_store_s3_mock_respond($conn, 403, 'Forbidden', [
             'Content-Type' => 'application/xml',
-        ], "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>" . htmlspecialchars($authError['code'], ENT_XML1) . "</Code><Message>" . htmlspecialchars($authError['message'], ENT_XML1) . "</Message></Error>");
+        ], king_object_store_s3_mock_error_body($authError['code'], $authError['message']));
+        fclose($conn);
+        continue;
+    }
+
+    $forcedResponse = king_object_store_s3_mock_take_forced_response($options, $method, $target);
+    if ($forcedResponse !== null) {
+        $status = (int) ($forcedResponse['status'] ?? 503);
+        $reason = (string) ($forcedResponse['reason'] ?? king_object_store_s3_mock_reason_phrase($status));
+        $headersOut = is_array($forcedResponse['headers'] ?? null) ? $forcedResponse['headers'] : [];
+        $bodyOut = (string) ($forcedResponse['body'] ?? '');
+        $errorCode = (string) ($forcedResponse['error_code'] ?? '');
+        $errorMessage = (string) ($forcedResponse['error_message'] ?? 'The object-store endpoint is temporarily throttling requests.');
+
+        if ($bodyOut === '' && $errorCode !== '') {
+            $bodyOut = king_object_store_s3_mock_error_body($errorCode, $errorMessage);
+            if (!isset($headersOut['Content-Type'])) {
+                $headersOut['Content-Type'] = 'application/xml';
+            }
+        }
+
+        $capture['events'][count($capture['events']) - 1]['forced_status'] = $status;
+        if ($errorCode !== '') {
+            $capture['events'][count($capture['events']) - 1]['forced_error_code'] = $errorCode;
+        }
+
+        king_object_store_s3_mock_respond($conn, $status, $reason, $headersOut, $bodyOut);
         fclose($conn);
         continue;
     }

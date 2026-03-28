@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate throttling / rate-limit behavior for the real object-store `cloud_s3` backend.
+- [ ] Validate recovery after incomplete writes for the real object-store `cloud_s3` backend.
 
 ## Active Executable Items
 
@@ -96,7 +96,7 @@
 - orchestrator continuation after host restart, richer error classification, multi-worker execution depth, and broader observability
 - Smart-DNS split-brain, failure/recovery, and broader distributed-topology depth
 - broader QUIC lifecycle, stats, resumption, and recovery validation beyond the current HTTP/3 client slices
-- object-store cloud backend failure slices beyond the now-real `cloud_s3` payload path: throttling, migration, and recovery
+- object-store cloud backend failure slices beyond the now-real `cloud_s3` payload path: migration and recovery
 
 ## Notes
 

@@ -184,7 +184,8 @@ Status note:
 - [x] Validate credential failures for the real `cloud_s3` backend
 - [ ] Validate network failures for future real cloud backends
 - [ ] Validate credential failures for future real cloud backends
-- [ ] Validate throttling / rate-limit behavior for cloud backends
+- [x] Validate throttling / rate-limit behavior for the real `cloud_s3` backend
+- [ ] Validate throttling / rate-limit behavior for future real cloud backends
 - [ ] Validate object migration between backends
 - [ ] Validate data integrity after backend migration
 - [ ] Validate metadata consistency after backend migration

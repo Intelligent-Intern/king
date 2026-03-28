@@ -506,20 +506,91 @@ static zend_result king_object_store_s3_build_url(
     return SUCCESS;
 }
 
-static void king_object_store_s3_format_status_error(
+static zend_bool king_object_store_s3_response_error_code(
+    const king_object_store_http_response_t *response,
+    char *destination,
+    size_t destination_size)
+{
+    const char *body;
+    const char *code_start;
+    const char *code_end;
+    size_t code_len;
+
+    if (destination != NULL && destination_size > 0) {
+        destination[0] = '\0';
+    }
+
+    if (response == NULL || response->body.s == NULL || destination == NULL || destination_size == 0) {
+        return 0;
+    }
+
+    body = ZSTR_VAL(response->body.s);
+    code_start = strstr(body, "<Code>");
+    if (code_start == NULL) {
+        return 0;
+    }
+    code_start += strlen("<Code>");
+
+    code_end = strstr(code_start, "</Code>");
+    if (code_end == NULL || code_end <= code_start) {
+        return 0;
+    }
+
+    code_len = (size_t) (code_end - code_start);
+    if (code_len >= destination_size) {
+        code_len = destination_size - 1;
+    }
+
+    memcpy(destination, code_start, code_len);
+    destination[code_len] = '\0';
+    return 1;
+}
+
+static zend_bool king_object_store_s3_response_is_throttled(
+    const king_object_store_http_response_t *response)
+{
+    char error_code[128];
+
+    if (response == NULL) {
+        return 0;
+    }
+
+    if (response->status_code == 429) {
+        return 1;
+    }
+
+    if (response->status_code != 503) {
+        return 0;
+    }
+
+    if (!king_object_store_s3_response_error_code(response, error_code, sizeof(error_code))) {
+        return 0;
+    }
+
+    return strcasecmp(error_code, "SlowDown") == 0
+        || strcasecmp(error_code, "Throttling") == 0
+        || strcasecmp(error_code, "ThrottlingException") == 0
+        || strcasecmp(error_code, "RequestThrottled") == 0
+        || strcasecmp(error_code, "TooManyRequestsException") == 0;
+}
+
+static void king_object_store_s3_format_response_error(
     const char *method,
     const char *object_id,
     const char *operation,
-    long status_code,
+    const king_object_store_http_response_t *response,
     char *error,
     size_t error_size)
 {
     const char *safe_method = method == NULL ? "request" : method;
     const char *safe_operation = operation == NULL ? "request" : operation;
+    long status_code;
 
     if (error == NULL || error_size == 0) {
         return;
     }
+
+    status_code = response == NULL ? 0 : response->status_code;
 
     if (status_code == 401 || status_code == 403) {
         if (object_id != NULL && object_id[0] != '\0') {
@@ -536,6 +607,28 @@ static void king_object_store_s3_format_status_error(
                 error,
                 error_size,
                 "cloud_s3 credentials were rejected during %s (HTTP %ld).",
+                safe_operation,
+                status_code
+            );
+        }
+        return;
+    }
+
+    if (king_object_store_s3_response_is_throttled(response)) {
+        if (object_id != NULL && object_id[0] != '\0') {
+            snprintf(
+                error,
+                error_size,
+                "cloud_s3 %s for '%s' was throttled by the configured endpoint (HTTP %ld).",
+                safe_operation,
+                object_id,
+                status_code
+            );
+        } else {
+            snprintf(
+                error,
+                error_size,
+                "cloud_s3 %s was throttled by the configured endpoint (HTTP %ld).",
                 safe_operation,
                 status_code
             );
@@ -922,11 +1015,11 @@ static zend_result king_object_store_s3_head_object(
     }
 
     if (response.status_code < 200 || response.status_code >= 300) {
-        king_object_store_s3_format_status_error(
+        king_object_store_s3_format_response_error(
             "HEAD",
             object_id,
             "metadata HEAD",
-            response.status_code,
+            &response,
             error,
             error_size
         );
@@ -1014,11 +1107,11 @@ static int king_object_store_s3_write(
     }
 
     if (response.status_code < 200 || response.status_code >= 300) {
-        king_object_store_s3_format_status_error(
+        king_object_store_s3_format_response_error(
             "PUT",
             object_id,
             "write",
-            response.status_code,
+            &response,
             error,
             error_size
         );
@@ -1083,11 +1176,11 @@ static int king_object_store_s3_read(const char *object_id, void **data, size_t 
     }
 
     if (response.status_code < 200 || response.status_code >= 300) {
-        king_object_store_s3_format_status_error(
+        king_object_store_s3_format_response_error(
             "GET",
             object_id,
             "read",
-            response.status_code,
+            &response,
             king_object_store_runtime.primary_adapter_error,
             sizeof(king_object_store_runtime.primary_adapter_error)
         );
@@ -1154,11 +1247,11 @@ static int king_object_store_s3_remove(const char *object_id)
     }
 
     if (response.status_code < 200 || response.status_code >= 300) {
-        king_object_store_s3_format_status_error(
+        king_object_store_s3_format_response_error(
             "DELETE",
             object_id,
             "delete",
-            response.status_code,
+            &response,
             king_object_store_runtime.primary_adapter_error,
             sizeof(king_object_store_runtime.primary_adapter_error)
         );
@@ -1300,11 +1393,11 @@ static int king_object_store_s3_list(zval *return_array)
     }
 
     if (response.status_code < 200 || response.status_code >= 300) {
-        king_object_store_s3_format_status_error(
+        king_object_store_s3_format_response_error(
             "GET",
             NULL,
             "list",
-            response.status_code,
+            &response,
             king_object_store_runtime.primary_adapter_error,
             sizeof(king_object_store_runtime.primary_adapter_error)
         );
@@ -1366,11 +1459,11 @@ static int king_object_store_s3_rehydrate_stats(char *error, size_t error_size)
     }
 
     if (response.status_code < 200 || response.status_code >= 300) {
-        king_object_store_s3_format_status_error(
+        king_object_store_s3_format_response_error(
             "GET",
             NULL,
             "inventory rehydrate",
-            response.status_code,
+            &response,
             error,
             error_size
         );
