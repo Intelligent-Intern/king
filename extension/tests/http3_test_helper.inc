@@ -435,6 +435,7 @@ function king_http3_stop_silent_udp_server(array $server): void
 function king_http3_failure_peer_binary(): string
 {
     $root = dirname(dirname(__DIR__));
+    $template = __DIR__ . '/http3_failure_peer.rs';
     $manifest = $root . '/quiche/apps/Cargo.toml';
     $source = $root . '/quiche/apps/src/bin/king-http3-failure-peer.rs';
     $binary = $root . '/quiche/target/release/king-http3-failure-peer';
@@ -443,7 +444,23 @@ function king_http3_failure_peer_binary(): string
         throw new RuntimeException('cargo is required to build the HTTP/3 failure peer helper');
     }
 
-    if (is_file($binary) && filemtime($binary) >= filemtime($source)) {
+    if (!is_file($template)) {
+        throw new RuntimeException('missing tracked HTTP/3 failure peer template');
+    }
+
+    $templateContents = file_get_contents($template);
+    if (!is_string($templateContents) || $templateContents === '') {
+        throw new RuntimeException('failed to read tracked HTTP/3 failure peer template');
+    }
+
+    $currentSource = is_file($source) ? file_get_contents($source) : false;
+    if (!is_string($currentSource) || $currentSource !== $templateContents) {
+        if (file_put_contents($source, $templateContents) !== strlen($templateContents)) {
+            throw new RuntimeException('failed to synchronize tracked HTTP/3 failure peer source');
+        }
+    }
+
+    if (is_file($binary) && filemtime($binary) >= max(filemtime($source), filemtime($template))) {
         return $binary;
     }
 
