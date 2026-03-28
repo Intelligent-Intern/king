@@ -68,7 +68,17 @@ function king_http3_destroy_fixture(array $fixture): void
 
 function king_http3_start_test_server(string $certFile, string $keyFile, string $rootDir): array
 {
-    $probe = stream_socket_server('udp://localhost:0', $errno, $errstr, STREAM_SERVER_BIND);
+    $bindHost = getenv('KING_HTTP3_TEST_BIND_HOST');
+    if (!is_string($bindHost) || $bindHost === '') {
+        $bindHost = 'localhost';
+    }
+
+    $urlHost = getenv('KING_HTTP3_TEST_URL_HOST');
+    if (!is_string($urlHost) || $urlHost === '') {
+        $urlHost = $bindHost;
+    }
+
+    $probe = stream_socket_server('udp://' . $bindHost . ':0', $errno, $errstr, STREAM_SERVER_BIND);
     if ($probe === false) {
         throw new RuntimeException("failed to reserve UDP test port: $errstr");
     }
@@ -131,7 +141,7 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
                 'process' => $process,
                 'pipes' => $pipes,
                 'port' => (int) $port,
-                'host' => 'localhost',
+                'host' => $urlHost,
             ];
         }
 
@@ -144,7 +154,7 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
                 'process' => $process,
                 'pipes' => $pipes,
                 'port' => (int) $port,
-                'host' => 'localhost',
+                'host' => $urlHost,
             ];
         }
     }
@@ -206,6 +216,11 @@ function king_http3_start_ticket_test_server(
     ?int $port = null,
     ?string $urlHost = null
 ): array {
+    $envBindHost = getenv('KING_HTTP3_TEST_BIND_HOST');
+    if ($bindHost === 'localhost' && is_string($envBindHost) && $envBindHost !== '') {
+        $bindHost = $envBindHost;
+    }
+
     if ($port === null) {
         $probe = stream_socket_server('udp://' . $bindHost . ':0', $errno, $errstr, STREAM_SERVER_BIND);
         if ($probe === false) {
@@ -218,7 +233,11 @@ function king_http3_start_ticket_test_server(
     }
 
     $binary = king_http3_ticket_server_binary();
-    $urlHost ??= $bindHost === '127.0.0.1' ? 'localhost' : $bindHost;
+    $envUrlHost = getenv('KING_HTTP3_TEST_URL_HOST');
+    if ($urlHost === null && is_string($envUrlHost) && $envUrlHost !== '') {
+        $urlHost = $envUrlHost;
+    }
+    $urlHost ??= $bindHost;
     $command = [$binary, $certFile, $keyFile, $rootDir, $bindHost, (string) $port];
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
@@ -486,8 +505,17 @@ function king_http3_start_failure_peer(
     string $bindHost = 'localhost',
     ?string $urlHost = null
 ): array {
+    $envBindHost = getenv('KING_HTTP3_TEST_BIND_HOST');
+    if ($bindHost === 'localhost' && is_string($envBindHost) && $envBindHost !== '') {
+        $bindHost = $envBindHost;
+    }
+
     $binary = king_http3_failure_peer_binary();
-    $urlHost ??= $bindHost === '127.0.0.1' ? 'localhost' : $bindHost;
+    $envUrlHost = getenv('KING_HTTP3_TEST_URL_HOST');
+    if ($urlHost === null && is_string($envUrlHost) && $envUrlHost !== '') {
+        $urlHost = $envUrlHost;
+    }
+    $urlHost ??= $bindHost;
     $command = [$binary, $mode, $certFile, $keyFile, $bindHost];
     $process = proc_open($command, [
         1 => ['pipe', 'w'],

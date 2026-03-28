@@ -41,6 +41,73 @@ control: edge services, realtime systems, AI backends, internal control planes,
 data-heavy platforms, and distributed application nodes that need native
 protocol behavior without leaving PHP.
 
+## Runtime Planes
+
+King does not treat async work as one generic promise layer.
+It separates the runtime into four clear planes so transport work, realtime
+work, remote control work, and fleet behavior do not collapse into one blurry
+"evented" abstraction.
+
+### 1. Realtime Plane
+
+The realtime plane is for long-lived interactive channels.
+This is where chat messages, presence updates, room state, small control
+messages, and other high-frequency bidirectional traffic belong.
+In King, that plane is built around WebSocket and IIBIN.
+WebSocket keeps the connection open and bidirectional.
+IIBIN gives that connection a compact, schema-defined binary message format.
+If an application needs to push many small messages quickly and keep both sides
+in sync, this is the right plane.
+
+### 2. Media And Transport Plane
+
+The media and transport plane is for session ownership, stream ownership,
+protocol state, transport reuse, and QUIC-aware behavior.
+This is where HTTP/1, HTTP/2, HTTP/3, QUIC, TLS, session tickets, stream
+lifecycle, cancellation, timeout, and polling logic live.
+The key idea is that a request is not always the same thing as a connection.
+King exposes `Session`, `Stream`, and protocol-specific transport paths because
+serious network software needs explicit control over the transport kernel under
+the application logic.
+
+### 3. Control Plane
+
+The control plane is for remote work that is not just "serve one response now".
+This is where MCP and the pipeline orchestrator live.
+MCP moves structured requests, uploads, downloads, deadlines, and cancellation
+between peers.
+The orchestrator manages multi-step work, queue-backed execution, remote-worker
+execution, run snapshots, and restart-aware control flow.
+If work needs to continue beyond one request, move to another process, or be
+tracked as an explicit runtime job, it belongs here.
+
+### 4. State And Fleet Plane
+
+The state and fleet plane is for durable system behavior across many requests,
+nodes, and services.
+This is where the object store, CDN hooks, Semantic DNS, telemetry, autoscaling,
+and router or load-balancer policy surfaces fit.
+The object store holds artifacts and large state.
+Semantic DNS decides where traffic should go.
+Telemetry measures what the system is doing.
+Autoscaling reacts to that telemetry.
+This plane is what lets King operate as infrastructure instead of only as a
+request library.
+
+### Why This Model Matters
+
+This split keeps the system readable.
+Realtime messaging does not have to pretend it is a batch job.
+Transport code does not have to pretend it is business logic.
+Remote orchestration does not have to masquerade as a normal HTTP request.
+Fleet control does not have to hide inside random helper functions.
+
+The result is that PHP code can stay simple while the runtime underneath stays
+honest.
+An application can use the small surface when that is enough, and still drop
+into explicit session, stream, channel, control-plane, or fleet-plane behavior
+when the system actually needs it.
+
 ## System Model
 
 King follows a few hard rules:
@@ -178,27 +245,27 @@ To build the extension from source:
 
 ```bash
 git clone --recurse-submodules https://github.com/Intelligent-Intern/king.git
-cd king/extension
-./scripts/build-extension.sh
+cd king
+./infra/scripts/build-extension.sh
 ```
 
 For a fully runnable local release profile, including `libquiche.so` and
 `quiche-server`, use:
 
 ```bash
-cd extension
-./scripts/build-profile.sh release
+cd king
+./infra/scripts/build-profile.sh release
 ```
 
 The build path above bootstraps the pinned QUIC dependency checkout recorded in
-[`extension/scripts/quiche-bootstrap.lock`](extension/scripts/quiche-bootstrap.lock)
+[`infra/scripts/quiche-bootstrap.lock`](infra/scripts/quiche-bootstrap.lock)
 and normalizes the matching workspace lockfile before cargo is invoked. Do not
 replace it with ad hoc local `quiche` clones or unlocked cargo retries.
 
 The build entrypoint above is the repository build path.
 Canonical release-install verification then runs through
-`./scripts/package-release.sh`, `./scripts/install-package-matrix.sh`, and
-`./scripts/container-smoke-matrix.sh`.
+`./infra/scripts/package-release.sh`, `./infra/scripts/install-package-matrix.sh`, and
+`./infra/scripts/container-smoke-matrix.sh`.
 The supported host/runtime verification matrix spans PHP `8.1` through `8.5`.
 
 ## Contributing
