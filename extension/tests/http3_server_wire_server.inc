@@ -1,7 +1,7 @@
 <?php
 
-if ($argc < 5) {
-    fwrite(STDERR, "usage: http3_server_wire_server.inc <capture-path> <port> <cert> <key>\n");
+if ($argc < 6) {
+    fwrite(STDERR, "usage: http3_server_wire_server.inc <capture-path> <port> <cert> <key> <host>\n");
     exit(1);
 }
 
@@ -9,19 +9,20 @@ $capturePath = $argv[1];
 $port = (int) $argv[2];
 $certFile = $argv[3];
 $keyFile = $argv[4];
+$host = $argv[5];
 $capture = [];
 $session = null;
-
-fwrite(STDOUT, "READY\n");
-fflush(STDOUT);
 
 $config = king_new_config([
     'tls_default_cert_file' => $certFile,
     'tls_default_key_file' => $keyFile,
 ]);
 
+fwrite(STDOUT, "READY\n");
+fflush(STDOUT);
+
 $result = king_http3_server_listen_once(
-    '127.0.0.1',
+    $host,
     $port,
     $config,
     static function (array $request) use (&$capture, &$session): array {

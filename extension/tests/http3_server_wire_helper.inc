@@ -2,19 +2,20 @@
 
 function king_http3_server_wire_start_server(string $certFile, string $keyFile): array
 {
-    $probe = stream_socket_server('udp://127.0.0.1:0', $errno, $errstr, STREAM_SERVER_BIND);
+    $bindHost = 'localhost';
+    $probe = stream_socket_server('udp://' . $bindHost . ':0', $errno, $errstr, STREAM_SERVER_BIND);
     if ($probe === false) {
         throw new RuntimeException("failed to reserve on-wire HTTP/3 test port: $errstr");
     }
 
     $serverName = stream_socket_get_name($probe, false);
     fclose($probe);
-    [, $port] = explode(':', $serverName, 2);
+    [, $port] = king_http3_parse_socket_name($serverName);
 
     $capture = tempnam(sys_get_temp_dir(), 'king-http3-server-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';
     $command = sprintf(
-        '%s -n -d %s -d %s %s %s %d %s %s',
+        '%s -n -d %s -d %s %s %s %d %s %s %s',
         escapeshellarg(PHP_BINARY),
         escapeshellarg('extension=' . $extensionPath),
         escapeshellarg('king.security_allow_config_override=1'),
@@ -22,7 +23,8 @@ function king_http3_server_wire_start_server(string $certFile, string $keyFile):
         escapeshellarg($capture),
         (int) $port,
         escapeshellarg($certFile),
-        escapeshellarg($keyFile)
+        escapeshellarg($keyFile),
+        escapeshellarg($bindHost)
     );
 
     $process = proc_open($command, [
@@ -45,6 +47,8 @@ function king_http3_server_wire_start_server(string $certFile, string $keyFile):
         @unlink($capture);
         throw new RuntimeException('on-wire HTTP/3 listener failed: ' . trim($stderr));
     }
+
+    usleep(100000);
 
     return [
         'process' => $process,

@@ -70,9 +70,8 @@ try {
                 $fixture['cert'],
                 $fixture['key'],
                 $fixture['root'],
-                '127.0.0.1',
-                $port,
-                'localhost'
+                'localhost',
+                $port
             );
         },
         'king_http3_stop_ticket_test_server',
@@ -105,9 +104,8 @@ try {
                 $fixture['cert'],
                 $fixture['key'],
                 $fixture['root'],
-                '127.0.0.1',
-                $port,
-                'localhost'
+                'localhost',
+                $port
             );
         },
         'king_http3_stop_ticket_test_server',
@@ -136,9 +134,8 @@ try {
                 $fixture['cert'],
                 $fixture['key'],
                 $fixture['root'],
-                '127.0.0.1',
-                $port,
-                'localhost'
+                'localhost',
+                $port
             );
         },
         'king_http3_stop_ticket_test_server',

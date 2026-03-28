@@ -202,7 +202,7 @@ function king_http3_start_ticket_test_server(
     string $certFile,
     string $keyFile,
     string $rootDir,
-    string $bindHost = '127.0.0.1',
+    string $bindHost = 'localhost',
     ?int $port = null,
     ?string $urlHost = null
 ): array {
@@ -466,7 +466,7 @@ function king_http3_start_failure_peer(
     string $mode,
     string $certFile,
     string $keyFile,
-    string $bindHost = '127.0.0.1',
+    string $bindHost = 'localhost',
     ?string $urlHost = null
 ): array {
     $binary = king_http3_failure_peer_binary();
