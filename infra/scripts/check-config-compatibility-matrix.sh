@@ -134,7 +134,7 @@ package_tree() {
 
     package_output="$(
         (
-            cd "${tree_root}/extension"
+            cd "${tree_root}"
             ./infra/scripts/package-release.sh --output-dir "${output_dir}"
         ) 2>&1 | tee "${log_path}"
     )"
@@ -153,7 +153,7 @@ verify_archive() {
     local log_path="$2"
 
     (
-        cd "${EXT_DIR}"
+        cd "${ROOT_DIR}"
         PHP_BIN="${PHP_BIN}" ./infra/scripts/verify-release-package.sh --archive "${archive_path}"
     ) 2>&1 | tee "${log_path}"
 }
