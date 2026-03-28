@@ -68,10 +68,12 @@ Those phrases are worth translating into plain English.
 Best effort means the runtime will try to export data, but it does not promise
 that every record will survive every outage. Bounded retry means failed export
 batches stay queued for retry, but only until the configured queue limit is
-reached. Process-local non-persistent means telemetry is not written to durable
-storage and does not survive process restart. Single batch per flush means one
-call to `king_telemetry_flush()` gives the runtime one export opportunity for
-the next queued batch rather than draining the whole queue in one call.
+reached. The same configured limit also bounds the pre-flush pending span and
+pending log buffers, so capture stays finite even before a flush happens.
+Process-local non-persistent means telemetry is not written to durable storage
+and does not survive process restart. Single batch per flush means one call to
+`king_telemetry_flush()` gives the runtime one export opportunity for the next
+queued batch rather than draining the whole queue in one call.
 
 This model is important because it tells you what telemetry is for. It is for
 fast local instrumentation with controlled export behavior. It is not a durable
@@ -193,7 +195,10 @@ most one delivery attempt.
 If the exporter succeeds, the batch is freed and the success counter grows. If
 the exporter fails, only the signals that still failed remain in the batch, and
 that batch is requeued for another attempt later. If the retry queue is already
-full, the runtime drops the new batch and increments `queue_drop_count`.
+full, the runtime drops the new batch and increments `queue_drop_count`. If the
+pending span or pending log buffer is already at its capture ceiling before
+flush, the runtime drops the new signal immediately and increments
+`pending_drop_count`.
 
 ```mermaid
 flowchart TD
@@ -362,8 +367,9 @@ King gives you two fast local read paths for telemetry state.
 `king_telemetry_get_status()` tells you whether the runtime is initialized and
 how the delivery path is behaving. This status array includes the flush count,
 the number of active metrics still in the live registry, the current retry
-queue size, the export success count, the export failure count, and the queue
-drop count.
+queue size, the export success count, the export failure count, the queue drop
+count, the pending capture limit, the current pending span and log counts, and
+the pending drop count.
 
 `king_telemetry_get_metrics()` returns the current live metric registry before
 those metrics are moved into a flush batch. This is useful when you want to
@@ -419,7 +425,9 @@ Another common question is whether exporter failure blocks the application. The
 runtime is designed so that it does not need an infinite or durable queue to
 remain safe. Exporter failures raise failure counters, leave failed batches in a
 bounded local retry queue, and eventually drop new batches when the queue cap is
-reached.
+reached. The pending pre-flush span and log buffers are bounded too, so a long
+period without flush does not turn telemetry capture into unbounded memory
+growth.
 
 A third common question is how often to flush. The answer depends on your
 runtime shape. A request-driven application often flushes at meaningful request

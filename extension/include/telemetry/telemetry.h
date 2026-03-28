@@ -177,6 +177,9 @@ void king_telemetry_cleanup_export_queue(void);
 int king_telemetry_process_export_queue(void);
 zend_bool king_telemetry_has_pending_signals(void);
 void king_telemetry_append_pending_signals(king_telemetry_batch_t *batch);
+uint32_t king_telemetry_get_pending_span_count(void);
+uint32_t king_telemetry_get_pending_log_count(void);
+uint32_t king_telemetry_get_pending_entry_limit(void);
 
 /* OTLP export functions */
 int king_telemetry_export_metrics_otlp(zval *metrics);
@@ -186,6 +189,7 @@ int king_telemetry_export_logs_otlp(zval *logs);
 /* Export queue statistics */
 extern uint32_t king_telemetry_queue_size;
 extern uint32_t king_telemetry_queue_drop_count;
+extern uint32_t king_telemetry_pending_drop_count;
 extern uint32_t king_telemetry_export_success_count;
 extern uint32_t king_telemetry_export_failure_count;
 

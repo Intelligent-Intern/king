@@ -254,4 +254,8 @@ PHP_FUNCTION(king_telemetry_get_status)
     add_assoc_long(return_value, "export_success_count", (zend_long)king_telemetry_export_success_count);
     add_assoc_long(return_value, "export_failure_count", (zend_long)king_telemetry_export_failure_count);
     add_assoc_long(return_value, "queue_drop_count", (zend_long)king_telemetry_queue_drop_count);
+    add_assoc_long(return_value, "pending_entry_limit", (zend_long)king_telemetry_get_pending_entry_limit());
+    add_assoc_long(return_value, "pending_span_count", (zend_long)king_telemetry_get_pending_span_count());
+    add_assoc_long(return_value, "pending_log_count", (zend_long)king_telemetry_get_pending_log_count());
+    add_assoc_long(return_value, "pending_drop_count", (zend_long)king_telemetry_pending_drop_count);
 }

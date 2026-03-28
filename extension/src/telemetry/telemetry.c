@@ -47,6 +47,7 @@ king_telemetry_batch_t *king_telemetry_export_queue_head = NULL;
 king_telemetry_batch_t *king_telemetry_export_queue_tail = NULL;
 uint32_t king_telemetry_queue_size = 0;
 uint32_t king_telemetry_queue_drop_count = 0;
+uint32_t king_telemetry_pending_drop_count = 0;
 uint32_t king_telemetry_export_success_count = 0;
 uint32_t king_telemetry_export_failure_count = 0;
 
@@ -201,6 +202,11 @@ static uint32_t king_telemetry_runtime_max_queue_size(void)
     return king_telemetry_default_max_queue_size();
 }
 
+uint32_t king_telemetry_get_pending_entry_limit(void)
+{
+    return king_telemetry_runtime_max_queue_size();
+}
+
 static void king_telemetry_pending_buffers_ensure(void)
 {
     if (king_telemetry_pending_buffers_initialized) {
@@ -230,6 +236,55 @@ static zend_bool king_telemetry_buffer_has_entries(zval *buffer)
     return buffer != NULL
         && Z_TYPE_P(buffer) == IS_ARRAY
         && zend_hash_num_elements(Z_ARRVAL_P(buffer)) > 0;
+}
+
+static uint32_t king_telemetry_buffer_entry_count(zval *buffer)
+{
+    if (buffer == NULL || Z_TYPE_P(buffer) != IS_ARRAY) {
+        return 0;
+    }
+
+    return (uint32_t) zend_hash_num_elements(Z_ARRVAL_P(buffer));
+}
+
+uint32_t king_telemetry_get_pending_span_count(void)
+{
+    if (!king_telemetry_pending_buffers_initialized) {
+        return 0;
+    }
+
+    return king_telemetry_buffer_entry_count(&king_telemetry_pending_spans);
+}
+
+uint32_t king_telemetry_get_pending_log_count(void)
+{
+    if (!king_telemetry_pending_buffers_initialized) {
+        return 0;
+    }
+
+    return king_telemetry_buffer_entry_count(&king_telemetry_pending_logs);
+}
+
+static zend_bool king_telemetry_capture_enabled(void)
+{
+    return king_telemetry_system_initialized && king_telemetry_runtime_config.enabled;
+}
+
+static zend_bool king_telemetry_pending_buffer_try_reserve(zval *buffer)
+{
+    uint32_t limit;
+
+    if (buffer == NULL || Z_TYPE_P(buffer) != IS_ARRAY) {
+        return 0;
+    }
+
+    limit = king_telemetry_get_pending_entry_limit();
+    if (limit > 0 && king_telemetry_buffer_entry_count(buffer) >= limit) {
+        king_telemetry_pending_drop_count++;
+        return 0;
+    }
+
+    return 1;
 }
 
 static void king_telemetry_buffer_move_entries(zval *target, zval *source)
@@ -596,7 +651,9 @@ void king_telemetry_cleanup_export_queue(void)
 
 zend_bool king_telemetry_has_pending_signals(void)
 {
-    king_telemetry_pending_buffers_ensure();
+    if (!king_telemetry_pending_buffers_initialized) {
+        return 0;
+    }
 
     return king_telemetry_buffer_has_entries(&king_telemetry_pending_spans)
         || king_telemetry_buffer_has_entries(&king_telemetry_pending_logs);
@@ -608,7 +665,10 @@ void king_telemetry_append_pending_signals(king_telemetry_batch_t *batch)
         return;
     }
 
-    king_telemetry_pending_buffers_ensure();
+    if (!king_telemetry_pending_buffers_initialized) {
+        return;
+    }
+
     king_telemetry_buffer_move_entries(&batch->spans, &king_telemetry_pending_spans);
     king_telemetry_buffer_move_entries(&batch->logs, &king_telemetry_pending_logs);
 }
@@ -737,7 +797,6 @@ int king_telemetry_finish_span(king_trace_context_t *span_context)
 {
     if (span_context) {
         span_context->end_time = time(NULL);
-        king_telemetry_pending_buffers_ensure();
         return SUCCESS;
     }
     return FAILURE;
@@ -747,6 +806,16 @@ int king_telemetry_log_internal(king_telemetry_level_t level, const char *logger
 {
     king_log_record_t log;
     zval log_entry;
+
+    if (!king_telemetry_capture_enabled()) {
+        return SUCCESS;
+    }
+
+    king_telemetry_pending_buffers_ensure();
+    if (!king_telemetry_pending_buffer_try_reserve(&king_telemetry_pending_logs)) {
+        return SUCCESS;
+    }
+
     memset(&log, 0, sizeof(log));
     
     log.timestamp = time(NULL);
@@ -759,7 +828,6 @@ int king_telemetry_log_internal(king_telemetry_level_t level, const char *logger
         strncpy(log.span_id, king_current_span->span_id, 16);
     }
 
-    king_telemetry_pending_buffers_ensure();
     array_init(&log_entry);
     add_assoc_string(&log_entry, "logger_name", log.logger_name);
     add_assoc_string(&log_entry, "message", log.message);
@@ -856,6 +924,7 @@ PHP_FUNCTION(king_telemetry_end_span)
 
     if (king_current_span && strcmp(king_current_span->span_id, span_id) == 0) {
         zval span_entry;
+        zend_bool capture_span = 0;
 
         if (final_attrs != NULL && Z_TYPE_P(final_attrs) == IS_ARRAY) {
             zend_string *attr_key;
@@ -871,6 +940,17 @@ PHP_FUNCTION(king_telemetry_end_span)
         }
 
         king_telemetry_finish_span(king_current_span);
+        if (king_telemetry_capture_enabled()) {
+            king_telemetry_pending_buffers_ensure();
+            capture_span = king_telemetry_pending_buffer_try_reserve(&king_telemetry_pending_spans);
+        }
+
+        if (!capture_span) {
+            king_telemetry_span_free(king_current_span);
+            king_current_span = NULL;
+            RETURN_TRUE;
+        }
+
         array_init(&span_entry);
         add_assoc_string(&span_entry, "name", king_current_span->operation_name);
         add_assoc_string(&span_entry, "trace_id", king_current_span->trace_id);
@@ -886,7 +966,6 @@ PHP_FUNCTION(king_telemetry_end_span)
             ZVAL_COPY(&attrs_copy, &king_current_span->attributes);
             add_assoc_zval(&span_entry, "attributes", &attrs_copy);
         }
-        king_telemetry_pending_buffers_ensure();
         add_next_index_zval(&king_telemetry_pending_spans, &span_entry);
         king_telemetry_span_free(king_current_span);
         king_current_span = NULL;
