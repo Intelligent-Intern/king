@@ -17,6 +17,10 @@ var_dump(str_contains($help, 'Usage: ./infra/scripts/soak-runtime.sh <asan|ubsan
 var_dump(str_contains($help, '--iterations N'));
 var_dump(str_contains($help, '--artifacts-dir DIR'));
 
+$scriptSource = (string) file_get_contents($script);
+var_dump(str_contains($scriptSource, 'export PHPRC="${EMPTY_PHP_INI_FILE}"'));
+var_dump(str_contains($scriptSource, 'export PHP_INI_SCAN_DIR='));
+
 $ci = (string) file_get_contents($ciWorkflow);
 var_dump(str_contains($ci, 'sanitizer-soak:'));
 var_dump(str_contains($ci, 'name: ${{ matrix.mode }} sanitizer soak'));
@@ -25,6 +29,8 @@ var_dump(str_contains($ci, 'king-${{ matrix.mode }}-soak-diagnostics'));
 var_dump(str_contains($ci, 'soak-artifacts/${{ matrix.mode }}/'));
 ?>
 --EXPECT--
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 bool(true)

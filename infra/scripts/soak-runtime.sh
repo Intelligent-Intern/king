@@ -99,6 +99,7 @@ fi
 LOG_DIR="${ARTIFACTS_DIR}/logs"
 SUMMARY_FILE="${ARTIFACTS_DIR}/summary.txt"
 TEST_LIST_FILE="${ARTIFACTS_DIR}/test-list.txt"
+EMPTY_PHP_INI_FILE="${ARTIFACTS_DIR}/php-empty.ini"
 
 resolve_sanitizer_runtime() {
     local runtime_name="$1"
@@ -200,11 +201,16 @@ printf 'mode=%s\nprofile=%s\niterations=%s\nstarted_at=%s\n' \
     "${ITERATIONS}" \
     "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" > "${SUMMARY_FILE}"
 printf '%s\n' "${TEST_FILES[@]}" > "${TEST_LIST_FILE}"
+printf '; intentionally empty sanitizer soak php.ini\n' > "${EMPTY_PHP_INI_FILE}"
 
 export KING_QUICHE_LIBRARY="${QUICHE_LIB}"
 export KING_QUICHE_SERVER="${QUICHE_SERVER}"
 export LD_LIBRARY_PATH="${PROFILE_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 export USE_ZEND_ALLOC=0
+# Keep sanitizer gates isolated from host-runner PHP extensions even when a
+# test helper accidentally spawns PHP without -n.
+export PHPRC="${EMPTY_PHP_INI_FILE}"
+export PHP_INI_SCAN_DIR=
 
 SANITIZER_RUNTIME_PATH=""
 case "${MODE}" in
