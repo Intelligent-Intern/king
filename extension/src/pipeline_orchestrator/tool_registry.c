@@ -491,6 +491,79 @@ static FILE *king_orchestrator_open_nofollow_stream(
     return stream;
 }
 
+static int king_orchestrator_open_claimed_job_fd(
+    const char *path,
+    int *fd_out,
+    bool *discard_path_out
+)
+{
+    int fd;
+    int open_flags = O_RDONLY;
+    struct stat st;
+
+    if (fd_out == NULL) {
+        return FAILURE;
+    }
+
+    *fd_out = -1;
+    if (discard_path_out != NULL) {
+        *discard_path_out = false;
+    }
+
+    if (path == NULL || path[0] == '\0') {
+        errno = EINVAL;
+        return FAILURE;
+    }
+
+#ifdef O_CLOEXEC
+    open_flags |= O_CLOEXEC;
+#endif
+#ifdef O_NONBLOCK
+    open_flags |= O_NONBLOCK;
+#endif
+#ifdef O_NOFOLLOW
+    open_flags |= O_NOFOLLOW;
+#endif
+
+    fd = open(path, open_flags);
+    if (fd < 0) {
+        if (
+            discard_path_out != NULL
+            && (errno == ELOOP || errno == ENOTDIR)
+        ) {
+            *discard_path_out = true;
+        }
+        return FAILURE;
+    }
+
+    if (fstat(fd, &st) != 0) {
+        close(fd);
+        return FAILURE;
+    }
+
+    if (!S_ISREG(st.st_mode)) {
+        close(fd);
+        if (discard_path_out != NULL) {
+            *discard_path_out = true;
+        }
+        errno = EINVAL;
+        return FAILURE;
+    }
+
+#ifdef O_NONBLOCK
+    {
+        int current_flags = fcntl(fd, F_GETFL);
+
+        if (current_flags >= 0 && (current_flags & O_NONBLOCK) != 0) {
+            (void) fcntl(fd, F_SETFL, current_flags & ~O_NONBLOCK);
+        }
+    }
+#endif
+
+    *fd_out = fd;
+    return SUCCESS;
+}
+
 static int king_orchestrator_state_path_validate_existing(const char *state_path)
 {
     struct stat st;
@@ -1399,6 +1472,7 @@ int king_orchestrator_claim_next_run(
     unsigned int attempt = 0;
     char busy_names[64][256];
     size_t busy_count = 0;
+    bool discard_claimed_path = false;
 
     if (run_id_out == NULL || claimed_path == NULL || claimed_path_len == 0) {
         return FAILURE;
@@ -1558,13 +1632,27 @@ int king_orchestrator_claim_next_run(
             }
         }
 
-        claimed_fd = open(claimed_path, O_RDONLY);
-        if (claimed_fd < 0) {
-            if (!selected_is_claimed) {
+        discard_claimed_path = false;
+        if (
+            king_orchestrator_open_claimed_job_fd(
+                claimed_path,
+                &claimed_fd,
+                &discard_claimed_path
+            ) != SUCCESS
+        ) {
+            int open_errno = errno;
+
+            if (discard_claimed_path || !selected_is_claimed) {
                 unlink(claimed_path);
             }
+            claimed_fd = -1;
             claimed_path[0] = '\0';
-            if (errno != ENOENT) {
+            if (
+                open_errno != ENOENT
+                && open_errno != ELOOP
+                && open_errno != ENOTDIR
+                && open_errno != EINVAL
+            ) {
                 return FAILURE;
             }
             attempt++;

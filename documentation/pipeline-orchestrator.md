@@ -170,6 +170,11 @@ worker process. The scheduler policy exposed by component info in this mode is
 that were already claimed but need recovery, and otherwise processes queued runs
 in FIFO order by run ID.
 
+The worker does not trust queue filenames alone. When it claims a job, it opens
+the claimed entry as a nofollow regular file and discards unsafe path swaps
+instead of following them. That matters because the file-worker queue is a real
+filesystem boundary, not just a naming convention.
+
 ```mermaid
 sequenceDiagram
     participant C as Controller
