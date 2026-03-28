@@ -418,13 +418,6 @@ void king_semantic_dns_refresh_live_service_signals(void)
         return;
     }
 
-    if (king_semantic_dns_runtime.config.semantic_mode_enable) {
-        if (king_semantic_dns_state_transaction_begin(&lock_fd) != SUCCESS) {
-            return;
-        }
-        use_state_transaction = true;
-    }
-
     ZEND_HASH_FOREACH_VAL(&king_semantic_dns_service_registry, service_entry) {
         king_semantic_dns_service *service;
 
@@ -439,6 +432,13 @@ void king_semantic_dns_refresh_live_service_signals(void)
 
         if (king_semantic_dns_probe_service_path(service) == NULL) {
             continue;
+        }
+
+        if (!use_state_transaction && king_semantic_dns_runtime.config.semantic_mode_enable) {
+            if (king_semantic_dns_state_transaction_begin(&lock_fd) != SUCCESS) {
+                return;
+            }
+            use_state_transaction = true;
         }
 
         if (king_semantic_dns_probe_service_live_state(service)) {
