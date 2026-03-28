@@ -102,7 +102,18 @@ function king_server_websocket_wire_connect_retry(string $url, int $timeoutMs = 
 
 function king_server_http1_wire_request_retry(int $port, string $request, int $timeoutMs = 3000): string
 {
+    $client = king_server_http1_wire_connect_retry($port, $timeoutMs);
+    stream_set_timeout($client, 2);
+    fwrite($client, $request);
+    $response = stream_get_contents($client);
+    fclose($client);
+    return (string) $response;
+}
+
+function king_server_http1_wire_connect_retry(int $port, int $timeoutMs = 3000)
+{
     $deadline = microtime(true) + ($timeoutMs / 1000);
+    $errstr = 'connection failed';
 
     do {
         $client = @stream_socket_client(
@@ -112,11 +123,7 @@ function king_server_http1_wire_request_retry(int $port, string $request, int $t
             0.25
         );
         if (is_resource($client)) {
-            stream_set_timeout($client, 2);
-            fwrite($client, $request);
-            $response = stream_get_contents($client);
-            fclose($client);
-            return (string) $response;
+            return $client;
         }
 
         usleep(50000);

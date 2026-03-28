@@ -18,6 +18,16 @@ $capture = [
     'upgrade_success_count' => 0,
     'close_success_count' => 0,
 ];
+$listenerConfig = null;
+
+if (
+    $mode === 'slowloris-accept'
+    || $mode === 'slowloris-head'
+) {
+    $listenerConfig = [
+        'tcp_connect_timeout_ms' => 200,
+    ];
+}
 
 fwrite(STDOUT, "READY\n");
 fflush(STDOUT);
@@ -26,14 +36,25 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
     $result = king_http1_server_listen_once(
         '127.0.0.1',
         $port,
-        null,
+        $listenerConfig,
         static function (array $request) use (&$capture, $mode, $iteration): array {
+            $capture['handler_called'] = true;
             $session = $request['session'];
             $capture['request_uri'] = $request['uri'];
             $capture['stream_id'] = $request['stream_id'];
             $capture['local_address'] = $request['local_address'];
             $capture['remote_address'] = $request['remote_address'];
             $capture['last_iteration'] = $iteration;
+
+            if (
+                $mode === 'slowloris-accept'
+                || $mode === 'slowloris-head'
+            ) {
+                return [
+                    'status' => 204,
+                    'body' => '',
+                ];
+            }
 
             if ($mode === 'plain') {
                 $upgrade = king_server_upgrade_to_websocket($session, $request['stream_id']);

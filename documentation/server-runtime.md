@@ -153,6 +153,11 @@ socket, accepts exactly one request, materializes one server-side session, runs
 the handler, writes the response when the handler returns a normal HTTP result,
 and then closes the listener and accepted session.
 
+The on-wire HTTP/1 path keeps that accept flow bounded. The runtime applies the
+active TCP timeout budget to the real `accept`, request-head read, request-body
+read, and response-write phases so a stalled client cannot hold the worker in
+an unbounded blocking socket read.
+
 This shape is especially useful when the application wants a tightly scoped,
 single-request listener flow. It is also the most direct entry point for
 workflows that need to observe one real HTTP/1 request and, when appropriate,

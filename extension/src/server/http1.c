@@ -23,6 +23,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <netdb.h>
+#include <poll.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -35,6 +36,7 @@
 
 #define KING_SERVER_HTTP1_MAX_REQUEST_HEAD_BYTES 32768
 #define KING_SERVER_HTTP1_MAX_REQUEST_BODY_BYTES 1048576
+#define KING_SERVER_HTTP1_DEFAULT_TIMEOUT_MS 5000L
 
 static void king_server_http1_build_request(
     zval *request,
@@ -271,17 +273,171 @@ static zend_result king_server_http1_apply_transport_snapshot_from_socket(
     return SUCCESS;
 }
 
+static zend_long king_server_http1_now_ms(void)
+{
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (zend_long) (ts.tv_sec * 1000LL + ts.tv_nsec / 1000000LL);
+}
+
+static zend_long king_server_http1_resolve_timeout_ms(king_client_session_t *session)
+{
+    if (session != NULL && session->transport_connect_timeout_ms > 0) {
+        return session->transport_connect_timeout_ms;
+    }
+
+    if (king_tcp_transport_config.connect_timeout_ms > 0) {
+        return king_tcp_transport_config.connect_timeout_ms;
+    }
+
+    return KING_SERVER_HTTP1_DEFAULT_TIMEOUT_MS;
+}
+
+static zend_result king_server_http1_wait_fd(
+    int fd,
+    short events,
+    zend_long deadline_ms,
+    const char *function_name,
+    const char *scope
+)
+{
+    for (;;) {
+        struct pollfd pfd;
+        zend_long remaining_ms;
+        int poll_result;
+
+        king_process_pending_interrupts();
+        if (EG(exception) != NULL) {
+            return FAILURE;
+        }
+
+        remaining_ms = deadline_ms - king_server_http1_now_ms();
+        if (remaining_ms <= 0) {
+            king_server_local_set_errorf(
+                "%s() timed out while waiting for the HTTP/1 %s.",
+                function_name,
+                scope
+            );
+            return FAILURE;
+        }
+
+        memset(&pfd, 0, sizeof(pfd));
+        pfd.fd = fd;
+        pfd.events = events;
+
+        poll_result = poll(&pfd, 1, (int) remaining_ms);
+        if (poll_result == 0) {
+            continue;
+        }
+
+        if (poll_result < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
+            king_server_local_set_errorf(
+                "%s() failed while polling the HTTP/1 %s (errno %d).",
+                function_name,
+                scope,
+                errno
+            );
+            return FAILURE;
+        }
+
+        if ((pfd.revents & events) != 0) {
+            return SUCCESS;
+        }
+
+        if ((pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+            king_server_local_set_errorf(
+                "%s() saw the HTTP/1 %s close before it became ready.",
+                function_name,
+                scope
+            );
+            return FAILURE;
+        }
+    }
+}
+
+static zend_result king_server_http1_accept_once(
+    int listener_fd,
+    zend_long deadline_ms,
+    int *accepted_fd_out,
+    const char *function_name
+)
+{
+    for (;;) {
+        if (
+            king_server_http1_wait_fd(
+                listener_fd,
+                POLLIN,
+                deadline_ms,
+                function_name,
+                "accept phase"
+            ) != SUCCESS
+        ) {
+            return FAILURE;
+        }
+
+        *accepted_fd_out = accept(listener_fd, NULL, NULL);
+        if (*accepted_fd_out >= 0) {
+            return SUCCESS;
+        }
+
+        if (errno == EINTR) {
+            continue;
+        }
+
+#ifdef EAGAIN
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            continue;
+        }
+#endif
+
+        king_server_local_set_errorf(
+            "%s() failed to accept the on-wire HTTP/1 connection (errno %d).",
+            function_name,
+            errno
+        );
+        return FAILURE;
+    }
+}
+
 static zend_result king_server_http1_write_all_fd(
     int fd,
     const char *buffer,
     size_t buffer_len,
+    zend_long deadline_ms,
     const char *function_name
 )
 {
     size_t written = 0;
 
     while (written < buffer_len) {
+        if (
+            king_server_http1_wait_fd(
+                fd,
+                POLLOUT,
+                deadline_ms,
+                function_name,
+                "response write phase"
+            ) != SUCCESS
+        ) {
+            return FAILURE;
+        }
+
         ssize_t chunk = send(fd, buffer + written, buffer_len - written, 0);
+
+        if (chunk < 0 && errno == EINTR) {
+            continue;
+        }
+
+#ifdef EAGAIN
+        if (chunk < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            continue;
+        }
+#endif
 
         if (chunk <= 0) {
             king_server_local_set_errorf(
@@ -302,13 +458,36 @@ static zend_result king_server_http1_read_exact_fd(
     int fd,
     unsigned char *buffer,
     size_t buffer_len,
+    zend_long deadline_ms,
     const char *function_name
 )
 {
     size_t total = 0;
 
     while (total < buffer_len) {
+        if (
+            king_server_http1_wait_fd(
+                fd,
+                POLLIN,
+                deadline_ms,
+                function_name,
+                "request body phase"
+            ) != SUCCESS
+        ) {
+            return FAILURE;
+        }
+
         ssize_t chunk = recv(fd, buffer + total, buffer_len - total, 0);
+
+        if (chunk < 0 && errno == EINTR) {
+            continue;
+        }
+
+#ifdef EAGAIN
+        if (chunk < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            continue;
+        }
+#endif
 
         if (chunk <= 0) {
             king_server_local_set_errorf(
@@ -399,6 +578,7 @@ static zend_result king_server_http1_open_listener_socket(
 static zend_result king_server_http1_read_request_head(
     int socket_fd,
     smart_str *request_head,
+    zend_long deadline_ms,
     const char *function_name
 )
 {
@@ -406,7 +586,29 @@ static zend_result king_server_http1_read_request_head(
     size_t total = 0;
 
     while (1) {
+        if (
+            king_server_http1_wait_fd(
+                socket_fd,
+                POLLIN,
+                deadline_ms,
+                function_name,
+                "request head phase"
+            ) != SUCCESS
+        ) {
+            return FAILURE;
+        }
+
         ssize_t chunk = recv(socket_fd, &ch, 1, 0);
+
+        if (chunk < 0 && errno == EINTR) {
+            continue;
+        }
+
+#ifdef EAGAIN
+        if (chunk < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            continue;
+        }
+#endif
 
         if (chunk <= 0) {
             king_server_local_set_errorf(
@@ -690,6 +892,7 @@ static zend_result king_server_http1_read_request_body(
     int socket_fd,
     zval *request,
     zend_long content_length,
+    zend_long deadline_ms,
     const char *function_name
 )
 {
@@ -719,6 +922,7 @@ static zend_result king_server_http1_read_request_body(
             socket_fd,
             (unsigned char *) ZSTR_VAL(body),
             (size_t) content_length,
+            deadline_ms,
             function_name
         ) != SUCCESS
     ) {
@@ -792,6 +996,7 @@ static zend_result king_server_http1_append_response_headers(
 static zend_result king_server_http1_send_response(
     king_client_session_t *session,
     zval *retval,
+    zend_long deadline_ms,
     const char *function_name
 )
 {
@@ -845,6 +1050,7 @@ static zend_result king_server_http1_send_response(
         session->transport_socket_fd,
         ZSTR_VAL(response.s),
         ZSTR_LEN(response.s),
+        deadline_ms,
         function_name
     );
 
@@ -946,6 +1152,9 @@ PHP_FUNCTION(king_http1_server_listen_once)
     zval retval;
     smart_str request_head = {0};
     zend_long content_length = 0;
+    zend_long accept_deadline_ms;
+    zend_long read_deadline_ms;
+    zend_long write_deadline_ms;
     int listener_fd = -1;
     int accepted_fd = -1;
     zend_bool rc = 0;
@@ -989,12 +1198,16 @@ PHP_FUNCTION(king_http1_server_listen_once)
         goto cleanup;
     }
 
-    accepted_fd = accept(listener_fd, NULL, NULL);
-    if (accepted_fd < 0) {
-        king_server_local_set_errorf(
-            "king_http1_server_listen_once() failed to accept the on-wire HTTP/1 connection (errno %d).",
-            errno
-        );
+    accept_deadline_ms = king_server_http1_now_ms()
+        + king_server_http1_resolve_timeout_ms(session);
+    if (
+        king_server_http1_accept_once(
+            listener_fd,
+            accept_deadline_ms,
+            &accepted_fd,
+            "king_http1_server_listen_once"
+        ) != SUCCESS
+    ) {
         goto cleanup;
     }
 
@@ -1011,10 +1224,13 @@ PHP_FUNCTION(king_http1_server_listen_once)
         goto cleanup;
     }
 
+    read_deadline_ms = king_server_http1_now_ms()
+        + king_server_http1_resolve_timeout_ms(session);
     if (
         king_server_http1_read_request_head(
             accepted_fd,
             &request_head,
+            read_deadline_ms,
             "king_http1_server_listen_once"
         ) != SUCCESS
     ) {
@@ -1039,6 +1255,7 @@ PHP_FUNCTION(king_http1_server_listen_once)
             accepted_fd,
             &request,
             content_length,
+            read_deadline_ms,
             "king_http1_server_listen_once"
         ) != SUCCESS
     ) {
@@ -1071,16 +1288,19 @@ PHP_FUNCTION(king_http1_server_listen_once)
         goto cleanup;
     }
 
-    if (
-        !zend_hash_num_elements(&session->server_upgraded_streams)
-        && !session->is_closed
-        && king_server_http1_send_response(
-            session,
-            &retval,
-            "king_http1_server_listen_once"
-        ) != SUCCESS
-    ) {
-        goto cleanup;
+    if (!zend_hash_num_elements(&session->server_upgraded_streams) && !session->is_closed) {
+        write_deadline_ms = king_server_http1_now_ms()
+            + king_server_http1_resolve_timeout_ms(session);
+        if (
+            king_server_http1_send_response(
+                session,
+                &retval,
+                write_deadline_ms,
+                "king_http1_server_listen_once"
+            ) != SUCCESS
+        ) {
+            goto cleanup;
+        }
     }
 
     rc = 1;
