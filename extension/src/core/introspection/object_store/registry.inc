@@ -94,7 +94,6 @@ PHP_FUNCTION(king_object_store_get)
     zval *options = NULL;
     void *data = NULL;
     size_t data_size = 0;
-    king_object_metadata_t metadata;
 
     ZEND_PARSE_PARAMETERS_START(1, 2)
         Z_PARAM_STR(object_id)
@@ -117,7 +116,7 @@ PHP_FUNCTION(king_object_store_get)
 
     (void) options;
 
-    if (king_object_store_read_object(ZSTR_VAL(object_id), &data, &data_size, &metadata) != SUCCESS) {
+    if (king_object_store_read_object(ZSTR_VAL(object_id), &data, &data_size, NULL) != SUCCESS) {
         RETURN_FALSE;
     }
 
