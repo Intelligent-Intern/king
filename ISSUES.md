@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate partial backend failures under replication for the real object-store backends.
+- [ ] Validate recovery after partial replication for the real object-store backends.
 
 ## Active Executable Items
 

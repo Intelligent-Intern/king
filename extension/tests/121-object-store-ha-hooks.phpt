@@ -17,16 +17,24 @@ king_object_store_init([
     'backup_backend' => 'memory_cache',
 ]);
 
-king_object_store_put('high_avail_doc', 'safe in memory cache');
+try {
+    king_object_store_put('high_avail_doc', 'safe in memory cache');
+    echo "no-exception\n";
+} catch (King\Exception $e) {
+    var_dump(get_class($e));
+    var_dump(str_contains($e->getMessage(), 'requested replication_factor 2 but runtime achieved only 1 real copies'));
+}
 
 $meta = king_object_store_get_metadata('high_avail_doc');
 var_dump($meta['object_id']);
+var_dump(king_object_store_get('high_avail_doc'));
 var_dump($meta['is_backed_up']);
 var_dump($meta['replication_status']);
 
 // cloud backup backend should now use the real S3-compatible runtime
 king_object_store_init([
     'storage_root_path' => $dir,
+    'replication_factor' => 2,
     'backup_backend' => 'cloud_s3',
     'cloud_credentials' => [
         'api_endpoint' => $mock['endpoint'],
@@ -43,6 +51,7 @@ var_dump(king_object_store_put('cloud_backup_doc', 'replicated to cloud backup')
 $meta = king_object_store_get_metadata('cloud_backup_doc');
 var_dump($meta['object_id']);
 var_dump($meta['is_backed_up']);
+var_dump($meta['replication_status']);
 
 $stats = king_object_store_get_stats()['object_store'];
 var_dump($stats['runtime_backup_adapter_contract']);
@@ -58,12 +67,16 @@ foreach (scandir($dir) as $f) { if ($f !== '.' && $f !== '..') @unlink("$dir/$f"
 king_object_store_s3_mock_cleanup_state_directory($mock['state_directory']);
 ?>
 --EXPECT--
+string(20) "King\SystemException"
+bool(true)
 string(14) "high_avail_doc"
+string(20) "safe in memory cache"
 int(0)
-int(2)
+int(3)
 bool(true)
 string(16) "cloud_backup_doc"
 int(1)
+int(2)
 string(5) "cloud"
 string(2) "ok"
 bool(true)

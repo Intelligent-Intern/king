@@ -179,7 +179,7 @@ Status note:
 - [x] Finalize local filesystem backend as the reference backend
 - [x] Validate multi-backend routing with real backends
 - [x] Validate backend failover on primary backend outage
-- [ ] Validate partial backend failures under replication
+- [x] Validate partial backend failures under replication
 - [x] Validate network failures for the real `cloud_s3` backend
 - [x] Validate credential failures for the real `cloud_s3` backend
 - [ ] Validate network failures for future real cloud backends

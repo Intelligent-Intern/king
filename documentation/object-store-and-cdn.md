@@ -487,6 +487,15 @@ That keeps `local_fs`-only objects invisible to a pure `cloud_s3` route, keeps
 pure `cloud_s3` objects invisible to a `local_fs` route, and still preserves
 shared visibility for the honest `local_fs` primary plus `cloud_s3` backup
 slice.
+The current real runtime also now evaluates replication against the copies it
+actually achieved instead of stamping `replication_status=completed` on every
+write with `replication_factor > 0`. Today the real topology can honestly
+reach one real copy on a standalone `local_fs` or `cloud_s3` primary, and two
+real copies on `local_fs` primary plus real `cloud_s3` backup. If a write asks
+for more copies than that topology really produced, the payloads that were
+successfully written remain readable, but the write fails and the stored
+metadata records `replication_status=failed` instead of pretending the
+replication target was met.
 
 ## A Full Example
 

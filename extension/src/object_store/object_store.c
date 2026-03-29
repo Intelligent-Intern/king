@@ -72,6 +72,7 @@ static int king_object_store_s3_remove(const char *object_id);
 static int king_object_store_s3_list(zval *return_array);
 static void king_object_store_shutdown_libcurl_runtime(void);
 static king_storage_backend_t king_object_store_normalize_backend(king_storage_backend_t backend);
+static void king_object_store_update_replication_status(const char *object_id, uint8_t replication_status);
 
 static void king_object_store_runtime_metadata_cache_entry_free(king_object_metadata_t *metadata)
 {
@@ -289,6 +290,22 @@ static king_storage_backend_t king_object_store_normalize_backend(king_storage_b
     }
 
     return backend;
+}
+
+static void king_object_store_update_replication_status(const char *object_id, uint8_t replication_status)
+{
+    king_object_metadata_t metadata;
+
+    if (object_id == NULL || object_id[0] == '\0') {
+        return;
+    }
+
+    if (king_object_store_meta_read(object_id, &metadata) != SUCCESS) {
+        return;
+    }
+
+    metadata.replication_status = replication_status;
+    (void) king_object_store_meta_write(object_id, &metadata);
 }
 
 static int king_object_store_path_is_within_root(const char *candidate_path, const char *root_path)
@@ -1971,18 +1988,83 @@ int king_object_store_restore_all_objects(const char *source_directory)
 
 int king_object_store_replicate_object(const char *object_id, uint32_t replication_factor)
 {
-    /* Runtime hook: simulate replication to peer nodes */
+    king_object_metadata_t metadata;
+    king_storage_backend_t primary_backend;
+    king_storage_backend_t backup_backend;
+    uint32_t achieved_real_copies = 0;
+    char replication_error[256];
+
     if (replication_factor == 0) {
         return SUCCESS;
     }
 
-    king_object_metadata_t metadata;
-    if (king_object_store_meta_read(object_id, &metadata) == SUCCESS) {
-        metadata.replication_status = 2; /* 2: Completed */
-        king_object_store_meta_write(object_id, &metadata);
+    if (object_id == NULL || object_id[0] == '\0') {
+        king_object_store_set_backend_runtime_result(
+            "primary",
+            king_object_store_runtime.config.primary_backend,
+            FAILURE,
+            "Object-store replication requires a valid object id."
+        );
+        return FAILURE;
     }
 
-    return SUCCESS;
+    if (king_object_store_meta_read(object_id, &metadata) != SUCCESS) {
+        king_object_store_set_backend_runtime_result(
+            "primary",
+            king_object_store_runtime.config.primary_backend,
+            FAILURE,
+            "Object-store replication could not load metadata for the stored object."
+        );
+        return FAILURE;
+    }
+
+    primary_backend = king_object_store_normalize_backend(
+        king_object_store_runtime.config.primary_backend
+    );
+    backup_backend = king_object_store_normalize_backend(
+        king_object_store_runtime.config.backup_backend
+    );
+
+    if (primary_backend == KING_STORAGE_BACKEND_LOCAL_FS && metadata.local_fs_present != 0) {
+        achieved_real_copies++;
+    } else if (primary_backend == KING_STORAGE_BACKEND_CLOUD_S3 && metadata.cloud_s3_present != 0) {
+        achieved_real_copies++;
+    } else if (king_object_store_backend_is_real(primary_backend)) {
+        achieved_real_copies++;
+    }
+
+    if (backup_backend != primary_backend && king_object_store_backend_is_real(backup_backend)) {
+        if (backup_backend == KING_STORAGE_BACKEND_LOCAL_FS && metadata.local_fs_present != 0) {
+            achieved_real_copies++;
+        } else if (backup_backend == KING_STORAGE_BACKEND_CLOUD_S3
+            && (metadata.cloud_s3_present != 0 || metadata.is_backed_up != 0)) {
+            achieved_real_copies++;
+        }
+    }
+
+    if (achieved_real_copies >= replication_factor) {
+        metadata.replication_status = 2; /* 2: Completed */
+        (void) king_object_store_meta_write(object_id, &metadata);
+        return SUCCESS;
+    }
+
+    metadata.replication_status = 3; /* 3: Failed */
+    (void) king_object_store_meta_write(object_id, &metadata);
+
+    snprintf(
+        replication_error,
+        sizeof(replication_error),
+        "Object-store replication requested replication_factor %u but runtime achieved only %u real copies.",
+        replication_factor,
+        achieved_real_copies
+    );
+    king_object_store_set_backend_runtime_result(
+        "primary",
+        king_object_store_runtime.config.primary_backend,
+        FAILURE,
+        replication_error
+    );
+    return FAILURE;
 }
 
 static int king_object_store_backup_object_to_backend(
@@ -2530,18 +2612,6 @@ int king_object_store_write_object(
         rc == SUCCESS ? NULL : "Primary object-store backend write failed."
     );
 
-    if (rc == SUCCESS && king_object_store_runtime.config.replication_factor > 0) {
-        if (king_object_store_replicate_object(object_id, king_object_store_runtime.config.replication_factor) != SUCCESS) {
-            king_object_store_set_backend_runtime_result(
-                "primary",
-                king_object_store_runtime.config.primary_backend,
-                FAILURE,
-                "Primary object-store write failed because replication hooks failed."
-            );
-            return FAILURE;
-        }
-    }
-
     if (rc == SUCCESS &&
         king_object_store_runtime.config.backup_backend != king_object_store_runtime.config.primary_backend) {
         if (king_object_store_backup_object_to_backend(
@@ -2551,12 +2621,29 @@ int king_object_store_write_object(
                 metadata,
                 king_object_store_runtime.config.backup_backend
             ) != SUCCESS) {
+            if (king_object_store_runtime.config.replication_factor > 0) {
+                king_object_store_update_replication_status(object_id, 3);
+            }
             king_object_store_set_backend_runtime_result(
                 "primary",
                 king_object_store_runtime.config.primary_backend,
                 FAILURE,
                 "Primary object-store write failed because backup operation failed."
             );
+            return FAILURE;
+        }
+    }
+
+    if (rc == SUCCESS && king_object_store_runtime.config.replication_factor > 0) {
+        if (king_object_store_replicate_object(object_id, king_object_store_runtime.config.replication_factor) != SUCCESS) {
+            if (king_object_store_runtime.primary_adapter_error[0] == '\0') {
+                king_object_store_set_backend_runtime_result(
+                    "primary",
+                    king_object_store_runtime.config.primary_backend,
+                    FAILURE,
+                    "Primary object-store write failed because replication target was not reached."
+                );
+            }
             return FAILURE;
         }
     }
