@@ -691,6 +691,22 @@ static int king_object_store_backend_is_real(king_storage_backend_t backend)
         || backend == KING_STORAGE_BACKEND_CLOUD_S3;
 }
 
+static zend_bool king_object_store_backend_is_future_cloud(king_storage_backend_t backend)
+{
+    backend = king_object_store_normalize_backend(backend);
+    return backend == KING_STORAGE_BACKEND_CLOUD_GCS
+        || backend == KING_STORAGE_BACKEND_CLOUD_AZURE;
+}
+
+static const char *king_object_store_missing_future_cloud_credentials_error(const char *scope)
+{
+    if (scope != NULL && strcmp(scope, "backup") == 0) {
+        return "Cloud credentials are required to enable native cloud backup backends.";
+    }
+
+    return "Cloud credentials are required to enable native cloud backend operation.";
+}
+
 static int king_object_store_require_honest_backend(
     const char *scope,
     king_storage_backend_t backend,
@@ -712,8 +728,18 @@ static int king_object_store_require_honest_backend(
     backend_name = king_storage_backend_to_string(backend);
     contract = king_object_store_backend_contract_to_string(backend);
 
-    if (backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
-        backend == KING_STORAGE_BACKEND_CLOUD_AZURE) {
+    if (
+        king_object_store_backend_is_future_cloud(backend)
+        && Z_TYPE(king_object_store_runtime.config.cloud_credentials) == IS_UNDEF
+    ) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s",
+            king_object_store_missing_future_cloud_credentials_error(scope)
+        );
+    } else if (backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
+               backend == KING_STORAGE_BACKEND_CLOUD_AZURE) {
         snprintf(
             message,
             sizeof(message),
@@ -872,10 +898,9 @@ int king_object_store_init_system(king_object_store_config_t *config)
 
     if (!king_object_store_backend_is_real(king_object_store_runtime.config.primary_backend)) {
         const char *message = "Primary backend is simulated-only and unavailable in this runtime.";
-        if ((king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
-             king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_AZURE) &&
+        if (king_object_store_backend_is_future_cloud(king_object_store_runtime.config.primary_backend) &&
             Z_TYPE(king_object_store_runtime.config.cloud_credentials) == IS_UNDEF) {
-            message = "Cloud credentials are required to enable native cloud backend operation.";
+            message = king_object_store_missing_future_cloud_credentials_error("primary");
         }
 
         king_object_store_set_runtime_adapter_status(
@@ -888,10 +913,9 @@ int king_object_store_init_system(king_object_store_config_t *config)
 
     if (!king_object_store_backend_is_real(king_object_store_runtime.config.backup_backend)) {
         const char *message = "Backup backend is simulated-only and unavailable in this runtime.";
-        if ((king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_GCS ||
-             king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_AZURE) &&
+        if (king_object_store_backend_is_future_cloud(king_object_store_runtime.config.backup_backend) &&
             Z_TYPE(king_object_store_runtime.config.cloud_credentials) == IS_UNDEF) {
-            message = "Cloud credentials are required to enable native cloud backup backends.";
+            message = king_object_store_missing_future_cloud_credentials_error("backup");
         }
 
         king_object_store_set_runtime_adapter_status(

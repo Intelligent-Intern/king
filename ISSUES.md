@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate credential failures for future real cloud backends.
+- [ ] Validate throttling / rate-limit behavior for future real cloud backends.
 
 ## Active Executable Items
 

@@ -462,6 +462,10 @@ endpoint-style cloud configuration. The future `cloud_gcs` and `cloud_azure`
 paths do not emit opportunistic network traffic yet; they fail locally with an
 explicit `simulated-only` adapter error instead of pretending to perform remote
 I/O.
+If callers select those future cloud backends without `cloud_credentials`, the
+runtime now preserves that absence as the visible reason through
+`runtime_*_adapter_error` and later operation failures instead of overwriting it
+with a vaguer simulated-only message.
 
 When the active `cloud_s3` credentials are rejected, `king_object_store_init()`
 keeps the runtime visible but marks the primary adapter as failed. The concrete
