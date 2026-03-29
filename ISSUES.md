@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Implement `local_fs` primary read fallback to real object-store `cloud_s3` backup on primary miss.
+- [ ] Validate backend failover on primary backend outage for `local_fs` primary plus real object-store `cloud_s3` backup.
 
 ## Active Executable Items
 

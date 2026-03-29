@@ -462,6 +462,12 @@ but the backup `PUT` tears down mid-flight, the caller still sees the write as
 failed, `is_backed_up` stays unset, the local primary object remains readable,
 the backup adapter keeps the concrete failure reason, and a later successful
 overwrite can heal the backup state back to `ok`.
+The same pair now also has a delete-safe read-failover contract: if the local
+payload disappears while the local `.meta` sidecar still says the object exists,
+`king_object_store_get()` can read the body from the real `cloud_s3` backup,
+rehydrate the missing local payload, and restore live counters from local
+truth. A real delete still removes the `.meta` sidecar, so stale backup copies
+do not resurrect intentionally deleted objects.
 
 ## A Full Example
 

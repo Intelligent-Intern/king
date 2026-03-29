@@ -1259,6 +1259,23 @@ int king_object_store_local_fs_read(
     return SUCCESS;
 }
 
+static int king_object_store_local_fs_payload_is_missing(const char *object_id)
+{
+    char file_path[1024];
+    struct stat st;
+
+    if (object_id == NULL || king_object_store_object_id_validate(object_id) != NULL) {
+        return 0;
+    }
+
+    king_object_store_build_path(file_path, sizeof(file_path), object_id);
+    if (stat(file_path, &st) == 0) {
+        return 0;
+    }
+
+    return errno == ENOENT ? 1 : 0;
+}
+
 int king_object_store_local_fs_remove(const char *object_id)
 {
     char file_path[1024];
@@ -2041,6 +2058,91 @@ static int king_object_store_azure_simulate_list(zval *return_array)
 
 #include "cloud_s3.inc"
 
+static int king_object_store_local_fs_restore_payload_from_backup(
+    const char *object_id,
+    const void *data,
+    size_t data_size
+)
+{
+    char file_path[1024];
+
+    if (object_id == NULL || data == NULL) {
+        return FAILURE;
+    }
+
+    king_object_store_build_path(file_path, sizeof(file_path), object_id);
+    if (king_object_store_mkdir_parents(file_path) != SUCCESS) {
+        return FAILURE;
+    }
+
+    return king_object_store_atomic_write_file(file_path, data, data_size);
+}
+
+static int king_object_store_local_fs_read_fallback_from_cloud_backup(
+    const char *object_id,
+    void **data,
+    size_t *data_size,
+    king_object_metadata_t *metadata
+)
+{
+    king_object_metadata_t sidecar_metadata;
+    char backup_error[512] = {0};
+    int rc;
+
+    if (king_object_store_runtime.config.backup_backend != KING_STORAGE_BACKEND_CLOUD_S3) {
+        return FAILURE;
+    }
+
+    /*
+     * Only heal from backup when the local metadata sidecar still says the
+     * object logically exists. A true delete removes the sidecar, so stale
+     * backup copies must not resurrect removed objects.
+     */
+    if (king_object_store_meta_read(object_id, &sidecar_metadata) != SUCCESS) {
+        return FAILURE;
+    }
+
+    rc = king_object_store_s3_read_with_error(
+        object_id,
+        data,
+        data_size,
+        backup_error,
+        sizeof(backup_error)
+    );
+    king_object_store_set_backend_runtime_result(
+        "backup",
+        king_object_store_runtime.config.backup_backend,
+        rc,
+        rc == SUCCESS ? NULL : backup_error
+    );
+    if (rc != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (sidecar_metadata.object_id[0] == '\0') {
+        strncpy(sidecar_metadata.object_id, object_id, sizeof(sidecar_metadata.object_id) - 1);
+    }
+    sidecar_metadata.content_length = (uint64_t) *data_size;
+    sidecar_metadata.is_backed_up = 1;
+
+    if (metadata != NULL) {
+        *metadata = sidecar_metadata;
+    }
+
+    if (king_object_store_local_fs_restore_payload_from_backup(object_id, *data, *data_size) != SUCCESS) {
+        king_object_store_append_adapter_error(
+            king_object_store_runtime.primary_adapter_error,
+            sizeof(king_object_store_runtime.primary_adapter_error),
+            "Primary object-store backend read fallback succeeded but local payload rehydration failed."
+        );
+        return FAILURE;
+    }
+
+    king_object_store_meta_write(object_id, &sidecar_metadata);
+    king_object_store_rehydrate_stats();
+    return SUCCESS;
+}
+
 /* --- Backend-routing dispatch --- */
 
 int king_object_store_write_object(
@@ -2161,6 +2263,14 @@ int king_object_store_read_object(
         case KING_STORAGE_BACKEND_LOCAL_FS:
         case KING_STORAGE_BACKEND_MEMORY_CACHE:
             rc = king_object_store_local_fs_read(object_id, data, data_size, metadata);
+            if (rc != SUCCESS && king_object_store_local_fs_payload_is_missing(object_id)) {
+                rc = king_object_store_local_fs_read_fallback_from_cloud_backup(
+                    object_id,
+                    data,
+                    data_size,
+                    metadata
+                );
+            }
             break;
         case KING_STORAGE_BACKEND_CLOUD_S3:
             rc = king_object_store_s3_read(object_id, data, data_size);

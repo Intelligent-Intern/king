@@ -1137,20 +1137,25 @@ static int king_object_store_s3_write(
     return SUCCESS;
 }
 
-static int king_object_store_s3_read(const char *object_id, void **data, size_t *data_size)
+static int king_object_store_s3_read_with_error(
+    const char *object_id,
+    void **data,
+    size_t *data_size,
+    char *error,
+    size_t error_size)
 {
     king_object_store_s3_runtime_config_t config;
     king_object_store_http_response_t response;
     void *copy;
 
-    if (data == NULL || data_size == NULL) {
+    if (data == NULL || data_size == NULL || error == NULL || error_size == 0) {
         return FAILURE;
     }
 
     *data = NULL;
     *data_size = 0;
 
-    if (king_object_store_s3_resolve_config(&config, king_object_store_runtime.primary_adapter_error, sizeof(king_object_store_runtime.primary_adapter_error)) != SUCCESS) {
+    if (king_object_store_s3_resolve_config(&config, error, error_size) != SUCCESS) {
         return FAILURE;
     }
 
@@ -1163,14 +1168,22 @@ static int king_object_store_s3_read(const char *object_id, void **data, size_t 
             NULL,
             0,
             &response,
-            king_object_store_runtime.primary_adapter_error,
-            sizeof(king_object_store_runtime.primary_adapter_error)
+            error,
+            error_size
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;
     }
 
     if (response.status_code == 404) {
+        king_object_store_s3_format_response_error(
+            "GET",
+            object_id,
+            "read",
+            &response,
+            error,
+            error_size
+        );
         king_object_store_http_response_destroy(&response);
         return FAILURE;
     }
@@ -1181,8 +1194,8 @@ static int king_object_store_s3_read(const char *object_id, void **data, size_t 
             object_id,
             "read",
             &response,
-            king_object_store_runtime.primary_adapter_error,
-            sizeof(king_object_store_runtime.primary_adapter_error)
+            error,
+            error_size
         );
         king_object_store_http_response_destroy(&response);
         return FAILURE;
@@ -1203,6 +1216,17 @@ static int king_object_store_s3_read(const char *object_id, void **data, size_t 
     *data_size = response.body_bytes;
     king_object_store_http_response_destroy(&response);
     return SUCCESS;
+}
+
+static int king_object_store_s3_read(const char *object_id, void **data, size_t *data_size)
+{
+    return king_object_store_s3_read_with_error(
+        object_id,
+        data,
+        data_size,
+        king_object_store_runtime.primary_adapter_error,
+        sizeof(king_object_store_runtime.primary_adapter_error)
+    );
 }
 
 static int king_object_store_s3_remove(const char *object_id)

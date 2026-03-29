@@ -186,6 +186,7 @@ Status note:
 - [ ] Validate credential failures for future real cloud backends
 - [x] Validate throttling / rate-limit behavior for the real `cloud_s3` backend
 - [x] Validate partial backup-failure recovery for `local_fs` primary plus real `cloud_s3` backup
+- [x] Validate `local_fs` primary read fallback to real `cloud_s3` backup on payload miss
 - [ ] Validate throttling / rate-limit behavior for future real cloud backends
 - [ ] Validate object migration between backends
 - [ ] Validate data integrity after backend migration
