@@ -495,7 +495,10 @@ real copies on `local_fs` primary plus real `cloud_s3` backup. If a write asks
 for more copies than that topology really produced, the payloads that were
 successfully written remain readable, but the write fails and the stored
 metadata records `replication_status=failed` instead of pretending the
-replication target was met.
+replication target was met. That failed status is also recoverable instead of
+sticky forever: when a later write runs under a topology and
+`replication_factor` that the current real backends can actually satisfy, King
+heals the same object's metadata back to `replication_status=completed`.
 
 ## A Full Example
 

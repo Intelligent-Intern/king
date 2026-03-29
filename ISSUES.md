@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate recovery after partial replication for the real object-store backends.
+- [ ] Validate object-store delete semantics across the real `local_fs` and `cloud_s3` backends.
 
 ## Active Executable Items
 
