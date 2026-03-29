@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate network failures for future real cloud backends.
+- [ ] Validate credential failures for future real cloud backends.
 
 ## Active Executable Items
 

@@ -182,7 +182,7 @@ Status note:
 - [x] Validate partial backend failures under replication
 - [x] Validate network failures for the real `cloud_s3` backend
 - [x] Validate credential failures for the real `cloud_s3` backend
-- [ ] Validate network failures for future real cloud backends
+- [x] Validate network failures for future real cloud backends
 - [ ] Validate credential failures for future real cloud backends
 - [x] Validate throttling / rate-limit behavior for the real `cloud_s3` backend
 - [x] Validate partial backup-failure recovery for `local_fs` primary plus real `cloud_s3` backup

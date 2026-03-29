@@ -457,6 +457,11 @@ Today that runtime has two honest backend slices:
 
 `distributed`, `cloud_gcs`, and `cloud_azure` are still simulated and should be
 read that way in the current alpha.
+That is now verified as a hard fail-closed boundary even when callers provide
+endpoint-style cloud configuration. The future `cloud_gcs` and `cloud_azure`
+paths do not emit opportunistic network traffic yet; they fail locally with an
+explicit `simulated-only` adapter error instead of pretending to perform remote
+I/O.
 
 When the active `cloud_s3` credentials are rejected, `king_object_store_init()`
 keeps the runtime visible but marks the primary adapter as failed. The concrete
