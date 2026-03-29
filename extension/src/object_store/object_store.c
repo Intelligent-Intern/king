@@ -56,6 +56,10 @@ static int king_object_store_backup_object_to_backend(
     const king_object_metadata_t *metadata,
     king_storage_backend_t backup_backend
 );
+static int king_object_store_remove_backup_object_from_backend(
+    const char *object_id,
+    king_storage_backend_t backup_backend
+);
 static int king_object_store_directory_is_within_storage_root(const char *directory_path, int allow_missing_path);
 static int king_object_store_s3_rehydrate_stats(char *error, size_t error_size);
 static int king_object_store_s3_write(
@@ -69,10 +73,21 @@ static int king_object_store_s3_write(
 );
 static int king_object_store_s3_read(const char *object_id, void **data, size_t *data_size);
 static int king_object_store_s3_remove(const char *object_id);
+static int king_object_store_s3_delete_backup_copy(
+    const char *object_id,
+    char *error,
+    size_t error_size,
+    zend_bool *removed_out
+);
 static int king_object_store_s3_list(zval *return_array);
 static void king_object_store_shutdown_libcurl_runtime(void);
+static int king_object_store_backend_is_real(king_storage_backend_t backend);
 static king_storage_backend_t king_object_store_normalize_backend(king_storage_backend_t backend);
 static void king_object_store_update_replication_status(const char *object_id, uint8_t replication_status);
+static void king_object_store_invalidate_cdn_cache_entry(const char *object_id);
+static uint32_t king_object_store_count_achieved_real_copies(const king_object_metadata_t *metadata);
+static void king_object_store_reconcile_replication_status(king_object_metadata_t *metadata);
+static int king_object_store_local_fs_remove_with_real_backup_semantics(const char *object_id);
 
 static void king_object_store_runtime_metadata_cache_entry_free(king_object_metadata_t *metadata)
 {
@@ -306,6 +321,74 @@ static void king_object_store_update_replication_status(const char *object_id, u
 
     metadata.replication_status = replication_status;
     (void) king_object_store_meta_write(object_id, &metadata);
+}
+
+static void king_object_store_invalidate_cdn_cache_entry(const char *object_id)
+{
+    zend_string *zobj_id;
+
+    if (object_id == NULL || object_id[0] == '\0' || !king_cdn_cache_registry_initialized) {
+        return;
+    }
+
+    zobj_id = zend_string_init(object_id, strlen(object_id), 0);
+    zend_hash_del(&king_cdn_cache_registry, zobj_id);
+    zend_string_release(zobj_id);
+}
+
+static uint32_t king_object_store_count_achieved_real_copies(const king_object_metadata_t *metadata)
+{
+    king_storage_backend_t primary_backend;
+    king_storage_backend_t backup_backend;
+    uint32_t achieved_real_copies = 0;
+
+    if (metadata == NULL) {
+        return 0;
+    }
+
+    primary_backend = king_object_store_normalize_backend(
+        king_object_store_runtime.config.primary_backend
+    );
+    backup_backend = king_object_store_normalize_backend(
+        king_object_store_runtime.config.backup_backend
+    );
+
+    if (primary_backend == KING_STORAGE_BACKEND_LOCAL_FS && metadata->local_fs_present != 0) {
+        achieved_real_copies++;
+    } else if (primary_backend == KING_STORAGE_BACKEND_CLOUD_S3 && metadata->cloud_s3_present != 0) {
+        achieved_real_copies++;
+    } else if (king_object_store_backend_is_real(primary_backend)) {
+        achieved_real_copies++;
+    }
+
+    if (backup_backend != primary_backend && king_object_store_backend_is_real(backup_backend)) {
+        if (backup_backend == KING_STORAGE_BACKEND_LOCAL_FS && metadata->local_fs_present != 0) {
+            achieved_real_copies++;
+        } else if (backup_backend == KING_STORAGE_BACKEND_CLOUD_S3
+            && (metadata->cloud_s3_present != 0 || metadata->is_backed_up != 0)) {
+            achieved_real_copies++;
+        }
+    }
+
+    return achieved_real_copies;
+}
+
+static void king_object_store_reconcile_replication_status(king_object_metadata_t *metadata)
+{
+    if (metadata == NULL) {
+        return;
+    }
+
+    if (king_object_store_runtime.config.replication_factor == 0) {
+        metadata->replication_status = 0;
+        return;
+    }
+
+    metadata->replication_status =
+        king_object_store_count_achieved_real_copies(metadata)
+            >= king_object_store_runtime.config.replication_factor
+        ? 2
+        : 3;
 }
 
 static int king_object_store_path_is_within_root(const char *candidate_path, const char *root_path)
@@ -1621,13 +1704,7 @@ int king_object_store_local_fs_remove(const char *object_id)
     king_object_store_meta_remove(object_id);
 
     /* Auto-invalidate matching CDN cache entry */
-    {
-        zend_string *zobj_id = zend_string_init(object_id, strlen(object_id), 0);
-        if (king_cdn_cache_registry_initialized) {
-            zend_hash_del(&king_cdn_cache_registry, zobj_id);
-        }
-        zend_string_release(zobj_id);
-    }
+    king_object_store_invalidate_cdn_cache_entry(object_id);
 
     return SUCCESS;
 }
@@ -1989,9 +2066,7 @@ int king_object_store_restore_all_objects(const char *source_directory)
 int king_object_store_replicate_object(const char *object_id, uint32_t replication_factor)
 {
     king_object_metadata_t metadata;
-    king_storage_backend_t primary_backend;
-    king_storage_backend_t backup_backend;
-    uint32_t achieved_real_copies = 0;
+    uint32_t achieved_real_copies;
     char replication_error[256];
 
     if (replication_factor == 0) {
@@ -2018,29 +2093,7 @@ int king_object_store_replicate_object(const char *object_id, uint32_t replicati
         return FAILURE;
     }
 
-    primary_backend = king_object_store_normalize_backend(
-        king_object_store_runtime.config.primary_backend
-    );
-    backup_backend = king_object_store_normalize_backend(
-        king_object_store_runtime.config.backup_backend
-    );
-
-    if (primary_backend == KING_STORAGE_BACKEND_LOCAL_FS && metadata.local_fs_present != 0) {
-        achieved_real_copies++;
-    } else if (primary_backend == KING_STORAGE_BACKEND_CLOUD_S3 && metadata.cloud_s3_present != 0) {
-        achieved_real_copies++;
-    } else if (king_object_store_backend_is_real(primary_backend)) {
-        achieved_real_copies++;
-    }
-
-    if (backup_backend != primary_backend && king_object_store_backend_is_real(backup_backend)) {
-        if (backup_backend == KING_STORAGE_BACKEND_LOCAL_FS && metadata.local_fs_present != 0) {
-            achieved_real_copies++;
-        } else if (backup_backend == KING_STORAGE_BACKEND_CLOUD_S3
-            && (metadata.cloud_s3_present != 0 || metadata.is_backed_up != 0)) {
-            achieved_real_copies++;
-        }
-    }
+    achieved_real_copies = king_object_store_count_achieved_real_copies(&metadata);
 
     if (achieved_real_copies >= replication_factor) {
         metadata.replication_status = 2; /* 2: Completed */
@@ -2164,6 +2217,162 @@ static int king_object_store_backup_object_to_backend(
         SUCCESS,
         NULL
     );
+    return SUCCESS;
+}
+
+static int king_object_store_remove_backup_object_from_backend(
+    const char *object_id,
+    king_storage_backend_t backup_backend)
+{
+    int rc = FAILURE;
+    char backup_error[512] = {0};
+    zend_bool removed = 0;
+
+    if (object_id == NULL || object_id[0] == '\0') {
+        king_object_store_set_backend_runtime_result(
+            "backup",
+            backup_backend,
+            FAILURE,
+            "Missing object id for backup delete operation."
+        );
+        return FAILURE;
+    }
+
+    if (!king_object_store_runtime.initialized) {
+        king_object_store_set_backend_runtime_result(
+            "backup",
+            backup_backend,
+            FAILURE,
+            "Object store is not initialized."
+        );
+        return FAILURE;
+    }
+
+    if (backup_backend == king_object_store_runtime.config.primary_backend) {
+        king_object_store_set_backend_runtime_result(
+            "backup",
+            backup_backend,
+            SUCCESS,
+            NULL
+        );
+        return SUCCESS;
+    }
+
+    if (king_object_store_require_honest_backend(
+            "backup",
+            backup_backend,
+            "object delete"
+        ) == FAILURE) {
+        return FAILURE;
+    }
+
+    switch (backup_backend) {
+        case KING_STORAGE_BACKEND_CLOUD_S3:
+            rc = king_object_store_s3_delete_backup_copy(
+                object_id,
+                backup_error,
+                sizeof(backup_error),
+                &removed
+            );
+            break;
+        case KING_STORAGE_BACKEND_LOCAL_FS:
+        case KING_STORAGE_BACKEND_MEMORY_CACHE:
+            king_object_store_set_backend_runtime_result(
+                "backup",
+                backup_backend,
+                FAILURE,
+                "Local backup backends are not implemented for a non-local primary object-store backend."
+            );
+            return FAILURE;
+        default:
+            king_object_store_set_backend_runtime_result(
+                "backup",
+                backup_backend,
+                FAILURE,
+                "Unsupported backup object-store backend."
+            );
+            return FAILURE;
+    }
+
+    if (rc != SUCCESS) {
+        king_object_store_set_backend_runtime_result(
+            "backup",
+            backup_backend,
+            FAILURE,
+            backup_error[0] == '\0' ? "Backup object-store backend delete failed." : backup_error
+        );
+        return FAILURE;
+    }
+
+    king_object_store_set_backend_runtime_result(
+        "backup",
+        backup_backend,
+        SUCCESS,
+        NULL
+    );
+    return SUCCESS;
+}
+
+static int king_object_store_local_fs_remove_with_real_backup_semantics(const char *object_id)
+{
+    king_object_metadata_t metadata_snapshot;
+    zend_bool has_metadata = 0;
+    int payload_exists;
+    king_storage_backend_t backup_backend;
+    int logical_exists;
+
+    if (object_id == NULL || object_id[0] == '\0') {
+        return FAILURE;
+    }
+
+    payload_exists = king_object_store_local_fs_payload_exists(object_id);
+    if (king_object_store_meta_read(object_id, &metadata_snapshot) == SUCCESS
+        || king_object_store_runtime_metadata_cache_read(object_id, &metadata_snapshot) == SUCCESS) {
+        has_metadata = 1;
+    }
+
+    logical_exists = payload_exists || has_metadata;
+    if (!logical_exists) {
+        return FAILURE;
+    }
+
+    backup_backend = king_object_store_normalize_backend(
+        king_object_store_runtime.config.backup_backend
+    );
+    if (backup_backend != king_object_store_normalize_backend(king_object_store_runtime.config.primary_backend)
+        && king_object_store_backend_is_real(backup_backend)) {
+        if (king_object_store_remove_backup_object_from_backend(object_id, backup_backend) != SUCCESS) {
+            return FAILURE;
+        }
+
+        if (has_metadata) {
+            if (backup_backend == KING_STORAGE_BACKEND_CLOUD_S3) {
+                metadata_snapshot.is_backed_up = 0;
+            }
+            king_object_store_metadata_mark_backend_present(
+                &metadata_snapshot,
+                backup_backend,
+                0
+            );
+            king_object_store_reconcile_replication_status(&metadata_snapshot);
+            if (king_object_store_meta_write(object_id, &metadata_snapshot) != SUCCESS) {
+                king_object_store_set_backend_runtime_result(
+                    "primary",
+                    king_object_store_runtime.config.primary_backend,
+                    FAILURE,
+                    "Primary object-store delete removed the backup copy but failed to update local metadata."
+                );
+                return FAILURE;
+            }
+        }
+    }
+
+    if (payload_exists) {
+        return king_object_store_local_fs_remove(object_id);
+    }
+
+    king_object_store_meta_remove(object_id);
+    king_object_store_invalidate_cdn_cache_entry(object_id);
     return SUCCESS;
 }
 
@@ -2735,7 +2944,7 @@ int king_object_store_remove_object(const char *object_id)
     switch (king_object_store_runtime.config.primary_backend) {
         case KING_STORAGE_BACKEND_LOCAL_FS:
         case KING_STORAGE_BACKEND_MEMORY_CACHE:
-            rc = king_object_store_local_fs_remove(object_id);
+            rc = king_object_store_local_fs_remove_with_real_backup_semantics(object_id);
             break;
         case KING_STORAGE_BACKEND_CLOUD_S3:
             rc = king_object_store_s3_remove(object_id);

@@ -1241,14 +1241,29 @@ static int king_object_store_s3_read(const char *object_id, void **data, size_t 
     );
 }
 
-static int king_object_store_s3_remove(const char *object_id)
+static int king_object_store_s3_delete_with_error(
+    const char *object_id,
+    char *error,
+    size_t error_size,
+    zend_bool update_counters,
+    zend_bool remove_sidecar,
+    zend_bool allow_missing,
+    zend_bool *removed_out)
 {
     king_object_store_s3_runtime_config_t config;
     king_object_store_http_response_t response;
     zend_bool exists = 0;
     king_object_metadata_t existing_metadata;
 
-    if (king_object_store_s3_resolve_config(&config, king_object_store_runtime.primary_adapter_error, sizeof(king_object_store_runtime.primary_adapter_error)) != SUCCESS) {
+    if (removed_out != NULL) {
+        *removed_out = 0;
+    }
+
+    if (error == NULL || error_size == 0) {
+        return FAILURE;
+    }
+
+    if (king_object_store_s3_resolve_config(&config, error, error_size) != SUCCESS) {
         return FAILURE;
     }
 
@@ -1257,13 +1272,13 @@ static int king_object_store_s3_remove(const char *object_id)
             object_id,
             &exists,
             &existing_metadata,
-            king_object_store_runtime.primary_adapter_error,
-            sizeof(king_object_store_runtime.primary_adapter_error)
+            error,
+            error_size
         ) != SUCCESS) {
         return FAILURE;
     }
     if (!exists) {
-        return FAILURE;
+        return allow_missing ? SUCCESS : FAILURE;
     }
 
     king_object_store_http_response_init(&response);
@@ -1275,8 +1290,8 @@ static int king_object_store_s3_remove(const char *object_id)
             NULL,
             0,
             &response,
-            king_object_store_runtime.primary_adapter_error,
-            sizeof(king_object_store_runtime.primary_adapter_error)
+            error,
+            error_size
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;
@@ -1288,23 +1303,61 @@ static int king_object_store_s3_remove(const char *object_id)
             object_id,
             "delete",
             &response,
-            king_object_store_runtime.primary_adapter_error,
-            sizeof(king_object_store_runtime.primary_adapter_error)
+            error,
+            error_size
         );
         king_object_store_http_response_destroy(&response);
         return FAILURE;
     }
 
-    if (king_object_store_runtime.current_stored_bytes >= existing_metadata.content_length) {
-        king_object_store_runtime.current_stored_bytes -= existing_metadata.content_length;
-    }
-    if (king_object_store_runtime.current_object_count > 0) {
-        king_object_store_runtime.current_object_count--;
+    if (removed_out != NULL) {
+        *removed_out = 1;
     }
 
-    king_object_store_meta_remove(object_id);
+    if (update_counters) {
+        if (king_object_store_runtime.current_stored_bytes >= existing_metadata.content_length) {
+            king_object_store_runtime.current_stored_bytes -= existing_metadata.content_length;
+        }
+        if (king_object_store_runtime.current_object_count > 0) {
+            king_object_store_runtime.current_object_count--;
+        }
+    }
+
+    if (remove_sidecar) {
+        king_object_store_meta_remove(object_id);
+    }
     king_object_store_http_response_destroy(&response);
     return SUCCESS;
+}
+
+static int king_object_store_s3_delete_backup_copy(
+    const char *object_id,
+    char *error,
+    size_t error_size,
+    zend_bool *removed_out)
+{
+    return king_object_store_s3_delete_with_error(
+        object_id,
+        error,
+        error_size,
+        0,
+        0,
+        1,
+        removed_out
+    );
+}
+
+static int king_object_store_s3_remove(const char *object_id)
+{
+    return king_object_store_s3_delete_with_error(
+        object_id,
+        king_object_store_runtime.primary_adapter_error,
+        sizeof(king_object_store_runtime.primary_adapter_error),
+        1,
+        1,
+        0,
+        NULL
+    );
 }
 
 static zend_result king_object_store_s3_parse_list_xml(

@@ -468,6 +468,14 @@ payload disappears while the local `.meta` sidecar still says the object exists,
 rehydrate the missing local payload, and restore live counters from local
 truth. A real delete still removes the `.meta` sidecar, so stale backup copies
 do not resurrect intentionally deleted objects.
+The same pair now also has an explicit cross-backend delete contract. When
+`local_fs` is primary and a real `cloud_s3` backup exists, King removes the
+backup copy before it completes the logical delete locally. If that remote
+delete fails, the delete call fails honestly and the local object remains
+readable instead of pretending the object is gone while the cloud copy still
+exists. If the local payload already vanished but the `.meta` sidecar still
+marks the object as live, a successful backup delete still completes the
+logical delete by clearing the remaining local sidecar and cache state.
 The same `local_fs` + `cloud_s3` pair now also survives a temporary live
 primary-root outage inside the same process. If the configured local storage
 root disappears after the process already loaded valid `.meta` sidecars,

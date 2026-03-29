@@ -35,7 +35,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `392/392` passing
+- `./infra/scripts/test-extension.sh`: `396/396` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -57,7 +57,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `392` PHPT files
+- `extension/tests`: `396` PHPT files
 - public stub parity: `128` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -80,7 +80,7 @@ The current tree already proves:
 - Semantic DNS register/discover/update routing, live HTTP health-probe driven route and discovery refresh from service-owned health endpoints, idempotent repeated registration without redundant durable-state churn, coherent parallel service/status persistence through locked refresh-before-persist durable-state transactions, larger-topology local churn coherence, coherent concurrent larger-topology mother-node sync statistics across multiprocess writers in the local persisted-state slice, registry-backed mother-node sync statistics, persisted registration plus mother-node rehydration across restart, object-safe durable-state decode hardening, and private-directory durable state handling
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs
 - router/loadbalancer is now exposed as an explicit config-backed system component with honest policy/discovery-only introspection
-- object-store local filesystem persistence plus real `cloud_s3` payload transport with explicit `local_fs+cloud_s3_sidecars` runtime/system contract, `memory_cache -> local_fs` compatibility aliasing, backend-presence-marked `.meta` sidecars with honest multi-backend routing across shared local/cloud roots, explicit `cloud_s3` credential-rejection, endpoint-connect-failure, throttling detection, incomplete-write recovery through runtime adapter status/error surfaces plus rehydration, partial backup-failure recovery for `local_fs` primary plus real `cloud_s3` backup, honest replication-status evaluation against actually achieved real copies so partial real-topology shortfalls fail instead of pretending `completed`, plus verified healing of that failed replication status after a later write meets the currently available real-backend topology, delete-safe local-primary read failover with local payload healing from real `cloud_s3` backup on payload miss, live-process failover across a temporary `local_fs` primary-root outage through a process-local metadata bridge plus local payload/sidecar healing from real `cloud_s3` backup, simulated `distributed`/`cloud_gcs`/`cloud_azure` fencing, CDN cache/runtime behavior, and confined backup/restore/import/export paths
+- object-store local filesystem persistence plus real `cloud_s3` payload transport with explicit `local_fs+cloud_s3_sidecars` runtime/system contract, `memory_cache -> local_fs` compatibility aliasing, backend-presence-marked `.meta` sidecars with honest multi-backend routing across shared local/cloud roots, explicit `cloud_s3` credential-rejection, endpoint-connect-failure, throttling detection, incomplete-write recovery through runtime adapter status/error surfaces plus rehydration, partial backup-failure recovery for `local_fs` primary plus real `cloud_s3` backup, honest replication-status evaluation against actually achieved real copies so partial real-topology shortfalls fail instead of pretending `completed`, plus verified healing of that failed replication status after a later write meets the currently available real-backend topology, delete-safe local-primary read failover with local payload healing from real `cloud_s3` backup on payload miss, honest cross-backend delete semantics where `local_fs` primary removes the real `cloud_s3` backup copy before completing the logical delete and refuses to pretend success when that remote delete fails, live-process failover across a temporary `local_fs` primary-root outage through a process-local metadata bridge plus local payload/sidecar healing from real `cloud_s3` backup, simulated `distributed`/`cloud_gcs`/`cloud_azure` fencing, CDN cache/runtime behavior, and confined backup/restore/import/export paths
 - deterministic QUIC bootstrap through a tracked pinset for the `quiche` repo revision, BoringSSL submodule revision, pinned workspace lockfile, and pinned `wirefilter` git revision with fail-closed static and PHPT verification
 - one shared runtime install smoke across staged profiles, packaged release artifacts, and published runtime containers, plus first-class clean-host package install and container smoke matrix entrypoints
 - long-duration ASan, UBSan, and leak-oriented soak gates with retained per-iteration logs and archived failure diagnostics under `extension/build/soak/` plus CI artifact upload on soak failure

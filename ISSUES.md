@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate object-store delete semantics across the real `local_fs` and `cloud_s3` backends.
+- [ ] Validate object migration between the real `local_fs` and `cloud_s3` backends.
 
 ## Active Executable Items
 
