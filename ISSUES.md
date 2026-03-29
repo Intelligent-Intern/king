@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Implement real Azure Blob backend where publicly claimed.
+- [ ] No open object-store cloud-backend leaf remains on this branch.
 
 ## Active Executable Items
 

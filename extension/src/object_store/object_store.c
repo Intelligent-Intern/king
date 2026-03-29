@@ -106,6 +106,32 @@ static zend_result king_object_store_gcs_head_object(
     char *error,
     size_t error_size
 );
+static zend_result king_object_store_azure_head_object(
+    const char *object_id,
+    zend_bool *exists_out,
+    king_object_metadata_t *metadata,
+    char *error,
+    size_t error_size
+);
+static int king_object_store_azure_rehydrate_stats(char *error, size_t error_size);
+static int king_object_store_azure_write(
+    const char *object_id,
+    const void *data,
+    size_t data_size,
+    const king_object_metadata_t *metadata,
+    char *error,
+    size_t error_size,
+    zend_bool update_counters
+);
+static int king_object_store_azure_read(const char *object_id, void **data, size_t *data_size);
+static int king_object_store_azure_remove(const char *object_id);
+static int king_object_store_azure_delete_backup_copy(
+    const char *object_id,
+    char *error,
+    size_t error_size,
+    zend_bool *removed_out
+);
+static int king_object_store_azure_list(zval *return_array);
 static void king_object_store_shutdown_libcurl_runtime(void);
 static int king_object_store_backend_is_real(king_storage_backend_t backend);
 static king_storage_backend_t king_object_store_normalize_backend(king_storage_backend_t backend);
@@ -265,6 +291,8 @@ static void king_object_store_metadata_mark_backend_present(
         metadata->cloud_s3_present = present;
     } else if (backend == KING_STORAGE_BACKEND_CLOUD_GCS) {
         metadata->cloud_gcs_present = present;
+    } else if (backend == KING_STORAGE_BACKEND_CLOUD_AZURE) {
+        metadata->cloud_azure_present = present;
     }
 }
 
@@ -325,6 +353,10 @@ static int king_object_store_metadata_matches_backend(
 
     if (backend == KING_STORAGE_BACKEND_CLOUD_GCS) {
         return metadata->cloud_gcs_present != 0;
+    }
+
+    if (backend == KING_STORAGE_BACKEND_CLOUD_AZURE) {
+        return metadata->cloud_azure_present != 0;
     }
 
     return 0;
@@ -391,6 +423,8 @@ static uint32_t king_object_store_count_achieved_real_copies(const king_object_m
         achieved_real_copies++;
     } else if (primary_backend == KING_STORAGE_BACKEND_CLOUD_GCS && metadata->cloud_gcs_present != 0) {
         achieved_real_copies++;
+    } else if (primary_backend == KING_STORAGE_BACKEND_CLOUD_AZURE && metadata->cloud_azure_present != 0) {
+        achieved_real_copies++;
     } else if (king_object_store_backend_is_real(primary_backend)) {
         achieved_real_copies++;
     }
@@ -403,6 +437,9 @@ static uint32_t king_object_store_count_achieved_real_copies(const king_object_m
             achieved_real_copies++;
         } else if (backup_backend == KING_STORAGE_BACKEND_CLOUD_GCS
             && metadata->cloud_gcs_present != 0) {
+            achieved_real_copies++;
+        } else if (backup_backend == KING_STORAGE_BACKEND_CLOUD_AZURE
+            && metadata->cloud_azure_present != 0) {
             achieved_real_copies++;
         }
     }
@@ -611,9 +648,9 @@ const char *king_object_store_backend_contract_to_string(king_storage_backend_t 
             return king_object_store_adapter_contract_local;
         case KING_STORAGE_BACKEND_CLOUD_S3:
         case KING_STORAGE_BACKEND_CLOUD_GCS:
+        case KING_STORAGE_BACKEND_CLOUD_AZURE:
             return king_object_store_adapter_contract_cloud;
         case KING_STORAGE_BACKEND_DISTRIBUTED:
-        case KING_STORAGE_BACKEND_CLOUD_AZURE:
             return king_object_store_adapter_contract_simulated;
         default:
             return king_object_store_adapter_contract_unconfigured;
@@ -628,9 +665,9 @@ static const char *king_object_store_initial_backend_status(king_storage_backend
         case KING_STORAGE_BACKEND_LOCAL_FS:
         case KING_STORAGE_BACKEND_CLOUD_S3:
         case KING_STORAGE_BACKEND_CLOUD_GCS:
+        case KING_STORAGE_BACKEND_CLOUD_AZURE:
             return king_object_store_adapter_status_ok;
         case KING_STORAGE_BACKEND_DISTRIBUTED:
-        case KING_STORAGE_BACKEND_CLOUD_AZURE:
             return king_object_store_adapter_status_simulated;
         default:
             return king_object_store_adapter_status_unimplemented;
@@ -726,13 +763,14 @@ static int king_object_store_backend_is_real(king_storage_backend_t backend)
     backend = king_object_store_normalize_backend(backend);
     return backend == KING_STORAGE_BACKEND_LOCAL_FS
         || backend == KING_STORAGE_BACKEND_CLOUD_S3
-        || backend == KING_STORAGE_BACKEND_CLOUD_GCS;
+        || backend == KING_STORAGE_BACKEND_CLOUD_GCS
+        || backend == KING_STORAGE_BACKEND_CLOUD_AZURE;
 }
 
 static zend_bool king_object_store_backend_is_future_cloud(king_storage_backend_t backend)
 {
-    backend = king_object_store_normalize_backend(backend);
-    return backend == KING_STORAGE_BACKEND_CLOUD_AZURE;
+    (void) backend;
+    return 0;
 }
 
 static const char *king_object_store_missing_future_cloud_credentials_error(const char *scope)
@@ -774,15 +812,6 @@ static int king_object_store_require_honest_backend(
             sizeof(message),
             "%s",
             king_object_store_missing_future_cloud_credentials_error(scope)
-        );
-    } else if (backend == KING_STORAGE_BACKEND_CLOUD_AZURE) {
-        snprintf(
-            message,
-            sizeof(message),
-            "%s backend '%s' is simulated-only and unavailable for %s.",
-            contract,
-            backend_name,
-            operation
         );
     } else if (backend == KING_STORAGE_BACKEND_DISTRIBUTED) {
         snprintf(
@@ -963,7 +992,8 @@ int king_object_store_init_system(king_object_store_config_t *config)
     }
 
     if (king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_S3
-        || king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_GCS) {
+        || king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_GCS
+        || king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_AZURE) {
         if (king_object_store_runtime.config.storage_root_path[0] == '\0') {
             king_object_store_set_runtime_adapter_status(
                 "primary",
@@ -976,6 +1006,8 @@ int king_object_store_init_system(king_object_store_config_t *config)
                 && king_object_store_s3_rehydrate_stats(error, sizeof(error)) != SUCCESS)
             || (king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_GCS
                 && king_object_store_gcs_rehydrate_stats(error, sizeof(error)) != SUCCESS)
+            || (king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_AZURE
+                && king_object_store_azure_rehydrate_stats(error, sizeof(error)) != SUCCESS)
         ) {
             king_object_store_set_runtime_adapter_status(
                 "primary",
@@ -1353,6 +1385,8 @@ static int king_object_store_metadata_parse_stream(FILE *fp, king_object_metadat
             metadata->cloud_s3_present = (uint8_t) atoi(val);
         } else if (strcmp(key, "cloud_gcs_present") == 0) {
             metadata->cloud_gcs_present = (uint8_t) atoi(val);
+        } else if (strcmp(key, "cloud_azure_present") == 0) {
+            metadata->cloud_azure_present = (uint8_t) atoi(val);
         } else if (strcmp(key, "is_backed_up") == 0) {
             metadata->is_backed_up = (uint8_t) atoi(val);
         } else if (strcmp(key, "replication_status") == 0) {
@@ -1402,6 +1436,7 @@ static int king_object_store_meta_write_to_path(const char *path, const king_obj
         "local_fs_present=%d\n"
         "cloud_s3_present=%d\n"
         "cloud_gcs_present=%d\n"
+        "cloud_azure_present=%d\n"
         "is_backed_up=%d\n"
         "replication_status=%d\n"
         "is_distributed=%d\n"
@@ -1420,6 +1455,7 @@ static int king_object_store_meta_write_to_path(const char *path, const king_obj
         (int)      metadata->local_fs_present,
         (int)      metadata->cloud_s3_present,
         (int)      metadata->cloud_gcs_present,
+        (int)      metadata->cloud_azure_present,
         (int)      metadata->is_backed_up,
         (int)      metadata->replication_status,
         (int)      metadata->is_distributed,
@@ -2251,6 +2287,17 @@ static int king_object_store_backup_object_to_backend(
                 0
             );
             break;
+        case KING_STORAGE_BACKEND_CLOUD_AZURE:
+            rc = king_object_store_azure_write(
+                object_id,
+                data,
+                data_size,
+                metadata,
+                backup_error,
+                sizeof(backup_error),
+                0
+            );
+            break;
         case KING_STORAGE_BACKEND_LOCAL_FS:
         case KING_STORAGE_BACKEND_MEMORY_CACHE:
             king_object_store_set_backend_runtime_result(
@@ -2364,6 +2411,14 @@ static int king_object_store_remove_backup_object_from_backend(
                 &removed
             );
             break;
+        case KING_STORAGE_BACKEND_CLOUD_AZURE:
+            rc = king_object_store_azure_delete_backup_copy(
+                object_id,
+                backup_error,
+                sizeof(backup_error),
+                &removed
+            );
+            break;
         case KING_STORAGE_BACKEND_LOCAL_FS:
         case KING_STORAGE_BACKEND_MEMORY_CACHE:
             king_object_store_set_backend_runtime_result(
@@ -2436,7 +2491,8 @@ static int king_object_store_local_fs_remove_with_real_backup_semantics(const ch
 
         if (has_metadata) {
             if (backup_backend == KING_STORAGE_BACKEND_CLOUD_S3
-                || backup_backend == KING_STORAGE_BACKEND_CLOUD_GCS) {
+                || backup_backend == KING_STORAGE_BACKEND_CLOUD_GCS
+                || backup_backend == KING_STORAGE_BACKEND_CLOUD_AZURE) {
                 metadata_snapshot.is_backed_up = 0;
             }
             king_object_store_metadata_mark_backend_present(
@@ -2741,6 +2797,7 @@ static int king_object_store_azure_simulate_list(zval *return_array)
 
 #include "cloud_s3.inc"
 #include "cloud_gcs.inc"
+#include "cloud_azure.inc"
 
 static int king_object_store_local_fs_restore_payload_from_backup(
     const char *object_id,
@@ -2907,6 +2964,17 @@ int king_object_store_write_object(
                 1
             );
             break;
+        case KING_STORAGE_BACKEND_CLOUD_AZURE:
+            rc = king_object_store_azure_write(
+                object_id,
+                data,
+                data_size,
+                metadata,
+                king_object_store_runtime.primary_adapter_error,
+                sizeof(king_object_store_runtime.primary_adapter_error),
+                1
+            );
+            break;
         default:
             king_object_store_set_backend_runtime_result(
                 "primary",
@@ -3011,6 +3079,12 @@ int king_object_store_read_object(
                 rc = king_object_store_backend_read_metadata(object_id, metadata);
             }
             break;
+        case KING_STORAGE_BACKEND_CLOUD_AZURE:
+            rc = king_object_store_azure_read(object_id, data, data_size);
+            if (rc == SUCCESS && metadata != NULL) {
+                rc = king_object_store_backend_read_metadata(object_id, metadata);
+            }
+            break;
         default:
             king_object_store_set_backend_runtime_result(
                 "primary",
@@ -3060,6 +3134,9 @@ int king_object_store_remove_object(const char *object_id)
         case KING_STORAGE_BACKEND_CLOUD_GCS:
             rc = king_object_store_gcs_remove(object_id);
             break;
+        case KING_STORAGE_BACKEND_CLOUD_AZURE:
+            rc = king_object_store_azure_remove(object_id);
+            break;
         default:
             king_object_store_set_backend_runtime_result(
                 "primary",
@@ -3099,6 +3176,9 @@ int king_object_store_list_object(zval *return_array)
             break;
         case KING_STORAGE_BACKEND_CLOUD_GCS:
             rc = king_object_store_gcs_list(return_array);
+            break;
+        case KING_STORAGE_BACKEND_CLOUD_AZURE:
+            rc = king_object_store_azure_list(return_array);
             break;
         default:
             king_object_store_set_backend_runtime_result(

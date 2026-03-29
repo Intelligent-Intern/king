@@ -1600,7 +1600,8 @@ int king_object_store_backend_read_metadata(
         }
 
         if (active_backend != KING_STORAGE_BACKEND_CLOUD_S3
-            && active_backend != KING_STORAGE_BACKEND_CLOUD_GCS) {
+            && active_backend != KING_STORAGE_BACKEND_CLOUD_GCS
+            && active_backend != KING_STORAGE_BACKEND_CLOUD_AZURE) {
             return FAILURE;
         }
     }
@@ -1651,8 +1652,23 @@ int king_object_store_backend_read_metadata(
         return SUCCESS;
     }
 
+    if (active_backend == KING_STORAGE_BACKEND_CLOUD_AZURE) {
+        if (king_object_store_azure_head_object(object_id, &exists, metadata, error, sizeof(error)) != SUCCESS || !exists) {
+            return FAILURE;
+        }
+
+        king_object_store_metadata_mark_backend_present(
+            metadata,
+            KING_STORAGE_BACKEND_CLOUD_AZURE,
+            1
+        );
+        (void) king_object_store_meta_write(object_id, metadata);
+        return SUCCESS;
+    }
+
     if (active_backend != KING_STORAGE_BACKEND_CLOUD_S3
-        && active_backend != KING_STORAGE_BACKEND_CLOUD_GCS) {
+        && active_backend != KING_STORAGE_BACKEND_CLOUD_GCS
+        && active_backend != KING_STORAGE_BACKEND_CLOUD_AZURE) {
         return FAILURE;
     }
 

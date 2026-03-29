@@ -158,7 +158,7 @@ function king_object_store_s3_mock_auth_error(array $headers, array $options): ?
     $receivedSessionToken = (string) ($headers['x-amz-security-token'] ?? '');
     $receivedAccessToken = king_object_store_s3_mock_extract_bearer_token($headers);
 
-    if ($provider === 'gcs') {
+    if ($provider === 'gcs' || $provider === 'azure') {
         if ($expectedAccessToken !== '' && $receivedAccessToken !== $expectedAccessToken) {
             return [
                 'code' => $errorCode,
@@ -283,6 +283,32 @@ function king_object_store_s3_mock_list_xml(string $objectsDirectory): string
     return $xml;
 }
 
+function king_object_store_azure_mock_list_xml(string $objectsDirectory): string
+{
+    $xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<EnumerationResults><Blobs>";
+    $entries = glob($objectsDirectory . '/*');
+    sort($entries, SORT_STRING);
+
+    foreach ($entries as $entry) {
+        if (!is_file($entry)) {
+            continue;
+        }
+        $objectId = rawurldecode(basename($entry));
+        $size = filesize($entry);
+        $modified = gmdate('D, d M Y H:i:s \G\M\T', filemtime($entry));
+        $xml .= '<Blob>';
+        $xml .= '<Name>' . htmlspecialchars($objectId, ENT_XML1) . '</Name>';
+        $xml .= '<Properties>';
+        $xml .= '<Last-Modified>' . $modified . '</Last-Modified>';
+        $xml .= '<Content-Length>' . (int) $size . '</Content-Length>';
+        $xml .= '</Properties>';
+        $xml .= '</Blob>';
+    }
+
+    $xml .= '</Blobs></EnumerationResults>';
+    return $xml;
+}
+
 $server = @stream_socket_server("tcp://{$bindHost}:{$port}", $errno, $errstr);
 if ($server === false) {
     fwrite(STDERR, "bind failed: $errstr\n");
@@ -396,8 +422,11 @@ while (($conn = @stream_socket_accept($server, 10)) !== false) {
     if ($method === 'GET' && (
             str_contains($query, 'list-type=2')
             || ($provider === 'gcs' && $objectId === '')
+            || ($provider === 'azure' && $objectId === '' && str_contains($query, 'restype=container') && str_contains($query, 'comp=list'))
         )) {
-        $xml = king_object_store_s3_mock_list_xml($objectsDirectory);
+        $xml = $provider === 'azure'
+            ? king_object_store_azure_mock_list_xml($objectsDirectory)
+            : king_object_store_s3_mock_list_xml($objectsDirectory);
         king_object_store_s3_mock_respond($conn, 200, 'OK', [
             'Content-Type' => 'application/xml',
         ], $xml);
@@ -415,7 +444,13 @@ while (($conn = @stream_socket_accept($server, 10)) !== false) {
 
     if ($method === 'PUT') {
         king_object_store_s3_mock_persist_object($objectsDirectory, $objectId, $body);
-        king_object_store_s3_mock_respond($conn, 200, 'OK');
+        if ($provider === 'azure') {
+            king_object_store_s3_mock_respond($conn, 201, 'Created', [
+                'ETag' => '"' . sha1($body) . '"',
+            ]);
+        } else {
+            king_object_store_s3_mock_respond($conn, 200, 'OK');
+        }
         fclose($conn);
         continue;
     }
@@ -427,27 +462,41 @@ while (($conn = @stream_socket_accept($server, 10)) !== false) {
     }
 
     if ($method === 'HEAD') {
-        king_object_store_s3_mock_respond($conn, 200, 'OK', [
+        $headersOut = [
             'Content-Length' => (string) filesize($objectPath),
             'Last-Modified' => gmdate('D, d M Y H:i:s \G\M\T', filemtime($objectPath)),
-        ]);
+            'ETag' => '"' . sha1_file($objectPath) . '"',
+        ];
+        if ($provider === 'azure') {
+            $headersOut['x-ms-blob-content-length'] = (string) filesize($objectPath);
+        }
+        king_object_store_s3_mock_respond($conn, 200, 'OK', $headersOut);
         fclose($conn);
         continue;
     }
 
     if ($method === 'GET') {
         $payload = (string) file_get_contents($objectPath);
-        king_object_store_s3_mock_respond($conn, 200, 'OK', [
+        $headersOut = [
             'Content-Length' => (string) strlen($payload),
             'Last-Modified' => gmdate('D, d M Y H:i:s \G\M\T', filemtime($objectPath)),
-        ], $payload);
+            'ETag' => '"' . sha1($payload) . '"',
+        ];
+        if ($provider === 'azure') {
+            $headersOut['x-ms-blob-content-length'] = (string) strlen($payload);
+        }
+        king_object_store_s3_mock_respond($conn, 200, 'OK', $headersOut, $payload);
         fclose($conn);
         continue;
     }
 
     if ($method === 'DELETE') {
         @unlink($objectPath);
-        king_object_store_s3_mock_respond($conn, 204, 'No Content');
+        if ($provider === 'azure') {
+            king_object_store_s3_mock_respond($conn, 202, 'Accepted');
+        } else {
+            king_object_store_s3_mock_respond($conn, 204, 'No Content');
+        }
         fclose($conn);
         continue;
     }

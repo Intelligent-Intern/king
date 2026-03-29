@@ -593,19 +593,21 @@ namespace {
     /**
      * Initializes local runtime settings for the object-store/CDN
      * layer without replacing the extension-wide INI configuration.
-     * The verified v1 storage contract is `local_fs` plus real `cloud_s3`
-     * and `cloud_gcs` payload storage with local `.meta` sidecars.
+     * The verified v1 storage contract is `local_fs` plus real `cloud_s3`,
+     * `cloud_gcs`, and `cloud_azure` payload storage with local `.meta`
+     * sidecars.
      * `memory_cache` is accepted as a compatibility alias that resolves
-     * to the same local filesystem backend. `distributed` and
-     * `cloud_azure` remain simulated/unavailable today. Supported keys are
+     * to the same local filesystem backend. `distributed` remains
+     * simulated/unavailable today. Supported keys are
      * `primary_backend`, `backup_backend`, `storage_root_path`,
      * `max_storage_size_bytes`, `replication_factor`, `chunk_size_kb`,
      * `cloud_credentials`, and `cdn_config` with `enabled`,
      * `cache_size_mb`, `default_ttl_seconds`. `cloud_credentials`
      * currently accepts `api_endpoint` or `endpoint`, `bucket`,
      * provider-specific auth material such as `access_key` plus
-     * `secret_key` for `cloud_s3` or `access_token` for `cloud_gcs`,
-     * plus optional `region`, `session_token`, `path_style`, and
+     * `secret_key` for `cloud_s3`, `access_token` for `cloud_gcs`, or
+     * `access_token` plus `container` for `cloud_azure`, plus optional
+     * `region`, `session_token`, `path_style`, `account_name`, and
      * `verify_tls`.
      * @param array<string,mixed> $config
      * @throws \King\ValidationException
