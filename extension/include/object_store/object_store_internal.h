@@ -55,6 +55,7 @@ void king_object_store_build_meta_path(char *dest, size_t dest_len, const char *
 int king_object_store_meta_write(const char *object_id, const king_object_metadata_t *metadata);
 int king_object_store_meta_read(const char *object_id, king_object_metadata_t *metadata);
 void king_object_store_meta_remove(const char *object_id);
+int king_object_store_runtime_metadata_cache_read(const char *object_id, king_object_metadata_t *metadata);
 
 /* Rehydrate runtime stats from disk on init */
 void king_object_store_rehydrate_stats(void);

@@ -87,19 +87,11 @@ PHP_FUNCTION(king_cdn_cache_object)
 
         if ((primary_backend == KING_STORAGE_BACKEND_LOCAL_FS
                 || primary_backend == KING_STORAGE_BACKEND_MEMORY_CACHE)
-            && king_object_store_meta_read(ZSTR_VAL(object_id), &metadata) == SUCCESS) {
-            struct stat st;
-            char file_path[1024];
-
-            king_object_store_build_path(file_path, sizeof(file_path), ZSTR_VAL(object_id));
-            if (stat(file_path, &st) == 0) {
-                if (metadata.content_length > 0 && metadata.content_length <= (uint64_t) SIZE_MAX) {
-                    data_size = (size_t) metadata.content_length;
-                } else {
-                    data_size = (size_t) st.st_size;
-                }
-                size_resolved = 1;
-            }
+            && (king_object_store_runtime_metadata_cache_read(ZSTR_VAL(object_id), &metadata) == SUCCESS
+                || king_object_store_meta_read(ZSTR_VAL(object_id), &metadata) == SUCCESS)
+            && metadata.content_length <= (uint64_t) SIZE_MAX) {
+            data_size = (size_t) metadata.content_length;
+            size_resolved = 1;
         } else if ((primary_backend == KING_STORAGE_BACKEND_CLOUD_S3
                 || primary_backend == KING_STORAGE_BACKEND_CLOUD_GCS
                 || primary_backend == KING_STORAGE_BACKEND_CLOUD_AZURE)

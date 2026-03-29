@@ -224,7 +224,7 @@ static int king_object_store_runtime_metadata_cache_store(
     return SUCCESS;
 }
 
-static int king_object_store_runtime_metadata_cache_read(
+int king_object_store_runtime_metadata_cache_read(
     const char *object_id,
     king_object_metadata_t *metadata
 )
@@ -1783,6 +1783,9 @@ int king_object_store_local_fs_remove(const char *object_id)
 {
     char file_path[1024];
     struct stat st;
+    king_object_metadata_t metadata;
+    uint64_t removed_size = 0;
+    zend_bool size_resolved = 0;
 
     if (!king_object_store_runtime.initialized || object_id == NULL) {
         return FAILURE;
@@ -1793,17 +1796,24 @@ int king_object_store_local_fs_remove(const char *object_id)
 
     king_object_store_build_path(file_path, sizeof(file_path), object_id);
 
-    if (stat(file_path, &st) == 0) {
-        if (king_object_store_runtime.current_stored_bytes >= (uint64_t)st.st_size) {
-            king_object_store_runtime.current_stored_bytes -= st.st_size;
-        }
-        if (king_object_store_runtime.current_object_count > 0) {
-            king_object_store_runtime.current_object_count--;
-        }
+    if (king_object_store_runtime_metadata_cache_read(object_id, &metadata) == SUCCESS
+        || king_object_store_meta_read(object_id, &metadata) == SUCCESS) {
+        removed_size = metadata.content_length;
+        size_resolved = 1;
+    } else if (stat(file_path, &st) == 0) {
+        removed_size = (uint64_t) st.st_size;
+        size_resolved = 1;
     }
 
     if (unlink(file_path) != 0) {
         return FAILURE;
+    }
+
+    if (size_resolved && king_object_store_runtime.current_stored_bytes >= removed_size) {
+        king_object_store_runtime.current_stored_bytes -= removed_size;
+    }
+    if (king_object_store_runtime.current_object_count > 0) {
+        king_object_store_runtime.current_object_count--;
     }
 
     /* Remove durable metadata sidecar */
@@ -2469,6 +2479,14 @@ static int king_object_store_local_fs_remove_with_real_backup_semantics(const ch
         return FAILURE;
     }
 
+    backup_backend = king_object_store_normalize_backend(
+        king_object_store_runtime.config.backup_backend
+    );
+    if (backup_backend == king_object_store_normalize_backend(king_object_store_runtime.config.primary_backend)
+        || !king_object_store_backend_is_real(backup_backend)) {
+        return king_object_store_local_fs_remove(object_id);
+    }
+
     payload_exists = king_object_store_local_fs_payload_exists(object_id);
     if (king_object_store_meta_read(object_id, &metadata_snapshot) == SUCCESS
         || king_object_store_runtime_metadata_cache_read(object_id, &metadata_snapshot) == SUCCESS) {
@@ -2480,36 +2498,30 @@ static int king_object_store_local_fs_remove_with_real_backup_semantics(const ch
         return FAILURE;
     }
 
-    backup_backend = king_object_store_normalize_backend(
-        king_object_store_runtime.config.backup_backend
-    );
-    if (backup_backend != king_object_store_normalize_backend(king_object_store_runtime.config.primary_backend)
-        && king_object_store_backend_is_real(backup_backend)) {
-        if (king_object_store_remove_backup_object_from_backend(object_id, backup_backend) != SUCCESS) {
-            return FAILURE;
-        }
+    if (king_object_store_remove_backup_object_from_backend(object_id, backup_backend) != SUCCESS) {
+        return FAILURE;
+    }
 
-        if (has_metadata) {
-            if (backup_backend == KING_STORAGE_BACKEND_CLOUD_S3
-                || backup_backend == KING_STORAGE_BACKEND_CLOUD_GCS
-                || backup_backend == KING_STORAGE_BACKEND_CLOUD_AZURE) {
-                metadata_snapshot.is_backed_up = 0;
-            }
-            king_object_store_metadata_mark_backend_present(
-                &metadata_snapshot,
-                backup_backend,
-                0
+    if (has_metadata) {
+        if (backup_backend == KING_STORAGE_BACKEND_CLOUD_S3
+            || backup_backend == KING_STORAGE_BACKEND_CLOUD_GCS
+            || backup_backend == KING_STORAGE_BACKEND_CLOUD_AZURE) {
+            metadata_snapshot.is_backed_up = 0;
+        }
+        king_object_store_metadata_mark_backend_present(
+            &metadata_snapshot,
+            backup_backend,
+            0
+        );
+        king_object_store_reconcile_replication_status(&metadata_snapshot);
+        if (king_object_store_meta_write(object_id, &metadata_snapshot) != SUCCESS) {
+            king_object_store_set_backend_runtime_result(
+                "primary",
+                king_object_store_runtime.config.primary_backend,
+                FAILURE,
+                "Primary object-store delete removed the backup copy but failed to update local metadata."
             );
-            king_object_store_reconcile_replication_status(&metadata_snapshot);
-            if (king_object_store_meta_write(object_id, &metadata_snapshot) != SUCCESS) {
-                king_object_store_set_backend_runtime_result(
-                    "primary",
-                    king_object_store_runtime.config.primary_backend,
-                    FAILURE,
-                    "Primary object-store delete removed the backup copy but failed to update local metadata."
-                );
-                return FAILURE;
-            }
+            return FAILURE;
         }
     }
 
