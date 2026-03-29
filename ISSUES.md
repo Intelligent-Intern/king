@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Implement real GCS backend where publicly claimed.
+- [ ] Implement real Azure Blob backend where publicly claimed.
 
 ## Active Executable Items
 

@@ -30,7 +30,7 @@ $cleanupTree = static function (string $path) use (&$cleanupTree): void {
 $cleanupTree($root);
 mkdir($root, 0700, true);
 
-foreach (['cloud_gcs', 'cloud_azure'] as $backend) {
+foreach (['cloud_azure'] as $backend) {
     var_dump(king_object_store_init([
         'storage_root_path' => $root,
         'primary_backend' => $backend,
@@ -71,7 +71,7 @@ foreach (['cloud_gcs', 'cloud_azure'] as $backend) {
     ));
 }
 
-foreach (['cloud_gcs', 'cloud_azure'] as $backend) {
+foreach (['cloud_azure'] as $backend) {
     var_dump(king_object_store_init([
         'storage_root_path' => $root,
         'primary_backend' => 'local_fs',
@@ -101,26 +101,6 @@ foreach (['cloud_gcs', 'cloud_azure'] as $backend) {
 $cleanupTree($root);
 ?>
 --EXPECT--
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
 bool(true)
 bool(true)
 bool(true)

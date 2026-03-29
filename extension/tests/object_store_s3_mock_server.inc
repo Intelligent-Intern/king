@@ -131,14 +131,44 @@ function king_object_store_s3_mock_extract_access_key(array $headers): string
     return '';
 }
 
+function king_object_store_s3_mock_extract_bearer_token(array $headers): string
+{
+    $authorization = (string) ($headers['authorization'] ?? '');
+
+    if ($authorization === '') {
+        return '';
+    }
+
+    if (preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches) === 1) {
+        return trim((string) $matches[1]);
+    }
+
+    return '';
+}
+
 function king_object_store_s3_mock_auth_error(array $headers, array $options): ?array
 {
+    $provider = (string) ($options['provider'] ?? 's3');
     $expectedAccessKey = (string) ($options['expected_access_key'] ?? '');
     $expectedSessionToken = (string) ($options['expected_session_token'] ?? '');
+    $expectedAccessToken = (string) ($options['expected_access_token'] ?? '');
     $errorCode = (string) ($options['auth_error_code'] ?? 'InvalidAccessKeyId');
     $errorMessage = (string) ($options['auth_error_message'] ?? 'The provided object-store credentials were rejected.');
     $receivedAccessKey = king_object_store_s3_mock_extract_access_key($headers);
     $receivedSessionToken = (string) ($headers['x-amz-security-token'] ?? '');
+    $receivedAccessToken = king_object_store_s3_mock_extract_bearer_token($headers);
+
+    if ($provider === 'gcs') {
+        if ($expectedAccessToken !== '' && $receivedAccessToken !== $expectedAccessToken) {
+            return [
+                'code' => $errorCode,
+                'message' => $errorMessage,
+                'received_access_token' => $receivedAccessToken,
+            ];
+        }
+
+        return null;
+    }
 
     if ($expectedAccessKey !== '' && $receivedAccessKey !== $expectedAccessKey) {
         return [
@@ -279,6 +309,7 @@ while (($conn = @stream_socket_accept($server, 10)) !== false) {
     $target = (string) $request['target'];
     $headers = (array) $request['headers'];
     $body = (string) $request['body'];
+    $provider = (string) ($options['provider'] ?? 's3');
     $path = parse_url($target, PHP_URL_PATH) ?: '/';
     $query = (string) (parse_url($target, PHP_URL_QUERY) ?? '');
     $segments = explode('/', ltrim($path, '/'));
@@ -293,6 +324,7 @@ while (($conn = @stream_socket_accept($server, 10)) !== false) {
         'object_id' => $objectId,
         'content_length' => strlen($body),
         'authorization_access_key' => king_object_store_s3_mock_extract_access_key($headers),
+        'authorization_bearer_token' => king_object_store_s3_mock_extract_bearer_token($headers),
     ];
 
     if ($bucket === '') {
@@ -305,7 +337,12 @@ while (($conn = @stream_socket_accept($server, 10)) !== false) {
     if ($authError !== null) {
         $capture['events'][count($capture['events']) - 1]['auth_rejected'] = true;
         $capture['events'][count($capture['events']) - 1]['auth_error_code'] = $authError['code'];
-        $capture['events'][count($capture['events']) - 1]['received_access_key'] = $authError['received_access_key'];
+        if (isset($authError['received_access_key'])) {
+            $capture['events'][count($capture['events']) - 1]['received_access_key'] = $authError['received_access_key'];
+        }
+        if (isset($authError['received_access_token'])) {
+            $capture['events'][count($capture['events']) - 1]['received_access_token'] = $authError['received_access_token'];
+        }
         king_object_store_s3_mock_respond($conn, 403, 'Forbidden', [
             'Content-Type' => 'application/xml',
         ], king_object_store_s3_mock_error_body($authError['code'], $authError['message']));
@@ -356,7 +393,10 @@ while (($conn = @stream_socket_accept($server, 10)) !== false) {
         continue;
     }
 
-    if ($method === 'GET' && str_contains($query, 'list-type=2')) {
+    if ($method === 'GET' && (
+            str_contains($query, 'list-type=2')
+            || ($provider === 'gcs' && $objectId === '')
+        )) {
         $xml = king_object_store_s3_mock_list_xml($objectsDirectory);
         king_object_store_s3_mock_respond($conn, 200, 'OK', [
             'Content-Type' => 'application/xml',

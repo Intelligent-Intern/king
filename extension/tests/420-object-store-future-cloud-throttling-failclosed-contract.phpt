@@ -67,7 +67,7 @@ $cloudCredentials = [
     'verify_tls' => false,
 ];
 
-foreach (['cloud_gcs', 'cloud_azure'] as $backend) {
+foreach (['cloud_azure'] as $backend) {
     var_dump(king_object_store_init([
         'storage_root_path' => $root,
         'primary_backend' => $backend,
@@ -108,7 +108,7 @@ foreach (['cloud_gcs', 'cloud_azure'] as $backend) {
     ));
 }
 
-foreach (['cloud_gcs', 'cloud_azure'] as $backend) {
+foreach (['cloud_azure'] as $backend) {
     var_dump(king_object_store_init([
         'storage_root_path' => $root,
         'primary_backend' => 'local_fs',
@@ -147,33 +147,6 @@ $cleanupTree($root);
 king_object_store_s3_mock_cleanup_state_directory($mock['state_directory']);
 ?>
 --EXPECT--
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
-bool(true)
 bool(true)
 bool(true)
 bool(true)

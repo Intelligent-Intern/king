@@ -62,7 +62,7 @@ static zend_result king_object_store_load_libcurl_symbol(void **target, const ch
         snprintf(
             king_object_store_libcurl.load_error,
             sizeof(king_object_store_libcurl.load_error),
-            "Failed to load libcurl symbol '%s' for cloud_s3 object-store operations.",
+            "Failed to load libcurl symbol '%s' for cloud object-store operations.",
             name
         );
         return FAILURE;
@@ -97,7 +97,7 @@ static zend_result king_object_store_ensure_libcurl_ready(void)
         snprintf(
             king_object_store_libcurl.load_error,
             sizeof(king_object_store_libcurl.load_error),
-            "Failed to load libcurl.so.4 or libcurl.so for cloud_s3 object-store operations."
+            "Failed to load libcurl.so.4 or libcurl.so for cloud object-store operations."
         );
         return FAILURE;
     }
@@ -150,7 +150,7 @@ static zend_result king_object_store_ensure_libcurl_ready(void)
         snprintf(
             king_object_store_libcurl.load_error,
             sizeof(king_object_store_libcurl.load_error),
-            "curl_global_init() failed for cloud_s3 object-store operations."
+            "curl_global_init() failed for cloud object-store operations."
         );
         king_object_store_close_libcurl_runtime_handle();
         return FAILURE;
@@ -1599,7 +1599,8 @@ int king_object_store_backend_read_metadata(
             return SUCCESS;
         }
 
-        if (active_backend != KING_STORAGE_BACKEND_CLOUD_S3) {
+        if (active_backend != KING_STORAGE_BACKEND_CLOUD_S3
+            && active_backend != KING_STORAGE_BACKEND_CLOUD_GCS) {
             return FAILURE;
         }
     }
@@ -1622,19 +1623,38 @@ int king_object_store_backend_read_metadata(
         return SUCCESS;
     }
 
-    if (active_backend != KING_STORAGE_BACKEND_CLOUD_S3) {
+    if (active_backend == KING_STORAGE_BACKEND_CLOUD_S3) {
+        if (king_object_store_s3_head_object(object_id, &exists, metadata, error, sizeof(error)) != SUCCESS || !exists) {
+            return FAILURE;
+        }
+
+        king_object_store_metadata_mark_backend_present(
+            metadata,
+            KING_STORAGE_BACKEND_CLOUD_S3,
+            1
+        );
+        (void) king_object_store_meta_write(object_id, metadata);
+        return SUCCESS;
+    }
+
+    if (active_backend == KING_STORAGE_BACKEND_CLOUD_GCS) {
+        if (king_object_store_gcs_head_object(object_id, &exists, metadata, error, sizeof(error)) != SUCCESS || !exists) {
+            return FAILURE;
+        }
+
+        king_object_store_metadata_mark_backend_present(
+            metadata,
+            KING_STORAGE_BACKEND_CLOUD_GCS,
+            1
+        );
+        (void) king_object_store_meta_write(object_id, metadata);
+        return SUCCESS;
+    }
+
+    if (active_backend != KING_STORAGE_BACKEND_CLOUD_S3
+        && active_backend != KING_STORAGE_BACKEND_CLOUD_GCS) {
         return FAILURE;
     }
 
-    if (king_object_store_s3_head_object(object_id, &exists, metadata, error, sizeof(error)) != SUCCESS || !exists) {
-        return FAILURE;
-    }
-
-    king_object_store_metadata_mark_backend_present(
-        metadata,
-        KING_STORAGE_BACKEND_CLOUD_S3,
-        1
-    );
-    (void) king_object_store_meta_write(object_id, metadata);
-    return SUCCESS;
+    return FAILURE;
 }

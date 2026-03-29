@@ -449,27 +449,29 @@ The names are intentionally direct. The value of the subsystem is not that the
 surface is mysterious. The value is that the simple surface drives a coherent
 runtime underneath.
 
-Today that runtime has two honest backend slices:
+Today that runtime has three honest backend slices:
 - `local_fs`, with `memory_cache` preserved as a compatibility alias onto the
   same local filesystem path
 - `cloud_s3` for real S3-compatible payload transport, while metadata still
   uses local `.meta` sidecars as the current reference contract
+- `cloud_gcs` for real GCS-compatible payload transport, with the same local
+  `.meta` sidecar contract and bearer-token based HTTP authentication
 
-`distributed`, `cloud_gcs`, and `cloud_azure` are still simulated and should be
-read that way in the current alpha.
+`distributed` and `cloud_azure` are still simulated and should be read that way
+in the current alpha.
 That is now verified as a hard fail-closed boundary even when callers provide
-endpoint-style cloud configuration. The future `cloud_gcs` and `cloud_azure`
-paths do not emit opportunistic network traffic yet; they fail locally with an
+endpoint-style cloud configuration. The remaining future `cloud_azure` path
+does not emit opportunistic network traffic yet; it fails locally with an
 explicit `simulated-only` adapter error instead of pretending to perform remote
 I/O.
-If callers select those future cloud backends without `cloud_credentials`, the
+If callers select that future cloud backend without `cloud_credentials`, the
 runtime now preserves that absence as the visible reason through
 `runtime_*_adapter_error` and later operation failures instead of overwriting it
 with a vaguer simulated-only message.
 That fail-closed boundary now also covers throttle-shaped endpoints: even if a
-configured peer would respond with `429` or `SlowDown`, the future cloud paths
-still do not emit network traffic and do not pretend to expose a real
-rate-limit contract before a native adapter exists.
+configured peer would respond with `429` or `SlowDown`, the remaining future
+cloud path still does not emit network traffic and does not pretend to expose a
+real rate-limit contract before a native adapter exists.
 
 When the active `cloud_s3` credentials are rejected, `king_object_store_init()`
 keeps the runtime visible but marks the primary adapter as failed. The concrete

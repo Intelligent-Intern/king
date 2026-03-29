@@ -174,7 +174,7 @@ Status note:
 ## F. Object Store Cloud Backends
 
 - [x] Implement real S3 backend
-- [ ] Implement real GCS backend where publicly claimed
+- [x] Implement real GCS backend where publicly claimed
 - [ ] Implement real Azure Blob backend where publicly claimed
 - [x] Finalize local filesystem backend as the reference backend
 - [x] Validate multi-backend routing with real backends
