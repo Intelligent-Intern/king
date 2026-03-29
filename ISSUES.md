@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate backend failover on primary backend outage for `local_fs` primary plus real object-store `cloud_s3` backup.
+- [ ] Validate multi-backend routing behavior across the real `local_fs` and `cloud_s3` object-store backends.
 
 ## Active Executable Items
 

@@ -1530,6 +1530,19 @@ int king_object_store_backend_read_metadata(
         return SUCCESS;
     }
 
+    /*
+     * For local_fs primary plus cloud_s3 backup, the process-local metadata
+     * cache is the live bridge during a temporary primary-root outage. It is
+     * not a restart contract; init_system repopulates it only from real
+     * durable sidecars.
+     */
+    if ((king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_LOCAL_FS
+            || king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_MEMORY_CACHE)
+        && king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_S3
+        && king_object_store_runtime_metadata_cache_read(object_id, metadata) == SUCCESS) {
+        return SUCCESS;
+    }
+
     if (king_object_store_runtime.config.primary_backend != KING_STORAGE_BACKEND_CLOUD_S3) {
         return FAILURE;
     }

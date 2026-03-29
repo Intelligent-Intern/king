@@ -31,6 +31,8 @@
 #endif
 
 king_object_store_runtime_state king_object_store_runtime;
+static HashTable king_object_store_runtime_metadata_cache;
+static bool king_object_store_runtime_metadata_cache_initialized = false;
 
 static const char *king_object_store_adapter_status_ok = "ok";
 static const char *king_object_store_adapter_status_simulated = "simulated";
@@ -46,6 +48,7 @@ static int king_object_store_mkdir_parents(const char *path);
 static int king_object_store_ensure_directory_recursive(const char *path);
 static int king_object_store_read_file_contents(const char *source_path, void **data, size_t *data_size);
 static int king_object_store_atomic_write_file(const char *target_path, const void *data, size_t data_size);
+static int king_object_store_meta_read_from_path(const char *path, king_object_metadata_t *metadata);
 static int king_object_store_backup_object_to_backend(
     const char *object_id,
     const void *data,
@@ -68,6 +71,139 @@ static int king_object_store_s3_read(const char *object_id, void **data, size_t 
 static int king_object_store_s3_remove(const char *object_id);
 static int king_object_store_s3_list(zval *return_array);
 static void king_object_store_shutdown_libcurl_runtime(void);
+
+static void king_object_store_runtime_metadata_cache_entry_free(king_object_metadata_t *metadata)
+{
+    if (metadata == NULL) {
+        return;
+    }
+
+    pefree(metadata, 1);
+}
+
+static void king_object_store_runtime_metadata_cache_zval_dtor(zval *zv)
+{
+    if (Z_TYPE_P(zv) == IS_PTR) {
+        king_object_store_runtime_metadata_cache_entry_free((king_object_metadata_t *) Z_PTR_P(zv));
+    }
+}
+
+static int king_object_store_runtime_metadata_cache_ensure(void)
+{
+    if (king_object_store_runtime_metadata_cache_initialized) {
+        return SUCCESS;
+    }
+
+    zend_hash_init(
+        &king_object_store_runtime_metadata_cache,
+        8,
+        NULL,
+        king_object_store_runtime_metadata_cache_zval_dtor,
+        1
+    );
+    king_object_store_runtime_metadata_cache_initialized = true;
+    return SUCCESS;
+}
+
+static void king_object_store_runtime_metadata_cache_reset(void)
+{
+    if (!king_object_store_runtime_metadata_cache_initialized) {
+        return;
+    }
+
+    zend_hash_destroy(&king_object_store_runtime_metadata_cache);
+    king_object_store_runtime_metadata_cache_initialized = false;
+}
+
+static void king_object_store_runtime_metadata_cache_clear(void)
+{
+    if (!king_object_store_runtime_metadata_cache_initialized) {
+        return;
+    }
+
+    zend_hash_clean(&king_object_store_runtime_metadata_cache);
+}
+
+static int king_object_store_runtime_metadata_cache_store(
+    const char *object_id,
+    const king_object_metadata_t *metadata
+)
+{
+    zend_string *persistent_key;
+    king_object_metadata_t *copy;
+    zval stored_metadata;
+
+    if (object_id == NULL || object_id[0] == '\0' || metadata == NULL) {
+        return FAILURE;
+    }
+
+    if (king_object_store_runtime_metadata_cache_ensure() != SUCCESS) {
+        return FAILURE;
+    }
+
+    copy = pemalloc(sizeof(*copy), 1);
+    if (copy == NULL) {
+        return FAILURE;
+    }
+    *copy = *metadata;
+
+    ZVAL_PTR(&stored_metadata, copy);
+    persistent_key = zend_string_init(object_id, strlen(object_id), 1);
+    zend_hash_update(&king_object_store_runtime_metadata_cache, persistent_key, &stored_metadata);
+    zend_string_release_ex(persistent_key, 1);
+
+    return SUCCESS;
+}
+
+static int king_object_store_runtime_metadata_cache_read(
+    const char *object_id,
+    king_object_metadata_t *metadata
+)
+{
+    zval *cached_entry;
+
+    if (object_id == NULL || metadata == NULL || !king_object_store_runtime_metadata_cache_initialized) {
+        return FAILURE;
+    }
+
+    cached_entry = zend_hash_str_find(
+        &king_object_store_runtime_metadata_cache,
+        object_id,
+        strlen(object_id)
+    );
+    if (cached_entry == NULL || Z_TYPE_P(cached_entry) != IS_PTR || Z_PTR_P(cached_entry) == NULL) {
+        return FAILURE;
+    }
+
+    *metadata = *((king_object_metadata_t *) Z_PTR_P(cached_entry));
+    return SUCCESS;
+}
+
+static void king_object_store_runtime_metadata_cache_remove(const char *object_id)
+{
+    if (object_id == NULL || !king_object_store_runtime_metadata_cache_initialized) {
+        return;
+    }
+
+    zend_hash_str_del(
+        &king_object_store_runtime_metadata_cache,
+        object_id,
+        strlen(object_id)
+    );
+}
+
+static void king_object_store_release_read_buffer(void **data, size_t *data_size)
+{
+    if (data == NULL || *data == NULL) {
+        return;
+    }
+
+    pefree(*data, 1);
+    *data = NULL;
+    if (data_size != NULL) {
+        *data_size = 0;
+    }
+}
 
 static king_storage_backend_t king_object_store_normalize_backend(king_storage_backend_t backend)
 {
@@ -544,6 +680,7 @@ int king_object_store_init_system(king_object_store_config_t *config)
         return FAILURE;
     }
 
+    king_object_store_runtime_metadata_cache_reset();
     king_object_store_config_clear(&king_object_store_runtime.config);
     memset(&king_object_store_runtime, 0, sizeof(king_object_store_runtime));
     ZVAL_UNDEF(&king_object_store_runtime.config.cloud_credentials);
@@ -621,11 +758,54 @@ int king_object_store_init_system(king_object_store_config_t *config)
         }
     }
 
+    if (king_object_store_runtime.config.storage_root_path[0] != '\0') {
+        DIR *dir;
+        struct dirent *ent;
+        char meta_path[1024];
+
+        if (king_object_store_runtime_metadata_cache_ensure() == SUCCESS) {
+            dir = opendir(king_object_store_runtime.config.storage_root_path);
+            if (dir != NULL) {
+                while ((ent = readdir(dir)) != NULL) {
+                    king_object_metadata_t metadata;
+                    size_t name_len;
+
+                    if (ent->d_name[0] == '.') {
+                        continue;
+                    }
+
+                    name_len = strlen(ent->d_name);
+                    if (name_len <= 5 || strcmp(ent->d_name + name_len - 5, ".meta") != 0) {
+                        continue;
+                    }
+
+                    snprintf(
+                        meta_path,
+                        sizeof(meta_path),
+                        "%s/%s",
+                        king_object_store_runtime.config.storage_root_path,
+                        ent->d_name
+                    );
+
+                    if (king_object_store_meta_read_from_path(meta_path, &metadata) == SUCCESS) {
+                        (void) king_object_store_runtime_metadata_cache_store(
+                            metadata.object_id,
+                            &metadata
+                        );
+                    }
+                }
+
+                closedir(dir);
+            }
+        }
+    }
+
     return SUCCESS;
 }
 
 void king_object_store_shutdown_system(void)
 {
+    king_object_store_runtime_metadata_cache_reset();
     king_object_store_config_clear(&king_object_store_runtime.config);
     memset(&king_object_store_runtime, 0, sizeof(king_object_store_runtime));
     king_object_store_shutdown_libcurl_runtime();
@@ -1068,7 +1248,12 @@ int king_object_store_meta_write(const char *object_id, const king_object_metada
     }
 
     king_object_store_build_meta_path(meta_path, sizeof(meta_path), object_id);
-    return king_object_store_meta_write_to_path(meta_path, metadata_source);
+    if (king_object_store_meta_write_to_path(meta_path, metadata_source) != SUCCESS) {
+        return FAILURE;
+    }
+
+    (void) king_object_store_runtime_metadata_cache_store(object_id, metadata_source);
+    return SUCCESS;
 }
 
 int king_object_store_meta_read(const char *object_id, king_object_metadata_t *metadata)
@@ -1080,7 +1265,12 @@ int king_object_store_meta_read(const char *object_id, king_object_metadata_t *m
     }
 
     king_object_store_build_meta_path(meta_path, sizeof(meta_path), object_id);
-    return king_object_store_meta_read_from_path(meta_path, metadata);
+    if (king_object_store_meta_read_from_path(meta_path, metadata) != SUCCESS) {
+        return FAILURE;
+    }
+
+    (void) king_object_store_runtime_metadata_cache_store(object_id, metadata);
+    return SUCCESS;
 }
 
 void king_object_store_meta_remove(const char *object_id)
@@ -1091,6 +1281,7 @@ void king_object_store_meta_remove(const char *object_id)
     }
     king_object_store_build_meta_path(meta_path, sizeof(meta_path), object_id);
     unlink(meta_path);
+    king_object_store_runtime_metadata_cache_remove(object_id);
 }
 
 /*
@@ -2098,7 +2289,8 @@ static int king_object_store_local_fs_read_fallback_from_cloud_backup(
      * object logically exists. A true delete removes the sidecar, so stale
      * backup copies must not resurrect removed objects.
      */
-    if (king_object_store_meta_read(object_id, &sidecar_metadata) != SUCCESS) {
+    if (king_object_store_meta_read(object_id, &sidecar_metadata) != SUCCESS
+        && king_object_store_runtime_metadata_cache_read(object_id, &sidecar_metadata) != SUCCESS) {
         return FAILURE;
     }
 
@@ -2135,10 +2327,19 @@ static int king_object_store_local_fs_read_fallback_from_cloud_backup(
             sizeof(king_object_store_runtime.primary_adapter_error),
             "Primary object-store backend read fallback succeeded but local payload rehydration failed."
         );
+        king_object_store_release_read_buffer(data, data_size);
         return FAILURE;
     }
 
-    king_object_store_meta_write(object_id, &sidecar_metadata);
+    if (king_object_store_meta_write(object_id, &sidecar_metadata) != SUCCESS) {
+        king_object_store_append_adapter_error(
+            king_object_store_runtime.primary_adapter_error,
+            sizeof(king_object_store_runtime.primary_adapter_error),
+            "Primary object-store backend read fallback succeeded but local metadata sidecar rehydration failed."
+        );
+        king_object_store_release_read_buffer(data, data_size);
+        return FAILURE;
+    }
     king_object_store_rehydrate_stats();
     return SUCCESS;
 }

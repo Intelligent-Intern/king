@@ -468,6 +468,15 @@ payload disappears while the local `.meta` sidecar still says the object exists,
 rehydrate the missing local payload, and restore live counters from local
 truth. A real delete still removes the `.meta` sidecar, so stale backup copies
 do not resurrect intentionally deleted objects.
+The same `local_fs` + `cloud_s3` pair now also survives a temporary live
+primary-root outage inside the same process. If the configured local storage
+root disappears after the process already loaded valid `.meta` sidecars,
+`king_object_store_get_metadata()` can still answer from a process-local
+metadata bridge and `king_object_store_get()` can heal both the local payload
+and its `.meta` sidecar back from the real `cloud_s3` backup. That bridge is
+deliberately a live-process contract, not a restart contract: on restart King
+still repopulates the cache only from durable local sidecars instead of
+pretending that remote backup alone is the metadata source of truth.
 
 ## A Full Example
 

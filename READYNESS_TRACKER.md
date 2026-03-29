@@ -178,7 +178,7 @@ Status note:
 - [ ] Implement real Azure Blob backend where publicly claimed
 - [x] Finalize local filesystem backend as the reference backend
 - [ ] Validate multi-backend routing with real backends
-- [ ] Validate backend failover on primary backend outage
+- [x] Validate backend failover on primary backend outage
 - [ ] Validate partial backend failures under replication
 - [x] Validate network failures for the real `cloud_s3` backend
 - [x] Validate credential failures for the real `cloud_s3` backend
