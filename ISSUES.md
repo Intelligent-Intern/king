@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate metadata consistency after backend migration between the real `local_fs` and `cloud_s3` backends.
+- [ ] Validate network failures for future real cloud backends.
 
 ## Active Executable Items
 

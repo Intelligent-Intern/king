@@ -389,6 +389,11 @@ That migration proof now also covers data integrity rather than only object
 visibility. Binary payloads with NUL bytes and non-text octets survive the
 roundtrip byte-for-byte, and the restored `content_length` still matches the
 source payload size on the target backend.
+The proof now also covers metadata consistency across that same real backend
+boundary. Durable fields such as `created_at`, cache policy, distribution
+state, and other exported `.meta` semantics survive the route change, while the
+backend-presence markers stay honest about where real copies now exist instead
+of silently dropping the source backend from the restored object view.
 
 `rehydration` is the runtime side of this story. After a restart, the store may
 need to rebuild active in-memory state from durable truth. This is how the

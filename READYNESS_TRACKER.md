@@ -191,7 +191,7 @@ Status note:
 - [ ] Validate throttling / rate-limit behavior for future real cloud backends
 - [x] Validate object migration between backends
 - [x] Validate data integrity after backend migration
-- [ ] Validate metadata consistency after backend migration
+- [x] Validate metadata consistency after backend migration
 - [x] Validate recovery after incomplete writes
 - [x] Validate recovery after partial replication
 

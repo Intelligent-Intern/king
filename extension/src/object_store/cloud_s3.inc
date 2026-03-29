@@ -1080,13 +1080,11 @@ static int king_object_store_s3_write(
         KING_STORAGE_BACKEND_CLOUD_S3,
         1
     );
-    if (king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_S3) {
-        king_object_store_metadata_mark_backend_present(
-            &final_metadata,
-            KING_STORAGE_BACKEND_LOCAL_FS,
-            0
-        );
-    }
+    /*
+     * Do not silently clear a source local_fs presence marker here.
+     * Export/restore migration and local_fs-primary backup copies can
+     * legitimately leave both real backends populated at the same time.
+     */
 
     memset(&existing_metadata, 0, sizeof(existing_metadata));
     if (king_object_store_s3_head_object(
