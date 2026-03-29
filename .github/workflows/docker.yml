@@ -16,9 +16,54 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  artifact-gate:
+    name: Docker artifact gate
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      run-docker-jobs: ${{ steps.check.outputs.run-docker-jobs }}
+      reason: ${{ steps.check.outputs.reason }}
+
+    steps:
+      - name: Decide whether docker publish jobs should run
+        id: check
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            let runDockerJobs = 'false';
+            let reason = `Skipping docker publish for workflow run ${run.id}.`;
+
+            if (run.conclusion === 'success' && run.event === 'push') {
+              const { data } = await github.rest.actions.listWorkflowRunArtifacts({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: run.id,
+                per_page: 100,
+              });
+
+              const hasReleasePackages = data.artifacts.some((artifact) =>
+                /^king-release-package-php\d+\.\d+-linux-(amd64|arm64)$/.test(artifact.name)
+              );
+
+              if (hasReleasePackages) {
+                runDockerJobs = 'true';
+                reason = `Docker publish enabled for workflow run ${run.id}; release package artifacts were found.`;
+              } else {
+                reason = `Skipping docker publish for workflow run ${run.id}; no release package artifacts were produced.`;
+              }
+            }
+
+            core.setOutput('run-docker-jobs', runDockerJobs);
+            core.setOutput('reason', reason);
+            core.notice(reason);
+
   build-and-push:
     name: Build, Smoke & Push Docker Images
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'develop' || !github.event.workflow_run.head_branch) }}
+    needs: artifact-gate
+    if: ${{ needs.artifact-gate.outputs.run-docker-jobs == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -157,7 +202,8 @@ jobs:
 
   build-demo:
     name: Build Demo Application PHP ${{ matrix.php-version }}
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'develop' || !github.event.workflow_run.head_branch) }}
+    needs: artifact-gate
+    if: ${{ needs.artifact-gate.outputs.run-docker-jobs == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
