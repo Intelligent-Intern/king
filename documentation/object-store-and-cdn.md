@@ -385,6 +385,10 @@ with the same object ids, not an in-place live backend flip. King now proves
 that path in both directions against the real `cloud_s3` mock: batch export
 from `local_fs` can be restored onto `cloud_s3`, and a `cloud_s3` object can be
 exported and restored back onto `local_fs`.
+That migration proof now also covers data integrity rather than only object
+visibility. Binary payloads with NUL bytes and non-text octets survive the
+roundtrip byte-for-byte, and the restored `content_length` still matches the
+source payload size on the target backend.
 
 `rehydration` is the runtime side of this story. After a restart, the store may
 need to rebuild active in-memory state from durable truth. This is how the
