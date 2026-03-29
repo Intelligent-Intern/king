@@ -54,6 +54,8 @@ typedef struct _king_object_metadata_t {
     king_object_type_t object_type;
     king_cache_policy_t cache_policy;
     uint32_t cache_ttl_seconds;
+    uint8_t local_fs_present;
+    uint8_t cloud_s3_present;
     /* Cloud-native HA state */
     uint8_t is_backed_up;
     uint8_t replication_status; /* 0: none, 1: pending, 2: completed, 3: failed */

@@ -177,7 +177,7 @@ Status note:
 - [ ] Implement real GCS backend where publicly claimed
 - [ ] Implement real Azure Blob backend where publicly claimed
 - [x] Finalize local filesystem backend as the reference backend
-- [ ] Validate multi-backend routing with real backends
+- [x] Validate multi-backend routing with real backends
 - [x] Validate backend failover on primary backend outage
 - [ ] Validate partial backend failures under replication
 - [x] Validate network failures for the real `cloud_s3` backend

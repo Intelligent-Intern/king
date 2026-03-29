@@ -477,6 +477,16 @@ and its `.meta` sidecar back from the real `cloud_s3` backup. That bridge is
 deliberately a live-process contract, not a restart contract: on restart King
 still repopulates the cache only from durable local sidecars instead of
 pretending that remote backup alone is the metadata source of truth.
+The same verified pair now also has an explicit multi-backend routing contract
+for shared storage roots. Local and cloud routes no longer treat every `.meta`
+sidecar as globally visible truth. King persists backend-presence markers into
+the sidecar, filters both durable sidecars and the live-process metadata cache
+through the active route, and only falls back to a remote `HEAD` rehydrate on
+the `cloud_s3` route when it needs to prove an older legacy cloud object.
+That keeps `local_fs`-only objects invisible to a pure `cloud_s3` route, keeps
+pure `cloud_s3` objects invisible to a `local_fs` route, and still preserves
+shared visibility for the honest `local_fs` primary plus `cloud_s3` backup
+slice.
 
 ## A Full Example
 

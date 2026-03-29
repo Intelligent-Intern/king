@@ -1075,6 +1075,18 @@ static int king_object_store_s3_write(
         final_metadata.created_at = time(NULL);
     }
     final_metadata.modified_at = time(NULL);
+    king_object_store_metadata_mark_backend_present(
+        &final_metadata,
+        KING_STORAGE_BACKEND_CLOUD_S3,
+        1
+    );
+    if (king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_S3) {
+        king_object_store_metadata_mark_backend_present(
+            &final_metadata,
+            KING_STORAGE_BACKEND_LOCAL_FS,
+            0
+        );
+    }
 
     memset(&existing_metadata, 0, sizeof(existing_metadata));
     if (king_object_store_s3_head_object(
@@ -1521,13 +1533,24 @@ int king_object_store_backend_read_metadata(
 {
     char error[256];
     zend_bool exists = 0;
+    king_storage_backend_t active_backend;
 
     if (metadata == NULL || object_id == NULL) {
         return FAILURE;
     }
 
+    active_backend = king_object_store_normalize_backend(
+        king_object_store_runtime.config.primary_backend
+    );
+
     if (king_object_store_meta_read(object_id, metadata) == SUCCESS) {
-        return SUCCESS;
+        if (king_object_store_metadata_matches_backend(object_id, metadata, active_backend)) {
+            return SUCCESS;
+        }
+
+        if (active_backend != KING_STORAGE_BACKEND_CLOUD_S3) {
+            return FAILURE;
+        }
     }
 
     /*
@@ -1539,11 +1562,16 @@ int king_object_store_backend_read_metadata(
     if ((king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_LOCAL_FS
             || king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_MEMORY_CACHE)
         && king_object_store_runtime.config.backup_backend == KING_STORAGE_BACKEND_CLOUD_S3
-        && king_object_store_runtime_metadata_cache_read(object_id, metadata) == SUCCESS) {
+        && king_object_store_runtime_metadata_cache_read(object_id, metadata) == SUCCESS
+        && king_object_store_metadata_matches_backend(
+            object_id,
+            metadata,
+            KING_STORAGE_BACKEND_LOCAL_FS
+        )) {
         return SUCCESS;
     }
 
-    if (king_object_store_runtime.config.primary_backend != KING_STORAGE_BACKEND_CLOUD_S3) {
+    if (active_backend != KING_STORAGE_BACKEND_CLOUD_S3) {
         return FAILURE;
     }
 
@@ -1551,6 +1579,11 @@ int king_object_store_backend_read_metadata(
         return FAILURE;
     }
 
+    king_object_store_metadata_mark_backend_present(
+        metadata,
+        KING_STORAGE_BACKEND_CLOUD_S3,
+        1
+    );
     (void) king_object_store_meta_write(object_id, metadata);
     return SUCCESS;
 }

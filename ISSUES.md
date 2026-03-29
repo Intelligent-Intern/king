@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate multi-backend routing behavior across the real `local_fs` and `cloud_s3` object-store backends.
+- [ ] Validate partial backend failures under replication for the real object-store backends.
 
 ## Active Executable Items
 

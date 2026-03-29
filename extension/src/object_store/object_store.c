@@ -71,6 +71,7 @@ static int king_object_store_s3_read(const char *object_id, void **data, size_t 
 static int king_object_store_s3_remove(const char *object_id);
 static int king_object_store_s3_list(zval *return_array);
 static void king_object_store_shutdown_libcurl_runtime(void);
+static king_storage_backend_t king_object_store_normalize_backend(king_storage_backend_t backend);
 
 static void king_object_store_runtime_metadata_cache_entry_free(king_object_metadata_t *metadata)
 {
@@ -203,6 +204,82 @@ static void king_object_store_release_read_buffer(void **data, size_t *data_size
     if (data_size != NULL) {
         *data_size = 0;
     }
+}
+
+static void king_object_store_metadata_mark_backend_present(
+    king_object_metadata_t *metadata,
+    king_storage_backend_t backend,
+    uint8_t present
+)
+{
+    if (metadata == NULL) {
+        return;
+    }
+
+    backend = king_object_store_normalize_backend(backend);
+    if (backend == KING_STORAGE_BACKEND_LOCAL_FS) {
+        metadata->local_fs_present = present;
+    } else if (backend == KING_STORAGE_BACKEND_CLOUD_S3) {
+        metadata->cloud_s3_present = present;
+    }
+}
+
+static int king_object_store_local_fs_payload_exists(const char *object_id)
+{
+    char file_path[1024];
+    struct stat st;
+
+    if (object_id == NULL || king_object_store_object_id_validate(object_id) != NULL) {
+        return 0;
+    }
+
+    king_object_store_build_path(file_path, sizeof(file_path), object_id);
+    if (stat(file_path, &st) != 0) {
+        return 0;
+    }
+
+    return S_ISREG(st.st_mode) ? 1 : 0;
+}
+
+static int king_object_store_metadata_matches_backend(
+    const char *object_id,
+    const king_object_metadata_t *metadata,
+    king_storage_backend_t backend
+)
+{
+    if (metadata == NULL) {
+        return 0;
+    }
+
+    backend = king_object_store_normalize_backend(backend);
+
+    if (backend == KING_STORAGE_BACKEND_LOCAL_FS) {
+        if (metadata->local_fs_present != 0) {
+            return 1;
+        }
+
+        /* Legacy sidecars without explicit route markers stay readable when
+         * the local payload still exists or when the object is known to have
+         * a backed-up failover copy for the local_fs primary contract.
+         */
+        return king_object_store_local_fs_payload_exists(object_id)
+            || metadata->is_backed_up != 0;
+    }
+
+    if (backend == KING_STORAGE_BACKEND_CLOUD_S3) {
+        if (metadata->cloud_s3_present != 0) {
+            return 1;
+        }
+
+        /* Legacy local_fs sidecars that were also backed up can still prove a
+         * cloud-visible copy. Pure legacy cloud_s3 sidecars will miss here and
+         * be rehydrated from a fresh HEAD request instead of leaking local
+         * route state into the cloud path.
+         */
+        return metadata->is_backed_up != 0;
+    }
+
+    return 0;
 }
 
 static king_storage_backend_t king_object_store_normalize_backend(king_storage_backend_t backend)
@@ -1104,6 +1181,10 @@ static int king_object_store_metadata_parse_stream(FILE *fp, king_object_metadat
             metadata->cache_policy = (king_cache_policy_t) atoi(val);
         } else if (strcmp(key, "cache_ttl_seconds") == 0) {
             metadata->cache_ttl_seconds = (uint32_t) strtoul(val, NULL, 10);
+        } else if (strcmp(key, "local_fs_present") == 0) {
+            metadata->local_fs_present = (uint8_t) atoi(val);
+        } else if (strcmp(key, "cloud_s3_present") == 0) {
+            metadata->cloud_s3_present = (uint8_t) atoi(val);
         } else if (strcmp(key, "is_backed_up") == 0) {
             metadata->is_backed_up = (uint8_t) atoi(val);
         } else if (strcmp(key, "replication_status") == 0) {
@@ -1150,6 +1231,8 @@ static int king_object_store_meta_write_to_path(const char *path, const king_obj
         "object_type=%d\n"
         "cache_policy=%d\n"
         "cache_ttl_seconds=%u\n"
+        "local_fs_present=%d\n"
+        "cloud_s3_present=%d\n"
         "is_backed_up=%d\n"
         "replication_status=%d\n"
         "is_distributed=%d\n"
@@ -1165,6 +1248,8 @@ static int king_object_store_meta_write_to_path(const char *path, const king_obj
         (int)      metadata->object_type,
         (int)      metadata->cache_policy,
         (unsigned) metadata->cache_ttl_seconds,
+        (int)      metadata->local_fs_present,
+        (int)      metadata->cloud_s3_present,
         (int)      metadata->is_backed_up,
         (int)      metadata->replication_status,
         (int)      metadata->is_distributed,
@@ -1345,6 +1430,7 @@ int king_object_store_local_fs_write(
     char file_path[1024];
     struct stat st_old;
     int is_overwrite = 0;
+    king_object_metadata_t final_metadata;
 
     if (!king_object_store_runtime.initialized || object_id == NULL || data == NULL) {
         return FAILURE;
@@ -1386,7 +1472,27 @@ int king_object_store_local_fs_write(
     king_object_store_runtime.latest_object_at = time(NULL);
 
     /* Write durable metadata sidecar */
-    king_object_store_meta_write(object_id, metadata);
+    memset(&final_metadata, 0, sizeof(final_metadata));
+    if (metadata != NULL) {
+        final_metadata = *metadata;
+    }
+    if (final_metadata.object_id[0] == '\0') {
+        strncpy(final_metadata.object_id, object_id, sizeof(final_metadata.object_id) - 1);
+    }
+    if (final_metadata.content_length == 0) {
+        final_metadata.content_length = data_size;
+    }
+    if (final_metadata.created_at == 0) {
+        final_metadata.created_at = time(NULL);
+    }
+    final_metadata.modified_at = time(NULL);
+    king_object_store_metadata_mark_backend_present(
+        &final_metadata,
+        KING_STORAGE_BACKEND_LOCAL_FS,
+        1
+    );
+
+    king_object_store_meta_write(object_id, &final_metadata);
 
     return SUCCESS;
 }
@@ -1961,8 +2067,13 @@ static int king_object_store_backup_object_to_backend(
     if (king_object_store_backend_read_metadata(object_id, &metadata_snapshot) == SUCCESS) {
         if (metadata_snapshot.is_backed_up == 0) {
             metadata_snapshot.is_backed_up = 1;
-            king_object_store_meta_write(object_id, &metadata_snapshot);
         }
+        king_object_store_metadata_mark_backend_present(
+            &metadata_snapshot,
+            backup_backend,
+            1
+        );
+        king_object_store_meta_write(object_id, &metadata_snapshot);
     }
 
     king_object_store_set_backend_runtime_result(
@@ -2293,6 +2404,13 @@ static int king_object_store_local_fs_read_fallback_from_cloud_backup(
         && king_object_store_runtime_metadata_cache_read(object_id, &sidecar_metadata) != SUCCESS) {
         return FAILURE;
     }
+    if (!king_object_store_metadata_matches_backend(
+            object_id,
+            &sidecar_metadata,
+            KING_STORAGE_BACKEND_LOCAL_FS
+        )) {
+        return FAILURE;
+    }
 
     rc = king_object_store_s3_read_with_error(
         object_id,
@@ -2315,6 +2433,16 @@ static int king_object_store_local_fs_read_fallback_from_cloud_backup(
         strncpy(sidecar_metadata.object_id, object_id, sizeof(sidecar_metadata.object_id) - 1);
     }
     sidecar_metadata.content_length = (uint64_t) *data_size;
+    king_object_store_metadata_mark_backend_present(
+        &sidecar_metadata,
+        KING_STORAGE_BACKEND_LOCAL_FS,
+        1
+    );
+    king_object_store_metadata_mark_backend_present(
+        &sidecar_metadata,
+        KING_STORAGE_BACKEND_CLOUD_S3,
+        1
+    );
     sidecar_metadata.is_backed_up = 1;
 
     if (metadata != NULL) {
