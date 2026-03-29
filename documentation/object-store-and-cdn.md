@@ -456,6 +456,12 @@ down before the write is acknowledged locally, the local sidecar state stays
 failed instead of pretending success, the object remains readable from the
 remote backend, metadata can be rehydrated on demand, and a fresh
 `king_object_store_init()` heals the inventory counters from remote truth.
+For `local_fs` primary plus real `cloud_s3` backup, King now also keeps a
+separate partial-backup-failure contract: if the local primary write succeeds
+but the backup `PUT` tears down mid-flight, the caller still sees the write as
+failed, `is_backed_up` stays unset, the local primary object remains readable,
+the backup adapter keeps the concrete failure reason, and a later successful
+overwrite can heal the backup state back to `ok`.
 
 ## A Full Example
 

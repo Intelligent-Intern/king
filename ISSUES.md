@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate partial backup-failure recovery for `local_fs` primary plus real object-store `cloud_s3` backup.
+- [ ] Implement `local_fs` primary read fallback to real object-store `cloud_s3` backup on primary miss.
 
 ## Active Executable Items
 
@@ -96,7 +96,7 @@
 - orchestrator continuation after host restart, richer error classification, multi-worker execution depth, and broader observability
 - Smart-DNS split-brain, failure/recovery, and broader distributed-topology depth
 - broader QUIC lifecycle, stats, resumption, and recovery validation beyond the current HTTP/3 client slices
-- object-store cloud backend failure slices beyond the now-real `cloud_s3` payload path: migration and partial-backend recovery
+- object-store cloud backend failover, migration, and broader partial-backend recovery beyond the now-real `cloud_s3` payload path
 
 ## Notes
 
