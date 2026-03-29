@@ -378,6 +378,13 @@ These functions matter because recovery is not complete if only the payload
 returns. Metadata must travel with it, otherwise the restored bytes lose their
 meaning. The restored object must still know what it is, how fresh it is, and
 how it should behave in the rest of the platform.
+The same export and restore format is also the currently verified migration path
+between the real `local_fs` and `cloud_s3` backends. In the current runtime,
+that means exporting from the source route and restoring under the target route
+with the same object ids, not an in-place live backend flip. King now proves
+that path in both directions against the real `cloud_s3` mock: batch export
+from `local_fs` can be restored onto `cloud_s3`, and a `cloud_s3` object can be
+exported and restored back onto `local_fs`.
 
 `rehydration` is the runtime side of this story. After a restart, the store may
 need to rebuild active in-memory state from durable truth. This is how the
