@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <dlfcn.h>
 #include <ctype.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -1633,10 +1634,14 @@ int king_object_store_local_fs_write(
     const king_object_metadata_t *metadata)
 {
     FILE *fp;
+    int fd;
     char file_path[1024];
     struct stat st_old;
     int is_overwrite = 0;
+    zend_bool old_size_resolved = 0;
+    uint64_t old_size = 0;
     king_object_metadata_t final_metadata;
+    king_object_metadata_t existing_metadata;
 
     if (!king_object_store_runtime.initialized || object_id == NULL || data == NULL) {
         return FAILURE;
@@ -1648,14 +1653,40 @@ int king_object_store_local_fs_write(
 
     king_object_store_build_path(file_path, sizeof(file_path), object_id);
 
-    /* Detect overwrite to fix capacity double-counting */
-    if (stat(file_path, &st_old) == 0 && S_ISREG(st_old.st_mode)) {
-        is_overwrite = 1;
-    }
+    /*
+     * Fast-path new objects without a pre-write stat(). Most benchmarked and
+     * request-time writes use fresh IDs, so prefer a create-only open and
+     * resolve overwrite state only on EEXIST.
+     */
+    fd = open(file_path, O_WRONLY | O_CREAT | O_EXCL, 0666);
+    if (fd >= 0) {
+        fp = fdopen(fd, "wb");
+        if (fp == NULL) {
+            close(fd);
+            unlink(file_path);
+            return FAILURE;
+        }
+    } else {
+        if (errno != EEXIST) {
+            return FAILURE;
+        }
 
-    fp = fopen(file_path, "wb");
-    if (fp == NULL) {
-        return FAILURE;
+        memset(&existing_metadata, 0, sizeof(existing_metadata));
+        if (king_object_store_runtime_metadata_cache_read(object_id, &existing_metadata) == SUCCESS
+            || king_object_store_meta_read(object_id, &existing_metadata) == SUCCESS) {
+            is_overwrite = 1;
+            old_size = existing_metadata.content_length;
+            old_size_resolved = 1;
+        } else if (stat(file_path, &st_old) == 0 && S_ISREG(st_old.st_mode)) {
+            is_overwrite = 1;
+            old_size = (uint64_t) st_old.st_size;
+            old_size_resolved = 1;
+        }
+
+        fp = fopen(file_path, "wb");
+        if (fp == NULL) {
+            return FAILURE;
+        }
     }
 
     if (fwrite(data, 1, data_size, fp) != data_size) {
@@ -1667,8 +1698,8 @@ int king_object_store_local_fs_write(
     fclose(fp);
 
     if (is_overwrite) {
-        if (king_object_store_runtime.current_stored_bytes >= (uint64_t)st_old.st_size) {
-            king_object_store_runtime.current_stored_bytes -= (uint64_t)st_old.st_size;
+        if (old_size_resolved && king_object_store_runtime.current_stored_bytes >= old_size) {
+            king_object_store_runtime.current_stored_bytes -= old_size;
         }
         /* Do NOT increment object count on overwrite */
     } else {
