@@ -36,7 +36,8 @@ function main(array $argv): void
             $caseName,
             $definition,
             $iterations,
-            $warmupIterations
+            $warmupIterations,
+            $options['samples']
         );
     }
 
@@ -48,6 +49,8 @@ function main(array $argv): void
         'hostname' => php_uname('n'),
         'selected_cases' => $selectedCaseNames,
         'max_slowdown' => $options['max_slowdown'],
+        'samples' => $options['samples'],
+        'sample_strategy' => 'median',
         'cases' => $results,
     ];
 
@@ -305,6 +308,7 @@ function parse_options(array $argv, array $availableCases): array
         'budget_file' => null,
         'write_baseline' => null,
         'max_slowdown' => KING_BENCHMARK_DEFAULT_MAX_SLOWDOWN,
+        'samples' => 1,
         'json' => false,
         'list_cases' => false,
     ];
@@ -349,6 +353,10 @@ function parse_options(array $argv, array $availableCases): array
 
             case '--warmup':
                 $options['warmup'] = parse_non_negative_int($value, '--warmup');
+                break;
+
+            case '--samples':
+                $options['samples'] = parse_positive_int($value, '--samples');
                 break;
 
             case '--baseline':
@@ -418,7 +426,53 @@ function default_warmup_iterations(int $iterations): int
     return max(5, min(50, (int) ceil($iterations * 0.1)));
 }
 
-function run_case(string $caseName, array $definition, int $iterations, int $warmupIterations): array
+function run_case(
+    string $caseName,
+    array $definition,
+    int $iterations,
+    int $warmupIterations,
+    int $sampleCount
+): array
+{
+    $samples = [];
+
+    for ($sampleIndex = 0; $sampleIndex < $sampleCount; $sampleIndex++) {
+        $samples[] = run_case_sample(
+            $caseName,
+            $definition,
+            $iterations,
+            $warmupIterations,
+            $sampleIndex
+        );
+    }
+
+    usort(
+        $samples,
+        static fn (array $left, array $right): int => $left['elapsed_ns'] <=> $right['elapsed_ns']
+    );
+
+    $selectedIndex = (int) floor(count($samples) / 2);
+    $selected = $samples[$selectedIndex];
+
+    $selected['sample_count'] = $sampleCount;
+    $selected['selected_sample_index'] = $selected['sample_index'];
+    $selected['sample_strategy'] = 'median';
+    $selected['sample_elapsed_ns'] = array_map(
+        static fn (array $sample): int => (int) $sample['elapsed_ns'],
+        $samples
+    );
+    unset($selected['sample_index']);
+
+    return $selected;
+}
+
+function run_case_sample(
+    string $caseName,
+    array $definition,
+    int $iterations,
+    int $warmupIterations,
+    int $sampleIndex
+): array
 {
     $bootstrap = $definition['bootstrap'];
     $context = $bootstrap();
@@ -459,6 +513,7 @@ function run_case(string $caseName, array $definition, int $iterations, int $war
         'description' => $definition['description'],
         'iterations' => $iterations,
         'warmup_iterations' => $warmupIterations,
+        'sample_index' => $sampleIndex,
         'operations_per_iteration' => (int) $definition['operations_per_iteration'],
         'total_operations' => $totalOperations,
         'elapsed_ns' => $elapsedNs,
@@ -625,6 +680,7 @@ function print_human_report(array $payload, ?array $comparison, ?array $budgetCo
     echo 'generated_at: ' . $payload['generated_at'] . PHP_EOL;
     echo 'php_version:  ' . $payload['php_version'] . PHP_EOL;
     echo 'selected:     ' . implode(', ', $payload['selected_cases']) . PHP_EOL;
+    echo 'samples:      ' . (string) ($payload['samples'] ?? 1) . ' (median)' . PHP_EOL;
     echo PHP_EOL;
 
     $headers = ['case', 'iters', 'ops/iter', 'ms total', 'us/iter', 'iter/s', 'ops/s', 'checksum'];
@@ -737,6 +793,7 @@ function print_help(array $availableCases): void
     echo '  --case=<list>            Comma-separated subset of cases (' . implode(', ', $availableCases) . ')' . PHP_EOL;
     echo '  --iterations=<n>         Override iterations for all selected cases' . PHP_EOL;
     echo '  --warmup=<n>             Override warmup iterations for all selected cases' . PHP_EOL;
+    echo '  --samples=<n>            Run each case n times and keep the median sample' . PHP_EOL;
     echo '  --baseline=<path>        Compare against a previous JSON baseline' . PHP_EOL;
     echo '  --budget-file=<path>     Enforce per-case ns/iteration budgets from a JSON file' . PHP_EOL;
     echo '  --write-baseline=<path>  Write the current run to a JSON baseline file' . PHP_EOL;

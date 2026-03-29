@@ -96,7 +96,7 @@ jobs:
 
       - name: Run final go-live readiness checks
         working-directory: extension
-        run: ../infra/scripts/go-live-readiness.sh --skip-baseline --output-dir ../dist --benchmark-iterations 5000 --benchmark-warmup 500 --benchmark-budget-file benchmarks/budgets/canonical-ci.json
+        run: ../infra/scripts/go-live-readiness.sh --skip-baseline --output-dir ../dist --benchmark-iterations 5000 --benchmark-warmup 500 --benchmark-samples 3 --benchmark-budget-file benchmarks/budgets/canonical-ci.json
 
       - name: Upload canonical release package artifact
         uses: actions/upload-artifact@v4
