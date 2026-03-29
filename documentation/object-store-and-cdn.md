@@ -466,6 +466,10 @@ If callers select those future cloud backends without `cloud_credentials`, the
 runtime now preserves that absence as the visible reason through
 `runtime_*_adapter_error` and later operation failures instead of overwriting it
 with a vaguer simulated-only message.
+That fail-closed boundary now also covers throttle-shaped endpoints: even if a
+configured peer would respond with `429` or `SlowDown`, the future cloud paths
+still do not emit network traffic and do not pretend to expose a real
+rate-limit contract before a native adapter exists.
 
 When the active `cloud_s3` credentials are rejected, `king_object_store_init()`
 keeps the runtime visible but marks the primary adapter as failed. The concrete

@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate throttling / rate-limit behavior for future real cloud backends.
+- [ ] Implement real GCS backend where publicly claimed.
 
 ## Active Executable Items
 

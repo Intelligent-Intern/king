@@ -188,7 +188,7 @@ Status note:
 - [x] Validate partial backup-failure recovery for `local_fs` primary plus real `cloud_s3` backup
 - [x] Validate `local_fs` primary read fallback to real `cloud_s3` backup on payload miss
 - [x] Validate object-store delete semantics across the real `local_fs` and `cloud_s3` backends
-- [ ] Validate throttling / rate-limit behavior for future real cloud backends
+- [x] Validate throttling / rate-limit behavior for future real cloud backends
 - [x] Validate object migration between backends
 - [x] Validate data integrity after backend migration
 - [x] Validate metadata consistency after backend migration
