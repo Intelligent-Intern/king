@@ -189,7 +189,7 @@ Status note:
 - [ ] Validate object migration between backends
 - [ ] Validate data integrity after backend migration
 - [ ] Validate metadata consistency after backend migration
-- [ ] Validate recovery after incomplete writes
+- [x] Validate recovery after incomplete writes
 - [ ] Validate recovery after partial replication
 
 ## G. Backup / Restore / Import / Export / Recovery

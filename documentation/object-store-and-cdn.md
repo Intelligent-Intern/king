@@ -450,7 +450,12 @@ failures surface the same adapter error in the thrown `King\SystemException`.
 The same status/error surface is now also the stable contract for endpoint
 connectivity failures such as an unreachable `cloud_s3` API endpoint, and for
 explicit `429` / S3 `SlowDown` throttling responses from the configured
-endpoint.
+endpoint. The same runtime also now has an explicit recovery contract for
+incomplete `cloud_s3` writes: if a `PUT` lands remotely but the response tears
+down before the write is acknowledged locally, the local sidecar state stays
+failed instead of pretending success, the object remains readable from the
+remote backend, metadata can be rehydrated on demand, and a fresh
+`king_object_store_init()` heals the inventory counters from remote truth.
 
 ## A Full Example
 

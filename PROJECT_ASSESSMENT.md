@@ -35,7 +35,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `388/388` passing
+- `./infra/scripts/test-extension.sh`: `389/389` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -80,7 +80,7 @@ The current tree already proves:
 - Semantic DNS register/discover/update routing, live HTTP health-probe driven route and discovery refresh from service-owned health endpoints, idempotent repeated registration without redundant durable-state churn, coherent parallel service/status persistence through locked refresh-before-persist durable-state transactions, larger-topology local churn coherence, coherent concurrent larger-topology mother-node sync statistics across multiprocess writers in the local persisted-state slice, registry-backed mother-node sync statistics, persisted registration plus mother-node rehydration across restart, object-safe durable-state decode hardening, and private-directory durable state handling
 - Smart-DNS public config and init surfaces are now narrowed to the active `service_discovery` / semantic-runtime knobs
 - router/loadbalancer is now exposed as an explicit config-backed system component with honest policy/discovery-only introspection
-- object-store local filesystem persistence plus real `cloud_s3` payload transport with explicit `local_fs+cloud_s3_sidecars` runtime/system contract, `memory_cache -> local_fs` compatibility aliasing, `.meta` sidecars as the current metadata reference across the verified backends, explicit `cloud_s3` credential-rejection, endpoint-connect-failure, and throttling detection through runtime adapter status/error surfaces, simulated `distributed`/`cloud_gcs`/`cloud_azure` fencing, CDN cache/runtime behavior, and confined backup/restore/import/export paths
+- object-store local filesystem persistence plus real `cloud_s3` payload transport with explicit `local_fs+cloud_s3_sidecars` runtime/system contract, `memory_cache -> local_fs` compatibility aliasing, `.meta` sidecars as the current metadata reference across the verified backends, explicit `cloud_s3` credential-rejection, endpoint-connect-failure, throttling detection, and incomplete-write recovery through runtime adapter status/error surfaces plus rehydration, simulated `distributed`/`cloud_gcs`/`cloud_azure` fencing, CDN cache/runtime behavior, and confined backup/restore/import/export paths
 - deterministic QUIC bootstrap through a tracked pinset for the `quiche` repo revision, BoringSSL submodule revision, pinned workspace lockfile, and pinned `wirefilter` git revision with fail-closed static and PHPT verification
 - one shared runtime install smoke across staged profiles, packaged release artifacts, and published runtime containers, plus first-class clean-host package install and container smoke matrix entrypoints
 - long-duration ASan, UBSan, and leak-oriented soak gates with retained per-iteration logs and archived failure diagnostics under `extension/build/soak/` plus CI artifact upload on soak failure

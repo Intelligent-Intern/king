@@ -218,6 +218,17 @@ function king_object_store_s3_mock_error_body(string $code, string $message): st
         . "</Message></Error>";
 }
 
+function king_object_store_s3_mock_persist_object(string $objectsDirectory, string $objectId, string $body): void
+{
+    if ($objectId === '') {
+        return;
+    }
+
+    $objectPath = king_object_store_s3_mock_object_path($objectsDirectory, $objectId);
+    file_put_contents($objectPath, $body);
+    touch($objectPath);
+}
+
 function king_object_store_s3_mock_list_xml(string $objectsDirectory): string
 {
     $xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ListBucketResult>";
@@ -273,6 +284,7 @@ while (($conn = @stream_socket_accept($server, 10)) !== false) {
     $segments = explode('/', ltrim($path, '/'));
     $bucket = rawurldecode((string) ($segments[0] ?? ''));
     $objectId = count($segments) > 1 ? rawurldecode(implode('/', array_slice($segments, 1))) : '';
+    $objectPath = $objectId === '' ? '' : king_object_store_s3_mock_object_path($objectsDirectory, $objectId);
 
     $capture['events'][] = [
         'method' => $method,
@@ -303,12 +315,29 @@ while (($conn = @stream_socket_accept($server, 10)) !== false) {
 
     $forcedResponse = king_object_store_s3_mock_take_forced_response($options, $method, $target);
     if ($forcedResponse !== null) {
+        $persistObjectBeforeReply = !empty($forcedResponse['persist_object_before_reply']);
+        $closeConnectionWithoutResponse = !empty($forcedResponse['close_connection_without_response']);
+        $rawResponsePrefix = (string) ($forcedResponse['raw_response_prefix'] ?? '');
         $status = (int) ($forcedResponse['status'] ?? 503);
         $reason = (string) ($forcedResponse['reason'] ?? king_object_store_s3_mock_reason_phrase($status));
         $headersOut = is_array($forcedResponse['headers'] ?? null) ? $forcedResponse['headers'] : [];
         $bodyOut = (string) ($forcedResponse['body'] ?? '');
         $errorCode = (string) ($forcedResponse['error_code'] ?? '');
         $errorMessage = (string) ($forcedResponse['error_message'] ?? 'The object-store endpoint is temporarily throttling requests.');
+
+        if ($persistObjectBeforeReply && $method === 'PUT' && $objectId !== '') {
+            king_object_store_s3_mock_persist_object($objectsDirectory, $objectId, $body);
+            $capture['events'][count($capture['events']) - 1]['persisted_before_forced_reply'] = true;
+        }
+
+        if ($closeConnectionWithoutResponse) {
+            $capture['events'][count($capture['events']) - 1]['forced_disconnect'] = true;
+            if ($rawResponsePrefix !== '') {
+                fwrite($conn, $rawResponsePrefix);
+            }
+            fclose($conn);
+            continue;
+        }
 
         if ($bodyOut === '' && $errorCode !== '') {
             $bodyOut = king_object_store_s3_mock_error_body($errorCode, $errorMessage);
@@ -345,8 +374,7 @@ while (($conn = @stream_socket_accept($server, 10)) !== false) {
     $objectPath = king_object_store_s3_mock_object_path($objectsDirectory, $objectId);
 
     if ($method === 'PUT') {
-        file_put_contents($objectPath, $body);
-        touch($objectPath);
+        king_object_store_s3_mock_persist_object($objectsDirectory, $objectId, $body);
         king_object_store_s3_mock_respond($conn, 200, 'OK');
         fclose($conn);
         continue;
