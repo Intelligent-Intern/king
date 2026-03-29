@@ -1,4 +1,5 @@
 #include "object_store/object_store_internal.h"
+#include <sys/stat.h>
 
 PHP_FUNCTION(king_cdn_cache_object)
 {
@@ -6,11 +7,13 @@ PHP_FUNCTION(king_cdn_cache_object)
     zval *options = NULL;
     void *data = NULL;
     size_t data_size = 0;
+    king_object_metadata_t metadata;
     king_cdn_cache_entry *cache_entry;
     king_cdn_cache_entry *existing = NULL;
     zval stored_entry;
     zend_long ttl_sec;
     time_t cached_at;
+    zend_bool size_resolved = 0;
 
     ZEND_PARSE_PARAMETERS_START(1, 2)
         Z_PARAM_STR(object_id)
@@ -72,15 +75,51 @@ PHP_FUNCTION(king_cdn_cache_object)
         }
     }
 
-    /* Verify the object exists in the backing store */
-    if (king_object_store_read_object(ZSTR_VAL(object_id), &data, &data_size, NULL) != SUCCESS) {
-        RETURN_FALSE;
-    }
-    if (data) {
-        if (data_size > 0) {
-            memset(data, 0, data_size);
+    /*
+     * The local CDN entry only tracks payload size and TTL metadata. Avoid a
+     * full payload read when the active backend can prove object existence and
+     * content length through local sidecars or cloud HEAD metadata.
+     */
+    if (king_object_store_runtime.initialized) {
+        king_storage_backend_t primary_backend = king_object_store_runtime.config.primary_backend;
+
+        memset(&metadata, 0, sizeof(metadata));
+
+        if ((primary_backend == KING_STORAGE_BACKEND_LOCAL_FS
+                || primary_backend == KING_STORAGE_BACKEND_MEMORY_CACHE)
+            && king_object_store_meta_read(ZSTR_VAL(object_id), &metadata) == SUCCESS) {
+            struct stat st;
+            char file_path[1024];
+
+            king_object_store_build_path(file_path, sizeof(file_path), ZSTR_VAL(object_id));
+            if (stat(file_path, &st) == 0) {
+                if (metadata.content_length > 0 && metadata.content_length <= (uint64_t) SIZE_MAX) {
+                    data_size = (size_t) metadata.content_length;
+                } else {
+                    data_size = (size_t) st.st_size;
+                }
+                size_resolved = 1;
+            }
+        } else if ((primary_backend == KING_STORAGE_BACKEND_CLOUD_S3
+                || primary_backend == KING_STORAGE_BACKEND_CLOUD_GCS
+                || primary_backend == KING_STORAGE_BACKEND_CLOUD_AZURE)
+            && king_object_store_backend_read_metadata(ZSTR_VAL(object_id), &metadata) == SUCCESS
+            && metadata.content_length <= (uint64_t) SIZE_MAX) {
+            data_size = (size_t) metadata.content_length;
+            size_resolved = 1;
         }
-        pefree(data, 1);
+    }
+
+    if (!size_resolved) {
+        if (king_object_store_read_object(ZSTR_VAL(object_id), &data, &data_size, NULL) != SUCCESS) {
+            RETURN_FALSE;
+        }
+        if (data) {
+            if (data_size > 0) {
+                memset(data, 0, data_size);
+            }
+            pefree(data, 1);
+        }
     }
 
     /*
