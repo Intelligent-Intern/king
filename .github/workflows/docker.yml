@@ -18,7 +18,7 @@ env:
 jobs:
   build-and-push:
     name: Build, Smoke & Push Docker Images
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'pull_request' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'develop' || !github.event.workflow_run.head_branch) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -157,7 +157,7 @@ jobs:
 
   build-demo:
     name: Build Demo Application PHP ${{ matrix.php-version }}
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'pull_request' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'develop' || !github.event.workflow_run.head_branch) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

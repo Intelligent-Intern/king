@@ -3,8 +3,7 @@ name: King Canonical Baseline
 on:
   push:
     branches:
-      - main
-      - develop
+      - '**'
     tags:
       - 'v*'
   pull_request:
