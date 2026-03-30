@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate Smart-DNS split-brain and partial-failure recovery on the local persisted-state slice.
+- [ ] No open object-store cloud-backend leaf remains on this branch.
 
 ## Active Executable Items
 
@@ -96,6 +96,7 @@
 - orchestrator continuation after host restart, richer error classification, multi-worker execution depth, and broader observability
 - Smart-DNS split-brain, failure/recovery, and broader distributed-topology depth
 - broader QUIC lifecycle, stats, resumption, and recovery validation beyond the current HTTP/3 client slices
+- object-store cloud backend failover, migration, and broader partial-backend recovery beyond the now-real `cloud_s3` payload path
 
 ## Notes
 

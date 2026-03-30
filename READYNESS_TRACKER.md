@@ -173,21 +173,27 @@ Status note:
 
 ## F. Object Store Cloud Backends
 
-- [ ] Implement real S3 backend
-- [ ] Implement real GCS backend where publicly claimed
-- [ ] Implement real Azure Blob backend where publicly claimed
+- [x] Implement real S3 backend
+- [x] Implement real GCS backend where publicly claimed
+- [x] Implement real Azure Blob backend where publicly claimed
 - [x] Finalize local filesystem backend as the reference backend
-- [ ] Validate multi-backend routing with real backends
-- [ ] Validate backend failover on primary backend outage
-- [ ] Validate partial backend failures under replication
-- [ ] Validate network failures for cloud backends
-- [ ] Validate credential failures for cloud backends
-- [ ] Validate throttling / rate-limit behavior for cloud backends
-- [ ] Validate object migration between backends
-- [ ] Validate data integrity after backend migration
-- [ ] Validate metadata consistency after backend migration
-- [ ] Validate recovery after incomplete writes
-- [ ] Validate recovery after partial replication
+- [x] Validate multi-backend routing with real backends
+- [x] Validate backend failover on primary backend outage
+- [x] Validate partial backend failures under replication
+- [x] Validate network failures for the real `cloud_s3` backend
+- [x] Validate credential failures for the real `cloud_s3` backend
+- [x] Validate network failures for future real cloud backends
+- [x] Validate credential failures for future real cloud backends
+- [x] Validate throttling / rate-limit behavior for the real `cloud_s3` backend
+- [x] Validate partial backup-failure recovery for `local_fs` primary plus real `cloud_s3` backup
+- [x] Validate `local_fs` primary read fallback to real `cloud_s3` backup on payload miss
+- [x] Validate object-store delete semantics across the real `local_fs` and `cloud_s3` backends
+- [x] Validate throttling / rate-limit behavior for future real cloud backends
+- [x] Validate object migration between backends
+- [x] Validate data integrity after backend migration
+- [x] Validate metadata consistency after backend migration
+- [x] Validate recovery after incomplete writes
+- [x] Validate recovery after partial replication
 
 ## G. Backup / Restore / Import / Export / Recovery
 

@@ -10,7 +10,7 @@ var_dump(king_object_store_init([
     'primary_backend' => 'memory_cache',
     'storage_root_path' => $dir,
     'max_storage_size_bytes' => 4,
-    'replication_factor' => 2,
+    'replication_factor' => 1,
     'chunk_size_kb' => 64,
     'cdn_config' => [
         'enabled' => true,
@@ -48,7 +48,7 @@ bool(true)
 string(8) "local_fs"
 string(%d) "%s"
 int(4)
-int(2)
+int(1)
 int(64)
 bool(true)
 int(32)

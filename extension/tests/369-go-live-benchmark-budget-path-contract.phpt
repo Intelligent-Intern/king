@@ -6,13 +6,24 @@ $extensionDir = dirname(__DIR__);
 $rootDir = dirname($extensionDir);
 $script = (string) file_get_contents($rootDir . '/infra/scripts/go-live-readiness.sh');
 $workflow = (string) file_get_contents($rootDir . '/.github/workflows/ci.yml');
+$runner = (string) file_get_contents($rootDir . '/benchmarks/run.php');
 
 var_dump($script !== '');
 var_dump(str_contains($script, 'resolve_existing_path()'));
 var_dump(str_contains($script, '${ROOT_DIR}/${candidate}'));
+var_dump(str_contains($script, '--benchmark-samples'));
+var_dump(str_contains($script, '--samples="${BENCHMARK_SAMPLES}"'));
 var_dump(str_contains($workflow, '--benchmark-budget-file benchmarks/budgets/canonical-ci.json'));
+var_dump(str_contains($workflow, '--benchmark-samples 3'));
+var_dump(str_contains($runner, "--samples=<n>"));
+var_dump(str_contains($runner, "'sample_strategy' => 'median'"));
 ?>
 --EXPECT--
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 bool(true)

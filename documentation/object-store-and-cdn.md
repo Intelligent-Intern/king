@@ -378,6 +378,22 @@ These functions matter because recovery is not complete if only the payload
 returns. Metadata must travel with it, otherwise the restored bytes lose their
 meaning. The restored object must still know what it is, how fresh it is, and
 how it should behave in the rest of the platform.
+The same export and restore format is also the currently verified migration path
+between the real `local_fs` and `cloud_s3` backends. In the current runtime,
+that means exporting from the source route and restoring under the target route
+with the same object ids, not an in-place live backend flip. King now proves
+that path in both directions against the real `cloud_s3` mock: batch export
+from `local_fs` can be restored onto `cloud_s3`, and a `cloud_s3` object can be
+exported and restored back onto `local_fs`.
+That migration proof now also covers data integrity rather than only object
+visibility. Binary payloads with NUL bytes and non-text octets survive the
+roundtrip byte-for-byte, and the restored `content_length` still matches the
+source payload size on the target backend.
+The proof now also covers metadata consistency across that same real backend
+boundary. Durable fields such as `created_at`, cache policy, distribution
+state, and other exported `.meta` semantics survive the route change, while the
+backend-presence markers stay honest about where real copies now exist instead
+of silently dropping the source backend from the restored object view.
 
 `rehydration` is the runtime side of this story. After a restart, the store may
 need to rebuild active in-memory state from durable truth. This is how the
@@ -432,6 +448,90 @@ If the question is "how do I move the object toward readers?", the answers are
 The names are intentionally direct. The value of the subsystem is not that the
 surface is mysterious. The value is that the simple surface drives a coherent
 runtime underneath.
+
+Today that runtime has four honest backend slices:
+- `local_fs`, with `memory_cache` preserved as a compatibility alias onto the
+  same local filesystem path
+- `cloud_s3` for real S3-compatible payload transport, while metadata still
+  uses local `.meta` sidecars as the current reference contract
+- `cloud_gcs` for real GCS-compatible payload transport, with the same local
+  `.meta` sidecar contract and bearer-token based HTTP authentication
+- `cloud_azure` for real Azure Blob-compatible payload transport, with the same
+  local `.meta` sidecar contract and bearer-token based HTTP authentication
+
+`distributed` is still simulated and should be read that way in the current
+alpha.
+The Azure slice now also has the same explicit runtime failure contract as the
+other real cloud backends: endpoint connect failures, credential rejection, and
+throttling responses surface through `runtime_*_adapter_status`,
+`runtime_*_adapter_error`, and thrown `King\SystemException` failures instead
+of being hidden behind a simulated-only fence.
+
+When the active `cloud_s3` credentials are rejected, `king_object_store_init()`
+keeps the runtime visible but marks the primary adapter as failed. The concrete
+reason is exposed through `king_object_store_get_stats()['object_store']` in
+`runtime_primary_adapter_status` and `runtime_primary_adapter_error`, and write
+failures surface the same adapter error in the thrown `King\SystemException`.
+The same status/error surface is now also the stable contract for endpoint
+connectivity failures such as an unreachable `cloud_s3` API endpoint, and for
+explicit `429` / S3 `SlowDown` throttling responses from the configured
+endpoint. The same runtime also now has an explicit recovery contract for
+incomplete `cloud_s3` writes: if a `PUT` lands remotely but the response tears
+down before the write is acknowledged locally, the local sidecar state stays
+failed instead of pretending success, the object remains readable from the
+remote backend, metadata can be rehydrated on demand, and a fresh
+`king_object_store_init()` heals the inventory counters from remote truth.
+For `local_fs` primary plus real `cloud_s3` backup, King now also keeps a
+separate partial-backup-failure contract: if the local primary write succeeds
+but the backup `PUT` tears down mid-flight, the caller still sees the write as
+failed, `is_backed_up` stays unset, the local primary object remains readable,
+the backup adapter keeps the concrete failure reason, and a later successful
+overwrite can heal the backup state back to `ok`.
+The same pair now also has a delete-safe read-failover contract: if the local
+payload disappears while the local `.meta` sidecar still says the object exists,
+`king_object_store_get()` can read the body from the real `cloud_s3` backup,
+rehydrate the missing local payload, and restore live counters from local
+truth. A real delete still removes the `.meta` sidecar, so stale backup copies
+do not resurrect intentionally deleted objects.
+The same pair now also has an explicit cross-backend delete contract. When
+`local_fs` is primary and a real `cloud_s3` backup exists, King removes the
+backup copy before it completes the logical delete locally. If that remote
+delete fails, the delete call fails honestly and the local object remains
+readable instead of pretending the object is gone while the cloud copy still
+exists. If the local payload already vanished but the `.meta` sidecar still
+marks the object as live, a successful backup delete still completes the
+logical delete by clearing the remaining local sidecar and cache state.
+The same `local_fs` + `cloud_s3` pair now also survives a temporary live
+primary-root outage inside the same process. If the configured local storage
+root disappears after the process already loaded valid `.meta` sidecars,
+`king_object_store_get_metadata()` can still answer from a process-local
+metadata bridge and `king_object_store_get()` can heal both the local payload
+and its `.meta` sidecar back from the real `cloud_s3` backup. That bridge is
+deliberately a live-process contract, not a restart contract: on restart King
+still repopulates the cache only from durable local sidecars instead of
+pretending that remote backup alone is the metadata source of truth.
+The same verified pair now also has an explicit multi-backend routing contract
+for shared storage roots. Local and cloud routes no longer treat every `.meta`
+sidecar as globally visible truth. King persists backend-presence markers into
+the sidecar, filters both durable sidecars and the live-process metadata cache
+through the active route, and only falls back to a remote `HEAD` rehydrate on
+the `cloud_s3` route when it needs to prove an older legacy cloud object.
+That keeps `local_fs`-only objects invisible to a pure `cloud_s3` route, keeps
+pure `cloud_s3` objects invisible to a `local_fs` route, and still preserves
+shared visibility for the honest `local_fs` primary plus `cloud_s3` backup
+slice.
+The current real runtime also now evaluates replication against the copies it
+actually achieved instead of stamping `replication_status=completed` on every
+write with `replication_factor > 0`. Today the real topology can honestly
+reach one real copy on a standalone `local_fs` or `cloud_s3` primary, and two
+real copies on `local_fs` primary plus real `cloud_s3` backup. If a write asks
+for more copies than that topology really produced, the payloads that were
+successfully written remain readable, but the write fails and the stored
+metadata records `replication_status=failed` instead of pretending the
+replication target was met. That failed status is also recoverable instead of
+sticky forever: when a later write runs under a topology and
+`replication_factor` that the current real backends can actually satisfy, King
+heals the same object's metadata back to `replication_status=completed`.
 
 ## A Full Example
 
