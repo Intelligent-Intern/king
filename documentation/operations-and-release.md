@@ -303,6 +303,7 @@ check in the order that matters?”
 ```bash
 ./infra/scripts/go-live-readiness.sh \
   --output-dir ../dist \
+  --benchmark-samples 3 \
   --benchmark-budget-file ../benchmarks/budgets/canonical-ci.json
 ```
 

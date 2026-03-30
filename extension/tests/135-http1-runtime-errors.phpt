@@ -1,9 +1,17 @@
 --TEST--
 King HTTP runtimes expose stable validation and protocol error contracts
+--SKIPIF--
+<?php
+if (!function_exists('proc_open') || !function_exists('stream_socket_server')) {
+    echo "skip proc_open and stream_socket_server are required";
+}
+?>
 --INI--
 king.security_allow_config_override=1
 --FILE--
 <?php
+require __DIR__ . '/http_tls_mismatch_test_helper.inc';
+
 try {
     king_http1_request_send('https://127.0.0.1/');
     echo "no-exception\n";
@@ -41,9 +49,11 @@ var_dump(king_http2_request_send(
 ));
 var_dump(king_get_last_error());
 
+$tlsMismatchServer = king_http_tls_mismatch_start_server();
+
 try {
     king_client_send_request(
-        'https://127.0.0.1:80/',
+        'https://127.0.0.1:' . $tlsMismatchServer[2] . '/',
         'GET',
         null,
         null,
@@ -60,6 +70,8 @@ try {
         king_get_last_error(),
         'king_client_send_request() libcurl HTTP/2 transfer failed:'
     ));
+} finally {
+    king_http_tls_mismatch_stop_server($tlsMismatchServer);
 }
 
 try {
@@ -97,7 +109,7 @@ bool(false)
 string(%d) "king_http1_request_send() cannot issue an HTTP/1 request while tcp.enable is disabled."
 bool(false)
 string(%d) "king_http2_request_send() cannot issue an HTTP/2 request while http2.enable is disabled."
-string(21) "King\NetworkException"
+string(17) "King\TlsException"
 bool(true)
 bool(true)
 string(22) "King\ProtocolException"

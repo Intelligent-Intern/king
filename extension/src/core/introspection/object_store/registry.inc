@@ -46,27 +46,36 @@ PHP_FUNCTION(king_object_store_put)
 
     (void) options;
 
-    if (king_object_store_runtime.config.max_storage_size_bytes > 0) {
+    if (king_object_store_runtime.config.max_storage_size_bytes > 0
+        && (king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_LOCAL_FS
+            || king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_MEMORY_CACHE)) {
         uint64_t new_size = ZSTR_LEN(payload);
         uint64_t current_total = king_object_store_runtime.current_stored_bytes;
-        
-        /* Check if it's an overwrite to avoid double counting */
-        char file_path[1024];
-        struct stat st_old;
-        king_object_store_build_path(file_path, sizeof(file_path), ZSTR_VAL(object_id));
-        if (stat(file_path, &st_old) == 0 && S_ISREG(st_old.st_mode)) {
-            if (current_total >= (uint64_t)st_old.st_size) {
-                current_total -= (uint64_t)st_old.st_size;
-            }
-        }
 
+        /*
+         * Only pay the overwrite lookup when the requested write would
+         * otherwise breach the configured capacity. New-object hot paths do
+         * not need a filesystem probe on every put().
+         */
         if (current_total + new_size > king_object_store_runtime.config.max_storage_size_bytes) {
-            zend_throw_exception_ex(
-                king_ce_validation_exception,
-                0,
-                "Object-store runtime capacity exceeded."
-            );
-            RETURN_THROWS();
+            char file_path[1024];
+            struct stat st_old;
+
+            king_object_store_build_path(file_path, sizeof(file_path), ZSTR_VAL(object_id));
+            if (stat(file_path, &st_old) == 0 && S_ISREG(st_old.st_mode)) {
+                if (current_total >= (uint64_t) st_old.st_size) {
+                    current_total -= (uint64_t) st_old.st_size;
+                }
+            }
+
+            if (current_total + new_size > king_object_store_runtime.config.max_storage_size_bytes) {
+                zend_throw_exception_ex(
+                    king_ce_validation_exception,
+                    0,
+                    "Object-store runtime capacity exceeded."
+                );
+                RETURN_THROWS();
+            }
         }
     }
 
@@ -74,8 +83,11 @@ PHP_FUNCTION(king_object_store_put)
         zend_throw_exception_ex(
             king_ce_system_exception,
             0,
-            "Failed to store object '%s'.",
-            ZSTR_VAL(object_id)
+            "Failed to store object '%s': %s",
+            ZSTR_VAL(object_id),
+            king_object_store_runtime.primary_adapter_error[0] != '\0'
+                ? king_object_store_runtime.primary_adapter_error
+                : "Primary object-store backend write failed."
         );
         RETURN_THROWS();
     }
@@ -89,7 +101,6 @@ PHP_FUNCTION(king_object_store_get)
     zval *options = NULL;
     void *data = NULL;
     size_t data_size = 0;
-    king_object_metadata_t metadata;
 
     ZEND_PARSE_PARAMETERS_START(1, 2)
         Z_PARAM_STR(object_id)
@@ -112,7 +123,7 @@ PHP_FUNCTION(king_object_store_get)
 
     (void) options;
 
-    if (king_object_store_read_object(ZSTR_VAL(object_id), &data, &data_size, &metadata) != SUCCESS) {
+    if (king_object_store_read_object(ZSTR_VAL(object_id), &data, &data_size, NULL) != SUCCESS) {
         RETURN_FALSE;
     }
 
@@ -201,7 +212,7 @@ PHP_FUNCTION(king_object_store_get_metadata)
         return;
     }
 
-    if (king_object_store_meta_read(ZSTR_VAL(object_id), &metadata) != SUCCESS) {
+    if (king_object_store_backend_read_metadata(ZSTR_VAL(object_id), &metadata) != SUCCESS) {
         RETURN_NULL();
     }
 

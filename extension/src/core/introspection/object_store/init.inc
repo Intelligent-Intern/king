@@ -93,6 +93,7 @@ PHP_FUNCTION(king_object_store_init)
             RETURN_THROWS();
         }
     }
+    new_config.backup_backend = new_config.primary_backend;
 
     value_zv = zend_hash_str_find(Z_ARRVAL_P(config), "storage_root_path", sizeof("storage_root_path") - 1);
     if (value_zv != NULL) {
