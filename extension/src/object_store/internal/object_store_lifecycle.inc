@@ -109,7 +109,8 @@ int king_object_store_init_system(king_object_store_config_t *config)
         struct dirent *ent;
         char meta_path[1024];
 
-        if (king_object_store_runtime_metadata_cache_ensure() == SUCCESS) {
+        if (king_native_object_store_config.metadata_cache_enable
+            && king_object_store_runtime_metadata_cache_ensure() == SUCCESS) {
             dir = opendir(king_object_store_runtime.config.storage_root_path);
             if (dir != NULL) {
                 while ((ent = readdir(dir)) != NULL) {

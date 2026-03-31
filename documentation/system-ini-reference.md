@@ -353,6 +353,7 @@ they belong in `php.ini`.
 | `king.storage_node_static_list` | `127.0.0.1:9711,127.0.0.1:9712` | Lists storage nodes when static discovery is used. |
 | `king.storage_metadata_cache_enable` | `1` | Enables metadata caching. |
 | `king.storage_metadata_cache_ttl_sec` | `60` | Sets the metadata cache lifetime in seconds. |
+| `king.storage_metadata_cache_max_entries` | `4096` | Caps the process-local metadata cache so long-lived runtimes evict older entries instead of growing without bound. |
 | `king.storage_enable_directstorage` | `0` | Enables direct storage paths for storage-heavy compute workloads. |
 | `king.cdn_enable` | `0` | Enables the native CDN subsystem. |
 | `king.cdn_cache_mode` | `disk` | Selects the cache storage mode. |

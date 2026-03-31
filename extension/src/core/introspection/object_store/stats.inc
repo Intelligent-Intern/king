@@ -7,11 +7,17 @@ PHP_FUNCTION(king_object_store_get_stats)
     zend_long cached_object_count = 0;
     zend_long cached_bytes = 0;
     zend_long latest_cached_at = 0;
+    zend_long runtime_metadata_cache_entries = 0;
+    zend_long runtime_metadata_cache_eviction_count = 0;
 
     ZEND_PARSE_PARAMETERS_NONE();
 
     array_init(return_value);
     king_cdn_collect_live_stats(&cached_object_count, &cached_bytes, &latest_cached_at);
+    king_object_store_runtime_metadata_cache_collect_stats(
+        &runtime_metadata_cache_entries,
+        &runtime_metadata_cache_eviction_count
+    );
 
     array_init(&object_store);
     add_assoc_bool(&object_store, "enabled", king_native_object_store_config.enable ? 1 : 0);
@@ -22,6 +28,7 @@ PHP_FUNCTION(king_object_store_get_stats)
     add_assoc_string(&object_store, "node_discovery_mode", king_safe_string(king_native_object_store_config.node_discovery_mode));
     add_assoc_bool(&object_store, "metadata_cache_enabled", king_native_object_store_config.metadata_cache_enable ? 1 : 0);
     add_assoc_long(&object_store, "metadata_cache_ttl_sec", king_native_object_store_config.metadata_cache_ttl_sec);
+    add_assoc_long(&object_store, "metadata_cache_max_entries", king_native_object_store_config.metadata_cache_max_entries);
     add_assoc_bool(&object_store, "directstorage_enabled", king_native_object_store_config.enable_directstorage ? 1 : 0);
 
     /* Use native runtime variables directly from the new C core */
@@ -110,6 +117,8 @@ PHP_FUNCTION(king_object_store_get_stats)
     add_assoc_string(&object_store, "runtime_primary_adapter_error", king_object_store_runtime.primary_adapter_error[0] == '\0' ? "" : king_object_store_runtime.primary_adapter_error);
     add_assoc_string(&object_store, "runtime_backup_adapter_status", king_object_store_runtime.backup_adapter_status[0] == '\0' ? "unknown" : king_object_store_runtime.backup_adapter_status);
     add_assoc_string(&object_store, "runtime_backup_adapter_error", king_object_store_runtime.backup_adapter_error[0] == '\0' ? "" : king_object_store_runtime.backup_adapter_error);
+    add_assoc_long(&object_store, "runtime_metadata_cache_entries", runtime_metadata_cache_entries);
+    add_assoc_long(&object_store, "runtime_metadata_cache_eviction_count", runtime_metadata_cache_eviction_count);
     add_assoc_long(&object_store, "object_count", king_object_store_runtime.current_object_count);
     add_assoc_long(&object_store, "stored_bytes", king_object_store_runtime.current_stored_bytes);
     

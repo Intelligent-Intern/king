@@ -12,6 +12,7 @@
 
 #include "php_king.h"
 #include "object_store/object_store_internal.h"
+#include "include/config/native_object_store/base_layer.h"
 #include "Zend/zend_smart_str.h"
 #include "main/php_streams.h"
 #include "ext/standard/base64.h"

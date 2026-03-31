@@ -18,7 +18,10 @@ var_dump($storage['object_store']['metadata_agent_uri']);
 var_dump($storage['object_store']['node_discovery_mode']);
 var_dump($storage['object_store']['metadata_cache_enabled']);
 var_dump($storage['object_store']['metadata_cache_ttl_sec']);
+var_dump($storage['object_store']['metadata_cache_max_entries']);
 var_dump($storage['object_store']['directstorage_enabled']);
+var_dump($storage['object_store']['runtime_metadata_cache_entries']);
+var_dump($storage['object_store']['runtime_metadata_cache_eviction_count']);
 var_dump($storage['object_store']['object_count']);
 var_dump($storage['object_store']['stored_bytes']);
 var_dump($storage['object_store']['latest_object_at']);
@@ -79,7 +82,10 @@ string(14) "127.0.0.1:9701"
 string(6) "static"
 bool(true)
 int(60)
+int(4096)
 bool(false)
+int(0)
+int(0)
 int(0)
 int(0)
 NULL

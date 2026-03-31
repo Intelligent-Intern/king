@@ -340,6 +340,7 @@ core part of the application.
 | `storage.node_static_list` | Provides the static storage-node list. |
 | `storage.metadata_cache_enable` | Enables or disables metadata caching. |
 | `storage.metadata_cache_ttl_sec` | Sets metadata cache TTL. |
+| `storage.metadata_cache_max_entries` | Caps how many metadata entries the runtime keeps in its process-local cache before evicting older entries. |
 | `storage.enable_directstorage` | Enables or disables DirectStorage integration. |
 
 ## CDN: `cdn.*`

@@ -20,5 +20,6 @@ void kg_config_native_object_store_defaults_load(void)
 
     king_native_object_store_config.metadata_cache_enable = true;
     king_native_object_store_config.metadata_cache_ttl_sec = 60;
+    king_native_object_store_config.metadata_cache_max_entries = 4096;
     king_native_object_store_config.enable_directstorage = false;
 }
