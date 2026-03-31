@@ -320,6 +320,7 @@ paths are machine-level concerns.
 | `king.mcp_default_retry_backoff_ms_initial` | `100` | Sets the initial MCP retry backoff in milliseconds. |
 | `king.mcp_enable_request_caching` | `0` | Enables request-result caching for eligible MCP calls. |
 | `king.mcp_request_cache_ttl_sec` | `60` | Sets the cache lifetime for MCP request caching. |
+| `king.mcp_allowed_peer_hosts` | unset | Lists non-loopback MCP peer hosts that this process may target. Loopback peers remain allowed by default; remote peers require an explicit comma-separated allowlist. |
 | `king.mcp_transfer_state_path` | unset | Points at the durable local MCP transfer queue snapshot used to rehydrate uploaded payloads after process restart until a successful download consumes them. |
 | `king.orchestrator_default_pipeline_timeout_ms` | `120000` | Sets the default pipeline timeout. |
 | `king.orchestrator_max_recursion_depth` | `10` | Caps pipeline nesting or recursive orchestration depth. |
