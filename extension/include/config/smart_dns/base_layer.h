@@ -33,6 +33,7 @@ typedef struct _kg_smart_dns_config_t {
     /* --- Semantic DNS & Mothernode --- */
     bool semantic_mode_enable;
     char *mothernode_uri;
+    char *live_probe_allowed_hosts;
 } kg_smart_dns_config_t;
 
 /* Module-global configuration instance. */

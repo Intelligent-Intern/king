@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <ctype.h>
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
@@ -80,6 +81,97 @@ static zend_string *king_semantic_dns_probe_service_path(
     }
 
     return Z_STR_P(attribute);
+}
+
+static char *king_semantic_dns_trim_ascii_whitespace(char *value);
+
+static bool king_semantic_dns_probe_host_has_safe_characters(zend_string *host)
+{
+    size_t index;
+
+    if (host == NULL || ZSTR_LEN(host) == 0) {
+        return false;
+    }
+
+    for (index = 0; index < ZSTR_LEN(host); index++) {
+        unsigned char ch = (unsigned char) ZSTR_VAL(host)[index];
+
+        if (!isalnum(ch) && ch != '.' && ch != '-' && ch != ':') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool king_semantic_dns_probe_path_is_safe(zend_string *path)
+{
+    size_t index;
+
+    if (path == NULL || ZSTR_LEN(path) == 0 || ZSTR_VAL(path)[0] != '/') {
+        return false;
+    }
+
+    for (index = 0; index < ZSTR_LEN(path); index++) {
+        unsigned char ch = (unsigned char) ZSTR_VAL(path)[index];
+
+        if (ch <= 0x20 || ch == 0x7f) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool king_semantic_dns_probe_host_matches_allowlist_entry(
+    zend_string *host,
+    const char *entry
+)
+{
+    size_t entry_len;
+
+    if (host == NULL || entry == NULL) {
+        return false;
+    }
+
+    entry_len = strlen(entry);
+    return entry_len == ZSTR_LEN(host)
+        && strncasecmp(entry, ZSTR_VAL(host), entry_len) == 0;
+}
+
+static bool king_semantic_dns_probe_host_is_allowed(zend_string *host)
+{
+    char *allowlist_copy;
+    char *entry;
+    char *saveptr = NULL;
+    bool allowed = false;
+
+    if (!king_semantic_dns_probe_host_has_safe_characters(host)
+        || king_smart_dns_config.live_probe_allowed_hosts == NULL
+        || king_smart_dns_config.live_probe_allowed_hosts[0] == '\0') {
+        return false;
+    }
+
+    allowlist_copy = estrdup(king_smart_dns_config.live_probe_allowed_hosts);
+    if (allowlist_copy == NULL) {
+        return false;
+    }
+
+    for (entry = strtok_r(allowlist_copy, ",", &saveptr);
+         entry != NULL;
+         entry = strtok_r(NULL, ",", &saveptr)) {
+        char *trimmed = king_semantic_dns_trim_ascii_whitespace(entry);
+
+        if (trimmed != NULL
+            && trimmed[0] != '\0'
+            && king_semantic_dns_probe_host_matches_allowlist_entry(host, trimmed)) {
+            allowed = true;
+            break;
+        }
+    }
+
+    efree(allowlist_copy);
+    return allowed;
 }
 
 static char *king_semantic_dns_trim_ascii_whitespace(char *value)
@@ -221,7 +313,7 @@ static bool king_semantic_dns_probe_service_live_state(
 {
     zend_string *probe_path = king_semantic_dns_probe_service_path(service);
     zend_string *probe_host;
-    zend_string *transport_target;
+    zend_string *transport_target = NULL;
     zend_string *transport_error = NULL;
     php_stream *stream = NULL;
     struct timeval timeout;
@@ -243,11 +335,26 @@ static bool king_semantic_dns_probe_service_live_state(
     }
 
     probe_host = king_semantic_dns_probe_service_host(service);
+    if (probe_host == NULL
+        || !king_semantic_dns_probe_path_is_safe(probe_path)
+        || !king_semantic_dns_probe_host_is_allowed(probe_host)) {
+        return king_semantic_dns_service_apply_probe_snapshot(
+            service,
+            "unhealthy",
+            service->current_load_percent,
+            service->active_connections,
+            service->total_requests,
+            false,
+            false,
+            false
+        );
+    }
+
     transport_target = king_semantic_dns_build_probe_transport_target(
         probe_host,
         king_semantic_dns_probe_service_port(service)
     );
-    if (probe_host == NULL || transport_target == NULL || ZSTR_VAL(probe_path)[0] != '/') {
+    if (transport_target == NULL) {
         return king_semantic_dns_service_apply_probe_snapshot(
             service,
             "unhealthy",
@@ -296,13 +403,28 @@ static bool king_semantic_dns_probe_service_live_state(
     php_stream_set_option(stream, PHP_STREAM_OPTION_BLOCKING, 1, NULL);
     php_stream_set_option(stream, PHP_STREAM_OPTION_READ_TIMEOUT, 0, &timeout);
 
-    snprintf(
+    {
+        int request_length = snprintf(
         request_buffer,
         sizeof(request_buffer),
         "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n",
         ZSTR_VAL(probe_path),
         ZSTR_VAL(probe_host)
-    );
+        );
+        if (request_length < 0 || (size_t) request_length >= sizeof(request_buffer)) {
+            php_stream_close(stream);
+            return king_semantic_dns_service_apply_probe_snapshot(
+                service,
+                "unhealthy",
+                service->current_load_percent,
+                service->active_connections,
+                service->total_requests,
+                false,
+                false,
+                false
+            );
+        }
+    }
 
     if (php_stream_write(stream, request_buffer, strlen(request_buffer)) != (ssize_t) strlen(request_buffer)) {
         probe_failed = true;
