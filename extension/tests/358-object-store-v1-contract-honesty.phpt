@@ -1,5 +1,5 @@
 --TEST--
-King object-store exposes an honest local_fs plus cloud_s3 plus cloud_gcs plus cloud_azure v1 backend contract
+King object-store exposes an honest local_fs plus distributed plus cloud_s3 plus cloud_gcs plus cloud_azure v1 backend contract
 --INI--
 king.security_allow_config_override=1
 --FILE--
@@ -131,13 +131,13 @@ bool(true)
 string(13) "azure payload"
 string(11) "cloud_azure"
 string(5) "cloud"
-string(48) "local_fs+cloud_s3+cloud_gcs+cloud_azure_sidecars"
+string(60) "local_fs+distributed+cloud_s3+cloud_gcs+cloud_azure_sidecars"
 string(22) "memory_cache->local_fs"
-string(11) "distributed"
+string(0) ""
 string(2) "ok"
-string(48) "local_fs+cloud_s3+cloud_gcs+cloud_azure_sidecars"
+string(60) "local_fs+distributed+cloud_s3+cloud_gcs+cloud_azure_sidecars"
 string(22) "memory_cache->local_fs"
-string(11) "distributed"
+string(0) ""
 bool(true)
 bool(true)
 bool(true)

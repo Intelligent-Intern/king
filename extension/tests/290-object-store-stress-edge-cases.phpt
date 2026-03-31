@@ -6,6 +6,28 @@ king.security_allow_config_override=1
 <?php if (!extension_loaded("king")) print "skip"; ?>
 --FILE--
 <?php
+function king_object_store_290_cleanup_dir(string $dir): void
+{
+    if (!is_dir($dir)) {
+        return;
+    }
+
+    foreach (scandir($dir) as $entry) {
+        if ($entry === '.' || $entry === '..') {
+            continue;
+        }
+
+        $path = $dir . DIRECTORY_SEPARATOR . $entry;
+        if (is_dir($path)) {
+            king_object_store_290_cleanup_dir($path);
+            @rmdir($path);
+            continue;
+        }
+
+        @unlink($path);
+    }
+}
+
 $storage_root = __DIR__ . "/stress_storage";
 if (!is_dir($storage_root)) mkdir($storage_root);
 
@@ -66,7 +88,7 @@ $stats = king_object_store_get_stats();
 echo "Rehydrated objects: " . $stats["object_store"]["object_count"] . "\n";
 
 // Cleanup
-foreach (glob($storage_root . "/*") as $file) unlink($file);
+king_object_store_290_cleanup_dir($storage_root);
 rmdir($storage_root);
 
 echo "Done.\n";
@@ -74,7 +96,7 @@ echo "Done.\n";
 --EXPECTF--
 --- Testing Capacity Enforcement ---
 Stored 10 x 1KB. Total: 10240 bytes
-Caught expected: Object-store runtime capacity exceeded.
+Caught expected: king_object_store_put() would exceed the configured object-store runtime capacity.
 --- Testing Overwrite Churn ---
 Final churn size: 99
 Active stored bytes: 10339

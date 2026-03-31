@@ -151,18 +151,21 @@ Status note:
 ## E. Object Store Core
 
 - [x] Explicitly and finally specify the object-store backend contract
-- [ ] Replace all currently simulated object-store backends with real implementations
-- [ ] Establish uniform failure semantics across all backends
-- [ ] Establish consistent metadata semantics across all backends
-- [ ] Establish consistent TTL / expiry semantics across all backends
-- [ ] Establish consistent chunking semantics across all backends
-- [ ] Establish consistent delete semantics across all backends
-- [ ] Establish consistent list / inventory semantics across all backends
-- [ ] Define consistent overwrite / versioning semantics
-- [ ] Define consistent concurrency / locking semantics
-- [ ] Define consistent quota / capacity semantics
-- [ ] Define per-object integrity validation semantics
-- [ ] Define per-backend recovery semantics
+- [x] Replace all currently simulated object-store backends with real implementations
+- [x] Establish uniform failure semantics across all backends
+- [x] Establish consistent metadata semantics across all backends
+- [x] Establish consistent TTL / expiry semantics across all backends
+- [x] Establish consistent chunking semantics across all backends
+- [x] Define bounded-memory streaming ingress / egress semantics for large objects
+- [x] Define range-read semantics across local and remote backends
+- [x] Define provider-native multipart / block / resumable upload semantics where publicly claimed
+- [x] Establish consistent delete semantics across all backends
+- [x] Establish consistent list / inventory semantics across all backends
+- [x] Define consistent overwrite / versioning semantics
+- [x] Define consistent concurrency / locking semantics
+- [x] Define consistent quota / capacity semantics
+- [x] Define per-object integrity validation semantics
+- [x] Define per-backend recovery semantics
 - [x] Validate object-store initialization across all target backends
 - [x] Validate object-store put across all target backends
 - [x] Validate object-store get across all target backends
