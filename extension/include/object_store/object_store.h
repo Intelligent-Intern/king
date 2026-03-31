@@ -42,12 +42,21 @@ typedef enum {
     KING_CACHE_POLICY_SMART_CDN
 } king_cache_policy_t;
 
+typedef enum {
+    KING_OBJECT_STORE_UPLOAD_PROTOCOL_NONE = 0,
+    KING_OBJECT_STORE_UPLOAD_PROTOCOL_S3_MULTIPART,
+    KING_OBJECT_STORE_UPLOAD_PROTOCOL_GCS_RESUMABLE,
+    KING_OBJECT_STORE_UPLOAD_PROTOCOL_AZURE_BLOCKS
+} king_object_store_upload_protocol_t;
+
 typedef struct _king_object_metadata_t {
     char object_id[128];
     char content_type[64];
     char content_encoding[32];
-    char etag[64];
+    char etag[129];
+    char integrity_sha256[65];
     uint64_t content_length;
+    uint64_t version;
     time_t created_at;
     time_t modified_at;
     time_t expires_at;
@@ -55,6 +64,7 @@ typedef struct _king_object_metadata_t {
     king_cache_policy_t cache_policy;
     uint32_t cache_ttl_seconds;
     uint8_t local_fs_present;
+    uint8_t distributed_present;
     uint8_t cloud_s3_present;
     uint8_t cloud_gcs_present;
     uint8_t cloud_azure_present;
@@ -65,6 +75,27 @@ typedef struct _king_object_metadata_t {
     uint8_t is_distributed;
     uint32_t distribution_peer_count;
 } king_object_metadata_t;
+
+typedef struct _king_object_store_upload_status_t {
+    char upload_id[65];
+    char object_id[128];
+    king_storage_backend_t backend;
+    king_object_store_upload_protocol_t protocol;
+    uint64_t uploaded_bytes;
+    uint64_t next_offset;
+    uint64_t chunk_size_bytes;
+    uint32_t next_part_number;
+    uint32_t uploaded_part_count;
+    time_t created_at;
+    time_t updated_at;
+    uint8_t sequential_chunks_required;
+    uint8_t final_chunk_may_be_shorter;
+    uint8_t final_chunk_received;
+    uint8_t remote_completed;
+    uint8_t recovered_after_restart;
+    uint8_t completed;
+    uint8_t aborted;
+} king_object_store_upload_status_t;
 
 typedef struct _king_storage_node_t {
     char node_id[64];
@@ -115,8 +146,29 @@ PHP_FUNCTION(king_object_store_init);
 /* Stores an object. */
 PHP_FUNCTION(king_object_store_put);
 
+/* Stores an object from a readable stream without whole-payload materialization. */
+PHP_FUNCTION(king_object_store_put_from_stream);
+
+/* Starts a provider-native resumable upload session for cloud object-store backends. */
+PHP_FUNCTION(king_object_store_begin_resumable_upload);
+
+/* Appends one chunk to a provider-native resumable upload session. */
+PHP_FUNCTION(king_object_store_append_resumable_upload_chunk);
+
+/* Completes a provider-native resumable upload session. */
+PHP_FUNCTION(king_object_store_complete_resumable_upload);
+
+/* Aborts a provider-native resumable upload session. */
+PHP_FUNCTION(king_object_store_abort_resumable_upload);
+
+/* Returns the current state of a provider-native resumable upload session. */
+PHP_FUNCTION(king_object_store_get_resumable_upload_status);
+
 /* Retrieves an object. */
 PHP_FUNCTION(king_object_store_get);
+
+/* Writes an object into a writable stream without whole-payload materialization. */
+PHP_FUNCTION(king_object_store_get_to_stream);
 
 /* Deletes an object. */
 PHP_FUNCTION(king_object_store_delete);
@@ -144,14 +196,44 @@ PHP_FUNCTION(king_object_store_optimize);
 int king_object_store_init_system(king_object_store_config_t *config);
 void king_object_store_shutdown_system(void);
 int king_object_store_write_object(const char *object_id, const void *data, size_t data_size, const king_object_metadata_t *metadata);
+int king_object_store_write_object_from_file(
+    const char *object_id,
+    const char *source_path,
+    const king_object_metadata_t *metadata
+);
 int king_object_store_read_object(const char *object_id, void **data, size_t *data_size, king_object_metadata_t *metadata);
+int king_object_store_read_object_range(
+    const char *object_id,
+    size_t offset,
+    size_t length,
+    zend_bool has_length,
+    void **data,
+    size_t *data_size,
+    king_object_metadata_t *metadata
+);
+int king_object_store_read_object_to_stream(
+    const char *object_id,
+    php_stream *destination_stream,
+    size_t offset,
+    size_t length,
+    zend_bool has_length,
+    king_object_metadata_t *metadata
+);
 int king_object_store_remove_object(const char *object_id);
 int king_object_store_replicate_object(const char *object_id, uint32_t replication_factor);
 int king_cdn_distribute_object(const char *object_id, const king_storage_node_t *edge_nodes, uint32_t node_count);
 int king_cdn_find_optimal_edge_node(const char *client_ip, king_storage_node_t **optimal_node);
-void king_object_store_cleanup_expired_objects(void);
+zend_bool king_object_store_metadata_is_expired_at(const king_object_metadata_t *metadata, time_t now);
+zend_bool king_object_store_metadata_is_expired_now(const king_object_metadata_t *metadata);
+int king_object_store_cleanup_expired_objects(
+    uint64_t *scanned_out,
+    uint64_t *removed_out,
+    uint64_t *bytes_reclaimed_out,
+    uint64_t *failures_out
+);
 const char* king_storage_backend_to_string(king_storage_backend_t backend);
 const char* king_object_type_to_string(king_object_type_t type);
 const char* king_cache_policy_to_string(king_cache_policy_t policy);
+const char* king_object_store_upload_protocol_to_string(king_object_store_upload_protocol_t protocol);
 
 #endif /* KING_OBJECT_STORE_H */

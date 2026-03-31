@@ -73,8 +73,15 @@ var_dump($stats['runtime_primary_adapter_status']);
 var_dump(str_contains($stats['runtime_primary_adapter_error'], "cloud_azure write for 'doc-azure' was throttled"));
 var_dump(str_contains($stats['runtime_primary_adapter_error'], 'HTTP 503'));
 
-$list = king_object_store_list();
-var_dump(count($list));
+try {
+    king_object_store_list();
+    echo "no-list-exception\n";
+} catch (Throwable $e) {
+    var_dump(get_class($e));
+    var_dump(str_contains($e->getMessage(), 'cloud_azure list was throttled'));
+    var_dump(str_contains($e->getMessage(), 'HTTP 429'));
+}
+
 $stats = king_object_store_get_stats()['object_store'];
 var_dump($stats['runtime_primary_adapter_status']);
 var_dump(str_contains($stats['runtime_primary_adapter_error'], 'cloud_azure list was throttled'));
@@ -116,7 +123,9 @@ bool(true)
 string(6) "failed"
 bool(true)
 bool(true)
-int(0)
+string(20) "King\SystemException"
+bool(true)
+bool(true)
 string(6) "failed"
 bool(true)
 bool(true)

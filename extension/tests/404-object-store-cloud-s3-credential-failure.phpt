@@ -54,9 +54,22 @@ $stats = king_object_store_get_stats()['object_store'];
 var_dump($stats['runtime_primary_adapter_status']);
 var_dump(str_contains($stats['runtime_primary_adapter_error'], 'credentials were rejected'));
 
-var_dump(king_object_store_get('doc-s3'));
-$list = king_object_store_list();
-var_dump(count($list));
+try {
+    king_object_store_get('doc-s3');
+    echo "no-get-exception\n";
+} catch (Throwable $e) {
+    var_dump(get_class($e));
+    var_dump(str_contains($e->getMessage(), 'credentials were rejected'));
+}
+
+try {
+    king_object_store_list();
+    echo "no-list-exception\n";
+} catch (Throwable $e) {
+    var_dump(get_class($e));
+    var_dump(str_contains($e->getMessage(), 'credentials were rejected'));
+}
+
 $stats = king_object_store_get_stats()['object_store'];
 var_dump($stats['runtime_primary_adapter_status']);
 var_dump(str_contains($stats['runtime_primary_adapter_error'], 'credentials were rejected'));
@@ -91,8 +104,10 @@ string(20) "King\SystemException"
 bool(true)
 string(6) "failed"
 bool(true)
-bool(false)
-int(0)
+string(20) "King\SystemException"
+bool(true)
+string(20) "King\SystemException"
+bool(true)
 string(6) "failed"
 bool(true)
 bool(true)

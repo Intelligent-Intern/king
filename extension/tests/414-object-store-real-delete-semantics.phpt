@@ -112,10 +112,16 @@ var_dump(count($list));
 
 var_dump(king_object_store_init($localConfig));
 var_dump(king_object_store_put('doc-fail', 'charlie'));
-var_dump(king_object_store_delete('doc-fail'));
+try {
+    king_object_store_delete('doc-fail');
+    echo "no-delete-exception\n";
+} catch (Throwable $e) {
+    var_dump(get_class($e));
+    var_dump(str_contains($e->getMessage(), 'backup removal failed'));
+}
 $stats = king_object_store_get_stats()['object_store'];
 var_dump($stats['runtime_primary_adapter_status']);
-var_dump(str_contains($stats['runtime_primary_adapter_error'], 'remove failed'));
+var_dump(str_contains($stats['runtime_primary_adapter_error'], 'backup removal failed'));
 var_dump($stats['runtime_backup_adapter_status']);
 var_dump(str_contains($stats['runtime_backup_adapter_error'], 'throttled'));
 var_dump(king_object_store_get('doc-fail'));
@@ -184,7 +190,8 @@ bool(false)
 int(0)
 bool(true)
 bool(true)
-bool(false)
+string(20) "King\SystemException"
+bool(true)
 string(6) "failed"
 bool(true)
 string(6) "failed"

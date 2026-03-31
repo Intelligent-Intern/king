@@ -23,6 +23,10 @@ $stats = king_object_store_get_stats();
 var_dump($stats['object_store']['runtime_primary_backend']);
 var_dump($stats['object_store']['runtime_storage_root_path']);
 var_dump($stats['object_store']['runtime_max_storage_size_bytes']);
+var_dump($stats['object_store']['runtime_capacity_mode']);
+var_dump($stats['object_store']['runtime_capacity_scope']);
+var_dump($stats['object_store']['runtime_capacity_enforced']);
+var_dump($stats['object_store']['runtime_capacity_available_bytes']);
 var_dump($stats['object_store']['runtime_replication_factor']);
 var_dump($stats['object_store']['runtime_chunk_size_kb']);
 var_dump($stats['cdn']['runtime_enabled']);
@@ -48,6 +52,10 @@ bool(true)
 string(8) "local_fs"
 string(%d) "%s"
 int(4)
+string(18) "logical_hard_limit"
+string(33) "committed_primary_inventory_bytes"
+bool(true)
+int(4)
 int(1)
 int(64)
 bool(true)
@@ -56,5 +64,5 @@ int(7)
 bool(true)
 bool(true)
 string(24) "King\ValidationException"
-string(39) "Object-store runtime capacity exceeded."
+string(82) "king_object_store_put() would exceed the configured object-store runtime capacity."
 bool(true)

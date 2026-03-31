@@ -47,13 +47,26 @@ $stats = king_object_store_get_stats()['object_store'];
 var_dump($stats['runtime_primary_adapter_status']);
 var_dump(str_contains($stats['runtime_primary_adapter_error'], 'could not connect to the configured endpoint'));
 
-$list = king_object_store_list();
-var_dump(count($list));
+try {
+    king_object_store_list();
+    echo "no-list-exception\n";
+} catch (Throwable $e) {
+    var_dump(get_class($e));
+    var_dump(str_contains($e->getMessage(), 'could not connect to the configured endpoint'));
+}
+
 $stats = king_object_store_get_stats()['object_store'];
 var_dump($stats['runtime_primary_adapter_status']);
 var_dump(str_contains($stats['runtime_primary_adapter_error'], 'could not connect to the configured endpoint'));
 
-var_dump(king_object_store_get('doc-azure'));
+try {
+    king_object_store_get('doc-azure');
+    echo "no-get-exception\n";
+} catch (Throwable $e) {
+    var_dump(get_class($e));
+    var_dump(str_contains($e->getMessage(), 'could not connect to the configured endpoint'));
+}
+
 $stats = king_object_store_get_stats()['object_store'];
 var_dump($stats['runtime_primary_adapter_status']);
 var_dump(str_contains($stats['runtime_primary_adapter_error'], 'could not connect to the configured endpoint'));
@@ -74,9 +87,11 @@ string(20) "King\SystemException"
 bool(true)
 string(6) "failed"
 bool(true)
-int(0)
+string(20) "King\SystemException"
+bool(true)
 string(6) "failed"
 bool(true)
-bool(false)
+string(20) "King\SystemException"
+bool(true)
 string(6) "failed"
 bool(true)

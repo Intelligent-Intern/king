@@ -8,6 +8,7 @@ void king_semantic_dns_request_shutdown(void);
 
 int king_cdn_cache_registry_minit(void);
 void king_cdn_cache_registry_mshutdown(void);
+void king_object_store_request_shutdown(void);
 void king_object_store_shutdown_system(void);
 
 PHP_FUNCTION(king_version);
@@ -22,7 +23,14 @@ PHP_FUNCTION(king_telemetry_extract_context);
 PHP_FUNCTION(king_telemetry_flush);
 PHP_FUNCTION(king_object_store_get_stats);
 PHP_FUNCTION(king_object_store_put);
+PHP_FUNCTION(king_object_store_put_from_stream);
+PHP_FUNCTION(king_object_store_begin_resumable_upload);
+PHP_FUNCTION(king_object_store_append_resumable_upload_chunk);
+PHP_FUNCTION(king_object_store_complete_resumable_upload);
+PHP_FUNCTION(king_object_store_abort_resumable_upload);
+PHP_FUNCTION(king_object_store_get_resumable_upload_status);
 PHP_FUNCTION(king_object_store_get);
+PHP_FUNCTION(king_object_store_get_to_stream);
 PHP_FUNCTION(king_object_store_delete);
 PHP_FUNCTION(king_object_store_list);
 PHP_FUNCTION(king_object_store_backup_object);

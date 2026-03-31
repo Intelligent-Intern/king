@@ -136,7 +136,7 @@ bool(true)
 bool(true)
 bool(true)
 bool(false)
-NULL
+bool(false)
 array(1) {
   [0]=>
   string(10) "cloud-only"
@@ -154,7 +154,7 @@ bool(true)
 string(6) "cloud!"
 string(7) "hybrid!"
 bool(false)
-NULL
+bool(false)
 string(10) "hybrid-doc"
 int(1)
 array(2) {
@@ -170,7 +170,7 @@ bool(true)
 string(5) "local"
 string(7) "hybrid!"
 bool(false)
-NULL
+bool(false)
 array(2) {
   [0]=>
   string(10) "hybrid-doc"
