@@ -560,6 +560,9 @@ static void king_object_store_azure_metadata_from_headers(
     if (king_object_store_http_header_get(headers, "x-ms-meta-local-fs-present", value, sizeof(value))) {
         metadata->local_fs_present = (uint8_t) atoi(value);
     }
+    if (king_object_store_http_header_get(headers, "x-ms-meta-distributed-present", value, sizeof(value))) {
+        metadata->distributed_present = (uint8_t) atoi(value);
+    }
     if (king_object_store_http_header_get(headers, "x-ms-meta-cloud-s3-present", value, sizeof(value))) {
         metadata->cloud_s3_present = (uint8_t) atoi(value);
     }

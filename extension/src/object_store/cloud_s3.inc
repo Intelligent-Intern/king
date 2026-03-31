@@ -1051,6 +1051,9 @@ static void king_object_store_s3_metadata_from_headers(
     if (king_object_store_http_header_get(headers, "x-amz-meta-local-fs-present", value, sizeof(value))) {
         metadata->local_fs_present = (uint8_t) atoi(value);
     }
+    if (king_object_store_http_header_get(headers, "x-amz-meta-distributed-present", value, sizeof(value))) {
+        metadata->distributed_present = (uint8_t) atoi(value);
+    }
     if (king_object_store_http_header_get(headers, "x-amz-meta-cloud-s3-present", value, sizeof(value))) {
         metadata->cloud_s3_present = (uint8_t) atoi(value);
     }
@@ -2431,15 +2434,6 @@ int king_object_store_backend_read_metadata(
         active_backend = KING_STORAGE_BACKEND_LOCAL_FS;
     }
 
-    if (active_backend == KING_STORAGE_BACKEND_DISTRIBUTED) {
-        snprintf(
-            king_object_store_runtime.primary_adapter_error,
-            sizeof(king_object_store_runtime.primary_adapter_error),
-            "distributed backend is simulated-only and unavailable for metadata reads."
-        );
-        return KING_OBJECT_STORE_RESULT_UNAVAILABLE;
-    }
-
     if ((active_backend == KING_STORAGE_BACKEND_LOCAL_FS
             || active_backend == KING_STORAGE_BACKEND_MEMORY_CACHE)
         && (king_object_store_runtime.config.storage_root_path[0] == '\0'
@@ -2459,6 +2453,14 @@ int king_object_store_backend_read_metadata(
         );
         return FAILURE;
     }
+    if (active_backend == KING_STORAGE_BACKEND_DISTRIBUTED
+        && !king_object_store_distributed_root_available(
+            "metadata read",
+            king_object_store_runtime.primary_adapter_error,
+            sizeof(king_object_store_runtime.primary_adapter_error)
+        )) {
+        return FAILURE;
+    }
 
     if (king_object_store_meta_read(object_id, metadata) == SUCCESS) {
         if (king_object_store_metadata_matches_backend(object_id, metadata, active_backend)) {
@@ -2468,12 +2470,19 @@ int king_object_store_backend_read_metadata(
         if (active_backend != KING_STORAGE_BACKEND_CLOUD_S3
             && active_backend != KING_STORAGE_BACKEND_CLOUD_GCS
             && active_backend != KING_STORAGE_BACKEND_CLOUD_AZURE) {
-            king_object_store_build_path(payload_path, sizeof(payload_path), object_id);
+            if (active_backend == KING_STORAGE_BACKEND_DISTRIBUTED) {
+                if (king_object_store_build_distributed_path(payload_path, sizeof(payload_path), object_id) != SUCCESS) {
+                    return FAILURE;
+                }
+            } else {
+                king_object_store_build_path(payload_path, sizeof(payload_path), object_id);
+            }
             if (stat(payload_path, &payload_stat) == 0 && S_ISREG(payload_stat.st_mode)) {
                 snprintf(
                     king_object_store_runtime.primary_adapter_error,
                     sizeof(king_object_store_runtime.primary_adapter_error),
-                    "local_fs metadata for '%s' is unavailable even though the payload still exists.",
+                    "%s metadata for '%s' is unavailable even though the payload still exists.",
+                    active_backend == KING_STORAGE_BACKEND_DISTRIBUTED ? "distributed" : "local_fs",
                     object_id
                 );
                 return FAILURE;

@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Implement the real `distributed` object-store data-plane contract on top of the persisted coordinator state.
+- [ ] Define consistency guarantees for backup snapshots across backup, export, and restore flows.
 
 ## Active Executable Items
 
@@ -96,7 +96,7 @@
 - orchestrator continuation after host restart, richer error classification, multi-worker execution depth, and broader observability
 - Smart-DNS split-brain, failure/recovery, and broader distributed-topology depth
 - broader QUIC lifecycle, stats, resumption, and recovery validation beyond the current HTTP/3 client slices
-- object-store distributed data-plane semantics beyond the now-persisted coordinator-state contract, plus broader backup/import/export recovery depth
+- broader backup/import/export recovery depth, snapshot consistency guarantees, and CDN/cache validation against real backends
 
 ## Notes
 

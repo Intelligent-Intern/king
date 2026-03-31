@@ -593,15 +593,15 @@ namespace {
     /**
      * Initializes local runtime settings for the object-store/CDN
      * layer without replacing the extension-wide INI configuration.
-     * The verified v1 storage contract is `local_fs` plus real `cloud_s3`,
-     * `cloud_gcs`, and `cloud_azure` payload storage with local `.meta`
-     * sidecars.
+     * The verified v1 storage contract is `local_fs`, `distributed`,
+     * `cloud_s3`, `cloud_gcs`, and `cloud_azure` payload storage with local
+     * `.meta` sidecars.
      * `memory_cache` is accepted as a compatibility alias that resolves
-     * to the same local filesystem backend. `distributed` remains
-     * simulated for object operations today, but it now persists a private
-     * coordinator-state file under
-     * `storage_root_path/.king-distributed/coordinator.state` and exposes
-     * that recovery/status surface through `king_object_store_get_stats()`.
+     * to the same local filesystem backend. The `distributed` backend now
+     * stores committed payloads under `storage_root_path/.king-distributed/`
+     * and also persists a private coordinator-state file under
+     * `storage_root_path/.king-distributed/coordinator.state`, exposing that
+     * runtime recovery/status surface through `king_object_store_get_stats()`.
      * Supported keys are
      * `primary_backend`, `backup_backend`, `storage_root_path`,
      * `max_storage_size_bytes`, `replication_factor`, `chunk_size_kb`,

@@ -1825,6 +1825,9 @@ PHP_FUNCTION(king_object_store_get_metadata)
                     metadata.local_fs_present != 0
                     || metadata.is_backed_up != 0;
                 backup_cache_snapshot_matches_route =
+                    (backup_backend == KING_STORAGE_BACKEND_DISTRIBUTED
+                        && metadata.distributed_present != 0)
+                    ||
                     (backup_backend == KING_STORAGE_BACKEND_CLOUD_S3
                         && (metadata.cloud_s3_present != 0 || metadata.is_backed_up != 0))
                     || (backup_backend == KING_STORAGE_BACKEND_CLOUD_GCS
@@ -1883,6 +1886,7 @@ PHP_FUNCTION(king_object_store_get_metadata)
     add_assoc_long(return_value, "cache_policy", (zend_long) metadata.cache_policy);
     add_assoc_long(return_value, "cache_ttl_seconds", (zend_long) metadata.cache_ttl_seconds);
     add_assoc_long(return_value, "local_fs_present", (zend_long) metadata.local_fs_present);
+    add_assoc_long(return_value, "distributed_present", (zend_long) metadata.distributed_present);
     add_assoc_long(return_value, "cloud_s3_present", (zend_long) metadata.cloud_s3_present);
     add_assoc_long(return_value, "cloud_gcs_present", (zend_long) metadata.cloud_gcs_present);
     add_assoc_long(return_value, "cloud_azure_present", (zend_long) metadata.cloud_azure_present);

@@ -562,13 +562,16 @@ primary-inventory bytes:
   own bucket/account quota; that remains a separate provider-integration and
   telemetry problem
 
-`distributed` is still simulated for actual object read/write/delete/list
-operations and should be read that way in the current alpha.
-What is now real about that remaining slice is only the coordinator-state
-contract: when `distributed` is selected, King persists a private coordinator
-snapshot under `storage_root_path/.king-distributed/coordinator.state` and
-surfaces its presence, recovery state, version, generation, path, and last
-load/error details through `king_object_store_get_stats()['object_store']`.
+`distributed` is no longer fenced as simulated-only. The current alpha now
+exposes a real filesystem-backed distributed data plane under
+`storage_root_path/.king-distributed/objects`, plus the persisted private
+coordinator snapshot under
+`storage_root_path/.king-distributed/coordinator.state`. That means the
+verified public contract now includes real read/write/delete/list behavior for
+`distributed`, real `local_fs -> distributed` backup semantics, and explicit
+runtime visibility into coordinator presence, recovery state, version,
+generation, path, and last load/error details through
+`king_object_store_get_stats()['object_store']`.
 The Azure slice now also has the same explicit runtime failure contract as the
 other real cloud backends: endpoint connect failures, credential rejection, and
 throttling responses surface through `runtime_*_adapter_status`,

@@ -248,7 +248,7 @@ var_export($results);
 ?>
 --EXPECTF--
 array (
-  's3' =>
+  's3' =>%w
   array (
     'cloud_missing_delete' => true,
     'cloud_fail_put' => true,
@@ -296,7 +296,7 @@ array (
     'delete_doc_backup_fail_count' => 2,
     'delete_doc_cloud_fail_count' => 2,
   ),
-  'gcs' =>
+  'gcs' =>%w
   array (
     'cloud_missing_delete' => true,
     'cloud_fail_put' => true,
@@ -344,7 +344,7 @@ array (
     'delete_doc_backup_fail_count' => 2,
     'delete_doc_cloud_fail_count' => 2,
   ),
-  'azure' =>
+  'azure' =>%w
   array (
     'cloud_missing_delete' => true,
     'cloud_fail_put' => true,

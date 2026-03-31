@@ -28,9 +28,9 @@ PHP_FUNCTION(king_object_store_get_stats)
     add_assoc_bool(&object_store, "runtime_initialized", king_object_store_runtime.initialized ? 1 : 0);
     add_assoc_string(&object_store, "runtime_primary_backend", (char *) king_storage_backend_to_string(king_object_store_runtime.config.primary_backend));
     add_assoc_string(&object_store, "runtime_primary_backend_contract", king_object_store_runtime.primary_adapter_contract[0] == '\0' ? "unknown" : king_object_store_runtime.primary_adapter_contract);
-    add_assoc_string(&object_store, "runtime_storage_contract", "local_fs+cloud_s3+cloud_gcs+cloud_azure_sidecars");
+    add_assoc_string(&object_store, "runtime_storage_contract", "local_fs+distributed+cloud_s3+cloud_gcs+cloud_azure_sidecars");
     add_assoc_string(&object_store, "runtime_legacy_backend_alias", "memory_cache->local_fs");
-    add_assoc_string(&object_store, "runtime_simulated_backends", "distributed");
+    add_assoc_string(&object_store, "runtime_simulated_backends", "");
     add_assoc_string(
         &object_store,
         "runtime_distributed_coordinator_state_status",

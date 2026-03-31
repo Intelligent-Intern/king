@@ -1,5 +1,5 @@
 --TEST--
-King object-store distributed backend persists a private coordinator-state contract even while data operations stay simulated
+King object-store distributed backend persists coordinator state and restores committed payloads after re-entry
 --INI--
 king.security_allow_config_override=1
 --FILE--
@@ -45,9 +45,9 @@ $firstGeneration = $stats['runtime_distributed_coordinator_generation'];
 $firstCreatedAt = $stats['runtime_distributed_coordinator_created_at'];
 
 var_dump($stats['runtime_primary_backend'] === 'distributed');
-var_dump($stats['runtime_primary_backend_contract'] === 'simulated');
-var_dump($stats['runtime_primary_adapter_status'] === 'simulated');
-var_dump($stats['runtime_simulated_backends'] === 'distributed');
+var_dump($stats['runtime_primary_backend_contract'] === 'distributed');
+var_dump($stats['runtime_primary_adapter_status'] === 'ok');
+var_dump($stats['runtime_simulated_backends'] === '');
 var_dump($stats['runtime_distributed_coordinator_state_status'] === 'initialized');
 var_dump($stats['runtime_distributed_coordinator_state_present'] === true);
 var_dump($stats['runtime_distributed_coordinator_state_recovered'] === false);
@@ -58,6 +58,9 @@ var_dump($firstGeneration > 0);
 var_dump($firstCreatedAt > 0);
 var_dump($stats['runtime_distributed_coordinator_last_loaded_at'] >= $firstCreatedAt);
 var_dump($stats['runtime_distributed_coordinator_state_error'] === '');
+
+var_dump(king_object_store_put('recovered-doc', 'recovered payload'));
+var_dump(king_object_store_get('recovered-doc'));
 
 var_dump(king_object_store_init($config));
 $stats = king_object_store_get_stats()['object_store'];
@@ -71,6 +74,11 @@ var_dump($stats['runtime_distributed_coordinator_created_at'] === $firstCreatedA
 var_dump($stats['runtime_distributed_coordinator_state_path'] === $firstPath);
 var_dump($stats['runtime_distributed_coordinator_last_loaded_at'] >= $firstCreatedAt);
 var_dump($stats['runtime_distributed_coordinator_state_error'] === '');
+var_dump(king_object_store_get('recovered-doc') === 'recovered payload');
+var_dump(count(array_filter(
+    king_object_store_list(),
+    static fn(array $entry): bool => ($entry['object_id'] ?? '') === 'recovered-doc'
+)) === 1);
 
 $cleanupTree($root);
 ?>
@@ -88,6 +96,10 @@ bool(true)
 bool(true)
 bool(true)
 bool(true)
+bool(true)
+bool(true)
+bool(true)
+string(17) "recovered payload"
 bool(true)
 bool(true)
 bool(true)

@@ -151,7 +151,7 @@ Status note:
 ## E. Object Store Core
 
 - [x] Explicitly and finally specify the object-store backend contract
-- [ ] Replace all currently simulated object-store backends with real implementations
+- [x] Replace all currently simulated object-store backends with real implementations
 - [x] Establish uniform failure semantics across all backends
 - [x] Establish consistent metadata semantics across all backends
 - [x] Establish consistent TTL / expiry semantics across all backends

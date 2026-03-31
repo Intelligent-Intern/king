@@ -64,6 +64,7 @@ typedef struct _king_object_metadata_t {
     king_cache_policy_t cache_policy;
     uint32_t cache_ttl_seconds;
     uint8_t local_fs_present;
+    uint8_t distributed_present;
     uint8_t cloud_s3_present;
     uint8_t cloud_gcs_present;
     uint8_t cloud_azure_present;
