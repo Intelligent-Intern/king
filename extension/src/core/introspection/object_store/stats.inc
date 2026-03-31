@@ -31,8 +31,77 @@ PHP_FUNCTION(king_object_store_get_stats)
     add_assoc_string(&object_store, "runtime_storage_contract", "local_fs+cloud_s3+cloud_gcs+cloud_azure_sidecars");
     add_assoc_string(&object_store, "runtime_legacy_backend_alias", "memory_cache->local_fs");
     add_assoc_string(&object_store, "runtime_simulated_backends", "distributed");
+    add_assoc_string(
+        &object_store,
+        "runtime_distributed_coordinator_state_status",
+        king_object_store_runtime.distributed_coordinator_state_status[0] == '\0'
+            ? "inactive"
+            : king_object_store_runtime.distributed_coordinator_state_status
+    );
+    if (king_object_store_runtime.distributed_coordinator_state_path[0] != '\0') {
+        add_assoc_string(
+            &object_store,
+            "runtime_distributed_coordinator_state_path",
+            king_object_store_runtime.distributed_coordinator_state_path
+        );
+    } else {
+        add_assoc_null(&object_store, "runtime_distributed_coordinator_state_path");
+    }
+    add_assoc_bool(
+        &object_store,
+        "runtime_distributed_coordinator_state_present",
+        king_object_store_runtime.distributed_coordinator_state_present ? 1 : 0
+    );
+    add_assoc_bool(
+        &object_store,
+        "runtime_distributed_coordinator_state_recovered",
+        king_object_store_runtime.distributed_coordinator_state_recovered ? 1 : 0
+    );
+    add_assoc_long(
+        &object_store,
+        "runtime_distributed_coordinator_state_version",
+        (zend_long) king_object_store_runtime.distributed_coordinator_state_version
+    );
+    add_assoc_long(
+        &object_store,
+        "runtime_distributed_coordinator_generation",
+        (zend_long) king_object_store_runtime.distributed_coordinator_generation
+    );
+    if (king_object_store_runtime.distributed_coordinator_created_at > 0) {
+        add_assoc_long(
+            &object_store,
+            "runtime_distributed_coordinator_created_at",
+            (zend_long) king_object_store_runtime.distributed_coordinator_created_at
+        );
+    } else {
+        add_assoc_null(&object_store, "runtime_distributed_coordinator_created_at");
+    }
+    if (king_object_store_runtime.distributed_coordinator_last_loaded_at > 0) {
+        add_assoc_long(
+            &object_store,
+            "runtime_distributed_coordinator_last_loaded_at",
+            (zend_long) king_object_store_runtime.distributed_coordinator_last_loaded_at
+        );
+    } else {
+        add_assoc_null(&object_store, "runtime_distributed_coordinator_last_loaded_at");
+    }
+    add_assoc_string(
+        &object_store,
+        "runtime_distributed_coordinator_state_error",
+        king_object_store_runtime.distributed_coordinator_state_error[0] == '\0'
+            ? ""
+            : king_object_store_runtime.distributed_coordinator_state_error
+    );
     add_assoc_string(&object_store, "runtime_storage_root_path", king_safe_string(king_object_store_runtime.config.storage_root_path));
     add_assoc_long(&object_store, "runtime_max_storage_size_bytes", king_object_store_runtime.config.max_storage_size_bytes);
+    add_assoc_string(&object_store, "runtime_capacity_mode", (char *) king_object_store_runtime_capacity_mode_to_string());
+    add_assoc_string(&object_store, "runtime_capacity_scope", "committed_primary_inventory_bytes");
+    add_assoc_bool(&object_store, "runtime_capacity_enforced", king_object_store_runtime_capacity_is_enabled() ? 1 : 0);
+    if (king_object_store_runtime_capacity_is_enabled()) {
+        add_assoc_long(&object_store, "runtime_capacity_available_bytes", (zend_long) king_object_store_runtime_capacity_available_bytes());
+    } else {
+        add_assoc_null(&object_store, "runtime_capacity_available_bytes");
+    }
     add_assoc_long(&object_store, "runtime_replication_factor", king_object_store_runtime.config.replication_factor);
     add_assoc_long(&object_store, "runtime_chunk_size_kb", king_object_store_runtime.config.chunk_size_kb);
     add_assoc_string(&object_store, "runtime_backup_backend", (char *) king_storage_backend_to_string(king_object_store_runtime.config.backup_backend));

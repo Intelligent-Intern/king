@@ -41,13 +41,44 @@ foreach ($unsupportedBackends as $backend) {
         echo "unexpected_put\n";
     } catch (Throwable $e) {
         var_dump(get_class($e));
+        var_dump(str_contains($e->getMessage(), 'put operations'));
+    }
+
+    try {
+        king_object_store_get('cloud_doc');
+        echo "unexpected_get\n";
+    } catch (Throwable $e) {
+        var_dump(get_class($e));
+        var_dump(str_contains($e->getMessage(), 'get operations'));
+    }
+
+    try {
+        king_object_store_delete('cloud_doc');
+        echo "unexpected_delete\n";
+    } catch (Throwable $e) {
+        var_dump(get_class($e));
+        var_dump(str_contains($e->getMessage(), 'delete operations'));
+    }
+
+    try {
+        king_object_store_list();
+        echo "unexpected_list\n";
+    } catch (Throwable $e) {
+        var_dump(get_class($e));
+        var_dump(str_contains($e->getMessage(), 'list operations'));
+    }
+
+    try {
+        king_object_store_get_metadata('cloud_doc');
+        echo "unexpected_meta\n";
+    } catch (Throwable $e) {
+        var_dump(get_class($e));
+        var_dump(str_contains($e->getMessage(), 'metadata reads'));
     }
 
     $stats = king_object_store_get_stats()['object_store'];
-    var_dump(king_object_store_get('cloud_doc'));
-    var_dump(king_object_store_delete('cloud_doc'));
     var_dump($stats['runtime_primary_adapter_status']);
-    var_dump(strlen((string) $stats['runtime_primary_adapter_error']) > 0);
+    var_dump(str_contains((string) $stats['runtime_primary_adapter_error'], 'metadata reads'));
 }
 
 foreach (scandir($root) as $file) {
@@ -66,8 +97,15 @@ string(2) "ok"
 string(9) "simulated"
 string(9) "simulated"
 bool(true)
-string(20) "King\SystemException"
-bool(false)
-bool(false)
+string(21) "King\RuntimeException"
+bool(true)
+string(21) "King\RuntimeException"
+bool(true)
+string(21) "King\RuntimeException"
+bool(true)
+string(21) "King\RuntimeException"
+bool(true)
+string(21) "King\RuntimeException"
+bool(true)
 string(6) "failed"
 bool(true)

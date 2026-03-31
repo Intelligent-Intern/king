@@ -598,7 +598,11 @@ namespace {
      * sidecars.
      * `memory_cache` is accepted as a compatibility alias that resolves
      * to the same local filesystem backend. `distributed` remains
-     * simulated/unavailable today. Supported keys are
+     * simulated for object operations today, but it now persists a private
+     * coordinator-state file under
+     * `storage_root_path/.king-distributed/coordinator.state` and exposes
+     * that recovery/status surface through `king_object_store_get_stats()`.
+     * Supported keys are
      * `primary_backend`, `backup_backend`, `storage_root_path`,
      * `max_storage_size_bytes`, `replication_factor`, `chunk_size_kb`,
      * `cloud_credentials`, and `cdn_config` with `enabled`,
@@ -609,34 +613,156 @@ namespace {
      * `access_token` plus `container` for `cloud_azure`, plus optional
      * `region`, `session_token`, `path_style`, `account_name`, and
      * `verify_tls`.
+     * `max_storage_size_bytes` is now the shared runtime quota on committed
+     * primary-inventory bytes across `local_fs` and the real cloud backends.
+     * It is not multiplied by replication/backups and it is not a claim about
+     * provider-native bucket/account quotas.
      * @param array<string,mixed> $config
      * @throws \King\ValidationException
      */
     function king_object_store_init(array $config): bool {}
 
     /**
-     * Stores an object in the local runtime object-store registry.
+     * Stores one fully materialized object payload in the current runtime
+     * object-store registry. Supported write options today are
+     * `content_type`, `content_encoding`, `expires_at`, `cache_ttl_sec`,
+     * `object_type`, `cache_policy`, `integrity_sha256`, `if_match`,
+     * `if_none_match`, and `expected_version`.
+     * `if_match`/`if_none_match` follow the stored strong-validator/ETag
+     * contract in the spirit of RFC 7232, while `expected_version`
+     * provides the matching object-store-native version precondition.
+     * Object mutation is exclusive per object id: conflicting writes,
+     * deletes, or active resumable upload sessions on the same object fail
+     * with `King\RuntimeException` instead of racing hidden last-writer-wins
+     * behavior into the runtime.
+     * For bounded-memory ingress, use `king_object_store_put_from_stream()`.
+     * For explicit provider-native cloud upload sessions, use
+     * `king_object_store_begin_resumable_upload()` and its append/complete
+     * companions.
      * @param array<string,mixed>|null $options
      * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
      */
     function king_object_store_put(string $object_id, string $data, ?array $options = null): bool {}
 
     /**
+     * Stores one object payload from a readable stream using bounded-memory
+     * staging and the same metadata/precondition contract as
+     * `king_object_store_put()`. Supported write options today are
+     * `content_type`, `content_encoding`, `expires_at`, `cache_ttl_sec`,
+     * `object_type`, `cache_policy`, `integrity_sha256`, `if_match`,
+     * `if_none_match`, and `expected_version`.
+     * This surface provides bounded-memory ingress for large objects. For
+     * explicit provider-native cloud upload sessions, use
+     * `king_object_store_begin_resumable_upload()` and its append/complete
+     * companions.
+     * Like `king_object_store_put()`, this is an exclusive per-object
+     * mutation surface.
+     * @param array<string,mixed>|null $options
+     * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
+     */
+    function king_object_store_put_from_stream(string $object_id, mixed $stream, ?array $options = null): bool {}
+
+    /**
+     * Starts a provider-native cloud upload session for the active primary
+     * object-store backend. The public contract is one resumable upload
+     * session shape that maps to S3 multipart upload, GCS resumable upload,
+     * and Azure Block Blob block-list staging internally.
+     * The returned session snapshot now also exposes the active
+     * `chunk_size_bytes` contract for sequential appends. Each appended chunk
+     * must be non-empty and no larger than that value; the final chunk may be
+     * shorter. The session holds the object's mutation lock until completion
+     * or abort, so conflicting writes/deletes fail instead of racing the
+     * active upload.
+     * Supported begin options today are the same metadata/precondition
+     * options as `king_object_store_put()`: `content_type`,
+     * `content_encoding`, `expires_at`, `cache_ttl_sec`, `object_type`,
+     * `cache_policy`, `integrity_sha256`, `if_match`, `if_none_match`, and
+     * `expected_version`.
+     * @return array<string,mixed>
+     * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
+     */
+    function king_object_store_begin_resumable_upload(string $object_id, ?array $options = null): array {}
+
+    /**
+     * Appends one sequential chunk to an active provider-native cloud upload
+     * session. Supported options today are `final` to mark the last chunk.
+     * Each appended chunk must contain at least one byte and no more than the
+     * session's exported `chunk_size_bytes`; `final=true` only marks the tail
+     * chunk and does not widen that limit. Chunks that would push the
+     * committed object past `max_storage_size_bytes` are rejected with
+     * `King\ValidationException`.
+     * @return array<string,mixed>
+     * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
+     */
+    function king_object_store_append_resumable_upload_chunk(string $upload_id, mixed $stream, ?array $options = null): array {}
+
+    /**
+     * Completes an active provider-native cloud upload session and returns the
+     * final session snapshot that was committed into the object-store.
+     * Upload sessions now survive `king_object_store_init()` re-entry and
+     * process/request restart against the same `storage_root_path`; resumed
+     * sessions surface `recovered_after_restart=true` in their status
+     * snapshots until they are completed or aborted.
+     * @return array<string,mixed>
+     * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
+     */
+    function king_object_store_complete_resumable_upload(string $upload_id): array {}
+
+    /**
+     * Aborts an active provider-native cloud upload session. Restart-recovered
+     * sessions may also be aborted through the same `upload_id`, and abort
+     * releases the per-object mutation lock for a replacement session.
+     * @throws \King\RuntimeException|\King\SystemException
+     */
+    function king_object_store_abort_resumable_upload(string $upload_id): bool {}
+
+    /**
+     * Returns the current provider-native cloud upload session snapshot, or
+     * `false` when the session does not exist anymore. The stable snapshot now
+     * includes `chunk_size_bytes`, `sequential_chunks_required`, and
+     * `final_chunk_may_be_shorter`, plus `recovered_after_restart` for
+     * sessions rehydrated from persisted upload state.
+     * @return array<string,mixed>|false
+     */
+    function king_object_store_get_resumable_upload_status(string $upload_id): array|false {}
+
+    /**
      * Stable object-store inventory snapshot for the current runtime.
      * @return list<array<string,mixed>>
+     * @throws \King\RuntimeException|\King\SystemException
      */
     function king_object_store_list(): array {}
 
     /**
      * Object-store lookup for the current runtime.
-     * Returns the stored payload for local registry hits and `false` on miss.
+     * Returns the stored payload as one materialized string for local registry
+     * hits and `false` on miss. Supported read options today are `offset`
+     * and `length`, using byte-range semantics aligned with RFC 7233.
+     * Full-object reads validate stored `integrity_sha256` metadata when
+     * present. For bounded-memory egress, use
+     * `king_object_store_get_to_stream()`.
      * @param array<string,mixed>|null $options
+      * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
      */
     function king_object_store_get(string $object_id, ?array $options = null): string|false {}
 
     /**
+     * Streams one object payload into a writable stream using bounded-memory
+     * staged egress. Supported read options today are `offset` and `length`,
+     * using byte-range semantics aligned with RFC 7233. Full-object reads
+     * validate stored `integrity_sha256` metadata before any payload bytes are
+     * written into the destination stream. Reads stay lock-free and observe
+     * the last committed local payload/sidecar state.
+     * @param array<string,mixed>|null $options
+     * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
+     */
+    function king_object_store_get_to_stream(string $object_id, mixed $stream, ?array $options = null): bool {}
+
+    /**
      * Object-store delete for the current runtime.
-     * Returns `true` on local registry hits and `false` on miss.
+     * Returns `true` on local registry hits and `false` on miss or when a
+     * conflicting per-object mutation is still active.
+     * @throws \King\RuntimeException|\King\SystemException
      */
     function king_object_store_delete(string $object_id): bool {}
 
@@ -689,14 +815,30 @@ namespace {
     /**
      * Remove expired local object-store entries and return a maintenance
      * summary for the active runtime.
-     * @return array<string,mixed>
+     * `expires_at` is the ordinary-read visibility boundary, while cleanup
+     * is the destructive sweep that physically removes already-expired
+     * objects.
+     * @return array{
+     *   mode:string,
+     *   scanned_objects:int,
+     *   expired_objects_removed:int,
+     *   bytes_reclaimed:int,
+     *   removal_failures:int,
+     *   cleanup_at:int
+     * }
      */
     function king_object_store_cleanup_expired_objects(): array {}
 
     /**
      * Return the stored metadata snapshot for one object-store entry, or
-     * `false` when the object is absent.
+     * `false` when the object is absent. The current snapshot includes
+     * payload metadata such as `content_type`, `content_encoding`,
+     * `etag`, `integrity_sha256`, `content_length`, `version`,
+     * `expires_at`, `object_type`, `object_type_name`, `cache_policy`,
+     * `cache_policy_name`, `cache_ttl_seconds`, `is_expired`,
+     * backend-presence flags, and HA/distribution state.
      * @return array<string,mixed>|false
+     * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
      */
     function king_object_store_get_metadata(string $object_id): array|false {}
 
@@ -925,6 +1067,10 @@ namespace {
      *     runtime_primary_backend:string,
      *     runtime_storage_root_path:string,
      *     runtime_max_storage_size_bytes:int,
+     *     runtime_capacity_mode:string,
+     *     runtime_capacity_scope:string,
+     *     runtime_capacity_enforced:bool,
+     *     runtime_capacity_available_bytes:int|null,
      *     runtime_replication_factor:int,
      *     runtime_chunk_size_kb:int,
      *     object_count:int,

@@ -338,9 +338,14 @@ static zend_result king_object_store_gcs_http_request(
     zend_bool list_bucket,
     const void *body,
     size_t body_size,
+    FILE *body_stream,
+    uint64_t body_stream_size,
+    const king_object_metadata_t *request_metadata,
+    const char *range_header,
     king_object_store_http_response_t *response,
     char *error,
-    size_t error_size)
+    size_t error_size,
+    FILE *response_body_sink)
 {
     CURL *easy = NULL;
     struct curl_slist *headers = NULL;
@@ -375,7 +380,26 @@ static zend_result king_object_store_gcs_http_request(
     headers = king_object_store_libcurl.curl_slist_append_fn(headers, auth_header);
 
     if (body != NULL || strcmp(method, "PUT") == 0) {
-        headers = king_object_store_libcurl.curl_slist_append_fn(headers, "Content-Type: application/octet-stream");
+        char content_type_header[160];
+
+        if (request_metadata != NULL && request_metadata->content_type[0] != '\0') {
+            snprintf(content_type_header, sizeof(content_type_header), "Content-Type: %s", request_metadata->content_type);
+            headers = king_object_store_libcurl.curl_slist_append_fn(headers, content_type_header);
+        } else {
+            headers = king_object_store_libcurl.curl_slist_append_fn(headers, "Content-Type: application/octet-stream");
+        }
+    }
+    if (request_metadata != NULL && request_metadata->content_encoding[0] != '\0') {
+        char content_encoding_header[128];
+
+        snprintf(content_encoding_header, sizeof(content_encoding_header), "Content-Encoding: %s", request_metadata->content_encoding);
+        headers = king_object_store_libcurl.curl_slist_append_fn(headers, content_encoding_header);
+    }
+    if (request_metadata != NULL) {
+        headers = king_object_store_append_metadata_headers(headers, "x-goog-meta-", request_metadata);
+    }
+    if (range_header != NULL && range_header[0] != '\0') {
+        headers = king_object_store_libcurl.curl_slist_append_fn(headers, range_header);
     }
 
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_URL, ZSTR_VAL(url.s));
@@ -383,8 +407,12 @@ static zend_result king_object_store_gcs_http_request(
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_TIMEOUT_MS, KING_OBJECT_STORE_HTTP_TIMEOUT_MS);
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_USERAGENT, "king-object-store/1");
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HTTPHEADER, headers);
-    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEFUNCTION, king_object_store_http_write_callback);
-    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEDATA, response);
+    if (response_body_sink != NULL) {
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEDATA, response_body_sink);
+    } else {
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEFUNCTION, king_object_store_http_write_callback);
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEDATA, response);
+    }
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HEADERFUNCTION, king_object_store_http_header_callback);
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HEADERDATA, response);
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_SSL_VERIFYPEER, config->verify_tls ? 1L : 0L);
@@ -397,14 +425,34 @@ static zend_result king_object_store_gcs_http_request(
         king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_CUSTOMREQUEST, "DELETE");
     } else if (strcmp(method, "PUT") == 0) {
         king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_CUSTOMREQUEST, "PUT");
-        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDS, body_size > 0 ? body : "");
-        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDSIZE, (long) body_size);
+        if (body_stream != NULL) {
+            rewind(body_stream);
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_UPLOAD, 1L);
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_READDATA, body_stream);
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_INFILESIZE_LARGE, (curl_off_t) body_stream_size);
+        } else {
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDS, body_size > 0 ? body : "");
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDSIZE, (long) body_size);
+        }
     } else {
         king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HTTPGET, 1L);
     }
 
     curl_code = king_object_store_libcurl.curl_easy_perform_fn(easy);
+    king_object_store_libcurl.curl_easy_getinfo_fn(easy, CURLINFO_RESPONSE_CODE, &response->status_code);
+    smart_str_0(&response->body);
+    smart_str_0(&response->headers);
+
     if (curl_code != CURLE_OK) {
+        if (!response->body_limit_exceeded
+            && !response->header_limit_exceeded
+            && response->status_code >= 400
+            && response->status_code < 600) {
+            king_object_store_libcurl.curl_slist_free_all_fn(headers);
+            king_object_store_libcurl.curl_easy_cleanup_fn(easy);
+            smart_str_free(&url);
+            return SUCCESS;
+        }
         if (response->body_limit_exceeded) {
             snprintf(error, error_size, "cloud_gcs response body exceeded the object-store size guard.");
         } else if (response->header_limit_exceeded) {
@@ -417,10 +465,6 @@ static zend_result king_object_store_gcs_http_request(
         smart_str_free(&url);
         return FAILURE;
     }
-
-    king_object_store_libcurl.curl_easy_getinfo_fn(easy, CURLINFO_RESPONSE_CODE, &response->status_code);
-    smart_str_0(&response->body);
-    smart_str_0(&response->headers);
 
     king_object_store_libcurl.curl_slist_free_all_fn(headers);
     king_object_store_libcurl.curl_easy_cleanup_fn(easy);
@@ -448,6 +492,19 @@ static void king_object_store_gcs_metadata_from_headers(
     if (king_object_store_http_header_get(headers, "x-goog-meta-object-id", value, sizeof(value))) {
         strncpy(metadata->object_id, value, sizeof(metadata->object_id) - 1);
     }
+    if (king_object_store_http_header_get(headers, "x-goog-meta-content-type", value, sizeof(value))) {
+        strncpy(metadata->content_type, value, sizeof(metadata->content_type) - 1);
+    } else if (king_object_store_http_header_get(headers, "Content-Type", value, sizeof(value))) {
+        strncpy(metadata->content_type, value, sizeof(metadata->content_type) - 1);
+    }
+    if (king_object_store_http_header_get(headers, "x-goog-meta-content-encoding", value, sizeof(value))) {
+        strncpy(metadata->content_encoding, value, sizeof(metadata->content_encoding) - 1);
+    } else if (king_object_store_http_header_get(headers, "Content-Encoding", value, sizeof(value))) {
+        strncpy(metadata->content_encoding, value, sizeof(metadata->content_encoding) - 1);
+    }
+    if (king_object_store_http_header_get(headers, "x-goog-meta-etag", value, sizeof(value))) {
+        strncpy(metadata->etag, value, sizeof(metadata->etag) - 1);
+    }
     if (king_object_store_http_header_get(headers, "x-goog-meta-content-length", value, sizeof(value))) {
         metadata->content_length = (uint64_t) strtoull(value, NULL, 10);
     } else if (king_object_store_http_header_get(headers, "Content-Length", value, sizeof(value))) {
@@ -455,6 +512,12 @@ static void king_object_store_gcs_metadata_from_headers(
     }
     if (king_object_store_http_header_get(headers, "ETag", value, sizeof(value))) {
         strncpy(metadata->etag, value, sizeof(metadata->etag) - 1);
+    }
+    if (king_object_store_http_header_get(headers, "x-goog-meta-integrity-sha256", value, sizeof(value))) {
+        strncpy(metadata->integrity_sha256, value, sizeof(metadata->integrity_sha256) - 1);
+    }
+    if (king_object_store_http_header_get(headers, "x-goog-meta-version", value, sizeof(value))) {
+        metadata->version = (uint64_t) strtoull(value, NULL, 10);
     }
     if (king_object_store_http_header_get(headers, "x-goog-meta-created-at", value, sizeof(value))) {
         metadata->created_at = (time_t) strtoll(value, NULL, 10);
@@ -492,6 +555,18 @@ static void king_object_store_gcs_metadata_from_headers(
     if (king_object_store_http_header_get(headers, "x-goog-meta-distribution-peer-count", value, sizeof(value))) {
         metadata->distribution_peer_count = (uint32_t) strtoul(value, NULL, 10);
     }
+    if (king_object_store_http_header_get(headers, "x-goog-meta-local-fs-present", value, sizeof(value))) {
+        metadata->local_fs_present = (uint8_t) atoi(value);
+    }
+    if (king_object_store_http_header_get(headers, "x-goog-meta-cloud-s3-present", value, sizeof(value))) {
+        metadata->cloud_s3_present = (uint8_t) atoi(value);
+    }
+    if (king_object_store_http_header_get(headers, "x-goog-meta-cloud-gcs-present", value, sizeof(value))) {
+        metadata->cloud_gcs_present = (uint8_t) atoi(value);
+    }
+    if (king_object_store_http_header_get(headers, "x-goog-meta-cloud-azure-present", value, sizeof(value))) {
+        metadata->cloud_azure_present = (uint8_t) atoi(value);
+    }
 }
 
 static zend_result king_object_store_gcs_head_object(
@@ -520,9 +595,14 @@ static zend_result king_object_store_gcs_head_object(
             0,
             NULL,
             0,
+            NULL,
+            0,
+            NULL,
+            NULL,
             &response,
             error,
-            error_size
+            error_size,
+            NULL
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;
@@ -557,6 +637,345 @@ static zend_result king_object_store_gcs_head_object(
     return SUCCESS;
 }
 
+static zend_result king_object_store_gcs_http_request_url(
+    const king_object_store_gcs_runtime_config_t *config,
+    const char *method,
+    const char *url,
+    const void *body,
+    size_t body_size,
+    FILE *body_stream,
+    uint64_t body_stream_size,
+    const king_object_metadata_t *request_metadata,
+    const char * const *extra_headers,
+    size_t extra_header_count,
+    king_object_store_http_response_t *response,
+    char *error,
+    size_t error_size
+)
+{
+    CURL *easy = NULL;
+    struct curl_slist *headers = NULL;
+    char auth_header[1400];
+    size_t i;
+    CURLcode curl_code;
+
+    if (config == NULL || method == NULL || url == NULL || response == NULL || error == NULL || error_size == 0) {
+        return FAILURE;
+    }
+
+    if (king_object_store_ensure_libcurl_ready() != SUCCESS) {
+        snprintf(error, error_size, "%s", king_object_store_libcurl.load_error);
+        return FAILURE;
+    }
+
+    easy = king_object_store_libcurl.curl_easy_init_fn();
+    if (easy == NULL) {
+        snprintf(error, error_size, "Failed to create libcurl handle for cloud_gcs operation.");
+        return FAILURE;
+    }
+
+    headers = king_object_store_libcurl.curl_slist_append_fn(headers, "Accept: */*");
+    headers = king_object_store_libcurl.curl_slist_append_fn(headers, "Expect:");
+    snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", config->access_token);
+    headers = king_object_store_libcurl.curl_slist_append_fn(headers, auth_header);
+
+    if (request_metadata != NULL || strcmp(method, "PUT") == 0) {
+        char content_type_header[160];
+
+        if (request_metadata != NULL && request_metadata->content_type[0] != '\0') {
+            snprintf(content_type_header, sizeof(content_type_header), "Content-Type: %s", request_metadata->content_type);
+            headers = king_object_store_libcurl.curl_slist_append_fn(headers, content_type_header);
+        } else {
+            headers = king_object_store_libcurl.curl_slist_append_fn(headers, "Content-Type: application/octet-stream");
+        }
+    }
+    if (request_metadata != NULL && request_metadata->content_encoding[0] != '\0') {
+        char content_encoding_header[128];
+
+        snprintf(content_encoding_header, sizeof(content_encoding_header), "Content-Encoding: %s", request_metadata->content_encoding);
+        headers = king_object_store_libcurl.curl_slist_append_fn(headers, content_encoding_header);
+    }
+    if (request_metadata != NULL) {
+        headers = king_object_store_append_metadata_headers(headers, "x-goog-meta-", request_metadata);
+    }
+    for (i = 0; i < extra_header_count; ++i) {
+        if (extra_headers[i] != NULL && extra_headers[i][0] != '\0') {
+            headers = king_object_store_libcurl.curl_slist_append_fn(headers, extra_headers[i]);
+        }
+    }
+
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_URL, url);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_NOSIGNAL, 1L);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_TIMEOUT_MS, KING_OBJECT_STORE_HTTP_TIMEOUT_MS);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_USERAGENT, "king-object-store/1");
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HTTPHEADER, headers);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEFUNCTION, king_object_store_http_write_callback);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEDATA, response);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HEADERFUNCTION, king_object_store_http_header_callback);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HEADERDATA, response);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_SSL_VERIFYPEER, config->verify_tls ? 1L : 0L);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_SSL_VERIFYHOST, config->verify_tls ? 2L : 0L);
+
+    if (strcmp(method, "DELETE") == 0) {
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_CUSTOMREQUEST, "DELETE");
+    } else if (strcmp(method, "PUT") == 0) {
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_CUSTOMREQUEST, "PUT");
+        if (body_stream != NULL) {
+            rewind(body_stream);
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_UPLOAD, 1L);
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_READDATA, body_stream);
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_INFILESIZE_LARGE, (curl_off_t) body_stream_size);
+        } else {
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDS, body_size > 0 ? body : "");
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDSIZE, (long) body_size);
+        }
+    } else if (strcmp(method, "POST") == 0) {
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POST, 1L);
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDS, body_size > 0 ? body : "");
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDSIZE, (long) body_size);
+    } else {
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HTTPGET, 1L);
+    }
+
+    curl_code = king_object_store_libcurl.curl_easy_perform_fn(easy);
+    if (curl_code != CURLE_OK) {
+        if (response->body_limit_exceeded) {
+            snprintf(error, error_size, "cloud_gcs response body exceeded the object-store size guard.");
+        } else if (response->header_limit_exceeded) {
+            snprintf(error, error_size, "cloud_gcs response headers exceeded the object-store size guard.");
+        } else {
+            king_object_store_gcs_format_transport_error(method, curl_code, error, error_size);
+        }
+        king_object_store_libcurl.curl_slist_free_all_fn(headers);
+        king_object_store_libcurl.curl_easy_cleanup_fn(easy);
+        return FAILURE;
+    }
+
+    king_object_store_libcurl.curl_easy_getinfo_fn(easy, CURLINFO_RESPONSE_CODE, &response->status_code);
+    smart_str_0(&response->body);
+    smart_str_0(&response->headers);
+
+    king_object_store_libcurl.curl_slist_free_all_fn(headers);
+    king_object_store_libcurl.curl_easy_cleanup_fn(easy);
+    return SUCCESS;
+}
+
+static int king_object_store_gcs_begin_upload_session(
+    const char *object_id,
+    const king_object_metadata_t *metadata,
+    char *provider_token,
+    size_t provider_token_size,
+    char *error,
+    size_t error_size
+)
+{
+    king_object_store_gcs_runtime_config_t config;
+    king_object_store_http_response_t response;
+    smart_str url = {0};
+    const char *location_header;
+
+    if (provider_token == NULL || provider_token_size == 0) {
+        return FAILURE;
+    }
+    provider_token[0] = '\0';
+
+    if (king_object_store_gcs_resolve_config(&config, error, error_size) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_object_store_gcs_build_url(&config, object_id, 0, &url, error, error_size) != SUCCESS) {
+        smart_str_free(&url);
+        return FAILURE;
+    }
+    smart_str_appends(&url, "?uploadType=resumable");
+    smart_str_0(&url);
+
+    {
+        const char *extra_headers[] = {"x-goog-resumable: start"};
+
+        king_object_store_http_response_init(&response);
+        if (king_object_store_gcs_http_request_url(
+                &config,
+                "POST",
+                ZSTR_VAL(url.s),
+                "",
+                0,
+                NULL,
+                0,
+                metadata,
+                extra_headers,
+                1,
+                &response,
+                error,
+                error_size
+            ) != SUCCESS) {
+            king_object_store_http_response_destroy(&response);
+            smart_str_free(&url);
+            return FAILURE;
+        }
+    }
+    smart_str_free(&url);
+
+    if (response.status_code < 200 || response.status_code >= 300) {
+        king_object_store_gcs_format_response_error("POST", object_id, "resumable-init", &response, error, error_size);
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+
+    location_header = NULL;
+    if (response.headers.s != NULL) {
+        static char location[1024];
+
+        if (king_object_store_http_header_get(&response.headers, "Location", location, sizeof(location))) {
+            location_header = location;
+        }
+    }
+    if (location_header == NULL || location_header[0] == '\0') {
+        snprintf(error, error_size, "cloud_gcs resumable init for '%s' did not return a session URL.", object_id);
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+
+    snprintf(provider_token, provider_token_size, "%s", location_header);
+    king_object_store_http_response_destroy(&response);
+    return SUCCESS;
+}
+
+static int king_object_store_gcs_append_upload_chunk(
+    const char *provider_token,
+    const char *source_path,
+    uint64_t chunk_size,
+    uint64_t offset,
+    zend_bool is_final_chunk,
+    uint64_t final_size,
+    zend_bool *remote_completed_out,
+    char *error,
+    size_t error_size
+)
+{
+    king_object_store_gcs_runtime_config_t config;
+    king_object_store_http_response_t response;
+    FILE *source_fp = NULL;
+    char content_range_header[128];
+    const char *extra_headers[1];
+
+    if (remote_completed_out != NULL) {
+        *remote_completed_out = 0;
+    }
+
+    if (king_object_store_gcs_resolve_config(&config, error, error_size) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (is_final_chunk) {
+        snprintf(
+            content_range_header,
+            sizeof(content_range_header),
+            "Content-Range: bytes %" PRIu64 "-%" PRIu64 "/%" PRIu64,
+            offset,
+            offset + chunk_size - 1,
+            final_size
+        );
+    } else {
+        snprintf(
+            content_range_header,
+            sizeof(content_range_header),
+            "Content-Range: bytes %" PRIu64 "-%" PRIu64 "/*",
+            offset,
+            offset + chunk_size - 1
+        );
+    }
+
+    extra_headers[0] = content_range_header;
+
+    source_fp = fopen(source_path, "rb");
+    if (source_fp == NULL) {
+        snprintf(error, error_size, "cloud_gcs could not open the resumable upload chunk.");
+        return FAILURE;
+    }
+
+    king_object_store_http_response_init(&response);
+    if (king_object_store_gcs_http_request_url(
+            &config,
+            "PUT",
+            provider_token,
+            NULL,
+            0,
+            source_fp,
+            chunk_size,
+            NULL,
+            extra_headers,
+            1,
+            &response,
+            error,
+            error_size
+        ) != SUCCESS) {
+        fclose(source_fp);
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+    fclose(source_fp);
+
+    if (!is_final_chunk && response.status_code == 308) {
+        king_object_store_http_response_destroy(&response);
+        return SUCCESS;
+    }
+
+    if (response.status_code < 200 || response.status_code >= 300) {
+        king_object_store_gcs_format_response_error("PUT", NULL, is_final_chunk ? "resumable-complete" : "resumable-chunk", &response, error, error_size);
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+
+    if (remote_completed_out != NULL) {
+        *remote_completed_out = 1;
+    }
+    king_object_store_http_response_destroy(&response);
+    return SUCCESS;
+}
+
+static int king_object_store_gcs_abort_upload_session(
+    const char *provider_token,
+    char *error,
+    size_t error_size
+)
+{
+    king_object_store_gcs_runtime_config_t config;
+    king_object_store_http_response_t response;
+
+    if (king_object_store_gcs_resolve_config(&config, error, error_size) != SUCCESS) {
+        return FAILURE;
+    }
+
+    king_object_store_http_response_init(&response);
+    if (king_object_store_gcs_http_request_url(
+            &config,
+            "DELETE",
+            provider_token,
+            NULL,
+            0,
+            NULL,
+            0,
+            NULL,
+            NULL,
+            0,
+            &response,
+            error,
+            error_size
+        ) != SUCCESS) {
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+
+    if (response.status_code != 404 && (response.status_code < 200 || response.status_code >= 300)) {
+        king_object_store_gcs_format_response_error("DELETE", NULL, "resumable-abort", &response, error, error_size);
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+
+    king_object_store_http_response_destroy(&response);
+    return SUCCESS;
+}
+
 static int king_object_store_gcs_write(
     const char *object_id,
     const void *data,
@@ -582,16 +1001,6 @@ static int king_object_store_gcs_write(
     if (metadata_source != NULL) {
         final_metadata = *metadata_source;
     }
-    if (final_metadata.object_id[0] == '\0') {
-        strncpy(final_metadata.object_id, object_id, sizeof(final_metadata.object_id) - 1);
-    }
-    if (final_metadata.content_length == 0) {
-        final_metadata.content_length = data_size;
-    }
-    if (final_metadata.created_at == 0) {
-        final_metadata.created_at = time(NULL);
-    }
-    final_metadata.modified_at = time(NULL);
     king_object_store_metadata_mark_backend_present(
         &final_metadata,
         KING_STORAGE_BACKEND_CLOUD_GCS,
@@ -611,6 +1020,13 @@ static int king_object_store_gcs_write(
     if (exists) {
         old_size = existing_metadata.content_length;
     }
+    king_object_store_prepare_metadata_for_write(
+        object_id,
+        data,
+        data_size,
+        &final_metadata,
+        exists ? &existing_metadata : NULL
+    );
 
     king_object_store_http_response_init(&response);
     if (king_object_store_gcs_http_request(
@@ -620,9 +1036,14 @@ static int king_object_store_gcs_write(
             0,
             data,
             data_size,
+            NULL,
+            0,
+            &final_metadata,
+            NULL,
             &response,
             error,
-            error_size
+            error_size,
+            NULL
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;
@@ -659,16 +1080,138 @@ static int king_object_store_gcs_write(
     return SUCCESS;
 }
 
+static int king_object_store_gcs_write_from_file(
+    const char *object_id,
+    const char *source_path,
+    const king_object_metadata_t *metadata,
+    char *error,
+    size_t error_size,
+    zend_bool update_counters)
+{
+    king_object_store_gcs_runtime_config_t config;
+    king_object_store_http_response_t response;
+    king_object_metadata_t final_metadata;
+    const king_object_metadata_t *metadata_source = metadata;
+    zend_bool exists = 0;
+    king_object_metadata_t existing_metadata;
+    uint64_t old_size = 0;
+    uint64_t source_size = 0;
+    char computed_sha256[65];
+    FILE *source_fp = NULL;
+
+    if (king_object_store_gcs_resolve_config(&config, error, error_size) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_object_store_compute_sha256_hex_for_path(source_path, computed_sha256, &source_size) != SUCCESS) {
+        snprintf(error, error_size, "cloud_gcs could not hash staged upload content for '%s'.", object_id);
+        return FAILURE;
+    }
+
+    memset(&final_metadata, 0, sizeof(final_metadata));
+    if (metadata_source != NULL) {
+        final_metadata = *metadata_source;
+    }
+    king_object_store_metadata_mark_backend_present(
+        &final_metadata,
+        KING_STORAGE_BACKEND_CLOUD_GCS,
+        1
+    );
+
+    memset(&existing_metadata, 0, sizeof(existing_metadata));
+    if (king_object_store_gcs_head_object(
+            object_id,
+            &exists,
+            &existing_metadata,
+            error,
+            error_size
+        ) != SUCCESS) {
+        return FAILURE;
+    }
+    if (exists) {
+        old_size = existing_metadata.content_length;
+    }
+    king_object_store_finalize_metadata_for_write(
+        object_id,
+        source_size,
+        computed_sha256,
+        &final_metadata,
+        exists ? &existing_metadata : NULL
+    );
+
+    source_fp = fopen(source_path, "rb");
+    if (source_fp == NULL) {
+        snprintf(error, error_size, "cloud_gcs could not open the staged upload for '%s'.", object_id);
+        return FAILURE;
+    }
+
+    king_object_store_http_response_init(&response);
+    if (king_object_store_gcs_http_request(
+            &config,
+            "PUT",
+            object_id,
+            0,
+            NULL,
+            0,
+            source_fp,
+            source_size,
+            &final_metadata,
+            NULL,
+            &response,
+            error,
+            error_size,
+            NULL
+        ) != SUCCESS) {
+        fclose(source_fp);
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+    fclose(source_fp);
+
+    if (response.status_code < 200 || response.status_code >= 300) {
+        king_object_store_gcs_format_response_error(
+            "PUT",
+            object_id,
+            "write",
+            &response,
+            error,
+            error_size
+        );
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+
+    if (king_object_store_meta_write(object_id, &final_metadata) != SUCCESS) {
+        snprintf(
+            error,
+            error_size,
+            "cloud_gcs write for '%s' succeeded but local metadata sidecar write failed.",
+            object_id
+        );
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+
+    if (update_counters) {
+        king_object_store_apply_local_fs_counters_for_rewrite(object_id, source_size, exists ? 1 : 0, old_size);
+    }
+    king_object_store_http_response_destroy(&response);
+    return SUCCESS;
+}
+
 static int king_object_store_gcs_read_with_error(
     const char *object_id,
     void **data,
     size_t *data_size,
+    size_t offset,
+    size_t length,
+    zend_bool has_length,
     char *error,
     size_t error_size)
 {
     king_object_store_gcs_runtime_config_t config;
     king_object_store_http_response_t response;
     void *copy;
+    char range_header[96];
 
     if (data == NULL || data_size == NULL || error == NULL || error_size == 0) {
         return FAILURE;
@@ -689,28 +1232,39 @@ static int king_object_store_gcs_read_with_error(
             0,
             NULL,
             0,
+            NULL,
+            0,
+            NULL,
+            (offset > 0 || has_length)
+                ? (king_object_store_build_range_header(offset, length, has_length, range_header, sizeof(range_header)), range_header)
+                : NULL,
             &response,
             error,
-            error_size
+            error_size,
+            NULL
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;
     }
 
     if (response.status_code == 404) {
-        king_object_store_gcs_format_response_error(
-            "GET",
-            object_id,
-            "read",
-            &response,
-            error,
-            error_size
-        );
+        error[0] = '\0';
         king_object_store_http_response_destroy(&response);
-        return FAILURE;
+        return KING_OBJECT_STORE_RESULT_MISS;
     }
 
-    if (response.status_code < 200 || response.status_code >= 300) {
+    if ((offset > 0 || has_length) && response.status_code == 416) {
+        snprintf(
+            error,
+            error_size,
+            "cloud_gcs range read for '%s' requested range starts past the end of the object.",
+            object_id
+        );
+        king_object_store_http_response_destroy(&response);
+        return KING_OBJECT_STORE_RESULT_VALIDATION;
+    }
+
+    if (response.status_code < 200 || response.status_code >= 300 || ((offset > 0 || has_length) && response.status_code != 206)) {
         king_object_store_gcs_format_response_error(
             "GET",
             object_id,
@@ -746,9 +1300,138 @@ static int king_object_store_gcs_read(const char *object_id, void **data, size_t
         object_id,
         data,
         data_size,
+        0,
+        0,
+        0,
         king_object_store_runtime.primary_adapter_error,
         sizeof(king_object_store_runtime.primary_adapter_error)
     );
+}
+
+static int king_object_store_gcs_read_range(
+    const char *object_id,
+    size_t offset,
+    size_t length,
+    zend_bool has_length,
+    void **data,
+    size_t *data_size,
+    king_object_metadata_t *metadata
+)
+{
+    int rc;
+
+    rc = king_object_store_gcs_read_with_error(
+        object_id,
+        data,
+        data_size,
+        offset,
+        length,
+        has_length,
+        king_object_store_runtime.primary_adapter_error,
+        sizeof(king_object_store_runtime.primary_adapter_error)
+    );
+    if (rc != SUCCESS) {
+        return rc;
+    }
+
+    if (metadata != NULL && king_object_store_backend_read_metadata(object_id, metadata) != SUCCESS) {
+        king_object_store_release_read_buffer(data, data_size);
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static int king_object_store_gcs_read_to_path_with_error(
+    const char *object_id,
+    const char *destination_path,
+    size_t offset,
+    size_t length,
+    zend_bool has_length,
+    char *error,
+    size_t error_size
+)
+{
+    king_object_store_gcs_runtime_config_t config;
+    king_object_store_http_response_t response;
+    char range_header[96];
+    FILE *destination_fp = NULL;
+
+    if (destination_path == NULL || error == NULL || error_size == 0) {
+        return FAILURE;
+    }
+
+    if (king_object_store_gcs_resolve_config(&config, error, error_size) != SUCCESS) {
+        return FAILURE;
+    }
+
+    destination_fp = fopen(destination_path, "w+b");
+    if (destination_fp == NULL) {
+        snprintf(error, error_size, "cloud_gcs could not open the bounded-memory download sink for '%s'.", object_id);
+        return FAILURE;
+    }
+
+    king_object_store_http_response_init(&response);
+    if (king_object_store_gcs_http_request(
+            &config,
+            "GET",
+            object_id,
+            0,
+            NULL,
+            0,
+            NULL,
+            0,
+            NULL,
+            (offset > 0 || has_length)
+                ? (king_object_store_build_range_header(offset, length, has_length, range_header, sizeof(range_header)), range_header)
+                : NULL,
+            &response,
+            error,
+            error_size,
+            destination_fp
+        ) != SUCCESS) {
+        fclose(destination_fp);
+        unlink(destination_path);
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+    fclose(destination_fp);
+
+    if (response.status_code == 404) {
+        error[0] = '\0';
+        unlink(destination_path);
+        king_object_store_http_response_destroy(&response);
+        return KING_OBJECT_STORE_RESULT_MISS;
+    }
+
+    if ((offset > 0 || has_length) && response.status_code == 416) {
+        snprintf(
+            error,
+            error_size,
+            "cloud_gcs range read for '%s' requested range starts past the end of the object.",
+            object_id
+        );
+        unlink(destination_path);
+        king_object_store_http_response_destroy(&response);
+        return KING_OBJECT_STORE_RESULT_VALIDATION;
+    }
+
+    if (response.status_code < 200 || response.status_code >= 300 || ((offset > 0 || has_length) && response.status_code != 206)) {
+        king_object_store_gcs_format_response_error(
+            "GET",
+            object_id,
+            "read",
+            &response,
+            error,
+            error_size
+        );
+        unlink(destination_path);
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+
+    king_object_store_http_response_destroy(&response);
+    return SUCCESS;
 }
 
 static int king_object_store_gcs_delete_with_error(
@@ -788,7 +1471,10 @@ static int king_object_store_gcs_delete_with_error(
         return FAILURE;
     }
     if (!exists) {
-        return allow_missing ? SUCCESS : FAILURE;
+        if (error != NULL && error_size > 0) {
+            error[0] = '\0';
+        }
+        return allow_missing ? SUCCESS : KING_OBJECT_STORE_RESULT_MISS;
     }
 
     king_object_store_http_response_init(&response);
@@ -799,9 +1485,14 @@ static int king_object_store_gcs_delete_with_error(
             0,
             NULL,
             0,
+            NULL,
+            0,
+            NULL,
+            NULL,
             &response,
             error,
-            error_size
+            error_size,
+            NULL
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;
@@ -887,9 +1578,14 @@ static int king_object_store_gcs_list(zval *return_array)
             1,
             NULL,
             0,
+            NULL,
+            0,
+            NULL,
+            NULL,
             &response,
             king_object_store_runtime.primary_adapter_error,
-            sizeof(king_object_store_runtime.primary_adapter_error)
+            sizeof(king_object_store_runtime.primary_adapter_error),
+            NULL
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;
@@ -953,9 +1649,14 @@ static int king_object_store_gcs_rehydrate_stats(char *error, size_t error_size)
             1,
             NULL,
             0,
+            NULL,
+            0,
+            NULL,
+            NULL,
             &response,
             error,
-            error_size
+            error_size,
+            NULL
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;

@@ -326,9 +326,14 @@ static zend_result king_object_store_azure_http_request(
     zend_bool list_container,
     const void *body,
     size_t body_size,
+    FILE *body_stream,
+    uint64_t body_stream_size,
+    const king_object_metadata_t *request_metadata,
+    const char *range_header,
     king_object_store_http_response_t *response,
     char *error,
-    size_t error_size)
+    size_t error_size,
+    FILE *response_body_sink)
 {
     CURL *easy = NULL;
     struct curl_slist *headers = NULL;
@@ -373,10 +378,29 @@ static zend_result king_object_store_azure_http_request(
     headers = king_object_store_libcurl.curl_slist_append_fn(headers, auth_header);
 
     if (body != NULL || strcmp(method, "PUT") == 0) {
-        headers = king_object_store_libcurl.curl_slist_append_fn(headers, "Content-Type: application/octet-stream");
+        char content_type_header[160];
+
+        if (request_metadata != NULL && request_metadata->content_type[0] != '\0') {
+            snprintf(content_type_header, sizeof(content_type_header), "Content-Type: %s", request_metadata->content_type);
+            headers = king_object_store_libcurl.curl_slist_append_fn(headers, content_type_header);
+        } else {
+            headers = king_object_store_libcurl.curl_slist_append_fn(headers, "Content-Type: application/octet-stream");
+        }
+    }
+    if (request_metadata != NULL && request_metadata->content_encoding[0] != '\0') {
+        char content_encoding_header[128];
+
+        snprintf(content_encoding_header, sizeof(content_encoding_header), "Content-Encoding: %s", request_metadata->content_encoding);
+        headers = king_object_store_libcurl.curl_slist_append_fn(headers, content_encoding_header);
     }
     if (strcmp(method, "PUT") == 0) {
         headers = king_object_store_libcurl.curl_slist_append_fn(headers, "x-ms-blob-type: BlockBlob");
+    }
+    if (request_metadata != NULL) {
+        headers = king_object_store_append_metadata_headers(headers, "x-ms-meta-", request_metadata);
+    }
+    if (range_header != NULL && range_header[0] != '\0') {
+        headers = king_object_store_libcurl.curl_slist_append_fn(headers, range_header);
     }
 
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_URL, ZSTR_VAL(url.s));
@@ -384,8 +408,12 @@ static zend_result king_object_store_azure_http_request(
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_TIMEOUT_MS, KING_OBJECT_STORE_HTTP_TIMEOUT_MS);
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_USERAGENT, "king-object-store/1");
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HTTPHEADER, headers);
-    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEFUNCTION, king_object_store_http_write_callback);
-    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEDATA, response);
+    if (response_body_sink != NULL) {
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEDATA, response_body_sink);
+    } else {
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEFUNCTION, king_object_store_http_write_callback);
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEDATA, response);
+    }
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HEADERFUNCTION, king_object_store_http_header_callback);
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HEADERDATA, response);
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_SSL_VERIFYPEER, config->verify_tls ? 1L : 0L);
@@ -398,14 +426,34 @@ static zend_result king_object_store_azure_http_request(
         king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_CUSTOMREQUEST, "DELETE");
     } else if (strcmp(method, "PUT") == 0) {
         king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_CUSTOMREQUEST, "PUT");
-        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDS, body_size > 0 ? body : "");
-        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDSIZE, (long) body_size);
+        if (body_stream != NULL) {
+            rewind(body_stream);
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_UPLOAD, 1L);
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_READDATA, body_stream);
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_INFILESIZE_LARGE, (curl_off_t) body_stream_size);
+        } else {
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDS, body_size > 0 ? body : "");
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDSIZE, (long) body_size);
+        }
     } else {
         king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HTTPGET, 1L);
     }
 
     curl_code = king_object_store_libcurl.curl_easy_perform_fn(easy);
+    king_object_store_libcurl.curl_easy_getinfo_fn(easy, CURLINFO_RESPONSE_CODE, &response->status_code);
+    smart_str_0(&response->body);
+    smart_str_0(&response->headers);
+
     if (curl_code != CURLE_OK) {
+        if (!response->body_limit_exceeded
+            && !response->header_limit_exceeded
+            && response->status_code >= 400
+            && response->status_code < 600) {
+            king_object_store_libcurl.curl_slist_free_all_fn(headers);
+            king_object_store_libcurl.curl_easy_cleanup_fn(easy);
+            smart_str_free(&url);
+            return SUCCESS;
+        }
         if (response->body_limit_exceeded) {
             snprintf(error, error_size, "cloud_azure response body exceeded the object-store size guard.");
         } else if (response->header_limit_exceeded) {
@@ -418,10 +466,6 @@ static zend_result king_object_store_azure_http_request(
         smart_str_free(&url);
         return FAILURE;
     }
-
-    king_object_store_libcurl.curl_easy_getinfo_fn(easy, CURLINFO_RESPONSE_CODE, &response->status_code);
-    smart_str_0(&response->body);
-    smart_str_0(&response->headers);
 
     king_object_store_libcurl.curl_slist_free_all_fn(headers);
     king_object_store_libcurl.curl_easy_cleanup_fn(easy);
@@ -449,6 +493,16 @@ static void king_object_store_azure_metadata_from_headers(
     if (king_object_store_http_header_get(headers, "x-ms-meta-object-id", value, sizeof(value))) {
         strncpy(metadata->object_id, value, sizeof(metadata->object_id) - 1);
     }
+    if (king_object_store_http_header_get(headers, "x-ms-meta-content-type", value, sizeof(value))) {
+        strncpy(metadata->content_type, value, sizeof(metadata->content_type) - 1);
+    } else if (king_object_store_http_header_get(headers, "Content-Type", value, sizeof(value))) {
+        strncpy(metadata->content_type, value, sizeof(metadata->content_type) - 1);
+    }
+    if (king_object_store_http_header_get(headers, "x-ms-meta-content-encoding", value, sizeof(value))) {
+        strncpy(metadata->content_encoding, value, sizeof(metadata->content_encoding) - 1);
+    } else if (king_object_store_http_header_get(headers, "Content-Encoding", value, sizeof(value))) {
+        strncpy(metadata->content_encoding, value, sizeof(metadata->content_encoding) - 1);
+    }
     if (king_object_store_http_header_get(headers, "x-ms-meta-content-length", value, sizeof(value))) {
         metadata->content_length = (uint64_t) strtoull(value, NULL, 10);
     } else if (king_object_store_http_header_get(headers, "Content-Length", value, sizeof(value))) {
@@ -456,8 +510,16 @@ static void king_object_store_azure_metadata_from_headers(
     } else if (king_object_store_http_header_get(headers, "x-ms-blob-content-length", value, sizeof(value))) {
         metadata->content_length = (uint64_t) strtoull(value, NULL, 10);
     }
-    if (king_object_store_http_header_get(headers, "ETag", value, sizeof(value))) {
+    if (king_object_store_http_header_get(headers, "x-ms-meta-etag", value, sizeof(value))) {
         strncpy(metadata->etag, value, sizeof(metadata->etag) - 1);
+    } else if (king_object_store_http_header_get(headers, "ETag", value, sizeof(value))) {
+        strncpy(metadata->etag, value, sizeof(metadata->etag) - 1);
+    }
+    if (king_object_store_http_header_get(headers, "x-ms-meta-integrity-sha256", value, sizeof(value))) {
+        strncpy(metadata->integrity_sha256, value, sizeof(metadata->integrity_sha256) - 1);
+    }
+    if (king_object_store_http_header_get(headers, "x-ms-meta-version", value, sizeof(value))) {
+        metadata->version = (uint64_t) strtoull(value, NULL, 10);
     }
     if (king_object_store_http_header_get(headers, "x-ms-meta-created-at", value, sizeof(value))) {
         metadata->created_at = (time_t) strtoll(value, NULL, 10);
@@ -495,6 +557,18 @@ static void king_object_store_azure_metadata_from_headers(
     if (king_object_store_http_header_get(headers, "x-ms-meta-distribution-peer-count", value, sizeof(value))) {
         metadata->distribution_peer_count = (uint32_t) strtoul(value, NULL, 10);
     }
+    if (king_object_store_http_header_get(headers, "x-ms-meta-local-fs-present", value, sizeof(value))) {
+        metadata->local_fs_present = (uint8_t) atoi(value);
+    }
+    if (king_object_store_http_header_get(headers, "x-ms-meta-cloud-s3-present", value, sizeof(value))) {
+        metadata->cloud_s3_present = (uint8_t) atoi(value);
+    }
+    if (king_object_store_http_header_get(headers, "x-ms-meta-cloud-gcs-present", value, sizeof(value))) {
+        metadata->cloud_gcs_present = (uint8_t) atoi(value);
+    }
+    if (king_object_store_http_header_get(headers, "x-ms-meta-cloud-azure-present", value, sizeof(value))) {
+        metadata->cloud_azure_present = (uint8_t) atoi(value);
+    }
 }
 
 static zend_result king_object_store_azure_head_object(
@@ -523,9 +597,14 @@ static zend_result king_object_store_azure_head_object(
             0,
             NULL,
             0,
+            NULL,
+            0,
+            NULL,
+            NULL,
             &response,
             error,
-            error_size
+            error_size,
+            NULL
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;
@@ -560,6 +639,336 @@ static zend_result king_object_store_azure_head_object(
     return SUCCESS;
 }
 
+static zend_result king_object_store_azure_http_request_url(
+    const king_object_store_azure_runtime_config_t *config,
+    const char *method,
+    const char *url,
+    const void *body,
+    size_t body_size,
+    FILE *body_stream,
+    uint64_t body_stream_size,
+    const king_object_metadata_t *request_metadata,
+    const char * const *extra_headers,
+    size_t extra_header_count,
+    king_object_store_http_response_t *response,
+    char *error,
+    size_t error_size
+)
+{
+    CURL *easy = NULL;
+    struct curl_slist *headers = NULL;
+    char auth_header[1400];
+    char date_header[96];
+    time_t now;
+    struct tm tm_utc;
+    size_t i;
+    CURLcode curl_code;
+
+    if (config == NULL || method == NULL || url == NULL || response == NULL || error == NULL || error_size == 0) {
+        return FAILURE;
+    }
+
+    if (king_object_store_ensure_libcurl_ready() != SUCCESS) {
+        snprintf(error, error_size, "%s", king_object_store_libcurl.load_error);
+        return FAILURE;
+    }
+
+    easy = king_object_store_libcurl.curl_easy_init_fn();
+    if (easy == NULL) {
+        snprintf(error, error_size, "Failed to create libcurl handle for cloud_azure operation.");
+        return FAILURE;
+    }
+
+    headers = king_object_store_libcurl.curl_slist_append_fn(headers, "Accept: */*");
+    headers = king_object_store_libcurl.curl_slist_append_fn(headers, "Expect:");
+    headers = king_object_store_libcurl.curl_slist_append_fn(headers, "x-ms-version: 2023-11-03");
+
+    now = time(NULL);
+    gmtime_r(&now, &tm_utc);
+    strftime(date_header, sizeof(date_header), "x-ms-date: %a, %d %b %Y %H:%M:%S GMT", &tm_utc);
+    headers = king_object_store_libcurl.curl_slist_append_fn(headers, date_header);
+
+    snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", config->access_token);
+    headers = king_object_store_libcurl.curl_slist_append_fn(headers, auth_header);
+
+    if (request_metadata != NULL || strcmp(method, "PUT") == 0) {
+        char content_type_header[160];
+
+        if (request_metadata != NULL && request_metadata->content_type[0] != '\0') {
+            snprintf(content_type_header, sizeof(content_type_header), "Content-Type: %s", request_metadata->content_type);
+            headers = king_object_store_libcurl.curl_slist_append_fn(headers, content_type_header);
+        } else {
+            headers = king_object_store_libcurl.curl_slist_append_fn(headers, "Content-Type: application/octet-stream");
+        }
+    }
+    if (request_metadata != NULL && request_metadata->content_encoding[0] != '\0') {
+        char content_encoding_header[128];
+
+        snprintf(content_encoding_header, sizeof(content_encoding_header), "Content-Encoding: %s", request_metadata->content_encoding);
+        headers = king_object_store_libcurl.curl_slist_append_fn(headers, content_encoding_header);
+    }
+    if (request_metadata != NULL) {
+        headers = king_object_store_append_metadata_headers(headers, "x-ms-meta-", request_metadata);
+    }
+    for (i = 0; i < extra_header_count; ++i) {
+        if (extra_headers[i] != NULL && extra_headers[i][0] != '\0') {
+            headers = king_object_store_libcurl.curl_slist_append_fn(headers, extra_headers[i]);
+        }
+    }
+
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_URL, url);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_NOSIGNAL, 1L);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_TIMEOUT_MS, KING_OBJECT_STORE_HTTP_TIMEOUT_MS);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_USERAGENT, "king-object-store/1");
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HTTPHEADER, headers);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEFUNCTION, king_object_store_http_write_callback);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEDATA, response);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HEADERFUNCTION, king_object_store_http_header_callback);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HEADERDATA, response);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_SSL_VERIFYPEER, config->verify_tls ? 1L : 0L);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_SSL_VERIFYHOST, config->verify_tls ? 2L : 0L);
+
+    if (strcmp(method, "DELETE") == 0) {
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_CUSTOMREQUEST, "DELETE");
+    } else if (strcmp(method, "PUT") == 0) {
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_CUSTOMREQUEST, "PUT");
+        if (body_stream != NULL) {
+            rewind(body_stream);
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_UPLOAD, 1L);
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_READDATA, body_stream);
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_INFILESIZE_LARGE, (curl_off_t) body_stream_size);
+        } else {
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDS, body_size > 0 ? body : "");
+            king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDSIZE, (long) body_size);
+        }
+    } else if (strcmp(method, "POST") == 0) {
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POST, 1L);
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDS, body_size > 0 ? body : "");
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_POSTFIELDSIZE, (long) body_size);
+    } else {
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HTTPGET, 1L);
+    }
+
+    curl_code = king_object_store_libcurl.curl_easy_perform_fn(easy);
+    if (curl_code != CURLE_OK) {
+        if (response->body_limit_exceeded) {
+            snprintf(error, error_size, "cloud_azure response body exceeded the object-store size guard.");
+        } else if (response->header_limit_exceeded) {
+            snprintf(error, error_size, "cloud_azure response headers exceeded the object-store size guard.");
+        } else {
+            king_object_store_azure_format_transport_error(method, curl_code, error, error_size);
+        }
+        king_object_store_libcurl.curl_slist_free_all_fn(headers);
+        king_object_store_libcurl.curl_easy_cleanup_fn(easy);
+        return FAILURE;
+    }
+
+    king_object_store_libcurl.curl_easy_getinfo_fn(easy, CURLINFO_RESPONSE_CODE, &response->status_code);
+    smart_str_0(&response->body);
+    smart_str_0(&response->headers);
+
+    king_object_store_libcurl.curl_slist_free_all_fn(headers);
+    king_object_store_libcurl.curl_easy_cleanup_fn(easy);
+    return SUCCESS;
+}
+
+static int king_object_store_azure_begin_upload_session(
+    const char *object_id,
+    const king_object_metadata_t *metadata,
+    char *provider_token,
+    size_t provider_token_size,
+    char *error,
+    size_t error_size
+)
+{
+    king_object_store_azure_runtime_config_t config;
+
+    (void) object_id;
+    (void) metadata;
+
+    if (provider_token != NULL && provider_token_size > 0) {
+        provider_token[0] = '\0';
+    }
+
+    return king_object_store_azure_resolve_config(&config, error, error_size);
+}
+
+static int king_object_store_azure_append_upload_chunk(
+    const char *object_id,
+    uint32_t part_number,
+    const char *source_path,
+    uint64_t chunk_size,
+    char *part_token,
+    size_t part_token_size,
+    char *error,
+    size_t error_size
+)
+{
+    king_object_store_azure_runtime_config_t config;
+    king_object_store_http_response_t response;
+    smart_str url = {0};
+    FILE *source_fp = NULL;
+    zend_string *block_id = NULL;
+    char part_name[32];
+
+    if (part_token == NULL || part_token_size == 0) {
+        return FAILURE;
+    }
+    part_token[0] = '\0';
+
+    if (king_object_store_azure_resolve_config(&config, error, error_size) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_object_store_azure_build_url(&config, object_id, 0, &url, error, error_size) != SUCCESS) {
+        smart_str_free(&url);
+        return FAILURE;
+    }
+
+    snprintf(part_name, sizeof(part_name), "%06u", part_number);
+    block_id = php_base64_encode((const unsigned char *) part_name, strlen(part_name));
+    if (block_id == NULL) {
+        smart_str_free(&url);
+        snprintf(error, error_size, "cloud_azure could not encode block id for '%s'.", object_id);
+        return FAILURE;
+    }
+
+    smart_str_append_printf(&url, "?comp=block&blockid=%s", ZSTR_VAL(block_id));
+    smart_str_0(&url);
+
+    source_fp = fopen(source_path, "rb");
+    if (source_fp == NULL) {
+        zend_string_release(block_id);
+        smart_str_free(&url);
+        snprintf(error, error_size, "cloud_azure could not open block %u for '%s'.", part_number, object_id);
+        return FAILURE;
+    }
+
+    {
+        const char *extra_headers[] = {"x-ms-blob-type: BlockBlob"};
+
+        king_object_store_http_response_init(&response);
+        if (king_object_store_azure_http_request_url(
+                &config,
+                "PUT",
+                ZSTR_VAL(url.s),
+                NULL,
+                0,
+                source_fp,
+                chunk_size,
+                NULL,
+                extra_headers,
+                1,
+                &response,
+                error,
+                error_size
+            ) != SUCCESS) {
+            fclose(source_fp);
+            zend_string_release(block_id);
+            king_object_store_http_response_destroy(&response);
+            smart_str_free(&url);
+            return FAILURE;
+        }
+    }
+    fclose(source_fp);
+    smart_str_free(&url);
+
+    if (response.status_code < 200 || response.status_code >= 300) {
+        king_object_store_azure_format_response_error("PUT", object_id, "block-stage", &response, error, error_size);
+        zend_string_release(block_id);
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+
+    snprintf(part_token, part_token_size, "%s", ZSTR_VAL(block_id));
+    zend_string_release(block_id);
+    king_object_store_http_response_destroy(&response);
+    return SUCCESS;
+}
+
+static int king_object_store_azure_complete_upload_session(
+    const char *object_id,
+    const HashTable *provider_parts,
+    const king_object_metadata_t *metadata,
+    char *error,
+    size_t error_size
+)
+{
+    king_object_store_azure_runtime_config_t config;
+    king_object_store_http_response_t response;
+    smart_str url = {0};
+    smart_str body = {0};
+    uint32_t part_count;
+    uint32_t part_number;
+
+    if (provider_parts == NULL) {
+        return FAILURE;
+    }
+
+    if (king_object_store_azure_resolve_config(&config, error, error_size) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_object_store_azure_build_url(&config, object_id, 0, &url, error, error_size) != SUCCESS) {
+        smart_str_free(&url);
+        return FAILURE;
+    }
+    smart_str_appends(&url, "?comp=blocklist");
+    smart_str_0(&url);
+
+    smart_str_appends(&body, "<?xml version=\"1.0\" encoding=\"utf-8\"?><BlockList>");
+    part_count = (uint32_t) zend_hash_num_elements((HashTable *) provider_parts);
+    for (part_number = 1; part_number <= part_count; ++part_number) {
+        zval *block_id = zend_hash_index_find((HashTable *) provider_parts, part_number);
+
+        if (block_id == NULL || Z_TYPE_P(block_id) != IS_STRING) {
+            snprintf(error, error_size, "cloud_azure block-list completion for '%s' is missing block %u.", object_id, part_number);
+            smart_str_free(&body);
+            smart_str_free(&url);
+            return FAILURE;
+        }
+
+        smart_str_append_printf(&body, "<Latest>%s</Latest>", Z_STRVAL_P(block_id));
+    }
+    smart_str_appends(&body, "</BlockList>");
+    smart_str_0(&body);
+
+    {
+        const char *extra_headers[] = {"Content-Type: application/xml"};
+
+        king_object_store_http_response_init(&response);
+        if (king_object_store_azure_http_request_url(
+                &config,
+                "PUT",
+                ZSTR_VAL(url.s),
+                ZSTR_VAL(body.s),
+                ZSTR_LEN(body.s),
+                NULL,
+                0,
+                metadata,
+                extra_headers,
+                1,
+                &response,
+                error,
+                error_size
+            ) != SUCCESS) {
+            king_object_store_http_response_destroy(&response);
+            smart_str_free(&body);
+            smart_str_free(&url);
+            return FAILURE;
+        }
+    }
+    smart_str_free(&body);
+    smart_str_free(&url);
+
+    if (response.status_code < 200 || response.status_code >= 300) {
+        king_object_store_azure_format_response_error("PUT", object_id, "blocklist-complete", &response, error, error_size);
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+
+    king_object_store_http_response_destroy(&response);
+    return SUCCESS;
+}
+
 static int king_object_store_azure_write(
     const char *object_id,
     const void *data,
@@ -585,16 +994,6 @@ static int king_object_store_azure_write(
     if (metadata_source != NULL) {
         final_metadata = *metadata_source;
     }
-    if (final_metadata.object_id[0] == '\0') {
-        strncpy(final_metadata.object_id, object_id, sizeof(final_metadata.object_id) - 1);
-    }
-    if (final_metadata.content_length == 0) {
-        final_metadata.content_length = data_size;
-    }
-    if (final_metadata.created_at == 0) {
-        final_metadata.created_at = time(NULL);
-    }
-    final_metadata.modified_at = time(NULL);
     king_object_store_metadata_mark_backend_present(
         &final_metadata,
         KING_STORAGE_BACKEND_CLOUD_AZURE,
@@ -614,6 +1013,13 @@ static int king_object_store_azure_write(
     if (exists) {
         old_size = existing_metadata.content_length;
     }
+    king_object_store_prepare_metadata_for_write(
+        object_id,
+        data,
+        data_size,
+        &final_metadata,
+        exists ? &existing_metadata : NULL
+    );
 
     king_object_store_http_response_init(&response);
     if (king_object_store_azure_http_request(
@@ -623,9 +1029,14 @@ static int king_object_store_azure_write(
             0,
             data,
             data_size,
+            NULL,
+            0,
+            &final_metadata,
+            NULL,
             &response,
             error,
-            error_size
+            error_size,
+            NULL
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;
@@ -662,16 +1073,138 @@ static int king_object_store_azure_write(
     return SUCCESS;
 }
 
+static int king_object_store_azure_write_from_file(
+    const char *object_id,
+    const char *source_path,
+    const king_object_metadata_t *metadata,
+    char *error,
+    size_t error_size,
+    zend_bool update_counters)
+{
+    king_object_store_azure_runtime_config_t config;
+    king_object_store_http_response_t response;
+    king_object_metadata_t final_metadata;
+    const king_object_metadata_t *metadata_source = metadata;
+    zend_bool exists = 0;
+    king_object_metadata_t existing_metadata;
+    uint64_t old_size = 0;
+    uint64_t source_size = 0;
+    char computed_sha256[65];
+    FILE *source_fp = NULL;
+
+    if (king_object_store_azure_resolve_config(&config, error, error_size) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_object_store_compute_sha256_hex_for_path(source_path, computed_sha256, &source_size) != SUCCESS) {
+        snprintf(error, error_size, "cloud_azure could not hash staged upload content for '%s'.", object_id);
+        return FAILURE;
+    }
+
+    memset(&final_metadata, 0, sizeof(final_metadata));
+    if (metadata_source != NULL) {
+        final_metadata = *metadata_source;
+    }
+    king_object_store_metadata_mark_backend_present(
+        &final_metadata,
+        KING_STORAGE_BACKEND_CLOUD_AZURE,
+        1
+    );
+
+    memset(&existing_metadata, 0, sizeof(existing_metadata));
+    if (king_object_store_azure_head_object(
+            object_id,
+            &exists,
+            &existing_metadata,
+            error,
+            error_size
+        ) != SUCCESS) {
+        return FAILURE;
+    }
+    if (exists) {
+        old_size = existing_metadata.content_length;
+    }
+    king_object_store_finalize_metadata_for_write(
+        object_id,
+        source_size,
+        computed_sha256,
+        &final_metadata,
+        exists ? &existing_metadata : NULL
+    );
+
+    source_fp = fopen(source_path, "rb");
+    if (source_fp == NULL) {
+        snprintf(error, error_size, "cloud_azure could not open the staged upload for '%s'.", object_id);
+        return FAILURE;
+    }
+
+    king_object_store_http_response_init(&response);
+    if (king_object_store_azure_http_request(
+            &config,
+            "PUT",
+            object_id,
+            0,
+            NULL,
+            0,
+            source_fp,
+            source_size,
+            &final_metadata,
+            NULL,
+            &response,
+            error,
+            error_size,
+            NULL
+        ) != SUCCESS) {
+        fclose(source_fp);
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+    fclose(source_fp);
+
+    if (response.status_code < 200 || response.status_code >= 300) {
+        king_object_store_azure_format_response_error(
+            "PUT",
+            object_id,
+            "write",
+            &response,
+            error,
+            error_size
+        );
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+
+    if (king_object_store_meta_write(object_id, &final_metadata) != SUCCESS) {
+        snprintf(
+            error,
+            error_size,
+            "cloud_azure write for '%s' succeeded but local metadata sidecar write failed.",
+            object_id
+        );
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+
+    if (update_counters) {
+        king_object_store_apply_local_fs_counters_for_rewrite(object_id, source_size, exists ? 1 : 0, old_size);
+    }
+    king_object_store_http_response_destroy(&response);
+    return SUCCESS;
+}
+
 static int king_object_store_azure_read_with_error(
     const char *object_id,
     void **data,
     size_t *data_size,
+    size_t offset,
+    size_t length,
+    zend_bool has_length,
     char *error,
     size_t error_size)
 {
     king_object_store_azure_runtime_config_t config;
     king_object_store_http_response_t response;
     void *copy;
+    char range_header[96];
 
     if (data == NULL || data_size == NULL || error == NULL || error_size == 0) {
         return FAILURE;
@@ -692,28 +1225,39 @@ static int king_object_store_azure_read_with_error(
             0,
             NULL,
             0,
+            NULL,
+            0,
+            NULL,
+            (offset > 0 || has_length)
+                ? (king_object_store_build_range_header(offset, length, has_length, range_header, sizeof(range_header)), range_header)
+                : NULL,
             &response,
             error,
-            error_size
+            error_size,
+            NULL
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;
     }
 
     if (response.status_code == 404) {
-        king_object_store_azure_format_response_error(
-            "GET",
-            object_id,
-            "read",
-            &response,
-            error,
-            error_size
-        );
+        error[0] = '\0';
         king_object_store_http_response_destroy(&response);
-        return FAILURE;
+        return KING_OBJECT_STORE_RESULT_MISS;
     }
 
-    if (response.status_code < 200 || response.status_code >= 300) {
+    if ((offset > 0 || has_length) && response.status_code == 416) {
+        snprintf(
+            error,
+            error_size,
+            "cloud_azure range read for '%s' requested range starts past the end of the object.",
+            object_id
+        );
+        king_object_store_http_response_destroy(&response);
+        return KING_OBJECT_STORE_RESULT_VALIDATION;
+    }
+
+    if (response.status_code < 200 || response.status_code >= 300 || ((offset > 0 || has_length) && response.status_code != 206)) {
         king_object_store_azure_format_response_error(
             "GET",
             object_id,
@@ -749,9 +1293,138 @@ static int king_object_store_azure_read(const char *object_id, void **data, size
         object_id,
         data,
         data_size,
+        0,
+        0,
+        0,
         king_object_store_runtime.primary_adapter_error,
         sizeof(king_object_store_runtime.primary_adapter_error)
     );
+}
+
+static int king_object_store_azure_read_range(
+    const char *object_id,
+    size_t offset,
+    size_t length,
+    zend_bool has_length,
+    void **data,
+    size_t *data_size,
+    king_object_metadata_t *metadata
+)
+{
+    int rc;
+
+    rc = king_object_store_azure_read_with_error(
+        object_id,
+        data,
+        data_size,
+        offset,
+        length,
+        has_length,
+        king_object_store_runtime.primary_adapter_error,
+        sizeof(king_object_store_runtime.primary_adapter_error)
+    );
+    if (rc != SUCCESS) {
+        return rc;
+    }
+
+    if (metadata != NULL && king_object_store_backend_read_metadata(object_id, metadata) != SUCCESS) {
+        king_object_store_release_read_buffer(data, data_size);
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static int king_object_store_azure_read_to_path_with_error(
+    const char *object_id,
+    const char *destination_path,
+    size_t offset,
+    size_t length,
+    zend_bool has_length,
+    char *error,
+    size_t error_size
+)
+{
+    king_object_store_azure_runtime_config_t config;
+    king_object_store_http_response_t response;
+    char range_header[96];
+    FILE *destination_fp = NULL;
+
+    if (destination_path == NULL || error == NULL || error_size == 0) {
+        return FAILURE;
+    }
+
+    if (king_object_store_azure_resolve_config(&config, error, error_size) != SUCCESS) {
+        return FAILURE;
+    }
+
+    destination_fp = fopen(destination_path, "w+b");
+    if (destination_fp == NULL) {
+        snprintf(error, error_size, "cloud_azure could not open the bounded-memory download sink for '%s'.", object_id);
+        return FAILURE;
+    }
+
+    king_object_store_http_response_init(&response);
+    if (king_object_store_azure_http_request(
+            &config,
+            "GET",
+            object_id,
+            0,
+            NULL,
+            0,
+            NULL,
+            0,
+            NULL,
+            (offset > 0 || has_length)
+                ? (king_object_store_build_range_header(offset, length, has_length, range_header, sizeof(range_header)), range_header)
+                : NULL,
+            &response,
+            error,
+            error_size,
+            destination_fp
+        ) != SUCCESS) {
+        fclose(destination_fp);
+        unlink(destination_path);
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+    fclose(destination_fp);
+
+    if (response.status_code == 404) {
+        error[0] = '\0';
+        unlink(destination_path);
+        king_object_store_http_response_destroy(&response);
+        return KING_OBJECT_STORE_RESULT_MISS;
+    }
+
+    if ((offset > 0 || has_length) && response.status_code == 416) {
+        snprintf(
+            error,
+            error_size,
+            "cloud_azure range read for '%s' requested range starts past the end of the object.",
+            object_id
+        );
+        unlink(destination_path);
+        king_object_store_http_response_destroy(&response);
+        return KING_OBJECT_STORE_RESULT_VALIDATION;
+    }
+
+    if (response.status_code < 200 || response.status_code >= 300 || ((offset > 0 || has_length) && response.status_code != 206)) {
+        king_object_store_azure_format_response_error(
+            "GET",
+            object_id,
+            "read",
+            &response,
+            error,
+            error_size
+        );
+        unlink(destination_path);
+        king_object_store_http_response_destroy(&response);
+        return FAILURE;
+    }
+
+    king_object_store_http_response_destroy(&response);
+    return SUCCESS;
 }
 
 static int king_object_store_azure_delete_with_error(
@@ -791,7 +1464,10 @@ static int king_object_store_azure_delete_with_error(
         return FAILURE;
     }
     if (!exists) {
-        return allow_missing ? SUCCESS : FAILURE;
+        if (error != NULL && error_size > 0) {
+            error[0] = '\0';
+        }
+        return allow_missing ? SUCCESS : KING_OBJECT_STORE_RESULT_MISS;
     }
 
     king_object_store_http_response_init(&response);
@@ -802,9 +1478,14 @@ static int king_object_store_azure_delete_with_error(
             0,
             NULL,
             0,
+            NULL,
+            0,
+            NULL,
+            NULL,
             &response,
             error,
-            error_size
+            error_size,
+            NULL
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;
@@ -948,11 +1629,24 @@ static zend_result king_object_store_azure_parse_list_xml(
 
         if (return_array != NULL) {
             zval exported_entry;
+            king_object_metadata_t metadata;
+            king_object_metadata_t *metadata_ptr = NULL;
 
-            array_init(&exported_entry);
-            add_assoc_string(&exported_entry, "object_id", key);
-            add_assoc_long(&exported_entry, "size_bytes", (zend_long) size_bytes);
-            add_assoc_long(&exported_entry, "stored_at", (zend_long) stored_at);
+            if (king_object_store_backend_read_metadata(key, &metadata) == SUCCESS) {
+                if (king_object_store_metadata_is_expired_now(&metadata)) {
+                    cursor = entry_end + strlen("</Blob>");
+                    continue;
+                }
+                metadata_ptr = &metadata;
+            }
+
+            king_object_store_list_entry_from_metadata(
+                &exported_entry,
+                key,
+                metadata_ptr,
+                size_bytes,
+                stored_at
+            );
             add_next_index_zval(return_array, &exported_entry);
         }
 
@@ -989,9 +1683,14 @@ static int king_object_store_azure_list(zval *return_array)
             1,
             NULL,
             0,
+            NULL,
+            0,
+            NULL,
+            NULL,
             &response,
             king_object_store_runtime.primary_adapter_error,
-            sizeof(king_object_store_runtime.primary_adapter_error)
+            sizeof(king_object_store_runtime.primary_adapter_error),
+            NULL
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;
@@ -1055,9 +1754,14 @@ static int king_object_store_azure_rehydrate_stats(char *error, size_t error_siz
             1,
             NULL,
             0,
+            NULL,
+            0,
+            NULL,
+            NULL,
             &response,
             error,
-            error_size
+            error_size,
+            NULL
         ) != SUCCESS) {
         king_object_store_http_response_destroy(&response);
         return FAILURE;
