@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] No open object-store cloud-backend leaf remains on this branch.
+- [ ] Implement the real `distributed` object-store data-plane contract on top of the persisted coordinator state.
 
 ## Active Executable Items
 
@@ -96,7 +96,7 @@
 - orchestrator continuation after host restart, richer error classification, multi-worker execution depth, and broader observability
 - Smart-DNS split-brain, failure/recovery, and broader distributed-topology depth
 - broader QUIC lifecycle, stats, resumption, and recovery validation beyond the current HTTP/3 client slices
-- object-store cloud backend failover, migration, and broader partial-backend recovery beyond the now-real `cloud_s3` payload path
+- object-store distributed data-plane semantics beyond the now-persisted coordinator-state contract, plus broader backup/import/export recovery depth
 
 ## Notes
 
