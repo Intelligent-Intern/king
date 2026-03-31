@@ -117,13 +117,16 @@ jobs:
 
       - name: Prepare runtime image metadata
         id: meta
+        env:
+          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
           set -euo pipefail
           image_name="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
           image="${REGISTRY}/${image_name}"
-          revision="${{ github.event.workflow_run.head_sha }}"
+          revision="${WORKFLOW_RUN_HEAD_SHA}"
           short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
-          branch="${{ github.event.workflow_run.head_branch }}"
+          branch="${WORKFLOW_RUN_HEAD_BRANCH}"
           semver_tag=""
 
           while IFS= read -r tag; do
@@ -252,13 +255,16 @@ jobs:
 
       - name: Prepare demo image metadata
         id: meta-demo
+        env:
+          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
           set -euo pipefail
           image_name="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
           image="${REGISTRY}/${image_name}-demo"
-          revision="${{ github.event.workflow_run.head_sha }}"
+          revision="${WORKFLOW_RUN_HEAD_SHA}"
           short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
-          branch="${{ github.event.workflow_run.head_branch }}"
+          branch="${WORKFLOW_RUN_HEAD_BRANCH}"
           semver_tag=""
 
           while IFS= read -r tag; do
