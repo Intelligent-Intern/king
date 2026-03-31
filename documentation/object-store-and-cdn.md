@@ -162,6 +162,11 @@ The write path is where the object first becomes real. The application calls
 `king_object_store_put()` with an object identifier, the payload, and optional
 write policy. The runtime persists the payload, updates or creates the metadata,
 updates inventory, and makes the object visible to the rest of the subsystem.
+The current verified write-policy surface includes content metadata such as
+`content_type` and `content_encoding`, retention/cache hints such as
+`expires_at` and `cache_ttl_sec`, object classification via `object_type` and
+`cache_policy`, caller-supplied `integrity_sha256`, and overwrite guards via
+`if_match`, `if_none_match`, and `expected_version`.
 
 If the write is an overwrite rather than a first write, the runtime also treats
 that as a real state transition. New bytes may mean a new [ETag](./glossary.md#etag),
@@ -217,6 +222,13 @@ like as a whole?"
 Those distinctions matter because storage debugging often fails when every
 question is treated as "read the file and see what happens."
 
+The current verified read contract now also includes byte-range reads through
+`king_object_store_get($objectId, ['offset' => ..., 'length' => ...])`, aligned
+with RFC 7233-style byte ranges. Full-object reads validate stored
+`integrity_sha256` metadata when present. Ranged reads intentionally return the
+requested slice without claiming whole-object hash revalidation over bytes that
+were not fetched.
+
 ## Overwrites, Versioning, And ETags
 
 Overwriting an object is not a trivial act. The object may still be cached,
@@ -226,6 +238,11 @@ thought than "open a file and truncate it".
 When an object changes, the runtime treats the new version as a new storage
 state. That new state usually implies a new [ETag](./glossary.md#etag), fresh
 timestamps, and a decision about whether edge copies must be invalidated.
+The current verified overwrite contract exposes that explicitly through
+`if_match`, `if_none_match`, and `expected_version`, so callers can require a
+known stored validator or version before replacing the payload. That follows the
+spirit of RFC 7232 conditional request semantics while keeping the object-store
+native version counter explicit in the same API.
 
 Versioning matters because long-lived systems need to reason about change
 without confusing old and new payloads. Even when the API keeps the same object
@@ -241,6 +258,12 @@ Expiry is the moment the object stops being a valid ordinary read target.
 Archiving means the object remains kept but is no longer in the main active
 serving tier. Destruction means the object is meant to be gone, not merely cold
 or invalid.
+
+`expires_at` is now the ordinary-read visibility boundary across the verified
+local and real cloud backends: once the stored expiry moment is in the past,
+plain `get()`, `get_to_stream()`, and inventory listing stop surfacing the
+object as a normal live entry, while `get_metadata()` still exposes the
+snapshot and marks it as expired.
 
 `king_object_store_cleanup_expired_objects()` exists because expired objects are
 not only a business-rule concern. They are also an operational concern. A store
@@ -412,7 +435,9 @@ you when it has reviewed and summarized its own state.
 
 `king_object_store_cleanup_expired_objects()` exists for the other half of the
 problem. Objects that are no longer meant to be served should not accumulate
-without bound. Cleanup turns retention policy into real runtime behavior.
+without bound. Cleanup turns retention policy into real runtime behavior and
+returns a summary of how many expired entries were scanned, removed, and how
+many bytes were reclaimed.
 
 These maintenance APIs matter because long-lived storage systems need explicit
 care, not only explicit writes.
@@ -426,11 +451,13 @@ If the question is "how do I start the subsystem?", the answer is
 `king_object_store_init()`.
 
 If the question is "how do I write or remove one object?", the answers are
-`king_object_store_put()` and `king_object_store_delete()`.
+`king_object_store_put()`, `king_object_store_put_from_stream()`, and
+`king_object_store_delete()`.
 
 If the question is "how do I inspect what exists?", the answers are
 `king_object_store_list()`, `king_object_store_get()`,
-`king_object_store_get_metadata()`, and `king_object_store_get_stats()`.
+`king_object_store_get_to_stream()`, `king_object_store_get_metadata()`, and
+`king_object_store_get_stats()`.
 
 If the question is "how do I protect or recover data?", the answers are
 `king_object_store_backup_object()`, `king_object_store_restore_object()`,
@@ -459,8 +486,92 @@ Today that runtime has four honest backend slices:
 - `cloud_azure` for real Azure Blob-compatible payload transport, with the same
   local `.meta` sidecar contract and bearer-token based HTTP authentication
 
-`distributed` is still simulated and should be read that way in the current
-alpha.
+That does not mean the large-object contract is finished.
+The current public API now has three storage/write surfaces:
+`king_object_store_put()` / `king_object_store_get()` still cover the
+materialized whole-object path, while
+`king_object_store_put_from_stream()` / `king_object_store_get_to_stream()`
+provide bounded-memory staged ingress and egress for large objects. The
+explicit cloud-session surface
+`king_object_store_begin_resumable_upload()` /
+`king_object_store_append_resumable_upload_chunk()` /
+`king_object_store_complete_resumable_upload()` /
+`king_object_store_abort_resumable_upload()` /
+`king_object_store_get_resumable_upload_status()` now covers provider-native
+multipart or resumable upload flow shape for the real cloud backends. The
+verified cloud work in this alpha is therefore about real backend transport,
+honest failure/recovery semantics, metadata parity, range reads,
+overwrite/versioning guards, full-read integrity validation, bounded-memory
+public streaming, and explicit sequential upload-session semantics for S3
+multipart upload, GCS resumable upload, and Azure block-list staging.
+`chunk_size_kb` should be read in that light. In the current alpha it now
+controls the bounded-memory staging/copy chunk size for the public stream
+surfaces and the sequential append contract used by the upload-session
+helpers. Publicly that now means:
+- `put_from_stream()` / `get_to_stream()` copy in bounded memory using the
+  configured runtime chunk size
+- cloud upload sessions export `chunk_size_bytes`
+- each appended resumable chunk must be non-empty and no larger than that
+  value
+- the final chunk may be shorter, but it does not get a larger size budget
+- upload sessions remain strictly sequential instead of promising arbitrary
+  parallel multipart scheduling
+
+The upload-session contract is no longer request-local. Active real cloud
+upload sessions now persist provider token, staged assembly bytes, metadata,
+part/block inventory, and the per-object mutation claim under the configured
+`storage_root_path`, so the same `upload_id` can be resumed or aborted after
+`king_object_store_init()` re-entry or after a process/request restart.
+Rehydrated session snapshots expose `recovered_after_restart=true`.
+
+What is still open there is a richer provider-specific multipart tuning
+surface, not whether restart recovery exists at all.
+
+The concurrency contract itself is no longer implicit. King now treats object
+mutation as per-object exclusive work across the local and real cloud
+backends:
+- `put()`, `put_from_stream()`, `delete()`, and resumable upload-session
+  `begin/append/complete/abort` serialize on one per-object mutation lock
+- conflicting writes or upload-session starts fail explicitly instead of
+  racing hidden last-writer-wins state into the runtime
+- local `local_fs` payload writes and `.meta` sidecar writes now commit via
+  temp-file plus rename, so readers see the last committed payload rather than
+  partially overwritten bytes
+- a real cloud upload session keeps that object mutation lock until the
+  session is completed or aborted
+- local payload rehydration from a real cloud backup only mutates local state
+  after it can acquire the same object mutation lock
+
+That means the current alpha now has a stable "exclusive mutation, lock-free
+reads of committed state" contract, including restart-safe recovery of active
+real cloud upload sessions. What is still open there is deeper provider-side
+multipart planning and broader recovery-policy tuning, not whether concurrent
+object mutation is serialized at all.
+
+The quota contract is now also explicit and shared across the local and real
+cloud backends. `max_storage_size_bytes` is a runtime hard limit on committed
+primary-inventory bytes:
+- it applies to `put()`, `put_from_stream()`, restore/import paths, and the
+  provider-native upload-session surface
+- it counts one committed logical object body once, not a multiplied replica
+  or backup footprint
+- it is exposed in `king_object_store_get_stats()` through
+  `runtime_capacity_mode`, `runtime_capacity_scope`,
+  `runtime_capacity_enforced`, and `runtime_capacity_available_bytes`
+- it is not a claim that King can currently discover or enforce the provider's
+  own bucket/account quota; that remains a separate provider-integration and
+  telemetry problem
+
+`distributed` is no longer fenced as simulated-only. The current alpha now
+exposes a real filesystem-backed distributed data plane under
+`storage_root_path/.king-distributed/objects`, plus the persisted private
+coordinator snapshot under
+`storage_root_path/.king-distributed/coordinator.state`. That means the
+verified public contract now includes real read/write/delete/list behavior for
+`distributed`, real `local_fs -> distributed` backup semantics, and explicit
+runtime visibility into coordinator presence, recovery state, version,
+generation, path, and last load/error details through
+`king_object_store_get_stats()['object_store']`.
 The Azure slice now also has the same explicit runtime failure contract as the
 other real cloud backends: endpoint connect failures, credential rejection, and
 throttling responses surface through `runtime_*_adapter_status`,
@@ -493,14 +604,39 @@ payload disappears while the local `.meta` sidecar still says the object exists,
 rehydrate the missing local payload, and restore live counters from local
 truth. A real delete still removes the `.meta` sidecar, so stale backup copies
 do not resurrect intentionally deleted objects.
-The same pair now also has an explicit cross-backend delete contract. When
-`local_fs` is primary and a real `cloud_s3` backup exists, King removes the
-backup copy before it completes the logical delete locally. If that remote
-delete fails, the delete call fails honestly and the local object remains
-readable instead of pretending the object is gone while the cloud copy still
-exists. If the local payload already vanished but the `.meta` sidecar still
-marks the object as live, a successful backup delete still completes the
-logical delete by clearing the remaining local sidecar and cache state.
+Across the local and real cloud backends, the public failure taxonomy is now
+stable instead of adapter-specific guesswork:
+- ordinary object misses still return `false` from `get()`,
+  `get_to_stream()`, and `get_metadata()`
+- unsatisfiable byte ranges, overwrite-precondition failures, and other caller
+  contract violations surface as `King\ValidationException`
+- simulated-only or otherwise unavailable backend surfaces fail with
+  `King\RuntimeException`
+- real backend execution faults such as root outages, rejected credentials,
+  endpoint-connect failures, and throttling surface as
+  `King\SystemException`
+
+That means the caller no longer has to reverse-engineer a backend-specific HTTP
+status or local errno string to tell "the object is absent" apart from
+"the request was invalid" or "the backend is broken right now".
+Delete semantics are now consistent across the verified local and real cloud
+backends instead of being a `cloud_s3`-only special case:
+- direct `cloud_s3`, `cloud_gcs`, and `cloud_azure` primaries treat a missing
+  delete as `false`, preserve the object on real backend delete failure, and
+  only make the object disappear after a successful remote delete
+- when `local_fs` is primary with a real cloud backup, King removes the remote
+  backup copy before it completes the logical local delete
+- if that remote backup delete fails, the delete call fails honestly and the
+  local object remains readable instead of pretending the object is gone while
+  the cloud copy still exists
+- if the local payload already vanished but the `.meta` sidecar still marks the
+  object as live, a successful backup delete still completes the logical delete
+  by clearing the remaining local sidecar and cache state
+
+That contract is now verified through the same delete-failure and logical-delete
+shape across `local_fs + cloud_s3`, `local_fs + cloud_gcs`, and
+`local_fs + cloud_azure`, as well as through direct primary-cloud delete
+failures on all three real cloud adapters.
 The same `local_fs` + `cloud_s3` pair now also survives a temporary live
 primary-root outage inside the same process. If the configured local storage
 root disappears after the process already loaded valid `.meta` sidecars,
@@ -537,7 +673,8 @@ heals the same object's metadata back to `replication_status=completed`.
 
 The following example shows a realistic object flow. A service writes a model
 checkpoint, inspects its metadata, warms it toward the CDN, exports a backup,
-and later reads the payload back.
+and later reads the payload back. It intentionally shows the simple
+whole-object API first, then the bounded-memory stream API for larger payloads.
 
 ```php
 <?php
@@ -562,12 +699,16 @@ if (!king_object_store_put($objectId, $payload, [
     'content_type' => 'application/octet-stream',
     'cache_ttl_sec' => 900,
     'expires_at' => '2026-04-03T00:00:00Z',
+    'object_type' => 'binary_data',
+    'cache_policy' => 'etag',
+    'integrity_sha256' => hash('sha256', $payload),
 ])) {
     throw new RuntimeException('Failed to store checkpoint.');
 }
 
 $metadata = king_object_store_get_metadata($objectId);
 $stats = king_object_store_get_stats();
+$preview = king_object_store_get($objectId, ['offset' => 0, 'length' => 4096]);
 
 king_cdn_cache_object($objectId, ['ttl_sec' => 300]);
 king_object_store_backup_object($objectId, __DIR__ . '/backups/nightly');
@@ -582,6 +723,76 @@ if ($restoredPayload === false) {
 The example is small, but it still shows the whole model: one identity, one
 payload, one metadata view, one edge action, one backup action, and a later
 read from the same object contract.
+
+For larger payloads, the same runtime now also exposes bounded-memory stream
+surfaces:
+
+```php
+<?php
+
+$source = fopen(__DIR__ . '/checkpoint-00042.bin', 'rb');
+$destination = fopen('php://temp', 'w+');
+
+king_object_store_put_from_stream('models/finetune/run-2026-03-27/checkpoint-00042', $source, [
+    'content_type' => 'application/octet-stream',
+    'cache_ttl_sec' => 900,
+    'object_type' => 'binary_data',
+    'cache_policy' => 'etag',
+]);
+
+king_object_store_get_to_stream(
+    'models/finetune/run-2026-03-27/checkpoint-00042',
+    $destination,
+    ['offset' => 0, 'length' => 4096]
+);
+```
+
+That bounded-memory streaming contract is now part of the verified public API.
+The same runtime now also exposes explicit provider-native cloud upload-session
+APIs for the real cloud backends:
+
+```php
+<?php
+
+$upload = king_object_store_begin_resumable_upload(
+    'models/finetune/run-2026-03-27/checkpoint-00042',
+    [
+        'content_type' => 'application/octet-stream',
+        'integrity_sha256' => hash_file('sha256', __DIR__ . '/checkpoint-00042.bin'),
+    ]
+);
+
+$source = fopen(__DIR__ . '/checkpoint-00042.bin', 'rb');
+
+while (!feof($source)) {
+    $chunk = fopen('php://temp', 'w+');
+    fwrite($chunk, fread($source, 1024 * 1024));
+    rewind($chunk);
+
+    $isFinal = feof($source);
+
+    king_object_store_append_resumable_upload_chunk(
+        $upload['upload_id'],
+        $chunk,
+        ['final' => $isFinal]
+    );
+}
+
+king_object_store_complete_resumable_upload($upload['upload_id']);
+```
+
+The important chunking and locking detail in that upload-session surface is now explicit:
+the session snapshot returned by `begin`, `append`, `complete`, and `status`
+includes `chunk_size_bytes`, `sequential_chunks_required`, and
+`final_chunk_may_be_shorter`. The session also owns the per-object mutation
+lock for its whole lifetime, so conflicting `put()` / `delete()` calls on the
+same object fail instead of racing a half-finished multipart/resumable upload.
+That is the stable cross-backend contract for real `cloud_s3`, `cloud_gcs`,
+and `cloud_azure` uploads in this alpha.
+
+What is still open for multi-gigabyte remote payloads is the stronger next
+step: restart persistence for upload sessions and provider-tuned multipart
+planning.
 
 ## Configuration Families
 

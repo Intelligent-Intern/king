@@ -72,7 +72,7 @@ cleanup($dir);
 ?>
 --EXPECT--
 int(90)
-Limit caught: Object-store runtime capacity exceeded.
+Limit caught: king_object_store_put() would exceed the configured object-store runtime capacity.
 int(90)
 int(50)
 int(1)
