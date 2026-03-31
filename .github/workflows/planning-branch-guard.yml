@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - 'planning/**'
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
@@ -20,7 +17,7 @@ permissions:
 jobs:
   docs-only-guard:
     name: Docs-only planning branch guard
-    if: github.event_name == 'push' || startsWith(github.head_ref, 'planning/')
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
 
     steps:
@@ -32,18 +29,12 @@ jobs:
       - name: Validate changed paths stay docs-only
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
 
           git fetch --no-tags origin main
 
-          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
-            range="${BASE_SHA}...${HEAD_SHA}"
-          else
-            range="origin/main...HEAD"
-          fi
+          range="origin/main...HEAD"
 
           mapfile -t changed_files < <(git diff --name-only "${range}" --)
 
