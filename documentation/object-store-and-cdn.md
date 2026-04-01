@@ -397,6 +397,27 @@ directory. `king_object_store_restore_object()` brings that object back.
 `king_object_store_backup_all_objects()` exports the full store view.
 `king_object_store_restore_all_objects()` imports it again.
 
+Those names are intentionally simple, but the current contract is no longer
+"copy whatever happens to be visible right now into a directory". Single-object
+backup and restore now participate in the same exclusive mutation lock that
+protects writes and deletes. If a caller tries to export or restore an object
+while another mutation is still in progress, the backup or restore fails
+instead of racing a torn state.
+
+The full-store path now has an explicit committed-snapshot contract.
+`king_object_store_backup_all_objects()` exports into a staging directory,
+writes a `.king_snapshot_manifest`, and only then swaps the finished snapshot
+into the requested destination. That means repeated full backups to the same
+directory do not silently retain payloads from an older run after those objects
+have been deleted from the live store.
+
+`king_object_store_restore_all_objects()` prefers that manifest when it is
+present. Restore therefore replays the committed snapshot inventory rather than
+whatever stray files happen to be sitting in the directory. This is
+intentionally a snapshot import contract, not a destructive mirror contract:
+objects listed in the snapshot are restored, but unrelated live objects already
+present in the destination store are not deleted automatically.
+
 These functions matter because recovery is not complete if only the payload
 returns. Metadata must travel with it, otherwise the restored bytes lose their
 meaning. The restored object must still know what it is, how fresh it is, and
