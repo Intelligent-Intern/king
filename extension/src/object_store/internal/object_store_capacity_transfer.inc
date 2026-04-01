@@ -534,7 +534,8 @@ static int king_object_store_snapshot_manifest_parse(
 )
 {
     FILE *fp;
-    char line[640];
+    char *line = NULL;
+    size_t line_capacity = 0;
     int saw_format = 0;
     int saw_kind = 0;
     int saw_consistency = 0;
@@ -554,7 +555,7 @@ static int king_object_store_snapshot_manifest_parse(
         return FAILURE;
     }
 
-    while (fgets(line, sizeof(line), fp) != NULL) {
+    while (getline(&line, &line_capacity, fp) != -1) {
         char *value = strchr(line, '=');
         size_t value_len;
 
@@ -646,6 +647,10 @@ static int king_object_store_snapshot_manifest_parse(
                 return FAILURE;
             }
         }
+    }
+
+    if (line != NULL) {
+        free(line);
     }
 
     fclose(fp);
