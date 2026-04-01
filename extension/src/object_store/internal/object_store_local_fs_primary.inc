@@ -304,7 +304,7 @@ int king_object_store_local_fs_read(
 
     king_object_store_build_path(file_path, sizeof(file_path), object_id);
 
-    if (stat(file_path, &st) != 0) {
+    if (king_object_store_open_regular_file_stream_readonly(file_path, &fp, &st) != SUCCESS) {
         if (errno == ENOENT) {
             return KING_OBJECT_STORE_RESULT_MISS;
         }
@@ -323,12 +323,6 @@ int king_object_store_local_fs_read(
         } else if (king_object_store_metadata_is_expired_now(metadata)) {
             return FAILURE;
         }
-    }
-
-    fp = fopen(file_path, "rb");
-    if (fp == NULL) {
-        king_object_store_set_local_failure_error("read", object_id, strerror(errno));
-        return FAILURE;
     }
 
     *data_size = st.st_size;
@@ -395,7 +389,7 @@ int king_object_store_local_fs_read_range(
     *data_size = 0;
 
     king_object_store_build_path(file_path, sizeof(file_path), object_id);
-    if (stat(file_path, &st) != 0 || !S_ISREG(st.st_mode)) {
+    if (king_object_store_open_regular_file_stream_readonly(file_path, &fp, &st) != SUCCESS) {
         if (errno == ENOENT) {
             return KING_OBJECT_STORE_RESULT_MISS;
         }
@@ -433,11 +427,6 @@ int king_object_store_local_fs_read_range(
         bytes_to_read = length;
     }
 
-    fp = fopen(file_path, "rb");
-    if (fp == NULL) {
-        king_object_store_set_local_failure_error("range read", object_id, strerror(errno));
-        return FAILURE;
-    }
     if (fseeko(fp, (off_t) offset, SEEK_SET) != 0) {
         fclose(fp);
         king_object_store_set_local_failure_error("range read", object_id, "could not seek to the requested offset.");
@@ -665,4 +654,3 @@ int king_object_store_local_fs_list(zval *return_array)
     closedir(dir);
     return SUCCESS;
 }
-

@@ -68,6 +68,62 @@ static int king_object_store_ensure_directory_recursive(const char *path)
     return king_object_store_ensure_directory(path);
 }
 
+static int king_object_store_open_regular_file_stream_readonly(
+    const char *path,
+    FILE **fp_out,
+    struct stat *st_out
+)
+{
+    int fd;
+    int flags = O_RDONLY;
+    FILE *fp;
+    struct stat st;
+    int saved_errno;
+
+    if (path == NULL || fp_out == NULL) {
+        return FAILURE;
+    }
+
+#ifdef O_CLOEXEC
+    flags |= O_CLOEXEC;
+#endif
+#ifdef O_NOFOLLOW
+    flags |= O_NOFOLLOW;
+#endif
+
+    fd = open(path, flags);
+    if (fd < 0) {
+        return FAILURE;
+    }
+
+    if (fstat(fd, &st) != 0) {
+        saved_errno = errno;
+        close(fd);
+        errno = saved_errno;
+        return FAILURE;
+    }
+
+    if (!S_ISREG(st.st_mode)) {
+        close(fd);
+        errno = EINVAL;
+        return FAILURE;
+    }
+
+    fp = fdopen(fd, "rb");
+    if (fp == NULL) {
+        saved_errno = errno;
+        close(fd);
+        errno = saved_errno;
+        return FAILURE;
+    }
+
+    if (st_out != NULL) {
+        *st_out = st;
+    }
+    *fp_out = fp;
+    return SUCCESS;
+}
+
 static int king_object_store_atomic_write_file(const char *target_path, const void *data, size_t data_size)
 {
     FILE *fp;
@@ -271,7 +327,7 @@ static int king_object_store_read_file_contents(
         return FAILURE;
     }
 
-    if (stat(source_path, &st) != 0 || !S_ISREG(st.st_mode)) {
+    if (king_object_store_open_regular_file_stream_readonly(source_path, &fp, &st) != SUCCESS) {
         return FAILURE;
     }
 
@@ -279,14 +335,7 @@ static int king_object_store_read_file_contents(
     *data = pemalloc(*data_size + 1, 1);
     if (*data == NULL) {
         *data_size = 0;
-        return FAILURE;
-    }
-
-    fp = fopen(source_path, "rb");
-    if (fp == NULL) {
-        pefree(*data, 1);
-        *data = NULL;
-        *data_size = 0;
+        fclose(fp);
         return FAILURE;
     }
 
