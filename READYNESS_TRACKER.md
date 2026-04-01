@@ -214,7 +214,7 @@ Status note:
 - [x] Handle restore from partially corrupted archives
 - [x] Handle restore while the system is running concurrently
 - [x] Validate crash recovery after hard process abort
-- [ ] Validate restart rehydration under all persistence modes
+- [x] Validate restart rehydration under all persistence modes
 - [ ] Enforce integrity checks after restore
 - [ ] Enforce integrity checks after import
 - [ ] Validate metadata migrations after restore

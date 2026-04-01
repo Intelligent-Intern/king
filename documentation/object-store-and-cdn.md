@@ -474,6 +474,10 @@ of silently dropping the source backend from the restored object view.
 need to rebuild active in-memory state from durable truth. This is how the
 system regains its footing after process loss without pretending that nothing
 happened.
+That restart re-entry is now explicitly proven after single-object export and
+restore plus committed full-snapshot replay across the active persisted-state
+modes: `local_fs`, `memory_cache`, `distributed`, `cloud_s3`, `cloud_gcs`, and
+`cloud_azure`.
 
 ## Maintenance And Optimization
 
