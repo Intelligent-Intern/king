@@ -417,6 +417,11 @@ whatever stray files happen to be sitting in the directory. This is
 intentionally a snapshot import contract, not a destructive mirror contract:
 objects listed in the snapshot are restored, but unrelated live objects already
 present in the destination store are not deleted automatically.
+The restore side is now also fail-closed against partial archive corruption.
+If a manifest-listed upsert is missing its payload or `.meta` sidecar, if a
+legacy directory contains a broken payload/metadata pair, or if the manifest
+shape is internally inconsistent, the restore fails before mutating the live
+store instead of importing an early subset and dying later.
 
 The same API now also supports explicit incremental backups:
 

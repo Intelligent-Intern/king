@@ -795,7 +795,9 @@ namespace {
     function king_object_store_backup_all_objects(string $path, ?array $options = null): bool {}
 
     /**
-     * Imports all object payload/metadata files from a filesystem backup directory.
+     * Imports all object payload/metadata files from a filesystem backup
+     * directory. Restore fails before live mutation if the archive is
+     * incomplete, partially corrupted, or manifest-inconsistent.
      * @return bool
      * @throws \King\RuntimeException|\King\SystemException
      */

@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Handle restore from partially corrupted archives.
+- [ ] Handle restore while the system is running concurrently.
 
 ## Active Executable Items
 
