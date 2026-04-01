@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate HTTP/3 timeout behavior against real slow peers.
+- [ ] Validate HTTP/3 backpressure under real multi-stream traffic.
 
 ## Active Executable Items
 
@@ -37,7 +37,7 @@
 3. [x] Validate HTTP/1 connection reuse limits under load.
    done when: sustained mixed-load traffic proves the runtime caps, recycles, and tears down reused HTTP/1 connections honestly instead of only succeeding on happy-path reuse.
 
-4. [ ] Validate HTTP/3 timeout behavior against real slow peers.
+4. [x] Validate HTTP/3 timeout behavior against real slow peers.
    done when: real slow-reader and slow-writer QUIC peers trigger stable timeout behavior rather than only transport-abort and handshake-failure slices.
 
 5. [ ] Validate HTTP/3 backpressure under real multi-stream traffic.

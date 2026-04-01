@@ -44,7 +44,7 @@ Status note:
 - [x] Validate HTTP/3 header and body paths against real h3 endpoints
 - [x] Validate HTTP/3 failure paths on transport abort
 - [x] Validate HTTP/3 failure paths on handshake failure
-- [ ] Validate HTTP/3 timeout behavior against real slow peers
+- [x] Validate HTTP/3 timeout behavior against real slow peers
 - [x] Validate HTTP/3 connection reuse and session ticket paths
 - [ ] Validate HTTP/3 early-data / session-ticket behavior
 - [ ] Validate HTTP/3 retransmit / loss behavior under injected packet loss

@@ -334,6 +334,12 @@ thinks in streams, resumption, transport identity, and modern loss recovery.
 Even if the application only calls one function, the transport underneath still
 belongs to the QUIC model.
 
+The timeout contract is not only about dead air before the handshake. The
+current runtime is also verified against already-established slow HTTP/3 peers
+that either never produce a response or stall request-body progress behind QUIC
+flow control, and both cases surface as the shared HTTP/3 timeout family rather
+than collapsing into transport-abort noise.
+
 This is why the HTTP/3 story is split across this chapter and
 [QUIC and TLS](./quic-and-tls.md). This chapter explains the request model. The
 other chapter explains the transport it rides on.
