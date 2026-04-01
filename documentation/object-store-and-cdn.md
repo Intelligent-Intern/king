@@ -477,6 +477,12 @@ boundary. Durable fields such as `created_at`, cache policy, distribution
 state, and other exported `.meta` semantics survive the route change, while the
 backend-presence markers stay honest about where real copies now exist instead
 of silently dropping the source backend from the restored object view.
+Committed `restore_all` replay is now also verified on the batch path from a
+real `local_fs` snapshot onto the real `cloud_s3`, `cloud_gcs`, and
+`cloud_azure` targets. Under that shared-root route-change contract, the same
+durable `.meta` semantic fields survive the replay, the target cloud-presence
+marker becomes visible, and unrelated cloud-presence markers stay clear instead
+of being fabricated during batch restore.
 
 `rehydration` is the runtime side of this story. After a restart, the store may
 need to rebuild active in-memory state from durable truth. This is how the

@@ -217,7 +217,7 @@ Status note:
 - [x] Validate restart rehydration under all persistence modes
 - [x] Enforce integrity checks after restore
 - [x] Enforce integrity checks after import
-- [ ] Validate metadata migrations after restore
+- [x] Validate metadata migrations after restore
 - [ ] Define rolling-restore / partial-restore semantics where publicly claimed
 
 ## H. CDN / Cache / Edge
