@@ -2,6 +2,28 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
+function constVendorChunkName(id: string) {
+  const groups: Array<[string, string[]]> = [
+    ['vue-vendor', ['vue', 'vue-router', 'pinia']],
+    ['ui-vendor', ['@vueuse/core', '@vueuse/components']],
+    ['media-vendor', ['webrtc-adapter', 'recordrtc', 'wavesurfer.js']],
+    ['chart-vendor', ['chart.js', 'vue-chartjs']],
+    ['utils-vendor', ['date-fns', 'uuid', 'crypto-js', 'file-saver']],
+  ]
+
+  if (!id.includes('node_modules/')) {
+    return undefined
+  }
+
+  for (const [chunkName, packages] of groups) {
+    if (packages.some((pkg) => id.includes(`/node_modules/${pkg}/`) || id.includes(`/node_modules/${pkg}.`))) {
+      return chunkName
+    }
+  }
+
+  return undefined
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [vue()],
@@ -34,12 +56,8 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vue-vendor': ['vue', 'vue-router', 'pinia'],
-          'ui-vendor': ['@vueuse/core', '@vueuse/components'],
-          'media-vendor': ['webrtc-adapter', 'recordrtc', 'wavesurfer.js'],
-          'chart-vendor': ['chart.js', 'vue-chartjs'],
-          'utils-vendor': ['date-fns', 'uuid', 'crypto-js', 'file-saver']
+        manualChunks(id) {
+          return constVendorChunkName(id)
         }
       }
     },
