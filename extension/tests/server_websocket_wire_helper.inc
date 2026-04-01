@@ -1,15 +1,19 @@
 <?php
 
-function king_server_websocket_wire_start_server(string $mode, int $iterations = 1): array
+function king_server_websocket_wire_start_server(string $mode, int $iterations = 1, ?int $fixedPort = null): array
 {
-    $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-    if ($probe === false) {
-        throw new RuntimeException("failed to reserve on-wire HTTP/1 test port: $errstr");
-    }
+    if ($fixedPort !== null) {
+        $port = $fixedPort;
+    } else {
+        $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        if ($probe === false) {
+            throw new RuntimeException("failed to reserve on-wire HTTP/1 test port: $errstr");
+        }
 
-    $serverName = stream_socket_get_name($probe, false);
-    fclose($probe);
-    [, $port] = explode(':', $serverName, 2);
+        $serverName = stream_socket_get_name($probe, false);
+        fclose($probe);
+        [, $port] = explode(':', $serverName, 2);
+    }
 
     $capture = tempnam(sys_get_temp_dir(), 'king-server-websocket-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';

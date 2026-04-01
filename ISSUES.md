@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate server close / drain / restart behavior.
+- [ ] Validate server response normalization against real clients.
 
 ## Active Executable Items
 
@@ -58,7 +58,7 @@
 10. [x] Validate server request normalization against real requests.
     done when: the on-wire server paths prove stable request-shape normalization across the active HTTP listener/runtime surfaces instead of only local validation contracts.
 
-11. [ ] Validate server close / drain / restart behavior.
+11. [x] Validate server close / drain / restart behavior.
     done when: active listener sessions can shut down, drain, and restart under real traffic without leaks, hangs, or half-closed runtime state.
 
 ### 3. Control Plane Distributed Depth

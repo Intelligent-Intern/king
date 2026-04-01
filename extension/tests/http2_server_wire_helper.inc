@@ -1,15 +1,19 @@
 <?php
 
-function king_http2_server_wire_start_server(): array
+function king_http2_server_wire_start_server(?int $fixedPort = null): array
 {
-    $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-    if ($probe === false) {
-        throw new RuntimeException("failed to reserve on-wire HTTP/2 test port: $errstr");
-    }
+    if ($fixedPort !== null) {
+        $port = $fixedPort;
+    } else {
+        $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        if ($probe === false) {
+            throw new RuntimeException("failed to reserve on-wire HTTP/2 test port: $errstr");
+        }
 
-    $serverName = stream_socket_get_name($probe, false);
-    fclose($probe);
-    [, $port] = explode(':', $serverName, 2);
+        $serverName = stream_socket_get_name($probe, false);
+        fclose($probe);
+        [, $port] = explode(':', $serverName, 2);
+    }
 
     $capture = tempnam(sys_get_temp_dir(), 'king-http2-server-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';

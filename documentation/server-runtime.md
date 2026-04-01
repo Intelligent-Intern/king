@@ -161,6 +161,11 @@ active TCP timeout budget to the real `accept`, request-head read, request-body
 read, and response-write phases so a stalled client cannot hold the worker in
 an unbounded blocking socket read.
 
+When that one-shot cycle finishes, the listener does not leave the accepted
+session half-open. The runtime closes the server-owned session and releases the
+bound port cleanly enough that the same listener can be started again on the
+same port for the next bounded request cycle.
+
 This shape is especially useful when the application wants a tightly scoped,
 single-request listener flow. It is also the most direct entry point for
 workflows that need to observe one real HTTP/1 request and, when appropriate,
@@ -173,6 +178,11 @@ decodes the request headers and optional body for one stream, builds the same
 kind of normalized request array, invokes the handler once, writes one HTTP/2
 response, sends `GOAWAY`, and closes the accepted connection cleanly.
 
+The same applies to restart behavior: after the one-shot request drains through
+`GOAWAY` and socket close, the runtime releases the bound port so the next
+listener instance can reuse it immediately instead of inheriting half-closed
+transport state from the previous request.
+
 `king_http3_server_listen_once()` is the QUIC and HTTP/3 sibling. It owns the
 same bounded one-request shape, but the transport work is different: it accepts
 an incoming QUIC connection, creates the HTTP/3 transport layer on top of that
@@ -181,6 +191,10 @@ normalized request into the handler, writes one HTTP/3 response, sends
 `GOAWAY`, and closes the connection. This is the right one-shot leaf when the
 application needs proof against a real QUIC and HTTP/3 client instead of only a
 local HTTP/3 request model.
+
+That close path is also part of the public contract. After the response and
+`GOAWAY` are drained, the one-shot HTTP/3 listener releases its bound UDP port
+so a fresh listener instance can restart on the same port under live traffic.
 
 The value of a one-shot listener is not that it is "small". The value is that
 the whole accept path is explicit and bounded.

@@ -36,7 +36,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `469/469` passing
+- `./infra/scripts/test-extension.sh`: `470/470` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -58,7 +58,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `469` PHPT files
+- `extension/tests`: `470` PHPT files
 - public stub parity: `136` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -72,7 +72,7 @@ The current tree already proves:
 - real HTTP/1, HTTP/2, and HTTP/3 client request paths, including HTTP/1 keep-alive reuse with verified one-idle-per-origin and sixteen-idle-global pool limits under mixed-load bursts plus honest reopen after peer `Connection: close`, repeated pooled HTTP/2 mixed-load bursts, streaming, bodiless-response handling, cumulative interim-response size-cap enforcement, bounded pending Early Hints storage, explicit HTTP/1 and HTTP/2 abort/reset failure mapping, explicit HTTP/3 handshake-failure and transport-close mapping, verified HTTP/3 in-flight timeout behavior against real slow-writer and flow-control-stalled slow-reader peers, shared-ring HTTP/3 session-ticket reuse with direct and dispatcher recovery from stale ticket seeds, verified buffered `king_http3_request_send_multi()` batches over one QUIC connection with mixed fast and slow concurrent stream progress plus sustained staggered fast-wave fairness while a long slow sibling stream remains active, repeated mixed-load burst soak behavior without poisoned later healthy sessions, and cancel/timeout contracts
 - HTTP/2 shared-session fairness under mixed slow and fast concurrent streams
 - HTTP/3 one-shot churn isolation across repeated timeout and healthy-recovery cycles
-- local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3, plus real one-shot on-wire listener proof for HTTP/1, HTTP/2, and HTTP/3, including bounded HTTP/1 one-shot accept and request-head timeout behavior against stalled clients plus stable normalized `uri` and routing `path` materialization from real request targets across the active one-shot listener surfaces
+- local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3, plus real one-shot on-wire listener proof for HTTP/1, HTTP/2, and HTTP/3, including bounded HTTP/1 one-shot accept and request-head timeout behavior against stalled clients, stable normalized `uri` and routing `path` materialization from real request targets across the active one-shot listener surfaces, and repeated close/drain/restart reuse of the same bound ports across HTTP/1, HTTP/2, and HTTP/3 listener cycles
 - on-wire WebSocket client handshake/frame/close runtime, stable network-abort mapping for peer disconnect, half-close, and abrupt socket-loss, stable `1002` protocol-close handling for malformed opcode/frame-shape/close-sequence and oversized control-frame peer violations, bounded queued receive pressure via configurable `max_queued_messages` / `max_queued_bytes` with introspectable queue state and policy-close on overflow, and honest OO `King\WebSocket\Connection` parity
 - multi-client WebSocket close/reconnect churn on one server without cross-client starvation or corruption, concurrent slow-consumer backpressure isolation without poisoning unrelated peers, and sustained fairness where one noisy client can hold a deep backlog without starving other concurrent websocket clients
 - server-side `king_server_upgrade_to_websocket()` both as an honest local marker slice for local listeners and as a real on-wire HTTP/1 one-shot upgrade path with frame flow, handler ownership, and close/drain coverage

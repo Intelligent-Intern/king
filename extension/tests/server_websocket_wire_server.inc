@@ -19,6 +19,7 @@ $capture = [
     'close_success_count' => 0,
 ];
 $listenerConfig = null;
+$session = null;
 
 if (
     $mode === 'slowloris-accept'
@@ -37,7 +38,7 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
         '127.0.0.1',
         $port,
         $listenerConfig,
-        static function (array $request) use (&$capture, $mode, $iteration): array {
+        static function (array $request) use (&$capture, &$session, $mode, $iteration): array {
             $capture['handler_called'] = true;
             $session = $request['session'];
             $capture['request_uri'] = $request['uri'];
@@ -114,6 +115,10 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
     if ($result !== true) {
         break;
     }
+}
+
+if ($session !== null) {
+    $capture['post_stats'] = king_get_stats($session);
 }
 
 file_put_contents(
