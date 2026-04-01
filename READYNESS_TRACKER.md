@@ -1,4 +1,4 @@
-# KING V1 FINAL COMPLETION CHECKLIST
+# KING V1 FINAL READINESS COMPLETION CHECKLIST
 
 Goal:
 King is only finished when every exported capability is fully real, deterministically buildable, operationally reliable, failure-tolerant, upgrade-safe, documented, and supportable for the long term.
