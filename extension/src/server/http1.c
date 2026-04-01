@@ -1155,6 +1155,7 @@ PHP_FUNCTION(king_http1_server_listen_once)
     zend_long accept_deadline_ms;
     zend_long read_deadline_ms;
     zend_long write_deadline_ms;
+    zend_long stream_id = 0;
     int listener_fd = -1;
     int accepted_fd = -1;
     zend_bool rc = 0;
@@ -1289,6 +1290,16 @@ PHP_FUNCTION(king_http1_server_listen_once)
     }
 
     if (!zend_hash_num_elements(&session->server_upgraded_streams) && !session->is_closed) {
+        zval *stream_id_zv = zend_hash_str_find(
+            Z_ARRVAL(request),
+            "stream_id",
+            sizeof("stream_id") - 1
+        );
+
+        if (stream_id_zv != NULL) {
+            stream_id = zval_get_long(stream_id_zv);
+        }
+
         write_deadline_ms = king_server_http1_now_ms()
             + king_server_http1_resolve_timeout_ms(session);
         if (
@@ -1299,6 +1310,13 @@ PHP_FUNCTION(king_http1_server_listen_once)
                 "king_http1_server_listen_once"
             ) != SUCCESS
         ) {
+            if (king_server_local_errno_is_peer_disconnect(errno)) {
+                king_server_local_mark_stream_cancelled_if_registered(
+                    session,
+                    stream_id,
+                    "king_http1_server_listen_once"
+                );
+            }
             goto cleanup;
         }
     }

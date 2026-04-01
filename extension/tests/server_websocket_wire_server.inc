@@ -75,6 +75,26 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
                 ];
             }
 
+            if ($mode === 'cancel-callback') {
+                $capture['cancel_handler_ok'] = king_server_on_cancel(
+                    $session,
+                    $request['stream_id'],
+                    static function (int $cancelledStreamId) use (&$capture): void {
+                        $capture['cancelled_stream'] = $cancelledStreamId;
+                    }
+                );
+                $capture['cancel_handler_error'] = king_get_last_error();
+                usleep(300000);
+
+                return [
+                    'status' => 200,
+                    'headers' => [
+                        'Content-Type' => 'text/plain',
+                    ],
+                    'body' => str_repeat('late-http1-', 65536),
+                ];
+            }
+
             if ($mode === 'plain') {
                 $upgrade = king_server_upgrade_to_websocket($session, $request['stream_id']);
                 $capture['upgrade_result'] = $upgrade;

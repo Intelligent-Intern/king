@@ -89,7 +89,7 @@ Status note:
 - [x] Validate server dispatch under real network traffic
 - [x] Validate server request normalization against real requests
 - [x] Validate server response normalization against real clients
-- [ ] Validate server-side cancel callbacks under real traffic
+- [x] Validate server-side cancel callbacks under real traffic
 - [ ] Validate server-side Early Hints on-wire
 - [x] Validate server-side WebSocket upgrades on-wire
 - [ ] Validate server TLS reload under live traffic

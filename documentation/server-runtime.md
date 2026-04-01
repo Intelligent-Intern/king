@@ -226,6 +226,12 @@ can send Early Hints, register a cancel callback, attach telemetry, reload TLS
 material on the server session, or upgrade the request into a WebSocket
 connection.
 
+That cancel-hook surface is not only a local convenience slice. The active
+one-shot HTTP/1, HTTP/2, and HTTP/3 listener leaves now prove that a real
+client abort during live traffic invokes a registered server-side cancel
+callback once for the real active stream instead of only mutating hidden local
+state.
+
 That is why the session-aware helper functions are part of the public surface.
 A real server request often needs to do more than return a status code and body.
 

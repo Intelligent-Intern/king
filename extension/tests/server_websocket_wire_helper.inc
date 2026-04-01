@@ -114,6 +114,59 @@ function king_server_http1_wire_request_retry(int $port, string $request, int $t
     return (string) $response;
 }
 
+function king_server_http1_wire_abort_request(int $port, string $request, int $settleUs = 50000): void
+{
+    $deadline = microtime(true) + 3.0;
+    $socket = false;
+
+    if (!function_exists('socket_create')) {
+        throw new RuntimeException('socket_create() is required for HTTP/1 abort requests');
+    }
+
+    do {
+        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if ($socket === false) {
+            throw new RuntimeException('failed to create HTTP/1 abort socket');
+        }
+
+        if (@socket_connect($socket, '127.0.0.1', $port) === true) {
+            break;
+        }
+
+        $message = socket_strerror(socket_last_error($socket));
+        socket_close($socket);
+        $socket = false;
+        usleep(50000);
+    } while (microtime(true) < $deadline);
+
+    if ($socket === false) {
+        throw new RuntimeException('failed to connect to on-wire HTTP/1 listener: ' . $message);
+    }
+
+    $written = 0;
+    $length = strlen($request);
+    while ($written < $length) {
+        $chunk = @socket_write($socket, substr($request, $written), $length - $written);
+        if ($chunk === false || $chunk === 0) {
+            $message = socket_strerror(socket_last_error($socket));
+            socket_close($socket);
+            throw new RuntimeException('failed while writing HTTP/1 abort request: ' . $message);
+        }
+        $written += $chunk;
+    }
+
+    usleep($settleUs);
+
+    if (defined('SO_LINGER')) {
+        @socket_set_option($socket, SOL_SOCKET, SO_LINGER, [
+            'l_onoff' => 1,
+            'l_linger' => 0,
+        ]);
+    }
+
+    socket_close($socket);
+}
+
 function king_server_http1_wire_parse_response(string $response): array
 {
     [$head, $body] = array_pad(explode("\r\n\r\n", $response, 2), 2, '');

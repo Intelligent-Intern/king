@@ -1795,6 +1795,13 @@ PHP_FUNCTION(king_http2_server_listen_once)
             "king_http2_server_listen_once"
         ) != SUCCESS
     ) {
+        if (king_server_local_errno_is_peer_disconnect(errno)) {
+            king_server_local_mark_stream_cancelled_if_registered(
+                session,
+                stream_id,
+                "king_http2_server_listen_once"
+            );
+        }
         goto cleanup;
     }
 

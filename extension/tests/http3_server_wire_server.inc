@@ -66,6 +66,26 @@ $result = king_http3_server_listen_once(
             ];
         }
 
+        if ($mode === 'cancel-callback') {
+            $capture['cancel_handler_ok'] = king_server_on_cancel(
+                $session,
+                $request['stream_id'],
+                static function (int $cancelledStreamId) use (&$capture): void {
+                    $capture['cancelled_stream'] = $cancelledStreamId;
+                }
+            );
+            $capture['cancel_handler_error'] = king_get_last_error();
+            usleep(300000);
+
+            return [
+                'status' => 200,
+                'headers' => [
+                    'content-type' => 'text/plain',
+                ],
+                'body' => str_repeat('late-http3-', 65536),
+            ];
+        }
+
         return [
             'status' => 201,
             'headers' => [

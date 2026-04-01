@@ -404,3 +404,54 @@ static zend_result king_server_local_validate_response(
 
     return SUCCESS;
 }
+
+static bool king_server_local_errno_is_peer_disconnect(int err)
+{
+    switch (err) {
+#ifdef EPIPE
+        case EPIPE:
+#endif
+#ifdef ECONNRESET
+        case ECONNRESET:
+#endif
+#ifdef ECONNREFUSED
+        case ECONNREFUSED:
+#endif
+#ifdef ECONNABORTED
+        case ECONNABORTED:
+#endif
+#ifdef ENOTCONN
+        case ENOTCONN:
+#endif
+            return true;
+        default:
+            return false;
+    }
+}
+
+static void king_server_local_mark_stream_cancelled_if_registered(
+    king_client_session_t *session,
+    zend_long stream_id,
+    const char *function_name
+)
+{
+    if (session == NULL || session->is_closed || stream_id < 0) {
+        return;
+    }
+
+    if (!zend_hash_index_exists(&session->server_cancel_handlers, (zend_ulong) stream_id)) {
+        return;
+    }
+
+    if (zend_hash_index_exists(&session->cancelled_streams, (zend_ulong) stream_id)) {
+        return;
+    }
+
+    (void) king_client_session_mark_cancelled(
+        session,
+        stream_id,
+        "both",
+        sizeof("both") - 1,
+        function_name
+    );
+}
