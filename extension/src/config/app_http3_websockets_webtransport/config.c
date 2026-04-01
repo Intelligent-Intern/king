@@ -81,6 +81,14 @@ int kg_config_app_http3_websockets_webtransport_apply_userland_config(zval *conf
             if (app_proto_apply_positive_long(value, &king_app_protocols_config.websocket_default_max_payload_size) != SUCCESS) {
                 return FAILURE;
             }
+        } else if (zend_string_equals_literal(key, "websocket_default_max_queued_messages")) {
+            if (app_proto_apply_positive_long(value, &king_app_protocols_config.websocket_default_max_queued_messages) != SUCCESS) {
+                return FAILURE;
+            }
+        } else if (zend_string_equals_literal(key, "websocket_default_max_queued_bytes")) {
+            if (app_proto_apply_positive_long(value, &king_app_protocols_config.websocket_default_max_queued_bytes) != SUCCESS) {
+                return FAILURE;
+            }
         } else if (zend_string_equals_literal(key, "websocket_default_ping_interval_ms")) {
             if (app_proto_apply_positive_long(value, &king_app_protocols_config.websocket_default_ping_interval_ms) != SUCCESS) {
                 return FAILURE;

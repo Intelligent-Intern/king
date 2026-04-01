@@ -188,6 +188,39 @@ static void king_websocket_message_queue_clear(king_ws_state *state)
 
     state->incoming_head = NULL;
     state->incoming_tail = NULL;
+    state->queued_message_count = 0;
+    state->queued_bytes = 0;
+}
+
+static bool king_websocket_message_queue_can_accept(
+    king_ws_state *state,
+    size_t payload_len
+)
+{
+    if (state->max_queued_messages > 0
+        && state->queued_message_count >= state->max_queued_messages) {
+        return false;
+    }
+
+    if (payload_len > (size_t) ZEND_LONG_MAX) {
+        return false;
+    }
+
+    if (state->max_queued_bytes > 0) {
+        size_t queued_bytes = state->queued_bytes > 0
+            ? (size_t) state->queued_bytes
+            : 0;
+
+        if (queued_bytes > (size_t) ZEND_LONG_MAX - payload_len) {
+            return false;
+        }
+
+        if (queued_bytes + payload_len > (size_t) state->max_queued_bytes) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 static zend_result king_websocket_message_queue_push(
@@ -197,8 +230,13 @@ static zend_result king_websocket_message_queue_push(
     bool is_binary
 )
 {
-    king_ws_message *message = ecalloc(1, sizeof(*message));
+    king_ws_message *message;
 
+    if (!king_websocket_message_queue_can_accept(state, payload_len)) {
+        return FAILURE;
+    }
+
+    message = ecalloc(1, sizeof(*message));
     message->payload = zend_string_init(payload, payload_len, 0);
     message->is_binary = is_binary;
 
@@ -209,6 +247,8 @@ static zend_result king_websocket_message_queue_push(
     }
 
     state->incoming_tail = message;
+    state->queued_message_count++;
+    state->queued_bytes += (zend_long) payload_len;
     return SUCCESS;
 }
 
@@ -225,6 +265,20 @@ static king_ws_message *king_websocket_message_queue_shift(
     state->incoming_head = message->next;
     if (state->incoming_head == NULL) {
         state->incoming_tail = NULL;
+    }
+
+    if (state->queued_message_count > 0) {
+        state->queued_message_count--;
+    }
+    if (state->queued_bytes > 0) {
+        zend_long payload_len = message->payload != NULL
+            ? (zend_long) ZSTR_LEN(message->payload)
+            : 0;
+
+        state->queued_bytes =
+            state->queued_bytes >= payload_len
+                ? state->queued_bytes - payload_len
+                : 0;
     }
 
     message->next = NULL;
@@ -716,6 +770,39 @@ static zend_result king_websocket_reject_received_protocol_violation(
     return FAILURE;
 }
 
+static zend_result king_websocket_reject_received_backpressure_overflow(
+    king_ws_state *state,
+    const char *function_name
+)
+{
+    unsigned char close_payload[2] = {0x03, 0xf0}; /* 1008 */
+
+    king_websocket_set_error(
+        "%s() pending WebSocket messages exceeded max_queued_messages %ld or max_queued_bytes %ld.",
+        function_name,
+        state->max_queued_messages,
+        state->max_queued_bytes
+    );
+    king_websocket_store_close_reason(state, close_payload, sizeof(close_payload));
+
+    if (!state->close_frame_sent && state->transport_stream != NULL) {
+        if (
+            king_websocket_send_frame(
+                state,
+                KING_WS_OPCODE_CLOSE,
+                close_payload,
+                sizeof(close_payload),
+                function_name
+            ) == SUCCESS
+        ) {
+            state->close_frame_sent = true;
+        }
+    }
+
+    king_websocket_mark_transport_closed(state);
+    return FAILURE;
+}
+
 static zend_result king_websocket_receive_one_frame(
     king_ws_state *state,
     zend_long timeout_ms,
@@ -956,11 +1043,10 @@ static zend_result king_websocket_receive_one_frame(
                 if (payload_buffer != NULL) {
                     efree(payload_buffer);
                 }
-                king_websocket_set_error(
-                    "%s() failed to queue a WebSocket frame received from the socket.",
+                return king_websocket_reject_received_backpressure_overflow(
+                    state,
                     function_name
                 );
-                return FAILURE;
             }
             *message_ready = true;
             break;
@@ -1093,7 +1179,11 @@ static zend_result king_websocket_pump_transport(
             return FAILURE;
         }
 
-        if (timed_out || message_ready || state->closed) {
+        if (timed_out || state->closed) {
+            return SUCCESS;
+        }
+
+        if (!message_ready && state->incoming_head == NULL) {
             return SUCCESS;
         }
 
@@ -1674,6 +1764,14 @@ static zend_result king_websocket_apply_options(
         king_app_protocols_config.websocket_default_max_payload_size > 0
             ? king_app_protocols_config.websocket_default_max_payload_size
             : 16777216;
+    state->max_queued_messages =
+        king_app_protocols_config.websocket_default_max_queued_messages > 0
+            ? king_app_protocols_config.websocket_default_max_queued_messages
+            : 64;
+    state->max_queued_bytes =
+        king_app_protocols_config.websocket_default_max_queued_bytes > 0
+            ? king_app_protocols_config.websocket_default_max_queued_bytes
+            : 67108864;
     state->ping_interval_ms =
         king_app_protocols_config.websocket_default_ping_interval_ms > 0
             ? king_app_protocols_config.websocket_default_ping_interval_ms
@@ -1704,6 +1802,8 @@ static zend_result king_websocket_apply_options(
 
         ZVAL_COPY(&state->config, option_value);
         state->max_payload_size = config->app_protocols.websocket_default_max_payload_size;
+        state->max_queued_messages = config->app_protocols.websocket_default_max_queued_messages;
+        state->max_queued_bytes = config->app_protocols.websocket_default_max_queued_bytes;
         state->ping_interval_ms = config->app_protocols.websocket_default_ping_interval_ms;
         state->handshake_timeout_ms = config->app_protocols.websocket_handshake_timeout_ms;
     }
@@ -1719,6 +1819,42 @@ static zend_result king_websocket_apply_options(
                 option_value,
                 "max_payload_size",
                 &state->max_payload_size,
+                function_name
+            ) != SUCCESS
+        ) {
+            return FAILURE;
+        }
+    }
+
+    option_value = zend_hash_str_find(
+        Z_ARRVAL_P(options_array),
+        "max_queued_messages",
+        sizeof("max_queued_messages") - 1
+    );
+    if (option_value != NULL && Z_TYPE_P(option_value) != IS_NULL) {
+        if (
+            king_websocket_validate_positive_option(
+                option_value,
+                "max_queued_messages",
+                &state->max_queued_messages,
+                function_name
+            ) != SUCCESS
+        ) {
+            return FAILURE;
+        }
+    }
+
+    option_value = zend_hash_str_find(
+        Z_ARRVAL_P(options_array),
+        "max_queued_bytes",
+        sizeof("max_queued_bytes") - 1
+    );
+    if (option_value != NULL && Z_TYPE_P(option_value) != IS_NULL) {
+        if (
+            king_websocket_validate_positive_option(
+                option_value,
+                "max_queued_bytes",
+                &state->max_queued_bytes,
                 function_name
             ) != SUCCESS
         ) {
@@ -1760,6 +1896,14 @@ static zend_result king_websocket_apply_options(
         ) {
             return FAILURE;
         }
+    }
+
+    if (state->max_queued_bytes < state->max_payload_size) {
+        king_websocket_set_error(
+            "%s() option 'max_queued_bytes' must be >= max_payload_size.",
+            function_name
+        );
+        return FAILURE;
     }
 
     return SUCCESS;
@@ -1907,6 +2051,12 @@ static void king_websocket_build_info_array(zval *return_value, king_ws_state *s
         strpprintf(0, "%s:%ld", ZSTR_VAL(state->host), state->port)
     );
     add_assoc_str(return_value, "protocol", zend_string_copy(state->scheme));
+    add_assoc_long(return_value, "max_payload_size", state->max_payload_size);
+    add_assoc_long(return_value, "max_queued_messages", state->max_queued_messages);
+    add_assoc_long(return_value, "max_queued_bytes", state->max_queued_bytes);
+    add_assoc_long(return_value, "queued_message_count", state->queued_message_count);
+    add_assoc_long(return_value, "queued_bytes", state->queued_bytes);
+    add_assoc_bool(return_value, "closed", state->closed);
 
     array_init(&headers);
     if (!Z_ISUNDEF(state->headers) && Z_TYPE(state->headers) == IS_ARRAY) {

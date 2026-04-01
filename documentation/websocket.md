@@ -143,6 +143,8 @@ $ws = new King\WebSocket\Connection(
         'handshake_timeout_ms' => 5000,
         'ping_interval_ms' => 25000,
         'max_payload_size' => 16 * 1024 * 1024,
+        'max_queued_messages' => 64,
+        'max_queued_bytes' => 64 * 1024 * 1024,
     ]
 );
 ```
@@ -269,11 +271,30 @@ protocol was violated, or for some other defined reason.
 The procedural `king_client_websocket_get_status()` returns the runtime status
 code for the live connection. `Connection::getInfo()` returns a richer view of
 the channel, including the connection identifier, remote address, negotiated
-protocol information when available, and handshake headers.
+protocol information when available, handshake headers, and the current queued
+message and byte counts plus the active queue limits.
 
 You use status when the code wants a quick machine-readable state check. You
 use `getInfo()` when the application needs a more descriptive picture for
 diagnostics, logging, or routing decisions.
+
+## Receive Backpressure And Queue Bounds
+
+King now treats the receive side as a bounded queue instead of an unbounded
+"keep reading until the process grows" path. The runtime can opportunistically
+buffer multiple ready messages behind one `receive()` call, but it does so only
+within explicit queue limits.
+
+Two knobs shape that behavior:
+
+- `max_queued_messages`
+- `max_queued_bytes`
+
+If a peer outruns the local consumer badly enough that the next frame would
+overflow those bounds, King closes the channel with a policy close instead of
+pretending that process memory is infinite. `Connection::getInfo()` exposes the
+live queued counts and configured limits so the application can see whether a
+connection is healthy, draining, or saturating.
 
 ## Server-Side Upgrade
 

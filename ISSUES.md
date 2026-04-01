@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate WebSocket backpressure under many concurrent connections.
+- [ ] Validate WebSocket fairness under many concurrent connections.
 
 ## Active Executable Items
 
@@ -49,7 +49,7 @@
 7. [x] Validate HTTP/3 long-duration soak behavior under continuous load.
     done when: the runtime survives longer-lived HTTP/3 pressure without transport-state drift, resource leaks, or poisoned follow-up sessions.
 
-8. [ ] Validate WebSocket backpressure under many concurrent connections.
+8. [x] Validate WebSocket backpressure under many concurrent connections.
     done when: slow websocket consumers do not let pending writes or queue growth escape the intended bounded runtime behavior.
 
 9. [ ] Validate WebSocket fairness under many concurrent connections.

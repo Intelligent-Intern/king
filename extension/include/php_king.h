@@ -152,6 +152,10 @@ typedef struct _king_ws_state {
     zval headers;
     zend_long port;
     zend_long max_payload_size;
+    zend_long max_queued_messages;
+    zend_long max_queued_bytes;
+    zend_long queued_message_count;
+    zend_long queued_bytes;
     zend_long ping_interval_ms;
     zend_long handshake_timeout_ms;
     zend_long last_close_status_code;

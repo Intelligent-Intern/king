@@ -214,7 +214,7 @@ object with its own lifecycle rather than a raw resource-style handle.
 | `sendBinary(string $payload)` | Sends a binary frame. |
 | `ping(?string $data = null)` | Sends a ping frame. |
 | `close(int $code = 1000, ?string $reason = null)` | Sends a close frame and closes the connection. |
-| `getInfo()` | Returns connection metadata and handshake information. |
+| `getInfo()` | Returns connection metadata, handshake information, and live queue diagnostics. |
 
 ## Exception Hierarchy
 

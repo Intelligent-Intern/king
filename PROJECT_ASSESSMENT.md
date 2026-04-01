@@ -36,7 +36,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `466/466` passing
+- `./infra/scripts/test-extension.sh`: `467/467` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -58,7 +58,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `466` PHPT files
+- `extension/tests`: `467` PHPT files
 - public stub parity: `136` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -73,8 +73,8 @@ The current tree already proves:
 - HTTP/2 shared-session fairness under mixed slow and fast concurrent streams
 - HTTP/3 one-shot churn isolation across repeated timeout and healthy-recovery cycles
 - local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3, plus real one-shot on-wire listener proof for HTTP/1, HTTP/2, and HTTP/3, including bounded HTTP/1 one-shot accept and request-head timeout behavior against stalled clients
-- on-wire WebSocket client handshake/frame/close runtime, stable network-abort mapping for peer disconnect, half-close, and abrupt socket-loss, stable `1002` protocol-close handling for malformed opcode/frame-shape/close-sequence and oversized control-frame peer violations, and honest OO `King\WebSocket\Connection` parity
-- multi-client WebSocket close/reconnect churn on one server without cross-client starvation or corruption
+- on-wire WebSocket client handshake/frame/close runtime, stable network-abort mapping for peer disconnect, half-close, and abrupt socket-loss, stable `1002` protocol-close handling for malformed opcode/frame-shape/close-sequence and oversized control-frame peer violations, bounded queued receive pressure via configurable `max_queued_messages` / `max_queued_bytes` with introspectable queue state and policy-close on overflow, and honest OO `King\WebSocket\Connection` parity
+- multi-client WebSocket close/reconnect churn on one server without cross-client starvation or corruption, plus concurrent slow-consumer backpressure isolation without poisoning unrelated peers
 - server-side `king_server_upgrade_to_websocket()` both as an honest local marker slice for local listeners and as a real on-wire HTTP/1 one-shot upgrade path with frame flow, handler ownership, and close/drain coverage
 - repeated server/session soak coverage for local upgrade, early hints, admin API, TLS reload, and on-wire websocket close/drain cycles
 - IIBIN schema, registry, encode/decode, object hydration, and wire validation
