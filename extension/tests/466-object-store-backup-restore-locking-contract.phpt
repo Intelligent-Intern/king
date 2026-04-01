@@ -76,6 +76,7 @@ king_object_store_init([
 ]);
 $stream = fopen($fifoPath, 'rb');
 var_dump(king_object_store_put_from_stream('locked-local', $stream));
+fclose($stream);
 PHP
 );
 
