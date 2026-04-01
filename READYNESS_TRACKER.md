@@ -12,7 +12,7 @@ Status note:
 - Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, and real TCP host/port `remote_peer` execution with persisted success/failure snapshots are now verified; the remaining open boxes below are the broader continuation, observability, and multi-host slices.
 - Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path, are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices, and now expose an explicit process-local non-persistent non-replay delivery contract across restart; the remaining open boxes below are richer ordering/idempotency guarantees, longer-haul characterization, and stronger diagnostics.
 - Recent QUIC bootstrap closure: the build path now rehydrates a pinned `quiche` commit, pinned BoringSSL submodule commit, tracked workspace lockfile, and pinned `wirefilter` revision without branch-based fallbacks or unlocked cargo retries.
-- Recent Smart-DNS closure: larger-topology mother-node churn now preserves coherent local persisted-state sync statistics across concurrent multiprocess writers; the broader real-topology and split-brain boxes below remain open.
+- Recent Smart-DNS closure: the local DNS-shaped query surface now fails closed on undersized response budgets and rehydrates cleanly after restart, while the broader real on-wire listener and distributed-topology boxes below remain open.
 - Recent security closure: HTTP/2 one-shot cumulative body caps, HTTP/3 one-shot full-body completion, MCP persisted transfer-key truncation fixes plus loopback-default peer targeting, bounded object-store metadata-cache growth, CRLF-safe cloud metadata headers, TOCTOU-safe local/distributed object-store reads, trusted workflow-run source materialization, and loopback-default Semantic DNS live probe allowlists are now verified on the current mainline; the broader full-surface security review remains open below.
 
 ## A. Transport / QUIC / HTTP / WebSocket
@@ -249,7 +249,7 @@ Status note:
 - [x] Implement rehydration of registration data after restart
 - [x] Validate consistency after split-brain / partial-failure scenarios where publicly claimed
 - [x] Validate topology generation under large service counts
-- [ ] Validate DNS failure and recovery behavior
+- [x] Validate DNS failure and recovery behavior
 
 ## J. Telemetry Core
 

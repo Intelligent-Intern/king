@@ -84,6 +84,7 @@ static const zend_function_entry king_functions[] = {
 
     PHP_FE(king_semantic_dns_init, arginfo_king_config_array)
     PHP_FE(king_semantic_dns_start_server, arginfo_king_no_args)
+    PHP_FE(king_semantic_dns_query, arginfo_king_semantic_dns_query)
     PHP_FE(king_semantic_dns_register_service, arginfo_king_register_service)
     PHP_FE(king_semantic_dns_discover_service, arginfo_king_service_discovery)
     PHP_FE(king_semantic_dns_register_mother_node, arginfo_king_register_mother_node)

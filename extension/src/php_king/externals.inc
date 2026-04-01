@@ -130,6 +130,7 @@ PHP_FUNCTION(king_pipeline_orchestrator_cancel_run);
 
 PHP_FUNCTION(king_semantic_dns_init);
 PHP_FUNCTION(king_semantic_dns_start_server);
+PHP_FUNCTION(king_semantic_dns_query);
 PHP_FUNCTION(king_semantic_dns_register_service);
 PHP_FUNCTION(king_semantic_dns_register_mother_node);
 PHP_FUNCTION(king_semantic_dns_update_service_status);

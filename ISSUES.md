@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate Smart-DNS DNS failure and recovery behavior.
+- none; the current `20`-issue batch is exhausted and waits for the next explicit batch pull
 
 ## Active Executable Items
 
@@ -47,13 +47,13 @@
    done when: repeated concurrent HTTP/3 work proves no starvation or pathological scheduler bias across active streams and sessions.
 
 7. [x] Validate HTTP/3 long-duration soak behavior under continuous load.
-    done when: the runtime survives longer-lived HTTP/3 pressure without transport-state drift, resource leaks, or poisoned follow-up sessions.
+   done when: the runtime survives longer-lived HTTP/3 pressure without transport-state drift, resource leaks, or poisoned follow-up sessions.
 
 8. [x] Validate WebSocket backpressure under many concurrent connections.
-    done when: slow websocket consumers do not let pending writes or queue growth escape the intended bounded runtime behavior.
+   done when: slow websocket consumers do not let pending writes or queue growth escape the intended bounded runtime behavior.
 
 9. [x] Validate WebSocket fairness under many concurrent connections.
-    done when: many active websocket clients can compete without one noisy or slow peer starving unrelated clients.
+   done when: many active websocket clients can compete without one noisy or slow peer starving unrelated clients.
 
 10. [x] Validate server request normalization against real requests.
     done when: the on-wire server paths prove stable request-shape normalization across the active HTTP listener/runtime surfaces instead of only local validation contracts.
@@ -86,7 +86,7 @@
 18. [x] Validate consistency after Smart-DNS split-brain / partial-failure scenarios where publicly claimed.
     done when: discovery, routing, and mother-node state converge honestly after conflicting writers, stale peers, or partial topology loss instead of only under the current coherent local slice.
 
-19. [ ] Validate Smart-DNS DNS failure and recovery behavior.
+19. [x] Validate Smart-DNS DNS failure and recovery behavior.
     done when: DNS-facing failure, timeout, and recovery paths are exercised and mapped cleanly instead of leaving the broader networked recovery contract implicit.
 
 ## Next-Up Clusters After The Top 20

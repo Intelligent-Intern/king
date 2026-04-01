@@ -1282,13 +1282,32 @@ namespace {
     function king_semantic_dns_start_server(): bool {}
 
     /**
+     * Process one local DNS-shaped query against the active semantic-DNS runtime.
+     * This is a bounded local helper for the current runtime slice, not an
+     * on-wire DNS listener.
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_semantic_dns_query(string $query, int $max_response_bytes = 256): string {}
+
+    /**
      * Semantic-DNS topology snapshot for the active runtime.
      * Registered services and mother nodes are exposed from the local
      * in-memory runtime registries.
      * @return array{
      *   services:list<array<string,mixed>>,
      *   mother_nodes:list<array<string,mixed>>,
-     *   statistics:array<string,int>,
+     *   statistics:array{
+     *     total_services:int,
+     *     healthy_services:int,
+     *     degraded_services:int,
+     *     unhealthy_services:int,
+     *     mother_nodes:int,
+     *     discovered_mother_nodes:int,
+     *     synced_mother_nodes:int,
+     *     start_count:int,
+     *     processed_queries:int,
+     *     server_active:int
+     *   },
      *   topology_generated_at:int
      * }
      */
