@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate HTTP/3 long-duration soak behavior under continuous load.
+- [ ] Validate WebSocket backpressure under many concurrent connections.
 
 ## Active Executable Items
 
@@ -46,7 +46,7 @@
 6. [x] Validate HTTP/3 fairness under sustained load.
    done when: repeated concurrent HTTP/3 work proves no starvation or pathological scheduler bias across active streams and sessions.
 
-7. [ ] Validate HTTP/3 long-duration soak behavior under continuous load.
+7. [x] Validate HTTP/3 long-duration soak behavior under continuous load.
     done when: the runtime survives longer-lived HTTP/3 pressure without transport-state drift, resource leaks, or poisoned follow-up sessions.
 
 8. [ ] Validate WebSocket backpressure under many concurrent connections.

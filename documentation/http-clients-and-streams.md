@@ -356,6 +356,12 @@ on the same QUIC connection from making bounded progress and completing first,
 including later staggered fast waves that still finish before one long-running
 slow stream under sustained load.
 
+The proof is also no longer only one burst deep. The active HTTP/3 tests now
+run repeated mixed-load bursts and then still require later healthy direct and
+dispatcher requests to succeed cleanly. That matters because a transport story
+is incomplete if it only looks good before longer pressure or if it poisons the
+next healthy session after a soak run.
+
 This is why the HTTP/3 story is split across this chapter and
 [QUIC and TLS](./quic-and-tls.md). This chapter explains the request model. The
 other chapter explains the transport it rides on.
