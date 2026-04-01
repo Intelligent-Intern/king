@@ -380,23 +380,58 @@ static zend_result king_object_store_gcs_http_request(
     headers = king_object_store_libcurl.curl_slist_append_fn(headers, auth_header);
 
     if (body != NULL || strcmp(method, "PUT") == 0) {
-        char content_type_header[160];
-
         if (request_metadata != NULL && request_metadata->content_type[0] != '\0') {
-            snprintf(content_type_header, sizeof(content_type_header), "Content-Type: %s", request_metadata->content_type);
-            headers = king_object_store_libcurl.curl_slist_append_fn(headers, content_type_header);
+            int header_result = king_object_store_append_named_http_header(
+                &headers,
+                "Content-Type",
+                "content_type",
+                request_metadata->content_type,
+                error,
+                error_size
+            );
+
+            if (header_result != SUCCESS) {
+                king_object_store_libcurl.curl_slist_free_all_fn(headers);
+                king_object_store_libcurl.curl_easy_cleanup_fn(easy);
+                smart_str_free(&url);
+                return header_result;
+            }
         } else {
             headers = king_object_store_libcurl.curl_slist_append_fn(headers, "Content-Type: application/octet-stream");
         }
     }
     if (request_metadata != NULL && request_metadata->content_encoding[0] != '\0') {
-        char content_encoding_header[128];
+        int header_result = king_object_store_append_named_http_header(
+            &headers,
+            "Content-Encoding",
+            "content_encoding",
+            request_metadata->content_encoding,
+            error,
+            error_size
+        );
 
-        snprintf(content_encoding_header, sizeof(content_encoding_header), "Content-Encoding: %s", request_metadata->content_encoding);
-        headers = king_object_store_libcurl.curl_slist_append_fn(headers, content_encoding_header);
+        if (header_result != SUCCESS) {
+            king_object_store_libcurl.curl_slist_free_all_fn(headers);
+            king_object_store_libcurl.curl_easy_cleanup_fn(easy);
+            smart_str_free(&url);
+            return header_result;
+        }
     }
     if (request_metadata != NULL) {
-        headers = king_object_store_append_metadata_headers(headers, "x-goog-meta-", request_metadata);
+        int header_result = king_object_store_append_metadata_headers(
+            &headers,
+            "x-goog-meta-",
+            request_metadata,
+            error,
+            error_size
+        );
+
+        if (header_result != SUCCESS) {
+            king_object_store_libcurl.curl_slist_free_all_fn(headers);
+            king_object_store_libcurl.curl_easy_cleanup_fn(easy);
+            smart_str_free(&url);
+            return header_result;
+        }
     }
     if (range_header != NULL && range_header[0] != '\0') {
         headers = king_object_store_libcurl.curl_slist_append_fn(headers, range_header);
@@ -683,23 +718,55 @@ static zend_result king_object_store_gcs_http_request_url(
     headers = king_object_store_libcurl.curl_slist_append_fn(headers, auth_header);
 
     if (request_metadata != NULL || strcmp(method, "PUT") == 0) {
-        char content_type_header[160];
-
         if (request_metadata != NULL && request_metadata->content_type[0] != '\0') {
-            snprintf(content_type_header, sizeof(content_type_header), "Content-Type: %s", request_metadata->content_type);
-            headers = king_object_store_libcurl.curl_slist_append_fn(headers, content_type_header);
+            int header_result = king_object_store_append_named_http_header(
+                &headers,
+                "Content-Type",
+                "content_type",
+                request_metadata->content_type,
+                error,
+                error_size
+            );
+
+            if (header_result != SUCCESS) {
+                king_object_store_libcurl.curl_slist_free_all_fn(headers);
+                king_object_store_libcurl.curl_easy_cleanup_fn(easy);
+                return header_result;
+            }
         } else {
             headers = king_object_store_libcurl.curl_slist_append_fn(headers, "Content-Type: application/octet-stream");
         }
     }
     if (request_metadata != NULL && request_metadata->content_encoding[0] != '\0') {
-        char content_encoding_header[128];
+        int header_result = king_object_store_append_named_http_header(
+            &headers,
+            "Content-Encoding",
+            "content_encoding",
+            request_metadata->content_encoding,
+            error,
+            error_size
+        );
 
-        snprintf(content_encoding_header, sizeof(content_encoding_header), "Content-Encoding: %s", request_metadata->content_encoding);
-        headers = king_object_store_libcurl.curl_slist_append_fn(headers, content_encoding_header);
+        if (header_result != SUCCESS) {
+            king_object_store_libcurl.curl_slist_free_all_fn(headers);
+            king_object_store_libcurl.curl_easy_cleanup_fn(easy);
+            return header_result;
+        }
     }
     if (request_metadata != NULL) {
-        headers = king_object_store_append_metadata_headers(headers, "x-goog-meta-", request_metadata);
+        int header_result = king_object_store_append_metadata_headers(
+            &headers,
+            "x-goog-meta-",
+            request_metadata,
+            error,
+            error_size
+        );
+
+        if (header_result != SUCCESS) {
+            king_object_store_libcurl.curl_slist_free_all_fn(headers);
+            king_object_store_libcurl.curl_easy_cleanup_fn(easy);
+            return header_result;
+        }
     }
     for (i = 0; i < extra_header_count; ++i) {
         if (extra_headers[i] != NULL && extra_headers[i][0] != '\0') {
@@ -762,4 +829,3 @@ static zend_result king_object_store_gcs_http_request_url(
     king_object_store_libcurl.curl_easy_cleanup_fn(easy);
     return SUCCESS;
 }
-
