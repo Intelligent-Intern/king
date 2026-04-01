@@ -123,7 +123,7 @@ array(6) {
 }
 string(12) "object_store"
 string(13) "config_backed"
-array(7) {
+array(10) {
   [0]=>
   string(7) "enabled"
   [1]=>
@@ -138,6 +138,12 @@ array(7) {
   string(18) "replication_factor"
   [6]=>
   string(13) "chunk_size_mb"
+  [7]=>
+  string(22) "metadata_cache_enabled"
+  [8]=>
+  string(22) "metadata_cache_ttl_sec"
+  [9]=>
+  string(26) "metadata_cache_max_entries"
 }
 bool(true)
 array(6) {

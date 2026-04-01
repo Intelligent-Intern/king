@@ -93,6 +93,10 @@ int kg_config_native_object_store_apply_userland_config_to(
             if (kg_validate_positive_long(value, &target->metadata_cache_ttl_sec) != SUCCESS) {
                 return FAILURE;
             }
+        } else if (zend_string_equals_literal(key, "metadata_cache_max_entries")) {
+            if (kg_validate_positive_long(value, &target->metadata_cache_max_entries) != SUCCESS) {
+                return FAILURE;
+            }
         } else if (zend_string_equals_literal(key, "enable_directstorage")) {
             if (kg_validate_bool(value, "enable_directstorage") != SUCCESS) {
                 return FAILURE;

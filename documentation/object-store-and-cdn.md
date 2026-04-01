@@ -812,7 +812,9 @@ The third family is topology and metadata. Keys such as
 `storage.metadata_agent_uri`, `storage.node_discovery_mode`,
 `storage.node_static_list`, `storage.metadata_cache_enable`, and
 `storage.metadata_cache_ttl_sec` decide where metadata authority lives and how
-the store learns about storage topology.
+the store learns about storage topology. `storage.metadata_cache_max_entries`
+adds the memory-safety boundary for long-lived runtimes so metadata readahead
+and ordinary object churn do not grow the process-local cache without bound.
 
 The fourth family is fast-path preparation. `storage.enable_directstorage` is
 the main switch for predictive residency and direct read paths for likely future

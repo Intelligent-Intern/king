@@ -34,6 +34,8 @@ static ZEND_INI_MH(OnUpdateObjectStorePositiveLong)
         king_native_object_store_config.default_chunk_size_mb = val;
     } else if (zend_string_equals_literal(entry->name, "king.storage_metadata_cache_ttl_sec")) {
         king_native_object_store_config.metadata_cache_ttl_sec = val;
+    } else if (zend_string_equals_literal(entry->name, "king.storage_metadata_cache_max_entries")) {
+        king_native_object_store_config.metadata_cache_max_entries = val;
     }
 
     return SUCCESS;
@@ -116,6 +118,7 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("king.storage_node_static_list", "127.0.0.1:9711,127.0.0.1:9712", PHP_INI_SYSTEM, OnUpdateString, node_static_list, kg_native_object_store_config_t, king_native_object_store_config)
     STD_PHP_INI_ENTRY("king.storage_metadata_cache_enable", "1", PHP_INI_SYSTEM, OnUpdateBool, metadata_cache_enable, kg_native_object_store_config_t, king_native_object_store_config)
     ZEND_INI_ENTRY("king.storage_metadata_cache_ttl_sec", "60", PHP_INI_SYSTEM, OnUpdateObjectStorePositiveLong)
+    ZEND_INI_ENTRY("king.storage_metadata_cache_max_entries", "4096", PHP_INI_SYSTEM, OnUpdateObjectStorePositiveLong)
     STD_PHP_INI_ENTRY("king.storage_enable_directstorage", "0", PHP_INI_SYSTEM, OnUpdateBool, enable_directstorage, kg_native_object_store_config_t, king_native_object_store_config)
 PHP_INI_END()
 

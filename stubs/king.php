@@ -1061,6 +1061,7 @@ namespace {
      *     node_discovery_mode:string,
      *     metadata_cache_enabled:bool,
      *     metadata_cache_ttl_sec:int,
+     *     metadata_cache_max_entries:int,
      *     directstorage_enabled:bool,
      *     local_registry_initialized:bool,
      *     runtime_initialized:bool,
@@ -1073,6 +1074,8 @@ namespace {
      *     runtime_capacity_available_bytes:int|null,
      *     runtime_replication_factor:int,
      *     runtime_chunk_size_kb:int,
+     *     runtime_metadata_cache_entries:int,
+     *     runtime_metadata_cache_eviction_count:int,
      *     object_count:int,
      *     stored_bytes:int,
      *     latest_object_at:int|null
