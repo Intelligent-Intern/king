@@ -247,7 +247,7 @@ Status note:
 - [x] Validate status updates under concurrent writes
 - [x] Implement persistence for registration data
 - [x] Implement rehydration of registration data after restart
-- [ ] Validate consistency after split-brain / partial-failure scenarios where publicly claimed
+- [x] Validate consistency after split-brain / partial-failure scenarios where publicly claimed
 - [x] Validate topology generation under large service counts
 - [ ] Validate DNS failure and recovery behavior
 

@@ -545,6 +545,15 @@ change what "best route" means.
 Another mistake is leaving discovery, routing, and autoscaling in separate
 mental worlds. In practice they are three views of the same moving system.
 
+The current repo-local proof now also covers the honest failure shape of this
+runtime slice. Conflicting persisted writers may still race in a local
+last-write-wins control plane, but stale service snapshots do not get to keep
+winning routes once real live probes disagree with them. After those probes run,
+discovery and routing fall back to the coherent currently healthy service slice,
+and that corrected slice survives restart through the durable state payload.
+Mother-node export remains the coherent persisted topology snapshot rather than a
+claim of quorum or distributed consensus.
+
 ## Where To Go Next
 
 If the next question is "how does the platform actually forward traffic once a

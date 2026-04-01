@@ -21,7 +21,7 @@ areas:
 - deeper transport and listener failure-path verification across HTTP/2, HTTP/3, and WebSocket
 - stronger object-store provider-quota classification and broader cross-backend failure normalization around the now-real core/cloud surface
 - orchestrator compensation semantics, observability depth, and broader distributed control-plane recovery
-- Smart-DNS split-brain, failure/recovery, and broader distributed-topology validation beyond the current concurrent-write, live-signal, and concurrent mother-node churn proof
+- Smart-DNS DNS failure/recovery and broader distributed-topology validation beyond the current concurrent-write, live-signal, split-brain/partial-failure, and concurrent mother-node churn proof
 - stronger telemetry/autoscaling load-bound, cleanup, and recovery guarantees
 
 The long-form completion checklist has now been distilled into the next `20`
@@ -36,7 +36,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `476/476` passing
+- `./infra/scripts/test-extension.sh`: `477/477` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -58,7 +58,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `476` PHPT files
+- `extension/tests`: `477` PHPT files
 - public stub parity: `136` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -110,7 +110,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 
 - Router/loadbalancer is now honestly fenced to a config-backed control-plane surface; it is not presented as a forwarding dataplane runtime.
 - Smart-DNS public config and init surfaces are now honest for the current local semantic/service-discovery runtime.
-- The remaining Smart-DNS work is split-brain and partial-failure recovery, real distributed topology validation beyond the local persisted-state slice, and broader failover behavior rather than more local config cleanup, restart-state basics, or local concurrent-write/mother-node churn correctness.
+- The remaining Smart-DNS work is DNS failure/recovery and real distributed topology validation beyond the local persisted-state slice rather than more local config cleanup, restart-state basics, or local concurrent-write/mother-node churn correctness.
 
 ### Observability and Fleet Operations
 

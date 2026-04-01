@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate consistency after Smart-DNS split-brain / partial-failure scenarios where publicly claimed.
+- [ ] Validate Smart-DNS DNS failure and recovery behavior.
 
 ## Active Executable Items
 
@@ -83,7 +83,7 @@
 
 ### 4. Smart-DNS Distributed Recovery
 
-18. [ ] Validate consistency after Smart-DNS split-brain / partial-failure scenarios where publicly claimed.
+18. [x] Validate consistency after Smart-DNS split-brain / partial-failure scenarios where publicly claimed.
     done when: discovery, routing, and mother-node state converge honestly after conflicting writers, stale peers, or partial topology loss instead of only under the current coherent local slice.
 
 19. [ ] Validate Smart-DNS DNS failure and recovery behavior.
