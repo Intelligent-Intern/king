@@ -82,7 +82,7 @@ Semantic-DNS v1 does not support init option 'health_check_interval_ms'.
 King\ValidationException
 Semantic-DNS v1 does not support init option 'mothernode_sync_interval_sec'.
 bool(true)
-array(8) {
+array(9) {
   [0]=>
   string(13) "server_enable"
   [1]=>
@@ -98,5 +98,7 @@ array(8) {
   [6]=>
   string(20) "semantic_mode_enable"
   [7]=>
+  string(24) "live_probe_allowed_hosts"
+  [8]=>
   string(14) "mothernode_uri"
 }

@@ -274,6 +274,13 @@ When a service record includes attributes such as `health_check_path`,
 can refresh the active service record from a real HTTP endpoint before it
 answers discovery, topology, or route questions.
 
+That probe path is intentionally not a free outbound fetch primitive. Probe
+targets are now gated by the operator-owned `king.dns_live_probe_allowed_hosts`
+allowlist, which defaults to loopback-only (`localhost`, `127.0.0.1`, `::1`).
+Non-loopback probe targets must be explicitly allowlisted at system level
+before Semantic-DNS will open a socket to them, and probe request hosts and
+paths are rejected when they contain unsafe request-line or header characters.
+
 When Semantic-DNS persistence is enabled, King also treats those writes as a
 shared control-plane state problem instead of a local array update. Concurrent
 service registration, status changes, and probe-driven refreshes are serialized
