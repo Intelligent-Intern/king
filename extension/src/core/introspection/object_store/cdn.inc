@@ -25,13 +25,14 @@ PHP_FUNCTION(king_cdn_cache_object)
         zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID cannot be empty");
         RETURN_THROWS();
     }
-    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "Object ID is invalid for object-store paths."
-        );
-        RETURN_THROWS();
+
+    {
+        const char *object_id_error = king_object_store_public_object_id_validate_zstr(object_id);
+
+        if (object_id_error != NULL) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", object_id_error);
+            RETURN_THROWS();
+        }
     }
 
     if (!king_cdn_cache_registry_initialized) {
@@ -170,11 +171,6 @@ PHP_FUNCTION(king_cdn_invalidate_cache)
         RETURN_THROWS();
     }
 
-    if (object_id != NULL && ZSTR_LEN(object_id) == 0) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID cannot be empty");
-        RETURN_THROWS();
-    }
-
     if (object_id == NULL) {
         /* Flush all (including expired) */
         zend_long removed_count = (zend_long) zend_hash_num_elements(&king_cdn_cache_registry);
@@ -182,13 +178,18 @@ PHP_FUNCTION(king_cdn_invalidate_cache)
         RETURN_LONG(removed_count);
     }
 
-    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "Object ID is invalid for object-store paths."
-        );
+    if (ZSTR_LEN(object_id) == 0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID cannot be empty");
         RETURN_THROWS();
+    }
+
+    {
+        const char *object_id_error = king_object_store_public_object_id_validate_zstr(object_id);
+
+        if (object_id_error != NULL) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", object_id_error);
+            RETURN_THROWS();
+        }
     }
 
     /* Single-object invalidation */

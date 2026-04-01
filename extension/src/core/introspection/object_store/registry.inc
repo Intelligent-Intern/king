@@ -1100,17 +1100,13 @@ PHP_FUNCTION(king_object_store_put)
         RETURN_THROWS();
     }
 
-    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID must be between 1 and 127 bytes.");
-        RETURN_THROWS();
-    }
-    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "Object ID is invalid for object-store paths."
-        );
-        RETURN_THROWS();
+    {
+        const char *object_id_error = king_object_store_public_object_id_validate_zstr(object_id);
+
+        if (object_id_error != NULL) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", object_id_error);
+            RETURN_THROWS();
+        }
     }
 
     if (!king_object_store_registry_acquire_mutation_lock(
@@ -1196,17 +1192,13 @@ PHP_FUNCTION(king_object_store_put_from_stream)
         RETURN_THROWS();
     }
 
-    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID must be between 1 and 127 bytes.");
-        RETURN_THROWS();
-    }
-    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "Object ID is invalid for object-store paths."
-        );
-        RETURN_THROWS();
+    {
+        const char *object_id_error = king_object_store_public_object_id_validate_zstr(object_id);
+
+        if (object_id_error != NULL) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", object_id_error);
+            RETURN_THROWS();
+        }
     }
 
     stream = king_object_store_registry_fetch_stream_resource(stream_zv, 2, "king_object_store_put_from_stream");
@@ -1323,13 +1315,13 @@ PHP_FUNCTION(king_object_store_begin_resumable_upload)
         zend_throw_exception_ex(king_ce_runtime_exception, 0, "Object-store registry is unavailable.");
         RETURN_THROWS();
     }
-    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID must be between 1 and 127 bytes.");
-        RETURN_THROWS();
-    }
-    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID is invalid for object-store paths.");
-        RETURN_THROWS();
+    {
+        const char *object_id_error = king_object_store_public_object_id_validate_zstr(object_id);
+
+        if (object_id_error != NULL) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", object_id_error);
+            RETURN_THROWS();
+        }
     }
 
     memset(&metadata, 0, sizeof(metadata));
@@ -1564,17 +1556,13 @@ PHP_FUNCTION(king_object_store_get)
         Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
 
-    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID must be between 1 and 127 bytes.");
-        RETURN_THROWS();
-    }
-    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "Object ID is invalid for object-store paths."
-        );
-        RETURN_THROWS();
+    {
+        const char *object_id_error = king_object_store_public_object_id_validate_zstr(object_id);
+
+        if (object_id_error != NULL) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", object_id_error);
+            RETURN_THROWS();
+        }
     }
 
     if (!king_object_store_registry_extract_range_options(
@@ -1649,17 +1637,13 @@ PHP_FUNCTION(king_object_store_get_to_stream)
         Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
 
-    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID must be between 1 and 127 bytes.");
-        RETURN_THROWS();
-    }
-    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "Object ID is invalid for object-store paths."
-        );
-        RETURN_THROWS();
+    {
+        const char *object_id_error = king_object_store_public_object_id_validate_zstr(object_id);
+
+        if (object_id_error != NULL) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", object_id_error);
+            RETURN_THROWS();
+        }
     }
 
     destination_stream = king_object_store_registry_fetch_stream_resource(stream_zv, 2, "king_object_store_get_to_stream");
@@ -1721,17 +1705,13 @@ PHP_FUNCTION(king_object_store_delete)
         Z_PARAM_STR(object_id)
     ZEND_PARSE_PARAMETERS_END();
 
-    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "Object ID must be between 1 and 127 bytes.");
-        RETURN_THROWS();
-    }
-    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "Object ID is invalid for object-store paths."
-        );
-        RETURN_THROWS();
+    {
+        const char *object_id_error = king_object_store_public_object_id_validate_zstr(object_id);
+
+        if (object_id_error != NULL) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", object_id_error);
+            RETURN_THROWS();
+        }
     }
 
     if (!king_object_store_runtime.initialized) {
@@ -1838,10 +1818,7 @@ PHP_FUNCTION(king_object_store_get_metadata)
     if (!king_object_store_runtime.initialized) {
         return;
     }
-    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
-        return;
-    }
-    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
+    if (king_object_store_public_object_id_validate_zstr(object_id) != NULL) {
         return;
     }
 
@@ -1954,22 +1931,20 @@ PHP_FUNCTION(king_object_store_backup_object)
         Z_PARAM_STR(destination_path)
     ZEND_PARSE_PARAMETERS_END();
 
-    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "Object ID must be between 1 and 127 bytes."
-        );
-        RETURN_THROWS();
+    {
+        const char *object_id_error = king_object_store_public_object_id_validate_zstr(object_id);
+
+        if (object_id_error != NULL) {
+            zend_throw_exception_ex(
+                king_ce_validation_exception,
+                0,
+                "%s",
+                object_id_error
+            );
+            RETURN_THROWS();
+        }
     }
-    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "Object ID is invalid for object-store paths."
-        );
-        RETURN_THROWS();
-    }
+
     if (ZSTR_LEN(destination_path) == 0) {
         zend_throw_exception_ex(
             king_ce_validation_exception,
@@ -2006,22 +1981,20 @@ PHP_FUNCTION(king_object_store_restore_object)
         Z_PARAM_STR(source_path)
     ZEND_PARSE_PARAMETERS_END();
 
-    if (ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "Object ID must be between 1 and 127 bytes."
-        );
-        RETURN_THROWS();
+    {
+        const char *object_id_error = king_object_store_public_object_id_validate_zstr(object_id);
+
+        if (object_id_error != NULL) {
+            zend_throw_exception_ex(
+                king_ce_validation_exception,
+                0,
+                "%s",
+                object_id_error
+            );
+            RETURN_THROWS();
+        }
     }
-    if (king_object_store_object_id_validate(ZSTR_VAL(object_id)) != NULL) {
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "Object ID is invalid for object-store paths."
-        );
-        RETURN_THROWS();
-    }
+
     if (ZSTR_LEN(source_path) == 0) {
         zend_throw_exception_ex(
             king_ce_validation_exception,
