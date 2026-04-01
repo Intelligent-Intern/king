@@ -23,6 +23,11 @@ short request handlers and thin application wrappers. It can own live sessions,
 streams, protocol state, routing decisions, telemetry, persistence, scaling
 signals, and cluster-facing workflows in one coherent runtime model.
 
+The current line is alpha. The repo-local baseline is green, the multi-backend
+object-store and control-plane surfaces are real, and the remaining closure
+work is now about narrower hardening, failure-depth, and distributed-operating
+proof rather than placeholder subsystem stories.
+
 King brings the following into one extension:
 
 - QUIC, HTTP/1, HTTP/2, HTTP/3, TLS, streaming, cancellation, and upgrade flows
@@ -32,7 +37,7 @@ King brings the following into one extension:
 - router and load-balancer control-plane configuration and policy
 - IIBIN for schema-defined native binary encoding and decoding
 - MCP for agent and tool protocol integration
-- object-store and CDN primitives
+- real multi-backend object-store and CDN primitives
 - telemetry, metrics, tracing, and admin control surfaces
 - autoscaling, orchestration, and cluster-facing infrastructure hooks
 
@@ -87,7 +92,8 @@ The state and fleet plane is for durable system behavior across many requests,
 nodes, and services.
 This is where the object store, CDN hooks, Semantic DNS, telemetry, autoscaling,
 and router or load-balancer policy surfaces fit.
-The object store holds artifacts and large state.
+The object store holds artifacts and large state across local, distributed, and
+real cloud backends.
 Semantic DNS decides where traffic should go.
 Telemetry measures what the system is doing.
 Autoscaling reacts to that telemetry.
@@ -167,9 +173,9 @@ King is also a data and protocol runtime:
 
 - IIBIN for schema-defined binary serialization
 - MCP for tool and agent protocol traffic
-- object-store primitives
+- real multi-backend object-store primitives
 - CDN-oriented cache distribution hooks
-- pipeline orchestration for multi-step workloads
+- pipeline orchestration for multi-step, recovery-aware workloads
 
 ### Observability and Operations
 
