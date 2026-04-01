@@ -38,6 +38,7 @@ typedef struct _kg_native_object_store_config_t {
     /* --- Performance & Caching --- */
     bool metadata_cache_enable;
     zend_long metadata_cache_ttl_sec;
+    zend_long metadata_cache_max_entries;
     bool enable_directstorage;
 
 } kg_native_object_store_config_t;

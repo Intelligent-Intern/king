@@ -177,6 +177,12 @@ PHP_FUNCTION(king_system_get_component_info)
             king_native_object_store_config.default_replication_factor);
         add_assoc_long(&configuration, "chunk_size_mb",
             king_native_object_store_config.default_chunk_size_mb);
+        add_assoc_bool(&configuration, "metadata_cache_enabled",
+            king_native_object_store_config.metadata_cache_enable ? 1 : 0);
+        add_assoc_long(&configuration, "metadata_cache_ttl_sec",
+            king_native_object_store_config.metadata_cache_ttl_sec);
+        add_assoc_long(&configuration, "metadata_cache_max_entries",
+            king_native_object_store_config.metadata_cache_max_entries);
     } else if (zend_string_equals_literal(component_name, "cdn")) {
         king_component_info_init(return_value, "cdn", "config_backed");
         array_init(&configuration);
