@@ -209,9 +209,9 @@ Status note:
 - [x] Implement complete import path for payloads
 - [x] Implement complete import path for `.meta` state
 - [x] Define consistency guarantees for backup snapshots
-- [ ] Implement incremental backups where publicly claimed
-- [ ] Handle restore from partially corrupted archives
-- [ ] Handle restore while the system is running concurrently
+- [x] Implement incremental backups where publicly claimed
+- [x] Handle restore from partially corrupted archives
+- [x] Handle restore while the system is running concurrently
 - [x] Validate crash recovery after hard process abort
 - [ ] Validate restart rehydration under all persistence modes
 - [ ] Enforce integrity checks after restore
