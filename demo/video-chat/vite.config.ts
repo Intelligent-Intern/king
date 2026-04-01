@@ -6,7 +6,7 @@ function constVendorChunkName(id: string) {
   const groups: Array<[string, string[]]> = [
     ['vue-vendor', ['vue', 'vue-router', 'pinia']],
     ['ui-vendor', ['@vueuse/core', '@vueuse/components']],
-    ['media-vendor', ['webrtc-adapter', 'recordrtc', 'wavesurfer.js']],
+    ['media-vendor', ['webrtc-adapter', 'recordrtc', 'wavesurfer.js', 'socket.io-client']],
     ['chart-vendor', ['chart.js', 'vue-chartjs']],
     ['utils-vendor', ['date-fns', 'uuid', 'crypto-js', 'file-saver']],
   ]
