@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate HTTP/3 fairness under sustained load.
+- [ ] Validate HTTP/3 long-duration soak behavior under continuous load.
 
 ## Active Executable Items
 
@@ -43,7 +43,7 @@
 5. [x] Validate HTTP/3 backpressure under real multi-stream traffic.
    done when: mixed fast and slow HTTP/3 streams keep progress bounded and fair under real peer pressure instead of only one-shot churn isolation.
 
-6. [ ] Validate HTTP/3 fairness under sustained load.
+6. [x] Validate HTTP/3 fairness under sustained load.
    done when: repeated concurrent HTTP/3 work proves no starvation or pathological scheduler bias across active streams and sessions.
 
 7. [ ] Validate HTTP/3 long-duration soak behavior under continuous load.

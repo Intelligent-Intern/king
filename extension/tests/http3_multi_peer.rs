@@ -249,6 +249,16 @@ fn resolve_udp_bind(host: &str) -> net::SocketAddr {
 }
 
 fn response_delay_ms(path: &str) -> u64 {
+    let mut segments = path.split('/').filter(|segment| !segment.is_empty());
+
+    if matches!(segments.next(), Some("delay")) {
+        if let Some(delay_segment) = segments.next() {
+            if let Ok(delay_ms) = delay_segment.parse::<u64>() {
+                return delay_ms;
+            }
+        }
+    }
+
     match path {
         "/slow" => 350,
         "/fast-b" => 50,

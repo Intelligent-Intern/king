@@ -352,7 +352,9 @@ The multi-request path is also now verified against mixed fast and slow
 concurrent streams on one real HTTP/3 peer. That matters because HTTP/3 is not
 interesting only when one request succeeds in isolation. The runtime now proves
 that a slower sibling stream can stay active without preventing faster streams
-on the same QUIC connection from making bounded progress and completing first.
+on the same QUIC connection from making bounded progress and completing first,
+including later staggered fast waves that still finish before one long-running
+slow stream under sustained load.
 
 This is why the HTTP/3 story is split across this chapter and
 [QUIC and TLS](./quic-and-tls.md). This chapter explains the request model. The

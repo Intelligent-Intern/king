@@ -49,7 +49,7 @@ Status note:
 - [x] Validate HTTP/3 backpressure under real multi-stream traffic
 - [ ] Validate HTTP/3 early-data / session-ticket behavior
 - [ ] Validate HTTP/3 retransmit / loss behavior under injected packet loss
-- [ ] Validate HTTP/3 fairness under sustained load
+- [x] Validate HTTP/3 fairness under sustained load
 - [ ] Validate HTTP/3 long-duration soak behavior under continuous load
 
 - [ ] Validate full QUIC session lifecycle against real peers
