@@ -16,6 +16,11 @@ var_dump(king_object_store_init([
 $badIds = [
     "evil\nformat=bad",
     "evil\rkind=full",
+    "evil\tformat=bad",
+    "evil\0format=bad",
+    "evil\fform=bad",
+    "evil\vformat=bad",
+    "evil\x7fform=bad",
 ];
 
 foreach ($badIds as $badId) {
@@ -43,6 +48,40 @@ foreach (scandir($root) as $file) {
 ?>
 --EXPECT--
 bool(true)
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
+string(24) "King\ValidationException"
+string(44) "Object ID is invalid for object-store paths."
 string(24) "King\ValidationException"
 string(44) "Object ID is invalid for object-store paths."
 string(24) "King\ValidationException"
