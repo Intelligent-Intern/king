@@ -22,7 +22,7 @@ $badIds = [
     "evil\fform=bad",
     // Edge cases: path traversal + control chars and 127-byte limits
     "../evil\nformat=bad",
-    str_repeat('a', 120) . "\n" . 'b',             // total length 122 (120 chars + newline + 'b'), still long with control char
+    str_repeat('a', 120) . "\n" . 'b',             // total length 122 bytes (120 'a' bytes + 1 newline byte + 1 'b' byte), still long with a control char
     str_repeat('x', 123) . "\x7f",                 // control char at the end of a long ID
 ];
 
