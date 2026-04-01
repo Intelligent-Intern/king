@@ -430,6 +430,9 @@ The same revalidation now applies to the single-object import surface behind
 `king_object_store_restore_object()`: tampered archived `object_id`,
 `content_length`, or `integrity_sha256` metadata is rejected before the
 imported object becomes live.
+That single-object import API is also the current public partial-restore
+contract. It restores exactly one archived object and leaves unrelated live
+objects alone.
 Batch restore now also requires a quiescent runtime. While
 `king_object_store_restore_all_objects()` is replaying a committed snapshot, new
 writes, deletes, and resumable-upload starts fail instead of interleaving with
@@ -456,6 +459,13 @@ objects, while the manifest carries delete tombstones and the effective current
 inventory fingerprint set. `restore_all_objects()` treats that incremental
 manifest as a patch: restore a full base snapshot first, then apply the
 incremental snapshot to bring the target store forward.
+
+That is the full current batch-restore contract. King does not currently expose
+a rolling live replay mode, a batch subset selector, or a "restore only these
+objects from this snapshot" option on `king_object_store_restore_all_objects()`.
+If you need a partial restore today, use `king_object_store_restore_object()`
+for one object at a time; if you need a batch restore, the supported shapes are
+committed full-snapshot replay and committed incremental-patch replay only.
 
 These functions matter because recovery is not complete if only the payload
 returns. Metadata must travel with it, otherwise the restored bytes lose their

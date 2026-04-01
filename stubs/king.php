@@ -778,6 +778,8 @@ namespace {
      * Imports one object (and optional `.meta`) from a filesystem directory.
      * Source path points to the backup export directory containing payload and
      * matching `<object_id>`/`<object_id>.meta` files.
+     * This is the public partial-restore surface: it restores exactly one
+     * archived object and does not roll through batch snapshot state.
      * @return bool
      * @throws \King\RuntimeException|\King\SystemException
      */
@@ -797,7 +799,10 @@ namespace {
     /**
      * Imports all object payload/metadata files from a filesystem backup
      * directory. Restore fails before live mutation if the archive is
-     * incomplete, partially corrupted, or manifest-inconsistent.
+     * incomplete, partially corrupted, or manifest-inconsistent. The current
+     * batch contract is committed full-snapshot replay or committed
+     * incremental-patch replay only; there is no public rolling restore or
+     * subset-filter option on this API today.
      * @return bool
      * @throws \King\RuntimeException|\King\SystemException
      */

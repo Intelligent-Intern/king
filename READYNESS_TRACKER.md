@@ -218,7 +218,7 @@ Status note:
 - [x] Enforce integrity checks after restore
 - [x] Enforce integrity checks after import
 - [x] Validate metadata migrations after restore
-- [ ] Define rolling-restore / partial-restore semantics where publicly claimed
+- [x] Define rolling-restore / partial-restore semantics where publicly claimed
 
 ## H. CDN / Cache / Edge
 

@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Define rolling-restore / partial-restore semantics where publicly claimed.
+- [ ] Validate HTTP/1 connection reuse limits under load.
 
 ## Active Executable Items
 
@@ -29,7 +29,7 @@
 1. [x] Validate metadata migrations after restore.
    done when: restored objects keep the same honest metadata contract, backend-presence markers, and semantic fields instead of only surviving payload roundtrips.
 
-2. [ ] Define rolling-restore / partial-restore semantics where publicly claimed.
+2. [x] Define rolling-restore / partial-restore semantics where publicly claimed.
    done when: the public backup/restore surface either exposes a real rolling/partial restore contract with verifiable behavior or explicitly narrows the public claim to the committed full/incremental restore shapes that actually exist.
 
 ### 2. Transport And Listener Failure Depth
