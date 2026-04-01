@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Define consistency guarantees for backup snapshots across backup, export, and restore flows.
+- [ ] Implement incremental backups where publicly claimed.
 
 ## Active Executable Items
 
