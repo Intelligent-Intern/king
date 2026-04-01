@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
-function constVendorChunkName(id: string) {
+function getVendorChunkName(id: string) {
   const groups: Array<[string, string[]]> = [
     ['vue-vendor', ['vue', 'vue-router', 'pinia']],
     ['ui-vendor', ['@vueuse/core', '@vueuse/components']],
@@ -57,7 +57,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          return constVendorChunkName(id)
+          return getVendorChunkName(id)
         }
       }
     },
