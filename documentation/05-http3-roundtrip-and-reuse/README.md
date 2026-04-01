@@ -205,6 +205,12 @@ direct request or the next object-oriented client request. Reuse is only
 valuable if the runtime can also keep failure from contaminating healthy later
 work.
 
+The same point applies to longer sustained mixed-load pressure. The current
+HTTP/3 proof is not only a single clean request plus a single later request.
+It now includes repeated buffered mixed-load bursts and still demands healthy
+later direct and dispatcher requests afterwards. Continuous pressure only
+matters if later sessions remain clean.
+
 ```mermaid
 sequenceDiagram
     participant App

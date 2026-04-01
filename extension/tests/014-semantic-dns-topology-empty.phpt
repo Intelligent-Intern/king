@@ -28,7 +28,7 @@ bool(true)
 array(0) {
 }
 bool(true)
-array(7) {
+array(10) {
   ["total_services"]=>
   int(0)
   ["healthy_services"]=>
@@ -42,6 +42,12 @@ array(7) {
   ["discovered_mother_nodes"]=>
   int(0)
   ["synced_mother_nodes"]=>
+  int(0)
+  ["start_count"]=>
+  int(0)
+  ["processed_queries"]=>
+  int(0)
+  ["server_active"]=>
   int(0)
 }
 bool(true)

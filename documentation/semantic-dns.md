@@ -67,7 +67,8 @@ record. `king_semantic_dns_register_mother_node()` adds a mother-node record.
 `king_semantic_dns_update_service_status()` patches live status and optional
 load counters for a service. `king_semantic_dns_discover_service()` returns the
 discoverable services for one service type. `king_semantic_dns_get_optimal_route()`
-returns the best route for a named service. `king_semantic_dns_get_service_topology()`
+returns the best route for a named service. `king_semantic_dns_query()` exposes
+the current bounded local DNS-shaped query helper. `king_semantic_dns_get_service_topology()`
 returns the current topology view.
 
 The value of this API is not that it is exotic. The value is that each call
@@ -168,6 +169,39 @@ from "configured" to "actively serving Semantic-DNS state and route decisions."
 
 This matters because discovery and route selection are not purely static
 configuration reads. They belong to live runtime state.
+
+## Local Query Surface
+
+The current tree still does not expose a real on-wire DNS listener. What it
+does expose is a bounded local query surface through `king_semantic_dns_query()`.
+That helper is the honest DNS-shaped runtime contract today.
+
+It answers the same current runtime slice that start-up and topology controls
+manage. For example, `status` returns whether the runtime is active and which
+bind and port configuration it is carrying, while `discover:<name>` returns the
+current discovery response budget for that query shape.
+
+```php
+<?php
+
+king_semantic_dns_init([
+    'enabled' => true,
+    'bind_address' => '127.0.0.1',
+    'dns_port' => 5353,
+    'service_discovery_max_ips_per_response' => 8,
+    'semantic_mode_enable' => true,
+    'mothernode_uri' => 'mother://semantic-core.internal',
+]);
+
+echo king_semantic_dns_query('status'), PHP_EOL;
+king_semantic_dns_start_server();
+echo king_semantic_dns_query('discover:inference'), PHP_EOL;
+```
+
+This matters for failure behavior too. The helper is explicit about bounded
+response shaping. If the caller asks for an unrealistically small response
+budget, the call fails cleanly instead of returning a silently truncated answer.
+That is the current honest failure surface until a real network listener exists.
 
 ## Registering Services
 
@@ -336,7 +370,9 @@ decision. Discovery narrows the candidate set. Routing selects the result.
 
 `king_semantic_dns_get_service_topology()` returns the broad current view of the
 runtime: services, mother nodes, statistics, and the generation timestamp of the
-topology snapshot.
+topology snapshot. Those statistics now include lifecycle and query counters for
+the active local runtime, such as `start_count`, `processed_queries`, and
+`server_active`.
 
 ```php
 <?php
@@ -544,6 +580,15 @@ change what "best route" means.
 
 Another mistake is leaving discovery, routing, and autoscaling in separate
 mental worlds. In practice they are three views of the same moving system.
+
+The current repo-local proof now also covers the honest failure shape of this
+runtime slice. Conflicting persisted writers may still race in a local
+last-write-wins control plane, but stale service snapshots do not get to keep
+winning routes once real live probes disagree with them. After those probes run,
+discovery and routing fall back to the coherent currently healthy service slice,
+and that corrected slice survives restart through the durable state payload.
+Mother-node export remains the coherent persisted topology snapshot rather than a
+claim of quorum or distributed consensus.
 
 ## Where To Go Next
 

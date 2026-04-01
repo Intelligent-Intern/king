@@ -57,6 +57,19 @@ logging configuration are also persisted so a restarted controller or worker can
 recover the current orchestrator state instead of starting from an empty memory
 image.
 
+Run snapshots now also keep the orchestrator's explicit failure classification
+instead of collapsing everything into one generic error string. When a run
+fails or is cancelled, `king_pipeline_orchestrator_get_run()` preserves whether
+the terminal condition was `validation`, `timeout`, `backend`,
+`remote_transport`, or `cancelled`, whether that classification is step-scoped
+or run-scoped, which backend owned the failure boundary, and which step index
+and tool were implicated when that is known.
+
+The same snapshot also carries a step-by-step status view. That matters because
+operational questions are usually not only "did the run fail?" but also "which
+step failed, which steps already completed, and is the remainder still pending
+or now indeterminate because the failure happened on a remote boundary?"
+
 This is the key reason the orchestrator feels like a control-plane subsystem
 instead of a convenience wrapper. The run is a system object with history.
 
@@ -206,6 +219,14 @@ The controller still persists the run snapshot locally before sending the remote
 execution payload. That matters because the run remains visible in local system
 history even though the work itself is performed remotely.
 
+The current proof for this backend is no longer limited to one remote process
+that handles the whole run in one place. King now also has an end-to-end
+verification slice where one remote execution peer distributes the pipeline's
+steps across multiple worker processes behind that peer boundary while the
+controller-side run snapshot still remains stable. That is deliberately weaker
+than the still-open true multi-host harness, but it is stronger than a
+single-worker-only remote story.
+
 ```mermaid
 sequenceDiagram
     participant C as Controller
@@ -263,7 +284,10 @@ the orchestrator continue that run from the stored initial data, pipeline, and
 execution options. This is run-level continuation, not mid-step checkpointing.
 If the interrupted run had already crossed a remote boundary, the
 `caller_managed` idempotency policy still applies, which means the caller owns
-the decision to replay that run.
+the decision to replay that run. That replay contract is now verified not only
+for controller-process restart, but also for the broader host-loss case where
+the controller and remote peer both disappear and the peer later returns on the
+same persisted host/port route.
 
 ## Logging Configuration
 
@@ -369,7 +393,10 @@ is intentionally separate from `worker_run_next()` because the file-worker
 backend already has its own claim and recovery path.
 
 `king_pipeline_orchestrator_get_run()` reads one persisted run snapshot by run
-ID.
+ID. The returned snapshot includes the persisted top-level run state plus a
+structured `error_classification` block and per-step `steps` status entries so
+callers can distinguish validation, timeout, backend, remote-transport, and
+cancelled failures without inferring them from exception strings.
 
 `king_pipeline_orchestrator_cancel_run()` requests cancellation for a persisted
 queued run on the file-worker backend.

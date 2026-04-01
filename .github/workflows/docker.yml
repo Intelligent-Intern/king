@@ -158,6 +158,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh run download "${{ github.event.workflow_run.id }}" \
+            --repo "${GITHUB_REPOSITORY}" \
             --name "king-release-package-php${{ matrix.php-version }}-linux-amd64" \
             --dir "dist/docker-packages/php${{ matrix.php-version }}/linux-amd64"
 
@@ -166,6 +167,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh run download "${{ github.event.workflow_run.id }}" \
+            --repo "${GITHUB_REPOSITORY}" \
             --name "king-release-package-php${{ matrix.php-version }}-linux-arm64" \
             --dir "dist/docker-packages/php${{ matrix.php-version }}/linux-arm64"
 
@@ -303,6 +305,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh run download "${{ github.event.workflow_run.id }}" \
+            --repo "${GITHUB_REPOSITORY}" \
             --name "king-release-package-php${{ matrix.php-version }}-linux-amd64" \
             --dir "dist/docker-packages/php${{ matrix.php-version }}/linux-amd64"
 
@@ -311,6 +314,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh run download "${{ github.event.workflow_run.id }}" \
+            --repo "${GITHUB_REPOSITORY}" \
             --name "king-release-package-php${{ matrix.php-version }}-linux-arm64" \
             --dir "dist/docker-packages/php${{ matrix.php-version }}/linux-arm64"
 

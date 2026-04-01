@@ -21,6 +21,8 @@ const SOCKET_TOKEN: Token = Token(0);
 enum Mode {
     HandshakeReject,
     TransportClose,
+    SlowResponse,
+    SlowReader,
 }
 
 fn main() {
@@ -31,8 +33,12 @@ fn main() {
     let mode = match args.next().as_deref() {
         Some("handshake_reject") => Mode::HandshakeReject,
         Some("transport_close") => Mode::TransportClose,
+        Some("slow_response") => Mode::SlowResponse,
+        Some("slow_reader") => Mode::SlowReader,
         _ => {
-            eprintln!("Usage: {cmd} <handshake_reject|transport_close> <cert> <key> [host]");
+            eprintln!(
+                "Usage: {cmd} <handshake_reject|transport_close|slow_response|slow_reader> <cert> <key> [host]"
+            );
             std::process::exit(1);
         },
     };
@@ -71,20 +77,26 @@ fn main() {
     config.load_priv_key_from_pem_file(&key).unwrap();
 
     match mode {
-        Mode::HandshakeReject => {
-            config.set_application_protos(&alpns::HTTP_09).unwrap();
-        },
-        Mode::TransportClose => {
+        Mode::HandshakeReject => config.set_application_protos(&alpns::HTTP_09).unwrap(),
+        Mode::TransportClose | Mode::SlowResponse | Mode::SlowReader => {
             config.set_application_protos(&alpns::HTTP_3).unwrap();
         },
     }
 
-    config.set_max_idle_timeout(3000);
+    config.set_max_idle_timeout(10_000);
     config.set_max_recv_udp_payload_size(MAX_DATAGRAM_SIZE);
     config.set_max_send_udp_payload_size(MAX_DATAGRAM_SIZE);
-    config.set_initial_max_data(1_000_000);
+    if mode == Mode::SlowReader {
+        config.set_initial_max_data(4096);
+    } else {
+        config.set_initial_max_data(1_000_000);
+    }
     config.set_initial_max_stream_data_bidi_local(1_000_000);
-    config.set_initial_max_stream_data_bidi_remote(1_000_000);
+    if mode == Mode::SlowReader {
+        config.set_initial_max_stream_data_bidi_remote(4096);
+    } else {
+        config.set_initial_max_stream_data_bidi_remote(1_000_000);
+    }
     config.set_initial_max_stream_data_uni(1_000_000);
     config.set_initial_max_streams_bidi(16);
     config.set_initial_max_streams_uni(16);
@@ -97,6 +109,7 @@ fn main() {
         ring::hmac::Key::generate(ring::hmac::HMAC_SHA256, &rng).unwrap();
 
     let mut conn: Option<quiche::Connection> = None;
+    let mut h3_conn: Option<quiche::h3::Connection> = None;
     let mut close_sent = false;
     let deadline = time::Instant::now() + time::Duration::from_secs(10);
     let mut buf = [0; 65535];
@@ -199,6 +212,23 @@ fn main() {
                 close_sent = true;
             }
 
+            if matches!(mode, Mode::SlowResponse | Mode::SlowReader)
+                && active.is_established()
+                && h3_conn.is_none()
+            {
+                h3_conn = Some(
+                    quiche::h3::Connection::with_transport(
+                        active,
+                        &quiche::h3::Config::new().unwrap(),
+                    )
+                    .unwrap(),
+                );
+            }
+
+            if let Some(http3) = h3_conn.as_mut() {
+                process_timeout_peer_events(http3, active, mode);
+            }
+
             flush_egress(&mut socket, active, &mut out);
 
             if active.is_closed() {
@@ -210,6 +240,46 @@ fn main() {
 
     if let Some(active) = conn.as_ref() {
         log_close_state(active);
+    }
+}
+
+fn process_timeout_peer_events(
+    http3: &mut quiche::h3::Connection,
+    conn: &mut quiche::Connection,
+    mode: Mode,
+) {
+    loop {
+        match http3.poll(conn) {
+            Ok((_stream_id, quiche::h3::Event::Headers { .. })) => (),
+
+            Ok((stream_id, quiche::h3::Event::Data)) => {
+                if mode == Mode::SlowResponse {
+                    let mut scratch = [0_u8; 4096];
+
+                    loop {
+                        match http3.recv_body(conn, stream_id, &mut scratch) {
+                            Ok(0) => break,
+                            Ok(_) => (),
+                            Err(quiche::h3::Error::Done) => break,
+                            Err(_) => break,
+                        }
+                    }
+                }
+            },
+
+            Ok((_stream_id, quiche::h3::Event::Finished)) => (),
+            Ok((_stream_id, quiche::h3::Event::Reset(_))) => (),
+            Ok((_stream_id, quiche::h3::Event::PriorityUpdate)) => (),
+            Ok((_goaway_id, quiche::h3::Event::GoAway)) => (),
+
+            Err(quiche::h3::Error::Done) => break,
+
+            Err(err) => {
+                warn!("{} http3 poll failed: {err:?}", conn.trace_id());
+                conn.close(false, 0x1, b"http3 failure").ok();
+                break;
+            },
+        }
     }
 }
 

@@ -1,15 +1,19 @@
 <?php
 
-function king_server_websocket_wire_start_server(string $mode, int $iterations = 1): array
+function king_server_websocket_wire_start_server(string $mode, int $iterations = 1, ?int $fixedPort = null): array
 {
-    $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-    if ($probe === false) {
-        throw new RuntimeException("failed to reserve on-wire HTTP/1 test port: $errstr");
-    }
+    if ($fixedPort !== null) {
+        $port = $fixedPort;
+    } else {
+        $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        if ($probe === false) {
+            throw new RuntimeException("failed to reserve on-wire HTTP/1 test port: $errstr");
+        }
 
-    $serverName = stream_socket_get_name($probe, false);
-    fclose($probe);
-    [, $port] = explode(':', $serverName, 2);
+        $serverName = stream_socket_get_name($probe, false);
+        fclose($probe);
+        [, $port] = explode(':', $serverName, 2);
+    }
 
     $capture = tempnam(sys_get_temp_dir(), 'king-server-websocket-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';
@@ -108,6 +112,108 @@ function king_server_http1_wire_request_retry(int $port, string $request, int $t
     $response = stream_get_contents($client);
     fclose($client);
     return (string) $response;
+}
+
+function king_server_http1_wire_abort_request(int $port, string $request, int $settleUs = 50000): void
+{
+    $deadline = microtime(true) + 3.0;
+    $socket = false;
+
+    if (!function_exists('socket_create')) {
+        throw new RuntimeException('socket_create() is required for HTTP/1 abort requests');
+    }
+
+    do {
+        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if ($socket === false) {
+            throw new RuntimeException('failed to create HTTP/1 abort socket');
+        }
+
+        if (@socket_connect($socket, '127.0.0.1', $port) === true) {
+            break;
+        }
+
+        $message = socket_strerror(socket_last_error($socket));
+        socket_close($socket);
+        $socket = false;
+        usleep(50000);
+    } while (microtime(true) < $deadline);
+
+    if ($socket === false) {
+        throw new RuntimeException('failed to connect to on-wire HTTP/1 listener: ' . $message);
+    }
+
+    $written = 0;
+    $length = strlen($request);
+    while ($written < $length) {
+        $chunk = @socket_write($socket, substr($request, $written), $length - $written);
+        if ($chunk === false || $chunk === 0) {
+            $message = socket_strerror(socket_last_error($socket));
+            socket_close($socket);
+            throw new RuntimeException('failed while writing HTTP/1 abort request: ' . $message);
+        }
+        $written += $chunk;
+    }
+
+    usleep($settleUs);
+
+    if (defined('SO_LINGER')) {
+        @socket_set_option($socket, SOL_SOCKET, SO_LINGER, [
+            'l_onoff' => 1,
+            'l_linger' => 0,
+        ]);
+    }
+
+    socket_close($socket);
+}
+
+function king_server_http1_wire_parse_response(string $response): array
+{
+    [$head, $body] = array_pad(explode("\r\n\r\n", $response, 2), 2, '');
+    $lines = $head === '' ? [] : explode("\r\n", $head);
+    $statusLine = array_shift($lines) ?? '';
+    $statusParts = explode(' ', $statusLine, 3);
+    $headers = [];
+    $headerPairs = [];
+
+    foreach ($lines as $line) {
+        if ($line === '' || strpos($line, ':') === false) {
+            continue;
+        }
+
+        [$name, $value] = explode(':', $line, 2);
+        $trimmedName = trim($name);
+        $trimmedValue = trim($value);
+        $normalizedName = strtolower($trimmedName);
+
+        $headerPairs[] = [
+            'name' => $trimmedName,
+            'value' => $trimmedValue,
+        ];
+
+        if (!array_key_exists($normalizedName, $headers)) {
+            $headers[$normalizedName] = $trimmedValue;
+            continue;
+        }
+
+        if (is_array($headers[$normalizedName])) {
+            $headers[$normalizedName][] = $trimmedValue;
+            continue;
+        }
+
+        $headers[$normalizedName] = [
+            $headers[$normalizedName],
+            $trimmedValue,
+        ];
+    }
+
+    return [
+        'status_line' => $statusLine,
+        'status' => isset($statusParts[1]) ? (int) $statusParts[1] : 0,
+        'headers' => $headers,
+        'header_pairs' => $headerPairs,
+        'body' => $body,
+    ];
 }
 
 function king_server_http1_wire_connect_retry(int $port, int $timeoutMs = 3000)

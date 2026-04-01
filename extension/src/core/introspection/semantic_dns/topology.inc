@@ -73,6 +73,9 @@ PHP_FUNCTION(king_semantic_dns_get_service_topology)
     add_assoc_long(&statistics, "mother_nodes", zend_hash_num_elements(Z_ARRVAL(mother_nodes)));
     add_assoc_long(&statistics, "discovered_mother_nodes", king_semantic_dns_runtime.last_discovered_node_count);
     add_assoc_long(&statistics, "synced_mother_nodes", king_semantic_dns_runtime.last_synced_node_count);
+    add_assoc_long(&statistics, "start_count", king_semantic_dns_runtime.start_count);
+    add_assoc_long(&statistics, "processed_queries", king_semantic_dns_runtime.processed_query_count);
+    add_assoc_long(&statistics, "server_active", king_semantic_dns_runtime.server_active ? 1 : 0);
     add_assoc_zval(return_value, "statistics", &statistics);
 
     add_assoc_long(return_value, "topology_generated_at", (zend_long) time(NULL));

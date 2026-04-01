@@ -91,9 +91,10 @@ A server handler in King receives a normalized request array instead of raw
 socket bytes. This is an important design choice.
 
 The array carries the data a handler naturally wants to reason about: method,
-path, headers, body, and protocol-specific metadata. It can also carry stream
-and session fields that help the handler understand which live server context it
-is operating on.
+the full request target in `uri`, the normalized routing path in `path`,
+headers, body, and protocol-specific metadata. It can also carry stream and
+session fields that help the handler understand which live server context it is
+operating on.
 
 The point of normalization is not to hide the protocol. The point is to avoid
 forcing every handler to rebuild the same request parsing logic. The runtime
@@ -109,7 +110,9 @@ flowchart LR
 ```
 
 This design makes handlers easier to read while still keeping transport-aware
-operations available through the session APIs.
+operations available through the session APIs. In practice, `uri` keeps the
+original request target such as `/chat?room=alpha`, while `path` gives the
+stable routing slice such as `/chat`.
 
 ## HTTP/1, HTTP/2, And HTTP/3 Listeners
 
@@ -158,6 +161,11 @@ active TCP timeout budget to the real `accept`, request-head read, request-body
 read, and response-write phases so a stalled client cannot hold the worker in
 an unbounded blocking socket read.
 
+When that one-shot cycle finishes, the listener does not leave the accepted
+session half-open. The runtime closes the server-owned session and releases the
+bound port cleanly enough that the same listener can be started again on the
+same port for the next bounded request cycle.
+
 This shape is especially useful when the application wants a tightly scoped,
 single-request listener flow. It is also the most direct entry point for
 workflows that need to observe one real HTTP/1 request and, when appropriate,
@@ -170,6 +178,11 @@ decodes the request headers and optional body for one stream, builds the same
 kind of normalized request array, invokes the handler once, writes one HTTP/2
 response, sends `GOAWAY`, and closes the accepted connection cleanly.
 
+The same applies to restart behavior: after the one-shot request drains through
+`GOAWAY` and socket close, the runtime releases the bound port so the next
+listener instance can reuse it immediately instead of inheriting half-closed
+transport state from the previous request.
+
 `king_http3_server_listen_once()` is the QUIC and HTTP/3 sibling. It owns the
 same bounded one-request shape, but the transport work is different: it accepts
 an incoming QUIC connection, creates the HTTP/3 transport layer on top of that
@@ -178,6 +191,10 @@ normalized request into the handler, writes one HTTP/3 response, sends
 `GOAWAY`, and closes the connection. This is the right one-shot leaf when the
 application needs proof against a real QUIC and HTTP/3 client instead of only a
 local HTTP/3 request model.
+
+That close path is also part of the public contract. After the response and
+`GOAWAY` are drained, the one-shot HTTP/3 listener releases its bound UDP port
+so a fresh listener instance can restart on the same port under live traffic.
 
 The value of a one-shot listener is not that it is "small". The value is that
 the whole accept path is explicit and bounded.
@@ -209,8 +226,21 @@ can send Early Hints, register a cancel callback, attach telemetry, reload TLS
 material on the server session, or upgrade the request into a WebSocket
 connection.
 
+That cancel-hook surface is not only a local convenience slice. The active
+one-shot HTTP/1, HTTP/2, and HTTP/3 listener leaves now prove that a real
+client abort during live traffic invokes a registered server-side cancel
+callback once for the real active stream instead of only mutating hidden local
+state.
+
 That is why the session-aware helper functions are part of the public surface.
 A real server request often needs to do more than return a status code and body.
+
+The response array is also normalized before it reaches the client. Repeated
+header values returned as arrays become repeated response fields. HTTP/1 keeps
+ownership of the final `Content-Length` and `Connection: close` lines for the
+one-shot listener, while HTTP/2 and HTTP/3 drop handler-supplied
+`content-length` and `connection` fields and emit stable lowercase header names
+on wire.
 
 ## Early Hints
 

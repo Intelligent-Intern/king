@@ -12,6 +12,8 @@ void kg_config_app_http3_websockets_webtransport_defaults_load(void)
     king_app_protocols_config.http_enable_early_hints = true;
 
     king_app_protocols_config.websocket_default_max_payload_size = 16777216;
+    king_app_protocols_config.websocket_default_max_queued_messages = 64;
+    king_app_protocols_config.websocket_default_max_queued_bytes = 67108864;
     king_app_protocols_config.websocket_default_ping_interval_ms = 25000;
     king_app_protocols_config.websocket_handshake_timeout_ms = 5000;
 

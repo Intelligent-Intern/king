@@ -1304,6 +1304,32 @@ static zend_result king_server_http3_flush_egress(
     return SUCCESS;
 }
 
+static void king_server_http3_mark_cancelled_on_transport_failure(
+    king_client_session_t *session,
+    const king_server_http3_request_state_t *request_state,
+    const king_server_http3_response_state_t *response_state,
+    const char *function_name
+)
+{
+    if (!king_server_local_errno_is_peer_disconnect(errno)) {
+        return;
+    }
+
+    if (request_state == NULL || response_state == NULL) {
+        return;
+    }
+
+    if (!request_state->request_stream_seen || !response_state->initialized) {
+        return;
+    }
+
+    king_server_local_mark_stream_cancelled_if_registered(
+        session,
+        (zend_long) request_state->stream_id,
+        function_name
+    );
+}
+
 static int king_server_http3_try_send_response(
     king_server_http3_runtime_t *runtime,
     king_server_http3_response_state_t *response,
@@ -1855,10 +1881,24 @@ PHP_FUNCTION(king_http3_server_listen_once)
             );
 
             if (send_rc < 0) {
+                if (runtime.conn != NULL
+                    && king_server_http3_quiche.quiche_conn_is_closed_fn(runtime.conn)) {
+                    king_server_local_mark_stream_cancelled_if_registered(
+                        session,
+                        request_state.stream_id,
+                        "king_http3_server_listen_once"
+                    );
+                }
                 goto cleanup;
             }
 
             if (king_server_http3_flush_egress(&runtime, "king_http3_server_listen_once") != SUCCESS) {
+                king_server_http3_mark_cancelled_on_transport_failure(
+                    session,
+                    &request_state,
+                    &response_state,
+                    "king_http3_server_listen_once"
+                );
                 goto cleanup;
             }
 
@@ -1874,6 +1914,11 @@ PHP_FUNCTION(king_http3_server_listen_once)
         if (runtime.conn != NULL
             && king_server_http3_quiche.quiche_conn_is_closed_fn(runtime.conn)
             && !response_state.close_sent) {
+            king_server_local_mark_stream_cancelled_if_registered(
+                session,
+                request_state.stream_id,
+                "king_http3_server_listen_once"
+            );
             king_server_local_set_errorf(
                 "king_http3_server_listen_once() saw the QUIC connection close before a complete response was sent."
             );
@@ -1920,6 +1965,12 @@ PHP_FUNCTION(king_http3_server_listen_once)
                 if (runtime.conn != NULL) {
                     king_server_http3_quiche.quiche_conn_on_timeout_fn(runtime.conn);
                     if (king_server_http3_flush_egress(&runtime, "king_http3_server_listen_once") != SUCCESS) {
+                        king_server_http3_mark_cancelled_on_transport_failure(
+                            session,
+                            &request_state,
+                            &response_state,
+                            "king_http3_server_listen_once"
+                        );
                         goto cleanup;
                     }
                 }
@@ -1995,6 +2046,12 @@ PHP_FUNCTION(king_http3_server_listen_once)
                     }
 
                     if (king_server_http3_flush_egress(&runtime, "king_http3_server_listen_once") != SUCCESS) {
+                        king_server_http3_mark_cancelled_on_transport_failure(
+                            session,
+                            &request_state,
+                            &response_state,
+                            "king_http3_server_listen_once"
+                        );
                         goto cleanup;
                     }
                 }

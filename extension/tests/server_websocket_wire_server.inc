@@ -19,6 +19,7 @@ $capture = [
     'close_success_count' => 0,
 ];
 $listenerConfig = null;
+$session = null;
 
 if (
     $mode === 'slowloris-accept'
@@ -37,10 +38,11 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
         '127.0.0.1',
         $port,
         $listenerConfig,
-        static function (array $request) use (&$capture, $mode, $iteration): array {
+        static function (array $request) use (&$capture, &$session, $mode, $iteration): array {
             $capture['handler_called'] = true;
             $session = $request['session'];
             $capture['request_uri'] = $request['uri'];
+            $capture['request_path'] = $request['path'] ?? null;
             $capture['stream_id'] = $request['stream_id'];
             $capture['local_address'] = $request['local_address'];
             $capture['remote_address'] = $request['remote_address'];
@@ -53,6 +55,43 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
                 return [
                     'status' => 204,
                     'body' => '',
+                ];
+            }
+
+            if ($mode === 'response-normalization') {
+                return [
+                    'status' => 202,
+                    'headers' => [
+                        'Content-Length' => '999',
+                        'Connection' => 'keep-alive',
+                        'Content-Type' => 'text/plain',
+                        'X-Reply-Mode' => 'normalized',
+                        'X-Multi' => [
+                            'alpha',
+                            'beta',
+                        ],
+                    ],
+                    'body' => 'normalized-body',
+                ];
+            }
+
+            if ($mode === 'cancel-callback') {
+                $capture['cancel_handler_ok'] = king_server_on_cancel(
+                    $session,
+                    $request['stream_id'],
+                    static function (int $cancelledStreamId) use (&$capture): void {
+                        $capture['cancelled_stream'] = $cancelledStreamId;
+                    }
+                );
+                $capture['cancel_handler_error'] = king_get_last_error();
+                usleep(300000);
+
+                return [
+                    'status' => 200,
+                    'headers' => [
+                        'Content-Type' => 'text/plain',
+                    ],
+                    'body' => str_repeat('late-http1-', 65536),
                 ];
             }
 
@@ -113,6 +152,10 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
     if ($result !== true) {
         break;
     }
+}
+
+if ($session !== null) {
+    $capture['post_stats'] = king_get_stats($session);
 }
 
 file_put_contents(

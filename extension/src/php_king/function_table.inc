@@ -29,6 +29,7 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_http2_request_send, arginfo_king_request_send)
     PHP_FE(king_http2_request_send_multi, arginfo_king_http2_request_send_multi)
     PHP_FE(king_http3_request_send, arginfo_king_request_send)
+    PHP_FE(king_http3_request_send_multi, arginfo_king_http3_request_send_multi)
 
     PHP_FE(king_client_websocket_connect, arginfo_king_websocket_connect)
     PHP_FE(king_client_websocket_send, arginfo_king_websocket_send)
@@ -83,6 +84,7 @@ static const zend_function_entry king_functions[] = {
 
     PHP_FE(king_semantic_dns_init, arginfo_king_config_array)
     PHP_FE(king_semantic_dns_start_server, arginfo_king_no_args)
+    PHP_FE(king_semantic_dns_query, arginfo_king_semantic_dns_query)
     PHP_FE(king_semantic_dns_register_service, arginfo_king_register_service)
     PHP_FE(king_semantic_dns_discover_service, arginfo_king_service_discovery)
     PHP_FE(king_semantic_dns_register_mother_node, arginfo_king_register_mother_node)

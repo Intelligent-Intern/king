@@ -115,6 +115,9 @@ PHP_FUNCTION(king_semantic_dns_init);
 /* Starts the semantic DNS server. */
 PHP_FUNCTION(king_semantic_dns_start_server);
 
+/* Processes one local semantic-DNS query against the active runtime. */
+PHP_FUNCTION(king_semantic_dns_query);
+
 /* Registers a service record. */
 PHP_FUNCTION(king_semantic_dns_register_service);
 

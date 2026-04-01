@@ -29,6 +29,8 @@ typedef struct _kg_app_protocols_config_t {
 
     /* --- WebSocket Protocol Settings --- */
     zend_long websocket_default_max_payload_size;
+    zend_long websocket_default_max_queued_messages;
+    zend_long websocket_default_max_queued_bytes;
     zend_long websocket_default_ping_interval_ms;
     zend_long websocket_handshake_timeout_ms;
 

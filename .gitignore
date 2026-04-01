@@ -7,11 +7,16 @@ node_modules
 extension/src_bak/
 
 # Local build and cache artifacts
+extension/Makefile
+extension/Makefile.objects
 extension/autom4te.cache/
 extension/.libs/
 extension/**/.libs/
+extension/config.nice
 extension/config.log
+extension/config.status
 extension/configure~
+extension/*.la
 extension/modules/*.so
 extension/modules/*.la
 extension/build/profiles/

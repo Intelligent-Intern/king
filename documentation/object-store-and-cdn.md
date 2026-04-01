@@ -422,6 +422,17 @@ If a manifest-listed upsert is missing its payload or `.meta` sidecar, if a
 legacy directory contains a broken payload/metadata pair, or if the manifest
 shape is internally inconsistent, the restore fails before mutating the live
 store instead of importing an early subset and dying later.
+That fail-closed contract now also includes restore-time integrity revalidation.
+If the archived payload no longer matches the exported `content_length` or
+`integrity_sha256`, the restore is rejected before the object becomes live, and
+batch restore leaves the already-live store untouched.
+The same revalidation now applies to the single-object import surface behind
+`king_object_store_restore_object()`: tampered archived `object_id`,
+`content_length`, or `integrity_sha256` metadata is rejected before the
+imported object becomes live.
+That single-object import API is also the current public partial-restore
+contract. It restores exactly one archived object and leaves unrelated live
+objects alone.
 Batch restore now also requires a quiescent runtime. While
 `king_object_store_restore_all_objects()` is replaying a committed snapshot, new
 writes, deletes, and resumable-upload starts fail instead of interleaving with
@@ -449,6 +460,13 @@ inventory fingerprint set. `restore_all_objects()` treats that incremental
 manifest as a patch: restore a full base snapshot first, then apply the
 incremental snapshot to bring the target store forward.
 
+That is the full current batch-restore contract. King does not currently expose
+a rolling live replay mode, a batch subset selector, or a "restore only these
+objects from this snapshot" option on `king_object_store_restore_all_objects()`.
+If you need a partial restore today, use `king_object_store_restore_object()`
+for one object at a time; if you need a batch restore, the supported shapes are
+committed full-snapshot replay and committed incremental-patch replay only.
+
 These functions matter because recovery is not complete if only the payload
 returns. Metadata must travel with it, otherwise the restored bytes lose their
 meaning. The restored object must still know what it is, how fresh it is, and
@@ -469,11 +487,21 @@ boundary. Durable fields such as `created_at`, cache policy, distribution
 state, and other exported `.meta` semantics survive the route change, while the
 backend-presence markers stay honest about where real copies now exist instead
 of silently dropping the source backend from the restored object view.
+Committed `restore_all` replay is now also verified on the batch path from a
+real `local_fs` snapshot onto the real `cloud_s3`, `cloud_gcs`, and
+`cloud_azure` targets. Under that shared-root route-change contract, the same
+durable `.meta` semantic fields survive the replay, the target cloud-presence
+marker becomes visible, and unrelated cloud-presence markers stay clear instead
+of being fabricated during batch restore.
 
 `rehydration` is the runtime side of this story. After a restart, the store may
 need to rebuild active in-memory state from durable truth. This is how the
 system regains its footing after process loss without pretending that nothing
 happened.
+That restart re-entry is now explicitly proven after single-object export and
+restore plus committed full-snapshot replay across the active persisted-state
+modes: `local_fs`, `memory_cache`, `distributed`, `cloud_s3`, `cloud_gcs`, and
+`cloud_azure`.
 
 ## Maintenance And Optimization
 

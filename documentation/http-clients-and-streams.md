@@ -27,8 +27,9 @@ active transport path for the request.
 
 The second way is the protocol-specific one-shot path. This uses
 `king_http1_request_send()`, `king_http2_request_send()`,
-`king_http2_request_send_multi()`, or `king_http3_request_send()` when the
-application already knows which protocol it wants.
+`king_http2_request_send_multi()`, `king_http3_request_send()`, or
+`king_http3_request_send_multi()` when the application already knows which
+protocol it wants.
 
 The third way is the explicit session-and-stream path. This uses `king_connect()`,
 `king_poll()`, `king_close()`, `king_cancel_stream()`, and the `King\Session`
@@ -43,7 +44,7 @@ classes.
 flowchart TD
     A[Application wants HTTP work] --> B{How much control is needed?}
     B -->|Smallest general path| C[king_send_request or king_client_send_request]
-    B -->|I know the protocol| D[king_http1_request_send / king_http2_request_send / king_http3_request_send]
+    B -->|I know the protocol| D[king_http1_request_send / king_http2_request_send / king_http2_request_send_multi / king_http3_request_send / king_http3_request_send_multi]
     B -->|I need direct session control| E[King\\Session and King\\Stream]
     B -->|I want OO client structure| F[King\\Client\\HttpClient family]
 ```
@@ -108,7 +109,9 @@ the application decision. If you know the call must be HTTP/1, use
 `king_http1_request_send()`. If you want a direct HTTP/2 call, use
 `king_http2_request_send()`. If you want one multiplex batch over one HTTP/2
 session, use `king_http2_request_send_multi()`. If you want one HTTP/3 request
-over the QUIC runtime, use `king_http3_request_send()`.
+over the QUIC runtime, use `king_http3_request_send()`. If you want one
+multiplex batch over one QUIC + HTTP/3 session, use
+`king_http3_request_send_multi()`.
 
 The choice is not about good and bad APIs. The choice is about whether the
 application wants the runtime to decide the active path or wants to pin the
@@ -118,6 +121,12 @@ protocol explicitly.
 
 HTTP/1 is the simplest protocol family in the chapter. It is still important
 because it remains common, widely compatible, and easy to reason about.
+In the current runtime, HTTP/1 keep-alive reuse is intentionally bounded: the
+pool keeps at most one idle socket per origin and at most sixteen idle sockets
+globally. Under mixed-load bursts that exceed that budget, the oldest idle
+origins are reopened instead of pretending there is an unbounded reuse pool,
+and any reused socket that comes back with `Connection: close` is torn down
+instead of being silently recycled.
 
 HTTP/2 adds multiplexing. That means one session can carry several request
 streams at the same time. It also changes how pooled reuse feels, because the
@@ -317,16 +326,41 @@ The key idea is that a multiplexed protocol can carry more than the single
 response the caller first asked for. The runtime keeps that extra traffic
 structured instead of forcing the caller to infer it.
 
-## HTTP/3 One-Shot Requests
+## HTTP/3 One-Shot And Multi-Request Paths
 
 `king_http3_request_send()` is the direct HTTP/3 one-shot path. It sends one
 request over the active QUIC runtime and returns the normalized response
-snapshot.
+snapshot. `king_http3_request_send_multi()` is the matching buffered batch path
+for callers that want several requests over one honest QUIC + HTTP/3
+connection. Like the HTTP/2 multi-request leaf, the current batch contract
+requires every entry to target the same absolute origin so the runtime can keep
+the multiplexing claim real instead of silently fanning out across unrelated
+connections.
 
 HTTP/3 matters when the application wants HTTP over a transport that already
 thinks in streams, resumption, transport identity, and modern loss recovery.
 Even if the application only calls one function, the transport underneath still
 belongs to the QUIC model.
+
+The timeout contract is not only about dead air before the handshake. The
+current runtime is also verified against already-established slow HTTP/3 peers
+that either never produce a response or stall request-body progress behind QUIC
+flow control, and both cases surface as the shared HTTP/3 timeout family rather
+than collapsing into transport-abort noise.
+
+The multi-request path is also now verified against mixed fast and slow
+concurrent streams on one real HTTP/3 peer. That matters because HTTP/3 is not
+interesting only when one request succeeds in isolation. The runtime now proves
+that a slower sibling stream can stay active without preventing faster streams
+on the same QUIC connection from making bounded progress and completing first,
+including later staggered fast waves that still finish before one long-running
+slow stream under sustained load.
+
+The proof is also no longer only one burst deep. The active HTTP/3 tests now
+run repeated mixed-load bursts and then still require later healthy direct and
+dispatcher requests to succeed cleanly. That matters because a transport story
+is incomplete if it only looks good before longer pressure or if it poisons the
+next healthy session after a soak run.
 
 This is why the HTTP/3 story is split across this chapter and
 [QUIC and TLS](./quic-and-tls.md). This chapter explains the request model. The
