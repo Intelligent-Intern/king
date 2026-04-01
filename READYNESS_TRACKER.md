@@ -392,7 +392,7 @@ Status note:
 
 ## Q. Dataflow / ETL / Flow PHP Integration
 
-King should not absorb ETL semantics as a hard-wired C-core subsystem just
+King should not absorb ETL semantics as a hardwired C-core subsystem just
 because the runtime can already transport, store, and orchestrate data. The
 expected `Q` end-state is a userland-facing dataflow/ETL layer, such as `Flow
 PHP`, running on top of King runtime primitives without losing the stronger
