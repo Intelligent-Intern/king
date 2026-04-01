@@ -13,6 +13,7 @@ Status note:
 - Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path, are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices, and now expose an explicit process-local non-persistent non-replay delivery contract across restart; the remaining open boxes below are richer ordering/idempotency guarantees, longer-haul characterization, and stronger diagnostics.
 - Recent QUIC bootstrap closure: the build path now rehydrates a pinned `quiche` commit, pinned BoringSSL submodule commit, tracked workspace lockfile, and pinned `wirefilter` revision without branch-based fallbacks or unlocked cargo retries.
 - Recent Smart-DNS closure: larger-topology mother-node churn now preserves coherent local persisted-state sync statistics across concurrent multiprocess writers; the broader real-topology and split-brain boxes below remain open.
+- Recent security closure: HTTP/2 one-shot cumulative body caps, HTTP/3 one-shot full-body completion, MCP persisted transfer-key truncation fixes plus loopback-default peer targeting, bounded object-store metadata-cache growth, CRLF-safe cloud metadata headers, TOCTOU-safe local/distributed object-store reads, trusted workflow-run source materialization, and loopback-default Semantic DNS live probe allowlists are now verified on the current mainline; the broader full-surface security review remains open below.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -571,6 +572,15 @@ Flow::extract($king->objectStore()->source('raw/orders/*.ndjson'))
 - [ ] Complete full security review of the admin API
 - [ ] Complete full security review of WebSocket server paths
 - [ ] Complete full security review of MCP transfer paths
+- [x] Eliminate privileged `workflow_run` checkout of non-trusted refs in release workflows
+- [x] Bound HTTP/2 one-shot listener request bodies
+- [x] Wait for full HTTP/3 one-shot request completion before handler invocation
+- [x] Enforce default loopback-only MCP peer targeting unless a system allowlist permits remote peers
+- [x] Keep MCP persisted transfer keys collision-free across the full base64url identifier length
+- [x] Bound object-store runtime metadata cache growth
+- [x] Reject CRLF-bearing cloud object-store metadata headers before network I/O
+- [x] Remove known TOCTOU local and distributed object-store read races
+- [x] Restrict Semantic DNS live probes to allowlisted hosts with sanitized request targets
 - [ ] Systematically eliminate path traversal, injection, UAF, double-free, leak, and lifetime risks
 - [ ] Systematically harden secret / token handling in memory
 - [ ] Systematically harden secret / token handling in logs / diagnostics
