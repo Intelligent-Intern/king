@@ -40,10 +40,17 @@ jobs:
             const eventName = context.eventName;
             const refName = process.env.GITHUB_REF_NAME;
             const refType = process.env.GITHUB_REF_TYPE;
+            const planningBranch = (eventName === 'pull_request'
+              ? context.payload.pull_request.head.ref
+              : refName
+            ) || '';
             let runHeavyJobs = 'true';
             let reason = `${eventName} runs the canonical pipeline`;
 
-            if (eventName === 'push' && refType === 'branch') {
+            if (planningBranch.startsWith('planning/')) {
+              runHeavyJobs = 'false';
+              reason = `Skipping canonical baseline for planning branch ${planningBranch}; docs-only planning guard is the required gate.`;
+            } else if (eventName === 'push' && refType === 'branch') {
               const { data: pulls } = await github.rest.pulls.list({
                 owner: context.repo.owner,
                 repo: context.repo.repo,

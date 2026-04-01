@@ -25,6 +25,10 @@ jobs:
     outputs:
       run-docker-jobs: ${{ steps.check.outputs.run-docker-jobs }}
       reason: ${{ steps.check.outputs.reason }}
+      trusted-checkout-ref: ${{ steps.check.outputs.trusted-checkout-ref }}
+      trusted-branch: ${{ steps.check.outputs.trusted-branch }}
+      trusted-revision: ${{ steps.check.outputs.trusted-revision }}
+      trusted-semver-tag: ${{ steps.check.outputs.trusted-semver-tag }}
 
     steps:
       - name: Decide whether docker publish jobs should run
@@ -35,8 +39,16 @@ jobs:
             const run = context.payload.workflow_run;
             let runDockerJobs = 'false';
             let reason = `Skipping docker publish for workflow run ${run.id}.`;
+            let trustedCheckoutRef = '';
+            let trustedBranch = '';
+            let trustedRevision = '';
+            let trustedSemverTag = '';
 
-            if (run.conclusion === 'success' && run.event === 'push') {
+            if (
+              run.conclusion === 'success'
+              && run.event === 'push'
+              && run.head_repository?.full_name === `${context.repo.owner}/${context.repo.repo}`
+            ) {
               const { data } = await github.rest.actions.listWorkflowRunArtifacts({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -48,16 +60,45 @@ jobs:
                 /^king-release-package-php\d+\.\d+-linux-(amd64|arm64)$/.test(artifact.name)
               );
 
-              if (hasReleasePackages) {
-                runDockerJobs = 'true';
-                reason = `Docker publish enabled for workflow run ${run.id}; release package artifacts were found.`;
+              if (run.head_branch === 'main' || run.head_branch === 'develop') {
+                trustedCheckoutRef = `refs/heads/${run.head_branch}`;
+                trustedBranch = run.head_branch;
+                trustedRevision = run.head_sha;
               } else {
-                reason = `Skipping docker publish for workflow run ${run.id}; no release package artifacts were produced.`;
+                const tags = await github.paginate(github.rest.repos.listTags, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  per_page: 100,
+                });
+
+                const matchingTag = tags.find((tag) =>
+                  /^v\d+\.\d+\.\d+$/.test(tag.name)
+                  && tag.commit?.sha === run.head_sha
+                );
+
+                if (matchingTag) {
+                  trustedCheckoutRef = `refs/tags/${matchingTag.name}`;
+                  trustedRevision = run.head_sha;
+                  trustedSemverTag = matchingTag.name;
+                }
+              }
+
+              if (hasReleasePackages && trustedCheckoutRef !== '') {
+                runDockerJobs = 'true';
+                reason = `Docker publish enabled for trusted workflow run ${run.id}; release package artifacts were found.`;
+              } else {
+                reason = hasReleasePackages
+                  ? `Skipping docker publish for workflow run ${run.id}; no trusted checkout ref could be derived.`
+                  : `Skipping docker publish for workflow run ${run.id}; no release package artifacts were produced.`;
               }
             }
 
             core.setOutput('run-docker-jobs', runDockerJobs);
             core.setOutput('reason', reason);
+            core.setOutput('trusted-checkout-ref', trustedCheckoutRef);
+            core.setOutput('trusted-branch', trustedBranch);
+            core.setOutput('trusted-revision', trustedRevision);
+            core.setOutput('trusted-semver-tag', trustedSemverTag);
             core.notice(reason);
 
   build-and-push:
@@ -93,7 +134,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ needs.artifact-gate.outputs.trusted-checkout-ref }}
           fetch-depth: 0
 
       - name: Fetch tags
@@ -117,21 +158,18 @@ jobs:
 
       - name: Prepare runtime image metadata
         id: meta
+        env:
+          TRUSTED_REVISION: ${{ needs.artifact-gate.outputs.trusted-revision }}
+          TRUSTED_BRANCH: ${{ needs.artifact-gate.outputs.trusted-branch }}
+          TRUSTED_SEMVER_TAG: ${{ needs.artifact-gate.outputs.trusted-semver-tag }}
         run: |
           set -euo pipefail
           image_name="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
           image="${REGISTRY}/${image_name}"
-          revision="${{ github.event.workflow_run.head_sha }}"
+          revision="${TRUSTED_REVISION}"
           short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
-          branch="${{ github.event.workflow_run.head_branch }}"
-          semver_tag=""
-
-          while IFS= read -r tag; do
-            if [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              semver_tag="${tag}"
-              break
-            fi
-          done < <(git tag --points-at "${revision}" | sort -Vr)
+          branch="${TRUSTED_BRANCH}"
+          semver_tag="${TRUSTED_SEMVER_TAG}"
 
           tags=(
             "${image}:php${{ matrix.php-version }}"
@@ -198,7 +236,7 @@ jobs:
           build-args: |
             PHP_VERSION=${{ matrix.php-version }}
             BUILD_DATE=${{ steps.meta.outputs.created_at }}
-            VCS_REF=${{ github.event.workflow_run.head_sha }}
+            VCS_REF=${{ needs.artifact-gate.outputs.trusted-revision }}
 
   build-demo:
     name: Build Demo Application PHP ${{ matrix.php-version }}
@@ -228,7 +266,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ needs.artifact-gate.outputs.trusted-checkout-ref }}
           fetch-depth: 0
 
       - name: Fetch tags
@@ -252,21 +290,18 @@ jobs:
 
       - name: Prepare demo image metadata
         id: meta-demo
+        env:
+          TRUSTED_REVISION: ${{ needs.artifact-gate.outputs.trusted-revision }}
+          TRUSTED_BRANCH: ${{ needs.artifact-gate.outputs.trusted-branch }}
+          TRUSTED_SEMVER_TAG: ${{ needs.artifact-gate.outputs.trusted-semver-tag }}
         run: |
           set -euo pipefail
           image_name="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
           image="${REGISTRY}/${image_name}-demo"
-          revision="${{ github.event.workflow_run.head_sha }}"
+          revision="${TRUSTED_REVISION}"
           short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
-          branch="${{ github.event.workflow_run.head_branch }}"
-          semver_tag=""
-
-          while IFS= read -r tag; do
-            if [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              semver_tag="${tag}"
-              break
-            fi
-          done < <(git tag --points-at "${revision}" | sort -Vr)
+          branch="${TRUSTED_BRANCH}"
+          semver_tag="${TRUSTED_SEMVER_TAG}"
 
           tags=(
             "${image}:php${{ matrix.php-version }}"
@@ -332,4 +367,4 @@ jobs:
           build-args: |
             PHP_VERSION=${{ matrix.php-version }}
             BUILD_DATE=${{ steps.meta-demo.outputs.created_at }}
-            VCS_REF=${{ github.event.workflow_run.head_sha }}
+            VCS_REF=${{ needs.artifact-gate.outputs.trusted-revision }}
