@@ -208,7 +208,7 @@ Status note:
 - [x] Implement complete export path for `.meta` state
 - [x] Implement complete import path for payloads
 - [x] Implement complete import path for `.meta` state
-- [ ] Define consistency guarantees for backup snapshots
+- [x] Define consistency guarantees for backup snapshots
 - [ ] Implement incremental backups where publicly claimed
 - [ ] Handle restore from partially corrupted archives
 - [ ] Handle restore while the system is running concurrently
