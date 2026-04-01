@@ -134,7 +134,7 @@ Status note:
 - [x] Persist pipeline run state
 - [x] Rehydrate pipeline run state after restart
 - [x] Implement pipeline continuation after process restart
-- [ ] Implement pipeline continuation after host restart
+- [x] Implement pipeline continuation after host restart
 - [x] Enforce bounded concurrency for pipeline execution
 - [x] Enforce per-step deadline handling
 - [x] Propagate cancellation across step / worker boundaries

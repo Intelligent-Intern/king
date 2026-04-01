@@ -23,6 +23,14 @@ stream_set_blocking($server, true);
 
 $capture = ['events' => []];
 
+function king_orchestrator_remote_peer_persist_capture(array $capture, string $capturePath): void
+{
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+}
+
 $encodeError = static fn(string $message): string => "ERR\t" . base64_encode($message) . "\n";
 $encodeResult = static fn(mixed $value): string => "OK\t" . base64_encode(serialize($value)) . "\n";
 $decodeZval = static function (string $payload): mixed {
@@ -36,6 +44,7 @@ $decodeZval = static function (string $payload): mixed {
 
 echo "READY\n";
 flush();
+king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
 
 while (($client = @stream_socket_accept($server, -1)) !== false) {
     $peer = stream_socket_get_name($client, true);
@@ -74,15 +83,18 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
     } catch (Throwable $e) {
         $event['remote_error'] = 'decode_failure';
         $capture['events'][] = $event;
+        king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
         fwrite($client, $encodeError('failed to decode remote orchestrator payload'));
         fclose($client);
         continue;
     }
 
     $capture['events'][] = &$event;
+    king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
 
     if (!is_array($event['pipeline'])) {
         $event['remote_error'] = 'invalid_pipeline';
+        king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
         fwrite($client, $encodeError('remote peer expected an array pipeline definition'));
         fclose($client);
         unset($event);
@@ -107,6 +119,7 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
 
         if (isset($step['remote_error']) && is_string($step['remote_error'])) {
             $event['remote_error'] = $step['remote_error'];
+            king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
             fwrite($client, $encodeError($step['remote_error']));
             $failed = true;
             break;
@@ -122,6 +135,7 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
                 $elapsedMs = (int) ((hrtime(true) - $startedAt) / 1000000);
                 if ($elapsedMs >= $effectiveBudgetMs) {
                     $event['remote_error'] = 'king_pipeline_orchestrator_run() exceeded the active orchestrator timeout budget.';
+                    king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
                     fwrite($client, $encodeError($event['remote_error']));
                     $failed = true;
                     break 2;
@@ -144,9 +158,11 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
         fwrite($client, $encodeResult($result));
     }
 
+    king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
+
     fclose($client);
     unset($event);
 }
 
-file_put_contents($capturePath, json_encode($capture));
+king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
 fclose($server);

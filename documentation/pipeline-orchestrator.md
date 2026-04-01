@@ -263,7 +263,10 @@ the orchestrator continue that run from the stored initial data, pipeline, and
 execution options. This is run-level continuation, not mid-step checkpointing.
 If the interrupted run had already crossed a remote boundary, the
 `caller_managed` idempotency policy still applies, which means the caller owns
-the decision to replay that run.
+the decision to replay that run. That replay contract is now verified not only
+for controller-process restart, but also for the broader host-loss case where
+the controller and remote peer both disappear and the peer later returns on the
+same persisted host/port route.
 
 ## Logging Configuration
 
