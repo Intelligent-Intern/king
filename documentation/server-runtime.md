@@ -229,6 +229,13 @@ connection.
 That is why the session-aware helper functions are part of the public surface.
 A real server request often needs to do more than return a status code and body.
 
+The response array is also normalized before it reaches the client. Repeated
+header values returned as arrays become repeated response fields. HTTP/1 keeps
+ownership of the final `Content-Length` and `Connection: close` lines for the
+one-shot listener, while HTTP/2 and HTTP/3 drop handler-supplied
+`content-length` and `connection` fields and emit stable lowercase header names
+on wire.
+
 ## Early Hints
 
 Early Hints are provisional HTTP hints sent before the final response is ready.

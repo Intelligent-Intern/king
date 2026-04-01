@@ -114,6 +114,55 @@ function king_server_http1_wire_request_retry(int $port, string $request, int $t
     return (string) $response;
 }
 
+function king_server_http1_wire_parse_response(string $response): array
+{
+    [$head, $body] = array_pad(explode("\r\n\r\n", $response, 2), 2, '');
+    $lines = $head === '' ? [] : explode("\r\n", $head);
+    $statusLine = array_shift($lines) ?? '';
+    $statusParts = explode(' ', $statusLine, 3);
+    $headers = [];
+    $headerPairs = [];
+
+    foreach ($lines as $line) {
+        if ($line === '' || strpos($line, ':') === false) {
+            continue;
+        }
+
+        [$name, $value] = explode(':', $line, 2);
+        $trimmedName = trim($name);
+        $trimmedValue = trim($value);
+        $normalizedName = strtolower($trimmedName);
+
+        $headerPairs[] = [
+            'name' => $trimmedName,
+            'value' => $trimmedValue,
+        ];
+
+        if (!array_key_exists($normalizedName, $headers)) {
+            $headers[$normalizedName] = $trimmedValue;
+            continue;
+        }
+
+        if (is_array($headers[$normalizedName])) {
+            $headers[$normalizedName][] = $trimmedValue;
+            continue;
+        }
+
+        $headers[$normalizedName] = [
+            $headers[$normalizedName],
+            $trimmedValue,
+        ];
+    }
+
+    return [
+        'status_line' => $statusLine,
+        'status' => isset($statusParts[1]) ? (int) $statusParts[1] : 0,
+        'headers' => $headers,
+        'header_pairs' => $headerPairs,
+        'body' => $body,
+    ];
+}
+
 function king_server_http1_wire_connect_retry(int $port, int $timeoutMs = 3000)
 {
     $deadline = microtime(true) + ($timeoutMs / 1000);

@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate server response normalization against real clients.
+- [ ] Validate server-side cancel callbacks under real traffic.
 
 ## Active Executable Items
 
@@ -58,29 +58,32 @@
 10. [x] Validate server request normalization against real requests.
     done when: the on-wire server paths prove stable request-shape normalization across the active HTTP listener/runtime surfaces instead of only local validation contracts.
 
-11. [x] Validate server close / drain / restart behavior.
+11. [x] Validate server response normalization against real clients.
+    done when: real HTTP/1, HTTP/2, and HTTP/3 clients observe the same stable response-shape contract for runtime-owned transport headers, repeated response fields, and normalized header names instead of only local response validation.
+
+12. [x] Validate server close / drain / restart behavior.
     done when: active listener sessions can shut down, drain, and restart under real traffic without leaks, hangs, or half-closed runtime state.
 
 ### 3. Control Plane Distributed Depth
 
-12. [ ] Validate MCP multi-host operation.
+13. [ ] Validate MCP multi-host operation.
     done when: the current real MCP peer contract is proven across actual cross-host topology instead of only same-host TCP host/port peers.
 
-13. [ ] Implement pipeline continuation after host restart.
+14. [ ] Implement pipeline continuation after host restart.
     done when: orchestrator continuation remains honest after the broader host-level loss case instead of only the current controller-process restart proof.
 
-14. [ ] Finalize per-step error classification for orchestrated execution.
+15. [ ] Finalize per-step error classification for orchestrated execution.
     done when: retry, non-retry, validation, remote transport, and backend failures stay distinguishable through the orchestrator surface without collapsing into generic runtime errors.
 
-15. [ ] Validate distributed tool execution across multiple workers.
+16. [ ] Validate distributed tool execution across multiple workers.
     done when: the orchestrator proves stable multi-worker execution, claiming, and result handling beyond the current local/file-worker and single remote-peer depth.
 
 ### 4. Smart-DNS Distributed Recovery
 
-16. [ ] Validate consistency after Smart-DNS split-brain / partial-failure scenarios where publicly claimed.
+17. [ ] Validate consistency after Smart-DNS split-brain / partial-failure scenarios where publicly claimed.
     done when: discovery, routing, and mother-node state converge honestly after conflicting writers, stale peers, or partial topology loss instead of only under the current coherent local slice.
 
-17. [ ] Validate Smart-DNS DNS failure and recovery behavior.
+18. [ ] Validate Smart-DNS DNS failure and recovery behavior.
     done when: DNS-facing failure, timeout, and recovery paths are exercised and mapped cleanly instead of leaving the broader networked recovery contract implicit.
 
 ## Next-Up Clusters After The Top 20
@@ -89,7 +92,7 @@
 - telemetry cleanup, cross-request residue hardening, load bounds, self-metrics, and richer export diagnostics
 - autoscaling decision logic under real load, live drain-before-delete, and automated post-bootstrap registration/readiness
 - broader QUIC lifecycle, stats, resumption, and recovery validation beyond the current HTTP/3 client slices
-- admin API auth/reload/failure depth, server response normalization, and broader real listener shutdown/drain coverage
+- admin API auth/reload/failure depth and broader real listener cancel/early-hints/TLS coverage
 - systematic security-review closure, negative-input expansion, and release-gated hardening across public entry, persistence, transport, and provider paths
 
 ## Notes

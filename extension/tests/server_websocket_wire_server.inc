@@ -58,6 +58,23 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
                 ];
             }
 
+            if ($mode === 'response-normalization') {
+                return [
+                    'status' => 202,
+                    'headers' => [
+                        'Content-Length' => '999',
+                        'Connection' => 'keep-alive',
+                        'Content-Type' => 'text/plain',
+                        'X-Reply-Mode' => 'normalized',
+                        'X-Multi' => [
+                            'alpha',
+                            'beta',
+                        ],
+                    ],
+                    'body' => 'normalized-body',
+                ];
+            }
+
             if ($mode === 'plain') {
                 $upgrade = king_server_upgrade_to_websocket($session, $request['stream_id']);
                 $capture['upgrade_result'] = $upgrade;

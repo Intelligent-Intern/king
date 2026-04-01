@@ -1,6 +1,11 @@
 <?php
 
-function king_http3_server_wire_start_server(string $certFile, string $keyFile, ?int $fixedPort = null): array
+function king_http3_server_wire_start_server(
+    string $certFile,
+    string $keyFile,
+    ?int $fixedPort = null,
+    string $mode = 'basic'
+): array
 {
     $bindHost = 'localhost';
     if ($fixedPort !== null) {
@@ -19,7 +24,7 @@ function king_http3_server_wire_start_server(string $certFile, string $keyFile, 
     $capture = tempnam(sys_get_temp_dir(), 'king-http3-server-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';
     $command = sprintf(
-        '%s -n -d %s -d %s %s %s %d %s %s %s',
+        '%s -n -d %s -d %s %s %s %d %s %s %s %s',
         escapeshellarg(PHP_BINARY),
         escapeshellarg('extension=' . $extensionPath),
         escapeshellarg('king.security_allow_config_override=1'),
@@ -28,7 +33,8 @@ function king_http3_server_wire_start_server(string $certFile, string $keyFile, 
         (int) $port,
         escapeshellarg($certFile),
         escapeshellarg($keyFile),
-        escapeshellarg($bindHost)
+        escapeshellarg($bindHost),
+        escapeshellarg($mode)
     );
 
     $process = proc_open($command, [

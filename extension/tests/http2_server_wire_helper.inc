@@ -1,6 +1,6 @@
 <?php
 
-function king_http2_server_wire_start_server(?int $fixedPort = null): array
+function king_http2_server_wire_start_server(?int $fixedPort = null, string $mode = 'basic'): array
 {
     if ($fixedPort !== null) {
         $port = $fixedPort;
@@ -18,12 +18,13 @@ function king_http2_server_wire_start_server(?int $fixedPort = null): array
     $capture = tempnam(sys_get_temp_dir(), 'king-http2-server-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';
     $command = sprintf(
-        '%s -n -d %s %s %s %d',
+        '%s -n -d %s %s %s %d %s',
         escapeshellarg(PHP_BINARY),
         escapeshellarg('extension=' . $extensionPath),
         escapeshellarg(__DIR__ . '/http2_server_wire_server.inc'),
         escapeshellarg($capture),
-        (int) $port
+        (int) $port,
+        escapeshellarg($mode)
     );
 
     $process = proc_open($command, [
@@ -189,9 +190,30 @@ function king_http2_wire_decode_string(string $buffer, int $offset): array
     return [$value, $consumed + $length];
 }
 
-function king_http2_wire_decode_header_block(string $block): array
+function king_http2_wire_add_header_value(array &$headers, string $name, string $value): void
+{
+    $normalizedName = strtolower($name);
+
+    if (!array_key_exists($normalizedName, $headers)) {
+        $headers[$normalizedName] = $value;
+        return;
+    }
+
+    if (is_array($headers[$normalizedName])) {
+        $headers[$normalizedName][] = $value;
+        return;
+    }
+
+    $headers[$normalizedName] = [
+        $headers[$normalizedName],
+        $value,
+    ];
+}
+
+function king_http2_wire_decode_header_block_detailed(string $block): array
 {
     $headers = [];
+    $pairs = [];
     $offset = 0;
 
     while ($offset < strlen($block)) {
@@ -219,10 +241,22 @@ function king_http2_wire_decode_header_block(string $block): array
             $offset += $consumed;
         }
 
-        $headers[strtolower($name)] = $value;
+        $pairs[] = [
+            'name' => $name,
+            'value' => $value,
+        ];
+        king_http2_wire_add_header_value($headers, $name, $value);
     }
 
-    return $headers;
+    return [
+        'headers' => $headers,
+        'pairs' => $pairs,
+    ];
+}
+
+function king_http2_wire_decode_header_block(string $block): array
+{
+    return king_http2_wire_decode_header_block_detailed($block)['headers'];
 }
 
 function king_http2_wire_frame(int $type, int $flags, int $streamId, string $payload = ''): string
@@ -359,6 +393,7 @@ function king_http2_server_wire_request_retry(int $port, array $request, int $ti
             king_http2_wire_write_all($client, $wire, 'HTTP/2 wire request');
 
             $responseHeaders = [];
+            $responseHeaderPairs = [];
             $responseBody = '';
             $responseStatus = null;
             $sawEndStream = false;
@@ -375,12 +410,15 @@ function king_http2_server_wire_request_retry(int $port, array $request, int $ti
                 }
 
                 if ($type === 0x1) {
-                    $decoded = king_http2_wire_decode_header_block($payload);
-                    foreach ($decoded as $name => $value) {
+                    $decoded = king_http2_wire_decode_header_block_detailed($payload);
+                    foreach ($decoded['pairs'] as $pair) {
+                        $responseHeaderPairs[] = $pair;
+                    }
+                    foreach ($decoded['headers'] as $name => $value) {
                         $responseHeaders[$name] = $value;
                     }
-                    if (isset($decoded[':status'])) {
-                        $responseStatus = (int) $decoded[':status'];
+                    if (isset($decoded['headers'][':status'])) {
+                        $responseStatus = (int) $decoded['headers'][':status'];
                     }
                     if (($flags & 0x1) !== 0) {
                         $sawEndStream = true;
@@ -424,6 +462,7 @@ function king_http2_server_wire_request_retry(int $port, array $request, int $ti
             return [
                 'status' => $responseStatus,
                 'headers' => $responseHeaders,
+                'header_pairs' => $responseHeaderPairs,
                 'body' => $responseBody,
                 'saw_goaway' => $sawGoaway,
                 'peer_closed' => $peerClosed,
