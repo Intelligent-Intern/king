@@ -29,6 +29,21 @@ and it is still not the active backlog. If open work matters, distill it into
 `ISSUES.md` as a small verifiable leaf instead of duplicating it across
 multiple docs.
 
+## 20-Issue Batch Execution Rule
+
+`ISSUES.md` is the only active repo-local execution queue.
+
+Use it with these rules:
+
+- read `CONTRIBUTE.md` before starting or replenishing any `20`-issue batch
+- only work items that are currently open in `ISSUES.md`
+- do not pull new items from `READYNESS_TRACKER.md` into `ISSUES.md` unless the user explicitly asks for a new `20`-issue batch
+- when the current batch is exhausted, stop and wait instead of self-refilling the queue
+- when a leaf closes, update code, tests, docs, and `PROJECT_ASSESSMENT.md` in the same change
+
+The tracker may still be broader, but it is not self-executing.
+Execution starts only from the current `ISSUES.md` batch.
+
 ## Working Standard
 
 King is a native systems project, not a demo app.

@@ -417,6 +417,37 @@ whatever stray files happen to be sitting in the directory. This is
 intentionally a snapshot import contract, not a destructive mirror contract:
 objects listed in the snapshot are restored, but unrelated live objects already
 present in the destination store are not deleted automatically.
+The restore side is now also fail-closed against partial archive corruption.
+If a manifest-listed upsert is missing its payload or `.meta` sidecar, if a
+legacy directory contains a broken payload/metadata pair, or if the manifest
+shape is internally inconsistent, the restore fails before mutating the live
+store instead of importing an early subset and dying later.
+Batch restore now also requires a quiescent runtime. While
+`king_object_store_restore_all_objects()` is replaying a committed snapshot, new
+writes, deletes, and resumable-upload starts fail instead of interleaving with
+the import. Symmetrically, if any live mutation is already in flight anywhere in
+the store, `restore_all_objects()` fails closed before it starts mutating the
+live inventory. The contract is therefore "committed snapshot replay against a
+quiet store", not "best effort merge while traffic is still modifying data."
+
+The same API now also supports explicit incremental backups:
+
+```php
+king_object_store_backup_all_objects(__DIR__ . '/backups/full');
+
+king_object_store_backup_all_objects(__DIR__ . '/backups/incremental-0001', [
+    'mode' => 'incremental',
+    'base_snapshot_path' => __DIR__ . '/backups/full',
+]);
+```
+
+Incremental mode is opt-in on purpose. It does not silently change what
+`backup_all_objects()` means. The emitted snapshot still has a committed
+manifest, but the payload directory now contains only changed or newly-added
+objects, while the manifest carries delete tombstones and the effective current
+inventory fingerprint set. `restore_all_objects()` treats that incremental
+manifest as a patch: restore a full base snapshot first, then apply the
+incremental snapshot to bring the target store forward.
 
 These functions matter because recovery is not complete if only the payload
 returns. Metadata must travel with it, otherwise the restored bytes lose their

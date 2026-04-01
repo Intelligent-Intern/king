@@ -860,6 +860,8 @@ static int king_object_store_require_honest_backend(
 
 const char *king_object_store_object_id_validate(const char *object_id)
 {
+    const unsigned char *cursor;
+
     if (object_id == NULL || object_id[0] == '\0') {
         return "Object ID must be between 1 and 127 bytes.";
     }
@@ -874,6 +876,12 @@ const char *king_object_store_object_id_validate(const char *object_id)
 
     if (strchr(object_id, '/') != NULL || strchr(object_id, '\\') != NULL) {
         return "Object ID must not contain path separator characters.";
+    }
+
+    for (cursor = (const unsigned char *) object_id; *cursor != '\0'; cursor++) {
+        if (*cursor < 0x20 || *cursor == 0x7f) {
+            return "Object ID must not contain control characters.";
+        }
     }
 
     return NULL;
@@ -967,4 +975,3 @@ const char *king_object_store_upload_protocol_to_string(king_object_store_upload
 }
 
 /* --- System lifecycle --- */
-

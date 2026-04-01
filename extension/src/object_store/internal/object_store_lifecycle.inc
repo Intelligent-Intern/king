@@ -10,6 +10,7 @@ int king_object_store_init_system(king_object_store_config_t *config)
 
     king_object_store_upload_sessions_reset();
     king_object_store_runtime_metadata_cache_reset();
+    king_object_store_mutation_barrier_fds_reset();
     king_object_store_config_clear(&king_object_store_runtime.config);
     memset(&king_object_store_runtime, 0, sizeof(king_object_store_runtime));
     ZVAL_UNDEF(&king_object_store_runtime.config.cloud_credentials);
@@ -163,6 +164,7 @@ void king_object_store_shutdown_system(void)
 {
     king_object_store_upload_sessions_reset();
     king_object_store_runtime_metadata_cache_reset();
+    king_object_store_mutation_barrier_fds_reset();
     king_object_store_config_clear(&king_object_store_runtime.config);
     memset(&king_object_store_runtime, 0, sizeof(king_object_store_runtime));
     king_object_store_shutdown_libcurl_runtime();
@@ -171,4 +173,5 @@ void king_object_store_shutdown_system(void)
 void king_object_store_request_shutdown(void)
 {
     king_object_store_upload_sessions_reset();
+    king_object_store_mutation_barrier_fds_reset();
 }

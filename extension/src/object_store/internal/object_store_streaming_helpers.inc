@@ -569,3 +569,32 @@ static int king_object_store_build_lock_path(
     return SUCCESS;
 }
 
+static int king_object_store_build_mutation_barrier_path(
+    char *destination,
+    size_t destination_size
+)
+{
+    if (destination == NULL || destination_size == 0) {
+        return FAILURE;
+    }
+
+    if (king_object_store_runtime.config.storage_root_path[0] != '\0'
+        && king_object_store_ensure_directory_recursive(
+            king_object_store_runtime.config.storage_root_path
+        ) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (snprintf(
+            destination,
+            destination_size,
+            "%s/.king_object_mutation_barrier.lock",
+            king_object_store_runtime.config.storage_root_path[0] != '\0'
+                ? king_object_store_runtime.config.storage_root_path
+                : "/tmp"
+        ) >= (int) destination_size) {
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}

@@ -103,7 +103,7 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_object_store_delete, arginfo_king_object_id)
     PHP_FE(king_object_store_backup_object, arginfo_king_object_store_backup)
     PHP_FE(king_object_store_restore_object, arginfo_king_object_store_restore)
-    PHP_FE(king_object_store_backup_all_objects, arginfo_king_object_store_all_objects_path)
+    PHP_FE(king_object_store_backup_all_objects, arginfo_king_object_store_backup_all_objects)
     PHP_FE(king_object_store_restore_all_objects, arginfo_king_object_store_all_objects_path)
     PHP_FE(king_object_store_list, arginfo_king_no_args)
     PHP_FE(king_object_store_get_stats, arginfo_king_no_args)

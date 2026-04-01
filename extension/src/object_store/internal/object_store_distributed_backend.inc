@@ -382,6 +382,7 @@ static int king_object_store_distributed_read_internal(
             metadata->version = 1;
             metadata->distributed_present = 1;
         } else if (king_object_store_metadata_is_expired_now(metadata)) {
+            fclose(fp);
             return FAILURE;
         }
     }
@@ -505,6 +506,7 @@ static int king_object_store_distributed_read_range_internal(
             object_id,
             "requested range starts past the end of the object."
         );
+        fclose(fp);
         return KING_OBJECT_STORE_RESULT_VALIDATION;
     }
 
@@ -518,10 +520,12 @@ static int king_object_store_distributed_read_range_internal(
             metadata->version = 1;
             metadata->distributed_present = 1;
         } else if (king_object_store_metadata_is_expired_now(metadata)) {
+            fclose(fp);
             return FAILURE;
         }
     } else if (king_object_store_meta_read(object_id, &resolved_metadata) == SUCCESS
         && king_object_store_metadata_is_expired_now(&resolved_metadata)) {
+        fclose(fp);
         return FAILURE;
     }
 

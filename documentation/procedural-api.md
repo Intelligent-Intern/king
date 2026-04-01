@@ -224,8 +224,8 @@ maintenance, and control the in-process CDN cache.
 | `king_object_store_delete()` | Deletes one object. | [Object Store and CDN](./object-store-and-cdn.md) |
 | `king_object_store_backup_object()` | Exports one object plus metadata. | [Object Store and CDN](./object-store-and-cdn.md) |
 | `king_object_store_restore_object()` | Restores one object plus metadata from backup material. | [Object Store and CDN](./object-store-and-cdn.md) |
-| `king_object_store_backup_all_objects()` | Exports the whole object-store inventory. | [Object Store and CDN](./object-store-and-cdn.md) |
-| `king_object_store_restore_all_objects()` | Restores a full object-store backup. | [Object Store and CDN](./object-store-and-cdn.md) |
+| `king_object_store_backup_all_objects()` | Exports a committed full snapshot or an explicit incremental delta snapshot. | [Object Store and CDN](./object-store-and-cdn.md) |
+| `king_object_store_restore_all_objects()` | Restores a committed full snapshot or applies an incremental patch snapshot. | [Object Store and CDN](./object-store-and-cdn.md) |
 | `king_object_store_optimize()` | Runs maintenance and live-summary work. | [Object Store and CDN](./object-store-and-cdn.md) |
 | `king_object_store_cleanup_expired_objects()` | Removes expired objects. | [Object Store and CDN](./object-store-and-cdn.md) |
 | `king_object_store_get_metadata()` | Returns metadata for one object. | [Object Store and CDN](./object-store-and-cdn.md) |

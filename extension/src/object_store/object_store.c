@@ -42,6 +42,9 @@ static HashTable king_object_store_runtime_metadata_cache;
 static bool king_object_store_runtime_metadata_cache_initialized = false;
 static HashTable king_object_store_upload_sessions;
 static bool king_object_store_upload_sessions_initialized = false;
+static HashTable king_object_store_mutation_barrier_fds;
+static bool king_object_store_mutation_barrier_fds_initialized = false;
+static int king_object_store_active_restore_barrier_fd = -1;
 
 typedef struct _king_object_store_upload_session_t {
     char upload_id[65];
@@ -379,8 +382,13 @@ static void king_object_store_upload_session_remove_persisted_state(
     const king_object_store_upload_session_t *session
 );
 static int king_object_store_rehydrate_upload_sessions(char *error, size_t error_size);
+static void king_object_store_release_exclusive_restore_barrier(int *lock_fd);
 static int king_object_store_build_lock_path(
     const char *object_id,
+    char *destination,
+    size_t destination_size
+);
+static int king_object_store_build_mutation_barrier_path(
     char *destination,
     size_t destination_size
 );

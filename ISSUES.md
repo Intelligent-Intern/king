@@ -9,15 +9,18 @@
 
 ## Working Rules
 
+- read `CONTRIBUTE.md` before starting, replenishing, or reshaping any `20`-issue batch
 - keep only open work here
 - every item must be narrow enough to implement and verify inside this repo
 - if a tracker item is still too broad, split it before adding it here
 - when a leaf closes, update code, tests, docs, and `PROJECT_ASSESSMENT.md` in the same change
+- do not pull new items from `READYNESS_TRACKER.md` into this file unless the user explicitly asks for the next `20`-issue batch
+- when the current batch is exhausted, stop and wait instead of refilling it automatically
 - do not shrink a meaningful v1 contract just to make tests, CI, or docs easier; if the intended contract matters, build the missing backend work or ask explicitly before reducing scope
 
 ## Current Next Leaf
 
-- [ ] Implement incremental backups where publicly claimed.
+- [ ] Validate restart rehydration under all persistence modes.
 
 ## Active Executable Items
 
@@ -100,6 +103,7 @@
 
 ## Notes
 
-- The active queue now intentionally carries the next `20` executable leaves instead of a one-item placeholder list.
+- The active queue is administered in explicit `20`-issue batches, not by automatic replenishment from `READYNESS_TRACKER.md`.
+- When the current batch is exhausted, work stops until the next `20`-issue batch is explicitly pulled in.
 - Items still open in `READYNESS_TRACKER.md` but not listed here are either derivative of these leaves, already fenced honestly, or still too broad to be a useful execution item today.
 - If an item is not listed here, it is not the current repo-local priority.

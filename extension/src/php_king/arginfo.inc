@@ -140,6 +140,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_object_store_all_objects_path, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, path, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_object_store_backup_all_objects, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, path, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_optional_object_id, 0, 0, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, object_id, IS_STRING, 1, "null")
 ZEND_END_ARG_INFO()
