@@ -6,6 +6,14 @@
 #define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_INCREMENTAL "incremental_backup"
 #define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_CONSISTENCY "per_object_locked_commit"
 
+#ifndef KING_PATH_MAX
+# if defined(PATH_MAX)
+#  define KING_PATH_MAX PATH_MAX
+# else
+#  define KING_PATH_MAX 1024
+# endif
+#endif
+
 static int king_object_store_is_meta_filename(const char *name)
 {
     size_t name_len;
@@ -66,7 +74,7 @@ static int king_object_store_remove_tree(const char *path)
         }
 
         while ((entry = readdir(dir)) != NULL) {
-            char child_path[1024];
+            char child_path[KING_PATH_MAX];
 
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
                 continue;
@@ -534,11 +542,13 @@ static int king_object_store_snapshot_manifest_parse(
 )
 {
     FILE *fp;
-    char line[640];
+    char *line = NULL;
+    size_t line_capacity = 0;
     int saw_format = 0;
     int saw_kind = 0;
     int saw_consistency = 0;
     char pending_inventory_object_id[128] = {0};
+    int status = FAILURE;
 
     if (manifest_path == NULL || manifest_path[0] == '\0'
         || inventory == NULL || Z_TYPE_P(inventory) != IS_ARRAY
@@ -554,7 +564,7 @@ static int king_object_store_snapshot_manifest_parse(
         return FAILURE;
     }
 
-    while (fgets(line, sizeof(line), fp) != NULL) {
+    while (getline(&line, &line_capacity, fp) != -1) {
         char *value = strchr(line, '=');
         size_t value_len;
 
@@ -571,8 +581,7 @@ static int king_object_store_snapshot_manifest_parse(
 
         if (strcmp(line, "format") == 0) {
             if (strcmp(value, KING_OBJECT_STORE_SNAPSHOT_MANIFEST_FORMAT) != 0) {
-                fclose(fp);
-                return FAILURE;
+                goto cleanup;
             }
             saw_format = 1;
             continue;
@@ -580,8 +589,7 @@ static int king_object_store_snapshot_manifest_parse(
         if (strcmp(line, "kind") == 0) {
             if (strcmp(value, KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_FULL) != 0
                 && strcmp(value, KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_INCREMENTAL) != 0) {
-                fclose(fp);
-                return FAILURE;
+                goto cleanup;
             }
             snprintf(kind_out, kind_out_size, "%s", value);
             saw_kind = 1;
@@ -589,8 +597,7 @@ static int king_object_store_snapshot_manifest_parse(
         }
         if (strcmp(line, "consistency") == 0) {
             if (strcmp(value, KING_OBJECT_STORE_SNAPSHOT_MANIFEST_CONSISTENCY) != 0) {
-                fclose(fp);
-                return FAILURE;
+                goto cleanup;
             }
             saw_consistency = 1;
             continue;
@@ -598,8 +605,7 @@ static int king_object_store_snapshot_manifest_parse(
         if (strcmp(line, "inventory_object_id") == 0) {
             if (pending_inventory_object_id[0] != '\0'
                 || king_object_store_object_id_validate(value) != NULL) {
-                fclose(fp);
-                return FAILURE;
+                goto cleanup;
             }
 
             snprintf(
@@ -618,8 +624,7 @@ static int king_object_store_snapshot_manifest_parse(
                     pending_inventory_object_id,
                     value
                 ) != SUCCESS) {
-                fclose(fp);
-                return FAILURE;
+                goto cleanup;
             }
 
             pending_inventory_object_id[0] = '\0';
@@ -628,33 +633,35 @@ static int king_object_store_snapshot_manifest_parse(
         if (strcmp(line, "object_id") == 0 || strcmp(line, "upsert_object_id") == 0) {
             if (king_object_store_object_id_validate(value) != NULL
                 || king_object_store_snapshot_string_list_push(upserts, value) != SUCCESS) {
-                fclose(fp);
-                return FAILURE;
+                goto cleanup;
             }
             if (strcmp(line, "object_id") == 0
                 && zend_hash_str_find(Z_ARRVAL_P(inventory), value, strlen(value)) == NULL
                 && king_object_store_snapshot_inventory_set(inventory, value, "") != SUCCESS) {
-                fclose(fp);
-                return FAILURE;
+                goto cleanup;
             }
             continue;
         }
         if (strcmp(line, "delete_object_id") == 0) {
             if (king_object_store_object_id_validate(value) != NULL
                 || king_object_store_snapshot_string_list_push(deletes, value) != SUCCESS) {
-                fclose(fp);
-                return FAILURE;
+                goto cleanup;
             }
         }
     }
 
-    fclose(fp);
-
     if (pending_inventory_object_id[0] != '\0') {
-        return FAILURE;
+        goto cleanup;
     }
 
-    return (saw_format && saw_kind && saw_consistency) ? SUCCESS : FAILURE;
+    status = (saw_format && saw_kind && saw_consistency) ? SUCCESS : FAILURE;
+
+cleanup:
+    if (line != NULL) {
+        free(line);
+    }
+    fclose(fp);
+    return status;
 }
 
 static int king_object_store_snapshot_manifest_validate_restore_shape(
