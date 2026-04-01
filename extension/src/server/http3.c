@@ -1590,10 +1590,6 @@ static zend_result king_server_http3_process_events(
                     return FAILURE;
                 }
 
-                if (!king_server_http3_quiche.quiche_h3_event_headers_has_more_frames_fn(event)) {
-                    *request_complete = true;
-                }
-
                 break;
             }
 
