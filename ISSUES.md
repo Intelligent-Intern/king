@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Finalize per-step error classification for orchestrated execution.
+- [ ] Validate distributed tool execution across multiple workers.
 
 ## Active Executable Items
 
@@ -75,7 +75,7 @@
 15. [x] Implement pipeline continuation after host restart.
     done when: orchestrator continuation remains honest after the broader host-level loss case instead of only the current controller-process restart proof.
 
-16. [ ] Finalize per-step error classification for orchestrated execution.
+16. [x] Finalize per-step error classification for orchestrated execution.
     done when: retry, non-retry, validation, remote transport, and backend failures stay distinguishable through the orchestrator surface without collapsing into generic runtime errors.
 
 17. [ ] Validate distributed tool execution across multiple workers.

@@ -1497,7 +1497,8 @@ namespace {
 
     /**
      * Read one persisted pipeline-run snapshot from the active orchestrator
-     * state registry.
+     * state registry, including explicit `error_classification` and per-step
+     * `steps` status snapshots when present.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_get_run(string $run_id): array|false {}

@@ -57,6 +57,19 @@ logging configuration are also persisted so a restarted controller or worker can
 recover the current orchestrator state instead of starting from an empty memory
 image.
 
+Run snapshots now also keep the orchestrator's explicit failure classification
+instead of collapsing everything into one generic error string. When a run
+fails or is cancelled, `king_pipeline_orchestrator_get_run()` preserves whether
+the terminal condition was `validation`, `timeout`, `backend`,
+`remote_transport`, or `cancelled`, whether that classification is step-scoped
+or run-scoped, which backend owned the failure boundary, and which step index
+and tool were implicated when that is known.
+
+The same snapshot also carries a step-by-step status view. That matters because
+operational questions are usually not only "did the run fail?" but also "which
+step failed, which steps already completed, and is the remainder still pending
+or now indeterminate because the failure happened on a remote boundary?"
+
 This is the key reason the orchestrator feels like a control-plane subsystem
 instead of a convenience wrapper. The run is a system object with history.
 
@@ -372,7 +385,10 @@ is intentionally separate from `worker_run_next()` because the file-worker
 backend already has its own claim and recovery path.
 
 `king_pipeline_orchestrator_get_run()` reads one persisted run snapshot by run
-ID.
+ID. The returned snapshot includes the persisted top-level run state plus a
+structured `error_classification` block and per-step `steps` status entries so
+callers can distinguish validation, timeout, backend, remote-transport, and
+cancelled failures without inferring them from exception strings.
 
 `king_pipeline_orchestrator_cancel_run()` requests cancellation for a persisted
 queued run on the file-worker backend.

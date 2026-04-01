@@ -32,6 +32,21 @@ function king_orchestrator_remote_peer_persist_capture(array $capture, string $c
 }
 
 $encodeError = static fn(string $message): string => "ERR\t" . base64_encode($message) . "\n";
+$encodeErrorMeta = static function (
+    string $message,
+    string $category,
+    string $retryDisposition,
+    int $stepIndex = -1,
+    ?string $backend = null
+): string {
+    return "ERRMETA\t" . base64_encode(serialize([
+        'message' => $message,
+        'category' => $category,
+        'retry_disposition' => $retryDisposition,
+        'step_index' => $stepIndex,
+        'backend' => $backend,
+    ])) . "\n";
+};
 $encodeResult = static fn(mixed $value): string => "OK\t" . base64_encode(serialize($value)) . "\n";
 $decodeZval = static function (string $payload): mixed {
     $decoded = base64_decode($payload, true);
@@ -112,15 +127,34 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
     }
 
     $failed = false;
-    foreach ($event['pipeline'] as $step) {
+    foreach ($event['pipeline'] as $stepIndex => $step) {
         if (!is_array($step)) {
             continue;
         }
 
+        if (!empty($step['remote_close'])) {
+            $event['remote_error'] = 'remote_close';
+            $event['failed_step_index'] = $stepIndex;
+            king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
+            fclose($client);
+            $failed = true;
+            break;
+        }
+
         if (isset($step['remote_error']) && is_string($step['remote_error'])) {
             $event['remote_error'] = $step['remote_error'];
+            $event['failed_step_index'] = $stepIndex;
             king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
-            fwrite($client, $encodeError($step['remote_error']));
+            fwrite(
+                $client,
+                $encodeErrorMeta(
+                    $step['remote_error'],
+                    'backend',
+                    'caller_managed_retry',
+                    $stepIndex,
+                    'remote_peer'
+                )
+            );
             $failed = true;
             break;
         }
@@ -135,8 +169,18 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
                 $elapsedMs = (int) ((hrtime(true) - $startedAt) / 1000000);
                 if ($elapsedMs >= $effectiveBudgetMs) {
                     $event['remote_error'] = 'king_pipeline_orchestrator_run() exceeded the active orchestrator timeout budget.';
+                    $event['failed_step_index'] = $stepIndex;
                     king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
-                    fwrite($client, $encodeError($event['remote_error']));
+                    fwrite(
+                        $client,
+                        $encodeErrorMeta(
+                            $event['remote_error'],
+                            'timeout',
+                            'caller_managed_retry',
+                            $stepIndex,
+                            'remote_peer'
+                        )
+                    );
                     $failed = true;
                     break 2;
                 }

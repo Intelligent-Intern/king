@@ -139,7 +139,7 @@ Status note:
 - [x] Enforce per-step deadline handling
 - [x] Propagate cancellation across step / worker boundaries
 - [x] Define and implement retry / idempotency semantics per step
-- [ ] Finalize per-step error classification
+- [x] Finalize per-step error classification
 - [ ] Define and implement rollback / compensation semantics where publicly claimed
 - [ ] Validate distributed tool execution across multiple workers
 - [x] Validate worker failure during active pipeline execution
