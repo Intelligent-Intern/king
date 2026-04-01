@@ -19,7 +19,7 @@ $badIds = [
     "evil\rkind=full",
     "evil\tformat=bad",
     "evil\0format=bad",
-    "evil\fform=bad",
+    "evil\fformat=bad",
     // Edge cases: path traversal + control chars and 127-byte limits
     "../evil\nformat=bad",
     str_repeat('a', 120) . "\n" . 'b',             // total length 122 bytes (120 'a' bytes + 1 newline byte + 1 'b' byte), still long with a control char
