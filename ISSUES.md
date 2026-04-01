@@ -17,7 +17,7 @@
 
 ## Current Next Leaf
 
-- [ ] Implement incremental backups where publicly claimed.
+- [ ] Handle restore from partially corrupted archives.
 
 ## Active Executable Items
 

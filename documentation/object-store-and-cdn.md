@@ -418,6 +418,25 @@ intentionally a snapshot import contract, not a destructive mirror contract:
 objects listed in the snapshot are restored, but unrelated live objects already
 present in the destination store are not deleted automatically.
 
+The same API now also supports explicit incremental backups:
+
+```php
+king_object_store_backup_all_objects(__DIR__ . '/backups/full');
+
+king_object_store_backup_all_objects(__DIR__ . '/backups/incremental-0001', [
+    'mode' => 'incremental',
+    'base_snapshot_path' => __DIR__ . '/backups/full',
+]);
+```
+
+Incremental mode is opt-in on purpose. It does not silently change what
+`backup_all_objects()` means. The emitted snapshot still has a committed
+manifest, but the payload directory now contains only changed or newly-added
+objects, while the manifest carries delete tombstones and the effective current
+inventory fingerprint set. `restore_all_objects()` treats that incremental
+manifest as a patch: restore a full base snapshot first, then apply the
+incremental snapshot to bring the target store forward.
+
 These functions matter because recovery is not complete if only the payload
 returns. Metadata must travel with it, otherwise the restored bytes lose their
 meaning. The restored object must still know what it is, how fresh it is, and

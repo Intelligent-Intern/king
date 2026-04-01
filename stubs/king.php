@@ -785,10 +785,14 @@ namespace {
 
     /**
      * Exports all objects and sidecar metadata from the active object-store.
+     * The default mode is a committed full snapshot. Pass
+     * `['mode' => 'incremental', 'base_snapshot_path' => '/path/to/base']`
+     * to emit a manifest-driven delta backup against an existing committed
+     * snapshot.
      * @return bool
-     * @throws \King\RuntimeException|\King\SystemException
+     * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
      */
-    function king_object_store_backup_all_objects(string $path): bool {}
+    function king_object_store_backup_all_objects(string $path, ?array $options = null): bool {}
 
     /**
      * Imports all object payload/metadata files from a filesystem backup directory.

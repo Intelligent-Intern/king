@@ -2,7 +2,8 @@
 
 #define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_FILENAME ".king_snapshot_manifest"
 #define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_FORMAT "king_object_store_snapshot_v1"
-#define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND "full_backup"
+#define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_FULL "full_backup"
+#define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_INCREMENTAL "incremental_backup"
 #define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_CONSISTENCY "per_object_locked_commit"
 
 static int king_object_store_is_meta_filename(const char *name)
@@ -122,16 +123,289 @@ static int king_object_store_create_unique_directory(
     return mkdtemp(destination) != NULL ? SUCCESS : FAILURE;
 }
 
-static int king_object_store_snapshot_manifest_write(const char *directory, zval *objects)
+static void king_object_store_fill_fallback_metadata(
+    king_object_metadata_t *metadata,
+    const char *object_id,
+    uint64_t content_length,
+    time_t fallback_timestamp
+);
+
+static int king_object_store_snapshot_manifest_fingerprint_is_hex(const char *value)
+{
+    const unsigned char *cursor;
+
+    if (value == NULL || strlen(value) != 64) {
+        return 0;
+    }
+
+    for (cursor = (const unsigned char *) value; *cursor != '\0'; ++cursor) {
+        if (!((*cursor >= '0' && *cursor <= '9')
+                || (*cursor >= 'a' && *cursor <= 'f')
+                || (*cursor >= 'A' && *cursor <= 'F'))) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int king_object_store_snapshot_inventory_set(
+    zval *inventory,
+    const char *object_id,
+    const char *fingerprint
+)
+{
+    zval stored;
+
+    if (inventory == NULL || Z_TYPE_P(inventory) != IS_ARRAY
+        || object_id == NULL || object_id[0] == '\0'
+        || fingerprint == NULL) {
+        return FAILURE;
+    }
+
+    ZVAL_STRING(&stored, fingerprint);
+    return zend_hash_str_update(
+               Z_ARRVAL_P(inventory),
+               object_id,
+               strlen(object_id),
+               &stored
+           ) != NULL
+        ? SUCCESS
+        : FAILURE;
+}
+
+static int king_object_store_snapshot_string_list_push(zval *entries, const char *value)
+{
+    if (entries == NULL || Z_TYPE_P(entries) != IS_ARRAY || value == NULL || value[0] == '\0') {
+        return FAILURE;
+    }
+
+    add_next_index_string(entries, value);
+    return SUCCESS;
+}
+
+static int king_object_store_snapshot_metadata_fingerprint(
+    const king_object_metadata_t *metadata,
+    char output[65]
+)
+{
+    char normalized[1024];
+    int written;
+
+    if (metadata == NULL || output == NULL) {
+        return FAILURE;
+    }
+
+    written = snprintf(
+        normalized,
+        sizeof(normalized),
+        "object_id=%s\n"
+        "content_type=%s\n"
+        "content_encoding=%s\n"
+        "etag=%s\n"
+        "integrity_sha256=%s\n"
+        "content_length=%" PRIu64 "\n"
+        "version=%" PRIu64 "\n"
+        "created_at=%" PRId64 "\n"
+        "modified_at=%" PRId64 "\n"
+        "expires_at=%" PRId64 "\n"
+        "object_type=%d\n"
+        "cache_policy=%d\n"
+        "cache_ttl_seconds=%u\n"
+        "local_fs_present=%u\n"
+        "distributed_present=%u\n"
+        "cloud_s3_present=%u\n"
+        "cloud_gcs_present=%u\n"
+        "cloud_azure_present=%u\n"
+        "is_backed_up=%u\n"
+        "replication_status=%u\n"
+        "is_distributed=%u\n"
+        "distribution_peer_count=%u\n",
+        metadata->object_id,
+        metadata->content_type,
+        metadata->content_encoding,
+        metadata->etag,
+        metadata->integrity_sha256,
+        metadata->content_length,
+        metadata->version,
+        (int64_t) metadata->created_at,
+        (int64_t) metadata->modified_at,
+        (int64_t) metadata->expires_at,
+        (int) metadata->object_type,
+        (int) metadata->cache_policy,
+        (unsigned) metadata->cache_ttl_seconds,
+        (unsigned) metadata->local_fs_present,
+        (unsigned) metadata->distributed_present,
+        (unsigned) metadata->cloud_s3_present,
+        (unsigned) metadata->cloud_gcs_present,
+        (unsigned) metadata->cloud_azure_present,
+        (unsigned) metadata->is_backed_up,
+        (unsigned) metadata->replication_status,
+        (unsigned) metadata->is_distributed,
+        (unsigned) metadata->distribution_peer_count
+    );
+    if (written < 0 || (size_t) written >= sizeof(normalized)) {
+        return FAILURE;
+    }
+
+    king_object_store_compute_sha256_hex(normalized, (size_t) written, output);
+    return SUCCESS;
+}
+
+static int king_object_store_snapshot_capture_object(
+    const char *object_id,
+    const char *destination_directory,
+    const char *base_fingerprint,
+    char fingerprint_out[65],
+    zend_bool *exported_out
+)
+{
+    char destination_path[1024];
+    char destination_meta_path[1024];
+    char lock_error[256];
+    void *data = NULL;
+    size_t data_size = 0;
+    king_object_metadata_t metadata;
+    int mutation_lock_fd = -1;
+    int rc = FAILURE;
+    zend_bool should_export = 0;
+    int metadata_rc;
+
+    if (fingerprint_out != NULL) {
+        fingerprint_out[0] = '\0';
+    }
+    if (exported_out != NULL) {
+        *exported_out = 0;
+    }
+    if (!king_object_store_runtime.initialized
+        || object_id == NULL
+        || king_object_store_object_id_validate(object_id) != NULL) {
+        return FAILURE;
+    }
+    if (destination_directory != NULL && destination_directory[0] != '\0') {
+        if (king_object_store_ensure_directory_recursive(destination_directory) != SUCCESS) {
+            return FAILURE;
+        }
+    }
+
+    if (king_object_store_acquire_object_lock(
+            object_id,
+            &mutation_lock_fd,
+            lock_error,
+            sizeof(lock_error)
+        ) != SUCCESS) {
+        king_object_store_set_backend_runtime_result(
+            "primary",
+            king_object_store_runtime.config.primary_backend,
+            FAILURE,
+            lock_error[0] != '\0'
+                ? lock_error
+                : "Failed to acquire object-store mutation lock for snapshot export."
+        );
+        return FAILURE;
+    }
+
+    memset(&metadata, 0, sizeof(metadata));
+    metadata_rc = king_object_store_backend_read_metadata(object_id, &metadata);
+    if (metadata_rc != SUCCESS) {
+        if (king_object_store_read_object(object_id, &data, &data_size, &metadata) != SUCCESS) {
+            goto cleanup;
+        }
+    }
+
+    if (metadata.object_id[0] == '\0') {
+        if (data != NULL) {
+            king_object_store_fill_fallback_metadata(&metadata, object_id, (uint64_t) data_size, time(NULL));
+        } else {
+            strncpy(metadata.object_id, object_id, sizeof(metadata.object_id) - 1);
+        }
+    }
+    if (metadata.content_length == 0 && data != NULL) {
+        metadata.content_length = (uint64_t) data_size;
+    }
+    if (king_object_store_snapshot_metadata_fingerprint(&metadata, fingerprint_out) != SUCCESS) {
+        goto cleanup;
+    }
+
+    should_export =
+        destination_directory != NULL
+        && destination_directory[0] != '\0'
+        && (base_fingerprint == NULL
+            || base_fingerprint[0] == '\0'
+            || strcmp(base_fingerprint, fingerprint_out) != 0);
+    if (!should_export) {
+        rc = SUCCESS;
+        goto cleanup;
+    }
+
+    if (data == NULL && king_object_store_read_object(object_id, &data, &data_size, &metadata) != SUCCESS) {
+        goto cleanup;
+    }
+    if (metadata.object_id[0] == '\0') {
+        king_object_store_fill_fallback_metadata(&metadata, object_id, (uint64_t) data_size, time(NULL));
+    }
+
+    if (king_object_store_build_path_in_directory(
+            destination_path,
+            sizeof(destination_path),
+            destination_directory,
+            object_id,
+            NULL
+        ) != SUCCESS
+        || king_object_store_build_path_in_directory(
+            destination_meta_path,
+            sizeof(destination_meta_path),
+            destination_directory,
+            object_id,
+            ".meta"
+        ) != SUCCESS) {
+        goto cleanup;
+    }
+
+    if (king_object_store_mkdir_parents(destination_path) != SUCCESS
+        || king_object_store_atomic_write_file(destination_path, data, data_size) != SUCCESS
+        || king_object_store_meta_write_to_path(destination_meta_path, &metadata) != SUCCESS) {
+        unlink(destination_path);
+        unlink(destination_meta_path);
+        goto cleanup;
+    }
+
+    if (exported_out != NULL) {
+        *exported_out = 1;
+    }
+    rc = SUCCESS;
+
+cleanup:
+    if (data != NULL) {
+        pefree(data, 1);
+    }
+    king_object_store_release_object_lock(&mutation_lock_fd);
+    return rc;
+}
+
+static int king_object_store_snapshot_manifest_write(
+    const char *directory,
+    const char *kind,
+    zval *inventory,
+    zval *upserts,
+    zval *deletes
+)
 {
     char manifest_path[1024];
     char temp_path[1024];
     FILE *fp = NULL;
     int temp_fd = -1;
-    size_t object_count = 0;
+    size_t inventory_count = 0;
+    size_t upsert_count = 0;
+    size_t delete_count = 0;
+    zend_string *key;
     zval *entry;
 
-    if (directory == NULL || directory[0] == '\0' || objects == NULL || Z_TYPE_P(objects) != IS_ARRAY) {
+    if (directory == NULL || directory[0] == '\0'
+        || kind == NULL || kind[0] == '\0'
+        || inventory == NULL || Z_TYPE_P(inventory) != IS_ARRAY
+        || upserts == NULL || Z_TYPE_P(upserts) != IS_ARRAY
+        || deletes == NULL || Z_TYPE_P(deletes) != IS_ARRAY) {
         return FAILURE;
     }
 
@@ -162,17 +436,20 @@ static int king_object_store_snapshot_manifest_write(const char *directory, zval
     }
     temp_fd = -1;
 
-    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(objects), entry) {
-        zval *object_id_zv;
-
-        if (Z_TYPE_P(entry) != IS_ARRAY) {
-            continue;
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(inventory), key, entry) {
+        if (key != NULL && Z_TYPE_P(entry) == IS_STRING) {
+            inventory_count++;
         }
-        object_id_zv = zend_hash_str_find(Z_ARRVAL_P(entry), "object_id", sizeof("object_id") - 1);
-        if (object_id_zv == NULL || Z_TYPE_P(object_id_zv) != IS_STRING) {
-            continue;
+    } ZEND_HASH_FOREACH_END();
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(upserts), entry) {
+        if (Z_TYPE_P(entry) == IS_STRING) {
+            upsert_count++;
         }
-        object_count++;
+    } ZEND_HASH_FOREACH_END();
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(deletes), entry) {
+        if (Z_TYPE_P(entry) == IS_STRING) {
+            delete_count++;
+        }
     } ZEND_HASH_FOREACH_END();
 
     fprintf(
@@ -180,25 +457,45 @@ static int king_object_store_snapshot_manifest_write(const char *directory, zval
         "format=%s\n"
         "kind=%s\n"
         "consistency=%s\n"
-        "object_count=%zu\n",
+        "inventory_count=%zu\n"
+        "upsert_count=%zu\n"
+        "delete_count=%zu\n",
         KING_OBJECT_STORE_SNAPSHOT_MANIFEST_FORMAT,
-        KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND,
+        kind,
         KING_OBJECT_STORE_SNAPSHOT_MANIFEST_CONSISTENCY,
-        object_count
+        inventory_count,
+        upsert_count,
+        delete_count
     );
 
-    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(objects), entry) {
-        zval *object_id_zv;
-
-        if (Z_TYPE_P(entry) != IS_ARRAY) {
-            continue;
-        }
-        object_id_zv = zend_hash_str_find(Z_ARRVAL_P(entry), "object_id", sizeof("object_id") - 1);
-        if (object_id_zv == NULL || Z_TYPE_P(object_id_zv) != IS_STRING) {
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(inventory), key, entry) {
+        if (key == NULL || Z_TYPE_P(entry) != IS_STRING) {
             continue;
         }
 
-        fprintf(fp, "object_id=%s\n", Z_STRVAL_P(object_id_zv));
+        fprintf(
+            fp,
+            "inventory_object_id=%s\n"
+            "inventory_fingerprint=%s\n",
+            ZSTR_VAL(key),
+            Z_STRVAL_P(entry)
+        );
+    } ZEND_HASH_FOREACH_END();
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(upserts), entry) {
+        if (Z_TYPE_P(entry) != IS_STRING) {
+            continue;
+        }
+
+        fprintf(fp, "upsert_object_id=%s\n", Z_STRVAL_P(entry));
+    } ZEND_HASH_FOREACH_END();
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(deletes), entry) {
+        if (Z_TYPE_P(entry) != IS_STRING) {
+            continue;
+        }
+
+        fprintf(fp, "delete_object_id=%s\n", Z_STRVAL_P(entry));
     } ZEND_HASH_FOREACH_END();
 
     if (fclose(fp) != 0) {
@@ -214,9 +511,13 @@ static int king_object_store_snapshot_manifest_write(const char *directory, zval
     return SUCCESS;
 }
 
-static int king_object_store_restore_all_objects_from_manifest(
-    const char *source_directory,
-    const char *manifest_path
+static int king_object_store_snapshot_manifest_parse(
+    const char *manifest_path,
+    zval *inventory,
+    zval *upserts,
+    zval *deletes,
+    char *kind_out,
+    size_t kind_out_size
 )
 {
     FILE *fp;
@@ -224,12 +525,17 @@ static int king_object_store_restore_all_objects_from_manifest(
     int saw_format = 0;
     int saw_kind = 0;
     int saw_consistency = 0;
+    char pending_inventory_object_id[128] = {0};
 
-    if (source_directory == NULL || source_directory[0] == '\0'
-        || manifest_path == NULL || manifest_path[0] == '\0') {
+    if (manifest_path == NULL || manifest_path[0] == '\0'
+        || inventory == NULL || Z_TYPE_P(inventory) != IS_ARRAY
+        || upserts == NULL || Z_TYPE_P(upserts) != IS_ARRAY
+        || deletes == NULL || Z_TYPE_P(deletes) != IS_ARRAY
+        || kind_out == NULL || kind_out_size == 0) {
         return FAILURE;
     }
 
+    kind_out[0] = '\0';
     fp = fopen(manifest_path, "rb");
     if (fp == NULL) {
         return FAILURE;
@@ -259,10 +565,12 @@ static int king_object_store_restore_all_objects_from_manifest(
             continue;
         }
         if (strcmp(line, "kind") == 0) {
-            if (strcmp(value, KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND) != 0) {
+            if (strcmp(value, KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_FULL) != 0
+                && strcmp(value, KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_INCREMENTAL) != 0) {
                 fclose(fp);
                 return FAILURE;
             }
+            snprintf(kind_out, kind_out_size, "%s", value);
             saw_kind = 1;
             continue;
         }
@@ -274,22 +582,135 @@ static int king_object_store_restore_all_objects_from_manifest(
             saw_consistency = 1;
             continue;
         }
-        if (strcmp(line, "object_id") != 0) {
+        if (strcmp(line, "inventory_object_id") == 0) {
+            if (pending_inventory_object_id[0] != '\0'
+                || king_object_store_object_id_validate(value) != NULL) {
+                fclose(fp);
+                return FAILURE;
+            }
+
+            snprintf(
+                pending_inventory_object_id,
+                sizeof(pending_inventory_object_id),
+                "%s",
+                value
+            );
             continue;
         }
-        if (king_object_store_object_id_validate(value) != NULL) {
-            fclose(fp);
-            return FAILURE;
+        if (strcmp(line, "inventory_fingerprint") == 0) {
+            if (pending_inventory_object_id[0] == '\0'
+                || !king_object_store_snapshot_manifest_fingerprint_is_hex(value)
+                || king_object_store_snapshot_inventory_set(
+                    inventory,
+                    pending_inventory_object_id,
+                    value
+                ) != SUCCESS) {
+                fclose(fp);
+                return FAILURE;
+            }
+
+            pending_inventory_object_id[0] = '\0';
+            continue;
         }
-        if (king_object_store_restore_object(value, source_directory) != SUCCESS) {
-            fclose(fp);
-            return FAILURE;
+        if (strcmp(line, "object_id") == 0 || strcmp(line, "upsert_object_id") == 0) {
+            if (king_object_store_object_id_validate(value) != NULL
+                || king_object_store_snapshot_string_list_push(upserts, value) != SUCCESS) {
+                fclose(fp);
+                return FAILURE;
+            }
+            if (strcmp(line, "object_id") == 0
+                && zend_hash_str_find(Z_ARRVAL_P(inventory), value, strlen(value)) == NULL
+                && king_object_store_snapshot_inventory_set(inventory, value, "") != SUCCESS) {
+                fclose(fp);
+                return FAILURE;
+            }
+            continue;
+        }
+        if (strcmp(line, "delete_object_id") == 0) {
+            if (king_object_store_object_id_validate(value) != NULL
+                || king_object_store_snapshot_string_list_push(deletes, value) != SUCCESS) {
+                fclose(fp);
+                return FAILURE;
+            }
         }
     }
 
     fclose(fp);
 
+    if (pending_inventory_object_id[0] != '\0') {
+        return FAILURE;
+    }
+
     return (saw_format && saw_kind && saw_consistency) ? SUCCESS : FAILURE;
+}
+
+static int king_object_store_restore_all_objects_from_manifest(
+    const char *source_directory,
+    const char *manifest_path
+)
+{
+    zval inventory;
+    zval upserts;
+    zval deletes;
+    zval *entry;
+    char kind[32];
+
+    if (source_directory == NULL || source_directory[0] == '\0'
+        || manifest_path == NULL || manifest_path[0] == '\0') {
+        return FAILURE;
+    }
+
+    array_init(&inventory);
+    array_init(&upserts);
+    array_init(&deletes);
+
+    if (king_object_store_snapshot_manifest_parse(
+            manifest_path,
+            &inventory,
+            &upserts,
+            &deletes,
+            kind,
+            sizeof(kind)
+        ) != SUCCESS) {
+        zval_ptr_dtor(&inventory);
+        zval_ptr_dtor(&upserts);
+        zval_ptr_dtor(&deletes);
+        return FAILURE;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL(upserts), entry) {
+        if (Z_TYPE_P(entry) != IS_STRING) {
+            continue;
+        }
+        if (king_object_store_restore_object(Z_STRVAL_P(entry), source_directory) != SUCCESS) {
+            zval_ptr_dtor(&inventory);
+            zval_ptr_dtor(&upserts);
+            zval_ptr_dtor(&deletes);
+            return FAILURE;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    if (strcmp(kind, KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_INCREMENTAL) == 0) {
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL(deletes), entry) {
+            int remove_rc;
+
+            if (Z_TYPE_P(entry) != IS_STRING) {
+                continue;
+            }
+            remove_rc = king_object_store_remove_object(Z_STRVAL_P(entry));
+            if (remove_rc != SUCCESS && remove_rc != KING_OBJECT_STORE_RESULT_MISS) {
+                zval_ptr_dtor(&inventory);
+                zval_ptr_dtor(&upserts);
+                zval_ptr_dtor(&deletes);
+                return FAILURE;
+            }
+        } ZEND_HASH_FOREACH_END();
+    }
+
+    zval_ptr_dtor(&inventory);
+    zval_ptr_dtor(&upserts);
+    zval_ptr_dtor(&deletes);
+    return SUCCESS;
 }
 
 static int king_object_store_commit_snapshot_directory(
@@ -567,14 +988,7 @@ static int king_object_store_apply_local_fs_counters_for_rewrite(
 
 static int king_object_store_export_object(const char *object_id, const char *destination_directory)
 {
-    char destination_path[1024];
-    char destination_meta_path[1024];
-    char lock_error[256];
-    void *data = NULL;
-    size_t data_size = 0;
-    king_object_metadata_t metadata;
-    int mutation_lock_fd = -1;
-    int rc = FAILURE;
+    char fingerprint[65];
 
     if (!king_object_store_runtime.initialized) {
         return FAILURE;
@@ -599,57 +1013,13 @@ static int king_object_store_export_object(const char *object_id, const char *de
         return FAILURE;
     }
 
-    if (king_object_store_acquire_object_lock(
-            object_id,
-            &mutation_lock_fd,
-            lock_error,
-            sizeof(lock_error)
-        ) != SUCCESS) {
-        king_object_store_set_backend_runtime_result(
-            "primary",
-            king_object_store_runtime.config.primary_backend,
-            FAILURE,
-            lock_error[0] != '\0' ? lock_error : "Failed to acquire object-store mutation lock for export."
-        );
-        return FAILURE;
-    }
-
-    if (king_object_store_read_object(object_id, &data, &data_size, &metadata) != SUCCESS) {
-        goto cleanup;
-    }
-
-    if (metadata.object_id[0] == '\0') {
-        king_object_store_fill_fallback_metadata(&metadata, object_id, (uint64_t) data_size, time(NULL));
-    }
-
-    if (king_object_store_build_path_in_directory(destination_path, sizeof(destination_path), destination_directory, object_id, NULL) != SUCCESS
-        || king_object_store_build_path_in_directory(
-            destination_meta_path,
-            sizeof(destination_meta_path),
-            destination_directory,
-            object_id,
-            ".meta"
-        ) != SUCCESS) {
-        goto cleanup;
-    }
-
-    if (king_object_store_mkdir_parents(destination_path) != SUCCESS
-        || king_object_store_atomic_write_file(destination_path, data, data_size) != SUCCESS
-        || king_object_store_meta_write_to_path(destination_meta_path, &metadata) != SUCCESS) {
-        unlink(destination_path);
-        unlink(destination_meta_path);
-        goto cleanup;
-    }
-
-    rc = SUCCESS;
-
-cleanup:
-    if (data != NULL) {
-        pefree(data, 1);
-    }
-    king_object_store_release_object_lock(&mutation_lock_fd);
-
-    return rc;
+    return king_object_store_snapshot_capture_object(
+        object_id,
+        destination_directory,
+        NULL,
+        fingerprint,
+        NULL
+    );
 }
 
 static int king_object_store_import_object(const char *object_id, const char *source_directory)
@@ -764,11 +1134,22 @@ int king_object_store_restore_object(const char *object_id, const char *source_p
     return king_object_store_import_object(object_id, source_path);
 }
 
-int king_object_store_backup_all_objects(const char *destination_directory)
+int king_object_store_backup_all_objects(
+    const char *destination_directory,
+    zend_bool incremental,
+    const char *base_snapshot_path
+)
 {
     zval objects;
+    zval inventory;
+    zval upserts;
+    zval deletes;
+    zval base_inventory;
     zval *entry;
     char staging_directory[1024];
+    char base_manifest_path[1024];
+    char snapshot_kind[32];
+    struct stat base_manifest_stat;
     int rc = FAILURE;
 
     if (!king_object_store_runtime.initialized || destination_directory == NULL || destination_directory[0] == '\0') {
@@ -782,6 +1163,24 @@ int king_object_store_backup_all_objects(const char *destination_directory)
     }
     if (king_object_store_directory_is_within_storage_root(destination_directory, 1) != SUCCESS) {
         return FAILURE;
+    }
+    if (incremental) {
+        if (base_snapshot_path == NULL || base_snapshot_path[0] == '\0') {
+            return FAILURE;
+        }
+        if (king_object_store_directory_is_within_storage_root(base_snapshot_path, 0) != SUCCESS) {
+            return FAILURE;
+        }
+        if (king_object_store_build_snapshot_manifest_path(
+                base_manifest_path,
+                sizeof(base_manifest_path),
+                base_snapshot_path
+            ) != SUCCESS) {
+            return FAILURE;
+        }
+        if (stat(base_manifest_path, &base_manifest_stat) != 0 || !S_ISREG(base_manifest_stat.st_mode)) {
+            return FAILURE;
+        }
     }
     if (king_object_store_create_unique_directory(
             destination_directory,
@@ -797,14 +1196,35 @@ int king_object_store_backup_all_objects(const char *destination_directory)
     }
 
     array_init(&objects);
+    array_init(&inventory);
+    array_init(&upserts);
+    array_init(&deletes);
+    array_init(&base_inventory);
+
+    snapshot_kind[0] = '\0';
     if (king_object_store_list_object(&objects) != SUCCESS) {
-        zval_ptr_dtor(&objects);
-        king_object_store_remove_tree(staging_directory);
-        return FAILURE;
+        goto cleanup;
     }
+    if (incremental
+        && king_object_store_snapshot_manifest_parse(
+            base_manifest_path,
+            &base_inventory,
+            &upserts,
+            &deletes,
+            snapshot_kind,
+            sizeof(snapshot_kind)
+        ) != SUCCESS) {
+        goto cleanup;
+    }
+    zend_hash_clean(Z_ARRVAL(upserts));
+    zend_hash_clean(Z_ARRVAL(deletes));
 
     ZEND_HASH_FOREACH_VAL(Z_ARRVAL(objects), entry) {
         zval *object_id_zv;
+        zval *base_fingerprint_zv;
+        const char *base_fingerprint = NULL;
+        char fingerprint[65];
+        zend_bool exported = 0;
 
         if (Z_TYPE_P(entry) != IS_ARRAY) {
             continue;
@@ -814,21 +1234,78 @@ int king_object_store_backup_all_objects(const char *destination_directory)
             continue;
         }
 
-        if (king_object_store_backup_object(Z_STRVAL_P(object_id_zv), staging_directory) != SUCCESS) {
-            zval_ptr_dtor(&objects);
-            king_object_store_remove_tree(staging_directory);
-            return FAILURE;
+        if (incremental) {
+            base_fingerprint_zv = zend_hash_find(
+                Z_ARRVAL(base_inventory),
+                Z_STR_P(object_id_zv)
+            );
+            if (base_fingerprint_zv != NULL && Z_TYPE_P(base_fingerprint_zv) == IS_STRING) {
+                base_fingerprint = Z_STRVAL_P(base_fingerprint_zv);
+            }
+        }
+
+        if (king_object_store_snapshot_capture_object(
+                Z_STRVAL_P(object_id_zv),
+                staging_directory,
+                base_fingerprint,
+                fingerprint,
+                &exported
+            ) != SUCCESS
+            || king_object_store_snapshot_inventory_set(
+                &inventory,
+                Z_STRVAL_P(object_id_zv),
+                fingerprint
+            ) != SUCCESS) {
+            goto cleanup;
+        }
+        if (exported
+            && king_object_store_snapshot_string_list_push(
+                &upserts,
+                Z_STRVAL_P(object_id_zv)
+            ) != SUCCESS) {
+            goto cleanup;
         }
     } ZEND_HASH_FOREACH_END();
 
-    if (king_object_store_snapshot_manifest_write(staging_directory, &objects) != SUCCESS) {
-        zval_ptr_dtor(&objects);
-        king_object_store_remove_tree(staging_directory);
-        return FAILURE;
+    if (incremental) {
+        zend_string *base_object_id;
+
+        ZEND_HASH_FOREACH_STR_KEY(Z_ARRVAL(base_inventory), base_object_id) {
+            if (base_object_id == NULL) {
+                continue;
+            }
+            if (zend_hash_exists(Z_ARRVAL(inventory), base_object_id)) {
+                continue;
+            }
+            if (king_object_store_snapshot_string_list_push(
+                    &deletes,
+                    ZSTR_VAL(base_object_id)
+                ) != SUCCESS) {
+                goto cleanup;
+            }
+        } ZEND_HASH_FOREACH_END();
     }
 
-    zval_ptr_dtor(&objects);
+    if (king_object_store_snapshot_manifest_write(
+            staging_directory,
+            incremental
+                ? KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_INCREMENTAL
+                : KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_FULL,
+            &inventory,
+            &upserts,
+            &deletes
+        ) != SUCCESS) {
+        goto cleanup;
+    }
+
     rc = king_object_store_commit_snapshot_directory(staging_directory, destination_directory);
+
+cleanup:
+    zval_ptr_dtor(&objects);
+    zval_ptr_dtor(&inventory);
+    zval_ptr_dtor(&upserts);
+    zval_ptr_dtor(&deletes);
+    zval_ptr_dtor(&base_inventory);
     if (rc != SUCCESS) {
         king_object_store_remove_tree(staging_directory);
     }
