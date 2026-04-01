@@ -192,6 +192,10 @@ static int king_object_store_simulated_backend_write(const char *subdir, const c
 static int king_object_store_simulated_backend_read(const char *subdir, const char *object_id, void **data, size_t *data_size)
 {
     char file_path[2048];
+    int fd;
+    FILE *fp = NULL;
+    struct stat st;
+    ssize_t bytes_read;
     if (king_object_store_runtime.config.storage_root_path[0] == '\0') {
         return FAILURE;
     }
@@ -200,26 +204,39 @@ static int king_object_store_simulated_backend_read(const char *subdir, const ch
         return FAILURE;
     }
 
-    struct stat st;
-    if (stat(file_path, &st) != 0 || !S_ISREG(st.st_mode)) {
+#ifdef O_CLOEXEC
+    fd = open(file_path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+#else
+    fd = open(file_path, O_RDONLY | O_NOFOLLOW);
+#endif
+    if (fd < 0) {
+        return FAILURE;
+    }
+
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+        close(fd);
         return FAILURE;
     }
 
     *data_size = st.st_size;
     *data = pemalloc(*data_size, 1);
     if (*data == NULL) {
+        close(fd);
         *data_size = 0;
         return FAILURE;
     }
 
-    FILE *fp = fopen(file_path, "rb");
+    fp = fdopen(fd, "rb");
     if (!fp) {
+        close(fd);
         pefree(*data, 1);
         *data = NULL;
         *data_size = 0;
         return FAILURE;
     }
-    if (fread(*data, 1, *data_size, fp) != *data_size) {
+
+    bytes_read = fread(*data, 1, *data_size, fp);
+    if ((size_t) bytes_read != *data_size) {
         fclose(fp);
         pefree(*data, 1);
         *data = NULL;
@@ -454,4 +471,3 @@ static void king_object_store_list_entry_from_metadata(
     add_assoc_long(entry, "size_bytes", (zend_long) size_bytes);
     add_assoc_long(entry, "stored_at", (zend_long) stored_at);
 }
-
