@@ -20,8 +20,6 @@ function getVendorChunkName(id: string) {
       return chunkName
     }
   }
-
-  return undefined
 }
 
 // https://vitejs.dev/config/
