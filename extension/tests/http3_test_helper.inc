@@ -498,6 +498,109 @@ function king_http3_failure_peer_binary(): string
     return $binary;
 }
 
+function king_http3_delayed_body_client_binary(): string
+{
+    $root = dirname(dirname(__DIR__));
+    $template = __DIR__ . '/http3_delayed_body_client.rs';
+    $manifest = $root . '/quiche/apps/Cargo.toml';
+    $source = $root . '/quiche/apps/src/bin/king-http3-delayed-body-client.rs';
+    $binary = $root . '/quiche/target/release/king-http3-delayed-body-client';
+
+    if (trim((string) shell_exec('command -v cargo')) === '') {
+        throw new RuntimeException('cargo is required to build the HTTP/3 delayed body client helper');
+    }
+
+    if (!is_file($template)) {
+        throw new RuntimeException('missing tracked HTTP/3 delayed body client template');
+    }
+
+    $templateContents = file_get_contents($template);
+    if (!is_string($templateContents) || $templateContents === '') {
+        throw new RuntimeException('failed to read tracked HTTP/3 delayed body client template');
+    }
+
+    $currentSource = is_file($source) ? file_get_contents($source) : false;
+    if (!is_string($currentSource) || $currentSource !== $templateContents) {
+        if (file_put_contents($source, $templateContents) !== strlen($templateContents)) {
+            throw new RuntimeException('failed to synchronize tracked HTTP/3 delayed body client source');
+        }
+    }
+
+    if (is_file($binary) && filemtime($binary) >= max(filemtime($source), filemtime($template))) {
+        return $binary;
+    }
+
+    $command = sprintf(
+        'cargo build --manifest-path %s --release --locked --bin king-http3-delayed-body-client 2>&1',
+        escapeshellarg($manifest)
+    );
+
+    exec($command, $output, $exitCode);
+    if ($exitCode !== 0 || !is_file($binary)) {
+        throw new RuntimeException(
+            "failed to build HTTP/3 delayed body client helper:\n" . implode("\n", $output)
+        );
+    }
+
+    return $binary;
+}
+
+function king_http3_send_delayed_body_request(string $url, string $body, int $delayMs = 250): array
+{
+    $binary = king_http3_delayed_body_client_binary();
+    $command = [$binary, $url, (string) $delayMs, $body];
+    $process = proc_open($command, [
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ], $pipes);
+
+    if (!is_resource($process)) {
+        throw new RuntimeException('failed to launch delayed HTTP/3 body client helper');
+    }
+
+    $stdout = stream_get_contents($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]);
+
+    foreach ($pipes as $pipe) {
+        fclose($pipe);
+    }
+
+    $exitCode = proc_close($process);
+    if ($exitCode !== 0) {
+        throw new RuntimeException(
+            "delayed HTTP/3 body client helper failed:\n" . trim($stdout . "\n" . $stderr)
+        );
+    }
+
+    $result = [
+        'status' => 0,
+        'body' => '',
+        'early_response' => false,
+    ];
+
+    foreach (preg_split('/\r?\n/', trim($stdout)) as $line) {
+        if (!is_string($line) || $line === '') {
+            continue;
+        }
+
+        if (strncmp($line, 'STATUS ', 7) === 0) {
+            $result['status'] = (int) substr($line, 7);
+            continue;
+        }
+
+        if (strncmp($line, 'BODY ', 5) === 0) {
+            $result['body'] = substr($line, 5);
+            continue;
+        }
+
+        if (strncmp($line, 'EARLY_RESPONSE ', 15) === 0) {
+            $result['early_response'] = substr($line, 15) === '1';
+        }
+    }
+
+    return $result;
+}
+
 function king_http3_start_failure_peer(
     string $mode,
     string $certFile,
