@@ -47,18 +47,8 @@ static int king_object_store_build_snapshot_manifest_path(
 
 static int king_object_store_remove_tree(const char *path)
 {
-    struct stat st;
-
     if (path == NULL || path[0] == '\0') {
         return FAILURE;
-    }
-
-    if (lstat(path, &st) != 0) {
-        return errno == ENOENT ? SUCCESS : FAILURE;
-    }
-
-    if (!S_ISDIR(st.st_mode)) {
-        return unlink(path) == 0 ? SUCCESS : FAILURE;
     }
 
     {
@@ -66,6 +56,12 @@ static int king_object_store_remove_tree(const char *path)
         struct dirent *entry;
 
         if (dir == NULL) {
+            if (errno == ENOENT) {
+                return SUCCESS;
+            }
+            if (errno == ENOTDIR) {
+                return unlink(path) == 0 ? SUCCESS : FAILURE;
+            }
             return FAILURE;
         }
 
@@ -999,7 +995,6 @@ static int king_object_store_commit_snapshot_directory(
     const char *destination_directory
 )
 {
-    struct stat st;
     char previous_directory[1024];
     zend_bool had_existing_destination = 0;
 
@@ -1010,25 +1005,28 @@ static int king_object_store_commit_snapshot_directory(
 
     previous_directory[0] = '\0';
 
-    if (stat(destination_directory, &st) == 0) {
-        if (!S_ISDIR(st.st_mode)) {
+    if (king_object_store_create_unique_directory(
+            destination_directory,
+            "previous",
+            previous_directory,
+            sizeof(previous_directory)
+        ) != SUCCESS) {
+        return FAILURE;
+    }
+    if (rmdir(previous_directory) != 0) {
+        king_object_store_remove_tree(previous_directory);
+        return FAILURE;
+    }
+
+    if (rename(destination_directory, previous_directory) == 0) {
+        DIR *moved_directory = opendir(previous_directory);
+
+        if (moved_directory == NULL) {
+            (void) rename(previous_directory, destination_directory);
             return FAILURE;
         }
-        if (king_object_store_create_unique_directory(
-                destination_directory,
-                "previous",
-                previous_directory,
-                sizeof(previous_directory)
-            ) != SUCCESS) {
-            return FAILURE;
-        }
-        if (rmdir(previous_directory) != 0) {
-            king_object_store_remove_tree(previous_directory);
-            return FAILURE;
-        }
-        if (rename(destination_directory, previous_directory) != 0) {
-            return FAILURE;
-        }
+
+        closedir(moved_directory);
         had_existing_destination = 1;
     } else if (errno != ENOENT) {
         return FAILURE;
