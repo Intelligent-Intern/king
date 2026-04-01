@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
-function getVendorChunkName(id: string) {
+function getVendorChunkName(id: string): string | undefined {
   const groups: Array<[string, string[]]> = [
     ['vue-vendor', ['vue', 'vue-router', 'pinia']],
     ['ui-vendor', ['@vueuse/core', '@vueuse/components']],
@@ -11,15 +11,25 @@ function getVendorChunkName(id: string) {
     ['utils-vendor', ['date-fns', 'uuid', 'crypto-js', 'file-saver']],
   ]
 
-  if (!id.includes('node_modules/')) {
+  const nmIndex = id.indexOf('node_modules/')
+  if (nmIndex === -1) {
     return undefined
   }
 
+  const modulePath = id.slice(nmIndex)
+
   for (const [chunkName, packages] of groups) {
-    if (packages.some((pkg) => id.includes(`/node_modules/${pkg}/`) || id.includes(`/node_modules/${pkg}.`))) {
+    if (
+      packages.some((pkg) => {
+        const prefix = `node_modules/${pkg}`
+        return modulePath.startsWith(`${prefix}/`) || modulePath.startsWith(`${prefix}.`)
+      })
+    ) {
       return chunkName
     }
   }
+
+  return undefined
 }
 
 // https://vitejs.dev/config/
