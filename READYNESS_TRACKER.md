@@ -117,7 +117,7 @@ Status note:
 - [x] Finalize MCP error mapping for transport failures
 - [x] Finalize MCP error mapping for backend failures
 - [x] Validate MCP multi-process operation
-- [ ] Validate MCP multi-host operation
+- [x] Validate MCP multi-host operation
 - [x] Enforce MCP concurrency and bounded-concurrency guarantees
 - [x] Enforce MCP deadline propagation
 - [x] Validate MCP upload/download under large payloads

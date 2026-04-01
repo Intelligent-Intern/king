@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate MCP multi-host operation.
+- [ ] Implement pipeline continuation after host restart.
 
 ## Active Executable Items
 
@@ -69,7 +69,7 @@
 
 ### 3. Control Plane Distributed Depth
 
-14. [ ] Validate MCP multi-host operation.
+14. [x] Validate MCP multi-host operation.
     done when: the current real MCP peer contract is proven across actual cross-host topology instead of only same-host TCP host/port peers.
 
 15. [ ] Implement pipeline continuation after host restart.

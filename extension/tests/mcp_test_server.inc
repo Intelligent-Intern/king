@@ -273,6 +273,8 @@ while (!$shouldStop) {
     $capture['connections'][] = [
         'id' => $connectionId,
         'command_count' => 0,
+        'peer_name' => stream_socket_get_name($client, true) ?: null,
+        'local_name' => stream_socket_get_name($client, false) ?: null,
     ];
 
     while (($line = stream_get_line($client, KING_MCP_TEST_MAX_LINE_BYTES, "\n")) !== false) {
