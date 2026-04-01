@@ -6,6 +6,14 @@
 #define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_INCREMENTAL "incremental_backup"
 #define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_CONSISTENCY "per_object_locked_commit"
 
+#ifndef KING_PATH_MAX
+# if defined(PATH_MAX)
+#  define KING_PATH_MAX PATH_MAX
+# else
+#  define KING_PATH_MAX 1024
+# endif
+#endif
+
 static int king_object_store_is_meta_filename(const char *name)
 {
     size_t name_len;
@@ -66,7 +74,7 @@ static int king_object_store_remove_tree(const char *path)
         }
 
         while ((entry = readdir(dir)) != NULL) {
-            char child_path[1024];
+            char child_path[KING_PATH_MAX];
 
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
                 continue;
@@ -534,7 +542,8 @@ static int king_object_store_snapshot_manifest_parse(
 )
 {
     FILE *fp;
-    char line[640];
+    char *line = NULL;
+    size_t line_capacity = 0;
     int saw_format = 0;
     int saw_kind = 0;
     int saw_consistency = 0;
@@ -554,7 +563,7 @@ static int king_object_store_snapshot_manifest_parse(
         return FAILURE;
     }
 
-    while (fgets(line, sizeof(line), fp) != NULL) {
+    while (getline(&line, &line_capacity, fp) != -1) {
         char *value = strchr(line, '=');
         size_t value_len;
 
@@ -646,6 +655,10 @@ static int king_object_store_snapshot_manifest_parse(
                 return FAILURE;
             }
         }
+    }
+
+    if (line != NULL) {
+        free(line);
     }
 
     fclose(fp);
