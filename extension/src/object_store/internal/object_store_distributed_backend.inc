@@ -357,7 +357,7 @@ static int king_object_store_distributed_read_internal(
         return FAILURE;
     }
 
-    if (stat(file_path, &st) != 0) {
+    if (king_object_store_open_regular_file_stream_readonly(file_path, &fp, &st) != SUCCESS) {
         if (errno == ENOENT) {
             return KING_OBJECT_STORE_RESULT_MISS;
         }
@@ -384,19 +384,6 @@ static int king_object_store_distributed_read_internal(
         } else if (king_object_store_metadata_is_expired_now(metadata)) {
             return FAILURE;
         }
-    }
-
-    fp = fopen(file_path, "rb");
-    if (fp == NULL) {
-        king_object_store_set_backend_filesystem_error(
-            error,
-            error_size,
-            "distributed",
-            "read",
-            object_id,
-            strerror(errno)
-        );
-        return FAILURE;
     }
 
     *data_size = (size_t) st.st_size;
@@ -494,7 +481,7 @@ static int king_object_store_distributed_read_range_internal(
     *data = NULL;
     *data_size = 0;
 
-    if (stat(file_path, &st) != 0 || !S_ISREG(st.st_mode)) {
+    if (king_object_store_open_regular_file_stream_readonly(file_path, &fp, &st) != SUCCESS) {
         if (errno == ENOENT) {
             return KING_OBJECT_STORE_RESULT_MISS;
         }
@@ -543,18 +530,6 @@ static int king_object_store_distributed_read_range_internal(
         bytes_to_read = length;
     }
 
-    fp = fopen(file_path, "rb");
-    if (fp == NULL) {
-        king_object_store_set_backend_filesystem_error(
-            error,
-            error_size,
-            "distributed",
-            "range read",
-            object_id,
-            strerror(errno)
-        );
-        return FAILURE;
-    }
     if (fseeko(fp, (off_t) offset, SEEK_SET) != 0) {
         fclose(fp);
         king_object_store_set_backend_filesystem_error(
@@ -989,4 +964,3 @@ static int king_object_store_distributed_remove_with_real_backup_semantics(const
 }
 
 /* --- CDN stubs --- */
-

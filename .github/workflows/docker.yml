@@ -131,14 +131,27 @@ jobs:
             latest: true
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.artifact-gate.outputs.trusted-checkout-ref }}
-          fetch-depth: 0
+      - name: Download trusted source tree
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRUSTED_CHECKOUT_REF: ${{ needs.artifact-gate.outputs.trusted-checkout-ref }}
+        run: |
+          set -euo pipefail
 
-      - name: Fetch tags
-        run: git fetch --force --tags origin '+refs/tags/*:refs/tags/*'
+          case "${TRUSTED_CHECKOUT_REF}" in
+            refs/heads/main|refs/heads/develop|refs/tags/v[0-9]*.[0-9]*.[0-9]*) ;;
+            *)
+              echo "Refusing to download untrusted source ref: ${TRUSTED_CHECKOUT_REF}"
+              exit 1
+              ;;
+          esac
+
+          archive_path="${RUNNER_TEMP}/king-source.tar.gz"
+          api_path="/repos/${GITHUB_REPOSITORY}/tarball/${TRUSTED_CHECKOUT_REF}"
+
+          gh api "${api_path}" > "${archive_path}"
+          find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+          tar -xzf "${archive_path}" --strip-components=1
 
       - name: Download amd64 release package
         env:
@@ -263,14 +276,27 @@ jobs:
             latest: true
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.artifact-gate.outputs.trusted-checkout-ref }}
-          fetch-depth: 0
+      - name: Download trusted source tree
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRUSTED_CHECKOUT_REF: ${{ needs.artifact-gate.outputs.trusted-checkout-ref }}
+        run: |
+          set -euo pipefail
 
-      - name: Fetch tags
-        run: git fetch --force --tags origin '+refs/tags/*:refs/tags/*'
+          case "${TRUSTED_CHECKOUT_REF}" in
+            refs/heads/main|refs/heads/develop|refs/tags/v[0-9]*.[0-9]*.[0-9]*) ;;
+            *)
+              echo "Refusing to download untrusted source ref: ${TRUSTED_CHECKOUT_REF}"
+              exit 1
+              ;;
+          esac
+
+          archive_path="${RUNNER_TEMP}/king-source.tar.gz"
+          api_path="/repos/${GITHUB_REPOSITORY}/tarball/${TRUSTED_CHECKOUT_REF}"
+
+          gh api "${api_path}" > "${archive_path}"
+          find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+          tar -xzf "${archive_path}" --strip-components=1
 
       - name: Download amd64 release package
         env:
