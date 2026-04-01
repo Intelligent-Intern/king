@@ -389,7 +389,147 @@ Status note:
 - [ ] Identify and eliminate flaky tests
 - [ ] Integrate soak / chaos / recovery gates into release decisions
 
-## Q. Compatibility / Stability / Long-Term Support
+## Q. Dataflow / ETL / Flow PHP Integration
+
+King should not absorb ETL semantics as a hard-wired C-core subsystem just
+because the runtime can already transport, store, and orchestrate data. The
+expected `Q` end-state is a userland-facing dataflow/ETL layer, such as `Flow
+PHP`, running on top of King runtime primitives without losing the stronger
+runtime guarantees that King already has around bounded-memory I/O, recovery,
+real object-store backends, distributed execution, telemetry, and security.
+
+The expected shape is:
+- one reusable runtime/configuration model for secure storage and execution,
+  rather than ad hoc per-pipeline arrays
+- explicit adapters for source, sink, checkpoint, execution, telemetry, and
+  schema concerns
+- preservation of King object-store semantics such as integrity, expiry,
+  multipart upload, range reads, recovery, and multi-backend topology instead
+  of flattening them away behind a weaker ETL abstraction
+- a real end-to-end proof that a dataflow pipeline can run locally and over
+  remote workers while keeping restart recovery, backpressure, and observability
+  intact
+
+`*` Example code below is intentionally target-shape illustration for this
+tracker section. It shows the kind of API and runtime model this block is
+trying to make real; it is not a claim that the exact userland surface already
+exists today.
+
+- [ ] Define the `Flow PHP` / ETL-on-King contract explicitly as a userland integration layer on top of King runtime services, not as hard-wired C-core pipeline semantics
+  done when: the repo documents a stable integration boundary that treats King as runtime substrate and `Flow PHP`-style ETL as userland orchestration/dataflow semantics, without silently shrinking existing King runtime guarantees
+- [ ] Define a reusable object-store / dataflow runtime configuration model for secure storage topology, encryption, integrity, lifecycle, upload, and replication policy
+  done when: one shared config object can describe primary plus replica/backups, credential sources, encryption mode, integrity policy, expiry/lifecycle policy, upload policy, and dataflow-facing checkpoint/temp-storage policy without every pipeline restating those concerns ad hoc
+- [ ] Implement a streaming source adapter contract on top of King object-store, MCP, HTTP, and other runtime-owned transports
+  done when: a dataflow source can consume records or blobs from King-backed transports with bounded-memory reads, resume-aware progress, and backpressure instead of requiring whole-object materialization first
+- [ ] Implement a streaming sink adapter contract on top of King object-store, MCP, HTTP, and other runtime-owned transports
+  done when: a dataflow sink can flush output through King-backed transports with bounded-memory writes, multipart/resumable upload where available, and explicit partial-failure handling
+- [ ] Implement a checkpoint-store contract for offsets, cursors, resumable progress, and replay boundaries on top of King persistence surfaces
+  done when: checkpoint state survives restart, can be versioned and resumed honestly, and does not require ETL callers to invent their own persistence layer outside King
+- [ ] Implement an execution-backend contract that can run dataflow pipelines over King local, file-worker, and remote-peer orchestrator backends
+  done when: a dataflow run can target the same verified King execution modes that the orchestrator already exposes, including restart-aware continuation and cancellation semantics
+- [ ] Implement a telemetry adapter contract that maps pipeline runs, partitions, batches, retries, and failures into King tracing, metrics, and runtime status
+  done when: dataflow runs produce first-class King telemetry instead of opaque application logs, and pipeline observability preserves per-run and per-step identity across workers
+- [ ] Define stable error and retry taxonomy mapping between ETL/dataflow failures and King validation, runtime, transport, and backend failures
+  done when: callers can distinguish invalid input, missing data, transient transport failure, backend outage, quota pressure, and retryable checkpoint/resume conditions without reverse-engineering adapter-specific strings
+- [ ] Define partitioning, fan-out/fan-in, and backpressure semantics for distributed dataflow execution on top of King runtime primitives
+  done when: distributed dataflow can split work predictably, merge it honestly, and keep memory/throughput bounded under slow consumers or uneven partitions
+- [ ] Implement an object-store dataset bridge with bounded-memory streaming, range reads, multipart upload, integrity, expiry, and multi-backend topology semantics preserved
+  done when: `Flow PHP`-style datasets can read and write through King object-store without discarding the stronger runtime semantics that now exist for local, distributed, and real cloud backends
+- [ ] Implement schema / serialization bridges for JSON, CSV, NDJSON, IIBIN, Proto, and binary object payload workflows
+  done when: dataflow pipelines can move between structured row formats and King-native binary/runtime formats without re-implementing serialization glue in every job
+- [ ] Implement control-plane surfaces for start, pause, cancel, resume, inspect, and checkpoint-aware recovery of dataflow runs
+  done when: dataflow runs can be controlled through explicit runtime state instead of hidden process-local control flow, and restart-aware resume can pick up from persisted checkpoints
+- [ ] Validate a real end-to-end ETL/dataflow pipeline on top of King runtime services under local and remote-worker execution
+  done when: the repo proves one non-trivial pipeline with secure object-store config, checkpointing, streaming source/sink adapters, telemetry, and orchestrated remote execution instead of only disconnected adapter slices
+
+Examples `*`
+
+```php
+<?php
+
+use King\ObjectStore\RuntimeConfig;
+use King\ObjectStore\Backend\{S3, AzureBlob};
+use King\ObjectStore\Encryption\{ServerSide, ClientSide};
+use King\ObjectStore\{
+    IntegrityPolicy,
+    LifecyclePolicy,
+    ReplicationPolicy,
+    UploadPolicy
+};
+
+$store = new RuntimeConfig(
+    primary: new S3(
+        bucket: 'etl-primary',
+        endpoint: 'https://fsn1.your-s3.example',
+        credentials: 'env:KING_S3_PRIMARY',
+        encryption: new ServerSide('AES256'),
+    ),
+    replicas: [
+        new AzureBlob(
+            container: 'etl-replica',
+            endpoint: 'https://etl.blob.core.windows.net',
+            credentials: 'env:KING_AZURE_REPLICA',
+            encryption: new ClientSide('vault:etl-replica-key'),
+        ),
+    ],
+    integrity: new IntegrityPolicy(
+        algorithm: 'sha256',
+        verifyOnRead: true,
+        verifyOnWrite: true,
+    ),
+    lifecycle: new LifecyclePolicy(
+        ttlSeconds: 86400,
+        purgeExpired: true,
+    ),
+    replication: new ReplicationPolicy(
+        mode: 'async',
+        minCopiesRequired: 2,
+    ),
+    uploads: new UploadPolicy(
+        resumable: true,
+        chunkSizeBytes: 8 * 1024 * 1024,
+        parallelParts: 4,
+    ),
+);
+```
+
+```php
+<?php
+
+use Flow\ETL\Flow;
+use Flow\ETL\Adapter\King\KingRuntime;
+
+$king = new KingRuntime(objectStore: $store);
+
+Flow::extract($king->objectStore()->source('raw/orders/*.ndjson'))
+    ->withCheckpointStore(
+        $king->objectStore()->checkpointStore('checkpoints/orders-import')
+    )
+    ->map(fn (array $row) => [
+        'id' => $row['id'],
+        'country' => strtoupper($row['country']),
+        'total' => (float) $row['total'],
+    ])
+    ->load(
+        $king->objectStore()->sink('warehouse/orders/{country}/part-{partition}.parquet')
+    )
+    ->withTelemetry(
+        $king->telemetry()->pipeline(
+            serviceName: 'orders-etl',
+            traceName: 'nightly-orders-import'
+        )
+    )
+    ->run(
+        $king->executionBackend(
+            mode: 'remote_peer',
+            workers: 12,
+            maxConcurrency: 8,
+            autoscaling: true
+        )
+    );
+```
+
+## R. Compatibility / Stability / Long-Term Support
 
 - [ ] Permanently stabilize the public API
 - [ ] Permanently stabilize the stub surface
@@ -405,7 +545,7 @@ Status note:
 - [ ] Write down breaking-change policy
 - [ ] Write down LTS / support policy where product support is claimed
 
-## R. Public Contract / Docs / Truthfulness
+## S. Public Contract / Docs / Truthfulness
 
 - [ ] Align README completely with the real, complete runtime
 - [ ] Transition `PROJECT_ASSESSMENT.md` to a state with no remaining caveats
@@ -422,7 +562,7 @@ Status note:
 - [ ] Fully finalize security documentation
 - [ ] Fully finalize compatibility documentation
 
-## S. Security / Hardening
+## T. Security / Hardening
 
 - [ ] Complete full security review of all public entry points
 - [ ] Complete full security review of all persistence paths
@@ -440,7 +580,7 @@ Status note:
 - [ ] Make security gates a release prerequisite
 - [ ] Define disclosure / patch process where product support is claimed
 
-## T. Final Closure Gates
+## U. Final Closure Gates
 
 - [ ] No simulated backends remain in the public product state
 - [ ] No local-first runtime slices remain in the public product state
