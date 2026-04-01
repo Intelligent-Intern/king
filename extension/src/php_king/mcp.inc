@@ -312,9 +312,11 @@ static zend_string *king_mcp_transfer_key_create(
         return NULL;
     }
 
-    key_len = (sizeof("mcp.v1..") - 1)
+    key_len = (sizeof("mcp.v1.") - 1)
         + ZSTR_LEN(encoded_service)
+        + 1
         + ZSTR_LEN(encoded_method)
+        + 1
         + ZSTR_LEN(encoded_id);
     key = zend_string_alloc(key_len, 0);
     cursor = ZSTR_VAL(key);
