@@ -124,6 +124,7 @@ void king_config_release_module_globals(void)
     memset(&king_smart_contracts_config, 0, sizeof(king_smart_contracts_config));
 
     KING_CONFIG_FREE_PERSISTENT(king_smart_dns_config.mode);
+    KING_CONFIG_FREE_PERSISTENT(king_smart_dns_config.live_probe_allowed_hosts);
     memset(&king_smart_dns_config, 0, sizeof(king_smart_dns_config));
 
     king_config_free_ssh_strings(&king_ssh_over_quic_config);

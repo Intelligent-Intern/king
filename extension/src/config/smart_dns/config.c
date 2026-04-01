@@ -58,6 +58,17 @@ static int kg_smart_dns_reject_unsupported_setting(const char *setting_name)
     return FAILURE;
 }
 
+static int kg_smart_dns_reject_system_only_setting(const char *setting_name)
+{
+    zend_throw_exception_ex(
+        spl_ce_InvalidArgumentException,
+        0,
+        "Smart-DNS v1 treats %s as a system-only setting.",
+        setting_name
+    );
+    return FAILURE;
+}
+
 int kg_config_smart_dns_apply_userland_config_to(
     kg_smart_dns_config_t *target,
     zval *config_arr)
@@ -118,6 +129,8 @@ int kg_config_smart_dns_apply_userland_config_to(
             return kg_smart_dns_reject_unsupported_setting("dns.recursive_forwarders");
         } else if (zend_string_equals_literal(key, "dns_health_agent_mcp_endpoint")) {
             return kg_smart_dns_reject_unsupported_setting("dns.health_agent_mcp_endpoint");
+        } else if (zend_string_equals_literal(key, "dns_live_probe_allowed_hosts")) {
+            return kg_smart_dns_reject_system_only_setting("dns.live_probe_allowed_hosts");
         } else if (zend_string_equals_literal(key, "dns_mothernode_uri")) {
             if (kg_validate_string(value, &target->mothernode_uri) != SUCCESS) {
                 return FAILURE;
