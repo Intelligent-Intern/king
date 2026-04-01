@@ -51,11 +51,28 @@ static void king_orchestrator_error_meta_init(king_orchestrator_error_meta_t *me
         return;
     }
 
-    meta->category[0] = '\0';
-    meta->retry_disposition[0] = '\0';
-    meta->backend[0] = '\0';
+    memset(meta, 0, sizeof(*meta));
     meta->step_index = -1;
     meta->has_classification = 0;
+}
+
+static void king_orchestrator_error_meta_copy_bounded(
+    char *destination,
+    size_t destination_size,
+    const char *source
+)
+{
+    if (destination == NULL || destination_size == 0) {
+        return;
+    }
+
+    destination[0] = '\0';
+    if (source == NULL) {
+        return;
+    }
+
+    strncpy(destination, source, destination_size - 1);
+    destination[destination_size - 1] = '\0';
 }
 
 static void king_orchestrator_error_meta_set(
@@ -71,15 +88,13 @@ static void king_orchestrator_error_meta_set(
     }
 
     king_orchestrator_error_meta_init(meta);
-    if (category != NULL) {
-        strncpy(meta->category, category, sizeof(meta->category) - 1);
-    }
-    if (retry_disposition != NULL) {
-        strncpy(meta->retry_disposition, retry_disposition, sizeof(meta->retry_disposition) - 1);
-    }
-    if (backend != NULL) {
-        strncpy(meta->backend, backend, sizeof(meta->backend) - 1);
-    }
+    king_orchestrator_error_meta_copy_bounded(meta->category, sizeof(meta->category), category);
+    king_orchestrator_error_meta_copy_bounded(
+        meta->retry_disposition,
+        sizeof(meta->retry_disposition),
+        retry_disposition
+    );
+    king_orchestrator_error_meta_copy_bounded(meta->backend, sizeof(meta->backend), backend);
     meta->step_index = step_index;
     meta->has_classification = 1;
 }
