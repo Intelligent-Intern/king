@@ -51,6 +51,41 @@ static zend_bool king_object_store_registry_copy_string_option(
     return 1;
 }
 
+static zend_bool king_object_store_registry_validate_http_header_option(
+    const char *key,
+    const char *value,
+    const char *function_name
+)
+{
+    char error[256];
+    int result;
+
+    if (value == NULL || value[0] == '\0') {
+        return 1;
+    }
+
+    result = king_object_store_http_header_value_validate(
+        key,
+        value,
+        error,
+        sizeof(error)
+    );
+    if (result == SUCCESS) {
+        return 1;
+    }
+
+    zend_throw_exception_ex(
+        king_ce_validation_exception,
+        0,
+        "%s() %s",
+        function_name,
+        error[0] != '\0'
+            ? error
+            : "Object-store metadata contains unsupported CR/LF characters for cloud HTTP headers."
+    );
+    return 0;
+}
+
 static php_stream *king_object_store_registry_fetch_stream_resource(
     zval *stream_zv,
     uint32_t arg_num,
@@ -671,6 +706,18 @@ static zend_bool king_object_store_registry_apply_put_metadata_options(
         return 0;
     }
 
+    if (!king_object_store_registry_validate_http_header_option(
+            "content_type",
+            metadata->content_type,
+            function_name
+        ) || !king_object_store_registry_validate_http_header_option(
+            "content_encoding",
+            metadata->content_encoding,
+            function_name
+        )) {
+        return 0;
+    }
+
     return 1;
 }
 
@@ -1083,15 +1130,15 @@ PHP_FUNCTION(king_object_store_put)
         RETURN_THROWS();
     }
 
-    if (!king_object_store_registry_check_write_preconditions(
-            ZSTR_VAL(object_id),
-            options,
-            "king_object_store_put"
-        )
-        || !king_object_store_registry_apply_put_options(
+    if (!king_object_store_registry_apply_put_options(
             options,
             payload,
             &metadata,
+            "king_object_store_put"
+        )
+        || !king_object_store_registry_check_write_preconditions(
+            ZSTR_VAL(object_id),
+            options,
             "king_object_store_put"
         )) {
         king_object_store_registry_release_mutation_lock(&mutation_lock_fd);
@@ -1177,9 +1224,9 @@ PHP_FUNCTION(king_object_store_put_from_stream)
 
     memset(&metadata, 0, sizeof(metadata));
     strncpy(metadata.object_id, ZSTR_VAL(object_id), sizeof(metadata.object_id) - 1);
-    if (!king_object_store_registry_check_write_preconditions(
-            ZSTR_VAL(object_id),
+    if (!king_object_store_registry_apply_put_metadata_options(
             options,
+            &metadata,
             "king_object_store_put_from_stream"
         )) {
         king_object_store_registry_release_mutation_lock(&mutation_lock_fd);
@@ -1199,7 +1246,12 @@ PHP_FUNCTION(king_object_store_put_from_stream)
     }
     staged = 1;
 
-    if (!king_object_store_registry_validate_capacity_for_size(
+    if (!king_object_store_registry_check_write_preconditions(
+            ZSTR_VAL(object_id),
+            options,
+            "king_object_store_put_from_stream"
+        )
+        || !king_object_store_registry_validate_capacity_for_size(
             ZSTR_VAL(object_id),
             content_length,
             "king_object_store_put_from_stream"
@@ -1210,11 +1262,7 @@ PHP_FUNCTION(king_object_store_put_from_stream)
     }
 
     metadata.content_length = content_length;
-    if (!king_object_store_registry_apply_put_metadata_options(
-            options,
-            &metadata,
-            "king_object_store_put_from_stream"
-        ) || !king_object_store_registry_apply_put_integrity_option(
+    if (!king_object_store_registry_apply_put_integrity_option(
             options,
             computed_sha256,
             &metadata,
@@ -1299,14 +1347,14 @@ PHP_FUNCTION(king_object_store_begin_resumable_upload)
         RETURN_THROWS();
     }
 
-    if (!king_object_store_registry_check_write_preconditions(
-            ZSTR_VAL(object_id),
-            options,
-            "king_object_store_begin_resumable_upload"
-        )
-        || !king_object_store_registry_apply_put_metadata_options(
+    if (!king_object_store_registry_apply_put_metadata_options(
             options,
             &metadata,
+            "king_object_store_begin_resumable_upload"
+        )
+        || !king_object_store_registry_check_write_preconditions(
+            ZSTR_VAL(object_id),
+            options,
             "king_object_store_begin_resumable_upload"
         )
         || !king_object_store_registry_copy_sha256_option(

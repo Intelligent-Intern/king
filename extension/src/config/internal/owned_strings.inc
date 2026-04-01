@@ -50,6 +50,7 @@ static void king_config_free_dns_strings(kg_smart_dns_config_t *dns)
     pefree(dns->server_bind_host, 1);
     pefree(dns->mode, 1);
     pefree(dns->mothernode_uri, 1);
+    pefree(dns->live_probe_allowed_hosts, 1);
 }
 
 static void king_config_free_otel_strings(kg_open_telemetry_config_t *otel)
@@ -162,6 +163,7 @@ static void king_config_clone_owned_strings(king_cfg_t *cfg)
     cfg->dns.server_bind_host = king_config_clone_persistent_string(cfg->dns.server_bind_host);
     cfg->dns.mode = king_config_clone_persistent_string(cfg->dns.mode);
     cfg->dns.mothernode_uri = king_config_clone_persistent_string(cfg->dns.mothernode_uri);
+    cfg->dns.live_probe_allowed_hosts = king_config_clone_persistent_string(cfg->dns.live_probe_allowed_hosts);
     cfg->owns_dns_strings = 1;
 
     cfg->observability.service_name = king_config_clone_persistent_string(cfg->observability.service_name);

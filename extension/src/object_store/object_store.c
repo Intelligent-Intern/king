@@ -319,10 +319,12 @@ static int king_object_store_require_honest_backend(
     const char *operation_name
 );
 static int king_object_store_local_fs_remove_with_real_backup_semantics(const char *object_id);
-static struct curl_slist *king_object_store_append_metadata_headers(
-    struct curl_slist *headers,
+static int king_object_store_append_metadata_headers(
+    struct curl_slist **headers,
     const char *prefix,
-    const king_object_metadata_t *metadata
+    const king_object_metadata_t *metadata,
+    char *error,
+    size_t error_size
 );
 static void king_object_store_list_entry_from_metadata(
     zval *entry,
@@ -516,6 +518,21 @@ static int king_object_store_azure_append_upload_chunk(
 static int king_object_store_azure_complete_upload_session(
     const char *object_id,
     const HashTable *provider_parts,
+    const king_object_metadata_t *metadata,
+    char *error,
+    size_t error_size
+);
+static int king_object_store_append_named_http_header(
+    struct curl_slist **headers,
+    const char *header_name,
+    const char *field_name,
+    const char *value,
+    char *error,
+    size_t error_size
+);
+static int king_object_store_append_metadata_headers(
+    struct curl_slist **headers,
+    const char *prefix,
     const king_object_metadata_t *metadata,
     char *error,
     size_t error_size

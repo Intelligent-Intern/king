@@ -118,6 +118,12 @@ void king_object_store_runtime_metadata_cache_collect_stats(
     zend_long *entry_count,
     zend_long *eviction_count
 );
+int king_object_store_http_header_value_validate(
+    const char *field_name,
+    const char *value,
+    char *error,
+    size_t error_size
+);
 
 /* Rehydrate runtime stats from disk on init */
 void king_object_store_rehydrate_stats(void);

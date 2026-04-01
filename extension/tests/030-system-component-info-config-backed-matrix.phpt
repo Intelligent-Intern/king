@@ -191,7 +191,7 @@ array(6) {
 }
 string(12) "semantic_dns"
 string(13) "config_backed"
-array(8) {
+array(9) {
   [0]=>
   string(13) "server_enable"
   [1]=>
@@ -207,6 +207,8 @@ array(8) {
   [6]=>
   string(20) "semantic_mode_enable"
   [7]=>
+  string(24) "live_probe_allowed_hosts"
+  [8]=>
   string(14) "mothernode_uri"
 }
 bool(true)

@@ -212,6 +212,8 @@ PHP_FUNCTION(king_system_get_component_info)
             king_smart_dns_config.service_discovery_max_ips_per_response);
         add_assoc_bool(&configuration, "semantic_mode_enable",
             king_smart_dns_config.semantic_mode_enable ? 1 : 0);
+        add_assoc_string(&configuration, "live_probe_allowed_hosts",
+            king_safe_string(king_smart_dns_config.live_probe_allowed_hosts));
         add_assoc_string(&configuration, "mothernode_uri",
             king_safe_string(king_smart_dns_config.mothernode_uri));
     } else if (zend_string_equals_literal(component_name, "mcp")) {
