@@ -142,6 +142,17 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
         }
 
         if (isset($step['remote_error']) && is_string($step['remote_error'])) {
+            $remoteErrorCategory = (
+                isset($step['remote_error_category']) && is_string($step['remote_error_category'])
+            ) ? $step['remote_error_category'] : 'backend';
+            $remoteErrorRetryDisposition = (
+                isset($step['remote_error_retry_disposition'])
+                && is_string($step['remote_error_retry_disposition'])
+            ) ? $step['remote_error_retry_disposition'] : 'caller_managed_retry';
+            $remoteErrorBackend = (
+                isset($step['remote_error_backend']) && is_string($step['remote_error_backend'])
+            ) ? $step['remote_error_backend'] : 'remote_peer';
+
             $event['remote_error'] = $step['remote_error'];
             $event['failed_step_index'] = $stepIndex;
             king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
@@ -149,10 +160,10 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
                 $client,
                 $encodeErrorMeta(
                     $step['remote_error'],
-                    'backend',
-                    'caller_managed_retry',
+                    $remoteErrorCategory,
+                    $remoteErrorRetryDisposition,
                     $stepIndex,
-                    'remote_peer'
+                    $remoteErrorBackend
                 )
             );
             $failed = true;
