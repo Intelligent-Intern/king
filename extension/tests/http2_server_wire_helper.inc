@@ -234,6 +234,26 @@ function king_http2_wire_frame(int $type, int $flags, int $streamId, string $pay
         . $payload;
 }
 
+function king_http2_wire_write_all($stream, string $buffer, string $label): void
+{
+    $written = 0;
+    $length = strlen($buffer);
+
+    while ($written < $length) {
+        $chunk = fwrite($stream, substr($buffer, $written));
+        if ($chunk === false || $chunk === 0) {
+            $meta = stream_get_meta_data($stream);
+            if (($meta['timed_out'] ?? false) === true) {
+                throw new RuntimeException("timed out while writing $label");
+            }
+
+            throw new RuntimeException("failed while writing $label");
+        }
+
+        $written += $chunk;
+    }
+}
+
 function king_http2_wire_read_exact($stream, int $bytes, string $label): string
 {
     $data = '';
@@ -289,8 +309,14 @@ function king_http2_server_wire_request_retry(int $port, array $request, int $ti
             $method = strtoupper((string) ($request['method'] ?? 'GET'));
             $path = (string) ($request['path'] ?? '/');
             $body = (string) ($request['body'] ?? '');
+            $bodyFrames = $request['body_frames'] ?? null;
             $headers = $request['headers'] ?? [];
             $authority = '127.0.0.1:' . $port;
+
+            if ($bodyFrames !== null && !is_array($bodyFrames)) {
+                fclose($client);
+                throw new RuntimeException('body_frames must be an array when provided');
+            }
 
             $headerBlock = $method === 'POST' ? "\x83" : "\x82";
             $headerBlock .= "\x86";
@@ -307,15 +333,26 @@ function king_http2_server_wire_request_retry(int $port, array $request, int $ti
             $wire .= king_http2_wire_frame(0x4, 0x0, 0, '');
             $wire .= king_http2_wire_frame(
                 0x1,
-                $body === '' ? 0x5 : 0x4,
+                ($body === '' && ($bodyFrames === null || $bodyFrames === [])) ? 0x5 : 0x4,
                 1,
                 $headerBlock
             );
-            if ($body !== '') {
+
+            if ($bodyFrames !== null && $bodyFrames !== []) {
+                $lastIndex = count($bodyFrames) - 1;
+                foreach (array_values($bodyFrames) as $index => $frameBody) {
+                    $wire .= king_http2_wire_frame(
+                        0x0,
+                        $index === $lastIndex ? 0x1 : 0x0,
+                        1,
+                        (string) $frameBody
+                    );
+                }
+            } elseif ($body !== '') {
                 $wire .= king_http2_wire_frame(0x0, 0x1, 1, $body);
             }
 
-            fwrite($client, $wire);
+            king_http2_wire_write_all($client, $wire, 'HTTP/2 wire request');
 
             $responseHeaders = [];
             $responseBody = '';
