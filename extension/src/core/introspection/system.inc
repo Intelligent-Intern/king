@@ -221,6 +221,8 @@ PHP_FUNCTION(king_system_get_component_info)
             king_mcp_orchestrator_config.mcp_enable_request_caching ? 1 : 0);
         add_assoc_long(&configuration, "request_cache_ttl_sec",
             king_mcp_orchestrator_config.mcp_request_cache_ttl_sec);
+        add_assoc_string(&configuration, "allowed_peer_hosts",
+            king_safe_string(king_mcp_orchestrator_config.mcp_allowed_peer_hosts));
         add_assoc_string(&configuration, "transfer_state_path",
             king_safe_string(king_mcp_orchestrator_config.mcp_transfer_state_path));
         add_assoc_string(

@@ -107,6 +107,13 @@ flowchart TD
 The value of explicit connection state is that all later operations know which
 peer they are talking to and whether that peer relationship is still valid.
 
+King also treats the peer target itself as part of the trust boundary. Loopback
+peers such as `127.0.0.1`, `::1`, and `localhost` are allowed by default. Any
+non-loopback MCP peer must be named explicitly through the system INI
+`king.mcp_allowed_peer_hosts`. That keeps ad-hoc application code from turning
+MCP into an unrestricted outbound TCP dialer while still preserving real
+multi-host deployments under operator control.
+
 ## Unary Request: One Payload In, One Payload Out
 
 `king_mcp_request()` is the smallest useful MCP operation. The caller provides a

@@ -82,6 +82,13 @@ int kg_config_mcp_and_orchestrator_apply_userland_config_to(
             if (kg_validate_positive_long(value, &target->mcp_request_cache_ttl_sec) != SUCCESS) {
                 return FAILURE;
             }
+        } else if (zend_string_equals_literal(key, "mcp_allowed_peer_hosts")) {
+            zend_throw_exception_ex(
+                spl_ce_InvalidArgumentException,
+                0,
+                "Configuration override 'mcp.allowed_peer_hosts' is only supported through the system INI king.mcp_allowed_peer_hosts."
+            );
+            return FAILURE;
         } else if (zend_string_equals_literal(key, "mcp_transfer_state_path")) {
             zend_throw_exception_ex(
                 spl_ce_InvalidArgumentException,
