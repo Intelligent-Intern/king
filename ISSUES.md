@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate WebSocket fairness under many concurrent connections.
+- [ ] Validate server request normalization against real requests.
 
 ## Active Executable Items
 
@@ -52,7 +52,7 @@
 8. [x] Validate WebSocket backpressure under many concurrent connections.
     done when: slow websocket consumers do not let pending writes or queue growth escape the intended bounded runtime behavior.
 
-9. [ ] Validate WebSocket fairness under many concurrent connections.
+9. [x] Validate WebSocket fairness under many concurrent connections.
     done when: many active websocket clients can compete without one noisy or slow peer starving unrelated clients.
 
 10. [ ] Validate server request normalization against real requests.

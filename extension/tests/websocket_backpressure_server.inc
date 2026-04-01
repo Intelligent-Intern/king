@@ -265,7 +265,7 @@ while (microtime(true) < $deadline) {
             ];
 
             if ($opcode === 0x1) {
-                if ($clientState['path'] === '/slow' && $payload === 'FLOOD' && !$clientState['flooded']) {
+                if ($payload === 'FLOOD' && !$clientState['flooded']) {
                     for ($messageIndex = 0; $messageIndex < $burstCount; $messageIndex++) {
                         $messagePayload = king_ws_backpressure_burst_payload($messageIndex, $payloadBytes);
                         king_ws_backpressure_frame_write($stream, 0x1, $messagePayload);

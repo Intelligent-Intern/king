@@ -296,6 +296,10 @@ pretending that process memory is infinite. `Connection::getInfo()` exposes the
 live queued counts and configured limits so the application can see whether a
 connection is healthy, draining, or saturating.
 
+Those same queue limits are part of the fairness story. A noisy or temporarily
+stalled connection is supposed to burn through its own queue budget, not steal
+progress from unrelated websocket clients sharing the same process.
+
 ## Server-Side Upgrade
 
 On the server side, WebSocket starts as an incoming HTTP request. The server

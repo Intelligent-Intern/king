@@ -73,7 +73,7 @@ Status note:
 - [x] Validate WebSocket error paths for network aborts
 - [x] Validate long-lived WebSocket connections under continuous load
 - [x] Validate WebSocket backpressure under many concurrent connections
-- [ ] Validate WebSocket fairness under many concurrent connections
+- [x] Validate WebSocket fairness under many concurrent connections
 - [ ] Fully implement honest WebSocket server API behavior
 - [ ] Back `King\WebSocket\Server` with fully real runtime behavior
 - [ ] Validate `King\WebSocket\Server` shutdown and drain behavior
