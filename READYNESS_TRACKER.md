@@ -1,4 +1,4 @@
-# KING V1 FINAL COMPLETION CHECKLIST
+# KING V1 FINAL READINESS COMPLETION CHECKLIST
 
 Goal:
 King is only finished when every exported capability is fully real, deterministically buildable, operationally reliable, failure-tolerant, upgrade-safe, documented, and supportable for the long term.
@@ -392,7 +392,7 @@ Status note:
 
 ## Q. Dataflow / ETL / Flow PHP Integration
 
-King should not absorb ETL semantics as a hard-wired C-core subsystem just
+King should not absorb ETL semantics as a hardwired C-core subsystem just
 because the runtime can already transport, store, and orchestrate data. The
 expected `Q` end-state is a userland-facing dataflow/ETL layer, such as `Flow
 PHP`, running on top of King runtime primitives without losing the stronger
