@@ -25,6 +25,10 @@ static ZEND_INI_MH(OnUpdateAppProtocolPositiveLong)
         king_app_protocols_config.h3_qpack_blocked_streams = val;
     } else if (zend_string_equals_literal(entry->name, "king.websocket_default_max_payload_size")) {
         king_app_protocols_config.websocket_default_max_payload_size = val;
+    } else if (zend_string_equals_literal(entry->name, "king.websocket_default_max_queued_messages")) {
+        king_app_protocols_config.websocket_default_max_queued_messages = val;
+    } else if (zend_string_equals_literal(entry->name, "king.websocket_default_max_queued_bytes")) {
+        king_app_protocols_config.websocket_default_max_queued_bytes = val;
     } else if (zend_string_equals_literal(entry->name, "king.websocket_default_ping_interval_ms")) {
         king_app_protocols_config.websocket_default_ping_interval_ms = val;
     } else if (zend_string_equals_literal(entry->name, "king.websocket_handshake_timeout_ms")) {
@@ -55,6 +59,10 @@ PHP_INI_BEGIN()
         http_enable_early_hints, kg_app_protocols_config_t, king_app_protocols_config)
     STD_PHP_INI_ENTRY("king.websocket_default_max_payload_size", "16777216", PHP_INI_SYSTEM, OnUpdateAppProtocolPositiveLong,
         websocket_default_max_payload_size, kg_app_protocols_config_t, king_app_protocols_config)
+    STD_PHP_INI_ENTRY("king.websocket_default_max_queued_messages", "64", PHP_INI_SYSTEM, OnUpdateAppProtocolPositiveLong,
+        websocket_default_max_queued_messages, kg_app_protocols_config_t, king_app_protocols_config)
+    STD_PHP_INI_ENTRY("king.websocket_default_max_queued_bytes", "67108864", PHP_INI_SYSTEM, OnUpdateAppProtocolPositiveLong,
+        websocket_default_max_queued_bytes, kg_app_protocols_config_t, king_app_protocols_config)
     STD_PHP_INI_ENTRY("king.websocket_default_ping_interval_ms", "25000", PHP_INI_SYSTEM, OnUpdateAppProtocolPositiveLong,
         websocket_default_ping_interval_ms, kg_app_protocols_config_t, king_app_protocols_config)
     STD_PHP_INI_ENTRY("king.websocket_handshake_timeout_ms", "5000", PHP_INI_SYSTEM, OnUpdateAppProtocolPositiveLong,

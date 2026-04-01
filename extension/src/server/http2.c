@@ -894,22 +894,30 @@ static zend_result king_server_http2_hpack_append_header_value(
     zend_string *value
 )
 {
-    if (zend_string_equals_literal_ci(name, "content-type")) {
-        return king_server_http2_hpack_encode_literal_static_name(
+    zend_string *normalized_name;
+    zend_result rc;
+
+    normalized_name = zend_string_tolower(name);
+    if (zend_string_equals_literal(normalized_name, "content-type")) {
+        rc = king_server_http2_hpack_encode_literal_static_name(
             buffer,
             31,
             ZSTR_VAL(value),
             ZSTR_LEN(value)
         );
+        zend_string_release(normalized_name);
+        return rc;
     }
 
-    return king_server_http2_hpack_encode_literal_name(
+    rc = king_server_http2_hpack_encode_literal_name(
         buffer,
-        ZSTR_VAL(name),
-        ZSTR_LEN(name),
+        ZSTR_VAL(normalized_name),
+        ZSTR_LEN(normalized_name),
         ZSTR_VAL(value),
         ZSTR_LEN(value)
     );
+    zend_string_release(normalized_name);
+    return rc;
 }
 
 static zend_result king_server_http2_write_frame(
@@ -1787,6 +1795,13 @@ PHP_FUNCTION(king_http2_server_listen_once)
             "king_http2_server_listen_once"
         ) != SUCCESS
     ) {
+        if (king_server_local_errno_is_peer_disconnect(errno)) {
+            king_server_local_mark_stream_cancelled_if_registered(
+                session,
+                stream_id,
+                "king_http2_server_listen_once"
+            );
+        }
         goto cleanup;
     }
 

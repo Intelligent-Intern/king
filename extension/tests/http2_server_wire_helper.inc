@@ -1,25 +1,30 @@
 <?php
 
-function king_http2_server_wire_start_server(): array
+function king_http2_server_wire_start_server(?int $fixedPort = null, string $mode = 'basic'): array
 {
-    $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-    if ($probe === false) {
-        throw new RuntimeException("failed to reserve on-wire HTTP/2 test port: $errstr");
-    }
+    if ($fixedPort !== null) {
+        $port = $fixedPort;
+    } else {
+        $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        if ($probe === false) {
+            throw new RuntimeException("failed to reserve on-wire HTTP/2 test port: $errstr");
+        }
 
-    $serverName = stream_socket_get_name($probe, false);
-    fclose($probe);
-    [, $port] = explode(':', $serverName, 2);
+        $serverName = stream_socket_get_name($probe, false);
+        fclose($probe);
+        [, $port] = explode(':', $serverName, 2);
+    }
 
     $capture = tempnam(sys_get_temp_dir(), 'king-http2-server-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';
     $command = sprintf(
-        '%s -n -d %s %s %s %d',
+        '%s -n -d %s %s %s %d %s',
         escapeshellarg(PHP_BINARY),
         escapeshellarg('extension=' . $extensionPath),
         escapeshellarg(__DIR__ . '/http2_server_wire_server.inc'),
         escapeshellarg($capture),
-        (int) $port
+        (int) $port,
+        escapeshellarg($mode)
     );
 
     $process = proc_open($command, [
@@ -185,9 +190,30 @@ function king_http2_wire_decode_string(string $buffer, int $offset): array
     return [$value, $consumed + $length];
 }
 
-function king_http2_wire_decode_header_block(string $block): array
+function king_http2_wire_add_header_value(array &$headers, string $name, string $value): void
+{
+    $normalizedName = strtolower($name);
+
+    if (!array_key_exists($normalizedName, $headers)) {
+        $headers[$normalizedName] = $value;
+        return;
+    }
+
+    if (is_array($headers[$normalizedName])) {
+        $headers[$normalizedName][] = $value;
+        return;
+    }
+
+    $headers[$normalizedName] = [
+        $headers[$normalizedName],
+        $value,
+    ];
+}
+
+function king_http2_wire_decode_header_block_detailed(string $block): array
 {
     $headers = [];
+    $pairs = [];
     $offset = 0;
 
     while ($offset < strlen($block)) {
@@ -215,10 +241,22 @@ function king_http2_wire_decode_header_block(string $block): array
             $offset += $consumed;
         }
 
-        $headers[strtolower($name)] = $value;
+        $pairs[] = [
+            'name' => $name,
+            'value' => $value,
+        ];
+        king_http2_wire_add_header_value($headers, $name, $value);
     }
 
-    return $headers;
+    return [
+        'headers' => $headers,
+        'pairs' => $pairs,
+    ];
+}
+
+function king_http2_wire_decode_header_block(string $block): array
+{
+    return king_http2_wire_decode_header_block_detailed($block)['headers'];
 }
 
 function king_http2_wire_frame(int $type, int $flags, int $streamId, string $payload = ''): string
@@ -291,6 +329,56 @@ function king_http2_wire_read_frame($stream): array
     return [$type, $flags, $streamId, $payload];
 }
 
+function king_http2_server_wire_build_request_bytes(int $port, array $request): string
+{
+    $method = strtoupper((string) ($request['method'] ?? 'GET'));
+    $path = (string) ($request['path'] ?? '/');
+    $body = (string) ($request['body'] ?? '');
+    $bodyFrames = $request['body_frames'] ?? null;
+    $headers = $request['headers'] ?? [];
+    $authority = '127.0.0.1:' . $port;
+
+    if ($bodyFrames !== null && !is_array($bodyFrames)) {
+        throw new RuntimeException('body_frames must be an array when provided');
+    }
+
+    $headerBlock = $method === 'POST' ? "\x83" : "\x82";
+    $headerBlock .= "\x86";
+    $headerBlock .= king_http2_wire_encode_literal_static_name(4, $path);
+    $headerBlock .= king_http2_wire_encode_literal_static_name(1, $authority);
+    foreach ($headers as $name => $value) {
+        $headerBlock .= king_http2_wire_encode_literal_name(
+            strtolower((string) $name),
+            (string) $value
+        );
+    }
+
+    $wire = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    $wire .= king_http2_wire_frame(0x4, 0x0, 0, '');
+    $wire .= king_http2_wire_frame(
+        0x1,
+        ($body === '' && ($bodyFrames === null || $bodyFrames === [])) ? 0x5 : 0x4,
+        1,
+        $headerBlock
+    );
+
+    if ($bodyFrames !== null && $bodyFrames !== []) {
+        $lastIndex = count($bodyFrames) - 1;
+        foreach (array_values($bodyFrames) as $index => $frameBody) {
+            $wire .= king_http2_wire_frame(
+                0x0,
+                $index === $lastIndex ? 0x1 : 0x0,
+                1,
+                (string) $frameBody
+            );
+        }
+    } elseif ($body !== '') {
+        $wire .= king_http2_wire_frame(0x0, 0x1, 1, $body);
+    }
+
+    return $wire;
+}
+
 function king_http2_server_wire_request_retry(int $port, array $request, int $timeoutMs = 3000): array
 {
     $deadline = microtime(true) + ($timeoutMs / 1000);
@@ -305,56 +393,11 @@ function king_http2_server_wire_request_retry(int $port, array $request, int $ti
         );
         if (is_resource($client)) {
             stream_set_timeout($client, 2);
-
-            $method = strtoupper((string) ($request['method'] ?? 'GET'));
-            $path = (string) ($request['path'] ?? '/');
-            $body = (string) ($request['body'] ?? '');
-            $bodyFrames = $request['body_frames'] ?? null;
-            $headers = $request['headers'] ?? [];
-            $authority = '127.0.0.1:' . $port;
-
-            if ($bodyFrames !== null && !is_array($bodyFrames)) {
-                fclose($client);
-                throw new RuntimeException('body_frames must be an array when provided');
-            }
-
-            $headerBlock = $method === 'POST' ? "\x83" : "\x82";
-            $headerBlock .= "\x86";
-            $headerBlock .= king_http2_wire_encode_literal_static_name(4, $path);
-            $headerBlock .= king_http2_wire_encode_literal_static_name(1, $authority);
-            foreach ($headers as $name => $value) {
-                $headerBlock .= king_http2_wire_encode_literal_name(
-                    strtolower((string) $name),
-                    (string) $value
-                );
-            }
-
-            $wire = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
-            $wire .= king_http2_wire_frame(0x4, 0x0, 0, '');
-            $wire .= king_http2_wire_frame(
-                0x1,
-                ($body === '' && ($bodyFrames === null || $bodyFrames === [])) ? 0x5 : 0x4,
-                1,
-                $headerBlock
-            );
-
-            if ($bodyFrames !== null && $bodyFrames !== []) {
-                $lastIndex = count($bodyFrames) - 1;
-                foreach (array_values($bodyFrames) as $index => $frameBody) {
-                    $wire .= king_http2_wire_frame(
-                        0x0,
-                        $index === $lastIndex ? 0x1 : 0x0,
-                        1,
-                        (string) $frameBody
-                    );
-                }
-            } elseif ($body !== '') {
-                $wire .= king_http2_wire_frame(0x0, 0x1, 1, $body);
-            }
-
+            $wire = king_http2_server_wire_build_request_bytes($port, $request);
             king_http2_wire_write_all($client, $wire, 'HTTP/2 wire request');
 
             $responseHeaders = [];
+            $responseHeaderPairs = [];
             $responseBody = '';
             $responseStatus = null;
             $sawEndStream = false;
@@ -371,12 +414,15 @@ function king_http2_server_wire_request_retry(int $port, array $request, int $ti
                 }
 
                 if ($type === 0x1) {
-                    $decoded = king_http2_wire_decode_header_block($payload);
-                    foreach ($decoded as $name => $value) {
+                    $decoded = king_http2_wire_decode_header_block_detailed($payload);
+                    foreach ($decoded['pairs'] as $pair) {
+                        $responseHeaderPairs[] = $pair;
+                    }
+                    foreach ($decoded['headers'] as $name => $value) {
                         $responseHeaders[$name] = $value;
                     }
-                    if (isset($decoded[':status'])) {
-                        $responseStatus = (int) $decoded[':status'];
+                    if (isset($decoded['headers'][':status'])) {
+                        $responseStatus = (int) $decoded['headers'][':status'];
                     }
                     if (($flags & 0x1) !== 0) {
                         $sawEndStream = true;
@@ -420,6 +466,7 @@ function king_http2_server_wire_request_retry(int $port, array $request, int $ti
             return [
                 'status' => $responseStatus,
                 'headers' => $responseHeaders,
+                'header_pairs' => $responseHeaderPairs,
                 'body' => $responseBody,
                 'saw_goaway' => $sawGoaway,
                 'peer_closed' => $peerClosed,
@@ -432,4 +479,58 @@ function king_http2_server_wire_request_retry(int $port, array $request, int $ti
     } while (microtime(true) < $deadline);
 
     throw new RuntimeException("failed to connect to on-wire HTTP/2 listener: $lastError");
+}
+
+function king_http2_server_wire_abort_request(int $port, array $request, int $settleUs = 50000): void
+{
+    $deadline = microtime(true) + 3.0;
+    $socket = false;
+
+    if (!function_exists('socket_create')) {
+        throw new RuntimeException('socket_create() is required for HTTP/2 abort requests');
+    }
+
+    do {
+        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if ($socket === false) {
+            throw new RuntimeException('failed to create HTTP/2 abort socket');
+        }
+
+        if (@socket_connect($socket, '127.0.0.1', $port) === true) {
+            break;
+        }
+
+        $message = socket_strerror(socket_last_error($socket));
+        socket_close($socket);
+        $socket = false;
+        usleep(50000);
+    } while (microtime(true) < $deadline);
+
+    if ($socket === false) {
+        throw new RuntimeException('failed to connect to on-wire HTTP/2 listener: ' . $message);
+    }
+
+    $wire = king_http2_server_wire_build_request_bytes($port, $request);
+    $written = 0;
+    $length = strlen($wire);
+    while ($written < $length) {
+        $chunk = @socket_write($socket, substr($wire, $written), $length - $written);
+        if ($chunk === false || $chunk === 0) {
+            $message = socket_strerror(socket_last_error($socket));
+            socket_close($socket);
+            throw new RuntimeException('failed while writing HTTP/2 abort request: ' . $message);
+        }
+        $written += $chunk;
+    }
+
+    usleep($settleUs);
+
+    if (defined('SO_LINGER')) {
+        @socket_set_option($socket, SOL_SOCKET, SO_LINGER, [
+            'l_onoff' => 1,
+            'l_linger' => 0,
+        ]);
+    }
+
+    socket_close($socket);
 }

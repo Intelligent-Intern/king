@@ -11,7 +11,9 @@ function king_orchestrator_test_format_tcp_endpoint(string $host, int $port): st
 
 function king_orchestrator_remote_peer_start(
     ?int $port = null,
-    string $bindHost = '127.0.0.1'
+    string $bindHost = '127.0.0.1',
+    ?string $serverScript = null,
+    array $extraArgs = []
 ): array {
     if ($port === null) {
         $probe = stream_socket_server(
@@ -35,14 +37,18 @@ function king_orchestrator_remote_peer_start(
     }
 
     $capture = tempnam(sys_get_temp_dir(), 'king-orchestrator-remote-peer-capture-');
+    $serverScript ??= __DIR__ . '/orchestrator_remote_peer_server.inc';
     $command = [
         PHP_BINARY,
         '-n',
-        __DIR__ . '/orchestrator_remote_peer_server.inc',
+        $serverScript,
         $capture,
         (string) $port,
         $bindHost,
     ];
+    foreach ($extraArgs as $extraArg) {
+        $command[] = (string) $extraArg;
+    }
 
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
@@ -71,6 +77,7 @@ function king_orchestrator_remote_peer_start(
         'capture' => $capture,
         'port' => (int) $port,
         'host' => $bindHost,
+        'server_script' => $serverScript,
     ];
 }
 

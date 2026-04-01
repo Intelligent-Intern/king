@@ -535,6 +535,56 @@ PHP_FUNCTION(king_semantic_dns_start_server)
     RETURN_TRUE;
 }
 
+PHP_FUNCTION(king_semantic_dns_query)
+{
+    zend_string *query;
+    zend_long max_response_bytes = 256;
+    char *response;
+
+    ZEND_PARSE_PARAMETERS_START(1, 2)
+        Z_PARAM_STR(query)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_LONG(max_response_bytes)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (!king_semantic_dns_runtime_require_initialized("king_semantic_dns_query")) {
+        RETURN_THROWS();
+    }
+
+    if (ZSTR_LEN(query) == 0) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "king_semantic_dns_query() requires a non-empty query."
+        );
+        RETURN_THROWS();
+    }
+
+    if (max_response_bytes < 1 || max_response_bytes > 4096) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "king_semantic_dns_query() 'max_response_bytes' must be between 1 and 4096."
+        );
+        RETURN_THROWS();
+    }
+
+    response = emalloc((size_t) max_response_bytes);
+    if (king_semantic_dns_process_query(ZSTR_VAL(query), response, (size_t) max_response_bytes) != SUCCESS) {
+        efree(response);
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "king_semantic_dns_query() could not produce a full response within %ld bytes.",
+            max_response_bytes
+        );
+        RETURN_THROWS();
+    }
+
+    RETVAL_STRING(response);
+    efree(response);
+}
+
 int king_semantic_dns_init_system(king_semantic_dns_config_t *config)
 {
     king_semantic_dns_runtime_state new_state;

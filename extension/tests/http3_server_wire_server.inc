@@ -1,7 +1,7 @@
 <?php
 
 if ($argc < 6) {
-    fwrite(STDERR, "usage: http3_server_wire_server.inc <capture-path> <port> <cert> <key> <host>\n");
+    fwrite(STDERR, "usage: http3_server_wire_server.inc <capture-path> <port> <cert> <key> <host> [mode]\n");
     exit(1);
 }
 
@@ -10,6 +10,7 @@ $port = (int) $argv[2];
 $certFile = $argv[3];
 $keyFile = $argv[4];
 $host = $argv[5];
+$mode = $argv[6] ?? 'basic';
 $capture = [];
 $session = null;
 
@@ -25,7 +26,7 @@ $result = king_http3_server_listen_once(
     $host,
     $port,
     $config,
-    static function (array $request) use (&$capture, &$session): array {
+    static function (array $request) use (&$capture, &$session, $mode): array {
         $session = $request['session'];
         $stats = king_get_stats($session);
 
@@ -34,6 +35,7 @@ $result = king_http3_server_listen_once(
             'scheme' => $request['scheme'],
             'method' => $request['method'],
             'uri' => $request['uri'],
+            'path' => $request['path'] ?? null,
             'host' => $request['host'],
             'body' => $request['body'],
             'stream_id' => $request['stream_id'],
@@ -46,6 +48,43 @@ $result = king_http3_server_listen_once(
             'transport_socket_family_before' => $stats['transport_socket_family'],
             'transport_has_socket_before' => $stats['transport_has_socket'],
         ];
+
+        if ($mode === 'response-normalization') {
+            return [
+                'status' => 202,
+                'headers' => [
+                    'Content-Length' => '999',
+                    'Connection' => 'keep-alive',
+                    'Content-Type' => 'text/plain',
+                    'X-Reply-Mode' => 'normalized',
+                    'X-Multi' => [
+                        'alpha',
+                        'beta',
+                    ],
+                ],
+                'body' => 'normalized-body',
+            ];
+        }
+
+        if ($mode === 'cancel-callback') {
+            $capture['cancel_handler_ok'] = king_server_on_cancel(
+                $session,
+                $request['stream_id'],
+                static function (int $cancelledStreamId) use (&$capture): void {
+                    $capture['cancelled_stream'] = $cancelledStreamId;
+                }
+            );
+            $capture['cancel_handler_error'] = king_get_last_error();
+            usleep(300000);
+
+            return [
+                'status' => 200,
+                'headers' => [
+                    'content-type' => 'text/plain',
+                ],
+                'body' => str_repeat('late-http3-', 65536),
+            ];
+        }
 
         return [
             'status' => 201,

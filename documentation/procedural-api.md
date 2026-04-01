@@ -77,10 +77,11 @@ the dispatcher to choose the protocol for you.
 | `king_http2_request_send()` | Sends one direct HTTP/2 request. | [HTTP Clients and Streams](./http-clients-and-streams.md) |
 | `king_http2_request_send_multi()` | Sends a multiplexed batch across one HTTP/2 session. | [HTTP Clients and Streams](./http-clients-and-streams.md) |
 | `king_http3_request_send()` | Sends one direct HTTP/3 request over QUIC. | [QUIC and TLS](./quic-and-tls.md) |
+| `king_http3_request_send_multi()` | Sends a multiplexed batch across one HTTP/3 session. | [QUIC and TLS](./quic-and-tls.md) |
 
 Most applications do not need protocol-specific calls on every request. They
-matter when protocol choice is itself part of the job, such as HTTP/2
-multiplexing tests, explicit HTTP/3 request paths, or controlled fallback
+matter when protocol choice is itself part of the job, such as HTTP/2 or
+HTTP/3 multiplexing tests, explicit QUIC request paths, or controlled fallback
 behavior.
 
 ## Early Hints

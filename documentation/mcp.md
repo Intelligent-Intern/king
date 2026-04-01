@@ -114,6 +114,12 @@ non-loopback MCP peer must be named explicitly through the system INI
 MCP into an unrestricted outbound TCP dialer while still preserving real
 multi-host deployments under operator control.
 
+That multi-host story is now verified in the tree, not only described. The MCP
+test harness runs a client inside an unprivileged user/network namespace behind
+`slirp4netns`, targets a host-bound MCP server over a non-loopback IPv4
+address, and proves that unary request, upload, and download flows survive that
+cross-host-style path instead of only loopback or same-process peers.
+
 ## Unary Request: One Payload In, One Payload Out
 
 `king_mcp_request()` is the smallest useful MCP operation. The caller provides a

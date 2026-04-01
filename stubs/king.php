@@ -178,6 +178,23 @@ namespace {
     function king_http3_request_send(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): array|false {}
 
     /**
+     * Direct live HTTP/3 multiplex leaf over one active QUIC + HTTP/3
+     * connection. Each request entry accepts `url`, optional `method`,
+     * optional `headers`, and optional `body`. The current leaf requires every
+     * entry to target the same absolute `https://` origin plus TLS profile so
+     * it can share one HTTP/3 session honestly; responses are returned in
+     * input order.
+     * @param array<int,array<string,mixed>> $requests
+     * @param array<string,mixed>|null $options
+     * @return array<int,array<string,mixed>>|false
+     * @throws \King\NetworkException
+     * @throws \King\TimeoutException
+     * @throws \King\TlsException
+     * @throws \King\ProtocolException
+     */
+    function king_http3_request_send_multi(array $requests, ?array $options = null): array|false {}
+
+    /**
      * Materialize an on-wire validated WebSocket client connection resource.
      * The current runtime accepts absolute `ws://` and `wss://` URLs,
      * performs a real client handshake, snapshots optional handshake headers
@@ -778,6 +795,8 @@ namespace {
      * Imports one object (and optional `.meta`) from a filesystem directory.
      * Source path points to the backup export directory containing payload and
      * matching `<object_id>`/`<object_id>.meta` files.
+     * This is the public partial-restore surface: it restores exactly one
+     * archived object and does not roll through batch snapshot state.
      * @return bool
      * @throws \King\RuntimeException|\King\SystemException
      */
@@ -797,7 +816,10 @@ namespace {
     /**
      * Imports all object payload/metadata files from a filesystem backup
      * directory. Restore fails before live mutation if the archive is
-     * incomplete, partially corrupted, or manifest-inconsistent.
+     * incomplete, partially corrupted, or manifest-inconsistent. The current
+     * batch contract is committed full-snapshot replay or committed
+     * incremental-patch replay only; there is no public rolling restore or
+     * subset-filter option on this API today.
      * @return bool
      * @throws \King\RuntimeException|\King\SystemException
      */
@@ -1260,13 +1282,32 @@ namespace {
     function king_semantic_dns_start_server(): bool {}
 
     /**
+     * Process one local DNS-shaped query against the active semantic-DNS runtime.
+     * This is a bounded local helper for the current runtime slice, not an
+     * on-wire DNS listener.
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_semantic_dns_query(string $query, int $max_response_bytes = 256): string {}
+
+    /**
      * Semantic-DNS topology snapshot for the active runtime.
      * Registered services and mother nodes are exposed from the local
      * in-memory runtime registries.
      * @return array{
      *   services:list<array<string,mixed>>,
      *   mother_nodes:list<array<string,mixed>>,
-     *   statistics:array<string,int>,
+     *   statistics:array{
+     *     total_services:int,
+     *     healthy_services:int,
+     *     degraded_services:int,
+     *     unhealthy_services:int,
+     *     mother_nodes:int,
+     *     discovered_mother_nodes:int,
+     *     synced_mother_nodes:int,
+     *     start_count:int,
+     *     processed_queries:int,
+     *     server_active:int
+     *   },
      *   topology_generated_at:int
      * }
      */
@@ -1475,7 +1516,8 @@ namespace {
 
     /**
      * Read one persisted pipeline-run snapshot from the active orchestrator
-     * state registry.
+     * state registry, including explicit `error_classification` and per-step
+     * `steps` status snapshots when present.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_get_run(string $run_id): array|false {}

@@ -12,7 +12,7 @@ Status note:
 - Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, and real TCP host/port `remote_peer` execution with persisted success/failure snapshots are now verified; the remaining open boxes below are the broader continuation, observability, and multi-host slices.
 - Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path, are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices, and now expose an explicit process-local non-persistent non-replay delivery contract across restart; the remaining open boxes below are richer ordering/idempotency guarantees, longer-haul characterization, and stronger diagnostics.
 - Recent QUIC bootstrap closure: the build path now rehydrates a pinned `quiche` commit, pinned BoringSSL submodule commit, tracked workspace lockfile, and pinned `wirefilter` revision without branch-based fallbacks or unlocked cargo retries.
-- Recent Smart-DNS closure: larger-topology mother-node churn now preserves coherent local persisted-state sync statistics across concurrent multiprocess writers; the broader real-topology and split-brain boxes below remain open.
+- Recent Smart-DNS closure: the local DNS-shaped query surface now fails closed on undersized response budgets and rehydrates cleanly after restart, while the broader real on-wire listener and distributed-topology boxes below remain open.
 - Recent security closure: HTTP/2 one-shot cumulative body caps, HTTP/3 one-shot full-body completion, MCP persisted transfer-key truncation fixes plus loopback-default peer targeting, bounded object-store metadata-cache growth, CRLF-safe cloud metadata headers, TOCTOU-safe local/distributed object-store reads, trusted workflow-run source materialization, and loopback-default Semantic DNS live probe allowlists are now verified on the current mainline; the broader full-surface security review remains open below.
 
 ## A. Transport / QUIC / HTTP / WebSocket
@@ -25,7 +25,7 @@ Status note:
 - [x] Validate HTTP/1 Content-Length responses against real servers
 - [x] Validate HTTP/1 failure paths against real connection aborts
 - [x] Validate HTTP/1 timeout behavior against real slow servers
-- [ ] Validate HTTP/1 connection reuse limits under load
+- [x] Validate HTTP/1 connection reuse limits under load
 - [ ] Validate HTTP/1 header normalization under real traffic
 
 - [x] Validate full HTTP/2 client behavior on-wire against real h2 servers
@@ -44,13 +44,13 @@ Status note:
 - [x] Validate HTTP/3 header and body paths against real h3 endpoints
 - [x] Validate HTTP/3 failure paths on transport abort
 - [x] Validate HTTP/3 failure paths on handshake failure
-- [ ] Validate HTTP/3 timeout behavior against real slow peers
+- [x] Validate HTTP/3 timeout behavior against real slow peers
 - [x] Validate HTTP/3 connection reuse and session ticket paths
+- [x] Validate HTTP/3 backpressure under real multi-stream traffic
 - [ ] Validate HTTP/3 early-data / session-ticket behavior
 - [ ] Validate HTTP/3 retransmit / loss behavior under injected packet loss
-- [ ] Validate HTTP/3 backpressure under real multi-stream traffic
-- [ ] Validate HTTP/3 fairness under sustained load
-- [ ] Validate HTTP/3 long-duration soak behavior under continuous load
+- [x] Validate HTTP/3 fairness under sustained load
+- [x] Validate HTTP/3 long-duration soak behavior under continuous load
 
 - [ ] Validate full QUIC session lifecycle against real peers
 - [ ] Validate full QUIC stream lifecycle against real peers
@@ -72,8 +72,8 @@ Status note:
 - [x] Validate WebSocket error paths for protocol violations
 - [x] Validate WebSocket error paths for network aborts
 - [x] Validate long-lived WebSocket connections under continuous load
-- [ ] Validate WebSocket backpressure under many concurrent connections
-- [ ] Validate WebSocket fairness under many concurrent connections
+- [x] Validate WebSocket backpressure under many concurrent connections
+- [x] Validate WebSocket fairness under many concurrent connections
 - [ ] Fully implement honest WebSocket server API behavior
 - [ ] Back `King\WebSocket\Server` with fully real runtime behavior
 - [ ] Validate `King\WebSocket\Server` shutdown and drain behavior
@@ -87,9 +87,9 @@ Status note:
 - [x] Validate HTTP/2 server listener as a real network listener
 - [x] Validate HTTP/3 server listener as a real network listener
 - [x] Validate server dispatch under real network traffic
-- [ ] Validate server request normalization against real requests
-- [ ] Validate server response normalization against real clients
-- [ ] Validate server-side cancel callbacks under real traffic
+- [x] Validate server request normalization against real requests
+- [x] Validate server response normalization against real clients
+- [x] Validate server-side cancel callbacks under real traffic
 - [ ] Validate server-side Early Hints on-wire
 - [x] Validate server-side WebSocket upgrades on-wire
 - [ ] Validate server TLS reload under live traffic
@@ -97,7 +97,7 @@ Status note:
 - [ ] Validate server admin API auth / reload / failure paths
 - [ ] Validate server CORS / header behavior against real browsers and clients
 - [x] Validate server session churn under long-running operation
-- [ ] Validate server close / drain / restart behavior
+- [x] Validate server close / drain / restart behavior
 - [ ] Validate server multi-connection scheduling under load
 - [ ] Validate server fairness across competing clients
 - [ ] Validate server resource cleanup under crash / abort scenarios
@@ -117,7 +117,7 @@ Status note:
 - [x] Finalize MCP error mapping for transport failures
 - [x] Finalize MCP error mapping for backend failures
 - [x] Validate MCP multi-process operation
-- [ ] Validate MCP multi-host operation
+- [x] Validate MCP multi-host operation
 - [x] Enforce MCP concurrency and bounded-concurrency guarantees
 - [x] Enforce MCP deadline propagation
 - [x] Validate MCP upload/download under large payloads
@@ -134,14 +134,14 @@ Status note:
 - [x] Persist pipeline run state
 - [x] Rehydrate pipeline run state after restart
 - [x] Implement pipeline continuation after process restart
-- [ ] Implement pipeline continuation after host restart
+- [x] Implement pipeline continuation after host restart
 - [x] Enforce bounded concurrency for pipeline execution
 - [x] Enforce per-step deadline handling
 - [x] Propagate cancellation across step / worker boundaries
 - [x] Define and implement retry / idempotency semantics per step
-- [ ] Finalize per-step error classification
+- [x] Finalize per-step error classification
 - [ ] Define and implement rollback / compensation semantics where publicly claimed
-- [ ] Validate distributed tool execution across multiple workers
+- [x] Validate distributed tool execution across multiple workers
 - [x] Validate worker failure during active pipeline execution
 - [x] Validate queue / scheduler fairness under load
 - [x] Finalize exact queued/running/failed/cancelled/completed state transitions
@@ -214,11 +214,11 @@ Status note:
 - [x] Handle restore from partially corrupted archives
 - [x] Handle restore while the system is running concurrently
 - [x] Validate crash recovery after hard process abort
-- [ ] Validate restart rehydration under all persistence modes
-- [ ] Enforce integrity checks after restore
-- [ ] Enforce integrity checks after import
-- [ ] Validate metadata migrations after restore
-- [ ] Define rolling-restore / partial-restore semantics where publicly claimed
+- [x] Validate restart rehydration under all persistence modes
+- [x] Enforce integrity checks after restore
+- [x] Enforce integrity checks after import
+- [x] Validate metadata migrations after restore
+- [x] Define rolling-restore / partial-restore semantics where publicly claimed
 
 ## H. CDN / Cache / Edge
 
@@ -247,9 +247,9 @@ Status note:
 - [x] Validate status updates under concurrent writes
 - [x] Implement persistence for registration data
 - [x] Implement rehydration of registration data after restart
-- [ ] Validate consistency after split-brain / partial-failure scenarios where publicly claimed
+- [x] Validate consistency after split-brain / partial-failure scenarios where publicly claimed
 - [x] Validate topology generation under large service counts
-- [ ] Validate DNS failure and recovery behavior
+- [x] Validate DNS failure and recovery behavior
 
 ## J. Telemetry Core
 

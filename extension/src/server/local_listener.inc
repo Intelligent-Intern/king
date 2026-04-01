@@ -182,6 +182,89 @@ static void king_server_local_close_session(king_client_session_t *session)
     session->last_activity_at = time(NULL);
 }
 
+static zend_string *king_server_local_build_normalized_path(zend_string *uri)
+{
+    const char *value;
+    size_t value_len;
+    const char *query;
+    const char *scheme;
+    const char *authority;
+    const char *slash;
+    size_t path_len;
+
+    if (uri == NULL) {
+        return zend_string_init("/", sizeof("/") - 1, 0);
+    }
+
+    value = ZSTR_VAL(uri);
+    value_len = ZSTR_LEN(uri);
+    if (value_len == 0) {
+        return zend_string_init("/", sizeof("/") - 1, 0);
+    }
+
+    query = memchr(value, '?', value_len);
+
+    if (value[0] == '/') {
+        path_len = query != NULL
+            ? (size_t) (query - value)
+            : value_len;
+        if (path_len == 0) {
+            path_len = 1;
+        }
+        return zend_string_init(value, path_len, 0);
+    }
+
+    if (value[0] == '*') {
+        return zend_string_init(value, 1, 0);
+    }
+
+    scheme = strstr(value, "://");
+    if (scheme != NULL) {
+        authority = scheme + 3;
+        slash = memchr(authority, '/', value_len - (size_t) (authority - value));
+        if (slash != NULL) {
+            const char *path_end = query != NULL && query > slash
+                ? query
+                : value + value_len;
+
+            path_len = (size_t) (path_end - slash);
+            if (path_len == 0) {
+                path_len = 1;
+            }
+            return zend_string_init(slash, path_len, 0);
+        }
+
+        return zend_string_init("/", sizeof("/") - 1, 0);
+    }
+
+    path_len = query != NULL
+        ? (size_t) (query - value)
+        : value_len;
+    if (path_len == 0) {
+        return zend_string_init("/", sizeof("/") - 1, 0);
+    }
+
+    return zend_string_init(value, path_len, 0);
+}
+
+static void king_server_local_add_normalized_target_fields(zval *request)
+{
+    zval *uri_zv;
+    zend_string *path;
+
+    uri_zv = zend_hash_str_find(
+        Z_ARRVAL_P(request),
+        "uri",
+        sizeof("uri") - 1
+    );
+    if (uri_zv == NULL || Z_TYPE_P(uri_zv) != IS_STRING) {
+        return;
+    }
+
+    path = king_server_local_build_normalized_path(Z_STR_P(uri_zv));
+    add_assoc_str(request, "path", path);
+}
+
 static void king_server_local_add_common_request_fields(
     zval *request,
     king_client_session_t *session,
@@ -203,6 +286,7 @@ static void king_server_local_add_common_request_fields(
     add_assoc_string(request, "protocol", (char *) protocol);
     add_assoc_string(request, "scheme", (char *) scheme);
     add_assoc_long(request, "stream_id", stream_id);
+    king_server_local_add_normalized_target_fields(request);
     add_assoc_str(request, "local_address", zend_string_copy(session->transport_local_address));
     add_assoc_long(request, "local_port", session->transport_local_port);
     add_assoc_str(request, "remote_address", zend_string_copy(session->transport_peer_address));
@@ -319,4 +403,55 @@ static zend_result king_server_local_validate_response(
     king_server_open_telemetry_record_response(session, protocol, retval);
 
     return SUCCESS;
+}
+
+static bool king_server_local_errno_is_peer_disconnect(int err)
+{
+    switch (err) {
+#ifdef EPIPE
+        case EPIPE:
+#endif
+#ifdef ECONNRESET
+        case ECONNRESET:
+#endif
+#ifdef ECONNREFUSED
+        case ECONNREFUSED:
+#endif
+#ifdef ECONNABORTED
+        case ECONNABORTED:
+#endif
+#ifdef ENOTCONN
+        case ENOTCONN:
+#endif
+            return true;
+        default:
+            return false;
+    }
+}
+
+static void king_server_local_mark_stream_cancelled_if_registered(
+    king_client_session_t *session,
+    zend_long stream_id,
+    const char *function_name
+)
+{
+    if (session == NULL || session->is_closed || stream_id < 0) {
+        return;
+    }
+
+    if (!zend_hash_index_exists(&session->server_cancel_handlers, (zend_ulong) stream_id)) {
+        return;
+    }
+
+    if (zend_hash_index_exists(&session->cancelled_streams, (zend_ulong) stream_id)) {
+        return;
+    }
+
+    (void) king_client_session_mark_cancelled(
+        session,
+        stream_id,
+        "both",
+        sizeof("both") - 1,
+        function_name
+    );
 }

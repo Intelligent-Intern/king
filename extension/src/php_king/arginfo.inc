@@ -74,6 +74,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_service_lookup, 0, 0, 1)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, client_info, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_semantic_dns_query, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, query, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, max_response_bytes, IS_LONG, 0, "256")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_register_service, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, service_info, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
@@ -179,6 +184,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_request_send, 0, 0, 1)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_http2_request_send_multi, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, requests, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_http3_request_send_multi, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, requests, IS_ARRAY, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
