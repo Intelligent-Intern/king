@@ -50,22 +50,22 @@ function king_object_store_466_finish_process($process, array $pipes): array
 }
 
 $root = sys_get_temp_dir() . '/king_object_store_backup_locking_466_' . getmypid();
-$backupDir = $root . '/backups';
-$restoreDir = $root . '/restore-source';
-$childScript = sys_get_temp_dir() . '/king_object_store_backup_locking_child_466_' . getmypid() . '.php';
-$fifoPath = sys_get_temp_dir() . '/king_object_store_backup_locking_fifo_466_' . getmypid();
+$backup_dir = $root . '/backups';
+$restore_dir = $root . '/restore-source';
+$child_script = sys_get_temp_dir() . '/king_object_store_backup_locking_child_466_' . getmypid() . '.php';
+$fifo_path = sys_get_temp_dir() . '/king_object_store_backup_locking_fifo_466_' . getmypid();
 $extensionPath = dirname(__DIR__) . '/modules/king.so';
 $lockPath = $root . '/.king_object_locks/locked-local.lock';
 
 king_object_store_466_cleanup_dir($root);
-@mkdir($backupDir, 0700, true);
-@mkdir($restoreDir, 0700, true);
-file_put_contents($restoreDir . '/locked-local', 'restored-value');
+@mkdir($backup_dir, 0700, true);
+@mkdir($restore_dir, 0700, true);
+file_put_contents($restore_dir . '/locked-local', 'restored-value');
 
-@unlink($fifoPath);
-posix_mkfifo($fifoPath, 0600);
+@unlink($fifo_path);
+posix_mkfifo($fifo_path, 0600);
 
-file_put_contents($childScript, <<<'PHP'
+file_put_contents($child_script, <<<'PHP'
 <?php
 $root = $argv[1];
 $fifoPath = $argv[2];
