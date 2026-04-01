@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate HTTP/3 backpressure under real multi-stream traffic.
+- [ ] Validate HTTP/3 fairness under sustained load.
 
 ## Active Executable Items
 
@@ -40,7 +40,7 @@
 4. [x] Validate HTTP/3 timeout behavior against real slow peers.
    done when: real slow-reader and slow-writer QUIC peers trigger stable timeout behavior rather than only transport-abort and handshake-failure slices.
 
-5. [ ] Validate HTTP/3 backpressure under real multi-stream traffic.
+5. [x] Validate HTTP/3 backpressure under real multi-stream traffic.
    done when: mixed fast and slow HTTP/3 streams keep progress bounded and fair under real peer pressure instead of only one-shot churn isolation.
 
 6. [ ] Validate HTTP/3 fairness under sustained load.

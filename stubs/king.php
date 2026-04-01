@@ -178,6 +178,23 @@ namespace {
     function king_http3_request_send(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): array|false {}
 
     /**
+     * Direct live HTTP/3 multiplex leaf over one active QUIC + HTTP/3
+     * connection. Each request entry accepts `url`, optional `method`,
+     * optional `headers`, and optional `body`. The current leaf requires every
+     * entry to target the same absolute `https://` origin plus TLS profile so
+     * it can share one HTTP/3 session honestly; responses are returned in
+     * input order.
+     * @param array<int,array<string,mixed>> $requests
+     * @param array<string,mixed>|null $options
+     * @return array<int,array<string,mixed>>|false
+     * @throws \King\NetworkException
+     * @throws \King\TimeoutException
+     * @throws \King\TlsException
+     * @throws \King\ProtocolException
+     */
+    function king_http3_request_send_multi(array $requests, ?array $options = null): array|false {}
+
+    /**
      * Materialize an on-wire validated WebSocket client connection resource.
      * The current runtime accepts absolute `ws://` and `wss://` URLs,
      * performs a real client handshake, snapshots optional handshake headers

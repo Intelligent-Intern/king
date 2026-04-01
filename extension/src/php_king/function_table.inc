@@ -29,6 +29,7 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_http2_request_send, arginfo_king_request_send)
     PHP_FE(king_http2_request_send_multi, arginfo_king_http2_request_send_multi)
     PHP_FE(king_http3_request_send, arginfo_king_request_send)
+    PHP_FE(king_http3_request_send_multi, arginfo_king_http3_request_send_multi)
 
     PHP_FE(king_client_websocket_connect, arginfo_king_websocket_connect)
     PHP_FE(king_client_websocket_send, arginfo_king_websocket_send)

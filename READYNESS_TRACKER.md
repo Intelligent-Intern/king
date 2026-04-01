@@ -46,9 +46,9 @@ Status note:
 - [x] Validate HTTP/3 failure paths on handshake failure
 - [x] Validate HTTP/3 timeout behavior against real slow peers
 - [x] Validate HTTP/3 connection reuse and session ticket paths
+- [x] Validate HTTP/3 backpressure under real multi-stream traffic
 - [ ] Validate HTTP/3 early-data / session-ticket behavior
 - [ ] Validate HTTP/3 retransmit / loss behavior under injected packet loss
-- [ ] Validate HTTP/3 backpressure under real multi-stream traffic
 - [ ] Validate HTTP/3 fairness under sustained load
 - [ ] Validate HTTP/3 long-duration soak behavior under continuous load
 

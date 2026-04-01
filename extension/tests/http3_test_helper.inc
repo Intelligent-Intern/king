@@ -545,6 +545,53 @@ function king_http3_delayed_body_client_binary(): string
     return $binary;
 }
 
+function king_http3_multi_peer_binary(): string
+{
+    $root = dirname(dirname(__DIR__));
+    $template = __DIR__ . '/http3_multi_peer.rs';
+    $manifest = $root . '/quiche/apps/Cargo.toml';
+    $source = $root . '/quiche/apps/src/bin/king-http3-multi-peer.rs';
+    $binary = $root . '/quiche/target/release/king-http3-multi-peer';
+
+    if (trim((string) shell_exec('command -v cargo')) === '') {
+        throw new RuntimeException('cargo is required to build the HTTP/3 multi peer helper');
+    }
+
+    if (!is_file($template)) {
+        throw new RuntimeException('missing tracked HTTP/3 multi peer template');
+    }
+
+    $templateContents = file_get_contents($template);
+    if (!is_string($templateContents) || $templateContents === '') {
+        throw new RuntimeException('failed to read tracked HTTP/3 multi peer template');
+    }
+
+    $currentSource = is_file($source) ? file_get_contents($source) : false;
+    if (!is_string($currentSource) || $currentSource !== $templateContents) {
+        if (file_put_contents($source, $templateContents) !== strlen($templateContents)) {
+            throw new RuntimeException('failed to synchronize tracked HTTP/3 multi peer source');
+        }
+    }
+
+    if (is_file($binary) && filemtime($binary) >= max(filemtime($source), filemtime($template))) {
+        return $binary;
+    }
+
+    $command = sprintf(
+        'cargo build --manifest-path %s --release --locked --bin king-http3-multi-peer 2>&1',
+        escapeshellarg($manifest)
+    );
+
+    exec($command, $output, $exitCode);
+    if ($exitCode !== 0 || !is_file($binary)) {
+        throw new RuntimeException(
+            "failed to build HTTP/3 multi peer helper:\n" . implode("\n", $output)
+        );
+    }
+
+    return $binary;
+}
+
 function king_http3_send_delayed_body_request(string $url, string $body, int $delayMs = 250): array
 {
     $binary = king_http3_delayed_body_client_binary();
@@ -646,6 +693,54 @@ function king_http3_start_failure_peer(
         'host' => $urlHost,
         'bind_host' => $bindHost,
         'mode' => $mode,
+    ];
+}
+
+function king_http3_start_multi_peer(
+    string $certFile,
+    string $keyFile,
+    string $bindHost = 'localhost',
+    ?string $urlHost = null,
+    int $expectedRequests = 3
+): array {
+    $envBindHost = getenv('KING_HTTP3_TEST_BIND_HOST');
+    if ($bindHost === 'localhost' && is_string($envBindHost) && $envBindHost !== '') {
+        $bindHost = $envBindHost;
+    }
+
+    $binary = king_http3_multi_peer_binary();
+    $envUrlHost = getenv('KING_HTTP3_TEST_URL_HOST');
+    if ($urlHost === null && is_string($envUrlHost) && $envUrlHost !== '') {
+        $urlHost = $envUrlHost;
+    }
+    $urlHost ??= $bindHost;
+    $command = [$binary, $certFile, $keyFile, $bindHost, (string) $expectedRequests];
+    $process = proc_open($command, [
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ], $pipes);
+
+    if (!is_resource($process)) {
+        throw new RuntimeException('failed to launch local HTTP/3 multi peer');
+    }
+
+    $ready = fgets($pipes[1]);
+    if (!is_string($ready) || preg_match('/^READY (\d+)$/', trim($ready), $matches) !== 1) {
+        $stderr = stream_get_contents($pipes[2]);
+        foreach ($pipes as $pipe) {
+            fclose($pipe);
+        }
+        proc_close($process);
+        throw new RuntimeException('local HTTP/3 multi peer failed: ' . trim($stderr));
+    }
+
+    return [
+        'process' => $process,
+        'pipes' => $pipes,
+        'port' => (int) $matches[1],
+        'host' => $urlHost,
+        'bind_host' => $bindHost,
+        'expected_requests' => $expectedRequests,
     ];
 }
 

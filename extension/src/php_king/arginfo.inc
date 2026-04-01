@@ -183,6 +183,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_http2_request_send_multi, 0, 0, 1)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_http3_request_send_multi, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, requests, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_receive_response, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, request_context, IS_MIXED, 0)
 ZEND_END_ARG_INFO()

@@ -87,6 +87,7 @@ PHP_FUNCTION(king_http1_request_send);
 PHP_FUNCTION(king_http2_request_send);
 PHP_FUNCTION(king_http2_request_send_multi);
 PHP_FUNCTION(king_http3_request_send);
+PHP_FUNCTION(king_http3_request_send_multi);
 
 PHP_FUNCTION(king_client_websocket_connect);
 PHP_FUNCTION(king_client_websocket_send);
