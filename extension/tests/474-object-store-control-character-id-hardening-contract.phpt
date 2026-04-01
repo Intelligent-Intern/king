@@ -14,13 +14,16 @@ var_dump(king_object_store_init([
 ]));
 
 $badIds = [
+    // Simple control-character cases
     "evil\nformat=bad",
     "evil\rkind=full",
     "evil\tformat=bad",
     "evil\0format=bad",
     "evil\fform=bad",
-    "evil\vformat=bad",
-    "evil\x7fform=bad",
+    // Edge cases: path traversal + control chars and 127-byte limits
+    "../evil\nformat=bad",
+    str_repeat('a', 120) . "\n" . 'b',             // total length 122 + 1 (newline) + 1 = 124, still long with control char
+    str_repeat('x', 123) . "\x7f",                 // control char at the end of a long ID
 ];
 
 foreach ($badIds as $badId) {
