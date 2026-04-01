@@ -55,8 +55,18 @@ static int king_object_store_build_snapshot_manifest_path(
 
 static int king_object_store_remove_tree(const char *path)
 {
+    struct stat st;
+
     if (path == NULL || path[0] == '\0') {
         return FAILURE;
+    }
+
+    if (lstat(path, &st) != 0) {
+        return errno == ENOENT ? SUCCESS : FAILURE;
+    }
+
+    if (!S_ISDIR(st.st_mode) || S_ISLNK(st.st_mode)) {
+        return unlink(path) == 0 ? SUCCESS : FAILURE;
     }
 
     {
@@ -64,12 +74,6 @@ static int king_object_store_remove_tree(const char *path)
         struct dirent *entry;
 
         if (dir == NULL) {
-            if (errno == ENOENT) {
-                return SUCCESS;
-            }
-            if (errno == ENOTDIR) {
-                return unlink(path) == 0 ? SUCCESS : FAILURE;
-            }
             return FAILURE;
         }
 
