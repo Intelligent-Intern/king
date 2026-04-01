@@ -215,7 +215,7 @@ Status note:
 - [x] Handle restore while the system is running concurrently
 - [x] Validate crash recovery after hard process abort
 - [x] Validate restart rehydration under all persistence modes
-- [ ] Enforce integrity checks after restore
+- [x] Enforce integrity checks after restore
 - [ ] Enforce integrity checks after import
 - [ ] Validate metadata migrations after restore
 - [ ] Define rolling-restore / partial-restore semantics where publicly claimed

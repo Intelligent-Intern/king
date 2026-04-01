@@ -721,6 +721,70 @@ static int king_object_store_snapshot_manifest_validate_restore_shape(
     return SUCCESS;
 }
 
+static int king_object_store_validate_restore_archive_metadata_for_buffer(
+    const char *object_id,
+    const king_object_metadata_t *metadata,
+    const void *data,
+    size_t data_size
+)
+{
+    if (object_id == NULL || object_id[0] == '\0' || metadata == NULL) {
+        return FAILURE;
+    }
+    if (metadata->object_id[0] != '\0' && strcmp(metadata->object_id, object_id) != 0) {
+        return FAILURE;
+    }
+    if (metadata->content_length != 0
+        && metadata->content_length != (uint64_t) data_size) {
+        return FAILURE;
+    }
+    if (metadata->integrity_sha256[0] != '\0'
+        && !king_object_store_verify_integrity_buffer(data, data_size, metadata)) {
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static int king_object_store_validate_restore_archive_metadata_for_path(
+    const char *object_id,
+    const king_object_metadata_t *metadata,
+    const char *source_path,
+    uint64_t source_size
+)
+{
+    char computed_sha256[65];
+    uint64_t computed_size = 0;
+
+    if (object_id == NULL || object_id[0] == '\0'
+        || metadata == NULL
+        || source_path == NULL
+        || source_path[0] == '\0') {
+        return FAILURE;
+    }
+    if (metadata->object_id[0] != '\0' && strcmp(metadata->object_id, object_id) != 0) {
+        return FAILURE;
+    }
+    if (metadata->content_length != 0 && metadata->content_length != source_size) {
+        return FAILURE;
+    }
+    if (metadata->integrity_sha256[0] != '\0') {
+        if (king_object_store_compute_sha256_hex_for_path(
+                source_path,
+                computed_sha256,
+                &computed_size
+            ) != SUCCESS) {
+            return FAILURE;
+        }
+        if (computed_size != source_size
+            || strcmp(computed_sha256, metadata->integrity_sha256) != 0) {
+            return FAILURE;
+        }
+    }
+
+    return SUCCESS;
+}
+
 static int king_object_store_preflight_restore_object_archive(
     const char *object_id,
     const char *source_directory
@@ -768,11 +832,12 @@ static int king_object_store_preflight_restore_object_archive(
     if (king_object_store_meta_read_from_path(source_meta_path, &metadata) != SUCCESS) {
         return FAILURE;
     }
-    if (metadata.object_id[0] != '\0' && strcmp(metadata.object_id, object_id) != 0) {
-        return FAILURE;
-    }
-    if (metadata.content_length != 0
-        && metadata.content_length != (uint64_t) source_stat.st_size) {
+    if (king_object_store_validate_restore_archive_metadata_for_path(
+            object_id,
+            &metadata,
+            source_path,
+            (uint64_t) source_stat.st_size
+        ) != SUCCESS) {
         return FAILURE;
     }
 
@@ -1379,6 +1444,19 @@ static int king_object_store_import_object(const char *object_id, const char *so
 
     if (king_object_store_meta_read_from_path(source_meta_path, &metadata) != SUCCESS) {
         king_object_store_fill_fallback_metadata(&metadata, object_id, (uint64_t) source_stat.st_size, source_stat.st_mtime);
+    } else if (king_object_store_validate_restore_archive_metadata_for_buffer(
+            object_id,
+            &metadata,
+            data,
+            data_size
+        ) != SUCCESS) {
+        king_object_store_set_backend_runtime_result(
+            "primary",
+            king_object_store_runtime.config.primary_backend,
+            FAILURE,
+            "Restore archive integrity validation failed before the object became live."
+        );
+        goto cleanup;
     }
 
     if (metadata.object_id[0] == '\0') {
