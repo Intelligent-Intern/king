@@ -20,7 +20,7 @@ areas:
 
 - deeper transport and listener failure-path verification across HTTP/2, HTTP/3, and WebSocket
 - stronger object-store provider-quota classification and broader cross-backend failure normalization around the now-real core/cloud surface
-- orchestrator continuation depth and broader distributed control-plane recovery
+- orchestrator compensation semantics, observability depth, and broader distributed control-plane recovery
 - Smart-DNS split-brain, failure/recovery, and broader distributed-topology validation beyond the current concurrent-write, live-signal, and concurrent mother-node churn proof
 - stronger telemetry/autoscaling load-bound, cleanup, and recovery guarantees
 
@@ -36,7 +36,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `475/475` passing
+- `./infra/scripts/test-extension.sh`: `476/476` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -58,7 +58,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `475` PHPT files
+- `extension/tests`: `476` PHPT files
 - public stub parity: `136` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -86,7 +86,7 @@ The current tree already proves:
 - one shared runtime install smoke across staged profiles, packaged release artifacts, and published runtime containers, plus first-class clean-host package install and container smoke matrix entrypoints
 - long-duration ASan, UBSan, and leak-oriented soak gates with retained per-iteration logs and archived failure diagnostics under `extension/build/soak/` plus CI artifact upload on soak failure
 - MCP request/upload/download parity against a real TCP host/port remote peer with propagated timeout, deadline, cancellation controls, stable OO exception mapping across transport, protocol, timeout, and local backend failures, IPv4 and IPv6 peer targeting coverage, 1 MiB payload roundtrips, canonical collision-free transfer identifiers across newline-shaped and binary-safe tuple components, parallel-transfer backpressure isolation, explicit single-flight reentry guards, rejection of unexpected remote `MISS` request responses without `NULL` payload crashes, same-host partial-failure recovery, persisted remote-state restart recovery coverage, restart-rehydratable local transfer-state fallback with consume-on-successful-download cleanup semantics, explicit `topology_scope=tcp_host_port_peer` introspection, and namespaced non-loopback multi-host request/upload/download verification against a host-bound peer
-- orchestrator persistence, honest `queued -> running -> completed|failed|cancelled` run transitions, explicit `single_attempt` retry plus `caller_managed` idempotency contract, explicit per-step error classification in persisted run snapshots so `validation`, `timeout`, `backend`, `remote_transport`, and `cancelled` outcomes remain distinguishable with step-local versus run-level scope, explicit `topology_scope=local_in_process|same_host_file_worker|tcp_host_port_execution_peer` introspection by backend mode, deterministic `claimed_recovery_then_fifo_run_id` scheduling, exclusive claimed-file locking across concurrent workers, nofollow and regular-file-only claimed-job opens with nonblocking special-file rejection, recovery of an already-running claimed run exactly once after worker loss, explicit `king_pipeline_orchestrator_resume_run()` continuation of persisted `running` runs after controller restart on the local and `remote_peer` backends, verified continuation after full controller plus remote-peer host loss once the peer returns on the persisted host/port contract, sustained queue fairness under repeated parallel-worker contention, local/file-worker backend boundaries, real TCP host/port `remote_peer` execution with persisted success/failure snapshots, rejection of remote network object payloads during result decode, cross-process cancellation, and multiprocess controller/observer/worker verification
+- orchestrator persistence, honest `queued -> running -> completed|failed|cancelled` run transitions, explicit `single_attempt` retry plus `caller_managed` idempotency contract, explicit per-step error classification in persisted run snapshots so `validation`, `timeout`, `backend`, `remote_transport`, and `cancelled` outcomes remain distinguishable with step-local versus run-level scope, explicit `topology_scope=local_in_process|same_host_file_worker|tcp_host_port_execution_peer` introspection by backend mode, deterministic `claimed_recovery_then_fifo_run_id` scheduling, exclusive claimed-file locking across concurrent workers, nofollow and regular-file-only claimed-job opens with nonblocking special-file rejection, recovery of an already-running claimed run exactly once after worker loss, explicit `king_pipeline_orchestrator_resume_run()` continuation of persisted `running` runs after controller restart on the local and `remote_peer` backends, verified continuation after full controller plus remote-peer host loss once the peer returns on the persisted host/port contract, sustained queue fairness under repeated parallel-worker contention, local/file-worker backend boundaries, real TCP host/port `remote_peer` execution with persisted success/failure snapshots, verified multi-worker step claiming and result handling behind one remote execution peer, rejection of remote network object payloads during result decode, cross-process cancellation, and multiprocess controller/observer/worker verification
 - telemetry batch queueing, bounded pending span/log capture before flush, bounded retry behavior, explicit `best_effort_bounded_retry` plus `process_local_non_persistent` delivery semantics, process-scoped lazy libcurl lifetime without per-export global teardown, explicit `restart_replay=not_supported` and `drain_behavior=single_batch_per_flush` component contracts, OTLP metrics/traces/logs export hardening, and real local collector coverage for success plus non-2xx, timeout, response-size-limit, and outage recovery
 - telemetry-driven Hetzner autoscaling with controller-owned credentials, persisted recovery state, `register -> ready -> drain -> delete` lifecycle gating, and stale pending-node rollback for failed bootstrap, registration, and readiness with explicit provider-delete failure reporting
 - system integration lifecycle coordination, restart-state visibility, and chaos/recovery harness coverage for the local control plane
@@ -98,7 +98,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 ### Remote Control Plane Depth
 
 - MCP now propagates timeout, deadline, and cancellation controls through the real peer protocol, and host/port TCP peer targeting, stable OO exception mapping across transport, protocol, timeout, and local backend failures, large-payload behavior, parallel-transfer backpressure isolation, single-flight reentry safety, partial-failure recovery, persisted remote-state restart recovery, plus restart-rehydratable local transfer-state fallback are verified. The runtime now exposes that honest `tcp_host_port_peer` scope explicitly; broader distributed failure semantics are still open.
-- The orchestrator now has honest `local_in_process`, `same_host_file_worker`, and `tcp_host_port_execution_peer` backend scopes, plus verified success/failure execution over a real TCP host/port remote peer and explicit controller-side continuation after process restart and full host loss/rejoin on the persisted remote-peer route. Remaining gaps are broader distributed multi-worker execution depth, observability depth, compensation semantics where publicly claimed, and a broader true multi-host harness.
+- The orchestrator now has honest `local_in_process`, `same_host_file_worker`, and `tcp_host_port_execution_peer` backend scopes, plus verified success/failure execution over a real TCP host/port remote peer, verified multi-worker step distribution behind that remote-peer boundary, and explicit controller-side continuation after process restart and full host loss/rejoin on the persisted remote-peer route. Remaining gaps are observability depth, compensation semantics where publicly claimed, and a broader true multi-host harness.
 - Retry and idempotency semantics are now explicit and test-backed for the current file-worker slice, including exact once-only recovery after worker loss during active execution and starvation-free queue progression under parallel-worker contention.
 
 ### Transport And Listener Failure Depth

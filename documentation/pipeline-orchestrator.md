@@ -219,6 +219,14 @@ The controller still persists the run snapshot locally before sending the remote
 execution payload. That matters because the run remains visible in local system
 history even though the work itself is performed remotely.
 
+The current proof for this backend is no longer limited to one remote process
+that handles the whole run in one place. King now also has an end-to-end
+verification slice where one remote execution peer distributes the pipeline's
+steps across multiple worker processes behind that peer boundary while the
+controller-side run snapshot still remains stable. That is deliberately weaker
+than the still-open true multi-host harness, but it is stronger than a
+single-worker-only remote story.
+
 ```mermaid
 sequenceDiagram
     participant C as Controller

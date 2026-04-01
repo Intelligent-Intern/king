@@ -141,7 +141,7 @@ Status note:
 - [x] Define and implement retry / idempotency semantics per step
 - [x] Finalize per-step error classification
 - [ ] Define and implement rollback / compensation semantics where publicly claimed
-- [ ] Validate distributed tool execution across multiple workers
+- [x] Validate distributed tool execution across multiple workers
 - [x] Validate worker failure during active pipeline execution
 - [x] Validate queue / scheduler fairness under load
 - [x] Finalize exact queued/running/failed/cancelled/completed state transitions

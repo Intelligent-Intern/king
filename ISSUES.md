@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate distributed tool execution across multiple workers.
+- [ ] Validate consistency after Smart-DNS split-brain / partial-failure scenarios where publicly claimed.
 
 ## Active Executable Items
 
@@ -78,7 +78,7 @@
 16. [x] Finalize per-step error classification for orchestrated execution.
     done when: retry, non-retry, validation, remote transport, and backend failures stay distinguishable through the orchestrator surface without collapsing into generic runtime errors.
 
-17. [ ] Validate distributed tool execution across multiple workers.
+17. [x] Validate distributed tool execution across multiple workers.
     done when: the orchestrator proves stable multi-worker execution, claiming, and result handling beyond the current local/file-worker and single remote-peer depth.
 
 ### 4. Smart-DNS Distributed Recovery
