@@ -1,5 +1,5 @@
 --TEST--
-King object-store backup and restore respect the exclusive mutation lock
+King object store backup and restore respect the exclusive mutation lock
 --SKIPIF--
 <?php
 if (!function_exists('proc_open') || !function_exists('posix_mkfifo')) {
