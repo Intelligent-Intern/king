@@ -1599,7 +1599,11 @@ int king_object_store_restore_all_objects(const char *source_directory)
     zval object_ids;
     zval *entry;
     char manifest_path[1024];
+    char restore_error[256];
     struct stat st;
+    int restore_barrier_fd = -1;
+    int rc = FAILURE;
+    zend_bool object_ids_initialized = 0;
 
     if (!king_object_store_runtime.initialized || source_directory == NULL || source_directory[0] == '\0') {
         return FAILURE;
@@ -1613,21 +1617,37 @@ int king_object_store_restore_all_objects(const char *source_directory)
     if (king_object_store_directory_is_within_storage_root(source_directory, 0) != SUCCESS) {
         return FAILURE;
     }
+    if (king_object_store_acquire_exclusive_restore_barrier(
+            &restore_barrier_fd,
+            restore_error,
+            sizeof(restore_error)
+        ) != SUCCESS) {
+        king_object_store_set_backend_runtime_result(
+            "primary",
+            king_object_store_runtime.config.primary_backend,
+            FAILURE,
+            restore_error[0] != '\0'
+                ? restore_error
+                : "Failed to acquire the object-store batch restore barrier."
+        );
+        return FAILURE;
+    }
     if (king_object_store_build_snapshot_manifest_path(
             manifest_path,
             sizeof(manifest_path),
             source_directory
         ) != SUCCESS) {
-        return FAILURE;
+        goto cleanup;
     }
     if (stat(manifest_path, &st) == 0 && S_ISREG(st.st_mode)) {
-        return king_object_store_restore_all_objects_from_manifest(source_directory, manifest_path);
+        rc = king_object_store_restore_all_objects_from_manifest(source_directory, manifest_path);
+        goto cleanup;
     }
 
     array_init(&object_ids);
+    object_ids_initialized = 1;
     if (king_object_store_collect_legacy_restore_objects(source_directory, &object_ids) != SUCCESS) {
-        zval_ptr_dtor(&object_ids);
-        return FAILURE;
+        goto cleanup;
     }
 
     ZEND_HASH_FOREACH_VAL(Z_ARRVAL(object_ids), entry) {
@@ -1635,11 +1655,16 @@ int king_object_store_restore_all_objects(const char *source_directory)
             continue;
         }
         if (king_object_store_restore_object(Z_STRVAL_P(entry), source_directory) != SUCCESS) {
-            zval_ptr_dtor(&object_ids);
-            return FAILURE;
+            goto cleanup;
         }
     } ZEND_HASH_FOREACH_END();
 
-    zval_ptr_dtor(&object_ids);
-    return SUCCESS;
+    rc = SUCCESS;
+
+cleanup:
+    if (object_ids_initialized) {
+        zval_ptr_dtor(&object_ids);
+    }
+    king_object_store_release_exclusive_restore_barrier(&restore_barrier_fd);
+    return rc;
 }

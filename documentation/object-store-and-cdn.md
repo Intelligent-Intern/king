@@ -422,6 +422,13 @@ If a manifest-listed upsert is missing its payload or `.meta` sidecar, if a
 legacy directory contains a broken payload/metadata pair, or if the manifest
 shape is internally inconsistent, the restore fails before mutating the live
 store instead of importing an early subset and dying later.
+Batch restore now also requires a quiescent runtime. While
+`king_object_store_restore_all_objects()` is replaying a committed snapshot, new
+writes, deletes, and resumable-upload starts fail instead of interleaving with
+the import. Symmetrically, if any live mutation is already in flight anywhere in
+the store, `restore_all_objects()` fails closed before it starts mutating the
+live inventory. The contract is therefore "committed snapshot replay against a
+quiet store", not "best effort merge while traffic is still modifying data."
 
 The same API now also supports explicit incremental backups:
 

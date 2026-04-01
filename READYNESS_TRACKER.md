@@ -211,7 +211,7 @@ Status note:
 - [x] Define consistency guarantees for backup snapshots
 - [x] Implement incremental backups where publicly claimed
 - [x] Handle restore from partially corrupted archives
-- [ ] Handle restore while the system is running concurrently
+- [x] Handle restore while the system is running concurrently
 - [x] Validate crash recovery after hard process abort
 - [ ] Validate restart rehydration under all persistence modes
 - [ ] Enforce integrity checks after restore
