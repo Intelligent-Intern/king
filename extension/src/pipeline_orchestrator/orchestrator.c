@@ -1415,15 +1415,28 @@ int king_orchestrator_resume_run(
         return FAILURE;
     }
 
-    rc = king_orchestrator_execute_existing_run(
-        run_id,
-        &initial_data,
-        &pipeline,
-        return_value,
-        &control,
-        function_name,
-        throw_on_error
-    );
+    if (king_orchestrator_backend_is_remote_peer()) {
+        rc = king_orchestrator_execute_remote_run(
+            run_id,
+            &initial_data,
+            &pipeline,
+            &options,
+            return_value,
+            &control,
+            function_name,
+            throw_on_error
+        );
+    } else {
+        rc = king_orchestrator_execute_existing_run(
+            run_id,
+            &initial_data,
+            &pipeline,
+            return_value,
+            &control,
+            function_name,
+            throw_on_error
+        );
+    }
 
     zval_ptr_dtor(&initial_data);
     zval_ptr_dtor(&pipeline);
