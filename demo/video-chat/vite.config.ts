@@ -11,15 +11,25 @@ function getVendorChunkName(id: string) {
     ['utils-vendor', ['date-fns', 'uuid', 'crypto-js', 'file-saver']],
   ]
 
-  if (!id.includes('node_modules/')) {
+  const nmIndex = id.indexOf('node_modules/')
+  if (nmIndex === -1) {
     return undefined
   }
 
+  const modulePath = id.slice(nmIndex)
+
   for (const [chunkName, packages] of groups) {
-    if (packages.some((pkg) => id.includes(`/node_modules/${pkg}/`) || id.includes(`/node_modules/${pkg}.`))) {
+    if (
+      packages.some((pkg) => {
+        const prefix = `node_modules/${pkg}`
+        return modulePath.startsWith(`${prefix}/`) || modulePath.startsWith(`${prefix}.`)
+      })
+    ) {
       return chunkName
     }
   }
+
+  return undefined
 }
 
 // https://vitejs.dev/config/
