@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate HTTP/1 connection reuse limits under load.
+- [ ] Validate HTTP/3 timeout behavior against real slow peers.
 
 ## Active Executable Items
 
@@ -34,7 +34,7 @@
 
 ### 2. Transport And Listener Failure Depth
 
-3. [ ] Validate HTTP/1 connection reuse limits under load.
+3. [x] Validate HTTP/1 connection reuse limits under load.
    done when: sustained mixed-load traffic proves the runtime caps, recycles, and tears down reused HTTP/1 connections honestly instead of only succeeding on happy-path reuse.
 
 4. [ ] Validate HTTP/3 timeout behavior against real slow peers.

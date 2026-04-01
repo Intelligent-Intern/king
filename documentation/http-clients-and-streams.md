@@ -118,6 +118,12 @@ protocol explicitly.
 
 HTTP/1 is the simplest protocol family in the chapter. It is still important
 because it remains common, widely compatible, and easy to reason about.
+In the current runtime, HTTP/1 keep-alive reuse is intentionally bounded: the
+pool keeps at most one idle socket per origin and at most sixteen idle sockets
+globally. Under mixed-load bursts that exceed that budget, the oldest idle
+origins are reopened instead of pretending there is an unbounded reuse pool,
+and any reused socket that comes back with `Connection: close` is torn down
+instead of being silently recycled.
 
 HTTP/2 adds multiplexing. That means one session can carry several request
 streams at the same time. It also changes how pooled reuse feels, because the

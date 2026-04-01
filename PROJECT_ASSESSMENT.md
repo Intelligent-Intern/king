@@ -69,7 +69,7 @@ Current tree facts:
 The current tree already proves:
 
 - explicit config and session ownership through `King\Config` and `King\Session`
-- real HTTP/1, HTTP/2, and HTTP/3 client request paths, including reuse, repeated pooled HTTP/2 mixed-load bursts, streaming, bodiless-response handling, cumulative interim-response size-cap enforcement, bounded pending Early Hints storage, explicit HTTP/1 and HTTP/2 abort/reset failure mapping, explicit HTTP/3 handshake-failure and transport-close mapping, shared-ring HTTP/3 session-ticket reuse with direct and dispatcher recovery from stale ticket seeds, and cancel/timeout contracts
+- real HTTP/1, HTTP/2, and HTTP/3 client request paths, including HTTP/1 keep-alive reuse with verified one-idle-per-origin and sixteen-idle-global pool limits under mixed-load bursts plus honest reopen after peer `Connection: close`, repeated pooled HTTP/2 mixed-load bursts, streaming, bodiless-response handling, cumulative interim-response size-cap enforcement, bounded pending Early Hints storage, explicit HTTP/1 and HTTP/2 abort/reset failure mapping, explicit HTTP/3 handshake-failure and transport-close mapping, shared-ring HTTP/3 session-ticket reuse with direct and dispatcher recovery from stale ticket seeds, and cancel/timeout contracts
 - HTTP/2 shared-session fairness under mixed slow and fast concurrent streams
 - HTTP/3 one-shot churn isolation across repeated timeout and healthy-recovery cycles
 - local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3, plus real one-shot on-wire listener proof for HTTP/1, HTTP/2, and HTTP/3, including bounded HTTP/1 one-shot accept and request-head timeout behavior against stalled clients
