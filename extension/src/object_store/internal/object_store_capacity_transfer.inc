@@ -5,6 +5,7 @@
 #define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_FULL "full_backup"
 #define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_INCREMENTAL "incremental_backup"
 #define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_CONSISTENCY "per_object_locked_commit"
+#define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_MAX_LINE_LENGTH 4096
 
 #ifndef KING_PATH_MAX
 # if defined(PATH_MAX)
@@ -542,8 +543,7 @@ static int king_object_store_snapshot_manifest_parse(
 )
 {
     FILE *fp;
-    char *line = NULL;
-    size_t line_capacity = 0;
+    char line[KING_OBJECT_STORE_SNAPSHOT_MANIFEST_MAX_LINE_LENGTH];
     int saw_format = 0;
     int saw_kind = 0;
     int saw_consistency = 0;
@@ -564,9 +564,18 @@ static int king_object_store_snapshot_manifest_parse(
         return FAILURE;
     }
 
-    while (getline(&line, &line_capacity, fp) != -1) {
+    while (fgets(line, sizeof(line), fp) != NULL) {
         char *value = strchr(line, '=');
+        size_t line_len = strlen(line);
         size_t value_len;
+
+        if (line_len == sizeof(line) - 1 && line[line_len - 1] != '\n') {
+            int ch;
+
+            while ((ch = fgetc(fp)) != '\n' && ch != EOF) {
+            }
+            goto cleanup;
+        }
 
         if (value == NULL) {
             continue;
@@ -657,9 +666,6 @@ static int king_object_store_snapshot_manifest_parse(
     status = (saw_format && saw_kind && saw_consistency) ? SUCCESS : FAILURE;
 
 cleanup:
-    if (line != NULL) {
-        free(line);
-    }
     fclose(fp);
     return status;
 }
