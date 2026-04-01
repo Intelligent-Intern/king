@@ -91,9 +91,10 @@ A server handler in King receives a normalized request array instead of raw
 socket bytes. This is an important design choice.
 
 The array carries the data a handler naturally wants to reason about: method,
-path, headers, body, and protocol-specific metadata. It can also carry stream
-and session fields that help the handler understand which live server context it
-is operating on.
+the full request target in `uri`, the normalized routing path in `path`,
+headers, body, and protocol-specific metadata. It can also carry stream and
+session fields that help the handler understand which live server context it is
+operating on.
 
 The point of normalization is not to hide the protocol. The point is to avoid
 forcing every handler to rebuild the same request parsing logic. The runtime
@@ -109,7 +110,9 @@ flowchart LR
 ```
 
 This design makes handlers easier to read while still keeping transport-aware
-operations available through the session APIs.
+operations available through the session APIs. In practice, `uri` keeps the
+original request target such as `/chat?room=alpha`, while `path` gives the
+stable routing slice such as `/chat`.
 
 ## HTTP/1, HTTP/2, And HTTP/3 Listeners
 

@@ -41,6 +41,7 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
             $capture['handler_called'] = true;
             $session = $request['session'];
             $capture['request_uri'] = $request['uri'];
+            $capture['request_path'] = $request['path'] ?? null;
             $capture['stream_id'] = $request['stream_id'];
             $capture['local_address'] = $request['local_address'];
             $capture['remote_address'] = $request['remote_address'];

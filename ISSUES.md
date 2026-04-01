@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- [ ] Validate server request normalization against real requests.
+- [ ] Validate server close / drain / restart behavior.
 
 ## Active Executable Items
 
@@ -55,7 +55,7 @@
 9. [x] Validate WebSocket fairness under many concurrent connections.
     done when: many active websocket clients can compete without one noisy or slow peer starving unrelated clients.
 
-10. [ ] Validate server request normalization against real requests.
+10. [x] Validate server request normalization against real requests.
     done when: the on-wire server paths prove stable request-shape normalization across the active HTTP listener/runtime surfaces instead of only local validation contracts.
 
 11. [ ] Validate server close / drain / restart behavior.

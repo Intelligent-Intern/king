@@ -26,6 +26,7 @@ $result = king_http2_server_listen_once(
             'scheme' => $request['scheme'],
             'method' => $request['method'],
             'uri' => $request['uri'],
+            'path' => $request['path'] ?? null,
             'host' => $request['host'],
             'body' => $request['body'],
             'stream_id' => $request['stream_id'],
