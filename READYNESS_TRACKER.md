@@ -216,7 +216,7 @@ Status note:
 - [x] Validate crash recovery after hard process abort
 - [x] Validate restart rehydration under all persistence modes
 - [x] Enforce integrity checks after restore
-- [ ] Enforce integrity checks after import
+- [x] Enforce integrity checks after import
 - [ ] Validate metadata migrations after restore
 - [ ] Define rolling-restore / partial-restore semantics where publicly claimed
 

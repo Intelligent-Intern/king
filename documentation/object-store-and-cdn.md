@@ -426,6 +426,10 @@ That fail-closed contract now also includes restore-time integrity revalidation.
 If the archived payload no longer matches the exported `content_length` or
 `integrity_sha256`, the restore is rejected before the object becomes live, and
 batch restore leaves the already-live store untouched.
+The same revalidation now applies to the single-object import surface behind
+`king_object_store_restore_object()`: tampered archived `object_id`,
+`content_length`, or `integrity_sha256` metadata is rejected before the
+imported object becomes live.
 Batch restore now also requires a quiescent runtime. While
 `king_object_store_restore_all_objects()` is replaying a committed snapshot, new
 writes, deletes, and resumable-upload starts fail instead of interleaving with

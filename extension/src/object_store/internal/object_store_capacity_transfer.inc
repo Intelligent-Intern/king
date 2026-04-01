@@ -1454,7 +1454,7 @@ static int king_object_store_import_object(const char *object_id, const char *so
             "primary",
             king_object_store_runtime.config.primary_backend,
             FAILURE,
-            "Restore archive integrity validation failed before the object became live."
+            "Object-store archive integrity validation failed before the object became live."
         );
         goto cleanup;
     }
