@@ -887,6 +887,27 @@ const char *king_object_store_object_id_validate(const char *object_id)
     return NULL;
 }
 
+const char *king_object_store_public_object_id_validate_zstr(const zend_string *object_id)
+{
+    const unsigned char *cursor;
+    size_t index;
+
+    if (object_id == NULL || ZSTR_LEN(object_id) == 0 || ZSTR_LEN(object_id) > 127) {
+        return "Object ID must be between 1 and 127 bytes.";
+    }
+
+    cursor = (const unsigned char *) ZSTR_VAL(object_id);
+    for (index = 0; index < ZSTR_LEN(object_id); index++) {
+        if (cursor[index] < 0x20 || cursor[index] == 0x7f) {
+            return "Object ID is invalid for object-store paths.";
+        }
+    }
+
+    return king_object_store_object_id_validate(ZSTR_VAL(object_id)) == NULL
+        ? NULL
+        : "Object ID is invalid for object-store paths.";
+}
+
 /* --- Config helpers --- */
 
 static void king_object_store_config_clear(king_object_store_config_t *config)
