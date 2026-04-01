@@ -6,6 +6,14 @@
 #define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_KIND_INCREMENTAL "incremental_backup"
 #define KING_OBJECT_STORE_SNAPSHOT_MANIFEST_CONSISTENCY "per_object_locked_commit"
 
+#ifndef KING_PATH_MAX
+# if defined(PATH_MAX)
+#  define KING_PATH_MAX PATH_MAX
+# else
+#  define KING_PATH_MAX 1024
+# endif
+#endif
+
 static int king_object_store_is_meta_filename(const char *name)
 {
     size_t name_len;
@@ -66,7 +74,7 @@ static int king_object_store_remove_tree(const char *path)
         }
 
         while ((entry = readdir(dir)) != NULL) {
-            char child_path[1024];
+            char child_path[KING_PATH_MAX];
 
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
                 continue;
