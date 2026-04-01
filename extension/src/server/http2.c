@@ -38,6 +38,7 @@
 #define KING_SERVER_HTTP2_CLIENT_PREFACE "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 #define KING_SERVER_HTTP2_CLIENT_PREFACE_LEN 24
 #define KING_SERVER_HTTP2_MAX_FRAME_PAYLOAD_BYTES 1048576
+#define KING_SERVER_HTTP2_MAX_REQUEST_BODY_BYTES 1048576
 
 #define KING_SERVER_HTTP2_FRAME_DATA 0x0
 #define KING_SERVER_HTTP2_FRAME_HEADERS 0x1
@@ -58,6 +59,7 @@ typedef struct _king_server_http2_request_state {
     zend_string *path;
     zend_string *scheme;
     zend_string *authority;
+    size_t body_bytes;
     uint32_t stream_id;
     zend_bool headers_initialized;
 } king_server_http2_request_state;
@@ -1474,6 +1476,17 @@ static zend_result king_server_http2_handle_wire_request(
                 }
 
                 if (ZSTR_LEN(payload) > 0) {
+                    if (state.body_bytes > KING_SERVER_HTTP2_MAX_REQUEST_BODY_BYTES - ZSTR_LEN(payload)) {
+                        zend_string_release(payload);
+                        king_server_local_set_errorf(
+                            "%s() received an HTTP/2 request body that exceeds the active one-shot limit.",
+                            function_name
+                        );
+                        king_server_http2_request_state_dtor(&state);
+                        return FAILURE;
+                    }
+
+                    state.body_bytes += ZSTR_LEN(payload);
                     smart_str_appendl(&state.body, ZSTR_VAL(payload), ZSTR_LEN(payload));
                 }
 
