@@ -13,6 +13,7 @@ var_dump(ini_get('king.dns_mode'));
 var_dump(ini_get('king.otel_service_name'));
 var_dump(ini_get('king.cluster_autoscale_provider'));
 var_dump(ini_get('king.mcp_default_request_timeout_ms'));
+var_dump(ini_get('king.mcp_allowed_peer_hosts'));
 var_dump(ini_get('king.mcp_transfer_state_path'));
 var_dump(ini_get('king.geometry_calculation_precision'));
 var_dump(ini_get('king.smartcontract_dlt_provider'));
@@ -30,6 +31,7 @@ string(17) "service_discovery"
 string(16) "king_application"
 string(0) ""
 string(5) "30000"
+string(0) ""
 string(0) ""
 string(7) "float64"
 string(8) "ethereum"

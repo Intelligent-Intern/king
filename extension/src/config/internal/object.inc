@@ -445,6 +445,20 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "mcp.allowed_peer_hosts",
+            sizeof("mcp.allowed_peer_hosts") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->mcp.mcp_allowed_peer_hosts != NULL ? cfg->mcp.mcp_allowed_peer_hosts : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "mcp.transfer_state_path",
             sizeof("mcp.transfer_state_path") - 1
         )
@@ -661,6 +675,11 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
         target,
         "mcp.default_request_timeout_ms",
         cfg->mcp.mcp_default_request_timeout_ms
+    );
+    add_assoc_string(
+        target,
+        "mcp.allowed_peer_hosts",
+        cfg->mcp.mcp_allowed_peer_hosts != NULL ? cfg->mcp.mcp_allowed_peer_hosts : ""
     );
     add_assoc_string(
         target,

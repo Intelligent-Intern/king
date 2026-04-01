@@ -25,6 +25,7 @@ typedef struct _kg_mcp_orchestrator_config_t {
     zend_long mcp_default_retry_backoff_ms_initial;
     bool mcp_enable_request_caching;
     zend_long mcp_request_cache_ttl_sec;
+    char *mcp_allowed_peer_hosts;
     char *mcp_transfer_state_path;
 
     /* --- Pipeline Orchestrator Settings --- */
