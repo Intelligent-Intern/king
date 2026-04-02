@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Fully validate QUIC/TLS interaction across handshake, resumption, and live listener churn.
+- Validate `King\WebSocket\Server` shutdown and drain behavior.
 
 ## Active Executable Items
 
@@ -33,7 +33,7 @@
 2. [x] Validate HTTP/3 retransmit / loss behavior under injected packet loss.
    done when: injected-loss peers prove bounded retransmit, recovery, and post-loss follow-up behavior instead of only timeout and transport-abort slices.
 
-3. [ ] Fully validate QUIC/TLS interaction across handshake, resumption, and live listener churn.
+3. [x] Fully validate QUIC/TLS interaction across handshake, resumption, and live listener churn.
    done when: the runtime proves coherent TLS and QUIC behavior across fresh handshakes, resumed sessions, and churn-sensitive listener cycles instead of leaving the broader interaction model implicit.
 
 4. [ ] Validate `King\WebSocket\Server` shutdown and drain behavior.
