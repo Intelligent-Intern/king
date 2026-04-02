@@ -102,7 +102,7 @@ fn run() -> Result<(), String> {
     let mut request_sent = false;
     let mut request_stream_id = 0_u64;
     let mut request_sent_at: Option<Instant> = None;
-    let mut close_sent = false;
+    let close_sent = false;
     let close_delay = Duration::from_millis(delay_ms);
 
     let authority = match url.port() {

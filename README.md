@@ -28,18 +28,153 @@ object-store and control-plane surfaces are real, and the remaining closure
 work is now about narrower hardening, distributed-operating proof, and
 multi-node fleet behavior rather than placeholder subsystem stories.
 
-## GitHub Snapshot
-
-King is a native PHP extension for applications that need real transport,
-control-plane, and infrastructure behavior inside the runtime instead of in
-sidecars. It brings HTTP/1, HTTP/2, HTTP/3, QUIC, TLS, WebSocket, object
-storage, MCP, orchestration, telemetry, autoscaling, and Smart DNS into one
-coherent systems-grade surface for PHP. The project is still alpha, but the
-core runtime is real and the repo is driven by contract tests for transport,
-storage, recovery, and distributed operating paths. If you do not have a
-Hetzner account yet, it is time to fix that. Use the
+If you do not have a Hetzner account yet, it is time to fix that. Use the
 [Hetzner Cloud referral link](https://hetzner.cloud/?ref=VYfKUSIni63u) and you
 help support the live infrastructure tests that keep King honest.
+
+## How To Install And Run It
+
+For a repository-local build:
+
+```bash
+git clone --recurse-submodules https://github.com/Intelligent-Intern/king.git
+cd king
+./infra/scripts/build-profile.sh release
+php -d extension="$(pwd)/extension/modules/king.so" -r 'echo king_version(), PHP_EOL;'
+```
+
+That gives you the extension plus the matching QUIC runtime artifacts for the
+local release profile. If you only want the extension build, use
+[`./infra/scripts/build-extension.sh`](./infra/scripts/build-extension.sh).
+
+King is also being wired for the first honest
+[PIE](https://github.com/php/pie) install path. The maintainer workflow lives in
+[`documentation/pie-install.md`](./documentation/pie-install.md), and the
+packaged alpha target is `pie install intelligent-intern/king-ext` once the
+release asset is published.
+
+## Small But Oho
+
+One good first King application is this:
+
+- clients subscribe over WebSocket to `/watch?bucket=inbox`
+- an uploader sends `POST /upload?bucket=inbox&object=demo.txt`
+- the application stores the file in the object store
+- every subscriber for that bucket immediately gets a realtime notification
+
+The event looks like this:
+
+```json
+{
+  "event": "object.available",
+  "bucket": "inbox",
+  "object_id": "demo.txt",
+  "content_type": "text/plain",
+  "size": 1234
+}
+```
+
+The important point is that the durable write and the realtime fanout happen in
+the same native runtime. The object lands in King storage, and the same PHP
+process can immediately push the event over live WebSocket handles without
+handing the work to a sidecar or an external glue service.
+
+The bucket-subscription registry in this example is intentionally
+application-managed and process-local. King already gives you the real object
+store and WebSocket runtime needed for it, but it does not currently claim a
+built-in distributed bucket-watch API. For the same reason, this README example
+stays single-node on purpose instead of pretending the current router or
+load-balancer control-plane layer is already a verified WebSocket forwarding
+dataplane.
+
+The core shape looks like this:
+
+```php
+<?php
+
+$subscribers = [];
+
+function king_demo_bucket_from_request(array $request): string
+{
+    $query = [];
+    parse_str((string) parse_url($request['uri'] ?? '/', PHP_URL_QUERY), $query);
+
+    return (string) ($query['bucket'] ?? 'inbox');
+}
+
+function king_demo_object_from_request(array $request): string
+{
+    $query = [];
+    parse_str((string) parse_url($request['uri'] ?? '/', PHP_URL_QUERY), $query);
+
+    return (string) ($query['object'] ?? 'upload.bin');
+}
+
+function king_demo_publish(array &$subscribers, string $bucket, array $event): void
+{
+    $payload = json_encode($event, JSON_UNESCAPED_SLASHES);
+
+    foreach ($subscribers[$bucket] ?? [] as $index => $websocket) {
+        if (!is_resource($websocket) || !king_websocket_send($websocket, $payload)) {
+            unset($subscribers[$bucket][$index]);
+        }
+    }
+}
+
+king_object_store_init([
+    'primary_backend' => 'local_fs',
+    'storage_root_path' => __DIR__ . '/storage',
+    'max_storage_size_bytes' => 50 * 1024 * 1024,
+]);
+
+$watchHandler = static function (array $request) use (&$subscribers): array {
+    $bucket = king_demo_bucket_from_request($request);
+    $websocket = king_server_upgrade_to_websocket($request['session'], $request['stream_id']);
+
+    if (!is_resource($websocket)) {
+        return ['status' => 400, 'body' => 'websocket upgrade failed'];
+    }
+
+    $subscribers[$bucket][] = $websocket;
+    king_websocket_send($websocket, json_encode([
+        'event' => 'subscribed',
+        'bucket' => $bucket,
+    ], JSON_UNESCAPED_SLASHES));
+
+    return ['status' => 101, 'headers' => [], 'body' => ''];
+};
+
+$uploadHandler = static function (array $request) use (&$subscribers): array {
+    $bucket = king_demo_bucket_from_request($request);
+    $objectId = king_demo_object_from_request($request);
+    $storageKey = $bucket . '/' . $objectId;
+
+    $source = fopen('php://temp', 'r+');
+    fwrite($source, (string) ($request['body'] ?? ''));
+    rewind($source);
+
+    king_object_store_put_from_stream($storageKey, $source, [
+        'content_type' => 'text/plain',
+    ]);
+
+    king_demo_publish($subscribers, $bucket, [
+        'event' => 'object.available',
+        'bucket' => $bucket,
+        'object_id' => $objectId,
+        'content_type' => 'text/plain',
+        'size' => strlen((string) ($request['body'] ?? '')),
+    ]);
+
+    return [
+        'status' => 202,
+        'headers' => ['content-type' => 'application/json'],
+        'body' => json_encode([
+            'stored' => true,
+            'key' => $storageKey,
+        ], JSON_UNESCAPED_SLASHES),
+    ];
+};
+```
 
 King brings the following into one extension:
 
@@ -286,6 +421,23 @@ Canonical release-install verification then runs through
 `./infra/scripts/package-release.sh`, `./infra/scripts/install-package-matrix.sh`, and
 `./infra/scripts/container-smoke-matrix.sh`.
 The supported host/runtime verification matrix spans PHP `8.1` through `8.5`.
+
+## PIE
+
+King now carries the first honest maintainer surface for
+[PIE](https://github.com/php/pie), the PHP Installer for Extensions.
+
+The intended package shape is:
+
+- root [`composer.json`](composer.json) with `type = php-ext`
+- `build-path = extension`
+- a pre-packaged source asset built with
+  [`./infra/scripts/package-pie-source.sh`](infra/scripts/package-pie-source.sh)
+
+That source asset is the important part. King cannot rely on the default
+repository ZIP for PIE because the bundled `quiche/` tree is part of the active
+build. The maintainer workflow is documented in
+[`documentation/pie-install.md`](documentation/pie-install.md).
 
 ## Contributing
 

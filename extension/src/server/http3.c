@@ -323,10 +323,49 @@ static void king_server_http3_close_runtime_handle(void)
     }
 }
 
+static zend_result king_server_http3_build_module_relative_candidate(
+    char *buffer,
+    size_t buffer_size,
+    const char *relative_path)
+{
+    Dl_info info;
+    const char *last_sep;
+    size_t dir_len;
+    size_t relative_len;
+
+    if (dladdr((void *) king_server_http3_build_module_relative_candidate, &info) == 0
+        || info.dli_fname == NULL
+        || info.dli_fname[0] == '\0') {
+        return FAILURE;
+    }
+
+    last_sep = strrchr(info.dli_fname, '/');
+    if (last_sep == NULL) {
+        return FAILURE;
+    }
+
+    dir_len = (size_t) (last_sep - info.dli_fname);
+    relative_len = strlen(relative_path);
+
+    if (dir_len + 1 + relative_len + 1 > buffer_size) {
+        return FAILURE;
+    }
+
+    memcpy(buffer, info.dli_fname, dir_len);
+    buffer[dir_len] = '/';
+    memcpy(buffer + dir_len + 1, relative_path, relative_len + 1);
+
+    return SUCCESS;
+}
+
 static zend_result king_server_http3_ensure_quiche_ready(void)
 {
     const char *env_path = getenv("KING_QUICHE_LIBRARY");
-    const char *const candidates[] = {
+    char module_runtime_candidate[PATH_MAX];
+    char module_local_candidate[PATH_MAX];
+    const char *candidates[] = {
+        NULL,
+        NULL,
         NULL,
         "../quiche/target/release/libquiche.so",
         "../quiche/target/debug/libquiche.so",
@@ -349,6 +388,22 @@ static zend_result king_server_http3_ensure_quiche_ready(void)
 
     if (env_path != NULL && env_path[0] != '\0') {
         king_server_http3_quiche.handle = dlopen(env_path, RTLD_LAZY | RTLD_LOCAL);
+    }
+
+    if (king_server_http3_build_module_relative_candidate(
+            module_runtime_candidate,
+            sizeof(module_runtime_candidate),
+            "king/runtime/libquiche.so"
+        ) == SUCCESS) {
+        candidates[1] = module_runtime_candidate;
+    }
+
+    if (king_server_http3_build_module_relative_candidate(
+            module_local_candidate,
+            sizeof(module_local_candidate),
+            "libquiche.so"
+        ) == SUCCESS) {
+        candidates[2] = module_local_candidate;
     }
 
     for (i = 1; king_server_http3_quiche.handle == NULL && candidates[i] != NULL; ++i) {

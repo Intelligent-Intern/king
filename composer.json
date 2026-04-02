@@ -1,0 +1,25 @@
+{
+    "name": "intelligent-intern/king-ext",
+    "description": "King native PHP extension packaged for PIE",
+    "type": "php-ext",
+    "license": "MIT",
+    "homepage": "https://github.com/Intelligent-Intern/king",
+    "support": {
+        "source": "https://github.com/Intelligent-Intern/king",
+        "issues": "https://github.com/Intelligent-Intern/king/issues"
+    },
+    "require": {
+        "php": ">=8.1",
+        "lib-curl": "*"
+    },
+    "php-ext": {
+        "extension-name": "king",
+        "build-path": "extension",
+        "download-url-method": "pre-packaged-source",
+        "support-zts": false,
+        "support-nts": true,
+        "os-families-exclude": [
+            "windows"
+        ]
+    }
+}
