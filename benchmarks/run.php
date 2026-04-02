@@ -224,7 +224,7 @@ function build_case_definitions(): array
             },
         ],
         'semantic_dns' => [
-            'description' => 'real local listener bootstrap plus register/discover/route/topology steady state',
+            'description' => 'real listener bootstrap on the active v1 init surface plus steady-state register/discover/route/topology',
             'default_iterations' => 50000,
             'operations_per_iteration' => 4,
             'bootstrap' => static function (): array {
@@ -236,7 +236,7 @@ function build_case_definitions(): array
                     'dns_port' => $dnsPort,
                     'default_record_ttl_sec' => 120,
                     'service_discovery_max_ips_per_response' => 5,
-                    'semantic_mode_enable' => false,
+                    'semantic_mode_enable' => true,
                     'mothernode_uri' => 'mother://bench-node',
                     'routing_policies' => ['mode' => 'local'],
                 ];
@@ -262,8 +262,8 @@ function build_case_definitions(): array
                             'status' => 'healthy',
                             'hostname' => 'api.internal',
                             'port' => 8443,
-                            'current_load_percent' => $iteration % 100,
-                            'active_connections' => $iteration % 32,
+                            'current_load_percent' => 12,
+                            'active_connections' => 3,
                         ])) {
                             throw new RuntimeException('king_semantic_dns_register_service() failed during the benchmark.');
                         }
