@@ -16,91 +16,97 @@
 - when a leaf closes, update code, tests, docs, and `PROJECT_ASSESSMENT.md` in the same change
 - do not pull new items from `READYNESS_TRACKER.md` into this file unless the user explicitly asks for the next `20`-issue batch
 - when the current batch is exhausted, stop and wait instead of refilling it automatically
+- complete one checkbox per commit while this active batch is in flight
 - do not shrink a meaningful v1 contract just to make tests, CI, or docs easier; if the intended contract matters, build the missing backend work or ask explicitly before reducing scope
 
 ## Current Next Leaf
 
-- none; the current `20`-issue batch is exhausted and waits for the next explicit batch pull
+- Validate HTTP/3 early-data / session-ticket behavior.
 
 ## Active Executable Items
 
-### 1. Backup / Restore / Recovery Depth
+### 1. Transport And Listener Failure Depth
 
-1. [x] Validate metadata migrations after restore.
-   done when: restored objects keep the same honest metadata contract, backend-presence markers, and semantic fields instead of only surviving payload roundtrips.
+1. [ ] Validate HTTP/3 early-data / session-ticket behavior.
+   done when: resumed QUIC sessions prove honest early-data acceptance, rejection, and fallback semantics instead of silently collapsing all resumed traffic into the ordinary request path.
 
-2. [x] Define rolling-restore / partial-restore semantics where publicly claimed.
-   done when: the public backup/restore surface either exposes a real rolling/partial restore contract with verifiable behavior or explicitly narrows the public claim to the committed full/incremental restore shapes that actually exist.
+2. [ ] Validate HTTP/3 retransmit / loss behavior under injected packet loss.
+   done when: injected-loss peers prove bounded retransmit, recovery, and post-loss follow-up behavior instead of only timeout and transport-abort slices.
 
-### 2. Transport And Listener Failure Depth
+3. [ ] Fully validate QUIC/TLS interaction across handshake, resumption, and live listener churn.
+   done when: the runtime proves coherent TLS and QUIC behavior across fresh handshakes, resumed sessions, and churn-sensitive listener cycles instead of leaving the broader interaction model implicit.
 
-3. [x] Validate HTTP/1 connection reuse limits under load.
-   done when: sustained mixed-load traffic proves the runtime caps, recycles, and tears down reused HTTP/1 connections honestly instead of only succeeding on happy-path reuse.
+4. [ ] Validate `King\WebSocket\Server` shutdown and drain behavior.
+   done when: live websocket server sessions drain, reject new work, and release runtime ownership cleanly under explicit shutdown without dangling peers or half-closed state.
 
-4. [x] Validate HTTP/3 timeout behavior against real slow peers.
-   done when: real slow-reader and slow-writer QUIC peers trigger stable timeout behavior rather than only transport-abort and handshake-failure slices.
+5. [ ] Validate server admin API auth / mTLS / reload / failure paths under real traffic.
+   done when: the active admin listener proves authentication, mTLS gating, reload behavior, and failure reporting against real clients instead of only local marker slices.
 
-5. [x] Validate HTTP/3 backpressure under real multi-stream traffic.
-   done when: mixed fast and slow HTTP/3 streams keep progress bounded and fair under real peer pressure instead of only one-shot churn isolation.
+### 2. Object-Store Provider Failure Normalization
 
-6. [x] Validate HTTP/3 fairness under sustained load.
-   done when: repeated concurrent HTTP/3 work proves no starvation or pathological scheduler bias across active streams and sessions.
+6. [ ] Classify provider quota-limit failures across real cloud backends.
+   done when: real quota and exhaustion signals stay distinct from generic transport or credential failures across the active cloud adapters.
 
-7. [x] Validate HTTP/3 long-duration soak behavior under continuous load.
-   done when: the runtime survives longer-lived HTTP/3 pressure without transport-state drift, resource leaks, or poisoned follow-up sessions.
+7. [ ] Normalize quota and throttling failures across the public object-store surface.
+   done when: reads, writes, deletes, and upload-session paths expose the same typed quota and backoff-worthy throttling story across `cloud_s3`, `cloud_gcs`, and `cloud_azure` instead of provider-specific string archaeology.
 
-8. [x] Validate WebSocket backpressure under many concurrent connections.
-   done when: slow websocket consumers do not let pending writes or queue growth escape the intended bounded runtime behavior.
-
-9. [x] Validate WebSocket fairness under many concurrent connections.
-   done when: many active websocket clients can compete without one noisy or slow peer starving unrelated clients.
-
-10. [x] Validate server request normalization against real requests.
-    done when: the on-wire server paths prove stable request-shape normalization across the active HTTP listener/runtime surfaces instead of only local validation contracts.
-
-11. [x] Validate server response normalization against real clients.
-    done when: real HTTP/1, HTTP/2, and HTTP/3 clients observe the same stable response-shape contract for runtime-owned transport headers, repeated response fields, and normalized header names instead of only local response validation.
-
-12. [x] Validate server close / drain / restart behavior.
-    done when: active listener sessions can shut down, drain, and restart under real traffic without leaks, hangs, or half-closed runtime state.
-
-13. [x] Validate server-side cancel callbacks under real traffic.
-    done when: registered server-side cancel hooks fire once with the real active stream identifier when live HTTP/1, HTTP/2, and HTTP/3 clients abort mid-request or mid-response instead of only through local cancellation state.
+8. [ ] Validate quota and rate-limit behavior across resumable upload recovery.
+   done when: restart rehydration, append, complete, and abort preserve the same honest quota and throttling classification instead of degrading into generic backend failure during upload recovery.
 
 ### 3. Control Plane Distributed Depth
 
-14. [x] Validate MCP multi-host operation.
-    done when: the current real MCP peer contract is proven across actual cross-host topology instead of only same-host TCP host/port peers.
+9. [ ] Implement an MCP failover harness for real peer recovery scenarios.
+   done when: the repo can inject and verify MCP peer loss, rejoin, and partial-topology breakage through one repeatable harness instead of one-off ad hoc tests.
 
-15. [x] Implement pipeline continuation after host restart.
-    done when: orchestrator continuation remains honest after the broader host-level loss case instead of only the current controller-process restart proof.
+10. [ ] Implement an orchestrator failover harness for controller, worker, and remote-peer loss.
+    done when: the repo can inject and verify orchestrator recovery across controller loss, worker loss, and remote-peer return without relying on hand-built scenario tests each time.
 
-16. [x] Finalize per-step error classification for orchestrated execution.
-    done when: retry, non-retry, validation, remote transport, and backend failures stay distinguishable through the orchestrator surface without collapsing into generic runtime errors.
+11. [ ] Finalize orchestrator observability depth for distributed execution.
+    done when: persisted run state and runtime introspection expose enough queue, claim, retry, recovery, and remote-step context to explain distributed outcomes without log archaeology.
 
-17. [x] Validate distributed tool execution across multiple workers.
-    done when: the orchestrator proves stable multi-worker execution, claiming, and result handling beyond the current local/file-worker and single remote-peer depth.
+12. [ ] Finalize orchestrator compensation semantics where publicly claimed.
+    done when: multi-step failure and retry paths preserve an explicit compensation contract instead of leaving rollback and cleanup behavior implicit or caller-guessable.
 
 ### 4. Smart-DNS Distributed Recovery
 
-18. [x] Validate consistency after Smart-DNS split-brain / partial-failure scenarios where publicly claimed.
-    done when: discovery, routing, and mother-node state converge honestly after conflicting writers, stale peers, or partial topology loss instead of only under the current coherent local slice.
+13. [ ] Validate Smart-DNS real on-wire DNS listener behavior.
+    done when: the live DNS listener path is exercised on-wire with honest request, timeout, truncation, and recovery behavior instead of only the current bounded local query helper.
 
-19. [x] Validate Smart-DNS DNS failure and recovery behavior.
-    done when: DNS-facing failure, timeout, and recovery paths are exercised and mapped cleanly instead of leaving the broader networked recovery contract implicit.
+14. [ ] Validate Smart-DNS distributed recovery after stale-peer rejoin and partial durable-state loss.
+    done when: a stale or partially reset node converges back to the current service and mother-node view without poisoning routing or discovery state.
+
+15. [ ] Validate Smart-DNS distributed mother-node churn under concurrent re-election pressure.
+    done when: concurrent mother-node departure, rejoin, and replacement preserve honest coordination counters and routing stability beyond the current local churn slice.
+
+### 5. Telemetry And Fleet Operation Depth
+
+16. [ ] Eliminate cross-request telemetry residue and prove cleanup under load.
+    done when: telemetry state is cleaned up correctly across request and worker boundaries under sustained load without stale span or log carry-over or lifetime hazards.
+
+17. [ ] Enforce telemetry memory bounds and self-metrics under degraded exporter load.
+    done when: telemetry stays memory-bounded during collector slowdown or outage and exposes enough self-metrics to make queue growth, drops, and retry pressure observable.
+
+18. [ ] Validate autoscaling decision logic under real load patterns.
+    done when: scaling decisions are exercised against real load shapes and the runtime can explain why it scaled or held instead of only reacting to synthetic single-signal slices.
+
+19. [ ] Validate autoscaling recovery after partial fleet-state loss and fresh-node bootstrap propagation.
+    done when: autoscaling recovers coherently after partial fleet-state loss and newly provisioned nodes receive the expected runtime bootstrap and registration state automatically.
+
+20. [ ] Refresh repo-root markdown after this batch closes.
+    done when: `README.md`, `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, `CONTRIBUTE.md`, and `ISSUES.md` match the verified post-batch runtime without stale open/closed drift.
 
 ## Next-Up Clusters After The Top 20
 
-- object-store provider quota/rate-limit classification and broader backup/import/export recovery depth beyond the current real core/cloud proof
-- telemetry cleanup, cross-request residue hardening, load bounds, self-metrics, and richer export diagnostics
-- autoscaling decision logic under real load, live drain-before-delete, and automated post-bootstrap registration/readiness
-- broader QUIC lifecycle, stats, resumption, and recovery validation beyond the current HTTP/3 client slices
-- admin API auth/reload/failure depth and broader real listener cancel/early-hints/TLS coverage
-- systematic security-review closure, negative-input expansion, and release-gated hardening across public entry, persistence, transport, and provider paths
+- broader websocket server runtime materialization beyond the drain-focused failure proof in this batch
+- deeper object-store cross-backend failure normalization beyond quota/throttling and resumable-upload recovery
+- broader Smart-DNS distributed-topology validation once stale-peer, partial-loss, and re-election pressure are proven
+- longer-haul telemetry exporter ordering and autoscaling fleet-behavior proof beyond the bounded cleanup, load, and recovery leaves in this batch
+- release, compatibility, supply-chain, and final security-review closure that remain outside this explicitly requested repo-local sprint batch
 
 ## Notes
 
 - The active queue is administered in explicit `20`-issue batches, not by automatic replenishment from `READYNESS_TRACKER.md`.
+- This batch was pulled explicitly from the still-open caveats in `PROJECT_ASSESSMENT.md`.
 - When the current batch is exhausted, work stops until the next `20`-issue batch is explicitly pulled in.
 - The active queue intentionally carries the next `20` open executable leaves, not a historical list of already-closed wins.
 - Items still open in `READYNESS_TRACKER.md` but not listed here are either derivative of these leaves, already fenced honestly, or still too broad to be a useful execution item today.
