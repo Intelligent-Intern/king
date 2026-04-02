@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Validate `King\WebSocket\Server` shutdown and drain behavior.
+- Validate server admin API auth / mTLS / reload / failure paths under real traffic.
 
 ## Active Executable Items
 
@@ -36,7 +36,7 @@
 3. [x] Fully validate QUIC/TLS interaction across handshake, resumption, and live listener churn.
    done when: the runtime proves coherent TLS and QUIC behavior across fresh handshakes, resumed sessions, and churn-sensitive listener cycles instead of leaving the broader interaction model implicit.
 
-4. [ ] Validate `King\WebSocket\Server` shutdown and drain behavior.
+4. [x] Validate `King\WebSocket\Server` shutdown and drain behavior.
    done when: live websocket server sessions drain, reject new work, and release runtime ownership cleanly under explicit shutdown without dangling peers or half-closed state.
 
 5. [ ] Validate server admin API auth / mTLS / reload / failure paths under real traffic.
