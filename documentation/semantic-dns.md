@@ -62,14 +62,16 @@ The Semantic-DNS API is intentionally direct.
 
 `king_semantic_dns_init()` initializes the runtime with bind, TTL, discovery,
 mode, and routing configuration. `king_semantic_dns_start_server()` starts the
-runtime server state. `king_semantic_dns_register_service()` adds a service
-record. `king_semantic_dns_register_mother_node()` adds a mother-node record.
+runtime server state and the bounded live UDP listener for the active config.
+`king_semantic_dns_register_service()` adds a service record.
+`king_semantic_dns_register_mother_node()` adds a mother-node record.
 `king_semantic_dns_update_service_status()` patches live status and optional
 load counters for a service. `king_semantic_dns_discover_service()` returns the
 discoverable services for one service type. `king_semantic_dns_get_optimal_route()`
 returns the best route for a named service. `king_semantic_dns_query()` exposes
-the current bounded local DNS-shaped query helper. `king_semantic_dns_get_service_topology()`
-returns the current topology view.
+the bounded local DNS-shaped helper that remains available alongside the live
+listener. `king_semantic_dns_get_service_topology()` returns the current
+topology view.
 
 The value of this API is not that it is exotic. The value is that each call
 maps to one real control-plane question.
@@ -164,17 +166,23 @@ services start joining the topology.
 ## Starting The Server State
 
 After initialization, `king_semantic_dns_start_server()` starts the active
-server-state slice for the subsystem. In simple terms, this moves the runtime
-from "configured" to "actively serving Semantic-DNS state and route decisions."
+server-state slice for the subsystem and binds the bounded UDP listener for the
+configured host and port. In simple terms, this moves the runtime from
+"configured" to "actively serving Semantic-DNS state and route decisions."
 
 This matters because discovery and route selection are not purely static
-configuration reads. They belong to live runtime state.
+configuration reads. They belong to live runtime state. The current on-wire
+surface is intentionally bounded: UDP only, DNS `A`/`IN` lookups over the
+active service registry, fail-closed silent drops for malformed packets, and
+truncated answers that set the normal DNS `TC` bit when the bounded UDP
+response budget is exceeded.
 
 ## Local Query Surface
 
-The current tree still does not expose a real on-wire DNS listener. What it
-does expose is a bounded local query surface through `king_semantic_dns_query()`.
-That helper is the honest DNS-shaped runtime contract today.
+The active tree now exposes both a real bounded on-wire UDP listener and the
+local helper surface through `king_semantic_dns_query()`. The helper still
+matters because it gives the same runtime a direct local inspection and
+exercise path without going over the network.
 
 It answers the same current runtime slice that start-up and topology controls
 manage. For example, `status` returns whether the runtime is active and which
@@ -201,7 +209,10 @@ echo king_semantic_dns_query('discover:inference'), PHP_EOL;
 This matters for failure behavior too. The helper is explicit about bounded
 response shaping. If the caller asks for an unrealistically small response
 budget, the call fails cleanly instead of returning a silently truncated answer.
-That is the current honest failure surface until a real network listener exists.
+The live UDP listener exposes the complementary network-facing contract: valid
+queries return bounded answers, malformed packets time out cleanly, oversized
+answer sets are truncated with `TC`, and later valid queries still recover on
+the same runtime.
 
 ## Registering Services
 
@@ -323,6 +334,14 @@ snapshot before applying its own mutation. That is what keeps one worker from
 quietly deleting another worker's registration or status update when both touch
 the same Semantic-DNS state file at nearly the same time.
 
+That same persisted-state contract now covers stale-peer rejoin after partial
+durable-state loss. When a process still carries an older local topology view
+and the shared payload has lost some entries, the runtime snapshots the local
+view before refresh, reloads the current shared state, and then merges back
+only the missing service and mother-node entries. Overlapping records continue
+to come from the fresher shared payload, so rejoin heals missing topology
+without rewinding newer route or discovery state.
+
 ## Choosing The Optimal Route
 
 `king_semantic_dns_get_optimal_route()` answers the final routing question:
@@ -437,6 +456,22 @@ new mother-node change, recalculates discovery and synchronization counters, and
 then persists the whole result while the state lock is still held. That is what
 keeps larger local topology churn from tearing the mother-node view away from
 the statistics that discovery and routing consume.
+
+The same rule matters during rejoin. A stale process is allowed to heal missing
+mother-node entries that disappeared from the shared payload, but it is not
+allowed to overwrite a newer shared record for a node that still exists there.
+That keeps trust, status, and managed-service counters monotonic toward the
+current shared topology instead of letting an older peer win just because it
+reconnected later.
+
+The current runtime also persists mother-node tombstones inside the durable
+payload for re-election churn. When a newer shared topology has explicitly
+removed one mother node and replaced it with another, a stale writer may still
+carry the old node in local memory. The rejoin-safe merge path now checks those
+tombstones before restoring missing entries, so a stale service update cannot
+quietly resurrect a departed leader. Only an explicit later
+`king_semantic_dns_register_mother_node()` call for that node clears the
+tombstone and makes the rejoin visible again.
 
 ## How Semantic-DNS Fits With The Router And Load Balancer
 

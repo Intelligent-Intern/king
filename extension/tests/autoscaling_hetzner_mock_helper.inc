@@ -16,8 +16,23 @@ function king_autoscaling_hetzner_mock_start(array $options = []): array
     $bindHost = $options['host'] ?? '127.0.0.1';
     $deleteStatus = (int) ($options['delete_status'] ?? 204);
     $createStatus = (int) ($options['create_status'] ?? 201);
+    $listStatus = (int) ($options['list_status'] ?? 200);
     $startId = (int) ($options['start_id'] ?? 9000);
     $logFile = $options['log_file'] ?? tempnam(sys_get_temp_dir(), 'king-hetzner-log-');
+    $stateFile = $options['state_file'] ?? tempnam(sys_get_temp_dir(), 'king-hetzner-state-');
+    $initialServers = $options['initial_servers'] ?? [];
+    $nextId = $startId;
+
+    foreach ($initialServers as $server) {
+        if (is_array($server) && isset($server['id']) && (int) $server['id'] >= $nextId) {
+            $nextId = (int) $server['id'] + 1;
+        }
+    }
+
+    file_put_contents($stateFile, json_encode([
+        'next_id' => $nextId,
+        'servers' => array_values($initialServers),
+    ], JSON_THROW_ON_ERROR));
 
     $probe = stream_socket_server(
         king_autoscaling_test_format_tcp_endpoint($bindHost, 0),
@@ -48,6 +63,8 @@ function king_autoscaling_hetzner_mock_start(array $options = []): array
         (string) $createStatus,
         (string) $startId,
         $bindHost,
+        (string) $listStatus,
+        $stateFile,
     ];
 
     $process = proc_open($command, [
@@ -75,6 +92,7 @@ function king_autoscaling_hetzner_mock_start(array $options = []): array
         'port' => $port,
         'host' => $bindHost,
         'log_file' => $logFile,
+        'state_file' => $stateFile,
     ];
 }
 

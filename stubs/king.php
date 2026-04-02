@@ -165,7 +165,13 @@ namespace {
     /**
      * Direct live HTTP/3 one-shot request path over the active QUIC runtime.
      * Supports absolute `https://` URLs and returns the normalized response
-     * snapshot used across the active client leaves.
+     * snapshot used across the active client leaves, including HTTP/3 ticket
+     * metadata such as `tls_has_session_ticket`, `tls_session_ticket_length`,
+     * `tls_ticket_source`, `tls_session_resumed`, and whether the request was
+     * sent while the runtime was still in the early-data phase via
+     * `tls_request_sent_in_early_data`, plus QUIC transport counters such as
+     * `quic_packets_lost`, `quic_packets_retransmitted`, and
+     * `quic_lost_bytes`.
      * @param array<string,mixed>|null $headers
      * @param array<string,mixed>|null $options
      * @return array<string,mixed>|false
@@ -182,7 +188,8 @@ namespace {
      * optional `headers`, and optional `body`. The current leaf requires every
      * entry to target the same absolute `https://` origin plus TLS profile so
      * it can share one HTTP/3 session honestly; responses are returned in
-     * input order.
+     * input order with the same transport and ticket metadata shape as the
+     * one-shot HTTP/3 leaf.
      * @param array<int,array<string,mixed>> $requests
      * @param array<string,mixed>|null $options
      * @return array<int,array<string,mixed>>|false
@@ -989,18 +996,27 @@ namespace {
     function king_proto_is_enum_defined(string $enum_name): bool {}
 
     /**
-     * Telemetry exporter and feature status from active config.
+     * Telemetry runtime status, queue pressure, and self-observation counters.
      * @return array{
-     *   system_status: array{
-     *     enabled:bool,
-     *     service_name:string,
-     *     exporter_endpoint:string,
-     *     exporter_protocol:string
-     *   },
-     *   feature_status: array{
-     *     metrics_enable:bool,
-     *     logs_enable:bool
-     *   }
+     *   initialized:bool,
+     *   flush_count:int,
+     *   active_metrics:int,
+     *   queue_size:int,
+     *   export_success_count:int,
+     *   export_failure_count:int,
+     *   queue_drop_count:int,
+     *   pending_entry_limit:int,
+     *   pending_span_count:int,
+     *   pending_log_count:int,
+     *   pending_drop_count:int,
+     *   queue_bytes:int,
+     *   pending_bytes:int,
+     *   memory_bytes:int,
+     *   memory_byte_limit:int,
+     *   queue_high_watermark:int,
+     *   queue_high_water_bytes:int,
+     *   memory_high_water_bytes:int,
+     *   retry_requeue_count:int
      * }
      */
     function king_telemetry_get_status(): array {}
@@ -1178,6 +1194,23 @@ namespace {
      *   last_action_kind:string,
      *   last_signal_source:string,
      *   last_decision_reason:string,
+     *   last_monitor_decision:string,
+     *   last_monitor_signal_snapshot:array{
+     *     cpu_utilization:float,
+     *     memory_utilization:float,
+     *     active_connections:int,
+     *     requests_per_second:int,
+     *     response_time_ms:int,
+     *     queue_depth:int,
+     *     timestamp:int
+     *   },
+     *   last_monitor_decision_details:array{
+     *     blocked_by_cooldown:bool,
+     *     live_signals:list<string>,
+     *     scale_up_signals:list<string>,
+     *     scale_down_ready_signals:list<string>,
+     *     hold_blockers:list<string>
+     *   },
      *   last_error:string,
      *   last_warning:string
      * }
@@ -1274,16 +1307,16 @@ namespace {
     function king_semantic_dns_init(array $config): bool {}
 
     /**
-     * Starts the local semantic-DNS server-state slice for the active runtime.
-     * This is a local lifecycle toggle, not yet a real network DNS listener.
+     * Starts the local semantic-DNS server-state slice and bounded UDP DNS
+     * listener for the active runtime.
      * @throws \King\RuntimeException
      */
     function king_semantic_dns_start_server(): bool {}
 
     /**
-     * Process one local DNS-shaped query against the active semantic-DNS runtime.
-     * This is a bounded local helper for the current runtime slice, not an
-     * on-wire DNS listener.
+     * Process one bounded local DNS-shaped query against the active
+     * semantic-DNS runtime.
+     * This remains the local helper surface alongside the live UDP listener.
      * @throws \King\ValidationException|\King\RuntimeException
      */
     function king_semantic_dns_query(string $query, int $max_response_bytes = 256): string {}
@@ -1516,7 +1549,8 @@ namespace {
     /**
      * Read one persisted pipeline-run snapshot from the active orchestrator
      * state registry, including explicit `error_classification` and per-step
-     * `steps` status snapshots when present.
+     * `steps` status snapshots plus the caller-managed `compensation` contract
+     * for failed multi-step runs when present.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_get_run(string $run_id): array|false {}

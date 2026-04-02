@@ -6,6 +6,7 @@
 #include "php_king.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"
 #include "include/pipeline_orchestrator/orchestrator.h"
+#include "include/telemetry/telemetry.h"
 #include "ext/standard/base64.h"
 #include "ext/standard/php_var.h"
 #include "zend_smart_str.h"
@@ -1261,6 +1262,23 @@ static int king_orchestrator_execute_remote_run(
         return FAILURE;
     }
 
+    if (king_orchestrator_pipeline_run_note_remote_attempt(run_id) != SUCCESS) {
+        ZVAL_FALSE(return_value);
+        (void) king_orchestrator_pipeline_run_fail_classified(
+            run_id,
+            "king_pipeline_orchestrator_run() failed to persist remote-attempt observability.",
+            "backend",
+            "caller_managed_retry",
+            -1,
+            "controller"
+        );
+        return king_orchestrator_raise_error(
+            "king_pipeline_orchestrator_run() failed to persist remote-attempt observability.",
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+
     target = king_orchestrator_remote_build_target();
     if (target == NULL) {
         error_message = "king_pipeline_orchestrator_run() requires a non-empty orchestrator_remote_host when orchestrator_execution_backend=remote_peer.";
@@ -1654,6 +1672,9 @@ int king_orchestrator_resume_run(
         return FAILURE;
     }
 
+    /* Each resumed run must start without stale pre-flush span/log residue. */
+    king_telemetry_cleanup_scope_state();
+
     ZVAL_NULL(&initial_data);
     ZVAL_NULL(&pipeline);
     ZVAL_NULL(&options);
@@ -1731,6 +1752,9 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
     ZVAL_UNDEF(&sanitized_options);
     ZVAL_UNDEF(&control.cancel_token);
     control.run_id = NULL;
+
+    /* A new orchestrator execution starts a fresh telemetry scope. */
+    king_telemetry_cleanup_scope_state();
 
     if (king_orchestrator_backend_is_file_worker()) {
         return king_orchestrator_raise_error(
@@ -1901,6 +1925,7 @@ int king_orchestrator_worker_run_next(zval *return_value)
     zend_string *run_id = NULL;
     char claimed_path[1024];
     int claimed_fd = -1;
+    zend_bool recovered_claim = 0;
     int rc;
 
     if (!king_orchestrator_backend_is_file_worker()) {
@@ -1922,7 +1947,15 @@ int king_orchestrator_worker_run_next(zval *return_value)
         );
     }
 
-    if (king_orchestrator_claim_next_run(&run_id, claimed_path, sizeof(claimed_path), &claimed_fd) != SUCCESS) {
+    if (
+        king_orchestrator_claim_next_run(
+            &run_id,
+            claimed_path,
+            sizeof(claimed_path),
+            &claimed_fd,
+            &recovered_claim
+        ) != SUCCESS
+    ) {
         return king_orchestrator_raise_error(
             "king_pipeline_orchestrator_worker_run_next() could not claim a queued run.",
             king_ce_runtime_exception,
@@ -1957,7 +1990,7 @@ int king_orchestrator_worker_run_next(zval *return_value)
         return SUCCESS;
     }
 
-    if (king_orchestrator_pipeline_run_mark_running(run_id) != SUCCESS) {
+    if (king_orchestrator_pipeline_run_mark_running(run_id, recovered_claim, (zend_long) getpid()) != SUCCESS) {
         if (claimed_path[0] != '\0') {
             unlink(claimed_path);
         }
@@ -2194,6 +2227,16 @@ PHP_FUNCTION(king_pipeline_orchestrator_resume_run)
     }
 
     zval_ptr_dtor(&run_snapshot);
+
+    if (king_orchestrator_pipeline_run_note_recovery(run_id, "resume_run") != SUCCESS) {
+        king_set_error("king_pipeline_orchestrator_resume_run() failed to persist recovery observability.");
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "king_pipeline_orchestrator_resume_run() failed to persist recovery observability."
+        );
+        RETURN_THROWS();
+    }
 
     if (
         king_orchestrator_resume_run(

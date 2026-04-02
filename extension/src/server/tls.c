@@ -129,6 +129,53 @@ static void king_server_tls_apply_session_snapshot(
     }
 }
 
+zend_result king_server_tls_reload_paths(
+    king_client_session_t *session,
+    const char *cert_file_path,
+    size_t cert_file_path_len,
+    const char *key_file_path,
+    size_t key_file_path_len,
+    const char *function_name
+)
+{
+    bool ticket_key_loaded;
+
+    if (!king_server_tls_path_is_readable(cert_file_path, cert_file_path_len)) {
+        king_server_control_set_errorf(
+            "%s() cert_file_path must be a non-empty readable file path.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    if (!king_server_tls_path_is_readable(key_file_path, key_file_path_len)) {
+        king_server_control_set_errorf(
+            "%s() key_file_path must be a non-empty readable file path.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    if (king_server_tls_validate_ticket_key(
+            session,
+            function_name,
+            &ticket_key_loaded
+        ) != SUCCESS) {
+        return FAILURE;
+    }
+
+    king_server_tls_apply_session_snapshot(
+        session,
+        cert_file_path,
+        cert_file_path_len,
+        key_file_path,
+        key_file_path_len,
+        ticket_key_loaded
+    );
+
+    return SUCCESS;
+}
+
 PHP_FUNCTION(king_server_reload_tls_config)
 {
     zval *zsession;
@@ -137,7 +184,6 @@ PHP_FUNCTION(king_server_reload_tls_config)
     size_t cert_file_path_len = 0;
     size_t key_file_path_len = 0;
     king_client_session_t *session;
-    bool ticket_key_loaded;
 
     ZEND_PARSE_PARAMETERS_START(3, 3)
         Z_PARAM_ZVAL(zsession)
@@ -158,36 +204,16 @@ PHP_FUNCTION(king_server_reload_tls_config)
         RETURN_FALSE;
     }
 
-    if (!king_server_tls_path_is_readable(cert_file_path, cert_file_path_len)) {
-        king_server_control_set_errorf(
-            "king_server_reload_tls_config() cert_file_path must be a non-empty readable file path."
-        );
-        RETURN_FALSE;
-    }
-
-    if (!king_server_tls_path_is_readable(key_file_path, key_file_path_len)) {
-        king_server_control_set_errorf(
-            "king_server_reload_tls_config() key_file_path must be a non-empty readable file path."
-        );
-        RETURN_FALSE;
-    }
-
-    if (king_server_tls_validate_ticket_key(
+    if (king_server_tls_reload_paths(
             session,
-            "king_server_reload_tls_config",
-            &ticket_key_loaded
+            cert_file_path,
+            cert_file_path_len,
+            key_file_path,
+            key_file_path_len,
+            "king_server_reload_tls_config"
         ) != SUCCESS) {
         RETURN_FALSE;
     }
-
-    king_server_tls_apply_session_snapshot(
-        session,
-        cert_file_path,
-        cert_file_path_len,
-        key_file_path,
-        key_file_path_len,
-        ticket_key_loaded
-    );
 
     king_set_error("");
     RETURN_TRUE;

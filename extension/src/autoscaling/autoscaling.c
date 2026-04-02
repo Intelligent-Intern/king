@@ -36,6 +36,28 @@ typedef struct _king_autoscaling_signal_snapshot_t {
     zend_bool queue_depth_live;
 } king_autoscaling_signal_snapshot_t;
 
+typedef struct _king_autoscaling_signal_descriptor_t {
+    uint32_t bit;
+    const char *name;
+} king_autoscaling_signal_descriptor_t;
+
+#define KING_AUTOSCALING_SIGNAL_CPU                (1u << 0)
+#define KING_AUTOSCALING_SIGNAL_MEMORY             (1u << 1)
+#define KING_AUTOSCALING_SIGNAL_ACTIVE_CONNECTIONS (1u << 2)
+#define KING_AUTOSCALING_SIGNAL_REQUESTS_PER_SECOND (1u << 3)
+#define KING_AUTOSCALING_SIGNAL_RESPONSE_TIME      (1u << 4)
+#define KING_AUTOSCALING_SIGNAL_QUEUE_DEPTH        (1u << 5)
+
+static const king_autoscaling_signal_descriptor_t king_autoscaling_signal_descriptors[] = {
+    {KING_AUTOSCALING_SIGNAL_CPU, "cpu"},
+    {KING_AUTOSCALING_SIGNAL_MEMORY, "memory"},
+    {KING_AUTOSCALING_SIGNAL_ACTIVE_CONNECTIONS, "active_connections"},
+    {KING_AUTOSCALING_SIGNAL_REQUESTS_PER_SECOND, "requests_per_second"},
+    {KING_AUTOSCALING_SIGNAL_RESPONSE_TIME, "response_time_ms"},
+    {KING_AUTOSCALING_SIGNAL_QUEUE_DEPTH, "queue_depth"},
+    {0u, NULL}
+};
+
 king_autoscaling_runtime_state_t king_autoscaling_runtime = {0};
 uint32_t king_current_instances = 1;
 
@@ -148,6 +170,25 @@ static void king_autoscaling_clear_managed_nodes(void)
 
     king_autoscaling_runtime.managed_node_count = 0;
     king_autoscaling_runtime.managed_node_capacity = 0;
+}
+
+static size_t king_autoscaling_runtime_count_persisted_live_nodes(void)
+{
+    size_t index;
+    size_t live_nodes = 0;
+
+    for (index = 0; index < king_autoscaling_runtime.managed_node_count; index++) {
+        king_autoscaling_managed_node_t *node = &king_autoscaling_runtime.managed_nodes[index];
+
+        if (
+            node->lifecycle_state != KING_AUTOSCALING_NODE_DELETED
+            && node->deleted_at == 0
+        ) {
+            live_nodes++;
+        }
+    }
+
+    return live_nodes;
 }
 
 static int king_autoscaling_runtime_ensure_capacity(size_t needed)
@@ -493,23 +534,223 @@ static zend_bool king_autoscaling_lookup_signal_value(
     return 0;
 }
 
-static void king_autoscaling_set_signal_source(
+static const char *king_autoscaling_resolve_signal_source(
     const king_autoscaling_signal_snapshot_t *snapshot)
 {
-    const char *source = "none";
-
     if (snapshot->telemetry_signal_present && snapshot->system_signal_present) {
-        source = "telemetry+system";
-    } else if (snapshot->telemetry_signal_present) {
-        source = "telemetry";
-    } else if (snapshot->system_signal_present) {
-        source = "system";
+        return "telemetry+system";
     }
 
+    if (snapshot->telemetry_signal_present) {
+        return "telemetry";
+    }
+
+    if (snapshot->system_signal_present) {
+        return "system";
+    }
+
+    return "none";
+}
+
+static uint32_t king_autoscaling_build_live_signal_mask(
+    const king_autoscaling_signal_snapshot_t *snapshot)
+{
+    uint32_t mask = 0u;
+
+    if (snapshot == NULL) {
+        return 0u;
+    }
+
+    if (snapshot->cpu_live) {
+        mask |= KING_AUTOSCALING_SIGNAL_CPU;
+    }
+    if (snapshot->memory_live) {
+        mask |= KING_AUTOSCALING_SIGNAL_MEMORY;
+    }
+    if (snapshot->active_connections_live) {
+        mask |= KING_AUTOSCALING_SIGNAL_ACTIVE_CONNECTIONS;
+    }
+    if (snapshot->requests_per_second_live) {
+        mask |= KING_AUTOSCALING_SIGNAL_REQUESTS_PER_SECOND;
+    }
+    if (snapshot->response_time_live) {
+        mask |= KING_AUTOSCALING_SIGNAL_RESPONSE_TIME;
+    }
+    if (snapshot->queue_depth_live) {
+        mask |= KING_AUTOSCALING_SIGNAL_QUEUE_DEPTH;
+    }
+
+    return mask;
+}
+
+static uint32_t king_autoscaling_build_scale_up_signal_mask(
+    const king_autoscaling_signal_snapshot_t *snapshot,
+    uint64_t instance_divisor)
+{
+    uint32_t mask = 0u;
+
+    if (snapshot == NULL) {
+        return 0u;
+    }
+
+    if (
+        snapshot->cpu_live
+        && snapshot->metrics.cpu_utilization_percent
+            >= (double) king_autoscaling_runtime.config.scale_up_cpu_threshold_percent
+    ) {
+        mask |= KING_AUTOSCALING_SIGNAL_CPU;
+    }
+    if (snapshot->queue_depth_live && snapshot->metrics.queue_depth >= 8) {
+        mask |= KING_AUTOSCALING_SIGNAL_QUEUE_DEPTH;
+    }
+    if (snapshot->response_time_live && snapshot->metrics.response_time_ms >= 250) {
+        mask |= KING_AUTOSCALING_SIGNAL_RESPONSE_TIME;
+    }
+    if (
+        snapshot->requests_per_second_live
+        && snapshot->metrics.requests_per_second >= (450 * instance_divisor)
+    ) {
+        mask |= KING_AUTOSCALING_SIGNAL_REQUESTS_PER_SECOND;
+    }
+    if (
+        snapshot->active_connections_live
+        && snapshot->metrics.active_connections >= (900 * instance_divisor)
+    ) {
+        mask |= KING_AUTOSCALING_SIGNAL_ACTIVE_CONNECTIONS;
+    }
+    if (
+        snapshot->memory_live
+        && snapshot->metrics.memory_utilization_percent >= 90.0
+    ) {
+        mask |= KING_AUTOSCALING_SIGNAL_MEMORY;
+    }
+
+    return mask;
+}
+
+static uint32_t king_autoscaling_build_scale_down_ready_mask(
+    const king_autoscaling_signal_snapshot_t *snapshot,
+    uint64_t instance_divisor)
+{
+    uint32_t mask = 0u;
+
+    if (snapshot == NULL) {
+        return 0u;
+    }
+
+    if (
+        snapshot->cpu_live
+        && snapshot->metrics.cpu_utilization_percent
+            <= (double) king_autoscaling_runtime.config.scale_down_cpu_threshold_percent
+    ) {
+        mask |= KING_AUTOSCALING_SIGNAL_CPU;
+    }
+    if (snapshot->queue_depth_live && snapshot->metrics.queue_depth <= 1) {
+        mask |= KING_AUTOSCALING_SIGNAL_QUEUE_DEPTH;
+    }
+    if (snapshot->response_time_live && snapshot->metrics.response_time_ms <= 50) {
+        mask |= KING_AUTOSCALING_SIGNAL_RESPONSE_TIME;
+    }
+    if (
+        snapshot->requests_per_second_live
+        && snapshot->metrics.requests_per_second <= (90 * instance_divisor)
+    ) {
+        mask |= KING_AUTOSCALING_SIGNAL_REQUESTS_PER_SECOND;
+    }
+    if (
+        snapshot->active_connections_live
+        && snapshot->metrics.active_connections <= (120 * instance_divisor)
+    ) {
+        mask |= KING_AUTOSCALING_SIGNAL_ACTIVE_CONNECTIONS;
+    }
+    if (
+        snapshot->memory_live
+        && snapshot->metrics.memory_utilization_percent <= 70.0
+    ) {
+        mask |= KING_AUTOSCALING_SIGNAL_MEMORY;
+    }
+
+    return mask;
+}
+
+static void king_autoscaling_append_signal_list(
+    char *buffer,
+    size_t buffer_length,
+    uint32_t mask)
+{
+    size_t index;
+    zend_bool first = 1;
+
+    if (buffer == NULL || buffer_length == 0) {
+        return;
+    }
+
+    buffer[0] = '\0';
+
+    for (index = 0; king_autoscaling_signal_descriptors[index].name != NULL; index++) {
+        const king_autoscaling_signal_descriptor_t *descriptor = &king_autoscaling_signal_descriptors[index];
+        size_t used;
+
+        if ((mask & descriptor->bit) == 0u) {
+            continue;
+        }
+
+        used = strlen(buffer);
+        if (used >= buffer_length - 1) {
+            break;
+        }
+
+        snprintf(
+            buffer + used,
+            buffer_length - used,
+            "%s%s",
+            first ? "" : ", ",
+            descriptor->name
+        );
+        first = 0;
+    }
+
+    if (first) {
+        snprintf(buffer, buffer_length, "%s", "none");
+    }
+}
+
+static void king_autoscaling_add_signal_mask_array(
+    zval *parent,
+    const char *key,
+    uint32_t mask)
+{
+    zval entries;
+    size_t index;
+
+    array_init(&entries);
+    for (index = 0; king_autoscaling_signal_descriptors[index].name != NULL; index++) {
+        const king_autoscaling_signal_descriptor_t *descriptor = &king_autoscaling_signal_descriptors[index];
+
+        if ((mask & descriptor->bit) != 0u) {
+            add_next_index_string(&entries, descriptor->name);
+        }
+    }
+
+    add_assoc_zval(parent, key, &entries);
+}
+
+static void king_autoscaling_capture_last_monitor_decision(
+    const king_autoscaling_signal_snapshot_t *snapshot,
+    const char *decision,
+    uint32_t live_mask,
+    uint32_t scale_up_mask,
+    uint32_t scale_down_ready_mask)
+{
+    king_autoscaling_runtime.last_monitor_metrics = snapshot->metrics;
+    king_autoscaling_runtime.last_monitor_live_signal_mask = live_mask;
+    king_autoscaling_runtime.last_monitor_scale_up_signal_mask = scale_up_mask;
+    king_autoscaling_runtime.last_monitor_scale_down_ready_mask = scale_down_ready_mask;
+    king_autoscaling_runtime.last_monitor_hold_blocker_mask = live_mask & ~scale_down_ready_mask;
     king_autoscaling_set_runtime_string(
-        king_autoscaling_runtime.last_signal_source,
-        sizeof(king_autoscaling_runtime.last_signal_source),
-        source
+        king_autoscaling_runtime.last_monitor_decision,
+        sizeof(king_autoscaling_runtime.last_monitor_decision),
+        decision
     );
 }
 
@@ -612,20 +853,24 @@ static int king_autoscaling_collect_live_signal_snapshot(
         snapshot->telemetry_signal_present = 1;
     }
 
-    king_autoscaling_set_signal_source(snapshot);
-    king_autoscaling_runtime.last_metrics = snapshot->metrics;
     return SUCCESS;
 }
 
 static int king_autoscaling_evaluate_scaling_decision_snapshot(
     const king_autoscaling_signal_snapshot_t *snapshot,
     char *reason_buffer,
-    size_t reason_buffer_length)
+    size_t reason_buffer_length,
+    uint32_t *live_mask_out,
+    uint32_t *scale_up_mask_out,
+    uint32_t *scale_down_ready_mask_out)
 {
-    zend_bool up_trigger = 0;
-    zend_bool down_ready = 0;
+    uint32_t live_mask;
+    uint32_t scale_up_mask;
+    uint32_t scale_down_ready_mask;
+    uint32_t hold_blocker_mask;
     zend_bool telemetry_present;
     uint64_t instance_divisor;
+    char signal_names[192];
 
     if (snapshot == NULL) {
         return 0;
@@ -633,72 +878,28 @@ static int king_autoscaling_evaluate_scaling_decision_snapshot(
 
     telemetry_present = snapshot->telemetry_signal_present;
     instance_divisor = king_current_instances > 0 ? (uint64_t) king_current_instances : 1;
+    live_mask = king_autoscaling_build_live_signal_mask(snapshot);
+    scale_up_mask = king_autoscaling_build_scale_up_signal_mask(snapshot, instance_divisor);
+    scale_down_ready_mask = king_autoscaling_build_scale_down_ready_mask(snapshot, instance_divisor);
 
-    if (
-        snapshot->cpu_live
-        && snapshot->metrics.cpu_utilization_percent
-            >= (double) king_autoscaling_runtime.config.scale_up_cpu_threshold_percent
-    ) {
-        up_trigger = 1;
-        snprintf(
-            reason_buffer,
-            reason_buffer_length,
-            "Live telemetry and system signals triggered a scale up decision: cpu %.2f >= %ld.",
-            snapshot->metrics.cpu_utilization_percent,
-            (long) king_autoscaling_runtime.config.scale_up_cpu_threshold_percent
-        );
-    } else if (snapshot->queue_depth_live && snapshot->metrics.queue_depth >= 8) {
-        up_trigger = 1;
-        snprintf(
-            reason_buffer,
-            reason_buffer_length,
-            "Live telemetry and system signals triggered a scale up decision: queue depth %llu is saturated.",
-            (unsigned long long) snapshot->metrics.queue_depth
-        );
-    } else if (snapshot->response_time_live && snapshot->metrics.response_time_ms >= 250) {
-        up_trigger = 1;
-        snprintf(
-            reason_buffer,
-            reason_buffer_length,
-            "Live telemetry and system signals triggered a scale up decision: response time %llu ms is saturated.",
-            (unsigned long long) snapshot->metrics.response_time_ms
-        );
-    } else if (
-        snapshot->requests_per_second_live
-        && snapshot->metrics.requests_per_second >= (450 * instance_divisor)
-    ) {
-        up_trigger = 1;
-        snprintf(
-            reason_buffer,
-            reason_buffer_length,
-            "Live telemetry and system signals triggered a scale up decision: requests_per_second %llu is above the per-instance budget.",
-            (unsigned long long) snapshot->metrics.requests_per_second
-        );
-    } else if (
-        snapshot->active_connections_live
-        && snapshot->metrics.active_connections >= (900 * instance_divisor)
-    ) {
-        up_trigger = 1;
-        snprintf(
-            reason_buffer,
-            reason_buffer_length,
-            "Live telemetry and system signals triggered a scale up decision: active_connections %llu is above the per-instance budget.",
-            (unsigned long long) snapshot->metrics.active_connections
-        );
-    } else if (
-        snapshot->memory_live
-        && snapshot->metrics.memory_utilization_percent >= 90.0
-    ) {
-        up_trigger = 1;
-        snprintf(
-            reason_buffer,
-            reason_buffer_length,
-            "Live telemetry and system signals triggered a scale up decision: memory %.2f%% is above the safety threshold.",
-            snapshot->metrics.memory_utilization_percent
-        );
+    if (live_mask_out != NULL) {
+        *live_mask_out = live_mask;
+    }
+    if (scale_up_mask_out != NULL) {
+        *scale_up_mask_out = scale_up_mask;
+    }
+    if (scale_down_ready_mask_out != NULL) {
+        *scale_down_ready_mask_out = scale_down_ready_mask;
     }
 
-    if (up_trigger) {
+    if (scale_up_mask != 0u) {
+        king_autoscaling_append_signal_list(signal_names, sizeof(signal_names), scale_up_mask);
+        snprintf(
+            reason_buffer,
+            reason_buffer_length,
+            "Live telemetry and system signals triggered a scale up decision: %s crossed scale-up pressure.",
+            signal_names
+        );
         return 1;
     }
 
@@ -711,31 +912,24 @@ static int king_autoscaling_evaluate_scaling_decision_snapshot(
         return 0;
     }
 
-    down_ready =
-        (!snapshot->cpu_live
-            || snapshot->metrics.cpu_utilization_percent
-                <= (double) king_autoscaling_runtime.config.scale_down_cpu_threshold_percent)
-        && (!snapshot->queue_depth_live || snapshot->metrics.queue_depth <= 1)
-        && (!snapshot->response_time_live || snapshot->metrics.response_time_ms <= 50)
-        && (!snapshot->requests_per_second_live
-            || snapshot->metrics.requests_per_second <= (90 * instance_divisor))
-        && (!snapshot->active_connections_live
-            || snapshot->metrics.active_connections <= (120 * instance_divisor))
-        && (!snapshot->memory_live || snapshot->metrics.memory_utilization_percent <= 70.0);
-
-    if (down_ready) {
+    if (live_mask != 0u && scale_down_ready_mask == live_mask) {
+        king_autoscaling_append_signal_list(signal_names, sizeof(signal_names), scale_down_ready_mask);
         snprintf(
             reason_buffer,
             reason_buffer_length,
-            "Live telemetry and system signals triggered a scale down decision: load is below the configured hysteresis window."
+            "Live telemetry and system signals triggered a scale down decision: %s are inside the scale-down window.",
+            signal_names
         );
         return -1;
     }
 
+    hold_blocker_mask = live_mask & ~scale_down_ready_mask;
+    king_autoscaling_append_signal_list(signal_names, sizeof(signal_names), hold_blocker_mask);
     snprintf(
         reason_buffer,
         reason_buffer_length,
-        "Live signals remain inside the autoscaling hysteresis window."
+        "Live signals remain inside the autoscaling hysteresis window; blockers: %s.",
+        signal_names
     );
     return 0;
 }
@@ -781,6 +975,9 @@ static zend_bool king_autoscaling_monitor_tick(void)
     int rollback_result;
     time_t now;
     time_t cooldown_remaining;
+    uint32_t live_mask = 0u;
+    uint32_t scale_up_mask = 0u;
+    uint32_t scale_down_ready_mask = 0u;
 
     if (!king_autoscaling_runtime.initialized) {
         snprintf(
@@ -823,10 +1020,26 @@ static zend_bool king_autoscaling_monitor_tick(void)
 
     now = snapshot.metrics.timestamp;
     king_autoscaling_runtime.last_monitor_tick_at = now;
+    king_autoscaling_runtime.last_monitor_metrics = snapshot.metrics;
+    king_autoscaling_set_runtime_string(
+        king_autoscaling_runtime.last_signal_source,
+        sizeof(king_autoscaling_runtime.last_signal_source),
+        king_autoscaling_resolve_signal_source(&snapshot)
+    );
     decision = king_autoscaling_evaluate_scaling_decision_snapshot(
         &snapshot,
         reason_buffer,
-        sizeof(reason_buffer)
+        sizeof(reason_buffer),
+        &live_mask,
+        &scale_up_mask,
+        &scale_down_ready_mask
+    );
+    king_autoscaling_capture_last_monitor_decision(
+        &snapshot,
+        decision > 0 ? "scale_up" : (decision < 0 ? "scale_down" : "hold"),
+        live_mask,
+        scale_up_mask,
+        scale_down_ready_mask
     );
     king_autoscaling_set_runtime_string(
         king_autoscaling_runtime.last_decision_reason,
@@ -1022,11 +1235,25 @@ void king_autoscaling_runtime_reset(void)
     king_autoscaling_runtime.initialized = 0;
     king_autoscaling_runtime.monitoring_active = 0;
     king_autoscaling_runtime.controller_token_configured = 0;
+    king_autoscaling_runtime.state_load_incomplete = 0;
     king_autoscaling_runtime.action_count = 0;
     king_autoscaling_runtime.last_scale_up_at = 0;
     king_autoscaling_runtime.last_scale_down_at = 0;
     king_autoscaling_runtime.last_monitor_tick_at = 0;
-    memset(&king_autoscaling_runtime.last_metrics, 0, sizeof(king_autoscaling_runtime.last_metrics));
+    memset(
+        &king_autoscaling_runtime.last_monitor_metrics,
+        0,
+        sizeof(king_autoscaling_runtime.last_monitor_metrics)
+    );
+    king_autoscaling_runtime.last_monitor_live_signal_mask = 0u;
+    king_autoscaling_runtime.last_monitor_scale_up_signal_mask = 0u;
+    king_autoscaling_runtime.last_monitor_scale_down_ready_mask = 0u;
+    king_autoscaling_runtime.last_monitor_hold_blocker_mask = 0u;
+    king_autoscaling_set_runtime_string(
+        king_autoscaling_runtime.last_monitor_decision,
+        sizeof(king_autoscaling_runtime.last_monitor_decision),
+        "none"
+    );
     king_autoscaling_reset_message(
         king_autoscaling_runtime.last_action_kind,
         sizeof(king_autoscaling_runtime.last_action_kind)
@@ -1076,6 +1303,9 @@ int king_autoscaling_runtime_load_state(void)
     FILE *stream;
     char line[512];
     const char *state_path = king_autoscaling_runtime.config.state_path;
+    zend_long expected_live_nodes = -1;
+
+    king_autoscaling_runtime.state_load_incomplete = 0;
 
     if (state_path == NULL || state_path[0] == '\0') {
         return SUCCESS;
@@ -1121,7 +1351,23 @@ int king_autoscaling_runtime_load_state(void)
         }
 
         kind = strtok_r(line, "\t\r\n", &saveptr);
-        if (kind == NULL || strcmp(kind, "node") != 0) {
+        if (kind == NULL) {
+            continue;
+        }
+
+        if (strcmp(kind, "live_nodes") == 0) {
+            char *value = strtok_r(NULL, "\t\r\n", &saveptr);
+
+            if (value == NULL || value[0] == '\0') {
+                king_autoscaling_runtime.state_load_incomplete = 1;
+                continue;
+            }
+
+            expected_live_nodes = ZEND_STRTOL(value, NULL, 10);
+            continue;
+        }
+
+        if (strcmp(kind, "node") != 0) {
             continue;
         }
 
@@ -1130,6 +1376,7 @@ int king_autoscaling_runtime_load_state(void)
         }
 
         if (field_count != 6 && field_count != 10) {
+            king_autoscaling_runtime.state_load_incomplete = 1;
             continue;
         }
 
@@ -1179,6 +1426,12 @@ int king_autoscaling_runtime_load_state(void)
     }
 
     fclose(stream);
+    if (
+        expected_live_nodes >= 0
+        && (zend_long) king_autoscaling_runtime_count_persisted_live_nodes() < expected_live_nodes
+    ) {
+        king_autoscaling_runtime.state_load_incomplete = 1;
+    }
     king_autoscaling_runtime_sync_instance_count();
     return SUCCESS;
 }
@@ -1208,6 +1461,11 @@ int king_autoscaling_runtime_persist_state(void)
     }
 
     fprintf(stream, "version\t%d\n", KING_AUTOSCALING_STATE_VERSION);
+    fprintf(
+        stream,
+        "live_nodes\t%zu\n",
+        king_autoscaling_runtime_count_persisted_live_nodes()
+    );
     for (index = 0; index < king_autoscaling_runtime.managed_node_count; index++) {
         king_autoscaling_managed_node_t *node = &king_autoscaling_runtime.managed_nodes[index];
         fprintf(
@@ -1291,6 +1549,12 @@ int king_autoscaling_init_system(const kg_cloud_autoscale_config_t *config)
     }
 
     king_autoscaling_runtime_load_state();
+    if (
+        king_autoscaling_runtime.state_load_incomplete
+        && king_autoscaling_provider_reconcile_inventory() != SUCCESS
+    ) {
+        return FAILURE;
+    }
     king_autoscaling_runtime_sync_instance_count();
     return SUCCESS;
 }
@@ -1417,6 +1681,10 @@ PHP_FUNCTION(king_autoscaling_get_metrics)
 
 PHP_FUNCTION(king_autoscaling_get_status)
 {
+    zval last_monitor_signal_snapshot;
+    zval last_monitor_decision_details;
+    zend_bool cooldown_blocked;
+
     ZEND_PARSE_PARAMETERS_NONE();
 
     array_init(return_value);
@@ -1489,6 +1757,84 @@ PHP_FUNCTION(king_autoscaling_get_status)
     add_assoc_string(return_value, "last_action_kind", king_autoscaling_runtime.last_action_kind);
     add_assoc_string(return_value, "last_signal_source", king_autoscaling_runtime.last_signal_source);
     add_assoc_string(return_value, "last_decision_reason", king_autoscaling_runtime.last_decision_reason);
+    add_assoc_string(
+        return_value,
+        "last_monitor_decision",
+        king_autoscaling_runtime.last_monitor_decision
+    );
+    array_init(&last_monitor_signal_snapshot);
+    add_assoc_double(
+        &last_monitor_signal_snapshot,
+        "cpu_utilization",
+        king_autoscaling_runtime.last_monitor_metrics.cpu_utilization_percent
+    );
+    add_assoc_double(
+        &last_monitor_signal_snapshot,
+        "memory_utilization",
+        king_autoscaling_runtime.last_monitor_metrics.memory_utilization_percent
+    );
+    add_assoc_long(
+        &last_monitor_signal_snapshot,
+        "active_connections",
+        (zend_long) king_autoscaling_runtime.last_monitor_metrics.active_connections
+    );
+    add_assoc_long(
+        &last_monitor_signal_snapshot,
+        "requests_per_second",
+        (zend_long) king_autoscaling_runtime.last_monitor_metrics.requests_per_second
+    );
+    add_assoc_long(
+        &last_monitor_signal_snapshot,
+        "response_time_ms",
+        (zend_long) king_autoscaling_runtime.last_monitor_metrics.response_time_ms
+    );
+    add_assoc_long(
+        &last_monitor_signal_snapshot,
+        "queue_depth",
+        (zend_long) king_autoscaling_runtime.last_monitor_metrics.queue_depth
+    );
+    add_assoc_long(
+        &last_monitor_signal_snapshot,
+        "timestamp",
+        (zend_long) king_autoscaling_runtime.last_monitor_metrics.timestamp
+    );
+    add_assoc_zval(return_value, "last_monitor_signal_snapshot", &last_monitor_signal_snapshot);
+
+    cooldown_blocked =
+        (
+            strcmp(king_autoscaling_runtime.last_monitor_decision, "scale_up") == 0
+            || strcmp(king_autoscaling_runtime.last_monitor_decision, "scale_down") == 0
+        )
+        && strcmp(king_autoscaling_runtime.last_action_kind, "monitor_tick") == 0
+        && strncmp(
+            king_autoscaling_runtime.last_warning,
+            "Autoscaling controller is in cooldown",
+            sizeof("Autoscaling controller is in cooldown") - 1
+        ) == 0;
+
+    array_init(&last_monitor_decision_details);
+    add_assoc_bool(&last_monitor_decision_details, "blocked_by_cooldown", cooldown_blocked);
+    king_autoscaling_add_signal_mask_array(
+        &last_monitor_decision_details,
+        "live_signals",
+        king_autoscaling_runtime.last_monitor_live_signal_mask
+    );
+    king_autoscaling_add_signal_mask_array(
+        &last_monitor_decision_details,
+        "scale_up_signals",
+        king_autoscaling_runtime.last_monitor_scale_up_signal_mask
+    );
+    king_autoscaling_add_signal_mask_array(
+        &last_monitor_decision_details,
+        "scale_down_ready_signals",
+        king_autoscaling_runtime.last_monitor_scale_down_ready_mask
+    );
+    king_autoscaling_add_signal_mask_array(
+        &last_monitor_decision_details,
+        "hold_blockers",
+        king_autoscaling_runtime.last_monitor_hold_blocker_mask
+    );
+    add_assoc_zval(return_value, "last_monitor_decision_details", &last_monitor_decision_details);
     add_assoc_string(return_value, "last_error", king_autoscaling_runtime.last_error);
     add_assoc_string(return_value, "last_warning", king_autoscaling_runtime.last_warning);
     add_assoc_string(

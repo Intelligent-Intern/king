@@ -132,10 +132,22 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
             $capture['reply_payloads'][] = $replyPayload;
             $capture['send_ok'] = king_websocket_send($websocket, $replyPayload);
             $capture['send_error'] = king_get_last_error();
+
+            if ($mode === 'shutdown-drain') {
+                $capture['shutdown_extra_send_ok'] = king_websocket_send($websocket, 'gamma');
+                $capture['shutdown_extra_send_error'] = king_get_last_error();
+            }
+
             $capture['close_ok'] = king_client_websocket_close($websocket, 1001, 'server-done');
             $capture['close_error'] = king_get_last_error();
             if ($capture['close_ok']) {
                 $capture['close_success_count']++;
+            }
+            if ($mode === 'shutdown-drain') {
+                $capture['send_after_close_ok'] = king_websocket_send($websocket, 'after-close');
+                $capture['send_after_close_error'] = king_get_last_error();
+                $capture['ping_after_close_ok'] = king_client_websocket_ping($websocket, 'p');
+                $capture['ping_after_close_error'] = king_get_last_error();
             }
             $capture['upgrade_status_after'] = king_client_websocket_get_status($websocket);
             $capture['stats'] = king_get_stats($session);

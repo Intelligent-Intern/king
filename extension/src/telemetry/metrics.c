@@ -10,6 +10,15 @@ static HashTable king_metrics_registry;
 static bool king_metrics_initialized = false;
 static uint64_t king_telemetry_flush_count = 0;
 
+static zend_long king_telemetry_u64_to_zend_long(uint64_t value)
+{
+    if (value > (uint64_t) ZEND_LONG_MAX) {
+        return ZEND_LONG_MAX;
+    }
+
+    return (zend_long) value;
+}
+
 static void king_metric_dtor(zval *zv)
 {
     king_metric_data_t *metric = Z_PTR_P(zv);
@@ -256,4 +265,12 @@ PHP_FUNCTION(king_telemetry_get_status)
     add_assoc_long(return_value, "pending_span_count", (zend_long)king_telemetry_get_pending_span_count());
     add_assoc_long(return_value, "pending_log_count", (zend_long)king_telemetry_get_pending_log_count());
     add_assoc_long(return_value, "pending_drop_count", (zend_long)king_telemetry_pending_drop_count);
+    add_assoc_long(return_value, "queue_bytes", king_telemetry_u64_to_zend_long(king_telemetry_get_queue_bytes()));
+    add_assoc_long(return_value, "pending_bytes", king_telemetry_u64_to_zend_long(king_telemetry_get_pending_bytes()));
+    add_assoc_long(return_value, "memory_bytes", king_telemetry_u64_to_zend_long(king_telemetry_get_memory_bytes()));
+    add_assoc_long(return_value, "memory_byte_limit", king_telemetry_u64_to_zend_long(king_telemetry_get_memory_byte_limit()));
+    add_assoc_long(return_value, "queue_high_watermark", (zend_long) king_telemetry_get_queue_high_watermark());
+    add_assoc_long(return_value, "queue_high_water_bytes", king_telemetry_u64_to_zend_long(king_telemetry_get_queue_high_water_bytes()));
+    add_assoc_long(return_value, "memory_high_water_bytes", king_telemetry_u64_to_zend_long(king_telemetry_get_memory_high_water_bytes()));
+    add_assoc_long(return_value, "retry_requeue_count", (zend_long) king_telemetry_get_retry_requeue_count());
 }

@@ -37,7 +37,8 @@ int king_orchestrator_claim_next_run(
     zend_string **run_id_out,
     char *claimed_path,
     size_t claimed_path_len,
-    int *claimed_fd_out
+    int *claimed_fd_out,
+    zend_bool *recovered_claim_out
 );
 int king_orchestrator_request_run_cancel(zend_string *run_id);
 int king_orchestrator_run_cancel_requested(zend_string *run_id);
@@ -50,9 +51,15 @@ zend_string *king_orchestrator_pipeline_run_begin(
     zval *options,
     const char *initial_status
 );
-int king_orchestrator_pipeline_run_mark_running(zend_string *run_id);
+int king_orchestrator_pipeline_run_mark_running(
+    zend_string *run_id,
+    zend_bool recovered_claim,
+    zend_long claimed_by_pid
+);
 int king_orchestrator_pipeline_run_is_terminal(zend_string *run_id);
 int king_orchestrator_pipeline_run_record_completed_steps(zend_string *run_id, zend_long completed_step_count);
+int king_orchestrator_pipeline_run_note_recovery(zend_string *run_id, const char *reason);
+int king_orchestrator_pipeline_run_note_remote_attempt(zend_string *run_id);
 int king_orchestrator_pipeline_run_complete(zend_string *run_id, zval *result);
 int king_orchestrator_pipeline_run_fail(zend_string *run_id, const char *error_message);
 int king_orchestrator_pipeline_run_cancelled(zend_string *run_id, const char *error_message);

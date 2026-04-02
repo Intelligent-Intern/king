@@ -142,6 +142,46 @@ static void king_semantic_dns_mother_node_zval_dtor(zval *zv)
     }
 }
 
+static void king_semantic_dns_mother_node_tombstone_record(
+    zend_string *node_id
+)
+{
+    zval marker;
+
+    if (!king_semantic_dns_registry_initialized || node_id == NULL) {
+        return;
+    }
+
+    ZVAL_TRUE(&marker);
+    zend_hash_update(
+        &king_semantic_dns_mother_node_tombstone_registry,
+        king_semantic_dns_copy_persistent_string(node_id),
+        &marker
+    );
+}
+
+static void king_semantic_dns_mother_node_tombstone_clear(
+    zend_string *node_id
+)
+{
+    if (!king_semantic_dns_registry_initialized || node_id == NULL) {
+        return;
+    }
+
+    zend_hash_del(&king_semantic_dns_mother_node_tombstone_registry, node_id);
+}
+
+static bool king_semantic_dns_mother_node_tombstone_exists(
+    zend_string *node_id
+)
+{
+    if (!king_semantic_dns_registry_initialized || node_id == NULL) {
+        return false;
+    }
+
+    return zend_hash_exists(&king_semantic_dns_mother_node_tombstone_registry, node_id);
+}
+
 int king_semantic_dns_registry_minit(void)
 {
     if (king_semantic_dns_registry_initialized) {
@@ -162,6 +202,13 @@ int king_semantic_dns_registry_minit(void)
         king_semantic_dns_mother_node_zval_dtor,
         1
     );
+    zend_hash_init(
+        &king_semantic_dns_mother_node_tombstone_registry,
+        4,
+        NULL,
+        NULL,
+        1
+    );
     king_semantic_dns_registry_initialized = true;
 
     return SUCCESS;
@@ -175,6 +222,7 @@ void king_semantic_dns_registry_mshutdown(void)
 
     zend_hash_destroy(&king_semantic_dns_service_registry);
     zend_hash_destroy(&king_semantic_dns_mother_node_registry);
+    zend_hash_destroy(&king_semantic_dns_mother_node_tombstone_registry);
     king_semantic_dns_registry_initialized = false;
 }
 

@@ -156,6 +156,23 @@ static bool king_semantic_dns_state_persist_locked_or_throw(
     return false;
 }
 
+static bool king_semantic_dns_listener_snapshot_or_throw(
+    const char *function_name
+)
+{
+    if (king_semantic_dns_listener_write_runtime_snapshot() == SUCCESS) {
+        return true;
+    }
+
+    zend_throw_exception_ex(
+        king_ce_system_exception,
+        0,
+        "%s() could not refresh the live Semantic-DNS listener snapshot.",
+        function_name
+    );
+    return false;
+}
+
 static bool king_semantic_dns_scalar_zval_equals(
     const zval *left,
     const zval *right

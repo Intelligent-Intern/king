@@ -23,13 +23,19 @@
 #include <unistd.h>
 #include <zend_hash.h>
 
-#define KING_ORCHESTRATOR_STATE_VERSION 3
+#define KING_ORCHESTRATOR_STATE_VERSION 4
 
 typedef struct _king_orchestrator_run_state {
     zend_string *run_id;
     zend_string *status;
+    zend_string *execution_backend;
+    zend_string *queue_phase;
     time_t started_at;
     time_t finished_at;
+    time_t enqueued_at;
+    time_t last_claimed_at;
+    time_t last_recovered_at;
+    time_t last_remote_attempt_at;
     zend_bool cancel_requested;
     zend_string *initial_data_b64;
     zend_string *pipeline_b64;
@@ -39,8 +45,13 @@ typedef struct _king_orchestrator_run_state {
     zend_string *error_category;
     zend_string *retry_disposition;
     zend_string *error_backend;
+    zend_string *last_recovery_reason;
     zend_long error_step_index;
     zend_long completed_step_count;
+    zend_long claim_count;
+    zend_long recovery_count;
+    zend_long remote_attempt_count;
+    zend_long last_claimed_by_pid;
 } king_orchestrator_run_state_t;
 
 static HashTable king_orchestrator_tool_registry;
@@ -74,6 +85,12 @@ static void king_orchestrator_run_state_free(king_orchestrator_run_state_t *run_
     if (run_state->status != NULL) {
         zend_string_release_ex(run_state->status, 1);
     }
+    if (run_state->execution_backend != NULL) {
+        zend_string_release_ex(run_state->execution_backend, 1);
+    }
+    if (run_state->queue_phase != NULL) {
+        zend_string_release_ex(run_state->queue_phase, 1);
+    }
     if (run_state->initial_data_b64 != NULL) {
         zend_string_release_ex(run_state->initial_data_b64, 1);
     }
@@ -97,6 +114,9 @@ static void king_orchestrator_run_state_free(king_orchestrator_run_state_t *run_
     }
     if (run_state->error_backend != NULL) {
         zend_string_release_ex(run_state->error_backend, 1);
+    }
+    if (run_state->last_recovery_reason != NULL) {
+        zend_string_release_ex(run_state->last_recovery_reason, 1);
     }
 
     pefree(run_state, 1);
@@ -293,6 +313,48 @@ static int king_orchestrator_backend_is_remote_peer(void)
 {
     return king_mcp_orchestrator_config.orchestrator_execution_backend != NULL
         && strcmp(king_mcp_orchestrator_config.orchestrator_execution_backend, "remote_peer") == 0;
+}
+
+static const char *king_orchestrator_current_execution_backend(void)
+{
+    if (
+        king_mcp_orchestrator_config.orchestrator_execution_backend == NULL
+        || king_mcp_orchestrator_config.orchestrator_execution_backend[0] == '\0'
+    ) {
+        return "local";
+    }
+
+    return king_mcp_orchestrator_config.orchestrator_execution_backend;
+}
+
+static const char *king_orchestrator_topology_scope_for_backend(const char *execution_backend)
+{
+    if (execution_backend == NULL || execution_backend[0] == '\0' || strcmp(execution_backend, "local") == 0) {
+        return "local_in_process";
+    }
+
+    if (strcmp(execution_backend, "file_worker") == 0) {
+        return "same_host_file_worker";
+    }
+
+    if (strcmp(execution_backend, "remote_peer") == 0) {
+        return "tcp_host_port_execution_peer";
+    }
+
+    return "local_in_process";
+}
+
+static const char *king_orchestrator_run_execution_backend(const king_orchestrator_run_state_t *run_state)
+{
+    if (
+        run_state != NULL
+        && run_state->execution_backend != NULL
+        && ZSTR_LEN(run_state->execution_backend) > 0
+    ) {
+        return ZSTR_VAL(run_state->execution_backend);
+    }
+
+    return king_orchestrator_current_execution_backend();
 }
 
 static int king_orchestrator_state_path_is_configured(void)
@@ -920,6 +982,138 @@ static size_t king_orchestrator_count_queued_runs(void)
     return queued_runs;
 }
 
+static size_t king_orchestrator_count_claimed_runs(void)
+{
+    DIR *dir;
+    struct dirent *entry;
+    size_t claimed_runs = 0;
+
+    if (!king_orchestrator_queue_path_is_configured()) {
+        return 0;
+    }
+
+    dir = opendir(king_mcp_orchestrator_config.orchestrator_worker_queue_path);
+    if (dir == NULL) {
+        return 0;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        char entry_path[1024];
+
+        if (king_orchestrator_queue_name_is_claimed_job(entry->d_name)) {
+            if (
+                king_orchestrator_build_queue_entry_path(
+                    entry->d_name,
+                    entry_path,
+                    sizeof(entry_path)
+                ) == SUCCESS
+                && king_orchestrator_queue_entry_is_regular_file(entry_path)
+            ) {
+                claimed_runs++;
+            }
+        }
+    }
+
+    closedir(dir);
+    return claimed_runs;
+}
+
+static void king_orchestrator_run_state_replace_string_literal(
+    zend_string **target,
+    const char *value
+)
+{
+    king_orchestrator_replace_runtime_string(
+        target,
+        value != NULL ? zend_string_init(value, strlen(value), 1) : NULL
+    );
+}
+
+static int king_orchestrator_pipeline_run_note_enqueued(zend_string *run_id, time_t enqueued_at)
+{
+    king_orchestrator_run_state_t *run_state;
+    int lock_fd = -1;
+    int rc;
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
+
+    run_state = king_orchestrator_find_run(run_id);
+    if (run_state == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
+        return FAILURE;
+    }
+
+    run_state->enqueued_at = enqueued_at;
+    king_orchestrator_run_state_replace_string_literal(&run_state->queue_phase, "queued");
+
+    rc = king_orchestrator_persist_state_locked();
+    king_orchestrator_state_lock_release(lock_fd);
+
+    return rc;
+}
+
+int king_orchestrator_pipeline_run_note_recovery(
+    zend_string *run_id,
+    const char *reason
+)
+{
+    king_orchestrator_run_state_t *run_state;
+    time_t now;
+    int lock_fd = -1;
+    int rc;
+
+    if (reason == NULL || reason[0] == '\0') {
+        return FAILURE;
+    }
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
+
+    run_state = king_orchestrator_find_run(run_id);
+    if (run_state == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
+        return FAILURE;
+    }
+
+    now = time(NULL);
+    run_state->recovery_count++;
+    run_state->last_recovered_at = now;
+    king_orchestrator_run_state_replace_string_literal(&run_state->last_recovery_reason, reason);
+
+    rc = king_orchestrator_persist_state_locked();
+    king_orchestrator_state_lock_release(lock_fd);
+
+    return rc;
+}
+
+int king_orchestrator_pipeline_run_note_remote_attempt(zend_string *run_id)
+{
+    king_orchestrator_run_state_t *run_state;
+    int lock_fd = -1;
+    int rc;
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
+
+    run_state = king_orchestrator_find_run(run_id);
+    if (run_state == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
+        return FAILURE;
+    }
+
+    run_state->remote_attempt_count++;
+    run_state->last_remote_attempt_at = time(NULL);
+
+    rc = king_orchestrator_persist_state_locked();
+    king_orchestrator_state_lock_release(lock_fd);
+
+    return rc;
+}
+
 static int king_orchestrator_persist_state_locked(void)
 {
     char tmp_path[1024];
@@ -1009,7 +1203,7 @@ static int king_orchestrator_persist_state_locked(void)
 
         fprintf(
             stream,
-            "run\t%s\t%s\t%ld\t%ld\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%ld\t%ld\n",
+            "run\t%s\t%s\t%ld\t%ld\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%ld\t%ld\t%s\t%s\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%ld\t%ld\n",
             ZSTR_VAL(run_state->run_id),
             ZSTR_VAL(run_state->status),
             (long) run_state->started_at,
@@ -1024,7 +1218,18 @@ static int king_orchestrator_persist_state_locked(void)
             run_state->retry_disposition != NULL ? ZSTR_VAL(run_state->retry_disposition) : "",
             run_state->error_backend != NULL ? ZSTR_VAL(run_state->error_backend) : "",
             (long) run_state->error_step_index,
-            (long) run_state->completed_step_count
+            (long) run_state->completed_step_count,
+            run_state->execution_backend != NULL ? ZSTR_VAL(run_state->execution_backend) : "",
+            run_state->queue_phase != NULL ? ZSTR_VAL(run_state->queue_phase) : "",
+            (long) run_state->enqueued_at,
+            (long) run_state->last_claimed_at,
+            (long) run_state->last_recovered_at,
+            (long) run_state->last_remote_attempt_at,
+            (long) run_state->claim_count,
+            (long) run_state->recovery_count,
+            run_state->last_recovery_reason != NULL ? ZSTR_VAL(run_state->last_recovery_reason) : "",
+            (long) run_state->remote_attempt_count,
+            (long) run_state->last_claimed_by_pid
         );
     } ZEND_HASH_FOREACH_END();
 
@@ -1044,6 +1249,45 @@ static int king_orchestrator_persist_state_locked(void)
     }
 
     return SUCCESS;
+}
+
+static size_t king_orchestrator_split_state_fields(
+    char *line,
+    char **fields,
+    size_t max_fields
+)
+{
+    char *cursor;
+    char *field_start;
+    size_t count = 0;
+
+    if (line == NULL || fields == NULL || max_fields == 0) {
+        return 0;
+    }
+
+    cursor = line;
+    field_start = line;
+
+    while (*cursor != '\0' && *cursor != '\n' && *cursor != '\r') {
+        if (*cursor == '\t') {
+            if (count < max_fields) {
+                fields[count++] = field_start;
+            }
+            *cursor = '\0';
+            field_start = cursor + 1;
+        }
+        cursor++;
+    }
+
+    if (*cursor == '\n' || *cursor == '\r') {
+        *cursor = '\0';
+    }
+
+    if (count < max_fields) {
+        fields[count++] = field_start;
+    }
+
+    return count;
 }
 
 static int king_orchestrator_load_state(void)
@@ -1088,24 +1332,30 @@ static int king_orchestrator_load_state(void)
     }
 
     while (fgets(line, sizeof(line), stream) != NULL) {
-        char *saveptr = NULL;
+        char *fields[32];
         char *kind;
+        size_t field_count;
 
         if (line[0] == '\n' || line[0] == '\r' || line[0] == '#') {
             continue;
         }
 
-        kind = strtok_r(line, "\t\r\n", &saveptr);
-        if (kind == NULL) {
+        field_count = king_orchestrator_split_state_fields(
+            line,
+            fields,
+            sizeof(fields) / sizeof(fields[0])
+        );
+        if (field_count == 0) {
             continue;
         }
+        kind = fields[0];
 
         if (strcmp(kind, "version") == 0) {
             continue;
         }
 
         if (strcmp(kind, "logging") == 0) {
-            char *logging_b64 = strtok_r(NULL, "\t\r\n", &saveptr);
+            char *logging_b64 = field_count > 1 ? fields[1] : NULL;
             if (logging_b64 != NULL && logging_b64[0] != '\0') {
                 king_orchestrator_replace_runtime_string(
                     &king_orchestrator_logging_config_b64,
@@ -1117,8 +1367,8 @@ static int king_orchestrator_load_state(void)
         }
 
         if (strcmp(kind, "tool") == 0) {
-            char *encoded_name = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *config_b64 = strtok_r(NULL, "\t\r\n", &saveptr);
+            char *encoded_name = field_count > 1 ? fields[1] : NULL;
+            char *config_b64 = field_count > 2 ? fields[2] : NULL;
             zend_string *decoded_name;
             zend_string *persistent_name;
             zval stored_config;
@@ -1148,25 +1398,71 @@ static int king_orchestrator_load_state(void)
         }
 
         if (strcmp(kind, "run") == 0) {
-            char *run_id = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *status = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *started_at = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *finished_at = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *initial_data_b64 = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *pipeline_b64 = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *options_b64 = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *result_b64 = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *error_b64 = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *cancel_requested = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *error_category = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *retry_disposition = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *error_backend = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *error_step_index = strtok_r(NULL, "\t\r\n", &saveptr);
-            char *completed_step_count = strtok_r(NULL, "\t\r\n", &saveptr);
+            char *run_id;
+            char *status;
+            char *started_at;
+            char *finished_at;
+            char *initial_data_b64;
+            char *pipeline_b64;
+            char *options_b64;
+            char *result_b64;
+            char *error_b64;
+            char *cancel_requested;
+            char *error_category;
+            char *retry_disposition;
+            char *error_backend;
+            char *error_step_index;
+            char *completed_step_count;
+            char *execution_backend = NULL;
+            char *queue_phase = NULL;
+            char *enqueued_at = NULL;
+            char *last_claimed_at = NULL;
+            char *last_recovered_at = NULL;
+            char *last_remote_attempt_at = NULL;
+            char *claim_count = NULL;
+            char *recovery_count = NULL;
+            char *last_recovery_reason = NULL;
+            char *remote_attempt_count = NULL;
+            char *last_claimed_by_pid = NULL;
             king_orchestrator_run_state_t *run_state;
             zval stored_run;
             zend_string *persistent_key;
             zend_long sequence;
+
+            if (field_count != 10 && field_count != 16 && field_count != 27) {
+                continue;
+            }
+
+            run_id = fields[1];
+            status = fields[2];
+            started_at = fields[3];
+            finished_at = fields[4];
+            initial_data_b64 = fields[5];
+            pipeline_b64 = fields[6];
+            options_b64 = fields[7];
+            result_b64 = fields[8];
+            error_b64 = fields[9];
+            if (field_count >= 16) {
+                cancel_requested = fields[10];
+                error_category = fields[11];
+                retry_disposition = fields[12];
+                error_backend = fields[13];
+                error_step_index = fields[14];
+                completed_step_count = fields[15];
+            }
+            if (field_count == 27) {
+                execution_backend = fields[16];
+                queue_phase = fields[17];
+                enqueued_at = fields[18];
+                last_claimed_at = fields[19];
+                last_recovered_at = fields[20];
+                last_remote_attempt_at = fields[21];
+                claim_count = fields[22];
+                recovery_count = fields[23];
+                last_recovery_reason = fields[24];
+                remote_attempt_count = fields[25];
+                last_claimed_by_pid = fields[26];
+            }
 
             if (
                 run_id == NULL || run_id[0] == '\0'
@@ -1186,8 +1482,26 @@ static int king_orchestrator_load_state(void)
             memset(run_state, 0, sizeof(*run_state));
             run_state->run_id = king_orchestrator_dup_state_field(run_id);
             run_state->status = king_orchestrator_dup_state_field(status);
+            run_state->execution_backend = (
+                execution_backend != NULL && execution_backend[0] != '\0'
+            ) ? king_orchestrator_dup_state_field(execution_backend) : king_orchestrator_dup_state_field(king_orchestrator_current_execution_backend());
+            run_state->queue_phase = (
+                queue_phase != NULL && queue_phase[0] != '\0'
+            ) ? king_orchestrator_dup_state_field(queue_phase) : king_orchestrator_dup_state_field("not_queued");
             run_state->started_at = (time_t) ZEND_STRTOL(started_at, NULL, 10);
             run_state->finished_at = (time_t) ZEND_STRTOL(finished_at, NULL, 10);
+            run_state->enqueued_at = (
+                enqueued_at != NULL && enqueued_at[0] != '\0'
+            ) ? (time_t) ZEND_STRTOL(enqueued_at, NULL, 10) : 0;
+            run_state->last_claimed_at = (
+                last_claimed_at != NULL && last_claimed_at[0] != '\0'
+            ) ? (time_t) ZEND_STRTOL(last_claimed_at, NULL, 10) : 0;
+            run_state->last_recovered_at = (
+                last_recovered_at != NULL && last_recovered_at[0] != '\0'
+            ) ? (time_t) ZEND_STRTOL(last_recovered_at, NULL, 10) : 0;
+            run_state->last_remote_attempt_at = (
+                last_remote_attempt_at != NULL && last_remote_attempt_at[0] != '\0'
+            ) ? (time_t) ZEND_STRTOL(last_remote_attempt_at, NULL, 10) : 0;
             run_state->cancel_requested = (zend_bool) (
                 cancel_requested != NULL && cancel_requested[0] != '\0'
                 && ZEND_STRTOL(cancel_requested, NULL, 10) != 0
@@ -1206,12 +1520,27 @@ static int king_orchestrator_load_state(void)
             run_state->error_backend = (
                 error_backend != NULL && error_backend[0] != '\0'
             ) ? king_orchestrator_dup_state_field(error_backend) : NULL;
+            run_state->last_recovery_reason = (
+                last_recovery_reason != NULL && last_recovery_reason[0] != '\0'
+            ) ? king_orchestrator_dup_state_field(last_recovery_reason) : NULL;
             run_state->error_step_index = (
                 error_step_index != NULL && error_step_index[0] != '\0'
             ) ? ZEND_STRTOL(error_step_index, NULL, 10) : -1;
             run_state->completed_step_count = (
                 completed_step_count != NULL && completed_step_count[0] != '\0'
             ) ? ZEND_STRTOL(completed_step_count, NULL, 10) : 0;
+            run_state->claim_count = (
+                claim_count != NULL && claim_count[0] != '\0'
+            ) ? ZEND_STRTOL(claim_count, NULL, 10) : 0;
+            run_state->recovery_count = (
+                recovery_count != NULL && recovery_count[0] != '\0'
+            ) ? ZEND_STRTOL(recovery_count, NULL, 10) : 0;
+            run_state->remote_attempt_count = (
+                remote_attempt_count != NULL && remote_attempt_count[0] != '\0'
+            ) ? ZEND_STRTOL(remote_attempt_count, NULL, 10) : 0;
+            run_state->last_claimed_by_pid = (
+                last_claimed_by_pid != NULL && last_claimed_by_pid[0] != '\0'
+            ) ? ZEND_STRTOL(last_claimed_by_pid, NULL, 10) : 0;
 
             ZVAL_PTR(&stored_run, run_state);
             persistent_key = zend_string_dup(run_state->run_id, 1);
@@ -1389,6 +1718,15 @@ static void king_orchestrator_append_error_classification(
     add_assoc_zval(target, "error_classification", &classification);
 }
 
+static zend_long king_orchestrator_pipeline_step_count(zval *pipeline)
+{
+    if (pipeline == NULL || Z_TYPE_P(pipeline) != IS_ARRAY) {
+        return 0;
+    }
+
+    return (zend_long) zend_hash_num_elements(Z_ARRVAL_P(pipeline));
+}
+
 static const char *king_orchestrator_step_status_for_snapshot(
     const king_orchestrator_run_state_t *run_state,
     zend_long step_index
@@ -1454,6 +1792,190 @@ static const char *king_orchestrator_step_status_for_snapshot(
     return "pending";
 }
 
+static zend_bool king_orchestrator_run_requires_compensation(
+    const king_orchestrator_run_state_t *run_state
+)
+{
+    if (
+        run_state == NULL
+        || run_state->status == NULL
+        || run_state->completed_step_count <= 0
+    ) {
+        return 0;
+    }
+
+    return zend_string_equals_literal(run_state->status, "failed")
+        || zend_string_equals_literal(run_state->status, "cancelled");
+}
+
+static const char *king_orchestrator_step_compensation_status_for_snapshot(
+    const king_orchestrator_run_state_t *run_state,
+    zend_long step_index
+)
+{
+    if (
+        run_state == NULL
+        || run_state->status == NULL
+        || step_index < 0
+        || step_index >= run_state->completed_step_count
+    ) {
+        return "not_applicable";
+    }
+
+    if (zend_string_equals_literal(run_state->status, "completed")) {
+        return "not_required";
+    }
+
+    if (king_orchestrator_run_requires_compensation(run_state)) {
+        return "pending";
+    }
+
+    return "available";
+}
+
+static zend_long king_orchestrator_indeterminate_step_count(
+    const king_orchestrator_run_state_t *run_state,
+    zval *pipeline
+)
+{
+    zend_long step_count;
+
+    if (run_state == NULL) {
+        return 0;
+    }
+
+    step_count = king_orchestrator_pipeline_step_count(pipeline);
+    if (
+        step_count > 0
+        && (
+            (run_state->error_category != NULL && zend_string_equals_literal(run_state->error_category, "remote_transport"))
+            || (run_state->error_backend != NULL && zend_string_equals_literal(run_state->error_backend, "remote_peer"))
+        )
+        && run_state->error_step_index < 0
+    ) {
+        return step_count > run_state->completed_step_count
+            ? step_count - run_state->completed_step_count
+            : 0;
+    }
+
+    return 0;
+}
+
+static void king_orchestrator_append_compensation_snapshot(
+    zval *target,
+    zval *pipeline,
+    const king_orchestrator_run_state_t *run_state
+)
+{
+    zval compensation;
+    zval pending_steps;
+    zval entry;
+    zval *tool;
+    zend_long step_index;
+    zend_bool required;
+
+    if (target == NULL) {
+        return;
+    }
+
+    required = king_orchestrator_run_requires_compensation(run_state);
+
+    array_init(&compensation);
+    add_assoc_string(&compensation, "policy", "caller_managed");
+    add_assoc_string(&compensation, "strategy", "reverse_completed_steps");
+    add_assoc_bool(&compensation, "required", required ? 1 : 0);
+    add_assoc_string(
+        &compensation,
+        "trigger",
+        required && run_state != NULL && run_state->status != NULL
+            ? ZSTR_VAL(run_state->status)
+            : "none"
+    );
+    add_assoc_long(
+        &compensation,
+        "pending_step_count",
+        required && run_state != NULL ? run_state->completed_step_count : 0
+    );
+
+    array_init(&pending_steps);
+    if (required && pipeline != NULL && Z_TYPE_P(pipeline) == IS_ARRAY && run_state != NULL) {
+        for (step_index = run_state->completed_step_count - 1; step_index >= 0; step_index--) {
+            array_init(&entry);
+            add_assoc_long(&entry, "index", step_index);
+
+            tool = king_orchestrator_find_pipeline_step_tool(pipeline, step_index);
+            if (tool != NULL && Z_TYPE_P(tool) == IS_STRING) {
+                add_assoc_stringl(&entry, "tool", Z_STRVAL_P(tool), Z_STRLEN_P(tool));
+            } else {
+                add_assoc_null(&entry, "tool");
+            }
+
+            add_assoc_string(&entry, "status", "pending");
+            add_next_index_zval(&pending_steps, &entry);
+
+            if (step_index == 0) {
+                break;
+            }
+        }
+    }
+
+    add_assoc_zval(&compensation, "pending_steps", &pending_steps);
+    add_assoc_zval(target, "compensation", &compensation);
+}
+
+static void king_orchestrator_append_run_observability(
+    zval *target,
+    const king_orchestrator_run_state_t *run_state,
+    zval *pipeline
+)
+{
+    zval observability;
+
+    if (target == NULL) {
+        return;
+    }
+
+    array_init(&observability);
+    add_assoc_string(
+        &observability,
+        "queue_phase",
+        run_state != NULL && run_state->queue_phase != NULL
+            ? ZSTR_VAL(run_state->queue_phase)
+            : "not_queued"
+    );
+    add_assoc_long(&observability, "enqueued_at", run_state != NULL ? (zend_long) run_state->enqueued_at : 0);
+    add_assoc_long(&observability, "claim_count", run_state != NULL ? run_state->claim_count : 0);
+    add_assoc_long(&observability, "last_claimed_at", run_state != NULL ? (zend_long) run_state->last_claimed_at : 0);
+    add_assoc_long(&observability, "last_claimed_by_pid", run_state != NULL ? run_state->last_claimed_by_pid : 0);
+    add_assoc_long(&observability, "recovery_count", run_state != NULL ? run_state->recovery_count : 0);
+    add_assoc_long(&observability, "last_recovered_at", run_state != NULL ? (zend_long) run_state->last_recovered_at : 0);
+    if (run_state != NULL && run_state->last_recovery_reason != NULL) {
+        add_assoc_stringl(
+            &observability,
+            "last_recovery_reason",
+            ZSTR_VAL(run_state->last_recovery_reason),
+            ZSTR_LEN(run_state->last_recovery_reason)
+        );
+    } else {
+        add_assoc_null(&observability, "last_recovery_reason");
+    }
+    add_assoc_long(&observability, "remote_attempt_count", run_state != NULL ? run_state->remote_attempt_count : 0);
+    add_assoc_long(
+        &observability,
+        "last_remote_attempt_at",
+        run_state != NULL ? (zend_long) run_state->last_remote_attempt_at : 0
+    );
+    add_assoc_long(&observability, "step_count", king_orchestrator_pipeline_step_count(pipeline));
+    add_assoc_long(&observability, "completed_step_count", run_state != NULL ? run_state->completed_step_count : 0);
+    add_assoc_long(
+        &observability,
+        "indeterminate_step_count",
+        king_orchestrator_indeterminate_step_count(run_state, pipeline)
+    );
+
+    add_assoc_zval(target, "distributed_observability", &observability);
+}
+
 static void king_orchestrator_append_step_snapshots(
     zval *target,
     zval *pipeline,
@@ -1463,8 +1985,10 @@ static void king_orchestrator_append_step_snapshots(
     zval steps;
     zval *step;
     zval *tool;
-    zval *entry;
+    zval entry;
     uint32_t index = 0;
+    const char *execution_backend = king_orchestrator_run_execution_backend(run_state);
+    const char *topology_scope = king_orchestrator_topology_scope_for_backend(execution_backend);
 
     if (target == NULL) {
         return;
@@ -1496,6 +2020,13 @@ static void king_orchestrator_append_step_snapshots(
             "status",
             king_orchestrator_step_status_for_snapshot(run_state, (zend_long) index)
         );
+        add_assoc_string(
+            &entry,
+            "compensation_status",
+            king_orchestrator_step_compensation_status_for_snapshot(run_state, (zend_long) index)
+        );
+        add_assoc_string(&entry, "execution_backend", (char *) execution_backend);
+        add_assoc_string(&entry, "topology_scope", (char *) topology_scope);
 
         if (
             run_state != NULL
@@ -1563,15 +2094,28 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     array_init(return_value);
     add_assoc_stringl(return_value, "run_id", ZSTR_VAL(run_state->run_id), ZSTR_LEN(run_state->run_id));
     add_assoc_stringl(return_value, "status", ZSTR_VAL(run_state->status), ZSTR_LEN(run_state->status));
+    add_assoc_string(return_value, "execution_backend", (char *) king_orchestrator_run_execution_backend(run_state));
+    add_assoc_string(
+        return_value,
+        "topology_scope",
+        (char *) king_orchestrator_topology_scope_for_backend(king_orchestrator_run_execution_backend(run_state))
+    );
+    add_assoc_string(return_value, "retry_policy", "single_attempt");
+    add_assoc_string(return_value, "idempotency_policy", "caller_managed");
+    add_assoc_string(return_value, "compensation_policy", "caller_managed");
     add_assoc_long(return_value, "started_at", (zend_long) run_state->started_at);
     add_assoc_long(return_value, "finished_at", (zend_long) run_state->finished_at);
     add_assoc_bool(return_value, "cancel_requested", run_state->cancel_requested ? 1 : 0);
+    add_assoc_long(return_value, "step_count", king_orchestrator_pipeline_step_count(&pipeline));
+    add_assoc_long(return_value, "completed_step_count", run_state->completed_step_count);
     add_assoc_zval(return_value, "initial_data", &initial_data);
     add_assoc_zval(return_value, "pipeline", &pipeline);
     add_assoc_zval(return_value, "options", &options);
     add_assoc_zval(return_value, "result", &result);
     add_assoc_zval(return_value, "error", &error);
     king_orchestrator_append_error_classification(return_value, run_state, &pipeline);
+    king_orchestrator_append_compensation_snapshot(return_value, &pipeline, run_state);
+    king_orchestrator_append_run_observability(return_value, run_state, &pipeline);
     king_orchestrator_append_step_snapshots(return_value, &pipeline, run_state);
 
     king_orchestrator_state_lock_release(lock_fd);
@@ -1582,6 +2126,7 @@ int king_orchestrator_enqueue_run(zend_string *run_id, zval *return_value)
 {
     char queue_file_path[1024];
     FILE *stream;
+    time_t enqueued_at;
 
     if (!king_orchestrator_backend_is_file_worker() || !king_orchestrator_queue_path_is_configured()) {
         return FAILURE;
@@ -1620,11 +2165,17 @@ int king_orchestrator_enqueue_run(zend_string *run_id, zval *return_value)
         return FAILURE;
     }
 
+    enqueued_at = time(NULL);
+    if (king_orchestrator_pipeline_run_note_enqueued(run_id, enqueued_at) != SUCCESS) {
+        unlink(queue_file_path);
+        return FAILURE;
+    }
+
     array_init(return_value);
     add_assoc_stringl(return_value, "run_id", ZSTR_VAL(run_id), ZSTR_LEN(run_id));
     add_assoc_string(return_value, "backend", "file_worker");
     add_assoc_string(return_value, "status", "queued");
-    add_assoc_long(return_value, "enqueued_at", (zend_long) time(NULL));
+    add_assoc_long(return_value, "enqueued_at", (zend_long) enqueued_at);
 
     return SUCCESS;
 }
@@ -1706,6 +2257,9 @@ int king_orchestrator_request_run_cancel(zend_string *run_id)
         );
         run_state->finished_at = time(NULL);
         run_state->cancel_requested = 1;
+        if (strcmp(king_orchestrator_run_execution_backend(run_state), "file_worker") == 0) {
+            king_orchestrator_run_state_replace_string_literal(&run_state->queue_phase, "dequeued");
+        }
         if (error_b64 != NULL) {
             king_orchestrator_replace_runtime_string(&run_state->error_b64, zend_string_dup(error_b64, 1));
             zend_string_release(error_b64);
@@ -1772,7 +2326,8 @@ int king_orchestrator_claim_next_run(
     zend_string **run_id_out,
     char *claimed_path,
     size_t claimed_path_len,
-    int *claimed_fd_out
+    int *claimed_fd_out,
+    zend_bool *recovered_claim_out
 )
 {
     int claimed_fd = -1;
@@ -1792,6 +2347,9 @@ int king_orchestrator_claim_next_run(
 
     if (claimed_fd_out != NULL) {
         *claimed_fd_out = -1;
+    }
+    if (recovered_claim_out != NULL) {
+        *recovered_claim_out = 0;
     }
 
     if (!king_orchestrator_backend_is_file_worker() || !king_orchestrator_queue_path_is_configured()) {
@@ -2038,6 +2596,9 @@ int king_orchestrator_claim_next_run(
         } else {
             close(claimed_fd);
         }
+        if (recovered_claim_out != NULL) {
+            *recovered_claim_out = selected_is_claimed ? 1 : 0;
+        }
         return SUCCESS;
     }
 }
@@ -2246,8 +2807,18 @@ zend_string *king_orchestrator_pipeline_run_begin(
 
     run_state->run_id = zend_string_dup(run_id, 1);
     run_state->status = zend_string_init(initial_status, strlen(initial_status), 1);
+    run_state->execution_backend = zend_string_init(
+        king_orchestrator_current_execution_backend(),
+        strlen(king_orchestrator_current_execution_backend()),
+        1
+    );
+    run_state->queue_phase = zend_string_init("not_queued", sizeof("not_queued") - 1, 1);
     run_state->started_at = time(NULL);
     run_state->finished_at = 0;
+    run_state->enqueued_at = 0;
+    run_state->last_claimed_at = 0;
+    run_state->last_recovered_at = 0;
+    run_state->last_remote_attempt_at = 0;
     run_state->cancel_requested = 0;
     run_state->initial_data_b64 = zend_string_dup(initial_data_b64, 1);
     run_state->pipeline_b64 = zend_string_dup(pipeline_b64, 1);
@@ -2257,8 +2828,13 @@ zend_string *king_orchestrator_pipeline_run_begin(
     run_state->error_category = NULL;
     run_state->retry_disposition = NULL;
     run_state->error_backend = NULL;
+    run_state->last_recovery_reason = NULL;
     run_state->error_step_index = -1;
     run_state->completed_step_count = 0;
+    run_state->claim_count = 0;
+    run_state->recovery_count = 0;
+    run_state->remote_attempt_count = 0;
+    run_state->last_claimed_by_pid = 0;
 
     zend_string_release(initial_data_b64);
     zend_string_release(pipeline_b64);
@@ -2286,9 +2862,14 @@ zend_string *king_orchestrator_pipeline_run_begin(
     return run_id;
 }
 
-int king_orchestrator_pipeline_run_mark_running(zend_string *run_id)
+int king_orchestrator_pipeline_run_mark_running(
+    zend_string *run_id,
+    zend_bool recovered_claim,
+    zend_long claimed_by_pid
+)
 {
     king_orchestrator_run_state_t *run_state;
+    time_t now;
     int lock_fd = -1;
     int rc;
 
@@ -2302,21 +2883,35 @@ int king_orchestrator_pipeline_run_mark_running(zend_string *run_id)
         return FAILURE;
     }
 
-    if (
-        king_orchestrator_run_state_is_terminal(run_state)
-        || zend_string_equals_literal(run_state->status, "running")
-    ) {
+    if (king_orchestrator_run_state_is_terminal(run_state)) {
         king_orchestrator_state_lock_release(lock_fd);
         return SUCCESS;
     }
 
-    king_orchestrator_replace_runtime_string(
-        &run_state->status,
-        zend_string_init("running", sizeof("running") - 1, 1)
-    );
-    run_state->finished_at = 0;
-    king_orchestrator_run_state_clear_error_classification(run_state);
-    king_orchestrator_set_last_run(run_state->run_id, "running");
+    if (!zend_string_equals_literal(run_state->status, "running")) {
+        king_orchestrator_replace_runtime_string(
+            &run_state->status,
+            zend_string_init("running", sizeof("running") - 1, 1)
+        );
+        run_state->finished_at = 0;
+        king_orchestrator_run_state_clear_error_classification(run_state);
+        king_orchestrator_set_last_run(run_state->run_id, "running");
+    }
+
+    now = time(NULL);
+    run_state->claim_count++;
+    run_state->last_claimed_at = now;
+    run_state->last_claimed_by_pid = claimed_by_pid;
+    king_orchestrator_run_state_replace_string_literal(&run_state->queue_phase, "claimed");
+
+    if (recovered_claim) {
+        run_state->recovery_count++;
+        run_state->last_recovered_at = now;
+        king_orchestrator_run_state_replace_string_literal(
+            &run_state->last_recovery_reason,
+            "claimed_job_recovery"
+        );
+    }
 
     rc = king_orchestrator_persist_state_locked();
     king_orchestrator_state_lock_release(lock_fd);
@@ -2413,6 +3008,9 @@ int king_orchestrator_pipeline_run_complete(zend_string *run_id, zval *result)
     );
     run_state->finished_at = time(NULL);
     run_state->cancel_requested = 0;
+    if (strcmp(king_orchestrator_run_execution_backend(run_state), "file_worker") == 0) {
+        king_orchestrator_run_state_replace_string_literal(&run_state->queue_phase, "dequeued");
+    }
     king_orchestrator_replace_runtime_string(&run_state->result_b64, zend_string_dup(result_b64, 1));
     king_orchestrator_replace_runtime_string(&run_state->error_b64, zend_string_dup(error_b64, 1));
     king_orchestrator_run_state_clear_error_classification(run_state);
@@ -2464,6 +3062,9 @@ static int king_orchestrator_pipeline_run_finish_with_error(
     );
     run_state->finished_at = time(NULL);
     run_state->cancel_requested = cancel_requested ? 1 : 0;
+    if (strcmp(king_orchestrator_run_execution_backend(run_state), "file_worker") == 0) {
+        king_orchestrator_run_state_replace_string_literal(&run_state->queue_phase, "dequeued");
+    }
     if (error_b64 != NULL) {
         king_orchestrator_replace_runtime_string(&run_state->error_b64, zend_string_dup(error_b64, 1));
         zend_string_release(error_b64);
@@ -2552,11 +3153,28 @@ int king_orchestrator_pipeline_run_cancelled_classified(
 
 void king_orchestrator_append_component_info(zval *configuration)
 {
+    typedef struct _king_orchestrator_observability_summary {
+        zend_long recovered_run_count;
+        zend_long remote_attempted_run_count;
+        zend_string *last_claimed_run_id;
+        zend_string *last_recovered_run_id;
+        zend_string *last_remote_attempt_run_id;
+        const char *last_recovery_reason;
+        time_t last_claimed_at;
+        time_t last_recovered_at;
+        time_t last_remote_attempt_at;
+    } king_orchestrator_observability_summary_t;
+
     zval registered_tools;
+    zval distributed_observability;
     zend_string *tool_name;
+    zval *run_entry;
     const char *execution_backend;
     const char *topology_scope = "local_in_process";
     const char *scheduler_policy = "in_process_linear";
+    king_orchestrator_observability_summary_t summary;
+
+    memset(&summary, 0, sizeof(summary));
 
     if (configuration == NULL || Z_TYPE_P(configuration) != IS_ARRAY) {
         return;
@@ -2594,6 +3212,7 @@ void king_orchestrator_append_component_info(zval *configuration)
     add_assoc_string(configuration, "scheduler_policy", scheduler_policy);
     add_assoc_string(configuration, "retry_policy", "single_attempt");
     add_assoc_string(configuration, "idempotency_policy", "caller_managed");
+    add_assoc_string(configuration, "compensation_policy", "caller_managed");
     add_assoc_string(
         configuration,
         "worker_queue_path",
@@ -2661,6 +3280,42 @@ void king_orchestrator_append_component_info(zval *configuration)
         add_assoc_null(configuration, "last_run_status");
     }
 
+    ZEND_HASH_FOREACH_VAL(&king_orchestrator_pipeline_runs, run_entry) {
+        king_orchestrator_run_state_t *run_state;
+
+        if (Z_TYPE_P(run_entry) != IS_PTR) {
+            continue;
+        }
+
+        run_state = (king_orchestrator_run_state_t *) Z_PTR_P(run_entry);
+        if (run_state == NULL || run_state->run_id == NULL) {
+            continue;
+        }
+
+        if (run_state->recovery_count > 0) {
+            summary.recovered_run_count++;
+        }
+        if (run_state->remote_attempt_count > 0) {
+            summary.remote_attempted_run_count++;
+        }
+
+        if (run_state->last_claimed_at > summary.last_claimed_at) {
+            summary.last_claimed_at = run_state->last_claimed_at;
+            summary.last_claimed_run_id = run_state->run_id;
+        }
+        if (run_state->last_recovered_at > summary.last_recovered_at) {
+            summary.last_recovered_at = run_state->last_recovered_at;
+            summary.last_recovered_run_id = run_state->run_id;
+            summary.last_recovery_reason = (
+                run_state->last_recovery_reason != NULL
+            ) ? ZSTR_VAL(run_state->last_recovery_reason) : NULL;
+        }
+        if (run_state->last_remote_attempt_at > summary.last_remote_attempt_at) {
+            summary.last_remote_attempt_at = run_state->last_remote_attempt_at;
+            summary.last_remote_attempt_run_id = run_state->run_id;
+        }
+    } ZEND_HASH_FOREACH_END();
+
     array_init(&registered_tools);
     ZEND_HASH_FOREACH_STR_KEY(&king_orchestrator_tool_registry, tool_name) {
         if (tool_name != NULL) {
@@ -2668,6 +3323,55 @@ void king_orchestrator_append_component_info(zval *configuration)
         }
     } ZEND_HASH_FOREACH_END();
     add_assoc_zval(configuration, "registered_tools", &registered_tools);
+
+    array_init(&distributed_observability);
+    add_assoc_long(
+        &distributed_observability,
+        "claimed_run_count",
+        (zend_long) king_orchestrator_count_claimed_runs()
+    );
+    add_assoc_long(&distributed_observability, "recovered_run_count", summary.recovered_run_count);
+    add_assoc_long(
+        &distributed_observability,
+        "remote_attempted_run_count",
+        summary.remote_attempted_run_count
+    );
+    if (summary.last_claimed_run_id != NULL) {
+        add_assoc_stringl(
+            &distributed_observability,
+            "last_claimed_run_id",
+            ZSTR_VAL(summary.last_claimed_run_id),
+            ZSTR_LEN(summary.last_claimed_run_id)
+        );
+    } else {
+        add_assoc_null(&distributed_observability, "last_claimed_run_id");
+    }
+    if (summary.last_recovered_run_id != NULL) {
+        add_assoc_stringl(
+            &distributed_observability,
+            "last_recovered_run_id",
+            ZSTR_VAL(summary.last_recovered_run_id),
+            ZSTR_LEN(summary.last_recovered_run_id)
+        );
+    } else {
+        add_assoc_null(&distributed_observability, "last_recovered_run_id");
+    }
+    if (summary.last_recovery_reason != NULL) {
+        add_assoc_string(&distributed_observability, "last_recovery_reason", (char *) summary.last_recovery_reason);
+    } else {
+        add_assoc_null(&distributed_observability, "last_recovery_reason");
+    }
+    if (summary.last_remote_attempt_run_id != NULL) {
+        add_assoc_stringl(
+            &distributed_observability,
+            "last_remote_attempt_run_id",
+            ZSTR_VAL(summary.last_remote_attempt_run_id),
+            ZSTR_LEN(summary.last_remote_attempt_run_id)
+        );
+    } else {
+        add_assoc_null(&distributed_observability, "last_remote_attempt_run_id");
+    }
+    add_assoc_zval(configuration, "distributed_observability", &distributed_observability);
 }
 
 PHP_FUNCTION(king_pipeline_orchestrator_register_tool)

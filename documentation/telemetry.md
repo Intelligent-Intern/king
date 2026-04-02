@@ -69,11 +69,22 @@ Best effort means the runtime will try to export data, but it does not promise
 that every record will survive every outage. Bounded retry means failed export
 batches stay queued for retry, but only until the configured queue limit is
 reached. The same configured limit also bounds the pre-flush pending span and
-pending log buffers, so capture stays finite even before a flush happens.
+pending log buffers, so capture stays finite even before a flush happens. The
+active runtime now also derives a fixed byte budget from that queue limit. Each
+queue slot carries a `64 KiB` memory budget, and pending plus queued telemetry
+must stay inside that combined byte ceiling.
 Process-local non-persistent means telemetry is not written to durable storage
 and does not survive process restart. Single batch per flush means one call to
 `king_telemetry_flush()` gives the runtime one export opportunity for the next
 queued batch rather than draining the whole queue in one call.
+
+One subtle boundary matters here. Queued export batches stay process-local
+until they succeed, fail repeatedly, or the process exits. But the unfinished
+scratch state for the currently active span and the pre-flush pending span/log
+buffers is not allowed to bleed into the next request or worker unit. If code
+opens a span or records logs and then leaves that local work unfinished, King
+drops that scratch residue at the next real request or worker execution
+boundary unless the caller flushed it first.
 
 This model is important because it tells you what telemetry is for. It is for
 fast local instrumentation with controlled export behavior. It is not a durable
@@ -149,6 +160,11 @@ King also correlates logs with the active span. When a log is written while a
 span is open, the log record inherits the current trace and span identifiers.
 That matters because it keeps the human-readable event stream attached to the
 operation that produced it.
+
+That correlation is local to the current work unit. If a request or worker
+leaves a span open and then returns control without flushing or ending it, King
+clears that stale span before the next request or worker execution begins. The
+next work unit does not inherit an old trace by accident.
 
 ## Logs
 
@@ -369,7 +385,11 @@ how the delivery path is behaving. This status array includes the flush count,
 the number of active metrics still in the live registry, the current retry
 queue size, the export success count, the export failure count, the queue drop
 count, the pending capture limit, the current pending span and log counts, and
-the pending drop count.
+the pending drop count. It also exposes the telemetry self-metrics for backlog
+pressure: current `queue_bytes`, `pending_bytes`, and total `memory_bytes`,
+the derived `memory_byte_limit`, queue and memory high-water marks, and the
+`retry_requeue_count` that shows how often failed batches were put back under
+collector slowdown or outage.
 
 `king_telemetry_get_metrics()` returns the current live metric registry before
 those metrics are moved into a flush batch. This is useful when you want to
