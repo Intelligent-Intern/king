@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Validate Smart-DNS real on-wire DNS listener behavior.
+- Validate Smart-DNS distributed recovery after stale-peer rejoin and partial durable-state loss.
 
 ## Active Executable Items
 
@@ -69,7 +69,7 @@
 
 ### 4. Smart-DNS Distributed Recovery
 
-13. [ ] Validate Smart-DNS real on-wire DNS listener behavior.
+13. [x] Validate Smart-DNS real on-wire DNS listener behavior.
     done when: the live DNS listener path is exercised on-wire with honest request, timeout, truncation, and recovery behavior instead of only the current bounded local query helper.
 
 14. [ ] Validate Smart-DNS distributed recovery after stale-peer rejoin and partial durable-state loss.

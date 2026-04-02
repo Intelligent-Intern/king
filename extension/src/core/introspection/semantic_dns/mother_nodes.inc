@@ -165,5 +165,9 @@ PHP_FUNCTION(king_semantic_dns_register_mother_node)
         king_semantic_dns_state_transaction_end(lock_fd);
     }
 
+    if (!king_semantic_dns_listener_snapshot_or_throw("king_semantic_dns_register_mother_node")) {
+        RETURN_THROWS();
+    }
+
     RETURN_TRUE;
 }

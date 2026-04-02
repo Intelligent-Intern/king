@@ -1281,16 +1281,16 @@ namespace {
     function king_semantic_dns_init(array $config): bool {}
 
     /**
-     * Starts the local semantic-DNS server-state slice for the active runtime.
-     * This is a local lifecycle toggle, not yet a real network DNS listener.
+     * Starts the local semantic-DNS server-state slice and bounded UDP DNS
+     * listener for the active runtime.
      * @throws \King\RuntimeException
      */
     function king_semantic_dns_start_server(): bool {}
 
     /**
-     * Process one local DNS-shaped query against the active semantic-DNS runtime.
-     * This is a bounded local helper for the current runtime slice, not an
-     * on-wire DNS listener.
+     * Process one bounded local DNS-shaped query against the active
+     * semantic-DNS runtime.
+     * This remains the local helper surface alongside the live UDP listener.
      * @throws \King\ValidationException|\King\RuntimeException
      */
     function king_semantic_dns_query(string $query, int $max_response_bytes = 256): string {}
