@@ -224,34 +224,36 @@ function build_case_definitions(): array
             },
         ],
         'semantic_dns' => [
-            'description' => 'init/start/register/discover/route/topology cycle',
+            'description' => 'real listener bootstrap plus register/discover/route/topology steady state',
             'default_iterations' => 50000,
-            'operations_per_iteration' => 6,
+            'operations_per_iteration' => 4,
             'bootstrap' => static function (): array {
                 $stateDir = '/tmp/king_semantic_dns_state';
+                $dnsPort = 18053 + (getmypid() % 1000);
+                $config = [
+                    'enabled' => true,
+                    'bind_address' => '127.0.0.1',
+                    'dns_port' => $dnsPort,
+                    'default_record_ttl_sec' => 120,
+                    'service_discovery_max_ips_per_response' => 5,
+                    'semantic_mode_enable' => true,
+                    'mothernode_uri' => 'mother://bench-node',
+                    'routing_policies' => ['mode' => 'local'],
+                ];
                 delete_flat_directory($stateDir);
+
+                if (!king_semantic_dns_init($config)) {
+                    throw new RuntimeException('king_semantic_dns_init() failed during benchmark setup.');
+                }
+
+                if (!king_semantic_dns_start_server()) {
+                    throw new RuntimeException('king_semantic_dns_start_server() failed during benchmark setup.');
+                }
 
                 return [
                     'run' => static function (int $iteration): int {
                         $serviceId = 'api-bench';
                         $serviceName = 'api-bench';
-
-                        if (!king_semantic_dns_init([
-                            'enabled' => true,
-                            'bind_address' => '127.0.0.1',
-                            'dns_port' => 8053,
-                            'default_record_ttl_sec' => 120,
-                            'service_discovery_max_ips_per_response' => 5,
-                            'semantic_mode_enable' => true,
-                            'mothernode_uri' => 'mother://bench-node',
-                            'routing_policies' => ['mode' => 'local'],
-                        ])) {
-                            throw new RuntimeException('king_semantic_dns_init() failed during the benchmark.');
-                        }
-
-                        if (!king_semantic_dns_start_server()) {
-                            throw new RuntimeException('king_semantic_dns_start_server() failed during the benchmark.');
-                        }
 
                         if (!king_semantic_dns_register_service([
                             'service_id' => $serviceId,
@@ -260,6 +262,8 @@ function build_case_definitions(): array
                             'status' => 'healthy',
                             'hostname' => 'api.internal',
                             'port' => 8443,
+                            'current_load_percent' => $iteration % 100,
+                            'active_connections' => $iteration % 32,
                         ])) {
                             throw new RuntimeException('king_semantic_dns_register_service() failed during the benchmark.');
                         }
@@ -289,7 +293,8 @@ function build_case_definitions(): array
                             + (int) ($topology['statistics']['healthy_services'] ?? 0)
                             + strlen($serviceId);
                     },
-                    'cleanup' => static function () use ($stateDir): void {
+                    'cleanup' => static function () use ($stateDir, $config): void {
+                        king_semantic_dns_init($config);
                         delete_flat_directory($stateDir);
                     },
                 ];
