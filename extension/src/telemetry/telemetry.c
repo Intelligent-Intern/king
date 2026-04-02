@@ -52,6 +52,7 @@ uint32_t king_telemetry_export_success_count = 0;
 uint32_t king_telemetry_export_failure_count = 0;
 
 static king_telemetry_libcurl_api_t king_telemetry_libcurl = {0};
+static void king_telemetry_span_free(king_trace_context_t *span);
 
 static void king_telemetry_reset_libcurl_runtime_state(void)
 {
@@ -229,6 +230,22 @@ static void king_telemetry_pending_buffers_destroy(void)
     ZVAL_UNDEF(&king_telemetry_pending_spans);
     ZVAL_UNDEF(&king_telemetry_pending_logs);
     king_telemetry_pending_buffers_initialized = false;
+}
+
+static void king_telemetry_reset_active_span(void)
+{
+    if (king_current_span == NULL) {
+        return;
+    }
+
+    king_telemetry_span_free(king_current_span);
+    king_current_span = NULL;
+}
+
+void king_telemetry_cleanup_scope_state(void)
+{
+    king_telemetry_reset_active_span();
+    king_telemetry_pending_buffers_destroy();
 }
 
 static zend_bool king_telemetry_buffer_has_entries(zval *buffer)
@@ -723,6 +740,12 @@ int king_telemetry_process_export_queue(void)
 int king_telemetry_init_system(king_telemetry_config_t *config)
 {
     if (config) {
+        /*
+         * Config re-initialization starts a fresh request/worker scope but must
+         * not tear down the process-local retry queue that already carries
+         * explicitly flushed batches.
+         */
+        king_telemetry_cleanup_scope_state();
         memcpy(&king_telemetry_runtime_config, config, sizeof(king_telemetry_config_t));
         if (king_telemetry_runtime_config.max_queue_size == 0) {
             king_telemetry_runtime_config.max_queue_size = king_telemetry_default_max_queue_size();
@@ -736,10 +759,7 @@ int king_telemetry_init_system(king_telemetry_config_t *config)
 void king_telemetry_shutdown_system(void)
 {
     king_telemetry_system_initialized = false;
-    if (king_current_span) {
-        king_telemetry_span_free(king_current_span);
-        king_current_span = NULL;
-    }
+    king_telemetry_cleanup_scope_state();
     
     /* Flush any remaining batches in queue */
     king_telemetry_batch_t *batch;
@@ -747,7 +767,6 @@ void king_telemetry_shutdown_system(void)
         king_telemetry_free_batch(batch);
     }
 
-    king_telemetry_pending_buffers_destroy();
     king_telemetry_shutdown_libcurl_runtime();
     memset(&king_telemetry_runtime_config, 0, sizeof(king_telemetry_runtime_config));
 }

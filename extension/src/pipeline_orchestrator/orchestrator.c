@@ -6,6 +6,7 @@
 #include "php_king.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"
 #include "include/pipeline_orchestrator/orchestrator.h"
+#include "include/telemetry/telemetry.h"
 #include "ext/standard/base64.h"
 #include "ext/standard/php_var.h"
 #include "zend_smart_str.h"
@@ -1671,6 +1672,9 @@ int king_orchestrator_resume_run(
         return FAILURE;
     }
 
+    /* Each resumed run must start without stale pre-flush span/log residue. */
+    king_telemetry_cleanup_scope_state();
+
     ZVAL_NULL(&initial_data);
     ZVAL_NULL(&pipeline);
     ZVAL_NULL(&options);
@@ -1748,6 +1752,9 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
     ZVAL_UNDEF(&sanitized_options);
     ZVAL_UNDEF(&control.cancel_token);
     control.run_id = NULL;
+
+    /* A new orchestrator execution starts a fresh telemetry scope. */
+    king_telemetry_cleanup_scope_state();
 
     if (king_orchestrator_backend_is_file_worker()) {
         return king_orchestrator_raise_error(

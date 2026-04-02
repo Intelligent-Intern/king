@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Eliminate cross-request telemetry residue and prove cleanup under load.
+- Enforce telemetry memory bounds and self-metrics under degraded exporter load.
 
 ## Active Executable Items
 
@@ -80,7 +80,7 @@
 
 ### 5. Telemetry And Fleet Operation Depth
 
-16. [ ] Eliminate cross-request telemetry residue and prove cleanup under load.
+16. [x] Eliminate cross-request telemetry residue and prove cleanup under load.
     done when: telemetry state is cleaned up correctly across request and worker boundaries under sustained load without stale span or log carry-over or lifetime hazards.
 
 17. [ ] Enforce telemetry memory bounds and self-metrics under degraded exporter load.
@@ -100,7 +100,7 @@
 - broader websocket server runtime materialization beyond the drain-focused failure proof in this batch
 - deeper object-store cross-backend failure normalization beyond quota/throttling and resumable-upload recovery
 - broader Smart-DNS distributed-topology validation once the remaining larger multi-node topology slices are proven
-- longer-haul telemetry exporter ordering and autoscaling fleet-behavior proof beyond the bounded cleanup, load, and recovery leaves in this batch
+- longer-haul telemetry exporter ordering, self-metrics, and autoscaling fleet-behavior proof beyond the bounded load and recovery leaves in this batch
 - release, compatibility, supply-chain, and final security-review closure that remain outside this explicitly requested repo-local sprint batch
 
 ## Notes

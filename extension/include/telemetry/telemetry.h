@@ -149,6 +149,7 @@ PHP_FUNCTION(king_telemetry_get_status);
 
 int king_telemetry_init_system(king_telemetry_config_t *config);
 void king_telemetry_shutdown_system(void);
+void king_telemetry_cleanup_scope_state(void);
 king_trace_context_t* king_telemetry_create_span(const char *operation_name, king_span_kind_t span_kind, const char *parent_span_id);
 int king_telemetry_finish_span(king_trace_context_t *span_context);
 int king_telemetry_record_metric_internal(const char *metric_name, king_metric_type_t metric_type, double value, zval *labels);
