@@ -571,3 +571,82 @@ int king_semantic_dns_import_state_payload(zval *payload)
 
     return SUCCESS;
 }
+
+int king_semantic_dns_merge_missing_state_payload(zval *payload)
+{
+    zval *services;
+    zval *mother_nodes;
+    zval *entry;
+    zend_bool merged_mother_nodes = 0;
+
+    if (
+        payload == NULL
+        || Z_TYPE_P(payload) != IS_ARRAY
+        || !king_semantic_dns_registry_initialized
+    ) {
+        return FAILURE;
+    }
+
+    services = zend_hash_str_find(Z_ARRVAL_P(payload), "services", sizeof("services") - 1);
+    mother_nodes = zend_hash_str_find(Z_ARRVAL_P(payload), "mother_nodes", sizeof("mother_nodes") - 1);
+
+    if (
+        (services != NULL && Z_TYPE_P(services) != IS_ARRAY)
+        || (mother_nodes != NULL && Z_TYPE_P(mother_nodes) != IS_ARRAY)
+    ) {
+        return FAILURE;
+    }
+
+    if (services != NULL) {
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(services), entry) {
+            king_semantic_dns_service *service;
+            zval stored_service;
+
+            service = king_semantic_dns_service_create_from_state_entry(entry);
+            if (service == NULL) {
+                return FAILURE;
+            }
+
+            if (king_semantic_dns_registry_get_service(service->service_id) != NULL) {
+                king_semantic_dns_service_free(service);
+                continue;
+            }
+
+            ZVAL_PTR(&stored_service, service);
+            zend_hash_update(&king_semantic_dns_service_registry, service->service_id, &stored_service);
+        } ZEND_HASH_FOREACH_END();
+    }
+
+    if (mother_nodes != NULL) {
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(mother_nodes), entry) {
+            king_semantic_dns_mother_node *mother_node;
+            zval stored_mother_node;
+
+            mother_node = king_semantic_dns_mother_node_create_from_state_entry(entry);
+            if (mother_node == NULL) {
+                return FAILURE;
+            }
+
+            if (zend_hash_find(&king_semantic_dns_mother_node_registry, mother_node->node_id) != NULL) {
+                king_semantic_dns_mother_node_free(mother_node);
+                continue;
+            }
+
+            ZVAL_PTR(&stored_mother_node, mother_node);
+            zend_hash_update(&king_semantic_dns_mother_node_registry, mother_node->node_id, &stored_mother_node);
+            merged_mother_nodes = 1;
+        } ZEND_HASH_FOREACH_END();
+    }
+
+    if (merged_mother_nodes) {
+        if (king_semantic_dns_refresh_runtime_mother_nodes_from_registry() != SUCCESS) {
+            return FAILURE;
+        }
+        king_semantic_dns_runtime.last_discovered_node_count =
+            king_semantic_dns_runtime.config.mother_node_count;
+        king_semantic_dns_runtime.last_synced_node_count =
+            king_semantic_dns_runtime.config.mother_node_count;
+    }
+
+    return SUCCESS;
+}

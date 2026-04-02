@@ -334,6 +334,14 @@ snapshot before applying its own mutation. That is what keeps one worker from
 quietly deleting another worker's registration or status update when both touch
 the same Semantic-DNS state file at nearly the same time.
 
+That same persisted-state contract now covers stale-peer rejoin after partial
+durable-state loss. When a process still carries an older local topology view
+and the shared payload has lost some entries, the runtime snapshots the local
+view before refresh, reloads the current shared state, and then merges back
+only the missing service and mother-node entries. Overlapping records continue
+to come from the fresher shared payload, so rejoin heals missing topology
+without rewinding newer route or discovery state.
+
 ## Choosing The Optimal Route
 
 `king_semantic_dns_get_optimal_route()` answers the final routing question:
@@ -448,6 +456,13 @@ new mother-node change, recalculates discovery and synchronization counters, and
 then persists the whole result while the state lock is still held. That is what
 keeps larger local topology churn from tearing the mother-node view away from
 the statistics that discovery and routing consume.
+
+The same rule matters during rejoin. A stale process is allowed to heal missing
+mother-node entries that disappeared from the shared payload, but it is not
+allowed to overwrite a newer shared record for a node that still exists there.
+That keeps trust, status, and managed-service counters monotonic toward the
+current shared topology instead of letting an older peer win just because it
+reconnected later.
 
 ## How Semantic-DNS Fits With The Router And Load Balancer
 
