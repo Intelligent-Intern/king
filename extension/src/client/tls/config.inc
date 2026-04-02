@@ -1,3 +1,15 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/tls/config.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Runtime TLS config mutators for the client surface. This slice validates
+ * user-supplied CA/certificate/key paths and updates the persistent client
+ * TLS defaults stored in the active `tls_and_crypto` config state.
+ * =========================================================================
+ */
+
 static void king_tls_set_ca_file_internal(
     INTERNAL_FUNCTION_PARAMETERS,
     const char *function_name)

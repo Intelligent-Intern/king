@@ -1,3 +1,9 @@
+/*
+ * Shared server-control helpers. Provides the common error formatting,
+ * session/stream validation and bounded string-normalization helpers reused by
+ * the local admin, cancel, upgrade and protocol control leaves.
+ */
+
 static void king_server_control_set_errorf(const char *format, ...)
 {
     char message[KING_ERR_LEN];

@@ -1,12 +1,7 @@
 /*
- * =========================================================================
- * FILENAME:   src/semantic_dns/mother_node_discovery.c
- * PROJECT:    king
- *
- * PURPOSE:
- * Implements the native Semantic-DNS mother node discovery and
- * topology maintenance loops.
- * =========================================================================
+ * Semantic-DNS mother-node discovery/sync slice. Refreshes runtime mother-node
+ * inventory from the registry or configured seed URI and updates the bounded
+ * topology-maintenance counters and heartbeat state.
  */
 
 #include "semantic_dns/semantic_dns_internal.h"

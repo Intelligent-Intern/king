@@ -1,15 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_double_range.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    (He nods, and takes the pill.)
- *
- * PURPOSE:
- * This file implements the validation helper for floating-point values
- * that must be within a specific range.
- * =========================================================================
+ * Validation helper for floating-point config values. Enforces numeric input
+ * and the inclusive min/max bounds supplied by the caller.
  */
 
 #include "include/validation/config_param/validate_double_range.h"

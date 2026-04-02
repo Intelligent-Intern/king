@@ -1,3 +1,8 @@
+/*
+ * GCS runtime/config slice. Normalizes endpoint, bucket and auth settings and
+ * provides the shared HTTP/runtime helpers used by the GCS adapter paths.
+ */
+
 typedef struct _king_object_store_gcs_runtime_config_t {
     char endpoint[512];
     char bucket[256];

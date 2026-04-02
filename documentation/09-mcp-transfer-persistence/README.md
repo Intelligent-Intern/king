@@ -146,8 +146,10 @@ if (!$ok) {
 
 The interesting detail here is not only that the source is a stream. The more
 important detail is that the upload is named by service, method, and stream
-identifier. That triple gives the transfer a disciplined identity instead of
-leaving the protocol to invent informal naming rules later.
+identifier. The current runtime persists and resolves transfers by that same
+triple, with the request payload carrying the identifier component during
+download. That gives the transfer a disciplined identity instead of leaving the
+protocol to invent informal naming rules later.
 
 ## Step 4: Download The Same Transfer Into Another Stream
 
@@ -162,7 +164,7 @@ $destination = fopen(__DIR__ . '/restored-checkpoint.bin', 'wb');
 $ok = king_mcp_download_to_stream(
     $conn,
     'artifact_service',
-    'fetch_checkpoint',
+    'store_checkpoint',
     'run-2026-03-27-checkpoint-42',
     $destination,
     [
@@ -178,7 +180,9 @@ if (!$ok) {
 ```
 
 This is where the transfer identity proves its value. The large payload can be
-referred to later without pretending it was only a one-shot response body.
+referred to later without pretending it was only a one-shot response body, but
+the current public surface still expects the same service and method names that
+were used when the transfer was stored.
 
 ## Step 5: Close The Connection Explicitly
 

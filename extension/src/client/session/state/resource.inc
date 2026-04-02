@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/session/state/resource.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Resource/object bridge and lifetime cleanup for `King\\Session`. This file
+ * resolves either resource or object handles back to the active session
+ * state, and releases the accumulated transport, TLS, config, server, and
+ * cancel snapshot fields when the session resource is destroyed.
+ * =========================================================================
+ */
+
 king_client_session_t *king_client_session_fetch_resource(
     zval *zsession,
     uint32_t arg_num)

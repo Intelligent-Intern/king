@@ -195,9 +195,9 @@ pretend everything is a tiny in-memory string.
 ## Download To Stream
 
 `king_mcp_download_to_stream()` is the reverse operation. The caller gives the
-connection, service name, method name, a payload that identifies the stored
-transfer, and a destination stream. The runtime fetches the remote transfer and
-writes the bytes into that destination stream.
+connection, the same service and method names used at upload time, a payload
+that identifies the stored transfer, and a destination stream. The runtime
+fetches the remote transfer and writes the bytes into that destination stream.
 
 ```php
 <?php
@@ -207,7 +207,7 @@ $out = fopen(__DIR__ . '/restored-checkpoint.bin', 'wb');
 king_mcp_download_to_stream(
     $conn,
     'artifact_service',
-    'fetch_checkpoint',
+    'store_checkpoint',
     'run-2026-03-27-checkpoint-42',
     $out,
     [
@@ -234,10 +234,11 @@ the system drifts into undocumented naming rules.
 
 King prevents that by making the transfer identity explicit. The upload path is
 keyed by service, method, and stream identifier. The download path resolves a
-stored transfer by treating the request payload as the remote transfer ID. That
-tuple is encoded internally before it becomes a storage key, so newline-shaped
-components, binary-safe identifiers, and separator ambiguity do not collapse
-distinct transfers into one another.
+stored transfer by reusing that same service and method while treating the
+request payload as the remote transfer ID component. That tuple is encoded
+internally before it becomes a storage key, so newline-shaped components,
+binary-safe identifiers, and separator ambiguity do not collapse distinct
+transfers into one another.
 
 That means the control-plane API stays understandable even when the payload is
 too large to fit comfortably into one ordinary request body.

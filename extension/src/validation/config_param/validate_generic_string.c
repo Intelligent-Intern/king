@@ -1,19 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_generic_string.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    Daisy, Daisy, give me your answer do...
- *
- * PURPOSE:
- * This file implements a simple validation helper for generic strings.
- *
- * ARCHITECTURE:
- * This function serves as a basic type check for parameters that accept
- * any string content, including an empty string. Its main purpose is to
- * ensure type safety and provide a consistent validation pattern.
- * =========================================================================
+ * Generic string validator for config parsing. Enforces string input and
+ * returns a duplicated value suitable for longer-lived config state.
  */
 
 #include "include/validation/config_param/validate_generic_string.h"

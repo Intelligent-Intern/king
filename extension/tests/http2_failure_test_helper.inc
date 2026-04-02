@@ -1,5 +1,7 @@
 <?php
 
+/* Test helper for starting the HTTP/2 failure-path harness server. */
+
 function king_http2_start_failure_test_server(): array
 {
     $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);

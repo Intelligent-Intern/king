@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/object.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * OO client/runtime glue for `King\\Response` and `King\\Client\\HttpClient`.
+ * This file maps dispatcher payloads into response objects, preserves the
+ * live HTTP/1 request context for streaming reads, and applies class-scope
+ * protocol preferences when the OO HTTP client dispatches requests.
+ * =========================================================================
+ */
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Response_getStatusCode_ret, 0, 0, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 

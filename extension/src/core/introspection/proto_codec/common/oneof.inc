@@ -1,3 +1,8 @@
+/*
+ * Common codec oneof slice: tracks selected oneof members during encoding
+ * and fails closed when multiple fields from the same oneof group are set.
+ */
+
 static bool king_proto_runtime_track_oneof_selection(
     HashTable *selected_oneofs,
     zend_string *schema_name,

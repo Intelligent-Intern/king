@@ -1,3 +1,9 @@
+/*
+ * Root CDN companion slice: implements the local cache/invalidation leaves
+ * and exposes the current synthetic edge-node inventory that the active
+ * object-store-backed CDN runtime can describe today.
+ */
+
 #include "object_store/object_store_internal.h"
 #include <sys/stat.h>
 

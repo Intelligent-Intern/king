@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/ssh_over_quic/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the SSH-over-QUIC config
+ * family. This file exposes the system-level gateway, bind/target
+ * endpoints, auth and mapping modes, timeout, agent-URI, and session-log
+ * directives and keeps `king_ssh_over_quic_config` aligned with validated
+ * updates.
+ * =========================================================================
+ */
+
 #include "include/config/ssh_over_quic/ini.h"
 #include "include/config/ssh_over_quic/base_layer.h"
 

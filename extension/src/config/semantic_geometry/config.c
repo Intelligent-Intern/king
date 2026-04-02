@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/semantic_geometry/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the semantic geometry config family.
+ * This file validates the `King\\Config` subset that can target either a
+ * temporary config snapshot or the live module-global state and applies
+ * bounded dimensionality, algorithm-selection, precision, and threshold
+ * overrides.
+ * =========================================================================
+ */
+
 #include "include/config/semantic_geometry/config.h"
 #include "include/config/semantic_geometry/base_layer.h"
 #include "include/king_globals.h"

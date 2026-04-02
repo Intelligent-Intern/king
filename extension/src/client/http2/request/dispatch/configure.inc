@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http2/request/dispatch/configure.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * libcurl easy-handle configuration for the active HTTP/2 dispatch path.
+ * This file applies the runtime HTTP version, transport and timeout knobs,
+ * request headers and body wiring, and the optional TLS verification and
+ * client-certificate settings inherited from the current config snapshot.
+ * =========================================================================
+ */
+
 static bool king_http2_has_path_option(const char *value)
 {
     return value != NULL && value[0] != '\0';

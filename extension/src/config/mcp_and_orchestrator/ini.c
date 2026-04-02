@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/mcp_and_orchestrator/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the MCP/orchestrator config
+ * family. This file exposes the system-level MCP timeout/retry/cache,
+ * allowed-peer, transfer-state, and orchestrator backend/queue/remote/state
+ * directives and keeps `king_mcp_orchestrator_config` aligned with updates.
+ * =========================================================================
+ */
+
 #include "include/config/mcp_and_orchestrator/ini.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"
 

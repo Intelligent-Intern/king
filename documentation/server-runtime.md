@@ -244,13 +244,16 @@ on wire.
 
 ## Early Hints
 
-Early Hints are provisional HTTP hints sent before the final response is ready.
-They are useful when the server already knows which assets or resources the
-client will probably need and wants to tell the client that information early.
+Early Hints are provisional HTTP hints associated with a response before the
+final body is ready. They are useful when the server already knows which assets
+or resources the client will probably need and wants to record that information
+early.
 
 King exposes this through `king_server_send_early_hints()`. The function takes
 a server-capable session, a stream identifier, and a normalized set of hint
-headers. The runtime stores and tracks the hint batch on the session state.
+headers. The current runtime stores and tracks the hint batch on the session
+state; the broader on-wire `103` emission story remains narrower than this
+staged-response model.
 
 This matters because server behavior is often staged. The final response may not
 be ready yet, but the server may already know enough to improve the next few
@@ -267,8 +270,8 @@ sequenceDiagram
     Server->>Client: Final response
 ```
 
-The concept is simple: tell the client something useful before the full answer
-is finished.
+The concept is simple: make useful pre-response intent explicit before the full
+answer is finished.
 
 ## Server-Side Cancellation
 
@@ -479,7 +482,10 @@ king_http1_server_listen_once('127.0.0.1', 9001, null, function (array $request)
 
 The exact response handling can vary by application design, but the basic
 picture stays the same: a request enters as HTTP and, when accepted, becomes a
-long-lived channel owned by the handler.
+long-lived channel owned by the handler. On the current on-wire HTTP/1 one-shot
+leaf, `king_server_upgrade_to_websocket()` writes the `101` handshake itself,
+so the returned `101` response array remains part of the normalized handler
+contract rather than a second wire write.
 
 ## How To Think About Protocol Choice
 

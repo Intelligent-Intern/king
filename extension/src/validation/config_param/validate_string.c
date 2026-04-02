@@ -1,17 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_string.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    "A single bit‑flip can ruin your day. Validate early, validate often."
- *
- * PURPOSE:
- *   Implements kg_validate_string() as declared in its header counterpart.
- *   It guarantees strict type safety (IS_STRING) and produces a *persistent*
- *   copy suitable for storage in global configuration structs that live for
- *   the lifetime of the process.
- * =========================================================================
+ * Core string validator for config parsing. Enforces string input and returns
+ * a duplicated value suitable for persistent module-config storage.
  */
 
 #include "include/validation/config_param/validate_string.h"

@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/native_cdn/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the native CDN config family. This file
+ * validates the `King\\Config` subset that can target either a temporary
+ * config snapshot or the live module-global state and applies bounded CDN
+ * enablement, cache, origin, stale-on-error, and response-policy overrides.
+ * =========================================================================
+ */
+
 #include "include/config/native_cdn/config.h"
 #include "include/config/native_cdn/base_layer.h"
 #include "include/king_globals.h"

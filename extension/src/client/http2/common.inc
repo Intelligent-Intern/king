@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http2/common.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Shared HTTP/2 client helpers for option parsing, timeout validation,
+ * `connection_config` overrides, `capture_push` gating, and the runtime
+ * checks that keep the libcurl-backed HTTP/2 surface aligned with the
+ * active TCP, TLS, and HTTP/2 config state.
+ * =========================================================================
+ */
+
 static void king_http2_set_error(const char *format, ...)
 {
     char message[KING_ERR_LEN];

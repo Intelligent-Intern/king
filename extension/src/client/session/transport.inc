@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/session/transport.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Low-level transport state for the current client-session runtime. This
+ * file initializes the socket/datagram counters, opens the non-blocking UDP
+ * transport used by the local QUIC-flavored session path, captures endpoint
+ * metadata, and drives the lightweight probe/drain loops reflected in
+ * `Session::poll()` stats.
+ * =========================================================================
+ */
+
 void king_client_session_init_transport_state(
     king_client_session_t *session)
 {

@@ -1,5 +1,7 @@
 <?php
 
+/* Test helper for starting the local Smart-DNS live-probe harness server. */
+
 function king_semantic_dns_live_probe_pick_port(): int
 {
     $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);

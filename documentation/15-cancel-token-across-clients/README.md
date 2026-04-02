@@ -60,7 +60,10 @@ The second thing to notice is where the same token travels. It is not locked to
 one protocol. The same stop signal can be carried into an HTTP request, a
 stream read, an MCP transfer, or an orchestrator run. This is one of the ways
 the extension keeps one common operational language across very different
-subsystems.
+subsystems. The exact stop point is still subsystem-specific: some paths honor
+the token before dispatch, some during active local polling or stream work, and
+queued file-worker orchestration still has its own persisted cancellation path
+instead of pretending every backend is the same.
 
 The third thing to notice is what cancellation does not promise. It does not
 turn every operation into immediate rollback. It gives the runtime a clear
@@ -78,6 +81,9 @@ not know whether that work still belongs to a live caller.
 This guide matters because it frames cancellation as part of correctness rather
 than as a convenience feature. The runtime is easier to reason about when
 starting work and stopping work use explicit objects with clear ownership.
+It is also easier to reason about when the runtime is honest about strength:
+the same `CancelToken` type appears across several surfaces, but not every
+surface offers the same immediate live-transport interruption semantics yet.
 
 ## Why This Matters In Practice
 

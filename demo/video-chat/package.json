@@ -1,7 +1,7 @@
 {
   "name": "king-video-chat",
   "version": "1.0.0",
-  "description": "WhatsApp-style video chat system powered by King IIBIN protocol",
+  "description": "King IIBIN WebSocket chat and stress demo",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,8 +9,6 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "stress-test": "node scripts/stress-test.js",
-    "performance-test": "node scripts/performance-test.js",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
     "type-check": "vue-tsc --noEmit"
   },

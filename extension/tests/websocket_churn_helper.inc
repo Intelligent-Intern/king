@@ -1,5 +1,7 @@
 <?php
 
+/* Test helper for starting the WebSocket churn harness server. */
+
 function king_websocket_churn_start_server(int $maxConnections = 4): array
 {
     $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);

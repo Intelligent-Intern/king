@@ -1,3 +1,9 @@
+/*
+ * Root telemetry introspection slice: exposes shared last-error helpers and
+ * keeps the trace-context surface honest about the current build, which has
+ * config and queues but no live current-span runtime yet.
+ */
+
 PHP_FUNCTION(king_get_last_error)
 {
     ZEND_PARSE_PARAMETERS_NONE();

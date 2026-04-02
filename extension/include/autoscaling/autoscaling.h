@@ -1,9 +1,11 @@
 /*
- * include/autoscaling/autoscaling.h - Public C API for autoscaling
- * ================================================================
+ * include/autoscaling/autoscaling.h - Public autoscaling controller surface
+ * ========================================================================
  *
- * This header exposes the autoscaling data structures and PHP functions used
- * to monitor load and trigger scale-up or scale-down actions.
+ * This header exposes the public load-signal structures and autoscaling PHP
+ * entry points for the local controller loop: runtime init/start/stop,
+ * metrics/status reads, explicit scale actions, and managed-node lifecycle
+ * transitions.
  */
 
 #ifndef KING_AUTOSCALING_H

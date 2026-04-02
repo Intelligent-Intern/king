@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/session/api/poll.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Poll-loop entry point for the active client-session transport. This file
+ * backs `king_poll()` with bounded timeout validation, socket readiness
+ * polling, probe send/drain hooks, and transport error-state surfacing for
+ * the local UDP-based session path.
+ * =========================================================================
+ */
+
 static zend_result king_client_session_poll_internal(
     king_client_session_t *session,
     zend_long timeout_ms)

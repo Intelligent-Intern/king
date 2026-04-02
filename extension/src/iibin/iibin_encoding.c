@@ -1,3 +1,9 @@
+/*
+ * Legacy IIBIN encode entry helper. Delegates schema lookup and payload
+ * encoding to the current runtime registry/codec slices while keeping the
+ * public king_iibin_encode() bridge stable.
+ */
+
 #include "php_king.h"
 #include "include/iibin/iibin_internal.h"
 

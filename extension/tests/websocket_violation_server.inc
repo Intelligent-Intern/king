@@ -1,5 +1,7 @@
 <?php
 
+/* Harness server for WebSocket protocol-violation and bad-frame contracts. */
+
 if ($argc < 4) {
     fwrite(STDERR, "usage: websocket_violation_server.php <capture-path> <port> <mode>\n");
     exit(1);

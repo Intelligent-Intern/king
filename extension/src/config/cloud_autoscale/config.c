@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/cloud_autoscale/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the cloud-autoscale config family.
+ * This file validates the `King\\Config` subset that can target either a
+ * temporary autoscale snapshot or the live module-global state and applies
+ * provider, threshold, budget, and instance-shape overrides fail-closed.
+ * =========================================================================
+ */
+
 #include "include/config/cloud_autoscale/config.h"
 #include "include/config/cloud_autoscale/base_layer.h"
 #include "include/king_globals.h"

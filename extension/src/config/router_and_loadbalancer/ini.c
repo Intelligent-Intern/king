@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/router_and_loadbalancer/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the router and load-
+ * balancer config family. This file exposes the system-level router mode,
+ * hashing, backend discovery/static inventory, MCP poll interval, and
+ * forwarding-cap directives and keeps
+ * `king_router_loadbalancer_config` aligned with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/router_and_loadbalancer/ini.h"
 #include "include/config/router_and_loadbalancer/base_layer.h"
 

@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <header class="app-header">
-      <h1>🚀 King IIBIN WebSocket Stress Test Demo</h1>
+      <h1>🚀 King IIBIN WebSocket Demo</h1>
       <div class="connection-status" :class="{ connected: isConnected }">
         {{ isConnected ? '🟢 Connected' : '🔴 Disconnected' }}
       </div>
@@ -521,7 +521,7 @@ function formatUptime(ms: number): string {
 
 // Lifecycle
 onMounted(() => {
-  console.log('🚀 King IIBIN WebSocket Demo loaded')
+  console.log('🚀 King IIBIN WebSocket chat and stress shell loaded')
 })
 
 onUnmounted(() => {

@@ -1,3 +1,15 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http1/response/send.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * HTTP/1 request-body send loop. This slice owns bounded socket writes plus
+ * poll-based backpressure waiting and cancel-aware interruption while the
+ * request bytes are still being flushed onto the live TCP transport.
+ * =========================================================================
+ */
+
 static zend_result king_http1_send_all(
     int fd,
     const char *buffer,

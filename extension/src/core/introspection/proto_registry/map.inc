@@ -1,3 +1,9 @@
+/*
+ * Root proto-registry map-helper slice: prepares synthetic key/value field
+ * descriptors for protobuf map entries, parses map input keys, stores
+ * decoded map entries, and initializes default map values for decode paths.
+ */
+
 static void king_proto_runtime_init_map_value_field(
     const king_proto_runtime_field *field,
     king_proto_runtime_field *map_value_field

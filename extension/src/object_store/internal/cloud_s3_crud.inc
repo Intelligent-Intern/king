@@ -1,3 +1,8 @@
+/*
+ * S3 CRUD adapter slice. Bridges bounded object writes, reads, range reads,
+ * removal and listing against the current S3 runtime contract.
+ */
+
 static int king_object_store_s3_rehydrate_stats(char *error, size_t error_size);
 
 static int king_object_store_s3_write(
@@ -833,4 +838,3 @@ static int king_object_store_s3_rehydrate_stats(char *error, size_t error_size)
     king_object_store_http_response_destroy(&response);
     return SUCCESS;
 }
-

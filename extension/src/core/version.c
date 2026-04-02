@@ -5,7 +5,8 @@
  * AUTHOR:     Jochen Schultz <jschultz@php.net>
  *
  * PURPOSE:
- * Implements King\version(). First real (non-stub) implementation.
+ * Implements king_version(). This is the small public leaf that exposes the
+ * shipped extension version string from `PHP_KING_VERSION`.
  * =========================================================================
  */
 

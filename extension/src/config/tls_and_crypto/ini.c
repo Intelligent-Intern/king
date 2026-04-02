@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/tls_and_crypto/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the TLS and crypto config
+ * family. This file exposes the system-level verification, trust and
+ * identity material, ticket / 0-RTT, cipher and curve policy, transport-
+ * encryption, storage-encryption, and MCP-payload-encryption directives
+ * and keeps `king_tls_and_crypto_config` aligned with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/tls_and_crypto/ini.h"
 #include "include/config/tls_and_crypto/base_layer.h"
 

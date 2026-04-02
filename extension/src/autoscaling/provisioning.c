@@ -1,5 +1,11 @@
 /*
- * src/autoscaling/provisioning.c - Autoscaling Provisioning Backends
+ * src/autoscaling/provisioning.c - Autoscaling Provider And Budget Backends
+ * =========================================================================
+ *
+ * This file owns the provider-facing autoscaling helpers: lazy libcurl
+ * loading, bounded HTTP I/O, Hetzner budget probing, provider payload/build
+ * helpers, simulated scale-up/down paths, and the public PHP scale actions
+ * that drive provider-side provisioning or deletion.
  * =========================================================================
  */
 #include "php_king.h"

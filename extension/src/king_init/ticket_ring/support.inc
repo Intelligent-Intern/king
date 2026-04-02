@@ -1,3 +1,9 @@
+/*
+ * Ticket-ring support helpers. Handles slot shredding, expiry pruning, robust
+ * mutex recovery and the small best-effort random fill used to harden ticket
+ * zeroization before a slot is reused.
+ */
+
 static void king_best_effort_random_fill(void *buffer, size_t len)
 {
     unsigned char *cursor = (unsigned char *) buffer;

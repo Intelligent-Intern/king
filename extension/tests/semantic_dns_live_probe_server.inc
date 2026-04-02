@@ -1,5 +1,7 @@
 <?php
 
+/* Local HTTP probe harness for Smart-DNS live health and sanitization contracts. */
+
 if ($argc < 4) {
     fwrite(STDERR, "usage: semantic_dns_live_probe_server.php <capture-path> <state-path> <port>\n");
     exit(1);

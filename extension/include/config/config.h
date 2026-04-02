@@ -6,39 +6,31 @@
  *
  * OVERVIEW
  *
- * This header file defines the master configuration structure, `king_cfg_t`,
- * which backs the PHP-level `King\Config` resource in the extension. It acts
- * as the single source of truth for all configurable parameters inside `king`.
+ * This header defines the master configuration snapshot, `king_cfg_t`, which
+ * backs the PHP-level `King\Config` resource. In the current runtime it is the
+ * composed per-resource override surface built from module-global defaults and
+ * optional userland overrides accepted through `king_new_config()`.
  *
- * ARCHITECTURAL PRINCIPLES
+ * RUNTIME MODEL
  *
- * This system is built on a strict, 4-tier hierarchical configuration model.
- * Settings are applied in the following order, with each subsequent layer
- * overriding the previous one:
+ * The active build keeps a simpler ownership line than the older design notes
+ * implied:
  *
- * TIER 1: C-LEVEL "SAFE DEFAULTS"
- * The absolute baseline. These are conservative, hardcoded values in the C
- * source code that prioritize stability and security over raw performance.
+ * 1. module-global defaults and system `php.ini` policy establish the process
+ *    baseline
+ * 2. `King\Config` may add the namespaced runtime-override slice when
+ *    `king.security_allow_config_override` permits it
+ * 3. once attached to a live runtime surface, the snapshot can be frozen and
+ *    inspected but not mutated
  *
- * TIER 2: GLOBAL `php.ini` OVERRIDES
- * A system administrator can establish a server-wide policy by setting
- * `king.*` directives in `php.ini`.
- *
- * TIER 3: PER-SESSION `King\Config` RESOURCE
- * A developer can create a per-session config resource with
- * `king_new_config($options)` to override the `php.ini` settings for a
- * specific session. By default, this capability is DISABLED for security
- * (`king.security_allow_config_override = 0`).
- *
- * TIER 4: LIVE ADMIN API HOT-RELOADS
- * For zero-downtime reconfiguration, a running server can have its active
- * configuration updated via a secure MCP-based Admin API.
+ * Admin-listener and TLS-reload flows exist elsewhere in the runtime, but they
+ * are not a fourth generic layer applied through this header.
  *
  * MODULAR STRUCTURE
  *
- * The C implementation is highly modular. This header file includes sub-headers
- * from each configuration domain (e.g., `tls_and_crypto/tls.h`). The master
- * `king_cfg_t` struct is composed of smaller structs defined in these modules.
+ * The config implementation stays split by subsystem. This header includes the
+ * per-domain base-layer and lifecycle headers, and `king_cfg_t` is the
+ * composed struct-of-structs that those modules fill.
  *
  * =========================================================================
  */
@@ -108,10 +100,10 @@ typedef void quiche_config;
 #include "include/config/tls_and_crypto/index.h"
 
 /**
- * @brief The master C-level representation of a `King\Config` object.
+ * @brief The master C-level representation of a `King\Config` snapshot.
  *
- * This struct is a "struct of structs", composed of the individual
- * configuration structures defined in the various sub-module headers.
+ * This struct is a composed snapshot of the individual configuration modules
+ * defined in the various sub-module headers.
  */
 typedef struct king_cfg_s {
     /* The underlying raw config handle from the quiche library. */
@@ -175,10 +167,11 @@ typedef struct king_cfg_s {
 PHP_FUNCTION(king_new_config);
 
 /**
- * @brief Creates a new `king_cfg_t` struct from a PHP options array.
+ * @brief Creates a new `king_cfg_t` snapshot from a PHP options array.
  *
- * This is the primary internal entry point. It allocates a new config struct
- * and applies the full 4-tier configuration hierarchy.
+ * This is the primary internal entry point. It allocates a new config snapshot
+ * from the active module globals and then applies the accepted userland
+ * override slice when present.
  *
  * @param zopts A zval pointing to a PHP associative array, or NULL.
  * @return A pointer to a newly allocated and fully populated `king_cfg_t`.

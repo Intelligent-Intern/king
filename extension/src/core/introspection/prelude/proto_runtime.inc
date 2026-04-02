@@ -1,3 +1,9 @@
+/*
+ * Prelude proto/runtime helper slice: centralizes the small shared helpers
+ * for build metadata, config-policy export, component-info scaffolding, and
+ * the current single shared error buffer used by multiple public surfaces.
+ */
+
 static void king_add_system_build_info(zval *target)
 {
     add_assoc_string(target, "status", "ok");

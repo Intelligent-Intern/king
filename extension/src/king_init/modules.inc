@@ -1,3 +1,9 @@
+/*
+ * Module-lifecycle bootstrap for King. Initializes and tears down the config
+ * families, orchestrator registry and shared ticket-ring support in the order
+ * required by the current MINIT/MSHUTDOWN surface.
+ */
+
 #include "include/config/config.h"
 #include "include/pipeline_orchestrator/orchestrator.h"
 #include "include/telemetry/telemetry.h"

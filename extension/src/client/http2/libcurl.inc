@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http2/libcurl.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Lazy libcurl runtime loading and HTTP/2 session-pool management for the
+ * active client surface. This file resolves the required libcurl symbols,
+ * verifies HTTP/2 support at runtime, and maintains the per-origin multi
+ * handle cache that backs connection reuse and bounded concurrent streams.
+ * =========================================================================
+ */
+
 static zend_result king_http2_load_symbol(
     void **target,
     const char *name)

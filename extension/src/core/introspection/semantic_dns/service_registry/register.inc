@@ -1,3 +1,9 @@
+/*
+ * Public service-registration leaf. Validates and materializes a persistent
+ * service entry, performs the idempotence check against the current registry,
+ * and persists semantic-mode state changes under the durable-state lock.
+ */
+
 PHP_FUNCTION(king_semantic_dns_register_service)
 {
     zval *service_info;

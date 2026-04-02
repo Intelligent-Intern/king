@@ -59,6 +59,11 @@ The point of `King\Config` is to let the caller express those local choices
 cleanly and explicitly. The point is not to let user code seize ownership of
 the whole process. This guide exists so the reader can see both halves of that
 story at once: runtime flexibility and deployment discipline.
+The current runtime makes that boundary explicit through system policy too:
+userland runtime overrides can be disabled entirely through
+`king.security_allow_config_override`, and the accepted `King\Config` surface is
+the namespaced runtime-override slice rather than an open-ended mirror of all
+`php.ini` directives.
 
 ## What You Should Notice
 
@@ -96,6 +101,10 @@ provider credentials, and similar deployment facts in system configuration. The
 application then builds `King\Config` snapshots for per-operation behavior such
 as transport tuning, timeouts, tracing options, or client-specific protocol
 preferences.
+
+If runtime overrides are disabled by system policy, the same application code
+must fall back to deployment-owned defaults instead of assuming it can always
+materialize a new `King\Config` at will.
 
 That is the practical shape this example is teaching. The deployment declares
 the process. The application shapes the work running inside that process.

@@ -1,5 +1,7 @@
 <?php
 
+/* Shared helper for starting the baseline WebSocket echo harness server. */
+
 function king_websocket_test_start_server(int $maxConnections = 1): array
 {
     $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);

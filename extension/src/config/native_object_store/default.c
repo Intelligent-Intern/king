@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/native_object_store/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the native object-store config family. This slice
+ * seeds the baseline storage enablement, redundancy, replication/chunk
+ * sizing, metadata/discovery, cache, and direct-storage defaults before INI
+ * and any allowed userland overrides refine the live storage snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/native_object_store/default.h"
 #include "include/config/native_object_store/base_layer.h"
 

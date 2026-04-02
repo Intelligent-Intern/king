@@ -1,22 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_cpu_affinity_map_string.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    A new life awaits you in the Off-world colonies! A chance
- * to begin again in a golden land of opportunity and adventure!
- *
- * PURPOSE:
- * This file implements the validation helper for CPU affinity map strings.
- *
- * ARCHITECTURE:
- * This function performs multi-level tokenization and validation to
- * strictly enforce the `worker:core-range` format. It uses `strtok_r`
- * to parse the comma-separated list and then further dissects each
- * entry to validate its components, ensuring that only a perfectly
- * formatted string can be accepted into the configuration.
- * =========================================================================
+ * Validation helper for CPU affinity map strings. Enforces string input and
+ * the bounded CPU-set grammar accepted by the cluster/process config surface.
  */
 
 #include "include/validation/config_param/validate_cpu_affinity_map_string.h"

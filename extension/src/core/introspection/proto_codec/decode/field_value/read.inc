@@ -1,3 +1,9 @@
+/*
+ * Decode field-value read slice: performs the raw protobuf wire reads for a
+ * single runtime field value, including fixed-width, varint, and length-
+ * delimited payload extraction with bounds checks.
+ */
+
 static bool king_proto_runtime_decode_field_value_read(
     const king_proto_runtime_field *field,
     zend_string *schema_name,

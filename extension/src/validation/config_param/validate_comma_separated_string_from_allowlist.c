@@ -1,16 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_comma_separated_string_from_allowlist.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    And many of them are so inert, so hopelessly dependent on the
- * system, that they will fight to protect it.
- *
- * PURPOSE:
- * This file implements the validation helper for comma-separated string
- * values that must match an allowed set of options.
- * =========================================================================
+ * Validation helper for comma-separated string lists. Enforces string input
+ * and verifies that every token belongs to the provided allowlist.
  */
 
 #include "include/validation/config_param/validate_comma_separated_string_from_allowlist.h"

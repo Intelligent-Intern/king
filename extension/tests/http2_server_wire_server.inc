@@ -1,5 +1,7 @@
 <?php
 
+/* Harness server for capturing on-wire HTTP/2 one-shot listener behavior. */
+
 if ($argc < 3) {
     fwrite(STDERR, "usage: http2_server_wire_server.inc <capture-path> <port> [mode]\n");
     exit(1);

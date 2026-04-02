@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http1/request/api.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Public PHP entry point for the direct HTTP/1 request leaf. This slice only
+ * parses the userland signature and forwards into the shared HTTP/1 dispatch
+ * path, which may return either a buffered response array or a live
+ * `King\\HttpRequestContext` when `response_stream` is enabled.
+ * =========================================================================
+ */
+
 PHP_FUNCTION(king_http1_request_send)
 {
     char *url_str;

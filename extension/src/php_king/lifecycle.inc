@@ -1,3 +1,9 @@
+/*
+ * Extension lifecycle hooks for php_king. Wires MINIT/MSHUTDOWN/RINIT/
+ * RSHUTDOWN/MINFO across the module bootstrap, registry setup and per-request
+ * runtime teardown paths.
+ */
+
 PHP_MINIT_FUNCTION(king)
 {
     if (king_init_modules(type, module_number) != SUCCESS) {

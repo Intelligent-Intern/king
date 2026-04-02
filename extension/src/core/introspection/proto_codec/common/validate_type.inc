@@ -1,3 +1,8 @@
+/*
+ * Common codec type-validation slice: enforces the PHP value shapes the
+ * active runtime accepts for each runtime field kind before range checks.
+ */
+
 static bool king_proto_runtime_validate_field_value_type(
     const king_proto_runtime_field *field,
     zval *value

@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/internal/overrides/state.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Temporary state model for collected runtime overrides. This file defines
+ * the per-family override buckets, resolves a routed module onto its bucket,
+ * records normalized override values with duplicate detection, and tears the
+ * temporary state down again after apply or failure.
+ * =========================================================================
+ */
+
 typedef struct _king_config_override_bucket_t {
     zend_bool initialized;
     zval values;

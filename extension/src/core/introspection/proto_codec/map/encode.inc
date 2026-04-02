@@ -1,3 +1,9 @@
+/*
+ * Map codec encode slice: validates map keys and values, materializes each
+ * protobuf map entry payload, and emits all entries from array or object
+ * input shapes supported by the active runtime.
+ */
+
 static bool king_proto_runtime_encode_map_entry(
     smart_str *buf,
     const king_proto_runtime_field *field,

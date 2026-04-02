@@ -31,8 +31,8 @@ The guide shows how one server request moves through four main ideas.
 The first is request normalization. The server runtime gives the handler a clean
 request array instead of raw protocol bytes.
 
-The second is staged response behavior. The server can send Early Hints before
-the final response is ready.
+The second is staged response behavior. The server can register Early Hints on
+the live session before the final response is ready.
 
 The third is cancellation and observability. If the client goes away or the
 server wants to instrument the request, the same live session gives it a place
@@ -101,7 +101,7 @@ the handler can send Early Hints, register cancellation, upgrade to WebSocket,
 reload TLS material, inspect peer identity, or attach telemetry without leaving
 the server model.
 
-## Step 3: Send Early Hints Before The Final Response
+## Step 3: Register Early Hints Before The Final Response
 
 Suppose the server already knows that the client will need a stylesheet and a
 script. It can tell the client that before the final page response is ready.
@@ -126,10 +126,13 @@ king_http1_server_listen('127.0.0.1', 8080, null, function (array $request) {
 });
 ```
 
-The value of Early Hints is simple. The server sends useful information as soon
-as it knows it instead of waiting for every part of the final response to be
-finished first. That matters most when the server can already name the
-resources the client will need next.
+The value of Early Hints is simple. The server records useful information as
+soon as it knows it instead of waiting for every part of the final response to
+be finished first. In the current runtime that hint batch is normalized onto
+the live session and exposed through session stats; the broader on-wire `103`
+story is still narrower than the overall staged-response model. That still
+matters because the server can already name the resources the client will need
+next and keep that intent explicit in one place.
 
 ## Step 4: Stop Work If The Client Cancels
 
@@ -223,8 +226,12 @@ king_http1_server_listen_once('127.0.0.1', 9001, null, function (array $request)
 ```
 
 The important shift is that the handler is no longer only preparing a final
-body. It is deciding that the request should become a long-lived channel. This
-is where ordinary request handling turns into realtime session ownership.
+body. It is deciding that the request should become a long-lived channel. On
+the current on-wire HTTP/1 one-shot listener, `king_server_upgrade_to_websocket()`
+also writes the `101 Switching Protocols` handshake itself, while the returned
+`101` array stays part of the normalized handler contract and is not emitted a
+second time after upgrade ownership is taken. This is where ordinary request
+handling turns into realtime session ownership.
 
 ## Step 7: Inspect Peer Identity And TLS State
 
@@ -291,12 +298,18 @@ king_admin_api_listen($session, [
     'admin.enable' => true,
     'admin.bind_host' => '127.0.0.1',
     'admin.bind_port' => 9443,
+    'admin.auth_mode' => 'mtls',
+    'admin.ca_file' => '/etc/king/admin/ca.pem',
+    'admin.cert_file' => '/etc/king/admin/server.crt',
+    'admin.key_file' => '/etc/king/admin/server.key',
 ]);
 ```
 
 The point is not only to open another listener. The point is to separate public
 traffic from operational control traffic while keeping both inside one server
 runtime model.
+The current runtime requires explicit enablement plus readable mTLS material for
+that admin listener snapshot.
 
 ## What You Should Watch
 

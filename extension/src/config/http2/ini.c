@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/http2/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the HTTP/2 config family.
+ * This file exposes the system-level enablement, flow-control, stream-limit,
+ * header-list, push, and frame-size directives and keeps
+ * `king_http2_config` aligned with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/http2/ini.h"
 #include "include/config/http2/base_layer.h"
 

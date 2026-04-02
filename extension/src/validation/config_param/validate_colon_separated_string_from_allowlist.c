@@ -1,20 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_colon_separated_string_from_allowlist.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    "A chain is only as strong as its weakest link; a config only
- *              as strong as its weakest token."
- *
- * PURPOSE:
- *   Implements kg_validate_colon_separated_string_from_allowlist().  The
- *   function performs strict type checking (must be a PHP string) and then
- *   iterates over each colon‑separated token, comparing it case‑sensitively
- *   against the provided allow‑list.  Any unknown token causes validation to
- *   fail immediately.  On success, an *exact* copy of the original string is
- *   duplicated into persistent memory for storage in a module config struct.
- * =========================================================================
+ * Validation helper for colon-separated string lists. Enforces string input
+ * and verifies that every token belongs to the provided allowlist.
  */
 #include "include/validation/config_param/validate_colon_separated_string_from_allowlist.h"
 #include <zend_exceptions.h>

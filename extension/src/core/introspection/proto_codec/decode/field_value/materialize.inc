@@ -1,3 +1,9 @@
+/*
+ * Decode field-value materialization slice: orchestrates raw wire reads,
+ * range validation, nested-message recursion, and final PHP zval
+ * materialization for one decoded scalar or message field value.
+ */
+
 static bool king_proto_runtime_decode_field_value(
     const king_proto_runtime_field *field,
     zend_string *schema_name,

@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/internal/owned_strings.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Owned-string cloning and cleanup for composed `king_cfg_t` snapshots. This
+ * file duplicates the module-global string fields that a per-resource config
+ * snapshot must own independently and releases those allocations again when
+ * the config resource is destroyed.
+ * =========================================================================
+ */
+
 static char *king_config_clone_persistent_string(const char *value)
 {
     return pestrdup(value != NULL ? value : "", 1);

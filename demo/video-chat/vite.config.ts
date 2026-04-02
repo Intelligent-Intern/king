@@ -13,23 +13,12 @@ function getVendorChunkName(id: string): string | undefined {
 
   const nmIndex = id.indexOf('node_modules/')
   if (nmIndex === -1) {
-  if (nmIndex === -1) {
     return undefined
   }
   const modulePath = id.slice(nmIndex)
 
-
-    if (
-      packages.some((pkg) => {
-        const prefix = `node_modules/${pkg}`
-        return modulePath.startsWith(`${prefix}/`) || modulePath.startsWith(`${prefix}.`)
-      })
-    ) {
-
   for (const [chunkName, packages] of groups) {
     if (
-
-  return undefined
       packages.some((pkg) => {
         const prefix = `node_modules/${pkg}`
         return modulePath.startsWith(`${prefix}/`) || modulePath.startsWith(`${prefix}.`)

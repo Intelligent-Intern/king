@@ -1,3 +1,9 @@
+/*
+ * Map codec decode slice: decodes one length-delimited protobuf map entry,
+ * applies default key/value initialization when needed, and stores the final
+ * entry in the target map storage.
+ */
+
 static bool king_proto_runtime_decode_map_field(
     zval *target,
     bool decode_as_object,

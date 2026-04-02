@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http2/request/dispatch/validate.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Request-target validation for the libcurl-backed HTTP/2 one-shot path.
+ * This file constrains the public surface to absolute `http://` and
+ * `https://` URLs, rejects embedded credentials, and hands back the parsed
+ * URL object consumed by the later dispatch/configuration slices.
+ * =========================================================================
+ */
+
 static zend_result king_http2_request_parse_url(
     const char *url_str,
     size_t url_len,

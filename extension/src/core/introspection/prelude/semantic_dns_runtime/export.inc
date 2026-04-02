@@ -1,3 +1,9 @@
+/*
+ * Semantic-DNS runtime export slice: converts persistent Smart-DNS runtime
+ * service and mother-node records into request-local PHP arrays with copied
+ * scalar and attribute payloads.
+ */
+
 static void king_semantic_dns_export_attributes(zval *target, const HashTable *attributes)
 {
     zend_string *attribute_name;

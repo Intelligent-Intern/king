@@ -1,3 +1,9 @@
+/*
+ * Prelude types slice: collects the shared includes, process-local registry
+ * globals, and small runtime structs that multiple introspection fragments
+ * reuse across Smart-DNS, CDN/object-store, telemetry, and proto helpers.
+ */
+
 #include "php.h"
 #include "php_king.h"
 #include <stdlib.h>

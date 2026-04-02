@@ -1,3 +1,10 @@
+/*
+ * Semantic-DNS runtime lifecycle slice: owns the process-local registry
+ * structs, persistent/request string copying helpers, registry init/shutdown,
+ * and the small status/ranking helpers that the Smart-DNS introspection
+ * surfaces reuse.
+ */
+
 static void king_semantic_dns_attribute_zval_dtor(zval *zv)
 {
     if (Z_TYPE_P(zv) == IS_STRING) {

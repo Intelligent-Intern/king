@@ -1,3 +1,5 @@
+/* Test client that delays HTTP/3 request body completion for one-shot listener contracts. */
+
 use quiche::h3::NameValue;
 
 use ring::rand::SecureRandom;

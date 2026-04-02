@@ -1,3 +1,9 @@
+/*
+ * Shared helpers for the Semantic-DNS service registry. Covers availability
+ * gates, metric validation, durable-state transaction wrappers and structural
+ * equality checks used to suppress redundant registry writes.
+ */
+
 static bool king_semantic_dns_registry_require_available(void)
 {
     if (king_semantic_dns_registry_initialized) {

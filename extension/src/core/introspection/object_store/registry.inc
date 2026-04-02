@@ -1,3 +1,10 @@
+/*
+ * Root object-store registry slice: implements the public CRUD, stream,
+ * metadata, backup/restore, and option-validation helpers for the active
+ * object-store runtime, including mutation locking and strict option
+ * validation for cloud/header-facing metadata.
+ */
+
 #include "object_store/object_store_internal.h"
 #include "main/php_streams.h"
 #include "ext/hash/php_hash.h"

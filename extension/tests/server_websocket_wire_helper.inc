@@ -1,5 +1,7 @@
 <?php
 
+/* Test helper for starting the on-wire HTTP/1/WebSocket one-shot listener harness. */
+
 function king_server_websocket_wire_start_server(string $mode, int $iterations = 1, ?int $fixedPort = null): array
 {
     if ($fixedPort !== null) {

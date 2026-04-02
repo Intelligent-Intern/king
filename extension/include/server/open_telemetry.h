@@ -16,6 +16,7 @@
 #include <php.h>
 #include "include/client/session.h"
 
+/* Validates telemetry config and records the resulting snapshot on a session. */
 PHP_FUNCTION(king_server_init_telemetry);
 
 void king_server_open_telemetry_add_request_metadata(

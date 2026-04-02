@@ -102,7 +102,7 @@ jobs:
             core.notice(reason);
 
   build-and-push:
-    name: Build, Smoke & Push Docker Images
+    name: Build & Push Docker Images
     needs: artifact-gate
     if: ${{ needs.artifact-gate.outputs.run-docker-jobs == 'true' }}
     runs-on: ubuntu-latest
@@ -254,7 +254,7 @@ jobs:
             VCS_REF=${{ needs.artifact-gate.outputs.trusted-revision }}
 
   build-demo:
-    name: Build Demo Application PHP ${{ matrix.php-version }}
+    name: Build & Push Demo Application PHP ${{ matrix.php-version }}
     needs: artifact-gate
     if: ${{ needs.artifact-gate.outputs.run-docker-jobs == 'true' }}
     runs-on: ubuntu-latest

@@ -22,7 +22,8 @@
  * memory and written to `target`.
  *
  * @param value The zval to validate, which must be a string.
- * @param param_name Parameter name used in exception messages.
+ * @param param_name Reserved for call-site context. The current
+ * implementation does not include it in exception text.
  * @param target Receives the persistent copy on success. Callers own any
  * previous allocation stored there.
  * @return `SUCCESS` on successful validation, `FAILURE` otherwise.

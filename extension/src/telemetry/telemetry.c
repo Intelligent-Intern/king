@@ -1,9 +1,7 @@
 /*
- * src/telemetry/telemetry.c - Telemetry and Distributed Tracing Core
- * =========================================================================
- *
- * This module implements the native tracing, logging, and context management
- * for the King telemetry system.
+ * Telemetry core runtime for King. Owns trace/log pending buffers, the batched
+ * export retry queue, lazy libcurl-based exporter wiring and the small context
+ * management helpers behind the current telemetry surface.
  */
 #include "php_king.h"
 #include "include/telemetry/telemetry.h"

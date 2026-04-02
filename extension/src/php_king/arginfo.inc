@@ -1,3 +1,9 @@
+/*
+ * Shared arginfo block for the King extension. Centralizes the procedural and
+ * OO signature metadata consumed by the module function table and class
+ * registrations.
+ */
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_no_args, 0, 0, 0)
 ZEND_END_ARG_INFO()
 

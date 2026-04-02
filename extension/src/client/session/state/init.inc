@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/session/state/init.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Base state initialization for the client-session runtime. This slice seeds
+ * cancel/server bookkeeping, TLS ticket state, negotiated protocol fields,
+ * transport defaults, and the config-derived session snapshot before the
+ * public connect/object leaves start using the session.
+ * =========================================================================
+ */
+
 void king_client_session_init_cancel_state(king_client_session_t *session)
 {
     zend_hash_init(

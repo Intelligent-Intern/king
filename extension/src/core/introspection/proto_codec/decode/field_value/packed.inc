@@ -1,3 +1,9 @@
+/*
+ * Decode packed-field slice: unpacks one length-delimited packed payload
+ * into repeated runtime field values and stores each decoded value on the
+ * target array or object.
+ */
+
 static bool king_proto_runtime_decode_packed_field_values(
     zval *target,
     bool decode_as_object,

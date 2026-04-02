@@ -1,15 +1,7 @@
 /*
- * =========================================================================
- * FILENAME:   src/semantic_dns/semantic_dns.c
- * PROJECT:    king
- *
- * PURPOSE:
- * Provides the first active Semantic-DNS core/server-state slice in the
- * current runtime. The richer registry/read-model runtime still lives under
- * src/core/introspection/semantic_dns/*.inc; this file owns the local
- * config-backed init/start lifecycle and the internal C helper surface that
- * later mother-node and routing leaves will build on.
- * =========================================================================
+ * Core Semantic-DNS runtime slice. Owns the local config-backed init/start
+ * lifecycle, the process-local server/runtime state and the internal helper
+ * surface that the routing, mother-node and durable-state modules build on.
  */
 
 #include "php_king.h"

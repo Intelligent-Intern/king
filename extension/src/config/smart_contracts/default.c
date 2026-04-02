@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/smart_contracts/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the smart-contracts config family. This slice
+ * seeds the baseline module-disabled state, chain and gas defaults, wallet
+ * and HSM placeholders, ABI location placeholder, and event-listener flag
+ * before INI and any allowed userland overrides refine the live snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/smart_contracts/default.h"
 #include "include/config/smart_contracts/base_layer.h"
 

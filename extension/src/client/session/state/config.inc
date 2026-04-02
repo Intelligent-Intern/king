@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/session/state/config.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Config-snapshot capture for `King\\Session`. This file applies a frozen
+ * `King\\Config` resource onto the live session state and mirrors the subset
+ * of transport, TLS, HTTP/2, object-store, MCP, Smart-DNS, telemetry, and
+ * other config fields that are exposed later through `Session::stats()`.
+ * =========================================================================
+ */
+
 void king_client_session_apply_config_resource(
     king_client_session_t *session,
     king_cfg_t *cfg)

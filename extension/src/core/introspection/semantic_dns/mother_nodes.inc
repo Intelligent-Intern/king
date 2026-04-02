@@ -1,3 +1,9 @@
+/*
+ * Public mother-node registration leaf. Validates the userland payload,
+ * persists the node in the registry, and in semantic mode refreshes the
+ * runtime mother-node snapshot plus discovery/sync state under the state lock.
+ */
+
 PHP_FUNCTION(king_semantic_dns_register_mother_node)
 {
     zval *mother_node_info;

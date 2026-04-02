@@ -4,10 +4,10 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Shared native session structure and helpers for the active runtime client
- * runtime. This stays transport-free for now, but owns the real
- * King\Session resource lifecycle, config snapshots, and local stream-cancel
- * state used by the current build.
+ * Shared native session structure and helpers for the active runtime session
+ * surface. In the current build this owns the real `King\Session` lifecycle,
+ * transport and TLS snapshots, config bindings, local stream-cancel state, and
+ * the server-observation fields reused by the local listener leaves.
  * =========================================================================
  */
 

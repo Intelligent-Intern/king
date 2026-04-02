@@ -1,3 +1,9 @@
+/*
+ * Proto-registry type-resolution slice: maps schema type names into runtime
+ * field kinds, resolves message and enum references for normal and map
+ * fields, and supplies the tag-order comparator for runtime field layouts.
+ */
+
 static bool king_proto_runtime_field_kind_from_type_name(
     const char *type_name,
     size_t type_name_len,

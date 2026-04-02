@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/native_cdn/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the native CDN config family. This slice seeds
+ * the baseline cache mode, memory/disk limits, origin timeout, stale-on-
+ * error, response-header, and allowed-method defaults before INI and any
+ * allowed userland overrides refine the live CDN snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/native_cdn/default.h"
 #include "include/config/native_cdn/base_layer.h"
 

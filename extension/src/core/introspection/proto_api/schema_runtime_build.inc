@@ -1,3 +1,10 @@
+/*
+ * Root proto schema-runtime builder: materializes validated schema arrays
+ * into the persistent runtime field layout used by the active codec and
+ * registry, including type resolution, tag ordering, required-field lists,
+ * and persisted default values.
+ */
+
 static int king_proto_build_runtime_schema_fields(
     king_proto_runtime_schema *runtime_schema,
     zend_string *schema_name,

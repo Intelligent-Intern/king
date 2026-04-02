@@ -1,3 +1,15 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/open_telemetry/index.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Lifecycle entry points for the OpenTelemetry config family. This file
+ * wires together default loading and INI registration during module init
+ * and unregisters the INI surface again during shutdown.
+ * =========================================================================
+ */
+
 #include "include/config/open_telemetry/index.h"
 #include "include/config/open_telemetry/default.h"
 #include "include/config/open_telemetry/ini.h"

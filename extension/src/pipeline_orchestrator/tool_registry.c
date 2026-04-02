@@ -1,9 +1,7 @@
 /*
- * src/pipeline_orchestrator/tool_registry.c - Native Tool Handler Registry
- * =========================================================================
- *
- * This module manages the global registry of available orchestrator tools,
- * logging config, and persisted pipeline run snapshots.
+ * Pipeline-orchestrator registry and durable run-state store. Owns the tool
+ * registry, logging snapshot, persisted run metadata and the recovery helpers
+ * that reload orchestrator state after restart.
  */
 #include "php_king.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"

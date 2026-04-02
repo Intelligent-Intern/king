@@ -1,3 +1,9 @@
+/*
+ * Proto-registry default support slice: answers whether one runtime field
+ * kind can carry a persisted default and fetches input field values from the
+ * array-or-object payload shapes the active runtime accepts.
+ */
+
 static bool king_proto_runtime_field_kind_supports_default(
     king_proto_runtime_field_kind kind
 )

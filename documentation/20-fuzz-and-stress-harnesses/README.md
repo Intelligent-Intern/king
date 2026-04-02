@@ -11,7 +11,10 @@ tests. They answer different questions. Does a parser stay stable under
 deterministic malformed input? Does a registry stay coherent under churn? Does
 the transport still recover after repeated aborts and retries? Does the
 runtime keep the same contract after thousands of small operations rather than
-one clean demonstration?
+one clean demonstration? In the current repo this evidence comes from two
+concrete entrypoints: a seeded PHPT subset in
+`./infra/scripts/fuzz-runtime.sh` and a separate sanitizer-oriented long-run
+surface in `./infra/scripts/soak-runtime.sh`.
 
 
 If a technical word is unfamiliar, keep the [Glossary](../glossary.md) open while you read.
@@ -42,8 +45,9 @@ stored seed becomes evidence rather than an accident.
 
 This is a practical point, not a cosmetic one. A test that can only find a
 problem once but cannot show it again is difficult to trust in a release
-workflow. Seeded fuzz and stress work create engineering artifacts that can be
-kept, discussed, and rerun.
+workflow. The seeded PHPT subset is there to stay rerunnable and reviewable;
+the sanitizer soak path adds retained logs and failure diagnostics under
+`extension/build/soak/` when the longer-running gate is exercised.
 
 ## What You Should Notice
 
@@ -62,7 +66,10 @@ state recovery stay consistent under many iterations.
 The third thing to notice is that the harnesses are part of release evidence.
 They are not there only to reassure a developer locally. They are there so the
 project can say that high-risk surfaces were exercised under deterministic
-pressure before a build was accepted.
+pressure before a build was accepted. The current repo-local go-live gate pulls
+in the seeded fuzz/stress subset directly, while the longer sanitizer soak
+surface remains a separate deeper gate rather than something hidden inside the
+default one-command path.
 
 ## How This Fits The Rest Of The Handbook
 

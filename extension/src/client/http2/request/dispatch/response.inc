@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http2/request/dispatch/response.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Transfer driving and response-meta collection for the HTTP/2 one-shot
+ * dispatch path. This slice owns cancel-aware multi-handle polling, curl
+ * completion/error handling, bounded response-size enforcement, and the
+ * response/effective-URL/protocol metadata readback from libcurl.
+ * =========================================================================
+ */
+
 static zend_result king_http2_request_abort_for_cancel(
     king_http2_pool_entry_t *pool_entry,
     CURL *easy_handle,

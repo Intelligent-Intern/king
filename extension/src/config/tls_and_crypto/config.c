@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/tls_and_crypto/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the TLS and crypto config family. This
+ * file validates the `King\\Config` subset that can target either a
+ * temporary config snapshot or the live module-global state and applies
+ * bounded TLS policy, certificate material, ticket / 0-RTT, transport-
+ * encryption, storage-encryption, and MCP-payload-encryption overrides.
+ * =========================================================================
+ */
+
 #include "include/config/tls_and_crypto/config.h"
 #include "include/config/tls_and_crypto/base_layer.h"
 #include "include/king_globals.h"

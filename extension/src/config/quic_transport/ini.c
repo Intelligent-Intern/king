@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/quic_transport/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the QUIC transport config
+ * family. This file exposes the system-level congestion-control, pacing,
+ * ACK/PTO, flow-control, stream-limit, retry, GREASE, and datagram queue
+ * directives and keeps `king_quic_transport_config` aligned with validated
+ * updates.
+ * =========================================================================
+ */
+
 #include "include/config/quic_transport/ini.h"
 #include "include/config/quic_transport/base_layer.h"
 

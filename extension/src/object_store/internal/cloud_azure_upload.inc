@@ -1,3 +1,8 @@
+/*
+ * Azure multipart-upload slice. Manages resumable upload-session state and the
+ * provider-specific chunk/finalize flow for the Azure adapter.
+ */
+
 static int king_object_store_azure_begin_upload_session(
     const char *object_id,
     const king_object_metadata_t *metadata,
@@ -194,4 +199,3 @@ static int king_object_store_azure_complete_upload_session(
     king_object_store_http_response_destroy(&response);
     return SUCCESS;
 }
-

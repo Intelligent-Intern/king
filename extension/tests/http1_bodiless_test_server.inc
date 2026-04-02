@@ -1,5 +1,7 @@
 <?php
 
+/* Harness server for HTTP/1 HEAD, 103, 204 and 304 bodiless-response contracts. */
+
 $port = (int) ($argv[1] ?? 0);
 $server = stream_socket_server("tcp://127.0.0.1:$port", $errno, $errstr);
 if ($server === false) {

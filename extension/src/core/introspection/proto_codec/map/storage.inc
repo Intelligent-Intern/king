@@ -1,3 +1,8 @@
+/*
+ * Map codec storage slice: fetches or creates the array-backed storage that
+ * decoded map entries use on the target array or object.
+ */
+
 static zval *king_proto_runtime_fetch_or_init_map_storage(
     zval *target,
     bool decode_as_object,

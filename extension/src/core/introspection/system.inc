@@ -1,3 +1,9 @@
+/*
+ * Root system introspection slice: exposes the current build-level health,
+ * memory-only metrics, bounded performance report, and fixed component
+ * inventory that the active runtime can answer honestly today.
+ */
+
 PHP_FUNCTION(king_system_health_check)
 {
     ZEND_PARSE_PARAMETERS_NONE();

@@ -1,3 +1,9 @@
+/*
+ * Shared-memory ticket-ring lifecycle. Creates or reattaches the per-user,
+ * per-module ring segment, initializes the robust process-shared mutex and
+ * tears the ring back down with slot shredding on shutdown.
+ */
+
 static int king_ticket_ring_init(void)
 {
     king_ticket_ring_shared_t *ring;

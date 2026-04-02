@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http1/common.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Shared HTTP/1 client helpers for option parsing, request/response policy
+ * decisions, redirect handling, keep-alive eligibility, and origin-key
+ * normalization. This is the contract glue used by both the buffered and
+ * `response_stream` dispatch paths.
+ * =========================================================================
+ */
+
 static void king_http1_set_error(const char *format, ...)
 {
     char message[KING_ERR_LEN];

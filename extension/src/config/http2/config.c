@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/http2/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the HTTP/2 config family. This file
+ * validates the `King\\Config` subset that can target either a temporary
+ * config snapshot or the live module-global state and applies bounded
+ * HTTP/2 enablement, flow-control, stream-limit, push, and frame-size
+ * overrides fail-closed.
+ * =========================================================================
+ */
+
 #include "include/config/http2/config.h"
 #include "include/config/http2/base_layer.h"
 #include "include/king_globals.h"

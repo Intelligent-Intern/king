@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/tcp_transport/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the TCP transport config family. This
+ * file validates the `King\\Config` subset that can target either a
+ * temporary config snapshot or the live module-global state and applies
+ * bounded transport enablement, socket-tuning, keepalive, connection-limit,
+ * and TLS policy overrides.
+ * =========================================================================
+ */
+
 #include "include/config/tcp_transport/config.h"
 #include "include/config/tcp_transport/base_layer.h"
 #include "include/king_globals.h"

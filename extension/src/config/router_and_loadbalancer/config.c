@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/router_and_loadbalancer/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the router and load-balancer config
+ * family. This file validates the small `King\\Config` subset that can
+ * adjust router enablement, hashing mode, backend discovery sources, MCP
+ * polling cadence, and forwarding limits in the live module-global state.
+ * =========================================================================
+ */
+
 #include "include/config/router_and_loadbalancer/config.h"
 #include "include/config/router_and_loadbalancer/base_layer.h"
 #include "include/king_globals.h"

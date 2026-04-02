@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/smart_dns/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the Smart-DNS config family. This slice seeds
+ * the baseline server-disabled state, bind/port, TTL, service-discovery
+ * fan-out limit, semantic-mode toggle, and mothernode / live-probe
+ * placeholders before INI and any allowed userland overrides refine the
+ * live DNS snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/smart_dns/default.h"
 #include "include/config/smart_dns/base_layer.h"
 

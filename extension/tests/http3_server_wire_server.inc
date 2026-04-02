@@ -1,5 +1,7 @@
 <?php
 
+/* Harness server for capturing on-wire HTTP/3 one-shot listener behavior. */
+
 if ($argc < 6) {
     fwrite(STDERR, "usage: http3_server_wire_server.inc <capture-path> <port> <cert> <key> <host> [mode]\n");
     exit(1);

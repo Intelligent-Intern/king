@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/open_telemetry/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the OpenTelemetry config family. This
+ * file validates the `King\\Config` subset that can target either a
+ * temporary config snapshot or the live module-global state and applies
+ * bounded telemetry enablement, exporter, batching, sampler, metrics, and
+ * logs overrides.
+ * =========================================================================
+ */
+
 #include "include/config/open_telemetry/config.h"
 #include "include/config/open_telemetry/base_layer.h"
 #include "include/king_globals.h"

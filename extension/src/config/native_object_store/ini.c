@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/native_object_store/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the native object-store
+ * config family. This file exposes the system-level storage enablement,
+ * redundancy, erasure-coding, replication/chunk sizing, metadata/discovery,
+ * cache, and direct-storage directives and keeps
+ * `king_native_object_store_config` aligned with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/native_object_store/ini.h"
 #include "include/config/native_object_store/base_layer.h"
 

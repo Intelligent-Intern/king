@@ -1,3 +1,9 @@
+/*
+ * Decode schema-payload slice: drives full payload decoding for one runtime
+ * schema, including unknown-field skipping, map and packed handling, oneof
+ * replacement, required-field enforcement, and default-value materialization.
+ */
+
 static bool king_proto_runtime_decode_schema_payload(
     zend_string *schema_name,
     const king_proto_runtime_schema *runtime_schema,

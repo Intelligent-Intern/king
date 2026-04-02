@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/app_http3_websockets_webtransport/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the app-protocol config
+ * family. This file exposes the system-level directives for HTTP/3, Early
+ * Hints, WebSocket, and WebTransport tuning and keeps the shared
+ * `king_app_protocols_config` snapshot aligned with validated ini updates.
+ * =========================================================================
+ */
+
 #include "include/config/app_http3_websockets_webtransport/ini.h"
 #include "include/config/app_http3_websockets_webtransport/base_layer.h"
 

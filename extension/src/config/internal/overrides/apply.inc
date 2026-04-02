@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/internal/overrides/apply.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Applies collected runtime override buckets onto a composed `king_cfg_t`
+ * snapshot. This file maps each normalized override bucket onto its owning
+ * config family and drives the bounded `*_apply_userland_config_to()`
+ * helpers before marking the snapshot as having explicit userland overrides.
+ * =========================================================================
+ */
+
 #define KING_CONFIG_APPLY_OVERRIDE_BUCKET(bucket_member, cfg_member, apply_fn) \
     do { \
         if (state->bucket_member.initialized && \

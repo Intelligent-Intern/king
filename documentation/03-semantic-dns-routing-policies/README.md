@@ -189,8 +189,7 @@ Now the runtime can choose the final route from the candidate set.
 <?php
 
 $route = king_semantic_dns_get_optimal_route('inference-primary', [
-    'client_region' => 'eu-central',
-    'latency_sensitive' => true,
+    'max_load_percent' => 80,
 ]);
 
 print_r($route);
@@ -199,6 +198,12 @@ print_r($route);
 The route decision is the moment where registration, status, load, client
 context, and topology all come together. The system is no longer only answering
 "what exists?" It is answering "what should handle the next request?"
+
+In the current runtime, this decision is scored from live service state rather
+than free-form policy hints. Status, `current_load_percent`,
+`active_connections`, and the service reliability/performance weights drive the
+score. Optional caller criteria currently act as hard filters such as
+`hostname`, `port`, and `max_load_percent`.
 
 ## Step 7: Inspect The Topology
 
@@ -248,9 +253,10 @@ topology layer that helps the platform reason about more than one isolated
 service record.
 
 In a growing platform, topology coordination matters because route choice is not
-always only about the current load of one backend. Trust score, coordination
-state, synchronization health, and the broader map of managed services can also
-change what the best route should be.
+always only about the current load of one backend. Today the public route
+surface is still primarily service-state driven, while mother-node state
+remains more visible in topology inspection than directly consumed by the route
+score itself.
 
 ## Why This Matters For Autoscaling
 

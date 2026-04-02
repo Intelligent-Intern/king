@@ -1,5 +1,7 @@
 <?php
 
+/* Local OTLP collector harness for telemetry export and retry contracts. */
+
 $capturePath = $argv[1];
 $planPath = $argv[2];
 $port = (int) $argv[3];

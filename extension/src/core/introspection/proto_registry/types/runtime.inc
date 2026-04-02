@@ -1,3 +1,9 @@
+/*
+ * Proto-registry runtime-helper slice: defines the runtime wire-type,
+ * packed-field, int32 conversion, and zero-default helpers shared by the
+ * active proto codec and registry logic.
+ */
+
 static uint32_t king_proto_runtime_wire_type_for_kind(
     king_proto_runtime_field_kind kind
 )

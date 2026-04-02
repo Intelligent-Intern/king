@@ -1,5 +1,7 @@
 <?php
 
+/* Shared helper utilities for orchestrator remote-peer harness processes. */
+
 function king_orchestrator_test_format_tcp_endpoint(string $host, int $port): string
 {
     if (strpos($host, ':') !== false && !preg_match('/^\[.*\]$/', $host)) {

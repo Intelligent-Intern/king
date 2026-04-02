@@ -26,7 +26,9 @@ failure. They can still make the released system worse in a way users feel.
 
 This example exists to show how King prevents that kind of silent drift from
 being accepted without evidence. It shows the benchmark run, the stored
-budget, and the comparison step as one release-time workflow.
+budget, and the comparison step as one release-time workflow. In the current
+repo, local baseline snapshots and committed CI budgets are related but not the
+same thing.
 
 ```mermaid
 flowchart LR
@@ -42,8 +44,9 @@ flowchart LR
 A useful benchmark always has three parts. First there is the workload. That is
 the thing being measured: an HTTP path, a storage path, a protocol roundtrip,
 an encode/decode loop, a lifecycle operation, or another unit of work that
-really matters to the platform. Second there is the budget or baseline. That is
-the statement of what the project currently accepts for that workload. Third
+really matters to the platform. Second there is the budget or baseline. In the
+current project shape, local raw baselines are for developer-side comparison,
+while committed per-case budgets are the actual CI and release gate. Third
 there is the comparison step that decides whether the result is still inside
 the allowed boundary.
 
@@ -80,9 +83,10 @@ project meant to ship.
 In practice, a team uses this pattern while iterating on transport tuning,
 retry behavior, memory management, encoding logic, or subsystem coordination.
 The team changes code, runs the benchmark workflow, and compares the result to
-the stored budget. If the result stays within the budget, the build is still
-behaving like the intended platform for that measured path. If the result
-exceeds the budget, the team now has a concrete regression to inspect.
+either a local earlier baseline or the committed per-case budget file. If the
+result stays within the budget, the build is still behaving like the intended
+platform for that measured path. If the result exceeds the budget, the team now
+has a concrete regression to inspect.
 
 This matters because performance work often becomes emotional when it is not
 grounded in a repeatable contract. One reader may call a result acceptable
@@ -101,6 +105,9 @@ recollections of what once felt fast enough.
 
 That is why this example belongs in the handbook. It is not about chasing large
 headline numbers. It is about proving that the released platform still behaves
-within the boundaries the project chose on purpose.
+within the boundaries the project chose on purpose. In the current repo, that
+release boundary is the canonical budget file, while `benchmarks/results/`
+stays local and ignored so developer baselines do not masquerade as shared CI
+truth.
 
 For the wider release workflow, read [Operations and Release](../operations-and-release.md).

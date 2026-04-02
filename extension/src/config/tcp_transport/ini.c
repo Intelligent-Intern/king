@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/tcp_transport/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the TCP transport config
+ * family. This file exposes the system-level transport enablement,
+ * connection/backlog limits, socket tuning, keepalive, and TLS policy
+ * directives and keeps `king_tcp_transport_config` aligned with validated
+ * updates.
+ * =========================================================================
+ */
+
 #include "include/config/tcp_transport/ini.h"
 #include "include/config/tcp_transport/base_layer.h"
 

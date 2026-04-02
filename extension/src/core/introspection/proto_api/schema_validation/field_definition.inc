@@ -1,3 +1,9 @@
+/*
+ * Schema-validation field-definition slice: drives validation of one schema
+ * field by composing metadata checks, runtime resolution, and constraint
+ * enforcement, then records the accepted tag in the seen-tag set.
+ */
+
 static int king_proto_validate_schema_field_definition(
     zend_string *schema_name,
     zend_string *field_name,

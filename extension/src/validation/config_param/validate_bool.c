@@ -1,15 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_bool.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    I can see it in your eyes. You have the look of a man who accepts what he sees because he is expecting to wake up.
- *
- * PURPOSE:
- * This file implements centralized, reusable validation helper function
- * for boolean values passed from PHP userland.
- * =========================================================================
+ * Validation helper for boolean config values. Performs strict userland type
+ * checks and raises the shared validation error when the value is not bool.
  */
 
 #include "include/validation/config_param/validate_bool.h"

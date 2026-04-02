@@ -1,22 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_non_negative_long.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    No.
- *
- * PURPOSE:
- * This file implements the centralized, reusable validation helper function
- * for non-negative integer values, as declared in its corresponding header file.
- *
- * ARCHITECTURE:
- * The function enforces strict type and range checking. It first verifies
- * that the input is a long, then checks that its value is not negative.
- * This two-step process prevents both type juggling and invalid numeric
- * ranges, providing a robust guard for any configuration parameter that
- * represents a count, size, or other non-negative quantity.
- * =========================================================================
+ * Validation helper for non-negative integers. Enforces long input and the
+ * `>= 0` contract used by multiple config families.
  */
 
 #include "include/validation/config_param/validate_non_negative_long.h"

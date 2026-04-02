@@ -1,13 +1,7 @@
 /*
- * =========================================================================
- * FILENAME:   src/semantic_dns/state.c
- * PROJECT:    king
- *
- * PURPOSE:
- * Implements the native Semantic-DNS durable state persistence,
- * allowing the control plane to recover topology and runtime data
- * across reboots or process limits.
- * =========================================================================
+ * Durable-state slice for Semantic-DNS. Persists and reloads the bounded
+ * topology/runtime payload so local server state, registry-derived topology
+ * and semantic-mode recovery survive restart.
  */
 
 #include "semantic_dns/semantic_dns_internal.h"

@@ -1,9 +1,10 @@
 /*
- * include/semantic_dns/semantic_dns.h - Public C API for semantic DNS
- * ====================================================================
+ * include/semantic_dns/semantic_dns.h - Public Semantic-DNS surface
+ * =================================================================
  *
- * This header exposes the types and PHP functions used by the semantic DNS
- * subsystem for service discovery and routing.
+ * Shared Semantic-DNS types plus the exported PHP and native C entry points
+ * for service registration, topology snapshots, local bounded queries, and
+ * route selection.
  */
 
 #ifndef KING_SEMANTIC_DNS_H
@@ -109,37 +110,38 @@ typedef struct _king_semantic_dns_config_t {
 
 /* --- PHP Function Prototypes --- */
 
-/* Initializes the semantic DNS system from a PHP config array. */
+/* Initializes the local Semantic-DNS runtime from a PHP config array. */
 PHP_FUNCTION(king_semantic_dns_init);
 
-/* Starts the semantic DNS server. */
+/* Activates local server state, optional mother-node sync, and probe refresh. */
 PHP_FUNCTION(king_semantic_dns_start_server);
 
-/* Processes one local semantic-DNS query against the active runtime. */
+/* Processes one bounded local DNS-shaped query against the active runtime. */
 PHP_FUNCTION(king_semantic_dns_query);
 
 /* Registers a service record. */
 PHP_FUNCTION(king_semantic_dns_register_service);
 
-/* Discovers services using semantic criteria. */
+/* Discovers routeable services using the current runtime registry. */
 PHP_FUNCTION(king_semantic_dns_discover_service);
 
 /* Registers a mother node. */
 PHP_FUNCTION(king_semantic_dns_register_mother_node);
 
-/* Returns the best route for a service. */
+/* Returns the current best route (or stable no-route shape) for a service. */
 PHP_FUNCTION(king_semantic_dns_get_optimal_route);
 
 /* Updates a registered service status. */
 PHP_FUNCTION(king_semantic_dns_update_service_status);
 
-/* Returns the current service topology. */
+/* Returns the current topology snapshot plus local runtime counters. */
 PHP_FUNCTION(king_semantic_dns_get_service_topology);
 
 /* --- Internal C API --- */
 
 int king_semantic_dns_init_system(king_semantic_dns_config_t *config);
 void king_semantic_dns_shutdown_system(void);
+void king_semantic_dns_request_shutdown(void);
 int king_semantic_dns_process_query(const char *query, char *response, size_t response_size);
 int king_semantic_dns_calculate_service_score(const king_service_record_t *service, const zval *criteria);
 int king_semantic_dns_discover_mother_nodes(void);

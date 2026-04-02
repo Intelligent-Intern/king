@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http1/response/receive.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * HTTP/1 receive and streaming-context helpers. This slice drives socket
+ * reads, consumes interim 1xx headers, feeds pending early hints into the
+ * live request context, finalizes buffered vs. streaming bodies, and exposes
+ * the `King\\HttpRequestContext` read/getBody/isEndOfBody surface.
+ * =========================================================================
+ */
+
 static void king_http1_response_buffer_discard_prefix(
     smart_str *buffer,
     size_t prefix_len)

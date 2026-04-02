@@ -1,3 +1,9 @@
+/*
+ * Common codec forward-declaration slice: keeps the cross-fragment encode
+ * and decode entry points declared before the helper fragments that call
+ * into them.
+ */
+
 static bool king_proto_runtime_encode_schema_payload(
     smart_str *buf,
     zend_string *schema_name,

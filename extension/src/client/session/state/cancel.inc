@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/session/state/cancel.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Local stream-cancellation bookkeeping for the client-session runtime.
+ * This slice records per-stream cancel mode in the session snapshot, keeps
+ * the public cancel counters in sync, and invokes any registered server-side
+ * cancel callback state that shares the same Session object.
+ * =========================================================================
+ */
+
 zend_result king_client_session_mark_cancelled(
     king_client_session_t *session,
     zend_long stream_id,

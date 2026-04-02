@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/quic_transport/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the QUIC transport config family. This
+ * file validates the `King\\Config` subset that can target either a
+ * temporary config snapshot or the live module-global state and applies
+ * bounded congestion-control, pacing, ACK/PTO, flow-control, retry, and
+ * datagram overrides.
+ * =========================================================================
+ */
+
 #include "include/config/quic_transport/config.h"
 #include "include/config/quic_transport/base_layer.h"
 #include "include/king_globals.h"

@@ -1,5 +1,7 @@
 <?php
 
+/* Shared helper utilities for local MCP protocol and transfer-state harnesses. */
+
 function king_mcp_test_format_tcp_endpoint(string $host, int $port): string
 {
     if (strpos($host, ':') !== false && !preg_match('/^\[.*\]$/', $host)) {

@@ -1,3 +1,8 @@
+/*
+ * Azure runtime/config slice. Normalizes endpoint and credential settings and
+ * provides the shared HTTP/runtime helpers used by the Azure adapter paths.
+ */
+
 typedef struct _king_object_store_azure_runtime_config_t {
     char endpoint[512];
     char container[256];

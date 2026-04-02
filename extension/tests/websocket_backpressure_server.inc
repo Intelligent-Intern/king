@@ -1,5 +1,7 @@
 <?php
 
+/* Harness server for concurrent WebSocket backpressure and fairness contracts. */
+
 if ($argc < 5) {
     fwrite(STDERR, "usage: websocket_backpressure_server.php <capture-path> <port> <burst-count> <payload-bytes> [max-connections]\n");
     exit(1);

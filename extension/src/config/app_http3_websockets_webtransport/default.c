@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/app_http3_websockets_webtransport/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the app-protocol config family. This slice seeds
+ * the module-global HTTP/3, Early Hints, WebSocket, and WebTransport
+ * defaults that are later refined by INI directives and the narrower
+ * userland `King\\Config` override path.
+ * =========================================================================
+ */
+
 #include "include/config/app_http3_websockets_webtransport/default.h"
 #include "include/config/app_http3_websockets_webtransport/base_layer.h"
 

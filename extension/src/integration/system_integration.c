@@ -1,9 +1,8 @@
 /*
- * src/integration/system_integration.c - System Integration Runtime
- * =========================================================================
- *
- * This module coordinates the extension's disparate subsystems. It manages
- * component lifecycles, health checks, and cross-component communication.
+ * Local system-integration runtime. Owns the process-local component registry,
+ * the small system config snapshot, status-transition bookkeeping and the
+ * public king_system_* leaves that expose status, restart and request-routing
+ * helpers over that inventory.
  */
 #include "php_king.h"
 #include "include/integration/system_integration.h"

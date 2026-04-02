@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/tls/support.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Small support helpers for the client TLS surface. This file owns the
+ * persistent-string replacement helper used by TLS config updates and the
+ * shared readable-path validation that keeps the public CA/cert/key leaves
+ * fail-closed.
+ * =========================================================================
+ */
+
 static void king_tls_replace_persistent_string(char **target, const char *value)
 {
     if (*target != NULL) {

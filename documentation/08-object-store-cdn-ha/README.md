@@ -74,6 +74,11 @@ flowchart LR
 The picture is intentionally simple. One object identity sits in the middle and
 every other action refers back to that same identity.
 
+In the current runtime, that identity is a flat object identifier rather than a
+filesystem-style path. Public object IDs must stay free of path separators, so
+examples in this guide use durable names like release tags or checkpoint
+handles rather than nested `dir/file` strings.
+
 ## Step 1: Initialize The Store
 
 The first step is to initialize the object-store runtime with a storage root,
@@ -109,7 +114,7 @@ Now the producer writes a checkpoint into the store.
 ```php
 <?php
 
-$objectId = 'models/finetune/run-2026-03-27/checkpoint-00042';
+$objectId = 'finetune-run-2026-03-27-checkpoint-00042';
 $payload = file_get_contents(__DIR__ . '/checkpoint-00042.bin');
 
 king_object_store_put($objectId, $payload, [
@@ -251,12 +256,20 @@ supports full export and full import.
 <?php
 
 king_object_store_backup_all_objects(__DIR__ . '/backups/full');
+king_object_store_backup_all_objects(__DIR__ . '/backups/incremental', [
+    'mode' => 'incremental',
+    'base_snapshot_path' => __DIR__ . '/backups/full',
+]);
+
 king_object_store_restore_all_objects(__DIR__ . '/backups/full');
+king_object_store_restore_all_objects(__DIR__ . '/backups/incremental');
 ```
 
 This is the path that matters when the operator is thinking about host loss,
 migration, environment rebuilds, or a fresh deployment that must regain the
-whole durable store.
+whole durable store. The public batch restore contract is committed full-snapshot
+replay plus committed incremental-patch replay; it is not a rolling or
+subset-filter restore API.
 
 ## Maintenance Is Part Of Trust
 

@@ -1,3 +1,15 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/cloud_autoscale/index.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Lifecycle entry points for the cloud-autoscale config family. This file
+ * wires together default loading and INI registration during module init and
+ * unregisters the INI surface again during shutdown.
+ * =========================================================================
+ */
+
 #include "include/config/cloud_autoscale/index.h"
 #include "include/config/cloud_autoscale/default.h"
 #include "include/config/cloud_autoscale/ini.h"

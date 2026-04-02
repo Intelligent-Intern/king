@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/bare_metal_tuning/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the bare-metal tuning
+ * config family. This file exposes the system-level io_uring, socket,
+ * busy-poll, timestamping, CPU-affinity, and NUMA directives and keeps the
+ * shared `king_bare_metal_config` snapshot aligned with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/bare_metal_tuning/ini.h"
 #include "include/config/bare_metal_tuning/base_layer.h"
 #include "include/validation/config_param/validate_cpu_affinity_map_string.h"

@@ -6,9 +6,9 @@
  * PURPOSE:
  * Minimal live HTTP/3 client runtime for the active runtime. The
  * implementation keeps the extension free of a hard libquiche dependency by
- * loading the bundled/system libquiche at runtime, then driving a one-shot
- * HTTPS-over-QUIC request path with the existing King config snapshot and
- * normalized response contract.
+ * loading the bundled/system libquiche at runtime, then driving the direct
+ * one-shot and multi-request HTTPS-over-QUIC leaves with the existing King
+ * config snapshot and normalized response contract.
  * =========================================================================
  */
 

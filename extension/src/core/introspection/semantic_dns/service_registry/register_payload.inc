@@ -1,3 +1,9 @@
+/*
+ * Payload-to-service materialization for Semantic-DNS registration. Validates
+ * required identity fields, status, metrics and scalar attributes, then builds
+ * the persistent registry entry consumed by register/update leaves.
+ */
+
 static bool king_semantic_dns_service_assign_required_string(
     HashTable *source,
     const char *key,

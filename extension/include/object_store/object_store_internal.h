@@ -4,7 +4,8 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Internal structures and state for the native object store backend.
+ * Internal runtime state and helper contracts for object-store payload,
+ * metadata, snapshot/restore, and resumable-upload flows.
  * =========================================================================
  */
 
@@ -32,7 +33,7 @@ typedef struct _king_object_store_runtime_state {
     zend_bool initialized;
     king_object_store_config_t config;
 
-    /* Live stats tracked natively */
+    /* Live primary-inventory stats tracked natively */
     uint64_t current_object_count;
     uint64_t current_stored_bytes;
     time_t latest_object_at;
@@ -45,7 +46,7 @@ typedef struct _king_object_store_runtime_state {
     char backup_adapter_status[24];
     char backup_adapter_error[512];
 
-    /* Persisted coordinator state for the still-simulated distributed backend */
+    /* Persisted coordinator state and recovery telemetry for the distributed contract */
     zend_bool distributed_coordinator_state_present;
     zend_bool distributed_coordinator_state_recovered;
     uint64_t distributed_coordinator_state_version;
@@ -108,7 +109,7 @@ int king_object_store_runtime_capacity_check_rewrite(
     size_t error_size
 );
 
-/* Durable metadata sidecar */
+/* Durable metadata sidecars plus the process-local metadata cache */
 void king_object_store_build_path(char *dest, size_t dest_len, const char *object_id);
 void king_object_store_build_meta_path(char *dest, size_t dest_len, const char *object_id);
 int king_object_store_meta_write(const char *object_id, const king_object_metadata_t *metadata);
@@ -129,8 +130,7 @@ int king_object_store_http_header_value_validate(
 /* Rehydrate runtime stats from disk on init */
 void king_object_store_rehydrate_stats(void);
 
-/* Cloud-native HA hooks */
-/* File-backed persistence backup/restore and recovery paths */
+/* Snapshot/restore, migration, and resumable-upload runtime hooks */
 int king_object_store_backup_object(const char *object_id, const char *destination_path);
 int king_object_store_restore_object(const char *object_id, const char *source_path);
 int king_object_store_backup_all_objects(

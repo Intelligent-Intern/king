@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/session/common.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Shared helpers for the client-session runtime. This file provides the
+ * common clock, bounded string-slot replacement, transport exception
+ * raising, address-family labeling, and low-level socket-close helper used
+ * across the Session and Stream implementation slices.
+ * =========================================================================
+ */
+
 static zend_long king_client_transport_now_ms(void)
 {
     struct timespec ts;

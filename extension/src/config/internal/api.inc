@@ -1,11 +1,16 @@
 /*
- * @brief Creates a new king_cfg_t from an optional PHP options array.
+ * =========================================================================
+ * FILENAME:   src/config/internal/api.inc
+ * PROJECT:    king
  *
- * In the runtime: snapshots the active module globals and applies the safe
- * explicit override surface that is already wired per resource.
- * In the full implementation: this will expand into the full 4-tier config
- * hierarchy.
+ * PURPOSE:
+ * Core `King\\Config` resource API for the active runtime. This file creates
+ * composed `king_cfg_t` snapshots from the current module globals, applies
+ * the bounded per-resource override surface, freezes snapshots once they are
+ * consumed, and exposes the public `king_new_config()` leaf.
+ * =========================================================================
  */
+
 king_cfg_t *king_config_new_from_options(zval *zopts)
 {
     king_cfg_t *cfg = ecalloc(1, sizeof(king_cfg_t));
@@ -33,7 +38,7 @@ king_cfg_t *king_config_new_from_options(zval *zopts)
 }
 
 /*
- * @brief Frees a king_cfg_t and all underlying resources.
+ * Frees a composed `king_cfg_t` plus any owned override allocations.
  */
 void king_config_free(king_cfg_t *cfg)
 {
@@ -53,10 +58,7 @@ void king_config_free(king_cfg_t *cfg)
 }
 
 /*
- * @brief Marks the config as immutable (frozen).
- *
- * Called when the config is first used to open a QUIC connection.
- * Any modification attempt after freezing should throw ValidationException.
+ * Marks a config snapshot as immutable after it is bound into runtime use.
  */
 void king_config_mark_frozen(king_cfg_t *cfg)
 {
@@ -65,13 +67,6 @@ void king_config_mark_frozen(king_cfg_t *cfg)
     }
 }
 
-/*
- * PHP_FUNCTION(king_new_config)
- *
- * PHP signature: king_new_config(?array $options = null): resource
- *
- * Runtime: creates a new composed king_cfg_t resource snapshot.
- */
 PHP_FUNCTION(king_new_config)
 {
     zval *zopts = NULL;

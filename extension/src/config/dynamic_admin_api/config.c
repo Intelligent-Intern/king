@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/dynamic_admin_api/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the dynamic-admin-api config family.
+ * This file validates the narrow `King\\Config` subset that can tune the
+ * local admin bind host, port, auth mode, and readable mTLS material paths
+ * on the live `king_dynamic_admin_api_config` snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/dynamic_admin_api/config.h"
 #include "include/config/dynamic_admin_api/base_layer.h"
 #include "include/king_globals.h"

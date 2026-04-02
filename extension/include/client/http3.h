@@ -5,7 +5,7 @@
 
 /**
  * @file extension/include/client/http3.h
- * @brief HTTP/3 client entry point.
+ * @brief HTTP/3 one-shot and multiplex client entry points.
  */
 
 zend_result king_http3_request_dispatch(
@@ -34,5 +34,15 @@ zend_result king_http3_request_dispatch(
  * @return A PHP array on success, FALSE on failure.
  */
 PHP_FUNCTION(king_http3_request_send);
+
+/**
+ * @brief Sends one multiplexed HTTP/3 batch over one active QUIC connection.
+ *
+ * Each request entry accepts `url`, optional `method`, optional `headers`, and
+ * optional `body`. The current leaf requires every entry to target the same
+ * absolute `https://` origin plus TLS profile so the runtime can share one
+ * honest HTTP/3 session.
+ */
+PHP_FUNCTION(king_http3_request_send_multi);
 
 #endif // KING_CLIENT_HTTP3_H

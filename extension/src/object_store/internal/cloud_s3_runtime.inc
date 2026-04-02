@@ -1,3 +1,9 @@
+/*
+ * Shared cloud HTTP runtime for S3-first adapters. Holds bounded response
+ * buffers plus the common request/signing/runtime helpers reused by cloud
+ * provider backends.
+ */
+
 typedef struct _king_object_store_http_response_t {
     smart_str body;
     smart_str headers;

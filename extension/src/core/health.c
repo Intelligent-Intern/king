@@ -5,9 +5,10 @@
  * AUTHOR:     Jochen Schultz <jschultz@php.net>
  *
  * PURPOSE:
- * Implements king_health(). Returns a PHP array with the current
- * extension status. Used as a build integrity check: if this returns,
- * the .so loaded correctly and the basic extension machinery works.
+ * Implements king_health(). The function still serves as a basic runtime
+ * integrity probe, but it now also exports the current active-runtime
+ * inventory and the current config-override policy gate for the loaded
+ * extension build.
  * =========================================================================
  */
 
@@ -112,10 +113,10 @@ const char *king_get_stubbed_api_summary(void)
  *   [
  *     'status'           => 'ok',
  *     'build'            => 'v1',
- *     'version'          => '1.0.0',
+ *     'version'          => PHP_KING_VERSION,
  *     'php_version'      => '8.4.x',
  *     'pid'              => 12345,
- *     'config_override'  => false,   // king_globals.is_userland_override_allowed
+ *     'config_override_allowed' => false, // king_globals.is_userland_override_allowed
  *     'active_runtime_count' => 30,
  *     'active_runtimes'  => [...],
  *     'stubbed_api_group_count' => 0,

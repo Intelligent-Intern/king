@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/iibin/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the IIBIN config family. This file
+ * validates the narrow `King\\Config` subset that can tune schema-depth,
+ * interning, shared-memory buffering, and buffer-size limits on the live
+ * `king_iibin_config` snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/iibin/config.h"
 #include "include/config/iibin/base_layer.h"
 #include "include/king_globals.h"

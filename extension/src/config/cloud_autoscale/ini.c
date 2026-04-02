@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/cloud_autoscale/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the cloud-autoscale config
+ * family. This file exposes the system-level provider, threshold, budget,
+ * cooldown, and instance-shape directives and keeps the shared
+ * `king_cloud_autoscale_config` snapshot aligned with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/cloud_autoscale/ini.h"
 #include "include/config/cloud_autoscale/base_layer.h"
 

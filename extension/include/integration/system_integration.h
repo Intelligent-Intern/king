@@ -1,9 +1,14 @@
 /*
- * include/integration/system_integration.h - System integration API
- * ==================================================================
+ * include/integration/system_integration.h - System integration runtime API
+ * ========================================================================
  *
- * This header exposes the types and functions used to coordinate the
- * extension's component subsystems.
+ * This header exposes the lightweight local system-integration runtime used
+ * by `king_system_init()`, `king_system_process_request()`,
+ * `king_system_restart_component()`, `king_system_shutdown()`, and the local
+ * status surface. The richer fixed-inventory inspection helpers for
+ * `king_system_get_component_info()`, `king_system_health_check()`,
+ * `king_system_get_metrics()`, and `king_system_get_performance_report()`
+ * are implemented separately in `src/core/introspection/system.inc`.
  */
 
 #ifndef KING_SYSTEM_INTEGRATION_H
@@ -13,7 +18,7 @@
 #include <stdint.h>
 #include <time.h>
 
-/* Component headers used by the system layer. */
+/* Component headers referenced by the system runtime / introspection layer. */
 #include "include/config/config.h"
 #include "include/semantic_dns/semantic_dns.h"
 #include "include/object_store/object_store.h"
@@ -58,8 +63,8 @@ typedef struct _king_component_info_t {
     uint64_t requests_handled;
     uint64_t errors_encountered;
     double avg_response_time_ms;
-    zval dependencies; /* PHP array of component dependencies */
-    zval configuration; /* PHP array of component configuration */
+    zval dependencies; /* Reserved PHP array; currently initialized empty. */
+    zval configuration; /* Reserved PHP array; currently initialized empty. */
 } king_component_info_t;
 
 typedef struct _king_system_config_t {
@@ -74,9 +79,10 @@ typedef struct _king_system_config_t {
     zend_bool enable_performance_monitoring;
     zend_bool enable_auto_scaling;
     zend_bool enable_circuit_breaker;
-    zval global_configuration; /* PHP array of global settings */
+    zval global_configuration; /* Reserved bootstrap settings array. */
 } king_system_config_t;
 
+/* Legacy richer health aggregate retained for the local integration runtime. */
 typedef struct _king_system_health_t {
     zend_bool overall_healthy;
     uint32_t healthy_components;
@@ -92,31 +98,31 @@ typedef struct _king_system_health_t {
 
 /* --- PHP Function Prototypes --- */
 
-/* Initializes all system components. */
+/* Initializes the local system-integration runtime and component registry. */
 PHP_FUNCTION(king_system_init);
 
-/* Shuts down all system components. */
+/* Shuts down the local system-integration runtime and component registry. */
 PHP_FUNCTION(king_system_shutdown);
 
-/* Returns overall system status. */
+/* Returns local runtime status for the active component registry. */
 PHP_FUNCTION(king_system_get_status);
 
-/* Performs a health check across components. */
+/* Returns the compact build/policy health snapshot from the introspection layer. */
 PHP_FUNCTION(king_system_health_check);
 
-/* Returns aggregated system metrics. */
+/* Returns the compact local resource-metrics snapshot from the introspection layer. */
 PHP_FUNCTION(king_system_get_metrics);
 
-/* Processes a request through the integrated system. */
+/* Performs the current lightweight request/liveness pass through the active runtime. */
 PHP_FUNCTION(king_system_process_request);
 
-/* Returns information about one component. */
+/* Returns the stable fixed component descriptor from the introspection layer. */
 PHP_FUNCTION(king_system_get_component_info);
 
-/* Restarts one component. */
+/* Marks one local component for the current restart/drain transition path. */
 PHP_FUNCTION(king_system_restart_component);
 
-/* Returns a performance report. */
+/* Returns the compact local performance snapshot from the introspection layer. */
 PHP_FUNCTION(king_system_get_performance_report);
 
 /* --- Internal C API --- */
@@ -129,17 +135,7 @@ king_component_info_t* king_system_get_component(king_component_type_t type);
 int king_system_check_component_health(king_component_type_t type);
 int king_system_check_all_components_health(void);
 int king_system_handle_component_error(king_component_type_t type, const char *error_message);
-int king_system_cross_component_call(king_component_type_t from, king_component_type_t to, const char *method, zval *params, zval *result);
-int king_system_broadcast_event(const char *event_name, zval *event_data);
-king_system_health_t* king_system_get_overall_health(void);
 const char* king_component_type_to_string(king_component_type_t type);
 const char* king_component_status_to_string(king_component_status_t status);
-
-/* --- Integration Utilities --- */
-int king_system_validate_dependencies(void);
-int king_system_setup_cross_component_communication(void);
-int king_system_initialize_monitoring(void);
-int king_system_setup_circuit_breakers(void);
-int king_system_optimize_performance(void);
 
 #endif /* KING_SYSTEM_INTEGRATION_H */

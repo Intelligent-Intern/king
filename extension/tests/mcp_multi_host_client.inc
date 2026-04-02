@@ -1,5 +1,7 @@
 <?php
 
+/* Namespaced client harness for MCP multi-host operation contracts. */
+
 if ($argc < 4) {
     fwrite(STDERR, "usage: mcp_multi_host_client.inc <capture-path> <host> <port>\n");
     exit(1);

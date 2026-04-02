@@ -1,3 +1,15 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/security_and_traffic/index.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Lifecycle entry points for the security and traffic config family. This
+ * file wires together default loading and INI registration during module
+ * init and unregisters the INI surface again during shutdown.
+ * =========================================================================
+ */
+
 #include "include/config/security_and_traffic/index.h"
 #include "include/config/security_and_traffic/default.h"
 #include "include/config/security_and_traffic/ini.h"

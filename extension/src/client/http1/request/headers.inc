@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http1/request/headers.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * HTTP/1 request-header normalization and validation helpers. This slice
+ * enforces token-safe header names, rejects CR/LF injection, applies the
+ * default Host/User-Agent/Accept/Connection headers, and rewrites body-
+ * sensitive headers when redirect handling drops the original request body.
+ * =========================================================================
+ */
+
 static zend_result king_http1_append_request_headers(
     smart_str *request_buffer,
     zval *headers_array,

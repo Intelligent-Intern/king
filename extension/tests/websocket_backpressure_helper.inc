@@ -1,5 +1,7 @@
 <?php
 
+/* Test helper for starting the concurrent WebSocket backpressure harness server. */
+
 function king_websocket_backpressure_start_server(
     int $burstCount = 12,
     int $payloadBytes = 128,
@@ -102,4 +104,3 @@ function king_websocket_backpressure_connect_retry(string $url, ?array $options 
 
     throw new RuntimeException('failed to connect to WebSocket backpressure server: ' . king_get_last_error());
 }
-

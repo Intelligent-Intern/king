@@ -1,3 +1,9 @@
+/*
+ * Schema-validation schema-definition slice: iterates all fields of a schema
+ * definition, tracks duplicate tags, and propagates whether the resulting
+ * schema stays inside the active runtime-supported subset.
+ */
+
 static int king_proto_validate_schema_definition(
     zend_string *schema_name,
     zval *schema_definition,

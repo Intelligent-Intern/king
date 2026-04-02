@@ -15,10 +15,12 @@
 #include "php.h"
 
 /**
- * @brief Validates a readable file path string.
+ * @brief Validates a readable filesystem path string.
  * @details Empty strings are accepted as an unset value. Non-empty paths
- * must point to a readable file. On success the original string is copied
- * into persistent memory and written to `target`.
+ * must resolve to a readable path according to `VCWD_ACCESS(..., R_OK)`;
+ * the current implementation does not distinguish files from directories.
+ * On success the original string is copied into persistent memory and
+ * written to `target`.
  *
  * @param value The zval to validate.
  * @param target Receives the persistent copy on success.

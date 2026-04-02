@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/open_telemetry/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the OpenTelemetry config
+ * family. This file exposes the system-level enablement, exporter,
+ * batching, trace sampler, metrics, and log directives and keeps
+ * `king_open_telemetry_config` aligned with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/open_telemetry/ini.h"
 #include "include/config/open_telemetry/base_layer.h"
 

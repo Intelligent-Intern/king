@@ -1,3 +1,9 @@
+/*
+ * Runtime schema compiler helpers for IIBIN. Validates schema definitions,
+ * builds the runtime field layout and field-name cache, and enforces the
+ * bounded input-key checks used by the active encoding path.
+ */
+
 #include "php_king.h"
 #include "include/iibin/iibin_internal.h"
 

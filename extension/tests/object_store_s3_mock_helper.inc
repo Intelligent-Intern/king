@@ -1,5 +1,7 @@
 <?php
 
+/* Test helper for spawning the local S3-compatible object-store mock server. */
+
 function king_object_store_s3_mock_format_endpoint(string $host, int $port): string
 {
     if (strpos($host, ':') !== false && !preg_match('/^\[.*\]$/', $host)) {

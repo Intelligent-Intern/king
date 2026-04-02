@@ -1,3 +1,8 @@
+/*
+ * Root proto predicate leafs: expose the small public presence checks for
+ * any proto symbol, schemas specifically, and enums specifically.
+ */
+
 PHP_FUNCTION(king_proto_is_defined)
 {
     zend_string *name;

@@ -1,21 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_readable_file_path.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    Just when I thought I was out, they pull me back in.
- *
- * PURPOSE:
- * This file implements the validation helper for readable file paths.
- *
- * ARCHITECTURE:
- * This function uses the `VCWD_ACCESS` macro, which is PHP's internal,
- * cross-platform way to check file permissions (`access()` syscall on Unix).
- * This ensures that configuration parameters pointing to files (like
- * certificates or keys) are validated at load time, preventing runtime
- * errors due to missing files or incorrect permissions.
- * =========================================================================
+ * Validation helper for readable filesystem paths. Enforces string input and
+ * the current `VCWD_ACCESS(..., R_OK)` readability check used by config paths.
  */
 
 #include "include/validation/config_param/validate_readable_file_path.h"

@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/app_http3_websockets_webtransport/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the app-protocol config family. This
+ * file validates the subset of HTTP/3, Early Hints, WebSocket, and
+ * WebTransport keys that are allowed through the active `King\\Config`
+ * snapshot path and applies them onto `king_app_protocols_config`.
+ * =========================================================================
+ */
+
 #include "include/config/app_http3_websockets_webtransport/config.h"
 #include "include/config/app_http3_websockets_webtransport/base_layer.h"
 #include "include/king_globals.h"

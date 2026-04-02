@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/security_and_traffic/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the security and traffic config family. This
+ * slice seeds the baseline policy-gate, admin-API, rate-limiter, and CORS
+ * defaults before INI and any allowed userland overrides refine the live
+ * security snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/security_and_traffic/default.h"
 #include "include/config/security_and_traffic/base_layer.h"
 

@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/session/object.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * `King\\Session` and `King\\Stream` object surface for the active client
+ * runtime. This file declares arginfo and class method tables, validates
+ * initialized stream/session state, tracks per-stream cancel/body snapshots,
+ * and implements the public OO methods for request dispatch, response
+ * receive, polling, close, stats, ALPN, and early-hints toggling.
+ * =========================================================================
+ */
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_Session___construct, 0, 0, 2)
     ZEND_ARG_TYPE_INFO(0, host, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO(0, port, IS_LONG, 0)

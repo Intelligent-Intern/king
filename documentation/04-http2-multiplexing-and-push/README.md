@@ -50,6 +50,10 @@ because it changes the shape of a response. A reply is no longer always “just
 the thing I asked for.” A session may also carry related pushed material, and
 the client has to represent that honestly.
 
+In the current runtime, push capture is explicit rather than automatic. The
+caller must opt into `capture_push`, and the HTTP/2 config must also allow push
+via `http2.enable_push`.
+
 ## Why Multiplexing Matters In Practice
 
 The easiest way to understand multiplexing is to stop thinking about sockets
@@ -112,7 +116,8 @@ single request may bring along more than one response object.
 
 This matters even if you rarely depend on push in production. The lesson is not
 “push is always good.” The lesson is “a multiplexed protocol can carry more
-state than a one-request view suggests.”
+state than a one-request view suggests,” and the runtime should expose that
+extra state only when the caller explicitly asks for it.
 
 ## Why This Matters In Practice
 

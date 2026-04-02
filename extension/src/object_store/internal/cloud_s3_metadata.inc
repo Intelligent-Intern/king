@@ -1,3 +1,8 @@
+/*
+ * S3 metadata/header slice. Parses bounded HTTP headers and maps object-store
+ * metadata to and from the S3 wire representation.
+ */
+
 static zend_bool king_object_store_http_header_get(
     const smart_str *headers,
     const char *name,

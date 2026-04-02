@@ -7,11 +7,15 @@
 
 /**
  * @file extension/include/server/early_hints.h
- * @brief Server-side HTTP 103 Early Hints support.
+ * @brief Server-side Early Hints normalization and session snapshot support.
  */
 
 /**
- * @brief Queues a 103 Early Hints response.
+ * @brief Normalizes one Early Hints batch onto the active server session.
+ *
+ * The current runtime validates and records the last Early Hints batch on the
+ * session snapshot for the addressed stream. It does not claim a general
+ * on-wire `103` transport path across every server leaf.
  *
  * @param session_resource The current session.
  * @param stream_id The stream to use.

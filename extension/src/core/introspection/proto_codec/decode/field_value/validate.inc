@@ -1,3 +1,9 @@
+/*
+ * Decode field-value validation slice: enforces the extra numeric bounds the
+ * active runtime must honor after raw wire decoding, especially for int32,
+ * uint32, enum, sint32, uint64, and fixed64 materialization into PHP longs.
+ */
+
 static bool king_proto_runtime_decode_field_value_validate(
     const king_proto_runtime_field *field,
     zend_string *schema_name,

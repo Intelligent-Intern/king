@@ -1,3 +1,10 @@
+/*
+ * State payload helpers for Semantic-DNS persistence. Duplicates validated
+ * registry fields into persistent runtime structures, rebuilds the runtime
+ * mother-node/config snapshot, and imports or exports the bounded state array
+ * used by restart, recovery and semantic-mode state sync.
+ */
+
 static zend_string *king_semantic_dns_state_dup_string_field(
     HashTable *source,
     const char *key,

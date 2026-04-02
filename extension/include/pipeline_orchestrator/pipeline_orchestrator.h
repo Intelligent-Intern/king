@@ -2,17 +2,20 @@
  * include/pipeline_orchestrator/pipeline_orchestrator.h - Pipeline orchestrator C API
  * ====================================================================================
  *
- * This header defines the C-side data structures and entry points used by
- * the pipeline orchestrator implementation.
+ * Thin PHP-surface anchor for the pipeline orchestrator entry points.
+ * The active runtime and persisted run-state helpers live in
+ * `orchestrator.h`; this header only keeps the high-level surface grouped
+ * together for extension-facing includes.
  */
 
-#ifndef KING_PIPELINE_ORCHESTRATOR_H
-#define KING_PIPELINE_ORCHESTRATOR_H
+#ifndef KING_PIPELINE_ORCHESTRATOR_SURFACE_H
+#define KING_PIPELINE_ORCHESTRATOR_SURFACE_H
 
 #include <php.h>
 #include "tool_handler_registry.h"
 
-/* --- Pipeline Definition Types --- */
+/* Legacy planning structs kept as schema notes; the active build consumes
+ * PHP arrays directly instead of materializing these C-side shapes. */
 
 typedef struct _king_pipeline_step_def_c {
     char *step_id_or_tool_name;
@@ -32,26 +35,30 @@ typedef struct _king_pipeline_exec_options_c {
     zend_bool fail_fast;
 } king_pipeline_exec_options_c;
 
-/* --- Orchestrator Lifecycle --- */
+/* --- Exported PHP Entry Points --- */
 
-int king_pipeline_orchestrator_init_settings(void);
-
-void king_pipeline_orchestrator_shutdown_settings(void);
-
-/* Configures automatic logging from a PHP array. */
-int king_pipeline_orchestrator_configure_auto_logging_from_php(zval *logger_config_php_array);
-
-/* Registers a tool handler from PHP. */
-int king_pipeline_orchestrator_register_tool_handler_from_php(const char *tool_name, zval *handler_config_php_array);
-
-/* Runs a pipeline definition from PHP. */
+/* Runs one pipeline immediately on the configured backend. */
 PHP_FUNCTION(king_pipeline_orchestrator_run);
 
-/* Registers a tool handler from PHP. */
+/* Queues one pipeline run for the file-worker backend. */
+PHP_FUNCTION(king_pipeline_orchestrator_dispatch);
+
+/* Registers or replaces one persisted tool configuration. */
 PHP_FUNCTION(king_pipeline_orchestrator_register_tool);
 
-/* Configures orchestrator logging from PHP. */
+/* Persists the active orchestrator logging snapshot. */
 PHP_FUNCTION(king_pipeline_orchestrator_configure_logging);
 
+/* Claims and runs the next queued file-worker job. */
+PHP_FUNCTION(king_pipeline_orchestrator_worker_run_next);
 
-#endif /* KING_PIPELINE_ORCHESTRATOR_H */
+/* Resumes one persisted running run on local or remote-peer backends. */
+PHP_FUNCTION(king_pipeline_orchestrator_resume_run);
+
+/* Reads one persisted run snapshot. */
+PHP_FUNCTION(king_pipeline_orchestrator_get_run);
+
+/* Requests cancellation for one persisted file-worker run. */
+PHP_FUNCTION(king_pipeline_orchestrator_cancel_run);
+
+#endif /* KING_PIPELINE_ORCHESTRATOR_SURFACE_H */

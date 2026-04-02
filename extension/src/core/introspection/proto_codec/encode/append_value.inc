@@ -1,3 +1,9 @@
+/*
+ * Encode append-value slice: appends one already-validated runtime field
+ * value to the protobuf buffer, including nested message recursion and the
+ * scalar wire encodings the active runtime supports.
+ */
+
 static bool king_proto_runtime_append_encoded_field_value(
     smart_str *buf,
     const king_proto_runtime_field *field,

@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/smart_dns/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the Smart-DNS config
+ * family. This file exposes the system-level server, TTL, mode,
+ * service-discovery, semantic-mode, live-probe allowlist, and mothernode
+ * directives and keeps `king_smart_dns_config` aligned with validated
+ * updates.
+ * =========================================================================
+ */
+
 #include "include/config/smart_dns/ini.h"
 #include "include/config/smart_dns/base_layer.h"
 

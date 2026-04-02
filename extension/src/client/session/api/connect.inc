@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/session/api/connect.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Public connect/close entry points for the client-session runtime. This
+ * slice validates the `king_connect()` arguments, allocates and initializes
+ * the session state snapshot, applies optional config input, opens the
+ * underlying UDP transport, and exposes the matching `king_close()` leaf.
+ * =========================================================================
+ */
+
 static king_client_session_t *king_client_session_open(
     const char *host,
     size_t host_len,

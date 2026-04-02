@@ -1,11 +1,7 @@
 /*
- * src/pipeline_orchestrator/orchestrator.c - Orchestrator Pipeline Runner
- * =========================================================================
- *
- * This module implements the core execution loop for pipelines.
- * Pipelines consist of sequential steps that currently validate tool presence,
- * snapshot run state, and either execute locally or cross the file-worker
- * backend boundary through the persisted run queue.
+ * Core pipeline-orchestrator runner. Owns the execution loop, run-control and
+ * cancel semantics, remote-peer/file-worker handoff paths, step-level error
+ * classification and the persisted step snapshots used by resume/recovery.
  */
 #include "php_king.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"

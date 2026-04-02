@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http2/request/multi.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Shared HTTP/2 multi-request and server-push state management for the
+ * libcurl-backed client surface. This file owns transfer lifetime, batch
+ * bookkeeping, pushed-stream capture, and the bounded helpers that let the
+ * public multi-request leaf reuse the same response and error semantics as
+ * the one-shot path.
+ * =========================================================================
+ */
+
 static void king_http2_multi_transfer_destroy(king_http2_multi_transfer_t *transfer)
 {
     if (transfer == NULL) {

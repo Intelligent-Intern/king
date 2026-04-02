@@ -1,3 +1,8 @@
+/*
+ * GCS CRUD adapter slice. Bridges bounded object writes, reads, range reads,
+ * removal and listing against the current GCS runtime contract.
+ */
+
 static int king_object_store_gcs_write(
     const char *object_id,
     const void *data,

@@ -1,3 +1,9 @@
+/*
+ * Legacy IIBIN decode implementation helpers. Retains the bounded decode-mode
+ * and primitive wire helpers that back the current runtime codec path and the
+ * decode_as_object materialization rules.
+ */
+
 #include "php_king.h"
 #include "include/iibin/iibin_internal.h"
 

@@ -1,3 +1,8 @@
+/*
+ * Local-fallback slice. Restores or synthesizes local payloads and metadata
+ * when cloud/distributed flows need a fail-closed filesystem fallback.
+ */
+
 static int king_object_store_local_fs_restore_payload_from_backup(
     const char *object_id,
     const void *data,
@@ -260,4 +265,3 @@ static int king_object_store_local_fs_read_fallback_from_cloud_backup_to_stream(
     unlink(temp_path);
     return rc;
 }
-

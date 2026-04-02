@@ -1,16 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_string_from_allowlist.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    ...you stay in Wonderland, and I show you how deep the
- * rabbit hole goes.
- *
- * PURPOSE:
- * This file implements the validation helper for string values that must
- * match one of an allowed set of options.
- * =========================================================================
+ * Validation helper for single string values constrained by an allowlist.
+ * Enforces string input and bounded membership checks against allowed values.
  */
 
 #include "include/validation/config_param/validate_string_from_allowlist.h"

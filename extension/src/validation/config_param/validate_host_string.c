@@ -1,19 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_host_string.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    This is the business we've chosen.
- *
- * PURPOSE:
- * This file implements the validation helper for host strings.
- *
- * ARCHITECTURE:
- * The function performs a character-level validation to ensure that the
- * provided string conforms to the allowed character set for hostnames
- * and IP addresses, preventing invalid input from reaching network layers.
- * =========================================================================
+ * Validation helper for host strings. Enforces string input and the bounded
+ * host-literal checks used by the current transport and control-plane config.
  */
 
 #include "include/validation/config_param/validate_host_string.h"

@@ -1,5 +1,7 @@
 <?php
 
+/* Local S3-compatible mock server for object-store cloud and backup contracts. */
+
 $capturePath = (string) ($argv[1] ?? '');
 $stateDirectory = (string) ($argv[2] ?? '');
 $port = (int) ($argv[3] ?? 0);

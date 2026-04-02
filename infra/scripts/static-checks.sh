@@ -23,8 +23,9 @@ for script in infra/scripts/*.sh; do
 done
 
 echo "Checking GitHub Actions workflow syntax..."
-ruby -e 'require "yaml"; YAML.load_file(ARGV[0])' .github/workflows/ci.yml
-ruby -e 'require "yaml"; YAML.load_file(ARGV[0])' .github/workflows/docker.yml
+for workflow in .github/workflows/*.yml; do
+    ruby -e 'require "yaml"; YAML.load_file(ARGV[0])' "${workflow}"
+done
 
 echo "Checking extension include layout..."
 infra/scripts/check-include-layout.sh

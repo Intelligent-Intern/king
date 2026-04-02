@@ -7,20 +7,21 @@
 
 /**
  * @file extension/include/server/http2.h
- * @brief HTTP/2 server entry point.
+ * @brief HTTP/2 local server leaves.
  */
 
 /**
- * @brief Starts an HTTP/2 server listener.
- *
- * @param host_str The host address or IP to bind.
- * @param host_len The length of the `host_str`.
- * @param port The port to bind.
- * @param config_resource The `King\Config` resource for the listener.
- * @param request_handler_callable The PHP callback that handles requests.
- * @return TRUE on success, FALSE on failure.
+ * @brief Runs the local HTTP/2-style single-dispatch server leaf.
  */
 PHP_FUNCTION(king_http2_server_listen);
+
+/**
+ * @brief Runs the on-wire one-shot h2c leaf.
+ *
+ * Accepts one real HTTP/2 connection, reads one request, waits for the full
+ * DATA body, sends one response plus `GOAWAY`, drains the remaining protocol
+ * tail, and then closes the connection.
+ */
 PHP_FUNCTION(king_http2_server_listen_once);
 
 #endif // KING_SERVER_HTTP2_H

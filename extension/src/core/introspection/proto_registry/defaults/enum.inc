@@ -1,3 +1,9 @@
+/*
+ * Proto-registry default enum slice: resolves enum member names to runtime
+ * numeric values for encoding and persists enum defaults into the normalized
+ * int32-backed runtime default representation.
+ */
+
 static bool king_proto_runtime_resolve_enum_value(
     const king_proto_runtime_field *field,
     zval *value,

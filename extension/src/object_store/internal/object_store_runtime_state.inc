@@ -1,3 +1,8 @@
+/*
+ * Shared runtime-state helpers for the object store. Covers integrity checks,
+ * metadata-cache state and the small bounded helpers reused across backends.
+ */
+
 static zend_bool king_object_store_verify_integrity_buffer(
     const void *data,
     size_t data_size,

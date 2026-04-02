@@ -1,5 +1,7 @@
 <?php
 
+/* Harness server that speaks plain TCP to exercise TLS-mismatch client failures. */
+
 $port = (int) ($argv[1] ?? 0);
 $server = stream_socket_server("tcp://127.0.0.1:$port", $errno, $errstr);
 if ($server === false) {

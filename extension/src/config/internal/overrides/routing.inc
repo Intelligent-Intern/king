@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/internal/overrides/routing.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Override-key routing and normalization for `King\\Config`. This file
+ * recognizes the supported namespaced and legacy flat runtime keys, maps
+ * them onto the owning config family, and produces the normalized key names
+ * consumed by duplicate detection and per-family override application.
+ * =========================================================================
+ */
+
 static zend_bool king_config_is_known_quic_flat_key(zend_string *key)
 {
     static const char *keys[] = {

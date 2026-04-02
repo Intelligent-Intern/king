@@ -1,5 +1,7 @@
 <?php
 
+/* Shared helper utilities for HTTP/3 test peers and harness processes. */
+
 function king_http3_parse_socket_name(string $socketName): array
 {
     if (preg_match('/^\[(.+)\]:(\d+)$/', $socketName, $matches) === 1) {

@@ -1,15 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_comma_separated_numeric_string.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    You've been living in a dream world, Neo.
- *
- * PURPOSE:
- * This file implements the validation helper for comma-separated numeric
- * strings.
- * =========================================================================
+ * Validation helper for comma-separated numeric strings. Enforces string input
+ * and keeps the bounded numeric-token validation used by config parsing.
  */
 
 #include "include/validation/config_param/validate_comma_separated_numeric_string.h"

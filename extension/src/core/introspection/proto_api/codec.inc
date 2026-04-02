@@ -1,3 +1,8 @@
+/*
+ * Root proto codec leafs: expose the public schema-bound encode/decode
+ * surface and delegate the real runtime work to the active IIBIN codec.
+ */
+
 PHP_FUNCTION(king_proto_encode)
 {
     zend_string *schema_name;

@@ -5,8 +5,13 @@
  * AUTHOR:     Jochen Schultz <jschultz@php.net>
  *
  * PURPOSE:
- * This header file declares the public C-API for applying runtime
- * configuration changes from PHP userland to the application protocols module.
+ * Declares the module-local helper for applying userland-shaped application
+ * protocol overrides to the live app-protocol config state.
+ *
+ * In the current build, the main `King\Config` snapshot pipeline does not
+ * route through a dedicated `*_apply_userland_config_to()` variant for this
+ * module, so this header describes the direct module helper rather than a
+ * generic config-snapshot entry point.
  * =========================================================================
  */
 
@@ -16,7 +21,7 @@
 #include "php.h"
 
 /**
- * @brief Applies runtime configuration settings from a PHP array.
+ * @brief Applies application-protocol settings from a PHP array.
  * @param config_arr A zval pointer to a PHP array containing the key-value
  * pairs of the configuration to apply.
  * @return `SUCCESS` if all settings were successfully validated and applied,

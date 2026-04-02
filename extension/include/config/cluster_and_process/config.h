@@ -5,15 +5,15 @@
  * AUTHOR:     Jochen Schultz <jschultz@php.net>
  *
  * PURPOSE:
- * This header file declares the public C-API for applying runtime
- * configuration changes from PHP userland to the `cluster_and_process`
- * module.
+ * Declares the module-local helper for applying cluster/process overrides to
+ * the live cluster config state.
  *
  * ARCHITECTURE:
- * The function declared here is the single entry point for all runtime
- * configuration modifications for this module, originating from either a
- * `King\Config` object or the Admin API. It encapsulates the process of
- * checking permissions, validating input, and applying settings.
+ * In the current build, the main `King\Config` snapshot pipeline does not
+ * route through a dedicated `cluster_and_process` `*_apply_userland_config_to()`
+ * helper, and this header is not a generic Admin-API entry point. It exposes
+ * the direct module helper that validates and applies userland-shaped updates
+ * onto the module-global runtime config.
  * =========================================================================
  */
 
@@ -23,13 +23,10 @@
 #include "php.h"
 
 /**
- * @brief Applies runtime configuration settings from a PHP array.
- * @details This is a high-level function called at runtime. It performs:
- * 1. Checks the global `is_userland_override_allowed` flag.
- * 2. Iterates through the provided `config_arr`.
- * 3. For each key, it retrieves the value and passes it to a dedicated,
- * robust validation function from the central validation directory.
- * 4. Only if validation succeeds is the new value applied.
+ * @brief Applies cluster/process settings from a PHP array.
+ * @details This helper checks userland-override policy, validates the supplied
+ * values, and writes successful updates into the module-global
+ * `king_cluster_config` state.
  *
  * @param config_arr A zval pointer to a PHP array containing the key-value
  * pairs of the configuration to apply.

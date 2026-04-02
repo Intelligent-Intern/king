@@ -16,8 +16,9 @@
 
 /**
  * @brief Validates a comma-separated string of numeric values.
- * @details On success the original string is copied into persistent memory
- * and written to `target`.
+ * @details Tokens are trimmed before validation. Empty tokens are currently
+ * accepted after trimming. On success the original string is copied into
+ * persistent memory and written to `target`.
  *
  * @param value The zval to validate.
  * @param target Receives the persistent copy on success.

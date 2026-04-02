@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http2/request/headers.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * HTTP/2 request-header normalization for the libcurl-backed client path.
+ * This slice rejects userland pseudo-headers and HTTP/1-only hop-by-hop
+ * fields, lowercases and validates header names, and injects the default
+ * `user-agent`, `accept`, and `content-length` headers expected by the
+ * active one-shot and multi-request leaves.
+ * =========================================================================
+ */
+
 static zend_result king_http2_append_header_line(
     struct curl_slist **request_headers,
     const char *header_name,

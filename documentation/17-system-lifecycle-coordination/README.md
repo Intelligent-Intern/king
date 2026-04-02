@@ -37,10 +37,13 @@ instead of collapsing them into one vague status blob.
 `king_system_get_component_info()` lets you inspect one named subsystem.
 
 `king_system_process_request()` sends a normalized request through the
-coordinated runtime instead of directly through one low-level API.
+coordinated runtime instead of directly through one low-level API. In the
+current build this is a bool success/failure pass through the integrated
+component slice, not yet a full normalized response envelope.
 
 `king_system_restart_component()` gives you a controlled in-process restart path
-for one named component.
+for one named component. In the current build that restart path is a local
+component-state cycle rather than a deep subsystem-specific hot restart.
 
 ## Why These Functions Exist At All
 
@@ -111,10 +114,10 @@ in memory before you go deeper.
 `king_system_health_check()` is the next layer up. It is not a substitute for
 `king_health()`. It is a different question.
 
-The system-health call speaks for the active coordinated runtime. It answers
-whether that integrated runtime currently considers itself healthy overall, and
-it reports the same build and version context so operators do not lose track of
-which process they are asking.
+The system-health call speaks for the active coordinated runtime, but today it
+is still a deliberately small answer. It reports overall health as a stable
+top-level boolean together with build, version, and config-override policy
+context, rather than exposing the full component graph there.
 
 This separation matters because a process can load the extension correctly and
 still have a degraded coordinated runtime. For example, the module might be
@@ -153,17 +156,19 @@ Many runtimes compress everything into one status call. King keeps three
 separate views because they answer three different questions.
 
 `king_system_get_status()` returns a coordinated system snapshot. In the current
-public contract that includes `system_info`, `configuration`, and
-`autoscaling` data. This is the best first answer to "what does the runtime
-think is active right now?"
+public build that snapshot is centered on lifecycle state:
+`initialized`, `component_count`, per-component status entries, readiness and
+draining counts, and the configured health-check interval. This is the best
+first answer to "what does the runtime think is active right now?"
 
 `king_system_get_metrics()` returns resource-oriented numbers. The stable public
 shape includes current memory usage, peak memory usage, and the collection
 timestamp.
 
 `king_system_get_performance_report()` is more interpretive. It returns a small
-performance overview, per-component performance notes, recommendations, and the
-time the report was generated.
+performance overview plus stable placeholders for component performance notes
+and recommendations. In the current build those deeper sections stay empty
+until the richer system-orchestration runtime is wired in.
 
 ```mermaid
 flowchart LR
@@ -186,6 +191,9 @@ The accepted names mirror the coordinated component inventory, including
 
 The returned descriptor includes the component name, build, version,
 implementation string, configuration snapshot, and the generation timestamp.
+In the current build this is a stable fixed inventory keyed by archived
+component names, with config-backed or local-runtime descriptors rather than a
+fully dynamic component registry.
 
 This is the call you use when you need a precise answer such as:
 
@@ -202,7 +210,8 @@ to use the integrated runtime as a platform surface instead of talking directly
 to one transport helper or one subsystem helper.
 
 The input is a normalized request array. The runtime processes that request
-through the active integrated path and returns a normalized result array.
+through the active integrated path and currently returns a success boolean while
+updating integrated component request counters.
 
 This is especially useful for edge-style or control-plane-style processes where
 the point is not only to perform one feature call. The point is to send work
@@ -240,8 +249,10 @@ local control-plane slice, or reload one piece of coordinated runtime state
 without immediately tearing down every active component in the process.
 
 This function is not magic. It does not promise that every failure can be fixed
-in place. It promises something more useful: restart is an explicit supported
-operation, not an improvised side effect.
+in place. In the current build it marks the named component as
+`shutting_down`, lets the local lifecycle transition logic advance it back
+toward `running`, and keeps that cycle explicit instead of leaving restart as an
+improvised side effect.
 
 ```mermaid
 sequenceDiagram
@@ -293,14 +304,14 @@ var_dump(king_system_get_metrics());
 var_dump(king_system_get_performance_report());
 var_dump(king_system_get_component_info('telemetry'));
 
-$result = king_system_process_request([
+$ok = king_system_process_request([
     'method' => 'GET',
     'path' => '/status',
     'headers' => ['accept' => 'application/json'],
     'body' => '',
 ]);
 
-var_dump($result);
+var_dump($ok);
 var_dump(king_system_restart_component('telemetry'));
 var_dump(king_system_shutdown());
 ```
