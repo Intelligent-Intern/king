@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Normalize quota and throttling failures across the public object-store surface.
+- Validate quota and rate-limit behavior across resumable upload recovery.
 
 ## Active Executable Items
 
@@ -47,7 +47,7 @@
 6. [x] Classify provider quota-limit failures across real cloud backends.
    done when: real quota and exhaustion signals stay distinct from generic transport or credential failures across the active cloud adapters.
 
-7. [ ] Normalize quota and throttling failures across the public object-store surface.
+7. [x] Normalize quota and throttling failures across the public object-store surface.
    done when: reads, writes, deletes, and upload-session paths expose the same typed quota and backoff-worthy throttling story across `cloud_s3`, `cloud_gcs`, and `cloud_azure` instead of provider-specific string archaeology.
 
 8. [ ] Validate quota and rate-limit behavior across resumable upload recovery.

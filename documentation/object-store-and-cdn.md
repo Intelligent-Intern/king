@@ -699,6 +699,12 @@ stable instead of adapter-specific guesswork:
 - real backend execution faults such as root outages, rejected credentials,
   endpoint-connect failures, and throttling surface as
   `King\SystemException`
+- when a real cloud primary reports throttling, the public CRUD and
+  upload-session leaves prefix the preserved backend detail with
+  `Object-store primary backend throttled the operation; retry with backoff.`
+- when a real cloud primary reports exhausted quota, the same public leaves
+  prefix the preserved backend detail with
+  `Object-store primary backend rejected the operation because the configured endpoint reported exhausted quota.`
 
 That means the caller no longer has to reverse-engineer a backend-specific HTTP
 status or local errno string to tell "the object is absent" apart from
