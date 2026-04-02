@@ -22,6 +22,9 @@ function king_server_admin_api_create_tls_fixture(): array
         'client_key' => $dir . '/client.key',
         'client_csr' => $dir . '/client.csr',
         'client_cert' => $dir . '/client.pem',
+        'rogue_client_key' => $dir . '/rogue-client.key',
+        'rogue_client_csr' => $dir . '/rogue-client.csr',
+        'rogue_client_cert' => $dir . '/rogue-client.pem',
         'server_ext' => $dir . '/server.ext',
         'client_ext' => $dir . '/client.ext',
     ];
@@ -88,6 +91,20 @@ function king_server_admin_api_create_tls_fixture(): array
             escapeshellarg($fixture['client_cert']),
             escapeshellarg($fixture['client_ext'])
         ),
+        sprintf('openssl genrsa -out %s 2048', escapeshellarg($fixture['rogue_client_key'])),
+        sprintf(
+            'openssl req -new -key %s -out %s -subj %s 2>/dev/null',
+            escapeshellarg($fixture['rogue_client_key']),
+            escapeshellarg($fixture['rogue_client_csr']),
+            escapeshellarg('/CN=KingAdminRogue')
+        ),
+        sprintf(
+            'openssl x509 -req -in %s -signkey %s -out %s -sha256 -days 1 -extfile %s 2>/dev/null',
+            escapeshellarg($fixture['rogue_client_csr']),
+            escapeshellarg($fixture['rogue_client_key']),
+            escapeshellarg($fixture['rogue_client_cert']),
+            escapeshellarg($fixture['client_ext'])
+        ),
     ];
 
     foreach ($commands as $command) {
@@ -107,6 +124,9 @@ function king_server_admin_api_cleanup_tls_fixture(array $fixture): void
         'client_cert',
         'client_csr',
         'client_key',
+        'rogue_client_cert',
+        'rogue_client_csr',
+        'rogue_client_key',
         'reload_cert',
         'reload_csr',
         'reload_key',
@@ -218,6 +238,20 @@ function king_server_admin_api_connect_retry(
     bool $withClientCert = true,
     int $timeoutMs = 3000
 ) {
+    return king_server_admin_api_connect_retry_with_profile(
+        $port,
+        $fixture,
+        $withClientCert ? 'trusted' : 'none',
+        $timeoutMs
+    );
+}
+
+function king_server_admin_api_connect_retry_with_profile(
+    int $port,
+    array $fixture,
+    string $clientProfile = 'trusted',
+    int $timeoutMs = 3000
+) {
     $deadline = microtime(true) + ($timeoutMs / 1000);
     $errstr = 'connection failed';
 
@@ -226,11 +260,22 @@ function king_server_admin_api_connect_retry(
             'cafile' => $fixture['ca_cert'],
             'verify_peer' => true,
             'verify_peer_name' => false,
-            'allow_self_signed' => true,
+            'allow_self_signed' => false,
         ];
-        if ($withClientCert) {
-            $sslOptions['local_cert'] = $fixture['client_cert'];
-            $sslOptions['local_pk'] = $fixture['client_key'];
+
+        switch ($clientProfile) {
+            case 'trusted':
+                $sslOptions['local_cert'] = $fixture['client_cert'];
+                $sslOptions['local_pk'] = $fixture['client_key'];
+                break;
+            case 'rogue_self_signed':
+                $sslOptions['local_cert'] = $fixture['rogue_client_cert'];
+                $sslOptions['local_pk'] = $fixture['rogue_client_key'];
+                break;
+            case 'none':
+                break;
+            default:
+                throw new RuntimeException('unknown admin API client profile');
         }
 
         $client = @stream_socket_client(
