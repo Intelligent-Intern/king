@@ -21,10 +21,12 @@ policy needed by the measured runtime slices.
   `king_proto_define_schema()` once, then repeated `king_proto_encode()` / `king_proto_decode()`
 - `object_store`
   `king_object_store_init()` once, then repeated put/get/cache/delete cycles
+  on a benchmark temp root that prefers tmpfs when available
 - `semantic_dns`
   one real `king_semantic_dns_init()` / `king_semantic_dns_start_server()`
-  bootstrap per sample, then repeated `king_semantic_dns_register_service()`,
-  discovery, route, and topology reads in steady state
+  bootstrap per sample in local routing mode, then repeated
+  `king_semantic_dns_register_service()`, discovery, route, and topology reads
+  in steady state
 
 ## Baselines
 

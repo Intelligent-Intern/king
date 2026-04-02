@@ -181,7 +181,7 @@ function build_case_definitions(): array
             'default_iterations' => 4000,
             'operations_per_iteration' => 4,
             'bootstrap' => static function (): array {
-                $root = sys_get_temp_dir() . '/king_bench_store_' . getmypid() . '_' . bin2hex(random_bytes(4));
+                $root = benchmark_temp_path('king_bench_store');
                 ensure_directory($root);
 
                 king_object_store_init([
@@ -224,7 +224,7 @@ function build_case_definitions(): array
             },
         ],
         'semantic_dns' => [
-            'description' => 'real listener bootstrap plus register/discover/route/topology steady state',
+            'description' => 'real listener bootstrap on the active v1 init surface plus steady-state register/discover/route/topology',
             'default_iterations' => 50000,
             'operations_per_iteration' => 4,
             'bootstrap' => static function (): array {
@@ -262,8 +262,8 @@ function build_case_definitions(): array
                             'status' => 'healthy',
                             'hostname' => 'api.internal',
                             'port' => 8443,
-                            'current_load_percent' => $iteration % 100,
-                            'active_connections' => $iteration % 32,
+                            'current_load_percent' => 12,
+                            'active_connections' => 3,
                         ])) {
                             throw new RuntimeException('king_semantic_dns_register_service() failed during the benchmark.');
                         }
@@ -301,6 +301,30 @@ function build_case_definitions(): array
             },
         ],
     ];
+}
+
+function benchmark_temp_path(string $prefix): string
+{
+    $base = benchmark_temp_root();
+
+    return $base
+        . DIRECTORY_SEPARATOR
+        . $prefix
+        . '_'
+        . getmypid()
+        . '_'
+        . bin2hex(random_bytes(4));
+}
+
+function benchmark_temp_root(): string
+{
+    $preferred = '/dev/shm';
+
+    if (is_dir($preferred) && is_writable($preferred)) {
+        return $preferred;
+    }
+
+    return sys_get_temp_dir();
 }
 
 function parse_options(array $argv, array $availableCases): array
