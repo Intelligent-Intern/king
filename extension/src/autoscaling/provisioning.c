@@ -1179,6 +1179,31 @@ static zend_result king_autoscaling_http_request(
     return SUCCESS;
 }
 
+static const char *king_autoscaling_effective_server_name_prefix(void)
+{
+    const char *prefix = king_autoscaling_runtime.config.server_name_prefix;
+
+    if (prefix != NULL && prefix[0] != '\0') {
+        return prefix;
+    }
+
+    return "king-node";
+}
+
+static zend_bool king_autoscaling_provider_name_matches_prefix(const char *name)
+{
+    const char *prefix;
+    size_t prefix_length;
+
+    if (name == NULL || name[0] == '\0') {
+        return 0;
+    }
+
+    prefix = king_autoscaling_effective_server_name_prefix();
+    prefix_length = strlen(prefix);
+    return prefix_length > 0 && strncmp(name, prefix, prefix_length) == 0;
+}
+
 static const char *king_autoscaling_json_find_server_section(const char *json)
 {
     const char *server = strstr(json, "\"server\"");
@@ -1265,6 +1290,171 @@ static zend_result king_autoscaling_json_extract_string(
 
     memcpy(buffer, start, length);
     buffer[length] = '\0';
+    return SUCCESS;
+}
+
+static void king_autoscaling_set_reconcile_warning(const char *message)
+{
+    snprintf(
+        king_autoscaling_runtime.last_warning,
+        sizeof(king_autoscaling_runtime.last_warning),
+        "%s",
+        message != NULL ? message : ""
+    );
+}
+
+int king_autoscaling_provider_reconcile_inventory(void)
+{
+    char url[512];
+    long http_code = 0;
+    smart_str response = {0};
+    zval decoded = {0};
+    zval *servers = NULL;
+    zval *entry;
+    const char *token = king_autoscaling_runtime.config.hetzner_api_token;
+    zend_bool recovered_any = 0;
+    time_t recovered_at = time(NULL);
+
+    if (
+        king_autoscaling_runtime.provider_kind != KING_AUTOSCALING_PROVIDER_HETZNER
+        || !king_autoscaling_runtime.state_load_incomplete
+    ) {
+        return SUCCESS;
+    }
+
+    if (
+        token == NULL || token[0] == '\0'
+        || king_autoscaling_runtime.config.api_endpoint == NULL
+        || king_autoscaling_runtime.config.api_endpoint[0] == '\0'
+    ) {
+        return SUCCESS;
+    }
+
+    snprintf(
+        url,
+        sizeof(url),
+        "%s/servers",
+        king_autoscaling_runtime.config.api_endpoint
+    );
+
+    if (king_autoscaling_http_request("GET", url, token, NULL, &http_code, &response) != SUCCESS) {
+        char warning[256];
+
+        snprintf(
+            warning,
+            sizeof(warning),
+            "Hetzner inventory reconcile skipped after partial state reload: %s",
+            king_autoscaling_runtime.last_error
+        );
+        king_autoscaling_set_reconcile_warning(warning);
+        king_autoscaling_runtime.last_error[0] = '\0';
+        smart_str_free(&response);
+        return SUCCESS;
+    }
+
+    if (http_code < 200 || http_code >= 300 || response.s == NULL) {
+        char warning[256];
+
+        snprintf(
+            warning,
+            sizeof(warning),
+            "Hetzner inventory reconcile skipped after partial state reload: list servers returned HTTP %ld.",
+            http_code
+        );
+        king_autoscaling_set_reconcile_warning(warning);
+        smart_str_free(&response);
+        return SUCCESS;
+    }
+
+    if (php_json_decode(&decoded, ZSTR_VAL(response.s), ZSTR_LEN(response.s), 1, 128) != SUCCESS) {
+        king_autoscaling_set_reconcile_warning(
+            "Hetzner inventory reconcile skipped after partial state reload: list servers returned invalid JSON."
+        );
+        smart_str_free(&response);
+        return SUCCESS;
+    }
+
+    smart_str_free(&response);
+
+    if (Z_TYPE(decoded) != IS_ARRAY) {
+        zval_ptr_dtor(&decoded);
+        king_autoscaling_set_reconcile_warning(
+            "Hetzner inventory reconcile skipped after partial state reload: list servers returned a malformed payload."
+        );
+        return SUCCESS;
+    }
+
+    servers = zend_hash_str_find(Z_ARRVAL(decoded), "servers", sizeof("servers") - 1);
+    if (servers == NULL || Z_TYPE_P(servers) != IS_ARRAY) {
+        zval_ptr_dtor(&decoded);
+        king_autoscaling_set_reconcile_warning(
+            "Hetzner inventory reconcile skipped after partial state reload: list servers did not include a servers array."
+        );
+        return SUCCESS;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(servers), entry) {
+        zval *id_entry;
+        zval *name_entry;
+        zval *status_entry;
+        zend_long server_id;
+
+        if (Z_TYPE_P(entry) != IS_ARRAY) {
+            continue;
+        }
+
+        id_entry = zend_hash_str_find(Z_ARRVAL_P(entry), "id", sizeof("id") - 1);
+        name_entry = zend_hash_str_find(Z_ARRVAL_P(entry), "name", sizeof("name") - 1);
+        status_entry = zend_hash_str_find(Z_ARRVAL_P(entry), "status", sizeof("status") - 1);
+        if (id_entry == NULL || name_entry == NULL) {
+            continue;
+        }
+        if (Z_TYPE_P(name_entry) != IS_STRING) {
+            continue;
+        }
+        if (!king_autoscaling_provider_name_matches_prefix(Z_STRVAL_P(name_entry))) {
+            continue;
+        }
+
+        server_id = zval_get_long(id_entry);
+        if (server_id <= 0 || king_autoscaling_runtime_find_node(server_id) != NULL) {
+            continue;
+        }
+
+        if (king_autoscaling_runtime_append_node(
+            server_id,
+            Z_STRVAL_P(name_entry),
+            status_entry != NULL && Z_TYPE_P(status_entry) == IS_STRING
+                ? Z_STRVAL_P(status_entry)
+                : "running",
+            recovered_at,
+            0
+        ) != SUCCESS) {
+            zval_ptr_dtor(&decoded);
+            return FAILURE;
+        }
+        recovered_any = 1;
+    } ZEND_HASH_FOREACH_END();
+
+    zval_ptr_dtor(&decoded);
+
+    if (recovered_any) {
+        char warning[256];
+
+        king_autoscaling_runtime_sync_instance_count();
+        if (king_autoscaling_runtime_persist_state() != SUCCESS) {
+            return FAILURE;
+        }
+
+        snprintf(
+            warning,
+            sizeof(warning),
+            "Recovered prefix-matched Hetzner nodes from provider inventory after partial state reload."
+        );
+        king_autoscaling_set_reconcile_warning(warning);
+    }
+
+    king_autoscaling_runtime.state_load_incomplete = 0;
     return SUCCESS;
 }
 

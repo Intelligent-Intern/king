@@ -182,6 +182,33 @@ static zend_bool king_object_store_azure_response_is_throttled(
         || strcasecmp(error_code, "OperationTimedOut") == 0;
 }
 
+static zend_bool king_object_store_azure_response_is_quota_exhausted(
+    const king_object_store_http_response_t *response)
+{
+    char error_code[128];
+
+    if (response == NULL) {
+        return 0;
+    }
+
+    if (response->status_code == 507) {
+        return 1;
+    }
+
+    if (response->status_code != 403 && response->status_code != 409) {
+        return 0;
+    }
+
+    if (!king_object_store_s3_response_error_code(response, error_code, sizeof(error_code))) {
+        return 0;
+    }
+
+    return strcasecmp(error_code, "QuotaExceeded") == 0
+        || strcasecmp(error_code, "InsufficientAccountResources") == 0
+        || strcasecmp(error_code, "InsufficientStorage") == 0
+        || strcasecmp(error_code, "ShareSizeQuotaExceeded") == 0;
+}
+
 static void king_object_store_azure_format_response_error(
     const char *method,
     const char *object_id,
@@ -199,6 +226,28 @@ static void king_object_store_azure_format_response_error(
     }
 
     status_code = response == NULL ? 0 : response->status_code;
+
+    if (king_object_store_azure_response_is_quota_exhausted(response)) {
+        if (object_id != NULL && object_id[0] != '\0') {
+            snprintf(
+                error,
+                error_size,
+                "cloud_azure %s for '%s' was rejected because the configured endpoint reported exhausted quota (HTTP %ld).",
+                safe_operation,
+                object_id,
+                status_code
+            );
+        } else {
+            snprintf(
+                error,
+                error_size,
+                "cloud_azure %s was rejected because the configured endpoint reported exhausted quota (HTTP %ld).",
+                safe_operation,
+                status_code
+            );
+        }
+        return;
+    }
 
     if (status_code == 401 || status_code == 403) {
         if (object_id != NULL && object_id[0] != '\0') {

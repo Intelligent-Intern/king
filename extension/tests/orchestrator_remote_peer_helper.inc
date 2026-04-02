@@ -141,3 +141,21 @@ function king_orchestrator_remote_peer_stop(array $server): array
 
     return king_orchestrator_remote_peer_finalize($server);
 }
+
+function king_orchestrator_remote_peer_crash(array $server, int $signal = 9): array
+{
+    if (is_resource($server['process'])) {
+        proc_terminate($server['process'], $signal);
+    }
+
+    $deadline = microtime(true) + 2.0;
+    while (microtime(true) < $deadline) {
+        $status = proc_get_status($server['process']);
+        if (!is_array($status) || !$status['running']) {
+            break;
+        }
+        usleep(10000);
+    }
+
+    return king_orchestrator_remote_peer_finalize($server);
+}

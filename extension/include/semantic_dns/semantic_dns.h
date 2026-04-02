@@ -3,8 +3,8 @@
  * =================================================================
  *
  * Shared Semantic-DNS types plus the exported PHP and native C entry points
- * for service registration, topology snapshots, local bounded queries, and
- * route selection.
+ * for service registration, topology snapshots, the bounded UDP listener,
+ * local bounded queries, and route selection.
  */
 
 #ifndef KING_SEMANTIC_DNS_H
@@ -113,10 +113,10 @@ typedef struct _king_semantic_dns_config_t {
 /* Initializes the local Semantic-DNS runtime from a PHP config array. */
 PHP_FUNCTION(king_semantic_dns_init);
 
-/* Activates local server state, optional mother-node sync, and probe refresh. */
+/* Activates local server state, optional mother-node sync, probe refresh, and the bounded UDP listener. */
 PHP_FUNCTION(king_semantic_dns_start_server);
 
-/* Processes one bounded local DNS-shaped query against the active runtime. */
+/* Processes one bounded local DNS-shaped query against the active runtime helper surface. */
 PHP_FUNCTION(king_semantic_dns_query);
 
 /* Registers a service record. */

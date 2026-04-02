@@ -106,6 +106,7 @@ typedef struct _king_telemetry_batch_t {
     zval metrics;      /* Array of metric data */
     zval spans;        /* Array of span data */
     zval logs;         /* Array of log data */
+    uint64_t estimated_bytes;
     time_t created_at;
     struct _king_telemetry_batch_t *next;
 } king_telemetry_batch_t;
@@ -149,6 +150,7 @@ PHP_FUNCTION(king_telemetry_get_status);
 
 int king_telemetry_init_system(king_telemetry_config_t *config);
 void king_telemetry_shutdown_system(void);
+void king_telemetry_cleanup_scope_state(void);
 king_trace_context_t* king_telemetry_create_span(const char *operation_name, king_span_kind_t span_kind, const char *parent_span_id);
 int king_telemetry_finish_span(king_trace_context_t *span_context);
 int king_telemetry_record_metric_internal(const char *metric_name, king_metric_type_t metric_type, double value, zval *labels);
@@ -177,6 +179,14 @@ void king_telemetry_append_pending_signals(king_telemetry_batch_t *batch);
 uint32_t king_telemetry_get_pending_span_count(void);
 uint32_t king_telemetry_get_pending_log_count(void);
 uint32_t king_telemetry_get_pending_entry_limit(void);
+uint64_t king_telemetry_get_queue_bytes(void);
+uint64_t king_telemetry_get_pending_bytes(void);
+uint64_t king_telemetry_get_memory_bytes(void);
+uint64_t king_telemetry_get_memory_byte_limit(void);
+uint32_t king_telemetry_get_queue_high_watermark(void);
+uint64_t king_telemetry_get_queue_high_water_bytes(void);
+uint64_t king_telemetry_get_memory_high_water_bytes(void);
+uint32_t king_telemetry_get_retry_requeue_count(void);
 
 /* OTLP export functions */
 int king_telemetry_export_metrics_otlp(zval *metrics);

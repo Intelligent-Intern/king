@@ -26,6 +26,7 @@
 
 HashTable king_semantic_dns_service_registry;
 HashTable king_semantic_dns_mother_node_registry;
+HashTable king_semantic_dns_mother_node_tombstone_registry;
 HashTable king_cdn_cache_registry;
 HashTable king_telemetry_metric_registry;
 

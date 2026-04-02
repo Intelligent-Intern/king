@@ -111,5 +111,10 @@ PHP_FUNCTION(king_semantic_dns_update_service_status)
         king_semantic_dns_state_transaction_end(lock_fd);
     }
 
+    if (state_changed
+        && !king_semantic_dns_listener_snapshot_or_throw("king_semantic_dns_update_service_status")) {
+        RETURN_THROWS();
+    }
+
     RETURN_TRUE;
 }

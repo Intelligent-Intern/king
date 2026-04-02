@@ -386,7 +386,7 @@ metrics are exported, and what sampler policy traces use.
 | `king.otel_exporter_protocol` | `grpc` | Selects the OTLP transport protocol. |
 | `king.otel_exporter_timeout_ms` | `10000` | Sets the exporter request timeout. |
 | `king.otel_exporter_headers` | unset | Supplies static headers added to OTLP export requests. |
-| `king.otel_batch_processor_max_queue_size` | `2048` | Caps the telemetry retry queue size. |
+| `king.otel_batch_processor_max_queue_size` | `2048` | Caps the telemetry retry queue size and the derived in-process telemetry byte budget (`64 KiB` per queue slot). |
 | `king.otel_batch_processor_schedule_delay_ms` | `5000` | Sets the telemetry batch scheduling delay. |
 | `king.otel_traces_sampler_type` | `parent_based_probability` | Selects the trace sampling strategy. |
 | `king.otel_traces_sampler_ratio` | `1.0` | Sets the probabilistic trace sampling ratio. |

@@ -487,6 +487,73 @@ function king_object_store_s3_mock_take_forced_response(array &$options, string 
     return null;
 }
 
+function king_object_store_s3_mock_handle_forced_response(
+    $conn,
+    array &$options,
+    string $method,
+    string $target,
+    string $provider,
+    string $objectsDirectory,
+    string $metadataDirectory,
+    string $objectId,
+    string $body,
+    array $headers
+): bool {
+    global $capture;
+
+    $forcedResponse = king_object_store_s3_mock_take_forced_response($options, $method, $target);
+    if ($forcedResponse === null) {
+        return false;
+    }
+
+    $persistObjectBeforeReply = !empty($forcedResponse['persist_object_before_reply']);
+    $closeConnectionWithoutResponse = !empty($forcedResponse['close_connection_without_response']);
+    $rawResponsePrefix = (string) ($forcedResponse['raw_response_prefix'] ?? '');
+    $status = (int) ($forcedResponse['status'] ?? 503);
+    $reason = (string) ($forcedResponse['reason'] ?? king_object_store_s3_mock_reason_phrase($status));
+    $headersOut = is_array($forcedResponse['headers'] ?? null) ? $forcedResponse['headers'] : [];
+    $bodyOut = (string) ($forcedResponse['body'] ?? '');
+    $errorCode = (string) ($forcedResponse['error_code'] ?? '');
+    $errorMessage = (string) ($forcedResponse['error_message'] ?? 'The object-store endpoint is temporarily throttling requests.');
+
+    if ($persistObjectBeforeReply && $method === 'PUT' && $objectId !== '') {
+        king_object_store_s3_mock_persist_object(
+            $objectsDirectory,
+            $metadataDirectory,
+            $objectId,
+            $body,
+            $headers,
+            $provider
+        );
+        $capture['events'][count($capture['events']) - 1]['persisted_before_forced_reply'] = true;
+    }
+
+    if ($closeConnectionWithoutResponse) {
+        $capture['events'][count($capture['events']) - 1]['forced_disconnect'] = true;
+        if ($rawResponsePrefix !== '') {
+            fwrite($conn, $rawResponsePrefix);
+        }
+        fclose($conn);
+        return true;
+    }
+
+    if ($bodyOut === '' && $errorCode !== '') {
+        $bodyOut = king_object_store_s3_mock_error_body($errorCode, $errorMessage);
+        if (!isset($headersOut['Content-Type'])) {
+            $headersOut['Content-Type'] = 'application/xml';
+        }
+    }
+
+    $capture['events'][count($capture['events']) - 1]['forced_status'] = $status;
+    if ($errorCode !== '') {
+        $capture['events'][count($capture['events']) - 1]['forced_error_code'] = $errorCode;
+    }
+
+    king_object_store_s3_mock_respond($conn, $status, $reason, $headersOut, $bodyOut);
+    fclose($conn);
+    return true;
+}
+
 function king_object_store_s3_mock_error_body(string $code, string $message): string
 {
     return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>"
@@ -630,6 +697,21 @@ while (($conn = @stream_socket_accept($server, 10)) !== false) {
             continue;
         }
 
+        if (king_object_store_s3_mock_handle_forced_response(
+                $conn,
+                $options,
+                $method,
+                $target,
+                'gcs',
+                $objectsDirectory,
+                $metadataDirectory,
+                '',
+                $body,
+                $headers
+            )) {
+            continue;
+        }
+
         if ($method === 'DELETE') {
             king_object_store_s3_mock_recursive_delete($sessionPath);
             king_object_store_s3_mock_recursive_delete($payloadPath);
@@ -711,53 +793,18 @@ while (($conn = @stream_socket_accept($server, 10)) !== false) {
         continue;
     }
 
-    $forcedResponse = king_object_store_s3_mock_take_forced_response($options, $method, $target);
-    if ($forcedResponse !== null) {
-        $persistObjectBeforeReply = !empty($forcedResponse['persist_object_before_reply']);
-        $closeConnectionWithoutResponse = !empty($forcedResponse['close_connection_without_response']);
-        $rawResponsePrefix = (string) ($forcedResponse['raw_response_prefix'] ?? '');
-        $status = (int) ($forcedResponse['status'] ?? 503);
-        $reason = (string) ($forcedResponse['reason'] ?? king_object_store_s3_mock_reason_phrase($status));
-        $headersOut = is_array($forcedResponse['headers'] ?? null) ? $forcedResponse['headers'] : [];
-        $bodyOut = (string) ($forcedResponse['body'] ?? '');
-        $errorCode = (string) ($forcedResponse['error_code'] ?? '');
-        $errorMessage = (string) ($forcedResponse['error_message'] ?? 'The object-store endpoint is temporarily throttling requests.');
-
-        if ($persistObjectBeforeReply && $method === 'PUT' && $objectId !== '') {
-            king_object_store_s3_mock_persist_object(
-                $objectsDirectory,
-                $metadataDirectory,
-                $objectId,
-                $body,
-                $headers,
-                $provider
-            );
-            $capture['events'][count($capture['events']) - 1]['persisted_before_forced_reply'] = true;
-        }
-
-        if ($closeConnectionWithoutResponse) {
-            $capture['events'][count($capture['events']) - 1]['forced_disconnect'] = true;
-            if ($rawResponsePrefix !== '') {
-                fwrite($conn, $rawResponsePrefix);
-            }
-            fclose($conn);
-            continue;
-        }
-
-        if ($bodyOut === '' && $errorCode !== '') {
-            $bodyOut = king_object_store_s3_mock_error_body($errorCode, $errorMessage);
-            if (!isset($headersOut['Content-Type'])) {
-                $headersOut['Content-Type'] = 'application/xml';
-            }
-        }
-
-        $capture['events'][count($capture['events']) - 1]['forced_status'] = $status;
-        if ($errorCode !== '') {
-            $capture['events'][count($capture['events']) - 1]['forced_error_code'] = $errorCode;
-        }
-
-        king_object_store_s3_mock_respond($conn, $status, $reason, $headersOut, $bodyOut);
-        fclose($conn);
+    if (king_object_store_s3_mock_handle_forced_response(
+            $conn,
+            $options,
+            $method,
+            $target,
+            $provider,
+            $objectsDirectory,
+            $metadataDirectory,
+            $objectId,
+            $body,
+            $headers
+        )) {
         continue;
     }
 

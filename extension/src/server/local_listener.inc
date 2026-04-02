@@ -6,6 +6,7 @@
 
 #include "include/server/cors.h"
 #include "include/server/open_telemetry.h"
+#include "include/telemetry/telemetry.h"
 
 static void king_server_local_set_errorf(const char *format, ...)
 {
@@ -310,6 +311,13 @@ static zend_result king_server_local_invoke_handler(
 {
     zend_fcall_info fci;
     zend_fcall_info_cache fcc;
+
+    /*
+     * Each listener-owned request starts a fresh telemetry scope. Explicitly
+     * flushed batches stay queued process-locally; only unfinished span/log
+     * scratch state is discarded here.
+     */
+    king_telemetry_cleanup_scope_state();
 
     if (zend_fcall_info_init(handler, 0, &fci, &fcc, NULL, NULL) != SUCCESS) {
         zend_argument_type_error(4, "must be a valid callback");

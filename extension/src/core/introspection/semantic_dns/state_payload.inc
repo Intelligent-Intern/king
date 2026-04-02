@@ -457,8 +457,10 @@ int king_semantic_dns_export_state_payload(zval *return_value)
 {
     zval services;
     zval mother_nodes;
+    zval mother_node_tombstones;
     zval *service_entry;
     zval *mother_node_entry;
+    zend_string *tombstone_node_id;
 
     if (return_value == NULL || !king_semantic_dns_registry_initialized) {
         return FAILURE;
@@ -467,6 +469,7 @@ int king_semantic_dns_export_state_payload(zval *return_value)
     array_init(return_value);
     array_init(&services);
     array_init(&mother_nodes);
+    array_init(&mother_node_tombstones);
 
     ZEND_HASH_FOREACH_VAL(&king_semantic_dns_service_registry, service_entry) {
         king_semantic_dns_service *service;
@@ -502,8 +505,20 @@ int king_semantic_dns_export_state_payload(zval *return_value)
         add_next_index_zval(&mother_nodes, &exported_mother_node);
     } ZEND_HASH_FOREACH_END();
 
+    ZEND_HASH_FOREACH_STR_KEY(&king_semantic_dns_mother_node_tombstone_registry, tombstone_node_id) {
+        if (tombstone_node_id == NULL) {
+            continue;
+        }
+
+        add_next_index_str(
+            &mother_node_tombstones,
+            king_semantic_dns_copy_request_string(tombstone_node_id)
+        );
+    } ZEND_HASH_FOREACH_END();
+
     add_assoc_zval(return_value, "services", &services);
     add_assoc_zval(return_value, "mother_nodes", &mother_nodes);
+    add_assoc_zval(return_value, "mother_node_tombstones", &mother_node_tombstones);
 
     return SUCCESS;
 }
@@ -512,6 +527,7 @@ int king_semantic_dns_import_state_payload(zval *payload)
 {
     zval *services;
     zval *mother_nodes;
+    zval *mother_node_tombstones;
     zval *entry;
 
     if (
@@ -524,16 +540,23 @@ int king_semantic_dns_import_state_payload(zval *payload)
 
     services = zend_hash_str_find(Z_ARRVAL_P(payload), "services", sizeof("services") - 1);
     mother_nodes = zend_hash_str_find(Z_ARRVAL_P(payload), "mother_nodes", sizeof("mother_nodes") - 1);
+    mother_node_tombstones = zend_hash_str_find(
+        Z_ARRVAL_P(payload),
+        "mother_node_tombstones",
+        sizeof("mother_node_tombstones") - 1
+    );
 
     if (
         (services != NULL && Z_TYPE_P(services) != IS_ARRAY)
         || (mother_nodes != NULL && Z_TYPE_P(mother_nodes) != IS_ARRAY)
+        || (mother_node_tombstones != NULL && Z_TYPE_P(mother_node_tombstones) != IS_ARRAY)
     ) {
         return FAILURE;
     }
 
     zend_hash_clean(&king_semantic_dns_service_registry);
     zend_hash_clean(&king_semantic_dns_mother_node_registry);
+    zend_hash_clean(&king_semantic_dns_mother_node_tombstone_registry);
 
     if (services != NULL) {
         ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(services), entry) {
@@ -567,6 +590,100 @@ int king_semantic_dns_import_state_payload(zval *payload)
         if (king_semantic_dns_import_mother_nodes_into_runtime_config(mother_nodes) != SUCCESS) {
             return FAILURE;
         }
+    }
+
+    if (mother_node_tombstones != NULL) {
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(mother_node_tombstones), entry) {
+            if (entry == NULL || Z_TYPE_P(entry) != IS_STRING || Z_STRLEN_P(entry) == 0) {
+                return FAILURE;
+            }
+
+            king_semantic_dns_mother_node_tombstone_record(Z_STR_P(entry));
+        } ZEND_HASH_FOREACH_END();
+    }
+
+    return SUCCESS;
+}
+
+int king_semantic_dns_merge_missing_state_payload(zval *payload)
+{
+    zval *services;
+    zval *mother_nodes;
+    zval *entry;
+    zend_bool merged_mother_nodes = 0;
+
+    if (
+        payload == NULL
+        || Z_TYPE_P(payload) != IS_ARRAY
+        || !king_semantic_dns_registry_initialized
+    ) {
+        return FAILURE;
+    }
+
+    services = zend_hash_str_find(Z_ARRVAL_P(payload), "services", sizeof("services") - 1);
+    mother_nodes = zend_hash_str_find(Z_ARRVAL_P(payload), "mother_nodes", sizeof("mother_nodes") - 1);
+
+    if (
+        (services != NULL && Z_TYPE_P(services) != IS_ARRAY)
+        || (mother_nodes != NULL && Z_TYPE_P(mother_nodes) != IS_ARRAY)
+    ) {
+        return FAILURE;
+    }
+
+    if (services != NULL) {
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(services), entry) {
+            king_semantic_dns_service *service;
+            zval stored_service;
+
+            service = king_semantic_dns_service_create_from_state_entry(entry);
+            if (service == NULL) {
+                return FAILURE;
+            }
+
+            if (king_semantic_dns_registry_get_service(service->service_id) != NULL) {
+                king_semantic_dns_service_free(service);
+                continue;
+            }
+
+            ZVAL_PTR(&stored_service, service);
+            zend_hash_update(&king_semantic_dns_service_registry, service->service_id, &stored_service);
+        } ZEND_HASH_FOREACH_END();
+    }
+
+    if (mother_nodes != NULL) {
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(mother_nodes), entry) {
+            king_semantic_dns_mother_node *mother_node;
+            zval stored_mother_node;
+
+            mother_node = king_semantic_dns_mother_node_create_from_state_entry(entry);
+            if (mother_node == NULL) {
+                return FAILURE;
+            }
+
+            if (zend_hash_find(&king_semantic_dns_mother_node_registry, mother_node->node_id) != NULL) {
+                king_semantic_dns_mother_node_free(mother_node);
+                continue;
+            }
+
+            if (king_semantic_dns_mother_node_tombstone_exists(mother_node->node_id)) {
+                king_semantic_dns_mother_node_free(mother_node);
+                continue;
+            }
+
+            ZVAL_PTR(&stored_mother_node, mother_node);
+            zend_hash_update(&king_semantic_dns_mother_node_registry, mother_node->node_id, &stored_mother_node);
+            merged_mother_nodes = 1;
+        } ZEND_HASH_FOREACH_END();
+    }
+
+    if (merged_mother_nodes) {
+        if (king_semantic_dns_refresh_runtime_mother_nodes_from_registry() != SUCCESS) {
+            return FAILURE;
+        }
+        king_semantic_dns_runtime.last_discovered_node_count =
+            king_semantic_dns_runtime.config.mother_node_count;
+        king_semantic_dns_runtime.last_synced_node_count =
+            king_semantic_dns_runtime.config.mother_node_count;
     }
 
     return SUCCESS;

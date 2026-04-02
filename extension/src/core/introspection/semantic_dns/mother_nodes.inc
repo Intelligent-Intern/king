@@ -137,6 +137,8 @@ PHP_FUNCTION(king_semantic_dns_register_mother_node)
         use_state_transaction = true;
     }
 
+    king_semantic_dns_mother_node_tombstone_clear(mother_node->node_id);
+
     ZVAL_PTR(&stored_mother_node, mother_node);
     if (zend_hash_update(&king_semantic_dns_mother_node_registry, mother_node->node_id, &stored_mother_node) == NULL) {
         zend_throw_exception_ex(
@@ -163,6 +165,10 @@ PHP_FUNCTION(king_semantic_dns_register_mother_node)
             RETURN_THROWS();
         }
         king_semantic_dns_state_transaction_end(lock_fd);
+    }
+
+    if (!king_semantic_dns_listener_snapshot_or_throw("king_semantic_dns_register_mother_node")) {
+        RETURN_THROWS();
     }
 
     RETURN_TRUE;

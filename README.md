@@ -25,8 +25,8 @@ signals, and cluster-facing workflows in one coherent runtime model.
 
 The current line is alpha. The repo-local baseline is green, the multi-backend
 object-store and control-plane surfaces are real, and the remaining closure
-work is now about narrower hardening, failure-depth, and distributed-operating
-proof rather than placeholder subsystem stories.
+work is now about narrower hardening, distributed-operating proof, and
+multi-node fleet behavior rather than placeholder subsystem stories.
 
 King brings the following into one extension:
 

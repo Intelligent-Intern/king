@@ -41,6 +41,7 @@ typedef struct _king_telemetry_libcurl_api_t {
 
 #define KING_TELEMETRY_HTTP_TIMEOUT_FALLBACK_MS 10000U
 #define KING_TELEMETRY_MAX_RESPONSE_SIZE (1024 * 1024) /* 1 MiB */
+#define KING_TELEMETRY_BYTES_PER_QUEUE_SLOT (64ULL * 1024ULL)
 
 /* Export queue for batched telemetry data */
 king_telemetry_batch_t *king_telemetry_export_queue_head = NULL;
@@ -50,8 +51,24 @@ uint32_t king_telemetry_queue_drop_count = 0;
 uint32_t king_telemetry_pending_drop_count = 0;
 uint32_t king_telemetry_export_success_count = 0;
 uint32_t king_telemetry_export_failure_count = 0;
+static uint64_t king_telemetry_queue_bytes = 0;
+static uint64_t king_telemetry_pending_bytes = 0;
+static uint32_t king_telemetry_queue_high_watermark = 0;
+static uint64_t king_telemetry_queue_high_water_bytes = 0;
+static uint64_t king_telemetry_memory_high_water_bytes = 0;
+static uint32_t king_telemetry_retry_requeue_count = 0;
 
 static king_telemetry_libcurl_api_t king_telemetry_libcurl = {0};
+static void king_telemetry_span_free(king_trace_context_t *span);
+
+static uint64_t king_telemetry_saturated_add_u64(uint64_t left, uint64_t right)
+{
+    if (UINT64_MAX - left < right) {
+        return UINT64_MAX;
+    }
+
+    return left + right;
+}
 
 static void king_telemetry_reset_libcurl_runtime_state(void)
 {
@@ -202,9 +219,89 @@ static uint32_t king_telemetry_runtime_max_queue_size(void)
     return king_telemetry_default_max_queue_size();
 }
 
+static uint64_t king_telemetry_runtime_memory_byte_limit_internal(void)
+{
+    uint64_t queue_slots = (uint64_t) king_telemetry_runtime_max_queue_size();
+
+    if (queue_slots == 0) {
+        queue_slots = (uint64_t) king_telemetry_default_max_queue_size();
+    }
+
+    if (queue_slots > UINT64_MAX / KING_TELEMETRY_BYTES_PER_QUEUE_SLOT) {
+        return UINT64_MAX;
+    }
+
+    return queue_slots * KING_TELEMETRY_BYTES_PER_QUEUE_SLOT;
+}
+
+static uint64_t king_telemetry_current_memory_bytes_internal(void)
+{
+    return king_telemetry_saturated_add_u64(
+        king_telemetry_queue_bytes,
+        king_telemetry_pending_bytes
+    );
+}
+
+static void king_telemetry_note_runtime_watermarks(void)
+{
+    uint64_t current_memory_bytes = king_telemetry_current_memory_bytes_internal();
+
+    if (king_telemetry_queue_size > king_telemetry_queue_high_watermark) {
+        king_telemetry_queue_high_watermark = king_telemetry_queue_size;
+    }
+
+    if (king_telemetry_queue_bytes > king_telemetry_queue_high_water_bytes) {
+        king_telemetry_queue_high_water_bytes = king_telemetry_queue_bytes;
+    }
+
+    if (current_memory_bytes > king_telemetry_memory_high_water_bytes) {
+        king_telemetry_memory_high_water_bytes = current_memory_bytes;
+    }
+}
+
 uint32_t king_telemetry_get_pending_entry_limit(void)
 {
     return king_telemetry_runtime_max_queue_size();
+}
+
+uint64_t king_telemetry_get_queue_bytes(void)
+{
+    return king_telemetry_queue_bytes;
+}
+
+uint64_t king_telemetry_get_pending_bytes(void)
+{
+    return king_telemetry_pending_bytes;
+}
+
+uint64_t king_telemetry_get_memory_bytes(void)
+{
+    return king_telemetry_current_memory_bytes_internal();
+}
+
+uint64_t king_telemetry_get_memory_byte_limit(void)
+{
+    return king_telemetry_runtime_memory_byte_limit_internal();
+}
+
+uint32_t king_telemetry_get_queue_high_watermark(void)
+{
+    return king_telemetry_queue_high_watermark;
+}
+
+uint64_t king_telemetry_get_queue_high_water_bytes(void)
+{
+    return king_telemetry_queue_high_water_bytes;
+}
+
+uint64_t king_telemetry_get_memory_high_water_bytes(void)
+{
+    return king_telemetry_memory_high_water_bytes;
+}
+
+uint32_t king_telemetry_get_retry_requeue_count(void)
+{
+    return king_telemetry_retry_requeue_count;
 }
 
 static void king_telemetry_pending_buffers_ensure(void)
@@ -221,6 +318,7 @@ static void king_telemetry_pending_buffers_ensure(void)
 static void king_telemetry_pending_buffers_destroy(void)
 {
     if (!king_telemetry_pending_buffers_initialized) {
+        king_telemetry_pending_bytes = 0;
         return;
     }
 
@@ -229,6 +327,23 @@ static void king_telemetry_pending_buffers_destroy(void)
     ZVAL_UNDEF(&king_telemetry_pending_spans);
     ZVAL_UNDEF(&king_telemetry_pending_logs);
     king_telemetry_pending_buffers_initialized = false;
+    king_telemetry_pending_bytes = 0;
+}
+
+static void king_telemetry_reset_active_span(void)
+{
+    if (king_current_span == NULL) {
+        return;
+    }
+
+    king_telemetry_span_free(king_current_span);
+    king_current_span = NULL;
+}
+
+void king_telemetry_cleanup_scope_state(void)
+{
+    king_telemetry_reset_active_span();
+    king_telemetry_pending_buffers_destroy();
 }
 
 static zend_bool king_telemetry_buffer_has_entries(zval *buffer)
@@ -270,9 +385,31 @@ static zend_bool king_telemetry_capture_enabled(void)
     return king_telemetry_system_initialized && king_telemetry_runtime_config.enabled;
 }
 
-static zend_bool king_telemetry_pending_buffer_try_reserve(zval *buffer)
+static uint64_t king_telemetry_estimate_zval_bytes(zval *value)
+{
+    smart_str json_payload = {0};
+    uint64_t estimated_bytes = 0;
+
+    if (value == NULL) {
+        return 0;
+    }
+
+    php_json_encode(&json_payload, value, 0);
+    smart_str_0(&json_payload);
+    if (json_payload.s != NULL) {
+        estimated_bytes = (uint64_t) ZSTR_LEN(json_payload.s);
+    }
+    smart_str_free(&json_payload);
+
+    return estimated_bytes;
+}
+
+static zend_bool king_telemetry_pending_buffer_try_reserve_entry(zval *buffer, zval *entry)
 {
     uint32_t limit;
+    uint64_t entry_bytes;
+    uint64_t memory_limit;
+    uint64_t next_memory_bytes;
 
     if (buffer == NULL || Z_TYPE_P(buffer) != IS_ARRAY) {
         return 0;
@@ -284,6 +421,22 @@ static zend_bool king_telemetry_pending_buffer_try_reserve(zval *buffer)
         return 0;
     }
 
+    entry_bytes = king_telemetry_estimate_zval_bytes(entry);
+    memory_limit = king_telemetry_runtime_memory_byte_limit_internal();
+    next_memory_bytes = king_telemetry_saturated_add_u64(
+        king_telemetry_current_memory_bytes_internal(),
+        entry_bytes
+    );
+    if (memory_limit > 0 && next_memory_bytes > memory_limit) {
+        king_telemetry_pending_drop_count++;
+        return 0;
+    }
+
+    king_telemetry_pending_bytes = king_telemetry_saturated_add_u64(
+        king_telemetry_pending_bytes,
+        entry_bytes
+    );
+    king_telemetry_note_runtime_watermarks();
     return 1;
 }
 
@@ -304,6 +457,31 @@ static void king_telemetry_buffer_move_entries(zval *target, zval *source)
     } ZEND_HASH_FOREACH_END();
 
     zend_hash_clean(Z_ARRVAL_P(source));
+}
+
+static uint64_t king_telemetry_batch_refresh_estimated_bytes(king_telemetry_batch_t *batch)
+{
+    uint64_t estimated_bytes = 0;
+
+    if (batch == NULL) {
+        return 0;
+    }
+
+    estimated_bytes = king_telemetry_saturated_add_u64(
+        estimated_bytes,
+        king_telemetry_estimate_zval_bytes(&batch->metrics)
+    );
+    estimated_bytes = king_telemetry_saturated_add_u64(
+        estimated_bytes,
+        king_telemetry_estimate_zval_bytes(&batch->spans)
+    );
+    estimated_bytes = king_telemetry_saturated_add_u64(
+        estimated_bytes,
+        king_telemetry_estimate_zval_bytes(&batch->logs)
+    );
+
+    batch->estimated_bytes = estimated_bytes;
+    return estimated_bytes;
 }
 
 static const char *king_telemetry_level_name(king_telemetry_level_t level)
@@ -590,6 +768,7 @@ king_telemetry_batch_t* king_telemetry_create_batch(void)
     array_init(&batch->metrics);
     array_init(&batch->spans);
     array_init(&batch->logs);
+    batch->estimated_bytes = 0;
     batch->created_at = time(NULL);
     batch->next = NULL;
     
@@ -599,14 +778,27 @@ king_telemetry_batch_t* king_telemetry_create_batch(void)
 int king_telemetry_queue_batch(king_telemetry_batch_t *batch)
 {
     uint32_t max_queue_size;
+    uint64_t memory_limit;
+    uint64_t queue_bytes_after_enqueue;
 
     if (!batch) return FAILURE;
 
     /* Always detach before enqueue so retries cannot retain stale links. */
     batch->next = NULL;
+    king_telemetry_batch_refresh_estimated_bytes(batch);
 
     max_queue_size = king_telemetry_runtime_max_queue_size();
     if (max_queue_size > 0 && king_telemetry_queue_size >= max_queue_size) {
+        king_telemetry_queue_drop_count++;
+        return FAILURE;
+    }
+
+    memory_limit = king_telemetry_runtime_memory_byte_limit_internal();
+    queue_bytes_after_enqueue = king_telemetry_saturated_add_u64(
+        king_telemetry_queue_bytes,
+        batch->estimated_bytes
+    );
+    if (memory_limit > 0 && queue_bytes_after_enqueue > memory_limit) {
         king_telemetry_queue_drop_count++;
         return FAILURE;
     }
@@ -620,6 +812,8 @@ int king_telemetry_queue_batch(king_telemetry_batch_t *batch)
     }
     
     king_telemetry_queue_size++;
+    king_telemetry_queue_bytes = queue_bytes_after_enqueue;
+    king_telemetry_note_runtime_watermarks();
     return SUCCESS;
 }
 
@@ -638,6 +832,11 @@ static king_telemetry_batch_t* king_telemetry_dequeue_batch(void)
     }
     
     king_telemetry_queue_size--;
+    if (king_telemetry_queue_bytes >= batch->estimated_bytes) {
+        king_telemetry_queue_bytes -= batch->estimated_bytes;
+    } else {
+        king_telemetry_queue_bytes = 0;
+    }
     return batch;
 }
 
@@ -671,6 +870,7 @@ void king_telemetry_append_pending_signals(king_telemetry_batch_t *batch)
 
     king_telemetry_buffer_move_entries(&batch->spans, &king_telemetry_pending_spans);
     king_telemetry_buffer_move_entries(&batch->logs, &king_telemetry_pending_logs);
+    king_telemetry_pending_bytes = 0;
 }
 
 int king_telemetry_process_export_queue(void)
@@ -723,6 +923,12 @@ int king_telemetry_process_export_queue(void)
 int king_telemetry_init_system(king_telemetry_config_t *config)
 {
     if (config) {
+        /*
+         * Config re-initialization starts a fresh request/worker scope but must
+         * not tear down the process-local retry queue that already carries
+         * explicitly flushed batches.
+         */
+        king_telemetry_cleanup_scope_state();
         memcpy(&king_telemetry_runtime_config, config, sizeof(king_telemetry_config_t));
         if (king_telemetry_runtime_config.max_queue_size == 0) {
             king_telemetry_runtime_config.max_queue_size = king_telemetry_default_max_queue_size();
@@ -736,10 +942,7 @@ int king_telemetry_init_system(king_telemetry_config_t *config)
 void king_telemetry_shutdown_system(void)
 {
     king_telemetry_system_initialized = false;
-    if (king_current_span) {
-        king_telemetry_span_free(king_current_span);
-        king_current_span = NULL;
-    }
+    king_telemetry_cleanup_scope_state();
     
     /* Flush any remaining batches in queue */
     king_telemetry_batch_t *batch;
@@ -747,7 +950,6 @@ void king_telemetry_shutdown_system(void)
         king_telemetry_free_batch(batch);
     }
 
-    king_telemetry_pending_buffers_destroy();
     king_telemetry_shutdown_libcurl_runtime();
     memset(&king_telemetry_runtime_config, 0, sizeof(king_telemetry_runtime_config));
 }
@@ -812,9 +1014,6 @@ int king_telemetry_log_internal(king_telemetry_level_t level, const char *logger
     }
 
     king_telemetry_pending_buffers_ensure();
-    if (!king_telemetry_pending_buffer_try_reserve(&king_telemetry_pending_logs)) {
-        return SUCCESS;
-    }
 
     memset(&log, 0, sizeof(log));
     
@@ -843,6 +1042,11 @@ int king_telemetry_log_internal(king_telemetry_level_t level, const char *logger
         zval attrs_copy;
         ZVAL_COPY(&attrs_copy, attributes);
         add_assoc_zval(&log_entry, "attributes", &attrs_copy);
+    }
+
+    if (!king_telemetry_pending_buffer_try_reserve_entry(&king_telemetry_pending_logs, &log_entry)) {
+        zval_ptr_dtor(&log_entry);
+        return SUCCESS;
     }
 
     add_next_index_zval(&king_telemetry_pending_logs, &log_entry);
@@ -940,16 +1144,6 @@ PHP_FUNCTION(king_telemetry_end_span)
         }
 
         king_telemetry_finish_span(king_current_span);
-        if (king_telemetry_capture_enabled()) {
-            king_telemetry_pending_buffers_ensure();
-            capture_span = king_telemetry_pending_buffer_try_reserve(&king_telemetry_pending_spans);
-        }
-
-        if (!capture_span) {
-            king_telemetry_span_free(king_current_span);
-            king_current_span = NULL;
-            RETURN_TRUE;
-        }
 
         array_init(&span_entry);
         add_assoc_string(&span_entry, "name", king_current_span->operation_name);
@@ -966,6 +1160,21 @@ PHP_FUNCTION(king_telemetry_end_span)
             ZVAL_COPY(&attrs_copy, &king_current_span->attributes);
             add_assoc_zval(&span_entry, "attributes", &attrs_copy);
         }
+        if (king_telemetry_capture_enabled()) {
+            king_telemetry_pending_buffers_ensure();
+            capture_span = king_telemetry_pending_buffer_try_reserve_entry(
+                &king_telemetry_pending_spans,
+                &span_entry
+            );
+        }
+
+        if (!capture_span) {
+            zval_ptr_dtor(&span_entry);
+            king_telemetry_span_free(king_current_span);
+            king_current_span = NULL;
+            RETURN_TRUE;
+        }
+
         add_next_index_zval(&king_telemetry_pending_spans, &span_entry);
         king_telemetry_span_free(king_current_span);
         king_current_span = NULL;
@@ -1128,7 +1337,9 @@ int king_telemetry_export_batch(void)
     } else {
         king_telemetry_export_failure_count++;
         /* Re-queue only the signals that still failed. */
+        king_telemetry_batch_refresh_estimated_bytes(batch);
         if (king_telemetry_queue_batch(batch) == SUCCESS) {
+            king_telemetry_retry_requeue_count++;
             batch = NULL; /* Don't free, it's back in queue */
         }
     }

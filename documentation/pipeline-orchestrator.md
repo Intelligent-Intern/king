@@ -70,6 +70,29 @@ operational questions are usually not only "did the run fail?" but also "which
 step failed, which steps already completed, and is the remainder still pending
 or now indeterminate because the failure happened on a remote boundary?"
 
+Failed or cancelled multi-step runs now also expose an explicit compensation
+contract instead of leaving rollback to guesswork. The run snapshot carries the
+top-level `compensation_policy`, and the nested `compensation` block makes the
+current contract concrete: compensation is still caller-managed, but the
+runtime names the reverse-completed-step strategy, whether compensation is
+required for the current terminal state, and which completed steps are pending
+compensation in reverse order. Each step snapshot also carries its own
+`compensation_status`, so a caller can tell the difference between a completed
+step that now needs compensation, a completed step that no longer needs it
+because the run ultimately succeeded, and a step for which compensation does
+not apply.
+
+Distributed runs also keep their operational breadcrumbs inside the snapshot
+instead of only in logs. `king_pipeline_orchestrator_get_run()` now exposes the
+run's `execution_backend`, `topology_scope`, `retry_policy`,
+`idempotency_policy`, `compensation_policy`, and a
+`distributed_observability` block that records queue phase, enqueue time, claim
+count, claiming worker PID, recovery count and reason, remote-attempt count,
+and the last relevant timestamps for those events. Each step snapshot also
+carries its effective backend, topology scope, and compensation status, which
+makes remote-boundary outcomes and post-failure cleanup duties visible at step
+granularity rather than only at the top level.
+
 This is the key reason the orchestrator feels like a control-plane subsystem
 instead of a convenience wrapper. The run is a system object with history.
 
@@ -277,6 +300,13 @@ configuration, and run snapshots from this persisted state. Component info
 surfaces whether the orchestrator was `recovered_from_state`, which gives
 operators a direct way to confirm that restart recovery occurred.
 
+The persisted run snapshot now keeps more than status and payloads. Queue
+claims, claimed-run recovery, explicit resume-driven recovery, and remote-peer
+attempts all survive restart in the stored `distributed_observability` block.
+That means an operator can tell whether a file-worker run was only enqueued,
+claimed and abandoned by one worker, recovered by another worker, or resumed
+after controller loss without reconstructing that story from external logs.
+
 Recovery is not limited to inspection. A controller that restarts on the local
 or `remote_peer` backends can call
 `king_pipeline_orchestrator_resume_run()` for a persisted `running` run and let
@@ -284,10 +314,16 @@ the orchestrator continue that run from the stored initial data, pipeline, and
 execution options. This is run-level continuation, not mid-step checkpointing.
 If the interrupted run had already crossed a remote boundary, the
 `caller_managed` idempotency policy still applies, which means the caller owns
-the decision to replay that run. That replay contract is now verified not only
-for controller-process restart, but also for the broader host-loss case where
-the controller and remote peer both disappear and the peer later returns on the
-same persisted host/port route.
+the decision to replay that run. The compensation contract is explicit now too:
+if a run failed after completing earlier steps, the caller must compensate the
+listed completed steps in reverse order before replaying or replacing that run.
+That replay contract is now verified not only for controller-process restart,
+but also for the broader host-loss case where the controller and remote peer
+both disappear and the peer later returns on the same persisted host/port
+route. The tree now also carries one reusable failover harness that proves
+controller loss, file-worker loss, and remote-peer return through the same
+persisted-state contract instead of relying on one-off scenario-specific
+recovery tests each time.
 
 ## Logging Configuration
 
@@ -307,10 +343,16 @@ The orchestrator exposes a rich component snapshot through
 
 This snapshot includes timeout defaults, recursion depth, concurrency default,
 distributed tracing policy, execution backend, topology scope, scheduler
-policy, retry policy, idempotency policy, state path, worker queue path, remote
-host and port, recovery status, tool count, run history count, active run
-count, queued run count, last run ID, last run status, and the list of
-registered tools.
+policy, retry policy, idempotency policy, compensation policy, state path,
+worker queue path, remote host and port, recovery status, tool count, run
+history count, active run count, queued run count, last run ID, last run
+status, and the list of registered tools.
+
+The component snapshot also exposes a nested `distributed_observability` block
+with claimed-run count, recovered-run count, remote-attempted-run count, and
+the last run IDs and recovery reason seen through those paths. Together with
+the per-run snapshot, this gives both fleet-level and run-level visibility into
+distributed execution outcomes.
 
 This matters because the orchestrator is not only a callable runtime. It is an
 inspectable operational subsystem.
@@ -394,9 +436,11 @@ backend already has its own claim and recovery path.
 
 `king_pipeline_orchestrator_get_run()` reads one persisted run snapshot by run
 ID. The returned snapshot includes the persisted top-level run state plus a
-structured `error_classification` block and per-step `steps` status entries so
-callers can distinguish validation, timeout, backend, remote-transport, and
-cancelled failures without inferring them from exception strings.
+structured `error_classification` block, per-step `steps` status entries, and
+the run's distributed observability fields so callers can distinguish
+validation, timeout, backend, remote-transport, and cancelled failures, see
+which backend and topology owned each step, and explain queue, claim, recovery,
+and remote-attempt history without inferring it from exception strings.
 
 `king_pipeline_orchestrator_cancel_run()` requests cancellation for a persisted
 queued run on the file-worker backend.

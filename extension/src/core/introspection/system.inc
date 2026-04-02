@@ -110,6 +110,10 @@ PHP_FUNCTION(king_system_get_component_info)
             "not_supported");
         add_assoc_string(&configuration, "drain_behavior",
             "single_batch_per_flush");
+        add_assoc_string(&configuration, "memory_bound",
+            "queue_slot_and_byte_bounded");
+        add_assoc_string(&configuration, "self_metrics_surface",
+            "king_telemetry_get_status");
     } else if (zend_string_equals_literal(component_name, "autoscaling")) {
         king_component_info_init(return_value, "autoscaling", "config_backed");
         array_init(&configuration);

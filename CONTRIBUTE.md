@@ -39,6 +39,7 @@ Use it with these rules:
 - only work items that are currently open in `ISSUES.md`
 - do not pull new items from `READYNESS_TRACKER.md` into `ISSUES.md` unless the user explicitly asks for a new `20`-issue batch
 - when the current batch is exhausted, stop and wait instead of self-refilling the queue
+- when the current batch is exhausted, collapse `ISSUES.md` back to an empty waiting state instead of leaving a checked historical batch in the active queue
 - when a leaf closes, update code, tests, docs, and `PROJECT_ASSESSMENT.md` in the same change
 
 The tracker may still be broader, but it is not self-executing.

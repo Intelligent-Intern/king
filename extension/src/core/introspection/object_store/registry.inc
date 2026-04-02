@@ -167,6 +167,54 @@ static const char *king_object_store_registry_primary_failure_message(const char
     return fallback_message != NULL ? fallback_message : "Primary object-store backend operation failed.";
 }
 
+static zend_bool king_object_store_registry_primary_failure_is_runtime_capacity(const char *message)
+{
+    return message != NULL && strstr(message, "runtime capacity") != NULL;
+}
+
+static zend_bool king_object_store_registry_primary_failure_is_throttled(const char *message)
+{
+    return message != NULL && strstr(message, "was throttled by the configured endpoint") != NULL;
+}
+
+static zend_bool king_object_store_registry_primary_failure_is_quota_exhausted(const char *message)
+{
+    return message != NULL && strstr(message, "reported exhausted quota") != NULL;
+}
+
+static void king_object_store_registry_throw_classified_primary_message(
+    zend_class_entry *exception_ce,
+    const char *message
+)
+{
+    const char *effective_message =
+        (message != NULL && message[0] != '\0')
+            ? message
+            : "Primary object-store backend operation failed.";
+
+    if (king_object_store_registry_primary_failure_is_throttled(effective_message)) {
+        zend_throw_exception_ex(
+            exception_ce,
+            0,
+            "Object-store primary backend throttled the operation; retry with backoff. %s",
+            effective_message
+        );
+        return;
+    }
+
+    if (king_object_store_registry_primary_failure_is_quota_exhausted(effective_message)) {
+        zend_throw_exception_ex(
+            exception_ce,
+            0,
+            "Object-store primary backend rejected the operation because the configured endpoint reported exhausted quota. %s",
+            effective_message
+        );
+        return;
+    }
+
+    zend_throw_exception_ex(exception_ce, 0, "%s", effective_message);
+}
+
 static void king_object_store_registry_throw_primary_failure(
     int result_code,
     const char *fallback_message
@@ -176,13 +224,13 @@ static void king_object_store_registry_throw_primary_failure(
 
     switch (result_code) {
         case KING_OBJECT_STORE_RESULT_UNAVAILABLE:
-            zend_throw_exception_ex(king_ce_runtime_exception, 0, "%s", message);
+            king_object_store_registry_throw_classified_primary_message(king_ce_runtime_exception, message);
             return;
         case KING_OBJECT_STORE_RESULT_VALIDATION:
             zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", message);
             return;
         default:
-            zend_throw_exception_ex(king_ce_system_exception, 0, "%s", message);
+            king_object_store_registry_throw_classified_primary_message(king_ce_system_exception, message);
             return;
     }
 }
@@ -1381,9 +1429,9 @@ PHP_FUNCTION(king_object_store_begin_resumable_upload)
         if (result != SUCCESS) {
             king_object_store_registry_release_mutation_lock(&mutation_lock_fd);
             if (result == KING_OBJECT_STORE_RESULT_UNAVAILABLE) {
-                zend_throw_exception_ex(king_ce_runtime_exception, 0, "%s", error);
+                king_object_store_registry_throw_classified_primary_message(king_ce_runtime_exception, error);
             } else {
-                zend_throw_exception_ex(king_ce_system_exception, 0, "%s", error);
+                king_object_store_registry_throw_classified_primary_message(king_ce_system_exception, error);
             }
             RETURN_THROWS();
         }
@@ -1457,11 +1505,11 @@ PHP_FUNCTION(king_object_store_append_resumable_upload_chunk)
         if (staged) {
             unlink(temp_path);
         }
-        if (strstr(error, "runtime capacity") != NULL) {
+        if (king_object_store_registry_primary_failure_is_runtime_capacity(error)) {
             zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", error);
             RETURN_THROWS();
         }
-        zend_throw_exception_ex(king_ce_system_exception, 0, "%s", error);
+        king_object_store_registry_throw_classified_primary_message(king_ce_system_exception, error);
         RETURN_THROWS();
     }
 
@@ -1489,11 +1537,11 @@ PHP_FUNCTION(king_object_store_complete_resumable_upload)
             error,
             sizeof(error)
         ) != SUCCESS) {
-        if (strstr(error, "runtime capacity") != NULL) {
+        if (king_object_store_registry_primary_failure_is_runtime_capacity(error)) {
             zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", error);
             RETURN_THROWS();
         }
-        zend_throw_exception_ex(king_ce_system_exception, 0, "%s", error);
+        king_object_store_registry_throw_classified_primary_message(king_ce_system_exception, error);
         RETURN_THROWS();
     }
 
@@ -1515,7 +1563,7 @@ PHP_FUNCTION(king_object_store_abort_resumable_upload)
             error,
             sizeof(error)
         ) != SUCCESS) {
-        zend_throw_exception_ex(king_ce_system_exception, 0, "%s", error);
+        king_object_store_registry_throw_classified_primary_message(king_ce_system_exception, error);
         RETURN_THROWS();
     }
 

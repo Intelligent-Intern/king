@@ -603,6 +603,9 @@ part/block inventory, and the per-object mutation claim under the configured
 `storage_root_path`, so the same `upload_id` can be resumed or aborted after
 `king_object_store_init()` re-entry or after a process/request restart.
 Rehydrated session snapshots expose `recovered_after_restart=true`.
+Recovered sessions also keep the same public quota and throttling failure
+prefixes on `append`, `complete`, and `abort` instead of degrading into a
+generic backend-failure story after restart.
 
 What is still open there is a richer provider-specific multipart tuning
 surface, not whether restart recovery exists at all.
@@ -653,8 +656,9 @@ runtime visibility into coordinator presence, recovery state, version,
 generation, path, and last load/error details through
 `king_object_store_get_stats()['object_store']`.
 The Azure slice now also has the same explicit runtime failure contract as the
-other real cloud backends: endpoint connect failures, credential rejection, and
-throttling responses surface through `runtime_*_adapter_status`,
+other real cloud backends: endpoint connect failures, credential rejection,
+provider-reported quota exhaustion, and throttling responses surface through
+`runtime_*_adapter_status`,
 `runtime_*_adapter_error`, and thrown `King\SystemException` failures instead
 of being hidden behind a simulated-only fence.
 
@@ -666,7 +670,10 @@ failures surface the same adapter error in the thrown `King\SystemException`.
 The same status/error surface is now also the stable contract for endpoint
 connectivity failures such as an unreachable `cloud_s3` API endpoint, and for
 explicit `429` / S3 `SlowDown` throttling responses from the configured
-endpoint. The same runtime also now has an explicit recovery contract for
+endpoint. The same runtime now also classifies provider-reported quota
+exhaustion distinctly across `cloud_s3`, `cloud_gcs`, and `cloud_azure`
+instead of collapsing those signals into generic credential or transport
+failures. The same runtime also now has an explicit recovery contract for
 incomplete `cloud_s3` writes: if a `PUT` lands remotely but the response tears
 down before the write is acknowledged locally, the local sidecar state stays
 failed instead of pretending success, the object remains readable from the
@@ -695,6 +702,12 @@ stable instead of adapter-specific guesswork:
 - real backend execution faults such as root outages, rejected credentials,
   endpoint-connect failures, and throttling surface as
   `King\SystemException`
+- when a real cloud primary reports throttling, the public CRUD and
+  upload-session leaves prefix the preserved backend detail with
+  `Object-store primary backend throttled the operation; retry with backoff.`
+- when a real cloud primary reports exhausted quota, the same public leaves
+  prefix the preserved backend detail with
+  `Object-store primary backend rejected the operation because the configured endpoint reported exhausted quota.`
 
 That means the caller no longer has to reverse-engineer a backend-specific HTTP
 status or local errno string to tell "the object is absent" apart from

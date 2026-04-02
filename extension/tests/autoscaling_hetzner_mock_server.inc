@@ -8,6 +8,30 @@ $deleteStatus = (int) ($argv[3] ?? 204);
 $createStatus = (int) ($argv[4] ?? 201);
 $nextId = (int) ($argv[5] ?? 9000);
 $bindHost = $argv[6] ?? '127.0.0.1';
+$listStatus = (int) ($argv[7] ?? 200);
+$stateFile = $argv[8] ?? '';
+
+function king_autoscaling_hetzner_mock_load_state(string $stateFile, int $fallbackNextId): array
+{
+    $raw = @file_get_contents($stateFile);
+    $state = is_string($raw) && $raw !== ''
+        ? json_decode($raw, true, 512, JSON_THROW_ON_ERROR)
+        : [];
+
+    if (!is_array($state)) {
+        $state = [];
+    }
+
+    return [
+        'next_id' => (int) ($state['next_id'] ?? $fallbackNextId),
+        'servers' => array_values(is_array($state['servers'] ?? null) ? $state['servers'] : []),
+    ];
+}
+
+function king_autoscaling_hetzner_mock_save_state(string $stateFile, array $state): void
+{
+    file_put_contents($stateFile, json_encode($state, JSON_THROW_ON_ERROR));
+}
 
 $server = @stream_socket_server("tcp://{$bindHost}:{$port}", $errno, $errstr);
 if ($server === false) {
@@ -78,12 +102,37 @@ while (true) {
         'body' => $body,
     ]) . "\n", FILE_APPEND);
 
-    if ($method === 'POST' && $path === '/v1/servers') {
-        $id = $nextId++;
+    if ($method === 'GET' && $path === '/v1/servers') {
+        $state = king_autoscaling_hetzner_mock_load_state($stateFile, $nextId);
+        $payload = json_encode([
+            'servers' => $state['servers'],
+        ]);
+        $statusLine = $listStatus === 200 ? '200 OK' : $listStatus . ' Error';
+        $response = "HTTP/1.1 {$statusLine}\r\n"
+            . "Content-Type: application/json\r\n"
+            . "Content-Length: " . strlen($payload) . "\r\n"
+            . "Connection: close\r\n\r\n"
+            . $payload;
+        fwrite($conn, $response);
+    } elseif ($method === 'POST' && $path === '/v1/servers') {
+        $state = king_autoscaling_hetzner_mock_load_state($stateFile, $nextId);
+        $decoded = json_decode($body, true);
+        $id = (int) ($state['next_id'] ?? $nextId);
+        $name = is_array($decoded) && is_string($decoded['name'] ?? null)
+            ? $decoded['name']
+            : "king-autoscale-$id";
+        $nextId = $id + 1;
+        $state['next_id'] = $nextId;
+        $state['servers'][] = [
+            'id' => $id,
+            'name' => $name,
+            'status' => 'running',
+        ];
+        king_autoscaling_hetzner_mock_save_state($stateFile, $state);
         $payload = json_encode([
             'server' => [
                 'id' => $id,
-                'name' => "king-autoscale-$id",
+                'name' => $name,
                 'status' => 'running',
             ],
         ]);
@@ -96,6 +145,13 @@ while (true) {
         fwrite($conn, $response);
     } elseif ($method === 'DELETE' && preg_match('#^/v1/servers/\d+$#', $path) === 1) {
         if ($deleteStatus === 204) {
+            $state = king_autoscaling_hetzner_mock_load_state($stateFile, $nextId);
+            $serverId = (int) basename($path);
+            $state['servers'] = array_values(array_filter(
+                $state['servers'],
+                static fn(array $server): bool => (int) ($server['id'] ?? 0) !== $serverId
+            ));
+            king_autoscaling_hetzner_mock_save_state($stateFile, $state);
             fwrite($conn, "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
         } else {
             $payload = json_encode(['error' => 'delete failed']);
