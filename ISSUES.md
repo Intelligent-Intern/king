@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Validate HTTP/3 retransmit / loss behavior under injected packet loss.
+- Fully validate QUIC/TLS interaction across handshake, resumption, and live listener churn.
 
 ## Active Executable Items
 
@@ -30,7 +30,7 @@
 1. [x] Validate HTTP/3 early-data / session-ticket behavior.
    done when: resumed QUIC sessions prove honest early-data acceptance, rejection, and fallback semantics instead of silently collapsing all resumed traffic into the ordinary request path.
 
-2. [ ] Validate HTTP/3 retransmit / loss behavior under injected packet loss.
+2. [x] Validate HTTP/3 retransmit / loss behavior under injected packet loss.
    done when: injected-loss peers prove bounded retransmit, recovery, and post-loss follow-up behavior instead of only timeout and transport-abort slices.
 
 3. [ ] Fully validate QUIC/TLS interaction across handshake, resumption, and live listener churn.

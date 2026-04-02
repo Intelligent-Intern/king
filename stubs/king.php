@@ -169,7 +169,9 @@ namespace {
      * metadata such as `tls_has_session_ticket`, `tls_session_ticket_length`,
      * `tls_ticket_source`, `tls_session_resumed`, and whether the request was
      * sent while the runtime was still in the early-data phase via
-     * `tls_request_sent_in_early_data`.
+     * `tls_request_sent_in_early_data`, plus QUIC transport counters such as
+     * `quic_packets_lost`, `quic_packets_retransmitted`, and
+     * `quic_lost_bytes`.
      * @param array<string,mixed>|null $headers
      * @param array<string,mixed>|null $options
      * @return array<string,mixed>|false

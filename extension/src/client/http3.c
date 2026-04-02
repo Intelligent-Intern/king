@@ -109,6 +109,12 @@ typedef struct _king_http3_request_runtime {
     bool tls_session_resumed;
     bool tls_ticket_published;
     bool tls_request_sent_in_early_data;
+    zend_long quic_packets_sent;
+    zend_long quic_packets_received;
+    zend_long quic_packets_lost;
+    zend_long quic_packets_retransmitted;
+    zend_long quic_lost_bytes;
+    zend_long quic_stream_retransmitted_bytes;
 } king_http3_request_runtime_t;
 
 typedef struct _king_http3_response_header_context {
@@ -138,6 +144,35 @@ typedef struct _king_http3_multi_request {
     size_t body_offset;
     bool request_headers_sent;
 } king_http3_multi_request_t;
+
+typedef struct _king_http3_quiche_stats {
+    size_t recv;
+    size_t sent;
+    size_t lost;
+    size_t spurious_lost;
+    size_t retrans;
+    uint64_t sent_bytes;
+    uint64_t recv_bytes;
+    uint64_t acked_bytes;
+    uint64_t lost_bytes;
+    uint64_t stream_retrans_bytes;
+    size_t dgram_recv;
+    size_t dgram_sent;
+    size_t paths_count;
+    uint64_t reset_stream_count_local;
+    uint64_t stopped_stream_count_local;
+    uint64_t reset_stream_count_remote;
+    uint64_t stopped_stream_count_remote;
+    uint64_t data_blocked_sent_count;
+    uint64_t stream_data_blocked_sent_count;
+    uint64_t data_blocked_recv_count;
+    uint64_t stream_data_blocked_recv_count;
+    uint64_t streams_blocked_bidi_recv_count;
+    uint64_t streams_blocked_uni_recv_count;
+    uint64_t path_challenge_rx_count;
+    uint64_t bytes_in_flight_duration_msec;
+    bool tx_buffered_inconsistent;
+} king_http3_quiche_stats_t;
 
 typedef struct _king_http3_quiche_api {
     void *handle;
@@ -188,6 +223,7 @@ typedef struct _king_http3_quiche_api {
     bool (*quiche_conn_is_established_fn)(const quiche_conn *);
     bool (*quiche_conn_is_resumed_fn)(const quiche_conn *);
     bool (*quiche_conn_is_in_early_data_fn)(const quiche_conn *);
+    void (*quiche_conn_stats_fn)(const quiche_conn *, king_http3_quiche_stats_t *);
     bool (*quiche_conn_is_closed_fn)(const quiche_conn *);
     int (*quiche_conn_close_fn)(quiche_conn *, bool, uint64_t, const uint8_t *, size_t);
     int (*quiche_conn_set_session_fn)(quiche_conn *, const uint8_t *, size_t);
@@ -520,6 +556,29 @@ static bool king_http3_runtime_can_open_h3(
         );
 }
 
+static void king_http3_refresh_transport_stats(
+    king_http3_request_runtime_t *runtime)
+{
+    king_http3_quiche_stats_t stats;
+
+    if (runtime == NULL
+        || runtime->conn == NULL
+        || king_http3_quiche.quiche_conn_stats_fn == NULL) {
+        return;
+    }
+
+    memset(&stats, 0, sizeof(stats));
+    king_http3_quiche.quiche_conn_stats_fn(runtime->conn, &stats);
+
+    runtime->quic_packets_sent = (zend_long) stats.sent;
+    runtime->quic_packets_received = (zend_long) stats.recv;
+    runtime->quic_packets_lost = (zend_long) stats.lost;
+    runtime->quic_packets_retransmitted = (zend_long) stats.retrans;
+    runtime->quic_lost_bytes = (zend_long) stats.lost_bytes;
+    runtime->quic_stream_retransmitted_bytes =
+        (zend_long) stats.stream_retrans_bytes;
+}
+
 static zend_result king_http3_validate_method(
     const char *method_str,
     size_t method_len,
@@ -801,6 +860,7 @@ static zend_result king_http3_ensure_quiche_ready(void)
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_is_established_fn, "quiche_conn_is_established") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_is_resumed_fn, "quiche_conn_is_resumed") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_is_in_early_data_fn, "quiche_conn_is_in_early_data") != SUCCESS
+        || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_stats_fn, "quiche_conn_stats") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_is_closed_fn, "quiche_conn_is_closed") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_close_fn, "quiche_conn_close") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_set_session_fn, "quiche_conn_set_session") != SUCCESS
@@ -967,6 +1027,8 @@ static void king_http3_refresh_tls_state(king_http3_request_runtime_t *runtime)
     if (runtime == NULL || runtime->conn == NULL) {
         return;
     }
+
+    king_http3_refresh_transport_stats(runtime);
 
     if (king_http3_quiche.quiche_conn_is_resumed_fn != NULL) {
         runtime->tls_session_resumed =
@@ -1588,6 +1650,12 @@ static zend_result king_http3_runtime_init(
     runtime->tls_session_resumed = false;
     runtime->tls_ticket_published = false;
     runtime->tls_request_sent_in_early_data = false;
+    runtime->quic_packets_sent = 0;
+    runtime->quic_packets_received = 0;
+    runtime->quic_packets_lost = 0;
+    runtime->quic_packets_retransmitted = 0;
+    runtime->quic_lost_bytes = 0;
+    runtime->quic_stream_retransmitted_bytes = 0;
     king_http3_seed_ticket_from_ring(runtime);
 
     return SUCCESS;
@@ -1855,6 +1923,36 @@ static zend_result king_http3_materialize_response(
     add_assoc_string(return_value, "protocol", "http/3");
     add_assoc_string(return_value, "transport_backend", "quiche_h3");
     add_assoc_string(return_value, "effective_url", (char *) url_str);
+    add_assoc_long(
+        return_value,
+        "quic_packets_sent",
+        runtime != NULL ? runtime->quic_packets_sent : 0
+    );
+    add_assoc_long(
+        return_value,
+        "quic_packets_received",
+        runtime != NULL ? runtime->quic_packets_received : 0
+    );
+    add_assoc_long(
+        return_value,
+        "quic_packets_lost",
+        runtime != NULL ? runtime->quic_packets_lost : 0
+    );
+    add_assoc_long(
+        return_value,
+        "quic_packets_retransmitted",
+        runtime != NULL ? runtime->quic_packets_retransmitted : 0
+    );
+    add_assoc_long(
+        return_value,
+        "quic_lost_bytes",
+        runtime != NULL ? runtime->quic_lost_bytes : 0
+    );
+    add_assoc_long(
+        return_value,
+        "quic_stream_retransmitted_bytes",
+        runtime != NULL ? runtime->quic_stream_retransmitted_bytes : 0
+    );
     add_assoc_bool(return_value, "response_complete", response->response_complete ? 1 : 0);
     add_assoc_long(return_value, "body_bytes", (zend_long) response->body_bytes);
     add_assoc_long(return_value, "header_bytes", (zend_long) response->header_bytes);

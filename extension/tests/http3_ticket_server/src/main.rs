@@ -1,4 +1,4 @@
-/* Local HTTP/3 harness server for session-ticket reuse and shared ticket-ring contracts. */
+/* Local HTTP/3 harness server for session-ticket, early-data, and packet-loss contracts. */
 
 use std::collections::HashMap;
 use std::fs;
@@ -68,6 +68,15 @@ fn main() {
         None => false,
     };
 
+    let drop_first_established_datagram = match args.next() {
+        Some(value) => match value.as_str() {
+            "1" => true,
+            "0" => false,
+            _ => usage_and_exit(&cmd),
+        },
+        None => false,
+    };
+
     let bind_addr = resolve_udp_bind(&host, port);
     let mut socket = mio::net::UdpSocket::bind(bind_addr).unwrap();
     let local_addr = socket.local_addr().unwrap();
@@ -109,6 +118,7 @@ fn main() {
     let mut pending = HashMap::<u64, PendingResponse>::new();
     let mut response_started = false;
     let mut response_idle_deadline: Option<Instant> = None;
+    let mut drop_first_established_datagram = drop_first_established_datagram;
     let overall_deadline = Instant::now() + Duration::from_secs(10);
     let mut buf = [0; 65535];
     let mut out = [0; MAX_DATAGRAM_SIZE];
@@ -175,6 +185,14 @@ fn main() {
             }
 
             let active = conn.as_mut().unwrap();
+            if drop_first_established_datagram &&
+                h3_conn.is_some() &&
+                !response_started
+            {
+                drop_first_established_datagram = false;
+                continue 'read;
+            }
+
             let recv_info = quiche::RecvInfo {
                 to: local_addr,
                 from,
@@ -241,7 +259,9 @@ fn main() {
 }
 
 fn usage_and_exit(cmd: &str) -> ! {
-    eprintln!("Usage: {cmd} <cert> <key> <root> <host> <port> [enable_early_data]");
+    eprintln!(
+        "Usage: {cmd} <cert> <key> <root> <host> <port> [enable_early_data] [drop_first_established_datagram]"
+    );
     std::process::exit(1);
 }
 
