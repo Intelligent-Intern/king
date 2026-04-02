@@ -54,52 +54,155 @@ static int king_object_store_build_snapshot_manifest_path(
     return (written >= 0 && (size_t) written < dest_len) ? SUCCESS : FAILURE;
 }
 
+static int king_object_store_remove_tree_at(int parent_fd, const char *name);
+
+static int king_object_store_remove_tree_directory_fd(int dir_fd)
+{
+    DIR *dir;
+    struct dirent *entry;
+    int scan_fd;
+    int status = SUCCESS;
+
+    if (dir_fd < 0) {
+        return FAILURE;
+    }
+
+    scan_fd = dup(dir_fd);
+    if (scan_fd < 0) {
+        return FAILURE;
+    }
+
+    dir = fdopendir(scan_fd);
+    if (dir == NULL) {
+        close(scan_fd);
+        return FAILURE;
+    }
+
+    errno = 0;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        if (king_object_store_remove_tree_at(dir_fd, entry->d_name) != SUCCESS) {
+            status = FAILURE;
+            break;
+        }
+    }
+
+    if (entry == NULL && errno != 0) {
+        status = FAILURE;
+    }
+
+    closedir(dir);
+    return status;
+}
+
+static int king_object_store_remove_tree_at(int parent_fd, const char *name)
+{
+    int open_flags = O_RDONLY;
+    int dir_fd;
+    int status;
+
+    if (parent_fd < 0 || name == NULL || name[0] == '\0') {
+        return FAILURE;
+    }
+
+    if (unlinkat(parent_fd, name, 0) == 0) {
+        return SUCCESS;
+    }
+
+    if (errno == ENOENT) {
+        return SUCCESS;
+    }
+
+    if (errno != EISDIR && errno != EPERM && errno != EACCES) {
+        return FAILURE;
+    }
+
+#ifdef O_CLOEXEC
+    open_flags |= O_CLOEXEC;
+#endif
+#ifdef O_DIRECTORY
+    open_flags |= O_DIRECTORY;
+#endif
+#ifdef O_NOFOLLOW
+    open_flags |= O_NOFOLLOW;
+#endif
+
+    dir_fd = openat(parent_fd, name, open_flags);
+    if (dir_fd < 0) {
+        return errno == ENOENT ? SUCCESS : FAILURE;
+    }
+
+    status = king_object_store_remove_tree_directory_fd(dir_fd);
+    close(dir_fd);
+    if (status != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (unlinkat(parent_fd, name, AT_REMOVEDIR) != 0) {
+        return errno == ENOENT ? SUCCESS : FAILURE;
+    }
+
+    return SUCCESS;
+}
+
 static int king_object_store_remove_tree(const char *path)
 {
-    struct stat st;
+    char path_copy[KING_PATH_MAX];
+    const char *parent_path = ".";
+    char *name;
+    size_t path_len;
+    int open_flags = O_RDONLY;
+    int parent_fd;
+    int status;
 
     if (path == NULL || path[0] == '\0') {
         return FAILURE;
     }
 
-    if (lstat(path, &st) != 0) {
-        return errno == ENOENT ? SUCCESS : FAILURE;
+    path_len = strlen(path);
+    if (path_len == 0 || path_len >= sizeof(path_copy)) {
+        return FAILURE;
     }
 
-    if (!S_ISDIR(st.st_mode) || S_ISLNK(st.st_mode)) {
-        return unlink(path) == 0 ? SUCCESS : FAILURE;
+    memcpy(path_copy, path, path_len + 1);
+    while (path_len > 1 && path_copy[path_len - 1] == '/') {
+        path_copy[--path_len] = '\0';
     }
 
-    {
-        DIR *dir = opendir(path);
-        struct dirent *entry;
-
-        if (dir == NULL) {
-            return FAILURE;
-        }
-
-        while ((entry = readdir(dir)) != NULL) {
-            char child_path[KING_PATH_MAX];
-
-            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-                continue;
-            }
-
-            if (snprintf(child_path, sizeof(child_path), "%s/%s", path, entry->d_name) >= (int) sizeof(child_path)) {
-                closedir(dir);
-                return FAILURE;
-            }
-
-            if (king_object_store_remove_tree(child_path) != SUCCESS) {
-                closedir(dir);
-                return FAILURE;
-            }
-        }
-
-        closedir(dir);
+    name = strrchr(path_copy, '/');
+    if (name == NULL) {
+        name = path_copy;
+    } else if (name == path_copy) {
+        parent_path = "/";
+        name++;
+    } else {
+        *name = '\0';
+        parent_path = path_copy;
+        name++;
     }
 
-    return rmdir(path) == 0 ? SUCCESS : FAILURE;
+    if (name[0] == '\0') {
+        return FAILURE;
+    }
+
+#ifdef O_CLOEXEC
+    open_flags |= O_CLOEXEC;
+#endif
+#ifdef O_DIRECTORY
+    open_flags |= O_DIRECTORY;
+#endif
+
+    parent_fd = open(parent_path, open_flags);
+    if (parent_fd < 0) {
+        return FAILURE;
+    }
+
+    status = king_object_store_remove_tree_at(parent_fd, name);
+    close(parent_fd);
+    return status;
 }
 
 static int king_object_store_create_unique_directory(
