@@ -91,12 +91,8 @@ void king_client_session_init_cancel_state(king_client_session_t *session)
     ZVAL_UNDEF(&session->server_last_early_hints);
 }
 
-void king_client_session_init_tls_state(king_client_session_t *session)
+static void king_client_session_init_tls_config_from_global(king_client_session_t *session)
 {
-    uint8_t ticket_buffer[KING_MAX_TICKET_SIZE];
-    size_t ticket_len = sizeof(ticket_buffer);
-    int ticket_status;
-
     session->tls_ticket_source = "none";
     session->tls_session_ticket_lifetime_sec = king_tls_and_crypto_config.tls_session_ticket_lifetime_sec;
     session->tls_enable_early_data = king_tls_and_crypto_config.tls_enable_early_data;
@@ -120,6 +116,15 @@ void king_client_session_init_tls_state(king_client_session_t *session)
         king_tls_and_crypto_config.tls_ticket_key_file
     );
     king_client_session_set_string(&session->tls_session_ticket, "");
+}
+
+void king_client_session_init_tls_state(king_client_session_t *session)
+{
+    uint8_t ticket_buffer[KING_MAX_TICKET_SIZE];
+    size_t ticket_len = sizeof(ticket_buffer);
+    int ticket_status;
+
+    king_client_session_init_tls_config_from_global(session);
 
     ticket_status = king_ticket_ring_get(ticket_buffer, &ticket_len);
     if (ticket_status == 1) {
@@ -221,22 +226,5 @@ void king_client_session_init_config_state(king_client_session_t *session)
         &session->config_tcp_tls_min_version_allowed,
         king_tcp_transport_config.tls_min_version_allowed
     );
-    session->tls_session_ticket_lifetime_sec = king_tls_and_crypto_config.tls_session_ticket_lifetime_sec;
-    session->tls_enable_early_data = king_tls_and_crypto_config.tls_enable_early_data;
-    king_client_session_set_string(
-        &session->tls_default_ca_file,
-        king_tls_and_crypto_config.tls_default_ca_file
-    );
-    king_client_session_set_string(
-        &session->tls_default_cert_file,
-        king_tls_and_crypto_config.tls_default_cert_file
-    );
-    king_client_session_set_string(
-        &session->tls_default_key_file,
-        king_tls_and_crypto_config.tls_default_key_file
-    );
-    king_client_session_set_string(
-        &session->tls_ticket_key_file,
-        king_tls_and_crypto_config.tls_ticket_key_file
-    );
+    king_client_session_init_tls_config_from_global(session);
 }
