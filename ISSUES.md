@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Implement an MCP failover harness for real peer recovery scenarios.
+- Implement an orchestrator failover harness for controller, worker, and remote-peer loss.
 
 ## Active Executable Items
 
@@ -55,7 +55,7 @@
 
 ### 3. Control Plane Distributed Depth
 
-9. [ ] Implement an MCP failover harness for real peer recovery scenarios.
+9. [x] Implement an MCP failover harness for real peer recovery scenarios.
    done when: the repo can inject and verify MCP peer loss, rejoin, and partial-topology breakage through one repeatable harness instead of one-off ad hoc tests.
 
 10. [ ] Implement an orchestrator failover harness for controller, worker, and remote-peer loss.
