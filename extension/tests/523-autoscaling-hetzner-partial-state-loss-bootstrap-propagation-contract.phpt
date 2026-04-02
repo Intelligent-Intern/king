@@ -39,7 +39,11 @@ try {
     $lines = file($statePath, FILE_IGNORE_NEW_LINES) ?: [];
     file_put_contents(
         $statePath,
-        $lines[0] . "\n" . $lines[1] . "\n" . "node\t" . $nodes[1]['server_id'] . "\t0\t"
+        implode("\n", [
+            $lines[0] ?? '',
+            $lines[1] ?? '',
+            $lines[2] ?? '',
+        ]) . "\n"
     );
 
     var_dump(king_autoscaling_init($config));

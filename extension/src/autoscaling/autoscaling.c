@@ -172,6 +172,25 @@ static void king_autoscaling_clear_managed_nodes(void)
     king_autoscaling_runtime.managed_node_capacity = 0;
 }
 
+static size_t king_autoscaling_runtime_count_persisted_live_nodes(void)
+{
+    size_t index;
+    size_t live_nodes = 0;
+
+    for (index = 0; index < king_autoscaling_runtime.managed_node_count; index++) {
+        king_autoscaling_managed_node_t *node = &king_autoscaling_runtime.managed_nodes[index];
+
+        if (
+            node->lifecycle_state != KING_AUTOSCALING_NODE_DELETED
+            && node->deleted_at == 0
+        ) {
+            live_nodes++;
+        }
+    }
+
+    return live_nodes;
+}
+
 static int king_autoscaling_runtime_ensure_capacity(size_t needed)
 {
     size_t next_capacity;
@@ -1284,6 +1303,7 @@ int king_autoscaling_runtime_load_state(void)
     FILE *stream;
     char line[512];
     const char *state_path = king_autoscaling_runtime.config.state_path;
+    zend_long expected_live_nodes = -1;
 
     king_autoscaling_runtime.state_load_incomplete = 0;
 
@@ -1331,7 +1351,23 @@ int king_autoscaling_runtime_load_state(void)
         }
 
         kind = strtok_r(line, "\t\r\n", &saveptr);
-        if (kind == NULL || strcmp(kind, "node") != 0) {
+        if (kind == NULL) {
+            continue;
+        }
+
+        if (strcmp(kind, "live_nodes") == 0) {
+            char *value = strtok_r(NULL, "\t\r\n", &saveptr);
+
+            if (value == NULL || value[0] == '\0') {
+                king_autoscaling_runtime.state_load_incomplete = 1;
+                continue;
+            }
+
+            expected_live_nodes = ZEND_STRTOL(value, NULL, 10);
+            continue;
+        }
+
+        if (strcmp(kind, "node") != 0) {
             continue;
         }
 
@@ -1390,6 +1426,12 @@ int king_autoscaling_runtime_load_state(void)
     }
 
     fclose(stream);
+    if (
+        expected_live_nodes >= 0
+        && (zend_long) king_autoscaling_runtime_count_persisted_live_nodes() < expected_live_nodes
+    ) {
+        king_autoscaling_runtime.state_load_incomplete = 1;
+    }
     king_autoscaling_runtime_sync_instance_count();
     return SUCCESS;
 }
@@ -1419,6 +1461,11 @@ int king_autoscaling_runtime_persist_state(void)
     }
 
     fprintf(stream, "version\t%d\n", KING_AUTOSCALING_STATE_VERSION);
+    fprintf(
+        stream,
+        "live_nodes\t%zu\n",
+        king_autoscaling_runtime_count_persisted_live_nodes()
+    );
     for (index = 0; index < king_autoscaling_runtime.managed_node_count; index++) {
         king_autoscaling_managed_node_t *node = &king_autoscaling_runtime.managed_nodes[index];
         fprintf(
