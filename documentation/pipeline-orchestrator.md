@@ -287,7 +287,10 @@ If the interrupted run had already crossed a remote boundary, the
 the decision to replay that run. That replay contract is now verified not only
 for controller-process restart, but also for the broader host-loss case where
 the controller and remote peer both disappear and the peer later returns on the
-same persisted host/port route.
+same persisted host/port route. The tree now also carries one reusable failover
+harness that proves controller loss, file-worker loss, and remote-peer return
+through the same persisted-state contract instead of relying on one-off
+scenario-specific recovery tests each time.
 
 ## Logging Configuration
 

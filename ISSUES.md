@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Implement an orchestrator failover harness for controller, worker, and remote-peer loss.
+- Finalize orchestrator observability depth for distributed execution.
 
 ## Active Executable Items
 
@@ -58,7 +58,7 @@
 9. [x] Implement an MCP failover harness for real peer recovery scenarios.
    done when: the repo can inject and verify MCP peer loss, rejoin, and partial-topology breakage through one repeatable harness instead of one-off ad hoc tests.
 
-10. [ ] Implement an orchestrator failover harness for controller, worker, and remote-peer loss.
+10. [x] Implement an orchestrator failover harness for controller, worker, and remote-peer loss.
     done when: the repo can inject and verify orchestrator recovery across controller loss, worker loss, and remote-peer return without relying on hand-built scenario tests each time.
 
 11. [ ] Finalize orchestrator observability depth for distributed execution.
