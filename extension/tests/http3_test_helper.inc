@@ -180,7 +180,8 @@ function king_http3_ticket_server_binary(): string
     $manifest = __DIR__ . '/http3_ticket_server/Cargo.toml';
     $source = __DIR__ . '/http3_ticket_server/src/main.rs';
     $lock = __DIR__ . '/http3_ticket_server/Cargo.lock';
-    $binary = __DIR__ . '/http3_ticket_server/target/release/king-http3-ticket-server';
+    $targetDir = $root . '/quiche/target';
+    $binary = $targetDir . '/release/king-http3-ticket-server';
 
     if (trim((string) shell_exec('command -v cargo')) === '') {
         throw new RuntimeException('cargo is required to build the HTTP/3 ticket server helper');
@@ -196,7 +197,8 @@ function king_http3_ticket_server_binary(): string
     }
 
     $command = sprintf(
-        'cargo build --manifest-path %s --release --locked 2>&1',
+        'env CARGO_TARGET_DIR=%s cargo build --manifest-path %s --release --locked 2>&1',
+        escapeshellarg($targetDir),
         escapeshellarg($manifest)
     );
 
@@ -216,7 +218,8 @@ function king_http3_start_ticket_test_server(
     string $rootDir,
     string $bindHost = 'localhost',
     ?int $port = null,
-    ?string $urlHost = null
+    ?string $urlHost = null,
+    bool $enableEarlyData = false
 ): array {
     $envBindHost = getenv('KING_HTTP3_TEST_BIND_HOST');
     if ($bindHost === 'localhost' && is_string($envBindHost) && $envBindHost !== '') {
@@ -240,7 +243,15 @@ function king_http3_start_ticket_test_server(
         $urlHost = $envUrlHost;
     }
     $urlHost ??= $bindHost;
-    $command = [$binary, $certFile, $keyFile, $rootDir, $bindHost, (string) $port];
+    $command = [
+        $binary,
+        $certFile,
+        $keyFile,
+        $rootDir,
+        $bindHost,
+        (string) $port,
+        $enableEarlyData ? '1' : '0',
+    ];
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
         2 => ['pipe', 'w'],

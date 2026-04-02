@@ -21,13 +21,13 @@
 
 ## Current Next Leaf
 
-- Validate HTTP/3 early-data / session-ticket behavior.
+- Validate HTTP/3 retransmit / loss behavior under injected packet loss.
 
 ## Active Executable Items
 
 ### 1. Transport And Listener Failure Depth
 
-1. [ ] Validate HTTP/3 early-data / session-ticket behavior.
+1. [x] Validate HTTP/3 early-data / session-ticket behavior.
    done when: resumed QUIC sessions prove honest early-data acceptance, rejection, and fallback semantics instead of silently collapsing all resumed traffic into the ordinary request path.
 
 2. [ ] Validate HTTP/3 retransmit / loss behavior under injected packet loss.

@@ -165,7 +165,11 @@ namespace {
     /**
      * Direct live HTTP/3 one-shot request path over the active QUIC runtime.
      * Supports absolute `https://` URLs and returns the normalized response
-     * snapshot used across the active client leaves.
+     * snapshot used across the active client leaves, including HTTP/3 ticket
+     * metadata such as `tls_has_session_ticket`, `tls_session_ticket_length`,
+     * `tls_ticket_source`, `tls_session_resumed`, and whether the request was
+     * sent while the runtime was still in the early-data phase via
+     * `tls_request_sent_in_early_data`.
      * @param array<string,mixed>|null $headers
      * @param array<string,mixed>|null $options
      * @return array<string,mixed>|false
@@ -182,7 +186,8 @@ namespace {
      * optional `headers`, and optional `body`. The current leaf requires every
      * entry to target the same absolute `https://` origin plus TLS profile so
      * it can share one HTTP/3 session honestly; responses are returned in
-     * input order.
+     * input order with the same transport and ticket metadata shape as the
+     * one-shot HTTP/3 leaf.
      * @param array<int,array<string,mixed>> $requests
      * @param array<string,mixed>|null $options
      * @return array<int,array<string,mixed>>|false

@@ -53,6 +53,7 @@ typedef struct _king_http3_request_options {
     zend_long connect_timeout_ms;
     zend_long timeout_ms;
     bool tls_verify_peer;
+    bool tls_enable_early_data;
     const char *tls_default_ca_file;
     const char *tls_default_cert_file;
     const char *tls_default_key_file;
@@ -104,8 +105,10 @@ typedef struct _king_http3_request_runtime {
     const char *tls_ticket_source;
     zend_long tls_session_ticket_length;
     bool tls_has_session_ticket;
+    bool tls_enable_early_data;
     bool tls_session_resumed;
     bool tls_ticket_published;
+    bool tls_request_sent_in_early_data;
 } king_http3_request_runtime_t;
 
 typedef struct _king_http3_response_header_context {
@@ -147,6 +150,7 @@ typedef struct _king_http3_quiche_api {
     int (*quiche_config_load_verify_locations_from_file_fn)(quiche_config *, const char *);
     void (*quiche_config_verify_peer_fn)(quiche_config *, bool);
     void (*quiche_config_grease_fn)(quiche_config *, bool);
+    void (*quiche_config_enable_early_data_fn)(quiche_config *);
     void (*quiche_config_enable_hystart_fn)(quiche_config *, bool);
     void (*quiche_config_enable_pacing_fn)(quiche_config *, bool);
     int (*quiche_config_set_application_protos_fn)(quiche_config *, const uint8_t *, size_t);
@@ -183,6 +187,7 @@ typedef struct _king_http3_quiche_api {
     void (*quiche_conn_on_timeout_fn)(quiche_conn *);
     bool (*quiche_conn_is_established_fn)(const quiche_conn *);
     bool (*quiche_conn_is_resumed_fn)(const quiche_conn *);
+    bool (*quiche_conn_is_in_early_data_fn)(const quiche_conn *);
     bool (*quiche_conn_is_closed_fn)(const quiche_conn *);
     int (*quiche_conn_close_fn)(quiche_conn *, bool, uint64_t, const uint8_t *, size_t);
     int (*quiche_conn_set_session_fn)(quiche_conn *, const uint8_t *, size_t);
@@ -495,6 +500,26 @@ static bool king_http3_string_has_crlf(const char *value, size_t value_len)
     return false;
 }
 
+static bool king_http3_runtime_is_in_early_data(
+    const king_http3_request_runtime_t *runtime)
+{
+    return runtime != NULL
+        && runtime->conn != NULL
+        && king_http3_quiche.quiche_conn_is_in_early_data_fn != NULL
+        && king_http3_quiche.quiche_conn_is_in_early_data_fn(runtime->conn);
+}
+
+static bool king_http3_runtime_can_open_h3(
+    const king_http3_request_runtime_t *runtime)
+{
+    return runtime != NULL
+        && runtime->conn != NULL
+        && (
+            king_http3_quiche.quiche_conn_is_established_fn(runtime->conn)
+            || king_http3_runtime_is_in_early_data(runtime)
+        );
+}
+
 static zend_result king_http3_validate_method(
     const char *method_str,
     size_t method_len,
@@ -561,6 +586,7 @@ static zend_result king_http3_parse_options(
         : 5000;
     options->timeout_ms = KING_HTTP3_DEFAULT_TIMEOUT_MS;
     options->tls_verify_peer = king_tls_and_crypto_config.tls_verify_peer;
+    options->tls_enable_early_data = king_tls_and_crypto_config.tls_enable_early_data;
     options->tls_default_ca_file = king_tls_and_crypto_config.tls_default_ca_file;
     options->tls_default_cert_file = king_tls_and_crypto_config.tls_default_cert_file;
     options->tls_default_key_file = king_tls_and_crypto_config.tls_default_key_file;
@@ -611,6 +637,7 @@ static zend_result king_http3_parse_options(
             ? options->connect_timeout_ms
             : KING_HTTP3_DEFAULT_TIMEOUT_MS;
         options->tls_verify_peer = options->config->tls.tls_verify_peer;
+        options->tls_enable_early_data = options->config->tls.tls_enable_early_data;
         options->tls_default_ca_file = options->config->tls.tls_default_ca_file;
         options->tls_default_cert_file = options->config->tls.tls_default_cert_file;
         options->tls_default_key_file = options->config->tls.tls_default_key_file;
@@ -745,6 +772,7 @@ static zend_result king_http3_ensure_quiche_ready(void)
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_config_load_verify_locations_from_file_fn, "quiche_config_load_verify_locations_from_file") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_config_verify_peer_fn, "quiche_config_verify_peer") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_config_grease_fn, "quiche_config_grease") != SUCCESS
+        || king_http3_load_symbol((void **) &king_http3_quiche.quiche_config_enable_early_data_fn, "quiche_config_enable_early_data") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_config_enable_hystart_fn, "quiche_config_enable_hystart") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_config_enable_pacing_fn, "quiche_config_enable_pacing") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_config_set_application_protos_fn, "quiche_config_set_application_protos") != SUCCESS
@@ -772,6 +800,7 @@ static zend_result king_http3_ensure_quiche_ready(void)
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_on_timeout_fn, "quiche_conn_on_timeout") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_is_established_fn, "quiche_conn_is_established") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_is_resumed_fn, "quiche_conn_is_resumed") != SUCCESS
+        || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_is_in_early_data_fn, "quiche_conn_is_in_early_data") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_is_closed_fn, "quiche_conn_is_closed") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_close_fn, "quiche_conn_close") != SUCCESS
         || king_http3_load_symbol((void **) &king_http3_quiche.quiche_conn_set_session_fn, "quiche_conn_set_session") != SUCCESS
@@ -1467,6 +1496,9 @@ static zend_result king_http3_runtime_init(
 
     king_http3_quiche.quiche_config_verify_peer_fn(runtime->config, options->tls_verify_peer);
     king_http3_quiche.quiche_config_grease_fn(runtime->config, options->quic_grease_enable);
+    if (options->tls_enable_early_data) {
+        king_http3_quiche.quiche_config_enable_early_data_fn(runtime->config);
+    }
     king_http3_quiche.quiche_config_enable_hystart_fn(runtime->config, options->quic_cc_enable_hystart_plus_plus);
     king_http3_quiche.quiche_config_enable_pacing_fn(runtime->config, options->quic_pacing_enable);
 
@@ -1552,8 +1584,10 @@ static zend_result king_http3_runtime_init(
     runtime->tls_ticket_source = "none";
     runtime->tls_session_ticket_length = 0;
     runtime->tls_has_session_ticket = false;
+    runtime->tls_enable_early_data = options->tls_enable_early_data;
     runtime->tls_session_resumed = false;
     runtime->tls_ticket_published = false;
+    runtime->tls_request_sent_in_early_data = false;
     king_http3_seed_ticket_from_ring(runtime);
 
     return SUCCESS;
@@ -1835,6 +1869,16 @@ static zend_result king_http3_materialize_response(
         "tls_session_ticket_length",
         runtime != NULL ? runtime->tls_session_ticket_length : 0
     );
+    add_assoc_bool(
+        return_value,
+        "tls_enable_early_data",
+        runtime != NULL && runtime->tls_enable_early_data
+    );
+    add_assoc_bool(
+        return_value,
+        "tls_request_sent_in_early_data",
+        runtime != NULL && runtime->tls_request_sent_in_early_data
+    );
     add_assoc_string(
         return_value,
         "tls_ticket_source",
@@ -2088,7 +2132,7 @@ static zend_result king_http3_execute_multi_requests(
             goto failure;
         }
 
-        if (king_http3_quiche.quiche_conn_is_established_fn(runtime.conn) && runtime.h3_conn == NULL) {
+        if (king_http3_runtime_can_open_h3(&runtime) && runtime.h3_conn == NULL) {
             runtime.h3_config = king_http3_quiche.quiche_h3_config_new_fn();
             if (runtime.h3_config == NULL) {
                 king_http3_throw(
@@ -2130,6 +2174,10 @@ static zend_result king_http3_execute_multi_requests(
                 if (stream_id >= 0) {
                     requests[i].request_stream_id = (uint64_t) stream_id;
                     requests[i].request_headers_sent = true;
+                    if (king_http3_runtime_is_in_early_data(&runtime)
+                        && !king_http3_quiche.quiche_conn_is_established_fn(runtime.conn)) {
+                        runtime.tls_request_sent_in_early_data = true;
+                    }
                     egress_progress = true;
                     continue;
                 }
@@ -2597,7 +2645,7 @@ static zend_result king_http3_execute_request(
             goto failure;
         }
 
-        if (king_http3_quiche.quiche_conn_is_established_fn(runtime.conn) && runtime.h3_conn == NULL) {
+        if (king_http3_runtime_can_open_h3(&runtime) && runtime.h3_conn == NULL) {
             runtime.h3_config = king_http3_quiche.quiche_h3_config_new_fn();
             if (runtime.h3_config == NULL) {
                 king_http3_throw(
@@ -2639,6 +2687,10 @@ static zend_result king_http3_execute_request(
 
             request_stream_id = (uint64_t) stream_id;
             request_headers_sent = true;
+            if (king_http3_runtime_is_in_early_data(&runtime)
+                && !king_http3_quiche.quiche_conn_is_established_fn(runtime.conn)) {
+                runtime.tls_request_sent_in_early_data = true;
+            }
 
             if (king_http3_flush_egress(&runtime, function_name) != SUCCESS) {
                 goto failure;

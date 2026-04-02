@@ -59,6 +59,15 @@ fn main() {
         None => usage_and_exit(&cmd),
     };
 
+    let enable_early_data = match args.next() {
+        Some(value) => match value.as_str() {
+            "1" => true,
+            "0" => false,
+            _ => usage_and_exit(&cmd),
+        },
+        None => false,
+    };
+
     let bind_addr = resolve_udp_bind(&host, port);
     let mut socket = mio::net::UdpSocket::bind(bind_addr).unwrap();
     let local_addr = socket.local_addr().unwrap();
@@ -75,6 +84,9 @@ fn main() {
     config.load_priv_key_from_pem_file(&key).unwrap();
     config.set_application_protos(&[b"h3"]).unwrap();
     config.set_ticket_key(&SESSION_TICKET_KEY).unwrap();
+    if enable_early_data {
+        config.enable_early_data();
+    }
     config.set_max_idle_timeout(5000);
     config.set_max_recv_udp_payload_size(MAX_DATAGRAM_SIZE);
     config.set_max_send_udp_payload_size(MAX_DATAGRAM_SIZE);
@@ -229,7 +241,7 @@ fn main() {
 }
 
 fn usage_and_exit(cmd: &str) -> ! {
-    eprintln!("Usage: {cmd} <cert> <key> <root> <host> <port>");
+    eprintln!("Usage: {cmd} <cert> <key> <root> <host> <port> [enable_early_data]");
     std::process::exit(1);
 }
 
@@ -257,6 +269,11 @@ fn process_http3_events(
                 let (status_code, body) = build_response(root, &list);
                 let status = status_code.to_string();
                 let content_length = body.len().to_string();
+                let early_data_phase = if conn.is_in_early_data() {
+                    b"early_data".as_slice()
+                } else {
+                    b"established".as_slice()
+                };
                 let headers = [
                     quiche::h3::Header::new(b":status", status.as_bytes()),
                     quiche::h3::Header::new(
@@ -266,6 +283,10 @@ fn process_http3_events(
                     quiche::h3::Header::new(
                         b"content-length",
                         content_length.as_bytes(),
+                    ),
+                    quiche::h3::Header::new(
+                        b"x-king-early-data-phase",
+                        early_data_phase,
                     ),
                 ];
 
