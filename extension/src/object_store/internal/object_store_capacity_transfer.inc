@@ -125,7 +125,7 @@ static int king_object_store_create_unique_directory(
         return FAILURE;
     }
 
-    if (king_object_store_mkdir_parents(destination) != SUCCESS) {
+    if (king_object_store_mkdir_parents(base_path) != SUCCESS) {
         return FAILURE;
     }
 
