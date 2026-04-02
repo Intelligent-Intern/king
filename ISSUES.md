@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Enforce telemetry memory bounds and self-metrics under degraded exporter load.
+- Validate autoscaling decision logic under real load patterns.
 
 ## Active Executable Items
 
@@ -83,7 +83,7 @@
 16. [x] Eliminate cross-request telemetry residue and prove cleanup under load.
     done when: telemetry state is cleaned up correctly across request and worker boundaries under sustained load without stale span or log carry-over or lifetime hazards.
 
-17. [ ] Enforce telemetry memory bounds and self-metrics under degraded exporter load.
+17. [x] Enforce telemetry memory bounds and self-metrics under degraded exporter load.
     done when: telemetry stays memory-bounded during collector slowdown or outage and exposes enough self-metrics to make queue growth, drops, and retry pressure observable.
 
 18. [ ] Validate autoscaling decision logic under real load patterns.
@@ -100,7 +100,7 @@
 - broader websocket server runtime materialization beyond the drain-focused failure proof in this batch
 - deeper object-store cross-backend failure normalization beyond quota/throttling and resumable-upload recovery
 - broader Smart-DNS distributed-topology validation once the remaining larger multi-node topology slices are proven
-- longer-haul telemetry exporter ordering, self-metrics, and autoscaling fleet-behavior proof beyond the bounded load and recovery leaves in this batch
+- longer-haul telemetry exporter ordering and autoscaling fleet-behavior proof beyond the bounded load and recovery leaves in this batch
 - release, compatibility, supply-chain, and final security-review closure that remain outside this explicitly requested repo-local sprint batch
 
 ## Notes

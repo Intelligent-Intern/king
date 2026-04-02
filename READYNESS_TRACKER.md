@@ -10,7 +10,7 @@ Status note:
 - Open boxes are not supposed to be "closed" by redefining the product downward. If a stronger shared, remote, persistent, or otherwise meaningful v1 contract already belongs to King, the default action is to implement it correctly rather than quietly shrinking scope.
 - `ISSUES.md` now carries the next `20` repo-local executable leaves distilled from this tracker. Everything else stays here until it is split to that size.
 - Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, and real TCP host/port `remote_peer` execution with persisted success/failure snapshots are now verified; the remaining open boxes below are the broader continuation, observability, and multi-host slices.
-- Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path, are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices, now expose an explicit process-local non-persistent non-replay delivery contract across restart, and now discard stale active-span plus pre-flush span/log scratch state at the next request or worker boundary instead of leaking it into later work units; the remaining open boxes below are richer ordering/idempotency guarantees, longer-haul characterization, and stronger diagnostics.
+- Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path, are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices, now expose an explicit process-local non-persistent non-replay delivery contract across restart, now discard stale active-span plus pre-flush span/log scratch state at the next request or worker boundary instead of leaking it into later work units, and now enforce a queue-size-derived in-process byte budget with live self-metrics for queue growth, drops, and retry pressure; the remaining open boxes below are richer ordering/idempotency guarantees, longer-haul characterization, and stronger diagnostics.
 - Recent QUIC bootstrap closure: the build path now rehydrates a pinned `quiche` commit, pinned BoringSSL submodule commit, tracked workspace lockfile, and pinned `wirefilter` revision without branch-based fallbacks or unlocked cargo retries.
 - Recent Smart-DNS closure: the local DNS-shaped query surface now fails closed on undersized response budgets and rehydrates cleanly after restart, the active runtime now proves a bounded real on-wire UDP listener with honest request, timeout, truncation, and recovery behavior, stale peers can now heal partial durable-state loss by merging only missing service and mother-node entries back into the shared topology without overwriting newer overlapping state, and mother-node re-election pressure now carries persisted tombstones so departed leaders are not silently resurrected by stale writers before an explicit rejoin; the broader distributed-topology boxes below remain open.
 - Recent security closure: HTTP/2 one-shot cumulative body caps, HTTP/3 one-shot full-body completion, MCP persisted transfer-key truncation fixes plus loopback-default peer targeting, bounded object-store metadata-cache growth, CRLF-safe cloud metadata headers, TOCTOU-safe local/distributed object-store reads, snapshot-manifest line caps, snapshot-cleanup symlink hardening, bounded remote orchestrator error metadata, trusted workflow-run source materialization, and loopback-default Semantic DNS live probe allowlists are now verified on the current mainline; the broader full-surface security review remains open below.
@@ -263,14 +263,14 @@ Status note:
 - [ ] Finalize trace-context extraction from incoming requests
 - [ ] Preserve span hierarchies correctly across process / worker boundaries
 - [ ] Finalize telemetry sampling strategy where publicly claimed
-- [ ] Enforce telemetry memory bounds under load
+- [x] Enforce telemetry memory bounds under load
 - [ ] Monitor telemetry CPU bounds under load
 - [x] Define and enforce telemetry queue limits
 - [x] Define and implement telemetry drop policy
 - [x] Define and implement telemetry retry policy
 - [x] Define and implement telemetry backpressure policy
 - [x] Make telemetry failure modes documented and testable
-- [ ] Finalize telemetry self-metrics
+- [x] Finalize telemetry self-metrics
 
 ## K. Telemetry Export / OTLP
 

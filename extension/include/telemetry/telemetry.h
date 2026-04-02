@@ -106,6 +106,7 @@ typedef struct _king_telemetry_batch_t {
     zval metrics;      /* Array of metric data */
     zval spans;        /* Array of span data */
     zval logs;         /* Array of log data */
+    uint64_t estimated_bytes;
     time_t created_at;
     struct _king_telemetry_batch_t *next;
 } king_telemetry_batch_t;
@@ -178,6 +179,14 @@ void king_telemetry_append_pending_signals(king_telemetry_batch_t *batch);
 uint32_t king_telemetry_get_pending_span_count(void);
 uint32_t king_telemetry_get_pending_log_count(void);
 uint32_t king_telemetry_get_pending_entry_limit(void);
+uint64_t king_telemetry_get_queue_bytes(void);
+uint64_t king_telemetry_get_pending_bytes(void);
+uint64_t king_telemetry_get_memory_bytes(void);
+uint64_t king_telemetry_get_memory_byte_limit(void);
+uint32_t king_telemetry_get_queue_high_watermark(void);
+uint64_t king_telemetry_get_queue_high_water_bytes(void);
+uint64_t king_telemetry_get_memory_high_water_bytes(void);
+uint32_t king_telemetry_get_retry_requeue_count(void);
 
 /* OTLP export functions */
 int king_telemetry_export_metrics_otlp(zval *metrics);

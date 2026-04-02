@@ -20,7 +20,7 @@ areas:
 
 - deeper transport and listener failure-path verification across HTTP/2, HTTP/3, and WebSocket
 - broader Smart-DNS distributed-topology validation beyond the current on-wire listener proof, stale-peer rejoin healing after partial durable-state loss, tombstone-aware mother-node re-election churn proof, local query failure/recovery, concurrent-write, live-signal, and split-brain/partial-failure proof
-- stronger telemetry/autoscaling load-bound, self-metrics, and recovery guarantees
+- stronger telemetry exporter ordering/diagnostics and autoscaling load-shape/recovery guarantees
 
 The long-form completion checklist has now been distilled into the next `20`
 repo-local executable leaves. If an open v1 item is not in `ISSUES.md`, it is
@@ -34,7 +34,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `499/499` passing
+- `./infra/scripts/test-extension.sh`: `500/500` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -56,7 +56,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `499` PHPT files
+- `extension/tests`: `500` PHPT files
 - public stub parity: `137` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -113,7 +113,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 ### Observability and Fleet Operations
 
 - Metrics, traces, and logs now share the same bounded export path and are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices.
-- Telemetry queueing and pre-flush pending signal capture are now bounded and their current v1 semantics are explicit: best-effort bounded retry, bounded pending span/log capture, process-local non-persistent queueing, request/worker-boundary stale-state cleanup, one drain attempt per flush, and no restart replay guarantee. Longer-haul degraded exporter behavior, richer ordering/idempotency guarantees, self-metrics, and stronger diagnostics still need more proof.
+- Telemetry queueing and pre-flush pending signal capture are now bounded and their current v1 semantics are explicit: best-effort bounded retry, bounded pending span/log capture, queue-size-derived byte budgets, process-local non-persistent queueing, request/worker-boundary stale-state cleanup, live self-metrics for queue/memory growth plus retry pressure, one drain attempt per flush, and no restart replay guarantee. Longer-haul degraded exporter behavior, richer ordering/idempotency guarantees, and stronger diagnostics still need more proof.
 - Autoscaling now rolls stale Hetzner pending nodes back safely even when telemetry is missing or degraded, and provider-side rollback failures are surfaced explicitly. Multi-node rolling restart, real-load decision depth, and broader fleet failover behavior are still open.
 
 ### Build, Compatibility, and Release Confidence

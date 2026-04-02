@@ -996,18 +996,27 @@ namespace {
     function king_proto_is_enum_defined(string $enum_name): bool {}
 
     /**
-     * Telemetry exporter and feature status from active config.
+     * Telemetry runtime status, queue pressure, and self-observation counters.
      * @return array{
-     *   system_status: array{
-     *     enabled:bool,
-     *     service_name:string,
-     *     exporter_endpoint:string,
-     *     exporter_protocol:string
-     *   },
-     *   feature_status: array{
-     *     metrics_enable:bool,
-     *     logs_enable:bool
-     *   }
+     *   initialized:bool,
+     *   flush_count:int,
+     *   active_metrics:int,
+     *   queue_size:int,
+     *   export_success_count:int,
+     *   export_failure_count:int,
+     *   queue_drop_count:int,
+     *   pending_entry_limit:int,
+     *   pending_span_count:int,
+     *   pending_log_count:int,
+     *   pending_drop_count:int,
+     *   queue_bytes:int,
+     *   pending_bytes:int,
+     *   memory_bytes:int,
+     *   memory_byte_limit:int,
+     *   queue_high_watermark:int,
+     *   queue_high_water_bytes:int,
+     *   memory_high_water_bytes:int,
+     *   retry_requeue_count:int
      * }
      */
     function king_telemetry_get_status(): array {}
