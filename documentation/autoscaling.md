@@ -136,6 +136,15 @@ This lifecycle is one of the biggest reasons King autoscaling is stronger than a
 simple shell script. The runtime knows what stage each node is in and can act
 accordingly.
 
+The controller also does not trust its persisted fleet snapshot blindly. If the
+Hetzner state file comes back only partially after a torn write or truncated
+restart artifact, the controller keeps the intact node records it could load,
+asks the provider for the live server inventory, and rehydrates only the
+prefix-matched nodes that are missing locally. That recovery path preserves the
+stronger contract: controller-owned lifecycle state stays explicit, but partial
+durable-state loss does not silently strand real provider nodes outside the
+fleet model.
+
 ## Initialization
 
 `king_autoscaling_init()` creates the runtime configuration snapshot for the
@@ -207,6 +216,10 @@ as a participant, not only as a provider object.
 
 That distinction matters in every real autoscaler. A cloud provider may create a
 VM successfully while the actual service bootstrap inside that VM still fails.
+For Hetzner rollout-backed scale-up, the create payload carries either explicit
+`bootstrap_user_data` or a generated `king-agent join --controller ... --release ...`
+bootstrap so freshly provisioned nodes keep the same join intent even after a
+restart or partial fleet-state recovery.
 
 ## Marking Nodes Ready
 

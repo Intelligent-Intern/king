@@ -8,11 +8,13 @@ Status note:
 - Unchecked boxes are still open, intentionally fenced out of the current v1 slice, or broader than the proof that exists in this repository today.
 - This file is the long-form closure tracker, not the active execution queue. `ISSUES.md` stays the narrow working backlog.
 - Open boxes are not supposed to be "closed" by redefining the product downward. If a stronger shared, remote, persistent, or otherwise meaningful v1 contract already belongs to King, the default action is to implement it correctly rather than quietly shrinking scope.
-- `ISSUES.md` now carries the next `20` repo-local executable leaves distilled from this tracker. Everything else stays here until it is split to that size.
-- Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, and real TCP host/port `remote_peer` execution with persisted success/failure snapshots are now verified; the remaining open boxes below are the broader continuation, observability, and multi-host slices.
+- `ISSUES.md` only carries the next `20` repo-local executable leaves when an explicit batch is active. Everything else stays here until it is split to that size.
+- Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, real TCP host/port `remote_peer` execution with persisted success/failure snapshots, distributed observability depth, and controller/worker/remote-peer failover harnesses are now verified; the remaining open boxes below are the broader continuation and larger multi-host slices.
 - Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path, are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices, now expose an explicit process-local non-persistent non-replay delivery contract across restart, now discard stale active-span plus pre-flush span/log scratch state at the next request or worker boundary instead of leaking it into later work units, and now enforce a queue-size-derived in-process byte budget with live self-metrics for queue growth, drops, and retry pressure; the remaining open boxes below are richer ordering/idempotency guarantees, longer-haul characterization, and stronger diagnostics.
+- Recent transport/admin closure: HTTP/3 early-data acceptance/fallback, injected packet-loss recovery, QUIC/TLS lifecycle churn, websocket server shutdown/drain, and bounded real admin-API mTLS/reload/failure behavior are now verified on the active runtime; the remaining open boxes below are the broader header/cors/live-traffic fairness slices.
 - Recent QUIC bootstrap closure: the build path now rehydrates a pinned `quiche` commit, pinned BoringSSL submodule commit, tracked workspace lockfile, and pinned `wirefilter` revision without branch-based fallbacks or unlocked cargo retries.
 - Recent Smart-DNS closure: the local DNS-shaped query surface now fails closed on undersized response budgets and rehydrates cleanly after restart, the active runtime now proves a bounded real on-wire UDP listener with honest request, timeout, truncation, and recovery behavior, stale peers can now heal partial durable-state loss by merging only missing service and mother-node entries back into the shared topology without overwriting newer overlapping state, and mother-node re-election pressure now carries persisted tombstones so departed leaders are not silently resurrected by stale writers before an explicit rejoin; the broader distributed-topology boxes below remain open.
+- Recent autoscaling closure: real load-shape decision explanations, partial persisted fleet-state recovery against live Hetzner inventory, and preserved fresh-node rollout bootstrap propagation are now verified; the remaining open boxes below are real drain-before-delete, policy-limit, and broader multi-node fleet-behavior slices.
 - Recent security closure: HTTP/2 one-shot cumulative body caps, HTTP/3 one-shot full-body completion, MCP persisted transfer-key truncation fixes plus loopback-default peer targeting, bounded object-store metadata-cache growth, CRLF-safe cloud metadata headers, TOCTOU-safe local/distributed object-store reads, snapshot-manifest line caps, snapshot-cleanup symlink hardening, bounded remote orchestrator error metadata, trusted workflow-run source materialization, and loopback-default Semantic DNS live probe allowlists are now verified on the current mainline; the broader full-surface security review remains open below.
 
 ## A. Transport / QUIC / HTTP / WebSocket
@@ -47,8 +49,8 @@ Status note:
 - [x] Validate HTTP/3 timeout behavior against real slow peers
 - [x] Validate HTTP/3 connection reuse and session ticket paths
 - [x] Validate HTTP/3 backpressure under real multi-stream traffic
-- [ ] Validate HTTP/3 early-data / session-ticket behavior
-- [ ] Validate HTTP/3 retransmit / loss behavior under injected packet loss
+- [x] Validate HTTP/3 early-data / session-ticket behavior
+- [x] Validate HTTP/3 retransmit / loss behavior under injected packet loss
 - [x] Validate HTTP/3 fairness under sustained load
 - [x] Validate HTTP/3 long-duration soak behavior under continuous load
 
@@ -59,7 +61,7 @@ Status note:
 - [ ] Validate QUIC congestion-control / flow-control behavior
 - [ ] Validate QUIC zero-RTT / session-resumption paths
 - [ ] Finalize QUIC error mapping to public exceptions
-- [ ] Fully validate QUIC/TLS interaction
+- [x] Fully validate QUIC/TLS interaction
 - [ ] Validate QUIC stats fields against real runtime values
 - [ ] Validate QUIC recovery after network interruption
 
@@ -76,7 +78,7 @@ Status note:
 - [x] Validate WebSocket fairness under many concurrent connections
 - [ ] Fully implement honest WebSocket server API behavior
 - [ ] Back `King\WebSocket\Server` with fully real runtime behavior
-- [ ] Validate `King\WebSocket\Server` shutdown and drain behavior
+- [x] Validate `King\WebSocket\Server` shutdown and drain behavior
 - [x] Validate WebSocket upgrade from HTTP/1 on-wire
 - [ ] Validate WebSocket upgrade from HTTP/2/h3 scenarios where publicly claimed
 - [ ] Validate WebSocket memory lifecycle across request/worker boundaries
@@ -93,8 +95,8 @@ Status note:
 - [ ] Validate server-side Early Hints on-wire
 - [x] Validate server-side WebSocket upgrades on-wire
 - [ ] Validate server TLS reload under live traffic
-- [ ] Validate server admin API under real mTLS configuration
-- [ ] Validate server admin API auth / reload / failure paths
+- [x] Validate server admin API under real mTLS configuration
+- [x] Validate server admin API auth / reload / failure paths
 - [ ] Validate server CORS / header behavior against real browsers and clients
 - [x] Validate server session churn under long-running operation
 - [x] Validate server close / drain / restart behavior
@@ -145,7 +147,7 @@ Status note:
 - [x] Validate worker failure during active pipeline execution
 - [x] Validate queue / scheduler fairness under load
 - [x] Finalize exact queued/running/failed/cancelled/completed state transitions
-- [ ] Fully integrate observability for pipeline execution
+- [x] Fully integrate observability for pipeline execution
 - [x] Build end-to-end multi-process harness
 - [ ] Build end-to-end multi-host harness
 
@@ -295,7 +297,7 @@ Status note:
 
 ## L. Autoscaling Core
 
-- [ ] Validate autoscaling decision logic under real load patterns
+- [x] Validate autoscaling decision logic under real load patterns
 - [ ] Validate CPU / memory / RPS / queue / latency signals under real operation
 - [x] Validate cooldown behavior under rapid load changes
 - [x] Validate hysteresis behavior under oscillating load
@@ -308,12 +310,12 @@ Status note:
 - [x] Finalize autoscaling failure behavior when telemetry is degraded
 - [x] Finalize autoscaling failure behavior when provider is degraded
 - [x] Validate autoscaling recovery after controller restart
-- [ ] Validate autoscaling recovery after partial fleet-state loss
+- [x] Validate autoscaling recovery after partial fleet-state loss
 
 ## M. Provisioning / Provider
 
 - [ ] Finish the Hetzner path as a complete production-grade path
-- [ ] Validate real release / bootstrap propagation to freshly provisioned nodes
+- [x] Validate real release / bootstrap propagation to freshly provisioned nodes
 - [ ] Make post-bootstrap node registration automated and robust
 - [ ] Make post-bootstrap node readiness automated and robust
 - [ ] Validate node drain before delete under real traffic
@@ -340,8 +342,8 @@ Status note:
 - [x] Implement telemetry failover harness
 - [x] Implement autoscaling failover harness
 - [ ] Implement object-store failover harness
-- [ ] Implement MCP failover harness
-- [ ] Implement orchestrator failover harness
+- [x] Implement MCP failover harness
+- [x] Implement orchestrator failover harness
 - [ ] Implement coordinated recovery after component failures
 - [ ] Implement coordinated recovery after node failure
 - [ ] Validate coordinated recovery after network partition where publicly claimed
