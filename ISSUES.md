@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Validate server admin API auth / mTLS / reload / failure paths under real traffic.
+- Classify provider quota-limit failures across real cloud backends.
 
 ## Active Executable Items
 
@@ -39,7 +39,7 @@
 4. [x] Validate `King\WebSocket\Server` shutdown and drain behavior.
    done when: live websocket server sessions drain, reject new work, and release runtime ownership cleanly under explicit shutdown without dangling peers or half-closed state.
 
-5. [ ] Validate server admin API auth / mTLS / reload / failure paths under real traffic.
+5. [x] Validate server admin API auth / mTLS / reload / failure paths under real traffic.
    done when: the active admin listener proves authentication, mTLS gating, reload behavior, and failure reporting against real clients instead of only local marker slices.
 
 ### 2. Object-Store Provider Failure Normalization
