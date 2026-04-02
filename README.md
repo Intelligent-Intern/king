@@ -287,6 +287,23 @@ Canonical release-install verification then runs through
 `./infra/scripts/container-smoke-matrix.sh`.
 The supported host/runtime verification matrix spans PHP `8.1` through `8.5`.
 
+## PIE
+
+King now carries the first honest maintainer surface for
+[PIE](https://github.com/php/pie), the PHP Installer for Extensions.
+
+The intended package shape is:
+
+- root [`composer.json`](composer.json) with `type = php-ext`
+- `build-path = extension`
+- a pre-packaged source asset built with
+  [`./infra/scripts/package-pie-source.sh`](infra/scripts/package-pie-source.sh)
+
+That source asset is the important part. King cannot rely on the default
+repository ZIP for PIE because the bundled `quiche/` tree is part of the active
+build. The maintainer workflow is documented in
+[`documentation/pie-install.md`](documentation/pie-install.md).
+
 ## Contributing
 
 See [CONTRIBUTE.md](CONTRIBUTE.md).
