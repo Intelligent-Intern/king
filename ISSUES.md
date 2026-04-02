@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Validate quota and rate-limit behavior across resumable upload recovery.
+- Implement an MCP failover harness for real peer recovery scenarios.
 
 ## Active Executable Items
 
@@ -50,7 +50,7 @@
 7. [x] Normalize quota and throttling failures across the public object-store surface.
    done when: reads, writes, deletes, and upload-session paths expose the same typed quota and backoff-worthy throttling story across `cloud_s3`, `cloud_gcs`, and `cloud_azure` instead of provider-specific string archaeology.
 
-8. [ ] Validate quota and rate-limit behavior across resumable upload recovery.
+8. [x] Validate quota and rate-limit behavior across resumable upload recovery.
    done when: restart rehydration, append, complete, and abort preserve the same honest quota and throttling classification instead of degrading into generic backend failure during upload recovery.
 
 ### 3. Control Plane Distributed Depth

@@ -603,6 +603,9 @@ part/block inventory, and the per-object mutation claim under the configured
 `storage_root_path`, so the same `upload_id` can be resumed or aborted after
 `king_object_store_init()` re-entry or after a process/request restart.
 Rehydrated session snapshots expose `recovered_after_restart=true`.
+Recovered sessions also keep the same public quota and throttling failure
+prefixes on `append`, `complete`, and `abort` instead of degrading into a
+generic backend-failure story after restart.
 
 What is still open there is a richer provider-specific multipart tuning
 surface, not whether restart recovery exists at all.
