@@ -44,6 +44,7 @@ typedef struct _king_autoscaling_runtime_state_t {
     zend_bool initialized;
     zend_bool monitoring_active;
     zend_bool controller_token_configured;
+    zend_bool state_load_incomplete;
     uint64_t action_count;
     time_t last_scale_up_at;
     time_t last_scale_down_at;
@@ -89,5 +90,6 @@ king_autoscaling_managed_node_t *king_autoscaling_runtime_pick_draining_node(voi
 int king_autoscaling_provider_scale_up(uint32_t count);
 int king_autoscaling_provider_scale_down(uint32_t count);
 int king_autoscaling_provider_rollback_stale_pending_node(time_t now);
+int king_autoscaling_provider_reconcile_inventory(void);
 
 #endif

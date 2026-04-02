@@ -1216,6 +1216,7 @@ void king_autoscaling_runtime_reset(void)
     king_autoscaling_runtime.initialized = 0;
     king_autoscaling_runtime.monitoring_active = 0;
     king_autoscaling_runtime.controller_token_configured = 0;
+    king_autoscaling_runtime.state_load_incomplete = 0;
     king_autoscaling_runtime.action_count = 0;
     king_autoscaling_runtime.last_scale_up_at = 0;
     king_autoscaling_runtime.last_scale_down_at = 0;
@@ -1284,6 +1285,8 @@ int king_autoscaling_runtime_load_state(void)
     char line[512];
     const char *state_path = king_autoscaling_runtime.config.state_path;
 
+    king_autoscaling_runtime.state_load_incomplete = 0;
+
     if (state_path == NULL || state_path[0] == '\0') {
         return SUCCESS;
     }
@@ -1337,6 +1340,7 @@ int king_autoscaling_runtime_load_state(void)
         }
 
         if (field_count != 6 && field_count != 10) {
+            king_autoscaling_runtime.state_load_incomplete = 1;
             continue;
         }
 
@@ -1498,6 +1502,12 @@ int king_autoscaling_init_system(const kg_cloud_autoscale_config_t *config)
     }
 
     king_autoscaling_runtime_load_state();
+    if (
+        king_autoscaling_runtime.state_load_incomplete
+        && king_autoscaling_provider_reconcile_inventory() != SUCCESS
+    ) {
+        return FAILURE;
+    }
     king_autoscaling_runtime_sync_instance_count();
     return SUCCESS;
 }
