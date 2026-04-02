@@ -226,5 +226,4 @@ void king_client_session_init_config_state(king_client_session_t *session)
         &session->config_tcp_tls_min_version_allowed,
         king_tcp_transport_config.tls_min_version_allowed
     );
-    king_client_session_init_tls_config_from_global(session);
 }
