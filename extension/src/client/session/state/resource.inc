@@ -139,12 +139,7 @@ void king_client_session_free(void *session_ptr)
         zend_string_release(session->tls_ticket_key_file);
     }
 
-    if (session->tls_session_ticket != NULL) {
-        if (ZSTR_LEN(session->tls_session_ticket) > 0) {
-            king_secure_zero(ZSTR_VAL(session->tls_session_ticket), ZSTR_LEN(session->tls_session_ticket));
-        }
-        zend_string_release(session->tls_session_ticket);
-    }
+    king_client_session_clear_tls_ticket(session);
 
     if (session->transport_backend != NULL) {
         zend_string_release(session->transport_backend);

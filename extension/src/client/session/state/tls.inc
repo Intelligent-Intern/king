@@ -11,6 +11,28 @@
  * =========================================================================
  */
 
+void king_client_session_clear_tls_ticket(king_client_session_t *session)
+{
+    if (session == NULL) {
+        return;
+    }
+
+    if (session->tls_session_ticket != NULL) {
+        if (ZSTR_LEN(session->tls_session_ticket) > 0) {
+            king_secure_zero(
+                ZSTR_VAL(session->tls_session_ticket),
+                ZSTR_LEN(session->tls_session_ticket)
+            );
+        }
+        zend_string_release(session->tls_session_ticket);
+        session->tls_session_ticket = NULL;
+    }
+
+    session->tls_has_session_ticket = false;
+    session->tls_session_ticket_length = 0;
+    session->tls_ticket_source = "none";
+}
+
 zend_result king_client_session_store_tls_ticket(
     king_client_session_t *session,
     const uint8_t *ticket,
@@ -29,10 +51,11 @@ zend_result king_client_session_store_tls_ticket(
         return FAILURE;
     }
 
-    king_client_session_set_string_bytes(
-        &session->tls_session_ticket,
+    king_client_session_clear_tls_ticket(session);
+    session->tls_session_ticket = zend_string_init(
         (const char *) ticket,
-        len
+        len,
+        0
     );
     session->tls_session_ticket_length = (zend_long) len;
     session->tls_has_session_ticket = true;

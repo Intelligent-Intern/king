@@ -93,11 +93,17 @@ void king_client_session_init_cancel_state(king_client_session_t *session)
 
 static void king_client_session_init_tls_config_from_global(king_client_session_t *session)
 {
-    session->tls_ticket_source = "none";
+    if (session->tls_session_ticket == NULL || ZSTR_LEN(session->tls_session_ticket) == 0) {
+        session->tls_ticket_source = "none";
+        session->tls_has_session_ticket = false;
+        session->tls_session_ticket_length = 0;
+    } else {
+        session->tls_has_session_ticket = true;
+        session->tls_session_ticket_length = (zend_long) ZSTR_LEN(session->tls_session_ticket);
+    }
+
     session->tls_session_ticket_lifetime_sec = king_tls_and_crypto_config.tls_session_ticket_lifetime_sec;
     session->tls_enable_early_data = king_tls_and_crypto_config.tls_enable_early_data;
-    session->tls_has_session_ticket = false;
-    session->tls_session_ticket_length = 0;
 
     king_client_session_set_string(
         &session->tls_default_ca_file,
@@ -115,7 +121,6 @@ static void king_client_session_init_tls_config_from_global(king_client_session_
         &session->tls_ticket_key_file,
         king_tls_and_crypto_config.tls_ticket_key_file
     );
-    king_client_session_set_string(&session->tls_session_ticket, "");
 }
 
 void king_client_session_init_tls_state(king_client_session_t *session)
