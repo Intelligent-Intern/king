@@ -1,7 +1,9 @@
 /*
  * Telemetry core runtime for King. Owns trace/log pending buffers, the batched
- * export retry queue, lazy libcurl-based exporter wiring and the small context
- * management helpers behind the current telemetry surface.
+ * export retry queue, lazy libcurl-based exporter wiring and the current small
+ * context helpers. Trace/span creation is live, but the local trace_id and
+ * span_id generators still return fixed placeholder values instead of a real
+ * entropy-backed ID source.
  */
 #include "php_king.h"
 #include "include/telemetry/telemetry.h"
@@ -753,7 +755,7 @@ void king_telemetry_shutdown_system(void)
 char* king_telemetry_generate_trace_id(void)
 {
     static char trace_id[33];
-    /* Simulation: static trace ID for runtime */
+    /* Current runtime still uses a fixed placeholder trace ID. */
     strncpy(trace_id, "4bf92f3577b34da6a3ce929d0e0e4736", 32);
     trace_id[32] = '\0';
     return trace_id;
@@ -762,7 +764,7 @@ char* king_telemetry_generate_trace_id(void)
 char* king_telemetry_generate_span_id(void)
 {
     static char span_id[17];
-    /* Simulation: static span ID for runtime */
+    /* Current runtime still uses a fixed placeholder span ID. */
     strncpy(span_id, "00f067aa0ba902b7", 16);
     span_id[16] = '\0';
     return span_id;

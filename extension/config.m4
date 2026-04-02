@@ -2,8 +2,11 @@ dnl =========================================================================
 dnl config.m4 -- King v1 build
 dnl
 dnl PURPOSE:
-dnl This config.m4 builds a minimal, compilable king extension.
-dnl It has zero external dependencies beyond the PHP build system itself.
+dnl This config.m4 drives the active King extension build with the current
+dnl runtime source list compiled into one shared module.
+dnl Mandatory inputs come from the PHP build toolchain plus the in-tree
+dnl headers the build already probes for, while optional quiche paths can be
+dnl layered in for extended transport builds.
 dnl
 dnl USE:
 dnl   cd extension
@@ -14,8 +17,9 @@ dnl
 dnl This runtime is the integration integrity check. All real subsystem
 dnl implementations are added here as they are transferred from src_bak/.
 dnl
-dnl When the full build is ready, this file will be replaced with the
-dnl production config.m4 that links quiche, libcurl, and OpenSSL.
+dnl Optional quiche wiring is prepared here, but the default active transport
+dnl runtime still stays on the local UDP substrate when no quiche path is
+dnl configured.
 dnl =========================================================================
 
 PHP_ARG_ENABLE([king],
