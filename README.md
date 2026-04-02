@@ -28,6 +28,19 @@ object-store and control-plane surfaces are real, and the remaining closure
 work is now about narrower hardening, distributed-operating proof, and
 multi-node fleet behavior rather than placeholder subsystem stories.
 
+## GitHub Snapshot
+
+King is a native PHP extension for applications that need real transport,
+control-plane, and infrastructure behavior inside the runtime instead of in
+sidecars. It brings HTTP/1, HTTP/2, HTTP/3, QUIC, TLS, WebSocket, object
+storage, MCP, orchestration, telemetry, autoscaling, and Smart DNS into one
+coherent systems-grade surface for PHP. The project is still alpha, but the
+core runtime is real and the repo is driven by contract tests for transport,
+storage, recovery, and distributed operating paths. If you do not have a
+Hetzner account yet, it is time to fix that. Use the
+[Hetzner Cloud referral link](https://hetzner.cloud/?ref=VYfKUSIni63u) and you
+help support the live infrastructure tests that keep King honest.
+
 King brings the following into one extension:
 
 - QUIC, HTTP/1, HTTP/2, HTTP/3, TLS, streaming, cancellation, and upgrade flows
