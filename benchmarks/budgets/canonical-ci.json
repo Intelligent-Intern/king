@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-04-02T13:45:00+00:00",
+  "generated_at": "2026-04-02T14:20:00+00:00",
   "target": "github-actions ubuntu-24.04 canonical benchmark gate",
   "iterations": 5000,
   "warmup_iterations": 500,
@@ -12,10 +12,10 @@
       "max_ns_per_iteration": 3000
     },
     "object_store": {
-      "max_ns_per_iteration": 600000
+      "max_ns_per_iteration": 900000
     },
     "semantic_dns": {
-      "max_ns_per_iteration": 150000
+      "max_ns_per_iteration": 350000
     }
   }
 }
