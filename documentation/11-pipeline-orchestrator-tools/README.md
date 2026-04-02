@@ -112,8 +112,9 @@ persistent system object rather than an anonymous return value.
 
 That is another key lesson of the example. The output of an orchestrated run is
 not only the final result. It is also the stored record of what was asked,
-which backend handled it, what state the run reached, and how the runtime can
-describe it later.
+which backend handled it, what state the run reached, which completed steps now
+need caller-managed compensation after a terminal failure, and how the runtime
+can describe that contract later.
 
 ## What You Should Watch
 

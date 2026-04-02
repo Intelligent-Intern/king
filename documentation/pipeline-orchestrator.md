@@ -70,15 +70,28 @@ operational questions are usually not only "did the run fail?" but also "which
 step failed, which steps already completed, and is the remainder still pending
 or now indeterminate because the failure happened on a remote boundary?"
 
+Failed or cancelled multi-step runs now also expose an explicit compensation
+contract instead of leaving rollback to guesswork. The run snapshot carries the
+top-level `compensation_policy`, and the nested `compensation` block makes the
+current contract concrete: compensation is still caller-managed, but the
+runtime names the reverse-completed-step strategy, whether compensation is
+required for the current terminal state, and which completed steps are pending
+compensation in reverse order. Each step snapshot also carries its own
+`compensation_status`, so a caller can tell the difference between a completed
+step that now needs compensation, a completed step that no longer needs it
+because the run ultimately succeeded, and a step for which compensation does
+not apply.
+
 Distributed runs also keep their operational breadcrumbs inside the snapshot
 instead of only in logs. `king_pipeline_orchestrator_get_run()` now exposes the
 run's `execution_backend`, `topology_scope`, `retry_policy`,
-`idempotency_policy`, and a `distributed_observability` block that records
-queue phase, enqueue time, claim count, claiming worker PID, recovery count and
-reason, remote-attempt count, and the last relevant timestamps for those
-events. Each step snapshot also carries its effective backend and topology
-scope, which makes remote-boundary outcomes visible at step granularity rather
-than only at the top level.
+`idempotency_policy`, `compensation_policy`, and a
+`distributed_observability` block that records queue phase, enqueue time, claim
+count, claiming worker PID, recovery count and reason, remote-attempt count,
+and the last relevant timestamps for those events. Each step snapshot also
+carries its effective backend, topology scope, and compensation status, which
+makes remote-boundary outcomes and post-failure cleanup duties visible at step
+granularity rather than only at the top level.
 
 This is the key reason the orchestrator feels like a control-plane subsystem
 instead of a convenience wrapper. The run is a system object with history.
@@ -301,13 +314,16 @@ the orchestrator continue that run from the stored initial data, pipeline, and
 execution options. This is run-level continuation, not mid-step checkpointing.
 If the interrupted run had already crossed a remote boundary, the
 `caller_managed` idempotency policy still applies, which means the caller owns
-the decision to replay that run. That replay contract is now verified not only
-for controller-process restart, but also for the broader host-loss case where
-the controller and remote peer both disappear and the peer later returns on the
-same persisted host/port route. The tree now also carries one reusable failover
-harness that proves controller loss, file-worker loss, and remote-peer return
-through the same persisted-state contract instead of relying on one-off
-scenario-specific recovery tests each time.
+the decision to replay that run. The compensation contract is explicit now too:
+if a run failed after completing earlier steps, the caller must compensate the
+listed completed steps in reverse order before replaying or replacing that run.
+That replay contract is now verified not only for controller-process restart,
+but also for the broader host-loss case where the controller and remote peer
+both disappear and the peer later returns on the same persisted host/port
+route. The tree now also carries one reusable failover harness that proves
+controller loss, file-worker loss, and remote-peer return through the same
+persisted-state contract instead of relying on one-off scenario-specific
+recovery tests each time.
 
 ## Logging Configuration
 
@@ -327,10 +343,10 @@ The orchestrator exposes a rich component snapshot through
 
 This snapshot includes timeout defaults, recursion depth, concurrency default,
 distributed tracing policy, execution backend, topology scope, scheduler
-policy, retry policy, idempotency policy, state path, worker queue path, remote
-host and port, recovery status, tool count, run history count, active run
-count, queued run count, last run ID, last run status, and the list of
-registered tools.
+policy, retry policy, idempotency policy, compensation policy, state path,
+worker queue path, remote host and port, recovery status, tool count, run
+history count, active run count, queued run count, last run ID, last run
+status, and the list of registered tools.
 
 The component snapshot also exposes a nested `distributed_observability` block
 with claimed-run count, recovered-run count, remote-attempted-run count, and

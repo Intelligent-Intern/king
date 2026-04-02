@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Finalize orchestrator compensation semantics where publicly claimed.
+- Validate Smart-DNS real on-wire DNS listener behavior.
 
 ## Active Executable Items
 
@@ -64,7 +64,7 @@
 11. [x] Finalize orchestrator observability depth for distributed execution.
     done when: persisted run state and runtime introspection expose enough queue, claim, retry, recovery, and remote-step context to explain distributed outcomes without log archaeology.
 
-12. [ ] Finalize orchestrator compensation semantics where publicly claimed.
+12. [x] Finalize orchestrator compensation semantics where publicly claimed.
     done when: multi-step failure and retry paths preserve an explicit compensation contract instead of leaving rollback and cleanup behavior implicit or caller-guessable.
 
 ### 4. Smart-DNS Distributed Recovery

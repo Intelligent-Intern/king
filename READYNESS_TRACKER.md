@@ -140,7 +140,7 @@ Status note:
 - [x] Propagate cancellation across step / worker boundaries
 - [x] Define and implement retry / idempotency semantics per step
 - [x] Finalize per-step error classification
-- [ ] Define and implement rollback / compensation semantics where publicly claimed
+- [x] Define and implement rollback / compensation semantics where publicly claimed
 - [x] Validate distributed tool execution across multiple workers
 - [x] Validate worker failure during active pipeline execution
 - [x] Validate queue / scheduler fairness under load

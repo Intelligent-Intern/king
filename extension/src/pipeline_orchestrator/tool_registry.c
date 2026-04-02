@@ -1792,6 +1792,47 @@ static const char *king_orchestrator_step_status_for_snapshot(
     return "pending";
 }
 
+static zend_bool king_orchestrator_run_requires_compensation(
+    const king_orchestrator_run_state_t *run_state
+)
+{
+    if (
+        run_state == NULL
+        || run_state->status == NULL
+        || run_state->completed_step_count <= 0
+    ) {
+        return 0;
+    }
+
+    return zend_string_equals_literal(run_state->status, "failed")
+        || zend_string_equals_literal(run_state->status, "cancelled");
+}
+
+static const char *king_orchestrator_step_compensation_status_for_snapshot(
+    const king_orchestrator_run_state_t *run_state,
+    zend_long step_index
+)
+{
+    if (
+        run_state == NULL
+        || run_state->status == NULL
+        || step_index < 0
+        || step_index >= run_state->completed_step_count
+    ) {
+        return "not_applicable";
+    }
+
+    if (zend_string_equals_literal(run_state->status, "completed")) {
+        return "not_required";
+    }
+
+    if (king_orchestrator_run_requires_compensation(run_state)) {
+        return "pending";
+    }
+
+    return "available";
+}
+
 static zend_long king_orchestrator_indeterminate_step_count(
     const king_orchestrator_run_state_t *run_state,
     zval *pipeline
@@ -1818,6 +1859,68 @@ static zend_long king_orchestrator_indeterminate_step_count(
     }
 
     return 0;
+}
+
+static void king_orchestrator_append_compensation_snapshot(
+    zval *target,
+    zval *pipeline,
+    const king_orchestrator_run_state_t *run_state
+)
+{
+    zval compensation;
+    zval pending_steps;
+    zval entry;
+    zval *tool;
+    zend_long step_index;
+    zend_bool required;
+
+    if (target == NULL) {
+        return;
+    }
+
+    required = king_orchestrator_run_requires_compensation(run_state);
+
+    array_init(&compensation);
+    add_assoc_string(&compensation, "policy", "caller_managed");
+    add_assoc_string(&compensation, "strategy", "reverse_completed_steps");
+    add_assoc_bool(&compensation, "required", required ? 1 : 0);
+    add_assoc_string(
+        &compensation,
+        "trigger",
+        required && run_state != NULL && run_state->status != NULL
+            ? ZSTR_VAL(run_state->status)
+            : "none"
+    );
+    add_assoc_long(
+        &compensation,
+        "pending_step_count",
+        required && run_state != NULL ? run_state->completed_step_count : 0
+    );
+
+    array_init(&pending_steps);
+    if (required && pipeline != NULL && Z_TYPE_P(pipeline) == IS_ARRAY && run_state != NULL) {
+        for (step_index = run_state->completed_step_count - 1; step_index >= 0; step_index--) {
+            array_init(&entry);
+            add_assoc_long(&entry, "index", step_index);
+
+            tool = king_orchestrator_find_pipeline_step_tool(pipeline, step_index);
+            if (tool != NULL && Z_TYPE_P(tool) == IS_STRING) {
+                add_assoc_stringl(&entry, "tool", Z_STRVAL_P(tool), Z_STRLEN_P(tool));
+            } else {
+                add_assoc_null(&entry, "tool");
+            }
+
+            add_assoc_string(&entry, "status", "pending");
+            add_next_index_zval(&pending_steps, &entry);
+
+            if (step_index == 0) {
+                break;
+            }
+        }
+    }
+
+    add_assoc_zval(&compensation, "pending_steps", &pending_steps);
+    add_assoc_zval(target, "compensation", &compensation);
 }
 
 static void king_orchestrator_append_run_observability(
@@ -1882,7 +1985,7 @@ static void king_orchestrator_append_step_snapshots(
     zval steps;
     zval *step;
     zval *tool;
-    zval *entry;
+    zval entry;
     uint32_t index = 0;
     const char *execution_backend = king_orchestrator_run_execution_backend(run_state);
     const char *topology_scope = king_orchestrator_topology_scope_for_backend(execution_backend);
@@ -1916,6 +2019,11 @@ static void king_orchestrator_append_step_snapshots(
             &entry,
             "status",
             king_orchestrator_step_status_for_snapshot(run_state, (zend_long) index)
+        );
+        add_assoc_string(
+            &entry,
+            "compensation_status",
+            king_orchestrator_step_compensation_status_for_snapshot(run_state, (zend_long) index)
         );
         add_assoc_string(&entry, "execution_backend", (char *) execution_backend);
         add_assoc_string(&entry, "topology_scope", (char *) topology_scope);
@@ -1994,6 +2102,7 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     );
     add_assoc_string(return_value, "retry_policy", "single_attempt");
     add_assoc_string(return_value, "idempotency_policy", "caller_managed");
+    add_assoc_string(return_value, "compensation_policy", "caller_managed");
     add_assoc_long(return_value, "started_at", (zend_long) run_state->started_at);
     add_assoc_long(return_value, "finished_at", (zend_long) run_state->finished_at);
     add_assoc_bool(return_value, "cancel_requested", run_state->cancel_requested ? 1 : 0);
@@ -2005,6 +2114,7 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     add_assoc_zval(return_value, "result", &result);
     add_assoc_zval(return_value, "error", &error);
     king_orchestrator_append_error_classification(return_value, run_state, &pipeline);
+    king_orchestrator_append_compensation_snapshot(return_value, &pipeline, run_state);
     king_orchestrator_append_run_observability(return_value, run_state, &pipeline);
     king_orchestrator_append_step_snapshots(return_value, &pipeline, run_state);
 
@@ -3102,6 +3212,7 @@ void king_orchestrator_append_component_info(zval *configuration)
     add_assoc_string(configuration, "scheduler_policy", scheduler_policy);
     add_assoc_string(configuration, "retry_policy", "single_attempt");
     add_assoc_string(configuration, "idempotency_policy", "caller_managed");
+    add_assoc_string(configuration, "compensation_policy", "caller_managed");
     add_assoc_string(
         configuration,
         "worker_queue_path",
