@@ -1,5 +1,7 @@
 <?php
 
+/* Local MCP harness server for parallel request and transfer-path contracts. */
+
 if ($argc < 4) {
     fwrite(STDERR, "usage: mcp_parallel_test_server.php <capture-path> <port> <bind-host>\n");
     exit(1);

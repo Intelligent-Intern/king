@@ -1,6 +1,12 @@
 #ifndef KING_SERVER_SESSION_H
 #define KING_SERVER_SESSION_H
 
+/*
+ * Shared server-session helpers layered on top of the unified `King\Session`
+ * runtime. These helpers own capability guarding, peer-cert snapshots, and
+ * server-initiated close metadata for the local server leaves.
+ */
+
 #include <php.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -71,7 +77,7 @@ PHP_FUNCTION(king_session_get_peer_cert_subject);
  *
  * Records a server-initiated close on the unified `King\Session` runtime,
  * closes the active transport socket if one is open, and rotates the session
- * capability on success.
+ * capability on success so stale close callers cannot replay the same token.
  */
 PHP_FUNCTION(king_session_close_server_initiated);
 

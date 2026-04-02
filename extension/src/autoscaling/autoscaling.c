@@ -1,6 +1,12 @@
 /*
- * src/autoscaling/autoscaling.c - Autoscaling Runtime State and Status Surface
- * =============================================================================
+ * src/autoscaling/autoscaling.c - Local Autoscaling Controller Runtime
+ * =========================================================================
+ *
+ * This file owns the in-process autoscaling controller state: config copy,
+ * persisted managed-node inventory, live telemetry/system signal collection,
+ * monitor-tick decision logic, and the public PHP entry points for init,
+ * status/metrics reads, and managed-node lifecycle transitions.
+ * =========================================================================
  */
 #include "php_king.h"
 #include "include/autoscaling/autoscaling.h"

@@ -1,5 +1,7 @@
 <?php
 
+/* Harness server for HTTP/1 interim-response and Early Hints budget contracts. */
+
 $port = (int) ($argv[1] ?? 0);
 $server = stream_socket_server("tcp://127.0.0.1:$port", $errno, $errstr);
 if ($server === false) {

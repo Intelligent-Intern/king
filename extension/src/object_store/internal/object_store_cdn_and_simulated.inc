@@ -1,3 +1,8 @@
+/*
+ * CDN and simulated-backend helpers. Covers synthetic CDN distribution hooks
+ * plus the lightweight simulated provider surfaces used for runtime reporting.
+ */
+
 int king_cdn_distribute_object(
     const char *object_id,
     const king_storage_node_t *edge_nodes,

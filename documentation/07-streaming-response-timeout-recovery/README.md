@@ -21,10 +21,12 @@ how to reason about ownership once the headers have already been accepted but
 the body is still arriving. At that point the request is neither a simple
 success nor a simple failure. It is a live response stream.
 
-That is exactly what the `response_stream` path is for. It turns the response
-into something the application can consume gradually. That opens the door to
-more realistic behavior, but it also means the caller now owns timeout
-decisions, partial progress, and end-of-body handling.
+That is exactly what the `response_stream` path is for. In the current public
+surface, that path is the HTTP/1 streaming slice: it returns a
+`King\HttpRequestContext`, which the caller then turns into a `King\Response`
+via `king_receive_response()`. That opens the door to more realistic behavior,
+but it also means the caller now owns timeout decisions, partial progress, and
+end-of-body handling.
 
 ```mermaid
 flowchart TD
@@ -59,19 +61,29 @@ buffered body.
 ```php
 <?php
 
-$response = king_send_request('https://example.com/large-export', [
-    'response_stream' => true,
-    'timeout_ms' => 10000,
-]);
+$ctx = king_send_request(
+    'http://example.com/large-export',
+    'GET',
+    null,
+    null,
+    [
+        'response_stream' => true,
+        'timeout_ms' => 10000,
+    ]
+);
 
-if ($response === false) {
+if ($ctx === false) {
     throw new RuntimeException(king_get_last_error());
 }
+
+$response = king_receive_response($ctx);
 ```
 
-The key idea is that a response object now represents a live exchange rather
-than a finished payload. Headers may already be trustworthy while the body is
-still arriving.
+The key idea is that the request first becomes a live response context and then
+materializes a `King\Response` whose body can still arrive over time. Headers
+may already be trustworthy while the body is still arriving. This streaming
+mode is currently the HTTP/1 response-stream slice; it is not the general
+dispatcher shape for HTTP/2 or HTTP/3.
 
 ## Step 2: Read Incrementally
 
@@ -81,16 +93,8 @@ for one finished body string.
 ```php
 <?php
 
-while (!feof($response->getBodyStream())) {
-    $chunk = fread($response->getBodyStream(), 8192);
-    if ($chunk === false) {
-        throw new RuntimeException('stream read failed');
-    }
-
-    if ($chunk === '') {
-        break;
-    }
-
+while (!$response->isEndOfBody()) {
+    $chunk = $response->read(8192);
     echo $chunk;
 }
 ```
@@ -98,7 +102,8 @@ while (!feof($response->getBodyStream())) {
 The important point is not the loop itself. The important point is that the
 application now owns progress. It can persist partial work, compute rolling
 checksums, emit progress information, or stop when policy says the response is
-no longer worth waiting for.
+no longer worth waiting for. It is still reading whole response-body chunks
+through the Response API rather than rebuilding framing from a raw PHP stream.
 
 ## Step 3: Understand Timeouts During Useful Progress
 

@@ -6,10 +6,12 @@ way to inspect itself, rotate trust material, and accept privileged operational
 actions without confusing those actions with ordinary public traffic.
 
 That is why this example matters. It does not describe an optional side path
-for operators. It describes part of the real service boundary. The admin API,
-peer certificate inspection, and live TLS reload path exist because a running
-service has to keep its identity, trust policy, and control plane healthy while
-it continues to serve work.
+for operators. It describes part of the real service boundary. In the current
+runtime, that boundary is represented as validated session state for the admin
+API, peer certificate inspection, and TLS reload path rather than a full
+network admin server and live accept-loop reconfiguration backend. Those
+surfaces still exist because a running service has to keep its identity, trust
+policy, and control plane healthy while it continues to serve work.
 
 
 If a technical word is unfamiliar, keep the [Glossary](../glossary.md) open while you read.
@@ -97,17 +99,23 @@ chain that was actually accepted, not according to a user-supplied header or a
 guess from outside the connection.
 
 The third thing to notice is timing. A TLS reload is valuable only if it can be
-performed while the process continues to serve traffic. That is why the example
-is not only about configuration. It is about lifecycle.
+performed while the process continues to serve traffic. In the current runtime,
+that reload is modeled as a validated TLS snapshot update on the live server
+session, not a full native listener hot-swap. That is why the example is not
+only about configuration. It is about lifecycle.
 
 ## How This Fits A Real Service
 
 In a real deployment, the main listener usually carries application traffic
 from public clients or upstream peers. The admin listener sits on a narrower
 path and receives actions such as reload, inspection, or other privileged
-operations. When new trust material is prepared, the runtime reloads it while
-the service remains alive. When an admin client connects, the process can read
-its verified subject and decide what that caller is allowed to do.
+operations. In the current runtime, King validates and records that admin
+listener snapshot on the live server session, including the required `mtls`
+material, instead of spinning up a separate in-tree network listener backend.
+When new trust material is prepared, the runtime reloads and tracks the TLS
+snapshot while the service remains alive. When an admin client connects on a
+server path that has peer identity available, the process can read its verified
+subject and decide what that caller is allowed to do.
 
 That combination is what makes the example practical. It does not show three
 unrelated features. It shows one operating model: keep the service online,
@@ -123,7 +131,9 @@ guesswork.
 
 This guide gives the reader the operational frame for that part of the runtime.
 It shows that King is not only designed to accept application traffic. It is
-designed to remain governable while it does so.
+designed to remain governable while it does so, even though the current repo
+slice models some of that control surface as validated session state rather
+than a full standalone admin daemon.
 
 For the wider server-side explanation, read [Server Runtime](../server-runtime.md)
 and [QUIC and TLS](../quic-and-tls.md).

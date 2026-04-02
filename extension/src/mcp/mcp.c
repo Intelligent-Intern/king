@@ -1,12 +1,8 @@
 /*
- * =========================================================================
- * FILENAME:   src/mcp/mcp.c
- * PROJECT:    king
- *
- * PURPOSE:
- * Implementation of the native MCP runtime. Manages connection lifecycle and
- * a small remote line-framed peer protocol for request/upload/download flows.
- * =========================================================================
+ * Native MCP runtime for King. Owns the local MCP state, the bounded
+ * line-framed remote-peer protocol for request/upload/download operations and
+ * the persisted transfer-state helpers that keep transfers resumable across
+ * restart and multi-host execution paths.
  */
 #include "include/mcp/mcp.h"
 #include "include/php_king.h"

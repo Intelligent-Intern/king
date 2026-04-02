@@ -1,5 +1,7 @@
 <?php
 
+/* Harness server for capturing on-wire HTTP/1 and WebSocket one-shot listener behavior. */
+
 if ($argc < 4) {
     fwrite(STDERR, "usage: server_websocket_wire_server.inc <capture-path> <port> <mode> [iterations]\n");
     exit(1);

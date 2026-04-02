@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/dynamic_admin_api/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the dynamic-admin-api
+ * config family. This file exposes the system-level bind host, port, auth
+ * mode, and mTLS material directives and keeps the shared
+ * `king_dynamic_admin_api_config` snapshot aligned with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/dynamic_admin_api/ini.h"
 #include "include/config/dynamic_admin_api/base_layer.h"
 

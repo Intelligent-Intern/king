@@ -1,3 +1,9 @@
+/*
+ * Proto-registry registry-helper slice: exports the small helpers for
+ * listing registered names and throwing the consistent runtime/validation
+ * errors used by the active proto registry surface.
+ */
+
 static void king_proto_return_registered_names(zval *return_value, HashTable *registry)
 {
     zend_string *name;

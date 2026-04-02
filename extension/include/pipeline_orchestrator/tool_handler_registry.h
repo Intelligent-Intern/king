@@ -2,15 +2,17 @@
  * include/pipeline_orchestrator/tool_handler_registry.h - Tool handler registry API
  * =================================================================================
  *
- * This header defines the C-level types and functions used to register and
- * look up pipeline tool handlers.
+ * Legacy declarative tool-configuration shapes for the orchestrator.
+ * The active runtime persists raw PHP tool-config arrays through the core
+ * orchestrator registry instead of instantiating a separate C registry layer
+ * from this header.
  */
 
-#ifndef KING_TOOL_HANDLER_REGISTRY_H
-#define KING_TOOL_HANDLER_REGISTRY_H
+#ifndef KING_PIPELINE_TOOL_HANDLER_REGISTRY_H
+#define KING_PIPELINE_TOOL_HANDLER_REGISTRY_H
 
 #include <php.h>
-#include "mcp.h"
+#include "mcp/mcp.h"
 
 /* --- MCP Target Configuration --- */
 typedef struct _king_mcp_target_config_t {
@@ -53,15 +55,4 @@ typedef struct _king_tool_handler_config_t {
     king_rag_config_t *rag_config;
 } king_tool_handler_config_t;
 
-/* --- Registry API --- */
-int king_tool_handler_registry_init(void);
-
-void king_tool_handler_registry_shutdown(void);
-
-/* Registers a tool handler from a PHP array. */
-int king_tool_handler_register_from_php(const char *tool_name, zval *config_php_array);
-
-/* Returns a registry-owned tool handler config, or NULL if not found. */
-const king_tool_handler_config_t* king_tool_handler_get(const char *tool_name);
-
-#endif /* KING_TOOL_HANDLER_REGISTRY_H */
+#endif /* KING_PIPELINE_TOOL_HANDLER_REGISTRY_H */

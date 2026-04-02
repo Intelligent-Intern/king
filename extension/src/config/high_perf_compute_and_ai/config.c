@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/high_perf_compute_and_ai/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the high-perf compute / AI config
+ * family. This file validates the narrow `King\\Config` subset that can
+ * tune dataframe limits, GPU backend/affinity, memory preallocation, and
+ * vendor-specific acceleration toggles on the live HPC snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/high_perf_compute_and_ai/config.h"
 #include "include/config/high_perf_compute_and_ai/base_layer.h"
 #include "include/king_globals.h"

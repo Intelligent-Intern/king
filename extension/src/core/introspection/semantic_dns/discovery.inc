@@ -1,3 +1,9 @@
+/*
+ * Public discovery leaf for Semantic-DNS service listings. Applies the live
+ * health sweep, filters the in-memory registry by type and optional criteria,
+ * and exports a bounded snapshot payload for userland.
+ */
+
 PHP_FUNCTION(king_semantic_dns_discover_service)
 {
     zend_string *service_type;

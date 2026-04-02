@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/smart_dns/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the Smart-DNS config family. This file
+ * validates the `King\\Config` subset that can target either a temporary
+ * config snapshot or the live module-global state, while explicitly
+ * fail-closing unsupported and system-only Smart-DNS v1 settings.
+ * =========================================================================
+ */
+
 #include "include/config/smart_dns/config.h"
 #include "include/config/smart_dns/base_layer.h"
 #include "include/king_globals.h"

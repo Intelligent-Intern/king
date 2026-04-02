@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/high_perf_compute_and_ai/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the high-perf compute / AI config family. This
+ * slice seeds the baseline dataframe, GPU backend/affinity, memory
+ * preallocation, direct-storage, and CUDA/ROCm/Arc acceleration defaults
+ * before INI and any allowed userland overrides refine the live snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/high_perf_compute_and_ai/default.h"
 #include "include/config/high_perf_compute_and_ai/base_layer.h"
 

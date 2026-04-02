@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/bare_metal_tuning/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the bare-metal tuning config family.
+ * This file validates the narrow `King\\Config` subset that is allowed to
+ * tweak io_uring, socket, CPU-affinity, and NUMA policy settings on the
+ * live `king_bare_metal_config` snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/bare_metal_tuning/config.h"
 #include "include/config/bare_metal_tuning/base_layer.h"
 #include "include/king_globals.h"

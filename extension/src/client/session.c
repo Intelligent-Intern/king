@@ -4,9 +4,11 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Native runtime client-session runtime. This owns the public
- * King\Session resource lifecycle and config-backed local state while the
- * live QUIC/TLS transport is still being transferred into the build.
+ * Native runtime client-session surface. This owns the public King\Session
+ * resource lifecycle plus the shared local config, cancel, TLS-ticket, and
+ * server-observation snapshots that client/server helpers read and update.
+ * The low-level transport state remains intentionally narrower than the full
+ * contract the session object already exposes.
  * =========================================================================
  */
 

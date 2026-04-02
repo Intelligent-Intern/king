@@ -130,8 +130,23 @@ is now living with a channel whose next message might arrive immediately, much
 later, or not at all. The runtime therefore exposes message receipt as its own
 operation.
 
+In the current public surface, pull-style receive is procedural. The
+object-oriented `King\WebSocket\Connection` wrapper currently covers connect,
+send, ping, close, and info inspection, while `king_client_websocket_receive()`
+is the explicit receive path.
+
 ```php
 <?php
+
+$handle = king_client_websocket_connect(
+    'ws://127.0.0.1:9000/realtime',
+    ['x-client-id' => 'example-reader'],
+    [
+        'handshake_timeout_ms' => 5000,
+        'ping_interval_ms' => 25000,
+        'max_payload_size' => 16 * 1024 * 1024,
+    ]
+);
 
 $payload = king_client_websocket_receive($handle, 1000);
 
@@ -187,7 +202,7 @@ different message types. Watch how receive ownership differs from a buffered
 HTTP body. Watch how ping and pong preserve channel health. Watch how close is
 handled as a real protocol event rather than as an afterthought.
 
-Those are the details that separate a working demo from a channel a real system
+Those are the details that separate a working example from a channel a real system
 can depend on.
 
 ## Why This Matters In Practice

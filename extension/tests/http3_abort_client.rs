@@ -1,3 +1,5 @@
+/* Test client that aborts an HTTP/3 request mid-flight for server cancel contracts. */
+
 use ring::rand::SecureRandom;
 use ring::rand::SystemRandom;
 

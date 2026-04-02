@@ -1,22 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_cors_origin_string.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    Because I don't like the idea that I'm not in control of my life.
- *
- * PURPOSE:
- * This file implements the centralized, reusable validation helper function
- * for CORS origin strings, as declared in its corresponding header file.
- *
- * ARCHITECTURE:
- * The function uses PHP's internal URL parser (`php_url_parse_ex`) to
- * provide robust, specification-compliant validation. It handles the two
- * valid cases for a CORS policy: a single wildcard `"*"` or a comma-
- * separated list of well-formed origins. This prevents malformed or
- * insecure origin strings from ever entering the extension's configuration.
- * =========================================================================
+ * Validation helper for CORS origin strings. Enforces string input and the
+ * bounded origin-shape checks used by the current server config surface.
  */
 
 #include "include/validation/config_param/validate_cors_origin_string.h"

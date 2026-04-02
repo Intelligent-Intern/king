@@ -1,3 +1,9 @@
+/*
+ * Shared init-state definitions for King. Holds the module-number latch and
+ * the shared-memory ticket-ring layout used by the TLS session-ticket helper
+ * lifecycle.
+ */
+
 #define KING_TICKET_RING_SLOT_COUNT 8
 
 typedef struct _king_ticket_ring_slot_t {

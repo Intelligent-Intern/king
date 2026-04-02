@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/open_telemetry/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the OpenTelemetry config family. This slice
+ * seeds the baseline exporter timeout, batch processor limits, trace
+ * sampler ratio and attribute cap, metrics cadence, and log export
+ * defaults before INI and any allowed userland overrides refine the live
+ * telemetry snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/open_telemetry/default.h"
 #include "include/config/open_telemetry/base_layer.h"
 

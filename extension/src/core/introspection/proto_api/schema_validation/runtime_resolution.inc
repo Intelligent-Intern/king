@@ -1,3 +1,10 @@
+/*
+ * Schema-validation runtime-resolution slice: resolves field type strings
+ * into the active runtime subset, distinguishes repeated and map fields, and
+ * marks schemas that are valid to define but not fully supported by the
+ * current runtime field implementation.
+ */
+
 static int king_proto_validate_schema_field_runtime_resolution(
     zend_string *schema_name,
     zend_string *field_name,

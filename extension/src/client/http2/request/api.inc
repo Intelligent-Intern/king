@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http2/request/api.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Public PHP entry leaf for the libcurl-backed HTTP/2 one-shot request
+ * surface. Argument parsing stays here; the actual request assembly,
+ * transfer execution, and response materialization are delegated into the
+ * bounded dispatch slices.
+ * =========================================================================
+ */
+
 PHP_FUNCTION(king_http2_request_send)
 {
     char *url_str;

@@ -1,3 +1,8 @@
+/*
+ * Primary local_fs runtime slice. Rehydrates local stats, enumerates objects
+ * and drives the primary filesystem-backed CRUD/state bookkeeping paths.
+ */
+
 void king_object_store_rehydrate_stats(void)
 {
     DIR *dir;

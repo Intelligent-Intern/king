@@ -1,3 +1,9 @@
+/*
+ * Backend-metadata bridge. Reads and writes metadata across the currently
+ * active backend and reconciles provider payload paths with local metadata
+ * snapshots.
+ */
+
 int king_object_store_backend_read_metadata(
     const char *object_id,
     king_object_metadata_t *metadata)

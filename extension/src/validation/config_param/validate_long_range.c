@@ -1,15 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_long_range.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    Come with me if you want to live.
- *
- * PURPOSE:
- * This file implements centralized, reusable validation helper function
- * for long integer values within a specific range passed from PHP userland.
- * =========================================================================
+ * Validation helper for integer config values. Enforces long input and the
+ * inclusive min/max bounds supplied by the caller.
  */
 
 #include "include/validation/config_param/validate_long_range.h"

@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/mcp_and_orchestrator/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the MCP/orchestrator config family. This slice
+ * seeds the baseline MCP timeout/retry/cache values plus orchestrator
+ * timeout, recursion, concurrency, backend, queue, and remote-peer defaults
+ * before INI and any allowed userland overrides refine the live snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/mcp_and_orchestrator/default.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"
 

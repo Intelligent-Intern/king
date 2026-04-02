@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/internal/object.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * `King\\Config` object surface on top of the native config resource. This
+ * file declares arginfo, resolves object/resource handles, canonicalizes and
+ * tracks namespaced override keys, enforces freeze and policy gates, and
+ * implements the OO `new/get/set/toArray` behavior for runtime config
+ * snapshots.
+ * =========================================================================
+ */
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_Config___construct, 0, 0, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()

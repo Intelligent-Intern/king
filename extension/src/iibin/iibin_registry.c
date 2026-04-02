@@ -1,3 +1,9 @@
+/*
+ * Process-local IIBIN registry runtime. Owns schema and enum registries,
+ * module lifecycle, runtime destructor hooks and the public enum-definition
+ * path used by the active proto surface.
+ */
+
 #include "php_king.h"
 #include "include/iibin/iibin_internal.h"
 

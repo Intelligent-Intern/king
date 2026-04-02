@@ -1,3 +1,10 @@
+/*
+ * Root object-store stats slice: exposes the current object-store and CDN
+ * runtime/config snapshot, including metadata-cache and coordinator state,
+ * plus the bounded optimize() surface that currently reports a native-fs
+ * no-op optimization pass.
+ */
+
 #include "object_store/object_store_internal.h"
 
 PHP_FUNCTION(king_object_store_get_stats)

@@ -1,14 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_scale_up_policy_string.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    Only I will remain.
- *
- * PURPOSE:
- * This file implements the validation helper for scale-up policy strings.
- * =========================================================================
+ * Validation helper for autoscaling scale-up policy strings. Enforces string
+ * input and the bounded policy names accepted by the autoscaling config.
  */
 
 #include "include/validation/config_param/validate_scale_up_policy_string.h"

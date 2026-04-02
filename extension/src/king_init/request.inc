@@ -1,3 +1,9 @@
+/*
+ * Request-lifecycle hooks for King. The active RINIT path is intentionally
+ * thin, while RSHUTDOWN clears the last-error buffer and tears down request-
+ * scoped telemetry state.
+ */
+
 #include "include/telemetry/telemetry.h"
 
 int king_request_init(int type, int module_number)

@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/tls/api.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Public client-TLS entry leaves. This file exposes the userland wrappers
+ * for CA-file and client-certificate configuration plus session-ticket
+ * import/export, while delegating the actual validation and state mutation
+ * into the smaller helper slices in this directory.
+ * =========================================================================
+ */
+
 PHP_FUNCTION(king_set_ca_file)
 {
     king_tls_set_ca_file_internal(

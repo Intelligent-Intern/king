@@ -1,3 +1,9 @@
+/*
+ * Shared local-listener helpers for the server runtime. Opens and normalizes
+ * the process-local server session snapshot, applies config/transport state
+ * and builds the normalized request path used by the local protocol leaves.
+ */
+
 #include "include/server/cors.h"
 #include "include/server/open_telemetry.h"
 

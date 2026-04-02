@@ -1,3 +1,5 @@
+/* HTTP/3 peer harness for slow-reader, slow-writer and timeout/failure contracts. */
+
 #[macro_use]
 extern crate log;
 

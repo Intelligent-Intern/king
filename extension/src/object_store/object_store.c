@@ -1,13 +1,8 @@
 /*
- * =========================================================================
- * FILENAME:   src/object_store/object_store.c
- * PROJECT:    king
- *
- * PURPOSE:
- * Native object store backend core. Implements local_fs persistence,
- * backend-routing dispatch, capacity enforcement accounting, and stubs
- * for distributed/cloud paths.
- * =========================================================================
+ * Native object-store runtime core. Owns local_fs persistence, backend
+ * dispatch, capacity and metadata accounting, upload-session recovery,
+ * distributed-state bookkeeping and the shared entry points that delegate the
+ * concrete cloud/provider work into the internal backend slices.
  */
 
 #include "php_king.h"

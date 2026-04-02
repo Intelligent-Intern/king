@@ -1,3 +1,8 @@
+/*
+ * Root proto enum-definition leaf: exposes the public enum registration
+ * surface and hands the validated payload to the active IIBIN registry.
+ */
+
 PHP_FUNCTION(king_proto_define_enum)
 {
     zend_string *enum_name;

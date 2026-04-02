@@ -6,8 +6,10 @@
  * PURPOSE:
  * Reserved arginfo aggregation point for autoscaling PHP entry points.
  *
- * No autoscaling-specific arginfo blocks are emitted in the current runtime
- * build, but the guarded header keeps the include graph explicit.
+ * The current runtime reuses most shared arginfo blocks from the central
+ * php_king arginfo table and only defines a small autoscaling-specific shape
+ * for node registration, so this header remains a thin include anchor rather
+ * than a generated block of declarations.
  * =========================================================================
  */
 

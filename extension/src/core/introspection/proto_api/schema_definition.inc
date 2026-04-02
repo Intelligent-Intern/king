@@ -1,3 +1,8 @@
+/*
+ * Root proto schema-definition leaf: exposes the public schema registration
+ * surface and hands the validated definition to the active IIBIN registry.
+ */
+
 PHP_FUNCTION(king_proto_define_schema)
 {
     zend_string *schema_name;

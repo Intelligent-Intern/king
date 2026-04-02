@@ -1,9 +1,10 @@
 /*
- * include/iibin/iibin.h - Public C API for IIBIN serialization
- * ============================================================
+ * include/iibin/iibin.h - Public PHP entry points for IIBIN/proto
+ * ===============================================================
  *
- * This header exposes the low-level schema and enum registration functions,
- * plus the encode/decode helpers used by the IIBIN wire-format layer.
+ * This header declares the exported PHP functions behind the `king_proto_*`
+ * surface and the `King\IIBIN` static API. The low-level registry and
+ * wire-format helpers live in `iibin_internal.h`.
  */
 
 #ifndef KING_PROTO_H
@@ -23,7 +24,7 @@ PHP_FUNCTION(king_proto_encode);
 /* Decodes a binary string using a predefined schema. */
 PHP_FUNCTION(king_proto_decode);
 
-/* Checks whether a schema is registered. */
+/* Checks whether a schema or enum is registered under the given name. */
 PHP_FUNCTION(king_proto_is_defined);
 
 /* Checks whether a message schema is registered. */

@@ -1,15 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_positive_long.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    The future is not set. There is no fate but what we make for ourselves.
- *
- * PURPOSE:
- * This file implements centralized, reusable validation helper function
- * for positive long integer values passed from PHP userland.
- * =========================================================================
+ * Validation helper for strictly positive integers. Enforces long input and
+ * the `> 0` contract used by multiple config families.
  */
 
 #include "include/validation/config_param/validate_positive_long.h"

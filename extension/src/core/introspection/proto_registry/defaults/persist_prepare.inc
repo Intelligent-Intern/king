@@ -1,3 +1,9 @@
+/*
+ * Proto-registry default prepare slice: handles the non-integer runtime
+ * default cases directly and decides whether the remaining default
+ * persistence should continue into the integer-specific path.
+ */
+
 static bool king_proto_runtime_persist_default_value_prepare(
     const king_proto_runtime_field *field,
     zval *value,

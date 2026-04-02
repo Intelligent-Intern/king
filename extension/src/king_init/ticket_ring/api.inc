@@ -1,3 +1,9 @@
+/*
+ * Public ticket-ring access helpers. Provides bounded put/get operations over
+ * the shared-memory TLS session-ticket ring, including expiry pruning and the
+ * newest-ticket selection path used by session resumption.
+ */
+
 void king_ticket_ring_put(const uint8_t *ticket, size_t len)
 {
     king_ticket_ring_shared_t *ring = king_ticket_ring_shared();

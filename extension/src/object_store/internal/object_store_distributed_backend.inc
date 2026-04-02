@@ -1,3 +1,8 @@
+/*
+ * Distributed-backend slice. Manages the filesystem-backed distributed object
+ * mirror and the bounded read/write/remove helpers behind distributed mode.
+ */
+
 static int king_object_store_distributed_root_available(
     const char *operation,
     char *error,

@@ -1,3 +1,9 @@
+/*
+ * Public topology export leaf. Emits the current service and mother-node
+ * inventories plus the local runtime counters that describe Smart-DNS server,
+ * discovery and query-processing state.
+ */
+
 PHP_FUNCTION(king_semantic_dns_get_service_topology)
 {
     zval services;

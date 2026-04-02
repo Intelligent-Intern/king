@@ -1,3 +1,15 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http1/request/target.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * HTTP/1 request-target construction helpers. This slice converts a parsed
+ * absolute URL into the on-wire origin-form path-plus-query target and
+ * rejects embedded CR/LF bytes before the request line is built.
+ * =========================================================================
+ */
+
 static zend_result king_http1_prepare_request_target(
     php_url *parsed_url,
     smart_str *request_target,

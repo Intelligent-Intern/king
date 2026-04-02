@@ -1,3 +1,9 @@
+/*
+ * Encode schema-payload slice: drives full payload encoding for one runtime
+ * schema, including input-shape validation, oneof tracking, map handling,
+ * repeated-field handling, and required-field enforcement.
+ */
+
 static bool king_proto_runtime_encode_schema_payload(
     smart_str *buf,
     zend_string *schema_name,

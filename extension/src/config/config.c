@@ -11,9 +11,11 @@
  * king_config_new_from_options() allocates a real composed king_cfg_t
  * snapshot from the active module globals. In the current runtime it
  * materializes the safe per-resource override surface that is already wired
- * for network, data/observability, autoscale, MCP/orchestrator, geometry,
- * smart-contract, and SSH-gateway config families. king_connect() can
- * consume and freeze this resource.
+ * for transport, TLS, HTTP/2, autoscale, MCP/orchestrator, geometry,
+ * Smart-DNS, storage/CDN, telemetry, smart-contract, and SSH-gateway
+ * config families. The resulting resource is consumed by the active client
+ * surfaces that accept `King\Config`, including `king_connect()` and the
+ * session-oriented runtime leaves.
  * =========================================================================
  */
 

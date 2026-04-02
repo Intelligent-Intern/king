@@ -1,5 +1,7 @@
 <?php
 
+/* Node-based harness server for HTTP/2 reset, abort and pool-recovery contracts. */
+
 $port = (int) ($argv[1] ?? 0);
 
 $script = <<<'JS'

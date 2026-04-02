@@ -4,8 +4,10 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Native Machine Control Protocol (MCP) runtime. This defines the stateful
- * remote peer connection handle used by request and transfer helpers.
+ * Native MCP runtime primitives shared by the PHP resource/object wrapper
+ * and the subsystem-local transport helpers. The runtime keeps one normalized
+ * remote peer target, one reusable socket stream, and the local persisted
+ * transfer-state fallback used by upload/download acknowledgements.
  * =========================================================================
  */
 #ifndef KING_MCP_H
@@ -24,7 +26,7 @@ typedef enum _king_mcp_error_kind {
 typedef struct _king_mcp_state {
     zend_string *host;
     zend_long port;
-    zval config; /* King\Config object */
+    zval config; /* Optional King\Config snapshot copied at connect time. */
     php_stream *transport_stream;
     bool closed;
     bool operation_active;
@@ -32,18 +34,18 @@ typedef struct _king_mcp_state {
 } king_mcp_state;
 
 typedef struct _king_mcp_runtime_control {
-    zend_long timeout_ms;
-    uint64_t deadline_ms;
+    zend_long timeout_ms;  /* Relative timeout budget in milliseconds. */
+    uint64_t deadline_ms;  /* Absolute monotonic deadline in milliseconds. */
     uint64_t started_at_ms;
-    zval *cancel_token;
+    zval *cancel_token;    /* Optional King\CancelToken zval. */
 } king_mcp_runtime_control_t;
 
-/* Runtime Management */
+/* Connection State Lifecycle */
 king_mcp_state *king_mcp_state_create(const char *host, size_t host_len, zend_long port, zval *config);
 void king_mcp_state_close(king_mcp_state *state);
 void king_mcp_state_free(king_mcp_state *state);
 
-/* Remote Transfer Operations */
+/* Remote Transfer Operations with local persisted fallback state */
 int king_mcp_transfer_store(
     king_mcp_state *state,
     const char *service,
@@ -72,7 +74,7 @@ int king_mcp_transfer_acknowledge(
     const char *id,
     size_t id_len);
 
-/* Request Transport */
+/* Unary line-framed request exchange */
 int king_mcp_request(
     king_mcp_state *state,
     const char *service,

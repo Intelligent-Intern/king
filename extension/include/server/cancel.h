@@ -9,7 +9,11 @@
  */
 
 /**
- * @brief Registers a callback that runs if a request stream is cancelled.
+ * @brief Registers a callback that runs once if a server stream is cancelled.
+ *
+ * The handler is stored on the shared `King\Session` snapshot and is invoked
+ * once when the same local stream later records cancellation, including the
+ * peer-disconnect path on the one-shot on-wire leaves.
  *
  * @param session_resource The session that owns the stream.
  * @param stream_id The stream identifier.

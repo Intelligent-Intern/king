@@ -1,5 +1,7 @@
 <?php
 
+/* Test helper for starting the local OTLP collector harness for telemetry exports. */
+
 function king_telemetry_test_pick_unused_port(): int
 {
     $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);

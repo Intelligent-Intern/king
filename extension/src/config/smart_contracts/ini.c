@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/smart_contracts/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the smart-contracts config
+ * family. This file exposes the system-level enablement, registry, DLT
+ * provider, gas defaults, wallet / HSM material, ABI directory, and
+ * event-listener directives and keeps `king_smart_contracts_config`
+ * aligned with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/smart_contracts/ini.h"
 #include "include/config/smart_contracts/base_layer.h"
 

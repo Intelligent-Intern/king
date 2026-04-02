@@ -1,3 +1,8 @@
+/*
+ * Common codec range-validation slice: enforces the numeric bounds and enum
+ * value constraints that the active runtime supports for scalar fields.
+ */
+
 static bool king_proto_runtime_validate_field_value_range(
     const king_proto_runtime_field *field,
     zval *value

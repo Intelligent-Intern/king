@@ -7,10 +7,12 @@ and, when needed, asks Hetzner for more machines. As those machines come up,
 the original node starts behaving more like a router and load balancer while
 the newer nodes take over more of the worker traffic.
 
-That is the shape this example is about. It is not a toy scale demo and it is
-not a local mock. It is the real story of one server growing into a cluster
-without pretending that "server created" is the same thing as "safe capacity is
-now available."
+That is the shape this example is about. Treat this guide as a deployment-shape
+walkthrough built around the real autoscaling controller surfaces King exposes
+today. The companion repo demo is still a local controller walkthrough, not a
+full end-to-end Hetzner bootstrap. The important point is the contract: one
+server grows into a cluster without pretending that "server created" is the
+same thing as "safe capacity is now available."
 
 
 If a technical word is unfamiliar, keep the [Glossary](../glossary.md) open while you read.
@@ -82,6 +84,11 @@ should not spend the scale event compiling or installing the whole runtime.
 
 The first node needs enough information to act as controller, ingress, and the
 initial worker.
+
+The config below shows the intended production shape. The companion
+`controller_demo.php` next to this guide only exercises the repo-local
+controller APIs and lifecycle snapshots; it does not provision real Hetzner
+instances during the docs demo.
 
 ```php
 <?php

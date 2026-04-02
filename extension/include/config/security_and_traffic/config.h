@@ -5,15 +5,15 @@
  * AUTHOR:     Jochen Schultz <jschultz@php.net>
  *
  * PURPOSE:
- * This header file declares the public C-API for applying runtime
- * configuration changes from PHP userland to the `security_and_traffic`
- * module.
+ * Declares the module-local helper for applying security/traffic overrides
+ * to the live security policy state.
  *
  * ARCHITECTURE:
- * The function declared here is the single entry point for all runtime
- * configuration modifications originating from either a `King\Config`
- * object or the Admin API. It encapsulates the entire process of
- * checking permissions, validating input, and applying settings.
+ * In the current build, the namespaced `King\Config` snapshot override
+ * pipeline does not route through a dedicated security
+ * `*_apply_userland_config_to()` helper, and this function is not a generic
+ * Admin-API entry point. It is the direct policy-gated helper for mutating
+ * the live module-global security config.
  * =========================================================================
  */
 
@@ -23,16 +23,10 @@
 #include "php.h"
 
 /**
- * @brief Applies runtime configuration settings from a PHP array.
- * @details This is a high-level function called at runtime (e.g., from a
- * server's `start()` method). It performs the following critical steps:
- * 1. Checks the global `is_userland_override_allowed` flag. If false,
- * it immediately throws a permission exception.
- * 2. Iterates through the provided `config_arr`.
- * 3. For each key, it retrieves the value and passes it to a dedicated,
- * robust validation function.
- * 4. Only if validation succeeds is the new value applied to the
- * module's internal configuration struct.
+ * @brief Applies security/traffic settings from a PHP array.
+ * @details This helper checks the global override policy, validates the
+ * supported security keys, and writes successful updates into the live
+ * `king_security_config` module state.
  *
  * @param config_arr A zval pointer to a PHP array containing the key-value
  * pairs of the configuration to apply.

@@ -1,3 +1,8 @@
+/*
+ * Internal class-registration helpers for the King extension. Keeps the small
+ * flag-aware wrappers used while registering core classes and facades.
+ */
+
 static zend_class_entry *king_register_class_with_flags(
     const char *name,
     zend_class_entry *parent,

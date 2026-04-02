@@ -1,4 +1,10 @@
 
+/*
+ * Prelude object-store runtime slice: owns the process-local CDN cache
+ * registry lifecycle, entry lookup, stats collection, and expiry sweeping
+ * that the active object-store/CDN introspection surfaces reuse.
+ */
+
 
 static void king_cdn_cache_entry_free(king_cdn_cache_entry *entry)
 {

@@ -1,5 +1,7 @@
 <?php
 
+/* Test helper for starting the on-wire HTTP/2 one-shot listener harness. */
+
 function king_http2_server_wire_start_server(?int $fixedPort = null, string $mode = 'basic'): array
 {
     if ($fixedPort !== null) {

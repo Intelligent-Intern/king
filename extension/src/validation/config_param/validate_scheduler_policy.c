@@ -1,20 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_scheduler_policy.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    If you'd like to hear it I can sing it for you.
- *
- * PURPOSE:
- * This file implements the centralized, reusable validation helper function
- * for Linux scheduler policy strings.
- *
- * ARCHITECTURE:
- * The function validates against a fixed allow-list of known, valid
- * scheduler policies, preventing arbitrary strings from being passed
- * to OS-level scheduling functions.
- * =========================================================================
+ * Validation helper for Linux scheduler policy strings. Enforces string input
+ * and the bounded scheduler names accepted by the cluster/process config.
  */
 
 #include "include/validation/config_param/validate_scheduler_policy.h"

@@ -1,3 +1,9 @@
+/*
+ * Public IIBIN facade bindings. Declares the King\IIBIN static method table
+ * and its arginfo so the OO surface maps directly onto the underlying
+ * king_proto_* procedural entry points.
+ */
+
 #include "php.h"
 #include "include/iibin/iibin_internal.h"
 

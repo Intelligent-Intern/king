@@ -1,3 +1,9 @@
+/*
+ * Distributed coordinator-state slice. Tracks the persisted coordinator
+ * snapshot, runtime recovery markers and state import/export helpers used by
+ * distributed object-store operation.
+ */
+
 static void king_object_store_distributed_state_reset_runtime(void)
 {
     king_object_store_runtime.distributed_coordinator_state_present = 0;

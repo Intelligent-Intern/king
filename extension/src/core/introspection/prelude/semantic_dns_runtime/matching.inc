@@ -1,3 +1,9 @@
+/*
+ * Semantic-DNS runtime matching slice: implements the current bounded
+ * criteria matcher for scalar service fields and attributes plus the simple
+ * candidate ranking heuristic used by the active routing surface.
+ */
+
 static bool king_semantic_dns_scalar_values_equal(const zval *left, const zval *right)
 {
     if (Z_TYPE_P(left) != Z_TYPE_P(right)) {

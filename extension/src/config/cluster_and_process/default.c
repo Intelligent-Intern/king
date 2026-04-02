@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/cluster_and_process/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the cluster/process config family. This slice
+ * seeds the baseline worker-count, graceful-shutdown, restart, fd-limit,
+ * scheduler, affinity, cgroup, and uid/gid defaults before INI and any
+ * allowed userland overrides refine the live cluster snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/cluster_and_process/default.h"
 #include "include/config/cluster_and_process/base_layer.h"
 

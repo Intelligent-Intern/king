@@ -1,5 +1,7 @@
 <?php
 
+/* Harness server for WebSocket churn and reconnect-isolation contracts. */
+
 if ($argc < 3) {
     fwrite(STDERR, "usage: websocket_churn_server.php <capture-path> <port> [max-connections]\n");
     exit(1);

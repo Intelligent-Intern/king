@@ -1,3 +1,9 @@
+/*
+ * Schema-validation constraints slice: enforces the cross-field rules around
+ * oneof, packed, default, required, map, and repeated combinations after the
+ * metadata and runtime type information for a field are known.
+ */
+
 static int king_proto_validate_schema_field_constraints(
     zend_string *schema_name,
     zend_string *field_name,

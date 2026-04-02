@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/tls/ticket.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * TLS session-ticket import/export helpers for `King\\Session`. This slice
+ * backs the public ticket leaves, enforces bounded ticket sizes, stores the
+ * imported ticket on the live session snapshot, and mirrors imported ticket
+ * bytes into the shared local ticket ring.
+ * =========================================================================
+ */
+
 static void king_tls_export_ticket_internal(
     INTERNAL_FUNCTION_PARAMETERS,
     const char *function_name)

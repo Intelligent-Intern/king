@@ -11,7 +11,7 @@
  */
 
 /**
- * @brief Upgrades a request stream to server-side WebSocket handling.
+ * @brief Upgrades one server stream to server-side WebSocket handling.
  *
  * @param session_resource The current session resource.
  * @param stream_id The stream that carried the request.

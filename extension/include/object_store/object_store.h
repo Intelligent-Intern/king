@@ -1,9 +1,11 @@
 /*
- * include/object_store/object_store.h - Public C API for object storage/CDN
+ * include/object_store/object_store.h - Public object-store/CDN surface
  * =========================================================================
  *
- * This header exposes the native object store and CDN entry points used by
- * the extension.
+ * Shared object-store/CDN types plus the exported PHP and native C entry
+ * points used by the extension. The active runtime covers object payload and
+ * metadata storage, bounded stream ingress/egress, real-cloud resumable
+ * uploads, CDN cache hooks, and committed snapshot backup/restore flows.
  */
 
 #ifndef KING_OBJECT_STORE_H
@@ -95,7 +97,7 @@ typedef struct _king_object_store_upload_status_t {
     uint8_t recovered_after_restart;
     uint8_t completed;
     uint8_t aborted;
-} king_object_store_upload_status_t;
+} king_object_store_upload_status_t; /* Stable PHP-visible upload-session snapshot. */
 
 typedef struct _king_storage_node_t {
     char node_id[64];
@@ -140,7 +142,7 @@ typedef struct _king_object_store_config_t {
 
 /* --- PHP Function Prototypes --- */
 
-/* Initializes the object store from a PHP config array. */
+/* Initializes the local object-store/CDN runtime from a PHP config array. */
 PHP_FUNCTION(king_object_store_init);
 
 /* Stores an object. */
@@ -149,7 +151,7 @@ PHP_FUNCTION(king_object_store_put);
 /* Stores an object from a readable stream without whole-payload materialization. */
 PHP_FUNCTION(king_object_store_put_from_stream);
 
-/* Starts a provider-native resumable upload session for cloud object-store backends. */
+/* Starts a real-cloud resumable upload session on the active primary backend. */
 PHP_FUNCTION(king_object_store_begin_resumable_upload);
 
 /* Appends one chunk to a provider-native resumable upload session. */
@@ -161,7 +163,7 @@ PHP_FUNCTION(king_object_store_complete_resumable_upload);
 /* Aborts a provider-native resumable upload session. */
 PHP_FUNCTION(king_object_store_abort_resumable_upload);
 
-/* Returns the current state of a provider-native resumable upload session. */
+/* Returns the current resumable-upload session snapshot. */
 PHP_FUNCTION(king_object_store_get_resumable_upload_status);
 
 /* Retrieves an object. */
@@ -173,7 +175,7 @@ PHP_FUNCTION(king_object_store_get_to_stream);
 /* Deletes an object. */
 PHP_FUNCTION(king_object_store_delete);
 
-/* Returns the object inventory for the active build. */
+/* Returns the current object inventory snapshot. */
 PHP_FUNCTION(king_object_store_list);
 
 /* Caches an object in CDN edge nodes. */
@@ -188,8 +190,26 @@ PHP_FUNCTION(king_cdn_get_edge_nodes);
 /* Returns object-store statistics. */
 PHP_FUNCTION(king_object_store_get_stats);
 
+/* Exports one object payload and metadata sidecar to a directory. */
+PHP_FUNCTION(king_object_store_backup_object);
+
+/* Restores exactly one archived object from a backup directory. */
+PHP_FUNCTION(king_object_store_restore_object);
+
+/* Exports a committed full or incremental snapshot of the current store. */
+PHP_FUNCTION(king_object_store_backup_all_objects);
+
+/* Restores a committed full snapshot or incremental patch replay. */
+PHP_FUNCTION(king_object_store_restore_all_objects);
+
 /* Runs object-store maintenance tasks. */
 PHP_FUNCTION(king_object_store_optimize);
+
+/* Removes already expired objects from the active runtime. */
+PHP_FUNCTION(king_object_store_cleanup_expired_objects);
+
+/* Returns one stored metadata snapshot, or false on miss. */
+PHP_FUNCTION(king_object_store_get_metadata);
 
 /* --- Internal C API --- */
 

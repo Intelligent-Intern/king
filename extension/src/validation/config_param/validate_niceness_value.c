@@ -1,21 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_niceness_value.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    I became operational at the H.A.L. plant in Urbana,
- * Illinois on the 12th of January 1992.
- *
- * PURPOSE:
- * This file implements the centralized, reusable validation helper function
- * for Linux 'niceness' values.
- *
- * ARCHITECTURE:
- * The function enforces strict type and range checking suitable for the
- * `setpriority()` system call, preventing invalid values from being
- * passed to the OS.
- * =========================================================================
+ * Validation helper for Linux niceness values. Enforces integer input and the
+ * bounded priority range accepted by the cluster/process config surface.
  */
 
 #include "include/validation/config_param/validate_niceness_value.h"

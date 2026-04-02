@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/state_management/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the state-management config
+ * family. This file exposes the system-level default backend and URI
+ * directives and keeps `king_state_management_config` aligned with
+ * validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/state_management/ini.h"
 #include "include/config/state_management/base_layer.h"
 

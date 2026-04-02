@@ -1,5 +1,7 @@
 <?php
 
+/* Test helper for starting the TLS-mismatch harness server for HTTP clients. */
+
 function king_http_tls_mismatch_start_server(): array
 {
     $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);

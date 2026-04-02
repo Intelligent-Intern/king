@@ -1,3 +1,9 @@
+/*
+ * External lifecycle declarations shared across php_king bootstrap slices.
+ * Lists the module-init and shutdown hooks imported from neighboring runtime
+ * components.
+ */
+
 int king_proto_registry_minit(void);
 void king_proto_registry_mshutdown(void);
 int king_iibin_minit(void);

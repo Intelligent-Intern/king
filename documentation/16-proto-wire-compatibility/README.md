@@ -8,7 +8,8 @@ King does not treat binary formats as temporary implementation detail. It
 treats them as contracts. That is why this guide matters. It teaches the reader
 to think about schema changes, field identity, defaults, enum stability, and
 backward reading behavior as part of platform design rather than as cleanup
-work done after a first release.
+work done after a first release. In the current runtime, that contract is the
+runtime-supported IIBIN subset, not every imaginable schema shape.
 
 
 If a technical word is unfamiliar, keep the [Glossary](../glossary.md) open while you read.
@@ -59,7 +60,10 @@ survives when one side knows slightly more or slightly less than the other.
 That is the case that matters in rolling deploys, staged upgrades, replay,
 stored artifacts, background workers, and mixed-version control-plane systems.
 Perfect version alignment is the easy case. Real systems spend long periods in
-the almost-aligned state instead.
+the almost-aligned state instead. The current repo slice proves that discipline
+inside the runtime-supported field shapes: stable field numbers, unknown-field
+skip behavior, decode-time defaults, packed compatibility for the supported
+numeric and enum cases, and `oneof` last-member-wins semantics.
 
 ## Why This Matters Outside Serialization
 
@@ -71,7 +75,8 @@ that originally changed the schema.
 
 That is why the example matters for more than IIBIN itself. It teaches a habit
 of disciplined change. Stable field numbers, safe defaults, additive growth,
-and explicit tests are all part of making a long-lived platform survivable.
+and explicit tests are all part of making a long-lived platform survivable,
+even before the runtime claims the full generality of every schema form.
 
 ## What You Should Notice In Practice
 

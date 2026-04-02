@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/security_and_traffic/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the security and traffic
+ * config family. This file exposes the system-level override-policy,
+ * admin-API, rate-limiter, and CORS directives and keeps
+ * `king_security_config` plus the global userland-override gate aligned
+ * with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/security_and_traffic/ini.h"
 #include "include/config/security_and_traffic/base_layer.h"
 #include "include/king_globals.h"

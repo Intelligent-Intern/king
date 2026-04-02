@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/cluster_and_process/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the cluster/process config family. This
+ * file validates the narrow `King\\Config` subset that can tune worker
+ * counts, restart policy, scheduler/niceness, affinity, cgroup, and runtime
+ * identity settings on the live `king_cluster_config` snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/cluster_and_process/config.h"
 #include "include/config/cluster_and_process/base_layer.h"
 #include "include/king_globals.h"

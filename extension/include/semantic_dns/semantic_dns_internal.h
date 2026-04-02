@@ -4,7 +4,8 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Internal header for the Semantic-DNS native runtime.
+ * Internal runtime state plus persisted topology/recovery helpers for the
+ * Semantic-DNS subsystem.
  * =========================================================================
  */
 
@@ -22,15 +23,16 @@ typedef struct _king_semantic_dns_runtime_state {
     bool server_active;
     time_t initialized_at;
     time_t server_started_at;
-    zend_long start_count;
-    zend_long processed_query_count;
-    zend_long last_discovered_node_count;
-    zend_long last_synced_node_count;
+    zend_long start_count;                /* Local server activations. */
+    zend_long processed_query_count;      /* Successful bounded local queries. */
+    zend_long last_discovered_node_count; /* Last discovery refresh count. */
+    zend_long last_synced_node_count;     /* Last mother-node sync count. */
     king_semantic_dns_config_t config;
 } king_semantic_dns_runtime_state;
 
 extern king_semantic_dns_runtime_state king_semantic_dns_runtime;
 
+/* Persisted state snapshot helpers */
 int king_semantic_dns_state_load(void);
 int king_semantic_dns_state_save(void);
 int king_semantic_dns_state_has_regular_snapshot(void);
@@ -39,6 +41,8 @@ void king_semantic_dns_state_transaction_end(int lock_fd);
 int king_semantic_dns_state_persist_locked(void);
 int king_semantic_dns_export_state_payload(zval *return_value);
 int king_semantic_dns_import_state_payload(zval *payload);
+
+/* Registry/runtime refresh helpers */
 int king_semantic_dns_refresh_runtime_mother_nodes_from_registry(void);
 void king_semantic_dns_refresh_live_service_signals(void);
 

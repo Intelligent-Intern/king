@@ -1,3 +1,8 @@
+/*
+ * Internal exception-registration helpers for the King extension. Provides the
+ * small wrappers that build the extension's exception hierarchy.
+ */
+
 static zend_class_entry *king_register_exception(
     const char *name,
     zend_class_entry *parent)

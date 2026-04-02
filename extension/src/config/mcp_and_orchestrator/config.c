@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/mcp_and_orchestrator/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the MCP/orchestrator config family.
+ * This file validates the `King\\Config` subset that may tune MCP timeout,
+ * retry, cache, and orchestrator execution settings on either a temporary
+ * config snapshot or the live module-global state, while rejecting the
+ * system-only path-based fields that must stay under php.ini control.
+ * =========================================================================
+ */
+
 #include "include/config/mcp_and_orchestrator/config.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"
 #include "include/king_globals.h"
