@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Finalize orchestrator observability depth for distributed execution.
+- Finalize orchestrator compensation semantics where publicly claimed.
 
 ## Active Executable Items
 
@@ -61,7 +61,7 @@
 10. [x] Implement an orchestrator failover harness for controller, worker, and remote-peer loss.
     done when: the repo can inject and verify orchestrator recovery across controller loss, worker loss, and remote-peer return without relying on hand-built scenario tests each time.
 
-11. [ ] Finalize orchestrator observability depth for distributed execution.
+11. [x] Finalize orchestrator observability depth for distributed execution.
     done when: persisted run state and runtime introspection expose enough queue, claim, retry, recovery, and remote-step context to explain distributed outcomes without log archaeology.
 
 12. [ ] Finalize orchestrator compensation semantics where publicly claimed.
