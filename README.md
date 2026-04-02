@@ -47,11 +47,14 @@ That gives you the extension plus the matching QUIC runtime artifacts for the
 local release profile. If you only want the extension build, use
 [`./infra/scripts/build-extension.sh`](./infra/scripts/build-extension.sh).
 
+If you want the beginner path from zero to a local WebSocket roundtrip, start
+with [documentation/getting-started.md](./documentation/getting-started.md).
+
 King is also being wired for the first honest
 [PIE](https://github.com/php/pie) install path. The maintainer workflow lives in
-[`documentation/pie-install.md`](./documentation/pie-install.md), and the
-packaged alpha target is `pie install intelligent-intern/king-ext` once the
-release asset is published.
+[`documentation/pie-install.md`](./documentation/pie-install.md). PIE is the
+successor to PECL, and the packaged alpha target is
+`pie install intelligent-intern/king-ext` once the release asset is published.
 
 ## Small But Oho
 
