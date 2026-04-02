@@ -1194,6 +1194,23 @@ namespace {
      *   last_action_kind:string,
      *   last_signal_source:string,
      *   last_decision_reason:string,
+     *   last_monitor_decision:string,
+     *   last_monitor_signal_snapshot:array{
+     *     cpu_utilization:float,
+     *     memory_utilization:float,
+     *     active_connections:int,
+     *     requests_per_second:int,
+     *     response_time_ms:int,
+     *     queue_depth:int,
+     *     timestamp:int
+     *   },
+     *   last_monitor_decision_details:array{
+     *     blocked_by_cooldown:bool,
+     *     live_signals:list<string>,
+     *     scale_up_signals:list<string>,
+     *     scale_down_ready_signals:list<string>,
+     *     hold_blockers:list<string>
+     *   },
      *   last_error:string,
      *   last_warning:string
      * }

@@ -94,6 +94,13 @@ is enabled, what provider mode is active, what the last signal source was, what
 decision was made recently, how much cooldown remains, and other controller
 state that explains why the system is or is not scaling.
 
+That explanation is now structured, not only textual. The status surface carries
+`last_monitor_decision`, `last_monitor_signal_snapshot`, and
+`last_monitor_decision_details` so callers can see which live signals were
+present, which ones created scale-up pressure, which ones were already inside
+the scale-down window, which signals kept the controller in the hysteresis
+middle, and whether a real decision was held back only by cooldown.
+
 This is important because autoscaling is one of the easiest places for a system
 to feel mysterious. A good controller should not only act. It should also expose
 its reasoning.

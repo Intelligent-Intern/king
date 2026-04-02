@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Validate autoscaling decision logic under real load patterns.
+- Validate autoscaling recovery after partial fleet-state loss and fresh-node bootstrap propagation.
 
 ## Active Executable Items
 
@@ -86,7 +86,7 @@
 17. [x] Enforce telemetry memory bounds and self-metrics under degraded exporter load.
     done when: telemetry stays memory-bounded during collector slowdown or outage and exposes enough self-metrics to make queue growth, drops, and retry pressure observable.
 
-18. [ ] Validate autoscaling decision logic under real load patterns.
+18. [x] Validate autoscaling decision logic under real load patterns.
     done when: scaling decisions are exercised against real load shapes and the runtime can explain why it scaled or held instead of only reacting to synthetic single-signal slices.
 
 19. [ ] Validate autoscaling recovery after partial fleet-state loss and fresh-node bootstrap propagation.

@@ -24,6 +24,9 @@ $expectedKeys = [
     'last_action_kind',
     'last_signal_source',
     'last_decision_reason',
+    'last_monitor_decision',
+    'last_monitor_signal_snapshot',
+    'last_monitor_decision_details',
     'last_error',
     'last_warning',
     'hetzner_budget_path',
@@ -44,7 +47,7 @@ var_dump($status['current_instances']);
 ?>
 --EXPECT--
 bool(true)
-int(31)
+int(34)
 bool(true)
 bool(false)
 int(1)
