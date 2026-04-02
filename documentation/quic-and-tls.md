@@ -166,6 +166,12 @@ This is the practical picture to keep in mind. The session is the long-lived
 owner. Streams are the individual units of work. Responses are what come back
 from those streams.
 
+The current tree also proves that lifecycle against real peers instead of only
+describing it abstractly. The active QUIC coverage now follows one-shot HTTP/3
+sessions through Initial, established/open, response-drain, draining, and
+closed phases with peer-observed capture, so the session model above is backed
+by real transport behavior rather than by a conceptual diagram alone.
+
 ## A First Session
 
 The first explicit session usually looks like this:

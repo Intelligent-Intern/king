@@ -25,6 +25,19 @@ struct PendingResponse {
     written: usize,
 }
 
+struct LifecycleCapture {
+    saw_initial: bool,
+    saw_established: bool,
+    saw_h3_open: bool,
+    saw_request_headers: bool,
+    saw_response_headers: bool,
+    saw_response_drain: bool,
+    response_drained_before_close: bool,
+    saw_draining: bool,
+    saw_closed: bool,
+    close_source: &'static str,
+}
+
 fn main() {
     let mut args = std::env::args();
     let cmd = args
@@ -116,6 +129,18 @@ fn main() {
     let mut conn: Option<quiche::Connection> = None;
     let mut h3_conn: Option<quiche::h3::Connection> = None;
     let mut pending = HashMap::<u64, PendingResponse>::new();
+    let mut lifecycle = LifecycleCapture {
+        saw_initial: false,
+        saw_established: false,
+        saw_h3_open: false,
+        saw_request_headers: false,
+        saw_response_headers: false,
+        saw_response_drain: false,
+        response_drained_before_close: false,
+        saw_draining: false,
+        saw_closed: false,
+        close_source: "none",
+    };
     let mut response_started = false;
     let mut response_idle_deadline: Option<Instant> = None;
     let mut drop_first_established_datagram = drop_first_established_datagram;
@@ -163,6 +188,8 @@ fn main() {
                     continue 'read;
                 }
 
+                lifecycle.saw_initial = true;
+
                 if !quiche::version_is_supported(hdr.version) {
                     let written = quiche::negotiate_version(
                         &hdr.scid,
@@ -202,9 +229,14 @@ fn main() {
                 continue 'read;
             }
 
+            if active.is_established() {
+                lifecycle.saw_established = true;
+            }
+
             if h3_conn.is_none() &&
                 (active.is_in_early_data() || active.is_established())
             {
+                lifecycle.saw_h3_open = true;
                 h3_conn = Some(
                     quiche::h3::Connection::with_transport(
                         active,
@@ -221,12 +253,13 @@ fn main() {
                     &root,
                     &mut pending,
                     &mut response_started,
+                    &mut lifecycle,
                 );
             }
         }
 
         if let (Some(http3), Some(active)) = (h3_conn.as_mut(), conn.as_mut()) {
-            flush_pending_bodies(http3, active, &mut pending);
+            flush_pending_bodies(http3, active, &mut pending, &mut lifecycle);
         }
 
         if response_started && pending.is_empty() && response_idle_deadline.is_none() {
@@ -241,7 +274,24 @@ fn main() {
         if let Some(active) = conn.as_mut() {
             flush_egress(&mut socket, active, &mut out);
 
+            if active.is_draining() {
+                if !lifecycle.saw_draining {
+                    lifecycle.response_drained_before_close =
+                        lifecycle.saw_response_drain;
+                    if lifecycle.close_source == "none" {
+                        lifecycle.close_source = "peer_draining_close";
+                    }
+                }
+                lifecycle.saw_draining = true;
+            }
+
             if active.is_closed() {
+                if lifecycle.close_source == "none" {
+                    lifecycle.response_drained_before_close =
+                        lifecycle.saw_response_drain;
+                    lifecycle.close_source = "peer_closed";
+                }
+                lifecycle.saw_closed = true;
                 break;
             }
         }
@@ -249,13 +299,35 @@ fn main() {
         if let Some(deadline) = response_idle_deadline {
             if pending.is_empty() && Instant::now() >= deadline {
                 if let Some(active) = conn.as_mut() {
+                    lifecycle.response_drained_before_close =
+                        response_started && lifecycle.saw_response_drain;
+                    lifecycle.close_source = "server_idle_close";
                     active.close(true, 0, b"").ok();
                     flush_egress(&mut socket, active, &mut out);
+                    if active.is_draining() {
+                        lifecycle.saw_draining = true;
+                    }
+                    if active.is_closed() {
+                        lifecycle.saw_closed = true;
+                    }
                 }
-                break;
             }
         }
     }
+
+    println!(
+        "LIFECYCLE {{\"saw_initial\":{},\"saw_established\":{},\"saw_h3_open\":{},\"saw_request_headers\":{},\"saw_response_headers\":{},\"saw_response_drain\":{},\"response_drained_before_close\":{},\"saw_draining\":{},\"saw_closed\":{},\"close_source\":\"{}\"}}",
+        lifecycle.saw_initial,
+        lifecycle.saw_established,
+        lifecycle.saw_h3_open,
+        lifecycle.saw_request_headers,
+        lifecycle.saw_response_headers,
+        lifecycle.saw_response_drain,
+        lifecycle.response_drained_before_close,
+        lifecycle.saw_draining,
+        lifecycle.saw_closed,
+        lifecycle.close_source,
+    );
 }
 
 fn usage_and_exit(cmd: &str) -> ! {
@@ -279,12 +351,14 @@ fn process_http3_events(
     root: &str,
     pending: &mut HashMap<u64, PendingResponse>,
     response_started: &mut bool,
+    lifecycle: &mut LifecycleCapture,
 ) {
     loop {
         match http3.poll(conn) {
             Ok((stream_id, quiche::h3::Event::Headers { list, .. })) => {
                 conn.stream_shutdown(stream_id, quiche::Shutdown::Read, 0).ok();
                 *response_started = true;
+                lifecycle.saw_request_headers = true;
 
                 let (status_code, body) = build_response(root, &list);
                 let status = status_code.to_string();
@@ -318,11 +392,15 @@ fn process_http3_events(
                     return;
                 }
 
+                lifecycle.saw_response_headers = true;
+
                 if !body.is_empty() {
                     pending.insert(
                         stream_id,
                         PendingResponse { body, written: 0 },
                     );
+                } else {
+                    lifecycle.saw_response_drain = true;
                 }
             },
 
@@ -358,6 +436,7 @@ fn flush_pending_bodies(
     http3: &mut quiche::h3::Connection,
     conn: &mut quiche::Connection,
     pending: &mut HashMap<u64, PendingResponse>,
+    lifecycle: &mut LifecycleCapture,
 ) {
     let mut completed = Vec::new();
 
@@ -372,6 +451,7 @@ fn flush_pending_bodies(
             Ok(written) => {
                 response.written += written;
                 if response.written == response.body.len() {
+                    lifecycle.saw_response_drain = true;
                     completed.push(*stream_id);
                 }
             },

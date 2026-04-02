@@ -304,6 +304,22 @@ function king_http3_stop_ticket_test_server(array $server): array
     return king_http3_finalize_failure_peer($server);
 }
 
+function king_http3_ticket_server_lifecycle(array $capture): array
+{
+    $stdout = (string) ($capture['stdout'] ?? '');
+
+    if (preg_match('/^LIFECYCLE (\{.+\})$/m', $stdout, $matches) !== 1) {
+        throw new RuntimeException('HTTP/3 ticket test server did not emit a lifecycle capture.');
+    }
+
+    $decoded = json_decode($matches[1], true, 512, JSON_THROW_ON_ERROR);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('HTTP/3 ticket test server lifecycle capture was not an object.');
+    }
+
+    return $decoded;
+}
+
 function king_http3_request_with_retry(callable $callback)
 {
     $lastError = null;

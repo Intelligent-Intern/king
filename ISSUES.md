@@ -20,11 +20,11 @@
 
 ## Current Next Leaf
 
-- `#1 Validate QUIC connection handshake, open, drain, and close lifecycle against real peers.`
+- `#2 Validate QUIC idle-timeout and application-close propagation against real peers.`
 
 ## Active Executable Items
 
-- [ ] `#1 Validate QUIC connection handshake, open, drain, and close lifecycle against real peers.`
+- [x] `#1 Validate QUIC connection handshake, open, drain, and close lifecycle against real peers.`
 - [ ] `#2 Validate QUIC idle-timeout and application-close propagation against real peers.`
 - [ ] `#3 Validate QUIC stream open, body, finish, and read-drain lifecycle against real peers.`
 - [ ] `#4 Validate QUIC reset and stop-sending lifecycle against real peers.`
