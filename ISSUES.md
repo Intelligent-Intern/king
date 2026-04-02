@@ -20,15 +20,34 @@
 
 ## Current Next Leaf
 
-- none. The current `20`-issue batch is exhausted.
+- `#1 Validate QUIC connection handshake, open, drain, and close lifecycle against real peers.`
 
 ## Active Executable Items
 
-- none. Wait for an explicit request before pulling the next `20`-issue batch from `READYNESS_TRACKER.md`.
+- [ ] `#1 Validate QUIC connection handshake, open, drain, and close lifecycle against real peers.`
+- [ ] `#2 Validate QUIC idle-timeout and application-close propagation against real peers.`
+- [ ] `#3 Validate QUIC stream open, body, finish, and read-drain lifecycle against real peers.`
+- [ ] `#4 Validate QUIC reset and stop-sending lifecycle against real peers.`
+- [ ] `#5 Validate QUIC userland cancel propagation into active transport state.`
+- [ ] `#6 Validate QUIC remote abort and transport-close mapping into public exceptions.`
+- [ ] `#7 Validate QUIC poll/event-loop wake, idle, and timeout behavior under sustained runtime.`
+- [ ] `#8 Validate QUIC congestion-control behavior under sustained constrained links.`
+- [ ] `#9 Validate QUIC flow-control exhaustion and recovery behavior under sustained streams.`
+- [ ] `#10 Validate QUIC zero-RTT acceptance and fallback against real peers.`
+- [ ] `#11 Finalize QUIC error mapping across transport, TLS, HTTP/3, timeout, and cancellation failures.`
+- [ ] `#12 Validate QUIC stats fields against live runtime counters and peer-observed state.`
+- [ ] `#13 Validate QUIC recovery after temporary network interruption and socket re-wake.`
+- [ ] `#14 Back server-upgrade WebSocket resources with honest bidirectional frame I/O.`
+- [ ] `#15 Back King\WebSocket\Server listen/accept lifecycle with fully real runtime behavior.`
+- [ ] `#16 Back King\WebSocket\Server connection registry and targeted send semantics with real runtime behavior.`
+- [ ] `#17 Back King\WebSocket\Server broadcast and shutdown semantics with real live connections.`
+- [ ] `#18 Validate WebSocket upgrade on HTTP/2 where the public docs or surface claim it.`
+- [ ] `#19 Validate WebSocket upgrade on HTTP/3 where the public docs or surface claim it.`
+- [ ] `#20 Validate WebSocket resource cleanup across request boundaries and worker reuse.`
 
 ## Notes
 
-- The previous explicit `20`-issue batch is closed.
-- Closed work has been rolled into `PROJECT_ASSESSMENT.md`.
-- `READYNESS_TRACKER.md` remains the long-form closure tracker, not the active queue.
+- This batch was pulled explicitly from `READYNESS_TRACKER.md`.
+- It is intentionally ordered as: QUIC runtime truth first, then WebSocket server/runtime truth.
+- The previous explicit `20`-issue batch is closed and rolled into `PROJECT_ASSESSMENT.md`.
 - If a task is not listed here, it is not the current repo-local execution item.
