@@ -464,6 +464,15 @@ That keeps trust, status, and managed-service counters monotonic toward the
 current shared topology instead of letting an older peer win just because it
 reconnected later.
 
+The current runtime also persists mother-node tombstones inside the durable
+payload for re-election churn. When a newer shared topology has explicitly
+removed one mother node and replaced it with another, a stale writer may still
+carry the old node in local memory. The rejoin-safe merge path now checks those
+tombstones before restoring missing entries, so a stale service update cannot
+quietly resurrect a departed leader. Only an explicit later
+`king_semantic_dns_register_mother_node()` call for that node clears the
+tombstone and makes the rejoin visible again.
+
 ## How Semantic-DNS Fits With The Router And Load Balancer
 
 It is important to separate discovery from forwarding while still understanding

@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Validate Smart-DNS distributed mother-node churn under concurrent re-election pressure.
+- Eliminate cross-request telemetry residue and prove cleanup under load.
 
 ## Active Executable Items
 
@@ -75,7 +75,7 @@
 14. [x] Validate Smart-DNS distributed recovery after stale-peer rejoin and partial durable-state loss.
     done when: a stale or partially reset node converges back to the current service and mother-node view without poisoning routing or discovery state.
 
-15. [ ] Validate Smart-DNS distributed mother-node churn under concurrent re-election pressure.
+15. [x] Validate Smart-DNS distributed mother-node churn under concurrent re-election pressure.
     done when: concurrent mother-node departure, rejoin, and replacement preserve honest coordination counters and routing stability beyond the current local churn slice.
 
 ### 5. Telemetry And Fleet Operation Depth
@@ -99,7 +99,7 @@
 
 - broader websocket server runtime materialization beyond the drain-focused failure proof in this batch
 - deeper object-store cross-backend failure normalization beyond quota/throttling and resumable-upload recovery
-- broader Smart-DNS distributed-topology validation once re-election pressure and the remaining larger multi-node topology slices are proven
+- broader Smart-DNS distributed-topology validation once the remaining larger multi-node topology slices are proven
 - longer-haul telemetry exporter ordering and autoscaling fleet-behavior proof beyond the bounded cleanup, load, and recovery leaves in this batch
 - release, compatibility, supply-chain, and final security-review closure that remain outside this explicitly requested repo-local sprint batch
 
