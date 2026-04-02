@@ -792,7 +792,8 @@ static zend_result king_server_admin_api_open_listener_stream(
     king_server_admin_api_context_set_string(context, "ssl", "cafile", config->ca_file);
     king_server_admin_api_context_set_bool(context, "ssl", "verify_peer", true);
     king_server_admin_api_context_set_bool(context, "ssl", "verify_peer_name", false);
-    king_server_admin_api_context_set_bool(context, "ssl", "allow_self_signed", true);
+    /* Admin mTLS must stay anchored to the configured CA trust root. */
+    king_server_admin_api_context_set_bool(context, "ssl", "allow_self_signed", false);
     king_server_admin_api_context_set_bool(context, "ssl", "capture_peer_cert", true);
 
     endpoint = strpprintf(

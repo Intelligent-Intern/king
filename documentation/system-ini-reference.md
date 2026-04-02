@@ -225,7 +225,7 @@ scope.
 | `king.admin_api_bind_host` | `127.0.0.1` | Sets the host or interface used by the admin API listener. |
 | `king.admin_api_port` | `2019` | Sets the admin API port. |
 | `king.admin_api_auth_mode` | `mtls` | Selects the authentication mode used by the admin API listener. |
-| `king.admin_api_ca_file` | unset | Points at the CA file used to verify admin API client certificates. |
+| `king.admin_api_ca_file` | unset | Points at the CA file used to verify admin API client certificate chains; arbitrary self-signed leaf certificates are rejected. |
 | `king.admin_api_cert_file` | unset | Points at the server certificate file used by the admin API listener. |
 | `king.admin_api_key_file` | unset | Points at the private key file used by the admin API listener. |
 | `king.security_allow_config_override` | `0` | Allows or forbids userland runtime configuration overrides. |

@@ -54,8 +54,9 @@ application access.
 
 Mutual TLS matters because an admin surface should not trust the network by
 default. It should trust explicit identity. That means the admin path does not
-only present a server certificate. It also verifies the client certificate and
-decides whether the caller belongs on that control surface at all.
+only present a server certificate. It also verifies the client certificate
+chain against the configured CA and decides whether the caller belongs on that
+control surface at all. A random self-signed client leaf is not enough.
 
 This matters because TLS is more than transport encryption. In this context it
 is part of access control. The process is not only protecting bytes on the
@@ -67,7 +68,7 @@ sequenceDiagram
     participant Server as King admin listener
 
     Client->>Server: Connect with client certificate
-    Server->>Server: Verify CA chain and peer identity
+    Server->>Server: Verify client cert chain against the configured CA
     Server->>Client: Accept or reject connection
     Note over Server: Application can inspect peer subject after acceptance
 ```
