@@ -318,22 +318,22 @@ int king_system_init_all_components(king_system_config_t *config)
     }
 
     /* Register core components */
-    king_system_register_component(KING_COMPONENT_CONFIG, "config", "1.0.0");
-    king_system_register_component(KING_COMPONENT_CLIENT, "client", "1.0.0");
-    king_system_register_component(KING_COMPONENT_SERVER, "server", "1.0.0");
+    king_system_register_component(KING_COMPONENT_CONFIG, "config", "0.2.1-alpha");
+    king_system_register_component(KING_COMPONENT_CLIENT, "client", "0.2.1-alpha");
+    king_system_register_component(KING_COMPONENT_SERVER, "server", "0.2.1-alpha");
     king_system_register_component(
         KING_COMPONENT_ROUTER_LOADBALANCER,
         "router_loadbalancer",
-        "1.0.0"
+        "0.2.1-alpha"
     );
-    king_system_register_component(KING_COMPONENT_MCP, "mcp", "1.0.0");
-    king_system_register_component(KING_COMPONENT_TELEMETRY, "telemetry", "1.0.0");
-    king_system_register_component(KING_COMPONENT_AUTOSCALING, "autoscaling", "1.0.0");
-    king_system_register_component(KING_COMPONENT_PIPELINE_ORCHESTRATOR, "orchestrator", "1.0.0");
-    king_system_register_component(KING_COMPONENT_OBJECT_STORE, "object_store", "1.0.0");
-    king_system_register_component(KING_COMPONENT_CDN, "cdn", "1.0.0");
-    king_system_register_component(KING_COMPONENT_IIBIN, "iibin", "1.0.0");
-    king_system_register_component(KING_COMPONENT_SEMANTIC_DNS, "semantic_dns", "1.0.0");
+    king_system_register_component(KING_COMPONENT_MCP, "mcp", "0.2.1-alpha");
+    king_system_register_component(KING_COMPONENT_TELEMETRY, "telemetry", "0.2.1-alpha");
+    king_system_register_component(KING_COMPONENT_AUTOSCALING, "autoscaling", "0.2.1-alpha");
+    king_system_register_component(KING_COMPONENT_PIPELINE_ORCHESTRATOR, "orchestrator", "0.2.1-alpha");
+    king_system_register_component(KING_COMPONENT_OBJECT_STORE, "object_store", "0.2.1-alpha");
+    king_system_register_component(KING_COMPONENT_CDN, "cdn", "0.2.1-alpha");
+    king_system_register_component(KING_COMPONENT_IIBIN, "iibin", "0.2.1-alpha");
+    king_system_register_component(KING_COMPONENT_SEMANTIC_DNS, "semantic_dns", "0.2.1-alpha");
 
     return SUCCESS;
 }
