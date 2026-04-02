@@ -22,8 +22,9 @@ policy needed by the measured runtime slices.
 - `object_store`
   `king_object_store_init()` once, then repeated put/get/cache/delete cycles
 - `semantic_dns`
-  repeated `king_semantic_dns_init()`, `king_semantic_dns_start_server()`,
-  `king_semantic_dns_register_service()`, discovery, route, and topology reads
+  one real `king_semantic_dns_init()` / `king_semantic_dns_start_server()`
+  bootstrap per sample, then repeated `king_semantic_dns_register_service()`,
+  discovery, route, and topology reads in steady state
 
 ## Baselines
 
