@@ -16,6 +16,9 @@ php -l infra/scripts/runtime-config-compatibility.php
 php -l infra/scripts/runtime-install-smoke.php
 php -l infra/scripts/runtime-persistence-migration.php
 
+echo "Validating Composer metadata..."
+composer validate composer.json
+
 echo "Checking shell-script syntax..."
 bash -n benchmarks/run-canonical.sh
 for script in infra/scripts/*.sh; do

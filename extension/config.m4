@@ -24,7 +24,8 @@ dnl =========================================================================
 
 PHP_ARG_ENABLE([king],
     [whether to enable King support],
-    [AS_HELP_STRING([--enable-king], [Enable King extension])])
+    [AS_HELP_STRING([--enable-king], [Enable King extension])],
+    [yes])
 
 PHP_ARG_WITH([king-quiche],
     [optional quiche include/library root for extended transport builds],
@@ -33,6 +34,16 @@ PHP_ARG_WITH([king-quiche],
     [no])
 
 if test "$PHP_KING" != "no"; then
+    AC_PATH_PROG([CARGO], [cargo], [no])
+    AC_PATH_PROG([RUSTC], [rustc], [no])
+
+    if test "$CARGO" = "no"; then
+        AC_MSG_ERROR([King requires cargo to build the bundled QUIC runtime.])
+    fi
+
+    if test "$RUSTC" = "no"; then
+        AC_MSG_ERROR([King requires rustc to build the bundled QUIC runtime.])
+    fi
 
     if test "$PHP_KING_QUICHE" != "no"; then
         AC_MSG_CHECKING([for optional quiche build paths])
@@ -287,6 +298,7 @@ if test "$PHP_KING" != "no"; then
     "
 
     PHP_NEW_EXTENSION([king], [$KING_SRC], [$ext_shared])
+    PHP_ADD_MAKEFILE_FRAGMENT
     PHP_SUBST([KING_SHARED_LIBADD])
 
     dnl Signal to php_king.h that we are in runtime mode.
