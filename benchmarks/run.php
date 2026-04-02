@@ -181,7 +181,7 @@ function build_case_definitions(): array
             'default_iterations' => 4000,
             'operations_per_iteration' => 4,
             'bootstrap' => static function (): array {
-                $root = sys_get_temp_dir() . '/king_bench_store_' . getmypid() . '_' . bin2hex(random_bytes(4));
+                $root = benchmark_temp_path('king_bench_store');
                 ensure_directory($root);
 
                 king_object_store_init([
@@ -224,7 +224,7 @@ function build_case_definitions(): array
             },
         ],
         'semantic_dns' => [
-            'description' => 'real listener bootstrap plus register/discover/route/topology steady state',
+            'description' => 'real local listener bootstrap plus register/discover/route/topology steady state',
             'default_iterations' => 50000,
             'operations_per_iteration' => 4,
             'bootstrap' => static function (): array {
@@ -236,7 +236,7 @@ function build_case_definitions(): array
                     'dns_port' => $dnsPort,
                     'default_record_ttl_sec' => 120,
                     'service_discovery_max_ips_per_response' => 5,
-                    'semantic_mode_enable' => true,
+                    'semantic_mode_enable' => false,
                     'mothernode_uri' => 'mother://bench-node',
                     'routing_policies' => ['mode' => 'local'],
                 ];
@@ -301,6 +301,30 @@ function build_case_definitions(): array
             },
         ],
     ];
+}
+
+function benchmark_temp_path(string $prefix): string
+{
+    $base = benchmark_temp_root();
+
+    return $base
+        . DIRECTORY_SEPARATOR
+        . $prefix
+        . '_'
+        . getmypid()
+        . '_'
+        . bin2hex(random_bytes(4));
+}
+
+function benchmark_temp_root(): string
+{
+    $preferred = '/dev/shm';
+
+    if (is_dir($preferred) && is_writable($preferred)) {
+        return $preferred;
+    }
+
+    return sys_get_temp_dir();
 }
 
 function parse_options(array $argv, array $availableCases): array
