@@ -1,3 +1,9 @@
+/*
+ * Backend-contract helpers for object-store metadata. Tracks per-backend
+ * presence bits, adapter status and contract reporting across the mixed local,
+ * distributed and cloud surfaces.
+ */
+
 static void king_object_store_metadata_mark_backend_present(
     king_object_metadata_t *metadata,
     king_storage_backend_t backend,

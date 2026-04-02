@@ -1,3 +1,9 @@
+/*
+ * Proto-registry default persist aggregator: drives runtime default-value
+ * persistence by composing the preparatory type-specific handling with the
+ * remaining integer-specific persistence path.
+ */
+
 static bool king_proto_runtime_persist_default_value(
     const king_proto_runtime_field *field,
     zval *value,

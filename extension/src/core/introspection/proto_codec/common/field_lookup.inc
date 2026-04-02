@@ -1,3 +1,8 @@
+/*
+ * Common codec field-lookup slice: resolves a runtime field by protobuf tag
+ * from the tag-sorted schema layout using a bounded binary search.
+ */
+
 static const king_proto_runtime_field *king_proto_runtime_find_field_by_tag(
     const king_proto_runtime_schema *schema,
     uint32_t tag

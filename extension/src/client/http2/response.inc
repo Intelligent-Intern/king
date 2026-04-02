@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http2/response.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Shared HTTP/2 response callbacks and protocol mapping helpers for the
+ * libcurl-backed client path. This file owns bounded header/body capture,
+ * status-line and header normalization, curl error-class translation, and
+ * the protocol labels persisted into the response snapshot.
+ * =========================================================================
+ */
+
 static size_t king_http2_write_callback(
     char *ptr,
     size_t size,

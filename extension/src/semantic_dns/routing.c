@@ -1,12 +1,7 @@
 /*
- * =========================================================================
- * FILENAME:   src/semantic_dns/routing.c
- * PROJECT:    king
- *
- * PURPOSE:
- * Implements the native Semantic-DNS real routing and scoring based on
- * load, health, and policy.
- * =========================================================================
+ * Native Semantic-DNS routing and scoring slice. Computes the bounded
+ * service score from health, load, active connections and hard criteria
+ * filters used by the current routing surface.
  */
 
 #include "semantic_dns/semantic_dns_internal.h"

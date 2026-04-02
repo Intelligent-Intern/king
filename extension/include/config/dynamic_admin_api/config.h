@@ -5,8 +5,13 @@
  * AUTHOR:     Jochen Schultz <jschultz@php.net>
  *
  * PURPOSE:
- * This header file declares the public C-API for applying runtime
- * configuration changes from PHP userland to the dynamic admin API module.
+ * Declares the module-local helper for applying dynamic admin-listener
+ * overrides to the live admin-API config state.
+ *
+ * In the current build, the main `King\Config` snapshot pipeline does not
+ * route through a dedicated dynamic-admin `*_apply_userland_config_to()`
+ * helper, so this header describes the direct module helper rather than a
+ * generic config-snapshot entry point.
  * =========================================================================
  */
 
@@ -16,7 +21,7 @@
 #include "php.h"
 
 /**
- * @brief Applies runtime configuration settings from a PHP array.
+ * @brief Applies dynamic admin-listener settings from a PHP array.
  * @param config_arr A zval pointer to a PHP array containing the key-value
  * pairs of the configuration to apply.
  * @return `SUCCESS` if all settings were successfully validated and applied,

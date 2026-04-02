@@ -1,3 +1,9 @@
+/*
+ * Prelude telemetry runtime slice: owns the process-local telemetry metric
+ * registry lifecycle, metric-type validation, and stable export helpers that
+ * the active telemetry introspection surfaces reuse.
+ */
+
 static void king_telemetry_metric_record_free(king_telemetry_metric_record *record)
 {
     if (record == NULL) {

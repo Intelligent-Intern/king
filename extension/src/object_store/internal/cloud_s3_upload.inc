@@ -1,3 +1,8 @@
+/*
+ * S3 multipart-upload slice. Manages resumable upload-session state and the
+ * provider-specific chunk/complete flow for the S3 adapter.
+ */
+
 static int king_object_store_s3_begin_upload_session(
     const char *object_id,
     const king_object_metadata_t *metadata,
@@ -304,4 +309,3 @@ static int king_object_store_s3_abort_upload_session(
     king_object_store_http_response_destroy(&response);
     return SUCCESS;
 }
-

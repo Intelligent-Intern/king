@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/session/api/stats.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Session stats materialization for the public client-session surface. This
+ * slice snapshots the current transport, server-observation, cancel, TLS,
+ * early-hints, and config-binding fields into the `king_stats()` /
+ * `Session::stats()` array contract.
+ * =========================================================================
+ */
+
 static void king_client_session_populate_stats(
     zval *return_value,
     king_client_session_t *session)

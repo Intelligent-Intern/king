@@ -1,3 +1,9 @@
+/*
+ * Proto-registry default integer slice: enforces the numeric bounds for the
+ * integer-like runtime field kinds before persisting a normalized integer
+ * default value.
+ */
+
 static bool king_proto_runtime_persist_integer_default_value(
     const king_proto_runtime_field *field,
     zval *value,

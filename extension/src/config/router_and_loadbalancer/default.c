@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/router_and_loadbalancer/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the router and load-balancer config family.
+ * This slice seeds the baseline router-disabled state, hashing mode,
+ * backend discovery placeholders, MCP poll cadence, and forwarding cap
+ * before INI and any allowed userland overrides refine the live snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/router_and_loadbalancer/default.h"
 #include "include/config/router_and_loadbalancer/base_layer.h"
 

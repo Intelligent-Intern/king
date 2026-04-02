@@ -1,3 +1,8 @@
+/*
+ * IIBIN module bootstrap. Registers the final King\IIBIN facade class that
+ * exposes the public static proto helpers to userland.
+ */
+
 #include "php.h"
 #include "include/iibin/iibin_internal.h"
 

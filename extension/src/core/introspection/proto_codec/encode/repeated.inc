@@ -1,3 +1,9 @@
+/*
+ * Encode repeated-field slice: handles repeated runtime fields in unpacked
+ * and packed form, including required-non-empty enforcement and per-item
+ * validation before emission.
+ */
+
 static bool king_proto_runtime_encode_repeated_field(
     smart_str *buf,
     const king_proto_runtime_field *field,

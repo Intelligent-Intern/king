@@ -1,3 +1,9 @@
+/*
+ * Common codec unknown-field slice: skips unsupported or unknown wire
+ * fields according to the protobuf wire type while maintaining buffer
+ * bounds.
+ */
+
 static bool king_proto_runtime_skip_unknown_field(
     const unsigned char **buf_ptr,
     const unsigned char *buf_end,

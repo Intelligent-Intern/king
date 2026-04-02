@@ -1,20 +1,6 @@
 /*
- * =========================================================================
- * FILENAME:   src/validation/config_param/validate_erasure_coding_shards_string.c
- * PROJECT:    king
- * AUTHOR:     Jochen Schultz <jschultz@php.net>
- *
- * WELCOME:    A wizard is never late, Frodo Baggins. Nor is he early.
- * He arrives precisely when he means to.
- *
- * PURPOSE:
- * This file implements the validation helper for erasure coding shard strings.
- *
- * ARCHITECTURE:
- * The function uses `sscanf` to parse the string according to the strict
- * "XdYp" format, ensuring both the structure and the numeric values of
- * the data and parity shards are valid before accepting the configuration.
- * =========================================================================
+ * Validation helper for erasure-coding shard strings. Enforces string input
+ * and the shard-layout grammar accepted by the object-store config surface.
  */
 
 #include "include/validation/config_param/validate_erasure_coding_shards_string.h"

@@ -1,3 +1,8 @@
+/*
+ * Root function table for the King extension. Maps the public procedural
+ * surface onto the shared arginfo blocks declared in this module.
+ */
+
 static const zend_function_entry king_functions[] = {
     PHP_FE(king_version, arginfo_king_no_args)
     PHP_FE(king_health, arginfo_king_no_args)

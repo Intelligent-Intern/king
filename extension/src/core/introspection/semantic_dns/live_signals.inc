@@ -1,3 +1,10 @@
+/*
+ * Live-probe helpers for Semantic-DNS services. Normalizes optional probe
+ * host/port/path attributes, enforces the allowlist and safe-character gates,
+ * performs the bounded wire probe and folds the resulting status/load snapshot
+ * back into the in-memory service registry.
+ */
+
 #include <errno.h>
 #include <ctype.h>
 #include <limits.h>

@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/internal/snapshot.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Module-global snapshot import for `king_cfg_t`. This file copies the
+ * active config-family globals into a fresh composed config resource, resets
+ * ownership flags, and then clones the string-backed fields that must become
+ * private to the new snapshot.
+ * =========================================================================
+ */
+
 static void king_config_snapshot_globals(king_cfg_t *cfg)
 {
     cfg->quiche_cfg = NULL;

@@ -1,5 +1,7 @@
 <?php
 
+/* Test helper for starting the HTTP/1 bodiless-response harness server. */
+
 function king_http1_start_bodiless_test_server(): array
 {
     $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);

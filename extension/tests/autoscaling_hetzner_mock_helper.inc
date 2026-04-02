@@ -1,5 +1,7 @@
 <?php
 
+/* Test helper for spawning the local Hetzner mock API used by autoscaling contracts. */
+
 function king_autoscaling_test_format_tcp_endpoint(string $host, int $port): string
 {
     if (strpos($host, ':') !== false && !preg_match('/^\[.*\]$/', $host)) {

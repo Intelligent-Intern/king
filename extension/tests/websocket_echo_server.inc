@@ -1,5 +1,7 @@
 <?php
 
+/* Local echo harness server for baseline WebSocket roundtrip contracts. */
+
 if ($argc < 3) {
     fwrite(STDERR, "usage: websocket_echo_server.php <capture-path> <port> [max-connections]\n");
     exit(1);

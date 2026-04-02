@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/iibin/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the IIBIN config family.
+ * This file exposes the system-level schema-depth, recursion, interning,
+ * shared-memory buffering, buffer-size, and shm-path directives and keeps
+ * `king_iibin_config` aligned with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/iibin/ini.h"
 #include "include/config/iibin/base_layer.h"
 

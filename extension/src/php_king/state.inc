@@ -1,3 +1,8 @@
+/*
+ * Shared php_king module state. Declares the resource ids, exception class
+ * pointers and forward declarations reused across the bootstrap slices.
+ */
+
 typedef struct king_cfg_s king_cfg_t;
 void king_config_free(king_cfg_t *cfg);
 

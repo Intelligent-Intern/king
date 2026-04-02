@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/security_and_traffic/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the security and traffic config
+ * family. This file enforces the global policy gate around `King\\Config`
+ * overrides and validates the narrow runtime-adjustable subset for rate
+ * limiting and CORS origin policy in the live module-global state.
+ * =========================================================================
+ */
+
 #include "include/config/security_and_traffic/config.h"
 #include "include/config/security_and_traffic/base_layer.h"
 #include "include/king_globals.h"

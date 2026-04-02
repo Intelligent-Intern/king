@@ -1,3 +1,8 @@
+/*
+ * Zend object handlers for php_king classes. Owns the create/free logic for
+ * the internal CancelToken and other object-backed surfaces.
+ */
+
 static void king_cancel_token_object_free(zend_object *object)
 {
     king_cancel_token_object *intern = php_king_cancel_token_obj_from_zend(object);

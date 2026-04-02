@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/quic_transport/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the QUIC transport config family. This slice
+ * seeds the baseline congestion-control algorithm, pacing burst, ACK/PTO
+ * timers, flow-control windows, stream counts, retry/GREASE behavior, and
+ * datagram queue lengths before INI and any allowed userland overrides
+ * refine the live transport snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/quic_transport/default.h"
 #include "include/config/quic_transport/base_layer.h"
 

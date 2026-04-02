@@ -1,9 +1,7 @@
 /*
- * src/telemetry/metrics.c - Metrics Aggregation and Export
- * =========================================================================
- *
- * This module implements the internal registry for metrics.
- * Supports counters, gauges, histograms and summaries.
+ * Telemetry metrics runtime for King. Owns the in-process metric registry, the
+ * small aggregation rules used for counters and the flush path that batches
+ * metrics together with pending telemetry signals for export.
  */
 #include "php_king.h"
 #include "include/telemetry/telemetry.h"

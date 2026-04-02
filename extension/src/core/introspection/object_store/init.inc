@@ -1,3 +1,10 @@
+/*
+ * Root object-store init slice: validates the public object-store bootstrap
+ * payload, maps backend names to the active runtime enum, normalizes the
+ * small config subset that the current runtime honors, and hands the
+ * assembled snapshot to `king_object_store_init_system()`.
+ */
+
 #include "object_store/object_store_internal.h"
 
 #include "include/king_globals.h"

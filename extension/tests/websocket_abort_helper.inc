@@ -1,5 +1,7 @@
 <?php
 
+/* Test helper for starting the WebSocket network-abort harness server. */
+
 function king_websocket_abort_start_server(string $mode): array
 {
     $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);

@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/session/state/tls.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * TLS session-ticket persistence for the client-session runtime. This slice
+ * stores the active ticket bytes, tracks their source and length, and keeps
+ * the session's TLS-resumption snapshot aligned with the current live
+ * connection state.
+ * =========================================================================
+ */
+
 zend_result king_client_session_store_tls_ticket(
     king_client_session_t *session,
     const uint8_t *ticket,

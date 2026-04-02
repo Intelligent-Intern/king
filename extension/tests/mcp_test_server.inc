@@ -1,5 +1,7 @@
 <?php
 
+/* Local MCP harness server for protocol, error and transfer-state contracts. */
+
 if ($argc < 4) {
     fwrite(STDERR, "usage: mcp_test_server.php <capture-path> <port> <bind-host> [transfer-state-path]\n");
     exit(1);

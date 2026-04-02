@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http1/transport.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Shared HTTP/1 socket and request-context transport helpers. This file owns
+ * per-origin idle-socket pooling, bounded poll-based waits with cancel
+ * integration, socket setup, request-context cleanup, and keep-alive reuse
+ * decisions for the live HTTP/1 runtime.
+ * =========================================================================
+ */
+
 static zend_result king_http1_set_socket_options(
     int fd,
     const king_http1_request_options_t *options)

@@ -1,3 +1,8 @@
+/*
+ * Encode field slice: validates one scalar runtime field value, emits the
+ * protobuf key varint, and appends the encoded field payload.
+ */
+
 static bool king_proto_runtime_encode_field(
     smart_str *buf,
     const king_proto_runtime_field *field,

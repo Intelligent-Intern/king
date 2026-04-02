@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/tcp_transport/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the TCP transport config family. This slice
+ * seeds the baseline transport-enabled state, connection and backlog caps,
+ * socket tuning, keepalive timings, and TLS policy placeholders before INI
+ * and any allowed userland overrides refine the live transport snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/tcp_transport/default.h"
 #include "include/config/tcp_transport/base_layer.h"
 

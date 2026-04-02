@@ -1,5 +1,7 @@
 <?php
 
+/* Remote-peer harness server for orchestrator restart, resume and failure contracts. */
+
 $capturePath = $argv[1] ?? null;
 $port = isset($argv[2]) ? (int) $argv[2] : 0;
 $bindHost = $argv[3] ?? '127.0.0.1';

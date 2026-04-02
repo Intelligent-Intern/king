@@ -1,9 +1,10 @@
 /*
- * include/telemetry/telemetry.h - Public C API for telemetry
- * ===========================================================
+ * include/telemetry/telemetry.h - Telemetry runtime surface
+ * =========================================================
  *
- * This header exposes the telemetry and observability types and PHP entry
- * points used by the extension.
+ * Shared telemetry types plus the exported PHP and native C entry points for
+ * the current metrics/log/span capture runtime, its retry queue, and the thin
+ * trace-context introspection helpers.
  */
 
 #ifndef KING_TELEMETRY_H
@@ -47,7 +48,7 @@ typedef struct _king_telemetry_config_t {
     char service_namespace[64];
     char deployment_environment[32];
     char otel_exporter_endpoint[256];
-    char otel_exporter_protocol[16]; /* grpc, http/protobuf, http/json */
+    char otel_exporter_protocol[16]; /* grpc, http/protobuf */
     uint32_t batch_timeout_ms;
     uint32_t max_batch_size;
     uint32_t max_export_batch_size;
@@ -114,10 +115,10 @@ typedef struct _king_telemetry_batch_t {
 /* Initializes telemetry from a PHP config array. */
 PHP_FUNCTION(king_telemetry_init);
 
-/* Starts a new tracing span. */
+/* Starts a new local span and returns its active span id. */
 PHP_FUNCTION(king_telemetry_start_span);
 
-/* Ends a tracing span. */
+/* Ends the current local span when the ids match. */
 PHP_FUNCTION(king_telemetry_end_span);
 
 /* Records a metric value. */
@@ -126,13 +127,13 @@ PHP_FUNCTION(king_telemetry_record_metric);
 /* Records a structured log entry. */
 PHP_FUNCTION(king_telemetry_log);
 
-/* Returns the current trace context. */
+/* Returns the current trace-context snapshot, or null when none is active. */
 PHP_FUNCTION(king_telemetry_get_trace_context);
 
-/* Injects trace context into headers. */
+/* Returns headers unchanged until a live current-span injector exists. */
 PHP_FUNCTION(king_telemetry_inject_context);
 
-/* Extracts trace context from headers. */
+/* Stable false until the active runtime accepts extracted trace context. */
 PHP_FUNCTION(king_telemetry_extract_context);
 
 /* Returns collected metrics. */
@@ -150,8 +151,6 @@ int king_telemetry_init_system(king_telemetry_config_t *config);
 void king_telemetry_shutdown_system(void);
 king_trace_context_t* king_telemetry_create_span(const char *operation_name, king_span_kind_t span_kind, const char *parent_span_id);
 int king_telemetry_finish_span(king_trace_context_t *span_context);
-int king_telemetry_add_span_attribute(king_trace_context_t *span_context, const char *key, const char *value);
-int king_telemetry_add_span_event(king_trace_context_t *span_context, const char *event_name, const char *event_data);
 int king_telemetry_record_metric_internal(const char *metric_name, king_metric_type_t metric_type, double value, zval *labels);
 zend_bool king_telemetry_lookup_metric(
     const char *metric_name,
@@ -163,8 +162,6 @@ int king_telemetry_log_internal(king_telemetry_level_t level, const char *logger
 char* king_telemetry_generate_trace_id(void);
 char* king_telemetry_generate_span_id(void);
 int king_telemetry_export_batch(void);
-king_trace_context_t* king_telemetry_get_current_span(void);
-int king_telemetry_set_current_span(king_trace_context_t *span_context);
 const char* king_telemetry_level_to_string(king_telemetry_level_t level);
 const char* king_metric_type_to_string(king_metric_type_t type);
 const char* king_span_kind_to_string(king_span_kind_t kind);
@@ -192,11 +189,5 @@ extern uint32_t king_telemetry_queue_drop_count;
 extern uint32_t king_telemetry_pending_drop_count;
 extern uint32_t king_telemetry_export_success_count;
 extern uint32_t king_telemetry_export_failure_count;
-
-/* --- Auto-Instrumentation Hooks --- */
-int king_telemetry_instrument_http_request(const char *method, const char *url, const char *user_agent);
-int king_telemetry_instrument_database_query(const char *query, const char *database_name);
-int king_telemetry_instrument_cache_operation(const char *operation, const char *key, zend_bool hit);
-int king_telemetry_instrument_external_call(const char *service_name, const char *endpoint, const char *method);
 
 #endif /* KING_TELEMETRY_H */

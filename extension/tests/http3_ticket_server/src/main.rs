@@ -1,3 +1,5 @@
+/* Local HTTP/3 harness server for session-ticket reuse and shared ticket-ring contracts. */
+
 use std::collections::HashMap;
 use std::fs;
 use std::net;

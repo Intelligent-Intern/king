@@ -1,5 +1,7 @@
 <?php
 
+/* Harness server for WebSocket peer-disconnect, half-close and reset contracts. */
+
 if ($argc < 4) {
     fwrite(STDERR, "usage: websocket_abort_server.php <capture-path> <port> <mode>\n");
     exit(1);

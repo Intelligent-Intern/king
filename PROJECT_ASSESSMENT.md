@@ -1,6 +1,6 @@
 # King Project Assessment
 
-> Stand: 2026-04-01
+> Stand: 2026-04-02
 > Scope: verified repo-local v1 state inside this repository
 > This file records what is actually verified now.
 > `README.md` stays product-level.
@@ -36,7 +36,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `478/478` passing
+- `./infra/scripts/test-extension.sh`: `481/481` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -58,7 +58,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `478` PHPT files
+- `extension/tests`: `481` PHPT files
 - public stub parity: `137` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception

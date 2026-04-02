@@ -1,3 +1,9 @@
+/*
+ * Root autoscaling introspection slice: exposes the current config-backed
+ * autoscaling status and keeps the metrics surface stable but empty until a
+ * real collector/runtime thread exists in the active build.
+ */
+
 PHP_FUNCTION(king_autoscaling_get_status)
 {
     ZEND_PARSE_PARAMETERS_NONE();

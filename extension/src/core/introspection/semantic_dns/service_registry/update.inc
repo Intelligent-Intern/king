@@ -1,3 +1,9 @@
+/*
+ * Public service-status update leaf. Applies validated status and optional
+ * metric deltas to an existing registry entry and persists semantic-mode state
+ * only when the effective runtime snapshot actually changed.
+ */
+
 PHP_FUNCTION(king_semantic_dns_update_service_status)
 {
     zend_string *service_id;

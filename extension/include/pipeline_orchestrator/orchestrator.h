@@ -2,21 +2,22 @@
  * include/pipeline_orchestrator/orchestrator.h - Pipeline Orchestrator Core
  * =========================================================================
  *
- * This header defines the native tool registry and pipeline execution
- * entry points for the King orchestrator.
+ * Active native orchestrator core for tool-registry persistence, run-state
+ * persistence, and execution across the `local`, `file_worker`, and
+ * `remote_peer` backends.
  */
-#ifndef KING_PIPELINE_ORCHESTRATOR_H
-#define KING_PIPELINE_ORCHESTRATOR_H
+#ifndef KING_PIPELINE_ORCHESTRATOR_CORE_H
+#define KING_PIPELINE_ORCHESTRATOR_CORE_H
 
 #include <php.h>
 
 typedef struct _king_orchestrator_tool {
     zend_string *name;
     zval config;
-    /* Handlers will be implemented as PHP callbacks or native hooks in later phases */
+    /* Persisted PHP tool configuration snapshot. */
 } king_orchestrator_tool_t;
 
-/* Registry Management */
+/* Registry and persisted run-state management */
 int king_orchestrator_registry_init(void);
 void king_orchestrator_registry_shutdown(void);
 int king_orchestrator_register_tool(const char *name, size_t name_len, zval *config);
@@ -42,7 +43,7 @@ int king_orchestrator_request_run_cancel(zend_string *run_id);
 int king_orchestrator_run_cancel_requested(zend_string *run_id);
 void king_orchestrator_clear_run_cancel_request(zend_string *run_id);
 
-/* Pipeline Execution */
+/* Pipeline execution and persisted status transitions */
 zend_string *king_orchestrator_pipeline_run_begin(
     zval *initial_data,
     zval *pipeline,
@@ -81,4 +82,4 @@ int king_orchestrator_resume_run(
 );
 int king_orchestrator_worker_run_next(zval *return_value);
 
-#endif /* KING_PIPELINE_ORCHESTRATOR_H */
+#endif /* KING_PIPELINE_ORCHESTRATOR_CORE_H */

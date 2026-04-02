@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http1/response/header_parse.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * HTTP/1 response-header parsing helpers. This slice validates the status
+ * line, normalizes header names to lowercase, derives keep-alive and
+ * chunked/content-length policy, and materializes the shared response-meta
+ * snapshot used by both buffered and streaming reads.
+ * =========================================================================
+ */
+
 static zend_result king_http1_parse_response_headers(
     const char *buffer,
     size_t header_len,

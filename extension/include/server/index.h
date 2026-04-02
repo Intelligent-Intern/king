@@ -5,18 +5,15 @@
 
 /**
  * @file extension/include/server/index.h
- * @brief Unified server entry point.
+ * @brief Unified local server dispatcher entry point.
  */
 
 /**
- * @brief Starts the multi-protocol server listener.
+ * @brief Selects the primary local server leaf from the active config snapshot.
  *
- * @param host_str The host address or IP to bind.
- * @param host_len The length of the `host_str`.
- * @param port The port to bind.
- * @param config_resource The `King\Config` resource for the listener.
- * @param request_handler_callable The PHP callback that handles requests.
- * @return TRUE on success, FALSE on failure.
+ * The current dispatcher resolves config first and then chooses HTTP/3 when
+ * `tcp.enable` is disabled, otherwise HTTP/2 when `http2.enable` is set, and
+ * otherwise HTTP/1.
  */
 PHP_FUNCTION(king_server_listen);
 

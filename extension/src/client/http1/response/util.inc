@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http1/response/util.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Shared HTTP/1 response utilities for header-boundary detection, lowercase
+ * normalization, and chunked-transfer parsing/decoding. This slice provides
+ * the bounded helpers that both the buffered receive path and the streaming
+ * request-context path rely on.
+ * =========================================================================
+ */
+
 static size_t king_http1_find_header_end(const char *buffer, size_t buffer_len)
 {
     size_t i;

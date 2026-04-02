@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http2/request/dispatch/api.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Core one-shot HTTP/2 dispatch entry for the libcurl-backed client path.
+ * This slice ties together option parsing, URL validation, reusable pool
+ * lookup, easy-handle setup, optional push capture, transfer execution, and
+ * final response materialization for `king_http2_request_send()`.
+ * =========================================================================
+ */
+
 zend_result king_http2_request_dispatch(
     zval *return_value,
     const char *url_str,

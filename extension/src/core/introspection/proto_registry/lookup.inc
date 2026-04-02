@@ -1,3 +1,10 @@
+/*
+ * Root proto-registry lookup slice: provides the small presence and lookup
+ * helpers for schema and enum registries, type-name parsing, map-type
+ * splitting, and runtime-schema access used across validation and codec
+ * paths.
+ */
+
 static bool king_proto_registry_has_schema(zend_string *schema_name)
 {
     return king_proto_registries_initialized

@@ -1,3 +1,9 @@
+/*
+ * Schema-validation metadata slice: validates the common per-field metadata
+ * keys such as tag, required, packed, oneof, and default, and enforces tag
+ * uniqueness before runtime type resolution happens.
+ */
+
 static int king_proto_validate_schema_field_metadata(
     zend_string *schema_name,
     zend_string *field_name,

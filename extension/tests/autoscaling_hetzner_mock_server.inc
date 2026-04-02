@@ -1,5 +1,7 @@
 <?php
 
+/* Local mock server for the autoscaling Hetzner-provider contracts. */
+
 $logFile = $argv[1] ?? '';
 $port = (int) ($argv[2] ?? 0);
 $deleteStatus = (int) ($argv[3] ?? 204);

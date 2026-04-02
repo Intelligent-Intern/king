@@ -1,3 +1,8 @@
+/*
+ * Streaming helper slice for the object store. Provides SHA-256 and stream
+ * transfer utilities reused by local and provider-backed object flows.
+ */
+
 void king_object_store_compute_sha256_hex(const void *data, size_t data_size, char output[65])
 {
     PHP_SHA256_CTX ctx;

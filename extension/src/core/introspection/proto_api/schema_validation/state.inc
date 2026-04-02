@@ -1,3 +1,10 @@
+/*
+ * Schema-validation state slice: defines the per-field validation state that
+ * the schema validator threads through metadata parsing, runtime type
+ * resolution, and constraint checks, plus the helper that recognizes the
+ * current repeated-field prefix convention.
+ */
+
 typedef struct _king_proto_schema_field_validation_state {
     zval *tag;
     zval *type;

@@ -1,3 +1,15 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/early_hints.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Local HTTP/1 early-hints normalization helpers for the client runtime.
+ * This file parses `Link` header values into the pending early-hints list on
+ * a live `King\HttpRequestContext`; it does not emit on-wire `103` responses.
+ * =========================================================================
+ */
+
 #include "php_king.h"
 #include "include/client/early_hints.h"
 

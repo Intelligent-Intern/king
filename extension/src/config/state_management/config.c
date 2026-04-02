@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/state_management/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the state-management config family.
+ * This file enforces the global override policy gate and validates the
+ * narrow `King\\Config` subset for the default backend identifier and its
+ * companion URI in the live module-global state.
+ * =========================================================================
+ */
+
 #include "include/config/state_management/config.h"
 #include "include/config/state_management/base_layer.h"
 #include "include/king_globals.h"

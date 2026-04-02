@@ -8,7 +8,6 @@ declare(strict_types=1);
  * Keep in sync with C arginfo (generated stubs).
  *
  * @api
- * @version 1.0.0
  */
 
 namespace {

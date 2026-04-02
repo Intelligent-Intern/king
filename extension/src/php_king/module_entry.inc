@@ -1,3 +1,8 @@
+/*
+ * Zend module-entry definition for King. Binds the function table and
+ * lifecycle hooks into the engine-facing extension descriptor.
+ */
+
 zend_module_entry king_module_entry = {
     STANDARD_MODULE_HEADER,
     "king",

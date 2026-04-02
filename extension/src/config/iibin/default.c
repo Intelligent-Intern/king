@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/iibin/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the IIBIN config family. This slice seeds the
+ * baseline schema-depth, recursion, interning, shared-memory buffering,
+ * buffer-size, and shm-path defaults before INI and any allowed userland
+ * overrides refine the live IIBIN snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/iibin/default.h"
 #include "include/config/iibin/base_layer.h"
 

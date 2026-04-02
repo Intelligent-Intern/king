@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/bare_metal_tuning/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the bare-metal tuning config family. This slice
+ * seeds the module-global io_uring, batch-I/O, socket-buffer, busy-poll,
+ * timestamping, CPU-affinity, and NUMA defaults before INI and any allowed
+ * userland overrides refine them.
+ * =========================================================================
+ */
+
 #include "include/config/bare_metal_tuning/default.h"
 #include "include/config/bare_metal_tuning/base_layer.h"
 

@@ -1,3 +1,9 @@
+/*
+ * Decode storage slice: stores decoded scalar/message values into arrays or
+ * objects, clears competing oneof members, applies persisted defaults, and
+ * tracks which runtime fields were observed during decoding.
+ */
+
 static void king_proto_runtime_store_decoded_value(
     zval *target,
     bool decode_as_object,

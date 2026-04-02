@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/cluster_and_process/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the cluster/process config
+ * family. This file exposes the system-level worker-count, restart,
+ * graceful-shutdown, fd-limit, niceness, scheduler, affinity, cgroup, and
+ * uid/gid directives and keeps `king_cluster_config` aligned with updates.
+ * =========================================================================
+ */
+
 #include "include/config/cluster_and_process/ini.h"
 #include "include/config/cluster_and_process/base_layer.h"
 

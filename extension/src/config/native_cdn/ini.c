@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/native_cdn/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the native CDN config
+ * family. This file exposes the system-level enablement, cache, origin,
+ * stale-on-error, response-header, and allowed-method directives and keeps
+ * `king_native_cdn_config` aligned with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/native_cdn/ini.h"
 #include "include/config/native_cdn/base_layer.h"
 

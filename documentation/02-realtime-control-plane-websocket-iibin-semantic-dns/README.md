@@ -3,13 +3,16 @@
 This guide shows a completely different part of the platform: a long-lived
 realtime control path. A client opens one WebSocket connection to a stable edge
 endpoint. The messages on that channel are encoded with IIBIN instead of loose
-text. The edge process uses Semantic-DNS to decide which backend should receive
-the work. The result is one realtime path that is compact, strongly shaped, and
-topology-aware.
+text. The edge process can use Semantic-DNS to decide which backend should
+receive the work. The result is one realtime path that is compact, strongly
+shaped, and topology-aware.
 
-That is the real point of the example. It is not about chat bubbles or a toy
-socket demo. It is about using WebSocket as a durable control channel, IIBIN as
-the message contract, and Semantic-DNS as the routing brain behind the channel.
+That is the real point of the guide. It is not about chat bubbles or a toy
+socket demo. It is about how three real runtime surfaces compose: WebSocket as
+a durable control channel, IIBIN as the message contract, and Semantic-DNS as a
+routing decision input behind the channel. The repo currently documents this as
+a composition pattern rather than shipping a single end-to-end sample for all
+three pieces in one file.
 
 
 If a technical word is unfamiliar, keep the [Glossary](../glossary.md) open while you read.
@@ -189,7 +192,7 @@ pieces is weak, the whole system becomes harder to trust. A live channel with a
 loose payload is fragile. A perfect binary payload on a bad transport is not
 enough. A stable channel that routes to the wrong backend is still wrong.
 
-This guide shows those three pieces working together as one runtime story.
+This guide shows how those three pieces fit together as one runtime story.
 
 For the subsystem background, read [WebSocket](../websocket.md),
 [IIBIN](../iibin.md), and [Semantic DNS](../semantic-dns.md).

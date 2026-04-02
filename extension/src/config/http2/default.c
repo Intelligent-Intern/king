@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/http2/default.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Default-value loader for the HTTP/2 config family. This slice seeds the
+ * baseline enablement, flow-control window, concurrent-stream cap, header
+ * list limit, server-push policy, and frame-size defaults before INI and
+ * any allowed userland overrides refine the live HTTP/2 snapshot.
+ * =========================================================================
+ */
+
 #include "include/config/http2/default.h"
 #include "include/config/http2/base_layer.h"
 

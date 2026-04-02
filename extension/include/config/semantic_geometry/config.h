@@ -5,8 +5,15 @@
  * AUTHOR:     Jochen Schultz <jschultz@php.net>
  *
  * PURPOSE:
- * This header file declares the public C-API for applying runtime
- * configuration changes from PHP userland to the Semantic Geometry module.
+ * Declares the semantic-geometry config apply helpers for both the live
+ * module-global runtime state and `King\Config` snapshot targets.
+ *
+ * ARCHITECTURE:
+ * Semantic geometry participates directly in the central config-snapshot
+ * override pipeline through
+ * `kg_config_semantic_geometry_apply_userland_config_to()`. The plain
+ * `kg_config_semantic_geometry_apply_userland_config()` variant remains the
+ * policy-gated helper for writing into the live module-global state.
  * =========================================================================
  */
 
@@ -17,13 +24,22 @@
 #include "include/config/semantic_geometry/base_layer.h"
 
 /**
- * @brief Applies runtime configuration settings from a PHP array.
+ * @brief Applies semantic-geometry settings from a PHP array to the live runtime state.
  * @param config_arr A zval pointer to a PHP array containing the key-value
  * pairs of the configuration to apply.
  * @return `SUCCESS` if all settings were successfully validated and applied,
  * `FAILURE` otherwise.
  */
 int kg_config_semantic_geometry_apply_userland_config(zval *config_arr);
+
+/**
+ * @brief Applies semantic-geometry settings from a PHP array to a target config struct.
+ * @param target The target semantic-geometry config snapshot to mutate.
+ * @param config_arr A zval pointer to a PHP array containing the key-value
+ * pairs of the configuration to apply.
+ * @return `SUCCESS` if all settings were successfully validated and applied,
+ * `FAILURE` otherwise.
+ */
 int kg_config_semantic_geometry_apply_userland_config_to(
     kg_semantic_geometry_config_t *target,
     zval *config_arr);

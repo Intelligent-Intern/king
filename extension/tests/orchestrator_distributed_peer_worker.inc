@@ -1,5 +1,7 @@
 <?php
 
+/* Worker process harness for distributed orchestrator remote-peer contracts. */
+
 $workerId = $argv[1] ?? null;
 
 if (!is_string($workerId) || $workerId === '') {

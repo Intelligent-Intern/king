@@ -1,5 +1,7 @@
 <?php
 
+/* Test helper for starting the on-wire HTTP/3 one-shot listener harness. */
+
 function king_http3_server_wire_start_server(
     string $certFile,
     string $keyFile,

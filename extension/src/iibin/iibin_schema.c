@@ -1,3 +1,9 @@
+/*
+ * Public schema-definition bridge for IIBIN. Validates registry availability,
+ * compiles the userland schema into the runtime form and installs it into the
+ * process-local schema registry.
+ */
+
 #include "php_king.h"
 #include "include/iibin/iibin_internal.h"
 

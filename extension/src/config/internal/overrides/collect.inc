@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/internal/overrides/collect.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Collects raw userland override input into normalized per-family buckets.
+ * This file validates that override keys are strings, routes each key onto
+ * its owning config family, and accumulates normalized values into the
+ * temporary override-state structure used by the later apply step.
+ * =========================================================================
+ */
+
 static int king_config_collect_userland_overrides(
     king_config_override_state_t *state,
     zval *zopts)

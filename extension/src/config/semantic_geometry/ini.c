@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/semantic_geometry/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the semantic geometry
+ * config family. This file exposes the system-level dimensionality,
+ * precision, algorithm-choice, and threshold directives and keeps
+ * `king_semantic_geometry_config` aligned with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/semantic_geometry/ini.h"
 #include "include/config/semantic_geometry/base_layer.h"
 

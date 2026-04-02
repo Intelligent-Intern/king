@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/websocket.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Active local WebSocket client/runtime surface. This file owns the
+ * procedural and OO connect/send/receive/ping/close APIs, real client-side
+ * handshake and frame I/O over PHP streams, and the bounded local message
+ * queue used by both live client sockets and server-upgrade-backed resources.
+ * =========================================================================
+ */
+
 #include "php.h"
 #include "php_king.h"
 #include "include/client/websocket.h"

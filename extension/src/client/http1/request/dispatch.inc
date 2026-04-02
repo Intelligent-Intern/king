@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/client/http1/request/dispatch.inc
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Core HTTP/1 request dispatcher. This slice owns absolute-URL validation,
+ * request assembly, socket acquisition, buffered vs. `response_stream`
+ * branching, redirect replay, chunked decoding, and the final normalized
+ * response payload returned to higher client surfaces.
+ * =========================================================================
+ */
+
 static king_http1_request_context *king_http1_request_context_create(
     int fd,
     char *origin,

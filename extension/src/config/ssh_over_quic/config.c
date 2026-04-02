@@ -1,3 +1,17 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/ssh_over_quic/config.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * Userland override application for the SSH-over-QUIC config family. This
+ * file validates the `King\\Config` subset that can target either a
+ * temporary config snapshot or the live module-global state and applies
+ * bounded gateway, endpoint, auth-mode, target-mapping, timeout, and
+ * session-logging overrides.
+ * =========================================================================
+ */
+
 #include "include/config/ssh_over_quic/config.h"
 #include "include/config/ssh_over_quic/base_layer.h"
 #include "include/king_globals.h"

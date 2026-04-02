@@ -1,3 +1,8 @@
+/*
+ * Metadata-header and upload-API helpers. Validates userland metadata/header
+ * inputs and normalizes the public upload-session API contract.
+ */
+
 int king_object_store_http_header_value_validate(
     const char *field_name,
     const char *value,

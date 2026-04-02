@@ -1,3 +1,16 @@
+/*
+ * =========================================================================
+ * FILENAME:   src/config/high_perf_compute_and_ai/ini.c
+ * PROJECT:    king
+ *
+ * PURPOSE:
+ * php.ini registration and update callbacks for the high-perf compute / AI
+ * config family. This file exposes the system-level dataframe, GPU backend,
+ * memory-preallocation, storage, and vendor-acceleration directives and
+ * keeps `king_high_perf_compute_ai_config` aligned with validated updates.
+ * =========================================================================
+ */
+
 #include "include/config/high_perf_compute_and_ai/ini.h"
 #include "include/config/high_perf_compute_and_ai/base_layer.h"
 
