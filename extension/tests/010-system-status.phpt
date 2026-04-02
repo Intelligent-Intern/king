@@ -38,7 +38,7 @@ array(4) {
 }
 bool(true)
 string(2) "v1"
-string(5) "1.0.0"
+string(11) "0.2.1-alpha"
 bool(false)
 array(6) {
   [0]=>
