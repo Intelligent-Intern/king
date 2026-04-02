@@ -34,6 +34,8 @@ export KING_QUICHE_LIBRARY="${QUICHE_LIB}"
 export KING_QUICHE_SERVER="${QUICHE_SERVER}"
 export LD_LIBRARY_PATH="${EXT_DIR}/../quiche/target/release${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
+"${SCRIPT_DIR}/prebuild-http3-test-helpers.sh"
+
 if [[ "$#" -gt 0 ]]; then
     exec "${PHP_BIN}" run-tests.php -q -d "extension=${EXT_SO}" "$@"
 fi
