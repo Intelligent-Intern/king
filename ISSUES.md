@@ -21,7 +21,7 @@
 
 ## Current Next Leaf
 
-- Classify provider quota-limit failures across real cloud backends.
+- Normalize quota and throttling failures across the public object-store surface.
 
 ## Active Executable Items
 
@@ -44,7 +44,7 @@
 
 ### 2. Object-Store Provider Failure Normalization
 
-6. [ ] Classify provider quota-limit failures across real cloud backends.
+6. [x] Classify provider quota-limit failures across real cloud backends.
    done when: real quota and exhaustion signals stay distinct from generic transport or credential failures across the active cloud adapters.
 
 7. [ ] Normalize quota and throttling failures across the public object-store surface.

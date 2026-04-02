@@ -653,8 +653,9 @@ runtime visibility into coordinator presence, recovery state, version,
 generation, path, and last load/error details through
 `king_object_store_get_stats()['object_store']`.
 The Azure slice now also has the same explicit runtime failure contract as the
-other real cloud backends: endpoint connect failures, credential rejection, and
-throttling responses surface through `runtime_*_adapter_status`,
+other real cloud backends: endpoint connect failures, credential rejection,
+provider-reported quota exhaustion, and throttling responses surface through
+`runtime_*_adapter_status`,
 `runtime_*_adapter_error`, and thrown `King\SystemException` failures instead
 of being hidden behind a simulated-only fence.
 
@@ -666,7 +667,10 @@ failures surface the same adapter error in the thrown `King\SystemException`.
 The same status/error surface is now also the stable contract for endpoint
 connectivity failures such as an unreachable `cloud_s3` API endpoint, and for
 explicit `429` / S3 `SlowDown` throttling responses from the configured
-endpoint. The same runtime also now has an explicit recovery contract for
+endpoint. The same runtime now also classifies provider-reported quota
+exhaustion distinctly across `cloud_s3`, `cloud_gcs`, and `cloud_azure`
+instead of collapsing those signals into generic credential or transport
+failures. The same runtime also now has an explicit recovery contract for
 incomplete `cloud_s3` writes: if a `PUT` lands remotely but the response tears
 down before the write is acknowledged locally, the local sidecar state stays
 failed instead of pretending success, the object remains readable from the
