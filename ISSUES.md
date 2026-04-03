@@ -39,11 +39,10 @@
 
 ## Current Next Leaf
 
-- `#9 Validate CDN cache paths against real object-store backends.`
+- `#10 Validate cache fill on miss against real backends.`
 
 ## Active Executable Items
 
-- [ ] `#9 Validate CDN cache paths against real object-store backends.`
 - [ ] `#10 Validate cache fill on miss against real backends.`
 - [ ] `#11 Validate cache invalidation under load.`
 - [ ] `#12 Validate stale-serve-on-error against real backend failures.`
@@ -59,6 +58,6 @@
 ## Notes
 
 - This batch was pulled explicitly from `READYNESS_TRACKER.md`.
-- It is intentionally ordered as: remaining transport/server truth first, then multi-host/CDN truth, then the next distributed Smart-DNS gap.
+- It is intentionally ordered as: CDN/object-store truth first, then the next distributed Smart-DNS gap.
 - The previous explicit `20`-issue batch is closed and rolled into `PROJECT_ASSESSMENT.md`.
 - If a task is not listed here, it is not the current repo-local execution item.

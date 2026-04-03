@@ -178,7 +178,7 @@ PHP_FUNCTION(king_object_store_delete);
 /* Returns the current object inventory snapshot. */
 PHP_FUNCTION(king_object_store_list);
 
-/* Caches an object in CDN edge nodes. */
+/* Caches an object in the runtime CDN layer, preferring backend metadata paths when available. */
 PHP_FUNCTION(king_cdn_cache_object);
 
 /* Invalidates cached objects across CDN edge nodes. */

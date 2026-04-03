@@ -1,7 +1,9 @@
 /*
- * Root CDN companion slice: implements the local cache/invalidation leaves
- * and exposes the current synthetic edge-node inventory that the active
- * object-store-backed CDN runtime can describe today.
+ * Root CDN companion slice: implements the local cache/invalidation leaves,
+ * resolves cache-entry size through the active local/distributed/cloud
+ * metadata path without dragging full payload bytes when avoidable, and
+ * exposes the current synthetic edge-node inventory that the runtime can
+ * describe today.
  */
 
 #include "object_store/object_store_internal.h"
@@ -83,9 +85,9 @@ PHP_FUNCTION(king_cdn_cache_object)
     }
 
     /*
-     * The local CDN entry only tracks payload size and TTL metadata. Avoid a
-     * full payload read when the active backend can prove object existence and
-     * content length through local sidecars or cloud HEAD metadata.
+     * The CDN entry only tracks payload size and TTL metadata. Avoid a full
+     * payload read when the active backend can prove object existence and
+     * content length through local/distributed sidecars or cloud HEAD metadata.
      */
     if (king_object_store_runtime.initialized) {
         king_storage_backend_t primary_backend = king_object_store_runtime.config.primary_backend;
@@ -99,7 +101,8 @@ PHP_FUNCTION(king_cdn_cache_object)
             && metadata.content_length <= (uint64_t) SIZE_MAX) {
             data_size = (size_t) metadata.content_length;
             size_resolved = 1;
-        } else if ((primary_backend == KING_STORAGE_BACKEND_CLOUD_S3
+        } else if ((primary_backend == KING_STORAGE_BACKEND_DISTRIBUTED
+                || primary_backend == KING_STORAGE_BACKEND_CLOUD_S3
                 || primary_backend == KING_STORAGE_BACKEND_CLOUD_GCS
                 || primary_backend == KING_STORAGE_BACKEND_CLOUD_AZURE)
             && king_object_store_backend_read_metadata(ZSTR_VAL(object_id), &metadata) == SUCCESS

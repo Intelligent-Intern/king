@@ -1150,8 +1150,10 @@ namespace {
     function king_object_store_get_stats(): array {}
 
     /**
-     * Caches an existing local object-store entry in the runtime CDN cache.
-     * Returns `false` when the object does not exist in the local object store.
+     * Caches an existing object-store entry in the runtime CDN cache.
+     * The runtime prefers committed backend metadata paths and only falls back
+     * to payload reads when size metadata cannot be proven.
+     * Returns `false` when the object does not exist in the active object store.
      * @param array{ttl_sec?:int}|null $options
      * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
      */
