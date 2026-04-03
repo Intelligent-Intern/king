@@ -776,7 +776,9 @@ namespace {
      * the CDN layer is enabled. That same process-local CDN registry now stays
      * inside the active `cdn.cache_memory_limit_mb` budget by evicting older
      * entries when newer full-read warms would otherwise grow it past the
-     * configured ceiling. For bounded-memory egress, use
+     * configured ceiling, and an oversize full-read body is not allowed to
+     * flush smaller already-admitted stale bodies just to fail admission
+     * itself. For bounded-memory egress, use
      * `king_object_store_get_to_stream()`.
      * @param array<string,mixed>|null $options
       * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
@@ -1168,7 +1170,9 @@ namespace {
      * CDN registry honors the active `cdn.cache_memory_limit_mb` budget by
      * evicting older entries before it grows without bound, so this call
      * returns `false` both on ordinary miss and when the runtime cannot keep
-     * the requested entry admitted under the current memory ceiling.
+     * the requested entry admitted under the current memory ceiling. Large
+     * objects can still stay admitted as metadata-only cache markers when
+     * their size can be proven without retaining the full body in memory.
      * @param array{ttl_sec?:int}|null $options
      * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
      */

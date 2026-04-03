@@ -98,7 +98,7 @@ static void king_object_store_fill_cdn_cache_on_read_success(
             king_cdn_cache_entry_replace_retained_payload(existing, NULL, 0);
         }
         king_object_store_cdn_entry_note_served(existing, now);
-        king_cdn_enforce_memory_limit();
+        king_cdn_enforce_memory_limit_for_object(object_id_zstr);
         zend_string_release_ex(object_id_zstr, 1);
         return;
     }
@@ -126,7 +126,7 @@ static void king_object_store_fill_cdn_cache_on_read_success(
         return;
     }
 
-    king_cdn_enforce_memory_limit();
+    king_cdn_enforce_memory_limit_for_object(cache_entry->object_id);
     (void) king_cdn_distribute_object(object_id, NULL, 1);
 }
 

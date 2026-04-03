@@ -377,6 +377,17 @@ current contract is honest about that pressure: `king_cdn_cache_object()` can
 return `false` even for an existing object when the entry cannot stay admitted
 under the active memory ceiling.
 
+Large objects follow a narrower but still honest rule. When
+`king_cdn_cache_object()` can prove a large object's size from committed
+metadata or backend `HEAD`, that object may stay admitted as a metadata-only
+cache marker even under a tight memory ceiling because the runtime is not
+retaining the full body bytes in memory. A later full-object read of that same
+large object still will not flush smaller already-admitted retained bodies just
+to try and keep its own oversize body. King serves the large read from the
+active backend, drops the oversize retained body back out when it cannot fit,
+and later backend failure for that large object still fails honestly instead of
+inventing stale bytes it never kept.
+
 The current honest miss-fill contract is full-object `king_object_store_get()`
 for `smart_cdn` objects. When the runtime CDN registry misses, a successful
 origin/backend read backfills the local cache entry and marks it served; the

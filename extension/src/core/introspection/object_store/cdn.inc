@@ -216,7 +216,7 @@ PHP_FUNCTION(king_cdn_cache_object)
         existing->cached_at    = cached_at;
         existing->expires_at   = ttl_sec > 0 ? cached_at + ttl_sec : 0;
         king_cdn_cache_entry_note_touched(existing);
-        king_cdn_enforce_memory_limit();
+        king_cdn_enforce_memory_limit_for_object(object_id);
         RETURN_BOOL(king_cdn_cache_registry_get_entry_allow_expired(object_id) != NULL);
     }
 
@@ -238,7 +238,7 @@ PHP_FUNCTION(king_cdn_cache_object)
         RETURN_THROWS();
     }
 
-    king_cdn_enforce_memory_limit();
+    king_cdn_enforce_memory_limit_for_object(object_id);
     if (king_cdn_cache_registry_get_entry_allow_expired(object_id) != NULL
         && king_cdn_distribute_object(ZSTR_VAL(cache_entry->object_id), NULL, 1) != SUCCESS) {
          /* Ignore distribution errors in the runtime (not fatal for the local cache) */

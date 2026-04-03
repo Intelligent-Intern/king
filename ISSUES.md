@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#17 Validate large objects in cache under memory pressure.`
+- `#18 Validate cache recovery after restart.`
 
 ## Active Executable Items
 
@@ -62,7 +62,7 @@
 - [x] `#14 Validate edge-node inventory against real nodes where publicly claimed.`
 - [x] `#15 Validate origin timeout / retry behavior.`
 - [x] `#16 Validate cache memory limits under load.`
-- [ ] `#17 Validate large objects in cache under memory pressure.`
+- [x] `#17 Validate large objects in cache under memory pressure.`
 - [ ] `#18 Validate cache recovery after restart.`
 - [ ] `#19 Finalize cache metrics and observability.`
 - [ ] `#20 Validate service registration against real distributed topology.`

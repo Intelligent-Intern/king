@@ -234,7 +234,7 @@ Status note:
 - [x] Validate edge-node inventory against real nodes where publicly claimed
 - [x] Validate origin timeout / retry behavior
 - [x] Validate cache memory limits under load
-- [ ] Validate large objects in cache under memory pressure
+- [x] Validate large objects in cache under memory pressure
 - [ ] Validate cache recovery after restart
 - [ ] Finalize cache metrics and observability
 

@@ -8,6 +8,11 @@
 
 static uint64_t king_cdn_cache_touch_counter = 0;
 
+static king_cdn_cache_entry *king_cdn_cache_registry_get_entry_allow_expired(
+    zend_string *object_id
+);
+void king_cdn_sweep_expired(void);
+
 
 static void king_cdn_cache_entry_free(king_cdn_cache_entry *entry)
 {
@@ -119,7 +124,9 @@ static uint64_t king_cdn_cache_collect_memory_bytes(void)
     return total;
 }
 
-static zend_string *king_cdn_cache_find_eviction_candidate(void)
+static zend_string *king_cdn_cache_find_eviction_candidate(
+    zend_string *protected_object_id
+)
 {
     zend_string *candidate_key = NULL;
     uint64_t candidate_touch = UINT64_MAX;
@@ -134,6 +141,9 @@ static zend_string *king_cdn_cache_find_eviction_candidate(void)
         king_cdn_cache_entry *entry;
 
         if (key == NULL || Z_TYPE_P(entry_zv) != IS_PTR) {
+            continue;
+        }
+        if (protected_object_id != NULL && zend_string_equals(key, protected_object_id)) {
             continue;
         }
 
@@ -159,8 +169,9 @@ static zend_string *king_cdn_cache_find_eviction_candidate(void)
     return candidate_key != NULL ? zend_string_copy(candidate_key) : NULL;
 }
 
-static void king_cdn_enforce_memory_limit(void)
+static void king_cdn_enforce_memory_limit_for_object(zend_string *protected_object_id)
 {
+    king_cdn_cache_entry *protected_entry = NULL;
     uint64_t limit_bytes;
     uint64_t current_bytes;
 
@@ -174,11 +185,27 @@ static void king_cdn_enforce_memory_limit(void)
         return;
     }
 
+    if (protected_object_id != NULL) {
+        protected_entry = king_cdn_cache_registry_get_entry_allow_expired(protected_object_id);
+        if (protected_entry != NULL
+            && king_cdn_cache_entry_estimated_memory_bytes(protected_entry) > limit_bytes) {
+            /*
+             * A single oversize candidate is not allowed to flush the rest of
+             * the resident CDN registry just to fail admission itself.
+             */
+            zend_hash_del(&king_cdn_cache_registry, protected_object_id);
+            return;
+        }
+    }
+
     current_bytes = king_cdn_cache_collect_memory_bytes();
     while (current_bytes > limit_bytes && zend_hash_num_elements(&king_cdn_cache_registry) > 0) {
-        zend_string *candidate_key = king_cdn_cache_find_eviction_candidate();
+        zend_string *candidate_key = king_cdn_cache_find_eviction_candidate(protected_object_id);
 
         if (candidate_key == NULL) {
+            if (protected_object_id != NULL) {
+                zend_hash_del(&king_cdn_cache_registry, protected_object_id);
+            }
             break;
         }
 
@@ -186,6 +213,11 @@ static void king_cdn_enforce_memory_limit(void)
         zend_string_release(candidate_key);
         current_bytes = king_cdn_cache_collect_memory_bytes();
     }
+}
+
+static void king_cdn_enforce_memory_limit(void)
+{
+    king_cdn_enforce_memory_limit_for_object(NULL);
 }
 
 static void king_cdn_cache_entry_zval_dtor(zval *zv)
