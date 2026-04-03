@@ -20,6 +20,7 @@
 - when the current batch is exhausted, stop and wait instead of refilling it automatically unless continuous batch execution is explicitly enabled
 - complete one checkbox per commit while an active batch is in flight
 - do not shrink a meaningful v1 contract just to make tests, CI, or docs easier; if the intended contract matters, build the missing backend work or ask explicitly before reducing scope
+- before opening, updating, or marking a PR ready, clear all outstanding GitHub AI findings for this repo at `https://github.com/Intelligent-Intern/king/security/quality/ai-findings`
 
 ## Per-Issue Closure Checklist
 
@@ -31,6 +32,7 @@
 - update `READYNESS_TRACKER.md`
 - run the strongest relevant verification available for that leaf before committing
 - make exactly one commit for the checkbox
+- before any PR refresh or release-candidate handoff, re-check `https://github.com/Intelligent-Intern/king/security/quality/ai-findings` and fix every outstanding finding on the branch
 
 ## Batch Mode
 
