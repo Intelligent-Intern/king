@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- `#7 Validate QUIC poll/event-loop wake, idle, and timeout behavior under sustained runtime.`
+- `#8 Validate QUIC congestion-control behavior under sustained constrained links.`
 
 ## Active Executable Items
 
@@ -30,7 +30,7 @@
 - [x] `#4 Validate QUIC reset and stop-sending lifecycle against real peers.`
 - [x] `#5 Validate QUIC userland cancel propagation into active transport state.`
 - [x] `#6 Validate QUIC remote abort and transport-close mapping into public exceptions.`
-- [ ] `#7 Validate QUIC poll/event-loop wake, idle, and timeout behavior under sustained runtime.`
+- [x] `#7 Validate QUIC poll/event-loop wake, idle, and timeout behavior under sustained runtime.`
 - [ ] `#8 Validate QUIC congestion-control behavior under sustained constrained links.`
 - [ ] `#9 Validate QUIC flow-control exhaustion and recovery behavior under sustained streams.`
 - [ ] `#10 Validate QUIC zero-RTT acceptance and fallback against real peers.`
