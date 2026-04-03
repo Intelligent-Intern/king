@@ -39,11 +39,11 @@
 
 ## Current Next Leaf
 
-- `#3 Validate server TLS reload under live traffic.`
+- `#4 Validate server CORS / header behavior against real browsers and clients.`
 
 ## Active Executable Items
 
-- [ ] `#3 Validate server TLS reload under live traffic.`
+- [ ] `#4 Validate server CORS / header behavior against real browsers and clients.`
 - [ ] `#4 Validate server CORS / header behavior against real browsers and clients.`
 - [ ] `#5 Validate server multi-connection scheduling under load.`
 - [ ] `#6 Validate server fairness across competing clients.`

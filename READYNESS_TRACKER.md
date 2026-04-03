@@ -94,7 +94,7 @@ Status note:
 - [x] Validate server-side cancel callbacks under real traffic
 - [x] Validate server-side Early Hints on-wire
 - [x] Validate server-side WebSocket upgrades on-wire
-- [ ] Validate server TLS reload under live traffic
+- [x] Validate server TLS reload under live traffic
 - [x] Validate server admin API under real mTLS configuration
 - [x] Validate server admin API auth / reload / failure paths
 - [ ] Validate server CORS / header behavior against real browsers and clients

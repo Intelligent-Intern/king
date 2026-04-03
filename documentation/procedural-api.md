@@ -173,7 +173,7 @@ telemetry setup, and server-side close behavior.
 | `king_server_on_cancel()` | Registers a cancel callback for server-side work. | [Server Runtime](./server-runtime.md) |
 | `king_server_send_early_hints()` | Records Early Hints on the server session and emits real `103` hints on the HTTP/1 one-shot listener. | [Server Runtime](./server-runtime.md) |
 | `king_server_upgrade_to_websocket()` | Upgrades a request or session to WebSocket. | [Server Runtime](./server-runtime.md) |
-| `king_server_reload_tls_config()` | Reloads TLS material on a live server session. | [Server Runtime](./server-runtime.md) |
+| `king_server_reload_tls_config()` | Reloads TLS material on a live server session, including during active on-wire request handling. | [Server Runtime](./server-runtime.md) |
 | `king_server_init_telemetry()` | Attaches telemetry configuration to a server session. | [Server Runtime](./server-runtime.md) |
 | `king_session_get_peer_cert_subject()` | Returns the normalized peer certificate subject for a session. | [Server Runtime](./server-runtime.md) |
 | `king_session_close_server_initiated()` | Closes a session from the server side with explicit close data. | [Server Runtime](./server-runtime.md) |

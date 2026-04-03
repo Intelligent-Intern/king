@@ -497,8 +497,9 @@ namespace {
      * `King\Session` resource or object.
      * The current runtime requires readable replacement certificate
      * and key paths, also requires the configured `tls_ticket_key_file` to
-     * be readable when set, and stores the last local server-TLS snapshot
-     * plus apply/reload counters on the shared session stats.
+     * be readable when set, stores the last local server-TLS snapshot
+     * plus apply/reload counters on the shared session stats, and keeps that
+     * contract valid during active on-wire request handling.
      * @param mixed $session
      */
     function king_server_reload_tls_config(mixed $session, string $cert_file_path, string $key_file_path): bool {}

@@ -389,7 +389,9 @@ that event as a full process mystery.
 King exposes this path through `king_server_reload_tls_config()`. The function
 takes a live server-capable session plus new certificate and key paths, validates
 that the replacement material is readable, and applies a new server-side TLS
-snapshot to the session.
+snapshot to the session. That snapshot path is now also proven during a live
+on-wire HTTP/3 request, so the runtime contract is not only a local marker.
+The current slice still does not hot-swap a native listener backend mid-accept.
 
 This matters because certificate rotation is not an edge case. It is normal
 operations. A platform that serves traffic for long periods has to make TLS
