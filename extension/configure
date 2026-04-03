@@ -680,6 +680,8 @@ DUMPBIN
 LD
 FGREP
 LIBTOOL
+RUSTC
+CARGO
 SHLIB_DL_SUFFIX_NAME
 SHLIB_SUFFIX_NAME
 CPP
@@ -4352,7 +4354,7 @@ printf "%s\n" "${T_MD}Configuring extension${T_ME}" >&6; }
 
 
 
-php_enable_king=no
+php_enable_king=yes
 
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether to enable King support" >&5
 printf %s "checking whether to enable King support... " >&6; }
@@ -4362,7 +4364,7 @@ then :
   enableval=$enable_king; PHP_KING=$enableval
 else $as_nop
 
-  PHP_KING=no
+  PHP_KING=yes
   test "$PHP_ENABLE_ALL" && PHP_KING=$PHP_ENABLE_ALL
 
 fi
@@ -4426,6 +4428,106 @@ printf "%s\n" "$ext_output" >&6; }
 
 
 if test "$PHP_KING" != "no"; then
+    # Extract the first word of "cargo", so it can be a program name with args.
+set dummy cargo; ac_word=$2
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_path_CARGO+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  case $CARGO in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_CARGO="$CARGO" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_path_CARGO="$as_dir$ac_word$ac_exec_ext"
+    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_CARGO" && ac_cv_path_CARGO="no"
+  ;;
+esac
+fi
+CARGO=$ac_cv_path_CARGO
+if test -n "$CARGO"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $CARGO" >&5
+printf "%s\n" "$CARGO" >&6; }
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+fi
+
+
+    # Extract the first word of "rustc", so it can be a program name with args.
+set dummy rustc; ac_word=$2
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+printf %s "checking for $ac_word... " >&6; }
+if test ${ac_cv_path_RUSTC+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  case $RUSTC in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_RUSTC="$RUSTC" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+    ac_cv_path_RUSTC="$as_dir$ac_word$ac_exec_ext"
+    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_RUSTC" && ac_cv_path_RUSTC="no"
+  ;;
+esac
+fi
+RUSTC=$ac_cv_path_RUSTC
+if test -n "$RUSTC"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $RUSTC" >&5
+printf "%s\n" "$RUSTC" >&6; }
+else
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+fi
+
+
+
+    if test "$CARGO" = "no"; then
+        as_fn_error $? "King requires cargo to build the bundled QUIC runtime." "$LINENO" 5
+    fi
+
+    if test "$RUSTC" = "no"; then
+        as_fn_error $? "King requires rustc to build the bundled QUIC runtime." "$LINENO" 5
+    fi
 
     if test "$PHP_KING_QUICHE" != "no"; then
         { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for optional quiche build paths" >&5
@@ -5167,6 +5269,11 @@ EOF
   PHP_VAR_SUBST="$PHP_VAR_SUBST PHP_PECL_EXTENSION"
 
   fi
+
+      src=$ext_srcdir/Makefile.frag
+  ac_srcdir=$ext_srcdir
+  ac_builddir=$ext_builddir
+  test -f "$src" && $SED -e "s#\$(srcdir)#$ac_srcdir#g" -e "s#\$(builddir)#$ac_builddir#g" $src  >> Makefile.fragments
 
 
   PHP_VAR_SUBST="$PHP_VAR_SUBST KING_SHARED_LIBADD"

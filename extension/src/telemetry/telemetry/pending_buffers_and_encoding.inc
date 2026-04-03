@@ -1,0 +1,516 @@
+static uint64_t king_telemetry_current_memory_bytes_internal(void)
+{
+    return king_telemetry_saturated_add_u64(
+        king_telemetry_queue_bytes,
+        king_telemetry_pending_bytes
+    );
+}
+
+static void king_telemetry_note_runtime_watermarks(void)
+{
+    uint64_t current_memory_bytes = king_telemetry_current_memory_bytes_internal();
+
+    if (king_telemetry_queue_size > king_telemetry_queue_high_watermark) {
+        king_telemetry_queue_high_watermark = king_telemetry_queue_size;
+    }
+
+    if (king_telemetry_queue_bytes > king_telemetry_queue_high_water_bytes) {
+        king_telemetry_queue_high_water_bytes = king_telemetry_queue_bytes;
+    }
+
+    if (current_memory_bytes > king_telemetry_memory_high_water_bytes) {
+        king_telemetry_memory_high_water_bytes = current_memory_bytes;
+    }
+}
+
+uint32_t king_telemetry_get_pending_entry_limit(void)
+{
+    return king_telemetry_runtime_max_queue_size();
+}
+
+uint64_t king_telemetry_get_queue_bytes(void)
+{
+    return king_telemetry_queue_bytes;
+}
+
+uint64_t king_telemetry_get_pending_bytes(void)
+{
+    return king_telemetry_pending_bytes;
+}
+
+uint64_t king_telemetry_get_memory_bytes(void)
+{
+    return king_telemetry_current_memory_bytes_internal();
+}
+
+uint64_t king_telemetry_get_memory_byte_limit(void)
+{
+    return king_telemetry_runtime_memory_byte_limit_internal();
+}
+
+uint32_t king_telemetry_get_queue_high_watermark(void)
+{
+    return king_telemetry_queue_high_watermark;
+}
+
+uint64_t king_telemetry_get_queue_high_water_bytes(void)
+{
+    return king_telemetry_queue_high_water_bytes;
+}
+
+uint64_t king_telemetry_get_memory_high_water_bytes(void)
+{
+    return king_telemetry_memory_high_water_bytes;
+}
+
+uint32_t king_telemetry_get_retry_requeue_count(void)
+{
+    return king_telemetry_retry_requeue_count;
+}
+
+static void king_telemetry_pending_buffers_ensure(void)
+{
+    if (king_telemetry_pending_buffers_initialized) {
+        return;
+    }
+
+    array_init(&king_telemetry_pending_spans);
+    array_init(&king_telemetry_pending_logs);
+    king_telemetry_pending_buffers_initialized = true;
+}
+
+static void king_telemetry_pending_buffers_destroy(void)
+{
+    if (!king_telemetry_pending_buffers_initialized) {
+        king_telemetry_pending_bytes = 0;
+        return;
+    }
+
+    zval_ptr_dtor(&king_telemetry_pending_spans);
+    zval_ptr_dtor(&king_telemetry_pending_logs);
+    ZVAL_UNDEF(&king_telemetry_pending_spans);
+    ZVAL_UNDEF(&king_telemetry_pending_logs);
+    king_telemetry_pending_buffers_initialized = false;
+    king_telemetry_pending_bytes = 0;
+}
+
+static void king_telemetry_reset_active_span(void)
+{
+    if (king_current_span == NULL) {
+        return;
+    }
+
+    king_telemetry_span_free(king_current_span);
+    king_current_span = NULL;
+}
+
+void king_telemetry_cleanup_scope_state(void)
+{
+    king_telemetry_reset_active_span();
+    king_telemetry_pending_buffers_destroy();
+}
+
+static zend_bool king_telemetry_buffer_has_entries(zval *buffer)
+{
+    return buffer != NULL
+        && Z_TYPE_P(buffer) == IS_ARRAY
+        && zend_hash_num_elements(Z_ARRVAL_P(buffer)) > 0;
+}
+
+static uint32_t king_telemetry_buffer_entry_count(zval *buffer)
+{
+    if (buffer == NULL || Z_TYPE_P(buffer) != IS_ARRAY) {
+        return 0;
+    }
+
+    return (uint32_t) zend_hash_num_elements(Z_ARRVAL_P(buffer));
+}
+
+uint32_t king_telemetry_get_pending_span_count(void)
+{
+    if (!king_telemetry_pending_buffers_initialized) {
+        return 0;
+    }
+
+    return king_telemetry_buffer_entry_count(&king_telemetry_pending_spans);
+}
+
+uint32_t king_telemetry_get_pending_log_count(void)
+{
+    if (!king_telemetry_pending_buffers_initialized) {
+        return 0;
+    }
+
+    return king_telemetry_buffer_entry_count(&king_telemetry_pending_logs);
+}
+
+static zend_bool king_telemetry_capture_enabled(void)
+{
+    return king_telemetry_system_initialized && king_telemetry_runtime_config.enabled;
+}
+
+static uint64_t king_telemetry_estimate_zval_bytes(zval *value)
+{
+    smart_str json_payload = {0};
+    uint64_t estimated_bytes = 0;
+
+    if (value == NULL) {
+        return 0;
+    }
+
+    php_json_encode(&json_payload, value, 0);
+    smart_str_0(&json_payload);
+    if (json_payload.s != NULL) {
+        estimated_bytes = (uint64_t) ZSTR_LEN(json_payload.s);
+    }
+    smart_str_free(&json_payload);
+
+    return estimated_bytes;
+}
+
+static zend_bool king_telemetry_pending_buffer_try_reserve_entry(zval *buffer, zval *entry)
+{
+    uint32_t limit;
+    uint64_t entry_bytes;
+    uint64_t memory_limit;
+    uint64_t next_memory_bytes;
+
+    if (buffer == NULL || Z_TYPE_P(buffer) != IS_ARRAY) {
+        return 0;
+    }
+
+    limit = king_telemetry_get_pending_entry_limit();
+    if (limit > 0 && king_telemetry_buffer_entry_count(buffer) >= limit) {
+        king_telemetry_pending_drop_count++;
+        return 0;
+    }
+
+    entry_bytes = king_telemetry_estimate_zval_bytes(entry);
+    memory_limit = king_telemetry_runtime_memory_byte_limit_internal();
+    next_memory_bytes = king_telemetry_saturated_add_u64(
+        king_telemetry_current_memory_bytes_internal(),
+        entry_bytes
+    );
+    if (memory_limit > 0 && next_memory_bytes > memory_limit) {
+        king_telemetry_pending_drop_count++;
+        return 0;
+    }
+
+    king_telemetry_pending_bytes = king_telemetry_saturated_add_u64(
+        king_telemetry_pending_bytes,
+        entry_bytes
+    );
+    king_telemetry_note_runtime_watermarks();
+    return 1;
+}
+
+static void king_telemetry_buffer_move_entries(zval *target, zval *source)
+{
+    zval *entry;
+
+    if (target == NULL || source == NULL) {
+        return;
+    }
+    if (Z_TYPE_P(target) != IS_ARRAY || Z_TYPE_P(source) != IS_ARRAY) {
+        return;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(source), entry) {
+        Z_TRY_ADDREF_P(entry);
+        add_next_index_zval(target, entry);
+    } ZEND_HASH_FOREACH_END();
+
+    zend_hash_clean(Z_ARRVAL_P(source));
+}
+
+static uint64_t king_telemetry_batch_refresh_estimated_bytes(king_telemetry_batch_t *batch)
+{
+    uint64_t estimated_bytes = 0;
+
+    if (batch == NULL) {
+        return 0;
+    }
+
+    estimated_bytes = king_telemetry_saturated_add_u64(
+        estimated_bytes,
+        king_telemetry_estimate_zval_bytes(&batch->metrics)
+    );
+    estimated_bytes = king_telemetry_saturated_add_u64(
+        estimated_bytes,
+        king_telemetry_estimate_zval_bytes(&batch->spans)
+    );
+    estimated_bytes = king_telemetry_saturated_add_u64(
+        estimated_bytes,
+        king_telemetry_estimate_zval_bytes(&batch->logs)
+    );
+
+    batch->estimated_bytes = estimated_bytes;
+    return estimated_bytes;
+}
+
+static const char *king_telemetry_level_name(king_telemetry_level_t level)
+{
+    switch (level) {
+        case KING_TELEMETRY_LEVEL_ERROR:
+            return "error";
+        case KING_TELEMETRY_LEVEL_WARN:
+            return "warn";
+        case KING_TELEMETRY_LEVEL_DEBUG:
+            return "debug";
+        case KING_TELEMETRY_LEVEL_TRACE:
+            return "trace";
+        case KING_TELEMETRY_LEVEL_INFO:
+        case KING_TELEMETRY_LEVEL_NONE:
+        default:
+            return "info";
+    }
+}
+
+static uint32_t king_telemetry_runtime_timeout_ms(void)
+{
+    if (king_telemetry_runtime_config.batch_timeout_ms > 0) {
+        return king_telemetry_runtime_config.batch_timeout_ms;
+    }
+    if (king_open_telemetry_config.exporter_timeout_ms > 0
+        && king_open_telemetry_config.exporter_timeout_ms <= UINT32_MAX) {
+        return (uint32_t) king_open_telemetry_config.exporter_timeout_ms;
+    }
+
+    return KING_TELEMETRY_HTTP_TIMEOUT_FALLBACK_MS;
+}
+
+static void king_telemetry_json_append_zval_as_string(smart_str *buffer, zval *value)
+{
+    zend_string *str;
+
+    if (buffer == NULL || value == NULL) {
+        return;
+    }
+
+    str = zval_get_string(value);
+    smart_str_append_escaped(buffer, ZSTR_VAL(str), ZSTR_LEN(str));
+    zend_string_release(str);
+}
+
+static zend_bool king_telemetry_export_array_succeeded(int result, zval *payload)
+{
+    return result == SUCCESS
+        && payload != NULL
+        && Z_TYPE_P(payload) == IS_ARRAY
+        && zend_hash_num_elements(Z_ARRVAL_P(payload)) > 0;
+}
+
+static zend_bool king_telemetry_batch_signal_complete(zval *payload, int result)
+{
+    if (!king_telemetry_export_array_succeeded(result, payload)) {
+        return 0;
+    }
+
+    zend_hash_clean(Z_ARRVAL_P(payload));
+    return 1;
+}
+
+static void king_telemetry_span_free(king_trace_context_t *span)
+{
+    if (span) {
+        zval_ptr_dtor(&span->attributes);
+        zval_ptr_dtor(&span->events);
+        zval_ptr_dtor(&span->links);
+        efree(span);
+    }
+}
+
+static king_telemetry_level_t king_telemetry_level_from_string(const char *level_str)
+{
+    if (level_str == NULL) {
+        return KING_TELEMETRY_LEVEL_INFO;
+    }
+
+    if (strcmp(level_str, "error") == 0) {
+        return KING_TELEMETRY_LEVEL_ERROR;
+    }
+    if (strcmp(level_str, "warn") == 0 || strcmp(level_str, "warning") == 0) {
+        return KING_TELEMETRY_LEVEL_WARN;
+    }
+    if (strcmp(level_str, "debug") == 0) {
+        return KING_TELEMETRY_LEVEL_DEBUG;
+    }
+    if (strcmp(level_str, "trace") == 0) {
+        return KING_TELEMETRY_LEVEL_TRACE;
+    }
+
+    return KING_TELEMETRY_LEVEL_INFO;
+}
+
+static zend_long king_telemetry_span_kind_to_otlp_kind(zval *kind_zval)
+{
+    zend_long kind;
+
+    if (kind_zval == NULL) {
+        return 1;
+    }
+
+    kind = zval_get_long(kind_zval);
+    switch ((king_span_kind_t) kind) {
+        case KING_SPAN_KIND_SERVER:
+            return 2;
+        case KING_SPAN_KIND_CLIENT:
+            return 3;
+        case KING_SPAN_KIND_PRODUCER:
+            return 4;
+        case KING_SPAN_KIND_CONSUMER:
+            return 5;
+        case KING_SPAN_KIND_INTERNAL:
+        default:
+            return 1;
+    }
+}
+
+static void king_telemetry_json_append_attributes(
+    smart_str *json_payload,
+    zval *attributes_zval)
+{
+    zval *attr_value;
+    zend_string *attr_key;
+    int first_attr = 1;
+
+    if (json_payload == NULL
+        || attributes_zval == NULL
+        || Z_TYPE_P(attributes_zval) != IS_ARRAY) {
+        return;
+    }
+
+    smart_str_appends(json_payload, ",\"attributes\":[");
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(attributes_zval), attr_key, attr_value) {
+        if (attr_key == NULL) {
+            continue;
+        }
+
+        if (!first_attr) {
+            smart_str_appends(json_payload, ",");
+        }
+        first_attr = 0;
+
+        smart_str_appends(json_payload, "{\"key\":\"");
+        smart_str_append_escaped(json_payload, ZSTR_VAL(attr_key), ZSTR_LEN(attr_key));
+        smart_str_appends(json_payload, "\",\"value\":{\"stringValue\":\"");
+        king_telemetry_json_append_zval_as_string(json_payload, attr_value);
+        smart_str_appends(json_payload, "\"}}");
+    } ZEND_HASH_FOREACH_END();
+
+    smart_str_appends(json_payload, "]");
+}
+
+static void king_telemetry_config_apply_inline_array(
+    king_telemetry_config_t *config,
+    zval *config_arr)
+{
+    zval *value;
+
+    if (config == NULL || config_arr == NULL || Z_TYPE_P(config_arr) != IS_ARRAY) {
+        return;
+    }
+
+    value = zend_hash_str_find(Z_ARRVAL_P(config_arr), "enabled", sizeof("enabled") - 1);
+    if (value != NULL) {
+        config->enabled = zend_is_true(value) ? 1 : 0;
+    }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "otel_exporter_endpoint",
+        sizeof("otel_exporter_endpoint") - 1
+    );
+    if (value != NULL && Z_TYPE_P(value) == IS_STRING) {
+        snprintf(
+            config->otel_exporter_endpoint,
+            sizeof(config->otel_exporter_endpoint),
+            "%s",
+            Z_STRVAL_P(value)
+        );
+    }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "otel_exporter_protocol",
+        sizeof("otel_exporter_protocol") - 1
+    );
+    if (value != NULL && Z_TYPE_P(value) == IS_STRING) {
+        snprintf(
+            config->otel_exporter_protocol,
+            sizeof(config->otel_exporter_protocol),
+            "%s",
+            Z_STRVAL_P(value)
+        );
+    }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "service_name",
+        sizeof("service_name") - 1
+    );
+    if (value != NULL && Z_TYPE_P(value) == IS_STRING) {
+        snprintf(
+            config->service_name,
+            sizeof(config->service_name),
+            "%s",
+            Z_STRVAL_P(value)
+        );
+    }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "batch_processor_max_queue_size",
+        sizeof("batch_processor_max_queue_size") - 1
+    );
+    if (value != NULL) {
+        zend_long queue_limit = zval_get_long(value);
+
+        if (queue_limit > 0) {
+            config->max_queue_size = queue_limit > UINT32_MAX
+                ? UINT32_MAX
+                : (uint32_t) queue_limit;
+        }
+    }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "exporter_timeout_ms",
+        sizeof("exporter_timeout_ms") - 1
+    );
+    if (value != NULL) {
+        zend_long timeout_ms = zval_get_long(value);
+
+        if (timeout_ms > 0) {
+            config->batch_timeout_ms = timeout_ms > UINT32_MAX
+                ? UINT32_MAX
+                : (uint32_t) timeout_ms;
+        }
+    }
+}
+
+static const char *king_telemetry_metric_type_from_zval(zval *type_zval)
+{
+    if (type_zval == NULL) {
+        return NULL;
+    }
+
+    if (Z_TYPE_P(type_zval) == IS_LONG) {
+        return king_metric_type_to_string((king_metric_type_t) Z_LVAL_P(type_zval));
+    }
+
+    if (Z_TYPE_P(type_zval) == IS_STRING) {
+        const char *type_str = Z_STRVAL_P(type_zval);
+
+        if (strcmp(type_str, "counter") == 0
+            || strcmp(type_str, "gauge") == 0
+            || strcmp(type_str, "histogram") == 0
+            || strcmp(type_str, "summary") == 0) {
+            return type_str;
+        }
+    }
+
+    return NULL;
+}
+
