@@ -53,6 +53,9 @@ typedef struct _king_telemetry_config_t {
     uint32_t max_batch_size;
     uint32_t max_export_batch_size;
     uint32_t max_queue_size;
+    char traces_sampler_type[32];
+    double traces_sampler_ratio;
+    zend_bool traces_sampler_ratio_configured;
     zend_bool enable_auto_instrumentation;
     zend_bool enable_distributed_tracing;
     zend_bool enable_metrics_collection;

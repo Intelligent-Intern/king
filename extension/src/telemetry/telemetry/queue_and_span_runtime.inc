@@ -35,6 +35,84 @@ static void king_telemetry_hex_encode(char *target, size_t target_len, const uin
     target[source_len * 2] = '\0';
 }
 
+static const char *king_telemetry_runtime_sampler_type(void)
+{
+    if (king_telemetry_runtime_config.traces_sampler_type[0] != '\0') {
+        return king_telemetry_runtime_config.traces_sampler_type;
+    }
+
+    if (king_open_telemetry_config.traces_sampler_type != NULL
+        && king_open_telemetry_config.traces_sampler_type[0] != '\0') {
+        return king_open_telemetry_config.traces_sampler_type;
+    }
+
+    return "parent_based_probability";
+}
+
+static double king_telemetry_runtime_sampler_ratio(void)
+{
+    double ratio = 1.0;
+
+    if (king_telemetry_runtime_config.traces_sampler_ratio_configured) {
+        ratio = king_telemetry_runtime_config.traces_sampler_ratio;
+    } else if (king_open_telemetry_config.traces_sampler_ratio >= 0.0
+        && king_open_telemetry_config.traces_sampler_ratio <= 1.0) {
+        ratio = king_open_telemetry_config.traces_sampler_ratio;
+    }
+
+    if (ratio < 0.0) {
+        return 0.0;
+    }
+    if (ratio > 1.0) {
+        return 1.0;
+    }
+
+    return ratio;
+}
+
+static zend_bool king_telemetry_sample_ratio_allows_root(double ratio)
+{
+    uint64_t random_value = 0;
+    double sample;
+
+    if (ratio <= 0.0) {
+        return 0;
+    }
+    if (ratio >= 1.0) {
+        return 1;
+    }
+
+    if (king_telemetry_fill_random_bytes((uint8_t *) &random_value, sizeof(random_value)) != SUCCESS) {
+        struct timespec ts;
+        pid_t pid = getpid();
+
+        clock_gettime(CLOCK_REALTIME, &ts);
+        random_value = ((uint64_t) ts.tv_sec << 32)
+            ^ (uint64_t) ts.tv_nsec
+            ^ (uint64_t) pid;
+    }
+
+    sample = (double) (random_value >> 11) / 9007199254740992.0;
+    return sample < ratio;
+}
+
+static uint8_t king_telemetry_choose_root_trace_flags(void)
+{
+    const char *sampler_type = king_telemetry_runtime_sampler_type();
+
+    if (strcmp(sampler_type, "always_off") == 0) {
+        return 0x00;
+    }
+
+    if (strcmp(sampler_type, "always_on") == 0) {
+        return 0x01;
+    }
+
+    return king_telemetry_sample_ratio_allows_root(
+        king_telemetry_runtime_sampler_ratio()
+    ) ? 0x01 : 0x00;
+}
+
 void king_telemetry_free_batch(king_telemetry_batch_t *batch)
 {
     if (batch) {
@@ -320,7 +398,7 @@ king_trace_context_t* king_telemetry_create_span(const char *operation_name, kin
         span->parent = NULL;
     } else {
         strncpy(span->trace_id, king_telemetry_generate_trace_id(), sizeof(span->trace_id) - 1);
-        span->trace_flags = 1;
+        span->trace_flags = king_telemetry_choose_root_trace_flags();
         span->parent = NULL;
     }
 

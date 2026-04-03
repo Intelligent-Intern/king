@@ -16,6 +16,7 @@ PHP_FUNCTION(king_telemetry_init)
     memset(&config, 0, sizeof(config));
     config.enabled = true;
     config.max_queue_size = king_telemetry_default_max_queue_size();
+    config.traces_sampler_ratio = 1.0;
     king_telemetry_config_apply_inline_array(&config, config_arr);
     
     king_telemetry_init_system(&config);

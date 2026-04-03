@@ -82,6 +82,11 @@ static void king_telemetry_pending_buffers_ensure(void)
 static zend_bool king_telemetry_capture_enabled(void);
 static zend_bool king_telemetry_pending_buffer_try_reserve_entry(zval *buffer, zval *entry);
 
+static zend_bool king_telemetry_span_is_sampled(king_trace_context_t *span)
+{
+    return span != NULL && (span->trace_flags & 0x01u) != 0;
+}
+
 static void king_telemetry_pending_buffers_destroy(void)
 {
     if (!king_telemetry_pending_buffers_initialized) {
@@ -387,7 +392,7 @@ static zend_bool king_telemetry_close_current_span(
         ZVAL_COPY(&attrs_copy, &finished_span->attributes);
         add_assoc_zval(&span_entry, "attributes", &attrs_copy);
     }
-    if (king_telemetry_capture_enabled()) {
+    if (king_telemetry_capture_enabled() && king_telemetry_span_is_sampled(finished_span)) {
         king_telemetry_pending_buffers_ensure();
         capture_span = king_telemetry_pending_buffer_try_reserve_entry(
             &king_telemetry_pending_spans,
@@ -754,6 +759,40 @@ static void king_telemetry_config_apply_inline_array(
             "%s",
             Z_STRVAL_P(value)
         );
+    }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "traces_sampler_type",
+        sizeof("traces_sampler_type") - 1
+    );
+    if (value != NULL
+        && Z_TYPE_P(value) == IS_STRING
+        && (
+            strcmp(Z_STRVAL_P(value), "parent_based_probability") == 0
+            || strcmp(Z_STRVAL_P(value), "always_on") == 0
+            || strcmp(Z_STRVAL_P(value), "always_off") == 0
+        )) {
+        snprintf(
+            config->traces_sampler_type,
+            sizeof(config->traces_sampler_type),
+            "%s",
+            Z_STRVAL_P(value)
+        );
+    }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "traces_sampler_ratio",
+        sizeof("traces_sampler_ratio") - 1
+    );
+    if (value != NULL) {
+        double sampler_ratio = zval_get_double(value);
+
+        if (sampler_ratio >= 0.0 && sampler_ratio <= 1.0) {
+            config->traces_sampler_ratio = sampler_ratio;
+            config->traces_sampler_ratio_configured = 1;
+        }
     }
 
     value = zend_hash_str_find(

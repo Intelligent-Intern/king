@@ -394,6 +394,14 @@ cadence. `metrics_default_histogram_boundaries` defines histogram bucket edges.
 `traces_max_attributes_per_span` limits attribute growth on one span.
 `logs_exporter_batch_size` shapes log exporter batching.
 
+Sampling semantics are now explicit instead of implied. `always_on` records new
+local root spans and exports them normally. `always_off` still gives you a live
+trace context and outgoing `traceparent` propagation with an unsampled `00`
+flag, but closed spans never enter the pending export buffer. The default
+`parent_based_probability` mode preserves the sampled or unsampled decision of
+an active local or incoming remote parent, and only falls back to the
+configured ratio when a brand-new local root has no parent context to inherit.
+
 The following runtime example shows the usual shape.
 
 ```php
@@ -490,7 +498,10 @@ snapshot for code that needs explicit access to boundary metadata.
 
 `king_telemetry_inject_context()` returns a header array containing the live
 current span as `traceparent` plus optional `tracestate`, unless the caller
-already supplied those headers explicitly.
+already supplied those headers explicitly. That propagation path also preserves
+the current span's sampled bit, so unsampled traces continue downstream as
+`traceparent` with `00` instead of being silently rewritten into sampled
+traffic.
 
 `king_telemetry_extract_context()` currently returns `false` until the incoming
 propagation contract is finalized.

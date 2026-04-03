@@ -264,7 +264,7 @@ Status note:
 - [x] Finalize trace-context injection on outgoing requests
 - [x] Finalize trace-context extraction from incoming requests
 - [x] Preserve span hierarchies correctly across process / worker boundaries
-- [ ] Finalize telemetry sampling strategy where publicly claimed
+- [x] Finalize telemetry sampling strategy where publicly claimed
 - [x] Enforce telemetry memory bounds under load
 - [ ] Monitor telemetry CPU bounds under load
 - [x] Define and enforce telemetry queue limits

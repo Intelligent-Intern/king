@@ -388,8 +388,8 @@ metrics are exported, and what sampler policy traces use.
 | `king.otel_exporter_headers` | unset | Supplies static headers added to OTLP export requests. |
 | `king.otel_batch_processor_max_queue_size` | `2048` | Caps the telemetry retry queue size and the derived in-process telemetry byte budget (`64 KiB` per queue slot). |
 | `king.otel_batch_processor_schedule_delay_ms` | `5000` | Sets the telemetry batch scheduling delay. |
-| `king.otel_traces_sampler_type` | `parent_based_probability` | Selects the trace sampling strategy. |
-| `king.otel_traces_sampler_ratio` | `1.0` | Sets the probabilistic trace sampling ratio. |
+| `king.otel_traces_sampler_type` | `parent_based_probability` | Selects the trace sampling strategy: `always_on`, `always_off`, or `parent_based_probability`. |
+| `king.otel_traces_sampler_ratio` | `1.0` | Sets the probabilistic root-trace sampler ratio used when `parent_based_probability` opens a brand-new local root. |
 | `king.otel_traces_max_attributes_per_span` | `128` | Caps how many attributes may be attached to one span. |
 | `king.otel_metrics_enable` | `1` | Enables metric export. |
 | `king.otel_metrics_export_interval_ms` | `60000` | Sets the metric export interval. |
