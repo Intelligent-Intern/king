@@ -4,6 +4,28 @@
 
 require __DIR__ . '/semantic_dns_wire_helper.inc';
 
+if (!function_exists('king_semantic_dns_wire_query')) {
+    /**
+     * Stub implementation of king_semantic_dns_wire_query to avoid undefined-function
+     * fatal errors in this test context. The real implementation is expected to be
+     * provided by semantic_dns_wire_helper.inc in production.
+     *
+     * @param string $host
+     * @param int    $port
+     * @param string $serviceName
+     *
+     * @return array
+     *
+     * @throws RuntimeException
+     */
+    function king_semantic_dns_wire_query($host, $port, $serviceName)
+    {
+        throw new RuntimeException(
+            'king_semantic_dns_wire_query is not implemented in this context.'
+        );
+    }
+}
+
 if ($argc < 5) {
     fwrite(
         STDERR,
