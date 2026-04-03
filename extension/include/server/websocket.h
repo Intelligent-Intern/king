@@ -44,6 +44,11 @@ zend_result king_server_websocket_upgrade_session(
     const char *function_name
 );
 
+void king_server_websocket_release_session_upgrade(
+    king_client_session_t *session,
+    zend_long stream_id
+);
+
 /**
  * @brief Sends a message on a WebSocket connection.
  *

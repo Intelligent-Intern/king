@@ -626,6 +626,7 @@ PHP_METHOD(King_WebSocket_Server, accept)
         );
         goto fail_cleanup;
     }
+    king_server_websocket_release_session_upgrade(session, 0);
 
     if (
         king_websocket_server_init_connection_object(

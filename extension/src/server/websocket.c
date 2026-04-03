@@ -33,6 +33,104 @@
 static const char *king_server_websocket_accept_magic =
     "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
+static void king_server_websocket_clear_queued_messages(king_ws_state *state)
+{
+    king_ws_message *message;
+
+    if (state == NULL) {
+        return;
+    }
+
+    message = state->incoming_head;
+    while (message != NULL) {
+        king_ws_message *next = message->next;
+
+        if (message->payload != NULL) {
+            zend_string_release(message->payload);
+        }
+
+        efree(message);
+        message = next;
+    }
+
+    state->incoming_head = NULL;
+    state->incoming_tail = NULL;
+    state->queued_message_count = 0;
+    state->queued_bytes = 0;
+}
+
+static void king_server_websocket_force_close_state(king_ws_state *state)
+{
+    if (state == NULL) {
+        return;
+    }
+
+    king_server_websocket_clear_queued_messages(state);
+
+    if (state->transport_stream != NULL) {
+        php_stream_close(state->transport_stream);
+        state->transport_stream = NULL;
+    }
+
+    if (!(state->state == KING_WS_STATE_CLOSED && state->closed)) {
+        if (state->last_close_reason != NULL) {
+            zend_string_release(state->last_close_reason);
+        }
+
+        state->last_close_reason = zend_string_init("", 0, 0);
+        state->last_close_status_code = 1001;
+    }
+
+    state->state = KING_WS_STATE_CLOSED;
+    state->closed = true;
+    state->close_frame_sent = true;
+}
+
+void king_client_session_cleanup_server_websockets(king_client_session_t *session)
+{
+    zval *upgrade_entry;
+
+    if (session == NULL || !session->server_upgraded_streams_initialized) {
+        return;
+    }
+
+    ZEND_HASH_FOREACH_VAL(&session->server_upgraded_streams, upgrade_entry)
+    {
+        king_ws_state *state;
+
+        if (Z_TYPE_P(upgrade_entry) != IS_RESOURCE) {
+            continue;
+        }
+
+        state = zend_fetch_resource(
+            Z_RES_P(upgrade_entry),
+            "King\\WebSocket",
+            le_king_ws
+        );
+        if (state != NULL) {
+            king_server_websocket_force_close_state(state);
+        }
+    }
+    ZEND_HASH_FOREACH_END();
+
+    zend_hash_clean(&session->server_upgraded_streams);
+}
+
+void king_server_websocket_release_session_upgrade(
+    king_client_session_t *session,
+    zend_long stream_id
+)
+{
+    if (session == NULL || !session->server_upgraded_streams_initialized) {
+        return;
+    }
+
+    zend_hash_index_del(
+        &session->server_upgraded_streams,
+        (zend_ulong) stream_id
+    );
+}
+
 static zend_string *king_server_websocket_build_authority(
     const char *host,
     size_t host_len,
@@ -183,7 +281,8 @@ zend_result king_server_websocket_upgrade_session(
     zend_string *url;
     php_stream *transport_stream = NULL;
     king_ws_state *state;
-    zval marker;
+    zval websocket_resource;
+    zend_resource *websocket_resource_handle;
     zend_bool on_wire_upgrade;
 
     if (zend_hash_index_exists(&session->server_upgraded_streams, (zend_ulong) stream_id)) {
@@ -304,14 +403,14 @@ zend_result king_server_websocket_upgrade_session(
         }
     }
 
-    ZVAL_TRUE(&marker);
+    websocket_resource_handle = zend_register_resource(state, le_king_ws);
+    ZVAL_RES(&websocket_resource, websocket_resource_handle);
     if (zend_hash_index_add_new(
             &session->server_upgraded_streams,
             (zend_ulong) stream_id,
-            &marker
+            &websocket_resource
         ) == NULL) {
-        zval_ptr_dtor(&marker);
-        king_ws_state_free(state);
+        zend_list_close(websocket_resource_handle);
         zend_string_release(authority);
         king_server_control_set_errorf(
             "%s() failed to record the local WebSocket upgrade for stream %ld.",
@@ -334,7 +433,8 @@ zend_result king_server_websocket_upgrade_session(
     zend_string_release(authority);
 
     king_set_error("");
-    ZVAL_RES(return_value, zend_register_resource(state, le_king_ws));
+    GC_ADDREF(websocket_resource_handle);
+    ZVAL_RES(return_value, websocket_resource_handle);
     return SUCCESS;
 }
 

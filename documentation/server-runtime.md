@@ -328,6 +328,11 @@ repo now carries dedicated local honesty contracts for both secure listener
 families, so that transport claim is explicit rather than inherited only from
 the broader mixed helper coverage.
 
+Those server-owned upgrade resources are also request-boundary scoped. If user
+code retains the returned resource after the handler returns, the runtime
+force-closes it and clears any queued local frames before the next request or
+same-process worker work unit can reuse that server path.
+
 This matters because a WebSocket channel is more than "another response body".
 It is a change in protocol mode and in connection ownership. After upgrade,
 the server is no longer only preparing one final HTTP response. It is managing a

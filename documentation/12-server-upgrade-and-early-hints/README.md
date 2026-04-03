@@ -237,7 +237,10 @@ live without pretending there was an accepted peer socket. On the secure local
 HTTP/2 and HTTP/3 slices, that still means a `wss://.../stream/<id>` identity
 under `h2` or `h3`, not a hidden wire upgrade that the runtime never actually
 performed; the local HTTP/2 and HTTP/3 slices each have their own dedicated
-honesty contract in the repo now. This is where
+honesty contract in the repo now. Those server-owned upgrade handles are still
+request-boundary scoped, so retained references are force-closed and their
+queued local frames are cleared before the next work unit reuses the same
+process path. This is where
 ordinary request handling turns into realtime session ownership.
 
 ## Step 7: Inspect Peer Identity And TLS State

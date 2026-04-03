@@ -229,6 +229,8 @@ void king_client_session_free(void *session_ptr)
         zend_string_release(session->server_pending_websocket_key);
     }
 
+    king_client_session_cleanup_server_websockets(session);
+
     if (session->cancelled_streams_initialized) {
         zend_hash_destroy(&session->cancelled_streams);
     }
