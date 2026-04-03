@@ -1,16 +1,16 @@
 /*
  * Telemetry core runtime for King. Owns trace/log pending buffers, the batched
- * export retry queue, lazy libcurl-based exporter wiring and the current small
- * context helpers. Trace/span creation is live, but the local trace_id and
- * span_id generators still return fixed placeholder values instead of a real
- * entropy-backed ID source.
+ * export retry queue, lazy libcurl-based exporter wiring, active local span
+ * stack, and the trace-context snapshot helpers that expose the live current
+ * span to userland.
  */
 #include "php_king.h"
 #include "include/telemetry/telemetry.h"
 #include <zend_hash.h>
-#include <uuid/uuid.h> /* assuming uuid-dev is available, otherwise simulated */
 #include <curl/curl.h>
 #include <dlfcn.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <ext/json/php_json.h>
 #include "zend_smart_str.h"
 #include "include/config/open_telemetry/base_layer.h"

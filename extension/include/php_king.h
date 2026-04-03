@@ -217,6 +217,7 @@ zend_result king_http1_request_context_append_early_hint(
     zval *hint,
     const char *function_name
 );
+zend_bool king_telemetry_build_trace_context_snapshot(zval *destination);
 zend_result king_http1_request_context_get_pending_early_hints(
     king_http1_request_context *context,
     zval *return_value

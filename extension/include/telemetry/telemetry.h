@@ -75,6 +75,7 @@ typedef struct _king_trace_context_t {
     zval attributes;      /* PHP array of span attributes */
     zval events;          /* PHP array of span events */
     zval links;           /* PHP array of span links */
+    struct _king_trace_context_t *parent; /* active parent span in the local runtime */
 } king_trace_context_t;
 
 typedef struct _king_metric_data_t {
@@ -131,7 +132,7 @@ PHP_FUNCTION(king_telemetry_log);
 /* Returns the current trace-context snapshot, or null when none is active. */
 PHP_FUNCTION(king_telemetry_get_trace_context);
 
-/* Returns headers unchanged until a live current-span injector exists. */
+/* Returns headers unchanged until outgoing trace-context injection is finalized. */
 PHP_FUNCTION(king_telemetry_inject_context);
 
 /* Stable false until the active runtime accepts extracted trace context. */
@@ -167,6 +168,7 @@ int king_telemetry_export_batch(void);
 const char* king_telemetry_level_to_string(king_telemetry_level_t level);
 const char* king_metric_type_to_string(king_metric_type_t type);
 const char* king_span_kind_to_string(king_span_kind_t kind);
+zend_bool king_telemetry_build_trace_context_snapshot(zval *destination);
 
 /* Export queue functions */
 king_telemetry_batch_t* king_telemetry_create_batch(void);

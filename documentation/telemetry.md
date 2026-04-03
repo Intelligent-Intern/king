@@ -313,11 +313,14 @@ boundaries. That is the job of [trace context](./glossary.md#trace-context) and
 
 King exposes three helpers for this boundary work.
 
-`king_telemetry_get_trace_context()` gives application code the current trace
-snapshot when one is available. `king_telemetry_inject_context()` prepares
-outgoing headers so downstream services can continue the trace. 
-`king_telemetry_extract_context()` accepts upstream headers so local work can
-join an existing distributed trace.
+`king_telemetry_get_trace_context()` now returns the live local span snapshot
+for the current runtime when a span is active. Nested spans stay on the same
+trace, the current child becomes the visible snapshot while it is active, and
+closing that child restores the parent snapshot instead of dropping the trace
+state entirely. `king_telemetry_inject_context()` and
+`king_telemetry_extract_context()` are still conservative placeholders for the
+separate propagation leaves: injection currently returns the provided headers
+unchanged, and extraction still returns `false`.
 
 Even if you only use the basic span API at first, it is worth understanding
 these helpers because they are the bridge between local tracing and
@@ -407,10 +410,13 @@ array. Use it at process startup or at the beginning of a controlled
 application lifecycle.
 
 `king_telemetry_start_span()` opens a new local span and returns the active span
-identifier. Use it at the start of a meaningful operation.
+identifier. Use it at the start of a meaningful operation. Child spans stay on
+the current trace and temporarily become the visible active context until they
+close.
 
 `king_telemetry_end_span()` closes an existing span and optionally merges final
-attributes before the finished span moves into the pending export buffer.
+attributes before the finished span moves into the pending export buffer. When a
+child span closes, its parent becomes the active context again.
 
 `king_telemetry_record_metric()` records one metric datapoint under a metric
 name, with an optional label set and metric type.
@@ -419,21 +425,22 @@ name, with an optional label set and metric type.
 and optional attributes.
 
 `king_telemetry_flush()` captures the current local signals into a batch and
-advances the bounded export queue by one delivery attempt.
+advances the bounded export queue by one delivery attempt. It is a bounded
+drain opportunity, not an unbounded exporter loop.
 
 `king_telemetry_get_status()` returns the current runtime counters and queue
 state for the telemetry subsystem.
 
 `king_telemetry_get_metrics()` returns the current live metrics registry.
 
-`king_telemetry_get_trace_context()` returns the current trace context snapshot
-for code that needs explicit access to boundary metadata.
+`king_telemetry_get_trace_context()` returns the current live trace context
+snapshot for code that needs explicit access to boundary metadata.
 
-`king_telemetry_inject_context()` prepares outgoing headers so downstream
-requests can continue the same trace.
+`king_telemetry_inject_context()` currently returns the provided headers
+unchanged until the outgoing propagation contract is finalized.
 
-`king_telemetry_extract_context()` accepts inbound propagation headers so local
-work can join an existing trace.
+`king_telemetry_extract_context()` currently returns `false` until the incoming
+propagation contract is finalized.
 
 ## Common Questions
 

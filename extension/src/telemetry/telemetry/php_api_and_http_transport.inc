@@ -45,11 +45,8 @@ PHP_FUNCTION(king_telemetry_start_span)
 
     king_trace_context_t *span = king_telemetry_create_span(op_name, KING_SPAN_KIND_INTERNAL, parent_id);
     if (!span) RETURN_FALSE;
-    
-    if (king_current_span) {
-        /* Support a simple stack of one span for now in the runtime */
-        king_telemetry_span_free(king_current_span);
-    }
+
+    king_telemetry_span_merge_attributes(span, attrs);
     king_current_span = span;
     
     RETURN_STRING(span->span_id);
@@ -68,37 +65,28 @@ PHP_FUNCTION(king_telemetry_end_span)
     ZEND_PARSE_PARAMETERS_END();
 
     if (king_current_span && strcmp(king_current_span->span_id, span_id) == 0) {
+        king_trace_context_t *finished_span = king_current_span;
+        king_trace_context_t *parent_span = finished_span->parent;
         zval span_entry;
         zend_bool capture_span = 0;
+        finished_span->parent = NULL;
 
-        if (final_attrs != NULL && Z_TYPE_P(final_attrs) == IS_ARRAY) {
-            zend_string *attr_key;
-            zval *attr_value;
-
-            ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(final_attrs), attr_key, attr_value) {
-                if (attr_key == NULL) {
-                    continue;
-                }
-                Z_TRY_ADDREF_P(attr_value);
-                zend_hash_update(Z_ARRVAL(king_current_span->attributes), attr_key, attr_value);
-            } ZEND_HASH_FOREACH_END();
-        }
-
-        king_telemetry_finish_span(king_current_span);
+        king_telemetry_span_merge_attributes(finished_span, final_attrs);
+        king_telemetry_finish_span(finished_span);
 
         array_init(&span_entry);
-        add_assoc_string(&span_entry, "name", king_current_span->operation_name);
-        add_assoc_string(&span_entry, "trace_id", king_current_span->trace_id);
-        add_assoc_string(&span_entry, "span_id", king_current_span->span_id);
-        if (king_current_span->parent_span_id[0] != '\0') {
-            add_assoc_string(&span_entry, "parent_span_id", king_current_span->parent_span_id);
+        add_assoc_string(&span_entry, "name", finished_span->operation_name);
+        add_assoc_string(&span_entry, "trace_id", finished_span->trace_id);
+        add_assoc_string(&span_entry, "span_id", finished_span->span_id);
+        if (finished_span->parent_span_id[0] != '\0') {
+            add_assoc_string(&span_entry, "parent_span_id", finished_span->parent_span_id);
         }
-        add_assoc_long(&span_entry, "start_time", (zend_long) king_current_span->start_time);
-        add_assoc_long(&span_entry, "end_time", (zend_long) king_current_span->end_time);
-        add_assoc_long(&span_entry, "kind", (zend_long) king_current_span->span_kind);
-        if (Z_TYPE(king_current_span->attributes) == IS_ARRAY) {
+        add_assoc_long(&span_entry, "start_time", (zend_long) finished_span->start_time);
+        add_assoc_long(&span_entry, "end_time", (zend_long) finished_span->end_time);
+        add_assoc_long(&span_entry, "kind", (zend_long) finished_span->span_kind);
+        if (Z_TYPE(finished_span->attributes) == IS_ARRAY) {
             zval attrs_copy;
-            ZVAL_COPY(&attrs_copy, &king_current_span->attributes);
+            ZVAL_COPY(&attrs_copy, &finished_span->attributes);
             add_assoc_zval(&span_entry, "attributes", &attrs_copy);
         }
         if (king_telemetry_capture_enabled()) {
@@ -111,14 +99,14 @@ PHP_FUNCTION(king_telemetry_end_span)
 
         if (!capture_span) {
             zval_ptr_dtor(&span_entry);
-            king_telemetry_span_free(king_current_span);
-            king_current_span = NULL;
+            king_telemetry_span_free(finished_span);
+            king_current_span = parent_span;
             RETURN_TRUE;
         }
 
         add_next_index_zval(&king_telemetry_pending_spans, &span_entry);
-        king_telemetry_span_free(king_current_span);
-        king_current_span = NULL;
+        king_telemetry_span_free(finished_span);
+        king_current_span = parent_span;
         RETURN_TRUE;
     }
     
@@ -223,4 +211,3 @@ static int king_telemetry_http_post(const char *url, const char *json_payload, k
 cleanup:
     return result;
 }
-

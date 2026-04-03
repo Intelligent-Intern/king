@@ -96,11 +96,15 @@ static void king_telemetry_pending_buffers_destroy(void)
 
 static void king_telemetry_reset_active_span(void)
 {
-    if (king_current_span == NULL) {
-        return;
-    }
+    king_trace_context_t *span = king_current_span;
+    king_trace_context_t *parent;
 
-    king_telemetry_span_free(king_current_span);
+    while (span != NULL) {
+        parent = span->parent;
+        span->parent = NULL;
+        king_telemetry_span_free(span);
+        span = parent;
+    }
     king_current_span = NULL;
 }
 
@@ -142,6 +146,55 @@ uint32_t king_telemetry_get_pending_log_count(void)
     }
 
     return king_telemetry_buffer_entry_count(&king_telemetry_pending_logs);
+}
+
+static void king_telemetry_span_merge_attributes(king_trace_context_t *span, zval *attributes)
+{
+    zend_string *attr_key;
+    zval *attr_value;
+
+    if (span == NULL || attributes == NULL || Z_TYPE_P(attributes) != IS_ARRAY) {
+        return;
+    }
+
+    SEPARATE_ARRAY(&span->attributes);
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(attributes), attr_key, attr_value) {
+        if (attr_key == NULL) {
+            continue;
+        }
+        Z_TRY_ADDREF_P(attr_value);
+        zend_hash_update(Z_ARRVAL(span->attributes), attr_key, attr_value);
+    } ZEND_HASH_FOREACH_END();
+}
+
+zend_bool king_telemetry_build_trace_context_snapshot(zval *destination)
+{
+    zval attrs_copy;
+
+    if (destination == NULL || king_current_span == NULL) {
+        return 0;
+    }
+
+    array_init(destination);
+    add_assoc_string(destination, "trace_id", king_current_span->trace_id);
+    add_assoc_string(destination, "span_id", king_current_span->span_id);
+    if (king_current_span->parent_span_id[0] != '\0') {
+        add_assoc_string(destination, "parent_span_id", king_current_span->parent_span_id);
+    }
+    add_assoc_long(destination, "trace_flags", (zend_long) king_current_span->trace_flags);
+    if (king_current_span->trace_state[0] != '\0') {
+        add_assoc_string(destination, "trace_state", king_current_span->trace_state);
+    }
+    add_assoc_string(destination, "operation_name", king_current_span->operation_name);
+    add_assoc_long(destination, "span_kind", (zend_long) king_current_span->span_kind);
+    add_assoc_long(destination, "start_time", (zend_long) king_current_span->start_time);
+    if (Z_TYPE(king_current_span->attributes) == IS_ARRAY) {
+        ZVAL_COPY(&attrs_copy, &king_current_span->attributes);
+        add_assoc_zval(destination, "attributes", &attrs_copy);
+    }
+
+    return 1;
 }
 
 static zend_bool king_telemetry_capture_enabled(void)
@@ -513,4 +566,3 @@ static const char *king_telemetry_metric_type_from_zval(zval *type_zval)
 
     return NULL;
 }
-

@@ -1,7 +1,7 @@
 /*
  * Root telemetry introspection slice: exposes shared last-error helpers and
- * keeps the trace-context surface honest about the current build, which has
- * config and queues but no live current-span runtime yet.
+ * exposes the live current-span snapshot while keeping the not-yet-finalized
+ * propagation helpers honest.
  */
 
 PHP_FUNCTION(king_get_last_error)
@@ -29,13 +29,9 @@ PHP_FUNCTION(king_telemetry_get_trace_context)
 {
     ZEND_PARSE_PARAMETERS_NONE();
 
-    /*
-     * The active runtime wires telemetry config, but it has no live
-     * span runtime or current-trace storage yet. Expose the current state as
-     * NULL instead of FALSE so callers can treat this as a real nullable
-     * snapshot API.
-     */
-    RETURN_NULL();
+    if (!king_telemetry_build_trace_context_snapshot(return_value)) {
+        RETURN_NULL();
+    }
 }
 
 PHP_FUNCTION(king_telemetry_inject_context)
@@ -48,10 +44,9 @@ PHP_FUNCTION(king_telemetry_inject_context)
     ZEND_PARSE_PARAMETERS_END();
 
     /*
-     * Without a live span runtime there is nothing to inject. Match the
-     * disabled/no-current-span path from the archived implementation and
-     * return the provided headers unchanged, or an empty array if none were
-     * provided.
+     * The runtime now tracks a live current span, but outward propagation is
+     * still a separate contract leaf. Keep the helper conservative until the
+     * outgoing trace-context injector is finalized.
      */
     if (headers != NULL) {
         RETURN_ZVAL(headers, 1, 0);
@@ -69,9 +64,9 @@ PHP_FUNCTION(king_telemetry_extract_context)
     ZEND_PARSE_PARAMETERS_END();
 
     /*
-     * The current runtime does not maintain a distributed-tracing runtime or
-     * current-span store. Parsing input headers would imply state that the
-     * active build cannot honor yet, so extraction remains a stable false.
+     * Span lifecycle is live, but incoming distributed trace-context
+     * extraction is still intentionally pending until the server/request
+     * propagation leaves are closed.
      */
     (void) headers;
     RETURN_FALSE;

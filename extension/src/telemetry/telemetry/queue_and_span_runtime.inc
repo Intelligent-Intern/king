@@ -1,3 +1,40 @@
+static zend_result king_telemetry_fill_random_bytes(uint8_t *target, size_t target_len)
+{
+    int fd;
+    ssize_t got;
+
+    fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        return FAILURE;
+    }
+
+    got = read(fd, target, target_len);
+    close(fd);
+
+    return got == (ssize_t) target_len ? SUCCESS : FAILURE;
+}
+
+static void king_telemetry_hex_encode(char *target, size_t target_len, const uint8_t *source, size_t source_len)
+{
+    static const char hex[] = "0123456789abcdef";
+    size_t i;
+
+    if (target == NULL || target_len == 0) {
+        return;
+    }
+
+    if (source == NULL || (source_len * 2) + 1 > target_len) {
+        target[0] = '\0';
+        return;
+    }
+
+    for (i = 0; i < source_len; ++i) {
+        target[i * 2] = hex[(source[i] >> 4) & 0x0f];
+        target[(i * 2) + 1] = hex[source[i] & 0x0f];
+    }
+    target[source_len * 2] = '\0';
+}
+
 void king_telemetry_free_batch(king_telemetry_batch_t *batch)
 {
     if (batch) {
@@ -205,18 +242,49 @@ void king_telemetry_shutdown_system(void)
 char* king_telemetry_generate_trace_id(void)
 {
     static char trace_id[33];
-    /* Current runtime still uses a fixed placeholder trace ID. */
-    strncpy(trace_id, "4bf92f3577b34da6a3ce929d0e0e4736", 32);
-    trace_id[32] = '\0';
+    uint8_t random_bytes[16];
+    struct timespec ts;
+    pid_t pid;
+
+    if (king_telemetry_fill_random_bytes(random_bytes, sizeof(random_bytes)) == SUCCESS) {
+        king_telemetry_hex_encode(trace_id, sizeof(trace_id), random_bytes, sizeof(random_bytes));
+        return trace_id;
+    }
+
+    clock_gettime(CLOCK_REALTIME, &ts);
+    pid = getpid();
+    snprintf(
+        trace_id,
+        sizeof(trace_id),
+        "%016llx%08x%08lx",
+        (unsigned long long) ts.tv_sec,
+        (unsigned int) pid,
+        (unsigned long) (ts.tv_nsec & 0xffffffffUL)
+    );
+
     return trace_id;
 }
 
 char* king_telemetry_generate_span_id(void)
 {
     static char span_id[17];
-    /* Current runtime still uses a fixed placeholder span ID. */
-    strncpy(span_id, "00f067aa0ba902b7", 16);
-    span_id[16] = '\0';
+    uint8_t random_bytes[8];
+    struct timespec ts;
+
+    if (king_telemetry_fill_random_bytes(random_bytes, sizeof(random_bytes)) == SUCCESS) {
+        king_telemetry_hex_encode(span_id, sizeof(span_id), random_bytes, sizeof(random_bytes));
+        return span_id;
+    }
+
+    clock_gettime(CLOCK_REALTIME, &ts);
+    snprintf(
+        span_id,
+        sizeof(span_id),
+        "%08llx%08lx",
+        (unsigned long long) ts.tv_sec,
+        (unsigned long) (ts.tv_nsec & 0xffffffffUL)
+    );
+
     return span_id;
 }
 
@@ -227,12 +295,26 @@ king_trace_context_t* king_telemetry_create_span(const char *operation_name, kin
     
     strncpy(span->operation_name, operation_name, sizeof(span->operation_name) - 1);
     span->span_kind = span_kind;
-    
-    strncpy(span->trace_id, king_telemetry_generate_trace_id(), 32);
-    strncpy(span->span_id, king_telemetry_generate_span_id(), 16);
-    
-    if (parent_span_id) {
+
+    if (king_current_span != NULL) {
+        strncpy(span->trace_id, king_current_span->trace_id, sizeof(span->trace_id) - 1);
+        span->trace_flags = king_current_span->trace_flags;
+        if (king_current_span->trace_state[0] != '\0') {
+            strncpy(span->trace_state, king_current_span->trace_state, sizeof(span->trace_state) - 1);
+        }
+        span->parent = king_current_span;
+    } else {
+        strncpy(span->trace_id, king_telemetry_generate_trace_id(), sizeof(span->trace_id) - 1);
+        span->trace_flags = 1;
+        span->parent = NULL;
+    }
+
+    strncpy(span->span_id, king_telemetry_generate_span_id(), sizeof(span->span_id) - 1);
+
+    if (parent_span_id != NULL && parent_span_id[0] != '\0') {
         strncpy(span->parent_span_id, parent_span_id, 16);
+    } else if (king_current_span != NULL) {
+        strncpy(span->parent_span_id, king_current_span->span_id, sizeof(span->parent_span_id) - 1);
     }
     
     span->start_time = time(NULL);
@@ -304,4 +386,3 @@ int king_telemetry_log_internal(king_telemetry_level_t level, const char *logger
 /* --- PHP Entry Points --- */
 
 #include "include/king_globals.h"
-

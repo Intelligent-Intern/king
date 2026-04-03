@@ -1074,9 +1074,8 @@ namespace {
     function king_telemetry_log(string $level, string $message, ?array $attributes = null): bool {}
 
     /**
-     * Flushes pending telemetry data for the current runtime.
-     * The active build has no exporter queues yet, so all exported counts are
-     * currently zero.
+     * Flushes pending telemetry in one bounded export attempt and reports the
+     * signals captured into that pass.
      * @return array{
      *   spans_exported:int,
      *   metrics_exported:int,
@@ -1088,22 +1087,21 @@ namespace {
 
     /**
      * Current telemetry trace context for the active runtime.
-     * Returns null until the current runtime has a live span runtime.
+     * Returns the live current-span snapshot, or null when no span is active.
      * @return array<string,mixed>|null
      */
     function king_telemetry_get_trace_context(): ?array {}
 
     /**
-     * Returns the provided headers unchanged until the current runtime has a
-     * live span runtime to inject.
+     * Returns the provided headers unchanged until outgoing trace-context
+     * injection is finalized.
      * @param array<string,string>|null $headers
      * @return array<string,string>
      */
     function king_telemetry_inject_context(?array $headers = null): array {}
 
     /**
-     * Returns false until the current runtime has a tracing runtime that can
-     * accept extracted context.
+     * Returns false until incoming trace-context extraction is finalized.
      * @param array<string,string> $headers
      */
     function king_telemetry_extract_context(array $headers): bool {}

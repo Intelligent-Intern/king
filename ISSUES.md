@@ -42,11 +42,11 @@
 
 ## Current Next Leaf
 
-- `#1 Validate span lifecycle under sustained request and worker churn.`
+- `#2 Validate metric lifecycle under sustained request and worker churn.`
 
 ## Active Executable Items
 
-- [ ] `#1 Validate span lifecycle under sustained request and worker churn.`
+- [x] `#1 Validate span lifecycle under sustained request and worker churn.`
 - [ ] `#2 Validate metric lifecycle under sustained request and worker churn.`
 - [ ] `#3 Validate log lifecycle under sustained request and worker churn.`
 - [ ] `#4 Implement incoming trace-context extraction on HTTP server requests.`
