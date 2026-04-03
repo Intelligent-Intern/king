@@ -48,19 +48,7 @@ shopt -s nullglob
 workflow_files=(.github/workflows/*.yml)
 shopt -u nullglob
 for workflow in "${workflow_files[@]}"; do
-    ruby -e 'require "yaml";
-path = ARGV.fetch(0)
-begin
-    YAML.safe_load(
-        File.read(path),
-        permitted_classes: [],
-        permitted_symbols: [],
-        aliases: false
-    )
-rescue StandardError => error
-    STDERR.puts "Error: YAML validation failed for #{path}: #{error.class}: #{error.message}"
-    exit 1
-end' "${workflow}"
+    ruby infra/scripts/validate-yaml.rb "${workflow}"
 done
 
 echo "Checking extension include layout..."
