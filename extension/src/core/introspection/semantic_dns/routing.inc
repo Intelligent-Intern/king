@@ -1,7 +1,8 @@
 /*
- * Public routing leaf for Semantic-DNS. Reuses the native service scoring
- * policy against the in-memory registry, exports the best eligible service and
- * otherwise returns the bounded no-route payload expected by userland.
+ * Public routing leaf for Semantic-DNS. Refreshes the semantic-mode shared
+ * state view, reuses the native service scoring policy against the in-memory
+ * registry, exports the best eligible service, and otherwise returns the
+ * bounded no-route payload expected by userland.
  */
 
 #include "include/semantic_dns/semantic_dns.h"
@@ -19,6 +20,10 @@ PHP_FUNCTION(king_semantic_dns_get_optimal_route)
         Z_PARAM_OPTIONAL
         Z_PARAM_ARRAY_OR_NULL(client_info)
     ZEND_PARSE_PARAMETERS_END();
+
+    if (!king_semantic_dns_refresh_runtime_view_or_throw("king_semantic_dns_get_optimal_route")) {
+        RETURN_THROWS();
+    }
 
     king_semantic_dns_health_check_services();
 

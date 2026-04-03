@@ -233,7 +233,7 @@ maintenance, and control the in-process CDN cache.
 | `king_object_store_get_stats()` | Returns object-store and CDN runtime statistics. | [Object Store and CDN](./object-store-and-cdn.md) |
 | `king_cdn_cache_object()` | Pushes one object into the CDN cache. | [Object Store and CDN](./object-store-and-cdn.md) |
 | `king_cdn_invalidate_cache()` | Invalidates one cached object or clears the cache. | [Object Store and CDN](./object-store-and-cdn.md) |
-| `king_cdn_get_edge_nodes()` | Returns the edge-node inventory used by the CDN runtime. | [Object Store and CDN](./object-store-and-cdn.md) |
+| `king_cdn_get_edge_nodes()` | Returns the explicit edge-node inventory known to the CDN runtime. | [Object Store and CDN](./object-store-and-cdn.md) |
 
 ## IIBIN
 

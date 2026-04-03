@@ -356,7 +356,7 @@ instead of only as an origin fetcher.
 | --- | --- |
 | `cdn.enable` | Enables or disables the CDN runtime. |
 | `cdn.cache_mode` | Selects the cache implementation mode. |
-| `cdn.cache_memory_limit_mb` | Sets the memory ceiling for cache state. |
+| `cdn.cache_memory_limit_mb` | Sets and enforces the process-local memory ceiling for CDN cache state by evicting older entries before the registry grows past budget. |
 | `cdn.cache_disk_path` | Points at the disk path used by the cache. |
 | `cdn.cache_default_ttl_sec` | Sets the default cache TTL. |
 | `cdn.cache_max_object_size_mb` | Sets the largest cacheable object size. |

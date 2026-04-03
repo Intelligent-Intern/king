@@ -358,7 +358,7 @@ they belong in `php.ini`.
 | `king.storage_enable_directstorage` | `0` | Enables direct storage paths for storage-heavy compute workloads. |
 | `king.cdn_enable` | `0` | Enables the native CDN subsystem. |
 | `king.cdn_cache_mode` | `disk` | Selects the cache storage mode. |
-| `king.cdn_cache_memory_limit_mb` | `512` | Sets the in-process memory budget reserved for CDN caching. |
+| `king.cdn_cache_memory_limit_mb` | `512` | Sets and enforces the in-process memory budget reserved for CDN caching by evicting older entries before the registry grows past budget. |
 | `king.cdn_cache_disk_path` | `/var/cache/king_cdn` | Points at the disk cache path used by the CDN. |
 | `king.cdn_cache_default_ttl_sec` | `86400` | Sets the default edge cache lifetime. |
 | `king.cdn_cache_max_object_size_mb` | `1024` | Caps the size of one cacheable object. |

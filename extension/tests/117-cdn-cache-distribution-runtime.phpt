@@ -1,5 +1,5 @@
 --TEST--
-King CDN cache object, TTL contract, invalidation, and edge-node exposure
+King CDN cache object, TTL contract, invalidation, and honest edge-node exposure
 --INI--
 king.security_allow_config_override=1
 --FILE--
@@ -35,10 +35,10 @@ var_dump($removed === 1);
 $stats2 = king_object_store_get_stats();
 var_dump($stats2['cdn']['cached_object_count'] === 0);
 
-// Edge nodes: CDN enabled → at least one synthetic node returned
+// Edge nodes stay empty until real descriptors are configured.
 $nodes = king_cdn_get_edge_nodes();
-var_dump(count($nodes) >= 1);
-var_dump($nodes[0]['is_cdn_edge'] === true);
+var_dump(array_is_list($nodes));
+var_dump(count($nodes) === 0);
 
 // Non-existent object cache attempt returns false
 $r2 = king_cdn_cache_object('nonexistent_object_xyz');
