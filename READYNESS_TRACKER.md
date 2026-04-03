@@ -102,7 +102,7 @@ Status note:
 - [x] Validate server close / drain / restart behavior
 - [x] Validate server multi-connection scheduling under load
 - [x] Validate server fairness across competing clients
-- [ ] Validate server resource cleanup under crash / abort scenarios
+- [x] Validate server resource cleanup under crash / abort scenarios
 
 ## C. MCP
 

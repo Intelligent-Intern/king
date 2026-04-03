@@ -150,6 +150,12 @@ carry a deeper queued backlog while the other accepted peers still receive
 their own scheduled frames on time, so the current server object contract is
 not "everyone waits behind the loudest client."
 
+It also covers crash-style cleanup. If one accepted peer disappears without a
+clean close handshake, the next server-owned fanout prunes that dead peer,
+keeps the surviving peers usable, and makes later sends to the removed
+`connection_id` fail as an inactive-peer lookup instead of keeping a poisoned
+registry entry around.
+
 ```php
 <?php
 

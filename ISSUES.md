@@ -39,11 +39,10 @@
 
 ## Current Next Leaf
 
-- `#7 Validate server resource cleanup under crash / abort scenarios.`
+- `#8 Build end-to-end multi-host harness.`
 
 ## Active Executable Items
 
-- [ ] `#7 Validate server resource cleanup under crash / abort scenarios.`
 - [ ] `#8 Build end-to-end multi-host harness.`
 - [ ] `#9 Validate CDN cache paths against real object-store backends.`
 - [ ] `#10 Validate cache fill on miss against real backends.`

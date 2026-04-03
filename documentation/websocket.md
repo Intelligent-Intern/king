@@ -209,6 +209,12 @@ deeper queued backlog, other accepted peers can still keep receiving their own
 scheduled frames on the same server object instead of being treated as
 "whoever gets served after the noisy client is done."
 
+Crash-style cleanup is explicit too. If one accepted peer disappears without a
+clean close handshake, the next registry-backed fanout prunes that dead peer,
+keeps the surviving peers schedulable, and makes later targeted sends to the
+removed `connection_id` fail as an inactive-peer error instead of leaving stale
+registry state behind.
+
 ## Connection Lifecycle
 
 A WebSocket channel moves through a clear lifecycle. It starts in the connect

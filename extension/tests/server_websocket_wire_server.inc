@@ -335,6 +335,90 @@ if ($mode === 'oo-competitive-fairness') {
     return;
 }
 
+if ($mode === 'oo-abort-cleanup') {
+    $server = new King\WebSocket\Server('127.0.0.1', $port);
+    $capture['server_class'] = get_class($server);
+    $connections = [];
+
+    try {
+        for ($i = 0; $i < 3; $i++) {
+            $connections[$i] = $server->accept();
+            $capture['accepted_info'][$i] = $connections[$i]->getInfo();
+        }
+
+        $capture['registry_after_accept'] = $server->getConnections();
+        $capture['registry_count_after_accept'] = count($capture['registry_after_accept']);
+
+        foreach ($connections as $i => $connection) {
+            $capture['ready_messages'][$i] = king_client_websocket_receive($connection, 1000);
+            $capture['ready_errors'][$i] = king_get_last_error();
+        }
+
+        usleep(200000);
+
+        try {
+            $server->broadcast('survivor-broadcast');
+            $capture['broadcast_ok'] = true;
+            $capture['broadcast_error'] = '';
+        } catch (Throwable $e) {
+            $capture['broadcast_ok'] = false;
+            $capture['broadcast_error'] = $e->getMessage();
+            $capture['broadcast_exception_class'] = get_class($e);
+        }
+
+        foreach ([0, 2] as $i) {
+            $connectionId = (string) ($capture['accepted_info'][$i]['connection_id'] ?? '');
+
+            try {
+                $server->send($connectionId, 'survivor-target-' . $i);
+                $capture['survivor_send_ok'][$i] = true;
+                $capture['survivor_send_error'][$i] = '';
+            } catch (Throwable $e) {
+                $capture['survivor_send_ok'][$i] = false;
+                $capture['survivor_send_error'][$i] = $e->getMessage();
+                $capture['survivor_send_exception_class'][$i] = get_class($e);
+            }
+        }
+
+        $capture['registry_after_abort'] = $server->getConnections();
+        $capture['registry_count_after_abort'] = count($capture['registry_after_abort']);
+
+        $abortedConnectionId = (string) ($capture['accepted_info'][1]['connection_id'] ?? '');
+        try {
+            $server->send($abortedConnectionId, 'after-abort-target');
+        } catch (Throwable $e) {
+            $capture['aborted_send_exception'] = get_class($e);
+            $capture['aborted_send_error'] = $e->getMessage();
+        }
+
+        foreach ([0, 2] as $i) {
+            try {
+                $connections[$i]->close(1000, 'abort-cleanup-done');
+                $capture['close_ok'][$i] = true;
+                $capture['close_error'][$i] = '';
+            } catch (Throwable $e) {
+                $capture['close_ok'][$i] = false;
+                $capture['close_error'][$i] = $e->getMessage();
+                $capture['close_exception_class'][$i] = get_class($e);
+            }
+        }
+
+        $capture['registry_after_close'] = $server->getConnections();
+        $capture['registry_count_after_close'] = count($capture['registry_after_close']);
+        $server->stop();
+        $capture['stop_error'] = king_get_last_error();
+    } catch (Throwable $e) {
+        $capture['abort_cleanup_exception_class'] = get_class($e);
+        $capture['abort_cleanup_exception_message'] = $e->getMessage();
+    }
+
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+    return;
+}
+
 for ($iteration = 0; $iteration < $iterations; $iteration++) {
     $result = king_http1_server_listen_once(
         '127.0.0.1',
