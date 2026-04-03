@@ -23,6 +23,9 @@ const APPLICATION_CLOSE_REASON: &[u8] = b"test application abort";
 const IDLE_TIMEOUT_MS: u64 = 250;
 const RESET_STREAM_CODE: u64 = 66;
 const STOP_SENDING_CODE: u64 = 67;
+const FLOW_CONTROL_RECOVERY_WINDOW: usize = 4096;
+const FLOW_CONTROL_RECOVERY_RESUME_DELAY_MS: u64 = 350;
+const FLOW_CONTROL_RECOVERY_CAPTURE_DELAY_MS: u64 = 100;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Mode {
@@ -32,6 +35,7 @@ enum Mode {
     IdleTimeout,
     SlowResponse,
     SlowReader,
+    FlowControlRecovery,
     CancelObserve,
     ResetStream,
     StopSending,
@@ -47,10 +51,22 @@ struct CloseCapture {
     request_body_bytes: usize,
     close_trigger: &'static str,
     stream_trigger: &'static str,
+    flow_control_pause_observed: bool,
+    flow_control_pause_bytes: usize,
+    flow_control_resume_observed: bool,
+    response_sent: bool,
+    response_sent_after_resume: bool,
     reset_stream_sent: bool,
     reset_stream_code: u64,
     stop_sending_sent: bool,
     stop_sending_code: u64,
+}
+
+struct PendingResponse {
+    stream_id: u64,
+    body: Vec<u8>,
+    written: usize,
+    headers_sent: bool,
 }
 
 fn main() {
@@ -65,12 +81,13 @@ fn main() {
         Some("idle_timeout") => Mode::IdleTimeout,
         Some("slow_response") => Mode::SlowResponse,
         Some("slow_reader") => Mode::SlowReader,
+        Some("flow_control_recovery") => Mode::FlowControlRecovery,
         Some("cancel_observe") => Mode::CancelObserve,
         Some("reset_stream") => Mode::ResetStream,
         Some("stop_sending") => Mode::StopSending,
         _ => {
             eprintln!(
-                "Usage: {cmd} <handshake_reject|transport_close|application_close|idle_timeout|slow_response|slow_reader|cancel_observe|reset_stream|stop_sending> <cert> <key> [host]"
+                "Usage: {cmd} <handshake_reject|transport_close|application_close|idle_timeout|slow_response|slow_reader|flow_control_recovery|cancel_observe|reset_stream|stop_sending> <cert> <key> [host]"
             );
             std::process::exit(1);
         },
@@ -116,6 +133,7 @@ fn main() {
         Mode::IdleTimeout |
         Mode::SlowResponse |
         Mode::SlowReader |
+        Mode::FlowControlRecovery |
         Mode::CancelObserve |
         Mode::ResetStream |
         Mode::StopSending => {
@@ -129,14 +147,20 @@ fn main() {
     });
     config.set_max_recv_udp_payload_size(MAX_DATAGRAM_SIZE);
     config.set_max_send_udp_payload_size(MAX_DATAGRAM_SIZE);
-    if matches!(mode, Mode::SlowReader | Mode::CancelObserve | Mode::StopSending) {
-        config.set_initial_max_data(4096);
+    if matches!(
+        mode,
+        Mode::SlowReader | Mode::FlowControlRecovery | Mode::CancelObserve | Mode::StopSending
+    ) {
+        config.set_initial_max_data(FLOW_CONTROL_RECOVERY_WINDOW as u64);
     } else {
         config.set_initial_max_data(1_000_000);
     }
     config.set_initial_max_stream_data_bidi_local(1_000_000);
-    if matches!(mode, Mode::SlowReader | Mode::CancelObserve | Mode::StopSending) {
-        config.set_initial_max_stream_data_bidi_remote(4096);
+    if matches!(
+        mode,
+        Mode::SlowReader | Mode::FlowControlRecovery | Mode::CancelObserve | Mode::StopSending
+    ) {
+        config.set_initial_max_stream_data_bidi_remote(FLOW_CONTROL_RECOVERY_WINDOW as u64);
     } else {
         config.set_initial_max_stream_data_bidi_remote(1_000_000);
     }
@@ -157,6 +181,10 @@ fn main() {
     let mut stall_after_request = false;
     let mut stream_action_sent = false;
     let mut pause_body_reads = false;
+    let mut flow_control_resume_deadline: Option<time::Instant> = None;
+    let mut flow_control_stream_id: Option<u64> = None;
+    let mut response_complete_deadline: Option<time::Instant> = None;
+    let mut pending_response: Option<PendingResponse> = None;
     let mut capture = CloseCapture {
         saw_initial: false,
         saw_established: false,
@@ -167,6 +195,11 @@ fn main() {
         request_body_bytes: 0,
         close_trigger: "none",
         stream_trigger: "none",
+        flow_control_pause_observed: false,
+        flow_control_pause_bytes: 0,
+        flow_control_resume_observed: false,
+        response_sent: false,
+        response_sent_after_resume: false,
         reset_stream_sent: false,
         reset_stream_code: 0,
         stop_sending_sent: false,
@@ -177,6 +210,17 @@ fn main() {
     let mut out = [0; MAX_DATAGRAM_SIZE];
 
     while time::Instant::now() < deadline {
+        if mode == Mode::FlowControlRecovery && pause_body_reads {
+            if let Some(resume_deadline) = flow_control_resume_deadline {
+                if time::Instant::now() >= resume_deadline {
+                    pause_body_reads = false;
+                    flow_control_resume_deadline = None;
+                    capture.flow_control_resume_observed = true;
+                    capture.stream_trigger = "flow_control_resume";
+                }
+            }
+        }
+
         let timeout = match conn.as_ref().and_then(|active| active.timeout()) {
             Some(value) => value.min(time::Duration::from_millis(100)),
             None => time::Duration::from_millis(100),
@@ -187,6 +231,28 @@ fn main() {
         if events.is_empty() {
             if let Some(active) = conn.as_mut() {
                 active.on_timeout();
+                if let Some(http3) = h3_conn.as_mut() {
+                    process_timeout_peer_events(
+                        http3,
+                        active,
+                        mode,
+                        &mut capture,
+                        &mut close_sent,
+                        &mut stall_after_request,
+                        &mut stream_action_sent,
+                        &mut pause_body_reads,
+                        &mut flow_control_resume_deadline,
+                        &mut flow_control_stream_id,
+                        &mut pending_response,
+                    );
+                    flush_pending_response(
+                        http3,
+                        active,
+                        &mut pending_response,
+                        &mut capture,
+                        &mut response_complete_deadline,
+                    );
+                }
                 if active.is_timed_out()
                     && (capture.close_trigger == "none"
                         || capture.close_trigger == "idle_timeout_wait")
@@ -199,6 +265,18 @@ fn main() {
                 if active.is_closed() {
                     emit_close_capture(mode, &capture, active);
                     return;
+                }
+
+                if mode == Mode::FlowControlRecovery {
+                    if let Some(done_deadline) = response_complete_deadline {
+                        if time::Instant::now() >= done_deadline {
+                            if capture.close_trigger == "none" {
+                                capture.close_trigger = "response_complete_capture";
+                            }
+                            emit_close_capture(mode, &capture, active);
+                            return;
+                        }
+                    }
                 }
             }
             continue;
@@ -301,6 +379,7 @@ fn main() {
                     | Mode::IdleTimeout
                     | Mode::SlowResponse
                     | Mode::SlowReader
+                    | Mode::FlowControlRecovery
                     | Mode::CancelObserve
                     | Mode::ResetStream
                     | Mode::StopSending
@@ -328,6 +407,16 @@ fn main() {
                     &mut stall_after_request,
                     &mut stream_action_sent,
                     &mut pause_body_reads,
+                    &mut flow_control_resume_deadline,
+                    &mut flow_control_stream_id,
+                    &mut pending_response,
+                );
+                flush_pending_response(
+                    http3,
+                    active,
+                    &mut pending_response,
+                    &mut capture,
+                    &mut response_complete_deadline,
                 );
             }
 
@@ -345,6 +434,18 @@ fn main() {
 
             if !stall_after_request {
                 flush_egress(&mut socket, active, &mut out);
+            }
+
+            if mode == Mode::FlowControlRecovery {
+                if let Some(done_deadline) = response_complete_deadline {
+                    if time::Instant::now() >= done_deadline {
+                        if capture.close_trigger == "none" {
+                            capture.close_trigger = "response_complete_capture";
+                        }
+                        emit_close_capture(mode, &capture, active);
+                        return;
+                    }
+                }
             }
 
             if active.is_closed() {
@@ -397,7 +498,24 @@ fn process_timeout_peer_events(
     stall_after_request: &mut bool,
     stream_action_sent: &mut bool,
     pause_body_reads: &mut bool,
+    flow_control_resume_deadline: &mut Option<time::Instant>,
+    flow_control_stream_id: &mut Option<u64>,
+    pending_response: &mut Option<PendingResponse>,
 ) {
+    if mode == Mode::FlowControlRecovery && !*pause_body_reads {
+        if let Some(stream_id) = *flow_control_stream_id {
+            drain_flow_control_recovery_body(
+                http3,
+                conn,
+                stream_id,
+                capture,
+                pause_body_reads,
+                flow_control_resume_deadline,
+                flow_control_stream_id,
+            );
+        }
+    }
+
     loop {
         match http3.poll(conn) {
             Ok((stream_id, quiche::h3::Event::Headers { .. })) => {
@@ -432,8 +550,28 @@ fn process_timeout_peer_events(
             Ok((stream_id, quiche::h3::Event::Data)) => {
                 let mut scratch = [0_u8; 4096];
 
-                if mode == Mode::CancelObserve && *pause_body_reads {
+                if matches!(mode, Mode::CancelObserve | Mode::FlowControlRecovery) &&
+                    *pause_body_reads
+                {
                     break;
+                }
+
+                if mode == Mode::FlowControlRecovery {
+                    drain_flow_control_recovery_body(
+                        http3,
+                        conn,
+                        stream_id,
+                        capture,
+                        pause_body_reads,
+                        flow_control_resume_deadline,
+                        flow_control_stream_id,
+                    );
+
+                    if *pause_body_reads {
+                        break;
+                    }
+
+                    continue;
                 }
 
                 loop {
@@ -469,13 +607,29 @@ fn process_timeout_peer_events(
                     break;
                 }
 
-                if mode == Mode::CancelObserve && *pause_body_reads {
+                if matches!(mode, Mode::CancelObserve | Mode::FlowControlRecovery) &&
+                    *pause_body_reads
+                {
                     break;
                 }
             },
 
-            Ok((_stream_id, quiche::h3::Event::Finished)) => {
+            Ok((stream_id, quiche::h3::Event::Finished)) => {
                 capture.saw_request_finished = true;
+
+                if mode == Mode::FlowControlRecovery && pending_response.is_none() {
+                    *flow_control_stream_id = None;
+                    *pending_response = Some(PendingResponse {
+                        stream_id,
+                        body: format!(
+                            "flow-control-ack:{}",
+                            capture.request_body_bytes
+                        )
+                        .into_bytes(),
+                        written: 0,
+                        headers_sent: false,
+                    });
+                }
             },
             Ok((_stream_id, quiche::h3::Event::Reset(_))) => (),
             Ok((_stream_id, quiche::h3::Event::PriorityUpdate)) => (),
@@ -489,6 +643,127 @@ fn process_timeout_peer_events(
                 break;
             },
         }
+    }
+}
+
+fn drain_flow_control_recovery_body(
+    http3: &mut quiche::h3::Connection,
+    conn: &mut quiche::Connection,
+    stream_id: u64,
+    capture: &mut CloseCapture,
+    pause_body_reads: &mut bool,
+    flow_control_resume_deadline: &mut Option<time::Instant>,
+    flow_control_stream_id: &mut Option<u64>,
+) {
+    let mut scratch = [0_u8; 4096];
+    *flow_control_stream_id = Some(stream_id);
+
+    loop {
+        match http3.recv_body(conn, stream_id, &mut scratch) {
+            Ok(0) => break,
+            Ok(read) => {
+                capture.saw_request_body = true;
+                capture.request_body_bytes += read;
+
+                if !capture.flow_control_pause_observed &&
+                    capture.request_body_bytes >= FLOW_CONTROL_RECOVERY_WINDOW
+                {
+                    capture.flow_control_pause_observed = true;
+                    capture.flow_control_pause_bytes = capture.request_body_bytes;
+                    capture.stream_trigger = "flow_control_pause";
+                    *pause_body_reads = true;
+                    *flow_control_resume_deadline = Some(
+                        time::Instant::now() +
+                            time::Duration::from_millis(
+                                FLOW_CONTROL_RECOVERY_RESUME_DELAY_MS,
+                            ),
+                    );
+                    break;
+                }
+            },
+            Err(quiche::h3::Error::Done) => break,
+            Err(_) => break,
+        }
+    }
+}
+
+fn flush_pending_response(
+    http3: &mut quiche::h3::Connection,
+    conn: &mut quiche::Connection,
+    pending_response: &mut Option<PendingResponse>,
+    capture: &mut CloseCapture,
+    response_complete_deadline: &mut Option<time::Instant>,
+) {
+    let Some(response) = pending_response.as_mut() else {
+        return;
+    };
+
+    if !response.headers_sent {
+        let content_length = response.body.len().to_string();
+        let headers = [
+            quiche::h3::Header::new(b":status", b"200"),
+            quiche::h3::Header::new(b"content-length", content_length.as_bytes()),
+        ];
+
+        match http3.send_response(conn, response.stream_id, &headers, response.body.is_empty()) {
+            Ok(_) => {
+                response.headers_sent = true;
+                capture.response_sent = true;
+                capture.response_sent_after_resume =
+                    capture.flow_control_resume_observed;
+                if response.body.is_empty() {
+                    *pending_response = None;
+                    *response_complete_deadline = Some(
+                        time::Instant::now() +
+                            time::Duration::from_millis(
+                                FLOW_CONTROL_RECOVERY_CAPTURE_DELAY_MS,
+                            ),
+                    );
+                    return;
+                }
+            },
+            Err(quiche::h3::Error::Done) => return,
+            Err(quiche::h3::Error::StreamBlocked) => return,
+            Err(_) => {
+                conn.close(false, 0x1, b"response failure").ok();
+                return;
+            },
+        }
+    }
+
+    let Some(response) = pending_response.as_mut() else {
+        return;
+    };
+    let body = &response.body[response.written..];
+    if body.is_empty() {
+        *pending_response = None;
+        *response_complete_deadline = Some(
+            time::Instant::now() +
+                time::Duration::from_millis(
+                    FLOW_CONTROL_RECOVERY_CAPTURE_DELAY_MS,
+                ),
+        );
+        return;
+    }
+
+    match http3.send_body(conn, response.stream_id, body, true) {
+        Ok(written) => {
+            response.written += written;
+            if response.written == response.body.len() {
+                *pending_response = None;
+                *response_complete_deadline = Some(
+                    time::Instant::now() +
+                        time::Duration::from_millis(
+                            FLOW_CONTROL_RECOVERY_CAPTURE_DELAY_MS,
+                        ),
+                );
+            }
+        },
+        Err(quiche::h3::Error::Done) => (),
+        Err(quiche::h3::Error::StreamBlocked) => (),
+        Err(_) => {
+            conn.close(false, 0x1, b"body failure").ok();
+        },
     }
 }
 
@@ -506,7 +781,7 @@ fn emit_close_capture(mode: Mode, capture: &CloseCapture, conn: &quiche::Connect
     };
 
     println!(
-        "CLOSE {{\"mode\":\"{}\",\"saw_initial\":{},\"saw_established\":{},\"saw_h3_open\":{},\"saw_request_headers\":{},\"saw_request_body\":{},\"saw_request_finished\":{},\"request_body_bytes\":{},\"close_trigger\":\"{}\",\"stream_trigger\":\"{}\",\"reset_stream_sent\":{},\"reset_stream_code\":{},\"stop_sending_sent\":{},\"stop_sending_code\":{},\"is_timed_out\":{},\"is_draining\":{},\"is_closed\":{},\"peer_error_present\":{},\"peer_error_is_app\":{},\"peer_error_code\":{},\"peer_error_reason\":\"{}\",\"local_error_present\":{},\"local_error_is_app\":{},\"local_error_code\":{},\"local_error_reason\":\"{}\"}}",
+        "CLOSE {{\"mode\":\"{}\",\"saw_initial\":{},\"saw_established\":{},\"saw_h3_open\":{},\"saw_request_headers\":{},\"saw_request_body\":{},\"saw_request_finished\":{},\"request_body_bytes\":{},\"close_trigger\":\"{}\",\"stream_trigger\":\"{}\",\"flow_control_pause_observed\":{},\"flow_control_pause_bytes\":{},\"flow_control_resume_observed\":{},\"response_sent\":{},\"response_sent_after_resume\":{},\"reset_stream_sent\":{},\"reset_stream_code\":{},\"stop_sending_sent\":{},\"stop_sending_code\":{},\"is_timed_out\":{},\"is_draining\":{},\"is_closed\":{},\"peer_error_present\":{},\"peer_error_is_app\":{},\"peer_error_code\":{},\"peer_error_reason\":\"{}\",\"local_error_present\":{},\"local_error_is_app\":{},\"local_error_code\":{},\"local_error_reason\":\"{}\"}}",
         mode_name(mode),
         capture.saw_initial,
         capture.saw_established,
@@ -517,6 +792,11 @@ fn emit_close_capture(mode: Mode, capture: &CloseCapture, conn: &quiche::Connect
         capture.request_body_bytes,
         close_trigger,
         capture.stream_trigger,
+        capture.flow_control_pause_observed,
+        capture.flow_control_pause_bytes,
+        capture.flow_control_resume_observed,
+        capture.response_sent,
+        capture.response_sent_after_resume,
         capture.reset_stream_sent,
         capture.reset_stream_code,
         capture.stop_sending_sent,
@@ -553,6 +833,7 @@ fn mode_name(mode: Mode) -> &'static str {
         Mode::IdleTimeout => "idle_timeout",
         Mode::SlowResponse => "slow_response",
         Mode::SlowReader => "slow_reader",
+        Mode::FlowControlRecovery => "flow_control_recovery",
         Mode::CancelObserve => "cancel_observe",
         Mode::ResetStream => "reset_stream",
         Mode::StopSending => "stop_sending",

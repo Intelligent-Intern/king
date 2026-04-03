@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- `#9 Validate QUIC flow-control exhaustion and recovery behavior under sustained streams.`
+- `#10 Validate QUIC zero-RTT acceptance and fallback against real peers.`
 
 ## Active Executable Items
 
@@ -32,7 +32,7 @@
 - [x] `#6 Validate QUIC remote abort and transport-close mapping into public exceptions.`
 - [x] `#7 Validate QUIC poll/event-loop wake, idle, and timeout behavior under sustained runtime.`
 - [x] `#8 Validate QUIC congestion-control behavior under sustained constrained links.`
-- [ ] `#9 Validate QUIC flow-control exhaustion and recovery behavior under sustained streams.`
+- [x] `#9 Validate QUIC flow-control exhaustion and recovery behavior under sustained streams.`
 - [ ] `#10 Validate QUIC zero-RTT acceptance and fallback against real peers.`
 - [ ] `#11 Finalize QUIC error mapping across transport, TLS, HTTP/3, timeout, and cancellation failures.`
 - [ ] `#12 Validate QUIC stats fields against live runtime counters and peer-observed state.`

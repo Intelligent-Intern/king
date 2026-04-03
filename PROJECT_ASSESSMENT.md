@@ -35,7 +35,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `512/512` passing
+- `./infra/scripts/test-extension.sh`: `513/513` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -57,7 +57,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `512` PHPT files
+- `extension/tests`: `513` PHPT files
 - public stub parity: `137` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -72,6 +72,7 @@ The current tree already proves:
 - public OO `King\Client\Http3Client` exception mapping for peer QUIC `transport_close` and peer protocol `application_close` aborts with stable `King\QuicException` and `King\ProtocolException` surfaces against real peers
 - explicit QUIC event-loop wake, idle, and timeout proof against real delayed and silent peers under sustained runtime instead of leaving quiche poll-loop behavior implicit
 - explicit QUIC congestion-control survival proof for both supported `cubic` and `bbr` algorithms under sustained lossy constrained links with visible loss and retransmit counters instead of only config-snapshot coverage
+- explicit QUIC flow-control exhaustion and recovery proof on sustained HTTP/3 request streams where a real peer advertises a tiny receive window, stalls after exhaustion, later resumes reads, and still completes the response instead of collapsing into a timeout-only contract
 - HTTP/2 shared-session fairness under mixed slow and fast concurrent streams
 - HTTP/3 one-shot churn isolation across repeated timeout and healthy-recovery cycles
 - local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3, plus real one-shot on-wire listener proof for HTTP/1, HTTP/2, and HTTP/3, including bounded HTTP/1 one-shot accept and request-head timeout behavior against stalled clients, stable normalized `uri` and routing `path` materialization from real request targets across the active one-shot listener surfaces, stable client-visible response normalization for runtime-owned transport headers plus repeated response fields across the active one-shot listener surfaces, real registered cancel-hook invocation on live client aborts across HTTP/1, HTTP/2, and HTTP/3 one-shot traffic, repeated close/drain/restart reuse of the same bound ports across HTTP/1, HTTP/2, and HTTP/3 listener cycles, and bounded live admin API proof for auth, mTLS gating, TLS reload, and handled reload failures against real clients instead of only local listener markers

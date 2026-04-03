@@ -33,7 +33,7 @@ function king_http3_failure_peer_binary(): string
     }
 
     $command = sprintf(
-        'cargo build --manifest-path %s --release --locked --bin king-http3-failure-peer 2>&1',
+        'cargo build --manifest-path %s -p quiche_apps --release --locked --no-default-features --bin king-http3-failure-peer 2>&1',
         escapeshellarg($manifest)
     );
 
@@ -80,7 +80,7 @@ function king_http3_delayed_body_client_binary(): string
     }
 
     $command = sprintf(
-        'cargo build --manifest-path %s --release --locked --bin king-http3-delayed-body-client 2>&1',
+        'cargo build --manifest-path %s -p quiche_apps --release --locked --no-default-features --bin king-http3-delayed-body-client 2>&1',
         escapeshellarg($manifest)
     );
 
@@ -127,7 +127,7 @@ function king_http3_abort_client_binary(): string
     }
 
     $command = sprintf(
-        'cargo build --manifest-path %s --release --locked --bin king-http3-abort-client 2>&1',
+        'cargo build --manifest-path %s -p quiche_apps --release --locked --no-default-features --bin king-http3-abort-client 2>&1',
         escapeshellarg($manifest)
     );
 
@@ -174,7 +174,7 @@ function king_http3_multi_peer_binary(): string
     }
 
     $command = sprintf(
-        'cargo build --manifest-path %s --release --locked --bin king-http3-multi-peer 2>&1',
+        'cargo build --manifest-path %s -p quiche_apps --release --locked --no-default-features --bin king-http3-multi-peer 2>&1',
         escapeshellarg($manifest)
     );
 

@@ -190,7 +190,11 @@ budget. Under an intentionally lossy constrained-link harness, the same live
 coverage now also proves both supported congestion-control algorithms,
 `cubic` and `bbr`, still make forward progress and surface visible loss plus
 retransmit counters instead of leaving that runtime slice as an unverified
-config-only claim.
+config-only claim. The same live peer coverage now also proves sustained
+request streams can exhaust a tiny peer-advertised flow-control window, stall
+until that peer resumes reading, and then recover to a completed HTTP/3
+response instead of collapsing the flow-control slice into a timeout-only
+story.
 
 ## A First Session
 
