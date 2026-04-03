@@ -19,7 +19,7 @@ surfaces inside the local tree. They are now concentrated in the deeper
 control-plane, telemetry, and fleet-behavior proof still listed below.
 
 The active explicitly requested `20`-issue repo-local batch in `ISSUES.md` is
-now exhausted and the tree is ready for PR/merge.
+in progress and currently centered on telemetry proof and propagation depth.
 
 ## Verified Baseline Snapshot
 
@@ -123,6 +123,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 
 - Metrics, traces, and logs now share the same bounded export path and are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices.
 - Telemetry now maintains a live local span stack instead of a single overwrite-only slot: root and child spans keep a stable trace identity, child close restores the parent span as the active context, `king_telemetry_get_trace_context()` returns the current live snapshot, and sustained request/worker churn proves that no stale active span leaks into the next work unit.
+- Server request telemetry snapshots now normalize valid incoming `traceparent` and optional `tracestate` headers into `incoming_trace_context` metadata on the live request array instead of leaving inbound trace identity opaque. Activation of that extracted context into request-root spans is still a separate open leaf.
 - Telemetry queueing and pre-flush pending signal capture are now bounded and their current v1 semantics are explicit: best-effort bounded retry, bounded pending span/log capture, queue-size-derived byte budgets, process-local non-persistent queueing, request/worker-boundary stale-state cleanup, a live metric registry that stays stable until flush and returns to zero active metrics after each flushed request/worker unit, a pending log buffer that stays local until flush and returns to zero pending logs after each flushed request/worker unit, live self-metrics for queue/memory growth plus retry pressure, one drain attempt per flush, real non-placeholder trace/span ids for local spans, and no restart replay guarantee. Longer-haul degraded exporter behavior, richer ordering/idempotency guarantees, and stronger diagnostics still need more proof.
 - Autoscaling now rolls stale Hetzner pending nodes back safely even when telemetry is missing or degraded, provider-side rollback failures are surfaced explicitly, real load-shape decisions are now explained through structured monitor snapshots instead of only isolated single-signal slices, and partial persisted fleet-state loss can now be repaired against live Hetzner inventory without dropping fresh rollout bootstrap intent. Multi-node rolling restart and broader fleet failover behavior are still open.
 

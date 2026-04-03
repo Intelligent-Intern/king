@@ -262,7 +262,7 @@ Status note:
 - [x] Eliminate all cross-request residue or UAF risk in telemetry state
 - [ ] Implement trace-context propagation on incoming requests
 - [ ] Finalize trace-context injection on outgoing requests
-- [ ] Finalize trace-context extraction from incoming requests
+- [x] Finalize trace-context extraction from incoming requests
 - [ ] Preserve span hierarchies correctly across process / worker boundaries
 - [ ] Finalize telemetry sampling strategy where publicly claimed
 - [x] Enforce telemetry memory bounds under load

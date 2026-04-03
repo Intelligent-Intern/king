@@ -42,14 +42,14 @@
 
 ## Current Next Leaf
 
-- `#4 Implement incoming trace-context extraction on HTTP server requests.`
+- `#5 Propagate extracted incoming trace context into request-root spans and child work.`
 
 ## Active Executable Items
 
 - [x] `#1 Validate span lifecycle under sustained request and worker churn.`
 - [x] `#2 Validate metric lifecycle under sustained request and worker churn.`
 - [x] `#3 Validate log lifecycle under sustained request and worker churn.`
-- [ ] `#4 Implement incoming trace-context extraction on HTTP server requests.`
+- [x] `#4 Implement incoming trace-context extraction on HTTP server requests.`
 - [ ] `#5 Propagate extracted incoming trace context into request-root spans and child work.`
 - [ ] `#6 Finalize outgoing trace-context injection on HTTP client transports.`
 - [ ] `#7 Preserve span hierarchies correctly across process and worker boundaries.`

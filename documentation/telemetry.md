@@ -312,6 +312,13 @@ telemetry snapshot that tells you whether telemetry is enabled, which service
 name is active, which exporter endpoint is configured, and whether metrics and
 logs are enabled for that session-owned view.
 
+That snapshot can now also expose `incoming_trace_context` when the accepted
+request carried a valid `traceparent` header and an optional `tracestate`
+header. King normalizes the inbound trace id, parent span id, and trace flags
+into lowercase metadata on the request snapshot so the handler can inspect the
+remote trace identity honestly. This leaf still stops at extraction: it does
+not yet auto-activate that inbound context as the current local span.
+
 If you want the full server-side story, read
 [Server Runtime](./server-runtime.md). If you want the process-wide telemetry
 model, stay in this chapter.
@@ -331,7 +338,11 @@ closing that child restores the parent snapshot instead of dropping the trace
 state entirely. `king_telemetry_inject_context()` and
 `king_telemetry_extract_context()` are still conservative placeholders for the
 separate propagation leaves: injection currently returns the provided headers
-unchanged, and extraction still returns `false`.
+unchanged, and extraction still returns `false`. Incoming HTTP server requests
+are now separate from that userland helper: their request telemetry snapshot
+can expose normalized inbound trace metadata under `incoming_trace_context`,
+but the runtime does not yet turn that extracted metadata into the active local
+span tree.
 
 Even if you only use the basic span API at first, it is worth understanding
 these helpers because they are the bridge between local tracing and

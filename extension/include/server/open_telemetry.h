@@ -5,8 +5,8 @@
  *
  * PURPOSE:
  * Declares the local server-side telemetry control leaf and the shared
- * listener helpers that attach telemetry metadata to request/response
- * snapshots in the active runtime.
+ * listener helpers that attach telemetry metadata plus incoming trace-context
+ * extraction results to request/response snapshots in the active runtime.
  * =========================================================================
  */
 
