@@ -204,6 +204,11 @@ surface. Repeated registry-targeted sends and broadcasts are verified across
 many simultaneously accepted peers on one live server object, so the current
 claim is not limited to two-connection demos or single-message fanout.
 
+The fairness story is also explicit now. When one accepted peer carries a
+deeper queued backlog, other accepted peers can still keep receiving their own
+scheduled frames on the same server object instead of being treated as
+"whoever gets served after the noisy client is done."
+
 ## Connection Lifecycle
 
 A WebSocket channel moves through a clear lifecycle. It starts in the connect

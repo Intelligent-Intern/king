@@ -145,6 +145,11 @@ load. One live server object can accept several peers, keep the registry stable
 for all of them, and schedule repeated targeted plus broadcast frames without
 collapsing back into a two-peer demo contract.
 
+That proof now also covers competing peers. A noisier accepted connection can
+carry a deeper queued backlog while the other accepted peers still receive
+their own scheduled frames on time, so the current server object contract is
+not "everyone waits behind the loudest client."
+
 ```php
 <?php
 

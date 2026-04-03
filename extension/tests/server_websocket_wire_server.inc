@@ -265,6 +265,76 @@ if ($mode === 'oo-scheduling-load') {
     return;
 }
 
+if ($mode === 'oo-competitive-fairness') {
+    $server = new King\WebSocket\Server('127.0.0.1', $port);
+    $capture['server_class'] = get_class($server);
+    $peerCount = max(3, $iterations);
+    $connections = [];
+
+    try {
+        for ($i = 0; $i < $peerCount; $i++) {
+            $connections[$i] = $server->accept();
+            $capture['accepted_info'][$i] = $connections[$i]->getInfo();
+        }
+
+        $capture['registry_after_accept'] = $server->getConnections();
+        $capture['registry_count_after_accept'] = count($capture['registry_after_accept']);
+
+        foreach ($connections as $i => $connection) {
+            $capture['ready_messages'][$i] = king_client_websocket_receive($connection, 1000);
+            $capture['ready_errors'][$i] = king_get_last_error();
+        }
+
+        $noisyConnectionId = (string) ($capture['accepted_info'][0]['connection_id'] ?? '');
+        $server->send($noisyConnectionId, 'noisy-00');
+        $capture['noisy_payloads'][] = 'noisy-00';
+
+        foreach (range(1, $peerCount - 1) as $i) {
+            $connectionId = (string) ($capture['accepted_info'][$i]['connection_id'] ?? '');
+            $payload = 'fair-' . $i . '-round-1';
+
+            $server->send($connectionId, $payload);
+            $capture['fair_payloads'][] = $payload;
+        }
+
+        foreach (range(1, $peerCount - 1) as $i) {
+            $connectionId = (string) ($capture['accepted_info'][$i]['connection_id'] ?? '');
+            $payload = 'fair-' . $i . '-round-2';
+
+            $server->send($connectionId, $payload);
+            $capture['fair_payloads'][] = $payload;
+        }
+
+        foreach (range(1, 11) as $suffix) {
+            $payload = sprintf('noisy-%02d', $suffix);
+
+            $server->send($noisyConnectionId, $payload);
+            $capture['noisy_payloads'][] = $payload;
+        }
+
+        $capture['registry_after_send'] = $server->getConnections();
+        $capture['registry_count_after_send'] = count($capture['registry_after_send']);
+
+        foreach ($connections as $connection) {
+            $connection->close(1000, 'fairness-done');
+        }
+
+        $capture['registry_after_close'] = $server->getConnections();
+        $capture['registry_count_after_close'] = count($capture['registry_after_close']);
+        $server->stop();
+        $capture['stop_error'] = king_get_last_error();
+    } catch (Throwable $e) {
+        $capture['fairness_exception_class'] = get_class($e);
+        $capture['fairness_exception_message'] = $e->getMessage();
+    }
+
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+    return;
+}
+
 for ($iteration = 0; $iteration < $iterations; $iteration++) {
     $result = king_http1_server_listen_once(
         '127.0.0.1',

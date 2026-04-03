@@ -101,7 +101,7 @@ Status note:
 - [x] Validate server session churn under long-running operation
 - [x] Validate server close / drain / restart behavior
 - [x] Validate server multi-connection scheduling under load
-- [ ] Validate server fairness across competing clients
+- [x] Validate server fairness across competing clients
 - [ ] Validate server resource cleanup under crash / abort scenarios
 
 ## C. MCP

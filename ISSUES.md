@@ -39,11 +39,10 @@
 
 ## Current Next Leaf
 
-- `#6 Validate server fairness across competing clients.`
+- `#7 Validate server resource cleanup under crash / abort scenarios.`
 
 ## Active Executable Items
 
-- [ ] `#6 Validate server fairness across competing clients.`
 - [ ] `#7 Validate server resource cleanup under crash / abort scenarios.`
 - [ ] `#8 Build end-to-end multi-host harness.`
 - [ ] `#9 Validate CDN cache paths against real object-store backends.`
