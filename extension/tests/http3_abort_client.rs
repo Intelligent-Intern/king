@@ -209,12 +209,17 @@ fn run() -> Result<(), String> {
 
         flush_egress(&mut socket, &mut conn, &mut out)?;
 
-        if request_sent && request_sent_at.unwrap().elapsed() >= close_delay {
-            conn.close(true, 0x100, b"client abort")
-                .map_err(|err| format!("failed to close client QUIC connection: {err:?}"))?;
-            flush_egress(&mut socket, &mut conn, &mut out)?;
-            println!("ABORTED {}", request_stream_id);
-            return Ok(());
+        if request_sent {
+            if let Some(sent_at) = request_sent_at {
+                // The helper aborts exactly once and returns immediately after the close frame.
+                if sent_at.elapsed() >= close_delay {
+                    conn.close(true, 0x100, b"client abort")
+                        .map_err(|err| format!("failed to close client QUIC connection: {err:?}"))?;
+                    flush_egress(&mut socket, &mut conn, &mut out)?;
+                    println!("ABORTED {}", request_stream_id);
+                    return Ok(());
+                }
+            }
         }
     }
 

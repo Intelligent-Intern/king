@@ -1,7 +1,13 @@
 /*
  * CDN HTTP-origin readthrough helper. This keeps full-object origin fallback
- * honest with one bounded GET attempt and without replaying hidden retries.
+ * honest with one bounded GET attempt, one bounded response body, and without
+ * replaying hidden retries.
  */
+
+typedef struct _king_object_store_cdn_origin_http_stream_sink_t {
+    king_object_store_http_response_t *response;
+    FILE *stream;
+} king_object_store_cdn_origin_http_stream_sink_t;
 
 static const char *king_object_store_cdn_origin_http_effective_endpoint(void)
 {
@@ -115,6 +121,33 @@ static void king_object_store_cdn_origin_http_format_transport_error(
     );
 }
 
+static size_t king_object_store_cdn_origin_http_stream_write_callback(
+    char *contents,
+    size_t size,
+    size_t nmemb,
+    void *userdata
+)
+{
+    king_object_store_cdn_origin_http_stream_sink_t *sink =
+        (king_object_store_cdn_origin_http_stream_sink_t *) userdata;
+    size_t bytes = size * nmemb;
+    size_t written;
+
+    if (sink == NULL || sink->response == NULL || sink->stream == NULL) {
+        return 0;
+    }
+
+    if (sink->response->body_bytes + bytes > KING_OBJECT_STORE_HTTP_MAX_BODY_BYTES) {
+        sink->response->body_limit_exceeded = 1;
+        return 0;
+    }
+
+    written = fwrite(contents, 1, bytes, sink->stream);
+    sink->response->body_bytes += written;
+
+    return written;
+}
+
 static int king_object_store_cdn_origin_http_request(
     const char *object_id,
     king_object_store_http_response_t *response,
@@ -126,6 +159,7 @@ static int king_object_store_cdn_origin_http_request(
     CURL *easy = NULL;
     struct curl_slist *headers = NULL;
     smart_str url = {0};
+    king_object_store_cdn_origin_http_stream_sink_t stream_sink = {0};
     CURLcode curl_code;
     long timeout_ms;
 
@@ -161,7 +195,14 @@ static int king_object_store_cdn_origin_http_request(
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HTTPHEADER, headers);
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HTTPGET, 1L);
     if (response_body_sink != NULL) {
-        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEDATA, response_body_sink);
+        stream_sink.response = response;
+        stream_sink.stream = response_body_sink;
+        king_object_store_libcurl.curl_easy_setopt_fn(
+            easy,
+            CURLOPT_WRITEFUNCTION,
+            king_object_store_cdn_origin_http_stream_write_callback
+        );
+        king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEDATA, &stream_sink);
     } else {
         king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEFUNCTION, king_object_store_http_write_callback);
         king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_WRITEDATA, response);
@@ -298,13 +339,13 @@ int king_object_store_cdn_origin_http_read_to_stream(
     }
 
     if (king_object_store_create_temp_file_path(temp_path, sizeof(temp_path)) != SUCCESS) {
-        snprintf(error, error_size, "Failed to allocate a bounded-memory sink for the CDN HTTP origin read.");
+        snprintf(error, error_size, "Failed to allocate a bounded local sink for the CDN HTTP origin read.");
         return FAILURE;
     }
 
     destination_fp = fopen(temp_path, "w+b");
     if (destination_fp == NULL) {
-        snprintf(error, error_size, "Failed to open the bounded-memory sink for the CDN HTTP origin read.");
+        snprintf(error, error_size, "Failed to open the bounded local sink for the CDN HTTP origin read.");
         return FAILURE;
     }
 

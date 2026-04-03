@@ -73,9 +73,6 @@ static zend_result king_http3_ensure_quiche_ready(void)
     char module_runtime_candidate[PATH_MAX];
     char module_local_candidate[PATH_MAX];
     const char *candidates[] = {
-        NULL,
-        NULL,
-        NULL,
         "../quiche/target/release/libquiche.so",
         "../quiche/target/debug/libquiche.so",
         "../../quiche/target/release/libquiche.so",
@@ -99,23 +96,26 @@ static zend_result king_http3_ensure_quiche_ready(void)
         king_http3_quiche.handle = dlopen(env_path, RTLD_LAZY | RTLD_LOCAL);
     }
 
-    if (king_http3_build_module_relative_candidate(
+    /* Optional module-relative candidates must not suppress the fixed fallbacks. */
+    if (king_http3_quiche.handle == NULL
+        && king_http3_build_module_relative_candidate(
             module_runtime_candidate,
             sizeof(module_runtime_candidate),
             "king/runtime/libquiche.so"
         ) == SUCCESS) {
-        candidates[1] = module_runtime_candidate;
+        king_http3_quiche.handle = dlopen(module_runtime_candidate, RTLD_LAZY | RTLD_LOCAL);
     }
 
-    if (king_http3_build_module_relative_candidate(
+    if (king_http3_quiche.handle == NULL
+        && king_http3_build_module_relative_candidate(
             module_local_candidate,
             sizeof(module_local_candidate),
             "libquiche.so"
         ) == SUCCESS) {
-        candidates[2] = module_local_candidate;
+        king_http3_quiche.handle = dlopen(module_local_candidate, RTLD_LAZY | RTLD_LOCAL);
     }
 
-    for (i = 1; king_http3_quiche.handle == NULL && candidates[i] != NULL; ++i) {
+    for (i = 0; king_http3_quiche.handle == NULL && candidates[i] != NULL; ++i) {
         king_http3_quiche.handle = dlopen(candidates[i], RTLD_LAZY | RTLD_LOCAL);
     }
 

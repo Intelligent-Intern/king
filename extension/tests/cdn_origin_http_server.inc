@@ -1,6 +1,6 @@
 <?php
 
-/* Bounded local HTTP origin harness for CDN readthrough timeout and retry proofs. */
+/* Bounded local HTTP origin harness for CDN readthrough timeout, retry, and size-guard proofs. */
 
 if ($argc < 5) {
     fwrite(STDERR, "usage: cdn_origin_http_server.inc <capture-path> <plan-path> <port> <bind-host>\n");
@@ -71,6 +71,7 @@ while (true) {
         'action' => $action,
         'status' => (int) ($entry['status'] ?? 200),
         'hang_ms' => (int) ($entry['hang_ms'] ?? 0),
+        'body_size' => isset($entry['body_size']) ? (int) $entry['body_size'] : strlen((string) ($entry['body'] ?? '')),
     ];
 
     if (isset($entry['hang_ms'])) {
@@ -81,19 +82,35 @@ while (true) {
 
     $status = (int) ($entry['status'] ?? 200);
     $body = (string) ($entry['body'] ?? '');
+    $bodySize = isset($entry['body_size']) ? (int) $entry['body_size'] : strlen($body);
+    $bodyByte = (string) ($entry['body_byte'] ?? 'x');
     $reason = match ($status) {
         200 => 'OK',
         404 => 'Not Found',
         503 => 'Service Unavailable',
         default => 'Origin Response',
     };
+    if ($bodyByte === '') {
+        $bodyByte = 'x';
+    }
+    $bodyByte = $bodyByte[0];
 
     $response = "HTTP/1.1 {$status} {$reason}\r\n"
         . "Content-Type: text/plain\r\n"
-        . "Content-Length: " . strlen($body) . "\r\n"
-        . "Connection: close\r\n\r\n"
-        . $body;
+        . "Content-Length: " . $bodySize . "\r\n"
+        . "Connection: close\r\n\r\n";
     fwrite($conn, $response);
+    if (isset($entry['body_size'])) {
+        $remaining = $bodySize;
+        while ($remaining > 0) {
+            $chunkLength = min($remaining, 8192);
+            $chunk = str_repeat($bodyByte, $chunkLength);
+            fwrite($conn, $chunk);
+            $remaining -= $chunkLength;
+        }
+    } else {
+        fwrite($conn, $body);
+    }
     fflush($conn);
     fclose($conn);
 

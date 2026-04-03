@@ -405,6 +405,10 @@ the local `smart_cdn` registry is backfilled when the runtime still has honest
 metadata for that object. If the origin request times out or otherwise fails,
 King only serves stale bytes when a previous successful full read already
 retained that body; a metadata-only warm entry still fails honestly.
+Oversized origin responses do not bypass that honesty through the streaming
+path: `king_object_store_get_to_stream()` applies the same object-store body
+guard before the temp sink keeps growing, so an origin cannot spill unbounded
+bytes to local disk through CDN readthrough.
 
 That same honesty rule now applies to edge-node inventory. A bare
 `cdn_config.edge_node_count` no longer manufactures `edge-0`, `edge-1`, and so
