@@ -132,7 +132,7 @@ PHP_FUNCTION(king_telemetry_log);
 /* Returns the current trace-context snapshot, or null when none is active. */
 PHP_FUNCTION(king_telemetry_get_trace_context);
 
-/* Returns headers unchanged until outgoing trace-context injection is finalized. */
+/* Returns headers with the live current span injected unless caller headers already set trace context. */
 PHP_FUNCTION(king_telemetry_inject_context);
 
 /* Stable false until the userland extract helper is finalized. */
@@ -176,6 +176,11 @@ const char* king_telemetry_level_to_string(king_telemetry_level_t level);
 const char* king_metric_type_to_string(king_metric_type_t type);
 const char* king_span_kind_to_string(king_span_kind_t kind);
 zend_bool king_telemetry_build_trace_context_snapshot(zval *destination);
+zend_bool king_telemetry_has_injectable_current_context(void);
+zend_result king_telemetry_inject_current_context_headers(
+    zval *destination,
+    zval *headers_array
+);
 
 /* Export queue functions */
 king_telemetry_batch_t* king_telemetry_create_batch(void);

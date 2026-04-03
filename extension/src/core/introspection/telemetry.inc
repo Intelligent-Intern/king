@@ -1,7 +1,7 @@
 /*
- * Root telemetry introspection slice: exposes shared last-error helpers and
- * exposes the live current-span snapshot while keeping the not-yet-finalized
- * propagation helpers honest.
+ * Root telemetry introspection slice: exposes shared last-error helpers, the
+ * live current-span snapshot, finalized outgoing trace-context injection, and
+ * the still-conservative userland extract placeholder.
  */
 
 PHP_FUNCTION(king_get_last_error)
@@ -43,16 +43,14 @@ PHP_FUNCTION(king_telemetry_inject_context)
         Z_PARAM_ARRAY_OR_NULL(headers)
     ZEND_PARSE_PARAMETERS_END();
 
-    /*
-     * The runtime now tracks a live current span, but outward propagation is
-     * still a separate contract leaf. Keep the helper conservative until the
-     * outgoing trace-context injector is finalized.
-     */
-    if (headers != NULL) {
-        RETURN_ZVAL(headers, 1, 0);
+    if (king_telemetry_inject_current_context_headers(return_value, headers) != SUCCESS) {
+        zend_throw_exception_ex(
+            king_ce_system_exception,
+            0,
+            "king_telemetry_inject_context() failed to materialize the outgoing trace context."
+        );
+        RETURN_THROWS();
     }
-
-    array_init(return_value);
 }
 
 PHP_FUNCTION(king_telemetry_extract_context)

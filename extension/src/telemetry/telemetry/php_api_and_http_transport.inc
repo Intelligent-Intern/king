@@ -130,6 +130,92 @@ PHP_FUNCTION(king_telemetry_log)
     RETURN_TRUE;
 }
 
+static zend_bool king_telemetry_header_name_matches(
+    zend_string *header_name,
+    const char *expected_name)
+{
+    size_t expected_name_len;
+
+    if (header_name == NULL || expected_name == NULL) {
+        return 0;
+    }
+
+    expected_name_len = strlen(expected_name);
+
+    return header_name != NULL
+        && ZSTR_LEN(header_name) == expected_name_len
+        && zend_binary_strcasecmp(
+            ZSTR_VAL(header_name),
+            ZSTR_LEN(header_name),
+            expected_name,
+            expected_name_len
+        ) == 0;
+}
+
+static zend_bool king_telemetry_headers_have_explicit_trace_context(zval *headers_array)
+{
+    zend_string *header_name;
+
+    if (headers_array == NULL || Z_TYPE_P(headers_array) != IS_ARRAY) {
+        return 0;
+    }
+
+    ZEND_HASH_FOREACH_STR_KEY(Z_ARRVAL_P(headers_array), header_name) {
+        if (king_telemetry_header_name_matches(header_name, "traceparent")
+            || king_telemetry_header_name_matches(header_name, "tracestate")) {
+            return 1;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return 0;
+}
+
+zend_bool king_telemetry_has_injectable_current_context(void)
+{
+    return king_current_span != NULL
+        && strlen(king_current_span->trace_id) == 32
+        && strlen(king_current_span->span_id) == 16;
+}
+
+zend_result king_telemetry_inject_current_context_headers(
+    zval *destination,
+    zval *headers_array)
+{
+    char traceparent[sizeof("00-") + 32 + 1 + 16 + 1 + 2];
+
+    if (destination == NULL) {
+        return FAILURE;
+    }
+
+    if (headers_array != NULL) {
+        ZVAL_COPY(destination, headers_array);
+        SEPARATE_ARRAY(destination);
+    } else {
+        array_init(destination);
+    }
+
+    if (!king_telemetry_has_injectable_current_context()
+        || king_telemetry_headers_have_explicit_trace_context(destination)) {
+        return SUCCESS;
+    }
+
+    snprintf(
+        traceparent,
+        sizeof(traceparent),
+        "00-%s-%s-%02x",
+        king_current_span->trace_id,
+        king_current_span->span_id,
+        (unsigned int) (king_current_span->trace_flags & 0xff)
+    );
+    add_assoc_string(destination, "traceparent", traceparent);
+
+    if (king_current_span->trace_state[0] != '\0') {
+        add_assoc_string(destination, "tracestate", king_current_span->trace_state);
+    }
+
+    return SUCCESS;
+}
+
 /* --- Internal Export Functions --- */
 
 typedef struct _king_telemetry_http_response_t {

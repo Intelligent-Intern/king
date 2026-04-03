@@ -24,6 +24,9 @@ static void king_http3_multi_request_destroy(king_http3_multi_request_t *request
     if (request->body_string != NULL) {
         zend_string_release(request->body_string);
     }
+    if (request->effective_headers_initialized) {
+        zval_ptr_dtor(&request->effective_headers);
+    }
 
     king_http3_free_request_headers(
         request->request_headers,

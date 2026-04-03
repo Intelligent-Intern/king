@@ -548,6 +548,15 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
                 ];
             }
 
+            if ($mode === 'capture-headers') {
+                $capture['request_headers'] = $request['headers'];
+
+                return [
+                    'status' => 200,
+                    'body' => 'captured',
+                ];
+            }
+
             $replyPayload = null;
             $websocket = king_server_upgrade_to_websocket($session, $request['stream_id']);
             $capture['upgrade_is_resource'] = is_resource($websocket);

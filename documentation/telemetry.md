@@ -338,16 +338,27 @@ King exposes three helpers for this boundary work.
 for the current runtime when a span is active. Nested spans stay on the same
 trace, the current child becomes the visible snapshot while it is active, and
 closing that child restores the parent snapshot instead of dropping the trace
-state entirely. `king_telemetry_inject_context()` and
-`king_telemetry_extract_context()` are still conservative placeholders for the
-separate propagation leaves: injection currently returns the provided headers
-unchanged, and extraction still returns `false`. Incoming HTTP server requests
-are now separate from that userland helper: their request telemetry snapshot
-can expose normalized inbound trace metadata under `incoming_trace_context`,
-and the first request-root span opened inside that handler now adopts that
-remote parent context while later child spans stay on the same inherited
-trace. The inbound parent seed is then cleared again before the next request
-starts so the propagation boundary stays request-local.
+state entirely. `king_telemetry_inject_context()` now materializes the live
+current span into an outgoing header array by adding lowercase `traceparent`
+and optional `tracestate` fields when the caller did not already provide an
+explicit boundary. If the caller already supplied `traceparent` or
+`tracestate`, King preserves that explicit boundary untouched instead of
+partially merging runtime state into it. `king_telemetry_extract_context()`
+still returns `false` until the separate userland extraction leaf is
+finalized. Incoming HTTP server requests are now separate from that userland
+helper: their request telemetry snapshot can expose normalized inbound trace
+metadata under `incoming_trace_context`, and the first request-root span
+opened inside that handler now adopts that remote parent context while later
+child spans stay on the same inherited trace. The inbound parent seed is then
+cleared again before the next request starts so the propagation boundary stays
+request-local.
+
+The HTTP client transports use the same outgoing injection path automatically.
+When a live span is active, `king_http1_request_send()`,
+`king_http2_request_send()`, `king_http3_request_send()`, and the matching
+dispatcher-backed client calls all emit the same `traceparent` and optional
+`tracestate` headers unless the caller already pinned an explicit boundary in
+the request headers.
 
 Even if you only use the basic span API at first, it is worth understanding
 these helpers because they are the bridge between local tracing and
@@ -468,8 +479,9 @@ by metric name until the next successful flush capture clears it.
 `king_telemetry_get_trace_context()` returns the current live trace context
 snapshot for code that needs explicit access to boundary metadata.
 
-`king_telemetry_inject_context()` currently returns the provided headers
-unchanged until the outgoing propagation contract is finalized.
+`king_telemetry_inject_context()` returns a header array containing the live
+current span as `traceparent` plus optional `tracestate`, unless the caller
+already supplied those headers explicitly.
 
 `king_telemetry_extract_context()` currently returns `false` until the incoming
 propagation contract is finalized.
