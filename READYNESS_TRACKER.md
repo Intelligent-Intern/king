@@ -226,7 +226,7 @@ Status note:
 
 - [x] Validate CDN cache paths against real object-store backends
 - [x] Validate cache fill on miss against real backends
-- [ ] Validate cache invalidation under load
+- [x] Validate cache invalidation under load
 - [x] Validate cache TTL enforcement under sustained operation
 - [ ] Validate stale-serve-on-error against real backend failures
 - [ ] Validate cache consistency after backend update

@@ -375,6 +375,11 @@ origin/backend read backfills the local cache entry and marks it served; the
 payload still comes from the active object-store backend today rather than from
 a fake edge body store.
 
+Repeated warm and invalidate churn is also now verified across `local_fs`,
+`distributed`, `cloud_s3`, `cloud_gcs`, and `cloud_azure`: repeated targeted
+invalidations drive `cached_object_count` and `cached_bytes` back to zero
+without stale registry drift under sustained cache warm/read-through load.
+
 This matters because a storage write often has a delivery consequence. A fresh
 object may need warming at the edge. An overwritten object may need invalidation
 so old copies stop being served. A missing object may require origin fallback. A
