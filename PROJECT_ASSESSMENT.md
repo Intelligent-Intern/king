@@ -18,7 +18,7 @@ The remaining gaps are no longer about broad runtime parity or placeholder
 surfaces inside the local tree. They are now concentrated in three narrower
 areas:
 
-- deeper transport and listener failure-path verification across HTTP/2, HTTP/3, and WebSocket
+- deeper CDN/cache/edge behavior under load, invalidation, restart, stale-serve, and observability across the real object-store backends
 - broader Smart-DNS distributed-topology validation beyond the current on-wire listener proof, stale-peer rejoin healing after partial durable-state loss, tombstone-aware mother-node re-election churn proof, local query failure/recovery, concurrent-write, live-signal, and split-brain/partial-failure proof
 - stronger telemetry exporter ordering/diagnostics and deeper autoscaling multi-node fleet behavior
 
