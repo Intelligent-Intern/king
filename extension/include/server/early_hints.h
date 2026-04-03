@@ -7,15 +7,17 @@
 
 /**
  * @file extension/include/server/early_hints.h
- * @brief Server-side Early Hints normalization and session snapshot support.
+ * @brief Server-side Early Hints normalization, session snapshot support, and
+ *        HTTP/1 one-shot on-wire emission.
  */
 
 /**
  * @brief Normalizes one Early Hints batch onto the active server session.
  *
  * The current runtime validates and records the last Early Hints batch on the
- * session snapshot for the addressed stream. It does not claim a general
- * on-wire `103` transport path across every server leaf.
+ * session snapshot for the addressed stream, and the HTTP/1 one-shot listener
+ * can emit that normalized batch as a real on-wire `103 Early Hints`
+ * response before the final status line for the same active stream.
  *
  * @param session_resource The current session.
  * @param stream_id The stream to use.

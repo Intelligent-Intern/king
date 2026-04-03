@@ -122,7 +122,7 @@ want one place for status, headers, and body access.
 | Method | What it does |
 | --- | --- |
 | `getStatusCode()` | Returns the HTTP status code. |
-| `getHeaders()` | Returns normalized response headers. |
+| `getHeaders()` | Returns normalized response headers keyed by lowercase names; repeated header fields are exposed as ordered arrays. |
 | `getBody()` | Returns the full response body. |
 | `read(int $length = 8192)` | Reads the next body chunk. |
 | `isEndOfBody()` | Reports whether the body has been fully consumed. |

@@ -252,8 +252,10 @@ early.
 King exposes this through `king_server_send_early_hints()`. The function takes
 a server-capable session, a stream identifier, and a normalized set of hint
 headers. The current runtime stores and tracks the hint batch on the session
-state; the broader on-wire `103` emission story remains narrower than this
-staged-response model.
+state, and the on-wire HTTP/1 one-shot listener now emits that normalized
+batch as a real `103 Early Hints` response before the final status line for the
+same active stream. The broader on-wire HTTP/2 and HTTP/3 interim-response
+story is still narrower than this staged-response model.
 
 This matters because server behavior is often staged. The final response may not
 be ready yet, but the server may already know enough to improve the next few
@@ -302,6 +304,27 @@ through unrelated globals.
 This is the heart of the server runtime design. One accepted request may feel
 small, but the surrounding server state is still real and still worth modeling
 explicitly.
+
+## Server CORS And Header State
+
+The current one-shot listener runtime now treats request headers as a real,
+normalized transport input instead of a loose helper artifact. On the active
+HTTP/1, HTTP/2, and HTTP/3 server paths, request header names are materialized
+through stable lowercase keys, so server code sees the same header shape across
+all three protocols.
+
+That matters directly for CORS. The server-side CORS helper reads the incoming
+`origin`, `access-control-request-method`, and
+`access-control-request-headers` fields from those normalized headers, records
+the evaluated origin/preflight decision on the request snapshot, and reflects
+the allowed origin plus `Vary: Origin` on the response path when the configured
+policy allows it.
+
+This is still a bounded slice. King is not pretending to be a full browser
+policy engine. What is explicit now is the contract that real clients can rely
+on today: the same live request headers that reach the handler are the ones the
+CORS helper evaluates, and the response headers the client sees are generated
+from that same evaluated state instead of from a disconnected local shortcut.
 
 ## Upgrading To WebSocket
 
@@ -387,7 +410,9 @@ that event as a full process mystery.
 King exposes this path through `king_server_reload_tls_config()`. The function
 takes a live server-capable session plus new certificate and key paths, validates
 that the replacement material is readable, and applies a new server-side TLS
-snapshot to the session.
+snapshot to the session. That snapshot path is now also proven during a live
+on-wire HTTP/3 request, so the runtime contract is not only a local marker.
+The current slice still does not hot-swap a native listener backend mid-accept.
 
 This matters because certificate rotation is not an edge case. It is normal
 operations. A platform that serves traffic for long periods has to make TLS

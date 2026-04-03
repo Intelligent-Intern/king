@@ -362,6 +362,14 @@ static zend_result king_websocket_server_broadcast_internal(
                 function_name
             ) != SUCCESS
         ) {
+            /* An aborted peer should be pruned, not allowed to poison the remaining fanout. */
+            if (state->closed || state->state == KING_WS_STATE_CLOSED) {
+                if (EG(exception) != NULL) {
+                    zend_clear_exception();
+                }
+                continue;
+            }
+
             king_websocket_server_registry_prune_closed(intern);
             return FAILURE;
         }

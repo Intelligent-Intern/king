@@ -11,7 +11,7 @@ Status note:
 - `ISSUES.md` only carries the next `20` repo-local executable leaves when an explicit batch is active. Everything else stays here until it is split to that size.
 - Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, real TCP host/port `remote_peer` execution with persisted success/failure snapshots, distributed observability depth, and controller/worker/remote-peer failover harnesses are now verified; the remaining open boxes below are the broader continuation and larger multi-host slices.
 - Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path, are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices, now expose an explicit process-local non-persistent non-replay delivery contract across restart, now discard stale active-span plus pre-flush span/log scratch state at the next request or worker boundary instead of leaking it into later work units, and now enforce a queue-size-derived in-process byte budget with live self-metrics for queue growth, drops, and retry pressure; the remaining open boxes below are richer ordering/idempotency guarantees, longer-haul characterization, and stronger diagnostics.
-- Recent transport/admin closure: HTTP/3 early-data acceptance/fallback, injected packet-loss recovery, explicit QUIC session handshake/open/drain/close proof against real peers, QUIC/TLS lifecycle churn, websocket server shutdown/drain, and bounded real admin-API mTLS/reload/failure behavior are now verified on the active runtime; the remaining open boxes below are the broader header/cors/live-traffic fairness slices.
+- Recent transport/admin closure: the active tree now verifies the full repo-local HTTP/1, HTTP/2, HTTP/3, QUIC, WebSocket, listener, upgrade, admin-API, CORS/header, fairness, shutdown, and cleanup slices carried in sections `A` and `B`; the remaining transport-adjacent open boxes below are the broader security-review and final-closure gates, not missing runtime proofs in those execution sections.
 - Recent QUIC bootstrap closure: the build path now rehydrates a pinned `quiche` commit, pinned BoringSSL submodule commit, tracked workspace lockfile, and pinned `wirefilter` revision without branch-based fallbacks or unlocked cargo retries.
 - Recent Smart-DNS closure: the local DNS-shaped query surface now fails closed on undersized response budgets and rehydrates cleanly after restart, the active runtime now proves a bounded real on-wire UDP listener with honest request, timeout, truncation, and recovery behavior, stale peers can now heal partial durable-state loss by merging only missing service and mother-node entries back into the shared topology without overwriting newer overlapping state, and mother-node re-election pressure now carries persisted tombstones so departed leaders are not silently resurrected by stale writers before an explicit rejoin; the broader distributed-topology boxes below remain open.
 - Recent autoscaling closure: real load-shape decision explanations, partial persisted fleet-state recovery against live Hetzner inventory, and preserved fresh-node rollout bootstrap propagation are now verified; the remaining open boxes below are real drain-before-delete, policy-limit, and broader multi-node fleet-behavior slices.
@@ -28,7 +28,7 @@ Status note:
 - [x] Validate HTTP/1 failure paths against real connection aborts
 - [x] Validate HTTP/1 timeout behavior against real slow servers
 - [x] Validate HTTP/1 connection reuse limits under load
-- [ ] Validate HTTP/1 header normalization under real traffic
+- [x] Validate HTTP/1 header normalization under real traffic
 
 - [x] Validate full HTTP/2 client behavior on-wire against real h2 servers
 - [x] Validate HTTP/2 h2c path against real h2c servers
@@ -55,15 +55,15 @@ Status note:
 - [x] Validate HTTP/3 long-duration soak behavior under continuous load
 
 - [x] Validate full QUIC session lifecycle against real peers
-- [ ] Validate full QUIC stream lifecycle against real peers
-- [ ] Validate QUIC cancel paths against real transport state
-- [ ] Validate QUIC poll/event-loop behavior under sustained runtime
-- [ ] Validate QUIC congestion-control / flow-control behavior
-- [ ] Validate QUIC zero-RTT / session-resumption paths
-- [ ] Finalize QUIC error mapping to public exceptions
+- [x] Validate full QUIC stream lifecycle against real peers
+- [x] Validate QUIC cancel paths against real transport state
+- [x] Validate QUIC poll/event-loop behavior under sustained runtime
+- [x] Validate QUIC congestion-control / flow-control behavior
+- [x] Validate QUIC zero-RTT / session-resumption paths
+- [x] Finalize QUIC error mapping to public exceptions
 - [x] Fully validate QUIC/TLS interaction
-- [ ] Validate QUIC stats fields against real runtime values
-- [ ] Validate QUIC recovery after network interruption
+- [x] Validate QUIC stats fields against real runtime values
+- [x] Validate QUIC recovery after network interruption
 
 - [x] Validate WebSocket client handshake fully on-wire
 - [x] Validate WebSocket server handshake fully on-wire
@@ -76,12 +76,12 @@ Status note:
 - [x] Validate long-lived WebSocket connections under continuous load
 - [x] Validate WebSocket backpressure under many concurrent connections
 - [x] Validate WebSocket fairness under many concurrent connections
-- [ ] Fully implement honest WebSocket server API behavior
-- [ ] Back `King\WebSocket\Server` with fully real runtime behavior
+- [x] Fully implement honest WebSocket server API behavior
+- [x] Back `King\WebSocket\Server` with fully real runtime behavior
 - [x] Validate `King\WebSocket\Server` shutdown and drain behavior
 - [x] Validate WebSocket upgrade from HTTP/1 on-wire
-- [ ] Validate WebSocket upgrade from HTTP/2/h3 scenarios where publicly claimed
-- [ ] Validate WebSocket memory lifecycle across request/worker boundaries
+- [x] Validate WebSocket upgrade from HTTP/2/h3 scenarios where publicly claimed
+- [x] Validate WebSocket memory lifecycle across request/worker boundaries
 
 ## B. Server Runtime / Listener / Admin / TLS
 
@@ -92,17 +92,17 @@ Status note:
 - [x] Validate server request normalization against real requests
 - [x] Validate server response normalization against real clients
 - [x] Validate server-side cancel callbacks under real traffic
-- [ ] Validate server-side Early Hints on-wire
+- [x] Validate server-side Early Hints on-wire
 - [x] Validate server-side WebSocket upgrades on-wire
-- [ ] Validate server TLS reload under live traffic
+- [x] Validate server TLS reload under live traffic
 - [x] Validate server admin API under real mTLS configuration
 - [x] Validate server admin API auth / reload / failure paths
-- [ ] Validate server CORS / header behavior against real browsers and clients
+- [x] Validate server CORS / header behavior against real browsers and clients
 - [x] Validate server session churn under long-running operation
 - [x] Validate server close / drain / restart behavior
-- [ ] Validate server multi-connection scheduling under load
-- [ ] Validate server fairness across competing clients
-- [ ] Validate server resource cleanup under crash / abort scenarios
+- [x] Validate server multi-connection scheduling under load
+- [x] Validate server fairness across competing clients
+- [x] Validate server resource cleanup under crash / abort scenarios
 
 ## C. MCP
 
@@ -149,7 +149,7 @@ Status note:
 - [x] Finalize exact queued/running/failed/cancelled/completed state transitions
 - [x] Fully integrate observability for pipeline execution
 - [x] Build end-to-end multi-process harness
-- [ ] Build end-to-end multi-host harness
+- [x] Build end-to-end multi-host harness
 
 ## E. Object Store Core
 
@@ -224,8 +224,8 @@ Status note:
 
 ## H. CDN / Cache / Edge
 
-- [ ] Validate CDN cache paths against real object-store backends
-- [ ] Validate cache fill on miss against real backends
+- [x] Validate CDN cache paths against real object-store backends
+- [x] Validate cache fill on miss against real backends
 - [ ] Validate cache invalidation under load
 - [x] Validate cache TTL enforcement under sustained operation
 - [ ] Validate stale-serve-on-error against real backend failures

@@ -4,10 +4,11 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Activates a first local server-side Early Hints slice over the shared
- * King\Session runtime. The current build validates and normalizes the
- * supplied hint headers, stores them on the local session snapshot, and
- * exposes that state via king_get_stats().
+ * Activates the server-side Early Hints slice over the shared King\Session
+ * runtime. The current build validates and normalizes the supplied hint
+ * headers, stores them on the session snapshot for stats/introspection, and
+ * lets the HTTP/1 one-shot listener emit that normalized batch as a real
+ * on-wire `103 Early Hints` response for the addressed active stream.
  * =========================================================================
  */
 

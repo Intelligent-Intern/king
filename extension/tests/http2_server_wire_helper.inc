@@ -19,15 +19,28 @@ function king_http2_server_wire_start_server(?int $fixedPort = null, string $mod
 
     $capture = tempnam(sys_get_temp_dir(), 'king-http2-server-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';
-    $command = sprintf(
-        '%s -n -d %s %s %s %d %s',
+    $commandParts = [
         escapeshellarg(PHP_BINARY),
+        '-n',
+        '-d',
         escapeshellarg('extension=' . $extensionPath),
+    ];
+
+    if ($mode === 'cors-allowlist') {
+        $commandParts[] = '-d';
+        $commandParts[] = escapeshellarg(
+            'king.security_cors_allowed_origins=https://app.king.test, https://admin.king.test'
+        );
+    }
+
+    $commandParts = array_merge($commandParts, [
         escapeshellarg(__DIR__ . '/http2_server_wire_server.inc'),
         escapeshellarg($capture),
-        (int) $port,
-        escapeshellarg($mode)
-    );
+        (string) (int) $port,
+        escapeshellarg($mode),
+    ]);
+
+    $command = implode(' ', $commandParts);
 
     $process = proc_open($command, [
         1 => ['pipe', 'w'],

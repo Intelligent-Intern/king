@@ -5,9 +5,9 @@
  *
  * PURPOSE:
  * Shared HTTP/1 response utilities for header-boundary detection, lowercase
- * normalization, and chunked-transfer parsing/decoding. This slice provides
- * the bounded helpers that both the buffered receive path and the streaming
- * request-context path rely on.
+ * normalization, repeated-field accumulation, and chunked-transfer
+ * parsing/decoding. This slice provides the bounded helpers that both the
+ * buffered receive path and the streaming request-context path rely on.
  * =========================================================================
  */
 
@@ -40,6 +40,50 @@ static void king_http1_lowercase_ascii(char *value, size_t value_len)
     for (i = 0; i < value_len; ++i) {
         value[i] = (char) tolower((unsigned char) value[i]);
     }
+}
+
+static void king_http1_add_normalized_header_value(
+    zval *headers,
+    const char *normalized_name,
+    size_t normalized_name_len,
+    const char *value,
+    size_t value_len)
+{
+    zval *existing;
+    zval array_value;
+    zval old_value;
+
+    existing = zend_hash_str_find(
+        Z_ARRVAL_P(headers),
+        normalized_name,
+        normalized_name_len
+    );
+    if (existing == NULL) {
+        add_assoc_stringl_ex(
+            headers,
+            normalized_name,
+            normalized_name_len,
+            (char *) value,
+            value_len
+        );
+        return;
+    }
+
+    if (Z_TYPE_P(existing) == IS_ARRAY) {
+        add_next_index_stringl(existing, (char *) value, value_len);
+        return;
+    }
+
+    array_init(&array_value);
+    ZVAL_COPY(&old_value, existing);
+    add_next_index_zval(&array_value, &old_value);
+    add_next_index_stringl(&array_value, (char *) value, value_len);
+    zend_hash_str_update(
+        Z_ARRVAL_P(headers),
+        normalized_name,
+        normalized_name_len,
+        &array_value
+    );
 }
 
 static bool king_http1_contains_ci(const char *haystack, const char *needle)

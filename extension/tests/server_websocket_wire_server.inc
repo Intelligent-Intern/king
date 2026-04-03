@@ -1,6 +1,6 @@
 <?php
 
-/* Harness server for capturing on-wire HTTP/1 and WebSocket one-shot listener behavior. */
+/* Harness server for capturing on-wire HTTP/1 one-shot listener behavior, including websocket, interim-response, CORS, and multi-peer load slices. */
 
 if ($argc < 4) {
     fwrite(STDERR, "usage: server_websocket_wire_server.inc <capture-path> <port> <mode> [iterations]\n");
@@ -207,6 +207,217 @@ if ($mode === 'oo-broadcast-shutdown') {
     return;
 }
 
+if ($mode === 'oo-scheduling-load') {
+    $server = new King\WebSocket\Server('127.0.0.1', $port);
+    $capture['server_class'] = get_class($server);
+    $peerCount = max(3, $iterations);
+    $rounds = 4;
+    $connections = [];
+
+    try {
+        for ($i = 0; $i < $peerCount; $i++) {
+            $connections[$i] = $server->accept();
+            $capture['accepted_info'][$i] = $connections[$i]->getInfo();
+        }
+
+        $capture['registry_after_accept'] = $server->getConnections();
+        $capture['registry_count_after_accept'] = count($capture['registry_after_accept']);
+
+        foreach ($connections as $i => $connection) {
+            $capture['ready_messages'][$i] = king_client_websocket_receive($connection, 1000);
+            $capture['ready_errors'][$i] = king_get_last_error();
+        }
+
+        for ($round = 0; $round < $rounds; $round++) {
+            foreach ($connections as $i => $connection) {
+                $connectionId = (string) ($capture['accepted_info'][$i]['connection_id'] ?? '');
+                $payload = 'slot-' . $round . '-peer-' . $i;
+
+                $server->send($connectionId, $payload);
+                $capture['scheduled_payloads'][] = $payload;
+            }
+
+            $fanout = 'fanout-' . $round;
+            $server->broadcast($fanout);
+            $capture['broadcast_payloads'][] = $fanout;
+        }
+
+        $capture['registry_after_send'] = $server->getConnections();
+        $capture['registry_count_after_send'] = count($capture['registry_after_send']);
+
+        foreach ($connections as $connection) {
+            $connection->close(1000, 'load-done');
+        }
+
+        $capture['registry_after_close'] = $server->getConnections();
+        $capture['registry_count_after_close'] = count($capture['registry_after_close']);
+        $server->stop();
+        $capture['stop_error'] = king_get_last_error();
+    } catch (Throwable $e) {
+        $capture['scheduling_exception_class'] = get_class($e);
+        $capture['scheduling_exception_message'] = $e->getMessage();
+    }
+
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+    return;
+}
+
+if ($mode === 'oo-competitive-fairness') {
+    $server = new King\WebSocket\Server('127.0.0.1', $port);
+    $capture['server_class'] = get_class($server);
+    $peerCount = max(3, $iterations);
+    $connections = [];
+
+    try {
+        for ($i = 0; $i < $peerCount; $i++) {
+            $connections[$i] = $server->accept();
+            $capture['accepted_info'][$i] = $connections[$i]->getInfo();
+        }
+
+        $capture['registry_after_accept'] = $server->getConnections();
+        $capture['registry_count_after_accept'] = count($capture['registry_after_accept']);
+
+        foreach ($connections as $i => $connection) {
+            $capture['ready_messages'][$i] = king_client_websocket_receive($connection, 1000);
+            $capture['ready_errors'][$i] = king_get_last_error();
+        }
+
+        $noisyConnectionId = (string) ($capture['accepted_info'][0]['connection_id'] ?? '');
+        $server->send($noisyConnectionId, 'noisy-00');
+        $capture['noisy_payloads'][] = 'noisy-00';
+
+        foreach (range(1, $peerCount - 1) as $i) {
+            $connectionId = (string) ($capture['accepted_info'][$i]['connection_id'] ?? '');
+            $payload = 'fair-' . $i . '-round-1';
+
+            $server->send($connectionId, $payload);
+            $capture['fair_payloads'][] = $payload;
+        }
+
+        foreach (range(1, $peerCount - 1) as $i) {
+            $connectionId = (string) ($capture['accepted_info'][$i]['connection_id'] ?? '');
+            $payload = 'fair-' . $i . '-round-2';
+
+            $server->send($connectionId, $payload);
+            $capture['fair_payloads'][] = $payload;
+        }
+
+        foreach (range(1, 11) as $suffix) {
+            $payload = sprintf('noisy-%02d', $suffix);
+
+            $server->send($noisyConnectionId, $payload);
+            $capture['noisy_payloads'][] = $payload;
+        }
+
+        $capture['registry_after_send'] = $server->getConnections();
+        $capture['registry_count_after_send'] = count($capture['registry_after_send']);
+
+        foreach ($connections as $connection) {
+            $connection->close(1000, 'fairness-done');
+        }
+
+        $capture['registry_after_close'] = $server->getConnections();
+        $capture['registry_count_after_close'] = count($capture['registry_after_close']);
+        $server->stop();
+        $capture['stop_error'] = king_get_last_error();
+    } catch (Throwable $e) {
+        $capture['fairness_exception_class'] = get_class($e);
+        $capture['fairness_exception_message'] = $e->getMessage();
+    }
+
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+    return;
+}
+
+if ($mode === 'oo-abort-cleanup') {
+    $server = new King\WebSocket\Server('127.0.0.1', $port);
+    $capture['server_class'] = get_class($server);
+    $connections = [];
+
+    try {
+        for ($i = 0; $i < 3; $i++) {
+            $connections[$i] = $server->accept();
+            $capture['accepted_info'][$i] = $connections[$i]->getInfo();
+        }
+
+        $capture['registry_after_accept'] = $server->getConnections();
+        $capture['registry_count_after_accept'] = count($capture['registry_after_accept']);
+
+        foreach ($connections as $i => $connection) {
+            $capture['ready_messages'][$i] = king_client_websocket_receive($connection, 1000);
+            $capture['ready_errors'][$i] = king_get_last_error();
+        }
+
+        usleep(200000);
+
+        try {
+            $server->broadcast('survivor-broadcast');
+            $capture['broadcast_ok'] = true;
+            $capture['broadcast_error'] = '';
+        } catch (Throwable $e) {
+            $capture['broadcast_ok'] = false;
+            $capture['broadcast_error'] = $e->getMessage();
+            $capture['broadcast_exception_class'] = get_class($e);
+        }
+
+        foreach ([0, 2] as $i) {
+            $connectionId = (string) ($capture['accepted_info'][$i]['connection_id'] ?? '');
+
+            try {
+                $server->send($connectionId, 'survivor-target-' . $i);
+                $capture['survivor_send_ok'][$i] = true;
+                $capture['survivor_send_error'][$i] = '';
+            } catch (Throwable $e) {
+                $capture['survivor_send_ok'][$i] = false;
+                $capture['survivor_send_error'][$i] = $e->getMessage();
+                $capture['survivor_send_exception_class'][$i] = get_class($e);
+            }
+        }
+
+        $capture['registry_after_abort'] = $server->getConnections();
+        $capture['registry_count_after_abort'] = count($capture['registry_after_abort']);
+
+        $abortedConnectionId = (string) ($capture['accepted_info'][1]['connection_id'] ?? '');
+        try {
+            $server->send($abortedConnectionId, 'after-abort-target');
+        } catch (Throwable $e) {
+            $capture['aborted_send_exception'] = get_class($e);
+            $capture['aborted_send_error'] = $e->getMessage();
+        }
+
+        foreach ([0, 2] as $i) {
+            try {
+                $connections[$i]->close(1000, 'abort-cleanup-done');
+                $capture['close_ok'][$i] = true;
+                $capture['close_error'][$i] = '';
+            } catch (Throwable $e) {
+                $capture['close_ok'][$i] = false;
+                $capture['close_error'][$i] = $e->getMessage();
+                $capture['close_exception_class'][$i] = get_class($e);
+            }
+        }
+
+        $capture['registry_after_close'] = $server->getConnections();
+        $capture['registry_count_after_close'] = count($capture['registry_after_close']);
+        $server->stop();
+        $capture['stop_error'] = king_get_last_error();
+    } catch (Throwable $e) {
+        $capture['abort_cleanup_exception_class'] = get_class($e);
+        $capture['abort_cleanup_exception_message'] = $e->getMessage();
+    }
+
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+    return;
+}
 for ($iteration = 0; $iteration < $iterations; $iteration++) {
     $result = king_http1_server_listen_once(
         '127.0.0.1',
@@ -269,6 +480,28 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
                 ];
             }
 
+            if ($mode === 'early-hints') {
+                $capture['early_hints_ok'] = king_server_send_early_hints(
+                    $session,
+                    $request['stream_id'],
+                    [
+                        'Link' => '</assets/app.css>; rel=preload; as=style',
+                        ['X-Trace', 'edge-1'],
+                    ]
+                );
+                $capture['early_hints_error'] = king_get_last_error();
+                $capture['early_hints_stats_before_return'] = king_get_stats($session);
+
+                return [
+                    'status' => 200,
+                    'headers' => [
+                        'Content-Type' => 'text/plain',
+                        'X-Mode' => 'early-hints',
+                    ],
+                    'body' => 'early-hints-body',
+                ];
+            }
+
             if ($mode === 'plain') {
                 $upgrade = king_server_upgrade_to_websocket($session, $request['stream_id']);
                 $capture['upgrade_result'] = $upgrade;
@@ -279,6 +512,39 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
                     'status' => 426,
                     'headers' => ['X-Mode' => 'plain-http1'],
                     'body' => 'upgrade-required',
+                ];
+            }
+
+            if ($mode === 'cors-allowlist') {
+                $capture['request_headers'] = $request['headers'];
+                $capture['request_cors'] = $request['cors'];
+                $capture['cors_stats_before_return'] = king_get_stats($session);
+
+                $headers = [
+                    'Content-Type' => 'text/plain',
+                    'X-Cors-Mode' => 'allowlist',
+                ];
+
+                if (($request['cors']['preflight'] ?? false) === true) {
+                    $requestedMethod = $request['headers']['access-control-request-method'] ?? 'GET';
+                    $requestedHeaders = $request['headers']['access-control-request-headers'] ?? null;
+
+                    $headers['Access-Control-Allow-Methods'] = $requestedMethod;
+                    if (is_string($requestedHeaders) && $requestedHeaders !== '') {
+                        $headers['Access-Control-Allow-Headers'] = $requestedHeaders;
+                    }
+
+                    return [
+                        'status' => 204,
+                        'headers' => $headers,
+                        'body' => '',
+                    ];
+                }
+
+                return [
+                    'status' => 200,
+                    'headers' => $headers,
+                    'body' => 'cors-http1-body',
                 ];
             }
 

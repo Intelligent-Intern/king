@@ -6,7 +6,8 @@ function king_http3_server_wire_start_server(
     string $certFile,
     string $keyFile,
     ?int $fixedPort = null,
-    string $mode = 'basic'
+    string $mode = 'basic',
+    array $modeArgs = []
 ): array
 {
     $bindHost = 'localhost';
@@ -25,19 +26,34 @@ function king_http3_server_wire_start_server(
 
     $capture = tempnam(sys_get_temp_dir(), 'king-http3-server-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';
-    $command = sprintf(
-        '%s -n -d %s -d %s %s %s %d %s %s %s %s',
+    $commandParts = [
         escapeshellarg(PHP_BINARY),
+        '-n',
+        '-d',
         escapeshellarg('extension=' . $extensionPath),
+        '-d',
         escapeshellarg('king.security_allow_config_override=1'),
         escapeshellarg(__DIR__ . '/http3_server_wire_server.inc'),
         escapeshellarg($capture),
-        (int) $port,
+        (string) (int) $port,
         escapeshellarg($certFile),
         escapeshellarg($keyFile),
         escapeshellarg($bindHost),
-        escapeshellarg($mode)
-    );
+        escapeshellarg($mode),
+    ];
+
+    if ($mode === 'cors-allowlist') {
+        array_splice($commandParts, 6, 0, [
+            '-d',
+            escapeshellarg('king.security_cors_allowed_origins=https://app.king.test, https://admin.king.test'),
+        ]);
+    }
+
+    foreach ($modeArgs as $modeArg) {
+        $commandParts[] = escapeshellarg((string) $modeArg);
+    }
+
+    $command = implode(' ', $commandParts);
 
     $process = proc_open($command, [
         1 => ['pipe', 'w'],

@@ -34,7 +34,7 @@ var_dump([
 --EXPECT--
 bool(true)
 string(0) ""
-array(6) {
+array(7) {
   ["enabled"]=>
   bool(true)
   ["allow_any_origin"]=>
@@ -45,6 +45,8 @@ array(6) {
   string(1) "*"
   ["origin"]=>
   NULL
+  ["allow_origin"]=>
+  string(1) "*"
   ["allowed_origins"]=>
   array(1) {
     [0]=>
