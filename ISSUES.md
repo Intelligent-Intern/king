@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- `#11 Finalize QUIC error mapping across transport, TLS, HTTP/3, timeout, and cancellation failures.`
+- `#12 Validate QUIC stats fields against live runtime counters and peer-observed state.`
 
 ## Active Executable Items
 
@@ -34,7 +34,7 @@
 - [x] `#8 Validate QUIC congestion-control behavior under sustained constrained links.`
 - [x] `#9 Validate QUIC flow-control exhaustion and recovery behavior under sustained streams.`
 - [x] `#10 Validate QUIC zero-RTT acceptance and fallback against real peers.`
-- [ ] `#11 Finalize QUIC error mapping across transport, TLS, HTTP/3, timeout, and cancellation failures.`
+- [x] `#11 Finalize QUIC error mapping across transport, TLS, HTTP/3, timeout, and cancellation failures.`
 - [ ] `#12 Validate QUIC stats fields against live runtime counters and peer-observed state.`
 - [ ] `#13 Validate QUIC recovery after temporary network interruption and socket re-wake.`
 - [ ] `#14 Back server-upgrade WebSocket resources with honest bidirectional frame I/O.`
