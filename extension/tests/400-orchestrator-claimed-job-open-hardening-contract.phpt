@@ -2,16 +2,17 @@
 King file-worker claimed-job opens stay nofollow nonblocking and regular-file only
 --FILE--
 <?php
-$source = file_get_contents(__DIR__ . '/../src/pipeline_orchestrator/tool_registry.c');
+$queueIoSource = file_get_contents(__DIR__ . '/../src/pipeline_orchestrator/tool_registry/path_and_queue_io.inc');
+$queueControlSource = file_get_contents(__DIR__ . '/../src/pipeline_orchestrator/tool_registry/queue_control.inc');
 
 preg_match(
     '/static int king_orchestrator_open_claimed_job_fd\\([^\\)]*\\)\\s*\\{(?P<body>.*?)^\\}/ms',
-    $source,
+    $queueIoSource,
     $helperMatches
 );
 preg_match(
     '/int king_orchestrator_claim_next_run\\([^\\)]*\\)\\s*\\{(?P<body>.*?)^\\}/ms',
-    $source,
+    $queueControlSource,
     $claimMatches
 );
 

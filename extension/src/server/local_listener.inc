@@ -184,6 +184,7 @@ static void king_server_local_close_session(king_client_session_t *session)
         return;
     }
 
+    king_client_session_cleanup_server_websockets(session);
     king_client_session_close_socket(session);
     session->is_closed = true;
     session->last_activity_at = time(NULL);

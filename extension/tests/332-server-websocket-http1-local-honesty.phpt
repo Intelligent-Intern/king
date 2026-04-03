@@ -1,5 +1,5 @@
 --TEST--
-King HTTP/1 server-side websocket upgrade stays an honest local-only marker slice in v1
+King HTTP/1 server-side websocket upgrade keeps an honest in-process local frame runtime in v1
 --FILE--
 <?php
 $captured = [];
@@ -17,18 +17,32 @@ var_dump(king_http1_server_listen(
         var_dump(king_client_websocket_get_status($websocket));
         var_dump(king_websocket_send($websocket, 'http1-upgrade'));
         $sendError = king_get_last_error();
+        var_dump(king_client_websocket_send($websocket, 'client-upgrade'));
+        $clientSendError = king_get_last_error();
         var_dump(king_client_websocket_receive($websocket));
-        $receiveError = king_get_last_error();
+        $receiveOneError = king_get_last_error();
+        var_dump(king_client_websocket_receive($websocket));
+        $receiveTwoError = king_get_last_error();
+        var_dump(king_client_websocket_receive($websocket));
+        $receiveEmptyError = king_get_last_error();
         var_dump(king_client_websocket_ping($websocket, 'ok'));
         $pingError = king_get_last_error();
         var_dump(king_client_websocket_close($websocket, 1000, 'done'));
-        var_dump(king_get_last_error());
+        $closeError = king_get_last_error();
+        var_dump(king_client_websocket_get_status($websocket));
+        var_dump(king_websocket_send($websocket, 'after-close'));
+        $sendAfterCloseError = king_get_last_error();
 
         $stats = king_get_stats($session);
         $captured = [
             'send_error' => $sendError,
-            'receive_error' => $receiveError,
+            'client_send_error' => $clientSendError,
+            'receive_one_error' => $receiveOneError,
+            'receive_two_error' => $receiveTwoError,
+            'receive_empty_error' => $receiveEmptyError,
             'ping_error' => $pingError,
+            'close_error' => $closeError,
+            'send_after_close_error' => $sendAfterCloseError,
             'server_last_websocket_url' => $stats['server_last_websocket_url'],
             'server_last_websocket_secure' => $stats['server_last_websocket_secure'],
             'server_websocket_upgrade_count' => $stats['server_websocket_upgrade_count'],
@@ -51,20 +65,34 @@ var_dump([
 --EXPECT--
 bool(true)
 int(1)
-bool(false)
-bool(false)
+bool(true)
+bool(true)
+string(13) "http1-upgrade"
+string(14) "client-upgrade"
+string(0) ""
+bool(true)
+bool(true)
+int(3)
 bool(false)
 bool(true)
 string(0) ""
-bool(true)
-string(0) ""
-array(7) {
+array(12) {
   ["send_error"]=>
-  string(97) "king_websocket_send() cannot exchange frames on a local-only server-side WebSocket upgrade in v1."
-  ["receive_error"]=>
-  string(107) "king_client_websocket_receive() cannot exchange frames on a local-only server-side WebSocket upgrade in v1."
+  string(0) ""
+  ["client_send_error"]=>
+  string(0) ""
+  ["receive_one_error"]=>
+  string(0) ""
+  ["receive_two_error"]=>
+  string(0) ""
+  ["receive_empty_error"]=>
+  string(0) ""
   ["ping_error"]=>
-  string(104) "king_client_websocket_ping() cannot exchange frames on a local-only server-side WebSocket upgrade in v1."
+  string(0) ""
+  ["close_error"]=>
+  string(0) ""
+  ["send_after_close_error"]=>
+  string(66) "king_websocket_send() cannot run on a closed WebSocket connection."
   ["server_last_websocket_url"]=>
   string(28) "ws://127.0.0.1:8080/stream/0"
   ["server_last_websocket_secure"]=>

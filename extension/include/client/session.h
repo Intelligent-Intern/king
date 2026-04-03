@@ -182,6 +182,9 @@ king_client_session_t *king_client_session_fetch_resource(
 void king_client_session_free(void *session_ptr);
 void king_client_session_close_socket(king_client_session_t *session);
 void king_client_session_clear_tls_ticket(king_client_session_t *session);
+void king_client_session_cleanup_server_websockets(
+    king_client_session_t *session
+);
 
 zend_result king_client_session_mark_cancelled(
     king_client_session_t *session,

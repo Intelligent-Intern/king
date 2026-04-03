@@ -1,5 +1,5 @@
 --TEST--
-King server cancel, early-hints, and websocket-upgrade helpers run locally on server listener sessions
+King server cancel, early-hints, and websocket-upgrade helpers keep local listener WebSocket frame I/O live
 --FILE--
 <?php
 $captured = [];
@@ -31,18 +31,25 @@ var_dump(king_http3_server_listen(
         $sendError = king_get_last_error();
         $payload = king_client_websocket_receive($websocket);
         $receiveError = king_get_last_error();
+        $emptyPayload = king_client_websocket_receive($websocket);
+        $emptyReceiveError = king_get_last_error();
         var_dump(king_client_websocket_ping($websocket, 'ok'));
         $pingError = king_get_last_error();
         var_dump(king_client_websocket_close($websocket, 1000, 'listener-done'));
+        $closeError = king_get_last_error();
+        var_dump(king_client_websocket_get_status($websocket));
 
         var_dump(king_cancel_stream($request['stream_id'], 'both', $session));
 
         $stats = king_get_stats($session);
         $captured = [
             'payload' => $payload,
+            'empty_payload' => $emptyPayload,
             'send_error' => $sendError,
             'receive_error' => $receiveError,
+            'empty_receive_error' => $emptyReceiveError,
             'ping_error' => $pingError,
+            'close_error' => $closeError,
             'cancelled_stream' => $GLOBALS['king_server_listener_cancelled_stream'],
             'server_last_early_hints' => $stats['server_last_early_hints'],
             'server_last_websocket_url' => $stats['server_last_websocket_url'],
@@ -70,21 +77,28 @@ var_dump([
 bool(true)
 bool(true)
 bool(true)
-bool(false)
-bool(false)
 bool(true)
+bool(true)
+bool(true)
+int(3)
 bool(true)
 bool(true)
 string(0) ""
-array(9) {
+array(12) {
   ["payload"]=>
-  bool(false)
+  string(7) "h3-push"
+  ["empty_payload"]=>
+  string(0) ""
   ["send_error"]=>
-  string(97) "king_websocket_send() cannot exchange frames on a local-only server-side WebSocket upgrade in v1."
+  string(0) ""
   ["receive_error"]=>
-  string(107) "king_client_websocket_receive() cannot exchange frames on a local-only server-side WebSocket upgrade in v1."
+  string(0) ""
+  ["empty_receive_error"]=>
+  string(0) ""
   ["ping_error"]=>
-  string(104) "king_client_websocket_ping() cannot exchange frames on a local-only server-side WebSocket upgrade in v1."
+  string(0) ""
+  ["close_error"]=>
+  string(0) ""
   ["cancelled_stream"]=>
   int(0)
   ["server_last_early_hints"]=>

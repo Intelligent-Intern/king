@@ -166,6 +166,58 @@ This is the practical picture to keep in mind. The session is the long-lived
 owner. Streams are the individual units of work. Responses are what come back
 from those streams.
 
+The current tree also proves that lifecycle against real peers instead of only
+describing it abstractly. The active QUIC coverage now follows one-shot HTTP/3
+sessions through Initial, established/open, request-stream open/body/finish
+plus request-body drain-before-response, response-drain, draining, and closed
+phases with peer-observed capture, so the session model above is backed by
+real transport behavior rather than by a conceptual diagram alone. The same
+live peer coverage now also proves that request-stream resets surface as
+explicit HTTP/3 stream-reset failures, peer `STOP_SENDING` on request bodies
+surfaces as an explicit QUIC body-send failure, negotiated QUIC idle timeouts
+surface explicitly as transport closure, peer-sent application closes
+surface as protocol closes instead of collapsing into generic request timeouts,
+and userland `CancelToken` aborts propagate into an explicit QUIC
+application-close on the active peer instead of silently disappearing inside
+local teardown. Those same QUIC/TLS handshake-failure, remote
+`transport_close`, remote `application_close`, connect-timeout, and active
+cancel paths also stay visible through `King\Client\Http3Client` as public
+`King\TlsException`, `King\QuicException`, `King\ProtocolException`,
+`King\TimeoutException`, and `King\RuntimeException` failures instead of
+collapsing into a generic OO runtime error. The same live peer coverage now
+also proves the active quiche event loop can stay idle across delayed response
+bursts, wake on real peer progress without sleeping until the full request
+budget, and then surface a real timeout once the peer stays silent past that
+budget. Under an intentionally lossy constrained-link harness, the same live
+coverage now also proves both supported congestion-control algorithms,
+`cubic` and `bbr`, still make forward progress and surface visible loss plus
+retransmit counters instead of leaving that runtime slice as an unverified
+config-only claim. The same live peer coverage now also proves sustained
+request streams can exhaust a tiny peer-advertised flow-control window, stall
+until that peer resumes reading, and then recover to a completed HTTP/3
+response instead of collapsing the flow-control slice into a timeout-only
+story. The same ticket-backed peer harness now also proves resumed 0-RTT
+requests end up in one of two honest transport phases: accepted early data,
+where the peer observes request and response headers inside early data, or
+server-disabled fallback, where the same resumed request is replayed only after
+establishment and the peer reports a disabled early-data reason. The same
+ticket-backed peer harness now also proves the exported HTTP/3 response stats
+fields stay tied to live quiche counters: `quic_packets_sent` and
+`quic_packets_received` stay consistent with peer-observed packet flow on clean
+request/response runs, while lossy and constrained-link runs surface honest
+`quic_packets_lost`, `quic_packets_retransmitted`, `quic_lost_bytes`, and
+`quic_stream_retransmitted_bytes` instead of stale zeroes or detached
+bookkeeping.
+
+The same ticket-backed peer harness now also proves temporary
+established-phase network interruption recovery instead of only clean packet
+loss counters. On a sustained request stream, the peer can go dark for a
+bounded interval, drop real established datagrams, stop sending for that same
+window, and then resume. The active HTTP/3 runtime re-wakes on the returning
+socket traffic, retransmits what the blackout stranded, and still completes
+the same request stream with visible loss and retransmit stats instead of
+timing out or silently replaying the work on a hidden fresh transport.
+
 ## A First Session
 
 The first explicit session usually looks like this:
@@ -315,6 +367,13 @@ time, the runtime can carry useful state forward.
 King also exposes `tls.enable_early_data` and related ticket settings because
 some deployments want to use resumption aggressively while others prefer a
 stricter trust policy.
+
+That distinction is now verified against real peers rather than only described
+at the API level. In the active HTTP/3 harness, a resumed request with
+`tls.enable_early_data=true` is proved in two separate modes: accepted 0-RTT,
+where the peer sees request and response headers during early data, and
+server-disabled fallback, where the peer reports a disabled early-data reason
+and only sees the request after the connection reaches the established phase.
 
 ### The Ticket Functions In Practice
 

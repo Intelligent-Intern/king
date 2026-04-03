@@ -120,13 +120,15 @@ The procedural API is the full control surface. It includes
 `king_client_websocket_get_status()`, `king_client_websocket_close()`,
 `king_websocket_send()`, and `king_client_websocket_get_last_error()`.
 
-The object-oriented API is `King\WebSocket\Connection`. Its methods are
-`__construct()`, `send()`, `sendBinary()`, `ping()`, `close()`, and `getInfo()`.
+The object-oriented API has two shapes. `King\WebSocket\Connection` is the
+connection object for active channels. `King\WebSocket\Server` is the bounded
+HTTP/1 listener object that accepts real on-wire websocket upgrade requests and
+returns those accepted peers as `Connection` objects.
 
 The procedural API is the better choice when the code wants to control every
 step explicitly, especially reads and last-error handling. The object-oriented
 API is more comfortable when the code wants a clean connection object for the
-common open, send, ping, close, and inspect operations.
+common open, send, ping, close, inspect, and bounded accept operations.
 
 ## Opening A Connection
 
@@ -155,6 +157,47 @@ belongs to the connection step, not to some later first message.
 
 The procedural equivalent is `king_client_websocket_connect()`. It returns a
 handle that the rest of the procedural calls operate on.
+
+## Accepting Peers With `King\WebSocket\Server`
+
+`King\WebSocket\Server` is the object-oriented server-side sibling. It is not a
+fake local marker. It binds a real TCP listener, waits for one HTTP/1 websocket
+upgrade request at a time, completes the real `101 Switching Protocols`
+handshake, and returns the accepted peer as a `King\WebSocket\Connection`
+object over the same native websocket runtime.
+
+```php
+<?php
+
+$server = new King\WebSocket\Server('127.0.0.1', 9501);
+$peer = $server->accept();
+$connections = $server->getConnections();
+$connectionId = array_key_first($connections);
+
+$message = king_client_websocket_receive($peer, 1000);
+$server->send($connectionId, 'ack:' . $message);
+$server->broadcast('server-broadcast');
+$server->stop();
+```
+
+The important limit is honesty: the current OO server surface is the real
+HTTP/1 websocket accept path. It does not pretend to be a broader HTTP/2 or
+HTTP/3 websocket listener until those leaves are separately verified.
+
+When more than one peer is accepted on the same server object, the registry is
+keyed by `connection_id`, not by URL. `Connection::getInfo()['id']` remains the
+URL-shaped channel identity, while `Connection::getInfo()['connection_id']` is
+the opaque server-assigned key you pass back into `Server::send()` or
+`Server::sendBinary()`. `Server::broadcast()` and `Server::broadcastBinary()`
+fan out one frame across every currently live accepted peer. That avoids
+collisions when multiple live peers connect to the same websocket path at the
+same time while still giving the server object a real group-send surface.
+
+`Server::stop()` is also no longer just listener bookkeeping. It closes the
+listener, sends a real `1001` close frame with reason `server-shutdown` to the
+currently live accepted peers, drains the close handshake, empties the server
+registry, and rejects later `accept()`, `send*()`, and `broadcast*()` calls on
+that stopped instance.
 
 ## Connection Lifecycle
 

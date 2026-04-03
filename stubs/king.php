@@ -481,11 +481,11 @@ namespace {
     /**
      * Materialize a server-side `King\WebSocket` resource for one stream on
      * an open `King\Session` resource or object.
-     * Local HTTP/1/2/3 listener leaves still produce a local-only marker
-     * resource with close/status metadata but no frame I/O. The on-wire
-     * `king_http1_server_listen_once()` leaf upgrades a real HTTP/1 websocket
-     * request, attaches socket-backed frame I/O, and keeps the resource
-     * handler-owned for the callback lifetime.
+     * Local HTTP/1/2/3 listener leaves produce an in-process bidirectional
+     * frame resource backed by the shared bounded queue/runtime slice. The
+     * on-wire `king_http1_server_listen_once()` leaf upgrades a real HTTP/1
+     * websocket request, attaches socket-backed frame I/O, and keeps the
+     * resource handler-owned for the callback lifetime.
      * @param mixed $session
      * @return resource|false
      */
@@ -1838,6 +1838,28 @@ namespace King\Client {
  * WebSocket over HTTP/3
  * =========================== */
 namespace King\WebSocket {
+    use King\Config;
+
+    final class Server {
+        public function __construct(string $host, int $port, ?Config $config = null) {}
+        public function accept(): Connection {}
+        /**
+         * @return array<string,array{
+         *   id:string,
+         *   connection_id:string,
+         *   remote_addr:string,
+         *   protocol?:string,
+         *   headers:array<string,string[]>
+         * }>
+         */
+        public function getConnections(): array {}
+        public function send(string $connectionId, string $message): void {}
+        public function sendBinary(string $connectionId, string $payload): void {}
+        public function broadcast(string $message): void {}
+        public function broadcastBinary(string $payload): void {}
+        public function stop(): void {}
+    }
+
     final class Connection {
         public function __construct(string $url, ?array $headers = null, ?array $options = null) {}
         public function send(string $message): void {}
@@ -1846,7 +1868,7 @@ namespace King\WebSocket {
         public function close(int $code = 1000, ?string $reason = null): void {}
         /**
          * @return array{
-         *   id:string,remote_addr:string,protocol?:string,headers:array<string,string[]>
+         *   id:string,connection_id:string,remote_addr:string,protocol?:string,headers:array<string,string[]>
          * }
          */
         public function getInfo(): array {}

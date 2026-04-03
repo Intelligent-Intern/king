@@ -35,6 +35,178 @@ if (
 fwrite(STDOUT, "READY\n");
 fflush(STDOUT);
 
+if ($mode === 'oo-runtime') {
+    $server = new King\WebSocket\Server('127.0.0.1', $port);
+    $capture['server_class'] = get_class($server);
+
+    try {
+        $connection = $server->accept();
+        $capture['accept_is_object'] = is_object($connection);
+        $capture['accept_class'] = is_object($connection) ? get_class($connection) : gettype($connection);
+        $capture['accept_info'] = $connection->getInfo();
+        $capture['received'] = king_client_websocket_receive($connection, 1000);
+        $capture['receive_error'] = king_get_last_error();
+
+        try {
+            $connection->send('beta');
+            $capture['send_ok'] = true;
+            $capture['send_error'] = '';
+        } catch (Throwable $e) {
+            $capture['send_ok'] = false;
+            $capture['send_error'] = $e->getMessage();
+        }
+
+        try {
+            $connection->close(1001, 'server-done');
+            $capture['close_ok'] = true;
+            $capture['close_error'] = '';
+        } catch (Throwable $e) {
+            $capture['close_ok'] = false;
+            $capture['close_error'] = $e->getMessage();
+        }
+
+        $server->stop();
+        $capture['stop_error'] = king_get_last_error();
+
+        try {
+            $server->accept();
+        } catch (Throwable $e) {
+            $capture['accept_after_stop_exception'] = get_class($e);
+            $capture['accept_after_stop_error'] = $e->getMessage();
+        }
+    } catch (Throwable $e) {
+        $capture['accept_exception_class'] = get_class($e);
+        $capture['accept_exception_message'] = $e->getMessage();
+    }
+
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+    return;
+}
+
+if ($mode === 'oo-registry') {
+    $server = new King\WebSocket\Server('127.0.0.1', $port);
+    $capture['server_class'] = get_class($server);
+
+    try {
+        $first = $server->accept();
+        $second = $server->accept();
+
+        $capture['first_class'] = get_class($first);
+        $capture['second_class'] = get_class($second);
+        $capture['first_info'] = $first->getInfo();
+        $capture['second_info'] = $second->getInfo();
+        $capture['registry_after_accept'] = $server->getConnections();
+        $capture['registry_count_after_accept'] = count($capture['registry_after_accept']);
+        $capture['registry_ids'] = array_keys($capture['registry_after_accept']);
+
+        try {
+            $server->send($capture['first_info']['connection_id'], 'to-first');
+            $capture['send_first_ok'] = true;
+            $capture['send_first_error'] = '';
+        } catch (Throwable $e) {
+            $capture['send_first_ok'] = false;
+            $capture['send_first_error'] = $e->getMessage();
+        }
+
+        try {
+            $server->sendBinary($capture['second_info']['connection_id'], 'to-second');
+            $capture['send_second_ok'] = true;
+            $capture['send_second_error'] = '';
+        } catch (Throwable $e) {
+            $capture['send_second_ok'] = false;
+            $capture['send_second_error'] = $e->getMessage();
+        }
+
+        try {
+            $server->send('missing-connection', 'miss');
+        } catch (Throwable $e) {
+            $capture['missing_send_exception'] = get_class($e);
+            $capture['missing_send_error'] = $e->getMessage();
+        }
+
+        $first->close(1001, 'first-done');
+        $capture['registry_after_first_close'] = $server->getConnections();
+        $capture['registry_count_after_first_close'] = count($capture['registry_after_first_close']);
+
+        $second->close(1001, 'second-done');
+        $capture['registry_after_second_close'] = $server->getConnections();
+        $capture['registry_count_after_second_close'] = count($capture['registry_after_second_close']);
+    } catch (Throwable $e) {
+        $capture['registry_exception_class'] = get_class($e);
+        $capture['registry_exception_message'] = $e->getMessage();
+    }
+
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+    return;
+}
+
+if ($mode === 'oo-broadcast-shutdown') {
+    $server = new King\WebSocket\Server('127.0.0.1', $port);
+    $capture['server_class'] = get_class($server);
+
+    try {
+        $first = $server->accept();
+        $second = $server->accept();
+
+        $capture['first_info'] = $first->getInfo();
+        $capture['second_info'] = $second->getInfo();
+        $capture['registry_before_broadcast'] = $server->getConnections();
+        $capture['registry_count_before_broadcast'] = count($capture['registry_before_broadcast']);
+
+        try {
+            $server->broadcast('fanout-text');
+            $capture['broadcast_ok'] = true;
+            $capture['broadcast_error'] = '';
+        } catch (Throwable $e) {
+            $capture['broadcast_ok'] = false;
+            $capture['broadcast_error'] = $e->getMessage();
+        }
+
+        try {
+            $server->broadcastBinary('fanout-binary');
+            $capture['broadcast_binary_ok'] = true;
+            $capture['broadcast_binary_error'] = '';
+        } catch (Throwable $e) {
+            $capture['broadcast_binary_ok'] = false;
+            $capture['broadcast_binary_error'] = $e->getMessage();
+        }
+
+        $server->stop();
+        $capture['stop_error'] = king_get_last_error();
+        $capture['registry_after_stop'] = $server->getConnections();
+        $capture['registry_count_after_stop'] = count($capture['registry_after_stop']);
+
+        try {
+            $server->broadcast('after-stop');
+        } catch (Throwable $e) {
+            $capture['broadcast_after_stop_exception'] = get_class($e);
+            $capture['broadcast_after_stop_error'] = $e->getMessage();
+        }
+
+        try {
+            $server->send($capture['first_info']['connection_id'], 'after-stop-target');
+        } catch (Throwable $e) {
+            $capture['send_after_stop_exception'] = get_class($e);
+            $capture['send_after_stop_error'] = $e->getMessage();
+        }
+    } catch (Throwable $e) {
+        $capture['broadcast_exception_class'] = get_class($e);
+        $capture['broadcast_exception_message'] = $e->getMessage();
+    }
+
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+    return;
+}
+
 for ($iteration = 0; $iteration < $iterations; $iteration++) {
     $result = king_http1_server_listen_once(
         '127.0.0.1',

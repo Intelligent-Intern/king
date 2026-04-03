@@ -14,6 +14,7 @@ $classes = [
     'King\\Client\\Http1Client',
     'King\\Client\\Http2Client',
     'King\\Client\\Http3Client',
+    'King\\WebSocket\\Server',
     'King\\WebSocket\\Connection',
 ];
 
@@ -97,6 +98,12 @@ array (
     'internal' => true,
     'final' => true,
     'parent' => 'King\\Client\\HttpClient',
+  ),
+  'King\\WebSocket\\Server' => 
+  array (
+    'internal' => true,
+    'final' => true,
+    'parent' => NULL,
   ),
   'King\\WebSocket\\Connection' => 
   array (

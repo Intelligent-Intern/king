@@ -4,12 +4,11 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Activates a first local server-side WebSocket-upgrade slice on top of the
- * shared King\Session and King\WebSocket runtimes. Client-side WebSocket
- * connections are now verified on-wire; this file remains the honest local
- * v1 server-side upgrade slice that models post-upgrade state, validates
- * stream/session constraints, and records the upgrade on the session
- * snapshot.
+ * Activates the server-side WebSocket-upgrade slice on top of the shared
+ * King\Session and King\WebSocket runtimes. Local HTTP/1/2/3 listener leaves
+ * now return an in-process bidirectional frame channel, while the on-wire
+ * HTTP/1 one-shot listener duplicates the accepted socket and keeps real
+ * frame I/O handler-owned for the callback lifetime.
  * =========================================================================
  */
 
@@ -33,6 +32,104 @@
 
 static const char *king_server_websocket_accept_magic =
     "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+static void king_server_websocket_clear_queued_messages(king_ws_state *state)
+{
+    king_ws_message *message;
+
+    if (state == NULL) {
+        return;
+    }
+
+    message = state->incoming_head;
+    while (message != NULL) {
+        king_ws_message *next = message->next;
+
+        if (message->payload != NULL) {
+            zend_string_release(message->payload);
+        }
+
+        efree(message);
+        message = next;
+    }
+
+    state->incoming_head = NULL;
+    state->incoming_tail = NULL;
+    state->queued_message_count = 0;
+    state->queued_bytes = 0;
+}
+
+static void king_server_websocket_force_close_state(king_ws_state *state)
+{
+    if (state == NULL) {
+        return;
+    }
+
+    king_server_websocket_clear_queued_messages(state);
+
+    if (state->transport_stream != NULL) {
+        php_stream_close(state->transport_stream);
+        state->transport_stream = NULL;
+    }
+
+    if (!(state->state == KING_WS_STATE_CLOSED && state->closed)) {
+        if (state->last_close_reason != NULL) {
+            zend_string_release(state->last_close_reason);
+        }
+
+        state->last_close_reason = zend_string_init("", 0, 0);
+        state->last_close_status_code = 1001;
+    }
+
+    state->state = KING_WS_STATE_CLOSED;
+    state->closed = true;
+    state->close_frame_sent = true;
+}
+
+void king_client_session_cleanup_server_websockets(king_client_session_t *session)
+{
+    zval *upgrade_entry;
+
+    if (session == NULL || !session->server_upgraded_streams_initialized) {
+        return;
+    }
+
+    ZEND_HASH_FOREACH_VAL(&session->server_upgraded_streams, upgrade_entry)
+    {
+        king_ws_state *state;
+
+        if (Z_TYPE_P(upgrade_entry) != IS_RESOURCE) {
+            continue;
+        }
+
+        state = zend_fetch_resource(
+            Z_RES_P(upgrade_entry),
+            "King\\WebSocket",
+            le_king_ws
+        );
+        if (state != NULL) {
+            king_server_websocket_force_close_state(state);
+        }
+    }
+    ZEND_HASH_FOREACH_END();
+
+    zend_hash_clean(&session->server_upgraded_streams);
+}
+
+void king_server_websocket_release_session_upgrade(
+    king_client_session_t *session,
+    zend_long stream_id
+)
+{
+    if (session == NULL || !session->server_upgraded_streams_initialized) {
+        return;
+    }
+
+    zend_hash_index_del(
+        &session->server_upgraded_streams,
+        (zend_ulong) stream_id
+    );
+}
 
 static zend_string *king_server_websocket_build_authority(
     const char *host,
@@ -169,11 +266,14 @@ static zend_result king_server_websocket_send_upgrade_response(
     return rc;
 }
 
-PHP_FUNCTION(king_server_upgrade_to_websocket)
+zend_result king_server_websocket_upgrade_session(
+    king_client_session_t *session,
+    zend_long stream_id,
+    zval *request_headers,
+    zval *return_value,
+    const char *function_name
+)
 {
-    zval *zsession;
-    zend_long stream_id;
-    king_client_session_t *session;
     const char *scheme;
     zend_bool secure;
     zend_string *authority;
@@ -181,8 +281,168 @@ PHP_FUNCTION(king_server_upgrade_to_websocket)
     zend_string *url;
     php_stream *transport_stream = NULL;
     king_ws_state *state;
-    zval marker;
+    zval websocket_resource;
+    zend_resource *websocket_resource_handle;
     zend_bool on_wire_upgrade;
+
+    if (zend_hash_index_exists(&session->server_upgraded_streams, (zend_ulong) stream_id)) {
+        king_server_control_set_errorf(
+            "%s() stream %ld is already upgraded locally.",
+            function_name,
+            stream_id
+        );
+        return FAILURE;
+    }
+
+    secure = king_server_websocket_is_secure(session);
+    on_wire_upgrade =
+        session->server_pending_websocket_upgrade
+        && session->server_pending_request_target != NULL
+        && session->server_pending_websocket_key != NULL
+        && session->transport_socket_fd >= 0;
+    if (session->transport_socket_fd >= 0 && !on_wire_upgrade) {
+        king_server_control_set_errorf(
+            "%s() requires an active HTTP/1 websocket upgrade request on on-wire server sessions.",
+            function_name
+        );
+        return FAILURE;
+    }
+    scheme = secure ? "wss" : "ws";
+    authority = king_server_websocket_build_authority(
+        ZSTR_VAL(session->host),
+        ZSTR_LEN(session->host),
+        session->port
+    );
+    request_target = on_wire_upgrade
+        ? zend_string_copy(session->server_pending_request_target)
+        : strpprintf(0, "/stream/%ld", stream_id);
+    url = strpprintf(
+        0,
+        "%s://%s%s",
+        scheme,
+        ZSTR_VAL(authority),
+        ZSTR_VAL(request_target)
+    );
+
+    state = ecalloc(1, sizeof(*state));
+    state->url = url;
+    state->connection_id = zend_string_copy(url);
+    state->scheme = zend_string_init(scheme, strlen(scheme), 0);
+    state->host = zend_string_copy(session->host);
+    state->request_target = request_target;
+    state->port = session->port;
+    state->max_payload_size =
+        session->config_websocket_default_max_payload_size > 0
+            ? session->config_websocket_default_max_payload_size
+            : 16777216;
+    state->ping_interval_ms =
+        session->config_websocket_default_ping_interval_ms > 0
+            ? session->config_websocket_default_ping_interval_ms
+            : 25000;
+    state->handshake_timeout_ms =
+        session->config_websocket_handshake_timeout_ms > 0
+            ? session->config_websocket_handshake_timeout_ms
+            : 5000;
+    state->last_close_status_code = 1000;
+    state->state = KING_WS_STATE_OPEN;
+    state->secure = secure != 0;
+    state->server_endpoint = true;
+    state->server_local_only = on_wire_upgrade ? false : true;
+    state->handshake_complete = true;
+    state->closed = false;
+    state->server_owner = NULL;
+    ZVAL_UNDEF(&state->config);
+    ZVAL_UNDEF(&state->headers);
+    if (request_headers != NULL && Z_TYPE_P(request_headers) == IS_ARRAY) {
+        ZVAL_COPY(&state->headers, request_headers);
+    }
+
+    if (on_wire_upgrade) {
+        int websocket_fd = dup(session->transport_socket_fd);
+
+        if (websocket_fd < 0) {
+            king_ws_state_free(state);
+            zend_string_release(authority);
+            king_server_control_set_errorf(
+                "%s() failed to duplicate the accepted HTTP/1 socket (errno %d).",
+                function_name,
+                errno
+            );
+            return FAILURE;
+        }
+
+        transport_stream = php_stream_sock_open_from_socket(websocket_fd, NULL);
+        if (transport_stream == NULL) {
+            close(websocket_fd);
+            king_ws_state_free(state);
+            zend_string_release(authority);
+            king_server_control_set_errorf(
+                "%s() failed to attach the accepted HTTP/1 socket to a websocket stream.",
+                function_name
+            );
+            return FAILURE;
+        }
+
+        php_stream_set_option(
+            transport_stream,
+            PHP_STREAM_OPTION_BLOCKING,
+            1,
+            NULL
+        );
+        state->transport_stream = transport_stream;
+
+        if (
+            king_server_websocket_send_upgrade_response(
+                session,
+                function_name
+            ) != SUCCESS
+        ) {
+            king_ws_state_free(state);
+            zend_string_release(authority);
+            return FAILURE;
+        }
+    }
+
+    websocket_resource_handle = zend_register_resource(state, le_king_ws);
+    ZVAL_RES(&websocket_resource, websocket_resource_handle);
+    if (zend_hash_index_add_new(
+            &session->server_upgraded_streams,
+            (zend_ulong) stream_id,
+            &websocket_resource
+        ) == NULL) {
+        zend_list_close(websocket_resource_handle);
+        zend_string_release(authority);
+        king_server_control_set_errorf(
+            "%s() failed to record the local WebSocket upgrade for stream %ld.",
+            function_name,
+            stream_id
+        );
+        return FAILURE;
+    }
+
+    session->server_websocket_upgrade_count++;
+    session->server_last_websocket_stream_id = stream_id;
+    session->server_last_websocket_secure = secure != 0;
+    session->last_activity_at = time(NULL);
+    king_server_control_set_string_bytes(
+        &session->server_last_websocket_url,
+        ZSTR_VAL(url),
+        ZSTR_LEN(url)
+    );
+
+    zend_string_release(authority);
+
+    king_set_error("");
+    GC_ADDREF(websocket_resource_handle);
+    ZVAL_RES(return_value, websocket_resource_handle);
+    return SUCCESS;
+}
+
+PHP_FUNCTION(king_server_upgrade_to_websocket)
+{
+    zval *zsession;
+    zend_long stream_id;
+    king_client_session_t *session;
 
     ZEND_PARSE_PARAMETERS_START(2, 2)
         Z_PARAM_ZVAL(zsession)
@@ -212,143 +472,15 @@ PHP_FUNCTION(king_server_upgrade_to_websocket)
         RETURN_FALSE;
     }
 
-    if (zend_hash_index_exists(&session->server_upgraded_streams, (zend_ulong) stream_id)) {
-        king_server_control_set_errorf(
-            "king_server_upgrade_to_websocket() stream %ld is already upgraded locally.",
-            stream_id
-        );
+    if (
+        king_server_websocket_upgrade_session(
+            session,
+            stream_id,
+            NULL,
+            return_value,
+            "king_server_upgrade_to_websocket"
+        ) != SUCCESS
+    ) {
         RETURN_FALSE;
     }
-
-    secure = king_server_websocket_is_secure(session);
-    on_wire_upgrade =
-        session->server_pending_websocket_upgrade
-        && session->server_pending_request_target != NULL
-        && session->server_pending_websocket_key != NULL
-        && session->transport_socket_fd >= 0;
-    if (session->transport_socket_fd >= 0 && !on_wire_upgrade) {
-        king_server_control_set_errorf(
-            "king_server_upgrade_to_websocket() requires an active HTTP/1 websocket upgrade request on on-wire server sessions."
-        );
-        RETURN_FALSE;
-    }
-    scheme = secure ? "wss" : "ws";
-    authority = king_server_websocket_build_authority(
-        ZSTR_VAL(session->host),
-        ZSTR_LEN(session->host),
-        session->port
-    );
-    request_target = on_wire_upgrade
-        ? zend_string_copy(session->server_pending_request_target)
-        : strpprintf(0, "/stream/%ld", stream_id);
-    url = strpprintf(
-        0,
-        "%s://%s%s",
-        scheme,
-        ZSTR_VAL(authority),
-        ZSTR_VAL(request_target)
-    );
-
-    state = ecalloc(1, sizeof(*state));
-    state->url = url;
-    state->scheme = zend_string_init(scheme, strlen(scheme), 0);
-    state->host = zend_string_copy(session->host);
-    state->request_target = request_target;
-    state->port = session->port;
-    state->max_payload_size =
-        session->config_websocket_default_max_payload_size > 0
-            ? session->config_websocket_default_max_payload_size
-            : 16777216;
-    state->ping_interval_ms =
-        session->config_websocket_default_ping_interval_ms > 0
-            ? session->config_websocket_default_ping_interval_ms
-            : 25000;
-    state->handshake_timeout_ms =
-        session->config_websocket_handshake_timeout_ms > 0
-            ? session->config_websocket_handshake_timeout_ms
-            : 5000;
-    state->last_close_status_code = 1000;
-    state->state = KING_WS_STATE_OPEN;
-    state->secure = secure != 0;
-    state->server_endpoint = true;
-    state->server_local_only = on_wire_upgrade ? false : true;
-    state->handshake_complete = true;
-    state->closed = false;
-    ZVAL_UNDEF(&state->config);
-    ZVAL_UNDEF(&state->headers);
-
-    if (on_wire_upgrade) {
-        int websocket_fd = dup(session->transport_socket_fd);
-
-        if (websocket_fd < 0) {
-            king_ws_state_free(state);
-            zend_string_release(authority);
-            king_server_control_set_errorf(
-                "king_server_upgrade_to_websocket() failed to duplicate the accepted HTTP/1 socket (errno %d).",
-                errno
-            );
-            RETURN_FALSE;
-        }
-
-        transport_stream = php_stream_sock_open_from_socket(websocket_fd, NULL);
-        if (transport_stream == NULL) {
-            close(websocket_fd);
-            king_ws_state_free(state);
-            zend_string_release(authority);
-            king_server_control_set_errorf(
-                "king_server_upgrade_to_websocket() failed to attach the accepted HTTP/1 socket to a websocket stream."
-            );
-            RETURN_FALSE;
-        }
-
-        php_stream_set_option(
-            transport_stream,
-            PHP_STREAM_OPTION_BLOCKING,
-            1,
-            NULL
-        );
-        state->transport_stream = transport_stream;
-
-        if (
-            king_server_websocket_send_upgrade_response(
-                session,
-                "king_server_upgrade_to_websocket"
-            ) != SUCCESS
-        ) {
-            king_ws_state_free(state);
-            zend_string_release(authority);
-            RETURN_FALSE;
-        }
-    }
-
-    ZVAL_TRUE(&marker);
-    if (zend_hash_index_add_new(
-            &session->server_upgraded_streams,
-            (zend_ulong) stream_id,
-            &marker
-        ) == NULL) {
-        zval_ptr_dtor(&marker);
-        king_ws_state_free(state);
-        zend_string_release(authority);
-        king_server_control_set_errorf(
-            "king_server_upgrade_to_websocket() failed to record the local WebSocket upgrade for stream %ld.",
-            stream_id
-        );
-        RETURN_FALSE;
-    }
-
-    session->server_websocket_upgrade_count++;
-    session->server_last_websocket_stream_id = stream_id;
-    session->server_last_websocket_secure = secure != 0;
-    session->last_activity_at = time(NULL);
-    king_server_control_set_string_bytes(
-        &session->server_last_websocket_url,
-        ZSTR_VAL(url),
-        ZSTR_LEN(url)
-    );
-
-    zend_string_release(authority);
-
-    king_set_error("");
-    RETURN_RES(zend_register_resource(state, le_king_ws));
 }
