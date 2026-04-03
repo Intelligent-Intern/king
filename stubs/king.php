@@ -481,11 +481,11 @@ namespace {
     /**
      * Materialize a server-side `King\WebSocket` resource for one stream on
      * an open `King\Session` resource or object.
-     * Local HTTP/1/2/3 listener leaves still produce a local-only marker
-     * resource with close/status metadata but no frame I/O. The on-wire
-     * `king_http1_server_listen_once()` leaf upgrades a real HTTP/1 websocket
-     * request, attaches socket-backed frame I/O, and keeps the resource
-     * handler-owned for the callback lifetime.
+     * Local HTTP/1/2/3 listener leaves produce an in-process bidirectional
+     * frame resource backed by the shared bounded queue/runtime slice. The
+     * on-wire `king_http1_server_listen_once()` leaf upgrades a real HTTP/1
+     * websocket request, attaches socket-backed frame I/O, and keeps the
+     * resource handler-owned for the callback lifetime.
      * @param mixed $session
      * @return resource|false
      */

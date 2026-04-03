@@ -103,24 +103,6 @@ static zend_string *king_websocket_compute_expected_accept(zend_string *client_k
     return php_base64_encode(digest, sizeof(digest));
 }
 
-static zend_bool king_websocket_uses_local_server_runtime(king_ws_state *state)
-{
-    return state != NULL
-        && state->server_local_only
-        && state->transport_stream == NULL;
-}
-
-static zend_result king_websocket_reject_local_server_frame_io(
-    const char *function_name
-)
-{
-    king_websocket_set_error(
-        "%s() cannot exchange frames on a local-only server-side WebSocket upgrade in v1.",
-        function_name
-    );
-    return FAILURE;
-}
-
 static void king_websocket_apply_timeout(
     king_ws_state *state,
     zend_long timeout_ms
@@ -280,10 +262,6 @@ static zend_result king_websocket_send_frame(
     size_t i;
 
     if (state->transport_stream == NULL) {
-        if (king_websocket_uses_local_server_runtime(state)) {
-            return king_websocket_reject_local_server_frame_io(function_name);
-        }
-
         return king_websocket_message_queue_push(
             state,
             (const char *) payload,
@@ -515,4 +493,3 @@ static zend_result king_websocket_reject_received_backpressure_overflow(
     king_websocket_mark_transport_closed(state);
     return FAILURE;
 }
-

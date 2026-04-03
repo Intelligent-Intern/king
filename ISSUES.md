@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- `#14 Back server-upgrade WebSocket resources with honest bidirectional frame I/O.`
+- `#15 Back King\WebSocket\Server listen/accept lifecycle with fully real runtime behavior.`
 
 ## Active Executable Items
 
@@ -37,7 +37,7 @@
 - [x] `#11 Finalize QUIC error mapping across transport, TLS, HTTP/3, timeout, and cancellation failures.`
 - [x] `#12 Validate QUIC stats fields against live runtime counters and peer-observed state.`
 - [x] `#13 Validate QUIC recovery after temporary network interruption and socket re-wake.`
-- [ ] `#14 Back server-upgrade WebSocket resources with honest bidirectional frame I/O.`
+- [x] `#14 Back server-upgrade WebSocket resources with honest bidirectional frame I/O.`
 - [ ] `#15 Back King\WebSocket\Server listen/accept lifecycle with fully real runtime behavior.`
 - [ ] `#16 Back King\WebSocket\Server connection registry and targeted send semantics with real runtime behavior.`
 - [ ] `#17 Back King\WebSocket\Server broadcast and shutdown semantics with real live connections.`

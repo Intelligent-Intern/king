@@ -167,17 +167,6 @@ PHP_METHOD(King_WebSocket_Connection, ping)
         RETURN_THROWS();
     }
 
-    if (king_websocket_uses_local_server_runtime(state)) {
-        king_websocket_reject_local_server_frame_io(
-            "WebSocket\\Connection::ping"
-        );
-        king_websocket_throw_last_error(
-            king_ce_ws_connection_error,
-            "Failed to send the active WebSocket ping frame."
-        );
-        RETURN_THROWS();
-    }
-
     if (state->last_ping_payload != NULL) {
         zend_string_release(state->last_ping_payload);
     }
@@ -476,13 +465,6 @@ PHP_FUNCTION(king_client_websocket_receive)
         RETURN_STR(payload);
     }
 
-    if (king_websocket_uses_local_server_runtime(state)) {
-        king_websocket_reject_local_server_frame_io(
-            "king_client_websocket_receive"
-        );
-        RETURN_FALSE;
-    }
-
     if (state->transport_stream != NULL && !state->closed) {
         if (
             king_websocket_pump_transport(
@@ -548,13 +530,6 @@ PHP_FUNCTION(king_client_websocket_ping)
         king_websocket_set_error(
             "king_client_websocket_ping() ping payload cannot exceed %d bytes.",
             KING_WS_PING_MAX_PAYLOAD_LEN
-        );
-        RETURN_FALSE;
-    }
-
-    if (king_websocket_uses_local_server_runtime(state)) {
-        king_websocket_reject_local_server_frame_io(
-            "king_client_websocket_ping"
         );
         RETURN_FALSE;
     }

@@ -4,12 +4,11 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Activates a first local server-side WebSocket-upgrade slice on top of the
- * shared King\Session and King\WebSocket runtimes. Client-side WebSocket
- * connections are now verified on-wire; this file remains the honest local
- * v1 server-side upgrade slice that models post-upgrade state, validates
- * stream/session constraints, and records the upgrade on the session
- * snapshot.
+ * Activates the server-side WebSocket-upgrade slice on top of the shared
+ * King\Session and King\WebSocket runtimes. Local HTTP/1/2/3 listener leaves
+ * now return an in-process bidirectional frame channel, while the on-wire
+ * HTTP/1 one-shot listener duplicates the accepted socket and keeps real
+ * frame I/O handler-owned for the callback lifetime.
  * =========================================================================
  */
 
