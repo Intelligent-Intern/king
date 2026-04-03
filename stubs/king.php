@@ -764,7 +764,8 @@ namespace {
      * hits and `false` on miss. Supported read options today are `offset`
      * and `length`, using byte-range semantics aligned with RFC 7233.
      * Full-object reads validate stored `integrity_sha256` metadata when
-     * present. For bounded-memory egress, use
+     * present and backfill runtime CDN state on a smart_cdn cache miss when
+     * the CDN layer is enabled. For bounded-memory egress, use
      * `king_object_store_get_to_stream()`.
      * @param array<string,mixed>|null $options
       * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException

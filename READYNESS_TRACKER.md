@@ -225,7 +225,7 @@ Status note:
 ## H. CDN / Cache / Edge
 
 - [x] Validate CDN cache paths against real object-store backends
-- [ ] Validate cache fill on miss against real backends
+- [x] Validate cache fill on miss against real backends
 - [ ] Validate cache invalidation under load
 - [x] Validate cache TTL enforcement under sustained operation
 - [ ] Validate stale-serve-on-error against real backend failures

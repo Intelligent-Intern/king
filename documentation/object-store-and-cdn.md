@@ -369,6 +369,12 @@ that same size path through provider `HEAD` metadata when the local sidecar is
 absent. The point is to keep edge warming tied to origin truth without
 downloading the full payload body just to record CDN state.
 
+The current honest miss-fill contract is full-object `king_object_store_get()`
+for `smart_cdn` objects. When the runtime CDN registry misses, a successful
+origin/backend read backfills the local cache entry and marks it served; the
+payload still comes from the active object-store backend today rather than from
+a fake edge body store.
+
 This matters because a storage write often has a delivery consequence. A fresh
 object may need warming at the edge. An overwritten object may need invalidation
 so old copies stop being served. A missing object may require origin fallback. A

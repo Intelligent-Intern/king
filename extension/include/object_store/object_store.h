@@ -166,7 +166,7 @@ PHP_FUNCTION(king_object_store_abort_resumable_upload);
 /* Returns the current resumable-upload session snapshot. */
 PHP_FUNCTION(king_object_store_get_resumable_upload_status);
 
-/* Retrieves an object. */
+/* Retrieves an object and can backfill smart_cdn cache state on a full-read miss. */
 PHP_FUNCTION(king_object_store_get);
 
 /* Writes an object into a writable stream without whole-payload materialization. */

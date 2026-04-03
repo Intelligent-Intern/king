@@ -1,3 +1,94 @@
+static zend_long king_object_store_get_readthrough_cdn_ttl_sec(void)
+{
+    if (king_object_store_runtime.config.cdn_config.default_ttl_seconds > 0) {
+        return (zend_long) king_object_store_runtime.config.cdn_config.default_ttl_seconds;
+    }
+
+    return (zend_long) king_native_cdn_config.cache_default_ttl_sec;
+}
+
+static void king_object_store_cdn_entry_note_served(
+    king_cdn_cache_entry *entry,
+    time_t served_at
+)
+{
+    if (entry == NULL) {
+        return;
+    }
+
+    if (entry->served_count < ZEND_LONG_MAX) {
+        entry->served_count++;
+    }
+    entry->last_served_at = served_at;
+}
+
+static void king_object_store_fill_cdn_cache_on_read_success(
+    const char *object_id,
+    const king_object_metadata_t *metadata,
+    size_t payload_size
+)
+{
+    zend_string *object_id_zstr;
+    king_cdn_cache_entry *existing;
+    king_cdn_cache_entry *cache_entry;
+    zval stored_entry;
+    time_t now;
+    zend_long ttl_sec;
+
+    if (!king_cdn_cache_registry_initialized
+        || !king_object_store_runtime.config.cdn_config.enabled
+        || object_id == NULL
+        || object_id[0] == '\0'
+        || metadata == NULL
+        || metadata->cache_policy != KING_CACHE_POLICY_SMART_CDN) {
+        return;
+    }
+
+    if (payload_size == 0) {
+        if (metadata->content_length > SIZE_MAX
+            || metadata->content_length > (uint64_t) ZEND_LONG_MAX) {
+            return;
+        }
+        payload_size = (size_t) metadata->content_length;
+    } else if (payload_size > (size_t) ZEND_LONG_MAX) {
+        return;
+    }
+
+    object_id_zstr = zend_string_init(object_id, strlen(object_id), 1);
+    if (object_id_zstr == NULL) {
+        return;
+    }
+
+    now = time(NULL);
+    existing = king_cdn_cache_registry_get_entry(object_id_zstr);
+    if (existing != NULL) {
+        king_object_store_cdn_entry_note_served(existing, now);
+        zend_string_release_ex(object_id_zstr, 1);
+        return;
+    }
+
+    cache_entry = pecalloc(1, sizeof(*cache_entry), 1);
+    if (cache_entry == NULL) {
+        zend_string_release_ex(object_id_zstr, 1);
+        return;
+    }
+
+    ttl_sec = king_object_store_get_readthrough_cdn_ttl_sec();
+    cache_entry->object_id = object_id_zstr;
+    cache_entry->payload_size = (zend_long) payload_size;
+    cache_entry->cached_at = now;
+    cache_entry->expires_at = ttl_sec > 0 ? now + ttl_sec : 0;
+    king_object_store_cdn_entry_note_served(cache_entry, now);
+
+    ZVAL_PTR(&stored_entry, cache_entry);
+    if (zend_hash_update(&king_cdn_cache_registry, cache_entry->object_id, &stored_entry) == NULL) {
+        king_cdn_cache_entry_free(cache_entry);
+        return;
+    }
+
+    (void) king_cdn_distribute_object(object_id, NULL, 1);
+}
+
 PHP_FUNCTION(king_object_store_get)
 {
     zend_string *object_id;
@@ -68,6 +159,19 @@ PHP_FUNCTION(king_object_store_get)
             );
             RETURN_THROWS();
         }
+    }
+
+    /*
+     * Full-object reads are the current honest read-through fill path for the
+     * synthetic CDN layer: a smart_cdn miss warms the local cache registry
+     * after the origin/backend read succeeds.
+     */
+    if (offset == 0 && !has_length) {
+        king_object_store_fill_cdn_cache_on_read_success(
+            ZSTR_VAL(object_id),
+            &metadata,
+            data_size
+        );
     }
 
     zend_string *ret_str = zend_string_init(data, data_size, 0);

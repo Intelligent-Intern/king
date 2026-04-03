@@ -39,11 +39,10 @@
 
 ## Current Next Leaf
 
-- `#10 Validate cache fill on miss against real backends.`
+- `#11 Validate cache invalidation under load.`
 
 ## Active Executable Items
 
-- [ ] `#10 Validate cache fill on miss against real backends.`
 - [ ] `#11 Validate cache invalidation under load.`
 - [ ] `#12 Validate stale-serve-on-error against real backend failures.`
 - [ ] `#13 Validate cache consistency after backend update.`
