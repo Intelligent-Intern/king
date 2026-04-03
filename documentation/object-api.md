@@ -213,7 +213,9 @@ the bounded server-side accept object and the live connection object.
 | `getConnections()` | Returns the live accepted-connection registry keyed by opaque `connection_id`. |
 | `send(string $connectionId, string $message)` | Sends one targeted text frame to the accepted peer identified by `connection_id`. |
 | `sendBinary(string $connectionId, string $payload)` | Sends one targeted binary frame to the accepted peer identified by `connection_id`. |
-| `stop()` | Stops the listener object and prevents later accepts on that server instance. |
+| `broadcast(string $message)` | Sends one text frame to every currently live accepted peer on that server instance. |
+| `broadcastBinary(string $payload)` | Sends one binary frame to every currently live accepted peer on that server instance. |
+| `stop()` | Stops the listener, sends `1001 server-shutdown` to live accepted peers, drains the close handshake, and prevents later accepts or sends on that server instance. |
 
 ### `King\WebSocket\Connection`
 

@@ -51,6 +51,70 @@ zend_result king_websocket_state_send(
     return SUCCESS;
 }
 
+zend_result king_websocket_state_close(
+    king_ws_state *state,
+    zend_long status_code,
+    zend_string *reason,
+    const char *function_name
+)
+{
+    size_t reason_len;
+
+    if (state == NULL) {
+        return FAILURE;
+    }
+
+    if (state->state == KING_WS_STATE_CLOSED || state->closed) {
+        king_set_error("");
+        return SUCCESS;
+    }
+
+    reason_len = reason != NULL ? ZSTR_LEN(reason) : 0;
+
+    if (state->last_close_reason != NULL) {
+        zend_string_release(state->last_close_reason);
+    }
+    state->last_close_reason = reason != NULL
+        ? zend_string_copy(reason)
+        : zend_string_init("", 0, 0);
+    state->last_close_status_code = status_code;
+
+    if (state->transport_stream != NULL) {
+        unsigned char close_payload[2 + KING_WS_CLOSE_REASON_MAX_LEN];
+
+        close_payload[0] = (unsigned char) ((status_code >> 8) & 0xff);
+        close_payload[1] = (unsigned char) (status_code & 0xff);
+        if (reason_len > 0) {
+            memcpy(close_payload + 2, ZSTR_VAL(reason), reason_len);
+        }
+
+        if (
+            king_websocket_send_frame(
+                state,
+                KING_WS_OPCODE_CLOSE,
+                close_payload,
+                reason_len + 2,
+                function_name
+            ) != SUCCESS
+        ) {
+            king_websocket_mark_transport_closed(state);
+            return FAILURE;
+        }
+
+        state->close_frame_sent = true;
+        king_websocket_drain_transport(state, 100, function_name);
+        if (!state->closed) {
+            king_websocket_mark_transport_closed(state);
+        }
+    } else {
+        state->state = KING_WS_STATE_CLOSED;
+        state->closed = true;
+    }
+
+    king_set_error("");
+    return SUCCESS;
+}
+
 static zend_result king_websocket_object_send_internal(
     zval *object,
     zend_string *payload,
@@ -247,48 +311,19 @@ PHP_METHOD(King_WebSocket_Connection, close)
         RETURN_THROWS();
     }
 
-    if (state->last_close_reason != NULL) {
-        zend_string_release(state->last_close_reason);
-    }
-    state->last_close_reason = reason != NULL
-        ? zend_string_copy(reason)
-        : zend_string_init("", 0, 0);
-    state->last_close_status_code = status_code;
-
-    if (state->transport_stream != NULL) {
-        unsigned char close_payload[2 + KING_WS_CLOSE_REASON_MAX_LEN];
-        size_t close_payload_len = 2 + (reason != NULL ? ZSTR_LEN(reason) : 0);
-
-        close_payload[0] = (unsigned char) ((status_code >> 8) & 0xff);
-        close_payload[1] = (unsigned char) (status_code & 0xff);
-        if (reason != NULL && ZSTR_LEN(reason) > 0) {
-            memcpy(close_payload + 2, ZSTR_VAL(reason), ZSTR_LEN(reason));
-        }
-
-        if (
-            king_websocket_send_frame(
-                state,
-                KING_WS_OPCODE_CLOSE,
-                close_payload,
-                close_payload_len,
-                "WebSocket\\Connection::close"
+    if (
+        king_websocket_state_close(
+            state,
+            status_code,
+            reason,
+            "WebSocket\\Connection::close"
         ) != SUCCESS
-        ) {
-            king_websocket_throw_last_error(
-                king_ce_ws_connection_error,
-                "Failed to send the active WebSocket close frame."
-            );
-            RETURN_THROWS();
-        }
-
-        state->close_frame_sent = true;
-        king_websocket_drain_transport(state, 100, "WebSocket\\Connection::close");
-        if (!state->closed) {
-            king_websocket_mark_transport_closed(state);
-        }
-    } else {
-        state->state = KING_WS_STATE_CLOSED;
-        state->closed = true;
+    ) {
+        king_websocket_throw_last_error(
+            king_ce_ws_connection_error,
+            "Failed to close the active WebSocket connection."
+        );
+        RETURN_THROWS();
     }
 
     king_set_error("");
@@ -596,6 +631,7 @@ PHP_FUNCTION(king_client_websocket_close)
     char *reason = "";
     size_t reason_len = 0;
     king_ws_state *state;
+    zend_string *reason_string = NULL;
 
     ZEND_PARSE_PARAMETERS_START(1, 3)
         Z_PARAM_ZVAL(websocket)
@@ -624,41 +660,26 @@ PHP_FUNCTION(king_client_websocket_close)
         RETURN_FALSE;
     }
 
-    if (state->last_close_reason != NULL) {
-        zend_string_release(state->last_close_reason);
+    if (reason_len > 0) {
+        reason_string = zend_string_init(reason, reason_len, 0);
     }
-    state->last_close_reason = zend_string_init(reason, reason_len, 0);
-    state->last_close_status_code = status_code;
 
-    if (state->transport_stream != NULL) {
-        unsigned char close_payload[2 + KING_WS_CLOSE_REASON_MAX_LEN];
-
-        close_payload[0] = (unsigned char) ((status_code >> 8) & 0xff);
-        close_payload[1] = (unsigned char) (status_code & 0xff);
-        if (reason_len > 0) {
-            memcpy(close_payload + 2, reason, reason_len);
+    if (
+        king_websocket_state_close(
+            state,
+            status_code,
+            reason_string,
+            "king_client_websocket_close"
+        ) != SUCCESS
+    ) {
+        if (reason_string != NULL) {
+            zend_string_release(reason_string);
         }
+        RETURN_FALSE;
+    }
 
-        if (
-            king_websocket_send_frame(
-                state,
-                KING_WS_OPCODE_CLOSE,
-                close_payload,
-                reason_len + 2,
-                "king_client_websocket_close"
-            ) != SUCCESS
-        ) {
-            RETURN_FALSE;
-        }
-
-        state->close_frame_sent = true;
-        king_websocket_drain_transport(state, 100, "king_client_websocket_close");
-        if (!state->closed) {
-            king_websocket_mark_transport_closed(state);
-        }
-    } else {
-        state->state = KING_WS_STATE_CLOSED;
-        state->closed = true;
+    if (reason_string != NULL) {
+        zend_string_release(reason_string);
     }
 
     king_set_error("");

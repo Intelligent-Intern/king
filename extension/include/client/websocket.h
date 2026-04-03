@@ -106,6 +106,26 @@ zend_result king_websocket_state_send(
 );
 
 /**
+ * @brief Closes one live websocket state with a validated close code/reason.
+ *
+ * Stores the exported close metadata on the runtime, writes one close frame
+ * when a transport is still active, drains the peer response briefly, and
+ * force-marks the transport closed when the write side is already broken.
+ *
+ * @param state Active websocket runtime.
+ * @param status_code Validated close status code.
+ * @param reason Optional close reason.
+ * @param function_name Error-label prefix.
+ * @return SUCCESS on success, FAILURE with `king_get_error()` populated.
+ */
+zend_result king_websocket_state_close(
+    king_ws_state *state,
+    zend_long status_code,
+    zend_string *reason,
+    const char *function_name
+);
+
+/**
  * @brief Builds the public websocket info array for one live state.
  *
  * @param return_value Target PHP array.

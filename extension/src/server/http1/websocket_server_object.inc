@@ -7,22 +7,6 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_King_WebSocket_Server_accept, 0, 0, King\\WebSocket\\Connection, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_getConnections, 0, 0, IS_ARRAY, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_send, 0, 2, IS_VOID, 0)
-    ZEND_ARG_TYPE_INFO(0, connectionId, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, message, IS_STRING, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_sendBinary, 0, 2, IS_VOID, 0)
-    ZEND_ARG_TYPE_INFO(0, connectionId, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, payload, IS_STRING, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_stop, 0, 0, IS_VOID, 0)
-ZEND_END_ARG_INFO()
-
 static void king_websocket_server_set_errorf(
     const char *format,
     ...
@@ -297,6 +281,15 @@ static zend_result king_websocket_server_send_internal(
 {
     king_ws_state *state;
 
+    if (intern->closed) {
+        king_websocket_server_set_errorf(
+            "%s() cannot run on a stopped WebSocket server.",
+            function_name
+        );
+        zend_throw_exception_ex(king_ce_runtime_exception, 0, "%s", king_get_error());
+        return FAILURE;
+    }
+
     if (ZSTR_LEN(connection_id) == 0) {
         king_websocket_server_set_errorf(
             "%s() requires a non-empty connection id.",
@@ -329,6 +322,92 @@ static zend_result king_websocket_server_send_internal(
 
     king_websocket_server_registry_prune_closed(intern);
     return SUCCESS;
+}
+
+static zend_result king_websocket_server_broadcast_internal(
+    king_ws_server_object *intern,
+    zend_string *payload,
+    bool is_binary,
+    const char *function_name
+)
+{
+    zval *entry;
+
+    if (intern->closed) {
+        king_websocket_server_set_errorf(
+            "%s() cannot run on a stopped WebSocket server.",
+            function_name
+        );
+        zend_throw_exception_ex(king_ce_runtime_exception, 0, "%s", king_get_error());
+        return FAILURE;
+    }
+
+    king_websocket_server_registry_prune_closed(intern);
+
+    ZEND_HASH_FOREACH_VAL(&intern->connections, entry)
+    {
+        king_ws_state *state = Z_TYPE_P(entry) == IS_PTR
+            ? (king_ws_state *) Z_PTR_P(entry)
+            : NULL;
+
+        if (state == NULL || state->closed || state->state == KING_WS_STATE_CLOSED) {
+            continue;
+        }
+
+        if (
+            king_websocket_state_send(
+                state,
+                payload,
+                is_binary,
+                function_name
+            ) != SUCCESS
+        ) {
+            king_websocket_server_registry_prune_closed(intern);
+            return FAILURE;
+        }
+    }
+    ZEND_HASH_FOREACH_END();
+
+    king_websocket_server_registry_prune_closed(intern);
+    king_set_error("");
+    return SUCCESS;
+}
+
+static void king_websocket_server_close_active_connections(
+    king_ws_server_object *intern,
+    const char *function_name
+)
+{
+    zend_string *reason;
+    zval *entry;
+
+    reason = zend_string_init(
+        "server-shutdown",
+        sizeof("server-shutdown") - 1,
+        0
+    );
+
+    ZEND_HASH_FOREACH_VAL(&intern->connections, entry)
+    {
+        king_ws_state *state = Z_TYPE_P(entry) == IS_PTR
+            ? (king_ws_state *) Z_PTR_P(entry)
+            : NULL;
+
+        if (state == NULL || state->closed || state->state == KING_WS_STATE_CLOSED) {
+            continue;
+        }
+
+        (void) king_websocket_state_close(
+            state,
+            1001,
+            reason,
+            function_name
+        );
+    }
+    ZEND_HASH_FOREACH_END();
+
+    zend_string_release(reason);
+    king_websocket_server_registry_prune_closed(intern);
 }
 
 PHP_METHOD(King_WebSocket_Server, __construct)
@@ -618,108 +697,4 @@ fail_cleanup:
     RETURN_THROWS();
 }
 
-PHP_METHOD(King_WebSocket_Server, getConnections)
-{
-    king_ws_server_object *intern;
-    zend_string *connection_id;
-    zval *entry;
-
-    ZEND_PARSE_PARAMETERS_NONE();
-
-    intern = php_king_ws_server_obj_from_zend(Z_OBJ_P(ZEND_THIS));
-    king_websocket_server_registry_prune_closed(intern);
-
-    array_init(return_value);
-    ZEND_HASH_FOREACH_STR_KEY_VAL(&intern->connections, connection_id, entry)
-    {
-        king_ws_state *state = Z_TYPE_P(entry) == IS_PTR
-            ? (king_ws_state *) Z_PTR_P(entry)
-            : NULL;
-        zval info;
-
-        if (connection_id == NULL || state == NULL) {
-            continue;
-        }
-
-        king_websocket_state_build_info_array(&info, state);
-        zend_hash_update(Z_ARRVAL_P(return_value), connection_id, &info);
-    }
-    ZEND_HASH_FOREACH_END();
-
-    king_set_error("");
-}
-
-PHP_METHOD(King_WebSocket_Server, send)
-{
-    zend_string *connection_id;
-    zend_string *message;
-    king_ws_server_object *intern;
-
-    ZEND_PARSE_PARAMETERS_START(2, 2)
-        Z_PARAM_STR(connection_id)
-        Z_PARAM_STR(message)
-    ZEND_PARSE_PARAMETERS_END();
-
-    intern = php_king_ws_server_obj_from_zend(Z_OBJ_P(ZEND_THIS));
-    if (
-        king_websocket_server_send_internal(
-            intern,
-            connection_id,
-            message,
-            false,
-            "WebSocket\\Server::send"
-        ) != SUCCESS
-    ) {
-        RETURN_THROWS();
-    }
-}
-
-PHP_METHOD(King_WebSocket_Server, sendBinary)
-{
-    zend_string *connection_id;
-    zend_string *payload;
-    king_ws_server_object *intern;
-
-    ZEND_PARSE_PARAMETERS_START(2, 2)
-        Z_PARAM_STR(connection_id)
-        Z_PARAM_STR(payload)
-    ZEND_PARSE_PARAMETERS_END();
-
-    intern = php_king_ws_server_obj_from_zend(Z_OBJ_P(ZEND_THIS));
-    if (
-        king_websocket_server_send_internal(
-            intern,
-            connection_id,
-            payload,
-            true,
-            "WebSocket\\Server::sendBinary"
-        ) != SUCCESS
-    ) {
-        RETURN_THROWS();
-    }
-}
-
-PHP_METHOD(King_WebSocket_Server, stop)
-{
-    king_ws_server_object *intern;
-
-    ZEND_PARSE_PARAMETERS_NONE();
-
-    intern = php_king_ws_server_obj_from_zend(Z_OBJ_P(ZEND_THIS));
-    if (intern->listener_fd >= 0) {
-        close(intern->listener_fd);
-        intern->listener_fd = -1;
-    }
-    intern->closed = true;
-    king_set_error("");
-}
-
-const zend_function_entry king_ws_server_class_methods[] = {
-    PHP_ME(King_WebSocket_Server, __construct, arginfo_class_King_WebSocket_Server___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
-    PHP_ME(King_WebSocket_Server, accept, arginfo_class_King_WebSocket_Server_accept, ZEND_ACC_PUBLIC)
-    PHP_ME(King_WebSocket_Server, getConnections, arginfo_class_King_WebSocket_Server_getConnections, ZEND_ACC_PUBLIC)
-    PHP_ME(King_WebSocket_Server, send, arginfo_class_King_WebSocket_Server_send, ZEND_ACC_PUBLIC)
-    PHP_ME(King_WebSocket_Server, sendBinary, arginfo_class_King_WebSocket_Server_sendBinary, ZEND_ACC_PUBLIC)
-    PHP_ME(King_WebSocket_Server, stop, arginfo_class_King_WebSocket_Server_stop, ZEND_ACC_PUBLIC)
-    PHP_FE_END
-};
+#include "websocket_server_object/dispatch.inc"

@@ -176,7 +176,7 @@ $connectionId = array_key_first($connections);
 
 $message = king_client_websocket_receive($peer, 1000);
 $server->send($connectionId, 'ack:' . $message);
-$peer->close(1001, 'server-done');
+$server->broadcast('server-broadcast');
 $server->stop();
 ```
 
@@ -188,8 +188,16 @@ When more than one peer is accepted on the same server object, the registry is
 keyed by `connection_id`, not by URL. `Connection::getInfo()['id']` remains the
 URL-shaped channel identity, while `Connection::getInfo()['connection_id']` is
 the opaque server-assigned key you pass back into `Server::send()` or
-`Server::sendBinary()`. That avoids collisions when multiple live peers connect
-to the same websocket path at the same time.
+`Server::sendBinary()`. `Server::broadcast()` and `Server::broadcastBinary()`
+fan out one frame across every currently live accepted peer. That avoids
+collisions when multiple live peers connect to the same websocket path at the
+same time while still giving the server object a real group-send surface.
+
+`Server::stop()` is also no longer just listener bookkeeping. It closes the
+listener, sends a real `1001` close frame with reason `server-shutdown` to the
+currently live accepted peers, drains the close handshake, empties the server
+registry, and rejects later `accept()`, `send*()`, and `broadcast*()` calls on
+that stopped instance.
 
 ## Connection Lifecycle
 

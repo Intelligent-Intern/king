@@ -137,7 +137,8 @@ is the explicit receive path. The OO server-side sibling is now
 `King\WebSocket\Server`, which accepts real on-wire HTTP/1 websocket upgrades
 and returns accepted peers as `Connection` objects, plus a live
 `getConnections()` registry for targeted server-owned sends by opaque
-`connection_id`.
+`connection_id`, broadcast fanout across the live accepted peer set, and
+`stop()`-driven close-handshake shutdown of those same live peers.
 
 ```php
 <?php

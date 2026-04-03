@@ -1855,6 +1855,8 @@ namespace King\WebSocket {
         public function getConnections(): array {}
         public function send(string $connectionId, string $message): void {}
         public function sendBinary(string $connectionId, string $payload): void {}
+        public function broadcast(string $message): void {}
+        public function broadcastBinary(string $payload): void {}
         public function stop(): void {}
     }
 
