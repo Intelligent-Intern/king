@@ -168,11 +168,14 @@ static zend_result king_server_websocket_send_upgrade_response(
     return rc;
 }
 
-PHP_FUNCTION(king_server_upgrade_to_websocket)
+zend_result king_server_websocket_upgrade_session(
+    king_client_session_t *session,
+    zend_long stream_id,
+    zval *request_headers,
+    zval *return_value,
+    const char *function_name
+)
 {
-    zval *zsession;
-    zend_long stream_id;
-    king_client_session_t *session;
     const char *scheme;
     zend_bool secure;
     zend_string *authority;
@@ -183,40 +186,13 @@ PHP_FUNCTION(king_server_upgrade_to_websocket)
     zval marker;
     zend_bool on_wire_upgrade;
 
-    ZEND_PARSE_PARAMETERS_START(2, 2)
-        Z_PARAM_ZVAL(zsession)
-        Z_PARAM_LONG(stream_id)
-    ZEND_PARSE_PARAMETERS_END();
-
-    session = king_server_control_fetch_open_session(
-        zsession,
-        1,
-        "king_server_upgrade_to_websocket"
-    );
-    if (session == NULL) {
-        if (EG(exception) != NULL) {
-            RETURN_THROWS();
-        }
-
-        RETURN_FALSE;
-    }
-
-    if (
-        king_server_control_validate_stream_id(
-            session,
-            stream_id,
-            "king_server_upgrade_to_websocket"
-        ) != SUCCESS
-    ) {
-        RETURN_FALSE;
-    }
-
     if (zend_hash_index_exists(&session->server_upgraded_streams, (zend_ulong) stream_id)) {
         king_server_control_set_errorf(
-            "king_server_upgrade_to_websocket() stream %ld is already upgraded locally.",
+            "%s() stream %ld is already upgraded locally.",
+            function_name,
             stream_id
         );
-        RETURN_FALSE;
+        return FAILURE;
     }
 
     secure = king_server_websocket_is_secure(session);
@@ -227,9 +203,10 @@ PHP_FUNCTION(king_server_upgrade_to_websocket)
         && session->transport_socket_fd >= 0;
     if (session->transport_socket_fd >= 0 && !on_wire_upgrade) {
         king_server_control_set_errorf(
-            "king_server_upgrade_to_websocket() requires an active HTTP/1 websocket upgrade request on on-wire server sessions."
+            "%s() requires an active HTTP/1 websocket upgrade request on on-wire server sessions.",
+            function_name
         );
-        RETURN_FALSE;
+        return FAILURE;
     }
     scheme = secure ? "wss" : "ws";
     authority = king_server_websocket_build_authority(
@@ -275,6 +252,9 @@ PHP_FUNCTION(king_server_upgrade_to_websocket)
     state->closed = false;
     ZVAL_UNDEF(&state->config);
     ZVAL_UNDEF(&state->headers);
+    if (request_headers != NULL && Z_TYPE_P(request_headers) == IS_ARRAY) {
+        ZVAL_COPY(&state->headers, request_headers);
+    }
 
     if (on_wire_upgrade) {
         int websocket_fd = dup(session->transport_socket_fd);
@@ -283,10 +263,11 @@ PHP_FUNCTION(king_server_upgrade_to_websocket)
             king_ws_state_free(state);
             zend_string_release(authority);
             king_server_control_set_errorf(
-                "king_server_upgrade_to_websocket() failed to duplicate the accepted HTTP/1 socket (errno %d).",
+                "%s() failed to duplicate the accepted HTTP/1 socket (errno %d).",
+                function_name,
                 errno
             );
-            RETURN_FALSE;
+            return FAILURE;
         }
 
         transport_stream = php_stream_sock_open_from_socket(websocket_fd, NULL);
@@ -295,9 +276,10 @@ PHP_FUNCTION(king_server_upgrade_to_websocket)
             king_ws_state_free(state);
             zend_string_release(authority);
             king_server_control_set_errorf(
-                "king_server_upgrade_to_websocket() failed to attach the accepted HTTP/1 socket to a websocket stream."
+                "%s() failed to attach the accepted HTTP/1 socket to a websocket stream.",
+                function_name
             );
-            RETURN_FALSE;
+            return FAILURE;
         }
 
         php_stream_set_option(
@@ -311,12 +293,12 @@ PHP_FUNCTION(king_server_upgrade_to_websocket)
         if (
             king_server_websocket_send_upgrade_response(
                 session,
-                "king_server_upgrade_to_websocket"
+                function_name
             ) != SUCCESS
         ) {
             king_ws_state_free(state);
             zend_string_release(authority);
-            RETURN_FALSE;
+            return FAILURE;
         }
     }
 
@@ -330,10 +312,11 @@ PHP_FUNCTION(king_server_upgrade_to_websocket)
         king_ws_state_free(state);
         zend_string_release(authority);
         king_server_control_set_errorf(
-            "king_server_upgrade_to_websocket() failed to record the local WebSocket upgrade for stream %ld.",
+            "%s() failed to record the local WebSocket upgrade for stream %ld.",
+            function_name,
             stream_id
         );
-        RETURN_FALSE;
+        return FAILURE;
     }
 
     session->server_websocket_upgrade_count++;
@@ -349,5 +332,53 @@ PHP_FUNCTION(king_server_upgrade_to_websocket)
     zend_string_release(authority);
 
     king_set_error("");
-    RETURN_RES(zend_register_resource(state, le_king_ws));
+    ZVAL_RES(return_value, zend_register_resource(state, le_king_ws));
+    return SUCCESS;
+}
+
+PHP_FUNCTION(king_server_upgrade_to_websocket)
+{
+    zval *zsession;
+    zend_long stream_id;
+    king_client_session_t *session;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_ZVAL(zsession)
+        Z_PARAM_LONG(stream_id)
+    ZEND_PARSE_PARAMETERS_END();
+
+    session = king_server_control_fetch_open_session(
+        zsession,
+        1,
+        "king_server_upgrade_to_websocket"
+    );
+    if (session == NULL) {
+        if (EG(exception) != NULL) {
+            RETURN_THROWS();
+        }
+
+        RETURN_FALSE;
+    }
+
+    if (
+        king_server_control_validate_stream_id(
+            session,
+            stream_id,
+            "king_server_upgrade_to_websocket"
+        ) != SUCCESS
+    ) {
+        RETURN_FALSE;
+    }
+
+    if (
+        king_server_websocket_upgrade_session(
+            session,
+            stream_id,
+            NULL,
+            return_value,
+            "king_server_upgrade_to_websocket"
+        ) != SUCCESS
+    ) {
+        RETURN_FALSE;
+    }
 }

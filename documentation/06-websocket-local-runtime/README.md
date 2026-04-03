@@ -133,7 +133,9 @@ operation.
 In the current public surface, pull-style receive is procedural. The
 object-oriented `King\WebSocket\Connection` wrapper currently covers connect,
 send, ping, close, and info inspection, while `king_client_websocket_receive()`
-is the explicit receive path.
+is the explicit receive path. The OO server-side sibling is now
+`King\WebSocket\Server`, which accepts real on-wire HTTP/1 websocket upgrades
+and returns accepted peers as `Connection` objects.
 
 ```php
 <?php

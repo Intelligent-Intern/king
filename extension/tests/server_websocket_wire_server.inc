@@ -35,6 +35,57 @@ if (
 fwrite(STDOUT, "READY\n");
 fflush(STDOUT);
 
+if ($mode === 'oo-runtime') {
+    $server = new King\WebSocket\Server('127.0.0.1', $port);
+    $capture['server_class'] = get_class($server);
+
+    try {
+        $connection = $server->accept();
+        $capture['accept_is_object'] = is_object($connection);
+        $capture['accept_class'] = is_object($connection) ? get_class($connection) : gettype($connection);
+        $capture['accept_info'] = $connection->getInfo();
+        $capture['received'] = king_client_websocket_receive($connection, 1000);
+        $capture['receive_error'] = king_get_last_error();
+
+        try {
+            $connection->send('beta');
+            $capture['send_ok'] = true;
+            $capture['send_error'] = '';
+        } catch (Throwable $e) {
+            $capture['send_ok'] = false;
+            $capture['send_error'] = $e->getMessage();
+        }
+
+        try {
+            $connection->close(1001, 'server-done');
+            $capture['close_ok'] = true;
+            $capture['close_error'] = '';
+        } catch (Throwable $e) {
+            $capture['close_ok'] = false;
+            $capture['close_error'] = $e->getMessage();
+        }
+
+        $server->stop();
+        $capture['stop_error'] = king_get_last_error();
+
+        try {
+            $server->accept();
+        } catch (Throwable $e) {
+            $capture['accept_after_stop_exception'] = get_class($e);
+            $capture['accept_after_stop_error'] = $e->getMessage();
+        }
+    } catch (Throwable $e) {
+        $capture['accept_exception_class'] = get_class($e);
+        $capture['accept_exception_message'] = $e->getMessage();
+    }
+
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+    return;
+}
+
 for ($iteration = 0; $iteration < $iterations; $iteration++) {
     $result = king_http1_server_listen_once(
         '127.0.0.1',

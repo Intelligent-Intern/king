@@ -16,6 +16,7 @@
 #include "include/config/config.h"
 #include "include/server/http1.h"
 #include "include/server/session.h"
+#include "include/server/websocket.h"
 
 #include "Zend/zend_smart_str.h"
 
@@ -43,3 +44,4 @@
 #include "http1/socket_io.inc"
 #include "http1/request_parsing.inc"
 #include "http1/public_api.inc"
+#include "http1/websocket_server_object.inc"

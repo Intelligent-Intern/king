@@ -1838,6 +1838,14 @@ namespace King\Client {
  * WebSocket over HTTP/3
  * =========================== */
 namespace King\WebSocket {
+    use King\Config;
+
+    final class Server {
+        public function __construct(string $host, int $port, ?Config $config = null) {}
+        public function accept(): Connection {}
+        public function stop(): void {}
+    }
+
     final class Connection {
         public function __construct(string $url, ?array $headers = null, ?array $options = null) {}
         public function send(string $message): void {}

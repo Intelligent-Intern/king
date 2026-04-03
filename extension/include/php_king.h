@@ -116,6 +116,7 @@ extern zend_class_entry
     *king_ce_client_http1,
     *king_ce_client_http2,
     *king_ce_client_http3,
+    *king_ce_ws_server,
     *king_ce_ws_connection;
 
 /* -----------------------------------------------------------------------------
@@ -288,6 +289,15 @@ typedef struct _king_ws_object {
     zval resource;
     zend_object   std;
 } king_ws_object;
+
+typedef struct _king_ws_server_object {
+    zval config;
+    zend_string *host;
+    zend_long port;
+    int listener_fd;
+    bool closed;
+    zend_object std;
+} king_ws_server_object;
 
 /* -----------------------------------------------------------------------------
  * Shared Error Buffer
@@ -536,6 +546,13 @@ php_king_ws_obj_from_zend(zend_object *obj)
         ((char*)obj - XtOffsetOf(king_ws_object, std));
 }
 
+static inline king_ws_server_object *
+php_king_ws_server_obj_from_zend(zend_object *obj)
+{
+    return (king_ws_server_object *)
+        ((char*)obj - XtOffsetOf(king_ws_server_object, std));
+}
+
 extern void *king_fetch_config(zval *zcfg);
 extern void king_ticket_ring_put(const uint8_t *ticket, size_t len);
 extern int king_ticket_ring_get(uint8_t *out, size_t *out_len);
@@ -547,6 +564,7 @@ extern const zend_function_entry king_stream_class_methods[];
 extern const zend_function_entry king_response_class_methods[];
 extern const zend_function_entry king_mcp_class_methods[];
 extern const zend_function_entry king_http_client_class_methods[];
+extern const zend_function_entry king_ws_server_class_methods[];
 extern const zend_function_entry king_ws_connection_class_methods[];
 
 /* -----------------------------------------------------------------------------

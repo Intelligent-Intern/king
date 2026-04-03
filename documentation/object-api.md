@@ -199,11 +199,18 @@ pins protocol choice to HTTP/2.
 `King\Client\Http3Client` keeps the same public method set as `HttpClient` but
 pins protocol choice to HTTP/3 over QUIC.
 
-## WebSocket Client Object
+## WebSocket Objects
 
-Read [WebSocket](./websocket.md) first. `King\WebSocket\Connection` exists
-because WebSocket code is usually easier to follow when the connection is an
-object with its own lifecycle rather than a raw resource-style handle.
+Read [WebSocket](./websocket.md) first. The WebSocket OO surface now has both
+the bounded server-side accept object and the live connection object.
+
+### `King\WebSocket\Server`
+
+| Method | What it does |
+| --- | --- |
+| `__construct(string $host, int $port, ?Config $config = null)` | Prepares one bounded HTTP/1 websocket listener object. |
+| `accept()` | Accepts one real on-wire websocket upgrade and returns a `King\WebSocket\Connection`. |
+| `stop()` | Stops the listener object and prevents later accepts on that server instance. |
 
 ### `King\WebSocket\Connection`
 
