@@ -433,6 +433,15 @@ warmups still only retain metadata and size, so a head-only warm entry without
 an earlier full read still fails through the public backend-failure taxonomy
 instead of pretending the CDN can synthesize bytes it never held.
 
+That process boundary matters after restart too. A real process restart begins
+with an empty CDN registry again even when the durable backend still has the
+object and its metadata sidecar. In that restarted process,
+`king_cdn_cache_object()` or the next successful full read can honestly
+re-admit the object from durable metadata or remote `HEAD`, but stale-on-error
+still remains unavailable until a new full read in that process actually
+retains the body again. King does not pretend that stale bytes from an earlier
+process survived restart.
+
 This matters because a storage write often has a delivery consequence. A fresh
 object may need warming at the edge. An overwritten object may need invalidation
 so old copies stop being served. A missing object may require origin fallback. A

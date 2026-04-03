@@ -1160,6 +1160,10 @@ namespace {
      *     latest_cached_at:int|null
      *   }
      * }
+     *
+     * CDN counters are live process-local observability. After a real process
+     * restart they begin empty again and only repopulate after a fresh
+     * metadata warm or full backend read in that new process.
      */
     function king_object_store_get_stats(): array {}
 

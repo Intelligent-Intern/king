@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#18 Validate cache recovery after restart.`
+- `#19 Finalize cache metrics and observability.`
 
 ## Active Executable Items
 
@@ -63,7 +63,7 @@
 - [x] `#15 Validate origin timeout / retry behavior.`
 - [x] `#16 Validate cache memory limits under load.`
 - [x] `#17 Validate large objects in cache under memory pressure.`
-- [ ] `#18 Validate cache recovery after restart.`
+- [x] `#18 Validate cache recovery after restart.`
 - [ ] `#19 Finalize cache metrics and observability.`
 - [ ] `#20 Validate service registration against real distributed topology.`
 

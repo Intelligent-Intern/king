@@ -18,7 +18,7 @@ The remaining gaps are no longer about broad runtime parity or placeholder
 surfaces inside the local tree. They are now concentrated in three narrower
 areas:
 
-- deeper CDN/cache/edge behavior under restart and observability across the real object-store backends
+- deeper CDN/cache/edge observability across the real object-store backends
 - broader Smart-DNS distributed-topology validation beyond the current on-wire listener proof, stale-peer rejoin healing after partial durable-state loss, tombstone-aware mother-node re-election churn proof, local query failure/recovery, concurrent-write, live-signal, and split-brain/partial-failure proof
 - stronger telemetry exporter ordering/diagnostics and deeper autoscaling multi-node fleet behavior
 
@@ -34,7 +34,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `539/539` passing
+- `./infra/scripts/test-extension.sh`: `540/540` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -56,7 +56,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `539` PHPT files
+- `extension/tests`: `540` PHPT files
 - public stub parity: `137` functions, `44` classes, `56` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -93,6 +93,7 @@ The current tree already proves:
 - full-object CDN readthrough now has an honest bounded HTTP-origin fallback slice: when `origin_http_endpoint` is configured, `king_object_store_get()` and `king_object_store_get_to_stream()` make one timeout-bounded `GET` attempt with no hidden retries, can satisfy the read directly from a successful origin response, only backfill `smart_cdn` when honest metadata still exists, and only serve stale bytes after origin failure when an earlier successful full read already retained that body
 - the process-local CDN registry now enforces `cache_memory_limit_mb` under sustained load instead of leaving that knob as stats-only folklore: repeated full-read `smart_cdn` warms evict the least-recently-touched older entries before the registry grows past budget, manual `king_cdn_cache_object()` admission can fail honestly when the requested entry cannot stay admitted under that ceiling, and only the still-admitted entries retain stale bodies for later backend-failure fallback
 - large objects now stay honest under that same memory pressure: metadata-proven `king_cdn_cache_object()` warms can keep a large object admitted as a metadata-only cache marker without displacing smaller resident stale bodies, while a later oversize full-read still serves from the active backend but drops its own retained body back out instead of flushing those smaller resident entries just to fail admission itself
+- CDN restart recovery is now explicitly proven across `local_fs`, `distributed`, `cloud_s3`, `cloud_gcs`, and `cloud_azure`: a real fresh process starts with an empty CDN registry again, metadata-only re-admission after restart still cannot fabricate stale bytes, and stale-on-error only becomes available again after the restarted process performs a new successful full read that retains the body
 - deterministic QUIC bootstrap through a tracked pinset for the `quiche` repo revision, BoringSSL submodule revision, pinned workspace lockfile, and pinned `wirefilter` git revision with fail-closed static and PHPT verification
 - one shared runtime install smoke across staged profiles, packaged release artifacts, and published runtime containers, plus first-class clean-host package install and container smoke matrix entrypoints
 - long-duration ASan, UBSan, and leak-oriented soak gates with retained per-iteration logs and archived failure diagnostics under `extension/build/soak/` plus CI artifact upload on soak failure
