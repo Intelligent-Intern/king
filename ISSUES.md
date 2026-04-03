@@ -12,7 +12,7 @@
 - keep only open work here
 - every item must be narrow enough to implement and verify inside this repo
 - if a tracker item is still too broad, split it before adding it here
-- when a leaf closes, update code, tests, docs, and `PROJECT_ASSESSMENT.md` in the same change
+- when a leaf closes, update code, touched comments/docblocks, tests, docs, `PROJECT_ASSESSMENT.md`, and `READYNESS_TRACKER.md` in the same change
 - do not pull new items from `READYNESS_TRACKER.md` into this file unless the user explicitly asks for the next `20`-issue batch
 - when the current batch is exhausted, stop and wait instead of refilling it automatically
 - complete one checkbox per commit while an active batch is in flight

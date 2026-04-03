@@ -55,15 +55,15 @@ Status note:
 - [x] Validate HTTP/3 long-duration soak behavior under continuous load
 
 - [x] Validate full QUIC session lifecycle against real peers
-- [ ] Validate full QUIC stream lifecycle against real peers
-- [ ] Validate QUIC cancel paths against real transport state
-- [ ] Validate QUIC poll/event-loop behavior under sustained runtime
-- [ ] Validate QUIC congestion-control / flow-control behavior
-- [ ] Validate QUIC zero-RTT / session-resumption paths
-- [ ] Finalize QUIC error mapping to public exceptions
+- [x] Validate full QUIC stream lifecycle against real peers
+- [x] Validate QUIC cancel paths against real transport state
+- [x] Validate QUIC poll/event-loop behavior under sustained runtime
+- [x] Validate QUIC congestion-control / flow-control behavior
+- [x] Validate QUIC zero-RTT / session-resumption paths
+- [x] Finalize QUIC error mapping to public exceptions
 - [x] Fully validate QUIC/TLS interaction
-- [ ] Validate QUIC stats fields against real runtime values
-- [ ] Validate QUIC recovery after network interruption
+- [x] Validate QUIC stats fields against real runtime values
+- [x] Validate QUIC recovery after network interruption
 
 - [x] Validate WebSocket client handshake fully on-wire
 - [x] Validate WebSocket server handshake fully on-wire
@@ -76,12 +76,12 @@ Status note:
 - [x] Validate long-lived WebSocket connections under continuous load
 - [x] Validate WebSocket backpressure under many concurrent connections
 - [x] Validate WebSocket fairness under many concurrent connections
-- [ ] Fully implement honest WebSocket server API behavior
-- [ ] Back `King\WebSocket\Server` with fully real runtime behavior
+- [x] Fully implement honest WebSocket server API behavior
+- [x] Back `King\WebSocket\Server` with fully real runtime behavior
 - [x] Validate `King\WebSocket\Server` shutdown and drain behavior
 - [x] Validate WebSocket upgrade from HTTP/1 on-wire
-- [ ] Validate WebSocket upgrade from HTTP/2/h3 scenarios where publicly claimed
-- [ ] Validate WebSocket memory lifecycle across request/worker boundaries
+- [x] Validate WebSocket upgrade from HTTP/2/h3 scenarios where publicly claimed
+- [x] Validate WebSocket memory lifecycle across request/worker boundaries
 
 ## B. Server Runtime / Listener / Admin / TLS
 
