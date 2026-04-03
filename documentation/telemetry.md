@@ -188,6 +188,11 @@ The log API does not force you to choose between readable text and machine
 usable context. The message stays readable, while the attributes keep the
 structured data attached.
 
+Fresh logs stay in the pending log buffer until flush moves them into an export
+batch. Repeated request or worker churn does not silently smear flushed log
+records into the next unit: once a unit flushes, the next unit starts from an
+empty pending log buffer again.
+
 ```mermaid
 flowchart LR
     A[Active span] --> B[trace_id and span_id]
@@ -431,7 +436,8 @@ name, with an optional label set and metric type. Omitting the type uses the
 runtime default `counter` behavior.
 
 `king_telemetry_log()` records one structured log event with a level, message,
-and optional attributes.
+and optional attributes. The fresh record stays in the pending log buffer until
+flush captures it into an export batch.
 
 `king_telemetry_flush()` captures the current local signals into a batch and
 advances the bounded export queue by one delivery attempt. It is a bounded

@@ -257,7 +257,7 @@ Status note:
 
 - [x] Validate span lifecycle fully under sustained runtime
 - [x] Validate metric lifecycle fully under sustained runtime
-- [ ] Validate log lifecycle fully under sustained runtime
+- [x] Validate log lifecycle fully under sustained runtime
 - [x] Fully harden request / worker cleanup for telemetry state
 - [x] Eliminate all cross-request residue or UAF risk in telemetry state
 - [ ] Implement trace-context propagation on incoming requests

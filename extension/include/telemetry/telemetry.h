@@ -126,7 +126,7 @@ PHP_FUNCTION(king_telemetry_end_span);
 /* Records a metric value. */
 PHP_FUNCTION(king_telemetry_record_metric);
 
-/* Records a structured log entry. */
+/* Records a structured log entry into the pending log buffer. */
 PHP_FUNCTION(king_telemetry_log);
 
 /* Returns the current trace-context snapshot, or null when none is active. */

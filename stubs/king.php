@@ -1070,6 +1070,7 @@ namespace {
 
     /**
      * Record one structured log entry in the active telemetry runtime.
+     * Fresh logs stay pending until flush captures them into an export batch.
      * @param array<string,mixed>|null $attributes
      */
     function king_telemetry_log(string $level, string $message, ?array $attributes = null): bool {}
