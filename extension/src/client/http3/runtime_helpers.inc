@@ -212,6 +212,36 @@ static void king_http3_flush_egress_best_effort(king_http3_request_runtime_t *ru
     }
 }
 
+static void king_http3_propagate_cancel_close(king_http3_request_runtime_t *runtime)
+{
+    bool use_application_close;
+
+    if (runtime == NULL
+        || runtime->conn == NULL
+        || king_http3_quiche.quiche_conn_close_fn == NULL) {
+        return;
+    }
+
+    if (king_http3_quiche.quiche_conn_is_closed_fn != NULL
+        && king_http3_quiche.quiche_conn_is_closed_fn(runtime->conn)) {
+        return;
+    }
+
+    use_application_close =
+        king_http3_quiche.quiche_conn_is_established_fn != NULL
+        && king_http3_quiche.quiche_conn_is_established_fn(runtime->conn);
+
+    if (king_http3_quiche.quiche_conn_close_fn(
+            runtime->conn,
+            use_application_close,
+            KING_HTTP3_CANCEL_CLOSE_CODE,
+            (const uint8_t *) KING_HTTP3_CANCEL_CLOSE_REASON,
+            KING_HTTP3_CANCEL_CLOSE_REASON_LEN
+        ) == 0) {
+        king_http3_flush_egress_best_effort(runtime);
+    }
+}
+
 static void king_http3_capture_post_response_tls_state(king_http3_request_runtime_t *runtime)
 {
     zend_long deadline_ms;
@@ -486,4 +516,3 @@ static void king_http3_request_target_destroy(
         zend_string_release(target->path);
     }
 }
-

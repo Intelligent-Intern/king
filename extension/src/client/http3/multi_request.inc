@@ -180,6 +180,7 @@ static zend_result king_http3_execute_multi_requests(
                 options->cancel_exception_ce,
                 "HTTP/3"
             ) != SUCCESS) {
+            king_http3_propagate_cancel_close(&runtime);
             goto failure;
         }
 

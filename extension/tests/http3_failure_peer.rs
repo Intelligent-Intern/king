@@ -32,6 +32,7 @@ enum Mode {
     IdleTimeout,
     SlowResponse,
     SlowReader,
+    CancelObserve,
     ResetStream,
     StopSending,
 }
@@ -64,11 +65,12 @@ fn main() {
         Some("idle_timeout") => Mode::IdleTimeout,
         Some("slow_response") => Mode::SlowResponse,
         Some("slow_reader") => Mode::SlowReader,
+        Some("cancel_observe") => Mode::CancelObserve,
         Some("reset_stream") => Mode::ResetStream,
         Some("stop_sending") => Mode::StopSending,
         _ => {
             eprintln!(
-                "Usage: {cmd} <handshake_reject|transport_close|application_close|idle_timeout|slow_response|slow_reader|reset_stream|stop_sending> <cert> <key> [host]"
+                "Usage: {cmd} <handshake_reject|transport_close|application_close|idle_timeout|slow_response|slow_reader|cancel_observe|reset_stream|stop_sending> <cert> <key> [host]"
             );
             std::process::exit(1);
         },
@@ -114,6 +116,7 @@ fn main() {
         Mode::IdleTimeout |
         Mode::SlowResponse |
         Mode::SlowReader |
+        Mode::CancelObserve |
         Mode::ResetStream |
         Mode::StopSending => {
             config.set_application_protos(&alpns::HTTP_3).unwrap();
@@ -126,13 +129,13 @@ fn main() {
     });
     config.set_max_recv_udp_payload_size(MAX_DATAGRAM_SIZE);
     config.set_max_send_udp_payload_size(MAX_DATAGRAM_SIZE);
-    if matches!(mode, Mode::SlowReader | Mode::StopSending) {
+    if matches!(mode, Mode::SlowReader | Mode::CancelObserve | Mode::StopSending) {
         config.set_initial_max_data(4096);
     } else {
         config.set_initial_max_data(1_000_000);
     }
     config.set_initial_max_stream_data_bidi_local(1_000_000);
-    if matches!(mode, Mode::SlowReader | Mode::StopSending) {
+    if matches!(mode, Mode::SlowReader | Mode::CancelObserve | Mode::StopSending) {
         config.set_initial_max_stream_data_bidi_remote(4096);
     } else {
         config.set_initial_max_stream_data_bidi_remote(1_000_000);
@@ -153,6 +156,7 @@ fn main() {
     let mut close_sent = false;
     let mut stall_after_request = false;
     let mut stream_action_sent = false;
+    let mut pause_body_reads = false;
     let mut capture = CloseCapture {
         saw_initial: false,
         saw_established: false,
@@ -183,7 +187,10 @@ fn main() {
         if events.is_empty() {
             if let Some(active) = conn.as_mut() {
                 active.on_timeout();
-                if active.is_timed_out() {
+                if active.is_timed_out()
+                    && (capture.close_trigger == "none"
+                        || capture.close_trigger == "idle_timeout_wait")
+                {
                     capture.close_trigger = "idle_timeout";
                 }
                 if !stall_after_request {
@@ -294,6 +301,7 @@ fn main() {
                     | Mode::IdleTimeout
                     | Mode::SlowResponse
                     | Mode::SlowReader
+                    | Mode::CancelObserve
                     | Mode::ResetStream
                     | Mode::StopSending
             )
@@ -319,6 +327,7 @@ fn main() {
                     &mut close_sent,
                     &mut stall_after_request,
                     &mut stream_action_sent,
+                    &mut pause_body_reads,
                 );
             }
 
@@ -339,7 +348,17 @@ fn main() {
             }
 
             if active.is_closed() {
-                if active.is_timed_out() {
+                if mode == Mode::CancelObserve {
+                    capture.close_trigger = match active.peer_error() {
+                        Some(error) if error.is_app => "peer_application_close",
+                        Some(_) => "peer_transport_close",
+                        None => "peer_closed",
+                    };
+                }
+                if active.is_timed_out()
+                    && (capture.close_trigger == "none"
+                        || capture.close_trigger == "idle_timeout_wait")
+                {
                     capture.close_trigger = "idle_timeout";
                 }
                 emit_close_capture(mode, &capture, active);
@@ -350,7 +369,10 @@ fn main() {
         if stall_after_request {
             if let Some(active) = conn.as_mut() {
                 active.on_timeout();
-                if active.is_timed_out() {
+                if active.is_timed_out()
+                    && (capture.close_trigger == "none"
+                        || capture.close_trigger == "idle_timeout_wait")
+                {
                     capture.close_trigger = "idle_timeout";
                 }
                 if active.is_closed() {
@@ -374,6 +396,7 @@ fn process_timeout_peer_events(
     close_sent: &mut bool,
     stall_after_request: &mut bool,
     stream_action_sent: &mut bool,
+    pause_body_reads: &mut bool,
 ) {
     loop {
         match http3.poll(conn) {
@@ -409,12 +432,22 @@ fn process_timeout_peer_events(
             Ok((stream_id, quiche::h3::Event::Data)) => {
                 let mut scratch = [0_u8; 4096];
 
+                if mode == Mode::CancelObserve && *pause_body_reads {
+                    break;
+                }
+
                 loop {
                     match http3.recv_body(conn, stream_id, &mut scratch) {
                         Ok(0) => break,
                         Ok(read) => {
                             capture.saw_request_body = true;
                             capture.request_body_bytes += read;
+
+                            if mode == Mode::CancelObserve {
+                                capture.stream_trigger = "cancel_observe";
+                                *pause_body_reads = true;
+                                break;
+                            }
 
                             if mode == Mode::StopSending && !*stream_action_sent {
                                 info!("sending deterministic QUIC STOP_SENDING");
@@ -433,6 +466,10 @@ fn process_timeout_peer_events(
                 }
 
                 if mode == Mode::StopSending && *stream_action_sent {
+                    break;
+                }
+
+                if mode == Mode::CancelObserve && *pause_body_reads {
                     break;
                 }
             },
@@ -458,6 +495,15 @@ fn process_timeout_peer_events(
 fn emit_close_capture(mode: Mode, capture: &CloseCapture, conn: &quiche::Connection) {
     let peer_error = conn.peer_error();
     let local_error = conn.local_error();
+    let close_trigger = if mode == Mode::CancelObserve && capture.close_trigger == "none" {
+        match peer_error {
+            Some(error) if error.is_app => "peer_application_close",
+            Some(_) => "peer_transport_close",
+            None => "peer_closed",
+        }
+    } else {
+        capture.close_trigger
+    };
 
     println!(
         "CLOSE {{\"mode\":\"{}\",\"saw_initial\":{},\"saw_established\":{},\"saw_h3_open\":{},\"saw_request_headers\":{},\"saw_request_body\":{},\"saw_request_finished\":{},\"request_body_bytes\":{},\"close_trigger\":\"{}\",\"stream_trigger\":\"{}\",\"reset_stream_sent\":{},\"reset_stream_code\":{},\"stop_sending_sent\":{},\"stop_sending_code\":{},\"is_timed_out\":{},\"is_draining\":{},\"is_closed\":{},\"peer_error_present\":{},\"peer_error_is_app\":{},\"peer_error_code\":{},\"peer_error_reason\":\"{}\",\"local_error_present\":{},\"local_error_is_app\":{},\"local_error_code\":{},\"local_error_reason\":\"{}\"}}",
@@ -469,7 +515,7 @@ fn emit_close_capture(mode: Mode, capture: &CloseCapture, conn: &quiche::Connect
         capture.saw_request_body,
         capture.saw_request_finished,
         capture.request_body_bytes,
-        capture.close_trigger,
+        close_trigger,
         capture.stream_trigger,
         capture.reset_stream_sent,
         capture.reset_stream_code,
@@ -507,6 +553,7 @@ fn mode_name(mode: Mode) -> &'static str {
         Mode::IdleTimeout => "idle_timeout",
         Mode::SlowResponse => "slow_response",
         Mode::SlowReader => "slow_reader",
+        Mode::CancelObserve => "cancel_observe",
         Mode::ResetStream => "reset_stream",
         Mode::StopSending => "stop_sending",
     }

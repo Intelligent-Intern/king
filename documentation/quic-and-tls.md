@@ -175,8 +175,11 @@ real transport behavior rather than by a conceptual diagram alone. The same
 live peer coverage now also proves that request-stream resets surface as
 explicit HTTP/3 stream-reset failures, peer `STOP_SENDING` on request bodies
 surfaces as an explicit QUIC body-send failure, negotiated QUIC idle timeouts
-surface explicitly as transport closure, and peer-sent application closes
-surface as protocol closes instead of collapsing into generic request timeouts.
+surface explicitly as transport closure, peer-sent application closes
+surface as protocol closes instead of collapsing into generic request timeouts,
+and userland `CancelToken` aborts propagate into an explicit QUIC
+application-close on the active peer instead of silently disappearing inside
+local teardown.
 
 ## A First Session
 

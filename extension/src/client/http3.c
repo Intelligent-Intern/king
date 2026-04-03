@@ -47,6 +47,9 @@
 #define KING_HTTP3_MAX_DATAGRAM_SIZE 1350
 #define KING_HTTP3_MAX_RESPONSE_BYTES (8 * 1024 * 1024)
 #define KING_HTTP3_MAX_HEADER_BYTES   (128 * 1024)
+#define KING_HTTP3_CANCEL_CLOSE_CODE  0x4b01
+#define KING_HTTP3_CANCEL_CLOSE_REASON "cancelled by userland CancelToken"
+#define KING_HTTP3_CANCEL_CLOSE_REASON_LEN (sizeof(KING_HTTP3_CANCEL_CLOSE_REASON) - 1)
 
 typedef struct _king_http3_request_options {
     king_cfg_t *config;
