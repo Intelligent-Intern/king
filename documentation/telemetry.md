@@ -360,6 +360,15 @@ dispatcher-backed client calls all emit the same `traceparent` and optional
 `tracestate` headers unless the caller already pinned an explicit boundary in
 the request headers.
 
+The pipeline orchestrator now uses the same propagation model when
+`orchestrator_enable_distributed_tracing` is enabled. A live controller span is
+captured as a distributed parent snapshot when work is persisted, and a later
+`king_pipeline_orchestrator_resume_run()` or
+`king_pipeline_orchestrator_worker_run_next()` reopens that lineage through an
+internal `pipeline-orchestrator-boundary` span. That keeps resumed work on the
+original trace across process restarts and file-worker handoff instead of
+quietly starting a fresh local root in the recovery process.
+
 Even if you only use the basic span API at first, it is worth understanding
 these helpers because they are the bridge between local tracing and
 cross-service tracing.

@@ -377,6 +377,14 @@ file-worker backend. `orchestrator_remote_host` and
 `orchestrator_remote_port` select the remote execution peer. 
 `king.orchestrator_state_path` defines where persisted orchestrator state lives.
 
+When distributed tracing stays enabled, the orchestrator now does more than
+copy a caller-owned `trace_id` string into run metadata. `run()` and
+`dispatch()` persist the live caller span's distributed parent snapshot with the
+run, and `resume_run()` plus `worker_run_next()` reopen that lineage through an
+internal `pipeline-orchestrator-boundary` span. The resumed worker or process
+therefore stays on the original controller trace instead of silently forking a
+new local root when work crosses a restart or file-worker boundary.
+
 The following runtime configuration example shows the general shape for a remote
 controller.
 

@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#7 Preserve span hierarchies correctly across process and worker boundaries.`
+- `#8 Finalize telemetry sampling semantics where sampling is publicly claimed.`
 
 ## Active Executable Items
 
@@ -52,7 +52,7 @@
 - [x] `#4 Implement incoming trace-context extraction on HTTP server requests.`
 - [x] `#5 Propagate extracted incoming trace context into request-root spans and child work.`
 - [x] `#6 Finalize outgoing trace-context injection on HTTP client transports.`
-- [ ] `#7 Preserve span hierarchies correctly across process and worker boundaries.`
+- [x] `#7 Preserve span hierarchies correctly across process and worker boundaries.`
 - [ ] `#8 Finalize telemetry sampling semantics where sampling is publicly claimed.`
 - [ ] `#9 Monitor and bound telemetry CPU cost under load.`
 - [ ] `#10 Enforce OTLP request-size limits before exporter dispatch.`

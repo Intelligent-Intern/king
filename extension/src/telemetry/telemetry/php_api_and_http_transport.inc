@@ -64,52 +64,14 @@ PHP_FUNCTION(king_telemetry_end_span)
         Z_PARAM_ARRAY_OR_NULL(final_attrs)
     ZEND_PARSE_PARAMETERS_END();
 
-    if (king_current_span && strcmp(king_current_span->span_id, span_id) == 0) {
-        king_trace_context_t *finished_span = king_current_span;
-        king_trace_context_t *parent_span = finished_span->parent;
-        zval span_entry;
-        zend_bool capture_span = 0;
-        finished_span->parent = NULL;
-
-        king_telemetry_span_merge_attributes(finished_span, final_attrs);
-        king_telemetry_finish_span(finished_span);
-
-        array_init(&span_entry);
-        add_assoc_string(&span_entry, "name", finished_span->operation_name);
-        add_assoc_string(&span_entry, "trace_id", finished_span->trace_id);
-        add_assoc_string(&span_entry, "span_id", finished_span->span_id);
-        if (finished_span->parent_span_id[0] != '\0') {
-            add_assoc_string(&span_entry, "parent_span_id", finished_span->parent_span_id);
-        }
-        add_assoc_long(&span_entry, "start_time", (zend_long) finished_span->start_time);
-        add_assoc_long(&span_entry, "end_time", (zend_long) finished_span->end_time);
-        add_assoc_long(&span_entry, "kind", (zend_long) finished_span->span_kind);
-        if (Z_TYPE(finished_span->attributes) == IS_ARRAY) {
-            zval attrs_copy;
-            ZVAL_COPY(&attrs_copy, &finished_span->attributes);
-            add_assoc_zval(&span_entry, "attributes", &attrs_copy);
-        }
-        if (king_telemetry_capture_enabled()) {
-            king_telemetry_pending_buffers_ensure();
-            capture_span = king_telemetry_pending_buffer_try_reserve_entry(
-                &king_telemetry_pending_spans,
-                &span_entry
-            );
-        }
-
-        if (!capture_span) {
-            zval_ptr_dtor(&span_entry);
-            king_telemetry_span_free(finished_span);
-            king_current_span = parent_span;
-            RETURN_TRUE;
-        }
-
-        add_next_index_zval(&king_telemetry_pending_spans, &span_entry);
-        king_telemetry_span_free(finished_span);
-        king_current_span = parent_span;
+    if (
+        king_current_span != NULL
+        && strcmp(king_current_span->span_id, span_id) == 0
+        && king_telemetry_end_internal_span(king_current_span, final_attrs) == SUCCESS
+    ) {
         RETURN_TRUE;
     }
-    
+
     RETURN_FALSE;
 }
 

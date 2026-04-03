@@ -158,9 +158,22 @@ zend_result king_telemetry_set_incoming_parent_context(
     uint8_t trace_flags,
     const char *trace_state
 );
+zend_result king_telemetry_set_incoming_parent_context_from_array(zval *context);
 void king_telemetry_clear_incoming_parent_context(void);
+zend_bool king_telemetry_has_incoming_parent_context(void);
 king_trace_context_t* king_telemetry_create_span(const char *operation_name, king_span_kind_t span_kind, const char *parent_span_id);
 int king_telemetry_finish_span(king_trace_context_t *span_context);
+zend_result king_telemetry_start_internal_span(
+    king_trace_context_t **span_out,
+    const char *operation_name,
+    king_span_kind_t span_kind,
+    zval *attributes,
+    const char *parent_span_id
+);
+zend_result king_telemetry_end_internal_span(
+    king_trace_context_t *span,
+    zval *final_attributes
+);
 int king_telemetry_record_metric_internal(const char *metric_name, king_metric_type_t metric_type, double value, zval *labels);
 zend_bool king_telemetry_lookup_metric(
     const char *metric_name,
@@ -176,6 +189,7 @@ const char* king_telemetry_level_to_string(king_telemetry_level_t level);
 const char* king_metric_type_to_string(king_metric_type_t type);
 const char* king_span_kind_to_string(king_span_kind_t kind);
 zend_bool king_telemetry_build_trace_context_snapshot(zval *destination);
+zend_bool king_telemetry_build_distributed_parent_context(zval *destination);
 zend_bool king_telemetry_has_injectable_current_context(void);
 zend_result king_telemetry_inject_current_context_headers(
     zval *destination,

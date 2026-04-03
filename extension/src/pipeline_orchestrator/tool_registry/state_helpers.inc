@@ -32,6 +32,9 @@ static void king_orchestrator_run_state_free(king_orchestrator_run_state_t *run_
     if (run_state->options_b64 != NULL) {
         zend_string_release_ex(run_state->options_b64, 1);
     }
+    if (run_state->telemetry_parent_context_b64 != NULL) {
+        zend_string_release_ex(run_state->telemetry_parent_context_b64, 1);
+    }
     if (run_state->result_b64 != NULL) {
         zend_string_release_ex(run_state->result_b64, 1);
     }
@@ -288,4 +291,3 @@ static const char *king_orchestrator_run_execution_backend(const king_orchestrat
 
     return king_orchestrator_current_execution_backend();
 }
-

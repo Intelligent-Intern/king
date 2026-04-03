@@ -1,3 +1,109 @@
+static zend_bool king_orchestrator_distributed_tracing_enabled(void)
+{
+    return king_mcp_orchestrator_config.orchestrator_enable_distributed_tracing ? 1 : 0;
+}
+
+static const char *king_orchestrator_boundary_backend_label(void)
+{
+    if (
+        king_mcp_orchestrator_config.orchestrator_execution_backend == NULL
+        || king_mcp_orchestrator_config.orchestrator_execution_backend[0] == '\0'
+    ) {
+        return "local";
+    }
+
+    return king_mcp_orchestrator_config.orchestrator_execution_backend;
+}
+
+static void king_orchestrator_capture_distributed_parent_context(zval *destination)
+{
+    if (destination == NULL) {
+        return;
+    }
+
+    ZVAL_NULL(destination);
+    if (!king_orchestrator_distributed_tracing_enabled()) {
+        return;
+    }
+
+    if (!king_telemetry_build_distributed_parent_context(destination)) {
+        ZVAL_NULL(destination);
+    }
+}
+
+static const char *king_orchestrator_boundary_origin_label(const char *function_name)
+{
+    if (
+        function_name != NULL
+        && strcmp(function_name, "king_pipeline_orchestrator_worker_run_next") == 0
+    ) {
+        return "file_worker";
+    }
+
+    return "process_resume";
+}
+
+static zend_result king_orchestrator_begin_boundary_span(
+    zend_string *run_id,
+    const char *function_name,
+    king_trace_context_t **span_out
+)
+{
+    zval attributes;
+    zend_result rc;
+
+    if (span_out == NULL) {
+        return FAILURE;
+    }
+
+    *span_out = NULL;
+    if (!king_telemetry_has_incoming_parent_context()) {
+        return SUCCESS;
+    }
+
+    array_init(&attributes);
+    add_assoc_string(&attributes, "component", "pipeline_orchestrator");
+    add_assoc_string(
+        &attributes,
+        "boundary_origin",
+        (char *) king_orchestrator_boundary_origin_label(function_name)
+    );
+    add_assoc_string(
+        &attributes,
+        "execution_backend",
+        (char *) king_orchestrator_boundary_backend_label()
+    );
+    add_assoc_string(&attributes, "hierarchy_source", "distributed_parent_context");
+    if (run_id != NULL) {
+        add_assoc_stringl(&attributes, "run_id", ZSTR_VAL(run_id), ZSTR_LEN(run_id));
+    }
+
+    rc = king_telemetry_start_internal_span(
+        span_out,
+        "pipeline-orchestrator-boundary",
+        KING_SPAN_KIND_CONSUMER,
+        &attributes,
+        NULL
+    );
+    zval_ptr_dtor(&attributes);
+
+    return rc;
+}
+
+static void king_orchestrator_finish_boundary_span(king_trace_context_t *span, int rc)
+{
+    zval final_attributes;
+
+    if (span == NULL) {
+        return;
+    }
+
+    array_init(&final_attributes);
+    add_assoc_string(&final_attributes, "outcome", rc == SUCCESS ? "completed" : "failed");
+    (void) king_telemetry_end_internal_span(span, &final_attributes);
+    zval_ptr_dtor(&final_attributes);
+}
+
 static int king_orchestrator_execute_existing_run(
     zend_string *run_id,
     zval *initial_data,
@@ -124,7 +230,10 @@ int king_orchestrator_resume_run(
     zval initial_data;
     zval pipeline;
     zval options;
+    zval telemetry_parent_context;
     king_orchestrator_exec_control_t control;
+    king_trace_context_t *boundary_span = NULL;
+    zend_bool boundary_seeded = 0;
     int rc;
 
     if (run_id == NULL) {
@@ -137,10 +246,19 @@ int king_orchestrator_resume_run(
     ZVAL_NULL(&initial_data);
     ZVAL_NULL(&pipeline);
     ZVAL_NULL(&options);
+    ZVAL_NULL(&telemetry_parent_context);
     ZVAL_UNDEF(&control.cancel_token);
     control.run_id = NULL;
 
-    if (king_orchestrator_load_run_payload(run_id, &initial_data, &pipeline, &options) != SUCCESS) {
+    if (
+        king_orchestrator_load_run_payload(
+            run_id,
+            &initial_data,
+            &pipeline,
+            &options,
+            &telemetry_parent_context
+        ) != SUCCESS
+    ) {
         char message[KING_ERR_LEN];
 
         snprintf(
@@ -165,8 +283,18 @@ int king_orchestrator_resume_run(
         zval_ptr_dtor(&initial_data);
         zval_ptr_dtor(&pipeline);
         zval_ptr_dtor(&options);
+        zval_ptr_dtor(&telemetry_parent_context);
         king_orchestrator_exec_control_cleanup(&control);
         return FAILURE;
+    }
+
+    if (
+        king_orchestrator_distributed_tracing_enabled()
+        && Z_TYPE(telemetry_parent_context) == IS_ARRAY
+        && king_telemetry_set_incoming_parent_context_from_array(&telemetry_parent_context) == SUCCESS
+    ) {
+        boundary_seeded = 1;
+        (void) king_orchestrator_begin_boundary_span(run_id, function_name, &boundary_span);
     }
 
     if (king_orchestrator_backend_is_remote_peer()) {
@@ -192,9 +320,15 @@ int king_orchestrator_resume_run(
         );
     }
 
+    king_orchestrator_finish_boundary_span(boundary_span, rc);
+    if (boundary_seeded) {
+        king_telemetry_clear_incoming_parent_context();
+    }
+
     zval_ptr_dtor(&initial_data);
     zval_ptr_dtor(&pipeline);
     zval_ptr_dtor(&options);
+    zval_ptr_dtor(&telemetry_parent_context);
     king_orchestrator_exec_control_cleanup(&control);
 
     return rc;
@@ -204,13 +338,21 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
 {
     zend_string *run_id;
     zval sanitized_options;
+    zval telemetry_parent_context;
     zval *persisted_options;
     king_orchestrator_exec_control_t control;
     int rc = FAILURE;
 
     ZVAL_UNDEF(&sanitized_options);
+    ZVAL_NULL(&telemetry_parent_context);
     ZVAL_UNDEF(&control.cancel_token);
     control.run_id = NULL;
+
+    /*
+     * Capture the current caller span before the fresh-run cleanup so resumed
+     * work can rehydrate the original parent trace relationship.
+     */
+    king_orchestrator_capture_distributed_parent_context(&telemetry_parent_context);
 
     /* A new orchestrator execution starts a fresh telemetry scope. */
     king_telemetry_cleanup_scope_state();
@@ -241,7 +383,13 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
     }
 
     persisted_options = king_orchestrator_prepare_persisted_options(options, &sanitized_options);
-    run_id = king_orchestrator_pipeline_run_begin(initial_data, pipeline_array, persisted_options, "running");
+    run_id = king_orchestrator_pipeline_run_begin(
+        initial_data,
+        pipeline_array,
+        persisted_options,
+        &telemetry_parent_context,
+        "running"
+    );
     if (run_id == NULL) {
         rc = king_orchestrator_raise_error(
             "king_pipeline_orchestrator_run() failed to persist the initial run snapshot.",
@@ -278,6 +426,7 @@ cleanup:
     if (!Z_ISUNDEF(sanitized_options)) {
         zval_ptr_dtor(&sanitized_options);
     }
+    zval_ptr_dtor(&telemetry_parent_context);
     king_orchestrator_exec_control_cleanup(&control);
     return rc;
 }
@@ -286,11 +435,13 @@ int king_orchestrator_dispatch(zval *initial_data, zval *pipeline_array, zval *o
 {
     zend_string *run_id;
     zval sanitized_options;
+    zval telemetry_parent_context;
     zval *persisted_options;
     king_orchestrator_exec_control_t control;
     int rc = FAILURE;
 
     ZVAL_UNDEF(&sanitized_options);
+    ZVAL_NULL(&telemetry_parent_context);
     ZVAL_UNDEF(&control.cancel_token);
     control.run_id = NULL;
 
@@ -339,8 +490,15 @@ int king_orchestrator_dispatch(zval *initial_data, zval *pipeline_array, zval *o
         goto cleanup;
     }
 
+    king_orchestrator_capture_distributed_parent_context(&telemetry_parent_context);
     persisted_options = king_orchestrator_prepare_persisted_options(options, &sanitized_options);
-    run_id = king_orchestrator_pipeline_run_begin(initial_data, pipeline_array, persisted_options, "queued");
+    run_id = king_orchestrator_pipeline_run_begin(
+        initial_data,
+        pipeline_array,
+        persisted_options,
+        &telemetry_parent_context,
+        "queued"
+    );
     if (run_id == NULL) {
         rc = king_orchestrator_raise_error(
             "king_pipeline_orchestrator_dispatch() failed to persist the initial run snapshot.",
@@ -375,6 +533,7 @@ cleanup:
     if (!Z_ISUNDEF(sanitized_options)) {
         zval_ptr_dtor(&sanitized_options);
     }
+    zval_ptr_dtor(&telemetry_parent_context);
     king_orchestrator_exec_control_cleanup(&control);
     return rc;
 }

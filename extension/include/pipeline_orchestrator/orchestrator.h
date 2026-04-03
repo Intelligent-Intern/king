@@ -30,7 +30,8 @@ int king_orchestrator_load_run_payload(
     zend_string *run_id,
     zval *initial_data,
     zval *pipeline,
-    zval *options
+    zval *options,
+    zval *telemetry_parent_context
 );
 int king_orchestrator_enqueue_run(zend_string *run_id, zval *return_value);
 int king_orchestrator_claim_next_run(
@@ -49,6 +50,7 @@ zend_string *king_orchestrator_pipeline_run_begin(
     zval *initial_data,
     zval *pipeline,
     zval *options,
+    zval *telemetry_parent_context,
     const char *initial_status
 );
 int king_orchestrator_pipeline_run_mark_running(
