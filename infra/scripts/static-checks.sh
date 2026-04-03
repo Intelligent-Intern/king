@@ -26,6 +26,12 @@ if ! command -v ruby >/dev/null 2>&1; then
     exit 1
 fi
 
+YAML_VALIDATOR="${ROOT_DIR}/infra/scripts/validate-yaml.rb"
+if [ ! -r "${YAML_VALIDATOR}" ]; then
+    echo "Error: YAML validator '${YAML_VALIDATOR}' is missing or not readable." >&2
+    exit 1
+fi
+
 echo "Linting PHP entry surfaces..."
 php -l stubs/king.php
 php -l benchmarks/run.php
@@ -48,7 +54,7 @@ shopt -s nullglob
 workflow_files=(.github/workflows/*.yml)
 shopt -u nullglob
 for workflow in "${workflow_files[@]}"; do
-    ruby infra/scripts/validate-yaml.rb "${workflow}"
+    ruby "${YAML_VALIDATOR}" "${workflow}"
 done
 
 echo "Checking extension include layout..."
