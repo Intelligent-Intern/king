@@ -13,10 +13,29 @@
 - every item must be narrow enough to implement and verify inside this repo
 - if a tracker item is still too broad, split it before adding it here
 - when a leaf closes, update code, touched comments/docblocks, tests, docs, `PROJECT_ASSESSMENT.md`, and `READYNESS_TRACKER.md` in the same change
-- do not pull new items from `READYNESS_TRACKER.md` into this file unless the user explicitly asks for the next `20`-issue batch
-- when the current batch is exhausted, stop and wait instead of refilling it automatically
+- when a leaf closes, also verify the affected runtime with the strongest relevant tests/harnesses available before committing
+- when a leaf closes, make exactly one commit for that checkbox; do not batch multiple checkbox closures into one commit
+- do not pull new items from `READYNESS_TRACKER.md` into this file unless the user explicitly asks for the next `20`-issue batch or enables continuous batch execution
+- when the current batch is exhausted, stop and wait instead of refilling it automatically unless continuous batch execution is explicitly enabled
 - complete one checkbox per commit while an active batch is in flight
 - do not shrink a meaningful v1 contract just to make tests, CI, or docs easier; if the intended contract matters, build the missing backend work or ask explicitly before reducing scope
+
+## Per-Issue Closure Checklist
+
+- update the runtime/backend code needed for the leaf
+- update any touched comments, docblocks, headers, and contract wording so code and prose stay aligned
+- add or tighten tests that prove the leaf on the strongest honest runtime path available
+- update repo docs affected by the leaf
+- update `PROJECT_ASSESSMENT.md`
+- update `READYNESS_TRACKER.md`
+- run the strongest relevant verification available for that leaf before committing
+- make exactly one commit for the checkbox
+
+## Batch Mode
+
+- The user has explicitly requested continuous execution across batches.
+- When the current `20`-issue batch is exhausted, immediately pull the next `20` executable leaves from `READYNESS_TRACKER.md` into this file instead of waiting.
+- Keep preserving tracker order and split broad items into repo-local executable leaves before adding them here.
 
 ## Current Next Leaf
 
