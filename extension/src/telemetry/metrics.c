@@ -9,6 +9,10 @@
 static HashTable king_metrics_registry;
 static bool king_metrics_initialized = false;
 static uint64_t king_telemetry_flush_count = 0;
+static uint64_t king_telemetry_metric_drop_count = 0;
+static uint32_t king_telemetry_metric_registry_high_watermark = 0;
+static uint64_t king_telemetry_last_flush_cpu_ns = 0;
+static uint64_t king_telemetry_flush_cpu_high_water_ns = 0;
 
 static zend_long king_telemetry_u64_to_zend_long(uint64_t value)
 {
@@ -17,6 +21,61 @@ static zend_long king_telemetry_u64_to_zend_long(uint64_t value)
     }
 
     return (zend_long) value;
+}
+
+static uint64_t king_telemetry_timespec_to_ns(const struct timespec *ts)
+{
+    if (ts == NULL || ts->tv_sec < 0 || ts->tv_nsec < 0) {
+        return 0;
+    }
+
+    return ((uint64_t) ts->tv_sec * 1000000000ULL) + (uint64_t) ts->tv_nsec;
+}
+
+static uint64_t king_telemetry_read_process_cpu_ns(void)
+{
+    struct timespec ts;
+
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts) != 0) {
+        return 0;
+    }
+
+    return king_telemetry_timespec_to_ns(&ts);
+}
+
+static void king_telemetry_note_metric_registry_high_watermark(void)
+{
+    uint32_t active_metric_count;
+
+    if (!king_metrics_initialized) {
+        return;
+    }
+
+    active_metric_count = (uint32_t) zend_hash_num_elements(&king_metrics_registry);
+    if (active_metric_count > king_telemetry_metric_registry_high_watermark) {
+        king_telemetry_metric_registry_high_watermark = active_metric_count;
+    }
+}
+
+static void king_telemetry_note_flush_cpu_cost(uint64_t flush_start_cpu_ns)
+{
+    uint64_t flush_end_cpu_ns;
+
+    if (flush_start_cpu_ns == 0) {
+        king_telemetry_last_flush_cpu_ns = 0;
+        return;
+    }
+
+    flush_end_cpu_ns = king_telemetry_read_process_cpu_ns();
+    if (flush_end_cpu_ns < flush_start_cpu_ns) {
+        king_telemetry_last_flush_cpu_ns = 0;
+        return;
+    }
+
+    king_telemetry_last_flush_cpu_ns = flush_end_cpu_ns - flush_start_cpu_ns;
+    if (king_telemetry_last_flush_cpu_ns > king_telemetry_flush_cpu_high_water_ns) {
+        king_telemetry_flush_cpu_high_water_ns = king_telemetry_last_flush_cpu_ns;
+    }
 }
 
 static void king_metric_dtor(zval *zv)
@@ -30,9 +89,26 @@ static void king_metric_dtor(zval *zv)
 
 int king_telemetry_record_metric_internal(const char *metric_name, king_metric_type_t metric_type, double value, zval *labels)
 {
+    zval *old_zv;
+    uint32_t metric_registry_limit;
+
     if (!king_metrics_initialized) {
         zend_hash_init(&king_metrics_registry, 16, NULL, king_metric_dtor, 0);
         king_metrics_initialized = true;
+    }
+
+    old_zv = zend_hash_str_find(&king_metrics_registry, metric_name, strlen(metric_name));
+    metric_registry_limit = king_telemetry_get_pending_entry_limit();
+    /*
+     * Bound unique live metric names to the same queue-derived limit that
+     * already caps pending telemetry capture, so flush cost cannot grow
+     * without limit under hostile or accidental high-cardinality input.
+     */
+    if (old_zv == NULL
+        && metric_registry_limit > 0
+        && zend_hash_num_elements(&king_metrics_registry) >= metric_registry_limit) {
+        king_telemetry_metric_drop_count++;
+        return SUCCESS;
     }
 
     king_metric_data_t *metric = emalloc(sizeof(king_metric_data_t));
@@ -49,7 +125,6 @@ int king_telemetry_record_metric_internal(const char *metric_name, king_metric_t
     }
     
     /* Aggregation logic for counters */
-    zval *old_zv = zend_hash_str_find(&king_metrics_registry, metric_name, strlen(metric_name));
     if (old_zv && metric_type == KING_METRIC_TYPE_COUNTER) {
         king_metric_data_t *old_metric = Z_PTR_P(old_zv);
         metric->value += old_metric->value;
@@ -59,6 +134,7 @@ int king_telemetry_record_metric_internal(const char *metric_name, king_metric_t
     ZVAL_PTR(&val, metric);
     
     zend_hash_str_update(&king_metrics_registry, metric_name, strlen(metric_name), &val);
+    king_telemetry_note_metric_registry_high_watermark();
     
     return SUCCESS;
 }
@@ -187,8 +263,11 @@ PHP_FUNCTION(king_telemetry_flush)
 {
     zend_bool has_metrics = 0;
     zend_bool has_pending_signals = 0;
+    uint64_t flush_start_cpu_ns;
 
     ZEND_PARSE_PARAMETERS_NONE();
+
+    flush_start_cpu_ns = king_telemetry_read_process_cpu_ns();
 
     has_metrics = king_metrics_initialized && zend_hash_num_elements(&king_metrics_registry) > 0;
     has_pending_signals = king_telemetry_has_pending_signals();
@@ -245,6 +324,8 @@ PHP_FUNCTION(king_telemetry_flush)
     if (king_telemetry_queue_size > 0) {
         (void) king_telemetry_export_batch();
     }
+
+    king_telemetry_note_flush_cpu_cost(flush_start_cpu_ns);
     
     RETURN_TRUE;
 }
@@ -257,6 +338,8 @@ PHP_FUNCTION(king_telemetry_get_status)
     add_assoc_bool(return_value, "initialized", king_metrics_initialized);
     add_assoc_long(return_value, "flush_count", (zend_long)king_telemetry_flush_count);
     add_assoc_long(return_value, "active_metrics", king_metrics_initialized ? zend_hash_num_elements(&king_metrics_registry) : 0);
+    add_assoc_long(return_value, "metric_registry_limit", (zend_long) king_telemetry_get_pending_entry_limit());
+    add_assoc_long(return_value, "metric_drop_count", king_telemetry_u64_to_zend_long(king_telemetry_metric_drop_count));
     add_assoc_long(return_value, "queue_size", (zend_long)king_telemetry_queue_size);
     add_assoc_long(return_value, "export_success_count", (zend_long)king_telemetry_export_success_count);
     add_assoc_long(return_value, "export_failure_count", (zend_long)king_telemetry_export_failure_count);
@@ -273,4 +356,7 @@ PHP_FUNCTION(king_telemetry_get_status)
     add_assoc_long(return_value, "queue_high_water_bytes", king_telemetry_u64_to_zend_long(king_telemetry_get_queue_high_water_bytes()));
     add_assoc_long(return_value, "memory_high_water_bytes", king_telemetry_u64_to_zend_long(king_telemetry_get_memory_high_water_bytes()));
     add_assoc_long(return_value, "retry_requeue_count", (zend_long) king_telemetry_get_retry_requeue_count());
+    add_assoc_long(return_value, "metric_registry_high_watermark", (zend_long) king_telemetry_metric_registry_high_watermark);
+    add_assoc_long(return_value, "last_flush_cpu_ns", king_telemetry_u64_to_zend_long(king_telemetry_last_flush_cpu_ns));
+    add_assoc_long(return_value, "flush_cpu_high_water_ns", king_telemetry_u64_to_zend_long(king_telemetry_flush_cpu_high_water_ns));
 }

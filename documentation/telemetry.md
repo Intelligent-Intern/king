@@ -69,10 +69,13 @@ Best effort means the runtime will try to export data, but it does not promise
 that every record will survive every outage. Bounded retry means failed export
 batches stay queued for retry, but only until the configured queue limit is
 reached. The same configured limit also bounds the pre-flush pending span and
-pending log buffers, so capture stays finite even before a flush happens. The
-active runtime now also derives a fixed byte budget from that queue limit. Each
-queue slot carries a `64 KiB` memory budget, and pending plus queued telemetry
-must stay inside that combined byte ceiling.
+pending log buffers, so capture stays finite even before a flush happens. That
+same queue-derived limit now also caps how many distinct metric names may sit
+live in the in-process registry before a flush, which keeps flush-side copy and
+encoding cost from exploding under high-cardinality input. The active runtime
+now also derives a fixed byte budget from that queue limit. Each queue slot
+carries a `64 KiB` memory budget, and pending plus queued telemetry must stay
+inside that combined byte ceiling.
 Process-local non-persistent means telemetry is not written to durable storage
 and does not survive process restart. Single batch per flush means one call to
 `king_telemetry_flush()` gives the runtime one export opportunity for the next
@@ -108,6 +111,12 @@ the metric as a `counter`.
 The registry stays live until flush. Repeated request or worker churn does not
 silently smear flushed metric values into the next unit: once a unit flushes,
 the next unit starts from an empty live metric registry again.
+
+The registry is also bounded. King lets existing metric names keep updating, but
+once the live registry has reached the queue-derived entry limit it stops
+accepting brand-new metric names until a later flush clears the registry again.
+That keeps flush CPU work tied to a configured ceiling instead of to accidental
+or hostile cardinality spikes.
 
 This makes counters useful for totals such as `requests_total`, while gauges
 fit things like CPU utilization, queue depth, or active connections.
@@ -385,7 +394,8 @@ The most important settings are easy to describe in plain language.
 service is sending the data. `exporter_endpoint` tells the runtime where the
 collector lives. `exporter_protocol` selects the OTLP protocol family.
 `exporter_timeout_ms` sets the maximum time one export attempt may take.
-`batch_processor_max_queue_size` sets the size of the retry queue.
+`batch_processor_max_queue_size` sets the size of the retry queue and the live
+telemetry bounds derived from it.
 `batch_processor_schedule_delay_ms` sets the intended delay policy for the
 batch processor. `metrics_enable` and `logs_enable` let you control signal
 families individually. `metrics_export_interval_ms` defines the metrics export
@@ -440,12 +450,15 @@ King gives you two fast local read paths for telemetry state.
 
 `king_telemetry_get_status()` tells you whether the runtime is initialized and
 how the delivery path is behaving. This status array includes the flush count,
-the number of active metrics still in the live registry, the current retry
-queue size, the export success count, the export failure count, the queue drop
-count, the pending capture limit, the current pending span and log counts, and
-the pending drop count. It also exposes the telemetry self-metrics for backlog
-pressure: current `queue_bytes`, `pending_bytes`, and total `memory_bytes`,
-the derived `memory_byte_limit`, queue and memory high-water marks, and the
+the number of active metrics still in the live registry, the live
+`metric_registry_limit`, cumulative `metric_drop_count`, the
+`metric_registry_high_watermark`, the current retry queue size, the export
+success count, the export failure count, the queue drop count, the pending
+capture limit, the current pending span and log counts, and the pending drop
+count. It also exposes the telemetry self-metrics for backlog pressure and
+runtime cost: current `queue_bytes`, `pending_bytes`, and total
+`memory_bytes`, the derived `memory_byte_limit`, queue and memory high-water
+marks, `last_flush_cpu_ns`, `flush_cpu_high_water_ns`, and the
 `retry_requeue_count` that shows how often failed batches were put back under
 collector slowdown or outage.
 

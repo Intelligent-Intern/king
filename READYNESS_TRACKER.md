@@ -266,7 +266,7 @@ Status note:
 - [x] Preserve span hierarchies correctly across process / worker boundaries
 - [x] Finalize telemetry sampling strategy where publicly claimed
 - [x] Enforce telemetry memory bounds under load
-- [ ] Monitor telemetry CPU bounds under load
+- [x] Monitor telemetry CPU bounds under load
 - [x] Define and enforce telemetry queue limits
 - [x] Define and implement telemetry drop policy
 - [x] Define and implement telemetry retry policy

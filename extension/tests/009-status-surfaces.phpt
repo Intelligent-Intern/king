@@ -41,7 +41,7 @@ var_dump($storage['cdn']['cached_bytes']);
 var_dump($storage['cdn']['latest_cached_at']);
 ?>
 --EXPECT--
-array(19) {
+array(24) {
   [0]=>
   string(11) "initialized"
   [1]=>
@@ -49,37 +49,47 @@ array(19) {
   [2]=>
   string(14) "active_metrics"
   [3]=>
-  string(10) "queue_size"
+  string(21) "metric_registry_limit"
   [4]=>
-  string(20) "export_success_count"
+  string(17) "metric_drop_count"
   [5]=>
-  string(20) "export_failure_count"
+  string(10) "queue_size"
   [6]=>
-  string(16) "queue_drop_count"
+  string(20) "export_success_count"
   [7]=>
-  string(19) "pending_entry_limit"
+  string(20) "export_failure_count"
   [8]=>
-  string(18) "pending_span_count"
+  string(16) "queue_drop_count"
   [9]=>
-  string(17) "pending_log_count"
+  string(19) "pending_entry_limit"
   [10]=>
-  string(18) "pending_drop_count"
+  string(18) "pending_span_count"
   [11]=>
-  string(11) "queue_bytes"
+  string(17) "pending_log_count"
   [12]=>
-  string(13) "pending_bytes"
+  string(18) "pending_drop_count"
   [13]=>
-  string(12) "memory_bytes"
+  string(11) "queue_bytes"
   [14]=>
-  string(17) "memory_byte_limit"
+  string(13) "pending_bytes"
   [15]=>
-  string(20) "queue_high_watermark"
+  string(12) "memory_bytes"
   [16]=>
-  string(22) "queue_high_water_bytes"
+  string(17) "memory_byte_limit"
   [17]=>
-  string(23) "memory_high_water_bytes"
+  string(20) "queue_high_watermark"
   [18]=>
+  string(22) "queue_high_water_bytes"
+  [19]=>
+  string(23) "memory_high_water_bytes"
+  [20]=>
   string(19) "retry_requeue_count"
+  [21]=>
+  string(30) "metric_registry_high_watermark"
+  [22]=>
+  string(17) "last_flush_cpu_ns"
+  [23]=>
+  string(23) "flush_cpu_high_water_ns"
 }
 bool(false)
 int(0)

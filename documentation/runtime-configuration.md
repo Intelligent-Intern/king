@@ -413,7 +413,7 @@ rewriting application code.
 | `otel.exporter_protocol` | Selects the collector protocol. |
 | `otel.exporter_timeout_ms` | Sets the exporter timeout. |
 | `otel.exporter_headers` | Adds static exporter headers. |
-| `otel.batch_processor_max_queue_size` | Sets the telemetry retry queue size. |
+| `otel.batch_processor_max_queue_size` | Sets the telemetry retry queue size, the queue-derived byte budget, and the cap for distinct live metric names before flush. |
 | `otel.batch_processor_schedule_delay_ms` | Sets the batch processor schedule delay. |
 | `otel.traces_sampler_type` | Selects the trace sampler policy: `always_on`, `always_off`, or `parent_based_probability`. |
 | `otel.traces_sampler_ratio` | Sets the probabilistic root-trace sampler ratio used by `parent_based_probability` when no parent decision already exists. |
