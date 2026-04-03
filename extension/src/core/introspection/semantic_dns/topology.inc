@@ -1,7 +1,7 @@
 /*
- * Public topology export leaf. Emits the current service and mother-node
- * inventories plus the local runtime counters that describe Smart-DNS server,
- * discovery and query-processing state.
+ * Public topology export leaf. Refreshes the semantic-mode shared state view
+ * before exporting the current service and mother-node inventories plus the
+ * runtime counters that describe Smart-DNS server, discovery, and query state.
  */
 
 PHP_FUNCTION(king_semantic_dns_get_service_topology)
@@ -18,6 +18,10 @@ PHP_FUNCTION(king_semantic_dns_get_service_topology)
     zend_long unhealthy_services = 0;
 
     ZEND_PARSE_PARAMETERS_NONE();
+
+    if (!king_semantic_dns_refresh_runtime_view_or_throw("king_semantic_dns_get_service_topology")) {
+        RETURN_THROWS();
+    }
 
     king_semantic_dns_health_check_services();
 

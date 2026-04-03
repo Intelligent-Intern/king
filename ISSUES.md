@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#20 Validate service registration against real distributed topology.`
+- none; active `20`-issue batch exhausted and ready for PR/merge.
 
 ## Active Executable Items
 
@@ -65,12 +65,12 @@
 - [x] `#17 Validate large objects in cache under memory pressure.`
 - [x] `#18 Validate cache recovery after restart.`
 - [x] `#19 Finalize cache metrics and observability.`
-- [ ] `#20 Validate service registration against real distributed topology.`
+- [x] `#20 Validate service registration against real distributed topology.`
 
 ## Notes
 
 - This batch was pulled explicitly from `READYNESS_TRACKER.md`.
 - This active wave keeps completed leaves visible instead of collapsing to only-open work.
 - `#1` through `#10` are already closed and merged; they remain listed here so the running wave stays readable.
-- It is intentionally ordered as: transport/server truth first, then CDN/object-store truth, then the next distributed Smart-DNS gap.
+- This batch is now exhausted and ready for PR/merge.
 - If a task is not listed here, it is not the current repo-local execution item.

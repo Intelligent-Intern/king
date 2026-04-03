@@ -242,7 +242,7 @@ Status note:
 
 - [x] Upgrade Semantic DNS from local lifecycle toggle to real network listener where publicly claimed
 - [x] Validate DNS protocol behavior on-wire where publicly claimed
-- [ ] Validate service registration against real distributed topology
+- [x] Validate service registration against real distributed topology
 - [x] Validate mother-node synchronization against real topology
 - [x] Validate routing decisions against real load / health data
 - [x] Validate service discovery under parallel updates

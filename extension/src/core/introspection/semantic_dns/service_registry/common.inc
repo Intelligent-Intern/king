@@ -173,6 +173,23 @@ static bool king_semantic_dns_listener_snapshot_or_throw(
     return false;
 }
 
+static bool king_semantic_dns_refresh_runtime_view_or_throw(
+    const char *function_name
+)
+{
+    if (king_semantic_dns_refresh_distributed_state() == SUCCESS) {
+        return true;
+    }
+
+    zend_throw_exception_ex(
+        king_ce_system_exception,
+        0,
+        "%s() could not refresh the shared Semantic-DNS topology snapshot.",
+        function_name
+    );
+    return false;
+}
+
 static bool king_semantic_dns_scalar_zval_equals(
     const zval *left,
     const zval *right

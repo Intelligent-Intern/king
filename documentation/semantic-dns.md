@@ -342,6 +342,15 @@ only the missing service and mother-node entries. Overlapping records continue
 to come from the fresher shared payload, so rejoin heals missing topology
 without rewinding newer route or discovery state.
 
+That distributed-registration contract is now also visible on the live read
+paths instead of only after restart. `king_semantic_dns_get_service_topology()`,
+`king_semantic_dns_discover_service()`, `king_semantic_dns_get_optimal_route()`,
+and the running UDP listener now reload the latest persisted shared snapshot in
+semantic mode before they answer. A sibling process can register a service into
+the shared topology, and a running listener on another process will surface it
+on the next topology read or on-wire DNS answer without a restart dance in
+between.
+
 ## Choosing The Optimal Route
 
 `king_semantic_dns_get_optimal_route()` answers the final routing question:

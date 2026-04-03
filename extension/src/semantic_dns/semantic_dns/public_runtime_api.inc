@@ -193,6 +193,26 @@ void king_semantic_dns_request_shutdown(void)
     king_semantic_dns_listener_stop();
 }
 
+int king_semantic_dns_refresh_distributed_state(void)
+{
+    if (!king_semantic_dns_runtime.initialized
+        || !king_semantic_dns_runtime.config.semantic_mode_enable) {
+        return SUCCESS;
+    }
+
+    if (!king_semantic_dns_state_has_regular_snapshot()) {
+        return SUCCESS;
+    }
+
+    /*
+     * Shared-state refresh is best-effort: when the persisted snapshot is
+     * unreadable, keep serving the current in-memory view instead of turning a
+     * hardening-path state rejection into a fatal read-surface failure.
+     */
+    (void) king_semantic_dns_state_load();
+    return SUCCESS;
+}
+
 int king_semantic_dns_process_query(
     const char *query,
     char *response,
