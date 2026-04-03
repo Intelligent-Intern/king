@@ -348,7 +348,7 @@ array (
         'type' => 'string',
         'allowsNull' => false,
         'optional' => true,
-        'default' => '\'gauge\'',
+        'default' => '\'counter\'',
       ),
     ),
   ),

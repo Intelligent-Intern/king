@@ -102,6 +102,12 @@ new value onto the old value. A `gauge` represents the latest observed value,
 so recording a new gauge value replaces the previous value for that name.
 `histogram` and `summary` samples are also recorded by metric name and exported
 as typed metric data so the collector can interpret the stream correctly.
+If you omit the metric type, King keeps the current runtime default and treats
+the metric as a `counter`.
+
+The registry stays live until flush. Repeated request or worker churn does not
+silently smear flushed metric values into the next unit: once a unit flushes,
+the next unit starts from an empty live metric registry again.
 
 This makes counters useful for totals such as `requests_total`, while gauges
 fit things like CPU utilization, queue depth, or active connections.
@@ -397,6 +403,8 @@ collector slowdown or outage.
 `king_telemetry_get_metrics()` returns the current live metric registry before
 those metrics are moved into a flush batch. This is useful when you want to
 inspect local metrics in-process or feed them into another local control path.
+The returned array is keyed by metric name, and a successful flush clears that
+live registry back to empty.
 
 These two calls are not duplicates. Status tells you how the runtime is doing.
 Metrics tell you what signal data is currently sitting in the registry.
@@ -419,7 +427,8 @@ attributes before the finished span moves into the pending export buffer. When a
 child span closes, its parent becomes the active context again.
 
 `king_telemetry_record_metric()` records one metric datapoint under a metric
-name, with an optional label set and metric type.
+name, with an optional label set and metric type. Omitting the type uses the
+runtime default `counter` behavior.
 
 `king_telemetry_log()` records one structured log event with a level, message,
 and optional attributes.
@@ -431,7 +440,8 @@ drain opportunity, not an unbounded exporter loop.
 `king_telemetry_get_status()` returns the current runtime counters and queue
 state for the telemetry subsystem.
 
-`king_telemetry_get_metrics()` returns the current live metrics registry.
+`king_telemetry_get_metrics()` returns the current live metrics registry keyed
+by metric name until the next successful flush capture clears it.
 
 `king_telemetry_get_trace_context()` returns the current live trace context
 snapshot for code that needs explicit access to boundary metadata.

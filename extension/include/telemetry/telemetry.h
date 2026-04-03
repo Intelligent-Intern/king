@@ -138,7 +138,7 @@ PHP_FUNCTION(king_telemetry_inject_context);
 /* Stable false until the active runtime accepts extracted trace context. */
 PHP_FUNCTION(king_telemetry_extract_context);
 
-/* Returns collected metrics. */
+/* Returns the live metric registry keyed by metric name. */
 PHP_FUNCTION(king_telemetry_get_metrics);
 
 /* Flushes pending telemetry data. */

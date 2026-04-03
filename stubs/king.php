@@ -1038,8 +1038,8 @@ namespace {
     function king_telemetry_get_status(): array {}
 
     /**
-     * Telemetry metrics collected by the active runtime.
-     * @return list<array<string,mixed>>
+     * Telemetry live metric registry keyed by metric name until the next flush.
+     * @return array<string,array<string,mixed>>
      */
     function king_telemetry_get_metrics(): array {}
 
@@ -1063,9 +1063,10 @@ namespace {
 
     /**
      * Record one metric datapoint in the active telemetry runtime.
+     * Omitting the metric type uses counter semantics.
      * @param array<string,string>|null $labels
      */
-    function king_telemetry_record_metric(string $metric_name, float $value, ?array $labels = null, string $metric_type = 'gauge'): bool {}
+    function king_telemetry_record_metric(string $metric_name, float $value, ?array $labels = null, string $metric_type = 'counter'): bool {}
 
     /**
      * Record one structured log entry in the active telemetry runtime.
