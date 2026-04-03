@@ -45,6 +45,10 @@ done
 
 echo "Checking GitHub Actions workflow syntax..."
 for workflow in .github/workflows/*.yml; do
+    if [ ! -r "${workflow}" ]; then
+        echo "Error: Workflow file '${workflow}' does not exist or is not readable." >&2
+        exit 1
+    fi
     ruby -e 'require "yaml"; YAML.safe_load(File.read(ARGV[0]), permitted_classes: [], permitted_symbols: [], aliases: false)' "${workflow}"
 done
 
