@@ -316,7 +316,7 @@ static zend_result king_server_local_invoke_handler(
     /*
      * Each listener-owned request starts a fresh telemetry scope. Explicitly
      * flushed batches stay queued process-locally; only unfinished span/log
-     * scratch state is discarded here.
+     * scratch state plus any inbound parent seed are discarded here.
      */
     king_telemetry_cleanup_scope_state();
 
@@ -329,7 +329,10 @@ static zend_result king_server_local_invoke_handler(
     fci.param_count = 1;
     fci.params = request;
 
+    king_server_open_telemetry_prepare_request_scope(request);
+
     if (zend_call_function(&fci, &fcc) != SUCCESS) {
+        king_server_open_telemetry_finish_request_scope();
         if (EG(exception) == NULL) {
             king_server_local_set_errorf(
                 "%s() failed to invoke the request handler.",
@@ -339,6 +342,8 @@ static zend_result king_server_local_invoke_handler(
 
         return FAILURE;
     }
+
+    king_server_open_telemetry_finish_request_scope();
 
     return SUCCESS;
 }

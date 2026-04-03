@@ -135,7 +135,7 @@ PHP_FUNCTION(king_telemetry_get_trace_context);
 /* Returns headers unchanged until outgoing trace-context injection is finalized. */
 PHP_FUNCTION(king_telemetry_inject_context);
 
-/* Stable false until the active runtime accepts extracted trace context. */
+/* Stable false until the userland extract helper is finalized. */
 PHP_FUNCTION(king_telemetry_extract_context);
 
 /* Returns the live metric registry keyed by metric name. */
@@ -152,6 +152,13 @@ PHP_FUNCTION(king_telemetry_get_status);
 int king_telemetry_init_system(king_telemetry_config_t *config);
 void king_telemetry_shutdown_system(void);
 void king_telemetry_cleanup_scope_state(void);
+zend_result king_telemetry_set_incoming_parent_context(
+    const char *trace_id,
+    const char *parent_span_id,
+    uint8_t trace_flags,
+    const char *trace_state
+);
+void king_telemetry_clear_incoming_parent_context(void);
 king_trace_context_t* king_telemetry_create_span(const char *operation_name, king_span_kind_t span_kind, const char *parent_span_id);
 int king_telemetry_finish_span(king_trace_context_t *span_context);
 int king_telemetry_record_metric_internal(const char *metric_name, king_metric_type_t metric_type, double value, zval *labels);

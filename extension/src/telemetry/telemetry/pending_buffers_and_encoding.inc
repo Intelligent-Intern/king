@@ -108,9 +108,64 @@ static void king_telemetry_reset_active_span(void)
     king_current_span = NULL;
 }
 
+void king_telemetry_clear_incoming_parent_context(void)
+{
+    memset(
+        &king_telemetry_incoming_parent_context,
+        0,
+        sizeof(king_telemetry_incoming_parent_context)
+    );
+}
+
+zend_result king_telemetry_set_incoming_parent_context(
+    const char *trace_id,
+    const char *parent_span_id,
+    uint8_t trace_flags,
+    const char *trace_state
+)
+{
+    if (trace_id == NULL
+        || parent_span_id == NULL
+        || strlen(trace_id) != 32
+        || strlen(parent_span_id) != 16) {
+        return FAILURE;
+    }
+
+    king_telemetry_clear_incoming_parent_context();
+    strncpy(
+        king_telemetry_incoming_parent_context.trace_id,
+        trace_id,
+        sizeof(king_telemetry_incoming_parent_context.trace_id) - 1
+    );
+    strncpy(
+        king_telemetry_incoming_parent_context.parent_span_id,
+        parent_span_id,
+        sizeof(king_telemetry_incoming_parent_context.parent_span_id) - 1
+    );
+    king_telemetry_incoming_parent_context.trace_flags = trace_flags;
+
+    if (trace_state != NULL && trace_state[0] != '\0') {
+        if (strlen(trace_state)
+            >= sizeof(king_telemetry_incoming_parent_context.trace_state)) {
+            king_telemetry_clear_incoming_parent_context();
+            return FAILURE;
+        }
+
+        strncpy(
+            king_telemetry_incoming_parent_context.trace_state,
+            trace_state,
+            sizeof(king_telemetry_incoming_parent_context.trace_state) - 1
+        );
+    }
+
+    king_telemetry_incoming_parent_context.active = 1;
+    return SUCCESS;
+}
+
 void king_telemetry_cleanup_scope_state(void)
 {
     king_telemetry_reset_active_span();
+    king_telemetry_clear_incoming_parent_context();
     king_telemetry_pending_buffers_destroy();
 }
 

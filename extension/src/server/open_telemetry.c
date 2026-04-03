@@ -6,8 +6,10 @@
  * PURPOSE:
  * Activates a first local server-side telemetry control leaf for the
  * current runtime. The current runtime validates telemetry configuration for
- * an open King\Session, records an initialized snapshot on that session, and
- * tracks the last locally instrumented request after the handler returns.
+ * an open King\Session, records an initialized snapshot on that session,
+ * extracts inbound trace-context metadata from accepted requests, and seeds
+ * the first request-local span from that remote parent when the handler opens
+ * one.
  * =========================================================================
  */
 
@@ -16,8 +18,10 @@
 #include "include/client/session.h"
 #include "include/config/config.h"
 #include "include/server/open_telemetry.h"
+#include "include/telemetry/telemetry.h"
 
 #include <ctype.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -526,6 +530,54 @@ static zend_result king_server_telemetry_extract_incoming_trace_context(
     return SUCCESS;
 }
 
+static zval *king_server_telemetry_find_request_incoming_trace_context(zval *request)
+{
+    zval *telemetry;
+
+    if (request == NULL || Z_TYPE_P(request) != IS_ARRAY) {
+        return NULL;
+    }
+
+    telemetry = zend_hash_str_find(
+        Z_ARRVAL_P(request),
+        "telemetry",
+        sizeof("telemetry") - 1
+    );
+    if (telemetry == NULL || Z_TYPE_P(telemetry) != IS_ARRAY) {
+        return NULL;
+    }
+
+    return zend_hash_str_find(
+        Z_ARRVAL_P(telemetry),
+        "incoming_trace_context",
+        sizeof("incoming_trace_context") - 1
+    );
+}
+
+static zend_result king_server_telemetry_parse_trace_flags(
+    zval *trace_flags,
+    uint8_t *parsed_flags
+)
+{
+    char *endptr = NULL;
+    unsigned long parsed;
+
+    if (trace_flags == NULL
+        || parsed_flags == NULL
+        || Z_TYPE_P(trace_flags) != IS_STRING
+        || Z_STRLEN_P(trace_flags) != 2) {
+        return FAILURE;
+    }
+
+    parsed = strtoul(Z_STRVAL_P(trace_flags), &endptr, 16);
+    if (endptr == NULL || *endptr != '\0' || parsed > 0xffUL) {
+        return FAILURE;
+    }
+
+    *parsed_flags = (uint8_t) parsed;
+    return SUCCESS;
+}
+
 PHP_FUNCTION(king_server_init_telemetry)
 {
     zval *zsession;
@@ -637,6 +689,72 @@ void king_server_open_telemetry_add_request_metadata(
     }
 
     add_assoc_zval(request, "telemetry", &telemetry);
+}
+
+void king_server_open_telemetry_prepare_request_scope(zval *request)
+{
+    zval *incoming_trace_context;
+    zval *trace_id;
+    zval *parent_span_id;
+    zval *trace_flags;
+    zval *trace_state;
+    uint8_t parsed_flags;
+    const char *trace_state_value = NULL;
+
+    king_telemetry_clear_incoming_parent_context();
+
+    incoming_trace_context = king_server_telemetry_find_request_incoming_trace_context(
+        request
+    );
+    if (incoming_trace_context == NULL
+        || Z_TYPE_P(incoming_trace_context) != IS_ARRAY) {
+        return;
+    }
+
+    trace_id = zend_hash_str_find(
+        Z_ARRVAL_P(incoming_trace_context),
+        "trace_id",
+        sizeof("trace_id") - 1
+    );
+    parent_span_id = zend_hash_str_find(
+        Z_ARRVAL_P(incoming_trace_context),
+        "parent_span_id",
+        sizeof("parent_span_id") - 1
+    );
+    trace_flags = zend_hash_str_find(
+        Z_ARRVAL_P(incoming_trace_context),
+        "trace_flags",
+        sizeof("trace_flags") - 1
+    );
+    trace_state = zend_hash_str_find(
+        Z_ARRVAL_P(incoming_trace_context),
+        "trace_state",
+        sizeof("trace_state") - 1
+    );
+
+    if (trace_id == NULL
+        || parent_span_id == NULL
+        || Z_TYPE_P(trace_id) != IS_STRING
+        || Z_TYPE_P(parent_span_id) != IS_STRING
+        || king_server_telemetry_parse_trace_flags(trace_flags, &parsed_flags) != SUCCESS) {
+        return;
+    }
+
+    if (trace_state != NULL && Z_TYPE_P(trace_state) == IS_STRING) {
+        trace_state_value = Z_STRVAL_P(trace_state);
+    }
+
+    (void) king_telemetry_set_incoming_parent_context(
+        Z_STRVAL_P(trace_id),
+        Z_STRVAL_P(parent_span_id),
+        parsed_flags,
+        trace_state_value
+    );
+}
+
+void king_server_open_telemetry_finish_request_scope(void)
+{
+    king_telemetry_clear_incoming_parent_context();
 }
 
 void king_server_open_telemetry_record_response(

@@ -5,8 +5,9 @@
  *
  * PURPOSE:
  * Declares the local server-side telemetry control leaf and the shared
- * listener helpers that attach telemetry metadata plus incoming trace-context
- * extraction results to request/response snapshots in the active runtime.
+ * listener helpers that attach telemetry metadata, extract incoming
+ * trace-context state, and seed request-scope propagation in the active
+ * runtime.
  * =========================================================================
  */
 
@@ -23,6 +24,9 @@ void king_server_open_telemetry_add_request_metadata(
     zval *request,
     king_client_session_t *session
 );
+
+void king_server_open_telemetry_prepare_request_scope(zval *request);
+void king_server_open_telemetry_finish_request_scope(void);
 
 void king_server_open_telemetry_record_response(
     king_client_session_t *session,

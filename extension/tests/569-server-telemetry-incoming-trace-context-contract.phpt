@@ -1,5 +1,5 @@
 --TEST--
-King server request telemetry extracts incoming trace context from HTTP headers without yet activating it
+King server request telemetry extracts normalized incoming trace context from HTTP headers for later request-scope propagation
 --INI--
 king.security_allow_config_override=1
 --FILE--

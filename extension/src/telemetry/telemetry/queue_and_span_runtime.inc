@@ -303,6 +303,21 @@ king_trace_context_t* king_telemetry_create_span(const char *operation_name, kin
             strncpy(span->trace_state, king_current_span->trace_state, sizeof(span->trace_state) - 1);
         }
         span->parent = king_current_span;
+    } else if (king_telemetry_incoming_parent_context.active) {
+        strncpy(
+            span->trace_id,
+            king_telemetry_incoming_parent_context.trace_id,
+            sizeof(span->trace_id) - 1
+        );
+        span->trace_flags = king_telemetry_incoming_parent_context.trace_flags;
+        if (king_telemetry_incoming_parent_context.trace_state[0] != '\0') {
+            strncpy(
+                span->trace_state,
+                king_telemetry_incoming_parent_context.trace_state,
+                sizeof(span->trace_state) - 1
+            );
+        }
+        span->parent = NULL;
     } else {
         strncpy(span->trace_id, king_telemetry_generate_trace_id(), sizeof(span->trace_id) - 1);
         span->trace_flags = 1;
@@ -315,6 +330,13 @@ king_trace_context_t* king_telemetry_create_span(const char *operation_name, kin
         strncpy(span->parent_span_id, parent_span_id, 16);
     } else if (king_current_span != NULL) {
         strncpy(span->parent_span_id, king_current_span->span_id, sizeof(span->parent_span_id) - 1);
+    } else if (king_telemetry_incoming_parent_context.active
+        && king_telemetry_incoming_parent_context.parent_span_id[0] != '\0') {
+        strncpy(
+            span->parent_span_id,
+            king_telemetry_incoming_parent_context.parent_span_id,
+            sizeof(span->parent_span_id) - 1
+        );
     }
     
     span->start_time = time(NULL);

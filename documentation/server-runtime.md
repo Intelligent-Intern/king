@@ -428,9 +428,11 @@ logs according to the supplied telemetry configuration.
 Once telemetry is attached, the normalized request array can also expose
 `$request['telemetry']['incoming_trace_context']` when the accepted request
 carried a valid `traceparent` header and an optional `tracestate` header. That
-snapshot is extraction-only for now: it gives the handler an honest view of
-the inbound trace identity, but it does not yet auto-parent the local request
-span from that remote context.
+snapshot still gives the handler an explicit view of the inbound trace
+identity, and it now also seeds the first request-root span opened during that
+handler so the local server trace joins the caller's trace instead of silently
+forking a new root. The inbound parent seed is discarded again before the next
+accepted request starts.
 
 This matters because good server behavior is not only about serving traffic. The
 system also needs to observe itself while serving traffic. Early Hints counters,

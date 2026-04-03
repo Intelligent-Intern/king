@@ -18,6 +18,14 @@
 static king_telemetry_config_t king_telemetry_runtime_config;
 static bool king_telemetry_system_initialized = false;
 static king_trace_context_t *king_current_span = NULL;
+typedef struct _king_telemetry_incoming_parent_context_t {
+    zend_bool active;
+    char trace_id[33];
+    char parent_span_id[17];
+    uint8_t trace_flags;
+    char trace_state[512];
+} king_telemetry_incoming_parent_context_t;
+static king_telemetry_incoming_parent_context_t king_telemetry_incoming_parent_context = {0};
 static zval king_telemetry_pending_spans;
 static zval king_telemetry_pending_logs;
 static bool king_telemetry_pending_buffers_initialized = false;
