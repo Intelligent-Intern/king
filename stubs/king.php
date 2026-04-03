@@ -1718,7 +1718,7 @@ namespace King {
     final class Response {
         public function getStatusCode(): int {}
 
-        /** @return array<string,string[]> */
+        /** @return array<string,string|string[]> */
         public function getHeaders(): array {}
 
         /** Read the full response body; streaming responses drain the live HTTP/1 request context. */

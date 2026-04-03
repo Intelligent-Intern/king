@@ -39,11 +39,10 @@
 
 ## Current Next Leaf
 
-- `#1 Validate HTTP/1 header normalization under real traffic.`
+- `#2 Validate server-side Early Hints on-wire.`
 
 ## Active Executable Items
 
-- [ ] `#1 Validate HTTP/1 header normalization under real traffic.`
 - [ ] `#2 Validate server-side Early Hints on-wire.`
 - [ ] `#3 Validate server TLS reload under live traffic.`
 - [ ] `#4 Validate server CORS / header behavior against real browsers and clients.`

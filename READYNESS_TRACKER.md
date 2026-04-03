@@ -28,7 +28,7 @@ Status note:
 - [x] Validate HTTP/1 failure paths against real connection aborts
 - [x] Validate HTTP/1 timeout behavior against real slow servers
 - [x] Validate HTTP/1 connection reuse limits under load
-- [ ] Validate HTTP/1 header normalization under real traffic
+- [x] Validate HTTP/1 header normalization under real traffic
 
 - [x] Validate full HTTP/2 client behavior on-wire against real h2 servers
 - [x] Validate HTTP/2 h2c path against real h2c servers
