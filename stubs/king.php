@@ -631,7 +631,15 @@ namespace {
      * `primary_backend`, `backup_backend`, `storage_root_path`,
      * `max_storage_size_bytes`, `replication_factor`, `chunk_size_kb`,
      * `cloud_credentials`, and `cdn_config` with `enabled`,
-     * `cache_size_mb`, `default_ttl_seconds`. `cloud_credentials`
+     * `cache_size_mb`, `default_ttl_seconds`, optional
+     * `origin_http_endpoint`, and optional `origin_request_timeout_ms`.
+     * A configured `cdn_config.origin_http_endpoint` adds one bounded
+     * full-read HTTP origin fallback attempt for `king_object_store_get()`
+     * and `king_object_store_get_to_stream()` when the primary backend
+     * misses or fails; there is no hidden automatic retry loop. If a
+     * previous successful full read already retained a stale `smart_cdn`
+     * body, that retained body may still satisfy the same read after an
+     * origin timeout or other origin failure. `cloud_credentials`
      * currently accepts `api_endpoint` or `endpoint`, `bucket`,
      * provider-specific auth material such as `access_key` plus
      * `secret_key` for `cloud_s3`, `access_token` for `cloud_gcs`, or

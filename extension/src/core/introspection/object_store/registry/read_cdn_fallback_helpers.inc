@@ -188,3 +188,35 @@ static zend_bool king_object_store_write_stale_cdn_payload_to_stream(
 
     return 1;
 }
+
+static zend_bool king_object_store_has_origin_http_readthrough(void)
+{
+    if (!king_object_store_runtime.config.cdn_config.enabled) {
+        return 0;
+    }
+
+    if (king_object_store_runtime.config.cdn_config.origin_http_endpoint[0] != '\0') {
+        return 1;
+    }
+
+    return king_native_cdn_config.origin_http_endpoint != NULL
+        && king_native_cdn_config.origin_http_endpoint[0] != '\0';
+}
+
+static zend_bool king_object_store_try_load_origin_fill_metadata(
+    const char *object_id,
+    king_object_metadata_t *metadata
+)
+{
+    if (object_id == NULL || metadata == NULL) {
+        return 0;
+    }
+
+    if (king_object_store_runtime_metadata_cache_read(object_id, metadata) == SUCCESS
+        || king_object_store_meta_read(object_id, metadata) == SUCCESS
+        || king_object_store_backend_read_metadata(object_id, metadata) == SUCCESS) {
+        return 1;
+    }
+
+    return 0;
+}

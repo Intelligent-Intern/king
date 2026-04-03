@@ -375,6 +375,18 @@ origin/backend read backfills the local cache entry and marks it served; the
 payload still comes from the active object-store backend today rather than from
 a fake edge body store.
 
+That same full-read path now also owns the honest HTTP-origin fallback slice
+when `cdn.origin_http_endpoint` or
+`king_object_store_init(['cdn_config' => ['origin_http_endpoint' => ...]])`
+is configured. On a full-object miss or backend failure, King makes one bounded
+HTTP `GET` attempt to the configured origin using the active
+`origin_request_timeout_ms` budget. It does not hide automatic retries behind
+that path. A successful origin response can satisfy the read immediately, and
+the local `smart_cdn` registry is backfilled when the runtime still has honest
+metadata for that object. If the origin request times out or otherwise fails,
+King only serves stale bytes when a previous successful full read already
+retained that body; a metadata-only warm entry still fails honestly.
+
 That same honesty rule now applies to edge-node inventory. A bare
 `cdn_config.edge_node_count` no longer manufactures `edge-0`, `edge-1`, and so
 on. `king_cdn_get_edge_nodes()` only returns explicitly configured
@@ -822,6 +834,8 @@ king_object_store_init([
         'enabled' => true,
         'cache_size_mb' => 2048,
         'default_ttl_seconds' => 900,
+        'origin_http_endpoint' => 'https://origin.example.internal/objects',
+        'origin_request_timeout_ms' => 1500,
     ],
 ]);
 

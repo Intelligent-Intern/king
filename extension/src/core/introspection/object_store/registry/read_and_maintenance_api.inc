@@ -5,9 +5,11 @@ PHP_FUNCTION(king_object_store_get)
     void *data = NULL;
     size_t data_size = 0;
     king_object_metadata_t metadata;
+    king_object_metadata_t origin_metadata;
     size_t offset = 0;
     size_t length = 0;
     zend_bool has_length = 0;
+    char origin_error[512] = {0};
 
     ZEND_PARSE_PARAMETERS_START(1, 2)
         Z_PARAM_STR(object_id)
@@ -57,6 +59,59 @@ PHP_FUNCTION(king_object_store_get)
         : king_object_store_read_object(ZSTR_VAL(object_id), &data, &data_size, &metadata);
 
         if (result == KING_OBJECT_STORE_RESULT_MISS) {
+            if (offset == 0 && !has_length && king_object_store_has_origin_http_readthrough()) {
+                int origin_result = king_object_store_cdn_origin_http_read(
+                    ZSTR_VAL(object_id),
+                    &data,
+                    &data_size,
+                    origin_error,
+                    sizeof(origin_error)
+                );
+
+                if (origin_result == SUCCESS) {
+                    zend_string *ret_str;
+
+                    if (king_object_store_try_load_origin_fill_metadata(
+                            ZSTR_VAL(object_id),
+                            &origin_metadata
+                        )) {
+                        king_object_store_fill_cdn_cache_on_read_success(
+                            ZSTR_VAL(object_id),
+                            &origin_metadata,
+                            data,
+                            data_size
+                        );
+                    }
+
+                    ret_str = zend_string_init(data != NULL ? (const char *) data : "", data_size, 0);
+                    if (data != NULL) {
+                        if (data_size > 0) {
+                            memset(data, 0, data_size);
+                        }
+                        pefree(data, 1);
+                    }
+                    RETURN_STR(ret_str);
+                }
+
+                if (origin_result != KING_OBJECT_STORE_RESULT_MISS) {
+                    zend_string *stale_payload = king_object_store_copy_stale_cdn_payload(object_id);
+
+                    if (stale_payload != NULL) {
+                        RETURN_STR(stale_payload);
+                    }
+
+                    zend_throw_exception_ex(
+                        king_ce_system_exception,
+                        0,
+                        "%s",
+                        origin_error[0] != '\0'
+                            ? origin_error
+                            : "CDN HTTP origin read failed after the primary backend miss."
+                    );
+                    RETURN_THROWS();
+                }
+            }
+
             RETURN_FALSE;
         }
         if (result != SUCCESS) {
@@ -72,9 +127,50 @@ PHP_FUNCTION(king_object_store_get)
             }
 
             if (offset == 0 && !has_length) {
+                if (king_object_store_has_origin_http_readthrough()) {
+                    int origin_result = king_object_store_cdn_origin_http_read(
+                        ZSTR_VAL(object_id),
+                        &data,
+                        &data_size,
+                        origin_error,
+                        sizeof(origin_error)
+                    );
+
+                    if (origin_result == SUCCESS) {
+                        if (king_object_store_try_load_origin_fill_metadata(
+                                ZSTR_VAL(object_id),
+                                &origin_metadata
+                            )) {
+                            king_object_store_fill_cdn_cache_on_read_success(
+                                ZSTR_VAL(object_id),
+                                &origin_metadata,
+                                data,
+                                data_size
+                            );
+                        }
+
+                        zend_string *ret_str = zend_string_init(data, data_size, 0);
+                        if (data_size > 0) {
+                            memset(data, 0, data_size);
+                        }
+                        pefree(data, 1);
+                        RETURN_STR(ret_str);
+                    }
+                }
+
                 stale_payload = king_object_store_copy_stale_cdn_payload(object_id);
                 if (stale_payload != NULL) {
                     RETURN_STR(stale_payload);
+                }
+
+                if (origin_error[0] != '\0') {
+                    zend_throw_exception_ex(
+                        king_ce_system_exception,
+                        0,
+                        "Primary object-store backend read failed and CDN HTTP origin fallback also failed: %s",
+                        origin_error
+                    );
+                    RETURN_THROWS();
                 }
             }
 
@@ -122,6 +218,7 @@ PHP_FUNCTION(king_object_store_get_to_stream)
     size_t length = 0;
     zend_bool has_length = 0;
     king_object_metadata_t metadata;
+    char origin_error[512] = {0};
 
     ZEND_PARSE_PARAMETERS_START(2, 3)
         Z_PARAM_STR(object_id)
@@ -174,14 +271,69 @@ PHP_FUNCTION(king_object_store_get_to_stream)
         );
 
         if (result == KING_OBJECT_STORE_RESULT_MISS) {
+            if (offset == 0 && !has_length && king_object_store_has_origin_http_readthrough()) {
+                int origin_result = king_object_store_cdn_origin_http_read_to_stream(
+                    ZSTR_VAL(object_id),
+                    destination_stream,
+                    origin_error,
+                    sizeof(origin_error)
+                );
+
+                if (origin_result == SUCCESS) {
+                    RETURN_TRUE;
+                }
+
+                if (origin_result != KING_OBJECT_STORE_RESULT_MISS) {
+                    if (king_object_store_write_stale_cdn_payload_to_stream(object_id, destination_stream)) {
+                        RETURN_TRUE;
+                    }
+                    if (EG(exception) != NULL) {
+                        RETURN_THROWS();
+                    }
+
+                    zend_throw_exception_ex(
+                        king_ce_system_exception,
+                        0,
+                        "%s",
+                        origin_error[0] != '\0'
+                            ? origin_error
+                            : "CDN HTTP origin read failed after the primary backend miss."
+                    );
+                    RETURN_THROWS();
+                }
+            }
+
             RETURN_FALSE;
         }
         if (result != SUCCESS) {
             if (offset == 0 && !has_length) {
+                if (king_object_store_has_origin_http_readthrough()) {
+                    int origin_result = king_object_store_cdn_origin_http_read_to_stream(
+                        ZSTR_VAL(object_id),
+                        destination_stream,
+                        origin_error,
+                        sizeof(origin_error)
+                    );
+
+                    if (origin_result == SUCCESS) {
+                        RETURN_TRUE;
+                    }
+                }
+
                 if (king_object_store_write_stale_cdn_payload_to_stream(object_id, destination_stream)) {
                     RETURN_TRUE;
                 }
                 if (EG(exception) != NULL) {
+                    RETURN_THROWS();
+                }
+
+                if (origin_error[0] != '\0') {
+                    zend_throw_exception_ex(
+                        king_ce_system_exception,
+                        0,
+                        "Primary object-store backend read failed and CDN HTTP origin fallback also failed: %s",
+                        origin_error
+                    );
                     RETURN_THROWS();
                 }
             }

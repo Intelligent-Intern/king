@@ -93,6 +93,19 @@ const char *king_object_store_object_id_validate(const char *object_id);
 const char *king_object_store_public_object_id_validate_zstr(const zend_string *object_id);
 void king_object_store_config_clear(king_object_store_config_t *config);
 void king_object_store_compute_sha256_hex(const void *data, size_t data_size, char output[65]);
+int king_object_store_cdn_origin_http_read(
+    const char *object_id,
+    void **data,
+    size_t *data_size,
+    char *error,
+    size_t error_size
+);
+int king_object_store_cdn_origin_http_read_to_stream(
+    const char *object_id,
+    php_stream *destination_stream,
+    char *error,
+    size_t error_size
+);
 zend_bool king_object_store_runtime_capacity_is_enabled(void);
 const char *king_object_store_runtime_capacity_mode_to_string(void);
 uint64_t king_object_store_runtime_capacity_available_bytes(void);

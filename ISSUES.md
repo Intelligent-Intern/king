@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#15 Validate origin timeout / retry behavior.`
+- `#16 Validate cache memory limits under load.`
 
 ## Active Executable Items
 
@@ -60,7 +60,7 @@
 - [x] `#12 Validate stale-serve-on-error against real backend failures.`
 - [x] `#13 Validate cache consistency after backend update.`
 - [x] `#14 Validate edge-node inventory against real nodes where publicly claimed.`
-- [ ] `#15 Validate origin timeout / retry behavior.`
+- [x] `#15 Validate origin timeout / retry behavior.`
 - [ ] `#16 Validate cache memory limits under load.`
 - [ ] `#17 Validate large objects in cache under memory pressure.`
 - [ ] `#18 Validate cache recovery after restart.`

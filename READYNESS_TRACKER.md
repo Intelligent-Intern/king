@@ -232,7 +232,7 @@ Status note:
 - [x] Validate cache consistency after backend update
 - [x] Validate cache consistency after delete
 - [x] Validate edge-node inventory against real nodes where publicly claimed
-- [ ] Validate origin timeout / retry behavior
+- [x] Validate origin timeout / retry behavior
 - [ ] Validate cache memory limits under load
 - [ ] Validate large objects in cache under memory pressure
 - [ ] Validate cache recovery after restart

@@ -363,6 +363,44 @@ PHP_FUNCTION(king_object_store_init)
             new_config.cdn_config.default_ttl_seconds = (uint32_t) Z_LVAL_P(cdn_value_zv);
         }
 
+        cdn_value_zv = zend_hash_str_find(Z_ARRVAL_P(value_zv), "origin_http_endpoint", sizeof("origin_http_endpoint") - 1);
+        if (cdn_value_zv != NULL) {
+            if (Z_TYPE_P(cdn_value_zv) != IS_STRING || Z_STRLEN_P(cdn_value_zv) == 0) {
+                zend_throw_exception_ex(
+                    king_ce_validation_exception,
+                    0,
+                    "Object-store config 'cdn_config.origin_http_endpoint' must be a non-empty string."
+                );
+                RETURN_THROWS();
+            }
+            if (Z_STRLEN_P(cdn_value_zv) >= sizeof(new_config.cdn_config.origin_http_endpoint)) {
+                zend_throw_exception_ex(
+                    king_ce_validation_exception,
+                    0,
+                    "Object-store config 'cdn_config.origin_http_endpoint' is too long."
+                );
+                RETURN_THROWS();
+            }
+            strncpy(
+                new_config.cdn_config.origin_http_endpoint,
+                Z_STRVAL_P(cdn_value_zv),
+                sizeof(new_config.cdn_config.origin_http_endpoint) - 1
+            );
+        }
+
+        cdn_value_zv = zend_hash_str_find(Z_ARRVAL_P(value_zv), "origin_request_timeout_ms", sizeof("origin_request_timeout_ms") - 1);
+        if (cdn_value_zv != NULL) {
+            if (Z_TYPE_P(cdn_value_zv) != IS_LONG || Z_LVAL_P(cdn_value_zv) <= 0) {
+                zend_throw_exception_ex(
+                    king_ce_validation_exception,
+                    0,
+                    "Object-store config 'cdn_config.origin_request_timeout_ms' must be a positive integer."
+                );
+                RETURN_THROWS();
+            }
+            new_config.cdn_config.origin_request_timeout_ms = (uint32_t) Z_LVAL_P(cdn_value_zv);
+        }
+
         cdn_value_zv = zend_hash_str_find(Z_ARRVAL_P(value_zv), "edge_nodes", sizeof("edge_nodes") - 1);
         if (cdn_value_zv != NULL
             && king_object_store_parse_cdn_edge_nodes(cdn_value_zv, &new_config) != SUCCESS) {
