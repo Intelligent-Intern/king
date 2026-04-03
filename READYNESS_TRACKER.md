@@ -97,7 +97,7 @@ Status note:
 - [x] Validate server TLS reload under live traffic
 - [x] Validate server admin API under real mTLS configuration
 - [x] Validate server admin API auth / reload / failure paths
-- [ ] Validate server CORS / header behavior against real browsers and clients
+- [x] Validate server CORS / header behavior against real browsers and clients
 - [x] Validate server session churn under long-running operation
 - [x] Validate server close / drain / restart behavior
 - [ ] Validate server multi-connection scheduling under load

@@ -39,12 +39,10 @@
 
 ## Current Next Leaf
 
-- `#4 Validate server CORS / header behavior against real browsers and clients.`
+- `#5 Validate server multi-connection scheduling under load.`
 
 ## Active Executable Items
 
-- [ ] `#4 Validate server CORS / header behavior against real browsers and clients.`
-- [ ] `#4 Validate server CORS / header behavior against real browsers and clients.`
 - [ ] `#5 Validate server multi-connection scheduling under load.`
 - [ ] `#6 Validate server fairness across competing clients.`
 - [ ] `#7 Validate server resource cleanup under crash / abort scenarios.`

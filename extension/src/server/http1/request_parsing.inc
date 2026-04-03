@@ -69,6 +69,22 @@ static zend_result king_server_http1_read_request_head(
     return SUCCESS;
 }
 
+static zend_string *king_server_http1_normalize_header_name(
+    const char *name,
+    size_t name_len
+)
+{
+    zend_string *normalized = zend_string_alloc(name_len, 0);
+    size_t i;
+
+    for (i = 0; i < name_len; i++) {
+        ZSTR_VAL(normalized)[i] = (char) tolower((unsigned char) name[i]);
+    }
+
+    ZSTR_VAL(normalized)[name_len] = '\0';
+    return normalized;
+}
+
 static zend_result king_server_http1_parse_request_head(
     const char *raw_request,
     size_t raw_request_len,
@@ -155,6 +171,7 @@ static zend_result king_server_http1_parse_request_head(
         const char *value_start;
         size_t name_len;
         size_t value_len;
+        zend_string *normalized_name;
         zval *existing;
 
         line_end = strstr(cursor, "\r\n");
@@ -193,9 +210,13 @@ static zend_result king_server_http1_parse_request_head(
             (size_t) (line_end - value_start)
         );
 
-        existing = zend_hash_str_find(Z_ARRVAL(headers), cursor, name_len);
+        normalized_name = king_server_http1_normalize_header_name(cursor, name_len);
+        existing = zend_hash_find(Z_ARRVAL(headers), normalized_name);
         if (existing == NULL) {
-            add_assoc_stringl(&headers, cursor, value_start, value_len);
+            zval header_value;
+
+            ZVAL_STRINGL(&header_value, value_start, value_len);
+            zend_hash_update(Z_ARRVAL(headers), normalized_name, &header_value);
         } else if (Z_TYPE_P(existing) == IS_ARRAY) {
             add_next_index_stringl(existing, value_start, value_len);
         } else {
@@ -205,8 +226,9 @@ static zend_result king_server_http1_parse_request_head(
             array_init(&values);
             add_next_index_str(&values, first_value);
             add_next_index_stringl(&values, value_start, value_len);
-            zend_hash_str_update(Z_ARRVAL(headers), cursor, name_len, &values);
+            zend_hash_update(Z_ARRVAL(headers), normalized_name, &values);
         }
+        zend_string_release(normalized_name);
 
         if (name_len == sizeof("Host") - 1 && strncasecmp(cursor, "Host", name_len) == 0) {
             if (host_value != NULL) {
@@ -415,4 +437,3 @@ static zend_result king_server_http1_append_response_headers(
 
     return SUCCESS;
 }
-

@@ -305,6 +305,27 @@ This is the heart of the server runtime design. One accepted request may feel
 small, but the surrounding server state is still real and still worth modeling
 explicitly.
 
+## Server CORS And Header State
+
+The current one-shot listener runtime now treats request headers as a real,
+normalized transport input instead of a loose helper artifact. On the active
+HTTP/1, HTTP/2, and HTTP/3 server paths, request header names are materialized
+through stable lowercase keys, so server code sees the same header shape across
+all three protocols.
+
+That matters directly for CORS. The server-side CORS helper reads the incoming
+`origin`, `access-control-request-method`, and
+`access-control-request-headers` fields from those normalized headers, records
+the evaluated origin/preflight decision on the request snapshot, and reflects
+the allowed origin plus `Vary: Origin` on the response path when the configured
+policy allows it.
+
+This is still a bounded slice. King is not pretending to be a full browser
+policy engine. What is explicit now is the contract that real clients can rely
+on today: the same live request headers that reach the handler are the ones the
+CORS helper evaluates, and the response headers the client sees are generated
+from that same evaluated state instead of from a disconnected local shortcut.
+
 ## Upgrading To WebSocket
 
 `king_server_upgrade_to_websocket()` is how an incoming server request changes

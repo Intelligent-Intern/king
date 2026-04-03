@@ -19,6 +19,7 @@ PHP_FUNCTION(king_http1_server_listen);
  * Binds a real TCP socket, accepts exactly one request, invokes the handler,
  * writes one HTTP/1 response when no websocket upgrade takes ownership, and
  * then tears the listener back down. This is the narrow v1 leaf used for true
+ * on-wire request parsing, header normalization, CORS/header behavior, and
  * server-side websocket upgrade coverage without claiming a long-lived HTTP
  * server runtime.
  */

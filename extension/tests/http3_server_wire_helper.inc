@@ -42,6 +42,13 @@ function king_http3_server_wire_start_server(
         escapeshellarg($mode),
     ];
 
+    if ($mode === 'cors-allowlist') {
+        array_splice($commandParts, 6, 0, [
+            '-d',
+            escapeshellarg('king.security_cors_allowed_origins=https://app.king.test, https://admin.king.test'),
+        ]);
+    }
+
     foreach ($modeArgs as $modeArg) {
         $commandParts[] = escapeshellarg((string) $modeArg);
     }

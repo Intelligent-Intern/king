@@ -1,6 +1,6 @@
 <?php
 
-/* Harness server for capturing on-wire HTTP/1 one-shot listener behavior, including websocket and interim responses. */
+/* Harness server for capturing on-wire HTTP/1 one-shot listener behavior, including websocket, interim-response, and CORS slices. */
 
 if ($argc < 4) {
     fwrite(STDERR, "usage: server_websocket_wire_server.inc <capture-path> <port> <mode> [iterations]\n");
@@ -301,6 +301,39 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
                     'status' => 426,
                     'headers' => ['X-Mode' => 'plain-http1'],
                     'body' => 'upgrade-required',
+                ];
+            }
+
+            if ($mode === 'cors-allowlist') {
+                $capture['request_headers'] = $request['headers'];
+                $capture['request_cors'] = $request['cors'];
+                $capture['cors_stats_before_return'] = king_get_stats($session);
+
+                $headers = [
+                    'Content-Type' => 'text/plain',
+                    'X-Cors-Mode' => 'allowlist',
+                ];
+
+                if (($request['cors']['preflight'] ?? false) === true) {
+                    $requestedMethod = $request['headers']['access-control-request-method'] ?? 'GET';
+                    $requestedHeaders = $request['headers']['access-control-request-headers'] ?? null;
+
+                    $headers['Access-Control-Allow-Methods'] = $requestedMethod;
+                    if (is_string($requestedHeaders) && $requestedHeaders !== '') {
+                        $headers['Access-Control-Allow-Headers'] = $requestedHeaders;
+                    }
+
+                    return [
+                        'status' => 204,
+                        'headers' => $headers,
+                        'body' => '',
+                    ];
+                }
+
+                return [
+                    'status' => 200,
+                    'headers' => $headers,
+                    'body' => 'cors-http1-body',
                 ];
             }
 

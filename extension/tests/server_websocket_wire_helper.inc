@@ -19,17 +19,31 @@ function king_server_websocket_wire_start_server(string $mode, int $iterations =
 
     $capture = tempnam(sys_get_temp_dir(), 'king-server-websocket-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';
-    $command = sprintf(
-        '%s -n -d %s -d %s %s %s %d %s %d',
+    $commandParts = [
         escapeshellarg(PHP_BINARY),
+        '-n',
+        '-d',
         escapeshellarg('extension=' . $extensionPath),
+        '-d',
         escapeshellarg('king.security_allow_config_override=1'),
+    ];
+
+    if ($mode === 'cors-allowlist') {
+        $commandParts[] = '-d';
+        $commandParts[] = escapeshellarg(
+            'king.security_cors_allowed_origins=https://app.king.test, https://admin.king.test'
+        );
+    }
+
+    $commandParts = array_merge($commandParts, [
         escapeshellarg(__DIR__ . '/server_websocket_wire_server.inc'),
         escapeshellarg($capture),
-        (int) $port,
+        (string) (int) $port,
         escapeshellarg($mode),
-        max(1, $iterations)
-    );
+        (string) max(1, $iterations),
+    ]);
+
+    $command = implode(' ', $commandParts);
 
     $process = proc_open($command, [
         1 => ['pipe', 'w'],

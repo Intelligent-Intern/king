@@ -5,8 +5,9 @@
  *
  * PURPOSE:
  * Keeps the original local HTTP/1 listener leaf and adds a narrow one-shot
- * on-wire HTTP/1 listener slice so v1 can verify real server-side websocket
- * upgrades without pretending the whole listener stack is long-lived yet.
+ * on-wire HTTP/1 listener slice so v1 can verify real request parsing,
+ * header normalization, CORS behavior, and server-side websocket upgrades
+ * without pretending the whole listener stack is long-lived yet.
  * =========================================================================
  */
 
