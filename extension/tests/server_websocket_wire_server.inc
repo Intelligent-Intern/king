@@ -418,7 +418,6 @@ if ($mode === 'oo-abort-cleanup') {
     );
     return;
 }
-
 for ($iteration = 0; $iteration < $iterations; $iteration++) {
     $result = king_http1_server_listen_once(
         '127.0.0.1',
