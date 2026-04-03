@@ -1,4 +1,4 @@
-static const char *king_http3_map_curless_candidate_error(const char *path)
+static const char *king_http3_map_candidate_error(const char *path)
 {
     return path != NULL && path[0] != '\0' ? path : "unknown";
 }
@@ -124,7 +124,7 @@ static zend_result king_http3_ensure_quiche_ready(void)
             king_http3_quiche.load_error,
             sizeof(king_http3_quiche.load_error),
             "Failed to load libquiche for the active HTTP/3 runtime (checked '%s' first).",
-            king_http3_map_curless_candidate_error(env_path)
+            king_http3_map_candidate_error(env_path)
         );
         return FAILURE;
     }
