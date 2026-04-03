@@ -44,9 +44,8 @@ static zend_result king_object_store_s3_build_url(
         return FAILURE;
     }
 
-    smart_str_appends(url, config->endpoint);
-
     if (config->path_style) {
+        smart_str_appends(url, config->endpoint);
         smart_str_appendc(url, '/');
         smart_str_appends(url, config->bucket);
         if (object_id != NULL && object_id[0] != '\0') {
@@ -60,7 +59,6 @@ static zend_result king_object_store_s3_build_url(
             return FAILURE;
         }
 
-        smart_str_free(url);
         smart_str_appendl(url, config->endpoint, (size_t) (scheme_sep - config->endpoint + 3));
         smart_str_appends(url, config->bucket);
         smart_str_appendc(url, '.');
