@@ -228,7 +228,7 @@ function build_case_definitions(): array
             'default_iterations' => 50000,
             'operations_per_iteration' => 4,
             'bootstrap' => static function (): array {
-                $stateDir = '/tmp/king_semantic_dns_state';
+                $stateDir = benchmark_temp_path('king_semantic_dns_state');
                 $dnsPort = 18053 + (getmypid() % 1000);
                 $config = [
                     'enabled' => true,
