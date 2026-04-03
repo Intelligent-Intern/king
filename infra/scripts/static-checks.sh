@@ -45,7 +45,7 @@ done
 
 echo "Checking GitHub Actions workflow syntax..."
 for workflow in .github/workflows/*.yml; do
-    ruby -e 'require "yaml"; YAML.safe_load(File.read(ARGV[0]), permitted_classes: [], permitted_symbols: [], aliases: true)' "${workflow}"
+    ruby -e 'require "yaml"; YAML.safe_load(File.read(ARGV[0]), permitted_classes: [], permitted_symbols: [], aliases: false)' "${workflow}"
 done
 
 echo "Checking extension include layout..."
