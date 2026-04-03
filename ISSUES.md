@@ -2,14 +2,15 @@
 
 > This file is the single moving roadmap and execution queue for repo-local
 > King v1.
-> It only carries the currently open executable batch.
+> It carries the currently active executable batch, including leaves already
+> closed inside that batch.
 > Closed work lives in `PROJECT_ASSESSMENT.md`.
 > `EPIC.md` stays the stable charter and release bar.
 
 ## Working Rules
 
 - read `CONTRIBUTE.md` before starting, replenishing, or reshaping any `20`-issue batch
-- keep only open work here
+- keep the active batch visible here until it is exhausted; mark closed leaves as `[x]` instead of deleting them mid-batch
 - every item must be narrow enough to implement and verify inside this repo
 - if a tracker item is still too broad, split it before adding it here
 - when a leaf closes, update code, touched comments/docblocks, tests, docs, `PROJECT_ASSESSMENT.md`, and `READYNESS_TRACKER.md` in the same change
@@ -39,11 +40,13 @@
 
 ## Current Next Leaf
 
-- `#13 Validate cache consistency after backend update.`
+- `#14 Validate edge-node inventory against real nodes where publicly claimed.`
 
 ## Active Executable Items
 
-- [ ] `#13 Validate cache consistency after backend update.`
+- [x] `#11 Validate cache invalidation under load.`
+- [x] `#12 Validate stale-serve-on-error against real backend failures.`
+- [x] `#13 Validate cache consistency after backend update.`
 - [ ] `#14 Validate edge-node inventory against real nodes where publicly claimed.`
 - [ ] `#15 Validate origin timeout / retry behavior.`
 - [ ] `#16 Validate cache memory limits under load.`

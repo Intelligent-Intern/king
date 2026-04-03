@@ -380,6 +380,13 @@ Repeated warm and invalidate churn is also now verified across `local_fs`,
 invalidations drive `cached_object_count` and `cached_bytes` back to zero
 without stale registry drift under sustained cache warm/read-through load.
 
+Backend updates now keep that CDN view honest as well. A committed overwrite
+invalidates any retained CDN state for the object before later reads run, so an
+old cached body cannot survive a newer origin truth. The next successful read
+repopulates the cache with the updated payload size and body, and a backend
+failure immediately after the overwrite no longer leaks the pre-update stale
+payload.
+
 The current honest stale-on-error contract is the same full-object
 `king_object_store_get()` / `king_object_store_get_to_stream()` path for
 `smart_cdn` objects when a previous successful full read already retained the

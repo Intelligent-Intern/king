@@ -149,6 +149,8 @@ static int king_object_store_finalize_completed_upload_session(
         session->existed_before,
         session->old_size
     );
+    /* Any committed primary write invalidates retained CDN state for that object. */
+    king_object_store_invalidate_cdn_cache_entry(session->object_id);
 
     if (king_object_store_runtime.config.backup_backend != session->backend) {
         if (king_object_store_backup_object_from_file_to_backend(

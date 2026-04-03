@@ -104,6 +104,11 @@ int king_object_store_write_object(
         rc == SUCCESS ? NULL : "Primary object-store backend write failed."
     );
 
+    if (rc == SUCCESS) {
+        /* Any committed primary write invalidates retained CDN state for that object. */
+        king_object_store_invalidate_cdn_cache_entry(object_id);
+    }
+
     if (rc == SUCCESS &&
         king_object_store_runtime.config.backup_backend != king_object_store_runtime.config.primary_backend) {
         if (king_object_store_backup_object_to_backend(
@@ -142,4 +147,3 @@ int king_object_store_write_object(
 
     return rc;
 }
-
