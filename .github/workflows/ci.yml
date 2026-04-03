@@ -21,6 +21,7 @@ permissions:
 
 env:
   DEBIAN_FRONTEND: noninteractive
+  REGISTRY: ghcr.io
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
@@ -756,3 +757,299 @@ jobs:
             extension/tests/*.exp
             extension/tests/*.log
             extension/tests/*.out
+
+  docker-publish-gate:
+    name: Docker publish gate
+    needs: install-package-matrix
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      run-docker-jobs: ${{ steps.gate.outputs.run-docker-jobs }}
+      reason: ${{ steps.gate.outputs.reason }}
+      trusted-branch: ${{ steps.gate.outputs.trusted-branch }}
+      trusted-revision: ${{ steps.gate.outputs.trusted-revision }}
+      trusted-semver-tag: ${{ steps.gate.outputs.trusted-semver-tag }}
+
+    steps:
+      - name: Decide whether docker publish jobs should run
+        id: gate
+        run: |
+          set -euo pipefail
+
+          run_docker_jobs='false'
+          reason="Skipping docker publish for ${GITHUB_REF}."
+          trusted_branch=''
+          trusted_revision="${GITHUB_SHA}"
+          trusted_semver_tag=''
+
+          if [[ "${GITHUB_REF}" == 'refs/heads/main' || "${GITHUB_REF}" == 'refs/heads/develop' ]]; then
+            run_docker_jobs='true'
+            trusted_branch="${GITHUB_REF_NAME}"
+            reason="Docker publish enabled for trusted branch ${GITHUB_REF_NAME}; release package artifacts were produced in this canonical run."
+          elif [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            run_docker_jobs='true'
+            trusted_semver_tag="${GITHUB_REF_NAME}"
+            reason="Docker publish enabled for trusted tag ${GITHUB_REF_NAME}; release package artifacts were produced in this canonical run."
+          fi
+
+          {
+            printf 'run-docker-jobs=%s\n' "${run_docker_jobs}"
+            printf 'reason=%s\n' "${reason}"
+            printf 'trusted-branch=%s\n' "${trusted_branch}"
+            printf 'trusted-revision=%s\n' "${trusted_revision}"
+            printf 'trusted-semver-tag=%s\n' "${trusted_semver_tag}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "${reason}"
+
+  docker-build-and-push:
+    name: Build & Push Docker Images
+    needs: docker-publish-gate
+    if: needs.docker-publish-gate.outputs.run-docker-jobs == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']
+        include:
+          - php-version: '8.1'
+            platforms: linux/amd64,linux/arm64
+            latest: false
+          - php-version: '8.2'
+            platforms: linux/amd64,linux/arm64
+            latest: false
+          - php-version: '8.3'
+            platforms: linux/amd64,linux/arm64
+            latest: false
+          - php-version: '8.4'
+            platforms: linux/amd64,linux/arm64
+            latest: false
+          - php-version: '8.5'
+            platforms: linux/amd64,linux/arm64
+            latest: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Download amd64 release package
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php${{ matrix.php-version }}-linux-amd64
+          path: dist/docker-packages/php${{ matrix.php-version }}/linux-amd64
+
+      - name: Download arm64 release package
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php${{ matrix.php-version }}-linux-arm64
+          path: dist/docker-packages/php${{ matrix.php-version }}/linux-arm64
+
+      - name: Prepare runtime image metadata
+        id: meta
+        env:
+          TRUSTED_REVISION: ${{ needs.docker-publish-gate.outputs.trusted-revision }}
+          TRUSTED_BRANCH: ${{ needs.docker-publish-gate.outputs.trusted-branch }}
+          TRUSTED_SEMVER_TAG: ${{ needs.docker-publish-gate.outputs.trusted-semver-tag }}
+        run: |
+          set -euo pipefail
+          image_name="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          image="${REGISTRY}/${image_name}"
+          revision="${TRUSTED_REVISION}"
+          short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
+          branch="${TRUSTED_BRANCH}"
+          semver_tag="${TRUSTED_SEMVER_TAG}"
+
+          tags=(
+            "${image}:php${{ matrix.php-version }}"
+            "${image}:sha-${short_sha}-php${{ matrix.php-version }}"
+          )
+
+          if [[ "${{ matrix.latest }}" == "true" ]]; then
+            if [[ "${branch}" == "main" ]]; then
+              tags+=("${image}:main" "${image}:latest")
+            elif [[ "${branch}" == "develop" ]]; then
+              tags+=("${image}:develop")
+            fi
+
+            if [[ -n "${semver_tag}" ]]; then
+              version="${semver_tag#v}"
+              IFS='.' read -r major minor patch <<< "${version}"
+              tags+=(
+                "${image}:${version}"
+                "${image}:${major}.${minor}"
+                "${image}:${major}"
+              )
+            fi
+          fi
+
+          created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          {
+            printf 'tags<<EOF\n'
+            printf '%s\n' "${tags[@]}"
+            printf 'EOF\n'
+            printf 'labels<<EOF\n'
+            printf 'org.opencontainers.image.title=king\n'
+            printf 'org.opencontainers.image.description=King PHP extension runtime image\n'
+            printf 'org.opencontainers.image.created=%s\n' "${created_at}"
+            printf 'org.opencontainers.image.revision=%s\n' "${revision}"
+            printf 'org.opencontainers.image.source=https://github.com/%s\n' "${GITHUB_REPOSITORY}"
+            printf 'EOF\n'
+            printf 'created_at=%s\n' "${created_at}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push King PHP ${{ matrix.php-version }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./infra/php-runtime.Dockerfile
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            PHP_VERSION=${{ matrix.php-version }}
+            BUILD_DATE=${{ steps.meta.outputs.created_at }}
+            VCS_REF=${{ needs.docker-publish-gate.outputs.trusted-revision }}
+
+  docker-build-demo:
+    name: Build & Push Demo Application PHP ${{ matrix.php-version }}
+    needs: docker-publish-gate
+    if: needs.docker-publish-gate.outputs.run-docker-jobs == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']
+        include:
+          - php-version: '8.1'
+            latest: false
+          - php-version: '8.2'
+            latest: false
+          - php-version: '8.3'
+            latest: false
+          - php-version: '8.4'
+            latest: false
+          - php-version: '8.5'
+            latest: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Download amd64 release package
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php${{ matrix.php-version }}-linux-amd64
+          path: dist/docker-packages/php${{ matrix.php-version }}/linux-amd64
+
+      - name: Download arm64 release package
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php${{ matrix.php-version }}-linux-arm64
+          path: dist/docker-packages/php${{ matrix.php-version }}/linux-arm64
+
+      - name: Prepare demo image metadata
+        id: meta-demo
+        env:
+          TRUSTED_REVISION: ${{ needs.docker-publish-gate.outputs.trusted-revision }}
+          TRUSTED_BRANCH: ${{ needs.docker-publish-gate.outputs.trusted-branch }}
+          TRUSTED_SEMVER_TAG: ${{ needs.docker-publish-gate.outputs.trusted-semver-tag }}
+        run: |
+          set -euo pipefail
+          image_name="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          image="${REGISTRY}/${image_name}-demo"
+          revision="${TRUSTED_REVISION}"
+          short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
+          branch="${TRUSTED_BRANCH}"
+          semver_tag="${TRUSTED_SEMVER_TAG}"
+
+          tags=(
+            "${image}:php${{ matrix.php-version }}"
+            "${image}:sha-${short_sha}-php${{ matrix.php-version }}"
+          )
+
+          if [[ "${{ matrix.latest }}" == "true" ]]; then
+            if [[ "${branch}" == "main" ]]; then
+              tags+=("${image}:main" "${image}:latest")
+            elif [[ "${branch}" == "develop" ]]; then
+              tags+=("${image}:develop")
+            fi
+
+            if [[ -n "${semver_tag}" ]]; then
+              version="${semver_tag#v}"
+              IFS='.' read -r major minor patch <<< "${version}"
+              tags+=(
+                "${image}:${version}"
+                "${image}:${major}.${minor}"
+              )
+            fi
+          fi
+
+          created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          {
+            printf 'tags<<EOF\n'
+            printf '%s\n' "${tags[@]}"
+            printf 'EOF\n'
+            printf 'labels<<EOF\n'
+            printf 'org.opencontainers.image.title=king-demo-server\n'
+            printf 'org.opencontainers.image.description=King demo server runtime image\n'
+            printf 'org.opencontainers.image.created=%s\n' "${created_at}"
+            printf 'org.opencontainers.image.revision=%s\n' "${revision}"
+            printf 'org.opencontainers.image.source=https://github.com/%s\n' "${GITHUB_REPOSITORY}"
+            printf 'EOF\n'
+            printf 'created_at=%s\n' "${created_at}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push demo application
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./infra/demo-server/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta-demo.outputs.tags }}
+          labels: ${{ steps.meta-demo.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            PHP_VERSION=${{ matrix.php-version }}
+            BUILD_DATE=${{ steps.meta-demo.outputs.created_at }}
+            VCS_REF=${{ needs.docker-publish-gate.outputs.trusted-revision }}
