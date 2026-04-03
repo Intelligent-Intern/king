@@ -96,13 +96,12 @@ fn main() {
         None => false,
     };
 
-    let drop_first_established_datagram = match args.next() {
-        Some(value) => match value.as_str() {
-            "1" => true,
-            "0" => false,
-            _ => usage_and_exit(&cmd),
+    let drop_established_datagram_budget = match args.next() {
+        Some(value) => match value.parse::<usize>() {
+            Ok(parsed) => parsed,
+            Err(_) => usage_and_exit(&cmd),
         },
-        None => false,
+        None => 0,
     };
 
     let bind_addr = resolve_udp_bind(&host, port);
@@ -166,7 +165,7 @@ fn main() {
     };
     let mut response_started = false;
     let mut response_idle_deadline: Option<Instant> = None;
-    let mut drop_first_established_datagram = drop_first_established_datagram;
+    let mut drop_established_datagram_budget = drop_established_datagram_budget;
     let overall_deadline = Instant::now() + Duration::from_secs(10);
     let mut buf = [0; 65535];
     let mut out = [0; MAX_DATAGRAM_SIZE];
@@ -235,11 +234,11 @@ fn main() {
             }
 
             let active = conn.as_mut().unwrap();
-            if drop_first_established_datagram &&
+            if drop_established_datagram_budget > 0 &&
                 h3_conn.is_some() &&
                 !response_started
             {
-                drop_first_established_datagram = false;
+                drop_established_datagram_budget -= 1;
                 continue 'read;
             }
 
@@ -363,7 +362,7 @@ fn main() {
 
 fn usage_and_exit(cmd: &str) -> ! {
     eprintln!(
-        "Usage: {cmd} <cert> <key> <root> <host> <port> [enable_early_data] [drop_first_established_datagram]"
+        "Usage: {cmd} <cert> <key> <root> <host> <port> [enable_early_data] [drop_established_datagram_count]"
     );
     std::process::exit(1);
 }
@@ -620,7 +619,8 @@ fn build_response(
     request_body: &[u8],
 ) -> (u16, Vec<u8>) {
     if !method.eq_ignore_ascii_case("GET") &&
-        !(method.eq_ignore_ascii_case("POST") && path == "/stream-lifecycle")
+        !(method.eq_ignore_ascii_case("POST") &&
+            (path == "/stream-lifecycle" || path == "/congestion-control"))
     {
         return (405, b"method not allowed\n".to_vec());
     }
@@ -633,6 +633,13 @@ fn build_response(
         let mut body = b"stream-ack:".to_vec();
         body.extend_from_slice(request_body);
         return (200, body);
+    }
+
+    if method.eq_ignore_ascii_case("POST") && path == "/congestion-control" {
+        return (
+            200,
+            format!("congestion-ack:{}", request_body.len()).into_bytes(),
+        );
     }
 
     let relative = path.trim_start_matches('/');

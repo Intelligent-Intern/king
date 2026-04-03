@@ -186,7 +186,11 @@ collapsing into a generic OO runtime error. The same live peer coverage now
 also proves the active quiche event loop can stay idle across delayed response
 bursts, wake on real peer progress without sleeping until the full request
 budget, and then surface a real timeout once the peer stays silent past that
-budget.
+budget. Under an intentionally lossy constrained-link harness, the same live
+coverage now also proves both supported congestion-control algorithms,
+`cubic` and `bbr`, still make forward progress and surface visible loss plus
+retransmit counters instead of leaving that runtime slice as an unverified
+config-only claim.
 
 ## A First Session
 
