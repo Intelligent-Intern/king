@@ -44,12 +44,23 @@ for script in infra/scripts/*.sh; do
 done
 
 echo "Checking GitHub Actions workflow syntax..."
-for workflow in .github/workflows/*.yml; do
-    if [ ! -r "${workflow}" ]; then
-        echo "Error: Workflow file '${workflow}' does not exist or is not readable." >&2
-        exit 1
-    fi
-    ruby -e 'require "yaml"; YAML.safe_load(File.read(ARGV[0]), permitted_classes: [], permitted_symbols: [], aliases: false)' "${workflow}"
+shopt -s nullglob
+workflow_files=(.github/workflows/*.yml)
+shopt -u nullglob
+for workflow in "${workflow_files[@]}"; do
+    ruby -e 'require "yaml";
+path = ARGV.fetch(0)
+begin
+    YAML.safe_load(
+        File.read(path),
+        permitted_classes: [],
+        permitted_symbols: [],
+        aliases: false
+    )
+rescue StandardError => error
+    STDERR.puts "Error: YAML validation failed for #{path}: #{error.class}: #{error.message}"
+    exit 1
+end' "${workflow}"
 done
 
 echo "Checking extension include layout..."
