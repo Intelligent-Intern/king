@@ -294,7 +294,6 @@ function build_case_definitions(): array
                             + strlen($serviceId);
                     },
                     'cleanup' => static function () use ($stateDir, $config): void {
-                        king_semantic_dns_init($config);
                         delete_flat_directory($stateDir);
                     },
                 ];
