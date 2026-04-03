@@ -39,14 +39,12 @@ function king_cdn_restart_561_cleanup_tree(string $path): void
 function king_cdn_restart_561_write_child_script(): string
 {
     $scriptPath = tempnam(sys_get_temp_dir(), 'king-cdn-restart-child-');
+    $helperPath = var_export(__DIR__ . '/object_store_s3_mock_helper.inc', true);
     if ($scriptPath === false) {
         throw new RuntimeException('failed to allocate CDN restart child script path');
     }
 
-    file_put_contents($scriptPath, <<<'PHP'
-<?php
-require '/home/jochen/projects/king.site/king/extension/tests/object_store_s3_mock_helper.inc';
-
+    file_put_contents($scriptPath, "<?php\nrequire " . $helperPath . ";\n\n" . <<<'PHP'
 function king_cdn_restart_561_child_start_cloud(
     array &$config,
     string $stateDirectory,
