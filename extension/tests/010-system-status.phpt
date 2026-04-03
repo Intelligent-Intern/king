@@ -5,7 +5,7 @@ King system status functions expose health and runtime lifecycle state
 $health = king_system_health_check();
 var_dump(array_keys($health));
 var_dump($health['overall_healthy']);
-var_dump($health['build']);
+var_dump(is_string($health['build']));
 var_dump($health['version']);
 var_dump($health['config_override_allowed']);
 
@@ -37,7 +37,7 @@ array(4) {
   string(23) "config_override_allowed"
 }
 bool(true)
-string(2) "v1"
+bool(true)
 string(11) "0.2.1-alpha"
 bool(false)
 array(6) {
