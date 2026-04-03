@@ -23,7 +23,7 @@ php -l infra/scripts/runtime-install-smoke.php
 php -l infra/scripts/runtime-persistence-migration.php
 
 echo "Validating Composer metadata..."
-composer validate composer.json
+composer validate "${ROOT_DIR}/composer.json"
 
 echo "Checking shell-script syntax..."
 bash -n benchmarks/run-canonical.sh
@@ -33,7 +33,7 @@ done
 
 echo "Checking GitHub Actions workflow syntax..."
 for workflow in .github/workflows/*.yml; do
-    ruby -e 'require "yaml"; YAML.load_file(ARGV[0])' "${workflow}"
+    ruby -e 'require "yaml"; YAML.safe_load_file(ARGV[0], permitted_classes: [], permitted_symbols: [], aliases: true)' "${workflow}"
 done
 
 echo "Checking extension include layout..."
