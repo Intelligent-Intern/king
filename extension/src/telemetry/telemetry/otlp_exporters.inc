@@ -1,3 +1,55 @@
+static zend_bool king_telemetry_batch_has_signals(king_telemetry_batch_t *batch)
+{
+    if (batch == NULL) {
+        return 0;
+    }
+
+    return zend_hash_num_elements(Z_ARRVAL(batch->metrics)) > 0
+        || zend_hash_num_elements(Z_ARRVAL(batch->spans)) > 0
+        || zend_hash_num_elements(Z_ARRVAL(batch->logs)) > 0;
+}
+
+static int king_telemetry_dispatch_otlp_json_payload(const char *endpoint_url, smart_str *json_payload)
+{
+    king_telemetry_http_response_t response;
+    int result;
+    size_t payload_bytes = 0;
+
+    if (endpoint_url == NULL || json_payload == NULL) {
+        return FAILURE;
+    }
+
+    smart_str_0(json_payload);
+    if (json_payload->s != NULL) {
+        payload_bytes = ZSTR_LEN(json_payload->s);
+    }
+
+    /*
+     * Oversized OTLP payloads are never retryable: another flush on the same
+     * batch would re-emit the same wire body. Fail closed before dispatch and
+     * let the caller drop the signal instead of poison-requeueing it forever.
+     */
+    if (payload_bytes > KING_TELEMETRY_MAX_REQUEST_SIZE) {
+        return KING_TELEMETRY_EXPORT_RESULT_DROP;
+    }
+
+    memset(&response, 0, sizeof(response));
+    result = king_telemetry_http_post(
+        endpoint_url,
+        ZSTR_VAL(json_payload->s),
+        payload_bytes,
+        &response
+    );
+
+    smart_str_free(&response.data);
+
+    if (result == SUCCESS && response.status_code >= 200 && response.status_code < 300) {
+        return SUCCESS;
+    }
+
+    return FAILURE;
+}
+
 int king_telemetry_export_batch(void)
 {
     int metrics_result = SUCCESS;
@@ -19,6 +71,9 @@ int king_telemetry_export_batch(void)
     if (zend_hash_num_elements(Z_ARRVAL(batch->metrics)) > 0) {
         attempted = 1;
         metrics_result = king_telemetry_export_metrics_otlp(&batch->metrics);
+        if (metrics_result != SUCCESS) {
+            failed = 1;
+        }
         if (!king_telemetry_batch_signal_complete(&batch->metrics, metrics_result)) {
             failed = 1;
         }
@@ -28,6 +83,9 @@ int king_telemetry_export_batch(void)
     if (zend_hash_num_elements(Z_ARRVAL(batch->spans)) > 0) {
         attempted = 1;
         spans_result = king_telemetry_export_spans_otlp(&batch->spans);
+        if (spans_result != SUCCESS) {
+            failed = 1;
+        }
         if (!king_telemetry_batch_signal_complete(&batch->spans, spans_result)) {
             failed = 1;
         }
@@ -37,6 +95,9 @@ int king_telemetry_export_batch(void)
     if (zend_hash_num_elements(Z_ARRVAL(batch->logs)) > 0) {
         attempted = 1;
         logs_result = king_telemetry_export_logs_otlp(&batch->logs);
+        if (logs_result != SUCCESS) {
+            failed = 1;
+        }
         if (!king_telemetry_batch_signal_complete(&batch->logs, logs_result)) {
             failed = 1;
         }
@@ -51,11 +112,13 @@ int king_telemetry_export_batch(void)
         king_telemetry_export_success_count++;
     } else {
         king_telemetry_export_failure_count++;
-        /* Re-queue only the signals that still failed. */
-        king_telemetry_batch_refresh_estimated_bytes(batch);
-        if (king_telemetry_queue_batch(batch) == SUCCESS) {
-            king_telemetry_retry_requeue_count++;
-            batch = NULL; /* Don't free, it's back in queue */
+        /* Re-queue only the signals that still failed and remain retryable. */
+        if (king_telemetry_batch_has_signals(batch)) {
+            king_telemetry_batch_refresh_estimated_bytes(batch);
+            if (king_telemetry_queue_batch(batch) == SUCCESS) {
+                king_telemetry_retry_requeue_count++;
+                batch = NULL; /* Don't free, it's back in queue */
+            }
         }
     }
     
@@ -179,21 +242,11 @@ int king_telemetry_export_metrics_otlp(zval *metrics)
     } ZEND_HASH_FOREACH_END();
     
     smart_str_appends(&json_payload, "]}]}]}");
-    smart_str_0(&json_payload);
-    
-    /* Send HTTP request */
-    king_telemetry_http_response_t response;
-    int result = king_telemetry_http_post(endpoint_url, ZSTR_VAL(json_payload.s), &response);
-    
-    /* Clean up */
+    int result = king_telemetry_dispatch_otlp_json_payload(endpoint_url, &json_payload);
+
     smart_str_free(&json_payload);
-    smart_str_free(&response.data);
-    
-    if (result == SUCCESS && response.status_code >= 200 && response.status_code < 300) {
-        return SUCCESS;
-    }
-    
-    return FAILURE;
+
+    return result;
 }
 
 int king_telemetry_export_spans_otlp(zval *spans)
@@ -311,21 +364,11 @@ int king_telemetry_export_spans_otlp(zval *spans)
     } ZEND_HASH_FOREACH_END();
     
     smart_str_appends(&json_payload, "]}]}]}");
-    smart_str_0(&json_payload);
-    
-    /* Send HTTP request */
-    king_telemetry_http_response_t response;
-    int result = king_telemetry_http_post(endpoint_url, ZSTR_VAL(json_payload.s), &response);
-    
-    /* Clean up */
+    int result = king_telemetry_dispatch_otlp_json_payload(endpoint_url, &json_payload);
+
     smart_str_free(&json_payload);
-    smart_str_free(&response.data);
-    
-    if (result == SUCCESS && response.status_code >= 200 && response.status_code < 300) {
-        return SUCCESS;
-    }
-    
-    return FAILURE;
+
+    return result;
 }
 
 int king_telemetry_export_logs_otlp(zval *logs)
@@ -454,19 +497,9 @@ int king_telemetry_export_logs_otlp(zval *logs)
     } ZEND_HASH_FOREACH_END();
     
     smart_str_appends(&json_payload, "]}]}]}");
-    smart_str_0(&json_payload);
-    
-    /* Send HTTP request */
-    king_telemetry_http_response_t response;
-    int result = king_telemetry_http_post(endpoint_url, ZSTR_VAL(json_payload.s), &response);
-    
-    /* Clean up */
+    int result = king_telemetry_dispatch_otlp_json_payload(endpoint_url, &json_payload);
+
     smart_str_free(&json_payload);
-    smart_str_free(&response.data);
-    
-    if (result == SUCCESS && response.status_code >= 200 && response.status_code < 300) {
-        return SUCCESS;
-    }
-    
-    return FAILURE;
+
+    return result;
 }

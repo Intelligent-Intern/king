@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#10 Enforce OTLP request-size limits before exporter dispatch.`
+- `#11 Enforce OTLP response-size handling against real collectors.`
 
 ## Active Executable Items
 
@@ -55,7 +55,7 @@
 - [x] `#7 Preserve span hierarchies correctly across process and worker boundaries.`
 - [x] `#8 Finalize telemetry sampling semantics where sampling is publicly claimed.`
 - [x] `#9 Monitor and bound telemetry CPU cost under load.`
-- [ ] `#10 Enforce OTLP request-size limits before exporter dispatch.`
+- [x] `#10 Enforce OTLP request-size limits before exporter dispatch.`
 - [ ] `#11 Enforce OTLP response-size handling against real collectors.`
 - [ ] `#12 Finalize permanent network failure behavior for telemetry exporters.`
 - [ ] `#13 Implement telemetry queue replay after process restart where the delivery contract requires it.`

@@ -602,9 +602,18 @@ static zend_bool king_telemetry_export_array_succeeded(int result, zval *payload
         && zend_hash_num_elements(Z_ARRVAL_P(payload)) > 0;
 }
 
+static zend_bool king_telemetry_export_array_dropped(int result, zval *payload)
+{
+    return result == KING_TELEMETRY_EXPORT_RESULT_DROP
+        && payload != NULL
+        && Z_TYPE_P(payload) == IS_ARRAY
+        && zend_hash_num_elements(Z_ARRVAL_P(payload)) > 0;
+}
+
 static zend_bool king_telemetry_batch_signal_complete(zval *payload, int result)
 {
-    if (!king_telemetry_export_array_succeeded(result, payload)) {
+    if (!king_telemetry_export_array_succeeded(result, payload)
+        && !king_telemetry_export_array_dropped(result, payload)) {
         return 0;
     }
 

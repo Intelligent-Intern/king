@@ -264,6 +264,13 @@ failure cannot grow memory without limit. When that ceiling is hit, the runtime
 starts dropping newly created batches and records that fact in
 `queue_drop_count`.
 
+One exporter-side boundary is intentionally fail-closed before any wire I/O
+happens. King caps one OTLP request body at `1 MiB`. If the encoded JSON for a
+metrics, spans, or logs export would exceed that size, King does not send a
+partial request and does not poison the retry queue with a batch that can never
+fit. The oversized signal is counted as an export failure for that flush and is
+dropped locally so later healthy smaller exports can still proceed.
+
 This behavior is usually the right tradeoff for a runtime library. It protects
 the main application from turning telemetry failure into uncontrolled memory
 growth, while still making the delivery problem visible through status counters.

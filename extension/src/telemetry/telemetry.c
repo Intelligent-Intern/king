@@ -48,6 +48,8 @@ typedef struct _king_telemetry_libcurl_api_t {
 } king_telemetry_libcurl_api_t;
 
 #define KING_TELEMETRY_HTTP_TIMEOUT_FALLBACK_MS 10000U
+#define KING_TELEMETRY_EXPORT_RESULT_DROP 1
+#define KING_TELEMETRY_MAX_REQUEST_SIZE (1024 * 1024) /* 1 MiB */
 #define KING_TELEMETRY_MAX_RESPONSE_SIZE (1024 * 1024) /* 1 MiB */
 #define KING_TELEMETRY_BYTES_PER_QUEUE_SLOT (64ULL * 1024ULL)
 

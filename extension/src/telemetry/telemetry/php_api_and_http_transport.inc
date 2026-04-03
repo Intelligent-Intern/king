@@ -202,7 +202,11 @@ static size_t king_telemetry_http_write_callback(void *ptr, size_t size, size_t 
     return total_size;
 }
 
-static int king_telemetry_http_post(const char *url, const char *json_payload, king_telemetry_http_response_t *response)
+static int king_telemetry_http_post(
+    const char *url,
+    const char *json_payload,
+    size_t json_payload_bytes,
+    king_telemetry_http_response_t *response)
 {
     CURL *curl = NULL;
     CURLcode res = CURLE_FAILED_INIT;
@@ -230,7 +234,7 @@ static int king_telemetry_http_post(const char *url, const char *json_payload, k
     king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_URL, url);
     king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_POST, 1L);
     king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_POSTFIELDS, json_payload);
-    king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_POSTFIELDSIZE, strlen(json_payload));
+    king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_POSTFIELDSIZE, (long) json_payload_bytes);
     king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_HTTPHEADER, headers);
     king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_WRITEFUNCTION, king_telemetry_http_write_callback);
     king_telemetry_libcurl.curl_easy_setopt_fn(curl, CURLOPT_WRITEDATA, response);
