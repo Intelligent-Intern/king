@@ -8,6 +8,12 @@ EXT_DIR="${ROOT_DIR}/extension"
 
 cd "${ROOT_DIR}"
 
+if ! command -v php >/dev/null 2>&1; then
+    echo "Error: PHP is required for static checks but was not found in PATH." >&2
+    echo "Please install PHP or ensure it is available on your PATH, then re-run this script." >&2
+    exit 1
+fi
+
 echo "Linting PHP entry surfaces..."
 php -l stubs/king.php
 php -l benchmarks/run.php
