@@ -16,5 +16,6 @@
 
 #include "registry/options_and_preconditions.inc"
 #include "registry/streaming_helpers.inc"
+#include "registry/read_cdn_fallback_helpers.inc"
 #include "registry/write_api.inc"
 #include "registry/read_and_maintenance_api.inc"

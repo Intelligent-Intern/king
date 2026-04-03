@@ -51,10 +51,15 @@ const char *king_object_store_public_object_id_validate_zstr(const zend_string *
 
 /* --- Config helpers --- */
 
-static void king_object_store_config_clear(king_object_store_config_t *config)
+void king_object_store_config_clear(king_object_store_config_t *config)
 {
     if (config == NULL) {
         return;
+    }
+    if (config->cdn_config.edge_nodes != NULL) {
+        pefree(config->cdn_config.edge_nodes, 1);
+        config->cdn_config.edge_nodes = NULL;
+        config->cdn_config.edge_node_count = 0;
     }
     if (Z_TYPE(config->cloud_credentials) != IS_UNDEF) {
         zval_ptr_dtor(&config->cloud_credentials);

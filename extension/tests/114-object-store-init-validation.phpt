@@ -45,6 +45,13 @@ try {
     var_dump(get_class($e));
     var_dump($e->getMessage());
 }
+
+try {
+    king_object_store_init(['cdn_config' => ['origin_request_timeout_ms' => 0]]);
+} catch (King\Exception $e) {
+    var_dump(get_class($e));
+    var_dump($e->getMessage());
+}
 ?>
 --EXPECTF--
 string(24) "King\ValidationException"
@@ -59,3 +66,5 @@ string(24) "King\ValidationException"
 string(63) "Object-store config 'chunk_size_kb' must be a positive integer."
 string(24) "King\ValidationException"
 string(84) "Object-store config 'cdn_config.default_ttl_seconds' must be a non-negative integer."
+string(24) "King\ValidationException"
+string(86) "Object-store config 'cdn_config.origin_request_timeout_ms' must be a positive integer."

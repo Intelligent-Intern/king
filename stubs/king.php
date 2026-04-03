@@ -631,7 +631,15 @@ namespace {
      * `primary_backend`, `backup_backend`, `storage_root_path`,
      * `max_storage_size_bytes`, `replication_factor`, `chunk_size_kb`,
      * `cloud_credentials`, and `cdn_config` with `enabled`,
-     * `cache_size_mb`, `default_ttl_seconds`. `cloud_credentials`
+     * `cache_size_mb`, `default_ttl_seconds`, optional
+     * `origin_http_endpoint`, and optional `origin_request_timeout_ms`.
+     * A configured `cdn_config.origin_http_endpoint` adds one bounded
+     * full-read HTTP origin fallback attempt for `king_object_store_get()`
+     * and `king_object_store_get_to_stream()` when the primary backend
+     * misses or fails; there is no hidden automatic retry loop. If a
+     * previous successful full read already retained a stale `smart_cdn`
+     * body, that retained body may still satisfy the same read after an
+     * origin timeout or other origin failure. `cloud_credentials`
      * currently accepts `api_endpoint` or `endpoint`, `bucket`,
      * provider-specific auth material such as `access_key` plus
      * `secret_key` for `cloud_s3`, `access_token` for `cloud_gcs`, or
@@ -765,7 +773,12 @@ namespace {
      * and `length`, using byte-range semantics aligned with RFC 7233.
      * Full-object reads validate stored `integrity_sha256` metadata when
      * present and backfill runtime CDN state on a smart_cdn cache miss when
-     * the CDN layer is enabled. For bounded-memory egress, use
+     * the CDN layer is enabled. That same process-local CDN registry now stays
+     * inside the active `cdn.cache_memory_limit_mb` budget by evicting older
+     * entries when newer full-read warms would otherwise grow it past the
+     * configured ceiling, and an oversize full-read body is not allowed to
+     * flush smaller already-admitted stale bodies just to fail admission
+     * itself. For bounded-memory egress, use
      * `king_object_store_get_to_stream()`.
      * @param array<string,mixed>|null $options
       * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
@@ -1144,17 +1157,39 @@ namespace {
      *     runtime_default_ttl_sec:int,
      *     cached_object_count:int,
      *     cached_bytes:int,
-     *     latest_cached_at:int|null
+     *     retained_object_count:int,
+     *     metadata_only_object_count:int,
+     *     retained_bytes:int,
+     *     served_count:int,
+     *     stale_serve_count:int,
+     *     eviction_count:int,
+     *     expiration_count:int,
+     *     invalidation_count:int,
+     *     latest_cached_at:int|null,
+     *     latest_served_at:int|null
      *   }
      * }
+     *
+     * The CDN stats separate live resident inventory
+     * (`cached_*`, `retained_*`, `metadata_only_object_count`) from
+     * process-local lifecycle counters
+     * (`served_count`, `stale_serve_count`, `eviction_count`,
+     * `expiration_count`, `invalidation_count`). After a real process restart
+     * those counters begin empty again and only repopulate after fresh warms,
+     * invalidations, expirations, or full backend reads in that new process.
      */
     function king_object_store_get_stats(): array {}
 
     /**
      * Caches an existing object-store entry in the runtime CDN cache.
      * The runtime prefers committed backend metadata paths and only falls back
-     * to payload reads when size metadata cannot be proven.
-     * Returns `false` when the object does not exist in the active object store.
+     * to payload reads when size metadata cannot be proven. The process-local
+     * CDN registry honors the active `cdn.cache_memory_limit_mb` budget by
+     * evicting older entries before it grows without bound, so this call
+     * returns `false` both on ordinary miss and when the runtime cannot keep
+     * the requested entry admitted under the current memory ceiling. Large
+     * objects can still stay admitted as metadata-only cache markers when
+     * their size can be proven without retaining the full body in memory.
      * @param array{ttl_sec?:int}|null $options
      * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
      */
@@ -1168,7 +1203,9 @@ namespace {
     function king_cdn_invalidate_cache(?string $object_id = null): int {}
 
     /**
-     * CDN edge-node inventory for the active runtime.
+     * Explicit CDN edge-node inventory known to the active runtime.
+     * Returned nodes are not synthesized from a count-only config and report
+     * live reachability in `is_healthy`.
      * @return list<array<string,mixed>>
      */
     function king_cdn_get_edge_nodes(): array {}

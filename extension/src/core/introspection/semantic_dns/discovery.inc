@@ -1,7 +1,8 @@
 /*
- * Public discovery leaf for Semantic-DNS service listings. Applies the live
- * health sweep, filters the in-memory registry by type and optional criteria,
- * and exports a bounded snapshot payload for userland.
+ * Public discovery leaf for Semantic-DNS service listings. Refreshes the
+ * semantic-mode shared state view, applies the live health sweep, filters the
+ * in-memory registry by type and optional criteria, and exports a bounded
+ * snapshot payload for userland.
  */
 
 PHP_FUNCTION(king_semantic_dns_discover_service)
@@ -18,6 +19,10 @@ PHP_FUNCTION(king_semantic_dns_discover_service)
         Z_PARAM_OPTIONAL
         Z_PARAM_ARRAY_OR_NULL(criteria)
     ZEND_PARSE_PARAMETERS_END();
+
+    if (!king_semantic_dns_refresh_runtime_view_or_throw("king_semantic_dns_discover_service")) {
+        RETURN_THROWS();
+    }
 
     king_semantic_dns_health_check_services();
 

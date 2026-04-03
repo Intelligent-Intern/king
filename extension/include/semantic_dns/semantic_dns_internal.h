@@ -53,6 +53,7 @@ int king_semantic_dns_state_remove_snapshot_file(const char *path);
 int king_semantic_dns_listener_write_runtime_snapshot(void);
 
 /* Registry/runtime refresh helpers */
+int king_semantic_dns_refresh_distributed_state(void);
 int king_semantic_dns_refresh_runtime_mother_nodes_from_registry(void);
 void king_semantic_dns_refresh_live_service_signals(void);
 

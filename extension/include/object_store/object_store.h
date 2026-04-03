@@ -120,10 +120,12 @@ typedef struct _king_cdn_config_t {
     uint32_t cache_size_mb;
     uint32_t max_object_size_mb;
     uint32_t default_ttl_seconds;
+    uint32_t origin_request_timeout_ms;
     zend_bool enable_compression;
     zend_bool enable_image_optimization;
     zend_bool enable_smart_routing;
     char origin_server[256];
+    char origin_http_endpoint[512];
 } king_cdn_config_t;
 
 typedef struct _king_object_store_config_t {
@@ -166,10 +168,10 @@ PHP_FUNCTION(king_object_store_abort_resumable_upload);
 /* Returns the current resumable-upload session snapshot. */
 PHP_FUNCTION(king_object_store_get_resumable_upload_status);
 
-/* Retrieves an object and can backfill smart_cdn cache state on a full-read miss. */
+/* Retrieves an object, with full-read CDN origin fallback and smart_cdn cache fill when available. */
 PHP_FUNCTION(king_object_store_get);
 
-/* Writes an object into a writable stream without whole-payload materialization. */
+/* Writes an object into a writable stream, including the full-read CDN origin fallback path. */
 PHP_FUNCTION(king_object_store_get_to_stream);
 
 /* Deletes an object. */

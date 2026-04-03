@@ -427,7 +427,13 @@ static void king_semantic_dns_listener_loop(int socket_fd)
             continue;
         }
 
-        (void) king_semantic_dns_listener_load_snapshot();
+        if (king_semantic_dns_runtime.config.semantic_mode_enable) {
+            if (king_semantic_dns_refresh_distributed_state() != SUCCESS) {
+                continue;
+            }
+        } else {
+            (void) king_semantic_dns_listener_load_snapshot();
+        }
         king_semantic_dns_health_check_services();
 
         if (!king_semantic_dns_wire_build_response(
@@ -508,4 +514,3 @@ static int king_semantic_dns_listener_start(void)
     king_semantic_dns_runtime.listener_pid = pid;
     return SUCCESS;
 }
-

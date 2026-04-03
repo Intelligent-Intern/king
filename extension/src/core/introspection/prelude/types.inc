@@ -61,8 +61,10 @@ typedef struct _king_semantic_dns_mother_node {
 typedef struct _king_cdn_cache_entry {
     zend_string *object_id;
     zend_long payload_size;
+    zend_string *retained_payload;
     time_t cached_at;
     time_t expires_at;
+    uint64_t touch_serial;
     /* Edge-state tracking */
     zend_long served_count;
     time_t last_served_at;

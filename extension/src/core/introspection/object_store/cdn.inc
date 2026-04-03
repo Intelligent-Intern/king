@@ -1,13 +1,92 @@
 /*
  * Root CDN companion slice: implements the local cache/invalidation leaves,
  * resolves cache-entry size through the active local/distributed/cloud
- * metadata path without dragging full payload bytes when avoidable, and
- * exposes the current synthetic edge-node inventory that the runtime can
- * describe today.
+ * metadata path without dragging full payload bytes when avoidable, keeps
+ * explicit invalidation honest for retained stale entries, and exposes the
+ * explicitly configured edge-node inventory through live health probes instead
+ * of inventing synthetic delivery nodes.
  */
 
 #include "object_store/object_store_internal.h"
 #include <sys/stat.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <poll.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+static zend_bool king_cdn_edge_node_probe_health(const king_storage_node_t *node)
+{
+    struct addrinfo hints;
+    struct addrinfo *results = NULL;
+    struct addrinfo *cursor;
+    char port_buffer[16];
+    int gai_status;
+
+    if (node == NULL || node->hostname[0] == '\0' || node->port == 0) {
+        return 0;
+    }
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_ADDRCONFIG | AI_NUMERICSERV;
+
+    snprintf(port_buffer, sizeof(port_buffer), "%u", (unsigned int) node->port);
+    gai_status = getaddrinfo(node->hostname, port_buffer, &hints, &results);
+    if (gai_status != 0) {
+        return 0;
+    }
+
+    for (cursor = results; cursor != NULL; cursor = cursor->ai_next) {
+        int fd;
+        int flags;
+        int connect_result;
+
+        fd = socket(cursor->ai_family, cursor->ai_socktype, cursor->ai_protocol);
+        if (fd < 0) {
+            continue;
+        }
+
+        flags = fcntl(fd, F_GETFL, 0);
+        if (flags >= 0) {
+            (void) fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        }
+
+        connect_result = connect(fd, cursor->ai_addr, cursor->ai_addrlen);
+        if (connect_result == 0) {
+            close(fd);
+            freeaddrinfo(results);
+            return 1;
+        }
+
+        if (errno == EINPROGRESS || errno == EWOULDBLOCK) {
+            struct pollfd pfd;
+
+            memset(&pfd, 0, sizeof(pfd));
+            pfd.fd = fd;
+            pfd.events = POLLOUT;
+
+            if (poll(&pfd, 1, 100) == 1 && (pfd.revents & POLLOUT) != 0) {
+                int socket_error = 0;
+                socklen_t socket_error_size = sizeof(socket_error);
+
+                if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &socket_error, &socket_error_size) == 0
+                    && socket_error == 0) {
+                    close(fd);
+                    freeaddrinfo(results);
+                    return 1;
+                }
+            }
+        }
+
+        close(fd);
+    }
+
+    freeaddrinfo(results);
+    return 0;
+}
 
 PHP_FUNCTION(king_cdn_cache_object)
 {
@@ -136,7 +215,9 @@ PHP_FUNCTION(king_cdn_cache_object)
         existing->payload_size = (zend_long) data_size;
         existing->cached_at    = cached_at;
         existing->expires_at   = ttl_sec > 0 ? cached_at + ttl_sec : 0;
-        RETURN_TRUE;
+        king_cdn_cache_entry_note_touched(existing);
+        king_cdn_enforce_memory_limit_for_object(object_id);
+        RETURN_BOOL(king_cdn_cache_registry_get_entry_allow_expired(object_id) != NULL);
     }
 
     cache_entry = pecalloc(1, sizeof(*cache_entry), 1);
@@ -144,6 +225,7 @@ PHP_FUNCTION(king_cdn_cache_object)
     cache_entry->payload_size = (zend_long) data_size;
     cache_entry->cached_at    = cached_at;
     cache_entry->expires_at   = ttl_sec > 0 ? cached_at + ttl_sec : 0;
+    king_cdn_cache_entry_note_touched(cache_entry);
 
     ZVAL_PTR(&stored_entry, cache_entry);
     if (zend_hash_update(&king_cdn_cache_registry, cache_entry->object_id, &stored_entry) == NULL) {
@@ -156,11 +238,12 @@ PHP_FUNCTION(king_cdn_cache_object)
         RETURN_THROWS();
     }
 
-    if (king_cdn_distribute_object(ZSTR_VAL(cache_entry->object_id), NULL, 1) != SUCCESS) {
+    king_cdn_enforce_memory_limit_for_object(object_id);
+    if (king_cdn_cache_registry_get_entry_allow_expired(object_id) != NULL
+        && king_cdn_distribute_object(ZSTR_VAL(cache_entry->object_id), NULL, 1) != SUCCESS) {
          /* Ignore distribution errors in the runtime (not fatal for the local cache) */
     }
-
-    RETURN_TRUE;
+    RETURN_BOOL(king_cdn_cache_registry_get_entry_allow_expired(object_id) != NULL);
 }
 
 PHP_FUNCTION(king_cdn_invalidate_cache)
@@ -184,6 +267,7 @@ PHP_FUNCTION(king_cdn_invalidate_cache)
         /* Flush all (including expired) */
         zend_long removed_count = (zend_long) zend_hash_num_elements(&king_cdn_cache_registry);
         zend_hash_clean(&king_cdn_cache_registry);
+        king_cdn_counter_add(&king_cdn_cache_invalidation_count, removed_count);
         RETURN_LONG(removed_count);
     }
 
@@ -202,47 +286,54 @@ PHP_FUNCTION(king_cdn_invalidate_cache)
     }
 
     /* Single-object invalidation */
-    if (king_cdn_cache_registry_get_entry(object_id) == NULL) {
+    if (king_cdn_cache_registry_get_entry_allow_expired(object_id) == NULL) {
         RETURN_LONG(0);
     }
 
-    RETURN_LONG(zend_hash_del(&king_cdn_cache_registry, object_id) == SUCCESS ? 1 : 0);
+    if (zend_hash_del(&king_cdn_cache_registry, object_id) == SUCCESS) {
+        king_cdn_counter_add(&king_cdn_cache_invalidation_count, 1);
+        RETURN_LONG(1);
+    }
+
+    RETURN_LONG(0);
 }
 
 /*
- * Expose a live snapshot of the CDN runtime configuration as a list of
- * virtual edge node descriptors derived from the active object-store config.
- *
- * In the current runtime there are no real distributed edge nodes, but we
- * return a single synthetic entry when the CDN is configured and enabled, so
- * callers can rely on a stable non-empty list.
+ * Expose the explicit edge-node inventory known to the CDN runtime. A plain
+ * `edge_node_count` does not synthesize nodes; returned entries must come from
+ * configured descriptors and report live TCP reachability at call time.
  */
 PHP_FUNCTION(king_cdn_get_edge_nodes)
 {
+    uint32_t index;
+
     ZEND_PARSE_PARAMETERS_NONE();
 
     array_init(return_value);
 
     if (!king_object_store_runtime.initialized ||
-        !king_object_store_runtime.config.cdn_config.enabled) {
+        !king_object_store_runtime.config.cdn_config.enabled ||
+        king_object_store_runtime.config.cdn_config.edge_nodes == NULL ||
+        king_object_store_runtime.config.cdn_config.edge_node_count == 0) {
         return; /* CDN disabled or store not yet initialised */
     }
 
-    uint32_t node_count = king_object_store_runtime.config.cdn_config.edge_node_count;
-    if (node_count == 0) node_count = 1;
-
-    for (uint32_t i = 0; i < node_count; i++) {
+    for (index = 0; index < king_object_store_runtime.config.cdn_config.edge_node_count; index++) {
         zval node;
-        char node_id[32];
-        snprintf(node_id, sizeof(node_id), "edge-%u", i);
+        const king_storage_node_t *configured_node =
+            &king_object_store_runtime.config.cdn_config.edge_nodes[index];
 
         array_init(&node);
-        add_assoc_string(&node, "node_id",        node_id);
-        add_assoc_string(&node, "hostname",       "localhost");
-        add_assoc_long  (&node, "port",           (zend_long)(8080 + i));
-        add_assoc_string(&node, "backend",        "local_fs");
-        add_assoc_bool  (&node, "is_cdn_edge",    1);
-        add_assoc_bool  (&node, "is_healthy",     1);
+        add_assoc_string(&node, "node_id", configured_node->node_id);
+        add_assoc_string(&node, "hostname", configured_node->hostname);
+        add_assoc_long  (&node, "port", (zend_long) configured_node->port);
+        add_assoc_string(
+            &node,
+            "backend",
+            (char *) king_storage_backend_to_string(configured_node->backend_type)
+        );
+        add_assoc_bool  (&node, "is_cdn_edge", configured_node->is_cdn_edge ? 1 : 0);
+        add_assoc_bool  (&node, "is_healthy", king_cdn_edge_node_probe_health(configured_node));
         add_assoc_long  (&node, "cache_size_mb",  (zend_long) king_object_store_runtime.config.cdn_config.cache_size_mb);
         add_assoc_long  (&node, "default_ttl_sec",(zend_long) king_object_store_runtime.config.cdn_config.default_ttl_seconds);
         add_next_index_zval(return_value, &node);

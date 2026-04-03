@@ -1,8 +1,9 @@
 /*
  * Root object-store init slice: validates the public object-store bootstrap
  * payload, maps backend names to the active runtime enum, normalizes the
- * small config subset that the current runtime honors, and hands the
- * assembled snapshot to `king_object_store_init_system()`.
+ * small config subset that the current runtime honors, parses explicit CDN
+ * edge-node descriptors without inventing synthetic delivery nodes, and hands
+ * the assembled snapshot to `king_object_store_init_system()`.
  */
 
 #include "object_store/object_store_internal.h"
@@ -68,6 +69,121 @@ static int king_object_store_parse_backend_config(
         config_key
     );
     return FAILURE;
+}
+
+static int king_object_store_parse_cdn_edge_nodes(
+    zval *edge_nodes_zv,
+    king_object_store_config_t *config
+)
+{
+    uint32_t parsed_count;
+    uint32_t index = 0;
+    king_storage_node_t *nodes = NULL;
+    zval *entry_zv;
+
+    if (Z_TYPE_P(edge_nodes_zv) != IS_ARRAY) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Object-store config 'cdn_config.edge_nodes' must be an array."
+        );
+        return FAILURE;
+    }
+
+    parsed_count = (uint32_t) zend_hash_num_elements(Z_ARRVAL_P(edge_nodes_zv));
+    if (parsed_count == 0) {
+        return SUCCESS;
+    }
+
+    if (config->cdn_config.edge_node_count != 0
+        && config->cdn_config.edge_node_count != parsed_count) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Object-store config 'cdn_config.edge_nodes' must match 'cdn_config.edge_node_count' when both are provided."
+        );
+        return FAILURE;
+    }
+
+    nodes = pecalloc(parsed_count, sizeof(*nodes), 1);
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(edge_nodes_zv), entry_zv) {
+        zval *field_zv;
+        king_storage_node_t *node = &nodes[index];
+
+        if (Z_TYPE_P(entry_zv) != IS_ARRAY) {
+            zend_throw_exception_ex(
+                king_ce_validation_exception,
+                0,
+                "Object-store config 'cdn_config.edge_nodes[%u]' must be an array.",
+                index
+            );
+            pefree(nodes, 1);
+            return FAILURE;
+        }
+
+        field_zv = zend_hash_str_find(Z_ARRVAL_P(entry_zv), "node_id", sizeof("node_id") - 1);
+        if (field_zv == NULL || Z_TYPE_P(field_zv) != IS_STRING || Z_STRLEN_P(field_zv) == 0
+            || (size_t) Z_STRLEN_P(field_zv) >= sizeof(node->node_id)) {
+            zend_throw_exception_ex(
+                king_ce_validation_exception,
+                0,
+                "Object-store config 'cdn_config.edge_nodes[%u].node_id' must be a non-empty string shorter than 64 bytes.",
+                index
+            );
+            pefree(nodes, 1);
+            return FAILURE;
+        }
+        strncpy(node->node_id, Z_STRVAL_P(field_zv), sizeof(node->node_id) - 1);
+
+        field_zv = zend_hash_str_find(Z_ARRVAL_P(entry_zv), "hostname", sizeof("hostname") - 1);
+        if (field_zv == NULL || Z_TYPE_P(field_zv) != IS_STRING || Z_STRLEN_P(field_zv) == 0
+            || (size_t) Z_STRLEN_P(field_zv) >= sizeof(node->hostname)) {
+            zend_throw_exception_ex(
+                king_ce_validation_exception,
+                0,
+                "Object-store config 'cdn_config.edge_nodes[%u].hostname' must be a non-empty string shorter than 256 bytes.",
+                index
+            );
+            pefree(nodes, 1);
+            return FAILURE;
+        }
+        strncpy(node->hostname, Z_STRVAL_P(field_zv), sizeof(node->hostname) - 1);
+
+        field_zv = zend_hash_str_find(Z_ARRVAL_P(entry_zv), "port", sizeof("port") - 1);
+        if (field_zv == NULL || Z_TYPE_P(field_zv) != IS_LONG || Z_LVAL_P(field_zv) <= 0
+            || Z_LVAL_P(field_zv) > 65535) {
+            zend_throw_exception_ex(
+                king_ce_validation_exception,
+                0,
+                "Object-store config 'cdn_config.edge_nodes[%u].port' must be an integer between 1 and 65535.",
+                index
+            );
+            pefree(nodes, 1);
+            return FAILURE;
+        }
+        node->port = (uint16_t) Z_LVAL_P(field_zv);
+
+        node->backend_type = config->primary_backend;
+        field_zv = zend_hash_str_find(Z_ARRVAL_P(entry_zv), "backend", sizeof("backend") - 1);
+        if (field_zv != NULL
+            && king_object_store_parse_backend_config(
+                field_zv,
+                "cdn_config.edge_nodes[].backend",
+                &node->backend_type
+            ) != SUCCESS) {
+            pefree(nodes, 1);
+            return FAILURE;
+        }
+
+        node->is_cdn_edge = 1;
+        node->is_healthy = 0;
+        index++;
+    } ZEND_HASH_FOREACH_END();
+
+    config->cdn_config.edge_nodes = nodes;
+    config->cdn_config.edge_node_count = parsed_count;
+    return SUCCESS;
 }
 
 PHP_FUNCTION(king_object_store_init)
@@ -246,9 +362,58 @@ PHP_FUNCTION(king_object_store_init)
             }
             new_config.cdn_config.default_ttl_seconds = (uint32_t) Z_LVAL_P(cdn_value_zv);
         }
+
+        cdn_value_zv = zend_hash_str_find(Z_ARRVAL_P(value_zv), "origin_http_endpoint", sizeof("origin_http_endpoint") - 1);
+        if (cdn_value_zv != NULL) {
+            if (Z_TYPE_P(cdn_value_zv) != IS_STRING || Z_STRLEN_P(cdn_value_zv) == 0) {
+                zend_throw_exception_ex(
+                    king_ce_validation_exception,
+                    0,
+                    "Object-store config 'cdn_config.origin_http_endpoint' must be a non-empty string."
+                );
+                RETURN_THROWS();
+            }
+            if (Z_STRLEN_P(cdn_value_zv) >= sizeof(new_config.cdn_config.origin_http_endpoint)) {
+                zend_throw_exception_ex(
+                    king_ce_validation_exception,
+                    0,
+                    "Object-store config 'cdn_config.origin_http_endpoint' is too long."
+                );
+                RETURN_THROWS();
+            }
+            strncpy(
+                new_config.cdn_config.origin_http_endpoint,
+                Z_STRVAL_P(cdn_value_zv),
+                sizeof(new_config.cdn_config.origin_http_endpoint) - 1
+            );
+        }
+
+        cdn_value_zv = zend_hash_str_find(Z_ARRVAL_P(value_zv), "origin_request_timeout_ms", sizeof("origin_request_timeout_ms") - 1);
+        if (cdn_value_zv != NULL) {
+            if (Z_TYPE_P(cdn_value_zv) != IS_LONG || Z_LVAL_P(cdn_value_zv) <= 0) {
+                zend_throw_exception_ex(
+                    king_ce_validation_exception,
+                    0,
+                    "Object-store config 'cdn_config.origin_request_timeout_ms' must be a positive integer."
+                );
+                RETURN_THROWS();
+            }
+            new_config.cdn_config.origin_request_timeout_ms = (uint32_t) Z_LVAL_P(cdn_value_zv);
+        }
+
+        cdn_value_zv = zend_hash_str_find(Z_ARRVAL_P(value_zv), "edge_nodes", sizeof("edge_nodes") - 1);
+        if (cdn_value_zv != NULL
+            && king_object_store_parse_cdn_edge_nodes(cdn_value_zv, &new_config) != SUCCESS) {
+            RETURN_THROWS();
+        }
     }
 
     if (king_object_store_init_system(&new_config) != SUCCESS) {
+        if (new_config.cdn_config.edge_nodes != NULL) {
+            pefree(new_config.cdn_config.edge_nodes, 1);
+            new_config.cdn_config.edge_nodes = NULL;
+            new_config.cdn_config.edge_node_count = 0;
+        }
         zend_throw_exception_ex(
             king_ce_system_exception,
             0,

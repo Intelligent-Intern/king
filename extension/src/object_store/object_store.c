@@ -7,10 +7,12 @@
 
 #include "php_king.h"
 #include "object_store/object_store_internal.h"
+#include "include/config/native_cdn/base_layer.h"
 #include "include/config/native_object_store/base_layer.h"
 #include "Zend/zend_smart_str.h"
 #include "main/php_streams.h"
 #include "ext/standard/base64.h"
+#include "ext/standard/url.h"
 #include "ext/hash/php_hash.h"
 #include "ext/hash/php_hash_sha.h"
 #include <curl/curl.h>
@@ -554,6 +556,7 @@ static int king_object_store_append_metadata_headers(
 #include "cloud_s3.inc"
 #include "cloud_gcs.inc"
 #include "cloud_azure.inc"
+#include "internal/object_store_origin_http.inc"
 
 #include "internal/object_store_metadata_headers_and_upload_api.inc"
 #include "internal/object_store_local_fallbacks.inc"

@@ -359,8 +359,8 @@ to read from edge locations.
 
 `king_cdn_cache_object()` pushes one object into the cache path. `king_cdn_invalidate_cache()`
 retires one cached object or clears the whole cache view. `king_cdn_get_edge_nodes()`
-returns the current edge inventory so the operator can see where the delivery
-layer exists.
+returns the explicit edge inventory known to the runtime so the operator can
+see which real delivery nodes were configured.
 
 That cache-warm path is now verified against the active real object-store
 backends. `local_fs` and `distributed` can size the cache entry from committed
@@ -369,11 +369,90 @@ that same size path through provider `HEAD` metadata when the local sidecar is
 absent. The point is to keep edge warming tied to origin truth without
 downloading the full payload body just to record CDN state.
 
+That same process-local CDN registry is now actually bounded by
+`cdn.cache_memory_limit_mb`. When repeated warms or full-read backfills would
+otherwise grow the registry past that in-process budget, King evicts the
+least-recently-touched older entries before the registry keeps growing. The
+current contract is honest about that pressure: `king_cdn_cache_object()` can
+return `false` even for an existing object when the entry cannot stay admitted
+under the active memory ceiling.
+
+Large objects follow a narrower but still honest rule. When
+`king_cdn_cache_object()` can prove a large object's size from committed
+metadata or backend `HEAD`, that object may stay admitted as a metadata-only
+cache marker even under a tight memory ceiling because the runtime is not
+retaining the full body bytes in memory. A later full-object read of that same
+large object still will not flush smaller already-admitted retained bodies just
+to try and keep its own oversize body. King serves the large read from the
+active backend, drops the oversize retained body back out when it cannot fit,
+and later backend failure for that large object still fails honestly instead of
+inventing stale bytes it never kept.
+
 The current honest miss-fill contract is full-object `king_object_store_get()`
 for `smart_cdn` objects. When the runtime CDN registry misses, a successful
 origin/backend read backfills the local cache entry and marks it served; the
 payload still comes from the active object-store backend today rather than from
 a fake edge body store.
+
+That same full-read path now also owns the honest HTTP-origin fallback slice
+when `cdn.origin_http_endpoint` or
+`king_object_store_init(['cdn_config' => ['origin_http_endpoint' => ...]])`
+is configured. On a full-object miss or backend failure, King makes one bounded
+HTTP `GET` attempt to the configured origin using the active
+`origin_request_timeout_ms` budget. It does not hide automatic retries behind
+that path. A successful origin response can satisfy the read immediately, and
+the local `smart_cdn` registry is backfilled when the runtime still has honest
+metadata for that object. If the origin request times out or otherwise fails,
+King only serves stale bytes when a previous successful full read already
+retained that body; a metadata-only warm entry still fails honestly.
+
+That same honesty rule now applies to edge-node inventory. A bare
+`cdn_config.edge_node_count` no longer manufactures `edge-0`, `edge-1`, and so
+on. `king_cdn_get_edge_nodes()` only returns explicitly configured
+`cdn_config.edge_nodes`, and each returned `is_healthy` bit is probed live
+against the configured host and port at call time.
+
+Repeated warm and invalidate churn is also now verified across `local_fs`,
+`distributed`, `cloud_s3`, `cloud_gcs`, and `cloud_azure`: repeated targeted
+invalidations drive `cached_object_count` and `cached_bytes` back to zero
+without stale registry drift under sustained cache warm/read-through load.
+
+Backend updates now keep that CDN view honest as well. A committed overwrite
+invalidates any retained CDN state for the object before later reads run, so an
+old cached body cannot survive a newer origin truth. The next successful read
+repopulates the cache with the updated payload size and body, and a backend
+failure immediately after the overwrite no longer leaks the pre-update stale
+payload.
+
+The current honest stale-on-error contract is the same full-object
+`king_object_store_get()` / `king_object_store_get_to_stream()` path for
+`smart_cdn` objects when a previous successful full read already retained the
+body in the local CDN registry. That retained body can be served after TTL
+expiry when a later real backend read fails. Direct `king_cdn_cache_object()`
+warmups still only retain metadata and size, so a head-only warm entry without
+an earlier full read still fails through the public backend-failure taxonomy
+instead of pretending the CDN can synthesize bytes it never held.
+
+That process boundary matters after restart too. A real process restart begins
+with an empty CDN registry again even when the durable backend still has the
+object and its metadata sidecar. In that restarted process,
+`king_cdn_cache_object()` or the next successful full read can honestly
+re-admit the object from durable metadata or remote `HEAD`, but stale-on-error
+still remains unavailable until a new full read in that process actually
+retains the body again. King does not pretend that stale bytes from an earlier
+process survived restart.
+
+`king_object_store_get_stats()['cdn']` now makes that split visible instead of
+collapsing everything into one vague count. The resident inventory fields
+`cached_object_count`, `cached_bytes`, `retained_object_count`,
+`metadata_only_object_count`, and `retained_bytes` describe the entries and
+bytes the current process is actually holding right now. The lifecycle counter
+fields `served_count`, `stale_serve_count`, `eviction_count`,
+`expiration_count`, and `invalidation_count` are process-local observability:
+they tell operators what this process has served, evicted, expired, and
+invalidated since it booted. `latest_cached_at` and `latest_served_at` expose
+the most recent resident admission and serve timestamps for that same live
+process.
 
 This matters because a storage write often has a delivery consequence. A fresh
 object may need warming at the edge. An overwritten object may need invalidation
@@ -795,6 +874,8 @@ king_object_store_init([
         'enabled' => true,
         'cache_size_mb' => 2048,
         'default_ttl_seconds' => 900,
+        'origin_http_endpoint' => 'https://origin.example.internal/objects',
+        'origin_request_timeout_ms' => 1500,
     ],
 ]);
 
