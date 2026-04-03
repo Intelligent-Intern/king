@@ -228,7 +228,7 @@ function build_case_definitions(): array
             'default_iterations' => 50000,
             'operations_per_iteration' => 4,
             'bootstrap' => static function (): array {
-                $stateDir = '/tmp/king_semantic_dns_state';
+                $stateDir = benchmark_temp_path('king_semantic_dns_state');
                 $dnsPort = 18053 + (getmypid() % 1000);
                 $config = [
                     'enabled' => true,
@@ -252,6 +252,7 @@ function build_case_definitions(): array
 
                 return [
                     'run' => static function (int $iteration): int {
+                        // In this benchmark, the service identifier and display name are intentionally identical.
                         $serviceId = 'api-bench';
                         $serviceName = 'api-bench';
 
@@ -294,7 +295,6 @@ function build_case_definitions(): array
                             + strlen($serviceId);
                     },
                     'cleanup' => static function () use ($stateDir, $config): void {
-                        king_semantic_dns_init($config);
                         delete_flat_directory($stateDir);
                     },
                 ];
