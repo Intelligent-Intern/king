@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- `#19 Validate WebSocket upgrade on HTTP/3 where the public docs or surface claim it.`
+- `#20 Validate WebSocket resource cleanup across request boundaries and worker reuse.`
 
 ## Active Executable Items
 
@@ -42,7 +42,7 @@
 - [x] `#16 Back King\WebSocket\Server connection registry and targeted send semantics with real runtime behavior.`
 - [x] `#17 Back King\WebSocket\Server broadcast and shutdown semantics with real live connections.`
 - [x] `#18 Validate WebSocket upgrade on HTTP/2 where the public docs or surface claim it.`
-- [ ] `#19 Validate WebSocket upgrade on HTTP/3 where the public docs or surface claim it.`
+- [x] `#19 Validate WebSocket upgrade on HTTP/3 where the public docs or surface claim it.`
 - [ ] `#20 Validate WebSocket resource cleanup across request boundaries and worker reuse.`
 
 ## Notes

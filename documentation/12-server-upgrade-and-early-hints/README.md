@@ -236,7 +236,8 @@ WebSocket resource backed by the shared bounded frame queue, so frame I/O stays
 live without pretending there was an accepted peer socket. On the secure local
 HTTP/2 and HTTP/3 slices, that still means a `wss://.../stream/<id>` identity
 under `h2` or `h3`, not a hidden wire upgrade that the runtime never actually
-performed. This is where
+performed; the local HTTP/2 and HTTP/3 slices each have their own dedicated
+honesty contract in the repo now. This is where
 ordinary request handling turns into realtime session ownership.
 
 ## Step 7: Inspect Peer Identity And TLS State

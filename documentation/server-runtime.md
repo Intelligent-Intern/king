@@ -323,7 +323,10 @@ accepted socket and exchanges real WebSocket frames with the peer.
 That local HTTP/2 and HTTP/3 contract is still honest about transport shape.
 The resource identity becomes `wss://.../stream/<id>` under the secure `h2` or
 `h3` listener session, but the runtime is not fabricating a hidden wire
-`101` or Extended CONNECT handshake where no accepted peer socket exists.
+`101` or Extended CONNECT handshake where no accepted peer socket exists. The
+repo now carries dedicated local honesty contracts for both secure listener
+families, so that transport claim is explicit rather than inherited only from
+the broader mixed helper coverage.
 
 This matters because a WebSocket channel is more than "another response body".
 It is a change in protocol mode and in connection ownership. After upgrade,

@@ -35,7 +35,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `520/520` passing
+- `./infra/scripts/test-extension.sh`: `521/521` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -57,7 +57,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `520` PHPT files
+- `extension/tests`: `521` PHPT files
 - public stub parity: `137` functions, `44` classes, `56` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -78,7 +78,7 @@ The current tree already proves:
 - local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3, plus real one-shot on-wire listener proof for HTTP/1, HTTP/2, and HTTP/3, including bounded HTTP/1 one-shot accept and request-head timeout behavior against stalled clients, stable normalized `uri` and routing `path` materialization from real request targets across the active one-shot listener surfaces, stable client-visible response normalization for runtime-owned transport headers plus repeated response fields across the active one-shot listener surfaces, real registered cancel-hook invocation on live client aborts across HTTP/1, HTTP/2, and HTTP/3 one-shot traffic, repeated close/drain/restart reuse of the same bound ports across HTTP/1, HTTP/2, and HTTP/3 listener cycles, and bounded live admin API proof for auth, mTLS gating, TLS reload, and handled reload failures against real clients instead of only local listener markers
 - on-wire WebSocket client handshake/frame/close runtime, stable network-abort mapping for peer disconnect, half-close, and abrupt socket-loss, stable `1002` protocol-close handling for malformed opcode/frame-shape/close-sequence and oversized control-frame peer violations, bounded queued receive pressure via configurable `max_queued_messages` / `max_queued_bytes` with introspectable queue state and policy-close on overflow, honest OO `King\WebSocket\Connection` parity, and a bounded OO `King\WebSocket\Server` surface that binds a real HTTP/1 listener, accepts real websocket upgrades, returns accepted peers as live `Connection` objects, exposes a live accepted-connection registry keyed by opaque `connection_id`, supports targeted and broadcast text/binary sends across those live peers, and turns `stop()` into a real `1001 server-shutdown` close-handshake drain instead of a fake listener-only placeholder
 - multi-client WebSocket close/reconnect churn on one server without cross-client starvation or corruption, concurrent slow-consumer backpressure isolation without poisoning unrelated peers, and sustained fairness where one noisy client can hold a deep backlog without starving other concurrent websocket clients
-- server-side `king_server_upgrade_to_websocket()` both as an honest local in-process bidirectional frame slice for HTTP/1, HTTP/2, and HTTP/3 local listeners and as a real on-wire HTTP/1 one-shot upgrade path with frame flow, explicit shutdown/drain coverage, rejection of post-close frame I/O, and clean post-close release of the server-owned socket from the session snapshot
+- server-side `king_server_upgrade_to_websocket()` both as an honest local in-process bidirectional frame slice for HTTP/1, HTTP/2, and HTTP/3 local listeners, with dedicated local honesty proof for each of those listener families, and as a real on-wire HTTP/1 one-shot upgrade path with frame flow, explicit shutdown/drain coverage, rejection of post-close frame I/O, and clean post-close release of the server-owned socket from the session snapshot
 - repeated server/session soak coverage for local upgrade, early hints, admin API, TLS reload, and on-wire websocket close/drain cycles
 - IIBIN schema, registry, encode/decode, object hydration, and wire validation
 - Semantic DNS register/discover/update routing, bounded local DNS-shaped query handling with fail-closed undersized-response rejection, a real bounded on-wire UDP listener with honest request, timeout, truncation, and recovery behavior, live HTTP health-probe driven route and discovery refresh from service-owned health endpoints, idempotent repeated registration without redundant durable-state churn, coherent parallel service/status persistence through locked refresh-before-persist durable-state transactions, larger-topology local churn coherence, coherent concurrent larger-topology mother-node sync statistics across multiprocess writers in the local persisted-state slice, stale-peer rejoin healing after partial durable-state loss without overwriting newer shared topology entries, tombstone-aware mother-node departure/replacement/rejoin handling under re-election pressure, registry-backed mother-node sync statistics, persisted registration plus mother-node rehydration across restart, object-safe durable-state decode hardening, and private-directory durable state handling
