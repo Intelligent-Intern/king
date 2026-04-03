@@ -193,7 +193,12 @@ static size_t king_telemetry_http_write_callback(void *ptr, size_t size, size_t 
     size_t total_size = size * nmemb;
     
     if (response->bytes + total_size > KING_TELEMETRY_MAX_RESPONSE_SIZE) {
-        return 0; /* Reject response that's too large */
+        /*
+         * Fail closed on oversized collector replies so the exporter sees a
+         * retryable transport failure instead of buffering unbounded response
+         * bytes inside the PHP process.
+         */
+        return 0;
     }
     
     smart_str_appendl(&response->data, ptr, total_size);

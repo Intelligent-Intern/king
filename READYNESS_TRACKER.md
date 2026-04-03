@@ -281,7 +281,7 @@ Status note:
 - [x] Validate OTLP logs export fully against real collectors
 - [x] Validate success / failure / retry behavior against real endpoints
 - [x] Correctly handle request-size limits before exporter dispatch
-- [ ] Correctly handle response-size limits against real collectors
+- [x] Correctly handle response-size limits against real collectors
 - [x] Correctly handle non-2xx responses
 - [x] Correctly handle transient network failures
 - [ ] Correctly handle permanent network failures

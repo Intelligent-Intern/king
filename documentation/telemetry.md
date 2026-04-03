@@ -271,6 +271,14 @@ partial request and does not poison the retry queue with a batch that can never
 fit. The oversized signal is counted as an export failure for that flush and is
 dropped locally so later healthy smaller exports can still proceed.
 
+The collector reply path is bounded too. King also caps one OTLP response body
+at `1 MiB`. If a collector replies with a larger body, the exporter aborts that
+response, counts the flush as an export failure, and keeps the affected
+metrics, spans, or logs batch retryable in the local queue. In other words:
+oversized requests are dropped before dispatch because they can never succeed,
+while oversized collector responses are treated as retryable exporter failures
+because the same batch may still succeed against a healthy collector later.
+
 This behavior is usually the right tradeoff for a runtime library. It protects
 the main application from turning telemetry failure into uncontrolled memory
 growth, while still making the delivery problem visible through status counters.
