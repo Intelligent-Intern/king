@@ -149,7 +149,7 @@ Status note:
 - [x] Finalize exact queued/running/failed/cancelled/completed state transitions
 - [x] Fully integrate observability for pipeline execution
 - [x] Build end-to-end multi-process harness
-- [ ] Build end-to-end multi-host harness
+- [x] Build end-to-end multi-host harness
 
 ## E. Object Store Core
 

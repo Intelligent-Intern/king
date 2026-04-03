@@ -39,11 +39,10 @@
 
 ## Current Next Leaf
 
-- `#8 Build end-to-end multi-host harness.`
+- `#9 Validate CDN cache paths against real object-store backends.`
 
 ## Active Executable Items
 
-- [ ] `#8 Build end-to-end multi-host harness.`
 - [ ] `#9 Validate CDN cache paths against real object-store backends.`
 - [ ] `#10 Validate cache fill on miss against real backends.`
 - [ ] `#11 Validate cache invalidation under load.`
