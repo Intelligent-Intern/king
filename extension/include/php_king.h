@@ -143,8 +143,11 @@ typedef struct _king_ws_message {
     struct _king_ws_message *next;
 } king_ws_message;
 
+typedef struct _king_ws_server_object king_ws_server_object;
+
 typedef struct _king_ws_state {
     zend_string *url;
+    zend_string *connection_id;
     zend_string *scheme;
     zend_string *host;
     zend_string *request_target;
@@ -171,6 +174,7 @@ typedef struct _king_ws_state {
     bool handshake_complete;
     bool close_frame_sent;
     bool closed;
+    king_ws_server_object *server_owner;
 } king_ws_state;
 
 typedef enum _king_client_protocol_preference {
@@ -220,6 +224,10 @@ zend_result king_http1_request_context_get_pending_early_hints(
 bool king_http1_request_context_is_end_of_body(
     king_http1_request_context *context,
     zend_long read_offset
+);
+void king_ws_server_registry_detach(
+    king_ws_server_object *server,
+    king_ws_state *state
 );
 void king_ws_state_free(king_ws_state *state);
 zend_result king_server_cancel_invoke_if_registered(
@@ -290,14 +298,17 @@ typedef struct _king_ws_object {
     zend_object   std;
 } king_ws_object;
 
-typedef struct _king_ws_server_object {
+struct _king_ws_server_object {
     zval config;
     zend_string *host;
     zend_long port;
     int listener_fd;
+    HashTable connections;
+    zend_ulong next_connection_sequence;
+    bool registry_initialized;
     bool closed;
     zend_object std;
-} king_ws_server_object;
+};
 
 /* -----------------------------------------------------------------------------
  * Shared Error Buffer

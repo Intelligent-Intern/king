@@ -178,6 +178,24 @@ static void king_ws_server_object_free(zend_object *object)
         close(intern->listener_fd);
         intern->listener_fd = -1;
     }
+    if (intern->registry_initialized) {
+        zval *entry;
+
+        ZEND_HASH_FOREACH_VAL(&intern->connections, entry)
+        {
+            king_ws_state *state = Z_TYPE_P(entry) == IS_PTR
+                ? (king_ws_state *) Z_PTR_P(entry)
+                : NULL;
+
+            if (state != NULL && state->server_owner == intern) {
+                state->server_owner = NULL;
+            }
+        }
+        ZEND_HASH_FOREACH_END();
+
+        zend_hash_destroy(&intern->connections);
+        intern->registry_initialized = false;
+    }
 
     zend_object_std_dtor(&intern->std);
 }
@@ -190,6 +208,9 @@ static zend_object *king_ws_server_object_create(zend_class_entry *ce)
     intern->host = NULL;
     intern->port = 0;
     intern->listener_fd = -1;
+    zend_hash_init(&intern->connections, 8, NULL, NULL, 0);
+    intern->next_connection_sequence = 1;
+    intern->registry_initialized = true;
     intern->closed = false;
     zend_object_std_init(&intern->std, ce);
     object_properties_init(&intern->std, ce);

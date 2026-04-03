@@ -210,6 +210,9 @@ the bounded server-side accept object and the live connection object.
 | --- | --- |
 | `__construct(string $host, int $port, ?Config $config = null)` | Prepares one bounded HTTP/1 websocket listener object. |
 | `accept()` | Accepts one real on-wire websocket upgrade and returns a `King\WebSocket\Connection`. |
+| `getConnections()` | Returns the live accepted-connection registry keyed by opaque `connection_id`. |
+| `send(string $connectionId, string $message)` | Sends one targeted text frame to the accepted peer identified by `connection_id`. |
+| `sendBinary(string $connectionId, string $payload)` | Sends one targeted binary frame to the accepted peer identified by `connection_id`. |
 | `stop()` | Stops the listener object and prevents later accepts on that server instance. |
 
 ### `King\WebSocket\Connection`
@@ -221,7 +224,7 @@ the bounded server-side accept object and the live connection object.
 | `sendBinary(string $payload)` | Sends a binary frame. |
 | `ping(?string $data = null)` | Sends a ping frame. |
 | `close(int $code = 1000, ?string $reason = null)` | Sends a close frame and closes the connection. |
-| `getInfo()` | Returns connection metadata, handshake information, and live queue diagnostics. |
+| `getInfo()` | Returns connection metadata, including the stable URL-style `id`, the targeted-send `connection_id`, and live queue diagnostics. |
 
 ## Exception Hierarchy
 

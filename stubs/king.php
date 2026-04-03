@@ -1843,6 +1843,18 @@ namespace King\WebSocket {
     final class Server {
         public function __construct(string $host, int $port, ?Config $config = null) {}
         public function accept(): Connection {}
+        /**
+         * @return array<string,array{
+         *   id:string,
+         *   connection_id:string,
+         *   remote_addr:string,
+         *   protocol?:string,
+         *   headers:array<string,string[]>
+         * }>
+         */
+        public function getConnections(): array {}
+        public function send(string $connectionId, string $message): void {}
+        public function sendBinary(string $connectionId, string $payload): void {}
         public function stop(): void {}
     }
 
@@ -1854,7 +1866,7 @@ namespace King\WebSocket {
         public function close(int $code = 1000, ?string $reason = null): void {}
         /**
          * @return array{
-         *   id:string,remote_addr:string,protocol?:string,headers:array<string,string[]>
+         *   id:string,connection_id:string,remote_addr:string,protocol?:string,headers:array<string,string[]>
          * }
          */
         public function getInfo(): array {}

@@ -171,9 +171,11 @@ object over the same native websocket runtime.
 
 $server = new King\WebSocket\Server('127.0.0.1', 9501);
 $peer = $server->accept();
+$connections = $server->getConnections();
+$connectionId = array_key_first($connections);
 
 $message = king_client_websocket_receive($peer, 1000);
-$peer->send('ack:' . $message);
+$server->send($connectionId, 'ack:' . $message);
 $peer->close(1001, 'server-done');
 $server->stop();
 ```
@@ -181,6 +183,13 @@ $server->stop();
 The important limit is honesty: the current OO server surface is the real
 HTTP/1 websocket accept path. It does not pretend to be a broader HTTP/2 or
 HTTP/3 websocket listener until those leaves are separately verified.
+
+When more than one peer is accepted on the same server object, the registry is
+keyed by `connection_id`, not by URL. `Connection::getInfo()['id']` remains the
+URL-shaped channel identity, while `Connection::getInfo()['connection_id']` is
+the opaque server-assigned key you pass back into `Server::send()` or
+`Server::sendBinary()`. That avoids collisions when multiple live peers connect
+to the same websocket path at the same time.
 
 ## Connection Lifecycle
 

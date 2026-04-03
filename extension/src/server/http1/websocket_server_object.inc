@@ -7,8 +7,36 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_King_WebSocket_Server_accept, 0, 0, King\\WebSocket\\Connection, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_getConnections, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_send, 0, 2, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, connectionId, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, message, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_sendBinary, 0, 2, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, connectionId, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, payload, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_stop, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
+
+static void king_websocket_server_set_errorf(
+    const char *format,
+    ...
+)
+{
+    char message[KING_ERR_LEN];
+    va_list args;
+
+    va_start(args, format);
+    vsnprintf(message, sizeof(message), format, args);
+    va_end(args);
+
+    king_set_error(message);
+}
 
 static void king_websocket_server_throw_last_error(
     zend_class_entry *exception_ce,
@@ -80,6 +108,226 @@ static zend_result king_websocket_server_init_connection_object(
         zval_ptr_dtor(&connection->resource);
     }
     ZVAL_COPY(&connection->resource, resource);
+    return SUCCESS;
+}
+
+static zend_string *king_websocket_server_next_connection_id(
+    king_ws_server_object *intern,
+    king_ws_state *state
+)
+{
+    zend_ulong sequence = intern->next_connection_sequence++;
+
+    return strpprintf(
+        0,
+        "%s#%lu",
+        ZSTR_VAL(state->url),
+        (unsigned long) sequence
+    );
+}
+
+void king_ws_server_registry_detach(
+    king_ws_server_object *server,
+    king_ws_state *state
+)
+{
+    zval *entry;
+
+    if (
+        server == NULL
+        || state == NULL
+        || !server->registry_initialized
+        || state->connection_id == NULL
+    ) {
+        return;
+    }
+
+    entry = zend_hash_find(&server->connections, state->connection_id);
+    if (
+        entry != NULL
+        && Z_TYPE_P(entry) == IS_PTR
+        && (king_ws_state *) Z_PTR_P(entry) == state
+    ) {
+        zend_hash_del(&server->connections, state->connection_id);
+    }
+
+    if (state->server_owner == server) {
+        state->server_owner = NULL;
+    }
+}
+
+static void king_websocket_server_registry_prune_closed(
+    king_ws_server_object *intern
+)
+{
+    uint32_t capacity;
+    uint32_t remove_count = 0;
+    zend_string **remove_keys;
+    zend_string *key;
+    zval *entry;
+
+    if (!intern->registry_initialized) {
+        return;
+    }
+
+    capacity = zend_hash_num_elements(&intern->connections);
+    if (capacity == 0) {
+        return;
+    }
+
+    remove_keys = safe_emalloc(capacity, sizeof(zend_string *), 0);
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(&intern->connections, key, entry)
+    {
+        king_ws_state *state = Z_TYPE_P(entry) == IS_PTR
+            ? (king_ws_state *) Z_PTR_P(entry)
+            : NULL;
+
+        if (key == NULL) {
+            continue;
+        }
+
+        if (state == NULL || state->closed || state->state == KING_WS_STATE_CLOSED) {
+            remove_keys[remove_count++] = zend_string_copy(key);
+            if (state != NULL && state->server_owner == intern) {
+                state->server_owner = NULL;
+            }
+        }
+    }
+    ZEND_HASH_FOREACH_END();
+
+    while (remove_count > 0) {
+        remove_count--;
+        zend_hash_del(&intern->connections, remove_keys[remove_count]);
+        zend_string_release(remove_keys[remove_count]);
+    }
+
+    efree(remove_keys);
+}
+
+static zend_result king_websocket_server_registry_attach(
+    king_ws_server_object *intern,
+    zval *resource,
+    const char *function_name
+)
+{
+    king_ws_state *state;
+    zend_string *connection_id;
+    zval stored_state;
+
+    state = zend_fetch_resource(
+        Z_RES_P(resource),
+        "King\\WebSocket",
+        le_king_ws
+    );
+    if (state == NULL) {
+        king_websocket_server_set_errorf(
+            "%s() failed to fetch the accepted native WebSocket state.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    connection_id = king_websocket_server_next_connection_id(intern, state);
+    if (state->connection_id != NULL) {
+        zend_string_release(state->connection_id);
+    }
+    state->connection_id = connection_id;
+    state->server_owner = intern;
+
+    ZVAL_PTR(&stored_state, state);
+    if (zend_hash_add_new(&intern->connections, connection_id, &stored_state) == NULL) {
+        state->server_owner = NULL;
+        king_websocket_server_set_errorf(
+            "%s() failed to register the accepted WebSocket connection.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static king_ws_state *king_websocket_server_registry_fetch_state(
+    king_ws_server_object *intern,
+    zend_string *connection_id,
+    const char *function_name
+)
+{
+    zval *entry;
+    king_ws_state *state;
+
+    king_websocket_server_registry_prune_closed(intern);
+    entry = zend_hash_find(&intern->connections, connection_id);
+    if (entry == NULL || Z_TYPE_P(entry) != IS_PTR) {
+        king_websocket_server_set_errorf(
+            "%s() target connection '%s' is not active on this WebSocket server.",
+            function_name,
+            ZSTR_VAL(connection_id)
+        );
+        zend_throw_exception_ex(king_ce_runtime_exception, 0, "%s", king_get_error());
+        return NULL;
+    }
+
+    state = (king_ws_state *) Z_PTR_P(entry);
+    if (state == NULL || state->closed || state->state == KING_WS_STATE_CLOSED) {
+        if (state != NULL && state->server_owner == intern) {
+            state->server_owner = NULL;
+        }
+        zend_hash_del(&intern->connections, connection_id);
+        king_websocket_server_set_errorf(
+            "%s() target connection '%s' is not active on this WebSocket server.",
+            function_name,
+            ZSTR_VAL(connection_id)
+        );
+        zend_throw_exception_ex(king_ce_runtime_exception, 0, "%s", king_get_error());
+        return NULL;
+    }
+
+    return state;
+}
+
+static zend_result king_websocket_server_send_internal(
+    king_ws_server_object *intern,
+    zend_string *connection_id,
+    zend_string *payload,
+    bool is_binary,
+    const char *function_name
+)
+{
+    king_ws_state *state;
+
+    if (ZSTR_LEN(connection_id) == 0) {
+        king_websocket_server_set_errorf(
+            "%s() requires a non-empty connection id.",
+            function_name
+        );
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", king_get_error());
+        return FAILURE;
+    }
+
+    state = king_websocket_server_registry_fetch_state(
+        intern,
+        connection_id,
+        function_name
+    );
+    if (state == NULL) {
+        return FAILURE;
+    }
+
+    if (
+        king_websocket_state_send(
+            state,
+            payload,
+            is_binary,
+            function_name
+        ) != SUCCESS
+    ) {
+        king_websocket_server_registry_prune_closed(intern);
+        return FAILURE;
+    }
+
+    king_websocket_server_registry_prune_closed(intern);
     return SUCCESS;
 }
 
@@ -287,6 +535,20 @@ PHP_METHOD(King_WebSocket_Server, accept)
     }
 
     if (
+        king_websocket_server_registry_attach(
+            intern,
+            &websocket_resource,
+            "WebSocket\\Server::accept"
+        ) != SUCCESS
+    ) {
+        king_websocket_server_throw_last_error(
+            king_ce_runtime_exception,
+            "WebSocket\\Server::accept() failed to register the accepted WebSocket connection."
+        );
+        goto fail_cleanup;
+    }
+
+    if (
         king_websocket_server_init_connection_object(
             return_value,
             &websocket_resource
@@ -356,6 +618,87 @@ fail_cleanup:
     RETURN_THROWS();
 }
 
+PHP_METHOD(King_WebSocket_Server, getConnections)
+{
+    king_ws_server_object *intern;
+    zend_string *connection_id;
+    zval *entry;
+
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    intern = php_king_ws_server_obj_from_zend(Z_OBJ_P(ZEND_THIS));
+    king_websocket_server_registry_prune_closed(intern);
+
+    array_init(return_value);
+    ZEND_HASH_FOREACH_STR_KEY_VAL(&intern->connections, connection_id, entry)
+    {
+        king_ws_state *state = Z_TYPE_P(entry) == IS_PTR
+            ? (king_ws_state *) Z_PTR_P(entry)
+            : NULL;
+        zval info;
+
+        if (connection_id == NULL || state == NULL) {
+            continue;
+        }
+
+        king_websocket_state_build_info_array(&info, state);
+        zend_hash_update(Z_ARRVAL_P(return_value), connection_id, &info);
+    }
+    ZEND_HASH_FOREACH_END();
+
+    king_set_error("");
+}
+
+PHP_METHOD(King_WebSocket_Server, send)
+{
+    zend_string *connection_id;
+    zend_string *message;
+    king_ws_server_object *intern;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_STR(connection_id)
+        Z_PARAM_STR(message)
+    ZEND_PARSE_PARAMETERS_END();
+
+    intern = php_king_ws_server_obj_from_zend(Z_OBJ_P(ZEND_THIS));
+    if (
+        king_websocket_server_send_internal(
+            intern,
+            connection_id,
+            message,
+            false,
+            "WebSocket\\Server::send"
+        ) != SUCCESS
+    ) {
+        RETURN_THROWS();
+    }
+}
+
+PHP_METHOD(King_WebSocket_Server, sendBinary)
+{
+    zend_string *connection_id;
+    zend_string *payload;
+    king_ws_server_object *intern;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_STR(connection_id)
+        Z_PARAM_STR(payload)
+    ZEND_PARSE_PARAMETERS_END();
+
+    intern = php_king_ws_server_obj_from_zend(Z_OBJ_P(ZEND_THIS));
+    if (
+        king_websocket_server_send_internal(
+            intern,
+            connection_id,
+            payload,
+            true,
+            "WebSocket\\Server::sendBinary"
+        ) != SUCCESS
+    ) {
+        RETURN_THROWS();
+    }
+}
+
 PHP_METHOD(King_WebSocket_Server, stop)
 {
     king_ws_server_object *intern;
@@ -374,6 +717,9 @@ PHP_METHOD(King_WebSocket_Server, stop)
 const zend_function_entry king_ws_server_class_methods[] = {
     PHP_ME(King_WebSocket_Server, __construct, arginfo_class_King_WebSocket_Server___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
     PHP_ME(King_WebSocket_Server, accept, arginfo_class_King_WebSocket_Server_accept, ZEND_ACC_PUBLIC)
+    PHP_ME(King_WebSocket_Server, getConnections, arginfo_class_King_WebSocket_Server_getConnections, ZEND_ACC_PUBLIC)
+    PHP_ME(King_WebSocket_Server, send, arginfo_class_King_WebSocket_Server_send, ZEND_ACC_PUBLIC)
+    PHP_ME(King_WebSocket_Server, sendBinary, arginfo_class_King_WebSocket_Server_sendBinary, ZEND_ACC_PUBLIC)
     PHP_ME(King_WebSocket_Server, stop, arginfo_class_King_WebSocket_Server_stop, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };

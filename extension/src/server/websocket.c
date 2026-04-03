@@ -227,6 +227,7 @@ zend_result king_server_websocket_upgrade_session(
 
     state = ecalloc(1, sizeof(*state));
     state->url = url;
+    state->connection_id = zend_string_copy(url);
     state->scheme = zend_string_init(scheme, strlen(scheme), 0);
     state->host = zend_string_copy(session->host);
     state->request_target = request_target;
@@ -250,6 +251,7 @@ zend_result king_server_websocket_upgrade_session(
     state->server_local_only = on_wire_upgrade ? false : true;
     state->handshake_complete = true;
     state->closed = false;
+    state->server_owner = NULL;
     ZVAL_UNDEF(&state->config);
     ZVAL_UNDEF(&state->headers);
     if (request_headers != NULL && Z_TYPE_P(request_headers) == IS_ARRAY) {

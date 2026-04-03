@@ -3,6 +3,8 @@
 
 #include <php.h>
 
+typedef struct _king_ws_state king_ws_state;
+
 /**
  * @file extension/include/client/websocket.h
  * @brief Client-side WebSocket helpers.
@@ -82,6 +84,37 @@ PHP_FUNCTION(king_client_websocket_get_last_error);
  * @return TRUE on success, FALSE on failure.
  */
 PHP_FUNCTION(king_client_websocket_close);
+
+/**
+ * @brief Shared frame-send helper for OO and server-owned websocket handles.
+ *
+ * Validates the active connection state, enforces the configured payload cap,
+ * writes one text or binary frame, and throws the public exception class that
+ * matches the current failure.
+ *
+ * @param state Active websocket runtime.
+ * @param payload Message payload.
+ * @param is_binary TRUE for a binary frame, FALSE for text.
+ * @param function_name Error-label prefix.
+ * @return SUCCESS on success, FAILURE after throwing.
+ */
+zend_result king_websocket_state_send(
+    king_ws_state *state,
+    zend_string *payload,
+    bool is_binary,
+    const char *function_name
+);
+
+/**
+ * @brief Builds the public websocket info array for one live state.
+ *
+ * @param return_value Target PHP array.
+ * @param state Active websocket runtime.
+ */
+void king_websocket_state_build_info_array(
+    zval *return_value,
+    king_ws_state *state
+);
 
 
 #endif // KING_CLIENT_WEBSOCKET_H

@@ -135,7 +135,9 @@ object-oriented `King\WebSocket\Connection` wrapper currently covers connect,
 send, ping, close, and info inspection, while `king_client_websocket_receive()`
 is the explicit receive path. The OO server-side sibling is now
 `King\WebSocket\Server`, which accepts real on-wire HTTP/1 websocket upgrades
-and returns accepted peers as `Connection` objects.
+and returns accepted peers as `Connection` objects, plus a live
+`getConnections()` registry for targeted server-owned sends by opaque
+`connection_id`.
 
 ```php
 <?php

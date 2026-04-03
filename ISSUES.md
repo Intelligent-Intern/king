@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- `#16 Back King\WebSocket\Server connection registry and targeted send semantics with real runtime behavior.`
+- `#17 Back King\WebSocket\Server broadcast and shutdown semantics with real live connections.`
 
 ## Active Executable Items
 
@@ -39,7 +39,7 @@
 - [x] `#13 Validate QUIC recovery after temporary network interruption and socket re-wake.`
 - [x] `#14 Back server-upgrade WebSocket resources with honest bidirectional frame I/O.`
 - [x] `#15 Back King\WebSocket\Server listen/accept lifecycle with fully real runtime behavior.`
-- [ ] `#16 Back King\WebSocket\Server connection registry and targeted send semantics with real runtime behavior.`
+- [x] `#16 Back King\WebSocket\Server connection registry and targeted send semantics with real runtime behavior.`
 - [ ] `#17 Back King\WebSocket\Server broadcast and shutdown semantics with real live connections.`
 - [ ] `#18 Validate WebSocket upgrade on HTTP/2 where the public docs or surface claim it.`
 - [ ] `#19 Validate WebSocket upgrade on HTTP/3 where the public docs or surface claim it.`

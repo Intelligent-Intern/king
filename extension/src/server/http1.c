@@ -13,6 +13,7 @@
 #include "php.h"
 #include "php_king.h"
 #include "include/client/session.h"
+#include "include/client/websocket.h"
 #include "include/config/config.h"
 #include "include/server/http1.h"
 #include "include/server/session.h"

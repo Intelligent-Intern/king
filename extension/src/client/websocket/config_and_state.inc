@@ -409,6 +409,7 @@ static king_ws_state *king_websocket_state_create(
 
     state = ecalloc(1, sizeof(*state));
     state->url = zend_string_init(url_str, url_len, 0);
+    state->connection_id = zend_string_copy(state->url);
     state->scheme = zend_string_copy(parsed_url->scheme);
     state->host = zend_string_copy(parsed_url->host);
     state->request_target = request_target;
@@ -419,6 +420,7 @@ static king_ws_state *king_websocket_state_create(
     state->handshake_complete = false;
     state->close_frame_sent = false;
     state->closed = false;
+    state->server_owner = NULL;
     ZVAL_UNDEF(&state->config);
     ZVAL_UNDEF(&state->headers);
 
@@ -454,8 +456,14 @@ void king_ws_state_free(king_ws_state *state)
         return;
     }
 
+    if (state->server_owner != NULL) {
+        king_ws_server_registry_detach(state->server_owner, state);
+    }
     if (state->url != NULL) {
         zend_string_release(state->url);
+    }
+    if (state->connection_id != NULL) {
+        zend_string_release(state->connection_id);
     }
     if (state->scheme != NULL) {
         zend_string_release(state->scheme);
@@ -503,12 +511,17 @@ static void king_websocket_info_append_values(zval *target, zval *value)
     add_next_index_str(target, zval_get_string(value));
 }
 
-static void king_websocket_build_info_array(zval *return_value, king_ws_state *state)
+void king_websocket_state_build_info_array(zval *return_value, king_ws_state *state)
 {
     zval headers;
 
     array_init(return_value);
     add_assoc_str(return_value, "id", zend_string_copy(state->url));
+    add_assoc_str(
+        return_value,
+        "connection_id",
+        zend_string_copy(state->connection_id != NULL ? state->connection_id : state->url)
+    );
     add_assoc_str(
         return_value,
         "remote_addr",
@@ -556,4 +569,3 @@ static void king_websocket_throw_last_error(
         king_get_error()[0] != '\0' ? king_get_error() : fallback
     );
 }
-

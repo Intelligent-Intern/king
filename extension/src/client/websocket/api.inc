@@ -1,12 +1,10 @@
-static zend_result king_websocket_object_send_internal(
-    zval *object,
+zend_result king_websocket_state_send(
+    king_ws_state *state,
     zend_string *payload,
     bool is_binary,
     const char *function_name
 )
 {
-    king_ws_state *state = king_websocket_object_fetch_state(object, function_name);
-
     if (state == NULL) {
         return FAILURE;
     }
@@ -51,6 +49,23 @@ static zend_result king_websocket_object_send_internal(
 
     king_set_error("");
     return SUCCESS;
+}
+
+static zend_result king_websocket_object_send_internal(
+    zval *object,
+    zend_string *payload,
+    bool is_binary,
+    const char *function_name
+)
+{
+    king_ws_state *state = king_websocket_object_fetch_state(object, function_name);
+
+    return king_websocket_state_send(
+        state,
+        payload,
+        is_binary,
+        function_name
+    );
 }
 
 PHP_METHOD(King_WebSocket_Connection, __construct)
@@ -290,7 +305,7 @@ PHP_METHOD(King_WebSocket_Connection, getInfo)
         RETURN_THROWS();
     }
 
-    king_websocket_build_info_array(return_value, state);
+    king_websocket_state_build_info_array(return_value, state);
     king_set_error("");
 }
 

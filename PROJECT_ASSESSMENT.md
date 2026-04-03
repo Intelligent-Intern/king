@@ -35,7 +35,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `517/517` passing
+- `./infra/scripts/test-extension.sh`: `518/518` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -57,8 +57,8 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `517` PHPT files
-- public stub parity: `137` functions, `44` classes, `51` declared public methods
+- `extension/tests`: `518` PHPT files
+- public stub parity: `137` functions, `44` classes, `54` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
 - static and runtime-surface audits now enforce that include-tree discipline
@@ -76,7 +76,7 @@ The current tree already proves:
 - HTTP/2 shared-session fairness under mixed slow and fast concurrent streams
 - HTTP/3 one-shot churn isolation across repeated timeout and healthy-recovery cycles
 - local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3, plus real one-shot on-wire listener proof for HTTP/1, HTTP/2, and HTTP/3, including bounded HTTP/1 one-shot accept and request-head timeout behavior against stalled clients, stable normalized `uri` and routing `path` materialization from real request targets across the active one-shot listener surfaces, stable client-visible response normalization for runtime-owned transport headers plus repeated response fields across the active one-shot listener surfaces, real registered cancel-hook invocation on live client aborts across HTTP/1, HTTP/2, and HTTP/3 one-shot traffic, repeated close/drain/restart reuse of the same bound ports across HTTP/1, HTTP/2, and HTTP/3 listener cycles, and bounded live admin API proof for auth, mTLS gating, TLS reload, and handled reload failures against real clients instead of only local listener markers
-- on-wire WebSocket client handshake/frame/close runtime, stable network-abort mapping for peer disconnect, half-close, and abrupt socket-loss, stable `1002` protocol-close handling for malformed opcode/frame-shape/close-sequence and oversized control-frame peer violations, bounded queued receive pressure via configurable `max_queued_messages` / `max_queued_bytes` with introspectable queue state and policy-close on overflow, honest OO `King\WebSocket\Connection` parity, and a bounded OO `King\WebSocket\Server` surface that binds a real HTTP/1 listener, accepts real websocket upgrades, returns accepted peers as live `Connection` objects, and stops that listener explicitly instead of shipping an empty placeholder
+- on-wire WebSocket client handshake/frame/close runtime, stable network-abort mapping for peer disconnect, half-close, and abrupt socket-loss, stable `1002` protocol-close handling for malformed opcode/frame-shape/close-sequence and oversized control-frame peer violations, bounded queued receive pressure via configurable `max_queued_messages` / `max_queued_bytes` with introspectable queue state and policy-close on overflow, honest OO `King\WebSocket\Connection` parity, and a bounded OO `King\WebSocket\Server` surface that binds a real HTTP/1 listener, accepts real websocket upgrades, returns accepted peers as live `Connection` objects, exposes a live accepted-connection registry keyed by opaque `connection_id`, supports targeted text and binary sends against those live peers, and still stops the listener explicitly instead of shipping an empty placeholder
 - multi-client WebSocket close/reconnect churn on one server without cross-client starvation or corruption, concurrent slow-consumer backpressure isolation without poisoning unrelated peers, and sustained fairness where one noisy client can hold a deep backlog without starving other concurrent websocket clients
 - server-side `king_server_upgrade_to_websocket()` both as an honest local in-process bidirectional frame slice for local listeners and as a real on-wire HTTP/1 one-shot upgrade path with frame flow, explicit shutdown/drain coverage, rejection of post-close frame I/O, and clean post-close release of the server-owned socket from the session snapshot
 - repeated server/session soak coverage for local upgrade, early hints, admin API, TLS reload, and on-wire websocket close/drain cycles

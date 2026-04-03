@@ -86,6 +86,66 @@ if ($mode === 'oo-runtime') {
     return;
 }
 
+if ($mode === 'oo-registry') {
+    $server = new King\WebSocket\Server('127.0.0.1', $port);
+    $capture['server_class'] = get_class($server);
+
+    try {
+        $first = $server->accept();
+        $second = $server->accept();
+
+        $capture['first_class'] = get_class($first);
+        $capture['second_class'] = get_class($second);
+        $capture['first_info'] = $first->getInfo();
+        $capture['second_info'] = $second->getInfo();
+        $capture['registry_after_accept'] = $server->getConnections();
+        $capture['registry_count_after_accept'] = count($capture['registry_after_accept']);
+        $capture['registry_ids'] = array_keys($capture['registry_after_accept']);
+
+        try {
+            $server->send($capture['first_info']['connection_id'], 'to-first');
+            $capture['send_first_ok'] = true;
+            $capture['send_first_error'] = '';
+        } catch (Throwable $e) {
+            $capture['send_first_ok'] = false;
+            $capture['send_first_error'] = $e->getMessage();
+        }
+
+        try {
+            $server->sendBinary($capture['second_info']['connection_id'], 'to-second');
+            $capture['send_second_ok'] = true;
+            $capture['send_second_error'] = '';
+        } catch (Throwable $e) {
+            $capture['send_second_ok'] = false;
+            $capture['send_second_error'] = $e->getMessage();
+        }
+
+        try {
+            $server->send('missing-connection', 'miss');
+        } catch (Throwable $e) {
+            $capture['missing_send_exception'] = get_class($e);
+            $capture['missing_send_error'] = $e->getMessage();
+        }
+
+        $first->close(1001, 'first-done');
+        $capture['registry_after_first_close'] = $server->getConnections();
+        $capture['registry_count_after_first_close'] = count($capture['registry_after_first_close']);
+
+        $second->close(1001, 'second-done');
+        $capture['registry_after_second_close'] = $server->getConnections();
+        $capture['registry_count_after_second_close'] = count($capture['registry_after_second_close']);
+    } catch (Throwable $e) {
+        $capture['registry_exception_class'] = get_class($e);
+        $capture['registry_exception_message'] = $e->getMessage();
+    }
+
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+    return;
+}
+
 for ($iteration = 0; $iteration < $iterations; $iteration++) {
     $result = king_http1_server_listen_once(
         '127.0.0.1',
