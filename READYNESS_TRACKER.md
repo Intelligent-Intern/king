@@ -233,7 +233,7 @@ Status note:
 - [x] Validate cache consistency after delete
 - [x] Validate edge-node inventory against real nodes where publicly claimed
 - [x] Validate origin timeout / retry behavior
-- [ ] Validate cache memory limits under load
+- [x] Validate cache memory limits under load
 - [ ] Validate large objects in cache under memory pressure
 - [ ] Validate cache recovery after restart
 - [ ] Finalize cache metrics and observability

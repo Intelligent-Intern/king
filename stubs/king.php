@@ -773,7 +773,10 @@ namespace {
      * and `length`, using byte-range semantics aligned with RFC 7233.
      * Full-object reads validate stored `integrity_sha256` metadata when
      * present and backfill runtime CDN state on a smart_cdn cache miss when
-     * the CDN layer is enabled. For bounded-memory egress, use
+     * the CDN layer is enabled. That same process-local CDN registry now stays
+     * inside the active `cdn.cache_memory_limit_mb` budget by evicting older
+     * entries when newer full-read warms would otherwise grow it past the
+     * configured ceiling. For bounded-memory egress, use
      * `king_object_store_get_to_stream()`.
      * @param array<string,mixed>|null $options
       * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
@@ -1161,8 +1164,11 @@ namespace {
     /**
      * Caches an existing object-store entry in the runtime CDN cache.
      * The runtime prefers committed backend metadata paths and only falls back
-     * to payload reads when size metadata cannot be proven.
-     * Returns `false` when the object does not exist in the active object store.
+     * to payload reads when size metadata cannot be proven. The process-local
+     * CDN registry honors the active `cdn.cache_memory_limit_mb` budget by
+     * evicting older entries before it grows without bound, so this call
+     * returns `false` both on ordinary miss and when the runtime cannot keep
+     * the requested entry admitted under the current memory ceiling.
      * @param array{ttl_sec?:int}|null $options
      * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
      */

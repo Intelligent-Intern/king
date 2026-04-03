@@ -1,10 +1,12 @@
 
 /*
  * Prelude object-store runtime slice: owns the process-local CDN cache
- * registry lifecycle, retained stale-body management, entry lookup, stats
- * collection, and expiry sweeping that the active object-store/CDN
- * introspection surfaces reuse.
+ * registry lifecycle, retained stale-body management, bounded memory-limit
+ * enforcement, entry lookup, stats collection, and expiry sweeping that the
+ * active object-store/CDN introspection surfaces reuse.
  */
+
+static uint64_t king_cdn_cache_touch_counter = 0;
 
 
 static void king_cdn_cache_entry_free(king_cdn_cache_entry *entry)
@@ -48,6 +50,144 @@ static void king_cdn_cache_entry_replace_retained_payload(
     entry->retained_payload = zend_string_init(payload_bytes, payload_size, 1);
 }
 
+static void king_cdn_cache_entry_note_touched(king_cdn_cache_entry *entry)
+{
+    if (entry == NULL) {
+        return;
+    }
+
+    if (king_cdn_cache_touch_counter < UINT64_MAX) {
+        king_cdn_cache_touch_counter++;
+    }
+
+    entry->touch_serial = king_cdn_cache_touch_counter;
+}
+
+static uint64_t king_cdn_cache_entry_estimated_memory_bytes(const king_cdn_cache_entry *entry)
+{
+    uint64_t total;
+
+    if (entry == NULL) {
+        return 0;
+    }
+
+    total = (uint64_t) sizeof(*entry);
+
+    if (entry->object_id != NULL) {
+        total += (uint64_t) sizeof(zend_string) + (uint64_t) ZSTR_LEN(entry->object_id) + 1U;
+    }
+    if (entry->retained_payload != NULL) {
+        total += (uint64_t) sizeof(zend_string) + (uint64_t) ZSTR_LEN(entry->retained_payload) + 1U;
+    }
+
+    return total;
+}
+
+static uint64_t king_cdn_cache_memory_limit_bytes(void)
+{
+    if (king_native_cdn_config.cache_memory_limit_mb <= 0) {
+        return 0;
+    }
+
+    if ((uint64_t) king_native_cdn_config.cache_memory_limit_mb > (UINT64_MAX / (1024ULL * 1024ULL))) {
+        return UINT64_MAX;
+    }
+
+    return (uint64_t) king_native_cdn_config.cache_memory_limit_mb * 1024ULL * 1024ULL;
+}
+
+static uint64_t king_cdn_cache_collect_memory_bytes(void)
+{
+    zval *entry_zv;
+    uint64_t total = 0;
+
+    if (!king_cdn_cache_registry_initialized) {
+        return 0;
+    }
+
+    ZEND_HASH_FOREACH_VAL(&king_cdn_cache_registry, entry_zv) {
+        king_cdn_cache_entry *entry;
+
+        if (Z_TYPE_P(entry_zv) != IS_PTR) {
+            continue;
+        }
+
+        entry = (king_cdn_cache_entry *) Z_PTR_P(entry_zv);
+        total += king_cdn_cache_entry_estimated_memory_bytes(entry);
+    } ZEND_HASH_FOREACH_END();
+
+    return total;
+}
+
+static zend_string *king_cdn_cache_find_eviction_candidate(void)
+{
+    zend_string *candidate_key = NULL;
+    uint64_t candidate_touch = UINT64_MAX;
+    zval *entry_zv;
+    zend_string *key;
+
+    if (!king_cdn_cache_registry_initialized) {
+        return NULL;
+    }
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(&king_cdn_cache_registry, key, entry_zv) {
+        king_cdn_cache_entry *entry;
+
+        if (key == NULL || Z_TYPE_P(entry_zv) != IS_PTR) {
+            continue;
+        }
+
+        entry = (king_cdn_cache_entry *) Z_PTR_P(entry_zv);
+        if (entry == NULL) {
+            continue;
+        }
+
+        if (candidate_key == NULL
+            || entry->touch_serial < candidate_touch
+            || (entry->touch_serial == candidate_touch
+                && zend_binary_strcmp(
+                    ZSTR_VAL(key),
+                    ZSTR_LEN(key),
+                    ZSTR_VAL(candidate_key),
+                    ZSTR_LEN(candidate_key)
+                ) < 0)) {
+            candidate_key = key;
+            candidate_touch = entry->touch_serial;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return candidate_key != NULL ? zend_string_copy(candidate_key) : NULL;
+}
+
+static void king_cdn_enforce_memory_limit(void)
+{
+    uint64_t limit_bytes;
+    uint64_t current_bytes;
+
+    if (!king_cdn_cache_registry_initialized) {
+        return;
+    }
+
+    king_cdn_sweep_expired();
+    limit_bytes = king_cdn_cache_memory_limit_bytes();
+    if (limit_bytes == 0) {
+        return;
+    }
+
+    current_bytes = king_cdn_cache_collect_memory_bytes();
+    while (current_bytes > limit_bytes && zend_hash_num_elements(&king_cdn_cache_registry) > 0) {
+        zend_string *candidate_key = king_cdn_cache_find_eviction_candidate();
+
+        if (candidate_key == NULL) {
+            break;
+        }
+
+        zend_hash_del(&king_cdn_cache_registry, candidate_key);
+        zend_string_release(candidate_key);
+        current_bytes = king_cdn_cache_collect_memory_bytes();
+    }
+}
+
 static void king_cdn_cache_entry_zval_dtor(zval *zv)
 {
     if (Z_TYPE_P(zv) == IS_PTR) {
@@ -69,6 +209,7 @@ int king_cdn_cache_registry_minit(void)
         1
     );
     king_cdn_cache_registry_initialized = true;
+    king_cdn_cache_touch_counter = 0;
 
     return SUCCESS;
 }
@@ -81,6 +222,7 @@ void king_cdn_cache_registry_mshutdown(void)
 
     zend_hash_destroy(&king_cdn_cache_registry);
     king_cdn_cache_registry_initialized = false;
+    king_cdn_cache_touch_counter = 0;
 }
 
 static king_cdn_cache_entry *king_cdn_cache_registry_find_entry(

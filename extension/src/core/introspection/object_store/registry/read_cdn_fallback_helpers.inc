@@ -20,6 +20,7 @@ static void king_object_store_cdn_entry_note_served(
         entry->served_count++;
     }
     entry->last_served_at = served_at;
+    king_cdn_cache_entry_note_touched(entry);
 }
 
 static zend_bool king_object_store_cdn_can_retain_payload(size_t payload_size)
@@ -97,6 +98,7 @@ static void king_object_store_fill_cdn_cache_on_read_success(
             king_cdn_cache_entry_replace_retained_payload(existing, NULL, 0);
         }
         king_object_store_cdn_entry_note_served(existing, now);
+        king_cdn_enforce_memory_limit();
         zend_string_release_ex(object_id_zstr, 1);
         return;
     }
@@ -112,6 +114,7 @@ static void king_object_store_fill_cdn_cache_on_read_success(
     cache_entry->payload_size = (zend_long) payload_size;
     cache_entry->cached_at = now;
     cache_entry->expires_at = ttl_sec > 0 ? now + ttl_sec : 0;
+    king_cdn_cache_entry_note_touched(cache_entry);
     if (retain_payload) {
         king_cdn_cache_entry_replace_retained_payload(cache_entry, payload, payload_size);
     }
@@ -123,6 +126,7 @@ static void king_object_store_fill_cdn_cache_on_read_success(
         return;
     }
 
+    king_cdn_enforce_memory_limit();
     (void) king_cdn_distribute_object(object_id, NULL, 1);
 }
 

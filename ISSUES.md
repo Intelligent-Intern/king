@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#16 Validate cache memory limits under load.`
+- `#17 Validate large objects in cache under memory pressure.`
 
 ## Active Executable Items
 
@@ -61,7 +61,7 @@
 - [x] `#13 Validate cache consistency after backend update.`
 - [x] `#14 Validate edge-node inventory against real nodes where publicly claimed.`
 - [x] `#15 Validate origin timeout / retry behavior.`
-- [ ] `#16 Validate cache memory limits under load.`
+- [x] `#16 Validate cache memory limits under load.`
 - [ ] `#17 Validate large objects in cache under memory pressure.`
 - [ ] `#18 Validate cache recovery after restart.`
 - [ ] `#19 Finalize cache metrics and observability.`

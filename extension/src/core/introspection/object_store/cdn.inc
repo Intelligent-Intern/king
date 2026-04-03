@@ -215,7 +215,9 @@ PHP_FUNCTION(king_cdn_cache_object)
         existing->payload_size = (zend_long) data_size;
         existing->cached_at    = cached_at;
         existing->expires_at   = ttl_sec > 0 ? cached_at + ttl_sec : 0;
-        RETURN_TRUE;
+        king_cdn_cache_entry_note_touched(existing);
+        king_cdn_enforce_memory_limit();
+        RETURN_BOOL(king_cdn_cache_registry_get_entry_allow_expired(object_id) != NULL);
     }
 
     cache_entry = pecalloc(1, sizeof(*cache_entry), 1);
@@ -223,6 +225,7 @@ PHP_FUNCTION(king_cdn_cache_object)
     cache_entry->payload_size = (zend_long) data_size;
     cache_entry->cached_at    = cached_at;
     cache_entry->expires_at   = ttl_sec > 0 ? cached_at + ttl_sec : 0;
+    king_cdn_cache_entry_note_touched(cache_entry);
 
     ZVAL_PTR(&stored_entry, cache_entry);
     if (zend_hash_update(&king_cdn_cache_registry, cache_entry->object_id, &stored_entry) == NULL) {
@@ -235,11 +238,12 @@ PHP_FUNCTION(king_cdn_cache_object)
         RETURN_THROWS();
     }
 
-    if (king_cdn_distribute_object(ZSTR_VAL(cache_entry->object_id), NULL, 1) != SUCCESS) {
+    king_cdn_enforce_memory_limit();
+    if (king_cdn_cache_registry_get_entry_allow_expired(object_id) != NULL
+        && king_cdn_distribute_object(ZSTR_VAL(cache_entry->object_id), NULL, 1) != SUCCESS) {
          /* Ignore distribution errors in the runtime (not fatal for the local cache) */
     }
-
-    RETURN_TRUE;
+    RETURN_BOOL(king_cdn_cache_registry_get_entry_allow_expired(object_id) != NULL);
 }
 
 PHP_FUNCTION(king_cdn_invalidate_cache)

@@ -369,6 +369,14 @@ that same size path through provider `HEAD` metadata when the local sidecar is
 absent. The point is to keep edge warming tied to origin truth without
 downloading the full payload body just to record CDN state.
 
+That same process-local CDN registry is now actually bounded by
+`cdn.cache_memory_limit_mb`. When repeated warms or full-read backfills would
+otherwise grow the registry past that in-process budget, King evicts the
+least-recently-touched older entries before the registry keeps growing. The
+current contract is honest about that pressure: `king_cdn_cache_object()` can
+return `false` even for an existing object when the entry cannot stay admitted
+under the active memory ceiling.
+
 The current honest miss-fill contract is full-object `king_object_store_get()`
 for `smart_cdn` objects. When the runtime CDN registry misses, a successful
 origin/backend read backfills the local cache entry and marks it served; the
