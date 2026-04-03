@@ -15,13 +15,18 @@ unless File.file?(path) && File.readable?(path)
 end
 
 begin
-    YAML.safe_load(
+    parsed_yaml = YAML.safe_load(
         File.read(path),
         permitted_classes: [],
         permitted_symbols: [],
         aliases: false
     )
-rescue StandardError => error
+rescue Errno::ENOENT, Errno::EACCES => error
+    STDERR.puts "Error: YAML file '#{path}' could not be read: #{error.class}: #{error.message}"
+    exit 1
+rescue Psych::SyntaxError, Psych::DisallowedClass, Psych::BadAlias => error
     STDERR.puts "Error: YAML validation failed for #{path}: #{error.class}: #{error.message}"
     exit 1
 end
+
+parsed_yaml
