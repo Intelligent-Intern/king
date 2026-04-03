@@ -313,6 +313,26 @@ for the request that is being upgraded. If the request is valid for upgrade, the
 runtime creates a server-side WebSocket resource and hands ownership of that
 channel to the handler.
 
+On the local HTTP/1, HTTP/2, and HTTP/3 listener slices, that resource is an
+in-process bidirectional channel backed by the shared bounded WebSocket queue,
+so frame send, receive, ping, status, and close calls remain live even without
+an accepted wire socket. On the on-wire HTTP/1 one-shot listener, the same
+upgrade path keeps the stronger contract: the returned resource is bound to the
+accepted socket and exchanges real WebSocket frames with the peer.
+
+That local HTTP/2 and HTTP/3 contract is still honest about transport shape.
+The resource identity becomes `wss://.../stream/<id>` under the secure `h2` or
+`h3` listener session, but the runtime is not fabricating a hidden wire
+`101` or Extended CONNECT handshake where no accepted peer socket exists. The
+repo now carries dedicated local honesty contracts for both secure listener
+families, so that transport claim is explicit rather than inherited only from
+the broader mixed helper coverage.
+
+Those server-owned upgrade resources are also request-boundary scoped. If user
+code retains the returned resource after the handler returns, the runtime
+force-closes it and clears any queued local frames before the next request or
+same-process worker work unit can reuse that server path.
+
 This matters because a WebSocket channel is more than "another response body".
 It is a change in protocol mode and in connection ownership. After upgrade,
 the server is no longer only preparing one final HTTP response. It is managing a
@@ -485,7 +505,9 @@ picture stays the same: a request enters as HTTP and, when accepted, becomes a
 long-lived channel owned by the handler. On the current on-wire HTTP/1 one-shot
 leaf, `king_server_upgrade_to_websocket()` writes the `101` handshake itself,
 so the returned `101` response array remains part of the normalized handler
-contract rather than a second wire write.
+contract rather than a second wire write. On the local listener slices, there
+is no accepted peer socket, so the returned resource stays an in-process
+channel instead of pretending to be a hidden wire connection.
 
 ## How To Think About Protocol Choice
 

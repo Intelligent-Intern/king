@@ -199,11 +199,23 @@ pins protocol choice to HTTP/2.
 `King\Client\Http3Client` keeps the same public method set as `HttpClient` but
 pins protocol choice to HTTP/3 over QUIC.
 
-## WebSocket Client Object
+## WebSocket Objects
 
-Read [WebSocket](./websocket.md) first. `King\WebSocket\Connection` exists
-because WebSocket code is usually easier to follow when the connection is an
-object with its own lifecycle rather than a raw resource-style handle.
+Read [WebSocket](./websocket.md) first. The WebSocket OO surface now has both
+the bounded server-side accept object and the live connection object.
+
+### `King\WebSocket\Server`
+
+| Method | What it does |
+| --- | --- |
+| `__construct(string $host, int $port, ?Config $config = null)` | Prepares one bounded HTTP/1 websocket listener object. |
+| `accept()` | Accepts one real on-wire websocket upgrade and returns a `King\WebSocket\Connection`. |
+| `getConnections()` | Returns the live accepted-connection registry keyed by opaque `connection_id`. |
+| `send(string $connectionId, string $message)` | Sends one targeted text frame to the accepted peer identified by `connection_id`. |
+| `sendBinary(string $connectionId, string $payload)` | Sends one targeted binary frame to the accepted peer identified by `connection_id`. |
+| `broadcast(string $message)` | Sends one text frame to every currently live accepted peer on that server instance. |
+| `broadcastBinary(string $payload)` | Sends one binary frame to every currently live accepted peer on that server instance. |
+| `stop()` | Stops the listener, sends `1001 server-shutdown` to live accepted peers, drains the close handshake, and prevents later accepts or sends on that server instance. |
 
 ### `King\WebSocket\Connection`
 
@@ -214,7 +226,7 @@ object with its own lifecycle rather than a raw resource-style handle.
 | `sendBinary(string $payload)` | Sends a binary frame. |
 | `ping(?string $data = null)` | Sends a ping frame. |
 | `close(int $code = 1000, ?string $reason = null)` | Sends a close frame and closes the connection. |
-| `getInfo()` | Returns connection metadata, handshake information, and live queue diagnostics. |
+| `getInfo()` | Returns connection metadata, including the stable URL-style `id`, the targeted-send `connection_id`, and live queue diagnostics. |
 
 ## Exception Hierarchy
 

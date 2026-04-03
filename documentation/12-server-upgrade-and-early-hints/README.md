@@ -230,8 +230,18 @@ body. It is deciding that the request should become a long-lived channel. On
 the current on-wire HTTP/1 one-shot listener, `king_server_upgrade_to_websocket()`
 also writes the `101 Switching Protocols` handshake itself, while the returned
 `101` array stays part of the normalized handler contract and is not emitted a
-second time after upgrade ownership is taken. This is where ordinary request
-handling turns into realtime session ownership.
+second time after upgrade ownership is taken. On the local HTTP/1, HTTP/2, and
+HTTP/3 listener slices, the same helper returns an in-process bidirectional
+WebSocket resource backed by the shared bounded frame queue, so frame I/O stays
+live without pretending there was an accepted peer socket. On the secure local
+HTTP/2 and HTTP/3 slices, that still means a `wss://.../stream/<id>` identity
+under `h2` or `h3`, not a hidden wire upgrade that the runtime never actually
+performed; the local HTTP/2 and HTTP/3 slices each have their own dedicated
+honesty contract in the repo now. Those server-owned upgrade handles are still
+request-boundary scoped, so retained references are force-closed and their
+queued local frames are cleared before the next work unit reuses the same
+process path. This is where
+ordinary request handling turns into realtime session ownership.
 
 ## Step 7: Inspect Peer Identity And TLS State
 

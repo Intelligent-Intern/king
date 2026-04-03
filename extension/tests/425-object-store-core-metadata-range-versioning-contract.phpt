@@ -5,6 +5,7 @@ king.security_allow_config_override=1
 --FILE--
 <?php
 $dir = sys_get_temp_dir() . '/king_object_store_core_425_' . getmypid();
+$expiresAt = '2099-01-01T00:00:00Z';
 if (!is_dir($dir)) {
     mkdir($dir, 0700, true);
 }
@@ -22,7 +23,7 @@ var_dump(king_object_store_put('doc', $payload, [
     'content_type' => 'text/plain',
     'content_encoding' => 'gzip',
     'cache_ttl_sec' => 123,
-    'expires_at' => '2026-04-03T00:00:00Z',
+    'expires_at' => $expiresAt,
     'object_type' => 'document',
     'cache_policy' => 'smart_cdn',
     'integrity_sha256' => $sha,

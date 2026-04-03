@@ -1,19 +1,15 @@
-/* Local HTTP/3 harness server for session-ticket, early-data, and packet-loss contracts. */
-
+/* Local HTTP/3 harness server for session-ticket, early-data, loss, and interruption contracts. */
 use std::collections::HashMap;
 use std::fs;
 use std::net;
 use std::net::ToSocketAddrs;
 use std::path::Path;
 use std::time::{Duration, Instant};
-
 use mio::Events;
 use mio::Interest;
 use mio::Poll;
 use mio::Token;
-
 use quiche::h3::NameValue;
-
 use ring::rand::SystemRandom;
 
 const MAX_DATAGRAM_SIZE: usize = 1350;
@@ -25,27 +21,62 @@ struct PendingResponse {
     written: usize,
 }
 
+struct PendingRequest {
+    method: String,
+    path: String,
+    body: Vec<u8>,
+    finished: bool,
+    response_sent: bool,
+}
+
+struct LifecycleCapture {
+    saw_initial: bool,
+    saw_established: bool,
+    saw_resumed: bool,
+    saw_early_data_state: bool,
+    saw_h3_open: bool,
+    saw_request_stream_open: bool,
+    saw_request_headers: bool,
+    request_headers_in_early_data: bool,
+    request_headers_after_established: bool,
+    saw_request_body: bool,
+    request_body_bytes: usize,
+    saw_request_finished: bool,
+    request_finished_before_response: bool,
+    request_body_drained_before_response: bool,
+    response_on_request_stream: bool,
+    saw_response_headers: bool,
+    response_headers_in_early_data: bool,
+    response_headers_after_established: bool,
+    saw_response_drain: bool,
+    response_drained_before_close: bool,
+    saw_draining: bool,
+    saw_closed: bool,
+    early_data_reason_code: u32,
+    early_data_reason: &'static str,
+    close_source: &'static str,
+    peer_packets_received: usize,
+    peer_packets_sent: usize,
+    interrupted_datagrams_dropped: usize,
+}
+
 fn main() {
     let mut args = std::env::args();
     let cmd = args
         .next()
         .unwrap_or_else(|| "king-http3-ticket-server".to_string());
-
     let cert = match args.next() {
         Some(value) => value,
         None => usage_and_exit(&cmd),
     };
-
     let key = match args.next() {
         Some(value) => value,
         None => usage_and_exit(&cmd),
     };
-
     let root = match args.next() {
         Some(value) => value,
         None => usage_and_exit(&cmd),
     };
-
     let host = match args.next() {
         Some(value) => value,
         None => usage_and_exit(&cmd),
@@ -67,16 +98,17 @@ fn main() {
         },
         None => false,
     };
-
-    let drop_first_established_datagram = match args.next() {
-        Some(value) => match value.as_str() {
-            "1" => true,
-            "0" => false,
-            _ => usage_and_exit(&cmd),
+    let drop_established_datagram_budget = match args.next() {
+        Some(value) => match value.parse::<usize>() {
+            Ok(parsed) => parsed,
+            Err(_) => usage_and_exit(&cmd),
         },
-        None => false,
+        None => 0,
     };
-
+    let interrupt_established_ms = match args.next() {
+        Some(value) => value.parse::<u64>().unwrap_or_else(|_| usage_and_exit(&cmd)),
+        None => 0,
+    };
     let bind_addr = resolve_udp_bind(&host, port);
     let mut socket = mio::net::UdpSocket::bind(bind_addr).unwrap();
     let local_addr = socket.local_addr().unwrap();
@@ -110,27 +142,56 @@ fn main() {
     println!("READY {}", local_addr.port());
 
     let rng = SystemRandom::new();
-    let conn_id_seed =
-        ring::hmac::Key::generate(ring::hmac::HMAC_SHA256, &rng).unwrap();
+    let conn_id_seed = ring::hmac::Key::generate(ring::hmac::HMAC_SHA256, &rng).unwrap();
 
     let mut conn: Option<quiche::Connection> = None;
     let mut h3_conn: Option<quiche::h3::Connection> = None;
     let mut pending = HashMap::<u64, PendingResponse>::new();
+    let mut requests = HashMap::<u64, PendingRequest>::new();
+    let mut lifecycle = LifecycleCapture {
+        saw_initial: false,
+        saw_established: false,
+        saw_resumed: false,
+        saw_early_data_state: false,
+        saw_h3_open: false,
+        saw_request_stream_open: false,
+        saw_request_headers: false,
+        request_headers_in_early_data: false,
+        request_headers_after_established: false,
+        saw_request_body: false,
+        request_body_bytes: 0,
+        saw_request_finished: false,
+        request_finished_before_response: false,
+        request_body_drained_before_response: false,
+        response_on_request_stream: false,
+        saw_response_headers: false,
+        response_headers_in_early_data: false,
+        response_headers_after_established: false,
+        saw_response_drain: false,
+        response_drained_before_close: false,
+        saw_draining: false,
+        saw_closed: false,
+        early_data_reason_code: 0,
+        early_data_reason: "unknown",
+        close_source: "none",
+        peer_packets_received: 0,
+        peer_packets_sent: 0,
+        interrupted_datagrams_dropped: 0,
+    };
     let mut response_started = false;
     let mut response_idle_deadline: Option<Instant> = None;
-    let mut drop_first_established_datagram = drop_first_established_datagram;
+    let mut drop_established_datagram_budget = drop_established_datagram_budget;
+    let mut interrupt_deadline: Option<Instant> = None;
+    let mut interrupt_injected = false;
     let overall_deadline = Instant::now() + Duration::from_secs(10);
     let mut buf = [0; 65535];
     let mut out = [0; MAX_DATAGRAM_SIZE];
-
     while Instant::now() < overall_deadline {
         let timeout = match conn.as_ref().and_then(|active| active.timeout()) {
             Some(value) => value.min(Duration::from_millis(50)),
             None => Duration::from_millis(50),
         };
-
         poll.poll(&mut events, Some(timeout)).unwrap();
-
         if let Some(active) = conn.as_mut() {
             if events.is_empty() {
                 active.on_timeout();
@@ -163,6 +224,8 @@ fn main() {
                     continue 'read;
                 }
 
+                lifecycle.saw_initial = true;
+
                 if !quiche::version_is_supported(hdr.version) {
                     let written = quiche::negotiate_version(
                         &hdr.scid,
@@ -185,11 +248,18 @@ fn main() {
             }
 
             let active = conn.as_mut().unwrap();
-            if drop_first_established_datagram &&
+            if let Some(deadline) = interrupt_deadline {
+                if Instant::now() < deadline && h3_conn.is_some() {
+                    lifecycle.interrupted_datagrams_dropped += 1;
+                    continue 'read;
+                }
+                interrupt_deadline = None;
+            }
+            if drop_established_datagram_budget > 0 &&
                 h3_conn.is_some() &&
                 !response_started
             {
-                drop_first_established_datagram = false;
+                drop_established_datagram_budget -= 1;
                 continue 'read;
             }
 
@@ -202,9 +272,26 @@ fn main() {
                 continue 'read;
             }
 
+            if active.is_established() {
+                lifecycle.saw_established = true;
+            }
+
+            if active.is_resumed() {
+                lifecycle.saw_resumed = true;
+            }
+
+            if active.is_in_early_data() {
+                lifecycle.saw_early_data_state = true;
+            }
+
+            lifecycle.early_data_reason_code = active.early_data_reason();
+            lifecycle.early_data_reason =
+                early_data_reason_name(lifecycle.early_data_reason_code);
+
             if h3_conn.is_none() &&
                 (active.is_in_early_data() || active.is_established())
             {
+                lifecycle.saw_h3_open = true;
                 h3_conn = Some(
                     quiche::h3::Connection::with_transport(
                         active,
@@ -220,13 +307,33 @@ fn main() {
                     active,
                     &root,
                     &mut pending,
+                    &mut requests,
                     &mut response_started,
+                    &mut lifecycle,
                 );
+                if !interrupt_injected
+                    && interrupt_deadline.is_none()
+                    && interrupt_established_ms > 0
+                    && requests
+                        .values()
+                        .any(|request| request.path == "/network-interruption" && !request.body.is_empty())
+                {
+                    interrupt_injected = true;
+                    interrupt_deadline =
+                        Some(Instant::now() + Duration::from_millis(interrupt_established_ms));
+                }
             }
         }
 
-        if let (Some(http3), Some(active)) = (h3_conn.as_mut(), conn.as_mut()) {
-            flush_pending_bodies(http3, active, &mut pending);
+        let interruption_active = matches!(
+            interrupt_deadline,
+            Some(deadline) if Instant::now() < deadline
+        );
+
+        if !interruption_active {
+            if let (Some(http3), Some(active)) = (h3_conn.as_mut(), conn.as_mut()) {
+                flush_pending_bodies(http3, active, &mut pending, &mut lifecycle);
+            }
         }
 
         if response_started && pending.is_empty() && response_idle_deadline.is_none() {
@@ -239,9 +346,28 @@ fn main() {
         }
 
         if let Some(active) = conn.as_mut() {
-            flush_egress(&mut socket, active, &mut out);
+            if !interruption_active {
+                flush_egress(&mut socket, active, &mut out);
+            }
+
+            if active.is_draining() {
+                if !lifecycle.saw_draining {
+                    lifecycle.response_drained_before_close =
+                        lifecycle.saw_response_drain;
+                    if lifecycle.close_source == "none" {
+                        lifecycle.close_source = "peer_draining_close";
+                    }
+                }
+                lifecycle.saw_draining = true;
+            }
 
             if active.is_closed() {
+                if lifecycle.close_source == "none" {
+                    lifecycle.response_drained_before_close =
+                        lifecycle.saw_response_drain;
+                    lifecycle.close_source = "peer_closed";
+                }
+                lifecycle.saw_closed = true;
                 break;
             }
         }
@@ -249,19 +375,63 @@ fn main() {
         if let Some(deadline) = response_idle_deadline {
             if pending.is_empty() && Instant::now() >= deadline {
                 if let Some(active) = conn.as_mut() {
+                    lifecycle.response_drained_before_close =
+                        response_started && lifecycle.saw_response_drain;
+                    lifecycle.close_source = "server_idle_close";
                     active.close(true, 0, b"").ok();
                     flush_egress(&mut socket, active, &mut out);
+                    if active.is_draining() {
+                        lifecycle.saw_draining = true;
+                    }
+                    if active.is_closed() {
+                        lifecycle.saw_closed = true;
+                    }
                 }
-                break;
             }
         }
     }
+
+    if let Some(active) = conn.as_ref() {
+        let stats = active.stats();
+        lifecycle.peer_packets_received = stats.recv;
+        lifecycle.peer_packets_sent = stats.sent;
+    }
+
+    println!(
+        "LIFECYCLE {{\"saw_initial\":{},\"saw_established\":{},\"saw_resumed\":{},\"saw_early_data_state\":{},\"saw_h3_open\":{},\"saw_request_stream_open\":{},\"saw_request_headers\":{},\"request_headers_in_early_data\":{},\"request_headers_after_established\":{},\"saw_request_body\":{},\"request_body_bytes\":{},\"saw_request_finished\":{},\"request_finished_before_response\":{},\"request_body_drained_before_response\":{},\"response_on_request_stream\":{},\"saw_response_headers\":{},\"response_headers_in_early_data\":{},\"response_headers_after_established\":{},\"saw_response_drain\":{},\"response_drained_before_close\":{},\"saw_draining\":{},\"saw_closed\":{},\"early_data_reason_code\":{},\"early_data_reason\":\"{}\",\"close_source\":\"{}\",\"peer_packets_received\":{},\"peer_packets_sent\":{},\"interrupted_datagrams_dropped\":{}}}",
+        lifecycle.saw_initial,
+        lifecycle.saw_established,
+        lifecycle.saw_resumed,
+        lifecycle.saw_early_data_state,
+        lifecycle.saw_h3_open,
+        lifecycle.saw_request_stream_open,
+        lifecycle.saw_request_headers,
+        lifecycle.request_headers_in_early_data,
+        lifecycle.request_headers_after_established,
+        lifecycle.saw_request_body,
+        lifecycle.request_body_bytes,
+        lifecycle.saw_request_finished,
+        lifecycle.request_finished_before_response,
+        lifecycle.request_body_drained_before_response,
+        lifecycle.response_on_request_stream,
+        lifecycle.saw_response_headers,
+        lifecycle.response_headers_in_early_data,
+        lifecycle.response_headers_after_established,
+        lifecycle.saw_response_drain,
+        lifecycle.response_drained_before_close,
+        lifecycle.saw_draining,
+        lifecycle.saw_closed,
+        lifecycle.early_data_reason_code,
+        lifecycle.early_data_reason,
+        lifecycle.close_source,
+        lifecycle.peer_packets_received,
+        lifecycle.peer_packets_sent,
+        lifecycle.interrupted_datagrams_dropped,
+    );
 }
 
 fn usage_and_exit(cmd: &str) -> ! {
-    eprintln!(
-        "Usage: {cmd} <cert> <key> <root> <host> <port> [enable_early_data] [drop_first_established_datagram]"
-    );
+    eprintln!("Usage: {cmd} <cert> <key> <root> <host> <port> [enable_early_data] [drop_established_datagram_count] [interrupt_established_ms]");
     std::process::exit(1);
 }
 
@@ -278,51 +448,56 @@ fn process_http3_events(
     conn: &mut quiche::Connection,
     root: &str,
     pending: &mut HashMap<u64, PendingResponse>,
+    requests: &mut HashMap<u64, PendingRequest>,
     response_started: &mut bool,
+    lifecycle: &mut LifecycleCapture,
 ) {
     loop {
         match http3.poll(conn) {
             Ok((stream_id, quiche::h3::Event::Headers { list, .. })) => {
-                conn.stream_shutdown(stream_id, quiche::Shutdown::Read, 0).ok();
-                *response_started = true;
+                let (method, path) = request_line_from_headers(&list);
 
-                let (status_code, body) = build_response(root, &list);
-                let status = status_code.to_string();
-                let content_length = body.len().to_string();
-                let early_data_phase = if conn.is_in_early_data() {
-                    b"early_data".as_slice()
-                } else {
-                    b"established".as_slice()
-                };
-                let headers = [
-                    quiche::h3::Header::new(b":status", status.as_bytes()),
-                    quiche::h3::Header::new(
-                        b"server",
-                        b"king-http3-ticket-server",
-                    ),
-                    quiche::h3::Header::new(
-                        b"content-length",
-                        content_length.as_bytes(),
-                    ),
-                    quiche::h3::Header::new(
-                        b"x-king-early-data-phase",
-                        early_data_phase,
-                    ),
-                ];
-
-                if http3
-                    .send_response(conn, stream_id, &headers, body.is_empty())
-                    .is_err()
-                {
-                    conn.close(false, 0x1, b"response failure").ok();
-                    return;
+                lifecycle.saw_request_stream_open = true;
+                lifecycle.saw_request_headers = true;
+                if conn.is_in_early_data() {
+                    lifecycle.request_headers_in_early_data = true;
+                }
+                if conn.is_established() && !conn.is_in_early_data() {
+                    lifecycle.request_headers_after_established = true;
                 }
 
-                if !body.is_empty() {
-                    pending.insert(
-                        stream_id,
-                        PendingResponse { body, written: 0 },
-                    );
+                requests.insert(
+                    stream_id,
+                    PendingRequest {
+                        method,
+                        path,
+                        body: Vec::new(),
+                        finished: false,
+                        response_sent: false,
+                    },
+                );
+
+                if let Some(request) = requests.get_mut(&stream_id) {
+                    if request.method.eq_ignore_ascii_case("GET") {
+                        if send_response_for_request(
+                            http3,
+                            conn,
+                            root,
+                            stream_id,
+                            request,
+                            pending,
+                            response_started,
+                            lifecycle,
+                        )
+                        .is_err()
+                        {
+                            conn.close(false, 0x1, b"response failure").ok();
+                            return;
+                        }
+
+                        conn.stream_shutdown(stream_id, quiche::Shutdown::Read, 0)
+                            .ok();
+                    }
                 }
             },
 
@@ -332,14 +507,50 @@ fn process_http3_events(
                 loop {
                     match http3.recv_body(conn, stream_id, &mut scratch) {
                         Ok(0) => break,
-                        Ok(_) => (),
+                        Ok(read) => {
+                            lifecycle.saw_request_body = true;
+                            lifecycle.request_body_bytes += read;
+
+                            if let Some(request) = requests.get_mut(&stream_id) {
+                                request.body.extend_from_slice(&scratch[..read]);
+                            }
+                        },
                         Err(quiche::h3::Error::Done) => break,
                         Err(_) => break,
                     }
                 }
             },
 
-            Ok((_stream_id, quiche::h3::Event::Finished)) => (),
+            Ok((stream_id, quiche::h3::Event::Finished)) => {
+                lifecycle.saw_request_finished = true;
+
+                if let Some(request) = requests.get_mut(&stream_id) {
+                    request.finished = true;
+
+                    if !request.response_sent {
+                        lifecycle.request_finished_before_response = true;
+                        lifecycle.request_body_drained_before_response = true;
+
+                        if send_response_for_request(
+                            http3,
+                            conn,
+                            root,
+                            stream_id,
+                            request,
+                            pending,
+                            response_started,
+                            lifecycle,
+                        )
+                        .is_err()
+                        {
+                            conn.close(false, 0x1, b"response failure").ok();
+                            return;
+                        }
+                    }
+
+                    conn.stream_shutdown(stream_id, quiche::Shutdown::Read, 0).ok();
+                }
+            },
             Ok((_stream_id, quiche::h3::Event::Reset { .. })) => (),
             Ok((_stream_id, quiche::h3::Event::PriorityUpdate)) => (),
             Ok((_stream_id, quiche::h3::Event::GoAway)) => (),
@@ -354,10 +565,61 @@ fn process_http3_events(
     }
 }
 
+fn send_response_for_request(
+    http3: &mut quiche::h3::Connection,
+    conn: &mut quiche::Connection,
+    root: &str,
+    stream_id: u64,
+    request: &mut PendingRequest,
+    pending: &mut HashMap<u64, PendingResponse>,
+    response_started: &mut bool,
+    lifecycle: &mut LifecycleCapture,
+) -> Result<(), ()> {
+    let (status_code, body) =
+        build_response(root, &request.method, &request.path, &request.body);
+    let status = status_code.to_string();
+    let content_length = body.len().to_string();
+    let early_data_phase = if conn.is_in_early_data() {
+        b"early_data".as_slice()
+    } else {
+        b"established".as_slice()
+    };
+    let headers = [
+        quiche::h3::Header::new(b":status", status.as_bytes()),
+        quiche::h3::Header::new(b"server", b"king-http3-ticket-server"),
+        quiche::h3::Header::new(b"content-length", content_length.as_bytes()),
+        quiche::h3::Header::new(b"x-king-early-data-phase", early_data_phase),
+    ];
+
+    *response_started = true;
+
+    http3.send_response(conn, stream_id, &headers, body.is_empty())
+        .map_err(|_| ())?;
+
+    request.response_sent = true;
+    lifecycle.saw_response_headers = true;
+    lifecycle.response_on_request_stream = true;
+    if conn.is_in_early_data() {
+        lifecycle.response_headers_in_early_data = true;
+    }
+    if conn.is_established() && !conn.is_in_early_data() {
+        lifecycle.response_headers_after_established = true;
+    }
+
+    if !body.is_empty() {
+        pending.insert(stream_id, PendingResponse { body, written: 0 });
+    } else {
+        lifecycle.saw_response_drain = true;
+    }
+
+    Ok(())
+}
+
 fn flush_pending_bodies(
     http3: &mut quiche::h3::Connection,
     conn: &mut quiche::Connection,
     pending: &mut HashMap<u64, PendingResponse>,
+    lifecycle: &mut LifecycleCapture,
 ) {
     let mut completed = Vec::new();
 
@@ -372,6 +634,7 @@ fn flush_pending_bodies(
             Ok(written) => {
                 response.written += written;
                 if response.written == response.body.len() {
+                    lifecycle.saw_response_drain = true;
                     completed.push(*stream_id);
                 }
             },
@@ -411,10 +674,7 @@ fn flush_egress(
     }
 }
 
-fn build_response(
-    root: &str,
-    headers: &[quiche::h3::Header],
-) -> (u16, Vec<u8>) {
+fn request_line_from_headers(headers: &[quiche::h3::Header]) -> (String, String) {
     let mut method = None;
     let mut path = None;
 
@@ -426,16 +686,38 @@ fn build_response(
         }
     }
 
-    if method.as_deref() != Some("GET") {
+    (
+        method.unwrap_or_else(|| "GET".to_string()),
+        path.unwrap_or_else(|| "/".to_string()),
+    )
+}
+
+fn build_response(
+    root: &str,
+    method: &str,
+    path: &str,
+    request_body: &[u8],
+) -> (u16, Vec<u8>) {
+    let supported_post = matches!(path, "/stream-lifecycle" | "/congestion-control" | "/network-interruption");
+    if !method.eq_ignore_ascii_case("GET") && !(method.eq_ignore_ascii_case("POST") && supported_post) {
         return (405, b"method not allowed\n".to_vec());
     }
 
-    let Some(path) = path else {
-        return (400, b"missing path\n".to_vec());
-    };
-
     if path.contains("..") || path.contains('\\') {
         return (400, b"invalid path\n".to_vec());
+    }
+
+    if method.eq_ignore_ascii_case("POST") && path == "/stream-lifecycle" {
+        let mut body = b"stream-ack:".to_vec();
+        body.extend_from_slice(request_body);
+        return (200, body);
+    }
+
+    if method.eq_ignore_ascii_case("POST") && path == "/congestion-control" {
+        return (200, format!("congestion-ack:{}", request_body.len()).into_bytes());
+    }
+    if method.eq_ignore_ascii_case("POST") && path == "/network-interruption" {
+        return (200, format!("interruption-ack:{}", request_body.len()).into_bytes());
     }
 
     let relative = path.trim_start_matches('/');
@@ -444,5 +726,25 @@ fn build_response(
     match fs::read(file_path) {
         Ok(body) => (200, body),
         Err(_) => (404, b"not found\n".to_vec()),
+    }
+}
+
+fn early_data_reason_name(reason: u32) -> &'static str {
+    match reason {
+        0 => "unknown",
+        1 => "disabled",
+        2 => "accepted",
+        3 => "protocol_version",
+        4 => "peer_declined",
+        5 => "no_session_offered",
+        6 => "session_not_resumed",
+        7 => "unsupported_for_session",
+        8 => "hello_retry_request",
+        9 => "alpn_mismatch",
+        10 => "channel_id",
+        12 => "ticket_age_skew",
+        13 => "quic_parameter_mismatch",
+        14 => "alps_mismatch",
+        _ => "unknown_reason_code",
     }
 }

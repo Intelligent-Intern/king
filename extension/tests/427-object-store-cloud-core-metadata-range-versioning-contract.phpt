@@ -31,6 +31,7 @@ function king_object_store_cloud_core_427_cleanup_dir(string $dir): void
 
 function king_object_store_cloud_core_427_run(string $backend, string $provider): array
 {
+    $expiresAt = '2099-01-01T00:00:00Z';
     $root = sys_get_temp_dir() . '/king_object_store_cloud_core_427_' . $backend . '_' . getmypid();
     if (!is_dir($root)) {
         mkdir($root, 0700, true);
@@ -84,7 +85,7 @@ function king_object_store_cloud_core_427_run(string $backend, string $provider)
             'content_type' => 'text/plain',
             'content_encoding' => 'gzip',
             'cache_ttl_sec' => 77,
-            'expires_at' => '2026-04-03T00:00:00Z',
+            'expires_at' => $expiresAt,
             'object_type' => 'document',
             'cache_policy' => 'smart_cdn',
         ]),
