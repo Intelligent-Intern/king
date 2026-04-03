@@ -228,7 +228,7 @@ Status note:
 - [x] Validate cache fill on miss against real backends
 - [x] Validate cache invalidation under load
 - [x] Validate cache TTL enforcement under sustained operation
-- [ ] Validate stale-serve-on-error against real backend failures
+- [x] Validate stale-serve-on-error against real backend failures
 - [ ] Validate cache consistency after backend update
 - [x] Validate cache consistency after delete
 - [ ] Validate edge-node inventory against real nodes where publicly claimed

@@ -18,7 +18,7 @@ The remaining gaps are no longer about broad runtime parity or placeholder
 surfaces inside the local tree. They are now concentrated in three narrower
 areas:
 
-- deeper CDN/cache/edge behavior under load, invalidation, restart, stale-serve, and observability across the real object-store backends
+- deeper CDN/cache/edge behavior under backend-update consistency, restart, edge inventory, retry, memory limits, and observability across the real object-store backends
 - broader Smart-DNS distributed-topology validation beyond the current on-wire listener proof, stale-peer rejoin healing after partial durable-state loss, tombstone-aware mother-node re-election churn proof, local query failure/recovery, concurrent-write, live-signal, and split-brain/partial-failure proof
 - stronger telemetry exporter ordering/diagnostics and deeper autoscaling multi-node fleet behavior
 
@@ -87,6 +87,7 @@ The current tree already proves:
 - CDN cache warmup now stays tied to the active object-store backend truth: `king_cdn_cache_object()` is verified across `local_fs`, `distributed`, `cloud_s3`, `cloud_gcs`, and `cloud_azure`, local and distributed primaries size cache entries through committed metadata sidecars, cloud primaries can rehydrate the same size path through provider `HEAD` when the local sidecar is absent, and those warm paths do not pull the full payload body just to populate CDN state
 - full-object `king_object_store_get()` now provides the current honest CDN fill-on-miss path for `smart_cdn` objects across `local_fs`, `distributed`, `cloud_s3`, `cloud_gcs`, and `cloud_azure`: a successful origin/backend read backfills the runtime CDN registry and marks the object served instead of leaving cache-miss fills as config-only folklore
 - repeated CDN warm/invalidate churn now stays exact across `local_fs`, `distributed`, `cloud_s3`, `cloud_gcs`, and `cloud_azure`: targeted invalidations return the runtime CDN registry to zero without stale count or byte drift under sustained repeated warm and read-through load
+- expired `smart_cdn` full-read entries now retain a real stale body for honest error fallback across `cloud_s3`, `cloud_gcs`, and `cloud_azure`: later backend read failures can serve that retained stale body on the same full-read public surfaces, while head-only warm entries without a retained body still fail through the public backend-failure taxonomy instead of pretending the CDN can invent bytes it never held
 - deterministic QUIC bootstrap through a tracked pinset for the `quiche` repo revision, BoringSSL submodule revision, pinned workspace lockfile, and pinned `wirefilter` git revision with fail-closed static and PHPT verification
 - one shared runtime install smoke across staged profiles, packaged release artifacts, and published runtime containers, plus first-class clean-host package install and container smoke matrix entrypoints
 - long-duration ASan, UBSan, and leak-oriented soak gates with retained per-iteration logs and archived failure diagnostics under `extension/build/soak/` plus CI artifact upload on soak failure

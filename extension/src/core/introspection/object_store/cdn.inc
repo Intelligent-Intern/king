@@ -1,9 +1,9 @@
 /*
  * Root CDN companion slice: implements the local cache/invalidation leaves,
  * resolves cache-entry size through the active local/distributed/cloud
- * metadata path without dragging full payload bytes when avoidable, and
- * exposes the current synthetic edge-node inventory that the runtime can
- * describe today.
+ * metadata path without dragging full payload bytes when avoidable, keeps
+ * explicit invalidation honest for retained stale entries, and exposes the
+ * current synthetic edge-node inventory that the runtime can describe today.
  */
 
 #include "object_store/object_store_internal.h"
@@ -202,7 +202,7 @@ PHP_FUNCTION(king_cdn_invalidate_cache)
     }
 
     /* Single-object invalidation */
-    if (king_cdn_cache_registry_get_entry(object_id) == NULL) {
+    if (king_cdn_cache_registry_get_entry_allow_expired(object_id) == NULL) {
         RETURN_LONG(0);
     }
 

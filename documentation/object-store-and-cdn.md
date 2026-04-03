@@ -380,6 +380,15 @@ Repeated warm and invalidate churn is also now verified across `local_fs`,
 invalidations drive `cached_object_count` and `cached_bytes` back to zero
 without stale registry drift under sustained cache warm/read-through load.
 
+The current honest stale-on-error contract is the same full-object
+`king_object_store_get()` / `king_object_store_get_to_stream()` path for
+`smart_cdn` objects when a previous successful full read already retained the
+body in the local CDN registry. That retained body can be served after TTL
+expiry when a later real backend read fails. Direct `king_cdn_cache_object()`
+warmups still only retain metadata and size, so a head-only warm entry without
+an earlier full read still fails through the public backend-failure taxonomy
+instead of pretending the CDN can synthesize bytes it never held.
+
 This matters because a storage write often has a delivery consequence. A fresh
 object may need warming at the edge. An overwritten object may need invalidation
 so old copies stop being served. A missing object may require origin fallback. A

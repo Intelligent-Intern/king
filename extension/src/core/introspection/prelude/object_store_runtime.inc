@@ -1,8 +1,9 @@
 
 /*
  * Prelude object-store runtime slice: owns the process-local CDN cache
- * registry lifecycle, entry lookup, stats collection, and expiry sweeping
- * that the active object-store/CDN introspection surfaces reuse.
+ * registry lifecycle, retained stale-body management, entry lookup, stats
+ * collection, and expiry sweeping that the active object-store/CDN
+ * introspection surfaces reuse.
  */
 
 
@@ -15,8 +16,36 @@ static void king_cdn_cache_entry_free(king_cdn_cache_entry *entry)
     if (entry->object_id != NULL) {
         zend_string_release_ex(entry->object_id, 1);
     }
+    if (entry->retained_payload != NULL) {
+        zend_string_release_ex(entry->retained_payload, 1);
+    }
 
     pefree(entry, 1);
+}
+
+static void king_cdn_cache_entry_replace_retained_payload(
+    king_cdn_cache_entry *entry,
+    const void *payload,
+    size_t payload_size
+)
+{
+    const char *payload_bytes;
+
+    if (entry == NULL) {
+        return;
+    }
+
+    if (entry->retained_payload != NULL) {
+        zend_string_release_ex(entry->retained_payload, 1);
+        entry->retained_payload = NULL;
+    }
+
+    if (payload == NULL && payload_size > 0) {
+        return;
+    }
+
+    payload_bytes = payload != NULL ? (const char *) payload : "";
+    entry->retained_payload = zend_string_init(payload_bytes, payload_size, 1);
 }
 
 static void king_cdn_cache_entry_zval_dtor(zval *zv)
@@ -54,8 +83,9 @@ void king_cdn_cache_registry_mshutdown(void)
     king_cdn_cache_registry_initialized = false;
 }
 
-static king_cdn_cache_entry *king_cdn_cache_registry_get_entry(
-    zend_string *object_id
+static king_cdn_cache_entry *king_cdn_cache_registry_find_entry(
+    zend_string *object_id,
+    zend_bool allow_expired
 )
 {
     zval *entry_zv;
@@ -75,13 +105,30 @@ static king_cdn_cache_entry *king_cdn_cache_registry_get_entry(
         return NULL;
     }
 
-    /* TTL expiry: treat expired entries as cache misses and evict them */
-    if (entry->expires_at > 0 && time(NULL) > entry->expires_at) {
-        zend_hash_del(&king_cdn_cache_registry, object_id);
+    /*
+     * Expired entries stay in the registry until explicit invalidation or the
+     * sweep path removes them. Ordinary cache hits must treat them as misses,
+     * but stale-on-error lookups may still need the retained body.
+     */
+    if (!allow_expired && entry->expires_at > 0 && time(NULL) > entry->expires_at) {
         return NULL;
     }
 
     return entry;
+}
+
+static king_cdn_cache_entry *king_cdn_cache_registry_get_entry(
+    zend_string *object_id
+)
+{
+    return king_cdn_cache_registry_find_entry(object_id, 0);
+}
+
+static king_cdn_cache_entry *king_cdn_cache_registry_get_entry_allow_expired(
+    zend_string *object_id
+)
+{
+    return king_cdn_cache_registry_find_entry(object_id, 1);
 }
 
 static void king_cdn_collect_live_stats(
