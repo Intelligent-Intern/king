@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- `#18 Validate WebSocket upgrade on HTTP/2 where the public docs or surface claim it.`
+- `#19 Validate WebSocket upgrade on HTTP/3 where the public docs or surface claim it.`
 
 ## Active Executable Items
 
@@ -41,7 +41,7 @@
 - [x] `#15 Back King\WebSocket\Server listen/accept lifecycle with fully real runtime behavior.`
 - [x] `#16 Back King\WebSocket\Server connection registry and targeted send semantics with real runtime behavior.`
 - [x] `#17 Back King\WebSocket\Server broadcast and shutdown semantics with real live connections.`
-- [ ] `#18 Validate WebSocket upgrade on HTTP/2 where the public docs or surface claim it.`
+- [x] `#18 Validate WebSocket upgrade on HTTP/2 where the public docs or surface claim it.`
 - [ ] `#19 Validate WebSocket upgrade on HTTP/3 where the public docs or surface claim it.`
 - [ ] `#20 Validate WebSocket resource cleanup across request boundaries and worker reuse.`
 

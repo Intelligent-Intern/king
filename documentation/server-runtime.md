@@ -320,6 +320,11 @@ an accepted wire socket. On the on-wire HTTP/1 one-shot listener, the same
 upgrade path keeps the stronger contract: the returned resource is bound to the
 accepted socket and exchanges real WebSocket frames with the peer.
 
+That local HTTP/2 and HTTP/3 contract is still honest about transport shape.
+The resource identity becomes `wss://.../stream/<id>` under the secure `h2` or
+`h3` listener session, but the runtime is not fabricating a hidden wire
+`101` or Extended CONNECT handshake where no accepted peer socket exists.
+
 This matters because a WebSocket channel is more than "another response body".
 It is a change in protocol mode and in connection ownership. After upgrade,
 the server is no longer only preparing one final HTTP response. It is managing a
