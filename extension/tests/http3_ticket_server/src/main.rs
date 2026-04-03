@@ -59,6 +59,8 @@ struct LifecycleCapture {
     early_data_reason_code: u32,
     early_data_reason: &'static str,
     close_source: &'static str,
+    peer_packets_received: usize,
+    peer_packets_sent: usize,
 }
 
 fn main() {
@@ -178,6 +180,8 @@ fn main() {
         early_data_reason_code: 0,
         early_data_reason: "unknown",
         close_source: "none",
+        peer_packets_received: 0,
+        peer_packets_sent: 0,
     };
     let mut response_started = false;
     let mut response_idle_deadline: Option<Instant> = None;
@@ -366,8 +370,14 @@ fn main() {
         }
     }
 
+    if let Some(active) = conn.as_ref() {
+        let stats = active.stats();
+        lifecycle.peer_packets_received = stats.recv;
+        lifecycle.peer_packets_sent = stats.sent;
+    }
+
     println!(
-        "LIFECYCLE {{\"saw_initial\":{},\"saw_established\":{},\"saw_resumed\":{},\"saw_early_data_state\":{},\"saw_h3_open\":{},\"saw_request_stream_open\":{},\"saw_request_headers\":{},\"request_headers_in_early_data\":{},\"request_headers_after_established\":{},\"saw_request_body\":{},\"request_body_bytes\":{},\"saw_request_finished\":{},\"request_finished_before_response\":{},\"request_body_drained_before_response\":{},\"response_on_request_stream\":{},\"saw_response_headers\":{},\"response_headers_in_early_data\":{},\"response_headers_after_established\":{},\"saw_response_drain\":{},\"response_drained_before_close\":{},\"saw_draining\":{},\"saw_closed\":{},\"early_data_reason_code\":{},\"early_data_reason\":\"{}\",\"close_source\":\"{}\"}}",
+        "LIFECYCLE {{\"saw_initial\":{},\"saw_established\":{},\"saw_resumed\":{},\"saw_early_data_state\":{},\"saw_h3_open\":{},\"saw_request_stream_open\":{},\"saw_request_headers\":{},\"request_headers_in_early_data\":{},\"request_headers_after_established\":{},\"saw_request_body\":{},\"request_body_bytes\":{},\"saw_request_finished\":{},\"request_finished_before_response\":{},\"request_body_drained_before_response\":{},\"response_on_request_stream\":{},\"saw_response_headers\":{},\"response_headers_in_early_data\":{},\"response_headers_after_established\":{},\"saw_response_drain\":{},\"response_drained_before_close\":{},\"saw_draining\":{},\"saw_closed\":{},\"early_data_reason_code\":{},\"early_data_reason\":\"{}\",\"close_source\":\"{}\",\"peer_packets_received\":{},\"peer_packets_sent\":{}}}",
         lifecycle.saw_initial,
         lifecycle.saw_established,
         lifecycle.saw_resumed,
@@ -393,6 +403,8 @@ fn main() {
         lifecycle.early_data_reason_code,
         lifecycle.early_data_reason,
         lifecycle.close_source,
+        lifecycle.peer_packets_received,
+        lifecycle.peer_packets_sent,
     );
 }
 

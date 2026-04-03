@@ -200,7 +200,14 @@ story. The same ticket-backed peer harness now also proves resumed 0-RTT
 requests end up in one of two honest transport phases: accepted early data,
 where the peer observes request and response headers inside early data, or
 server-disabled fallback, where the same resumed request is replayed only after
-establishment and the peer reports a disabled early-data reason.
+establishment and the peer reports a disabled early-data reason. The same
+ticket-backed peer harness now also proves the exported HTTP/3 response stats
+fields stay tied to live quiche counters: `quic_packets_sent` and
+`quic_packets_received` stay consistent with peer-observed packet flow on clean
+request/response runs, while lossy and constrained-link runs surface honest
+`quic_packets_lost`, `quic_packets_retransmitted`, `quic_lost_bytes`, and
+`quic_stream_retransmitted_bytes` instead of stale zeroes or detached
+bookkeeping.
 
 ## A First Session
 
