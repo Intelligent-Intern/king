@@ -46,7 +46,8 @@ function king_http3_start_ticket_test_server(
     ?int $port = null,
     ?string $urlHost = null,
     bool $enableEarlyData = false,
-    int $dropEstablishedDatagramCount = 0
+    int $dropEstablishedDatagramCount = 0,
+    int $interruptEstablishedMs = 0
 ): array {
     $envBindHost = getenv('KING_HTTP3_TEST_BIND_HOST');
     if ($bindHost === 'localhost' && is_string($envBindHost) && $envBindHost !== '') {
@@ -79,6 +80,7 @@ function king_http3_start_ticket_test_server(
         (string) $port,
         $enableEarlyData ? '1' : '0',
         (string) max(0, $dropEstablishedDatagramCount),
+        (string) max(0, $interruptEstablishedMs),
     ];
     $process = proc_open($command, [
         1 => ['pipe', 'w'],

@@ -209,6 +209,15 @@ request/response runs, while lossy and constrained-link runs surface honest
 `quic_stream_retransmitted_bytes` instead of stale zeroes or detached
 bookkeeping.
 
+The same ticket-backed peer harness now also proves temporary
+established-phase network interruption recovery instead of only clean packet
+loss counters. On a sustained request stream, the peer can go dark for a
+bounded interval, drop real established datagrams, stop sending for that same
+window, and then resume. The active HTTP/3 runtime re-wakes on the returning
+socket traffic, retransmits what the blackout stranded, and still completes
+the same request stream with visible loss and retransmit stats instead of
+timing out or silently replaying the work on a hidden fresh transport.
+
 ## A First Session
 
 The first explicit session usually looks like this:

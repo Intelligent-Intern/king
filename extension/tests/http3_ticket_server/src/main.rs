@@ -1,19 +1,15 @@
-/* Local HTTP/3 harness server for session-ticket, early-data, and packet-loss contracts. */
-
+/* Local HTTP/3 harness server for session-ticket, early-data, loss, and interruption contracts. */
 use std::collections::HashMap;
 use std::fs;
 use std::net;
 use std::net::ToSocketAddrs;
 use std::path::Path;
 use std::time::{Duration, Instant};
-
 use mio::Events;
 use mio::Interest;
 use mio::Poll;
 use mio::Token;
-
 use quiche::h3::NameValue;
-
 use ring::rand::SystemRandom;
 
 const MAX_DATAGRAM_SIZE: usize = 1350;
@@ -61,6 +57,7 @@ struct LifecycleCapture {
     close_source: &'static str,
     peer_packets_received: usize,
     peer_packets_sent: usize,
+    interrupted_datagrams_dropped: usize,
 }
 
 fn main() {
@@ -68,22 +65,18 @@ fn main() {
     let cmd = args
         .next()
         .unwrap_or_else(|| "king-http3-ticket-server".to_string());
-
     let cert = match args.next() {
         Some(value) => value,
         None => usage_and_exit(&cmd),
     };
-
     let key = match args.next() {
         Some(value) => value,
         None => usage_and_exit(&cmd),
     };
-
     let root = match args.next() {
         Some(value) => value,
         None => usage_and_exit(&cmd),
     };
-
     let host = match args.next() {
         Some(value) => value,
         None => usage_and_exit(&cmd),
@@ -105,7 +98,6 @@ fn main() {
         },
         None => false,
     };
-
     let drop_established_datagram_budget = match args.next() {
         Some(value) => match value.parse::<usize>() {
             Ok(parsed) => parsed,
@@ -113,7 +105,10 @@ fn main() {
         },
         None => 0,
     };
-
+    let interrupt_established_ms = match args.next() {
+        Some(value) => value.parse::<u64>().unwrap_or_else(|_| usage_and_exit(&cmd)),
+        None => 0,
+    };
     let bind_addr = resolve_udp_bind(&host, port);
     let mut socket = mio::net::UdpSocket::bind(bind_addr).unwrap();
     let local_addr = socket.local_addr().unwrap();
@@ -147,8 +142,7 @@ fn main() {
     println!("READY {}", local_addr.port());
 
     let rng = SystemRandom::new();
-    let conn_id_seed =
-        ring::hmac::Key::generate(ring::hmac::HMAC_SHA256, &rng).unwrap();
+    let conn_id_seed = ring::hmac::Key::generate(ring::hmac::HMAC_SHA256, &rng).unwrap();
 
     let mut conn: Option<quiche::Connection> = None;
     let mut h3_conn: Option<quiche::h3::Connection> = None;
@@ -182,22 +176,22 @@ fn main() {
         close_source: "none",
         peer_packets_received: 0,
         peer_packets_sent: 0,
+        interrupted_datagrams_dropped: 0,
     };
     let mut response_started = false;
     let mut response_idle_deadline: Option<Instant> = None;
     let mut drop_established_datagram_budget = drop_established_datagram_budget;
+    let mut interrupt_deadline: Option<Instant> = None;
+    let mut interrupt_injected = false;
     let overall_deadline = Instant::now() + Duration::from_secs(10);
     let mut buf = [0; 65535];
     let mut out = [0; MAX_DATAGRAM_SIZE];
-
     while Instant::now() < overall_deadline {
         let timeout = match conn.as_ref().and_then(|active| active.timeout()) {
             Some(value) => value.min(Duration::from_millis(50)),
             None => Duration::from_millis(50),
         };
-
         poll.poll(&mut events, Some(timeout)).unwrap();
-
         if let Some(active) = conn.as_mut() {
             if events.is_empty() {
                 active.on_timeout();
@@ -254,6 +248,13 @@ fn main() {
             }
 
             let active = conn.as_mut().unwrap();
+            if let Some(deadline) = interrupt_deadline {
+                if Instant::now() < deadline && h3_conn.is_some() {
+                    lifecycle.interrupted_datagrams_dropped += 1;
+                    continue 'read;
+                }
+                interrupt_deadline = None;
+            }
             if drop_established_datagram_budget > 0 &&
                 h3_conn.is_some() &&
                 !response_started
@@ -310,11 +311,29 @@ fn main() {
                     &mut response_started,
                     &mut lifecycle,
                 );
+                if !interrupt_injected
+                    && interrupt_deadline.is_none()
+                    && interrupt_established_ms > 0
+                    && requests
+                        .values()
+                        .any(|request| request.path == "/network-interruption" && !request.body.is_empty())
+                {
+                    interrupt_injected = true;
+                    interrupt_deadline =
+                        Some(Instant::now() + Duration::from_millis(interrupt_established_ms));
+                }
             }
         }
 
-        if let (Some(http3), Some(active)) = (h3_conn.as_mut(), conn.as_mut()) {
-            flush_pending_bodies(http3, active, &mut pending, &mut lifecycle);
+        let interruption_active = matches!(
+            interrupt_deadline,
+            Some(deadline) if Instant::now() < deadline
+        );
+
+        if !interruption_active {
+            if let (Some(http3), Some(active)) = (h3_conn.as_mut(), conn.as_mut()) {
+                flush_pending_bodies(http3, active, &mut pending, &mut lifecycle);
+            }
         }
 
         if response_started && pending.is_empty() && response_idle_deadline.is_none() {
@@ -327,7 +346,9 @@ fn main() {
         }
 
         if let Some(active) = conn.as_mut() {
-            flush_egress(&mut socket, active, &mut out);
+            if !interruption_active {
+                flush_egress(&mut socket, active, &mut out);
+            }
 
             if active.is_draining() {
                 if !lifecycle.saw_draining {
@@ -377,7 +398,7 @@ fn main() {
     }
 
     println!(
-        "LIFECYCLE {{\"saw_initial\":{},\"saw_established\":{},\"saw_resumed\":{},\"saw_early_data_state\":{},\"saw_h3_open\":{},\"saw_request_stream_open\":{},\"saw_request_headers\":{},\"request_headers_in_early_data\":{},\"request_headers_after_established\":{},\"saw_request_body\":{},\"request_body_bytes\":{},\"saw_request_finished\":{},\"request_finished_before_response\":{},\"request_body_drained_before_response\":{},\"response_on_request_stream\":{},\"saw_response_headers\":{},\"response_headers_in_early_data\":{},\"response_headers_after_established\":{},\"saw_response_drain\":{},\"response_drained_before_close\":{},\"saw_draining\":{},\"saw_closed\":{},\"early_data_reason_code\":{},\"early_data_reason\":\"{}\",\"close_source\":\"{}\",\"peer_packets_received\":{},\"peer_packets_sent\":{}}}",
+        "LIFECYCLE {{\"saw_initial\":{},\"saw_established\":{},\"saw_resumed\":{},\"saw_early_data_state\":{},\"saw_h3_open\":{},\"saw_request_stream_open\":{},\"saw_request_headers\":{},\"request_headers_in_early_data\":{},\"request_headers_after_established\":{},\"saw_request_body\":{},\"request_body_bytes\":{},\"saw_request_finished\":{},\"request_finished_before_response\":{},\"request_body_drained_before_response\":{},\"response_on_request_stream\":{},\"saw_response_headers\":{},\"response_headers_in_early_data\":{},\"response_headers_after_established\":{},\"saw_response_drain\":{},\"response_drained_before_close\":{},\"saw_draining\":{},\"saw_closed\":{},\"early_data_reason_code\":{},\"early_data_reason\":\"{}\",\"close_source\":\"{}\",\"peer_packets_received\":{},\"peer_packets_sent\":{},\"interrupted_datagrams_dropped\":{}}}",
         lifecycle.saw_initial,
         lifecycle.saw_established,
         lifecycle.saw_resumed,
@@ -405,13 +426,12 @@ fn main() {
         lifecycle.close_source,
         lifecycle.peer_packets_received,
         lifecycle.peer_packets_sent,
+        lifecycle.interrupted_datagrams_dropped,
     );
 }
 
 fn usage_and_exit(cmd: &str) -> ! {
-    eprintln!(
-        "Usage: {cmd} <cert> <key> <root> <host> <port> [enable_early_data] [drop_established_datagram_count]"
-    );
+    eprintln!("Usage: {cmd} <cert> <key> <root> <host> <port> [enable_early_data] [drop_established_datagram_count] [interrupt_established_ms]");
     std::process::exit(1);
 }
 
@@ -678,10 +698,8 @@ fn build_response(
     path: &str,
     request_body: &[u8],
 ) -> (u16, Vec<u8>) {
-    if !method.eq_ignore_ascii_case("GET") &&
-        !(method.eq_ignore_ascii_case("POST") &&
-            (path == "/stream-lifecycle" || path == "/congestion-control"))
-    {
+    let supported_post = matches!(path, "/stream-lifecycle" | "/congestion-control" | "/network-interruption");
+    if !method.eq_ignore_ascii_case("GET") && !(method.eq_ignore_ascii_case("POST") && supported_post) {
         return (405, b"method not allowed\n".to_vec());
     }
 
@@ -696,10 +714,10 @@ fn build_response(
     }
 
     if method.eq_ignore_ascii_case("POST") && path == "/congestion-control" {
-        return (
-            200,
-            format!("congestion-ack:{}", request_body.len()).into_bytes(),
-        );
+        return (200, format!("congestion-ack:{}", request_body.len()).into_bytes());
+    }
+    if method.eq_ignore_ascii_case("POST") && path == "/network-interruption" {
+        return (200, format!("interruption-ack:{}", request_body.len()).into_bytes());
     }
 
     let relative = path.trim_start_matches('/');
