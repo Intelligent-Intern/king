@@ -199,6 +199,11 @@ currently live accepted peers, drains the close handshake, empties the server
 registry, and rejects later `accept()`, `send*()`, and `broadcast*()` calls on
 that stopped instance.
 
+The repo now also carries a dedicated load proof for that bounded server
+surface. Repeated registry-targeted sends and broadcasts are verified across
+many simultaneously accepted peers on one live server object, so the current
+claim is not limited to two-connection demos or single-message fanout.
+
 ## Connection Lifecycle
 
 A WebSocket channel moves through a clear lifecycle. It starts in the connect

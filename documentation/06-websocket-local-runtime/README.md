@@ -140,6 +140,11 @@ and returns accepted peers as `Connection` objects, plus a live
 `connection_id`, broadcast fanout across the live accepted peer set, and
 `stop()`-driven close-handshake shutdown of those same live peers.
 
+That bounded server surface is now also verified under repeated multi-peer
+load. One live server object can accept several peers, keep the registry stable
+for all of them, and schedule repeated targeted plus broadcast frames without
+collapsing back into a two-peer demo contract.
+
 ```php
 <?php
 

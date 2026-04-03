@@ -39,11 +39,10 @@
 
 ## Current Next Leaf
 
-- `#5 Validate server multi-connection scheduling under load.`
+- `#6 Validate server fairness across competing clients.`
 
 ## Active Executable Items
 
-- [ ] `#5 Validate server multi-connection scheduling under load.`
 - [ ] `#6 Validate server fairness across competing clients.`
 - [ ] `#7 Validate server resource cleanup under crash / abort scenarios.`
 - [ ] `#8 Build end-to-end multi-host harness.`

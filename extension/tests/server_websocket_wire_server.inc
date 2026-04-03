@@ -1,6 +1,6 @@
 <?php
 
-/* Harness server for capturing on-wire HTTP/1 one-shot listener behavior, including websocket, interim-response, and CORS slices. */
+/* Harness server for capturing on-wire HTTP/1 one-shot listener behavior, including websocket, interim-response, CORS, and multi-peer load slices. */
 
 if ($argc < 4) {
     fwrite(STDERR, "usage: server_websocket_wire_server.inc <capture-path> <port> <mode> [iterations]\n");
@@ -198,6 +198,64 @@ if ($mode === 'oo-broadcast-shutdown') {
     } catch (Throwable $e) {
         $capture['broadcast_exception_class'] = get_class($e);
         $capture['broadcast_exception_message'] = $e->getMessage();
+    }
+
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+    return;
+}
+
+if ($mode === 'oo-scheduling-load') {
+    $server = new King\WebSocket\Server('127.0.0.1', $port);
+    $capture['server_class'] = get_class($server);
+    $peerCount = max(3, $iterations);
+    $rounds = 4;
+    $connections = [];
+
+    try {
+        for ($i = 0; $i < $peerCount; $i++) {
+            $connections[$i] = $server->accept();
+            $capture['accepted_info'][$i] = $connections[$i]->getInfo();
+        }
+
+        $capture['registry_after_accept'] = $server->getConnections();
+        $capture['registry_count_after_accept'] = count($capture['registry_after_accept']);
+
+        foreach ($connections as $i => $connection) {
+            $capture['ready_messages'][$i] = king_client_websocket_receive($connection, 1000);
+            $capture['ready_errors'][$i] = king_get_last_error();
+        }
+
+        for ($round = 0; $round < $rounds; $round++) {
+            foreach ($connections as $i => $connection) {
+                $connectionId = (string) ($capture['accepted_info'][$i]['connection_id'] ?? '');
+                $payload = 'slot-' . $round . '-peer-' . $i;
+
+                $server->send($connectionId, $payload);
+                $capture['scheduled_payloads'][] = $payload;
+            }
+
+            $fanout = 'fanout-' . $round;
+            $server->broadcast($fanout);
+            $capture['broadcast_payloads'][] = $fanout;
+        }
+
+        $capture['registry_after_send'] = $server->getConnections();
+        $capture['registry_count_after_send'] = count($capture['registry_after_send']);
+
+        foreach ($connections as $connection) {
+            $connection->close(1000, 'load-done');
+        }
+
+        $capture['registry_after_close'] = $server->getConnections();
+        $capture['registry_count_after_close'] = count($capture['registry_after_close']);
+        $server->stop();
+        $capture['stop_error'] = king_get_last_error();
+    } catch (Throwable $e) {
+        $capture['scheduling_exception_class'] = get_class($e);
+        $capture['scheduling_exception_message'] = $e->getMessage();
     }
 
     file_put_contents(
