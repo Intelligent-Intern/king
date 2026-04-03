@@ -1,6 +1,6 @@
 # King Project Assessment
 
-> Stand: 2026-04-02
+> Stand: 2026-04-03
 > Scope: verified repo-local v1 state inside this repository
 > This file records what is actually verified now.
 > `README.md` stays product-level.
@@ -34,7 +34,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-include-layout.sh`: passing
 - `./infra/scripts/audit-runtime-surface.sh`: passing
 - `./infra/scripts/build-extension.sh`: passing
-- `./infra/scripts/test-extension.sh`: `502/502` passing
+- `./infra/scripts/test-extension.sh`: `507/507` passing
 - `./infra/scripts/fuzz-runtime.sh`: passing
 - `./infra/scripts/check-stub-parity.sh`: passing
 - `./infra/scripts/check-php-support-matrix.sh`: passing
@@ -56,7 +56,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `502` PHPT files
+- `extension/tests`: `507` PHPT files
 - public stub parity: `137` functions, `43` classes, `48` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -67,7 +67,7 @@ Current tree facts:
 The current tree already proves:
 
 - explicit config and session ownership through `King\Config` and `King\Session`
-- real HTTP/1, HTTP/2, and HTTP/3 client request paths, including HTTP/1 keep-alive reuse with verified one-idle-per-origin and sixteen-idle-global pool limits under mixed-load bursts plus honest reopen after peer `Connection: close`, repeated pooled HTTP/2 mixed-load bursts, streaming, bodiless-response handling, cumulative interim-response size-cap enforcement, bounded pending Early Hints storage, explicit HTTP/1 and HTTP/2 abort/reset failure mapping, explicit HTTP/3 handshake-failure and transport-close mapping, verified HTTP/3 in-flight timeout behavior against real slow-writer and flow-control-stalled slow-reader peers, shared-ring HTTP/3 session-ticket reuse with direct and dispatcher recovery from stale ticket seeds, explicit QUIC session lifecycle proof across direct and dispatcher HTTP/3 one-shot requests with peer-observed Initial, established/open, response-drain, draining, and closed phases, explicit QUIC/TLS lifecycle proof across fresh handshakes, resumed shared-ticket sessions, and repeated same-port live-listener churn instead of leaving that broader interaction model implicit, honest resumed-session HTTP/3 early-data proof across acceptance and server-disabled fallback paths instead of collapsing all resumed traffic into the ordinary post-handshake request path, injected packet-loss recovery with visible QUIC loss and retransmit counters plus successful multi-request follow-up behavior on the active HTTP/3 runtime, verified buffered `king_http3_request_send_multi()` batches over one QUIC connection with mixed fast and slow concurrent stream progress plus sustained staggered fast-wave fairness while a long slow sibling stream remains active, repeated mixed-load burst soak behavior without poisoned later healthy sessions, and cancel/timeout contracts
+- real HTTP/1, HTTP/2, and HTTP/3 client request paths, including HTTP/1 keep-alive reuse with verified one-idle-per-origin and sixteen-idle-global pool limits under mixed-load bursts plus honest reopen after peer `Connection: close`, repeated pooled HTTP/2 mixed-load bursts, streaming, bodiless-response handling, cumulative interim-response size-cap enforcement, bounded pending Early Hints storage, explicit HTTP/1 and HTTP/2 abort/reset failure mapping, explicit HTTP/3 handshake-failure and transport-close mapping, verified HTTP/3 in-flight timeout behavior against real slow-writer and flow-control-stalled slow-reader peers, shared-ring HTTP/3 session-ticket reuse with direct and dispatcher recovery from stale ticket seeds, explicit QUIC session lifecycle proof across direct and dispatcher HTTP/3 one-shot requests with peer-observed Initial, established/open, request-stream open/body/finish plus request-body drain-before-response, response-drain, draining, and closed phases, explicit QUIC idle-timeout and application-close propagation against real peers on those same one-shot request paths, explicit QUIC/TLS lifecycle proof across fresh handshakes, resumed shared-ticket sessions, and repeated same-port live-listener churn instead of leaving that broader interaction model implicit, honest resumed-session HTTP/3 early-data proof across acceptance and server-disabled fallback paths instead of collapsing all resumed traffic into the ordinary post-handshake request path, injected packet-loss recovery with visible QUIC loss and retransmit counters plus successful multi-request follow-up behavior on the active HTTP/3 runtime, verified buffered `king_http3_request_send_multi()` batches over one QUIC connection with mixed fast and slow concurrent stream progress plus sustained staggered fast-wave fairness while a long slow sibling stream remains active, repeated mixed-load burst soak behavior without poisoned later healthy sessions, and cancel/timeout contracts
 - HTTP/2 shared-session fairness under mixed slow and fast concurrent streams
 - HTTP/3 one-shot churn isolation across repeated timeout and healthy-recovery cycles
 - local server dispatch and listener slices for HTTP/1, HTTP/2, and HTTP/3, plus real one-shot on-wire listener proof for HTTP/1, HTTP/2, and HTTP/3, including bounded HTTP/1 one-shot accept and request-head timeout behavior against stalled clients, stable normalized `uri` and routing `path` materialization from real request targets across the active one-shot listener surfaces, stable client-visible response normalization for runtime-owned transport headers plus repeated response fields across the active one-shot listener surfaces, real registered cancel-hook invocation on live client aborts across HTTP/1, HTTP/2, and HTTP/3 one-shot traffic, repeated close/drain/restart reuse of the same bound ports across HTTP/1, HTTP/2, and HTTP/3 listener cycles, and bounded live admin API proof for auth, mTLS gating, TLS reload, and handled reload failures against real clients instead of only local listener markers

@@ -168,9 +168,13 @@ from those streams.
 
 The current tree also proves that lifecycle against real peers instead of only
 describing it abstractly. The active QUIC coverage now follows one-shot HTTP/3
-sessions through Initial, established/open, response-drain, draining, and
-closed phases with peer-observed capture, so the session model above is backed
-by real transport behavior rather than by a conceptual diagram alone.
+sessions through Initial, established/open, request-stream open/body/finish
+plus request-body drain-before-response, response-drain, draining, and closed
+phases with peer-observed capture, so the session model above is backed by
+real transport behavior rather than by a conceptual diagram alone. The same
+live peer coverage now also proves that negotiated QUIC idle timeouts surface
+explicitly as transport closure and that peer-sent application closes surface
+as protocol closes instead of collapsing into generic request timeouts.
 
 ## A First Session
 

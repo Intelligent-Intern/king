@@ -25,11 +25,26 @@ struct PendingResponse {
     written: usize,
 }
 
+struct PendingRequest {
+    method: String,
+    path: String,
+    body: Vec<u8>,
+    finished: bool,
+    response_sent: bool,
+}
+
 struct LifecycleCapture {
     saw_initial: bool,
     saw_established: bool,
     saw_h3_open: bool,
+    saw_request_stream_open: bool,
     saw_request_headers: bool,
+    saw_request_body: bool,
+    request_body_bytes: usize,
+    saw_request_finished: bool,
+    request_finished_before_response: bool,
+    request_body_drained_before_response: bool,
+    response_on_request_stream: bool,
     saw_response_headers: bool,
     saw_response_drain: bool,
     response_drained_before_close: bool,
@@ -129,11 +144,19 @@ fn main() {
     let mut conn: Option<quiche::Connection> = None;
     let mut h3_conn: Option<quiche::h3::Connection> = None;
     let mut pending = HashMap::<u64, PendingResponse>::new();
+    let mut requests = HashMap::<u64, PendingRequest>::new();
     let mut lifecycle = LifecycleCapture {
         saw_initial: false,
         saw_established: false,
         saw_h3_open: false,
+        saw_request_stream_open: false,
         saw_request_headers: false,
+        saw_request_body: false,
+        request_body_bytes: 0,
+        saw_request_finished: false,
+        request_finished_before_response: false,
+        request_body_drained_before_response: false,
+        response_on_request_stream: false,
         saw_response_headers: false,
         saw_response_drain: false,
         response_drained_before_close: false,
@@ -252,6 +275,7 @@ fn main() {
                     active,
                     &root,
                     &mut pending,
+                    &mut requests,
                     &mut response_started,
                     &mut lifecycle,
                 );
@@ -316,11 +340,18 @@ fn main() {
     }
 
     println!(
-        "LIFECYCLE {{\"saw_initial\":{},\"saw_established\":{},\"saw_h3_open\":{},\"saw_request_headers\":{},\"saw_response_headers\":{},\"saw_response_drain\":{},\"response_drained_before_close\":{},\"saw_draining\":{},\"saw_closed\":{},\"close_source\":\"{}\"}}",
+        "LIFECYCLE {{\"saw_initial\":{},\"saw_established\":{},\"saw_h3_open\":{},\"saw_request_stream_open\":{},\"saw_request_headers\":{},\"saw_request_body\":{},\"request_body_bytes\":{},\"saw_request_finished\":{},\"request_finished_before_response\":{},\"request_body_drained_before_response\":{},\"response_on_request_stream\":{},\"saw_response_headers\":{},\"saw_response_drain\":{},\"response_drained_before_close\":{},\"saw_draining\":{},\"saw_closed\":{},\"close_source\":\"{}\"}}",
         lifecycle.saw_initial,
         lifecycle.saw_established,
         lifecycle.saw_h3_open,
+        lifecycle.saw_request_stream_open,
         lifecycle.saw_request_headers,
+        lifecycle.saw_request_body,
+        lifecycle.request_body_bytes,
+        lifecycle.saw_request_finished,
+        lifecycle.request_finished_before_response,
+        lifecycle.request_body_drained_before_response,
+        lifecycle.response_on_request_stream,
         lifecycle.saw_response_headers,
         lifecycle.saw_response_drain,
         lifecycle.response_drained_before_close,
@@ -350,57 +381,50 @@ fn process_http3_events(
     conn: &mut quiche::Connection,
     root: &str,
     pending: &mut HashMap<u64, PendingResponse>,
+    requests: &mut HashMap<u64, PendingRequest>,
     response_started: &mut bool,
     lifecycle: &mut LifecycleCapture,
 ) {
     loop {
         match http3.poll(conn) {
             Ok((stream_id, quiche::h3::Event::Headers { list, .. })) => {
-                conn.stream_shutdown(stream_id, quiche::Shutdown::Read, 0).ok();
-                *response_started = true;
+                let (method, path) = request_line_from_headers(&list);
+
+                lifecycle.saw_request_stream_open = true;
                 lifecycle.saw_request_headers = true;
 
-                let (status_code, body) = build_response(root, &list);
-                let status = status_code.to_string();
-                let content_length = body.len().to_string();
-                let early_data_phase = if conn.is_in_early_data() {
-                    b"early_data".as_slice()
-                } else {
-                    b"established".as_slice()
-                };
-                let headers = [
-                    quiche::h3::Header::new(b":status", status.as_bytes()),
-                    quiche::h3::Header::new(
-                        b"server",
-                        b"king-http3-ticket-server",
-                    ),
-                    quiche::h3::Header::new(
-                        b"content-length",
-                        content_length.as_bytes(),
-                    ),
-                    quiche::h3::Header::new(
-                        b"x-king-early-data-phase",
-                        early_data_phase,
-                    ),
-                ];
+                requests.insert(
+                    stream_id,
+                    PendingRequest {
+                        method,
+                        path,
+                        body: Vec::new(),
+                        finished: false,
+                        response_sent: false,
+                    },
+                );
 
-                if http3
-                    .send_response(conn, stream_id, &headers, body.is_empty())
-                    .is_err()
-                {
-                    conn.close(false, 0x1, b"response failure").ok();
-                    return;
-                }
+                if let Some(request) = requests.get_mut(&stream_id) {
+                    if request.method.eq_ignore_ascii_case("GET") {
+                        if send_response_for_request(
+                            http3,
+                            conn,
+                            root,
+                            stream_id,
+                            request,
+                            pending,
+                            response_started,
+                            lifecycle,
+                        )
+                        .is_err()
+                        {
+                            conn.close(false, 0x1, b"response failure").ok();
+                            return;
+                        }
 
-                lifecycle.saw_response_headers = true;
-
-                if !body.is_empty() {
-                    pending.insert(
-                        stream_id,
-                        PendingResponse { body, written: 0 },
-                    );
-                } else {
-                    lifecycle.saw_response_drain = true;
+                        conn.stream_shutdown(stream_id, quiche::Shutdown::Read, 0)
+                            .ok();
+                    }
                 }
             },
 
@@ -410,14 +434,50 @@ fn process_http3_events(
                 loop {
                     match http3.recv_body(conn, stream_id, &mut scratch) {
                         Ok(0) => break,
-                        Ok(_) => (),
+                        Ok(read) => {
+                            lifecycle.saw_request_body = true;
+                            lifecycle.request_body_bytes += read;
+
+                            if let Some(request) = requests.get_mut(&stream_id) {
+                                request.body.extend_from_slice(&scratch[..read]);
+                            }
+                        },
                         Err(quiche::h3::Error::Done) => break,
                         Err(_) => break,
                     }
                 }
             },
 
-            Ok((_stream_id, quiche::h3::Event::Finished)) => (),
+            Ok((stream_id, quiche::h3::Event::Finished)) => {
+                lifecycle.saw_request_finished = true;
+
+                if let Some(request) = requests.get_mut(&stream_id) {
+                    request.finished = true;
+
+                    if !request.response_sent {
+                        lifecycle.request_finished_before_response = true;
+                        lifecycle.request_body_drained_before_response = true;
+
+                        if send_response_for_request(
+                            http3,
+                            conn,
+                            root,
+                            stream_id,
+                            request,
+                            pending,
+                            response_started,
+                            lifecycle,
+                        )
+                        .is_err()
+                        {
+                            conn.close(false, 0x1, b"response failure").ok();
+                            return;
+                        }
+                    }
+
+                    conn.stream_shutdown(stream_id, quiche::Shutdown::Read, 0).ok();
+                }
+            },
             Ok((_stream_id, quiche::h3::Event::Reset { .. })) => (),
             Ok((_stream_id, quiche::h3::Event::PriorityUpdate)) => (),
             Ok((_stream_id, quiche::h3::Event::GoAway)) => (),
@@ -430,6 +490,50 @@ fn process_http3_events(
             },
         }
     }
+}
+
+fn send_response_for_request(
+    http3: &mut quiche::h3::Connection,
+    conn: &mut quiche::Connection,
+    root: &str,
+    stream_id: u64,
+    request: &mut PendingRequest,
+    pending: &mut HashMap<u64, PendingResponse>,
+    response_started: &mut bool,
+    lifecycle: &mut LifecycleCapture,
+) -> Result<(), ()> {
+    let (status_code, body) =
+        build_response(root, &request.method, &request.path, &request.body);
+    let status = status_code.to_string();
+    let content_length = body.len().to_string();
+    let early_data_phase = if conn.is_in_early_data() {
+        b"early_data".as_slice()
+    } else {
+        b"established".as_slice()
+    };
+    let headers = [
+        quiche::h3::Header::new(b":status", status.as_bytes()),
+        quiche::h3::Header::new(b"server", b"king-http3-ticket-server"),
+        quiche::h3::Header::new(b"content-length", content_length.as_bytes()),
+        quiche::h3::Header::new(b"x-king-early-data-phase", early_data_phase),
+    ];
+
+    *response_started = true;
+
+    http3.send_response(conn, stream_id, &headers, body.is_empty())
+        .map_err(|_| ())?;
+
+    request.response_sent = true;
+    lifecycle.saw_response_headers = true;
+    lifecycle.response_on_request_stream = true;
+
+    if !body.is_empty() {
+        pending.insert(stream_id, PendingResponse { body, written: 0 });
+    } else {
+        lifecycle.saw_response_drain = true;
+    }
+
+    Ok(())
 }
 
 fn flush_pending_bodies(
@@ -491,10 +595,7 @@ fn flush_egress(
     }
 }
 
-fn build_response(
-    root: &str,
-    headers: &[quiche::h3::Header],
-) -> (u16, Vec<u8>) {
+fn request_line_from_headers(headers: &[quiche::h3::Header]) -> (String, String) {
     let mut method = None;
     let mut path = None;
 
@@ -506,16 +607,32 @@ fn build_response(
         }
     }
 
-    if method.as_deref() != Some("GET") {
+    (
+        method.unwrap_or_else(|| "GET".to_string()),
+        path.unwrap_or_else(|| "/".to_string()),
+    )
+}
+
+fn build_response(
+    root: &str,
+    method: &str,
+    path: &str,
+    request_body: &[u8],
+) -> (u16, Vec<u8>) {
+    if !method.eq_ignore_ascii_case("GET") &&
+        !(method.eq_ignore_ascii_case("POST") && path == "/stream-lifecycle")
+    {
         return (405, b"method not allowed\n".to_vec());
     }
 
-    let Some(path) = path else {
-        return (400, b"missing path\n".to_vec());
-    };
-
     if path.contains("..") || path.contains('\\') {
         return (400, b"invalid path\n".to_vec());
+    }
+
+    if method.eq_ignore_ascii_case("POST") && path == "/stream-lifecycle" {
+        let mut body = b"stream-ack:".to_vec();
+        body.extend_from_slice(request_body);
+        return (200, body);
     }
 
     let relative = path.trim_start_matches('/');
