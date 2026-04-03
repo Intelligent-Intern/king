@@ -1168,7 +1168,9 @@ namespace {
     function king_cdn_invalidate_cache(?string $object_id = null): int {}
 
     /**
-     * CDN edge-node inventory for the active runtime.
+     * Explicit CDN edge-node inventory known to the active runtime.
+     * Returned nodes are not synthesized from a count-only config and report
+     * live reachability in `is_healthy`.
      * @return list<array<string,mixed>>
      */
     function king_cdn_get_edge_nodes(): array {}

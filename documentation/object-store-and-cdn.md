@@ -359,8 +359,8 @@ to read from edge locations.
 
 `king_cdn_cache_object()` pushes one object into the cache path. `king_cdn_invalidate_cache()`
 retires one cached object or clears the whole cache view. `king_cdn_get_edge_nodes()`
-returns the current edge inventory so the operator can see where the delivery
-layer exists.
+returns the explicit edge inventory known to the runtime so the operator can
+see which real delivery nodes were configured.
 
 That cache-warm path is now verified against the active real object-store
 backends. `local_fs` and `distributed` can size the cache entry from committed
@@ -374,6 +374,12 @@ for `smart_cdn` objects. When the runtime CDN registry misses, a successful
 origin/backend read backfills the local cache entry and marks it served; the
 payload still comes from the active object-store backend today rather than from
 a fake edge body store.
+
+That same honesty rule now applies to edge-node inventory. A bare
+`cdn_config.edge_node_count` no longer manufactures `edge-0`, `edge-1`, and so
+on. `king_cdn_get_edge_nodes()` only returns explicitly configured
+`cdn_config.edge_nodes`, and each returned `is_healthy` bit is probed live
+against the configured host and port at call time.
 
 Repeated warm and invalidate churn is also now verified across `local_fs`,
 `distributed`, `cloud_s3`, `cloud_gcs`, and `cloud_azure`: repeated targeted

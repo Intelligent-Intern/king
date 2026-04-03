@@ -231,7 +231,7 @@ Status note:
 - [x] Validate stale-serve-on-error against real backend failures
 - [x] Validate cache consistency after backend update
 - [x] Validate cache consistency after delete
-- [ ] Validate edge-node inventory against real nodes where publicly claimed
+- [x] Validate edge-node inventory against real nodes where publicly claimed
 - [ ] Validate origin timeout / retry behavior
 - [ ] Validate cache memory limits under load
 - [ ] Validate large objects in cache under memory pressure

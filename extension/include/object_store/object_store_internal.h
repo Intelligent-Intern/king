@@ -91,6 +91,7 @@ int king_object_store_list_object(zval *return_array);
 int king_object_store_backend_read_metadata(const char *object_id, king_object_metadata_t *metadata);
 const char *king_object_store_object_id_validate(const char *object_id);
 const char *king_object_store_public_object_id_validate_zstr(const zend_string *object_id);
+void king_object_store_config_clear(king_object_store_config_t *config);
 void king_object_store_compute_sha256_hex(const void *data, size_t data_size, char output[65]);
 zend_bool king_object_store_runtime_capacity_is_enabled(void);
 const char *king_object_store_runtime_capacity_mode_to_string(void);
