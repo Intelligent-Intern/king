@@ -5,9 +5,10 @@
  *
  * PURPOSE:
  * HTTP/1 response-header parsing helpers. This slice validates the status
- * line, normalizes header names to lowercase, derives keep-alive and
- * chunked/content-length policy, and materializes the shared response-meta
- * snapshot used by both buffered and streaming reads.
+ * line, normalizes header names to lowercase, preserves repeated header
+ * fields in arrival order, derives keep-alive and chunked/content-length
+ * policy, and materializes the shared response-meta snapshot used by both
+ * buffered and streaming reads.
  * =========================================================================
  */
 
@@ -128,7 +129,13 @@ static zend_result king_http1_parse_response_headers(
 
         lowercase_key = estrndup(cursor, key_len);
         king_http1_lowercase_ascii(lowercase_key, key_len);
-        add_assoc_stringl(&meta->headers, lowercase_key, value, value_len);
+        king_http1_add_normalized_header_value(
+            &meta->headers,
+            lowercase_key,
+            key_len,
+            value,
+            value_len
+        );
 
         if (strcmp(lowercase_key, "content-length") == 0) {
             char *length_end;

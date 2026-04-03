@@ -140,6 +140,22 @@ and returns accepted peers as `Connection` objects, plus a live
 `connection_id`, broadcast fanout across the live accepted peer set, and
 `stop()`-driven close-handshake shutdown of those same live peers.
 
+That bounded server surface is now also verified under repeated multi-peer
+load. One live server object can accept several peers, keep the registry stable
+for all of them, and schedule repeated targeted plus broadcast frames without
+collapsing back into a two-peer demo contract.
+
+That proof now also covers competing peers. A noisier accepted connection can
+carry a deeper queued backlog while the other accepted peers still receive
+their own scheduled frames on time, so the current server object contract is
+not "everyone waits behind the loudest client."
+
+It also covers crash-style cleanup. If one accepted peer disappears without a
+clean close handshake, the next server-owned fanout prunes that dead peer,
+keeps the surviving peers usable, and makes later sends to the removed
+`connection_id` fail as an inactive-peer lookup instead of keeping a poisoned
+registry entry around.
+
 ```php
 <?php
 

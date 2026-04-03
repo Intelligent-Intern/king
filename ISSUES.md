@@ -12,42 +12,51 @@
 - keep only open work here
 - every item must be narrow enough to implement and verify inside this repo
 - if a tracker item is still too broad, split it before adding it here
-- when a leaf closes, update code, tests, docs, and `PROJECT_ASSESSMENT.md` in the same change
-- do not pull new items from `READYNESS_TRACKER.md` into this file unless the user explicitly asks for the next `20`-issue batch
-- when the current batch is exhausted, stop and wait instead of refilling it automatically
+- when a leaf closes, update code, touched comments/docblocks, tests, docs, `PROJECT_ASSESSMENT.md`, and `READYNESS_TRACKER.md` in the same change
+- when a leaf closes, also verify the affected runtime with the strongest relevant tests/harnesses available before committing
+- when a leaf closes, make exactly one commit for that checkbox; do not batch multiple checkbox closures into one commit
+- do not pull new items from `READYNESS_TRACKER.md` into this file unless the user explicitly asks for the next `20`-issue batch or enables continuous batch execution
+- when the current batch is exhausted, stop and wait instead of refilling it automatically unless continuous batch execution is explicitly enabled
 - complete one checkbox per commit while an active batch is in flight
 - do not shrink a meaningful v1 contract just to make tests, CI, or docs easier; if the intended contract matters, build the missing backend work or ask explicitly before reducing scope
 
+## Per-Issue Closure Checklist
+
+- update the runtime/backend code needed for the leaf
+- update any touched comments, docblocks, headers, and contract wording so code and prose stay aligned
+- add or tighten tests that prove the leaf on the strongest honest runtime path available
+- update repo docs affected by the leaf
+- update `PROJECT_ASSESSMENT.md`
+- update `READYNESS_TRACKER.md`
+- run the strongest relevant verification available for that leaf before committing
+- make exactly one commit for the checkbox
+
+## Batch Mode
+
+- The user has explicitly requested continuous execution across batches.
+- When the current `20`-issue batch is exhausted, immediately pull the next `20` executable leaves from `READYNESS_TRACKER.md` into this file instead of waiting.
+- Keep preserving tracker order and split broad items into repo-local executable leaves before adding them here.
+
 ## Current Next Leaf
 
-- Batch exhausted. Wait for explicit PR/publish flow or a new requested batch.
+- `#11 Validate cache invalidation under load.`
 
 ## Active Executable Items
 
-- [x] `#1 Validate QUIC connection handshake, open, drain, and close lifecycle against real peers.`
-- [x] `#2 Validate QUIC idle-timeout and application-close propagation against real peers.`
-- [x] `#3 Validate QUIC stream open, body, finish, and read-drain lifecycle against real peers.`
-- [x] `#4 Validate QUIC reset and stop-sending lifecycle against real peers.`
-- [x] `#5 Validate QUIC userland cancel propagation into active transport state.`
-- [x] `#6 Validate QUIC remote abort and transport-close mapping into public exceptions.`
-- [x] `#7 Validate QUIC poll/event-loop wake, idle, and timeout behavior under sustained runtime.`
-- [x] `#8 Validate QUIC congestion-control behavior under sustained constrained links.`
-- [x] `#9 Validate QUIC flow-control exhaustion and recovery behavior under sustained streams.`
-- [x] `#10 Validate QUIC zero-RTT acceptance and fallback against real peers.`
-- [x] `#11 Finalize QUIC error mapping across transport, TLS, HTTP/3, timeout, and cancellation failures.`
-- [x] `#12 Validate QUIC stats fields against live runtime counters and peer-observed state.`
-- [x] `#13 Validate QUIC recovery after temporary network interruption and socket re-wake.`
-- [x] `#14 Back server-upgrade WebSocket resources with honest bidirectional frame I/O.`
-- [x] `#15 Back King\WebSocket\Server listen/accept lifecycle with fully real runtime behavior.`
-- [x] `#16 Back King\WebSocket\Server connection registry and targeted send semantics with real runtime behavior.`
-- [x] `#17 Back King\WebSocket\Server broadcast and shutdown semantics with real live connections.`
-- [x] `#18 Validate WebSocket upgrade on HTTP/2 where the public docs or surface claim it.`
-- [x] `#19 Validate WebSocket upgrade on HTTP/3 where the public docs or surface claim it.`
-- [x] `#20 Validate WebSocket resource cleanup across request boundaries and worker reuse.`
+- [ ] `#11 Validate cache invalidation under load.`
+- [ ] `#12 Validate stale-serve-on-error against real backend failures.`
+- [ ] `#13 Validate cache consistency after backend update.`
+- [ ] `#14 Validate edge-node inventory against real nodes where publicly claimed.`
+- [ ] `#15 Validate origin timeout / retry behavior.`
+- [ ] `#16 Validate cache memory limits under load.`
+- [ ] `#17 Validate large objects in cache under memory pressure.`
+- [ ] `#18 Validate cache recovery after restart.`
+- [ ] `#19 Finalize cache metrics and observability.`
+- [ ] `#20 Validate service registration against real distributed topology.`
 
 ## Notes
 
 - This batch was pulled explicitly from `READYNESS_TRACKER.md`.
-- It is intentionally ordered as: QUIC runtime truth first, then WebSocket server/runtime truth.
+- It is intentionally ordered as: CDN/object-store truth first, then the next distributed Smart-DNS gap.
 - The previous explicit `20`-issue batch is closed and rolled into `PROJECT_ASSESSMENT.md`.
 - If a task is not listed here, it is not the current repo-local execution item.

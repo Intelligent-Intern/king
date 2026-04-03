@@ -120,6 +120,12 @@ test harness runs a client inside an unprivileged user/network namespace behind
 address, and proves that unary request, upload, and download flows survive that
 cross-host-style path instead of only loopback or same-process peers.
 
+That proof now sits on a shared repo-wide multi-host harness rather than an
+MCP-only one-off. The common harness can boot a host-bound server process,
+launch a namespaced client behind `slirp4netns`, force a non-loopback path, and
+capture both sides of the resulting peer identity. MCP uses that shared slice
+for its own host/port contract instead of carrying a private approximation.
+
 The tree also now carries a reusable failover harness for named TCP peers. That
 harness can crash one peer, keep sibling peers live, restart the failed peer on
 the same host and port with persisted remote transfer state, and prove that

@@ -1,6 +1,6 @@
 <?php
 
-/* Harness server for capturing on-wire HTTP/2 one-shot listener behavior. */
+/* Harness server for capturing on-wire HTTP/2 one-shot listener behavior, including CORS slices. */
 
 if ($argc < 3) {
     fwrite(STDERR, "usage: http2_server_wire_server.inc <capture-path> <port> [mode]\n");
@@ -76,6 +76,21 @@ $result = king_http2_server_listen_once(
                     'content-type' => 'text/plain',
                 ],
                 'body' => str_repeat('late-http2-', 65536),
+            ];
+        }
+
+        if ($mode === 'cors-allowlist') {
+            $capture['request']['headers'] = $request['headers'];
+            $capture['request']['cors'] = $request['cors'];
+            $capture['cors_stats_before_return'] = king_get_stats($session);
+
+            return [
+                'status' => 200,
+                'headers' => [
+                    'content-type' => 'text/plain',
+                    'x-cors-mode' => 'allowlist',
+                ],
+                'body' => 'cors-http2-body',
             ];
         }
 

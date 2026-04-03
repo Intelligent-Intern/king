@@ -88,8 +88,10 @@ connection.
 ## What A Response Is
 
 A `King\Response` is the structured view of the answer that came back. It gives
-the application a status code, normalized headers, and body access. The body can
-be consumed all at once with `getBody()` or incrementally with `read()`.
+the application a status code, normalized headers, and body access. Response
+headers are exposed through lowercase keys, and repeated header fields stay
+visible as ordered arrays instead of collapsing into the last value. The body
+can be consumed all at once with `getBody()` or incrementally with `read()`.
 
 That second mode is important enough to say early. Not every response should be
 buffered in one giant string. Some responses are large. Some arrive slowly. Some

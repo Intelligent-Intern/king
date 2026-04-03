@@ -246,8 +246,11 @@ The current proof for this backend is no longer limited to one remote process
 that handles the whole run in one place. King now also has an end-to-end
 verification slice where one remote execution peer distributes the pipeline's
 steps across multiple worker processes behind that peer boundary while the
-controller-side run snapshot still remains stable. That is deliberately weaker
-than the still-open true multi-host harness, but it is stronger than a
+controller-side run snapshot still remains stable. The tree now also carries a
+shared repo-wide multi-host namespace harness for host-bound peers over a
+non-loopback path, but the orchestrator backend itself is still verified here
+through the current remote-peer execution boundary rather than a broader
+distributed orchestrator topology. That is still stronger than a
 single-worker-only remote story.
 
 ```mermaid

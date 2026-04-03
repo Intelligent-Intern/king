@@ -232,7 +232,7 @@ scope.
 | `king.security_rate_limiter_enable` | `1` | Enables the built-in traffic rate limiter. |
 | `king.security_rate_limiter_requests_per_sec` | `100` | Sets the steady-state request budget per second for the limiter. |
 | `king.security_rate_limiter_burst` | `50` | Sets the extra burst budget above the steady-state limit. |
-| `king.security_cors_allowed_origins` | `*` | Sets the allowed origin list for cross-origin policy where the feature is relevant. |
+| `king.security_cors_allowed_origins` | `*` | Sets the allowed origin list for the active server-side CORS helper, which evaluates normalized live request headers and reflects the matched origin on supported listener response paths. |
 
 ## Compute And AI Runtime
 

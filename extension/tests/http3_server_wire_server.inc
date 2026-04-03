@@ -1,9 +1,9 @@
 <?php
 
-/* Harness server for capturing on-wire HTTP/3 one-shot listener behavior. */
+/* Harness server for capturing on-wire HTTP/3 one-shot listener behaviors, including TLS-reload and CORS slices. */
 
 if ($argc < 6) {
-    fwrite(STDERR, "usage: http3_server_wire_server.inc <capture-path> <port> <cert> <key> <host> [mode]\n");
+    fwrite(STDERR, "usage: http3_server_wire_server.inc <capture-path> <port> <cert> <key> <host> [mode] [mode-args...]\n");
     exit(1);
 }
 
@@ -13,13 +13,16 @@ $certFile = $argv[3];
 $keyFile = $argv[4];
 $host = $argv[5];
 $mode = $argv[6] ?? 'basic';
+$modeArgs = array_slice($argv, 7);
 $capture = [];
 $session = null;
 
-$config = king_new_config([
+$configOptions = [
     'tls_default_cert_file' => $certFile,
     'tls_default_key_file' => $keyFile,
-]);
+];
+
+$config = king_new_config($configOptions);
 
 fwrite(STDOUT, "READY\n");
 fflush(STDOUT);
@@ -28,7 +31,7 @@ $result = king_http3_server_listen_once(
     $host,
     $port,
     $config,
-    static function (array $request) use (&$capture, &$session, $mode): array {
+    static function (array $request) use (&$capture, &$session, $mode, $modeArgs): array {
         $session = $request['session'];
         $stats = king_get_stats($session);
 
@@ -85,6 +88,43 @@ $result = king_http3_server_listen_once(
                     'content-type' => 'text/plain',
                 ],
                 'body' => str_repeat('late-http3-', 65536),
+            ];
+        }
+
+        if ($mode === 'tls-reload') {
+            $reloadCertFile = (string) ($modeArgs[0] ?? '');
+            $reloadKeyFile = (string) ($modeArgs[1] ?? '');
+
+            $capture['tls_reload_ok'] = king_server_reload_tls_config(
+                $session,
+                $reloadCertFile,
+                $reloadKeyFile
+            );
+            $capture['tls_reload_error'] = king_get_last_error();
+            $capture['tls_reload_stats'] = king_get_stats($session);
+
+            return [
+                'status' => 200,
+                'headers' => [
+                    'content-type' => 'text/plain',
+                    'x-reply-mode' => 'tls-reload',
+                ],
+                'body' => 'tls-reload-live',
+            ];
+        }
+
+        if ($mode === 'cors-allowlist') {
+            $capture['request']['headers'] = $request['headers'];
+            $capture['request']['cors'] = $request['cors'];
+            $capture['cors_stats_before_return'] = king_get_stats($session);
+
+            return [
+                'status' => 200,
+                'headers' => [
+                    'content-type' => 'text/plain',
+                    'x-cors-mode' => 'allowlist',
+                ],
+                'body' => 'cors-http3-body',
             ];
         }
 

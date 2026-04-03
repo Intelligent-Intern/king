@@ -199,6 +199,22 @@ currently live accepted peers, drains the close handshake, empties the server
 registry, and rejects later `accept()`, `send*()`, and `broadcast*()` calls on
 that stopped instance.
 
+The repo now also carries a dedicated load proof for that bounded server
+surface. Repeated registry-targeted sends and broadcasts are verified across
+many simultaneously accepted peers on one live server object, so the current
+claim is not limited to two-connection demos or single-message fanout.
+
+The fairness story is also explicit now. When one accepted peer carries a
+deeper queued backlog, other accepted peers can still keep receiving their own
+scheduled frames on the same server object instead of being treated as
+"whoever gets served after the noisy client is done."
+
+Crash-style cleanup is explicit too. If one accepted peer disappears without a
+clean close handshake, the next registry-backed fanout prunes that dead peer,
+keeps the surviving peers schedulable, and makes later targeted sends to the
+removed `connection_id` fail as an inactive-peer error instead of leaving stale
+registry state behind.
+
 ## Connection Lifecycle
 
 A WebSocket channel moves through a clear lifecycle. It starts in the connect

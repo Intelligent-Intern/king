@@ -468,11 +468,12 @@ namespace {
     function king_server_on_cancel(mixed $session, int $stream_id, callable $handler): bool {}
 
     /**
-     * Validate and normalize a local server-side Early Hints batch for one
+     * Validate and normalize one server-side Early Hints batch for one
      * stream on an open `King\Session` resource or object.
      * The current runtime stores the normalized header pairs on the
-     * session snapshot and exposes the last batch plus counters via
-     * `king_get_stats()`.
+     * session snapshot, exposes the last batch plus counters via
+     * `king_get_stats()`, and emits a real `103 Early Hints` block on the
+     * HTTP/1 one-shot listener before the final response for the same stream.
      * @param mixed $session
      * @param array<int|string,mixed> $hints
      */
@@ -496,8 +497,9 @@ namespace {
      * `King\Session` resource or object.
      * The current runtime requires readable replacement certificate
      * and key paths, also requires the configured `tls_ticket_key_file` to
-     * be readable when set, and stores the last local server-TLS snapshot
-     * plus apply/reload counters on the shared session stats.
+     * be readable when set, stores the last local server-TLS snapshot
+     * plus apply/reload counters on the shared session stats, and keeps that
+     * contract valid during active on-wire request handling.
      * @param mixed $session
      */
     function king_server_reload_tls_config(mixed $session, string $cert_file_path, string $key_file_path): bool {}
@@ -762,7 +764,8 @@ namespace {
      * hits and `false` on miss. Supported read options today are `offset`
      * and `length`, using byte-range semantics aligned with RFC 7233.
      * Full-object reads validate stored `integrity_sha256` metadata when
-     * present. For bounded-memory egress, use
+     * present and backfill runtime CDN state on a smart_cdn cache miss when
+     * the CDN layer is enabled. For bounded-memory egress, use
      * `king_object_store_get_to_stream()`.
      * @param array<string,mixed>|null $options
       * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
@@ -1148,8 +1151,10 @@ namespace {
     function king_object_store_get_stats(): array {}
 
     /**
-     * Caches an existing local object-store entry in the runtime CDN cache.
-     * Returns `false` when the object does not exist in the local object store.
+     * Caches an existing object-store entry in the runtime CDN cache.
+     * The runtime prefers committed backend metadata paths and only falls back
+     * to payload reads when size metadata cannot be proven.
+     * Returns `false` when the object does not exist in the active object store.
      * @param array{ttl_sec?:int}|null $options
      * @throws \King\ValidationException|\King\RuntimeException|\King\SystemException
      */
@@ -1718,7 +1723,7 @@ namespace King {
     final class Response {
         public function getStatusCode(): int {}
 
-        /** @return array<string,string[]> */
+        /** @return array<string,string|string[]> */
         public function getHeaders(): array {}
 
         /** Read the full response body; streaming responses drain the live HTTP/1 request context. */

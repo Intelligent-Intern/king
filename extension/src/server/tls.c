@@ -4,12 +4,13 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Activates a first local server-side TLS reload slice for the runtime
- * build. This is intentionally an in-memory lifecycle contract over the
- * unified King\Session runtime: it validates replacement certificate/key
- * files, reflects the applied snapshot into session stats, and keeps a
- * minimal reload counter. A real server TLS backend and live accept-loop
- * reconfiguration remain outside this leaf.
+ * Activates the current server-side TLS reload slice for the runtime build.
+ * This remains a validated snapshot update over the unified King\Session
+ * runtime: it validates replacement certificate/key files, reflects the
+ * applied snapshot into session stats, and keeps the apply/reload counters
+ * coherent. The leaf is now proven during live on-wire request handling as
+ * well, but a native listener hot-swap backend still remains outside this
+ * runtime slice.
  * =========================================================================
  */
 

@@ -102,8 +102,10 @@ guess from outside the connection.
 The third thing to notice is timing. A TLS reload is valuable only if it can be
 performed while the process continues to serve traffic. In the current runtime,
 that reload is modeled as a validated TLS snapshot update on the live server
-session, not a full native listener hot-swap. That is why the example is not
-only about configuration. It is about lifecycle.
+session, and that slice is now proven while a real HTTP/3 request is still
+flowing through the server path, not only through local markers. It is still
+not a full native listener hot-swap. That is why the example is not only about
+configuration. It is about lifecycle.
 
 ## How This Fits A Real Service
 

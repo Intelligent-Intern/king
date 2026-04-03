@@ -16,7 +16,8 @@
  *
  * The current runtime validates readable certificate/key files, revalidates
  * optional ticket-key material, and records the resulting TLS snapshot on the
- * session. It does not hot-swap a live network listener backend.
+ * session, including during active on-wire request handling. It does not
+ * hot-swap a live network listener backend.
  *
  * @param session_resource The open `King\Session` resource or object to update.
  * @param cert_file_path The PEM certificate chain path.

@@ -19,17 +19,31 @@ function king_server_websocket_wire_start_server(string $mode, int $iterations =
 
     $capture = tempnam(sys_get_temp_dir(), 'king-server-websocket-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';
-    $command = sprintf(
-        '%s -n -d %s -d %s %s %s %d %s %d',
+    $commandParts = [
         escapeshellarg(PHP_BINARY),
+        '-n',
+        '-d',
         escapeshellarg('extension=' . $extensionPath),
+        '-d',
         escapeshellarg('king.security_allow_config_override=1'),
+    ];
+
+    if ($mode === 'cors-allowlist') {
+        $commandParts[] = '-d';
+        $commandParts[] = escapeshellarg(
+            'king.security_cors_allowed_origins=https://app.king.test, https://admin.king.test'
+        );
+    }
+
+    $commandParts = array_merge($commandParts, [
         escapeshellarg(__DIR__ . '/server_websocket_wire_server.inc'),
         escapeshellarg($capture),
-        (int) $port,
+        (string) (int) $port,
         escapeshellarg($mode),
-        max(1, $iterations)
-    );
+        (string) max(1, $iterations),
+    ]);
+
+    $command = implode(' ', $commandParts);
 
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
@@ -216,6 +230,125 @@ function king_server_http1_wire_parse_response(string $response): array
         'header_pairs' => $headerPairs,
         'body' => $body,
     ];
+}
+
+function king_server_websocket_wire_raw_client_connect(int $port, string $path)
+{
+    $deadline = microtime(true) + 3.0;
+    $socket = false;
+    $message = 'connection failed';
+
+    if (!function_exists('socket_create')) {
+        throw new RuntimeException('socket_create() is required for raw websocket client fixtures');
+    }
+
+    do {
+        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if ($socket === false) {
+            throw new RuntimeException('failed to create raw websocket client socket');
+        }
+
+        if (@socket_connect($socket, '127.0.0.1', $port) === true) {
+            break;
+        }
+
+        $message = socket_strerror(socket_last_error($socket));
+        socket_close($socket);
+        $socket = false;
+        usleep(50000);
+    } while (microtime(true) < $deadline);
+
+    if ($socket === false) {
+        throw new RuntimeException('failed to connect raw websocket client: ' . $message);
+    }
+
+    $key = base64_encode(random_bytes(16));
+    $request =
+        "GET " . $path . " HTTP/1.1\r\n"
+        . "Host: 127.0.0.1:" . $port . "\r\n"
+        . "Upgrade: websocket\r\n"
+        . "Connection: Upgrade\r\n"
+        . "Sec-WebSocket-Version: 13\r\n"
+        . "Sec-WebSocket-Key: " . $key . "\r\n\r\n";
+
+    $written = 0;
+    $length = strlen($request);
+    while ($written < $length) {
+        $chunk = @socket_write($socket, substr($request, $written), $length - $written);
+        if ($chunk === false || $chunk === 0) {
+            $message = socket_strerror(socket_last_error($socket));
+            socket_close($socket);
+            throw new RuntimeException('failed while writing raw websocket handshake: ' . $message);
+        }
+
+        $written += $chunk;
+    }
+
+    $response = '';
+    while (!str_contains($response, "\r\n\r\n")) {
+        $chunk = @socket_read($socket, 8192, PHP_BINARY_READ);
+        if ($chunk === false || $chunk === '') {
+            $message = socket_strerror(socket_last_error($socket));
+            socket_close($socket);
+            throw new RuntimeException('failed while reading raw websocket handshake: ' . $message);
+        }
+
+        $response .= $chunk;
+    }
+
+    if (!str_starts_with($response, "HTTP/1.1 101 ")) {
+        socket_close($socket);
+        throw new RuntimeException('raw websocket handshake failed: ' . trim(strtok($response, "\r\n")));
+    }
+
+    return $socket;
+}
+
+function king_server_websocket_wire_raw_client_send_text($socket, string $payload): void
+{
+    $payloadLength = strlen($payload);
+    $mask = random_bytes(4);
+    $frame = chr(0x81);
+
+    if ($payloadLength <= 125) {
+        $frame .= chr(0x80 | $payloadLength);
+    } elseif ($payloadLength <= 65535) {
+        $frame .= chr(0x80 | 126) . pack('n', $payloadLength);
+    } else {
+        $frame .= chr(0x80 | 127) . pack('N2', 0, $payloadLength);
+    }
+
+    $maskedPayload = '';
+    for ($i = 0; $i < $payloadLength; $i++) {
+        $maskedPayload .= $payload[$i] ^ $mask[$i % 4];
+    }
+
+    $frame .= $mask . $maskedPayload;
+
+    $written = 0;
+    $length = strlen($frame);
+    while ($written < $length) {
+        $chunk = @socket_write($socket, substr($frame, $written), $length - $written);
+        if ($chunk === false || $chunk === 0) {
+            $message = socket_strerror(socket_last_error($socket));
+            socket_close($socket);
+            throw new RuntimeException('failed while writing raw websocket frame: ' . $message);
+        }
+
+        $written += $chunk;
+    }
+}
+
+function king_server_websocket_wire_raw_client_abort($socket): void
+{
+    if (defined('SO_LINGER')) {
+        @socket_set_option($socket, SOL_SOCKET, SO_LINGER, [
+            'l_onoff' => 1,
+            'l_linger' => 0,
+        ]);
+    }
+
+    socket_close($socket);
 }
 
 function king_server_http1_wire_connect_retry(int $port, int $timeoutMs = 3000)

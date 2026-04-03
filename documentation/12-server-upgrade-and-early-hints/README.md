@@ -129,7 +129,9 @@ king_http1_server_listen('127.0.0.1', 8080, null, function (array $request) {
 The value of Early Hints is simple. The server records useful information as
 soon as it knows it instead of waiting for every part of the final response to
 be finished first. In the current runtime that hint batch is normalized onto
-the live session and exposed through session stats; the broader on-wire `103`
+the live session, exposed through session stats, and emitted as a real on-wire
+`103 Early Hints` response on the HTTP/1 one-shot listener before the final
+response for the same stream. The broader HTTP/2 and HTTP/3 interim-response
 story is still narrower than the overall staged-response model. That still
 matters because the server can already name the resources the client will need
 next and keep that intent explicit in one place.
