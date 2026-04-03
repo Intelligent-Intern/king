@@ -209,7 +209,7 @@ fn run() -> Result<(), String> {
 
         flush_egress(&mut socket, &mut conn, &mut out)?;
 
-        if request_sent && !close_sent && request_sent_at.unwrap().elapsed() >= close_delay {
+        if request_sent && request_sent_at.unwrap().elapsed() >= close_delay {
             conn.close(true, 0x100, b"client abort")
                 .map_err(|err| format!("failed to close client QUIC connection: {err:?}"))?;
             flush_egress(&mut socket, &mut conn, &mut out)?;

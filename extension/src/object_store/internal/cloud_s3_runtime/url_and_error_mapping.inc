@@ -1,3 +1,10 @@
+/*
+ * Percent-encode a single URL path component and append it to a smart_str.
+ *
+ * This helper performs RFC 3986-style percent-encoding suitable for path
+ * components. Unreserved characters stay unchanged, while every other byte is
+ * emitted as uppercase `%HH`. A NULL input is treated as an empty string.
+ */
 static void king_object_store_url_encode_component(
     smart_str *encoded,
     const char *value)
@@ -54,7 +61,6 @@ static zend_result king_object_store_s3_build_url(
         }
 
         smart_str_free(url);
-        smart_str_appends(url, "");
         smart_str_appendl(url, config->endpoint, (size_t) (scheme_sep - config->endpoint + 3));
         smart_str_appends(url, config->bucket);
         smart_str_appendc(url, '.');
@@ -331,4 +337,3 @@ static void king_object_store_s3_format_transport_error(
             return;
     }
 }
-

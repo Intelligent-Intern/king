@@ -26,6 +26,15 @@ if (!function_exists('king_semantic_dns_wire_query')) {
     }
 }
 
+if (!function_exists('king_semantic_dns_wire_parse_response')) {
+    function king_semantic_dns_wire_parse_response($response)
+    {
+        throw new RuntimeException(
+            'king_semantic_dns_wire_parse_response is not available in this context.'
+        );
+    }
+}
+
 if ($argc < 5) {
     fwrite(
         STDERR,
@@ -46,16 +55,31 @@ try {
     $capture['service_name'] = $serviceName;
 
     $response = king_semantic_dns_wire_query($host, $port, $serviceName);
+    if (!is_array($response)
+        || !array_key_exists('timed_out', $response)
+        || !array_key_exists('response', $response)) {
+        throw new RuntimeException(
+            'Malformed response from king_semantic_dns_wire_query: missing expected keys.'
+        );
+    }
+
     $capture['timed_out'] = $response['timed_out'];
     $capture['parsed'] = king_semantic_dns_wire_parse_response($response['response']);
 } catch (Throwable $e) {
     $capture['exception_class'] = get_class($e);
     $capture['exception_message'] = $e->getMessage();
 } finally {
-    file_put_contents(
+    $bytesWritten = file_put_contents(
         $capturePath,
         json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
     );
+    if ($bytesWritten === false) {
+        fwrite(
+            STDERR,
+            "Failed to write capture data to '{$capturePath}'.\n"
+        );
+        exit(2);
+    }
 }
 
 exit(isset($capture['exception_class']) ? 1 : 0);

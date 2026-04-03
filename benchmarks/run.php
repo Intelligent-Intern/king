@@ -252,13 +252,11 @@ function build_case_definitions(): array
 
                 return [
                     'run' => static function (int $iteration): int {
-                        // In this benchmark, the service identifier and display name are intentionally identical.
                         $serviceId = 'api-bench';
-                        $serviceName = 'api-bench';
 
                         if (!king_semantic_dns_register_service([
                             'service_id' => $serviceId,
-                            'service_name' => $serviceName,
+                            'service_name' => $serviceId,
                             'service_type' => 'pipeline_orchestrator',
                             'status' => 'healthy',
                             'hostname' => 'api.internal',
@@ -270,7 +268,7 @@ function build_case_definitions(): array
                         }
 
                         $discovery = king_semantic_dns_discover_service('pipeline_orchestrator');
-                        $route = king_semantic_dns_get_optimal_route($serviceName, [
+                        $route = king_semantic_dns_get_optimal_route($serviceId, [
                             'location' => [
                                 'latitude' => 52.52 + (($iteration % 100) / 1000),
                                 'longitude' => 13.405 + (($iteration % 100) / 1000),
@@ -294,7 +292,7 @@ function build_case_definitions(): array
                             + (int) ($topology['statistics']['healthy_services'] ?? 0)
                             + strlen($serviceId);
                     },
-                    'cleanup' => static function () use ($stateDir, $config): void {
+                    'cleanup' => static function () use ($stateDir): void {
                         delete_flat_directory($stateDir);
                     },
                 ];
