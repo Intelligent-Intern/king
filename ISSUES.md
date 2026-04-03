@@ -20,34 +20,34 @@
 
 ## Current Next Leaf
 
-- Batch exhausted. Wait for explicit PR/publish flow or a new requested batch.
+- `#1 Validate HTTP/1 header normalization under real traffic.`
 
 ## Active Executable Items
 
-- [x] `#1 Validate QUIC connection handshake, open, drain, and close lifecycle against real peers.`
-- [x] `#2 Validate QUIC idle-timeout and application-close propagation against real peers.`
-- [x] `#3 Validate QUIC stream open, body, finish, and read-drain lifecycle against real peers.`
-- [x] `#4 Validate QUIC reset and stop-sending lifecycle against real peers.`
-- [x] `#5 Validate QUIC userland cancel propagation into active transport state.`
-- [x] `#6 Validate QUIC remote abort and transport-close mapping into public exceptions.`
-- [x] `#7 Validate QUIC poll/event-loop wake, idle, and timeout behavior under sustained runtime.`
-- [x] `#8 Validate QUIC congestion-control behavior under sustained constrained links.`
-- [x] `#9 Validate QUIC flow-control exhaustion and recovery behavior under sustained streams.`
-- [x] `#10 Validate QUIC zero-RTT acceptance and fallback against real peers.`
-- [x] `#11 Finalize QUIC error mapping across transport, TLS, HTTP/3, timeout, and cancellation failures.`
-- [x] `#12 Validate QUIC stats fields against live runtime counters and peer-observed state.`
-- [x] `#13 Validate QUIC recovery after temporary network interruption and socket re-wake.`
-- [x] `#14 Back server-upgrade WebSocket resources with honest bidirectional frame I/O.`
-- [x] `#15 Back King\WebSocket\Server listen/accept lifecycle with fully real runtime behavior.`
-- [x] `#16 Back King\WebSocket\Server connection registry and targeted send semantics with real runtime behavior.`
-- [x] `#17 Back King\WebSocket\Server broadcast and shutdown semantics with real live connections.`
-- [x] `#18 Validate WebSocket upgrade on HTTP/2 where the public docs or surface claim it.`
-- [x] `#19 Validate WebSocket upgrade on HTTP/3 where the public docs or surface claim it.`
-- [x] `#20 Validate WebSocket resource cleanup across request boundaries and worker reuse.`
+- [ ] `#1 Validate HTTP/1 header normalization under real traffic.`
+- [ ] `#2 Validate server-side Early Hints on-wire.`
+- [ ] `#3 Validate server TLS reload under live traffic.`
+- [ ] `#4 Validate server CORS / header behavior against real browsers and clients.`
+- [ ] `#5 Validate server multi-connection scheduling under load.`
+- [ ] `#6 Validate server fairness across competing clients.`
+- [ ] `#7 Validate server resource cleanup under crash / abort scenarios.`
+- [ ] `#8 Build end-to-end multi-host harness.`
+- [ ] `#9 Validate CDN cache paths against real object-store backends.`
+- [ ] `#10 Validate cache fill on miss against real backends.`
+- [ ] `#11 Validate cache invalidation under load.`
+- [ ] `#12 Validate stale-serve-on-error against real backend failures.`
+- [ ] `#13 Validate cache consistency after backend update.`
+- [ ] `#14 Validate edge-node inventory against real nodes where publicly claimed.`
+- [ ] `#15 Validate origin timeout / retry behavior.`
+- [ ] `#16 Validate cache memory limits under load.`
+- [ ] `#17 Validate large objects in cache under memory pressure.`
+- [ ] `#18 Validate cache recovery after restart.`
+- [ ] `#19 Finalize cache metrics and observability.`
+- [ ] `#20 Validate service registration against real distributed topology.`
 
 ## Notes
 
 - This batch was pulled explicitly from `READYNESS_TRACKER.md`.
-- It is intentionally ordered as: QUIC runtime truth first, then WebSocket server/runtime truth.
+- It is intentionally ordered as: remaining transport/server truth first, then multi-host/CDN truth, then the next distributed Smart-DNS gap.
 - The previous explicit `20`-issue batch is closed and rolled into `PROJECT_ASSESSMENT.md`.
 - If a task is not listed here, it is not the current repo-local execution item.
