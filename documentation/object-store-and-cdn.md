@@ -442,6 +442,18 @@ still remains unavailable until a new full read in that process actually
 retains the body again. King does not pretend that stale bytes from an earlier
 process survived restart.
 
+`king_object_store_get_stats()['cdn']` now makes that split visible instead of
+collapsing everything into one vague count. The resident inventory fields
+`cached_object_count`, `cached_bytes`, `retained_object_count`,
+`metadata_only_object_count`, and `retained_bytes` describe the entries and
+bytes the current process is actually holding right now. The lifecycle counter
+fields `served_count`, `stale_serve_count`, `eviction_count`,
+`expiration_count`, and `invalidation_count` are process-local observability:
+they tell operators what this process has served, evicted, expired, and
+invalidated since it booted. `latest_cached_at` and `latest_served_at` expose
+the most recent resident admission and serve timestamps for that same live
+process.
+
 This matters because a storage write often has a delivery consequence. A fresh
 object may need warming at the edge. An overwritten object may need invalidation
 so old copies stop being served. A missing object may require origin fallback. A

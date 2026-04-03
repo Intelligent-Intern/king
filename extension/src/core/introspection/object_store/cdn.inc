@@ -267,6 +267,7 @@ PHP_FUNCTION(king_cdn_invalidate_cache)
         /* Flush all (including expired) */
         zend_long removed_count = (zend_long) zend_hash_num_elements(&king_cdn_cache_registry);
         zend_hash_clean(&king_cdn_cache_registry);
+        king_cdn_counter_add(&king_cdn_cache_invalidation_count, removed_count);
         RETURN_LONG(removed_count);
     }
 
@@ -289,7 +290,12 @@ PHP_FUNCTION(king_cdn_invalidate_cache)
         RETURN_LONG(0);
     }
 
-    RETURN_LONG(zend_hash_del(&king_cdn_cache_registry, object_id) == SUCCESS ? 1 : 0);
+    if (zend_hash_del(&king_cdn_cache_registry, object_id) == SUCCESS) {
+        king_cdn_counter_add(&king_cdn_cache_invalidation_count, 1);
+        RETURN_LONG(1);
+    }
+
+    RETURN_LONG(0);
 }
 
 /*

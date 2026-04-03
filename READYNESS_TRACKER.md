@@ -236,7 +236,7 @@ Status note:
 - [x] Validate cache memory limits under load
 - [x] Validate large objects in cache under memory pressure
 - [x] Validate cache recovery after restart
-- [ ] Finalize cache metrics and observability
+- [x] Finalize cache metrics and observability
 
 ## I. Semantic DNS
 

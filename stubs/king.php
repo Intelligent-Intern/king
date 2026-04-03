@@ -1157,13 +1157,26 @@ namespace {
      *     runtime_default_ttl_sec:int,
      *     cached_object_count:int,
      *     cached_bytes:int,
-     *     latest_cached_at:int|null
+     *     retained_object_count:int,
+     *     metadata_only_object_count:int,
+     *     retained_bytes:int,
+     *     served_count:int,
+     *     stale_serve_count:int,
+     *     eviction_count:int,
+     *     expiration_count:int,
+     *     invalidation_count:int,
+     *     latest_cached_at:int|null,
+     *     latest_served_at:int|null
      *   }
      * }
      *
-     * CDN counters are live process-local observability. After a real process
-     * restart they begin empty again and only repopulate after a fresh
-     * metadata warm or full backend read in that new process.
+     * The CDN stats separate live resident inventory
+     * (`cached_*`, `retained_*`, `metadata_only_object_count`) from
+     * process-local lifecycle counters
+     * (`served_count`, `stale_serve_count`, `eviction_count`,
+     * `expiration_count`, `invalidation_count`). After a real process restart
+     * those counters begin empty again and only repopulate after fresh warms,
+     * invalidations, expirations, or full backend reads in that new process.
      */
     function king_object_store_get_stats(): array {}
 

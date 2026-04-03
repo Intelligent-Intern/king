@@ -14,13 +14,23 @@ PHP_FUNCTION(king_object_store_get_stats)
     zend_long cached_object_count = 0;
     zend_long cached_bytes = 0;
     zend_long latest_cached_at = 0;
+    zend_long retained_object_count = 0;
+    zend_long metadata_only_object_count = 0;
+    zend_long retained_bytes = 0;
     zend_long runtime_metadata_cache_entries = 0;
     zend_long runtime_metadata_cache_eviction_count = 0;
 
     ZEND_PARSE_PARAMETERS_NONE();
 
     array_init(return_value);
-    king_cdn_collect_live_stats(&cached_object_count, &cached_bytes, &latest_cached_at);
+    king_cdn_collect_live_stats(
+        &cached_object_count,
+        &cached_bytes,
+        &latest_cached_at,
+        &retained_object_count,
+        &metadata_only_object_count,
+        &retained_bytes
+    );
     king_object_store_runtime_metadata_cache_collect_stats(
         &runtime_metadata_cache_entries,
         &runtime_metadata_cache_eviction_count
@@ -157,10 +167,23 @@ PHP_FUNCTION(king_object_store_get_stats)
     add_assoc_long(&cdn, "runtime_default_ttl_sec", king_object_store_runtime.config.cdn_config.default_ttl_seconds);
     add_assoc_long(&cdn, "cached_object_count", cached_object_count);
     add_assoc_long(&cdn, "cached_bytes", cached_bytes);
+    add_assoc_long(&cdn, "retained_object_count", retained_object_count);
+    add_assoc_long(&cdn, "metadata_only_object_count", metadata_only_object_count);
+    add_assoc_long(&cdn, "retained_bytes", retained_bytes);
+    add_assoc_long(&cdn, "served_count", king_cdn_cache_served_count);
+    add_assoc_long(&cdn, "stale_serve_count", king_cdn_cache_stale_serve_count);
+    add_assoc_long(&cdn, "eviction_count", king_cdn_cache_eviction_count);
+    add_assoc_long(&cdn, "expiration_count", king_cdn_cache_expiration_count);
+    add_assoc_long(&cdn, "invalidation_count", king_cdn_cache_invalidation_count);
     if (latest_cached_at > 0) {
         add_assoc_long(&cdn, "latest_cached_at", latest_cached_at);
     } else {
         add_assoc_null(&cdn, "latest_cached_at");
+    }
+    if (king_cdn_cache_latest_served_at > 0) {
+        add_assoc_long(&cdn, "latest_served_at", (zend_long) king_cdn_cache_latest_served_at);
+    } else {
+        add_assoc_null(&cdn, "latest_served_at");
     }
     
     add_assoc_zval(return_value, "cdn", &cdn);

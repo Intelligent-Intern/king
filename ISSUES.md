@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#19 Finalize cache metrics and observability.`
+- `#20 Validate service registration against real distributed topology.`
 
 ## Active Executable Items
 
@@ -64,7 +64,7 @@
 - [x] `#16 Validate cache memory limits under load.`
 - [x] `#17 Validate large objects in cache under memory pressure.`
 - [x] `#18 Validate cache recovery after restart.`
-- [ ] `#19 Finalize cache metrics and observability.`
+- [x] `#19 Finalize cache metrics and observability.`
 - [ ] `#20 Validate service registration against real distributed topology.`
 
 ## Notes

@@ -20,6 +20,8 @@ static void king_object_store_cdn_entry_note_served(
         entry->served_count++;
     }
     entry->last_served_at = served_at;
+    king_cdn_counter_add(&king_cdn_cache_served_count, 1);
+    king_cdn_cache_latest_served_at = served_at;
     king_cdn_cache_entry_note_touched(entry);
 }
 
@@ -151,6 +153,7 @@ static zend_string *king_object_store_copy_stale_cdn_payload(
 
     now = time(NULL);
     king_object_store_cdn_entry_note_served(entry, now);
+    king_cdn_counter_add(&king_cdn_cache_stale_serve_count, 1);
 
     return zend_string_init(
         ZSTR_VAL(entry->retained_payload),
