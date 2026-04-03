@@ -1,6 +1,6 @@
 <?php
 
-/* Harness server for capturing on-wire HTTP/1 and WebSocket one-shot listener behavior. */
+/* Harness server for capturing on-wire HTTP/1 one-shot listener behavior, including websocket and interim responses. */
 
 if ($argc < 4) {
     fwrite(STDERR, "usage: server_websocket_wire_server.inc <capture-path> <port> <mode> [iterations]\n");
@@ -266,6 +266,28 @@ for ($iteration = 0; $iteration < $iterations; $iteration++) {
                         'Content-Type' => 'text/plain',
                     ],
                     'body' => str_repeat('late-http1-', 65536),
+                ];
+            }
+
+            if ($mode === 'early-hints') {
+                $capture['early_hints_ok'] = king_server_send_early_hints(
+                    $session,
+                    $request['stream_id'],
+                    [
+                        'Link' => '</assets/app.css>; rel=preload; as=style',
+                        ['X-Trace', 'edge-1'],
+                    ]
+                );
+                $capture['early_hints_error'] = king_get_last_error();
+                $capture['early_hints_stats_before_return'] = king_get_stats($session);
+
+                return [
+                    'status' => 200,
+                    'headers' => [
+                        'Content-Type' => 'text/plain',
+                        'X-Mode' => 'early-hints',
+                    ],
+                    'body' => 'early-hints-body',
                 ];
             }
 

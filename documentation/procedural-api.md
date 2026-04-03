@@ -171,7 +171,7 @@ telemetry setup, and server-side close behavior.
 | `king_http3_server_listen_once()` | Accepts and handles one on-wire HTTP/3 request over QUIC. | [Server Runtime](./server-runtime.md) |
 | `king_server_listen()` | Dispatches a generic server listener through the runtime index. | [Server Runtime](./server-runtime.md) |
 | `king_server_on_cancel()` | Registers a cancel callback for server-side work. | [Server Runtime](./server-runtime.md) |
-| `king_server_send_early_hints()` | Sends or records Early Hints on the server side. | [Server Runtime](./server-runtime.md) |
+| `king_server_send_early_hints()` | Records Early Hints on the server session and emits real `103` hints on the HTTP/1 one-shot listener. | [Server Runtime](./server-runtime.md) |
 | `king_server_upgrade_to_websocket()` | Upgrades a request or session to WebSocket. | [Server Runtime](./server-runtime.md) |
 | `king_server_reload_tls_config()` | Reloads TLS material on a live server session. | [Server Runtime](./server-runtime.md) |
 | `king_server_init_telemetry()` | Attaches telemetry configuration to a server session. | [Server Runtime](./server-runtime.md) |

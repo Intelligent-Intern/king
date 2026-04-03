@@ -252,8 +252,10 @@ early.
 King exposes this through `king_server_send_early_hints()`. The function takes
 a server-capable session, a stream identifier, and a normalized set of hint
 headers. The current runtime stores and tracks the hint batch on the session
-state; the broader on-wire `103` emission story remains narrower than this
-staged-response model.
+state, and the on-wire HTTP/1 one-shot listener now emits that normalized
+batch as a real `103 Early Hints` response before the final status line for the
+same active stream. The broader on-wire HTTP/2 and HTTP/3 interim-response
+story is still narrower than this staged-response model.
 
 This matters because server behavior is often staged. The final response may not
 be ready yet, but the server may already know enough to improve the next few

@@ -39,11 +39,10 @@
 
 ## Current Next Leaf
 
-- `#2 Validate server-side Early Hints on-wire.`
+- `#3 Validate server TLS reload under live traffic.`
 
 ## Active Executable Items
 
-- [ ] `#2 Validate server-side Early Hints on-wire.`
 - [ ] `#3 Validate server TLS reload under live traffic.`
 - [ ] `#4 Validate server CORS / header behavior against real browsers and clients.`
 - [ ] `#5 Validate server multi-connection scheduling under load.`

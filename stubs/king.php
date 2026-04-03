@@ -468,11 +468,12 @@ namespace {
     function king_server_on_cancel(mixed $session, int $stream_id, callable $handler): bool {}
 
     /**
-     * Validate and normalize a local server-side Early Hints batch for one
+     * Validate and normalize one server-side Early Hints batch for one
      * stream on an open `King\Session` resource or object.
      * The current runtime stores the normalized header pairs on the
-     * session snapshot and exposes the last batch plus counters via
-     * `king_get_stats()`.
+     * session snapshot, exposes the last batch plus counters via
+     * `king_get_stats()`, and emits a real `103 Early Hints` block on the
+     * HTTP/1 one-shot listener before the final response for the same stream.
      * @param mixed $session
      * @param array<int|string,mixed> $hints
      */

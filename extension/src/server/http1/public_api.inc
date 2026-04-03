@@ -1,6 +1,94 @@
+static zend_result king_server_http1_send_early_hints(
+    king_client_session_t *session,
+    zend_long stream_id,
+    zend_long deadline_ms,
+    const char *function_name
+)
+{
+    smart_str response = {0};
+    zval *pair;
+    zend_result rc;
+
+    if (session->transport_socket_fd < 0 || !session->http_enable_early_hints) {
+        return SUCCESS;
+    }
+
+    if (
+        Z_ISUNDEF(session->server_last_early_hints)
+        || Z_TYPE(session->server_last_early_hints) != IS_ARRAY
+        || stream_id != session->server_last_early_hints_stream_id
+        || zend_hash_num_elements(Z_ARRVAL(session->server_last_early_hints)) == 0
+    ) {
+        return SUCCESS;
+    }
+
+    smart_str_appends(&response, "HTTP/1.1 103 Early Hints\r\n");
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL(session->server_last_early_hints), pair)
+    {
+        zval *name_zv;
+        zval *value_zv;
+        zend_string *name;
+        zend_string *value;
+
+        if (pair == NULL || Z_TYPE_P(pair) != IS_ARRAY) {
+            smart_str_free(&response);
+            king_server_local_set_errorf(
+                "%s() failed to materialize the normalized HTTP/1 Early Hints batch.",
+                function_name
+            );
+            return FAILURE;
+        }
+
+        name_zv = zend_hash_str_find(
+            Z_ARRVAL_P(pair),
+            "name",
+            sizeof("name") - 1
+        );
+        value_zv = zend_hash_str_find(
+            Z_ARRVAL_P(pair),
+            "value",
+            sizeof("value") - 1
+        );
+        if (name_zv == NULL || value_zv == NULL) {
+            smart_str_free(&response);
+            king_server_local_set_errorf(
+                "%s() failed to materialize the normalized HTTP/1 Early Hints batch.",
+                function_name
+            );
+            return FAILURE;
+        }
+
+        name = zval_get_string(name_zv);
+        value = zval_get_string(value_zv);
+        smart_str_append(&response, name);
+        smart_str_appends(&response, ": ");
+        smart_str_append(&response, value);
+        smart_str_appends(&response, "\r\n");
+        zend_string_release(name);
+        zend_string_release(value);
+    }
+    ZEND_HASH_FOREACH_END();
+
+    smart_str_appends(&response, "\r\n");
+    smart_str_0(&response);
+
+    rc = king_server_http1_write_all_fd(
+        session->transport_socket_fd,
+        ZSTR_VAL(response.s),
+        ZSTR_LEN(response.s),
+        deadline_ms,
+        function_name
+    );
+
+    smart_str_free(&response);
+    return rc;
+}
+
 static zend_result king_server_http1_send_response(
     king_client_session_t *session,
     zval *retval,
+    zend_long stream_id,
     zend_long deadline_ms,
     const char *function_name
 )
@@ -29,6 +117,18 @@ static zend_result king_server_http1_send_response(
         body = zval_get_string(body_zv);
     } else {
         body = zend_string_init("", 0, 0);
+    }
+
+    if (
+        king_server_http1_send_early_hints(
+            session,
+            stream_id,
+            deadline_ms,
+            function_name
+        ) != SUCCESS
+    ) {
+        zend_string_release(body);
+        return FAILURE;
     }
 
     smart_str_appends(&response, "HTTP/1.1 ");
@@ -311,6 +411,7 @@ PHP_FUNCTION(king_http1_server_listen_once)
             king_server_http1_send_response(
                 session,
                 &retval,
+                stream_id,
                 write_deadline_ms,
                 "king_http1_server_listen_once"
             ) != SUCCESS

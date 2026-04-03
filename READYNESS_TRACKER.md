@@ -92,7 +92,7 @@ Status note:
 - [x] Validate server request normalization against real requests
 - [x] Validate server response normalization against real clients
 - [x] Validate server-side cancel callbacks under real traffic
-- [ ] Validate server-side Early Hints on-wire
+- [x] Validate server-side Early Hints on-wire
 - [x] Validate server-side WebSocket upgrades on-wire
 - [ ] Validate server TLS reload under live traffic
 - [x] Validate server admin API under real mTLS configuration
