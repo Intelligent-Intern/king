@@ -179,7 +179,10 @@ surface explicitly as transport closure, peer-sent application closes
 surface as protocol closes instead of collapsing into generic request timeouts,
 and userland `CancelToken` aborts propagate into an explicit QUIC
 application-close on the active peer instead of silently disappearing inside
-local teardown.
+local teardown. Those same remote `transport_close` and `application_close`
+paths also stay visible through `King\Client\Http3Client` as public
+`King\QuicException` and `King\ProtocolException` failures instead of
+collapsing into a generic OO runtime error.
 
 ## A First Session
 

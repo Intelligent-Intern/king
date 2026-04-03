@@ -20,7 +20,7 @@
 
 ## Current Next Leaf
 
-- `#6 Validate QUIC remote abort and transport-close mapping into public exceptions.`
+- `#7 Validate QUIC poll/event-loop wake, idle, and timeout behavior under sustained runtime.`
 
 ## Active Executable Items
 
@@ -29,7 +29,7 @@
 - [x] `#3 Validate QUIC stream open, body, finish, and read-drain lifecycle against real peers.`
 - [x] `#4 Validate QUIC reset and stop-sending lifecycle against real peers.`
 - [x] `#5 Validate QUIC userland cancel propagation into active transport state.`
-- [ ] `#6 Validate QUIC remote abort and transport-close mapping into public exceptions.`
+- [x] `#6 Validate QUIC remote abort and transport-close mapping into public exceptions.`
 - [ ] `#7 Validate QUIC poll/event-loop wake, idle, and timeout behavior under sustained runtime.`
 - [ ] `#8 Validate QUIC congestion-control behavior under sustained constrained links.`
 - [ ] `#9 Validate QUIC flow-control exhaustion and recovery behavior under sustained streams.`
