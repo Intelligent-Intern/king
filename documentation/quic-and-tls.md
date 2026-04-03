@@ -194,7 +194,11 @@ config-only claim. The same live peer coverage now also proves sustained
 request streams can exhaust a tiny peer-advertised flow-control window, stall
 until that peer resumes reading, and then recover to a completed HTTP/3
 response instead of collapsing the flow-control slice into a timeout-only
-story.
+story. The same ticket-backed peer harness now also proves resumed 0-RTT
+requests end up in one of two honest transport phases: accepted early data,
+where the peer observes request and response headers inside early data, or
+server-disabled fallback, where the same resumed request is replayed only after
+establishment and the peer reports a disabled early-data reason.
 
 ## A First Session
 
@@ -345,6 +349,13 @@ time, the runtime can carry useful state forward.
 King also exposes `tls.enable_early_data` and related ticket settings because
 some deployments want to use resumption aggressively while others prefer a
 stricter trust policy.
+
+That distinction is now verified against real peers rather than only described
+at the API level. In the active HTTP/3 harness, a resumed request with
+`tls.enable_early_data=true` is proved in two separate modes: accepted 0-RTT,
+where the peer sees request and response headers during early data, and
+server-disabled fallback, where the peer reports a disabled early-data reason
+and only sees the request after the connection reaches the established phase.
 
 ### The Ticket Functions In Practice
 

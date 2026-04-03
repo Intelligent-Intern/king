@@ -36,9 +36,13 @@ struct PendingRequest {
 struct LifecycleCapture {
     saw_initial: bool,
     saw_established: bool,
+    saw_resumed: bool,
+    saw_early_data_state: bool,
     saw_h3_open: bool,
     saw_request_stream_open: bool,
     saw_request_headers: bool,
+    request_headers_in_early_data: bool,
+    request_headers_after_established: bool,
     saw_request_body: bool,
     request_body_bytes: usize,
     saw_request_finished: bool,
@@ -46,10 +50,14 @@ struct LifecycleCapture {
     request_body_drained_before_response: bool,
     response_on_request_stream: bool,
     saw_response_headers: bool,
+    response_headers_in_early_data: bool,
+    response_headers_after_established: bool,
     saw_response_drain: bool,
     response_drained_before_close: bool,
     saw_draining: bool,
     saw_closed: bool,
+    early_data_reason_code: u32,
+    early_data_reason: &'static str,
     close_source: &'static str,
 }
 
@@ -147,9 +155,13 @@ fn main() {
     let mut lifecycle = LifecycleCapture {
         saw_initial: false,
         saw_established: false,
+        saw_resumed: false,
+        saw_early_data_state: false,
         saw_h3_open: false,
         saw_request_stream_open: false,
         saw_request_headers: false,
+        request_headers_in_early_data: false,
+        request_headers_after_established: false,
         saw_request_body: false,
         request_body_bytes: 0,
         saw_request_finished: false,
@@ -157,10 +169,14 @@ fn main() {
         request_body_drained_before_response: false,
         response_on_request_stream: false,
         saw_response_headers: false,
+        response_headers_in_early_data: false,
+        response_headers_after_established: false,
         saw_response_drain: false,
         response_drained_before_close: false,
         saw_draining: false,
         saw_closed: false,
+        early_data_reason_code: 0,
+        early_data_reason: "unknown",
         close_source: "none",
     };
     let mut response_started = false;
@@ -255,6 +271,18 @@ fn main() {
                 lifecycle.saw_established = true;
             }
 
+            if active.is_resumed() {
+                lifecycle.saw_resumed = true;
+            }
+
+            if active.is_in_early_data() {
+                lifecycle.saw_early_data_state = true;
+            }
+
+            lifecycle.early_data_reason_code = active.early_data_reason();
+            lifecycle.early_data_reason =
+                early_data_reason_name(lifecycle.early_data_reason_code);
+
             if h3_conn.is_none() &&
                 (active.is_in_early_data() || active.is_established())
             {
@@ -339,12 +367,16 @@ fn main() {
     }
 
     println!(
-        "LIFECYCLE {{\"saw_initial\":{},\"saw_established\":{},\"saw_h3_open\":{},\"saw_request_stream_open\":{},\"saw_request_headers\":{},\"saw_request_body\":{},\"request_body_bytes\":{},\"saw_request_finished\":{},\"request_finished_before_response\":{},\"request_body_drained_before_response\":{},\"response_on_request_stream\":{},\"saw_response_headers\":{},\"saw_response_drain\":{},\"response_drained_before_close\":{},\"saw_draining\":{},\"saw_closed\":{},\"close_source\":\"{}\"}}",
+        "LIFECYCLE {{\"saw_initial\":{},\"saw_established\":{},\"saw_resumed\":{},\"saw_early_data_state\":{},\"saw_h3_open\":{},\"saw_request_stream_open\":{},\"saw_request_headers\":{},\"request_headers_in_early_data\":{},\"request_headers_after_established\":{},\"saw_request_body\":{},\"request_body_bytes\":{},\"saw_request_finished\":{},\"request_finished_before_response\":{},\"request_body_drained_before_response\":{},\"response_on_request_stream\":{},\"saw_response_headers\":{},\"response_headers_in_early_data\":{},\"response_headers_after_established\":{},\"saw_response_drain\":{},\"response_drained_before_close\":{},\"saw_draining\":{},\"saw_closed\":{},\"early_data_reason_code\":{},\"early_data_reason\":\"{}\",\"close_source\":\"{}\"}}",
         lifecycle.saw_initial,
         lifecycle.saw_established,
+        lifecycle.saw_resumed,
+        lifecycle.saw_early_data_state,
         lifecycle.saw_h3_open,
         lifecycle.saw_request_stream_open,
         lifecycle.saw_request_headers,
+        lifecycle.request_headers_in_early_data,
+        lifecycle.request_headers_after_established,
         lifecycle.saw_request_body,
         lifecycle.request_body_bytes,
         lifecycle.saw_request_finished,
@@ -352,10 +384,14 @@ fn main() {
         lifecycle.request_body_drained_before_response,
         lifecycle.response_on_request_stream,
         lifecycle.saw_response_headers,
+        lifecycle.response_headers_in_early_data,
+        lifecycle.response_headers_after_established,
         lifecycle.saw_response_drain,
         lifecycle.response_drained_before_close,
         lifecycle.saw_draining,
         lifecycle.saw_closed,
+        lifecycle.early_data_reason_code,
+        lifecycle.early_data_reason,
         lifecycle.close_source,
     );
 }
@@ -391,6 +427,12 @@ fn process_http3_events(
 
                 lifecycle.saw_request_stream_open = true;
                 lifecycle.saw_request_headers = true;
+                if conn.is_in_early_data() {
+                    lifecycle.request_headers_in_early_data = true;
+                }
+                if conn.is_established() && !conn.is_in_early_data() {
+                    lifecycle.request_headers_after_established = true;
+                }
 
                 requests.insert(
                     stream_id,
@@ -525,6 +567,12 @@ fn send_response_for_request(
     request.response_sent = true;
     lifecycle.saw_response_headers = true;
     lifecycle.response_on_request_stream = true;
+    if conn.is_in_early_data() {
+        lifecycle.response_headers_in_early_data = true;
+    }
+    if conn.is_established() && !conn.is_in_early_data() {
+        lifecycle.response_headers_after_established = true;
+    }
 
     if !body.is_empty() {
         pending.insert(stream_id, PendingResponse { body, written: 0 });
@@ -648,5 +696,25 @@ fn build_response(
     match fs::read(file_path) {
         Ok(body) => (200, body),
         Err(_) => (404, b"not found\n".to_vec()),
+    }
+}
+
+fn early_data_reason_name(reason: u32) -> &'static str {
+    match reason {
+        0 => "unknown",
+        1 => "disabled",
+        2 => "accepted",
+        3 => "protocol_version",
+        4 => "peer_declined",
+        5 => "no_session_offered",
+        6 => "session_not_resumed",
+        7 => "unsupported_for_session",
+        8 => "hello_retry_request",
+        9 => "alpn_mismatch",
+        10 => "channel_id",
+        12 => "ticket_age_skew",
+        13 => "quic_parameter_mismatch",
+        14 => "alps_mismatch",
+        _ => "unknown_reason_code",
     }
 }
