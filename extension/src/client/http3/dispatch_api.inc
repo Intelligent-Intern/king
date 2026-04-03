@@ -182,12 +182,7 @@ static zend_result king_http3_execute_request(
                     goto failure;
                 }
             } else if (wrote != QUICHE_H3_ERR_DONE && wrote != QUICHE_H3_ERR_STREAM_BLOCKED) {
-                king_http3_throw(
-                    king_ce_protocol_exception,
-                    "%s() failed while sending the active HTTP/3 request body (%zd).",
-                    function_name,
-                    wrote
-                );
+                king_http3_throw_request_body_send_error(function_name, wrote);
                 goto failure;
             }
         }
@@ -305,12 +300,8 @@ static zend_result king_http3_execute_request(
                         break;
 
                     case QUICHE_H3_EVENT_RESET:
+                        king_http3_throw_active_request_stream_reset(function_name, event);
                         king_http3_quiche.quiche_h3_event_free_fn(event);
-                        king_http3_throw(
-                            king_ce_protocol_exception,
-                            "%s() received an HTTP/3 stream reset for the active request.",
-                            function_name
-                        );
                         goto failure;
 
                     case QUICHE_H3_EVENT_GOAWAY:

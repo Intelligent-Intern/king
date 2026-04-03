@@ -21,6 +21,8 @@ const SOCKET_TOKEN: Token = Token(0);
 const APPLICATION_CLOSE_CODE: u64 = 0x1234;
 const APPLICATION_CLOSE_REASON: &[u8] = b"test application abort";
 const IDLE_TIMEOUT_MS: u64 = 250;
+const RESET_STREAM_CODE: u64 = 66;
+const STOP_SENDING_CODE: u64 = 67;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Mode {
@@ -30,6 +32,8 @@ enum Mode {
     IdleTimeout,
     SlowResponse,
     SlowReader,
+    ResetStream,
+    StopSending,
 }
 
 struct CloseCapture {
@@ -37,7 +41,15 @@ struct CloseCapture {
     saw_established: bool,
     saw_h3_open: bool,
     saw_request_headers: bool,
+    saw_request_body: bool,
+    saw_request_finished: bool,
+    request_body_bytes: usize,
     close_trigger: &'static str,
+    stream_trigger: &'static str,
+    reset_stream_sent: bool,
+    reset_stream_code: u64,
+    stop_sending_sent: bool,
+    stop_sending_code: u64,
 }
 
 fn main() {
@@ -52,9 +64,11 @@ fn main() {
         Some("idle_timeout") => Mode::IdleTimeout,
         Some("slow_response") => Mode::SlowResponse,
         Some("slow_reader") => Mode::SlowReader,
+        Some("reset_stream") => Mode::ResetStream,
+        Some("stop_sending") => Mode::StopSending,
         _ => {
             eprintln!(
-                "Usage: {cmd} <handshake_reject|transport_close|application_close|idle_timeout|slow_response|slow_reader> <cert> <key> [host]"
+                "Usage: {cmd} <handshake_reject|transport_close|application_close|idle_timeout|slow_response|slow_reader|reset_stream|stop_sending> <cert> <key> [host]"
             );
             std::process::exit(1);
         },
@@ -99,7 +113,9 @@ fn main() {
         Mode::ApplicationClose |
         Mode::IdleTimeout |
         Mode::SlowResponse |
-        Mode::SlowReader => {
+        Mode::SlowReader |
+        Mode::ResetStream |
+        Mode::StopSending => {
             config.set_application_protos(&alpns::HTTP_3).unwrap();
         },
     }
@@ -110,13 +126,13 @@ fn main() {
     });
     config.set_max_recv_udp_payload_size(MAX_DATAGRAM_SIZE);
     config.set_max_send_udp_payload_size(MAX_DATAGRAM_SIZE);
-    if mode == Mode::SlowReader {
+    if matches!(mode, Mode::SlowReader | Mode::StopSending) {
         config.set_initial_max_data(4096);
     } else {
         config.set_initial_max_data(1_000_000);
     }
     config.set_initial_max_stream_data_bidi_local(1_000_000);
-    if mode == Mode::SlowReader {
+    if matches!(mode, Mode::SlowReader | Mode::StopSending) {
         config.set_initial_max_stream_data_bidi_remote(4096);
     } else {
         config.set_initial_max_stream_data_bidi_remote(1_000_000);
@@ -136,12 +152,21 @@ fn main() {
     let mut h3_conn: Option<quiche::h3::Connection> = None;
     let mut close_sent = false;
     let mut stall_after_request = false;
+    let mut stream_action_sent = false;
     let mut capture = CloseCapture {
         saw_initial: false,
         saw_established: false,
         saw_h3_open: false,
         saw_request_headers: false,
+        saw_request_body: false,
+        saw_request_finished: false,
+        request_body_bytes: 0,
         close_trigger: "none",
+        stream_trigger: "none",
+        reset_stream_sent: false,
+        reset_stream_code: 0,
+        stop_sending_sent: false,
+        stop_sending_code: 0,
     };
     let deadline = time::Instant::now() + time::Duration::from_secs(10);
     let mut buf = [0; 65535];
@@ -265,7 +290,12 @@ fn main() {
 
             if matches!(
                 mode,
-                Mode::ApplicationClose | Mode::IdleTimeout | Mode::SlowResponse | Mode::SlowReader
+                Mode::ApplicationClose
+                    | Mode::IdleTimeout
+                    | Mode::SlowResponse
+                    | Mode::SlowReader
+                    | Mode::ResetStream
+                    | Mode::StopSending
             )
                 && active.is_established()
                 && h3_conn.is_none()
@@ -288,10 +318,17 @@ fn main() {
                     &mut capture,
                     &mut close_sent,
                     &mut stall_after_request,
+                    &mut stream_action_sent,
                 );
             }
 
             if mode == Mode::ApplicationClose && close_sent {
+                flush_egress(&mut socket, active, &mut out);
+                emit_close_capture(mode, &capture, active);
+                return;
+            }
+
+            if matches!(mode, Mode::ResetStream | Mode::StopSending) && stream_action_sent {
                 flush_egress(&mut socket, active, &mut out);
                 emit_close_capture(mode, &capture, active);
                 return;
@@ -336,10 +373,11 @@ fn process_timeout_peer_events(
     capture: &mut CloseCapture,
     close_sent: &mut bool,
     stall_after_request: &mut bool,
+    stream_action_sent: &mut bool,
 ) {
     loop {
         match http3.poll(conn) {
-            Ok((_stream_id, quiche::h3::Event::Headers { .. })) => {
+            Ok((stream_id, quiche::h3::Event::Headers { .. })) => {
                 capture.saw_request_headers = true;
 
                 if mode == Mode::ApplicationClose && !*close_sent {
@@ -351,6 +389,17 @@ fn process_timeout_peer_events(
                     break;
                 }
 
+                if mode == Mode::ResetStream && !*stream_action_sent {
+                    info!("sending deterministic HTTP/3 request-stream reset");
+                    conn.stream_shutdown(stream_id, quiche::Shutdown::Write, RESET_STREAM_CODE)
+                        .ok();
+                    capture.stream_trigger = "reset_stream";
+                    capture.reset_stream_sent = true;
+                    capture.reset_stream_code = RESET_STREAM_CODE;
+                    *stream_action_sent = true;
+                    break;
+                }
+
                 if mode == Mode::IdleTimeout {
                     capture.close_trigger = "idle_timeout_wait";
                     *stall_after_request = true;
@@ -358,21 +407,39 @@ fn process_timeout_peer_events(
             },
 
             Ok((stream_id, quiche::h3::Event::Data)) => {
-                if mode == Mode::SlowResponse {
-                    let mut scratch = [0_u8; 4096];
+                let mut scratch = [0_u8; 4096];
 
-                    loop {
-                        match http3.recv_body(conn, stream_id, &mut scratch) {
-                            Ok(0) => break,
-                            Ok(_) => (),
-                            Err(quiche::h3::Error::Done) => break,
-                            Err(_) => break,
-                        }
+                loop {
+                    match http3.recv_body(conn, stream_id, &mut scratch) {
+                        Ok(0) => break,
+                        Ok(read) => {
+                            capture.saw_request_body = true;
+                            capture.request_body_bytes += read;
+
+                            if mode == Mode::StopSending && !*stream_action_sent {
+                                info!("sending deterministic QUIC STOP_SENDING");
+                                conn.stream_shutdown(stream_id, quiche::Shutdown::Read, STOP_SENDING_CODE)
+                                    .ok();
+                                capture.stream_trigger = "stop_sending";
+                                capture.stop_sending_sent = true;
+                                capture.stop_sending_code = STOP_SENDING_CODE;
+                                *stream_action_sent = true;
+                                break;
+                            }
+                        },
+                        Err(quiche::h3::Error::Done) => break,
+                        Err(_) => break,
                     }
+                }
+
+                if mode == Mode::StopSending && *stream_action_sent {
+                    break;
                 }
             },
 
-            Ok((_stream_id, quiche::h3::Event::Finished)) => (),
+            Ok((_stream_id, quiche::h3::Event::Finished)) => {
+                capture.saw_request_finished = true;
+            },
             Ok((_stream_id, quiche::h3::Event::Reset(_))) => (),
             Ok((_stream_id, quiche::h3::Event::PriorityUpdate)) => (),
             Ok((_goaway_id, quiche::h3::Event::GoAway)) => (),
@@ -393,13 +460,21 @@ fn emit_close_capture(mode: Mode, capture: &CloseCapture, conn: &quiche::Connect
     let local_error = conn.local_error();
 
     println!(
-        "CLOSE {{\"mode\":\"{}\",\"saw_initial\":{},\"saw_established\":{},\"saw_h3_open\":{},\"saw_request_headers\":{},\"close_trigger\":\"{}\",\"is_timed_out\":{},\"is_draining\":{},\"is_closed\":{},\"peer_error_present\":{},\"peer_error_is_app\":{},\"peer_error_code\":{},\"peer_error_reason\":\"{}\",\"local_error_present\":{},\"local_error_is_app\":{},\"local_error_code\":{},\"local_error_reason\":\"{}\"}}",
+        "CLOSE {{\"mode\":\"{}\",\"saw_initial\":{},\"saw_established\":{},\"saw_h3_open\":{},\"saw_request_headers\":{},\"saw_request_body\":{},\"saw_request_finished\":{},\"request_body_bytes\":{},\"close_trigger\":\"{}\",\"stream_trigger\":\"{}\",\"reset_stream_sent\":{},\"reset_stream_code\":{},\"stop_sending_sent\":{},\"stop_sending_code\":{},\"is_timed_out\":{},\"is_draining\":{},\"is_closed\":{},\"peer_error_present\":{},\"peer_error_is_app\":{},\"peer_error_code\":{},\"peer_error_reason\":\"{}\",\"local_error_present\":{},\"local_error_is_app\":{},\"local_error_code\":{},\"local_error_reason\":\"{}\"}}",
         mode_name(mode),
         capture.saw_initial,
         capture.saw_established,
         capture.saw_h3_open,
         capture.saw_request_headers,
+        capture.saw_request_body,
+        capture.saw_request_finished,
+        capture.request_body_bytes,
         capture.close_trigger,
+        capture.stream_trigger,
+        capture.reset_stream_sent,
+        capture.reset_stream_code,
+        capture.stop_sending_sent,
+        capture.stop_sending_code,
         conn.is_timed_out(),
         conn.is_draining(),
         conn.is_closed(),
@@ -432,6 +507,8 @@ fn mode_name(mode: Mode) -> &'static str {
         Mode::IdleTimeout => "idle_timeout",
         Mode::SlowResponse => "slow_response",
         Mode::SlowReader => "slow_reader",
+        Mode::ResetStream => "reset_stream",
+        Mode::StopSending => "stop_sending",
     }
 }
 

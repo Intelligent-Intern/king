@@ -237,6 +237,7 @@ typedef struct _king_http3_quiche_api {
     quiche_h3_conn *(*quiche_h3_conn_new_with_transport_fn)(quiche_conn *, quiche_h3_config *);
     int64_t (*quiche_h3_conn_poll_fn)(quiche_h3_conn *, quiche_conn *, quiche_h3_event **);
     enum quiche_h3_event_type (*quiche_h3_event_type_fn)(quiche_h3_event *);
+    uint64_t (*quiche_h3_event_reset_error_fn)(quiche_h3_event *);
     int (*quiche_h3_event_for_each_header_fn)(
         quiche_h3_event *,
         int (*)(uint8_t *, size_t, uint8_t *, size_t, void *),

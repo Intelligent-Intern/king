@@ -20,14 +20,14 @@
 
 ## Current Next Leaf
 
-- `#4 Validate QUIC reset and stop-sending lifecycle against real peers.`
+- `#5 Validate QUIC userland cancel propagation into active transport state.`
 
 ## Active Executable Items
 
 - [x] `#1 Validate QUIC connection handshake, open, drain, and close lifecycle against real peers.`
 - [x] `#2 Validate QUIC idle-timeout and application-close propagation against real peers.`
 - [x] `#3 Validate QUIC stream open, body, finish, and read-drain lifecycle against real peers.`
-- [ ] `#4 Validate QUIC reset and stop-sending lifecycle against real peers.`
+- [x] `#4 Validate QUIC reset and stop-sending lifecycle against real peers.`
 - [ ] `#5 Validate QUIC userland cancel propagation into active transport state.`
 - [ ] `#6 Validate QUIC remote abort and transport-close mapping into public exceptions.`
 - [ ] `#7 Validate QUIC poll/event-loop wake, idle, and timeout behavior under sustained runtime.`

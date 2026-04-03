@@ -19,6 +19,11 @@ static zend_result king_http3_load_symbol(void **target, const char *name)
     return SUCCESS;
 }
 
+static void king_http3_load_optional_symbol(void **target, const char *name)
+{
+    *target = dlsym(king_http3_quiche.handle, name);
+}
+
 static void king_http3_close_runtime_handle(void)
 {
     if (king_http3_quiche.handle != NULL) {
@@ -183,7 +188,11 @@ static zend_result king_http3_ensure_quiche_ready(void)
         return FAILURE;
     }
 
+    king_http3_load_optional_symbol(
+        (void **) &king_http3_quiche.quiche_h3_event_reset_error_fn,
+        "quiche_h3_event_reset_error"
+    );
+
     king_http3_quiche.ready = true;
     return SUCCESS;
 }
-

@@ -295,11 +295,9 @@ static zend_result king_http3_execute_multi_requests(
                     continue;
                 }
 
-                king_http3_throw(
-                    king_ce_protocol_exception,
-                    "%s() failed while sending the HTTP/3 request body for request #%zu (%zd).",
+                king_http3_throw_multi_request_body_send_error(
                     function_name,
-                    i + 1,
+                    requests[i].url,
                     wrote
                 );
                 goto failure;
@@ -429,13 +427,12 @@ static zend_result king_http3_execute_multi_requests(
                         break;
 
                     case QUICHE_H3_EVENT_RESET:
-                        king_http3_quiche.quiche_h3_event_free_fn(event);
-                        king_http3_throw(
-                            king_ce_protocol_exception,
-                            "%s() received an HTTP/3 stream reset for request '%s'.",
+                        king_http3_throw_multi_request_stream_reset(
                             function_name,
-                            ZSTR_VAL(request->url)
+                            request->url,
+                            event
                         );
+                        king_http3_quiche.quiche_h3_event_free_fn(event);
                         goto failure;
 
                     case QUICHE_H3_EVENT_GOAWAY:
@@ -601,4 +598,3 @@ failure:
     king_http3_multi_requests_destroy(requests, request_count);
     return FAILURE;
 }
-

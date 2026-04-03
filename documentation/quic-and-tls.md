@@ -172,9 +172,11 @@ sessions through Initial, established/open, request-stream open/body/finish
 plus request-body drain-before-response, response-drain, draining, and closed
 phases with peer-observed capture, so the session model above is backed by
 real transport behavior rather than by a conceptual diagram alone. The same
-live peer coverage now also proves that negotiated QUIC idle timeouts surface
-explicitly as transport closure and that peer-sent application closes surface
-as protocol closes instead of collapsing into generic request timeouts.
+live peer coverage now also proves that request-stream resets surface as
+explicit HTTP/3 stream-reset failures, peer `STOP_SENDING` on request bodies
+surfaces as an explicit QUIC body-send failure, negotiated QUIC idle timeouts
+surface explicitly as transport closure, and peer-sent application closes
+surface as protocol closes instead of collapsing into generic request timeouts.
 
 ## A First Session
 

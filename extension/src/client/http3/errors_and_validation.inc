@@ -262,6 +262,119 @@ static void king_http3_throw_recv_error(
     );
 }
 
+static void king_http3_throw_request_body_send_error(
+    const char *function_name,
+    ssize_t error_code)
+{
+    switch (error_code) {
+        case QUICHE_H3_TRANSPORT_ERR_STREAM_STOPPED:
+            king_http3_throw(
+                king_ce_protocol_exception,
+                "%s() received QUIC STOP_SENDING while sending the active HTTP/3 request body.",
+                function_name
+            );
+            return;
+
+        case QUICHE_H3_TRANSPORT_ERR_STREAM_RESET:
+            king_http3_throw(
+                king_ce_protocol_exception,
+                "%s() received QUIC RESET_STREAM while sending the active HTTP/3 request body.",
+                function_name
+            );
+            return;
+
+        default:
+            king_http3_throw(
+                king_ce_protocol_exception,
+                "%s() failed while sending the active HTTP/3 request body (%zd).",
+                function_name,
+                error_code
+            );
+            return;
+    }
+}
+
+static void king_http3_throw_multi_request_body_send_error(
+    const char *function_name,
+    zend_string *url,
+    ssize_t error_code)
+{
+    switch (error_code) {
+        case QUICHE_H3_TRANSPORT_ERR_STREAM_STOPPED:
+            king_http3_throw(
+                king_ce_protocol_exception,
+                "%s() received QUIC STOP_SENDING while sending the HTTP/3 request body for request '%s'.",
+                function_name,
+                ZSTR_VAL(url)
+            );
+            return;
+
+        case QUICHE_H3_TRANSPORT_ERR_STREAM_RESET:
+            king_http3_throw(
+                king_ce_protocol_exception,
+                "%s() received QUIC RESET_STREAM while sending the HTTP/3 request body for request '%s'.",
+                function_name,
+                ZSTR_VAL(url)
+            );
+            return;
+
+        default:
+            king_http3_throw(
+                king_ce_protocol_exception,
+                "%s() failed while sending the HTTP/3 request body for request '%s' (%zd).",
+                function_name,
+                ZSTR_VAL(url),
+                error_code
+            );
+            return;
+    }
+}
+
+static void king_http3_throw_active_request_stream_reset(
+    const char *function_name,
+    quiche_h3_event *event)
+{
+    if (king_http3_quiche.quiche_h3_event_reset_error_fn != NULL) {
+        king_http3_throw(
+            king_ce_protocol_exception,
+            "%s() received an HTTP/3 stream reset for the active request (code %" PRIu64 ").",
+            function_name,
+            king_http3_quiche.quiche_h3_event_reset_error_fn(event)
+        );
+        return;
+    }
+
+    king_http3_throw(
+        king_ce_protocol_exception,
+        "%s() received an HTTP/3 stream reset for the active request.",
+        function_name
+    );
+}
+
+static void king_http3_throw_multi_request_stream_reset(
+    const char *function_name,
+    zend_string *url,
+    quiche_h3_event *event)
+{
+    if (king_http3_quiche.quiche_h3_event_reset_error_fn != NULL) {
+        king_http3_throw(
+            king_ce_protocol_exception,
+            "%s() received an HTTP/3 stream reset for request '%s' (code %" PRIu64 ").",
+            function_name,
+            ZSTR_VAL(url),
+            king_http3_quiche.quiche_h3_event_reset_error_fn(event)
+        );
+        return;
+    }
+
+    king_http3_throw(
+        king_ce_protocol_exception,
+        "%s() received an HTTP/3 stream reset for request '%s'.",
+        function_name,
+        ZSTR_VAL(url)
+    );
+}
+
 static bool king_http3_is_token_char(unsigned char c)
 {
     return isalnum(c)
@@ -512,4 +625,3 @@ static zend_result king_http3_parse_options(
 
     return SUCCESS;
 }
-
