@@ -148,7 +148,6 @@ static zend_result king_object_store_gcs_build_url(
         }
 
         smart_str_free(url);
-        smart_str_appends(url, "");
         smart_str_appendl(url, config->endpoint, (size_t) (scheme_sep - config->endpoint + 3));
         smart_str_appends(url, config->bucket);
         smart_str_appendc(url, '.');
@@ -166,4 +165,3 @@ static zend_result king_object_store_gcs_build_url(
     smart_str_0(url);
     return SUCCESS;
 }
-

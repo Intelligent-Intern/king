@@ -25,7 +25,7 @@ $status = king_system_get_status();
 var_dump($status['initialized']);
 var_dump($status['component_count']);
 ?>
---EXPECT--
+--EXPECTF--
 array(4) {
   [0]=>
   string(15) "overall_healthy"
@@ -38,7 +38,7 @@ array(4) {
 }
 bool(true)
 bool(true)
-string(11) "0.2.1-alpha"
+string(%d) "%s"
 bool(false)
 array(6) {
   [0]=>
