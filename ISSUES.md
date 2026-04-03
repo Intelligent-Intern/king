@@ -44,6 +44,16 @@
 
 ## Active Executable Items
 
+- [x] `#1 Validate HTTP/1 header normalization under real traffic.`
+- [x] `#2 Validate server-side Early Hints on-wire.`
+- [x] `#3 Validate server TLS reload under live traffic.`
+- [x] `#4 Validate server CORS and header behavior against real clients.`
+- [x] `#5 Validate server multi-connection scheduling under load.`
+- [x] `#6 Validate server fairness across competing clients.`
+- [x] `#7 Validate server resource cleanup under crash and abort scenarios.`
+- [x] `#8 Build end-to-end multi-host harness.`
+- [x] `#9 Validate CDN cache paths against real object-store backends.`
+- [x] `#10 Validate cache fill on miss against real backends.`
 - [x] `#11 Validate cache invalidation under load.`
 - [x] `#12 Validate stale-serve-on-error against real backend failures.`
 - [x] `#13 Validate cache consistency after backend update.`
@@ -58,6 +68,7 @@
 ## Notes
 
 - This batch was pulled explicitly from `READYNESS_TRACKER.md`.
-- It is intentionally ordered as: CDN/object-store truth first, then the next distributed Smart-DNS gap.
-- The previous explicit `20`-issue batch is closed and rolled into `PROJECT_ASSESSMENT.md`.
+- This active wave keeps completed leaves visible instead of collapsing to only-open work.
+- `#1` through `#10` are already closed and merged; they remain listed here so the running wave stays readable.
+- It is intentionally ordered as: transport/server truth first, then CDN/object-store truth, then the next distributed Smart-DNS gap.
 - If a task is not listed here, it is not the current repo-local execution item.
