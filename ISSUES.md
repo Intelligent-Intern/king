@@ -42,35 +42,35 @@
 
 ## Current Next Leaf
 
-- none; active `20`-issue batch exhausted and ready for PR/merge.
+- `#1 Validate span lifecycle under sustained request and worker churn.`
 
 ## Active Executable Items
 
-- [x] `#1 Validate HTTP/1 header normalization under real traffic.`
-- [x] `#2 Validate server-side Early Hints on-wire.`
-- [x] `#3 Validate server TLS reload under live traffic.`
-- [x] `#4 Validate server CORS and header behavior against real clients.`
-- [x] `#5 Validate server multi-connection scheduling under load.`
-- [x] `#6 Validate server fairness across competing clients.`
-- [x] `#7 Validate server resource cleanup under crash and abort scenarios.`
-- [x] `#8 Build end-to-end multi-host harness.`
-- [x] `#9 Validate CDN cache paths against real object-store backends.`
-- [x] `#10 Validate cache fill on miss against real backends.`
-- [x] `#11 Validate cache invalidation under load.`
-- [x] `#12 Validate stale-serve-on-error against real backend failures.`
-- [x] `#13 Validate cache consistency after backend update.`
-- [x] `#14 Validate edge-node inventory against real nodes where publicly claimed.`
-- [x] `#15 Validate origin timeout / retry behavior.`
-- [x] `#16 Validate cache memory limits under load.`
-- [x] `#17 Validate large objects in cache under memory pressure.`
-- [x] `#18 Validate cache recovery after restart.`
-- [x] `#19 Finalize cache metrics and observability.`
-- [x] `#20 Validate service registration against real distributed topology.`
+- [ ] `#1 Validate span lifecycle under sustained request and worker churn.`
+- [ ] `#2 Validate metric lifecycle under sustained request and worker churn.`
+- [ ] `#3 Validate log lifecycle under sustained request and worker churn.`
+- [ ] `#4 Implement incoming trace-context extraction on HTTP server requests.`
+- [ ] `#5 Propagate extracted incoming trace context into request-root spans and child work.`
+- [ ] `#6 Finalize outgoing trace-context injection on HTTP client transports.`
+- [ ] `#7 Preserve span hierarchies correctly across process and worker boundaries.`
+- [ ] `#8 Finalize telemetry sampling semantics where sampling is publicly claimed.`
+- [ ] `#9 Monitor and bound telemetry CPU cost under load.`
+- [ ] `#10 Enforce OTLP request-size limits before exporter dispatch.`
+- [ ] `#11 Enforce OTLP response-size handling against real collectors.`
+- [ ] `#12 Finalize permanent network failure behavior for telemetry exporters.`
+- [ ] `#13 Implement telemetry queue replay after process restart where the delivery contract requires it.`
+- [ ] `#14 Define export ordering guarantees across queued telemetry batches.`
+- [ ] `#15 Define exporter idempotency behavior across retry and replay paths.`
+- [ ] `#16 Finalize telemetry batch formation under mixed span, metric, and log pressure.`
+- [ ] `#17 Validate OTLP JSON payloads against reference collectors.`
+- [ ] `#18 Provide complete export failure diagnostics across transport, TLS, HTTP, and collector errors.`
+- [ ] `#19 Finalize telemetry export endpoint and credential security boundaries.`
+- [ ] `#20 Implement the pipeline telemetry adapter contract for run, partition, batch, retry, and failure identity.`
 
 ## Notes
 
 - This batch was pulled explicitly from `READYNESS_TRACKER.md`.
-- This active wave keeps completed leaves visible instead of collapsing to only-open work.
-- `#1` through `#10` are already closed and merged; they remain listed here so the running wave stays readable.
-- This batch is now exhausted and ready for PR/merge.
+- This telemetry wave replaces the exhausted HTTP/CDN/discovery wave after the user explicitly requested the next executable batch.
+- This batch pulls every currently open telemetry-related tracker item from `READYNESS_TRACKER.md` sections `J`, `K`, and the open dataflow telemetry-adapter contract.
+- Keep this wave visible until the telemetry batch is exhausted; do not refill it with non-telemetry work mid-flight.
 - If a task is not listed here, it is not the current repo-local execution item.
