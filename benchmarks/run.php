@@ -252,6 +252,7 @@ function build_case_definitions(): array
 
                 return [
                     'run' => static function (int $iteration): int {
+                        // In this benchmark, the service identifier and display name are intentionally identical.
                         $serviceId = 'api-bench';
                         $serviceName = 'api-bench';
 
