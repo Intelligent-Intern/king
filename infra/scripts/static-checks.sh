@@ -14,6 +14,18 @@ if ! command -v php >/dev/null 2>&1; then
     exit 1
 fi
 
+if ! command -v composer >/dev/null 2>&1; then
+    echo "Error: Composer is required for static checks but was not found in PATH." >&2
+    echo "Please install Composer or ensure it is available on your PATH, then re-run this script." >&2
+    exit 1
+fi
+
+if ! command -v ruby >/dev/null 2>&1; then
+    echo "Error: Ruby is required for GitHub Actions workflow validation but was not found in PATH." >&2
+    echo "Please install Ruby or ensure it is available on your PATH, then re-run this script." >&2
+    exit 1
+fi
+
 echo "Linting PHP entry surfaces..."
 php -l stubs/king.php
 php -l benchmarks/run.php
