@@ -131,11 +131,13 @@ The local callable now receives one context array with `input`, `tool`, `run`,
 and `step` blocks and must return one array containing `output` as the next
 array payload.
 
-Queued file-worker runs now persist the durable handler-reference boundary too.
-If you inspect a queued run with `king_pipeline_orchestrator_get_run()`, the
-snapshot includes `handler_boundary` with the required tool names and step
-indexes for later worker execution. That is intentionally only a durable
-reference surface, not a serialized PHP callback.
+Queued userland-backed file-worker runs now persist the durable
+handler-reference boundary too. If you inspect one of those queued runs with
+`king_pipeline_orchestrator_get_run()`, the snapshot includes
+`handler_boundary` with the required tool names and step indexes for later
+worker execution. That is intentionally only a durable reference surface, not
+a serialized PHP callback, and a worker without those re-registered handlers
+now skips that run before claim or recovery resume.
 
 ## Step 4: Inspect The Persisted Run
 

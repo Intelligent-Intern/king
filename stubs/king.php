@@ -1606,10 +1606,13 @@ namespace {
      * public surface does not claim that handlers registered through
      * `king_pipeline_orchestrator_register_handler()` were persisted with the
      * run. Worker processes must therefore bind the relevant tool handlers
-     * again before they claim executable work. Queued run snapshots may expose
-     * a durable `handler_boundary` with tool-name references and step indexes,
-     * but that boundary is still not executable handler state and must fail
-     * closed when unsupported non-rehydratable forms are involved.
+     * again before they claim executable work. Userland-backed queued run
+     * snapshots may expose a durable `handler_boundary` with tool-name
+     * references and step indexes, but that boundary is still not executable
+     * handler state. Workers without those re-registered handlers now skip the
+     * queued or recovered run before claim/recovery resume instead of failing
+     * late inside execution, and must still fail closed on unsupported
+     * non-rehydratable forms.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_worker_run_next(): array|false {}
@@ -1632,9 +1635,10 @@ namespace {
      * Read one persisted pipeline-run snapshot from the active orchestrator
      * state registry, including explicit `error_classification` and per-step
      * `steps` status snapshots plus the caller-managed `compensation` contract
-     * for failed multi-step runs when present. Queued file-worker runs may
-     * also expose `handler_boundary`, which carries only the durable tool-name
-     * references and step indexes needed for later worker readiness checks.
+     * for failed multi-step runs when present. Userland-backed queued
+     * file-worker runs may also expose `handler_boundary`, which carries only
+     * the durable tool-name references and step indexes needed for later
+     * worker readiness checks.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_get_run(string $run_id): array|false {}

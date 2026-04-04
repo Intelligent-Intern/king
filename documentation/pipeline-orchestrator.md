@@ -185,11 +185,12 @@ rerunning already-completed local steps after controller restart or
 running-snapshot recovery. File-worker and remote-peer handler execution still
 need their own execution closures.
 
-Queued file-worker runs now persist the durable handler-reference boundary they
-will need later too. The persisted run snapshot exposes this as
-`handler_boundary`, which currently carries only the durable tool-name
-references plus step indexes for queued worker execution. That boundary is
-deliberately narrower than executable readiness:
+Queued userland-backed file-worker runs now persist the durable
+handler-reference boundary they will need later too. When the dispatching
+process had bound executable handlers for queued worker tools, the persisted
+run snapshot exposes this as `handler_boundary`, which currently carries only
+the durable tool-name references plus step indexes for queued worker
+execution. That boundary is deliberately narrower than executable readiness:
 
 - `handler_boundary` persists tool-name references only
 - `handler_boundary` is durable across queue, restart, and snapshot reload
@@ -197,6 +198,8 @@ deliberately narrower than executable readiness:
   state, or controller memory
 - later worker readiness must still be satisfied by per-process handler
   registration before execution begins
+- unready workers now skip those queued or recovered runs before claim or
+  recovery resume instead of failing late inside opaque worker execution
 
 The local handler invocation contract is now explicit too. The callable
 receives one context array with these top-level keys:
@@ -245,8 +248,9 @@ The required registration matrix is:
 - file-worker backend: the controller may queue a run after registering the
   durable tool definition, but each worker process that may call
   `worker_run_next()` must register the executable handlers it may run; the
-  queued run now persists only the durable tool-name boundary needed to check
-  that readiness later
+  queued userland-backed run now persists only the durable tool-name boundary
+  needed to check that readiness later, and unready workers now skip that run
+  before claim or recovery resume
 - local restart continuation: the restarted controller process must re-register
   the executable handlers before `resume_run()`
 - file-worker restart continuation: any restarted replacement worker must

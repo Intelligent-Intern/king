@@ -352,6 +352,16 @@ static zend_result king_orchestrator_build_handler_boundary_snapshot(
                 continue;
             }
 
+            if (
+                king_orchestrator_lookup_tool_handler(
+                    Z_STRVAL_P(tool),
+                    Z_STRLEN_P(tool)
+                ) == NULL
+            ) {
+                index++;
+                continue;
+            }
+
             ZEND_HASH_FOREACH_VAL(Z_ARRVAL(required_tools), required_tool_entry) {
                 if (
                     required_tool_entry != NULL
@@ -372,6 +382,14 @@ static zend_result king_orchestrator_build_handler_boundary_snapshot(
             add_next_index_zval(&required_step_refs, &entry);
             index++;
         } ZEND_HASH_FOREACH_END();
+    }
+
+    if (zend_hash_num_elements(Z_ARRVAL(required_step_refs)) == 0) {
+        zval_ptr_dtor(&required_tools);
+        zval_ptr_dtor(&required_step_refs);
+        zval_ptr_dtor(return_value);
+        ZVAL_NULL(return_value);
+        return SUCCESS;
     }
 
     add_assoc_long(return_value, "required_tool_count", zend_hash_num_elements(Z_ARRVAL(required_tools)));
