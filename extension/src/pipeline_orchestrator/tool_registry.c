@@ -56,11 +56,13 @@ typedef struct _king_orchestrator_run_state {
 } king_orchestrator_run_state_t;
 
 static HashTable king_orchestrator_tool_registry;
+static HashTable king_orchestrator_tool_handler_registry;
 static HashTable king_orchestrator_pipeline_runs;
 static zend_string *king_orchestrator_logging_config_b64 = NULL;
 static zend_string *king_orchestrator_last_run_id = NULL;
 static zend_string *king_orchestrator_last_run_status = NULL;
 static bool king_orchestrator_registry_initialized = false;
+static bool king_orchestrator_tool_handler_registry_initialized = false;
 static bool king_orchestrator_recovered_from_state = false;
 static zend_long king_orchestrator_next_run_id = 1;
 static king_orchestrator_run_state_t *king_orchestrator_find_run(zend_string *run_id);

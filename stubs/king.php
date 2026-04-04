@@ -1577,6 +1577,16 @@ namespace {
     function king_pipeline_orchestrator_register_tool(string $tool_name, array $config): bool {}
 
     /**
+     * Register or replace one executable userland handler for a previously
+     * registered orchestrator tool name inside the current PHP process.
+     * This binding is process-local runtime state only. It is not persisted
+     * into orchestrator state, replayed across restart, or transported to a
+     * file worker or remote peer automatically. Replacement processes must
+     * bind their own handlers again for the same durable tool-name identity.
+     */
+    function king_pipeline_orchestrator_register_handler(string $tool_name, callable $handler): bool {}
+
+    /**
      * Configure the active pipeline-orchestrator logging snapshot.
      * @param array<string,mixed> $config
      */
@@ -1586,11 +1596,11 @@ namespace {
      * Claim and execute the next queued file-worker run from the configured
      * orchestrator queue. Returns `false` when the queue is empty.
      * Persisted tool definitions and run state rehydrate here, but the current
-     * public surface does not claim that arbitrary userland callables were
-     * persisted with the run. Any future userland handler API must therefore
-     * re-bind handlers for the relevant tool names inside the worker process
-     * before it claims executable work, and must fail closed when the claimed
-     * work depends on unsupported non-rehydratable handler forms.
+     * public surface does not claim that handlers registered through
+     * `king_pipeline_orchestrator_register_handler()` were persisted with the
+     * run. Worker processes must therefore bind the relevant tool handlers
+     * again before they claim executable work, and must fail closed when the
+     * claimed work depends on unsupported non-rehydratable handler forms.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_worker_run_next(): array|false {}
@@ -1599,9 +1609,9 @@ namespace {
      * Resume one persisted non-terminal pipeline run after controller
      * restart. This continuation path is for the local and `remote_peer`
      * orchestrator backends. The file-worker backend continues work through
-     * `king_pipeline_orchestrator_worker_run_next()`. Any future userland
-     * handler API must re-bind handlers for the relevant tool names inside the
-     * restarted process before continuation.
+     * `king_pipeline_orchestrator_worker_run_next()`. Handlers registered
+     * through `king_pipeline_orchestrator_register_handler()` are process-local
+     * and must be bound again inside the restarted process before continuation.
      * @return array<string,mixed>
      */
     function king_pipeline_orchestrator_resume_run(string $run_id): array {}

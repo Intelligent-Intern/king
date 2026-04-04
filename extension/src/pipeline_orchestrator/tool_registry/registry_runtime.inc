@@ -28,6 +28,25 @@ int king_orchestrator_registry_init(void)
     return king_orchestrator_load_state();
 }
 
+int king_orchestrator_runtime_handlers_init(void)
+{
+    if (king_orchestrator_tool_handler_registry_initialized) {
+        zend_hash_clean(&king_orchestrator_tool_handler_registry);
+        return SUCCESS;
+    }
+
+    zend_hash_init(
+        &king_orchestrator_tool_handler_registry,
+        8,
+        NULL,
+        ZVAL_PTR_DTOR,
+        0
+    );
+    king_orchestrator_tool_handler_registry_initialized = true;
+
+    return SUCCESS;
+}
+
 void king_orchestrator_registry_shutdown(void)
 {
     if (!king_orchestrator_registry_initialized) {
@@ -53,6 +72,16 @@ void king_orchestrator_registry_shutdown(void)
     king_orchestrator_registry_initialized = false;
     king_orchestrator_recovered_from_state = false;
     king_orchestrator_next_run_id = 1;
+}
+
+void king_orchestrator_runtime_handlers_shutdown(void)
+{
+    if (!king_orchestrator_tool_handler_registry_initialized) {
+        return;
+    }
+
+    zend_hash_destroy(&king_orchestrator_tool_handler_registry);
+    king_orchestrator_tool_handler_registry_initialized = false;
 }
 
 int king_orchestrator_register_tool(const char *name, size_t name_len, zval *config)
@@ -104,6 +133,56 @@ zval *king_orchestrator_lookup_tool(const char *name, size_t name_len)
     king_orchestrator_state_lock_release(lock_fd);
 
     return entry;
+}
+
+int king_orchestrator_register_tool_handler(const char *name, size_t name_len, zval *handler)
+{
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+    zval stored_handler;
+
+    if (name == NULL || name_len == 0 || handler == NULL) {
+        return FAILURE;
+    }
+
+    if (
+        !king_orchestrator_tool_handler_registry_initialized
+        && king_orchestrator_runtime_handlers_init() != SUCCESS
+    ) {
+        return FAILURE;
+    }
+
+    if (king_orchestrator_lookup_tool(name, name_len) == NULL) {
+        return FAILURE;
+    }
+
+    if (zend_fcall_info_init(handler, 0, &fci, &fcc, NULL, NULL) != SUCCESS) {
+        return FAILURE;
+    }
+
+    ZVAL_COPY(&stored_handler, handler);
+    if (
+        zend_hash_str_update(
+            &king_orchestrator_tool_handler_registry,
+            name,
+            name_len,
+            &stored_handler
+        ) == NULL
+    ) {
+        zval_ptr_dtor(&stored_handler);
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+zval *king_orchestrator_lookup_tool_handler(const char *name, size_t name_len)
+{
+    if (!king_orchestrator_tool_handler_registry_initialized) {
+        return NULL;
+    }
+
+    return zend_hash_str_find(&king_orchestrator_tool_handler_registry, name, name_len);
 }
 
 int king_orchestrator_configure_logging(zval *config)

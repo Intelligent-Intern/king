@@ -42,14 +42,14 @@
 
 ## Current Next Leaf
 
-- `#4 Add a public userland handler-registration API that binds a runtime handler to a registered orchestrator tool name.`
+- `#5 Execute registered userland handlers on the local orchestrator backend with persisted run-state parity.`
 
 ## Active Executable Items
 
 - [x] `#1 Define the public userland tool-handler contract for application workflows on top of the pipeline orchestrator.`
 - [x] `#2 Define the exact handler-identity and re-registration contract across local, file-worker, remote-peer, and restart boundaries.`
 - [x] `#3 Reject unsupported non-rehydratable userland handler forms honestly instead of pretending closures survive restart or host boundaries.`
-- [ ] `#4 Add a public userland handler-registration API that binds a runtime handler to a registered orchestrator tool name.`
+- [x] `#4 Add a public userland handler-registration API that binds a runtime handler to a registered orchestrator tool name.`
 - [ ] `#5 Execute registered userland handlers on the local orchestrator backend with persisted run-state parity.`
 - [ ] `#6 Pass step input, tool config, run metadata, and step metadata into local userland handler execution with an explicit result contract.`
 - [ ] `#7 Persist the durable handler-reference boundary needed for queued runs without serializing arbitrary PHP callables into state.`
@@ -99,5 +99,6 @@
 - Leaf `#1` is now closed by the contract-definition pass across the public orchestrator docs, procedural index, stub docblocks, and root status documents.
 - Leaf `#2` is now closed by the identity/re-registration pass across the public orchestrator docs, procedural index, stub docblocks, and root status documents.
 - Leaf `#3` is now closed by the fail-closed pass across the public orchestrator docs, procedural index, stub docblocks, and root status documents.
+- Leaf `#4` is now closed by the public handler-registration API pass across the extension surface, request-local runtime registry, PHPT proof, and root status documents.
 - The autoscaling / provisioning / readiness wave remains visible below as the deferred previous batch and resumes once the current userland orchestration batch is exhausted.
 - If a task is not listed here, it is not the current repo-local execution item.

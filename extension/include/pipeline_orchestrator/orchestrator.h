@@ -20,8 +20,12 @@ typedef struct _king_orchestrator_tool {
 /* Registry and persisted run-state management */
 int king_orchestrator_registry_init(void);
 void king_orchestrator_registry_shutdown(void);
+int king_orchestrator_runtime_handlers_init(void);
+void king_orchestrator_runtime_handlers_shutdown(void);
 int king_orchestrator_register_tool(const char *name, size_t name_len, zval *config);
 zval *king_orchestrator_lookup_tool(const char *name, size_t name_len);
+int king_orchestrator_register_tool_handler(const char *name, size_t name_len, zval *handler);
+zval *king_orchestrator_lookup_tool_handler(const char *name, size_t name_len);
 int king_orchestrator_configure_logging(zval *config);
 size_t king_orchestrator_count_active_runs(void);
 void king_orchestrator_append_component_info(zval *configuration);

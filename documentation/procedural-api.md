@@ -321,6 +321,7 @@ cancellation.
 | `king_pipeline_orchestrator_run()` | Executes one pipeline immediately through the active backend. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_dispatch()` | Queues one pipeline run onto the worker backend. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_register_tool()` | Registers or replaces one durable tool definition. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
+| `king_pipeline_orchestrator_register_handler()` | Binds or replaces one process-local executable handler for a registered tool name. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_configure_logging()` | Configures orchestrator logging. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_worker_run_next()` | Claims and executes the next queued worker run. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_resume_run()` | Continues one persisted `running` run after controller restart. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
@@ -333,11 +334,11 @@ orchestrator API does not claim that arbitrary userland callables, closure
 captures, or controller memory are persisted or transported as executable
 handler state across restart, file-worker, or remote-peer boundaries.
 
-Identity boundary: the durable execution anchor is the tool name string.
-Executable handler readiness is process-local. Any future handler API must
-therefore require the exact controller, worker, or remote-peer process that
-will execute a step to bind a handler for that tool name again after restart or
-replacement.
+Handler binding boundary: `king_pipeline_orchestrator_register_handler()`
+attaches an executable callable to that durable tool-name identity inside the
+current process only. Executable handler readiness is still process-local, so
+the exact controller, worker, or remote-peer process that will execute a step
+must bind a handler for that tool name again after restart or replacement.
 
 Fail-closed boundary: unsupported non-rehydratable forms such as captured
 closures, resource-backed callables, or handlers that depend on opaque

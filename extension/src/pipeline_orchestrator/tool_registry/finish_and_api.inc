@@ -388,6 +388,67 @@ PHP_FUNCTION(king_pipeline_orchestrator_register_tool)
     RETURN_THROWS();
 }
 
+PHP_FUNCTION(king_pipeline_orchestrator_register_handler)
+{
+    char *tool_name = NULL;
+    size_t tool_name_len = 0;
+    zval *handler;
+    char message[256];
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_STRING(tool_name, tool_name_len)
+        Z_PARAM_ZVAL(handler)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (tool_name_len == 0) {
+        king_set_error("king_pipeline_orchestrator_register_handler() requires a non-empty tool name.");
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "king_pipeline_orchestrator_register_handler() requires a non-empty tool name."
+        );
+        RETURN_THROWS();
+    }
+
+    if (zend_fcall_info_init(handler, 0, &fci, &fcc, NULL, NULL) != SUCCESS) {
+        zend_argument_type_error(2, "must be a valid callback");
+        RETURN_THROWS();
+    }
+
+    if (king_orchestrator_lookup_tool(tool_name, tool_name_len) == NULL) {
+        snprintf(
+            message,
+            sizeof(message),
+            "king_pipeline_orchestrator_register_handler() requires a previously registered tool '%s'.",
+            tool_name
+        );
+        king_set_error(message);
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "%s",
+            message
+        );
+        RETURN_THROWS();
+    }
+
+    if (king_orchestrator_register_tool_handler(tool_name, tool_name_len, handler) == SUCCESS) {
+        RETURN_TRUE;
+    }
+
+    king_set_error(
+        "king_pipeline_orchestrator_register_handler() failed to bind the process-local handler registry."
+    );
+    zend_throw_exception_ex(
+        king_ce_runtime_exception,
+        0,
+        "king_pipeline_orchestrator_register_handler() failed to bind the process-local handler registry."
+    );
+    RETURN_THROWS();
+}
+
 PHP_FUNCTION(king_pipeline_orchestrator_get_run)
 {
     zend_string *run_id;

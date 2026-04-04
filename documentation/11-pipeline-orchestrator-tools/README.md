@@ -82,8 +82,9 @@ only after work has already begun.
 The important boundary is that this registration step defines a durable tool
 name and configuration snapshot, not an executable PHP callback. The current
 public contract does not claim that userland closures or controller memory are
-serialized into persisted run state. Any later public handler API must bind
-executable handlers by tool name inside each process that can execute work.
+serialized into persisted run state. `king_pipeline_orchestrator_register_handler()`
+now binds an executable handler by tool name inside the current process, but
+that runtime binding is still separate from durable orchestrator state.
 
 That registration identity is now explicit too: the durable cross-boundary
 anchor is the tool name itself. A local controller, a same-host file worker, a

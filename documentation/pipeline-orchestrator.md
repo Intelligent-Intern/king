@@ -158,8 +158,10 @@ orchestrator state contract.
 That boundary is now part of the public documentation on purpose. King does not
 claim that a registered tool definition already means a PHP callable was
 serialized, persisted, or transported safely across process or host boundaries.
-If the future public handler API binds executable userland handlers to tool
-names, that API must keep the stronger contract explicit:
+`king_pipeline_orchestrator_register_handler()` now binds an executable
+userland handler to that tool-name identity inside the current PHP process, but
+that binding is still non-durable runtime state. The handler-registration API
+therefore keeps the stronger contract explicit:
 
 - the durable run state persists tool names, tool config, pipeline data, and
   run metadata
@@ -173,10 +175,10 @@ names, that API must keep the stronger contract explicit:
 - missing handler registration must be visible as an explicit runtime failure,
   not hidden behind fake fallback behavior
 
-Applications that need executable userland workflow steps before that public
-handler API lands should therefore own that execution layer themselves instead
-of assuming the current orchestrator already persists or transports arbitrary
-PHP callbacks.
+The presence of the registration API does not yet mean every execution backend
+consumes those handlers for step execution. The important closure in this leaf
+is that the public binding surface now exists and the non-durable boundary is
+explicit in the runtime contract.
 
 ## Handler Identity And Re-Registration
 
@@ -216,7 +218,7 @@ The required registration matrix is:
 - remote-peer return after loss: the returning peer must re-register the
   executable handlers before it can execute resumed or new remote work again
 
-This means the future public handler API cannot treat "I registered this once
+This means the handler-registration API cannot treat "I registered this once
 somewhere in the system" as a sufficient readiness claim. Readiness must be
 true in the exact process that will execute the step.
 
@@ -249,7 +251,7 @@ The important point is not that such forms are "bad PHP". The point is that the
 orchestrator must not misrepresent them as durable execution state once work can
 cross queue, restart, or host boundaries.
 
-That gives the future public handler API an explicit fail-closed contract:
+That gives the handler-registration API an explicit fail-closed contract:
 
 - reject unsupported handler forms at registration time when the runtime can
   tell they are non-rehydratable
