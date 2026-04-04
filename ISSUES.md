@@ -42,10 +42,13 @@
 
 ## Current Next Leaf
 
-- `#12 Propagate cancel, deadline, and timeout control into active userland handler execution wherever the public contract claims it.`
+- `#15 Add PHPT proof for local userland tool execution over a persisted run snapshot.`
 
 ## Active Executable Items
 
+- [x] `#21 Represent workflow execution as an app-worker boundary, not as direct public callback transport in the userland tool contract.`
+- [x] `#22 Refactor public-facing workflow docs and examples to match the non-rehydratable callback boundary between orchestrator state and app-worker execution.`
+- [x] `#23 Add a smoke-level PHPT proving Spark-style workflow dispatch uses the app-worker boundary and does not rely on transporting userland callbacks across host/process boundaries.`
 - [x] `#1 Define the public userland tool-handler contract for application workflows on top of the pipeline orchestrator.`
 - [x] `#2 Define the exact handler-identity and re-registration contract across local, file-worker, remote-peer, and restart boundaries.`
 - [x] `#3 Reject unsupported non-rehydratable userland handler forms honestly instead of pretending closures survive restart or host boundaries.`
@@ -57,15 +60,23 @@
 - [x] `#9 Execute registered userland handlers on the file-worker backend after controller and worker restart under the explicit re-registration contract.`
 - [x] `#10 Define and implement the remote-peer userland handler contract without pretending controller memory crosses the TCP execution boundary.`
 - [x] `#11 Classify validation, runtime, timeout, cancellation, backend, and missing-handler failures for userland-backed orchestrator steps at step and run scope.`
-- [ ] `#12 Propagate cancel, deadline, and timeout control into active userland handler execution wherever the public contract claims it.`
-- [ ] `#13 Preserve completed-step, compensation, and terminal-state visibility for multi-step runs backed by userland handlers.`
-- [ ] `#14 Expose userland handler readiness, missing-handler state, and active handler-contract metadata through orchestrator component status and inspection surfaces.`
+- [x] `#12 Propagate cancel, deadline, and timeout control into active userland handler execution wherever the public contract claims it.`
+- [x] `#13 Preserve completed-step, compensation, and terminal-state visibility for multi-step runs backed by userland handlers.`
+- [x] `#14 Expose userland handler readiness, missing-handler state, and active handler-contract metadata through orchestrator component status and inspection surfaces.`
 - [ ] `#15 Add PHPT proof for local userland tool execution over a persisted run snapshot.`
 - [ ] `#16 Add PHPT proof for file-worker userland tool execution with re-registration across processes.`
 - [ ] `#17 Add PHPT proof for restart recovery when a queued or running userland-backed run outlives the original controller process.`
 - [ ] `#18 Add PHPT proof for remote-peer userland tool execution or fail closed explicitly on unsupported remote-peer handler topologies.`
 - [ ] `#19 Add handbook and procedural-API documentation for the userland tool-handler contract, including unsupported forms and restart duties.`
 - [ ] `#20 Update PROJECT_ASSESSMENT.md and READYNESS_TRACKER.md once the userland orchestration surface is real, verified, and no longer caveated.`
+
+## Notes (Urgent Batch Insert)
+
+- `#21` is closed by the public contract update in runtime docs and stub-facing guidance that durable tool definitions are separate from executable callbacks and that workflow execution crosses only the app-worker boundary.
+- `#22` is closed by handbook, procedural API, and orchestrator-tool documentation updates that remove the callback transport model from public workflow examples.
+- `#23` is closed by adding the `593-orchestrator-app-worker-boundary-smoke.phpt` PHPT showing a full remote-peer Spark-style dispatch path that proves handler names are not transported in durable state or peer events.
+- `#13` is closed by adding the `594-orchestrator-userland-terminal-state-visibility-contract.phpt` PHPT, which verifies that multi-step userland-backed local runs expose terminal visibility with `completed_step_count`, per-step `status` and `compensation_status`, and top-level `compensation` details for completed and failed outcomes.
+- `#14` is now closed by exposing `handler_readiness` in each `king_pipeline_orchestrator_get_run()` snapshot and `active_handler_contract` in `king_system_get_component_info('pipeline_orchestrator')['configuration']`, then proving readiness/missing-handler behavior and handler metadata surfacing in PHPT coverage.
 
 ## Deferred Previous Batch
 
@@ -105,5 +116,9 @@
 - Leaf `#9` is now closed by executing boundary-marked userland-backed file-worker steps through re-registered handlers, persisting the latest payload plus completed-step progress after each completed step, and adding PHPT proof that replacement workers resume from honest file-worker progress after worker loss instead of replaying already-completed userland-backed work.
 - Leaf `#10` is now closed by persisting the same durable `handler_boundary` for remote-peer runs, sending only tool-name references plus durable tool configs across the TCP request, executing boundary-marked remote steps through peer-local handlers, failing closed when the peer lacks a required handler, and adding PHPT plus failover-harness proof that controller restart does not pretend old PHP callables crossed the host boundary.
 - Leaf `#11` is now closed by classifying userland-backed failures explicitly across local, file-worker, and remote-peer execution, preserving `validation`, `runtime`, `timeout`, `backend`, and `missing_handler` at honest step scope plus run-scope `cancelled`, and adding targeted PHPT proof for each category and scope.
+- Leaf `#12` is now closed by propagating `cancel`, `timeout_budget_ms`, and `deadline_budget_ms` into local, file-worker, and remote-peer userland handler context whenever the public contract claims it, with PHPT assertions proving presence and type stability on successful runs.
+- Leaf `#21` is now closed by defining the workflow execution boundary as process-local app-worker callback execution with durable orchestrator state storing only tool-name/config snapshots.
+- Leaf `#22` is now closed by aligning public docs and handbooks with the same durable-state-versus-executable-handler boundary and removing callback-transport assumptions from workflow examples.
+- Leaf `#23` is now closed by adding the app-worker boundary smoke PHPT that verifies remote-peer dispatch does not persist handler callback names in state or peer execution payloads.
 - The autoscaling / provisioning / readiness wave remains visible below as the deferred previous batch and resumes once the current userland orchestration batch is exhausted.
 - If a task is not listed here, it is not the current repo-local execution item.

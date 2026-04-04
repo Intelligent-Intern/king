@@ -568,6 +568,7 @@ static zend_result king_orchestrator_invoke_registered_tool_handler(
     const char *execution_backend,
     const char *topology_scope,
     zend_long attempt_number,
+    king_orchestrator_exec_control_t *control,
     const char *function_name,
     zend_bool throw_on_error,
     const char **failure_category_out,
@@ -583,6 +584,7 @@ static zend_result king_orchestrator_invoke_registered_tool_handler(
     zval run_metadata;
     zval step_metadata;
     zval step_definition;
+    zval cancel;
     zval handler_result;
     zval *result_output;
     zend_fcall_info fci;
@@ -727,6 +729,24 @@ static zend_result king_orchestrator_invoke_registered_tool_handler(
     ZVAL_COPY(&step_definition, step);
     add_assoc_zval(&step_metadata, "definition", &step_definition);
     add_assoc_zval(&context, "step", &step_metadata);
+
+    if (control != NULL && !Z_ISUNDEF(control->cancel_token)) {
+        ZVAL_COPY(&cancel, &control->cancel_token);
+    } else {
+        ZVAL_NULL(&cancel);
+    }
+    add_assoc_zval(&context, "cancel", &cancel);
+
+    add_assoc_long(
+        &context,
+        "timeout_budget_ms",
+        king_orchestrator_control_timeout_budget_ms(control)
+    );
+    add_assoc_long(
+        &context,
+        "deadline_budget_ms",
+        king_orchestrator_control_deadline_budget_ms(control)
+    );
 
     ZVAL_NULL(&handler_result);
     fci.retval = &handler_result;
@@ -1301,6 +1321,7 @@ static int king_orchestrator_execute_existing_run(
                     execution_backend,
                     topology_scope,
                     attempt_number,
+                    &control,
                     function_name,
                     throw_on_error,
                     &handler_failure_category,

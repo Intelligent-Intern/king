@@ -50,6 +50,7 @@ echo json_encode([
     'queue_phase' => $run['distributed_observability']['queue_phase'] ?? null,
     'result_text' => $run['result']['text'] ?? null,
     'handler_boundary' => $run['handler_boundary'] ?? null,
+    'handler_readiness' => $run['handler_readiness'] ?? null,
 ]), "\n";
 PHP);
 
@@ -132,6 +133,12 @@ var_dump(($queuedRun['status'] ?? null) === 'queued');
 var_dump(($queuedRun['queue_phase'] ?? null) === 'queued');
 var_dump(($queuedRun['handler_boundary']['requires_process_registration'] ?? null) === true);
 var_dump(($queuedRun['handler_boundary']['required_tools'] ?? null) === ['summarizer']);
+var_dump(($queuedRun['handler_readiness']['requires_process_registration'] ?? null) === true);
+var_dump(($queuedRun['handler_readiness']['ready'] ?? null) === false);
+var_dump(($queuedRun['handler_readiness']['required_tool_count'] ?? null) === 1);
+var_dump(($queuedRun['handler_readiness']['required_step_count'] ?? null) === 1);
+var_dump(($queuedRun['handler_readiness']['missing_tool_count'] ?? null) === 1);
+var_dump(($queuedRun['handler_readiness']['missing_tools'] ?? null) === ['summarizer']);
 
 $unreadyOutput1 = [];
 $unreadyStatus1 = -1;
@@ -267,6 +274,12 @@ if (is_dir($queuePath)) {
 int(0)
 bool(true)
 int(0)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 bool(true)

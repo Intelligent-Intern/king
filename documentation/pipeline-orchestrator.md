@@ -208,6 +208,9 @@ readiness:
   state, or controller memory
 - later worker or remote-peer readiness must still be satisfied by per-process
   handler registration before execution begins
+- each persisted run now also exposes `handler_readiness`, which reports whether
+  the currently observed process can execute the required userland boundary
+  and which tools are still missing for each queued or resumed claim
 - ready workers now execute those boundary-marked steps and persist progress
   after each completed step for later recovery
 - unready workers skip those queued or recovered runs before claim or recovery
@@ -344,7 +347,9 @@ Because the pipeline is data, King can validate it, persist it, queue it,
 rehydrate it, send it to a remote peer, and inspect it after the fact.
 
 That is one of the biggest practical differences between an orchestrated
-workflow and a chain of ad-hoc PHP calls.
+workflow and in-process callback chaining. In King, workflow data crosses
+durable boundaries while executable handlers are re-registered on the process
+that owns execution (the app-worker boundary).
 
 ## Run Lifecycle
 
@@ -561,6 +566,9 @@ claimed through `king_pipeline_orchestrator_get_run()` and the component
 snapshot itself.
 
 The component snapshot also exposes a nested `distributed_observability` block
+and `active_handler_contract` block with process-local registration-state
+metadata, including scope, registered handler count, active handler names, and
+whether that process-local boundary is currently required.
 with claimed-run count, recovered-run count, remote-attempted-run count, and
 the last run IDs and recovery reason seen through those paths. Together with
 the per-run snapshot, this gives both fleet-level and run-level visibility into

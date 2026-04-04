@@ -136,9 +136,13 @@ void king_orchestrator_append_component_info(zval *configuration)
     } king_orchestrator_observability_summary_t;
 
     zval registered_tools;
+    zval active_handler_contract;
+    zval active_handler_tools;
     zval distributed_observability;
     zend_string *tool_name;
     zval *run_entry;
+    zval *handler_entry;
+    zend_string *handler_name;
     const char *execution_backend;
     const char *topology_scope = "local_in_process";
     const char *scheduler_policy = "in_process_linear";
@@ -303,6 +307,39 @@ void king_orchestrator_append_component_info(zval *configuration)
         }
     } ZEND_HASH_FOREACH_END();
     add_assoc_zval(configuration, "registered_tools", &registered_tools);
+
+    array_init(&active_handler_tools);
+    if (king_orchestrator_tool_handler_registry_initialized) {
+        ZEND_HASH_FOREACH_STR_KEY_PTR(&king_orchestrator_tool_handler_registry, handler_name, handler_entry) {
+            if (handler_name != NULL) {
+                add_next_index_stringl(
+                    &active_handler_tools,
+                    ZSTR_VAL(handler_name),
+                    ZSTR_LEN(handler_name)
+                );
+            }
+        } ZEND_HASH_FOREACH_END();
+    }
+    array_init(&active_handler_contract);
+    add_assoc_string(
+        &active_handler_contract,
+        "scope",
+        (char *) topology_scope
+    );
+    add_assoc_long(
+        &active_handler_contract,
+        "registered_handler_count",
+        king_orchestrator_tool_handler_registry_initialized
+            ? (zend_long) zend_hash_num_elements(&king_orchestrator_tool_handler_registry)
+            : 0
+    );
+    add_assoc_zval(&active_handler_contract, "registered_tools", &active_handler_tools);
+    add_assoc_bool(
+        &active_handler_contract,
+        "requires_process_registration",
+        king_orchestrator_tool_handler_registry_initialized
+    );
+    add_assoc_zval(configuration, "active_handler_contract", &active_handler_contract);
 
     array_init(&distributed_observability);
     add_assoc_long(

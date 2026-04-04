@@ -333,6 +333,10 @@ durable tool name plus configuration snapshot only. The current public
 orchestrator API does not claim that arbitrary userland callables, closure
 captures, or controller memory are persisted or transported as executable
 handler state across restart, file-worker, or remote-peer boundaries.
+`king_pipeline_orchestrator_register_tool()` and
+`king_pipeline_orchestrator_register_handler()` together form the app-worker
+boundary in this contract: durable state stores the tool definition, and the
+runtime process that will execute each step stores the executable callback.
 
 Handler binding boundary: `king_pipeline_orchestrator_register_handler()`
 attaches an executable callable to that durable tool-name identity inside the

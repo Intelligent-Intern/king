@@ -1,8 +1,8 @@
 # 11: Pipeline Orchestrator Tools
 
 This guide is the first place in the handbook where the reader can watch King
-treat workflow execution as an operational system rather than as a chain of
-callbacks.
+treat workflow execution as an operational system rather than as a callback
+chain between in-process steps.
 
 Many projects begin with a few direct calls wired together in a controller.
 That is usually enough until the workflow becomes important enough that people
@@ -80,11 +80,13 @@ pipelines that reference undefined capabilities instead of discovering mistakes
 only after work has already begun.
 
 The important boundary is that this registration step defines a durable tool
-name and configuration snapshot, not an executable PHP callback. The current
+name and configuration snapshot, not executable PHP callbacks for later host or
+process execution. The current
 public contract does not claim that userland closures or controller memory are
 serialized into persisted run state. `king_pipeline_orchestrator_register_handler()`
 now binds an executable handler by tool name inside the current process, but
-that runtime binding is still separate from durable orchestrator state.
+that runtime binding is still separate from durable orchestrator state. This
+crosses only at the app-worker boundary.
 
 That registration identity is now explicit too: the durable cross-boundary
 anchor is the tool name itself. A local controller, a same-host file worker, a

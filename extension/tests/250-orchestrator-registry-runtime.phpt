@@ -35,6 +35,26 @@ function summarizer_handler(array $context): array
     if (!is_string($context['run_id'] ?? null)) {
         throw new RuntimeException('unexpected run id alias');
     }
+    if (!array_key_exists('cancel', $context)) {
+        throw new RuntimeException('missing context cancel');
+    }
+    if (!is_null($context['cancel'])) {
+        throw new RuntimeException('unexpected context cancel value');
+    }
+    if (
+        !array_key_exists('timeout_budget_ms', $context)
+        || !is_int($context['timeout_budget_ms'])
+        || $context['timeout_budget_ms'] < 0
+    ) {
+        throw new RuntimeException('unexpected context timeout budget');
+    }
+    if (
+        !array_key_exists('deadline_budget_ms', $context)
+        || !is_int($context['deadline_budget_ms'])
+        || $context['deadline_budget_ms'] < 0
+    ) {
+        throw new RuntimeException('unexpected context deadline budget');
+    }
 
     $input['handled_by'] = 'summarizer';
     $input['tool_model'] = $context['tool']['config']['model'];
@@ -75,6 +95,10 @@ var_dump($info['configuration']['run_history_count']);
 var_dump($info['configuration']['active_run_count']);
 var_dump($info['configuration']['last_run_status']);
 var_dump($info['configuration']['registered_tools']);
+var_dump($info['configuration']['active_handler_contract']['scope']);
+var_dump((bool) $info['configuration']['active_handler_contract']['requires_process_registration']);
+var_dump(($info['configuration']['active_handler_contract']['registered_tools'] ?? null) === ['summarizer']);
+var_dump($info['configuration']['active_handler_contract']['registered_handler_count']);
 var_dump(($run['result']['handled_by'] ?? null) === 'summarizer');
 
 // 4. Enforce the explicit handler result contract
@@ -113,6 +137,10 @@ array(1) {
   [0]=>
   string(10) "summarizer"
 }
+string(16) "local_in_process"
+bool(true)
+bool(true)
+int(1)
 bool(true)
 bool(true)
 bool(true)

@@ -113,7 +113,9 @@ function king_orchestrator_remote_peer_invoke_registered_handler(
     string $runId,
     array $step,
     int $stepIndex,
-    mixed $currentPayload
+    mixed $currentPayload,
+    int $timeoutBudgetMs,
+    int $deadlineBudgetMs
 ): array {
     $toolName = $step['tool'] ?? null;
     if (!is_string($toolName) || $toolName === '') {
@@ -139,6 +141,9 @@ function king_orchestrator_remote_peer_invoke_registered_handler(
     $result = $handler([
         'input' => $currentPayload,
         'run_id' => $runId,
+        'cancel' => null,
+        'timeout_budget_ms' => $timeoutBudgetMs,
+        'deadline_budget_ms' => $deadlineBudgetMs,
         'tool' => [
             'name' => $toolName,
             'config' => $toolConfig,
@@ -486,7 +491,9 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
                     (string) $event['run_id'],
                     $step,
                     $stepIndex,
-                    $currentResult
+                    $currentResult,
+                    (int) $event['timeout_budget_ms'],
+                    (int) $event['deadline_budget_ms']
                 );
             } catch (Throwable $e) {
                 $classification = king_orchestrator_remote_peer_classify_handler_failure($e);

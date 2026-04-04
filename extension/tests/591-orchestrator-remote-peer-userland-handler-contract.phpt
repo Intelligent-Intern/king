@@ -31,8 +31,22 @@ function remote_prepare_handler(array $context): array
     if (!is_array($input)) {
         throw new RuntimeException('unexpected remote prepare input');
     }
+    if (!array_key_exists('cancel', $context) || !is_null($context['cancel'])) {
+        throw new RuntimeException('unexpected remote prepare cancel token');
+    }
+    if (!array_key_exists('timeout_budget_ms', $context) || !is_int($context['timeout_budget_ms'])) {
+        throw new RuntimeException('unexpected remote prepare timeout budget');
+    }
+    if (!array_key_exists('deadline_budget_ms', $context) || !is_int($context['deadline_budget_ms'])) {
+        throw new RuntimeException('unexpected remote prepare deadline budget');
+    }
 
-    $input['history'][] = 'remote-prepare:' . (($context['tool']['config']['label'] ?? null) ?? 'missing');
+    $input['history'][] = sprintf(
+        'remote-prepare:%s:%d:%d',
+        (($context['tool']['config']['label'] ?? null) ?? 'missing'),
+        (int) $context['timeout_budget_ms'],
+        (int) $context['deadline_budget_ms']
+    );
     return ['output' => $input];
 }
 
@@ -42,8 +56,22 @@ function remote_finalize_handler(array $context): array
     if (!is_array($input)) {
         throw new RuntimeException('unexpected remote finalize input');
     }
+    if (!array_key_exists('cancel', $context) || !is_null($context['cancel'])) {
+        throw new RuntimeException('unexpected remote finalize cancel token');
+    }
+    if (!array_key_exists('timeout_budget_ms', $context) || !is_int($context['timeout_budget_ms'])) {
+        throw new RuntimeException('unexpected remote finalize timeout budget');
+    }
+    if (!array_key_exists('deadline_budget_ms', $context) || !is_int($context['deadline_budget_ms'])) {
+        throw new RuntimeException('unexpected remote finalize deadline budget');
+    }
 
-    $input['history'][] = 'remote-finalize:' . (($context['tool']['config']['label'] ?? null) ?? 'missing');
+    $input['history'][] = sprintf(
+        'remote-finalize:%s:%d:%d',
+        (($context['tool']['config']['label'] ?? null) ?? 'missing'),
+        (int) $context['timeout_budget_ms'],
+        (int) $context['deadline_budget_ms']
+    );
     return ['output' => $input];
 }
 
@@ -61,8 +89,21 @@ function remote_prepare_only_handler(array $context): array
     if (!is_array($input)) {
         throw new RuntimeException('unexpected remote prepare-only input');
     }
+    if (!array_key_exists('cancel', $context) || !is_null($context['cancel'])) {
+        throw new RuntimeException('unexpected remote prepare-only cancel token');
+    }
+    if (!array_key_exists('timeout_budget_ms', $context) || !is_int($context['timeout_budget_ms'])) {
+        throw new RuntimeException('unexpected remote prepare-only timeout budget');
+    }
+    if (!array_key_exists('deadline_budget_ms', $context) || !is_int($context['deadline_budget_ms'])) {
+        throw new RuntimeException('unexpected remote prepare-only deadline budget');
+    }
 
-    $input['history'][] = 'remote-prepare-only';
+    $input['history'][] = sprintf(
+        'remote-prepare-only:%d:%d',
+        (int) $context['timeout_budget_ms'],
+        (int) $context['deadline_budget_ms']
+    );
     return ['output' => $input];
 }
 
@@ -316,10 +357,10 @@ exec($successResumeCommand('run-1'), $resumeOutput, $resumeStatus);
 $resumed = json_decode(trim($resumeOutput[0] ?? ''), true);
 var_dump($resumeStatus);
 var_dump(($resumed['recovered_from_state'] ?? null) === true);
-var_dump(($resumed['result_history'] ?? null) === [
-    'remote-prepare:prepare-config',
-    'remote-finalize:finalize-config',
-]);
+var_dump(is_array($resumed['result_history'] ?? null));
+var_dump(count($resumed['result_history'] ?? []) === 2);
+var_dump(str_starts_with((string) ($resumed['result_history'][0] ?? ''), 'remote-prepare:prepare-config:'));
+var_dump(str_starts_with((string) ($resumed['result_history'][1] ?? ''), 'remote-finalize:finalize-config:'));
 var_dump(($resumed['run_status'] ?? null) === 'completed');
 var_dump(($resumed['run_error'] ?? null) === null);
 var_dump(($resumed['handler_boundary']['required_tools'] ?? null) === ['prepare', 'finalize']);
@@ -329,10 +370,20 @@ var_dump(($successCapture['registered_handlers'] ?? null) === ['prepare', 'final
 var_dump(count($successCapture['events'] ?? []) === 2);
 var_dump(($successCapture['events'][0]['handler_boundary']['required_tools'] ?? null) === ['prepare', 'finalize']);
 var_dump(($successCapture['events'][1]['tool_configs']['finalize']['label'] ?? null) === 'finalize-config');
-var_dump(($successCapture['events'][1]['result']['history'] ?? null) === [
-    'remote-prepare:prepare-config',
-    'remote-finalize:finalize-config',
-]);
+var_dump(is_array($successCapture['events'][1]['result']['history'] ?? null));
+var_dump(count($successCapture['events'][1]['result']['history'] ?? []) === 2);
+var_dump(
+    str_starts_with(
+        (string) (($successCapture['events'][1]['result']['history'][0] ?? '') ?: ''),
+        'remote-prepare:prepare-config:'
+    )
+);
+var_dump(
+    str_starts_with(
+        (string) (($successCapture['events'][1]['result']['history'][1] ?? '') ?: ''),
+        'remote-finalize:finalize-config:'
+    )
+);
 
 $failureServer = king_orchestrator_remote_peer_start(null, '127.0.0.1', null, [$failureBootstrapScript]);
 $failureCommand = $buildCommand($failureServer, $failureStatePath, $failureRunnerScript);
@@ -379,6 +430,12 @@ bool(true)
 bool(true)
 bool(true)
 int(0)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 bool(true)

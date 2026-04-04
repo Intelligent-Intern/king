@@ -563,3 +563,172 @@ static void king_orchestrator_append_run_observability(
 
     add_assoc_zval(target, "distributed_observability", &observability);
 }
+
+static zend_bool king_orchestrator_tool_name_in_array(
+    zval *tools,
+    const char *tool_name,
+    size_t tool_name_len
+)
+{
+    zval *entry;
+
+    if (
+        tools == NULL
+        || Z_TYPE_P(tools) != IS_ARRAY
+        || tool_name == NULL
+        || tool_name_len == 0
+    ) {
+        return 0;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(tools), entry) {
+        if (
+            entry != NULL
+            && Z_TYPE_P(entry) == IS_STRING
+            && Z_STRLEN_P(entry) == tool_name_len
+            && memcmp(Z_STRVAL_P(entry), tool_name, tool_name_len) == 0
+        ) {
+            return 1;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return 0;
+}
+
+static void king_orchestrator_append_handler_readiness(
+    zval *handler_boundary,
+    zval *target
+)
+{
+    zval required_tools;
+    zval required_step_refs;
+    zval missing_tools;
+    zval *requires_process_registration_value;
+    zval *required_tools_value;
+    zval *required_step_refs_value;
+    zval *entry;
+    zval step_ref;
+    const char *tool_name;
+    zend_bool requires_process_registration = 0;
+    zend_bool ready = 1;
+    zend_long required_tool_count = 0;
+    zend_long required_step_count = 0;
+    zend_long missing_tool_count = 0;
+    size_t tool_name_len;
+
+    if (target == NULL) {
+        return;
+    }
+
+    array_init(target);
+
+    if (handler_boundary == NULL || Z_TYPE_P(handler_boundary) != IS_ARRAY) {
+        add_assoc_bool(target, "requires_process_registration", 0);
+        add_assoc_bool(target, "ready", 1);
+        add_assoc_long(target, "required_tool_count", 0);
+        add_assoc_long(target, "required_step_count", 0);
+        add_assoc_long(target, "missing_tool_count", 0);
+        array_init(&required_tools);
+        array_init(&required_step_refs);
+        array_init(&missing_tools);
+        add_assoc_zval(target, "required_tools", &required_tools);
+        add_assoc_zval(target, "required_step_refs", &required_step_refs);
+        add_assoc_zval(target, "missing_tools", &missing_tools);
+        return;
+    }
+
+    requires_process_registration_value = zend_hash_str_find(
+        Z_ARRVAL_P(handler_boundary),
+        "requires_process_registration",
+        sizeof("requires_process_registration") - 1
+    );
+    requires_process_registration = requires_process_registration_value != NULL
+        && zend_is_true(requires_process_registration_value);
+
+    required_tools_value = zend_hash_str_find(
+        Z_ARRVAL_P(handler_boundary),
+        "required_tools",
+        sizeof("required_tools") - 1
+    );
+    required_step_refs_value = zend_hash_str_find(
+        Z_ARRVAL_P(handler_boundary),
+        "required_step_refs",
+        sizeof("required_step_refs") - 1
+    );
+
+    array_init(&required_tools);
+    if (required_tools_value != NULL && Z_TYPE_P(required_tools_value) == IS_ARRAY) {
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(required_tools_value), entry) {
+            if (entry == NULL || Z_TYPE_P(entry) != IS_STRING || Z_STRLEN_P(entry) == 0) {
+                continue;
+            }
+
+            tool_name = Z_STRVAL_P(entry);
+            tool_name_len = Z_STRLEN_P(entry);
+            if (king_orchestrator_tool_name_in_array(&required_tools, tool_name, tool_name_len)) {
+                continue;
+            }
+
+            add_next_index_stringl(&required_tools, tool_name, tool_name_len);
+            required_tool_count++;
+        } ZEND_HASH_FOREACH_END();
+    }
+
+    array_init(&required_step_refs);
+    if (required_step_refs_value != NULL && Z_TYPE_P(required_step_refs_value) == IS_ARRAY) {
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(required_step_refs_value), entry) {
+            if (entry == NULL || Z_TYPE_P(entry) != IS_ARRAY) {
+                continue;
+            }
+
+            ZVAL_DUP(&step_ref, entry);
+            add_next_index_zval(&required_step_refs, &step_ref);
+            required_step_count++;
+        } ZEND_HASH_FOREACH_END();
+    }
+
+    array_init(&missing_tools);
+    if (requires_process_registration) {
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL(required_tools), entry) {
+            if (entry == NULL || Z_TYPE_P(entry) != IS_STRING || Z_STRLEN_P(entry) == 0) {
+                continue;
+            }
+
+            tool_name = Z_STRVAL_P(entry);
+            tool_name_len = Z_STRLEN_P(entry);
+
+            if (
+                king_orchestrator_lookup_tool_handler(
+                    tool_name,
+                    tool_name_len
+                ) != NULL
+            ) {
+                continue;
+            }
+
+            if (
+                king_orchestrator_tool_name_in_array(
+                    &missing_tools,
+                    tool_name,
+                    tool_name_len
+                )
+            ) {
+                continue;
+            }
+
+            add_next_index_stringl(&missing_tools, tool_name, tool_name_len);
+            missing_tool_count++;
+        } ZEND_HASH_FOREACH_END();
+    }
+
+    ready = !requires_process_registration || missing_tool_count == 0;
+
+    add_assoc_bool(target, "requires_process_registration", requires_process_registration ? 1 : 0);
+    add_assoc_bool(target, "ready", ready ? 1 : 0);
+    add_assoc_long(target, "required_tool_count", required_tool_count);
+    add_assoc_long(target, "required_step_count", required_step_count);
+    add_assoc_long(target, "missing_tool_count", missing_tool_count);
+    add_assoc_zval(target, "required_tools", &required_tools);
+    add_assoc_zval(target, "required_step_refs", &required_step_refs);
+    add_assoc_zval(target, "missing_tools", &missing_tools);
+}

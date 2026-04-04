@@ -157,6 +157,7 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     zval handler_boundary;
     zval result;
     zval error;
+    zval handler_readiness;
     int lock_fd = -1;
 
     ZVAL_NULL(&initial_data);
@@ -165,6 +166,7 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     ZVAL_NULL(&handler_boundary);
     ZVAL_NULL(&result);
     ZVAL_NULL(&error);
+    ZVAL_NULL(&handler_readiness);
 
     if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
         return FAILURE;
@@ -218,6 +220,13 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     add_assoc_zval(return_value, "pipeline", &pipeline);
     add_assoc_zval(return_value, "options", &options);
     add_assoc_zval(return_value, "handler_boundary", &handler_boundary);
+    king_orchestrator_append_handler_readiness(
+        Z_TYPE(handler_boundary) == IS_ARRAY
+            ? &handler_boundary
+            : NULL,
+        &handler_readiness
+    );
+    add_assoc_zval(return_value, "handler_readiness", &handler_readiness);
     add_assoc_zval(return_value, "result", &result);
     add_assoc_zval(return_value, "error", &error);
     king_orchestrator_append_error_classification(return_value, run_state, &pipeline);
