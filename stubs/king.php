@@ -1562,6 +1562,10 @@ namespace {
     /**
      * Register or replace one tool definition in the active pipeline
      * orchestrator registry.
+     * This stores the durable tool name and configuration snapshot only.
+     * It does not register a PHP callable or claim closure/object/resource
+     * serialization across restart, file-worker, or remote-peer boundaries;
+     * executable userland handler binding is a separate contract.
      * @param array<string,mixed> $config
      */
     function king_pipeline_orchestrator_register_tool(string $tool_name, array $config): bool {}
@@ -1575,6 +1579,9 @@ namespace {
     /**
      * Claim and execute the next queued file-worker run from the configured
      * orchestrator queue. Returns `false` when the queue is empty.
+     * Persisted tool definitions and run state rehydrate here, but the current
+     * public surface does not claim that arbitrary userland callables were
+     * persisted with the run.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_worker_run_next(): array|false {}

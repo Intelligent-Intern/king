@@ -320,12 +320,18 @@ cancellation.
 | --- | --- | --- |
 | `king_pipeline_orchestrator_run()` | Executes one pipeline immediately through the active backend. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_dispatch()` | Queues one pipeline run onto the worker backend. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
-| `king_pipeline_orchestrator_register_tool()` | Registers or replaces one tool definition. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
+| `king_pipeline_orchestrator_register_tool()` | Registers or replaces one durable tool definition. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_configure_logging()` | Configures orchestrator logging. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_worker_run_next()` | Claims and executes the next queued worker run. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_resume_run()` | Continues one persisted `running` run after controller restart. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_get_run()` | Returns one persisted run snapshot. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_cancel_run()` | Requests cancellation for one persisted run. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
+
+Important boundary: `king_pipeline_orchestrator_register_tool()` stores the
+durable tool name plus configuration snapshot only. The current public
+orchestrator API does not claim that arbitrary userland callables, closure
+captures, or controller memory are persisted or transported as executable
+handler state across restart, file-worker, or remote-peer boundaries.
 
 ## Error Buffers And Reading Order
 

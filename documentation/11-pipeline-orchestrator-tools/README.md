@@ -79,6 +79,12 @@ governable. The platform can list tools, inspect tool metadata, and reject
 pipelines that reference undefined capabilities instead of discovering mistakes
 only after work has already begun.
 
+The important boundary is that this registration step defines a durable tool
+name and configuration snapshot, not an executable PHP callback. The current
+public contract does not claim that userland closures or controller memory are
+serialized into persisted run state. Any later public handler API must bind
+executable handlers by tool name inside each process that can execute work.
+
 ## Step 2: Define The Pipeline As Data
 
 After that, the example defines the pipeline itself as an array of step

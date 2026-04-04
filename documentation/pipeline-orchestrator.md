@@ -138,6 +138,46 @@ orchestrator component reports how many tools are registered and exposes the
 list of tool names in `registered_tools`. That makes the registry inspectable at
 runtime instead of being hidden inside application code.
 
+## Userland Tool Handlers
+
+The public orchestrator contract now separates two things that are easy to blur
+together if they are only discussed informally.
+
+The first thing is the durable tool definition. That is what
+`king_pipeline_orchestrator_register_tool()` stores today: a tool name plus a
+configuration snapshot that pipelines and persisted run state can refer to
+honestly across restart, file-worker claim, and remote-peer execution.
+
+The second thing is the executable userland handler that application code wants
+to run for that tool. That handler is not the same kind of state. It belongs to
+the PHP process that currently owns execution. Controller memory, worker
+memory, remote-peer memory, closure captures, object instances, resources, and
+arbitrary userland callables are therefore not part of the current durable
+orchestrator state contract.
+
+That boundary is now part of the public documentation on purpose. King does not
+claim that a registered tool definition already means a PHP callable was
+serialized, persisted, or transported safely across process or host boundaries.
+If the future public handler API binds executable userland handlers to tool
+names, that API must keep the stronger contract explicit:
+
+- the durable run state persists tool names, tool config, pipeline data, and
+  run metadata
+- executable handlers are registered per process, not smuggled through
+  persisted run state
+- every controller, file-worker, and remote execution peer that may execute a
+  step must register the handlers it intends to run
+- unsupported non-rehydratable forms such as captured closures, opaque object
+  graphs, or resource-backed callables must fail closed instead of being
+  treated as durable
+- missing handler registration must be visible as an explicit runtime failure,
+  not hidden behind fake fallback behavior
+
+Applications that need executable userland workflow steps before that public
+handler API lands should therefore own that execution layer themselves instead
+of assuming the current orchestrator already persists or transports arbitrary
+PHP callbacks.
+
 ## What A Pipeline Looks Like
 
 A pipeline is an ordered array of step definitions. At minimum, each step names

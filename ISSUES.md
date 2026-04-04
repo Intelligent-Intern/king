@@ -42,9 +42,32 @@
 
 ## Current Next Leaf
 
-- `#1 Validate autoscaling CPU / memory / RPS / queue / latency signals under real operation.`
+- `#2 Define the exact handler-identity and re-registration contract across local, file-worker, remote-peer, and restart boundaries.`
 
 ## Active Executable Items
+
+- [x] `#1 Define the public userland tool-handler contract for application workflows on top of the pipeline orchestrator.`
+- [ ] `#2 Define the exact handler-identity and re-registration contract across local, file-worker, remote-peer, and restart boundaries.`
+- [ ] `#3 Reject unsupported non-rehydratable userland handler forms honestly instead of pretending closures survive restart or host boundaries.`
+- [ ] `#4 Add a public userland handler-registration API that binds a runtime handler to a registered orchestrator tool name.`
+- [ ] `#5 Execute registered userland handlers on the local orchestrator backend with persisted run-state parity.`
+- [ ] `#6 Pass step input, tool config, run metadata, and step metadata into local userland handler execution with an explicit result contract.`
+- [ ] `#7 Persist the durable handler-reference boundary needed for queued runs without serializing arbitrary PHP callables into state.`
+- [ ] `#8 Rehydrate and validate handler readiness before file-worker claim or resume instead of failing late inside opaque worker execution.`
+- [ ] `#9 Execute registered userland handlers on the file-worker backend after controller and worker restart under the explicit re-registration contract.`
+- [ ] `#10 Define and implement the remote-peer userland handler contract without pretending controller memory crosses the TCP execution boundary.`
+- [ ] `#11 Classify validation, runtime, timeout, cancellation, backend, and missing-handler failures for userland-backed orchestrator steps at step and run scope.`
+- [ ] `#12 Propagate cancel, deadline, and timeout control into active userland handler execution wherever the public contract claims it.`
+- [ ] `#13 Preserve completed-step, compensation, and terminal-state visibility for multi-step runs backed by userland handlers.`
+- [ ] `#14 Expose userland handler readiness, missing-handler state, and active handler-contract metadata through orchestrator component status and inspection surfaces.`
+- [ ] `#15 Add PHPT proof for local userland tool execution over a persisted run snapshot.`
+- [ ] `#16 Add PHPT proof for file-worker userland tool execution with re-registration across processes.`
+- [ ] `#17 Add PHPT proof for restart recovery when a queued or running userland-backed run outlives the original controller process.`
+- [ ] `#18 Add PHPT proof for remote-peer userland tool execution or fail closed explicitly on unsupported remote-peer handler topologies.`
+- [ ] `#19 Add handbook and procedural-API documentation for the userland tool-handler contract, including unsupported forms and restart duties.`
+- [ ] `#20 Update PROJECT_ASSESSMENT.md and READYNESS_TRACKER.md once the userland orchestration surface is real, verified, and no longer caveated.`
+
+## Deferred Previous Batch
 
 - [ ] `#1 Validate autoscaling CPU / memory / RPS / queue / latency signals under real operation.`
 - [ ] `#2 Validate autoscaling drain-before-delete under real live connections.`
@@ -70,7 +93,9 @@
 ## Notes
 
 - The previous telemetry wave is exhausted; its closed leaves now live in `PROJECT_ASSESSMENT.md`.
-- This batch was pulled immediately from `READYNESS_TRACKER.md` because continuous batch execution is enabled.
-- This wave pulls the next executable leaves from `READYNESS_TRACKER.md` sections `L`, `M`, and the first still-open lifecycle gate in `N`.
-- Keep this autoscaling / provisioning / readiness wave visible until it is exhausted; do not refill it with unrelated work mid-flight.
+- This new active batch is an explicit user-priority override because current application-workflow work now depends on a real public userland orchestrator surface.
+- The new active batch takes the next `20` leaves because `ISSUES.md` is organized as a `20`-issue execution batch and the user explicitly requested that this gap move ahead of the existing autoscaling wave.
+- This userland orchestration batch is grounded in the open userland-facing integration direction in `READYNESS_TRACKER.md` section `Q`, but is narrowed here to the immediately blocking public orchestrator gap around application tool execution and recovery.
+- Leaf `#1` is now closed by the contract-definition pass across the public orchestrator docs, procedural index, stub docblocks, and root status documents.
+- The autoscaling / provisioning / readiness wave remains visible below as the deferred previous batch and resumes once the current userland orchestration batch is exhausted.
 - If a task is not listed here, it is not the current repo-local execution item.
