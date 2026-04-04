@@ -21,7 +21,7 @@ function writer_handler(array $context): array
     }
 
     $input['handled_by'] = 'writer';
-    return $input;
+    return ['output' => $input];
 }
 
 var_dump(king_pipeline_orchestrator_register_tool('summarizer', [
@@ -54,7 +54,7 @@ function reader_handler(array $context): array
     }
 
     $input['handled_by'] = 'reader';
-    return $input;
+    return ['output' => $input];
 }
 
 $info = king_system_get_component_info('pipeline_orchestrator');

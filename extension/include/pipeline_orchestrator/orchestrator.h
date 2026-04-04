@@ -24,6 +24,7 @@ int king_orchestrator_runtime_handlers_init(void);
 void king_orchestrator_runtime_handlers_shutdown(void);
 int king_orchestrator_register_tool(const char *name, size_t name_len, zval *config);
 zval *king_orchestrator_lookup_tool(const char *name, size_t name_len);
+int king_orchestrator_load_tool_config(const char *name, size_t name_len, zval *return_value);
 int king_orchestrator_register_tool_handler(const char *name, size_t name_len, zval *handler);
 zval *king_orchestrator_lookup_tool_handler(const char *name, size_t name_len);
 int king_orchestrator_configure_logging(zval *config);

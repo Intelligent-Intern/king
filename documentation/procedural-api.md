@@ -347,6 +347,13 @@ the latest local payload together with completed-step progress so local restart
 continuation can resume from honest persisted progress instead of replaying
 already-completed local steps.
 
+Local handler contract: the callable receives one context array with `input`,
+`tool`, `run`, and `step` blocks, plus the legacy top-level `run_id` alias.
+The callable must return one array result contract containing key `output`,
+and `output` must be the next array payload. Missing `output`, a scalar
+result, or a bare payload array now fails closed as a runtime contract
+violation.
+
 Fail-closed boundary: unsupported non-rehydratable forms such as captured
 closures, resource-backed callables, or handlers that depend on opaque
 controller memory are outside the durable public contract and must be rejected

@@ -1586,6 +1586,10 @@ namespace {
      * into orchestrator state, replayed across restart, or transported to a
      * file worker or remote peer automatically. Replacement processes must
      * bind their own handlers again for the same durable tool-name identity.
+     * On the local backend the callable receives one context array with
+     * top-level keys `input`, `tool`, `run`, and `step`, plus the legacy
+     * `run_id` alias. The callable must return one array containing key
+     * `output`, and `output` must be the next array payload.
      */
     function king_pipeline_orchestrator_register_handler(string $tool_name, callable $handler): bool {}
 

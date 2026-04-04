@@ -43,7 +43,7 @@ function prepare_handler(array $context): array
     }
 
     $input['history'][] = 'prepare';
-    return $input;
+    return ['output' => $input];
 }
 
 function finalize_handler(array $context): array
@@ -54,7 +54,7 @@ function finalize_handler(array $context): array
     }
 
     $input['history'][] = 'finalize';
-    return $input;
+    return ['output' => $input];
 }
 
 $info = king_system_get_component_info('pipeline_orchestrator');

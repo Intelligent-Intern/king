@@ -127,6 +127,9 @@ When the active backend is local and the relevant tool handlers were bound with
 handlers directly and persists the latest local step payload after each
 completed step. A later `resume_run()` can therefore continue from honest
 completed-step progress instead of replaying already-completed local work.
+The local callable now receives one context array with `input`, `tool`, `run`,
+and `step` blocks and must return one array containing `output` as the next
+array payload.
 
 ## Step 4: Inspect The Persisted Run
 

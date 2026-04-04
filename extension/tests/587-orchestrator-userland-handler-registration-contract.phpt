@@ -15,7 +15,7 @@ file_put_contents($writerScript, <<<'PHP'
 <?php
 function writer_handler(array $context): array
 {
-    return $context;
+    return ['output' => $context['input'] ?? []];
 }
 
 var_dump(king_pipeline_orchestrator_register_tool('summarizer', [
@@ -36,7 +36,7 @@ file_put_contents($readerScript, <<<'PHP'
 <?php
 function reader_handler(array $context): array
 {
-    return $context;
+    return ['output' => $context['input'] ?? []];
 }
 
 $info = king_system_get_component_info('pipeline_orchestrator');

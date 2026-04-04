@@ -9,7 +9,7 @@ function seeded_registry_handler(array $context): array
         throw new RuntimeException('unexpected handler input');
     }
 
-    return $input;
+    return ['output' => $input];
 }
 
 $registered = true;

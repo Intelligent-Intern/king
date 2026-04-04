@@ -135,6 +135,44 @@ zval *king_orchestrator_lookup_tool(const char *name, size_t name_len)
     return entry;
 }
 
+int king_orchestrator_load_tool_config(const char *name, size_t name_len, zval *return_value)
+{
+    int lock_fd = -1;
+    zval *entry;
+
+    if (return_value == NULL || name == NULL || name_len == 0) {
+        return FAILURE;
+    }
+
+    ZVAL_NULL(return_value);
+
+    if (!king_orchestrator_registry_initialized) {
+        if (king_orchestrator_registry_init() != SUCCESS) {
+            return FAILURE;
+        }
+    }
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
+
+    entry = zend_hash_str_find(&king_orchestrator_tool_registry, name, name_len);
+    if (entry == NULL || Z_TYPE_P(entry) != IS_STRING) {
+        king_orchestrator_state_lock_release(lock_fd);
+        return FAILURE;
+    }
+
+    if (king_orchestrator_decode_base64_zval(Z_STR_P(entry), return_value) != SUCCESS) {
+        king_orchestrator_state_lock_release(lock_fd);
+        zval_ptr_dtor(return_value);
+        ZVAL_NULL(return_value);
+        return FAILURE;
+    }
+
+    king_orchestrator_state_lock_release(lock_fd);
+    return SUCCESS;
+}
+
 int king_orchestrator_register_tool_handler(const char *name, size_t name_len, zval *handler)
 {
     zend_fcall_info fci;

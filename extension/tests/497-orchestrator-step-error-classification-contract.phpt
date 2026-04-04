@@ -17,7 +17,7 @@ function summarizer_handler(array $context): array
         throw new RuntimeException('unexpected handler input');
     }
 
-    return $input;
+    return ['output' => $input];
 }
 
 var_dump(king_pipeline_orchestrator_register_tool('summarizer', [

@@ -22,7 +22,7 @@ function prepare_handler(array $context): array
     }
 
     $input['history'][] = 'prepare';
-    return $input;
+    return ['output' => $input];
 }
 
 function finalize_handler(array $context): array
@@ -33,7 +33,7 @@ function finalize_handler(array $context): array
     }
 
     $input['history'][] = 'finalize';
-    return $input;
+    return ['output' => $input];
 }
 
 king_pipeline_orchestrator_register_tool('prepare', [
@@ -84,7 +84,7 @@ function prepare_handler(array $context): array
     }
 
     $input['history'][] = 'prepare';
-    return $input;
+    return ['output' => $input];
 }
 
 function finalize_handler(array $context): array
@@ -95,7 +95,7 @@ function finalize_handler(array $context): array
     }
 
     $input['history'][] = 'finalize';
-    return $input;
+    return ['output' => $input];
 }
 
 king_pipeline_orchestrator_register_handler('prepare', 'prepare_handler');

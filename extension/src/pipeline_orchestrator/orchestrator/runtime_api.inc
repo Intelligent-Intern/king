@@ -407,8 +407,12 @@ static zend_bool king_orchestrator_executes_userland_handlers_locally(void)
 static zend_result king_orchestrator_invoke_local_tool_handler(
     zend_string *run_id,
     zval *step,
+    uint32_t step_index,
     zval *current_payload,
     zval *step_output,
+    const char *execution_backend,
+    const char *topology_scope,
+    zend_long attempt_number,
     const char *function_name,
     zend_bool throw_on_error
 )
@@ -417,6 +421,13 @@ static zend_result king_orchestrator_invoke_local_tool_handler(
     zval *handler;
     zval context;
     zval context_input;
+    zval tool_metadata;
+    zval tool_config;
+    zval run_metadata;
+    zval step_metadata;
+    zval step_definition;
+    zval handler_result;
+    zval *result_output;
     zend_fcall_info fci;
     zend_fcall_info_cache fcc;
     char message[KING_ERR_LEN];
@@ -460,7 +471,30 @@ static zend_result king_orchestrator_invoke_local_tool_handler(
         );
     }
 
+    ZVAL_NULL(&tool_config);
+    if (
+        king_orchestrator_load_tool_config(
+            Z_STRVAL_P(tool),
+            Z_STRLEN_P(tool),
+            &tool_config
+        ) != SUCCESS
+    ) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() could not load the persisted tool config for local handler '%s'.",
+            function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
+            Z_STRVAL_P(tool)
+        );
+        return king_orchestrator_raise_error(
+            message,
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+
     if (zend_fcall_info_init(handler, 0, &fci, &fcc, NULL, NULL) != SUCCESS) {
+        zval_ptr_dtor(&tool_config);
         snprintf(
             message,
             sizeof(message),
@@ -478,13 +512,42 @@ static zend_result king_orchestrator_invoke_local_tool_handler(
     array_init(&context);
     ZVAL_COPY(&context_input, current_payload);
     add_assoc_zval(&context, "input", &context_input);
+
+    array_init(&tool_metadata);
+    add_assoc_stringl(&tool_metadata, "name", Z_STRVAL_P(tool), Z_STRLEN_P(tool));
+    add_assoc_zval(&tool_metadata, "config", &tool_config);
+    add_assoc_zval(&context, "tool", &tool_metadata);
+
+    array_init(&run_metadata);
     if (run_id != NULL) {
         add_assoc_stringl(&context, "run_id", ZSTR_VAL(run_id), ZSTR_LEN(run_id));
+        add_assoc_stringl(&run_metadata, "run_id", ZSTR_VAL(run_id), ZSTR_LEN(run_id));
     } else {
         add_assoc_null(&context, "run_id");
+        add_assoc_null(&run_metadata, "run_id");
     }
+    add_assoc_long(&run_metadata, "attempt_number", attempt_number > 0 ? attempt_number : 1);
+    add_assoc_string(
+        &run_metadata,
+        "execution_backend",
+        (char *) (execution_backend != NULL ? execution_backend : "local")
+    );
+    add_assoc_string(
+        &run_metadata,
+        "topology_scope",
+        (char *) (topology_scope != NULL ? topology_scope : "local_in_process")
+    );
+    add_assoc_zval(&context, "run", &run_metadata);
 
-    fci.retval = step_output;
+    array_init(&step_metadata);
+    add_assoc_long(&step_metadata, "index", (zend_long) step_index);
+    add_assoc_stringl(&step_metadata, "tool_name", Z_STRVAL_P(tool), Z_STRLEN_P(tool));
+    ZVAL_COPY(&step_definition, step);
+    add_assoc_zval(&step_metadata, "definition", &step_definition);
+    add_assoc_zval(&context, "step", &step_metadata);
+
+    ZVAL_NULL(&handler_result);
+    fci.retval = &handler_result;
     fci.param_count = 1;
     fci.params = &context;
 
@@ -508,14 +571,17 @@ static zend_result king_orchestrator_invoke_local_tool_handler(
     }
 
     zval_ptr_dtor(&context);
+    if (EG(exception) != NULL) {
+        zval_ptr_dtor(&handler_result);
+        return FAILURE;
+    }
 
-    if (Z_TYPE_P(step_output) != IS_ARRAY) {
-        zval_ptr_dtor(step_output);
-        ZVAL_NULL(step_output);
+    if (Z_TYPE(handler_result) != IS_ARRAY) {
+        zval_ptr_dtor(&handler_result);
         snprintf(
             message,
             sizeof(message),
-            "%s() local handler for tool '%s' must return an array payload.",
+            "%s() local handler for tool '%s' must return an array result contract.",
             function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
             Z_STRVAL_P(tool)
         );
@@ -525,6 +591,30 @@ static zend_result king_orchestrator_invoke_local_tool_handler(
             throw_on_error
         );
     }
+
+    result_output = zend_hash_str_find(
+        Z_ARRVAL(handler_result),
+        "output",
+        sizeof("output") - 1
+    );
+    if (result_output == NULL || Z_TYPE_P(result_output) != IS_ARRAY) {
+        zval_ptr_dtor(&handler_result);
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() local handler for tool '%s' must return an array result contract with key 'output'.",
+            function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
+            Z_STRVAL_P(tool)
+        );
+        return king_orchestrator_raise_error(
+            message,
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+
+    ZVAL_COPY(step_output, result_output);
+    zval_ptr_dtor(&handler_result);
 
     return SUCCESS;
 }
@@ -964,8 +1054,12 @@ static int king_orchestrator_execute_existing_run(
                 king_orchestrator_invoke_local_tool_handler(
                     run_id,
                     step,
+                    index,
                     &current_payload,
                     &step_output,
+                    execution_backend,
+                    topology_scope,
+                    attempt_number,
                     function_name,
                     throw_on_error
                 ) != SUCCESS

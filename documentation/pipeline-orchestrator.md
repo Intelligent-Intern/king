@@ -185,6 +185,25 @@ rerunning already-completed local steps after controller restart or
 running-snapshot recovery. File-worker and remote-peer handler execution still
 need their own execution closures.
 
+The local handler invocation contract is now explicit too. The callable
+receives one context array with these top-level keys:
+
+- `input`: the current step input payload
+- `tool`: an array containing the durable `name` plus decoded durable `config`
+- `run`: an array containing `run_id`, `attempt_number`,
+  `execution_backend`, and `topology_scope`
+- `step`: an array containing `index`, `tool_name`, and the full step
+  `definition`
+
+For compatibility with the first local slice, the top-level `run_id` alias is
+still present too, but the structured `run` block is now the public contract.
+
+The local result contract is explicit and fail-closed: the handler must return
+one array containing key `output`, and `output` must itself be the next array
+payload that should flow into the next step and persisted run state. Returning
+a bare payload array, a scalar, or an array without `output` is now a runtime
+contract violation instead of an implied shortcut.
+
 ## Handler Identity And Re-Registration
 
 The exact public identity boundary is now explicit.

@@ -214,7 +214,7 @@ function summarizer_handler(array $context): array
         throw new RuntimeException('unexpected handler input');
     }
 
-    return $input;
+    return ['output' => $input];
 }
 
 $collectorPort = (int) $argv[1];
@@ -261,7 +261,7 @@ function summarizer_handler(array $context): array
         throw new RuntimeException('unexpected handler input');
     }
 
-    return $input;
+    return ['output' => $input];
 }
 
 $collectorPort = (int) $argv[1];
