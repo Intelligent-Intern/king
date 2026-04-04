@@ -90,6 +90,7 @@ static void king_metric_dtor(zval *zv)
 int king_telemetry_record_metric_internal(const char *metric_name, king_metric_type_t metric_type, double value, zval *labels)
 {
     zval *old_zv;
+    king_metric_data_t *old_metric = NULL;
     uint32_t metric_registry_limit;
 
     if (!king_metrics_initialized) {
@@ -117,6 +118,10 @@ int king_telemetry_record_metric_internal(const char *metric_name, king_metric_t
     strncpy(metric->metric_name, metric_name, sizeof(metric->metric_name) - 1);
     metric->metric_type = metric_type;
     metric->value = value;
+    metric->count = 1;
+    metric->sum = value;
+    metric->min = value;
+    metric->max = value;
     metric->timestamp = time(NULL);
     
     array_init(&metric->labels);
@@ -126,8 +131,27 @@ int king_telemetry_record_metric_internal(const char *metric_name, king_metric_t
     
     /* Aggregation logic for counters */
     if (old_zv && metric_type == KING_METRIC_TYPE_COUNTER) {
-        king_metric_data_t *old_metric = Z_PTR_P(old_zv);
+        old_metric = Z_PTR_P(old_zv);
         metric->value += old_metric->value;
+        metric->sum = metric->value;
+        metric->count = 1;
+        metric->min = metric->value;
+        metric->max = metric->value;
+    }
+
+    if (old_zv
+        && (metric_type == KING_METRIC_TYPE_HISTOGRAM
+            || metric_type == KING_METRIC_TYPE_SUMMARY)) {
+        double old_min;
+        double old_max;
+
+        old_metric = Z_PTR_P(old_zv);
+        metric->count = old_metric->count > 0 ? old_metric->count + 1 : 2;
+        metric->sum = old_metric->count > 0 ? old_metric->sum + value : old_metric->value + value;
+        old_min = old_metric->count > 0 ? old_metric->min : old_metric->value;
+        old_max = old_metric->count > 0 ? old_metric->max : old_metric->value;
+        metric->min = value < old_min ? value : old_min;
+        metric->max = value > old_max ? value : old_max;
     }
 
     zval val;
@@ -286,6 +310,10 @@ static zend_bool king_telemetry_snapshot_metric_registry(zval *metrics_snapshot)
         add_assoc_double(&m_info, "value", metric->value);
         add_assoc_long(&m_info, "timestamp", (zend_long) metric->timestamp);
         add_assoc_long(&m_info, "type", (zend_long) metric->metric_type);
+        add_assoc_long(&m_info, "count", (zend_long) metric->count);
+        add_assoc_double(&m_info, "sum", metric->sum);
+        add_assoc_double(&m_info, "min", metric->min);
+        add_assoc_double(&m_info, "max", metric->max);
 
         if (Z_TYPE(metric->labels) == IS_ARRAY) {
             Z_ADDREF(metric->labels);

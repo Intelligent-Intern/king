@@ -124,6 +124,12 @@ as typed metric data so the collector can interpret the stream correctly.
 If you omit the metric type, King keeps the current runtime default and treats
 the metric as a `counter`.
 
+On the wire, those metric families now leave the process as honest OTLP JSON
+metric bodies instead of a one-off local shape: counters export as OTLP `sum`,
+gauges as `gauge`, histograms as `histogram`, and summaries as `summary`, with
+their datapoints and labels validated against the same reference-style
+collector harness that checks the current trace and log payloads.
+
 The registry stays live until flush. Repeated request or worker churn does not
 silently smear flushed metric values into the next unit: once a unit flushes,
 the next unit starts from an empty live metric registry again.
@@ -326,6 +332,10 @@ King exports telemetry to an OTLP collector endpoint. In practical terms, that
 means you point the runtime at a collector URL, choose the protocol family, and
 let King send metric, trace, and log batches to the collector paths for those
 signal types.
+
+The current repo-local proof now also validates those metric, trace, and log
+payload envelopes against a strict reference-collector harness instead of only
+checking that the collector received roughly JSON-shaped bodies.
 
 The main configuration values are the service name, exporter endpoint, exporter
 protocol, exporter timeout, queue size, optional durable queue state path,

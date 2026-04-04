@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#17 Validate OTLP JSON payloads against reference collectors.`
+- `#18 Provide complete export failure diagnostics across transport, TLS, HTTP, and collector errors.`
 
 ## Active Executable Items
 
@@ -62,7 +62,7 @@
 - [x] `#14 Define export ordering guarantees across queued telemetry batches.`
 - [x] `#15 Define exporter idempotency behavior across retry and replay paths.`
 - [x] `#16 Finalize telemetry batch formation under mixed span, metric, and log pressure.`
-- [ ] `#17 Validate OTLP JSON payloads against reference collectors.`
+- [x] `#17 Validate OTLP JSON payloads against reference collectors.`
 - [ ] `#18 Provide complete export failure diagnostics across transport, TLS, HTTP, and collector errors.`
 - [ ] `#19 Finalize telemetry export endpoint and credential security boundaries.`
 - [ ] `#20 Implement the pipeline telemetry adapter contract for run, partition, batch, retry, and failure identity.`

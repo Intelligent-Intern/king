@@ -170,7 +170,11 @@ function king_telemetry_metric_lifecycle_collect_metric_batches(array $collector
                 continue;
             }
 
-            $dataPoint = $metric['data']['dataPoints'][0] ?? null;
+            $dataPoint = $metric['sum']['dataPoints'][0]
+                ?? $metric['gauge']['dataPoints'][0]
+                ?? $metric['histogram']['dataPoints'][0]
+                ?? $metric['summary']['dataPoints'][0]
+                ?? null;
             if (!is_array($dataPoint)) {
                 continue;
             }
