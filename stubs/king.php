@@ -1609,10 +1609,12 @@ namespace {
      * again before they claim executable work. Userland-backed queued run
      * snapshots may expose a durable `handler_boundary` with tool-name
      * references and step indexes, but that boundary is still not executable
-     * handler state. Workers without those re-registered handlers now skip the
-     * queued or recovered run before claim/recovery resume instead of failing
-     * late inside execution, and must still fail closed on unsupported
-     * non-rehydratable forms.
+     * handler state. Ready workers now execute those boundary-marked steps
+     * through the re-registered handlers and persist the latest payload plus
+     * completed-step progress after each completed step; workers without those
+     * handlers skip the queued or recovered run before claim/recovery resume
+     * instead of failing late inside execution, and unsupported
+     * non-rehydratable forms must still fail closed.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_worker_run_next(): array|false {}

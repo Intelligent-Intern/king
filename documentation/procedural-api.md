@@ -357,6 +357,14 @@ the latest local payload together with completed-step progress so local restart
 continuation can resume from honest persisted progress instead of replaying
 already-completed local steps.
 
+File-worker execution boundary: when a queued run carries that durable
+`handler_boundary` and the current worker has re-registered the required
+handlers, `king_pipeline_orchestrator_worker_run_next()` now executes those
+marked steps through the registered handlers and persists the latest payload
+plus completed-step progress after each completed step. A replacement worker
+therefore resumes from honest file-worker progress after worker loss or
+restart instead of replaying already-completed userland-backed steps.
+
 Local handler contract: the callable receives one context array with `input`,
 `tool`, `run`, and `step` blocks, plus the legacy top-level `run_id` alias.
 The callable must return one array result contract containing key `output`,

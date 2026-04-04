@@ -760,3 +760,45 @@ int king_orchestrator_load_run_progress(
     king_orchestrator_state_lock_release(lock_fd);
     return SUCCESS;
 }
+
+int king_orchestrator_load_run_handler_boundary(zend_string *run_id, zval *return_value)
+{
+    king_orchestrator_run_state_t *run_state;
+    int lock_fd = -1;
+
+    if (return_value == NULL) {
+        return FAILURE;
+    }
+
+    ZVAL_NULL(return_value);
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
+
+    run_state = king_orchestrator_find_run(run_id);
+    if (run_state == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
+        return FAILURE;
+    }
+
+    if (run_state->handler_boundary_b64 == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
+        return SUCCESS;
+    }
+
+    if (
+        king_orchestrator_decode_base64_zval(
+            run_state->handler_boundary_b64,
+            return_value
+        ) != SUCCESS
+    ) {
+        zval_ptr_dtor(return_value);
+        ZVAL_NULL(return_value);
+        king_orchestrator_state_lock_release(lock_fd);
+        return FAILURE;
+    }
+
+    king_orchestrator_state_lock_release(lock_fd);
+    return SUCCESS;
+}

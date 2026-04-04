@@ -137,7 +137,11 @@ handler-reference boundary too. If you inspect one of those queued runs with
 `handler_boundary` with the required tool names and step indexes for later
 worker execution. That is intentionally only a durable reference surface, not
 a serialized PHP callback, and a worker without those re-registered handlers
-now skips that run before claim or recovery resume.
+now skips that run before claim or recovery resume. A ready worker executes the
+boundary-marked steps through those registered handlers, persists the latest
+payload plus completed-step progress after each completed step, and lets a
+replacement worker continue from honest persisted file-worker progress instead
+of replaying already-completed userland-backed work.
 
 ## Step 4: Inspect The Persisted Run
 

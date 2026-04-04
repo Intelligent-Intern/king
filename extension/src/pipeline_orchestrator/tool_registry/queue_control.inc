@@ -315,12 +315,10 @@ static zend_result king_orchestrator_worker_handler_boundary_is_ready(
     zend_bool *ready_out
 )
 {
-    king_orchestrator_run_state_t *run_state;
     zval handler_boundary;
     zval *requires_process_registration;
     zval *required_step_refs;
     zval *entry;
-    int lock_fd = -1;
 
     if (ready_out == NULL) {
         return FAILURE;
@@ -329,32 +327,9 @@ static zend_result king_orchestrator_worker_handler_boundary_is_ready(
     *ready_out = 1;
     ZVAL_NULL(&handler_boundary);
 
-    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+    if (king_orchestrator_load_run_handler_boundary(run_id, &handler_boundary) != SUCCESS) {
         return FAILURE;
     }
-
-    run_state = king_orchestrator_find_run(run_id);
-    if (run_state == NULL) {
-        king_orchestrator_state_lock_release(lock_fd);
-        return FAILURE;
-    }
-
-    if (run_state->handler_boundary_b64 == NULL) {
-        king_orchestrator_state_lock_release(lock_fd);
-        return SUCCESS;
-    }
-
-    if (
-        king_orchestrator_decode_base64_zval(
-            run_state->handler_boundary_b64,
-            &handler_boundary
-        ) != SUCCESS
-    ) {
-        king_orchestrator_state_lock_release(lock_fd);
-        return FAILURE;
-    }
-
-    king_orchestrator_state_lock_release(lock_fd);
 
     if (Z_TYPE(handler_boundary) != IS_ARRAY) {
         zval_ptr_dtor(&handler_boundary);

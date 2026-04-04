@@ -404,7 +404,90 @@ static zend_bool king_orchestrator_executes_userland_handlers_locally(void)
     return !king_orchestrator_backend_is_file_worker() && !king_orchestrator_backend_is_remote_peer();
 }
 
-static zend_result king_orchestrator_invoke_local_tool_handler(
+static zend_bool king_orchestrator_handler_boundary_requires_process_registration(
+    zval *handler_boundary
+)
+{
+    zval *requires_process_registration;
+
+    if (handler_boundary == NULL || Z_TYPE_P(handler_boundary) != IS_ARRAY) {
+        return 0;
+    }
+
+    requires_process_registration = zend_hash_str_find(
+        Z_ARRVAL_P(handler_boundary),
+        "requires_process_registration",
+        sizeof("requires_process_registration") - 1
+    );
+
+    return requires_process_registration != NULL && zend_is_true(requires_process_registration);
+}
+
+static zend_bool king_orchestrator_handler_boundary_step_uses_registered_handler(
+    zval *handler_boundary,
+    zval *step,
+    zend_long step_index
+)
+{
+    zval *required_step_refs;
+    zval *tool;
+    zval *entry;
+
+    if (
+        handler_boundary == NULL
+        || Z_TYPE_P(handler_boundary) != IS_ARRAY
+        || step == NULL
+        || Z_TYPE_P(step) != IS_ARRAY
+    ) {
+        return 0;
+    }
+
+    tool = zend_hash_str_find(Z_ARRVAL_P(step), "tool", sizeof("tool") - 1);
+    if (tool == NULL || Z_TYPE_P(tool) != IS_STRING || Z_STRLEN_P(tool) == 0) {
+        return 0;
+    }
+
+    required_step_refs = zend_hash_str_find(
+        Z_ARRVAL_P(handler_boundary),
+        "required_step_refs",
+        sizeof("required_step_refs") - 1
+    );
+    if (required_step_refs == NULL || Z_TYPE_P(required_step_refs) != IS_ARRAY) {
+        return 0;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(required_step_refs), entry) {
+        zval *entry_index;
+        zval *tool_name;
+
+        if (entry == NULL || Z_TYPE_P(entry) != IS_ARRAY) {
+            continue;
+        }
+
+        entry_index = zend_hash_str_find(Z_ARRVAL_P(entry), "index", sizeof("index") - 1);
+        tool_name = zend_hash_str_find(
+            Z_ARRVAL_P(entry),
+            "tool_name",
+            sizeof("tool_name") - 1
+        );
+        if (
+            entry_index == NULL
+            || Z_TYPE_P(entry_index) != IS_LONG
+            || Z_LVAL_P(entry_index) != step_index
+            || tool_name == NULL
+            || Z_TYPE_P(tool_name) != IS_STRING
+            || !zend_string_equals(Z_STR_P(tool_name), Z_STR_P(tool))
+        ) {
+            continue;
+        }
+
+        return 1;
+    } ZEND_HASH_FOREACH_END();
+
+    return 0;
+}
+
+static zend_result king_orchestrator_invoke_registered_tool_handler(
     zend_string *run_id,
     zval *step,
     uint32_t step_index,
@@ -439,7 +522,7 @@ static zend_result king_orchestrator_invoke_local_tool_handler(
         || step_output == NULL
     ) {
         return king_orchestrator_raise_error(
-            "king_pipeline_orchestrator_run() could not prepare the local userland handler invocation.",
+            "king_pipeline_orchestrator_run() could not prepare the registered userland handler invocation.",
             king_ce_runtime_exception,
             throw_on_error
         );
@@ -449,7 +532,7 @@ static zend_result king_orchestrator_invoke_local_tool_handler(
     tool = zend_hash_str_find(Z_ARRVAL_P(step), "tool", sizeof("tool") - 1);
     if (tool == NULL || Z_TYPE_P(tool) != IS_STRING || Z_STRLEN_P(tool) == 0) {
         return king_orchestrator_raise_error(
-            "king_pipeline_orchestrator_run() step requires a non-empty tool name before local handler execution.",
+            "king_pipeline_orchestrator_run() step requires a non-empty tool name before registered handler execution.",
             king_ce_validation_exception,
             throw_on_error
         );
@@ -460,7 +543,7 @@ static zend_result king_orchestrator_invoke_local_tool_handler(
         snprintf(
             message,
             sizeof(message),
-            "%s() has no registered local handler for tool '%s'.",
+            "%s() has no registered handler for tool '%s'.",
             function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
             Z_STRVAL_P(tool)
         );
@@ -482,7 +565,7 @@ static zend_result king_orchestrator_invoke_local_tool_handler(
         snprintf(
             message,
             sizeof(message),
-            "%s() could not load the persisted tool config for local handler '%s'.",
+            "%s() could not load the persisted tool config for registered handler '%s'.",
             function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
             Z_STRVAL_P(tool)
         );
@@ -498,7 +581,7 @@ static zend_result king_orchestrator_invoke_local_tool_handler(
         snprintf(
             message,
             sizeof(message),
-            "%s() found an invalid registered local handler for tool '%s'.",
+            "%s() found an invalid registered handler for tool '%s'.",
             function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
             Z_STRVAL_P(tool)
         );
@@ -557,7 +640,7 @@ static zend_result king_orchestrator_invoke_local_tool_handler(
             snprintf(
                 message,
                 sizeof(message),
-                "%s() failed while invoking the local handler for tool '%s'.",
+                "%s() failed while invoking the registered handler for tool '%s'.",
                 function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
                 Z_STRVAL_P(tool)
             );
@@ -581,7 +664,7 @@ static zend_result king_orchestrator_invoke_local_tool_handler(
         snprintf(
             message,
             sizeof(message),
-            "%s() local handler for tool '%s' must return an array result contract.",
+            "%s() registered handler for tool '%s' must return an array result contract.",
             function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
             Z_STRVAL_P(tool)
         );
@@ -602,7 +685,7 @@ static zend_result king_orchestrator_invoke_local_tool_handler(
         snprintf(
             message,
             sizeof(message),
-            "%s() local handler for tool '%s' must return an array result contract with key 'output'.",
+            "%s() registered handler for tool '%s' must return an array result contract with key 'output'.",
             function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
             Z_STRVAL_P(tool)
         );
@@ -639,8 +722,10 @@ static int king_orchestrator_execute_existing_run(
     zend_long persisted_completed_step_count = 0;
     zend_string *attempt_identity = NULL;
     king_trace_context_t *run_span = NULL;
+    zval handler_boundary;
     zval current_payload;
-    zend_bool use_local_userland_handlers = king_orchestrator_executes_userland_handlers_locally();
+    zend_bool use_registered_tool_handlers = king_orchestrator_executes_userland_handlers_locally();
+    zend_bool use_handler_boundary = 0;
 
     if (initial_data == NULL || pipeline_array == NULL || Z_TYPE_P(pipeline_array) != IS_ARRAY) {
         return king_orchestrator_raise_error(
@@ -654,11 +739,31 @@ static int king_orchestrator_execute_existing_run(
         control->run_id = run_id;
     }
 
+    ZVAL_NULL(&handler_boundary);
     ZVAL_UNDEF(&current_payload);
     attempt_number = king_orchestrator_run_attempt_number(run_id);
     attempt_identity = king_orchestrator_build_attempt_identity(run_id);
 
-    if (use_local_userland_handlers) {
+    if (king_orchestrator_backend_is_file_worker()) {
+        if (run_id == NULL || king_orchestrator_load_run_handler_boundary(run_id, &handler_boundary) != SUCCESS) {
+            if (attempt_identity != NULL) {
+                zend_string_release(attempt_identity);
+            }
+            zval_ptr_dtor(&handler_boundary);
+            return king_orchestrator_raise_error(
+                "king_pipeline_orchestrator_run() could not load the persisted file-worker handler boundary.",
+                king_ce_runtime_exception,
+                throw_on_error
+            );
+        }
+
+        if (king_orchestrator_handler_boundary_requires_process_registration(&handler_boundary)) {
+            use_registered_tool_handlers = 1;
+            use_handler_boundary = 1;
+        }
+    }
+
+    if (use_registered_tool_handlers) {
         if (
             run_id == NULL
             || king_orchestrator_load_run_progress(
@@ -670,8 +775,9 @@ static int king_orchestrator_execute_existing_run(
             if (attempt_identity != NULL) {
                 zend_string_release(attempt_identity);
             }
+            zval_ptr_dtor(&handler_boundary);
             return king_orchestrator_raise_error(
-                "king_pipeline_orchestrator_run() could not load persisted local handler progress.",
+                "king_pipeline_orchestrator_run() could not load persisted registered-handler progress.",
                 king_ce_runtime_exception,
                 throw_on_error
             );
@@ -762,9 +868,10 @@ static int king_orchestrator_execute_existing_run(
             zend_string_release(failure_identity);
         }
         king_orchestrator_mark_interrupted_run(run_id, cancelled, -1, NULL);
-        if (use_local_userland_handlers) {
+        if (use_registered_tool_handlers) {
             zval_ptr_dtor(&current_payload);
         }
+        zval_ptr_dtor(&handler_boundary);
         ZVAL_FALSE(return_value);
         if (attempt_identity != NULL) {
             zend_string_release(attempt_identity);
@@ -772,8 +879,8 @@ static int king_orchestrator_execute_existing_run(
         return FAILURE;
     }
 
-    if (!use_local_userland_handlers) {
-        /* Non-local backends still use the current placeholder execution path. */
+    if (!use_registered_tool_handlers) {
+        /* Runs without a registered-handler execution boundary still use the placeholder path. */
         ZVAL_COPY(return_value, initial_data);
     }
 
@@ -781,11 +888,20 @@ static int king_orchestrator_execute_existing_run(
     ZEND_HASH_FOREACH_VAL(ht, step) {
         king_trace_context_t *step_span = NULL;
         zend_string *failure_identity = NULL;
+        zend_bool step_uses_registered_handler = use_registered_tool_handlers && !use_handler_boundary;
         zval step_output;
 
-        if (use_local_userland_handlers && (zend_long) index < persisted_completed_step_count) {
+        if (use_registered_tool_handlers && (zend_long) index < persisted_completed_step_count) {
             index++;
             continue;
+        }
+
+        if (use_handler_boundary) {
+            step_uses_registered_handler = king_orchestrator_handler_boundary_step_uses_registered_handler(
+                &handler_boundary,
+                step,
+                (zend_long) index
+            );
         }
 
         if (king_telemetry_is_capture_enabled() && attempt_identity != NULL) {
@@ -894,7 +1010,7 @@ static int king_orchestrator_execute_existing_run(
             if (failure_identity != NULL) {
                 zend_string_release(failure_identity);
             }
-            if (use_local_userland_handlers) {
+            if (use_registered_tool_handlers) {
                 zval_ptr_dtor(&current_payload);
             } else {
                 zval_ptr_dtor(return_value);
@@ -904,6 +1020,7 @@ static int king_orchestrator_execute_existing_run(
             if (attempt_identity != NULL) {
                 zend_string_release(attempt_identity);
             }
+            zval_ptr_dtor(&handler_boundary);
             return FAILURE;
         }
 
@@ -954,7 +1071,7 @@ static int king_orchestrator_execute_existing_run(
             if (failure_identity != NULL) {
                 zend_string_release(failure_identity);
             }
-            if (use_local_userland_handlers) {
+            if (use_registered_tool_handlers) {
                 zval_ptr_dtor(&current_payload);
             } else {
                 zval_ptr_dtor(return_value);
@@ -971,6 +1088,7 @@ static int king_orchestrator_execute_existing_run(
             if (attempt_identity != NULL) {
                 zend_string_release(attempt_identity);
             }
+            zval_ptr_dtor(&handler_boundary);
             return FAILURE;
         }
         cancelled = 0;
@@ -1035,7 +1153,7 @@ static int king_orchestrator_execute_existing_run(
             if (failure_identity != NULL) {
                 zend_string_release(failure_identity);
             }
-            if (use_local_userland_handlers) {
+            if (use_registered_tool_handlers) {
                 zval_ptr_dtor(&current_payload);
             } else {
                 zval_ptr_dtor(return_value);
@@ -1045,13 +1163,14 @@ static int king_orchestrator_execute_existing_run(
             if (attempt_identity != NULL) {
                 zend_string_release(attempt_identity);
             }
+            zval_ptr_dtor(&handler_boundary);
             return FAILURE;
         }
 
         ZVAL_UNDEF(&step_output);
-        if (use_local_userland_handlers) {
+        if (step_uses_registered_handler) {
             if (
-                king_orchestrator_invoke_local_tool_handler(
+                king_orchestrator_invoke_registered_tool_handler(
                     run_id,
                     step,
                     index,
@@ -1132,11 +1251,15 @@ static int king_orchestrator_execute_existing_run(
                 if (attempt_identity != NULL) {
                     zend_string_release(attempt_identity);
                 }
+                zval_ptr_dtor(&handler_boundary);
                 return FAILURE;
             }
 
             zval_ptr_dtor(&current_payload);
             ZVAL_COPY_VALUE(&current_payload, &step_output);
+        }
+
+        if (use_registered_tool_handlers) {
             if (
                 king_orchestrator_pipeline_run_record_progress(
                     run_id,
@@ -1175,7 +1298,7 @@ static int king_orchestrator_execute_existing_run(
                     execution_backend,
                     "backend",
                     "caller_managed_retry",
-                    "king_pipeline_orchestrator_run() failed to persist local handler progress.",
+                    "king_pipeline_orchestrator_run() failed to persist registered-handler progress.",
                     "failed"
                 );
                 king_orchestrator_record_pipeline_counter(
@@ -1191,7 +1314,9 @@ static int king_orchestrator_execute_existing_run(
                 }
                 zval_ptr_dtor(&current_payload);
                 ZVAL_FALSE(return_value);
-                king_set_error("king_pipeline_orchestrator_run() failed to persist local handler progress.");
+                king_set_error(
+                    "king_pipeline_orchestrator_run() failed to persist registered-handler progress."
+                );
                 (void) king_orchestrator_pipeline_run_fail_classified(
                     run_id,
                     king_get_error(),
@@ -1203,6 +1328,7 @@ static int king_orchestrator_execute_existing_run(
                 if (attempt_identity != NULL) {
                     zend_string_release(attempt_identity);
                 }
+                zval_ptr_dtor(&handler_boundary);
                 return king_orchestrator_raise_error(
                     king_get_error(),
                     king_ce_runtime_exception,
@@ -1262,6 +1388,7 @@ static int king_orchestrator_execute_existing_run(
             if (attempt_identity != NULL) {
                 zend_string_release(attempt_identity);
             }
+            zval_ptr_dtor(&handler_boundary);
             return king_orchestrator_raise_error(
                 king_get_error(),
                 king_ce_runtime_exception,
@@ -1327,7 +1454,7 @@ static int king_orchestrator_execute_existing_run(
         if (failure_identity != NULL) {
             zend_string_release(failure_identity);
         }
-        if (use_local_userland_handlers) {
+        if (use_registered_tool_handlers) {
             zval_ptr_dtor(&current_payload);
         } else {
             zval_ptr_dtor(return_value);
@@ -1337,10 +1464,11 @@ static int king_orchestrator_execute_existing_run(
         if (attempt_identity != NULL) {
             zend_string_release(attempt_identity);
         }
+        zval_ptr_dtor(&handler_boundary);
         return FAILURE;
     }
 
-    if (use_local_userland_handlers) {
+    if (use_registered_tool_handlers) {
         ZVAL_COPY(return_value, &current_payload);
         zval_ptr_dtor(&current_payload);
     }
@@ -1391,6 +1519,7 @@ static int king_orchestrator_execute_existing_run(
         if (attempt_identity != NULL) {
             zend_string_release(attempt_identity);
         }
+        zval_ptr_dtor(&handler_boundary);
         return king_orchestrator_raise_error(
             "king_pipeline_orchestrator_run() failed to persist the completed run snapshot.",
             king_ce_runtime_exception,
@@ -1402,6 +1531,7 @@ static int king_orchestrator_execute_existing_run(
     if (attempt_identity != NULL) {
         zend_string_release(attempt_identity);
     }
+    zval_ptr_dtor(&handler_boundary);
     return SUCCESS;
 }
 

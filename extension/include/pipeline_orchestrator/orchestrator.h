@@ -43,6 +43,7 @@ int king_orchestrator_load_run_progress(
     zval *result,
     zend_long *completed_step_count_out
 );
+int king_orchestrator_load_run_handler_boundary(zend_string *run_id, zval *return_value);
 int king_orchestrator_enqueue_run(zend_string *run_id, zval *return_value);
 int king_orchestrator_claim_next_run(
     zend_string **run_id_out,

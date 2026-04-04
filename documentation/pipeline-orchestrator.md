@@ -182,8 +182,13 @@ the latest local payload together with `completed_step_count` after each
 completed local step. That lets `king_pipeline_orchestrator_resume_run()`
 continue a persisted local `running` run from honest local progress instead of
 rerunning already-completed local steps after controller restart or
-running-snapshot recovery. File-worker and remote-peer handler execution still
-need their own execution closures.
+running-snapshot recovery. The file-worker backend now does the same for
+userland-backed queued runs after per-process re-registration: workers execute
+the boundary-marked steps through the registered handlers, persist the latest
+payload plus `completed_step_count` after each completed step, and let a
+replacement worker continue from that honest persisted progress after worker
+loss or restart. Remote-peer handler execution still needs its own execution
+closure.
 
 Queued userland-backed file-worker runs now persist the durable
 handler-reference boundary they will need later too. When the dispatching
@@ -198,8 +203,10 @@ execution. That boundary is deliberately narrower than executable readiness:
   state, or controller memory
 - later worker readiness must still be satisfied by per-process handler
   registration before execution begins
-- unready workers now skip those queued or recovered runs before claim or
-  recovery resume instead of failing late inside opaque worker execution
+- ready workers now execute those boundary-marked steps and persist progress
+  after each completed step for later recovery
+- unready workers skip those queued or recovered runs before claim or recovery
+  resume instead of failing late inside opaque worker execution
 
 The local handler invocation contract is now explicit too. The callable
 receives one context array with these top-level keys:
@@ -249,8 +256,9 @@ The required registration matrix is:
   durable tool definition, but each worker process that may call
   `worker_run_next()` must register the executable handlers it may run; the
   queued userland-backed run now persists only the durable tool-name boundary
-  needed to check that readiness later, and unready workers now skip that run
-  before claim or recovery resume
+  needed to check that readiness later, ready workers execute those marked
+  steps and persist progress after each completed step, and unready workers
+  skip that run before claim or recovery resume
 - local restart continuation: the restarted controller process must re-register
   the executable handlers before `resume_run()`
 - file-worker restart continuation: any restarted replacement worker must
