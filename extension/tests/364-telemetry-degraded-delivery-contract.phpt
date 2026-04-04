@@ -29,6 +29,7 @@ $component = king_system_get_component_info('telemetry');
 var_dump($component['configuration']['delivery_contract']);
 var_dump($component['configuration']['queue_persistence']);
 var_dump($component['configuration']['restart_replay']);
+var_dump($component['configuration']['idempotency_policy']);
 var_dump($component['configuration']['drain_behavior']);
 
 $collector = king_telemetry_test_start_collector([
@@ -87,6 +88,7 @@ int(4)
 string(25) "best_effort_bounded_retry"
 string(28) "process_local_non_persistent"
 string(13) "not_supported"
+string(40) "at_least_once_with_stable_batch_identity"
 string(22) "single_batch_per_flush"
 bool(true)
 int(1)

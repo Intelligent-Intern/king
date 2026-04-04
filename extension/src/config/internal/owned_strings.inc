@@ -72,6 +72,7 @@ static void king_config_free_otel_strings(kg_open_telemetry_config_t *otel)
     pefree(otel->exporter_endpoint, 1);
     pefree(otel->exporter_protocol, 1);
     pefree(otel->exporter_headers, 1);
+    pefree(otel->queue_state_path, 1);
     pefree(otel->traces_sampler_type, 1);
     pefree(otel->metrics_default_histogram_boundaries, 1);
 }
@@ -184,6 +185,7 @@ static void king_config_clone_owned_strings(king_cfg_t *cfg)
     cfg->observability.exporter_endpoint = king_config_clone_persistent_string(cfg->observability.exporter_endpoint);
     cfg->observability.exporter_protocol = king_config_clone_persistent_string(cfg->observability.exporter_protocol);
     cfg->observability.exporter_headers = king_config_clone_persistent_string(cfg->observability.exporter_headers);
+    cfg->observability.queue_state_path = king_config_clone_persistent_string(cfg->observability.queue_state_path);
     cfg->observability.traces_sampler_type = king_config_clone_persistent_string(cfg->observability.traces_sampler_type);
     cfg->observability.metrics_default_histogram_boundaries = king_config_clone_persistent_string(cfg->observability.metrics_default_histogram_boundaries);
     cfg->owns_otel_strings = 1;

@@ -1,3 +1,225 @@
+static zend_bool king_telemetry_batch_has_signals(king_telemetry_batch_t *batch)
+{
+    if (batch == NULL) {
+        return 0;
+    }
+
+    return zend_hash_num_elements(Z_ARRVAL(batch->metrics)) > 0
+        || zend_hash_num_elements(Z_ARRVAL(batch->spans)) > 0
+        || zend_hash_num_elements(Z_ARRVAL(batch->logs)) > 0;
+}
+
+static void king_telemetry_otlp_append_unix_time_nano(
+    smart_str *json_payload,
+    zend_long unix_seconds)
+{
+    char timestamp_str[32];
+
+    if (json_payload == NULL) {
+        return;
+    }
+
+    if (unix_seconds > 0) {
+        snprintf(
+            timestamp_str,
+            sizeof(timestamp_str),
+            "%lld%09ld",
+            (long long) unix_seconds,
+            0L
+        );
+    } else {
+        struct timespec ts;
+
+        clock_gettime(CLOCK_REALTIME, &ts);
+        snprintf(
+            timestamp_str,
+            sizeof(timestamp_str),
+            "%lld%09ld",
+            (long long) ts.tv_sec,
+            ts.tv_nsec
+        );
+    }
+
+    smart_str_appends(json_payload, timestamp_str);
+}
+
+static zend_long king_telemetry_otlp_metric_count_from_snapshot(zval *count_zval)
+{
+    zend_long count;
+
+    if (count_zval == NULL) {
+        return 1;
+    }
+
+    count = zval_get_long(count_zval);
+    return count > 0 ? count : 1;
+}
+
+static double king_telemetry_otlp_metric_double_from_snapshot(zval *value_zval, double fallback)
+{
+    if (value_zval == NULL) {
+        return fallback;
+    }
+
+    return zval_get_double(value_zval);
+}
+
+static void king_telemetry_otlp_append_metric_labels(
+    smart_str *json_payload,
+    zval *labels_zval)
+{
+    if (labels_zval != NULL && Z_TYPE_P(labels_zval) == IS_ARRAY) {
+        king_telemetry_json_append_attributes(json_payload, labels_zval);
+    }
+}
+
+static void king_telemetry_otlp_append_counter_metric(
+    smart_str *json_payload,
+    zend_long metric_timestamp,
+    zend_long metric_value,
+    zval *labels_zval)
+{
+    smart_str_appends(json_payload, "\"sum\":{\"dataPoints\":[{\"timeUnixNano\":\"");
+    king_telemetry_otlp_append_unix_time_nano(json_payload, metric_timestamp);
+    smart_str_appends(json_payload, "\",\"asInt\":\"");
+    smart_str_append_long(json_payload, metric_value);
+    smart_str_appends(json_payload, "\"");
+    king_telemetry_otlp_append_metric_labels(json_payload, labels_zval);
+    smart_str_appends(json_payload, "}],\"aggregationTemporality\":2,\"isMonotonic\":true}");
+}
+
+static void king_telemetry_otlp_append_gauge_metric(
+    smart_str *json_payload,
+    zend_long metric_timestamp,
+    double metric_value,
+    zval *labels_zval)
+{
+    smart_str_appends(json_payload, "\"gauge\":{\"dataPoints\":[{\"timeUnixNano\":\"");
+    king_telemetry_otlp_append_unix_time_nano(json_payload, metric_timestamp);
+    smart_str_appends(json_payload, "\",\"asDouble\":");
+    smart_str_append_double(json_payload, metric_value, 6, 0);
+    king_telemetry_otlp_append_metric_labels(json_payload, labels_zval);
+    smart_str_appends(json_payload, "}]}");
+}
+
+static void king_telemetry_otlp_append_histogram_metric(
+    smart_str *json_payload,
+    zend_long metric_timestamp,
+    zend_long count,
+    double sum,
+    zval *labels_zval)
+{
+    smart_str_appends(json_payload, "\"histogram\":{\"dataPoints\":[{\"timeUnixNano\":\"");
+    king_telemetry_otlp_append_unix_time_nano(json_payload, metric_timestamp);
+    smart_str_appends(json_payload, "\",\"count\":\"");
+    smart_str_append_long(json_payload, count);
+    smart_str_appends(json_payload, "\",\"sum\":");
+    smart_str_append_double(json_payload, sum, 6, 0);
+    king_telemetry_otlp_append_metric_labels(json_payload, labels_zval);
+    smart_str_appends(json_payload, ",\"bucketCounts\":[\"");
+    smart_str_append_long(json_payload, count);
+    smart_str_appends(json_payload, "\"],\"explicitBounds\":[]}],\"aggregationTemporality\":2}");
+}
+
+static void king_telemetry_otlp_append_summary_metric(
+    smart_str *json_payload,
+    zend_long metric_timestamp,
+    zend_long count,
+    double sum,
+    double latest_value,
+    zval *labels_zval)
+{
+    smart_str_appends(json_payload, "\"summary\":{\"dataPoints\":[{\"timeUnixNano\":\"");
+    king_telemetry_otlp_append_unix_time_nano(json_payload, metric_timestamp);
+    smart_str_appends(json_payload, "\",\"count\":\"");
+    smart_str_append_long(json_payload, count);
+    smart_str_appends(json_payload, "\",\"sum\":");
+    smart_str_append_double(json_payload, sum, 6, 0);
+    king_telemetry_otlp_append_metric_labels(json_payload, labels_zval);
+    smart_str_appends(json_payload, ",\"quantileValues\":[{\"quantile\":1,\"value\":");
+    smart_str_append_double(json_payload, latest_value, 6, 0);
+    smart_str_appends(json_payload, "}]}]}");
+}
+
+static int king_telemetry_dispatch_otlp_json_payload(
+    const char *endpoint_url,
+    smart_str *json_payload,
+    const char *batch_id,
+    const char *signal_name
+)
+{
+    king_telemetry_http_response_t response;
+    int result;
+    size_t payload_bytes = 0;
+
+    if (endpoint_url == NULL || json_payload == NULL) {
+        return FAILURE;
+    }
+
+    smart_str_0(json_payload);
+    if (json_payload->s != NULL) {
+        payload_bytes = ZSTR_LEN(json_payload->s);
+    }
+
+    /*
+     * Oversized OTLP payloads are never retryable: another flush on the same
+     * batch would re-emit the same wire body. Fail closed before dispatch and
+     * let the caller drop the signal instead of poison-requeueing it forever.
+     */
+    if (payload_bytes > KING_TELEMETRY_MAX_REQUEST_SIZE) {
+        king_telemetry_record_export_diagnostic(
+            signal_name,
+            "pre_dispatch",
+            "request_size_limit_exceeded",
+            "drop",
+            batch_id,
+            "OTLP request exceeded the 1 MiB request cap before dispatch.",
+            0,
+            0,
+            payload_bytes,
+            0
+        );
+        return KING_TELEMETRY_EXPORT_RESULT_DROP;
+    }
+
+    memset(&response, 0, sizeof(response));
+    result = king_telemetry_http_post(
+        endpoint_url,
+        ZSTR_VAL(json_payload->s),
+        payload_bytes,
+        batch_id,
+        signal_name,
+        &response
+    );
+
+    smart_str_free(&response.data);
+
+    if (result == KING_TELEMETRY_EXPORT_RESULT_DROP) {
+        return KING_TELEMETRY_EXPORT_RESULT_DROP;
+    }
+
+    if (result == SUCCESS && response.status_code >= 200 && response.status_code < 300) {
+        return SUCCESS;
+    }
+
+    if (result == SUCCESS) {
+        king_telemetry_record_export_diagnostic(
+            signal_name,
+            "http",
+            "non_2xx_status",
+            "retry",
+            batch_id,
+            "Collector returned a non-2xx HTTP status.",
+            0,
+            (zend_long) response.status_code,
+            payload_bytes,
+            response.bytes
+        );
+    }
+
+    return FAILURE;
+}
+
 int king_telemetry_export_batch(void)
 {
     int metrics_result = SUCCESS;
@@ -9,8 +231,8 @@ int king_telemetry_export_batch(void)
     if (!king_telemetry_system_initialized || !king_telemetry_runtime_config.enabled) {
         return FAILURE;
     }
-    
-    king_telemetry_batch_t *batch = king_telemetry_dequeue_batch();
+
+    king_telemetry_batch_t *batch = king_telemetry_peek_batch();
     if (!batch) {
         return SUCCESS; /* No batches to export */
     }
@@ -18,7 +240,10 @@ int king_telemetry_export_batch(void)
     /* Export metrics via OTLP */
     if (zend_hash_num_elements(Z_ARRVAL(batch->metrics)) > 0) {
         attempted = 1;
-        metrics_result = king_telemetry_export_metrics_otlp(&batch->metrics);
+        metrics_result = king_telemetry_export_metrics_otlp(&batch->metrics, batch->batch_id);
+        if (metrics_result != SUCCESS) {
+            failed = 1;
+        }
         if (!king_telemetry_batch_signal_complete(&batch->metrics, metrics_result)) {
             failed = 1;
         }
@@ -27,7 +252,10 @@ int king_telemetry_export_batch(void)
     /* Export spans via OTLP */
     if (zend_hash_num_elements(Z_ARRVAL(batch->spans)) > 0) {
         attempted = 1;
-        spans_result = king_telemetry_export_spans_otlp(&batch->spans);
+        spans_result = king_telemetry_export_spans_otlp(&batch->spans, batch->batch_id);
+        if (spans_result != SUCCESS) {
+            failed = 1;
+        }
         if (!king_telemetry_batch_signal_complete(&batch->spans, spans_result)) {
             failed = 1;
         }
@@ -36,33 +264,52 @@ int king_telemetry_export_batch(void)
     /* Export logs via OTLP */
     if (zend_hash_num_elements(Z_ARRVAL(batch->logs)) > 0) {
         attempted = 1;
-        logs_result = king_telemetry_export_logs_otlp(&batch->logs);
+        logs_result = king_telemetry_export_logs_otlp(&batch->logs, batch->batch_id);
+        if (logs_result != SUCCESS) {
+            failed = 1;
+        }
         if (!king_telemetry_batch_signal_complete(&batch->logs, logs_result)) {
             failed = 1;
         }
     }
 
     if (!attempted) {
-        king_telemetry_free_batch(batch);
+        batch = king_telemetry_remove_head_batch_in_memory();
+        if (batch != NULL) {
+            (void) king_telemetry_persist_queue_state();
+            king_telemetry_free_batch(batch);
+        }
         return SUCCESS;
     }
 
     if (!failed) {
         king_telemetry_export_success_count++;
+        batch = king_telemetry_remove_head_batch_in_memory();
+        if (batch != NULL) {
+            (void) king_telemetry_persist_queue_state();
+            king_telemetry_free_batch(batch);
+        }
     } else {
         king_telemetry_export_failure_count++;
-        /* Re-queue only the signals that still failed. */
-        king_telemetry_batch_refresh_estimated_bytes(batch);
-        if (king_telemetry_queue_batch(batch) == SUCCESS) {
+        if (king_telemetry_batch_has_signals(batch)) {
+            /*
+             * The oldest unresolved batch stays at the queue head until it is
+             * fully exported or locally dropped. Younger batches never
+             * overtake it just because one retryable export failed.
+             */
+            king_telemetry_batch_refresh_estimated_bytes(batch);
+            king_telemetry_refresh_queue_accounting();
+            (void) king_telemetry_persist_queue_state();
             king_telemetry_retry_requeue_count++;
-            batch = NULL; /* Don't free, it's back in queue */
+        } else {
+            batch = king_telemetry_remove_head_batch_in_memory();
+            if (batch != NULL) {
+                (void) king_telemetry_persist_queue_state();
+                king_telemetry_free_batch(batch);
+            }
         }
     }
-    
-    if (batch) {
-        king_telemetry_free_batch(batch);
-    }
-    
+
     if (failed) {
         return FAILURE;
     }
@@ -73,9 +320,21 @@ int king_telemetry_export_batch(void)
     return SUCCESS;
 }
 
-int king_telemetry_export_metrics_otlp(zval *metrics)
+int king_telemetry_export_metrics_otlp(zval *metrics, const char *batch_id)
 {
     if (!king_telemetry_runtime_config.otel_exporter_endpoint[0]) {
+        king_telemetry_record_export_diagnostic(
+            "metrics",
+            "config",
+            "missing_endpoint",
+            "retry",
+            batch_id,
+            "Telemetry exporter endpoint is not configured for metrics.",
+            0,
+            0,
+            0,
+            0
+        );
         return FAILURE; /* No endpoint configured */
     }
     
@@ -100,9 +359,14 @@ int king_telemetry_export_metrics_otlp(zval *metrics)
         zval *value_zval;
         zval *type_zval;
         zval *timestamp_zval;
+        zval *labels_zval;
+        zval *count_zval;
+        zval *sum_zval;
         const char *metric_type;
         double metric_value;
         zend_long metric_timestamp = 0;
+        zend_long metric_count = 1;
+        double metric_sum;
 
         if (Z_TYPE_P(metric_data) != IS_ARRAY) {
             continue;
@@ -112,6 +376,9 @@ int king_telemetry_export_metrics_otlp(zval *metrics)
         value_zval = zend_hash_str_find(Z_ARRVAL_P(metric_data), "value", sizeof("value") - 1);
         type_zval = zend_hash_str_find(Z_ARRVAL_P(metric_data), "type", sizeof("type") - 1);
         timestamp_zval = zend_hash_str_find(Z_ARRVAL_P(metric_data), "timestamp", sizeof("timestamp") - 1);
+        labels_zval = zend_hash_str_find(Z_ARRVAL_P(metric_data), "labels", sizeof("labels") - 1);
+        count_zval = zend_hash_str_find(Z_ARRVAL_P(metric_data), "count", sizeof("count") - 1);
+        sum_zval = zend_hash_str_find(Z_ARRVAL_P(metric_data), "sum", sizeof("sum") - 1);
 
         if (name_zval == NULL
             || value_zval == NULL
@@ -127,6 +394,8 @@ int king_telemetry_export_metrics_otlp(zval *metrics)
         }
 
         metric_value = zval_get_double(value_zval);
+        metric_sum = king_telemetry_otlp_metric_double_from_snapshot(sum_zval, metric_value);
+        metric_count = king_telemetry_otlp_metric_count_from_snapshot(count_zval);
         if (timestamp_zval != NULL) {
             metric_timestamp = zval_get_long(timestamp_zval);
         }
@@ -137,68 +406,73 @@ int king_telemetry_export_metrics_otlp(zval *metrics)
         first_metric = 0;
 
         smart_str_appends(&json_payload, "{\"name\":\"");
-        smart_str_append(&json_payload, Z_STR_P(name_zval));
-        smart_str_appends(&json_payload, "\",\"data\":{\"dataPoints\":[{\"timeUnixNano\":\"");
-        
-        /* Add timestamp */
-        char timestamp_str[32];
-        if (metric_timestamp > 0) {
-            snprintf(
-                timestamp_str,
-                sizeof(timestamp_str),
-                "%lld%09ld",
-                (long long) metric_timestamp,
-                0L
-            );
-        } else {
-            struct timespec ts;
-            clock_gettime(CLOCK_REALTIME, &ts);
-            snprintf(
-                timestamp_str,
-                sizeof(timestamp_str),
-                "%lld%09ld",
-                (long long) ts.tv_sec,
-                ts.tv_nsec
-            );
-        }
-        smart_str_appends(&json_payload, timestamp_str);
+        smart_str_append_escaped(&json_payload, Z_STRVAL_P(name_zval), Z_STRLEN_P(name_zval));
         smart_str_appends(&json_payload, "\",");
-        
-        /* Add value based on type */
+
         if (strcmp(metric_type, "counter") == 0) {
-            smart_str_appends(&json_payload, "\"asInt\":\"");
-            smart_str_append_long(&json_payload, (zend_long) metric_value);
-            smart_str_appends(&json_payload, "\"");
+            king_telemetry_otlp_append_counter_metric(
+                &json_payload,
+                metric_timestamp,
+                (zend_long) metric_value,
+                labels_zval
+            );
+        } else if (strcmp(metric_type, "gauge") == 0) {
+            king_telemetry_otlp_append_gauge_metric(
+                &json_payload,
+                metric_timestamp,
+                metric_value,
+                labels_zval
+            );
+        } else if (strcmp(metric_type, "histogram") == 0) {
+            king_telemetry_otlp_append_histogram_metric(
+                &json_payload,
+                metric_timestamp,
+                metric_count,
+                metric_sum,
+                labels_zval
+            );
         } else {
-            smart_str_appends(&json_payload, "\"asDouble\":\"");
-            smart_str_append_double(&json_payload, metric_value, 6, 0);
-            smart_str_appends(&json_payload, "\"");
+            king_telemetry_otlp_append_summary_metric(
+                &json_payload,
+                metric_timestamp,
+                metric_count,
+                metric_sum,
+                metric_value,
+                labels_zval
+            );
         }
-        
-        smart_str_appends(&json_payload, "}]}}");
+
+        smart_str_appends(&json_payload, "}");
     } ZEND_HASH_FOREACH_END();
     
     smart_str_appends(&json_payload, "]}]}]}");
-    smart_str_0(&json_payload);
-    
-    /* Send HTTP request */
-    king_telemetry_http_response_t response;
-    int result = king_telemetry_http_post(endpoint_url, ZSTR_VAL(json_payload.s), &response);
-    
-    /* Clean up */
+    int result = king_telemetry_dispatch_otlp_json_payload(
+        endpoint_url,
+        &json_payload,
+        batch_id,
+        "metrics"
+    );
+
     smart_str_free(&json_payload);
-    smart_str_free(&response.data);
-    
-    if (result == SUCCESS && response.status_code >= 200 && response.status_code < 300) {
-        return SUCCESS;
-    }
-    
-    return FAILURE;
+
+    return result;
 }
 
-int king_telemetry_export_spans_otlp(zval *spans)
+int king_telemetry_export_spans_otlp(zval *spans, const char *batch_id)
 {
     if (!king_telemetry_runtime_config.otel_exporter_endpoint[0]) {
+        king_telemetry_record_export_diagnostic(
+            "traces",
+            "config",
+            "missing_endpoint",
+            "retry",
+            batch_id,
+            "Telemetry exporter endpoint is not configured for traces.",
+            0,
+            0,
+            0,
+            0
+        );
         return FAILURE; /* No endpoint configured */
     }
     
@@ -311,26 +585,33 @@ int king_telemetry_export_spans_otlp(zval *spans)
     } ZEND_HASH_FOREACH_END();
     
     smart_str_appends(&json_payload, "]}]}]}");
-    smart_str_0(&json_payload);
-    
-    /* Send HTTP request */
-    king_telemetry_http_response_t response;
-    int result = king_telemetry_http_post(endpoint_url, ZSTR_VAL(json_payload.s), &response);
-    
-    /* Clean up */
+    int result = king_telemetry_dispatch_otlp_json_payload(
+        endpoint_url,
+        &json_payload,
+        batch_id,
+        "traces"
+    );
+
     smart_str_free(&json_payload);
-    smart_str_free(&response.data);
-    
-    if (result == SUCCESS && response.status_code >= 200 && response.status_code < 300) {
-        return SUCCESS;
-    }
-    
-    return FAILURE;
+
+    return result;
 }
 
-int king_telemetry_export_logs_otlp(zval *logs)
+int king_telemetry_export_logs_otlp(zval *logs, const char *batch_id)
 {
     if (!king_telemetry_runtime_config.otel_exporter_endpoint[0]) {
+        king_telemetry_record_export_diagnostic(
+            "logs",
+            "config",
+            "missing_endpoint",
+            "retry",
+            batch_id,
+            "Telemetry exporter endpoint is not configured for logs.",
+            0,
+            0,
+            0,
+            0
+        );
         return FAILURE; /* No endpoint configured */
     }
     
@@ -454,19 +735,14 @@ int king_telemetry_export_logs_otlp(zval *logs)
     } ZEND_HASH_FOREACH_END();
     
     smart_str_appends(&json_payload, "]}]}]}");
-    smart_str_0(&json_payload);
-    
-    /* Send HTTP request */
-    king_telemetry_http_response_t response;
-    int result = king_telemetry_http_post(endpoint_url, ZSTR_VAL(json_payload.s), &response);
-    
-    /* Clean up */
+    int result = king_telemetry_dispatch_otlp_json_payload(
+        endpoint_url,
+        &json_payload,
+        batch_id,
+        "logs"
+    );
+
     smart_str_free(&json_payload);
-    smart_str_free(&response.data);
-    
-    if (result == SUCCESS && response.status_code >= 200 && response.status_code < 300) {
-        return SUCCESS;
-    }
-    
-    return FAILURE;
+
+    return result;
 }

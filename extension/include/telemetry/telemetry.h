@@ -53,6 +53,9 @@ typedef struct _king_telemetry_config_t {
     uint32_t max_batch_size;
     uint32_t max_export_batch_size;
     uint32_t max_queue_size;
+    char traces_sampler_type[32];
+    double traces_sampler_ratio;
+    zend_bool traces_sampler_ratio_configured;
     zend_bool enable_auto_instrumentation;
     zend_bool enable_distributed_tracing;
     zend_bool enable_metrics_collection;
@@ -75,6 +78,7 @@ typedef struct _king_trace_context_t {
     zval attributes;      /* PHP array of span attributes */
     zval events;          /* PHP array of span events */
     zval links;           /* PHP array of span links */
+    struct _king_trace_context_t *parent; /* active parent span in the local runtime */
 } king_trace_context_t;
 
 typedef struct _king_metric_data_t {
@@ -106,10 +110,25 @@ typedef struct _king_telemetry_batch_t {
     zval metrics;      /* Array of metric data */
     zval spans;        /* Array of span data */
     zval logs;         /* Array of log data */
+    char batch_id[33]; /* Stable across retry and restart replay for collector dedupe */
     uint64_t estimated_bytes;
     time_t created_at;
     struct _king_telemetry_batch_t *next;
 } king_telemetry_batch_t;
+
+typedef struct _king_telemetry_export_diagnostic_t {
+    zend_bool active;
+    char signal[16];
+    char stage[32];
+    char reason[64];
+    char disposition[16];
+    char batch_id[33];
+    char message[256];
+    zend_long curl_code;
+    zend_long http_status;
+    size_t request_bytes;
+    size_t response_bytes;
+} king_telemetry_export_diagnostic_t;
 
 /* --- PHP Function Prototypes --- */
 
@@ -125,19 +144,19 @@ PHP_FUNCTION(king_telemetry_end_span);
 /* Records a metric value. */
 PHP_FUNCTION(king_telemetry_record_metric);
 
-/* Records a structured log entry. */
+/* Records a structured log entry into the pending log buffer. */
 PHP_FUNCTION(king_telemetry_log);
 
 /* Returns the current trace-context snapshot, or null when none is active. */
 PHP_FUNCTION(king_telemetry_get_trace_context);
 
-/* Returns headers unchanged until a live current-span injector exists. */
+/* Returns headers with the live current span injected unless caller headers already set trace context. */
 PHP_FUNCTION(king_telemetry_inject_context);
 
-/* Stable false until the active runtime accepts extracted trace context. */
+/* Stable false until the userland extract helper is finalized. */
 PHP_FUNCTION(king_telemetry_extract_context);
 
-/* Returns collected metrics. */
+/* Returns the live metric registry keyed by metric name. */
 PHP_FUNCTION(king_telemetry_get_metrics);
 
 /* Flushes pending telemetry data. */
@@ -151,8 +170,28 @@ PHP_FUNCTION(king_telemetry_get_status);
 int king_telemetry_init_system(king_telemetry_config_t *config);
 void king_telemetry_shutdown_system(void);
 void king_telemetry_cleanup_scope_state(void);
+zend_result king_telemetry_set_incoming_parent_context(
+    const char *trace_id,
+    const char *parent_span_id,
+    uint8_t trace_flags,
+    const char *trace_state
+);
+zend_result king_telemetry_set_incoming_parent_context_from_array(zval *context);
+void king_telemetry_clear_incoming_parent_context(void);
+zend_bool king_telemetry_has_incoming_parent_context(void);
 king_trace_context_t* king_telemetry_create_span(const char *operation_name, king_span_kind_t span_kind, const char *parent_span_id);
 int king_telemetry_finish_span(king_trace_context_t *span_context);
+zend_result king_telemetry_start_internal_span(
+    king_trace_context_t **span_out,
+    const char *operation_name,
+    king_span_kind_t span_kind,
+    zval *attributes,
+    const char *parent_span_id
+);
+zend_result king_telemetry_end_internal_span(
+    king_trace_context_t *span,
+    zval *final_attributes
+);
 int king_telemetry_record_metric_internal(const char *metric_name, king_metric_type_t metric_type, double value, zval *labels);
 zend_bool king_telemetry_lookup_metric(
     const char *metric_name,
@@ -167,18 +206,33 @@ int king_telemetry_export_batch(void);
 const char* king_telemetry_level_to_string(king_telemetry_level_t level);
 const char* king_metric_type_to_string(king_metric_type_t type);
 const char* king_span_kind_to_string(king_span_kind_t kind);
+zend_bool king_telemetry_build_trace_context_snapshot(zval *destination);
+zend_bool king_telemetry_build_distributed_parent_context(zval *destination);
+zend_bool king_telemetry_build_last_export_diagnostic(zval *destination);
+zend_bool king_telemetry_is_capture_enabled(void);
+zend_bool king_telemetry_has_injectable_current_context(void);
+zend_result king_telemetry_inject_current_context_headers(
+    zval *destination,
+    zval *headers_array
+);
 
 /* Export queue functions */
 king_telemetry_batch_t* king_telemetry_create_batch(void);
+void king_telemetry_assign_batch_identity(king_telemetry_batch_t *batch);
 void king_telemetry_free_batch(king_telemetry_batch_t *batch);
 int king_telemetry_queue_batch(king_telemetry_batch_t *batch);
 void king_telemetry_cleanup_export_queue(void);
 int king_telemetry_process_export_queue(void);
 zend_bool king_telemetry_has_pending_signals(void);
 void king_telemetry_append_pending_signals(king_telemetry_batch_t *batch);
+void king_telemetry_append_pending_signals_limited(
+    king_telemetry_batch_t *batch,
+    uint32_t chunk_size
+);
 uint32_t king_telemetry_get_pending_span_count(void);
 uint32_t king_telemetry_get_pending_log_count(void);
 uint32_t king_telemetry_get_pending_entry_limit(void);
+uint32_t king_telemetry_get_export_chunk_size(void);
 uint64_t king_telemetry_get_queue_bytes(void);
 uint64_t king_telemetry_get_pending_bytes(void);
 uint64_t king_telemetry_get_memory_bytes(void);
@@ -189,9 +243,9 @@ uint64_t king_telemetry_get_memory_high_water_bytes(void);
 uint32_t king_telemetry_get_retry_requeue_count(void);
 
 /* OTLP export functions */
-int king_telemetry_export_metrics_otlp(zval *metrics);
-int king_telemetry_export_spans_otlp(zval *spans);
-int king_telemetry_export_logs_otlp(zval *logs);
+int king_telemetry_export_metrics_otlp(zval *metrics, const char *batch_id);
+int king_telemetry_export_spans_otlp(zval *spans, const char *batch_id);
+int king_telemetry_export_logs_otlp(zval *logs, const char *batch_id);
 
 /* Export queue statistics */
 extern uint32_t king_telemetry_queue_size;

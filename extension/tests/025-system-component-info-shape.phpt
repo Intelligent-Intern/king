@@ -37,7 +37,7 @@ array(6) {
 }
 string(9) "telemetry"
 string(13) "config_backed"
-array(12) {
+array(15) {
   [0]=>
   string(7) "enabled"
   [1]=>
@@ -57,11 +57,17 @@ array(12) {
   [8]=>
   string(14) "restart_replay"
   [9]=>
-  string(14) "drain_behavior"
+  string(18) "ordering_guarantee"
   [10]=>
-  string(12) "memory_bound"
+  string(18) "idempotency_policy"
   [11]=>
+  string(14) "drain_behavior"
+  [12]=>
+  string(12) "memory_bound"
+  [13]=>
   string(20) "self_metrics_surface"
+  [14]=>
+  string(27) "failure_diagnostics_surface"
 }
 bool(true)
 bool(true)

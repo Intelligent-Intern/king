@@ -363,7 +363,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_telemetry_record_metric, 0, 0, 2)
     ZEND_ARG_TYPE_INFO(0, metric_name, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO(0, value, IS_DOUBLE, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, labels, IS_ARRAY, 1, "null")
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, metric_type, IS_STRING, 0, "\"gauge\"")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, metric_type, IS_STRING, 0, "\"counter\"")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_telemetry_log, 0, 0, 2)

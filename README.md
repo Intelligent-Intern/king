@@ -9,8 +9,8 @@
 [![CI](https://github.com/Intelligent-Intern/king/actions/workflows/ci.yml/badge.svg)](https://github.com/Intelligent-Intern/king/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Intelligent-Intern/king?display_name=tag)](https://github.com/Intelligent-Intern/king/releases)
 [![PHP 8.1-8.5](https://img.shields.io/badge/PHP-8.1--8.5-777BB4?logo=php&logoColor=white)](https://github.com/Intelligent-Intern/king)
-[![Linux x86_64 / arm64](https://img.shields.io/badge/Linux-x86__64%20%2F%20arm64-333333?logo=linux&logoColor=white)](https://github.com/Intelligent-Intern/king/blob/main/.github/workflows/docker.yml)
-[![Docker](https://github.com/Intelligent-Intern/king/actions/workflows/docker.yml/badge.svg)](https://github.com/Intelligent-Intern/king/actions/workflows/docker.yml)
+[![Linux x86_64 / arm64](https://img.shields.io/badge/Linux-x86__64%20%2F%20arm64-333333?logo=linux&logoColor=white)](https://github.com/Intelligent-Intern/king/actions/workflows/ci.yml)
+[![Container Images via CI](https://img.shields.io/badge/Container%20Images-via%20CI-2496ED?logo=docker&logoColor=white)](https://github.com/Intelligent-Intern/king/actions/workflows/ci.yml)
 
 King turns PHP into a systems platform for transport-heavy, realtime,
 infrastructure-aware software. Instead of pushing critical networking,

@@ -1038,8 +1038,8 @@ namespace {
     function king_telemetry_get_status(): array {}
 
     /**
-     * Telemetry metrics collected by the active runtime.
-     * @return list<array<string,mixed>>
+     * Telemetry live metric registry keyed by metric name until the next flush.
+     * @return array<string,array<string,mixed>>
      */
     function king_telemetry_get_metrics(): array {}
 
@@ -1063,20 +1063,21 @@ namespace {
 
     /**
      * Record one metric datapoint in the active telemetry runtime.
+     * Omitting the metric type uses counter semantics.
      * @param array<string,string>|null $labels
      */
-    function king_telemetry_record_metric(string $metric_name, float $value, ?array $labels = null, string $metric_type = 'gauge'): bool {}
+    function king_telemetry_record_metric(string $metric_name, float $value, ?array $labels = null, string $metric_type = 'counter'): bool {}
 
     /**
      * Record one structured log entry in the active telemetry runtime.
+     * Fresh logs stay pending until flush captures them into an export batch.
      * @param array<string,mixed>|null $attributes
      */
     function king_telemetry_log(string $level, string $message, ?array $attributes = null): bool {}
 
     /**
-     * Flushes pending telemetry data for the current runtime.
-     * The active build has no exporter queues yet, so all exported counts are
-     * currently zero.
+     * Flushes pending telemetry in one bounded export attempt and reports the
+     * signals captured into that pass.
      * @return array{
      *   spans_exported:int,
      *   metrics_exported:int,
@@ -1088,22 +1089,21 @@ namespace {
 
     /**
      * Current telemetry trace context for the active runtime.
-     * Returns null until the current runtime has a live span runtime.
+     * Returns the live current-span snapshot, or null when no span is active.
      * @return array<string,mixed>|null
      */
     function king_telemetry_get_trace_context(): ?array {}
 
     /**
-     * Returns the provided headers unchanged until the current runtime has a
-     * live span runtime to inject.
+     * Returns the provided headers unchanged until outgoing trace-context
+     * injection is finalized.
      * @param array<string,string>|null $headers
      * @return array<string,string>
      */
     function king_telemetry_inject_context(?array $headers = null): array {}
 
     /**
-     * Returns false until the current runtime has a tracing runtime that can
-     * accept extracted context.
+     * Returns false until incoming trace-context extraction is finalized.
      * @param array<string,string> $headers
      */
     function king_telemetry_extract_context(array $headers): bool {}

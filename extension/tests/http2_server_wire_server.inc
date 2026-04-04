@@ -94,6 +94,18 @@ $result = king_http2_server_listen_once(
             ];
         }
 
+        if ($mode === 'capture-headers') {
+            $capture['request']['headers'] = $request['headers'];
+
+            return [
+                'status' => 200,
+                'headers' => [
+                    'content-type' => 'text/plain',
+                ],
+                'body' => 'captured',
+            ];
+        }
+
         return [
             'status' => 201,
             'headers' => [

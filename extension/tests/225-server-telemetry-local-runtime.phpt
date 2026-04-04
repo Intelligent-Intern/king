@@ -47,7 +47,7 @@ bool(true)
 string(0) ""
 array(3) {
   ["before"]=>
-  array(7) {
+  array(8) {
     ["enabled"]=>
     bool(true)
     ["initialized"]=>
@@ -62,6 +62,8 @@ array(3) {
     bool(true)
     ["logs_enable"]=>
     bool(false)
+    ["incoming_trace_context"]=>
+    NULL
   }
   ["init"]=>
   bool(true)

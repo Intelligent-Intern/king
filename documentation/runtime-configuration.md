@@ -409,17 +409,17 @@ rewriting application code.
 | --- | --- |
 | `otel.enable` | Enables or disables the telemetry runtime. |
 | `otel.service_name` | Sets the service name attached to exported telemetry. |
-| `otel.exporter_endpoint` | Points at the collector endpoint. |
+| `otel.exporter_endpoint` | Points at the collector endpoint with an absolute `http://` or `https://` URL. Embedded credentials plus query/fragment components are rejected, and public telemetry metadata only echoes the collector origin. |
 | `otel.exporter_protocol` | Selects the collector protocol. |
 | `otel.exporter_timeout_ms` | Sets the exporter timeout. |
-| `otel.exporter_headers` | Adds static exporter headers. |
-| `otel.batch_processor_max_queue_size` | Sets the telemetry retry queue size. |
+| `otel.exporter_headers` | Adds static exporter headers. The value must stay on one line, and King never echoes it back through public telemetry metadata. |
+| `otel.batch_processor_max_queue_size` | Sets the telemetry retry queue size, the queue-derived byte budget, and the cap for distinct live metric names before flush. |
 | `otel.batch_processor_schedule_delay_ms` | Sets the batch processor schedule delay. |
-| `otel.traces_sampler_type` | Selects the trace sampler policy. |
-| `otel.traces_sampler_ratio` | Sets the probabilistic trace sampler ratio. |
+| `otel.traces_sampler_type` | Selects the trace sampler policy: `always_on`, `always_off`, or `parent_based_probability`. |
+| `otel.traces_sampler_ratio` | Sets the probabilistic root-trace sampler ratio used by `parent_based_probability` when no parent decision already exists. |
 | `otel.traces_max_attributes_per_span` | Limits how many attributes one span may carry. |
 | `otel.metrics_enable` | Enables or disables metrics export. |
 | `otel.metrics_export_interval_ms` | Sets the metrics export interval. |
 | `otel.metrics_default_histogram_boundaries` | Sets default histogram bucket boundaries. |
 | `otel.logs_enable` | Enables or disables logs export. |
-| `otel.logs_exporter_batch_size` | Sets the log exporter batch size. |
+| `otel.logs_exporter_batch_size` | Sets the active mixed-signal export chunk size used when one flush must split metric, span, and log pressure across multiple FIFO batches. |

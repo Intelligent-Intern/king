@@ -20,6 +20,7 @@
 #include "include/config/config.h"
 #include "include/config/http2/base_layer.h"
 #include "include/config/tcp_transport/base_layer.h"
+#include "include/telemetry/telemetry.h"
 
 #include "Zend/zend_smart_str.h"
 #include "ext/standard/url.h"
@@ -77,6 +78,7 @@ typedef struct _king_http2_multi_transfer {
     zend_string *url;
     zend_string *method;
     zend_string *body_string;
+    zval effective_headers;
     struct curl_slist *request_headers;
     char *effective_url;
     long response_code;
@@ -90,6 +92,7 @@ typedef struct _king_http2_multi_transfer {
     size_t request_index;
     size_t parent_request_index;
     zval promise_headers;
+    bool effective_headers_initialized;
     bool promise_headers_initialized;
 } king_http2_multi_transfer_t;
 

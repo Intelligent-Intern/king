@@ -34,21 +34,42 @@ require "yaml"
 root_dir = ARGV[0]
 expected = ARGV[1].split(",")
 
-docker = YAML.load_file(File.join(root_dir, ".github/workflows/docker.yml"))
-docker_versions = docker.dig("jobs", "build-and-push", "strategy", "matrix", "php-version")
-docker_include = docker.dig("jobs", "build-and-push", "strategy", "matrix", "include")
-docker_include_versions = docker_include.map { |entry| entry["php-version"] }
-
-ci = YAML.load_file(File.join(root_dir, ".github/workflows/ci.yml"))
+ci = YAML.safe_load(
+  File.read(File.join(root_dir, ".github/workflows/ci.yml")),
+  permitted_classes: [],
+  permitted_symbols: [],
+  aliases: false
+)
+docker_publish = YAML.safe_load(
+  File.read(File.join(root_dir, ".github/workflows/docker-publish.yml")),
+  permitted_classes: [],
+  permitted_symbols: [],
+  aliases: false
+)
 ci_include = ci.dig("jobs", "install-package-matrix", "strategy", "matrix", "include")
 ci_versions = ci_include.map { |entry| entry["php-version"] }.uniq
 
-if docker_versions != expected
-  abort("Docker workflow PHP matrix mismatch: expected #{expected.inspect}, got #{docker_versions.inspect}")
+docker_runtime_versions = docker_publish.dig("jobs", "docker-build-and-push", "strategy", "matrix", "php-version")
+docker_runtime_include = docker_publish.dig("jobs", "docker-build-and-push", "strategy", "matrix", "include")
+docker_runtime_include_versions = docker_runtime_include.map { |entry| entry["php-version"] }
+docker_demo_versions = docker_publish.dig("jobs", "docker-build-demo", "strategy", "matrix", "php-version")
+docker_demo_include = docker_publish.dig("jobs", "docker-build-demo", "strategy", "matrix", "include")
+docker_demo_include_versions = docker_demo_include.map { |entry| entry["php-version"] }
+
+if docker_runtime_versions != expected
+  abort("CI docker runtime PHP matrix mismatch: expected #{expected.inspect}, got #{docker_runtime_versions.inspect}")
 end
 
-if docker_include_versions != expected
-  abort("Docker workflow include PHP matrix mismatch: expected #{expected.inspect}, got #{docker_include_versions.inspect}")
+if docker_runtime_include_versions != expected
+  abort("CI docker runtime include PHP matrix mismatch: expected #{expected.inspect}, got #{docker_runtime_include_versions.inspect}")
+end
+
+if docker_demo_versions != expected
+  abort("CI docker demo PHP matrix mismatch: expected #{expected.inspect}, got #{docker_demo_versions.inspect}")
+end
+
+if docker_demo_include_versions != expected
+  abort("CI docker demo include PHP matrix mismatch: expected #{expected.inspect}, got #{docker_demo_include_versions.inspect}")
 end
 
 if ci_versions != expected

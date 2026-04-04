@@ -59,9 +59,14 @@ the write path fast.
 
 The telemetry component exposes this contract directly through system
 introspection. The component reports a delivery contract of
-`best_effort_bounded_retry`, a queue persistence model of
-`process_local_non_persistent`, a restart replay mode of `not_supported`, and a
-drain behavior of `single_batch_per_flush`.
+`best_effort_bounded_retry`, an ordering guarantee of
+`head_of_queue_fifo`, an idempotency policy of
+`at_least_once_with_stable_batch_identity`, a drain behavior of
+`single_batch_per_flush`, and one of two queue contracts: without
+`king.otel_queue_state_path` it reports `process_local_non_persistent` plus
+`restart_replay=not_supported`, while a configured durable queue path upgrades
+that to `process_local_durable_file` plus
+`restart_replay=best_effort_supported`.
 
 Those phrases are worth translating into plain English.
 
@@ -69,14 +74,28 @@ Best effort means the runtime will try to export data, but it does not promise
 that every record will survive every outage. Bounded retry means failed export
 batches stay queued for retry, but only until the configured queue limit is
 reached. The same configured limit also bounds the pre-flush pending span and
-pending log buffers, so capture stays finite even before a flush happens. The
-active runtime now also derives a fixed byte budget from that queue limit. Each
-queue slot carries a `64 KiB` memory budget, and pending plus queued telemetry
-must stay inside that combined byte ceiling.
+pending log buffers, so capture stays finite even before a flush happens. That
+same queue-derived limit now also caps how many distinct metric names may sit
+live in the in-process registry before a flush, which keeps flush-side copy and
+encoding cost from exploding under high-cardinality input. The active runtime
+now also derives a fixed byte budget from that queue limit. Each queue slot
+carries a `64 KiB` memory budget, and pending plus queued telemetry must stay
+inside that combined byte ceiling.
 Process-local non-persistent means telemetry is not written to durable storage
-and does not survive process restart. Single batch per flush means one call to
-`king_telemetry_flush()` gives the runtime one export opportunity for the next
-queued batch rather than draining the whole queue in one call.
+and does not survive process restart. The durable-file variant means already
+queued retry batches are snapshotted to one local state file and rehydrated by
+the next process on the same host, but the still-live metric registry and the
+pre-flush pending span/log buffers remain process-local scratch state.
+Head-of-queue FIFO means the oldest unresolved batch stays ahead of every
+younger batch until it succeeds or is locally dropped. Single batch per flush
+means one call to `king_telemetry_flush()` gives the runtime one export
+opportunity for that oldest queued batch rather than draining the whole queue
+in one call.
+At least once with stable batch identity means the exporter does not promise
+that a collector sees a batch only one time, but it does keep one stable
+`X-King-Telemetry-Batch-Id` value on that batch across retry and restart
+replay so a collector or downstream adapter can dedupe deliberate
+re-deliveries.
 
 One subtle boundary matters here. Queued export batches stay process-local
 until they succeed, fail repeatedly, or the process exits. But the unfinished
@@ -102,6 +121,24 @@ new value onto the old value. A `gauge` represents the latest observed value,
 so recording a new gauge value replaces the previous value for that name.
 `histogram` and `summary` samples are also recorded by metric name and exported
 as typed metric data so the collector can interpret the stream correctly.
+If you omit the metric type, King keeps the current runtime default and treats
+the metric as a `counter`.
+
+On the wire, those metric families now leave the process as honest OTLP JSON
+metric bodies instead of a one-off local shape: counters export as OTLP `sum`,
+gauges as `gauge`, histograms as `histogram`, and summaries as `summary`, with
+their datapoints and labels validated against the same reference-style
+collector harness that checks the current trace and log payloads.
+
+The registry stays live until flush. Repeated request or worker churn does not
+silently smear flushed metric values into the next unit: once a unit flushes,
+the next unit starts from an empty live metric registry again.
+
+The registry is also bounded. King lets existing metric names keep updating, but
+once the live registry has reached the queue-derived entry limit it stops
+accepting brand-new metric names until a later flush clears the registry again.
+That keeps flush CPU work tied to a configured ceiling instead of to accidental
+or hostile cardinality spikes.
 
 This makes counters useful for totals such as `requests_total`, while gauges
 fit things like CPU utilization, queue depth, or active connections.
@@ -182,6 +219,11 @@ The log API does not force you to choose between readable text and machine
 usable context. The message stays readable, while the attributes keep the
 structured data attached.
 
+Fresh logs stay in the pending log buffer until flush moves them into an export
+batch. Repeated request or worker churn does not silently smear flushed log
+records into the next unit: once a unit flushes, the next unit starts from an
+empty pending log buffer again.
+
 ```mermaid
 flowchart LR
     A[Active span] --> B[trace_id and span_id]
@@ -199,54 +241,90 @@ The most important telemetry function to understand operationally is
 
 Flush does not mean "write everything durably right now." It means "take
 whatever is currently sitting in the live metric registry and pending signal
-buffers, put that material into an export batch, place that batch onto the
-bounded retry queue, and then give the export path one chance to send the next
-queued batch."
+buffers, snapshot that material into one or more bounded export batches, place
+those batches onto the bounded retry queue, and then give the export path one
+chance to send the next queued batch."
 
 This detail matters because it explains why the queue exists and why the system
 component reports `single_batch_per_flush`. A flush call has two jobs. First it
-captures new local data into a batch. Second it advances the export queue by at
-most one delivery attempt.
+captures new local data into one or more bounded queue batches. Second it
+advances the oldest queued batch by at most one delivery attempt.
 
 If the exporter succeeds, the batch is freed and the success counter grows. If
 the exporter fails, only the signals that still failed remain in the batch, and
-that batch is requeued for another attempt later. If the retry queue is already
-full, the runtime drops the new batch and increments `queue_drop_count`. If the
+that oldest unresolved batch stays at the queue head for another attempt later
+instead of rotating behind younger work. If the retry queue is already full,
+the runtime drops the new batch and increments `queue_drop_count`. If the
 pending span or pending log buffer is already at its capture ceiling before
 flush, the runtime drops the new signal immediately and increments
 `pending_drop_count`.
 
 ```mermaid
 flowchart TD
-    A[king_telemetry_flush] --> B[Build batch from metrics, spans, logs]
-    B --> C{Retry queue has room?}
-    C -->|No| D[Drop batch and increment queue_drop_count]
-    C -->|Yes| E[Enqueue batch]
-    E --> F[Try to export one queued batch]
-    F --> G{Collector success?}
-    G -->|Yes| H[Increment export_success_count]
-    G -->|No| I[Requeue failed signals]
+    A[king_telemetry_flush] --> B[Snapshot metrics plus pending spans/logs]
+    B --> C[Chunk mixed signals into bounded FIFO batches]
+    C --> D{Retry queue has room?}
+    D -->|No| E[Drop new batch chunk and increment queue_drop_count]
+    D -->|Yes| F[Enqueue batch chunk]
+    F --> G[Try to export one queued batch]
+    G --> H{Collector success?}
+    H -->|Yes| I[Increment export_success_count]
+    H -->|No| J[Keep failed signals at queue head]
 ```
 
 This is the core reliability story of the telemetry runtime. The queue is not
-infinite. The retry path is explicit. Drops are counted. Restart replay is not
-part of the contract.
+infinite. The retry path is explicit. Drops are counted. Restart replay is only
+part of the contract when `king.otel_queue_state_path` is configured.
+The runtime is still honest `at_least_once`, not exactly-once. What it adds on
+top is one stable exporter batch id per queued batch, preserved across retry
+and restart replay so downstream storage can recognize duplicate delivery of
+the same batch.
 
 ## What Happens During Export Failure
 
 A telemetry system is not defined only by success. It is defined by what it
 does when the collector is slow, unreachable, or returning errors.
 
-King handles failure by keeping the undelivered batch in the local retry queue
-until a later flush cycle can try again. This gives short outages a clean
+King handles failure by keeping the oldest undelivered batch at the head of the
+local retry queue until a later flush cycle can try again. This gives short
+outages a clean
 recovery path. At the same time, the queue has a fixed ceiling so exporter
 failure cannot grow memory without limit. When that ceiling is hit, the runtime
 starts dropping newly created batches and records that fact in
 `queue_drop_count`.
 
+One exporter-side boundary is intentionally fail-closed before any wire I/O
+happens. King caps one OTLP request body at `1 MiB`. If the encoded JSON for a
+metrics, spans, or logs export would exceed that size, King does not send a
+partial request and does not poison the retry queue with a batch that can never
+fit. The oversized signal is counted as an export failure for that flush and is
+dropped locally so later healthy smaller exports can still proceed.
+
+The collector reply path is bounded too. King also caps one OTLP response body
+at `1 MiB`. If a collector replies with a larger body, the exporter aborts that
+response, counts the flush as an export failure, and keeps the affected
+metrics, spans, or logs batch retryable in the local queue. In other words:
+oversized requests are dropped before dispatch because they can never succeed,
+while oversized collector responses are treated as retryable exporter failures
+because the same batch may still succeed against a healthy collector later.
+
+There is one more terminal branch on the exporter boundary. If libcurl reports
+that the configured collector host or proxy cannot be resolved, or that the
+endpoint URL itself is not usable, King treats that as a permanent endpoint
+failure for the current process configuration. The affected metrics, spans, or
+logs batch is counted as an export failure and dropped locally instead of being
+requeued forever behind an endpoint that this process cannot reach. That keeps
+later healthy exports from being poisoned by a clearly non-retryable endpoint
+mistake.
+
 This behavior is usually the right tradeoff for a runtime library. It protects
 the main application from turning telemetry failure into uncontrolled memory
 growth, while still making the delivery problem visible through status counters.
+Whenever the same batch is retried, the OTLP HTTP request also carries the same
+`X-King-Telemetry-Batch-Id` header. If the process exits and a later process
+rehydrates the queued batch from `king.otel_queue_state_path`, that replayed
+request keeps the same batch id too. A later newly formed batch gets a new
+batch id.
 
 ## Telemetry And The Collector
 
@@ -255,9 +333,14 @@ means you point the runtime at a collector URL, choose the protocol family, and
 let King send metric, trace, and log batches to the collector paths for those
 signal types.
 
+The current repo-local proof now also validates those metric, trace, and log
+payload envelopes against a strict reference-collector harness instead of only
+checking that the collector received roughly JSON-shaped bodies.
+
 The main configuration values are the service name, exporter endpoint, exporter
-protocol, exporter timeout, queue size, flush delay policy, metrics export
-interval, histogram boundaries, trace sampler settings, and log batch sizing.
+protocol, exporter timeout, queue size, optional durable queue state path,
+flush delay policy, metrics export interval, histogram boundaries, trace
+sampler settings, and log batch sizing.
 
 The collector is the boundary between the application runtime and the rest of
 your monitoring system. Once the collector has the data, downstream systems can
@@ -298,8 +381,20 @@ That server API belongs to the server runtime chapter because it attaches
 telemetry state to one accepted session. Even so, it matters here because it
 shows how telemetry travels into request handling. A server request can carry a
 telemetry snapshot that tells you whether telemetry is enabled, which service
-name is active, which exporter endpoint is configured, and whether metrics and
-logs are enabled for that session-owned view.
+name is active, which public-safe collector origin is configured, and whether
+metrics and logs are enabled for that session-owned view. That request/session
+metadata intentionally exposes only the collector origin, not raw endpoint
+paths or credential material.
+
+That snapshot can now also expose `incoming_trace_context` when the accepted
+request carried a valid `traceparent` header and an optional `tracestate`
+header. King normalizes the inbound trace id, parent span id, and trace flags
+into lowercase metadata on the request snapshot so the handler can inspect the
+remote trace identity honestly. The runtime still does not synthesize an
+already-active span before user code runs, but once the handler opens its
+first request-root span that span now inherits the inbound trace id, remote
+parent span id, trace flags, and optional trace state instead of silently
+forking a fresh local root.
 
 If you want the full server-side story, read
 [Server Runtime](./server-runtime.md). If you want the process-wide telemetry
@@ -313,11 +408,51 @@ boundaries. That is the job of [trace context](./glossary.md#trace-context) and
 
 King exposes three helpers for this boundary work.
 
-`king_telemetry_get_trace_context()` gives application code the current trace
-snapshot when one is available. `king_telemetry_inject_context()` prepares
-outgoing headers so downstream services can continue the trace. 
-`king_telemetry_extract_context()` accepts upstream headers so local work can
-join an existing distributed trace.
+`king_telemetry_get_trace_context()` now returns the live local span snapshot
+for the current runtime when a span is active. Nested spans stay on the same
+trace, the current child becomes the visible snapshot while it is active, and
+closing that child restores the parent snapshot instead of dropping the trace
+state entirely. `king_telemetry_inject_context()` now materializes the live
+current span into an outgoing header array by adding lowercase `traceparent`
+and optional `tracestate` fields when the caller did not already provide an
+explicit boundary. If the caller already supplied `traceparent` or
+`tracestate`, King preserves that explicit boundary untouched instead of
+partially merging runtime state into it. `king_telemetry_extract_context()`
+still returns `false` until the separate userland extraction leaf is
+finalized. Incoming HTTP server requests are now separate from that userland
+helper: their request telemetry snapshot can expose normalized inbound trace
+metadata under `incoming_trace_context`, and the first request-root span
+opened inside that handler now adopts that remote parent context while later
+child spans stay on the same inherited trace. The inbound parent seed is then
+cleared again before the next request starts so the propagation boundary stays
+request-local.
+
+The HTTP client transports use the same outgoing injection path automatically.
+When a live span is active, `king_http1_request_send()`,
+`king_http2_request_send()`, `king_http3_request_send()`, and the matching
+dispatcher-backed client calls all emit the same `traceparent` and optional
+`tracestate` headers unless the caller already pinned an explicit boundary in
+the request headers.
+
+The pipeline orchestrator now uses the same propagation model when
+`orchestrator_enable_distributed_tracing` is enabled. A live controller span is
+captured as a distributed parent snapshot when work is persisted, and a later
+`king_pipeline_orchestrator_resume_run()` or
+`king_pipeline_orchestrator_worker_run_next()` reopens that lineage through an
+internal `pipeline-orchestrator-boundary` span. That keeps resumed work on the
+original trace across process restarts and file-worker handoff instead of
+quietly starting a fresh local root in the recovery process.
+
+The orchestrator now also exposes a first-class telemetry adapter on top of
+that lineage instead of leaving pipeline telemetry as unstructured app logs.
+Recovered and fresh pipeline attempts emit `pipeline-orchestrator-run` and
+`pipeline-orchestrator-step` spans, bounded `pipeline.run.count`,
+`pipeline.retry.count`, `pipeline.partition.count`, `pipeline.batch.count`, and
+`pipeline.failure.count` metrics, plus one structured failure log when a run
+ends unsuccessfully. Those exported attributes intentionally line up with the
+persisted run snapshot's `telemetry_adapter` block, so `attempt_identity`,
+`retry_identity`, `partition_id`, `batch_id`, and `failure_identity` stay
+stable across worker recovery and restart boundaries.
 
 Even if you only use the basic span API at first, it is worth understanding
 these helpers because they are the bridge between local tracing and
@@ -333,16 +468,35 @@ The most important settings are easy to describe in plain language.
 
 `enable` turns telemetry on or off. `service_name` tells the collector which
 service is sending the data. `exporter_endpoint` tells the runtime where the
-collector lives. `exporter_protocol` selects the OTLP protocol family.
+collector lives and must be an absolute `http://` or `https://` URL without
+embedded credentials, query strings, or fragments. `exporter_protocol`
+selects the OTLP protocol family.
 `exporter_timeout_ms` sets the maximum time one export attempt may take.
-`batch_processor_max_queue_size` sets the size of the retry queue.
+`batch_processor_max_queue_size` sets the size of the retry queue and the live
+telemetry bounds derived from it.
 `batch_processor_schedule_delay_ms` sets the intended delay policy for the
 batch processor. `metrics_enable` and `logs_enable` let you control signal
 families individually. `metrics_export_interval_ms` defines the metrics export
 cadence. `metrics_default_histogram_boundaries` defines histogram bucket edges.
 `traces_sampler_type` and `traces_sampler_ratio` control trace sampling.
 `traces_max_attributes_per_span` limits attribute growth on one span.
-`logs_exporter_batch_size` shapes log exporter batching.
+`logs_exporter_batch_size` shapes the active export chunk size. In the current
+runtime that means one bounded mixed-signal flush batch may carry up to that
+many metric snapshot entries, spans, and logs before the next FIFO batch takes
+the remainder.
+
+`exporter_headers` is the write-only place for static collector credentials or
+other fixed OTLP headers. The value must stay on one line, and King never
+echoes it back through request, session, system, or export-diagnostic
+surfaces.
+
+Sampling semantics are now explicit instead of implied. `always_on` records new
+local root spans and exports them normally. `always_off` still gives you a live
+trace context and outgoing `traceparent` propagation with an unsampled `00`
+flag, but closed spans never enter the pending export buffer. The default
+`parent_based_probability` mode preserves the sampled or unsampled decision of
+an active local or incoming remote parent, and only falls back to the
+configured ratio when a brand-new local root has no parent context to inherit.
 
 The following runtime example shows the usual shape.
 
@@ -382,18 +536,28 @@ King gives you two fast local read paths for telemetry state.
 
 `king_telemetry_get_status()` tells you whether the runtime is initialized and
 how the delivery path is behaving. This status array includes the flush count,
-the number of active metrics still in the live registry, the current retry
-queue size, the export success count, the export failure count, the queue drop
-count, the pending capture limit, the current pending span and log counts, and
-the pending drop count. It also exposes the telemetry self-metrics for backlog
-pressure: current `queue_bytes`, `pending_bytes`, and total `memory_bytes`,
-the derived `memory_byte_limit`, queue and memory high-water marks, and the
+the number of active metrics still in the live registry, the live
+`metric_registry_limit`, cumulative `metric_drop_count`, the
+`metric_registry_high_watermark`, the current retry queue size, the export
+success count, the export failure count, the queue drop count, the pending
+capture limit, the current pending span and log counts, and the pending drop
+count. It also exposes the telemetry self-metrics for backlog pressure and
+runtime cost: current `queue_bytes`, `pending_bytes`, and total
+`memory_bytes`, the derived `memory_byte_limit`, queue and memory high-water
+marks, `last_flush_cpu_ns`, `flush_cpu_high_water_ns`, and the
 `retry_requeue_count` that shows how often failed batches were put back under
-collector slowdown or outage.
+collector slowdown or outage. When a failure happens, the same status array now
+also carries `last_export_diagnostic`, a bounded snapshot of the latest failed
+export attempt with the signal name, failure stage, reason, retry-or-drop
+disposition, collector-visible batch id, curl code, HTTP status, request and
+response byte counts, and a short local message. The failure stages are
+currently `pre_dispatch`, `transport`, `tls`, `http`, and `collector`.
 
 `king_telemetry_get_metrics()` returns the current live metric registry before
 those metrics are moved into a flush batch. This is useful when you want to
 inspect local metrics in-process or feed them into another local control path.
+The returned array is keyed by metric name, and a successful flush clears that
+live registry back to empty.
 
 These two calls are not duplicates. Status tells you how the runtime is doing.
 Metrics tell you what signal data is currently sitting in the registry.
@@ -407,47 +571,70 @@ array. Use it at process startup or at the beginning of a controlled
 application lifecycle.
 
 `king_telemetry_start_span()` opens a new local span and returns the active span
-identifier. Use it at the start of a meaningful operation.
+identifier. Use it at the start of a meaningful operation. Child spans stay on
+the current trace and temporarily become the visible active context until they
+close.
 
 `king_telemetry_end_span()` closes an existing span and optionally merges final
-attributes before the finished span moves into the pending export buffer.
+attributes before the finished span moves into the pending export buffer. When a
+child span closes, its parent becomes the active context again.
 
 `king_telemetry_record_metric()` records one metric datapoint under a metric
-name, with an optional label set and metric type.
+name, with an optional label set and metric type. Omitting the type uses the
+runtime default `counter` behavior.
 
 `king_telemetry_log()` records one structured log event with a level, message,
-and optional attributes.
+and optional attributes. The fresh record stays in the pending log buffer until
+flush captures it into an export batch.
 
 `king_telemetry_flush()` captures the current local signals into a batch and
-advances the bounded export queue by one delivery attempt.
+advances the bounded export queue by one delivery attempt. It is a bounded
+drain opportunity, not an unbounded exporter loop.
 
-`king_telemetry_get_status()` returns the current runtime counters and queue
-state for the telemetry subsystem.
+`king_telemetry_get_status()` returns the current runtime counters, queue state,
+and latest bounded export-failure diagnostic for the telemetry subsystem.
 
-`king_telemetry_get_metrics()` returns the current live metrics registry.
+`king_telemetry_get_metrics()` returns the current live metrics registry keyed
+by metric name until the next successful flush capture clears it.
 
-`king_telemetry_get_trace_context()` returns the current trace context snapshot
-for code that needs explicit access to boundary metadata.
+`king_telemetry_get_trace_context()` returns the current live trace context
+snapshot for code that needs explicit access to boundary metadata.
 
-`king_telemetry_inject_context()` prepares outgoing headers so downstream
-requests can continue the same trace.
+`king_telemetry_inject_context()` returns a header array containing the live
+current span as `traceparent` plus optional `tracestate`, unless the caller
+already supplied those headers explicitly. That propagation path also preserves
+the current span's sampled bit, so unsampled traces continue downstream as
+`traceparent` with `00` instead of being silently rewritten into sampled
+traffic.
 
-`king_telemetry_extract_context()` accepts inbound propagation headers so local
-work can join an existing trace.
+`king_telemetry_extract_context()` currently returns `false` until the incoming
+propagation contract is finalized.
 
 ## Common Questions
 
-One common question is whether telemetry survives restart. The answer is no.
-Telemetry is process-local and non-persistent. If you need durable replay, that
-belongs outside this runtime in the collector or in another queueing system.
+One common question is whether telemetry survives restart. The answer depends
+on whether `king.otel_queue_state_path` is configured. Without it, telemetry is
+process-local and non-persistent. With it, only already queued retry batches
+survive restart through one local durable file; the live metric registry and
+the pre-flush pending span/log scratch buffers do not. If you need stronger or
+cross-host durability than that best-effort local replay, it still belongs in
+the collector or in another queueing system.
 
 Another common question is whether exporter failure blocks the application. The
 runtime is designed so that it does not need an infinite or durable queue to
 remain safe. Exporter failures raise failure counters, leave failed batches in a
 bounded local retry queue, and eventually drop new batches when the queue cap is
-reached. The pending pre-flush span and log buffers are bounded too, so a long
-period without flush does not turn telemetry capture into unbounded memory
-growth.
+reached. Retryable failures also keep the oldest unresolved batch ahead of any
+younger queued work, so delivery order stays FIFO across batches instead of
+letting later work overtake an earlier export. The pending pre-flush span and
+log buffers are bounded too, so a long period without flush does not turn
+telemetry capture into unbounded memory growth. If you need to know why the
+latest export failed, read `last_export_diagnostic` from
+`king_telemetry_get_status()` instead of inferring from queue counters alone.
+That snapshot intentionally stays local and bounded: it does not echo exporter
+credentials or raw endpoint URLs back into the status surface. The broader
+public telemetry metadata surfaces follow the same rule and expose only the
+collector origin, not a credential-bearing or path-bearing export URL.
 
 A third common question is how often to flush. The answer depends on your
 runtime shape. A request-driven application often flushes at meaningful request

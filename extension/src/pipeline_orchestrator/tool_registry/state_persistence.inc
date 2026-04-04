@@ -255,7 +255,7 @@ static int king_orchestrator_persist_state_locked(void)
 
         fprintf(
             stream,
-            "run\t%s\t%s\t%ld\t%ld\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%ld\t%ld\t%s\t%s\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%ld\t%ld\n",
+            "run\t%s\t%s\t%ld\t%ld\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%ld\t%ld\t%s\t%s\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%ld\t%ld\t%s\n",
             ZSTR_VAL(run_state->run_id),
             ZSTR_VAL(run_state->status),
             (long) run_state->started_at,
@@ -281,7 +281,10 @@ static int king_orchestrator_persist_state_locked(void)
             (long) run_state->recovery_count,
             run_state->last_recovery_reason != NULL ? ZSTR_VAL(run_state->last_recovery_reason) : "",
             (long) run_state->remote_attempt_count,
-            (long) run_state->last_claimed_by_pid
+            (long) run_state->last_claimed_by_pid,
+            run_state->telemetry_parent_context_b64 != NULL
+                ? ZSTR_VAL(run_state->telemetry_parent_context_b64)
+                : ""
         );
     } ZEND_HASH_FOREACH_END();
 
@@ -476,12 +479,13 @@ static int king_orchestrator_load_state(void)
             char *last_recovery_reason = NULL;
             char *remote_attempt_count = NULL;
             char *last_claimed_by_pid = NULL;
+            char *telemetry_parent_context_b64 = NULL;
             king_orchestrator_run_state_t *run_state;
             zval stored_run;
             zend_string *persistent_key;
             zend_long sequence;
 
-            if (field_count != 10 && field_count != 16 && field_count != 27) {
+            if (field_count != 10 && field_count != 16 && field_count != 27 && field_count != 28) {
                 continue;
             }
 
@@ -502,7 +506,7 @@ static int king_orchestrator_load_state(void)
                 error_step_index = fields[14];
                 completed_step_count = fields[15];
             }
-            if (field_count == 27) {
+            if (field_count == 27 || field_count == 28) {
                 execution_backend = fields[16];
                 queue_phase = fields[17];
                 enqueued_at = fields[18];
@@ -514,6 +518,9 @@ static int king_orchestrator_load_state(void)
                 last_recovery_reason = fields[24];
                 remote_attempt_count = fields[25];
                 last_claimed_by_pid = fields[26];
+            }
+            if (field_count == 28) {
+                telemetry_parent_context_b64 = fields[27];
             }
 
             if (
@@ -561,6 +568,9 @@ static int king_orchestrator_load_state(void)
             run_state->initial_data_b64 = king_orchestrator_dup_state_field(initial_data_b64);
             run_state->pipeline_b64 = king_orchestrator_dup_state_field(pipeline_b64);
             run_state->options_b64 = king_orchestrator_dup_state_field(options_b64);
+            run_state->telemetry_parent_context_b64 = (
+                telemetry_parent_context_b64 != NULL && telemetry_parent_context_b64[0] != '\0'
+            ) ? king_orchestrator_dup_state_field(telemetry_parent_context_b64) : NULL;
             run_state->result_b64 = king_orchestrator_dup_state_field(result_b64);
             run_state->error_b64 = king_orchestrator_dup_state_field(error_b64);
             run_state->error_category = (
@@ -633,18 +643,25 @@ int king_orchestrator_load_run_payload(
     zend_string *run_id,
     zval *initial_data,
     zval *pipeline,
-    zval *options)
+    zval *options,
+    zval *telemetry_parent_context)
 {
     king_orchestrator_run_state_t *run_state;
     int lock_fd = -1;
 
-    if (initial_data == NULL || pipeline == NULL || options == NULL) {
+    if (
+        initial_data == NULL
+        || pipeline == NULL
+        || options == NULL
+        || telemetry_parent_context == NULL
+    ) {
         return FAILURE;
     }
 
     ZVAL_NULL(initial_data);
     ZVAL_NULL(pipeline);
     ZVAL_NULL(options);
+    ZVAL_NULL(telemetry_parent_context);
 
     if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
         return FAILURE;
@@ -660,13 +677,22 @@ int king_orchestrator_load_run_payload(
         king_orchestrator_decode_base64_zval(run_state->initial_data_b64, initial_data) != SUCCESS
         || king_orchestrator_decode_base64_zval(run_state->pipeline_b64, pipeline) != SUCCESS
         || king_orchestrator_decode_base64_zval(run_state->options_b64, options) != SUCCESS
+        || (
+            run_state->telemetry_parent_context_b64 != NULL
+            && king_orchestrator_decode_base64_zval(
+                run_state->telemetry_parent_context_b64,
+                telemetry_parent_context
+            ) != SUCCESS
+        )
     ) {
         zval_ptr_dtor(initial_data);
         zval_ptr_dtor(pipeline);
         zval_ptr_dtor(options);
+        zval_ptr_dtor(telemetry_parent_context);
         ZVAL_NULL(initial_data);
         ZVAL_NULL(pipeline);
         ZVAL_NULL(options);
+        ZVAL_NULL(telemetry_parent_context);
         king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }

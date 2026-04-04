@@ -10,7 +10,7 @@ Status note:
 - Open boxes are not supposed to be "closed" by redefining the product downward. If a stronger shared, remote, persistent, or otherwise meaningful v1 contract already belongs to King, the default action is to implement it correctly rather than quietly shrinking scope.
 - `ISSUES.md` only carries the next `20` repo-local executable leaves when an explicit batch is active. Everything else stays here until it is split to that size.
 - Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, real TCP host/port `remote_peer` execution with persisted success/failure snapshots, distributed observability depth, and controller/worker/remote-peer failover harnesses are now verified; the remaining open boxes below are the broader continuation and larger multi-host slices.
-- Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path, are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, and outage-recovery slices, now expose an explicit process-local non-persistent non-replay delivery contract across restart, now discard stale active-span plus pre-flush span/log scratch state at the next request or worker boundary instead of leaking it into later work units, and now enforce a queue-size-derived in-process byte budget with live self-metrics for queue growth, drops, and retry pressure; the remaining open boxes below are richer ordering/idempotency guarantees, longer-haul characterization, and stronger diagnostics.
+- Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path, are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, request-size fail-closed pre-dispatch, outage-recovery slices, and reference-collector OTLP JSON payload validation, now expose an explicit restart contract that stays process-local and non-replaying by default but upgrades to best-effort local durable replay when `king.otel_queue_state_path` is configured, now discard stale active-span plus pre-flush span/log scratch state at the next request or worker boundary instead of leaking it into later work units, now seed the first request-local server span from a valid incoming `traceparent`/`tracestate` pair instead of leaving inbound propagation as metadata-only folklore, now auto-inject the live current span into outgoing HTTP/1, HTTP/2, and HTTP/3 client requests while preserving explicit caller-supplied `traceparent` and `tracestate` boundaries, now preserve caller span lineage across orchestrator process-resume and file-worker boundaries through persisted distributed parent context plus exported `pipeline-orchestrator-boundary` spans, now enforce a queue-size-derived in-process byte budget with live self-metrics for queue growth, drops, retry pressure, and flush CPU cost, now keep retryable export batches in explicit head-of-queue FIFO order so younger batches cannot overtake an older unresolved batch, now keep one stable exporter batch identity across retry plus restart replay so downstream collectors can dedupe the honest at-least-once delivery path, now split mixed metric/span/log flush pressure into bounded FIFO batch chunks instead of collapsing one large local snapshot into an unbounded monolith, now expose a live `last_export_diagnostic` surface that classifies the latest export failure across pre-dispatch, transport, TLS, HTTP, and collector-response failure stages without leaking endpoint secrets, and now enforce endpoint/credential boundaries by rejecting URL-embedded credentials plus query/fragment exporter endpoints while exposing only a public-safe collector origin on request/session/system telemetry metadata; the remaining open boxes below are longer-haul degraded-exporter characterization.
 - Recent transport/admin closure: the active tree now verifies the full repo-local HTTP/1, HTTP/2, HTTP/3, QUIC, WebSocket, listener, upgrade, admin-API, CORS/header, fairness, shutdown, and cleanup slices carried in sections `A` and `B`; the remaining transport-adjacent open boxes below are the broader security-review and final-closure gates, not missing runtime proofs in those execution sections.
 - Recent QUIC bootstrap closure: the build path now rehydrates a pinned `quiche` commit, pinned BoringSSL submodule commit, tracked workspace lockfile, and pinned `wirefilter` revision without branch-based fallbacks or unlocked cargo retries.
 - Recent Smart-DNS closure: the local DNS-shaped query surface now fails closed on undersized response budgets and rehydrates cleanly after restart, the active runtime now proves a bounded real on-wire UDP listener with honest request, timeout, truncation, and recovery behavior, stale peers can now heal partial durable-state loss by merging only missing service and mother-node entries back into the shared topology without overwriting newer overlapping state, and mother-node re-election pressure now carries persisted tombstones so departed leaders are not silently resurrected by stale writers before an explicit rejoin; the broader distributed-topology boxes below remain open.
@@ -255,18 +255,18 @@ Status note:
 
 ## J. Telemetry Core
 
-- [ ] Validate span lifecycle fully under sustained runtime
-- [ ] Validate metric lifecycle fully under sustained runtime
-- [ ] Validate log lifecycle fully under sustained runtime
+- [x] Validate span lifecycle fully under sustained runtime
+- [x] Validate metric lifecycle fully under sustained runtime
+- [x] Validate log lifecycle fully under sustained runtime
 - [x] Fully harden request / worker cleanup for telemetry state
 - [x] Eliminate all cross-request residue or UAF risk in telemetry state
-- [ ] Implement trace-context propagation on incoming requests
-- [ ] Finalize trace-context injection on outgoing requests
-- [ ] Finalize trace-context extraction from incoming requests
-- [ ] Preserve span hierarchies correctly across process / worker boundaries
-- [ ] Finalize telemetry sampling strategy where publicly claimed
+- [x] Implement trace-context propagation on incoming requests
+- [x] Finalize trace-context injection on outgoing requests
+- [x] Finalize trace-context extraction from incoming requests
+- [x] Preserve span hierarchies correctly across process / worker boundaries
+- [x] Finalize telemetry sampling strategy where publicly claimed
 - [x] Enforce telemetry memory bounds under load
-- [ ] Monitor telemetry CPU bounds under load
+- [x] Monitor telemetry CPU bounds under load
 - [x] Define and enforce telemetry queue limits
 - [x] Define and implement telemetry drop policy
 - [x] Define and implement telemetry retry policy
@@ -280,20 +280,22 @@ Status note:
 - [x] Validate OTLP traces export fully against real collectors
 - [x] Validate OTLP logs export fully against real collectors
 - [x] Validate success / failure / retry behavior against real endpoints
-- [ ] Correctly handle response-size / request-size limits
+- [x] Correctly handle request-size limits before exporter dispatch
+- [x] Correctly handle response-size limits against real collectors
 - [x] Correctly handle non-2xx responses
 - [x] Correctly handle transient network failures
-- [ ] Correctly handle permanent network failures
+- [x] Correctly handle permanent network failures
 - [x] Correctly handle export timeout behavior
 - [x] Implement queue replay after collector outage
-- [ ] Implement queue replay after process restart where required
-- [ ] Define export ordering and idempotency correctly
-- [ ] Finalize batch formation behavior
+- [x] Implement queue replay after process restart where required
+- [x] Define export ordering correctly
+- [x] Define export idempotency correctly
+- [x] Finalize batch formation behavior
 - [x] Finalize flush semantics
 - [x] Finalize delivery semantics
-- [ ] Validate OTLP JSON payloads against reference collectors
-- [ ] Provide complete export failure diagnostics
-- [ ] Finalize export endpoint / credential security boundaries
+- [x] Validate OTLP JSON payloads against reference collectors
+- [x] Provide complete export failure diagnostics
+- [x] Finalize export endpoint / credential security boundaries
 
 ## L. Autoscaling Core
 
@@ -430,7 +432,7 @@ exists today.
   done when: checkpoint state survives restart, can be versioned and resumed honestly, and does not require ETL callers to invent their own persistence layer outside King
 - [ ] Implement an execution-backend contract that can run dataflow pipelines over King local, file-worker, and remote-peer orchestrator backends
   done when: a dataflow run can target the same verified King execution modes that the orchestrator already exposes, including restart-aware continuation and cancellation semantics
-- [ ] Implement a telemetry adapter contract that maps pipeline runs, partitions, batches, retries, and failures into King tracing, metrics, and runtime status
+- [x] Implement a telemetry adapter contract that maps pipeline runs, partitions, batches, retries, and failures into King tracing, metrics, and runtime status
   done when: dataflow runs produce first-class King telemetry instead of opaque application logs, and pipeline observability preserves per-run and per-step identity across workers
 - [ ] Define stable error and retry taxonomy mapping between ETL/dataflow failures and King validation, runtime, transport, and backend failures
   done when: callers can distinguish invalid input, missing data, transient transport failure, backend outage, quota pressure, and retryable checkpoint/resume conditions without reverse-engineering adapter-specific strings

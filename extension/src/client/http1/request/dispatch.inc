@@ -64,8 +64,11 @@ zend_result king_http1_request_dispatch(
     bool request_allows_keep_alive = true;
     int fd = -1;
     char host_header[NI_MAXHOST + 16];
+    zval effective_headers;
+    zval *request_headers_array = headers_array;
 
     memset(&response_meta, 0, sizeof(response_meta));
+    ZVAL_UNDEF(&effective_headers);
 
     if (url_len == 0) {
         king_http1_set_error("%s() requires a non-empty URL.", function_name);
@@ -80,8 +83,15 @@ zend_result king_http1_request_dispatch(
         return FAILURE;
     }
 
-    if (king_http1_request_allows_keep_alive(headers_array, &request_allows_keep_alive) != SUCCESS) {
-        return FAILURE;
+    if (king_telemetry_has_injectable_current_context()) {
+        if (king_telemetry_inject_current_context_headers(&effective_headers, headers_array) != SUCCESS) {
+            goto cleanup;
+        }
+        request_headers_array = &effective_headers;
+    }
+
+    if (king_http1_request_allows_keep_alive(request_headers_array, &request_allows_keep_alive) != SUCCESS) {
+        goto cleanup;
     }
 
     current_url = zend_string_init(url_str, url_len, 0);
@@ -177,7 +187,7 @@ zend_result king_http1_request_dispatch(
 
         if (king_http1_append_request_headers(
                 &request_buffer,
-                headers_array,
+                request_headers_array,
                 current_body,
                 current_body_was_supplied,
                 drop_body_headers,
@@ -550,6 +560,9 @@ cleanup:
     }
     if (origin != NULL) {
         efree(origin);
+    }
+    if (Z_TYPE(effective_headers) != IS_UNDEF) {
+        zval_ptr_dtor(&effective_headers);
     }
     king_http1_response_meta_destroy(&response_meta);
     smart_str_free(&decoded_body);

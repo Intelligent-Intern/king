@@ -40,6 +40,82 @@ static int kg_open_telemetry_apply_bool_field(zval *value, const char *name, boo
 static const char *k_open_telemetry_exporter_protocol_allowed[] = {"grpc", "http/protobuf", NULL};
 static const char *k_open_telemetry_sampler_type_allowed[] = {"parent_based_probability", "always_on", "always_off", NULL};
 
+static zend_result kg_open_telemetry_apply_validated_endpoint_field(
+    zval *value,
+    char **target
+)
+{
+    const char *validation_error;
+
+    if (Z_TYPE_P(value) != IS_STRING) {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "Invalid type provided. A string is required."
+        );
+        return FAILURE;
+    }
+
+    validation_error = king_open_telemetry_validate_exporter_endpoint_value(
+        Z_STRVAL_P(value),
+        Z_STRLEN_P(value)
+    );
+    if (validation_error != NULL) {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "%s",
+            validation_error
+        );
+        return FAILURE;
+    }
+
+    if (*target != NULL) {
+        pefree(*target, 1);
+    }
+    *target = pestrdup(Z_STRVAL_P(value), 1);
+
+    return SUCCESS;
+}
+
+static zend_result kg_open_telemetry_apply_validated_headers_field(
+    zval *value,
+    char **target
+)
+{
+    const char *validation_error;
+
+    if (Z_TYPE_P(value) != IS_STRING) {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "Invalid type provided. A string is required."
+        );
+        return FAILURE;
+    }
+
+    validation_error = king_open_telemetry_validate_exporter_headers_value(
+        Z_STRVAL_P(value),
+        Z_STRLEN_P(value)
+    );
+    if (validation_error != NULL) {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "%s",
+            validation_error
+        );
+        return FAILURE;
+    }
+
+    if (*target != NULL) {
+        pefree(*target, 1);
+    }
+    *target = pestrdup(Z_STRVAL_P(value), 1);
+
+    return SUCCESS;
+}
+
 int kg_config_open_telemetry_apply_userland_config_to(
     kg_open_telemetry_config_t *target,
     zval *config_arr)
@@ -70,7 +146,10 @@ int kg_config_open_telemetry_apply_userland_config_to(
                 return FAILURE;
             }
         } else if (zend_string_equals_literal(key, "exporter_endpoint")) {
-            if (kg_validate_generic_string(value, &target->exporter_endpoint) != SUCCESS) {
+            if (kg_open_telemetry_apply_validated_endpoint_field(
+                    value,
+                    &target->exporter_endpoint
+                ) != SUCCESS) {
                 return FAILURE;
             }
         } else if (zend_string_equals_literal(key, "exporter_protocol")) {
@@ -85,7 +164,10 @@ int kg_config_open_telemetry_apply_userland_config_to(
                 return FAILURE;
             }
         } else if (zend_string_equals_literal(key, "exporter_headers")) {
-            if (kg_validate_generic_string(value, &target->exporter_headers) != SUCCESS) {
+            if (kg_open_telemetry_apply_validated_headers_field(
+                    value,
+                    &target->exporter_headers
+                ) != SUCCESS) {
                 return FAILURE;
             }
         } else if (zend_string_equals_literal(key, "batch_processor_max_queue_size")) {

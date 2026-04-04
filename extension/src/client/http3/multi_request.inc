@@ -128,11 +128,23 @@ static zend_result king_http3_execute_multi_requests(
             requests[i].body_string = zval_get_string(body_value);
         }
 
+        if (king_telemetry_has_injectable_current_context()) {
+            if (king_telemetry_inject_current_context_headers(
+                    &requests[i].effective_headers,
+                    headers_value != NULL && Z_TYPE_P(headers_value) == IS_ARRAY ? headers_value : NULL
+                ) != SUCCESS) {
+                goto failure;
+            }
+            requests[i].effective_headers_initialized = true;
+        }
+
         if (king_http3_prepare_request_headers(
                 &requests[i].target,
                 ZSTR_VAL(requests[i].method),
                 ZSTR_LEN(requests[i].method),
-                headers_value != NULL && Z_TYPE_P(headers_value) == IS_ARRAY ? headers_value : NULL,
+                requests[i].effective_headers_initialized
+                    ? &requests[i].effective_headers
+                    : (headers_value != NULL && Z_TYPE_P(headers_value) == IS_ARRAY ? headers_value : NULL),
                 &requests[i].request_headers,
                 &requests[i].request_header_count,
                 &requests[i].owned_strings,
