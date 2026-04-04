@@ -432,7 +432,7 @@ exists today.
   done when: checkpoint state survives restart, can be versioned and resumed honestly, and does not require ETL callers to invent their own persistence layer outside King
 - [ ] Implement an execution-backend contract that can run dataflow pipelines over King local, file-worker, and remote-peer orchestrator backends
   done when: a dataflow run can target the same verified King execution modes that the orchestrator already exposes, including restart-aware continuation and cancellation semantics
-- [ ] Implement a telemetry adapter contract that maps pipeline runs, partitions, batches, retries, and failures into King tracing, metrics, and runtime status
+- [x] Implement a telemetry adapter contract that maps pipeline runs, partitions, batches, retries, and failures into King tracing, metrics, and runtime status
   done when: dataflow runs produce first-class King telemetry instead of opaque application logs, and pipeline observability preserves per-run and per-step identity across workers
 - [ ] Define stable error and retry taxonomy mapping between ETL/dataflow failures and King validation, runtime, transport, and backend failures
   done when: callers can distinguish invalid input, missing data, transient transport failure, backend outage, quota pressure, and retryable checkpoint/resume conditions without reverse-engineering adapter-specific strings

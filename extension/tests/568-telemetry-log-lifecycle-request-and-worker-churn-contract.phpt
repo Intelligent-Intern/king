@@ -320,15 +320,18 @@ if (($workerCapture['empty'] ?? true) !== false) {
     throw new RuntimeException('log lifecycle worker runner expected the queue to be empty at the end.');
 }
 
-if (count($collectorCapture) !== $requestIterations + $workerIterations) {
+$logBatches = [];
+foreach ($collectorCapture as $entry) {
+    if (($entry['path'] ?? null) === '/v1/logs') {
+        $logBatches[] = $entry;
+    }
+}
+if (count($logBatches) !== $requestIterations + $workerIterations) {
     throw new RuntimeException('log lifecycle collector did not observe the expected number of log flushes.');
 }
 
 for ($i = 0; $i < $requestIterations; $i++) {
-    $body = (string) ($collectorCapture[$i]['body'] ?? '');
-    if (($collectorCapture[$i]['path'] ?? null) !== '/v1/logs') {
-        throw new RuntimeException('request log lifecycle collector observed an unexpected OTLP path.');
-    }
+    $body = (string) ($logBatches[$i]['body'] ?? '');
     if (!str_contains($body, 'request-log-a-' . $i) || !str_contains($body, 'request-log-b-' . $i)) {
         throw new RuntimeException('request log batch did not contain the expected fresh logs.');
     }
@@ -342,10 +345,7 @@ for ($i = 0; $i < $requestIterations; $i++) {
 }
 
 for ($i = 0; $i < $workerIterations; $i++) {
-    $body = (string) ($collectorCapture[$requestIterations + $i]['body'] ?? '');
-    if (($collectorCapture[$requestIterations + $i]['path'] ?? null) !== '/v1/logs') {
-        throw new RuntimeException('worker log lifecycle collector observed an unexpected OTLP path.');
-    }
+    $body = (string) ($logBatches[$requestIterations + $i]['body'] ?? '');
     if (!str_contains($body, 'worker-log-a-' . $i) || !str_contains($body, 'worker-log-b-' . $i)) {
         throw new RuntimeException('worker log batch did not contain the expected fresh logs.');
     }

@@ -64,6 +64,83 @@ static void king_orchestrator_append_step_snapshots(
             add_assoc_null(&entry, "error_classification");
         }
 
+        if (king_orchestrator_find_pipeline_step_string(
+                pipeline,
+                (zend_long) index,
+                "partition_id",
+                sizeof("partition_id") - 1
+            ) != NULL
+            || king_orchestrator_find_pipeline_step_string(
+                pipeline,
+                (zend_long) index,
+                "batch_id",
+                sizeof("batch_id") - 1
+            ) != NULL) {
+            zval step_adapter;
+            zend_string *attempt_identity;
+            zend_string *failure_identity;
+            zval *partition_id;
+            zval *batch_id;
+
+            array_init(&step_adapter);
+            attempt_identity = king_orchestrator_build_attempt_identity_for_snapshot(run_state);
+            add_assoc_stringl(&step_adapter, "attempt_identity", ZSTR_VAL(attempt_identity), ZSTR_LEN(attempt_identity));
+            if (run_state != NULL && run_state->recovery_count > 0) {
+                add_assoc_stringl(&step_adapter, "retry_identity", ZSTR_VAL(attempt_identity), ZSTR_LEN(attempt_identity));
+            } else {
+                add_assoc_null(&step_adapter, "retry_identity");
+            }
+            zend_string_release(attempt_identity);
+
+            partition_id = king_orchestrator_find_pipeline_step_string(
+                pipeline,
+                (zend_long) index,
+                "partition_id",
+                sizeof("partition_id") - 1
+            );
+            if (partition_id != NULL) {
+                add_assoc_stringl(&step_adapter, "partition_id", Z_STRVAL_P(partition_id), Z_STRLEN_P(partition_id));
+            } else {
+                add_assoc_null(&step_adapter, "partition_id");
+            }
+
+            batch_id = king_orchestrator_find_pipeline_step_string(
+                pipeline,
+                (zend_long) index,
+                "batch_id",
+                sizeof("batch_id") - 1
+            );
+            if (batch_id != NULL) {
+                add_assoc_stringl(&step_adapter, "batch_id", Z_STRVAL_P(batch_id), Z_STRLEN_P(batch_id));
+            } else {
+                add_assoc_null(&step_adapter, "batch_id");
+            }
+
+            if (
+                run_state != NULL
+                && run_state->error_step_index == (zend_long) index
+                && run_state->status != NULL
+                && (
+                    zend_string_equals_literal(run_state->status, "failed")
+                    || zend_string_equals_literal(run_state->status, "cancelled")
+                )
+            ) {
+                failure_identity = king_orchestrator_build_failure_identity_for_snapshot(run_state);
+                if (failure_identity != NULL) {
+                    add_assoc_stringl(&step_adapter, "failure_identity", ZSTR_VAL(failure_identity), ZSTR_LEN(failure_identity));
+                    zend_string_release(failure_identity);
+                } else {
+                    add_assoc_null(&step_adapter, "failure_identity");
+                }
+            } else {
+                add_assoc_null(&step_adapter, "failure_identity");
+            }
+
+            add_assoc_zval(&entry, "telemetry_adapter", &step_adapter);
+        } else {
+            add_assoc_null(&entry, "telemetry_adapter");
+        }
+
         add_next_index_zval(&steps, &entry);
         index++;
     } ZEND_HASH_FOREACH_END();
@@ -136,6 +213,7 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     add_assoc_zval(return_value, "result", &result);
     add_assoc_zval(return_value, "error", &error);
     king_orchestrator_append_error_classification(return_value, run_state, &pipeline);
+    king_orchestrator_append_run_telemetry_adapter_snapshot(return_value, &pipeline, run_state);
     king_orchestrator_append_compensation_snapshot(return_value, &pipeline, run_state);
     king_orchestrator_append_run_observability(return_value, run_state, &pipeline);
     king_orchestrator_append_step_snapshots(return_value, &pipeline, run_state);
@@ -624,4 +702,3 @@ int king_orchestrator_claim_next_run(
         return SUCCESS;
     }
 }
-

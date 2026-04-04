@@ -81,10 +81,9 @@ function king_orchestrator_telemetry_boundary_collect_exported_spans(array $coll
     $spans = [];
 
     foreach ($collectorCapture as $entry) {
-        king_orchestrator_telemetry_boundary_assert(
-            ($entry['path'] ?? null) === '/v1/traces',
-            'collector observed an unexpected OTLP path while checking orchestrator boundary spans.'
-        );
+        if (($entry['path'] ?? null) !== '/v1/traces') {
+            continue;
+        }
 
         $payload = json_decode((string) ($entry['body'] ?? ''), true);
         king_orchestrator_telemetry_boundary_assert(
@@ -99,7 +98,7 @@ function king_orchestrator_telemetry_boundary_collect_exported_spans(array $coll
         );
 
         foreach ($bodySpans as $span) {
-            if (is_array($span)) {
+            if (is_array($span) && ($span['name'] ?? null) === 'pipeline-orchestrator-boundary') {
                 $spans[] = $span;
             }
         }

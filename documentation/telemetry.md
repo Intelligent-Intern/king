@@ -443,6 +443,17 @@ internal `pipeline-orchestrator-boundary` span. That keeps resumed work on the
 original trace across process restarts and file-worker handoff instead of
 quietly starting a fresh local root in the recovery process.
 
+The orchestrator now also exposes a first-class telemetry adapter on top of
+that lineage instead of leaving pipeline telemetry as unstructured app logs.
+Recovered and fresh pipeline attempts emit `pipeline-orchestrator-run` and
+`pipeline-orchestrator-step` spans, bounded `pipeline.run.count`,
+`pipeline.retry.count`, `pipeline.partition.count`, `pipeline.batch.count`, and
+`pipeline.failure.count` metrics, plus one structured failure log when a run
+ends unsuccessfully. Those exported attributes intentionally line up with the
+persisted run snapshot's `telemetry_adapter` block, so `attempt_identity`,
+`retry_identity`, `partition_id`, `batch_id`, and `failure_identity` stay
+stable across worker recovery and restart boundaries.
+
 Even if you only use the basic span API at first, it is worth understanding
 these helpers because they are the bridge between local tracing and
 cross-service tracing.

@@ -480,6 +480,11 @@ static zend_bool king_telemetry_capture_enabled(void)
     return king_telemetry_system_initialized && king_telemetry_runtime_config.enabled;
 }
 
+zend_bool king_telemetry_is_capture_enabled(void)
+{
+    return king_telemetry_capture_enabled();
+}
+
 static uint64_t king_telemetry_estimate_zval_bytes(zval *value)
 {
     smart_str json_payload = {0};

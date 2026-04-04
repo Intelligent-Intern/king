@@ -18,6 +18,219 @@ static zval *king_orchestrator_find_pipeline_step_tool(zval *pipeline, zend_long
     return zend_hash_str_find(Z_ARRVAL_P(step), "tool", sizeof("tool") - 1);
 }
 
+static zval *king_orchestrator_find_pipeline_step_string(
+    zval *pipeline,
+    zend_long step_index,
+    const char *field_name,
+    size_t field_name_len
+)
+{
+    zval *step;
+    zval *value;
+
+    if (
+        pipeline == NULL
+        || Z_TYPE_P(pipeline) != IS_ARRAY
+        || step_index < 0
+    ) {
+        return NULL;
+    }
+
+    step = zend_hash_index_find(Z_ARRVAL_P(pipeline), (zend_ulong) step_index);
+    if (step == NULL || Z_TYPE_P(step) != IS_ARRAY) {
+        return NULL;
+    }
+
+    value = zend_hash_str_find(Z_ARRVAL_P(step), field_name, field_name_len);
+    if (value == NULL || Z_TYPE_P(value) != IS_STRING || Z_STRLEN_P(value) == 0) {
+        return NULL;
+    }
+
+    return value;
+}
+
+static zend_long king_orchestrator_pipeline_step_metadata_count(
+    zval *pipeline,
+    const char *field_name,
+    size_t field_name_len
+)
+{
+    zval *step;
+    zval *value;
+    zend_long count = 0;
+
+    if (pipeline == NULL || Z_TYPE_P(pipeline) != IS_ARRAY) {
+        return 0;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(pipeline), step) {
+        if (step == NULL || Z_TYPE_P(step) != IS_ARRAY) {
+            continue;
+        }
+
+        value = zend_hash_str_find(Z_ARRVAL_P(step), field_name, field_name_len);
+        if (value != NULL && Z_TYPE_P(value) == IS_STRING && Z_STRLEN_P(value) > 0) {
+            count++;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return count;
+}
+
+static zend_string *king_orchestrator_build_attempt_identity_for_snapshot(
+    const king_orchestrator_run_state_t *run_state
+)
+{
+    zend_long attempt_number = 1;
+    const char *run_id = "run-unknown";
+
+    if (run_state != NULL && run_state->recovery_count >= 0) {
+        attempt_number = run_state->recovery_count + 1;
+    }
+
+    if (run_state != NULL && run_state->run_id != NULL) {
+        run_id = ZSTR_VAL(run_state->run_id);
+    }
+
+    return strpprintf(
+        0,
+        "%s:attempt-%ld",
+        run_id,
+        attempt_number > 0 ? attempt_number : 1
+    );
+}
+
+static zend_string *king_orchestrator_build_failure_identity_for_snapshot(
+    const king_orchestrator_run_state_t *run_state
+)
+{
+    zend_string *attempt_identity;
+    zend_string *failure_identity;
+
+    if (
+        run_state == NULL
+        || run_state->run_id == NULL
+        || run_state->status == NULL
+        || (
+            !zend_string_equals_literal(run_state->status, "failed")
+            && !zend_string_equals_literal(run_state->status, "cancelled")
+        )
+    ) {
+        return NULL;
+    }
+
+    attempt_identity = king_orchestrator_build_attempt_identity_for_snapshot(run_state);
+    failure_identity = strpprintf(
+        0,
+        "%s:%s:%s:%ld",
+        ZSTR_VAL(attempt_identity),
+        ZSTR_VAL(run_state->status),
+        run_state->error_category != NULL ? ZSTR_VAL(run_state->error_category) : "backend",
+        run_state->error_step_index
+    );
+    zend_string_release(attempt_identity);
+
+    return failure_identity;
+}
+
+static void king_orchestrator_append_run_telemetry_adapter_snapshot(
+    zval *target,
+    zval *pipeline,
+    const king_orchestrator_run_state_t *run_state
+)
+{
+    zval adapter;
+    zend_string *attempt_identity;
+    zend_string *failure_identity;
+    zval *failed_partition;
+    zval *failed_batch;
+
+    if (target == NULL) {
+        return;
+    }
+
+    array_init(&adapter);
+    add_assoc_string(&adapter, "contract", "run_partition_batch_retry_failure_identity");
+    add_assoc_string(
+        &adapter,
+        "identity_surface",
+        "run_snapshots+otlp_spans+otlp_logs+telemetry_metrics"
+    );
+
+    attempt_identity = king_orchestrator_build_attempt_identity_for_snapshot(run_state);
+    add_assoc_stringl(&adapter, "attempt_identity", ZSTR_VAL(attempt_identity), ZSTR_LEN(attempt_identity));
+    if (run_state != NULL && run_state->recovery_count > 0) {
+        add_assoc_stringl(&adapter, "retry_identity", ZSTR_VAL(attempt_identity), ZSTR_LEN(attempt_identity));
+    } else {
+        add_assoc_null(&adapter, "retry_identity");
+    }
+    zend_string_release(attempt_identity);
+
+    add_assoc_long(
+        &adapter,
+        "partition_count",
+        king_orchestrator_pipeline_step_metadata_count(
+            pipeline,
+            "partition_id",
+            sizeof("partition_id") - 1
+        )
+    );
+    add_assoc_long(
+        &adapter,
+        "batch_count",
+        king_orchestrator_pipeline_step_metadata_count(
+            pipeline,
+            "batch_id",
+            sizeof("batch_id") - 1
+        )
+    );
+
+    failure_identity = king_orchestrator_build_failure_identity_for_snapshot(run_state);
+    if (failure_identity != NULL) {
+        add_assoc_stringl(&adapter, "failure_identity", ZSTR_VAL(failure_identity), ZSTR_LEN(failure_identity));
+        zend_string_release(failure_identity);
+    } else {
+        add_assoc_null(&adapter, "failure_identity");
+    }
+
+    if (run_state != NULL && run_state->retry_disposition != NULL) {
+        add_assoc_stringl(
+            &adapter,
+            "retry_disposition",
+            ZSTR_VAL(run_state->retry_disposition),
+            ZSTR_LEN(run_state->retry_disposition)
+        );
+    } else {
+        add_assoc_null(&adapter, "retry_disposition");
+    }
+
+    failed_partition = king_orchestrator_find_pipeline_step_string(
+        pipeline,
+        run_state != NULL ? run_state->error_step_index : -1,
+        "partition_id",
+        sizeof("partition_id") - 1
+    );
+    if (failed_partition != NULL) {
+        add_assoc_stringl(&adapter, "failed_partition_id", Z_STRVAL_P(failed_partition), Z_STRLEN_P(failed_partition));
+    } else {
+        add_assoc_null(&adapter, "failed_partition_id");
+    }
+
+    failed_batch = king_orchestrator_find_pipeline_step_string(
+        pipeline,
+        run_state != NULL ? run_state->error_step_index : -1,
+        "batch_id",
+        sizeof("batch_id") - 1
+    );
+    if (failed_batch != NULL) {
+        add_assoc_stringl(&adapter, "failed_batch_id", Z_STRVAL_P(failed_batch), Z_STRLEN_P(failed_batch));
+    } else {
+        add_assoc_null(&adapter, "failed_batch_id");
+    }
+
+    add_assoc_zval(target, "telemetry_adapter", &adapter);
+}
+
 static void king_orchestrator_append_error_classification(
     zval *target,
     const king_orchestrator_run_state_t *run_state,
@@ -350,4 +563,3 @@ static void king_orchestrator_append_run_observability(
 
     add_assoc_zval(target, "distributed_observability", &observability);
 }
-

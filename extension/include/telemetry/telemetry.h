@@ -209,6 +209,7 @@ const char* king_span_kind_to_string(king_span_kind_t kind);
 zend_bool king_telemetry_build_trace_context_snapshot(zval *destination);
 zend_bool king_telemetry_build_distributed_parent_context(zval *destination);
 zend_bool king_telemetry_build_last_export_diagnostic(zval *destination);
+zend_bool king_telemetry_is_capture_enabled(void);
 zend_bool king_telemetry_has_injectable_current_context(void);
 zend_result king_telemetry_inject_current_context_headers(
     zval *destination,

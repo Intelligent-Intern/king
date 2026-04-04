@@ -124,7 +124,7 @@ function king_telemetry_metric_lifecycle_assert_iteration(
     if (!is_array($beforeStatus) || (int) ($beforeStatus['active_metrics'] ?? -1) !== 0) {
         throw new RuntimeException($prefix . ' iteration started with stale live metrics.');
     }
-    if (!is_array($midMetrics) || count($midMetrics) !== 2) {
+    if (!is_array($midMetrics) || count($midMetrics) < 2) {
         throw new RuntimeException($prefix . ' iteration did not expose the expected live metric registry.');
     }
     if (!is_array($counterMetric)
@@ -151,7 +151,7 @@ function king_telemetry_metric_lifecycle_collect_metric_batches(array $collector
 
     foreach ($collectorCapture as $entry) {
         if (($entry['path'] ?? null) !== '/v1/metrics') {
-            throw new RuntimeException('telemetry metric lifecycle collector observed an unexpected OTLP path.');
+            continue;
         }
 
         $payload = json_decode((string) ($entry['body'] ?? ''), true);
