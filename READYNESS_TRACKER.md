@@ -284,7 +284,7 @@ Status note:
 - [x] Correctly handle response-size limits against real collectors
 - [x] Correctly handle non-2xx responses
 - [x] Correctly handle transient network failures
-- [ ] Correctly handle permanent network failures
+- [x] Correctly handle permanent network failures
 - [x] Correctly handle export timeout behavior
 - [x] Implement queue replay after collector outage
 - [ ] Implement queue replay after process restart where required

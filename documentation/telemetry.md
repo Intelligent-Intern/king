@@ -279,6 +279,15 @@ oversized requests are dropped before dispatch because they can never succeed,
 while oversized collector responses are treated as retryable exporter failures
 because the same batch may still succeed against a healthy collector later.
 
+There is one more terminal branch on the exporter boundary. If libcurl reports
+that the configured collector host or proxy cannot be resolved, or that the
+endpoint URL itself is not usable, King treats that as a permanent endpoint
+failure for the current process configuration. The affected metrics, spans, or
+logs batch is counted as an export failure and dropped locally instead of being
+requeued forever behind an endpoint that this process cannot reach. That keeps
+later healthy exports from being poisoned by a clearly non-retryable endpoint
+mistake.
+
 This behavior is usually the right tradeoff for a runtime library. It protects
 the main application from turning telemetry failure into uncontrolled memory
 growth, while still making the delivery problem visible through status counters.

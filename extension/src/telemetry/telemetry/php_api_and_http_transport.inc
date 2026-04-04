@@ -207,6 +207,26 @@ static size_t king_telemetry_http_write_callback(void *ptr, size_t size, size_t 
     return total_size;
 }
 
+static int king_telemetry_http_result_from_curl_code(CURLcode res)
+{
+    switch (res) {
+        case CURLE_COULDNT_RESOLVE_PROXY:
+        case CURLE_COULDNT_RESOLVE_HOST:
+        case CURLE_UNSUPPORTED_PROTOCOL:
+        case CURLE_URL_MALFORMAT:
+        case CURLE_NOT_BUILT_IN:
+            /*
+             * These failures point at a terminal exporter endpoint problem for
+             * the current payload, not a transient collector outage. Drop the
+             * batch locally so later healthy exports are not blocked behind an
+             * endpoint that this process can never reach.
+             */
+            return KING_TELEMETRY_EXPORT_RESULT_DROP;
+        default:
+            return FAILURE;
+    }
+}
+
 static int king_telemetry_http_post(
     const char *url,
     const char *json_payload,
@@ -259,6 +279,7 @@ static int king_telemetry_http_post(
     
     if (res != CURLE_OK) {
         smart_str_free(&response->data);
+        result = king_telemetry_http_result_from_curl_code(res);
         goto cleanup;
     }
     

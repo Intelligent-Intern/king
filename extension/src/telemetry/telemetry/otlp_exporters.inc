@@ -43,6 +43,10 @@ static int king_telemetry_dispatch_otlp_json_payload(const char *endpoint_url, s
 
     smart_str_free(&response.data);
 
+    if (result == KING_TELEMETRY_EXPORT_RESULT_DROP) {
+        return KING_TELEMETRY_EXPORT_RESULT_DROP;
+    }
+
     if (result == SUCCESS && response.status_code >= 200 && response.status_code < 300) {
         return SUCCESS;
     }
