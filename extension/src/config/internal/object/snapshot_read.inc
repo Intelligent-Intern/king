@@ -117,6 +117,20 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "otel.queue_state_path",
+            sizeof("otel.queue_state_path") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->observability.queue_state_path != NULL ? cfg->observability.queue_state_path : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "autoscale.provider",
             sizeof("autoscale.provider") - 1
         )
@@ -349,4 +363,3 @@ static zend_result king_config_object_snapshot_read(
 
     return FAILURE;
 }
-

@@ -9,9 +9,14 @@
 #include <zend_hash.h>
 #include <curl/curl.h>
 #include <dlfcn.h>
+#include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <sys/file.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <ext/json/php_json.h>
+#include <ext/standard/php_var.h>
 #include "zend_smart_str.h"
 #include "include/config/open_telemetry/base_layer.h"
 
@@ -74,6 +79,7 @@ static void king_telemetry_span_free(king_trace_context_t *span);
 
 #include "telemetry/runtime_and_libcurl.inc"
 #include "telemetry/pending_buffers_and_encoding.inc"
+#include "telemetry/state_persistence.inc"
 #include "telemetry/queue_and_span_runtime.inc"
 #include "telemetry/php_api_and_http_transport.inc"
 #include "telemetry/otlp_exporters.inc"

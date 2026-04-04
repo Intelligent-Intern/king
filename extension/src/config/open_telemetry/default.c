@@ -23,6 +23,7 @@ void kg_config_open_telemetry_defaults_load(void)
     king_open_telemetry_config.exporter_protocol = NULL;
     king_open_telemetry_config.exporter_timeout_ms = 10000;
     king_open_telemetry_config.exporter_headers = NULL;
+    king_open_telemetry_config.queue_state_path = NULL;
     king_open_telemetry_config.batch_processor_max_queue_size = 2048;
     king_open_telemetry_config.batch_processor_schedule_delay_ms = 5000;
     king_open_telemetry_config.traces_sampler_type = NULL;

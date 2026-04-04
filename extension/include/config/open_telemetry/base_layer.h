@@ -24,6 +24,7 @@ typedef struct _kg_open_telemetry_config_t {
     char *exporter_protocol;
     zend_long exporter_timeout_ms;
     char *exporter_headers;
+    char *queue_state_path;
 
     /* --- Batch Processor Settings --- */
     zend_long batch_processor_max_queue_size;

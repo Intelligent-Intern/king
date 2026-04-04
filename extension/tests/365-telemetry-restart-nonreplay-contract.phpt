@@ -1,5 +1,5 @@
 --TEST--
-King telemetry restart semantics stay explicitly process-local and non-replaying
+King telemetry restart semantics stay non-replaying without a durable queue state path
 --INI--
 king.security_allow_config_override=1
 --FILE--

@@ -140,75 +140,13 @@ king_telemetry_batch_t* king_telemetry_create_batch(void)
 
 int king_telemetry_queue_batch(king_telemetry_batch_t *batch)
 {
-    uint32_t max_queue_size;
-    uint64_t memory_limit;
-    uint64_t queue_bytes_after_enqueue;
-
-    if (!batch) return FAILURE;
-
-    /* Always detach before enqueue so retries cannot retain stale links. */
-    batch->next = NULL;
-    king_telemetry_batch_refresh_estimated_bytes(batch);
-
-    max_queue_size = king_telemetry_runtime_max_queue_size();
-    if (max_queue_size > 0 && king_telemetry_queue_size >= max_queue_size) {
-        king_telemetry_queue_drop_count++;
-        return FAILURE;
-    }
-
-    memory_limit = king_telemetry_runtime_memory_byte_limit_internal();
-    queue_bytes_after_enqueue = king_telemetry_saturated_add_u64(
-        king_telemetry_queue_bytes,
-        batch->estimated_bytes
-    );
-    if (memory_limit > 0 && queue_bytes_after_enqueue > memory_limit) {
-        king_telemetry_queue_drop_count++;
-        return FAILURE;
-    }
-    
-    if (!king_telemetry_export_queue_head) {
-        king_telemetry_export_queue_head = batch;
-        king_telemetry_export_queue_tail = batch;
-    } else {
-        king_telemetry_export_queue_tail->next = batch;
-        king_telemetry_export_queue_tail = batch;
-    }
-    
-    king_telemetry_queue_size++;
-    king_telemetry_queue_bytes = queue_bytes_after_enqueue;
-    king_telemetry_note_runtime_watermarks();
-    return SUCCESS;
-}
-
-static king_telemetry_batch_t* king_telemetry_dequeue_batch(void)
-{
-    king_telemetry_batch_t *batch;
-
-    if (!king_telemetry_export_queue_head) return NULL;
-    
-    batch = king_telemetry_export_queue_head;
-    king_telemetry_export_queue_head = batch->next;
-    batch->next = NULL;
-    
-    if (!king_telemetry_export_queue_head) {
-        king_telemetry_export_queue_tail = NULL;
-    }
-    
-    king_telemetry_queue_size--;
-    if (king_telemetry_queue_bytes >= batch->estimated_bytes) {
-        king_telemetry_queue_bytes -= batch->estimated_bytes;
-    } else {
-        king_telemetry_queue_bytes = 0;
-    }
-    return batch;
+    return king_telemetry_queue_batch_internal(batch, 1);
 }
 
 void king_telemetry_cleanup_export_queue(void)
 {
-    king_telemetry_batch_t *batch;
-    while ((batch = king_telemetry_dequeue_batch()) != NULL) {
-        king_telemetry_free_batch(batch);
-    }
+    king_telemetry_free_export_queue_in_memory();
+    (void) king_telemetry_persist_queue_state();
 }
 
 zend_bool king_telemetry_has_pending_signals(void)
@@ -238,65 +176,42 @@ void king_telemetry_append_pending_signals(king_telemetry_batch_t *batch)
 
 int king_telemetry_process_export_queue(void)
 {
-    king_telemetry_batch_t *batch;
+    uint32_t attempts;
     int total_processed = 0;
     int total_success = 0;
-    
-    while ((batch = king_telemetry_dequeue_batch()) != NULL) {
+
+    attempts = king_telemetry_queue_size;
+    while (attempts-- > 0 && king_telemetry_peek_batch() != NULL) {
         total_processed++;
-        
-        /* Export metrics if present */
-        if (zend_hash_num_elements(Z_ARRVAL(batch->metrics)) > 0) {
-            if (king_telemetry_export_metrics_otlp(&batch->metrics) == SUCCESS) {
-                zend_hash_clean(Z_ARRVAL(batch->metrics));
-                total_success++;
-            } else {
-                king_telemetry_export_failure_count++;
-            }
+        if (king_telemetry_export_batch() == SUCCESS) {
+            total_success++;
         }
-        
-        /* Export spans if present */
-        if (zend_hash_num_elements(Z_ARRVAL(batch->spans)) > 0) {
-            if (king_telemetry_export_spans_otlp(&batch->spans) == SUCCESS) {
-                zend_hash_clean(Z_ARRVAL(batch->spans));
-                total_success++;
-            } else {
-                king_telemetry_export_failure_count++;
-            }
-        }
-        
-        /* Export logs if present */
-        if (zend_hash_num_elements(Z_ARRVAL(batch->logs)) > 0) {
-            if (king_telemetry_export_logs_otlp(&batch->logs) == SUCCESS) {
-                zend_hash_clean(Z_ARRVAL(batch->logs));
-                total_success++;
-            } else {
-                king_telemetry_export_failure_count++;
-            }
-        }
-        
-        /* Free the batch */
-        king_telemetry_free_batch(batch);
     }
-    
-    king_telemetry_export_success_count += total_success;
+
+    (void) total_success;
     return total_processed;
 }
 
 int king_telemetry_init_system(king_telemetry_config_t *config)
 {
+    zend_bool should_rehydrate = 0;
+
     if (config) {
         /*
          * Config re-initialization starts a fresh request/worker scope but must
          * not tear down the process-local retry queue that already carries
          * explicitly flushed batches.
          */
+        should_rehydrate = king_telemetry_system_initialized ? 0 : 1;
         king_telemetry_cleanup_scope_state();
         memcpy(&king_telemetry_runtime_config, config, sizeof(king_telemetry_config_t));
         if (king_telemetry_runtime_config.max_queue_size == 0) {
             king_telemetry_runtime_config.max_queue_size = king_telemetry_default_max_queue_size();
         }
         king_telemetry_pending_buffers_ensure();
+        if (should_rehydrate) {
+            (void) king_telemetry_rehydrate_queue_state();
+        }
         king_telemetry_system_initialized = true;
     }
     return SUCCESS;
@@ -306,12 +221,13 @@ void king_telemetry_shutdown_system(void)
 {
     king_telemetry_system_initialized = false;
     king_telemetry_cleanup_scope_state();
-    
-    /* Flush any remaining batches in queue */
-    king_telemetry_batch_t *batch;
-    while ((batch = king_telemetry_dequeue_batch()) != NULL) {
-        king_telemetry_free_batch(batch);
-    }
+
+    /*
+     * A configured durable queue path already carries the persisted retry
+     * queue. Free the in-memory list without mutating the persisted state so a
+     * fresh process can replay it.
+     */
+    king_telemetry_free_export_queue_in_memory();
 
     king_telemetry_shutdown_libcurl_runtime();
     memset(&king_telemetry_runtime_config, 0, sizeof(king_telemetry_runtime_config));

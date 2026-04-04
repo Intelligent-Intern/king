@@ -104,10 +104,26 @@ PHP_FUNCTION(king_system_get_component_info)
             king_open_telemetry_config.logs_enable ? 1 : 0);
         add_assoc_string(&configuration, "delivery_contract",
             "best_effort_bounded_retry");
-        add_assoc_string(&configuration, "queue_persistence",
-            "process_local_non_persistent");
-        add_assoc_string(&configuration, "restart_replay",
-            "not_supported");
+        add_assoc_string(
+            &configuration,
+            "queue_persistence",
+            (
+                king_open_telemetry_config.queue_state_path != NULL
+                && king_open_telemetry_config.queue_state_path[0] != '\0'
+            )
+                ? "process_local_durable_file"
+                : "process_local_non_persistent"
+        );
+        add_assoc_string(
+            &configuration,
+            "restart_replay",
+            (
+                king_open_telemetry_config.queue_state_path != NULL
+                && king_open_telemetry_config.queue_state_path[0] != '\0'
+            )
+                ? "best_effort_supported"
+                : "not_supported"
+        );
         add_assoc_string(&configuration, "drain_behavior",
             "single_batch_per_flush");
         add_assoc_string(&configuration, "memory_bound",

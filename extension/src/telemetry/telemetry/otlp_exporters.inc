@@ -65,8 +65,8 @@ int king_telemetry_export_batch(void)
     if (!king_telemetry_system_initialized || !king_telemetry_runtime_config.enabled) {
         return FAILURE;
     }
-    
-    king_telemetry_batch_t *batch = king_telemetry_dequeue_batch();
+
+    king_telemetry_batch_t *batch = king_telemetry_peek_batch();
     if (!batch) {
         return SUCCESS; /* No batches to export */
     }
@@ -108,28 +108,37 @@ int king_telemetry_export_batch(void)
     }
 
     if (!attempted) {
-        king_telemetry_free_batch(batch);
+        batch = king_telemetry_remove_head_batch_in_memory();
+        if (batch != NULL) {
+            (void) king_telemetry_persist_queue_state();
+            king_telemetry_free_batch(batch);
+        }
         return SUCCESS;
     }
 
     if (!failed) {
         king_telemetry_export_success_count++;
+        batch = king_telemetry_remove_head_batch_in_memory();
+        if (batch != NULL) {
+            (void) king_telemetry_persist_queue_state();
+            king_telemetry_free_batch(batch);
+        }
     } else {
         king_telemetry_export_failure_count++;
-        /* Re-queue only the signals that still failed and remain retryable. */
         if (king_telemetry_batch_has_signals(batch)) {
             king_telemetry_batch_refresh_estimated_bytes(batch);
-            if (king_telemetry_queue_batch(batch) == SUCCESS) {
-                king_telemetry_retry_requeue_count++;
-                batch = NULL; /* Don't free, it's back in queue */
+            king_telemetry_move_head_batch_to_tail_in_memory();
+            (void) king_telemetry_persist_queue_state();
+            king_telemetry_retry_requeue_count++;
+        } else {
+            batch = king_telemetry_remove_head_batch_in_memory();
+            if (batch != NULL) {
+                (void) king_telemetry_persist_queue_state();
+                king_telemetry_free_batch(batch);
             }
         }
     }
-    
-    if (batch) {
-        king_telemetry_free_batch(batch);
-    }
-    
+
     if (failed) {
         return FAILURE;
     }

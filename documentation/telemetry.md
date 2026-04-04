@@ -59,9 +59,11 @@ the write path fast.
 
 The telemetry component exposes this contract directly through system
 introspection. The component reports a delivery contract of
-`best_effort_bounded_retry`, a queue persistence model of
-`process_local_non_persistent`, a restart replay mode of `not_supported`, and a
-drain behavior of `single_batch_per_flush`.
+`best_effort_bounded_retry`, a drain behavior of `single_batch_per_flush`, and
+one of two queue contracts: without `king.otel_queue_state_path` it reports
+`process_local_non_persistent` plus `restart_replay=not_supported`, while a
+configured durable queue path upgrades that to
+`process_local_durable_file` plus `restart_replay=best_effort_supported`.
 
 Those phrases are worth translating into plain English.
 
@@ -77,9 +79,13 @@ now also derives a fixed byte budget from that queue limit. Each queue slot
 carries a `64 KiB` memory budget, and pending plus queued telemetry must stay
 inside that combined byte ceiling.
 Process-local non-persistent means telemetry is not written to durable storage
-and does not survive process restart. Single batch per flush means one call to
-`king_telemetry_flush()` gives the runtime one export opportunity for the next
-queued batch rather than draining the whole queue in one call.
+and does not survive process restart. The durable-file variant means already
+queued retry batches are snapshotted to one local state file and rehydrated by
+the next process on the same host, but the still-live metric registry and the
+pre-flush pending span/log buffers remain process-local scratch state. Single
+batch per flush means one call to `king_telemetry_flush()` gives the runtime
+one export opportunity for the next queued batch rather than draining the whole
+queue in one call.
 
 One subtle boundary matters here. Queued export batches stay process-local
 until they succeed, fail repeatedly, or the process exits. But the unfinished
@@ -249,8 +255,8 @@ flowchart TD
 ```
 
 This is the core reliability story of the telemetry runtime. The queue is not
-infinite. The retry path is explicit. Drops are counted. Restart replay is not
-part of the contract.
+infinite. The retry path is explicit. Drops are counted. Restart replay is only
+part of the contract when `king.otel_queue_state_path` is configured.
 
 ## What Happens During Export Failure
 
@@ -300,8 +306,9 @@ let King send metric, trace, and log batches to the collector paths for those
 signal types.
 
 The main configuration values are the service name, exporter endpoint, exporter
-protocol, exporter timeout, queue size, flush delay policy, metrics export
-interval, histogram boundaries, trace sampler settings, and log batch sizing.
+protocol, exporter timeout, queue size, optional durable queue state path,
+flush delay policy, metrics export interval, histogram boundaries, trace
+sampler settings, and log batch sizing.
 
 The collector is the boundary between the application runtime and the rest of
 your monitoring system. Once the collector has the data, downstream systems can
@@ -545,9 +552,13 @@ propagation contract is finalized.
 
 ## Common Questions
 
-One common question is whether telemetry survives restart. The answer is no.
-Telemetry is process-local and non-persistent. If you need durable replay, that
-belongs outside this runtime in the collector or in another queueing system.
+One common question is whether telemetry survives restart. The answer depends
+on whether `king.otel_queue_state_path` is configured. Without it, telemetry is
+process-local and non-persistent. With it, only already queued retry batches
+survive restart through one local durable file; the live metric registry and
+the pre-flush pending span/log scratch buffers do not. If you need stronger or
+cross-host durability than that best-effort local replay, it still belongs in
+the collector or in another queueing system.
 
 Another common question is whether exporter failure blocks the application. The
 runtime is designed so that it does not need an infinite or durable queue to
