@@ -1565,7 +1565,10 @@ namespace {
      * This stores the durable tool name and configuration snapshot only.
      * It does not register a PHP callable or claim closure/object/resource
      * serialization across restart, file-worker, or remote-peer boundaries;
-     * executable userland handler binding is a separate contract.
+     * executable userland handler binding is a separate contract. The durable
+     * cross-boundary handler identity is the tool-name string itself; any
+     * later public handler API must bind executable handlers again inside the
+     * exact process that will execute that tool.
      * @param array<string,mixed> $config
      */
     function king_pipeline_orchestrator_register_tool(string $tool_name, array $config): bool {}
@@ -1581,7 +1584,9 @@ namespace {
      * orchestrator queue. Returns `false` when the queue is empty.
      * Persisted tool definitions and run state rehydrate here, but the current
      * public surface does not claim that arbitrary userland callables were
-     * persisted with the run.
+     * persisted with the run. Any future userland handler API must therefore
+     * re-bind handlers for the relevant tool names inside the worker process
+     * before it claims executable work.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_worker_run_next(): array|false {}
@@ -1590,7 +1595,9 @@ namespace {
      * Resume one persisted non-terminal pipeline run after controller
      * restart. This continuation path is for the local and `remote_peer`
      * orchestrator backends. The file-worker backend continues work through
-     * `king_pipeline_orchestrator_worker_run_next()`.
+     * `king_pipeline_orchestrator_worker_run_next()`. Any future userland
+     * handler API must re-bind handlers for the relevant tool names inside the
+     * restarted process before continuation.
      * @return array<string,mixed>
      */
     function king_pipeline_orchestrator_resume_run(string $run_id): array {}

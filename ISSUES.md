@@ -42,12 +42,12 @@
 
 ## Current Next Leaf
 
-- `#2 Define the exact handler-identity and re-registration contract across local, file-worker, remote-peer, and restart boundaries.`
+- `#3 Reject unsupported non-rehydratable userland handler forms honestly instead of pretending closures survive restart or host boundaries.`
 
 ## Active Executable Items
 
 - [x] `#1 Define the public userland tool-handler contract for application workflows on top of the pipeline orchestrator.`
-- [ ] `#2 Define the exact handler-identity and re-registration contract across local, file-worker, remote-peer, and restart boundaries.`
+- [x] `#2 Define the exact handler-identity and re-registration contract across local, file-worker, remote-peer, and restart boundaries.`
 - [ ] `#3 Reject unsupported non-rehydratable userland handler forms honestly instead of pretending closures survive restart or host boundaries.`
 - [ ] `#4 Add a public userland handler-registration API that binds a runtime handler to a registered orchestrator tool name.`
 - [ ] `#5 Execute registered userland handlers on the local orchestrator backend with persisted run-state parity.`
@@ -97,5 +97,6 @@
 - The new active batch takes the next `20` leaves because `ISSUES.md` is organized as a `20`-issue execution batch and the user explicitly requested that this gap move ahead of the existing autoscaling wave.
 - This userland orchestration batch is grounded in the open userland-facing integration direction in `READYNESS_TRACKER.md` section `Q`, but is narrowed here to the immediately blocking public orchestrator gap around application tool execution and recovery.
 - Leaf `#1` is now closed by the contract-definition pass across the public orchestrator docs, procedural index, stub docblocks, and root status documents.
+- Leaf `#2` is now closed by the identity/re-registration pass across the public orchestrator docs, procedural index, stub docblocks, and root status documents.
 - The autoscaling / provisioning / readiness wave remains visible below as the deferred previous batch and resumes once the current userland orchestration batch is exhausted.
 - If a task is not listed here, it is not the current repo-local execution item.

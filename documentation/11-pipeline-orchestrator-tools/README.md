@@ -85,6 +85,12 @@ public contract does not claim that userland closures or controller memory are
 serialized into persisted run state. Any later public handler API must bind
 executable handlers by tool name inside each process that can execute work.
 
+That registration identity is now explicit too: the durable cross-boundary
+anchor is the tool name itself. A local controller, a same-host file worker, a
+restarted replacement worker, and a remote execution peer must each bind their
+own executable handler for that same tool name in the process that will
+actually execute the step.
+
 ## Step 2: Define The Pipeline As Data
 
 After that, the example defines the pipeline itself as an array of step

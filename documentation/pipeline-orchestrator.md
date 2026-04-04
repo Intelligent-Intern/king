@@ -178,6 +178,54 @@ handler API lands should therefore own that execution layer themselves instead
 of assuming the current orchestrator already persists or transports arbitrary
 PHP callbacks.
 
+## Handler Identity And Re-Registration
+
+The exact public identity boundary is now explicit.
+
+The durable orchestrator identity for executable userland work is the tool name
+string that appears in the pipeline step and in the tool registry. That is the
+only cross-process, cross-restart, and cross-host identifier the current public
+contract is willing to treat as durable at the handler boundary.
+
+Tool configuration is durable input to that tool identity, but it is not a
+second executable-handler identity. Closure captures, object-instance state,
+resource handles, and controller memory are not handler identity either. They
+may influence a process-local registration call in the future, but they are not
+part of the persisted orchestrator contract.
+
+The practical rule is therefore simple: if a process may execute a step for
+tool `X`, that process must register the executable handler for tool `X`
+locally before execution starts. The orchestrator may persist the run, the tool
+definition, and the step metadata, but executable handler readiness is still a
+per-process obligation.
+
+The required registration matrix is:
+
+- local backend: the controller process that calls `run()` must register the
+  handler for every tool it may execute locally
+- file-worker backend: the controller may queue a run after registering the
+  durable tool definition, but each worker process that may call
+  `worker_run_next()` must register the executable handlers it may run
+- local restart continuation: the restarted controller process must re-register
+  the executable handlers before `resume_run()`
+- file-worker restart continuation: any restarted replacement worker must
+  re-register the executable handlers before claiming queued or recovered work
+- remote-peer backend: the remote execution peer must register the executable
+  handlers it may run; controller-side registration does not satisfy remote
+  execution readiness
+- remote-peer return after loss: the returning peer must re-register the
+  executable handlers before it can execute resumed or new remote work again
+
+This means the future public handler API cannot treat "I registered this once
+somewhere in the system" as a sufficient readiness claim. Readiness must be
+true in the exact process that will execute the step.
+
+The same rule also defines the honest fail-closed line. If a run, worker, or
+remote peer reaches a step whose tool name has no executable handler bound in
+that exact process, King must treat that as missing execution readiness. It
+must not silently borrow controller memory, infer closure state from persisted
+arrays, or pretend a previous process registration still exists after restart.
+
 ## What A Pipeline Looks Like
 
 A pipeline is an ordered array of step definitions. At minimum, each step names

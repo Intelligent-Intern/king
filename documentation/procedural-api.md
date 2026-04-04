@@ -333,6 +333,12 @@ orchestrator API does not claim that arbitrary userland callables, closure
 captures, or controller memory are persisted or transported as executable
 handler state across restart, file-worker, or remote-peer boundaries.
 
+Identity boundary: the durable execution anchor is the tool name string.
+Executable handler readiness is process-local. Any future handler API must
+therefore require the exact controller, worker, or remote-peer process that
+will execute a step to bind a handler for that tool name again after restart or
+replacement.
+
 ## Error Buffers And Reading Order
 
 Three functions exist specifically to expose the shared error buffers used by
