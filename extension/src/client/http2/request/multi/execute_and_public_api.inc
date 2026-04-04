@@ -260,9 +260,22 @@ PHP_FUNCTION(king_http2_request_send_multi)
             transfers[i].body_was_supplied = true;
         }
 
+        if (king_telemetry_has_injectable_current_context()) {
+            if (king_telemetry_inject_current_context_headers(
+                    &transfers[i].effective_headers,
+                    headers_value != NULL && Z_TYPE_P(headers_value) == IS_ARRAY ? headers_value : NULL
+                ) != SUCCESS) {
+                php_url_free(parsed_url);
+                goto fail;
+            }
+            transfers[i].effective_headers_initialized = true;
+        }
+
         if (king_http2_prepare_headers(
                 &transfers[i].request_headers,
-                headers_value != NULL && Z_TYPE_P(headers_value) == IS_ARRAY ? headers_value : NULL,
+                transfers[i].effective_headers_initialized
+                    ? &transfers[i].effective_headers
+                    : (headers_value != NULL && Z_TYPE_P(headers_value) == IS_ARRAY ? headers_value : NULL),
                 transfers[i].body_string,
                 transfers[i].body_was_supplied,
                 "king_http2_request_send_multi"

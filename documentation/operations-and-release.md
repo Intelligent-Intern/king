@@ -343,6 +343,10 @@ This matters because it keeps local release work and CI behavior aligned. If a
 release path only works in GitHub and not on a release engineer’s machine, it
 is not a trustworthy path.
 
+Published GHCR Docker images are intentionally a mainline-only follow-up. Branch
+and pull-request runs stop at package and container verification; the actual
+Docker publish flow runs only after a successful canonical baseline on `main`.
+
 ## A Practical Release Sequence
 
 A careful release engineer usually works through the toolchain in a predictable

@@ -112,8 +112,10 @@ try {
         'otel_exporter_endpoint' => 'http://127.0.0.1:' . $server[4],
     ]);
 
-    king_telemetry_record_metric('requests_total', 5.0, null, 'counter');
-    king_telemetry_record_metric('cpu_utilization', 12.5, null, 'gauge');
+    king_telemetry_record_metric('requests_total', 5.0, ['route' => '/checkout'], 'counter');
+    king_telemetry_record_metric('cpu_utilization', 12.5, ['host' => 'api-1'], 'gauge');
+    king_telemetry_record_metric('response_time_ms', 42.0, ['route' => '/checkout'], 'histogram');
+    king_telemetry_record_metric('queue_delay_ms', 17.0, ['route' => '/checkout'], 'summary');
 
     var_dump(king_telemetry_flush());
     $status = king_telemetry_get_status();
@@ -129,9 +131,18 @@ $body = file_get_contents($capture);
 @unlink($capture);
 
 var_dump(str_contains($body, '"name":"requests_total"'));
+var_dump(str_contains($body, '"sum":{"dataPoints"'));
 var_dump(str_contains($body, '"asInt":"5"'));
+var_dump(str_contains($body, '"isMonotonic":true'));
 var_dump(str_contains($body, '"name":"cpu_utilization"'));
-var_dump(str_contains($body, '"asDouble":"12.5'));
+var_dump(str_contains($body, '"gauge":{"dataPoints"'));
+var_dump(str_contains($body, '"asDouble":12.5'));
+var_dump(str_contains($body, '"name":"response_time_ms"'));
+var_dump(str_contains($body, '"histogram":{"dataPoints"'));
+var_dump(str_contains($body, '"bucketCounts":["1"]'));
+var_dump(str_contains($body, '"name":"queue_delay_ms"'));
+var_dump(str_contains($body, '"summary":{"dataPoints"'));
+var_dump(str_contains($body, '"quantileValues":[{"quantile":1,"value":17'));
 ?>
 --EXPECT--
 bool(true)
@@ -139,6 +150,15 @@ int(0)
 int(1)
 int(0)
 int(1)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 bool(true)

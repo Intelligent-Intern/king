@@ -42,35 +42,35 @@
 
 ## Current Next Leaf
 
-- `#1 Validate span lifecycle under sustained request and worker churn.`
+- `#1 Validate autoscaling CPU / memory / RPS / queue / latency signals under real operation.`
 
 ## Active Executable Items
 
-- [ ] `#1 Validate span lifecycle under sustained request and worker churn.`
-- [ ] `#2 Validate metric lifecycle under sustained request and worker churn.`
-- [ ] `#3 Validate log lifecycle under sustained request and worker churn.`
-- [ ] `#4 Implement incoming trace-context extraction on HTTP server requests.`
-- [ ] `#5 Propagate extracted incoming trace context into request-root spans and child work.`
-- [ ] `#6 Finalize outgoing trace-context injection on HTTP client transports.`
-- [ ] `#7 Preserve span hierarchies correctly across process and worker boundaries.`
-- [ ] `#8 Finalize telemetry sampling semantics where sampling is publicly claimed.`
-- [ ] `#9 Monitor and bound telemetry CPU cost under load.`
-- [ ] `#10 Enforce OTLP request-size limits before exporter dispatch.`
-- [ ] `#11 Enforce OTLP response-size handling against real collectors.`
-- [ ] `#12 Finalize permanent network failure behavior for telemetry exporters.`
-- [ ] `#13 Implement telemetry queue replay after process restart where the delivery contract requires it.`
-- [ ] `#14 Define export ordering guarantees across queued telemetry batches.`
-- [ ] `#15 Define exporter idempotency behavior across retry and replay paths.`
-- [ ] `#16 Finalize telemetry batch formation under mixed span, metric, and log pressure.`
-- [ ] `#17 Validate OTLP JSON payloads against reference collectors.`
-- [ ] `#18 Provide complete export failure diagnostics across transport, TLS, HTTP, and collector errors.`
-- [ ] `#19 Finalize telemetry export endpoint and credential security boundaries.`
-- [ ] `#20 Implement the pipeline telemetry adapter contract for run, partition, batch, retry, and failure identity.`
+- [ ] `#1 Validate autoscaling CPU / memory / RPS / queue / latency signals under real operation.`
+- [ ] `#2 Validate autoscaling drain-before-delete under real live connections.`
+- [ ] `#3 Validate autoscaling scale-up policy limits under burst load.`
+- [ ] `#4 Validate autoscaling scale-down policy limits under active traffic.`
+- [ ] `#5 Finalize autoscaling metrics and decision explanations.`
+- [ ] `#6 Define the real Hetzner-only production contract and remove placeholder provider expectations from the live provisioning path.`
+- [ ] `#7 Implement automated post-bootstrap node registration on the Hetzner path.`
+- [ ] `#8 Make post-bootstrap node registration robust across retry, restart, and duplicate-success cases.`
+- [ ] `#9 Implement automated post-bootstrap node readiness on the Hetzner path.`
+- [ ] `#10 Make post-bootstrap node readiness robust across retry, restart, and duplicate-success cases.`
+- [ ] `#11 Validate Hetzner node drain before delete under real traffic.`
+- [ ] `#12 Make Hetzner node delete robust under failures and timeouts.`
+- [ ] `#13 Classify and handle Hetzner provider API failures.`
+- [ ] `#14 Classify and handle Hetzner provider rate limits.`
+- [ ] `#15 Classify and handle Hetzner provider quota limits.`
+- [ ] `#16 Securely load and rotate provider credentials where publicly claimed.`
+- [ ] `#17 Validate firewalls, placement, labels, and networks against real provider APIs.`
+- [ ] `#18 Either drop non-Hetzner provider claims from docs and surface or implement a second real provider path.`
+- [ ] `#19 Remove or fully implement remaining simulated provider paths.`
+- [ ] `#20 Define system-wide readiness transitions across startup, drain, and autoscaling boundaries.`
 
 ## Notes
 
-- This batch was pulled explicitly from `READYNESS_TRACKER.md`.
-- This telemetry wave replaces the exhausted HTTP/CDN/discovery wave after the user explicitly requested the next executable batch.
-- This batch pulls every currently open telemetry-related tracker item from `READYNESS_TRACKER.md` sections `J`, `K`, and the open dataflow telemetry-adapter contract.
-- Keep this wave visible until the telemetry batch is exhausted; do not refill it with non-telemetry work mid-flight.
+- The previous telemetry wave is exhausted; its closed leaves now live in `PROJECT_ASSESSMENT.md`.
+- This batch was pulled immediately from `READYNESS_TRACKER.md` because continuous batch execution is enabled.
+- This wave pulls the next executable leaves from `READYNESS_TRACKER.md` sections `L`, `M`, and the first still-open lifecycle gate in `N`.
+- Keep this autoscaling / provisioning / readiness wave visible until it is exhausted; do not refill it with unrelated work mid-flight.
 - If a task is not listed here, it is not the current repo-local execution item.

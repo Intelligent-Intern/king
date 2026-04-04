@@ -76,10 +76,16 @@ void king_client_session_apply_config_resource(
         &session->config_otel_service_name,
         cfg->observability.service_name
     );
-    king_client_session_set_string(
-        &session->config_otel_exporter_endpoint,
-        cfg->observability.exporter_endpoint
-    );
+    if (session->config_otel_exporter_endpoint != NULL) {
+        zend_string_release(session->config_otel_exporter_endpoint);
+    }
+    session->config_otel_exporter_endpoint =
+        king_open_telemetry_build_public_exporter_endpoint(
+            cfg->observability.exporter_endpoint,
+            cfg->observability.exporter_endpoint != NULL
+                ? strlen(cfg->observability.exporter_endpoint)
+                : 0
+        );
     king_client_session_set_string(
         &session->config_otel_exporter_protocol,
         cfg->observability.exporter_protocol

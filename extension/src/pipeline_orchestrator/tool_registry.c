@@ -23,7 +23,7 @@
 #include <unistd.h>
 #include <zend_hash.h>
 
-#define KING_ORCHESTRATOR_STATE_VERSION 4
+#define KING_ORCHESTRATOR_STATE_VERSION 5
 
 typedef struct _king_orchestrator_run_state {
     zend_string *run_id;
@@ -40,6 +40,7 @@ typedef struct _king_orchestrator_run_state {
     zend_string *initial_data_b64;
     zend_string *pipeline_b64;
     zend_string *options_b64;
+    zend_string *telemetry_parent_context_b64;
     zend_string *result_b64;
     zend_string *error_b64;
     zend_string *error_category;

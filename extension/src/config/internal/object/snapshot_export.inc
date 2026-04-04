@@ -30,6 +30,11 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
     );
     add_assoc_string(
         target,
+        "otel.queue_state_path",
+        cfg->observability.queue_state_path != NULL ? cfg->observability.queue_state_path : ""
+    );
+    add_assoc_string(
+        target,
         "autoscale.provider",
         cfg->autoscale.provider != NULL ? cfg->autoscale.provider : ""
     );
@@ -127,4 +132,3 @@ static void king_config_object_overlay_explicit_overrides(
         zend_hash_update(Z_ARRVAL_P(target), key, &value_copy);
     } ZEND_HASH_FOREACH_END();
 }
-

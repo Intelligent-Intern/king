@@ -1,7 +1,7 @@
 /*
- * Root telemetry introspection slice: exposes shared last-error helpers and
- * keeps the trace-context surface honest about the current build, which has
- * config and queues but no live current-span runtime yet.
+ * Root telemetry introspection slice: exposes shared last-error helpers, the
+ * live current-span snapshot, finalized outgoing trace-context injection, and
+ * the still-conservative userland extract placeholder.
  */
 
 PHP_FUNCTION(king_get_last_error)
@@ -29,13 +29,9 @@ PHP_FUNCTION(king_telemetry_get_trace_context)
 {
     ZEND_PARSE_PARAMETERS_NONE();
 
-    /*
-     * The active runtime wires telemetry config, but it has no live
-     * span runtime or current-trace storage yet. Expose the current state as
-     * NULL instead of FALSE so callers can treat this as a real nullable
-     * snapshot API.
-     */
-    RETURN_NULL();
+    if (!king_telemetry_build_trace_context_snapshot(return_value)) {
+        RETURN_NULL();
+    }
 }
 
 PHP_FUNCTION(king_telemetry_inject_context)
@@ -47,17 +43,14 @@ PHP_FUNCTION(king_telemetry_inject_context)
         Z_PARAM_ARRAY_OR_NULL(headers)
     ZEND_PARSE_PARAMETERS_END();
 
-    /*
-     * Without a live span runtime there is nothing to inject. Match the
-     * disabled/no-current-span path from the archived implementation and
-     * return the provided headers unchanged, or an empty array if none were
-     * provided.
-     */
-    if (headers != NULL) {
-        RETURN_ZVAL(headers, 1, 0);
+    if (king_telemetry_inject_current_context_headers(return_value, headers) != SUCCESS) {
+        zend_throw_exception_ex(
+            king_ce_system_exception,
+            0,
+            "king_telemetry_inject_context() failed to materialize the outgoing trace context."
+        );
+        RETURN_THROWS();
     }
-
-    array_init(return_value);
 }
 
 PHP_FUNCTION(king_telemetry_extract_context)
@@ -69,9 +62,9 @@ PHP_FUNCTION(king_telemetry_extract_context)
     ZEND_PARSE_PARAMETERS_END();
 
     /*
-     * The current runtime does not maintain a distributed-tracing runtime or
-     * current-span store. Parsing input headers would imply state that the
-     * active build cannot honor yet, so extraction remains a stable false.
+     * Span lifecycle is live, but incoming distributed trace-context
+     * extraction is still intentionally pending until the server/request
+     * propagation leaves are closed.
      */
     (void) headers;
     RETURN_FALSE;

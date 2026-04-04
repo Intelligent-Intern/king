@@ -20,6 +20,7 @@
 #include "include/config/quic_transport/base_layer.h"
 #include "include/config/tcp_transport/base_layer.h"
 #include "include/config/tls_and_crypto/base_layer.h"
+#include "include/telemetry/telemetry.h"
 
 #include "Zend/zend_smart_str.h"
 #include "ext/standard/url.h"
@@ -138,6 +139,7 @@ typedef struct _king_http3_multi_request {
     king_http3_request_target_t target;
     zend_string *method;
     zend_string *body_string;
+    zval effective_headers;
     quiche_h3_header *request_headers;
     size_t request_header_count;
     zend_string **owned_strings;
@@ -145,6 +147,7 @@ typedef struct _king_http3_multi_request {
     king_http3_response_t response;
     uint64_t request_stream_id;
     size_t body_offset;
+    bool effective_headers_initialized;
     bool request_headers_sent;
 } king_http3_multi_request_t;
 

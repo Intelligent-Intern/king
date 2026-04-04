@@ -65,6 +65,7 @@ typedef struct _king_server_http2_request_state {
 } king_server_http2_request_state;
 
 #include "http2/request_transport.inc"
+#include "http2/hpack_huffman.inc"
 #include "http2/hpack_codec.inc"
 #include "http2/wire_frames.inc"
 #include "http2/request_response_flow.inc"

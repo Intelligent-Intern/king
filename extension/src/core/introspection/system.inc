@@ -74,6 +74,7 @@ PHP_FUNCTION(king_system_get_component_info)
 {
     zend_string *component_name;
     zval configuration;
+    zend_string *public_exporter_endpoint;
 
     ZEND_PARSE_PARAMETERS_START(1, 1)
         Z_PARAM_STR(component_name)
@@ -94,8 +95,13 @@ PHP_FUNCTION(king_system_get_component_info)
         add_assoc_bool(&configuration, "enabled", king_open_telemetry_config.enable ? 1 : 0);
         add_assoc_string(&configuration, "service_name",
             king_safe_string(king_open_telemetry_config.service_name));
-        add_assoc_string(&configuration, "exporter_endpoint",
-            king_safe_string(king_open_telemetry_config.exporter_endpoint));
+        public_exporter_endpoint = king_open_telemetry_build_public_exporter_endpoint(
+            king_open_telemetry_config.exporter_endpoint,
+            king_open_telemetry_config.exporter_endpoint != NULL
+                ? strlen(king_open_telemetry_config.exporter_endpoint)
+                : 0
+        );
+        add_assoc_str(&configuration, "exporter_endpoint", public_exporter_endpoint);
         add_assoc_string(&configuration, "exporter_protocol",
             king_safe_string(king_open_telemetry_config.exporter_protocol));
         add_assoc_bool(&configuration, "metrics_enable",
@@ -104,16 +110,38 @@ PHP_FUNCTION(king_system_get_component_info)
             king_open_telemetry_config.logs_enable ? 1 : 0);
         add_assoc_string(&configuration, "delivery_contract",
             "best_effort_bounded_retry");
-        add_assoc_string(&configuration, "queue_persistence",
-            "process_local_non_persistent");
-        add_assoc_string(&configuration, "restart_replay",
-            "not_supported");
+        add_assoc_string(
+            &configuration,
+            "queue_persistence",
+            (
+                king_open_telemetry_config.queue_state_path != NULL
+                && king_open_telemetry_config.queue_state_path[0] != '\0'
+            )
+                ? "process_local_durable_file"
+                : "process_local_non_persistent"
+        );
+        add_assoc_string(
+            &configuration,
+            "restart_replay",
+            (
+                king_open_telemetry_config.queue_state_path != NULL
+                && king_open_telemetry_config.queue_state_path[0] != '\0'
+            )
+                ? "best_effort_supported"
+                : "not_supported"
+        );
+        add_assoc_string(&configuration, "ordering_guarantee",
+            "head_of_queue_fifo");
+        add_assoc_string(&configuration, "idempotency_policy",
+            "at_least_once_with_stable_batch_identity");
         add_assoc_string(&configuration, "drain_behavior",
             "single_batch_per_flush");
         add_assoc_string(&configuration, "memory_bound",
             "queue_slot_and_byte_bounded");
         add_assoc_string(&configuration, "self_metrics_surface",
             "king_telemetry_get_status");
+        add_assoc_string(&configuration, "failure_diagnostics_surface",
+            "king_telemetry_get_status.last_export_diagnostic");
     } else if (zend_string_equals_literal(component_name, "autoscaling")) {
         king_component_info_init(return_value, "autoscaling", "config_backed");
         array_init(&configuration);

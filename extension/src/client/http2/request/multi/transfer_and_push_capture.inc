@@ -21,6 +21,9 @@ static void king_http2_multi_transfer_destroy(king_http2_multi_transfer_t *trans
     if (transfer->request_headers != NULL) {
         king_http2_libcurl.curl_slist_free_all_fn(transfer->request_headers);
     }
+    if (transfer->effective_headers_initialized) {
+        zval_ptr_dtor(&transfer->effective_headers);
+    }
     if (transfer->body_string != NULL) {
         zend_string_release(transfer->body_string);
     }
@@ -305,4 +308,3 @@ static void king_http2_multi_reset_push_state(king_http2_pool_entry_t *pool_entr
     );
     (void) multi_code;
 }
-

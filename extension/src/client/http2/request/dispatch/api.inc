@@ -37,9 +37,12 @@ zend_result king_http2_request_dispatch(
     long response_code = 0;
     long http_version = CURL_HTTP_VERSION_NONE;
     char *effective_url = NULL;
+    zval effective_headers;
+    zval *request_headers_array = headers_array;
 
     memset(&response, 0, sizeof(response));
     memset(&batch_transfer, 0, sizeof(batch_transfer));
+    ZVAL_UNDEF(&effective_headers);
 
     if (king_http2_validate_method(method_str, method_len, function_name) != SUCCESS) {
         return FAILURE;
@@ -76,9 +79,16 @@ zend_result king_http2_request_dispatch(
         body_was_supplied = true;
     }
 
+    if (king_telemetry_has_injectable_current_context()) {
+        if (king_telemetry_inject_current_context_headers(&effective_headers, headers_array) != SUCCESS) {
+            goto cleanup;
+        }
+        request_headers_array = &effective_headers;
+    }
+
     if (king_http2_prepare_headers(
             &request_headers,
-            headers_array,
+            request_headers_array,
             body_string,
             body_was_supplied,
             function_name
@@ -217,6 +227,9 @@ cleanup:
     }
     if (request_headers != NULL) {
         king_http2_libcurl.curl_slist_free_all_fn(request_headers);
+    }
+    if (Z_TYPE(effective_headers) != IS_UNDEF) {
+        zval_ptr_dtor(&effective_headers);
     }
     king_http2_easy_destroy(easy_handle);
     king_http2_request_response_destroy(&response);

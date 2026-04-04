@@ -24,6 +24,7 @@ typedef struct _kg_open_telemetry_config_t {
     char *exporter_protocol;
     zend_long exporter_timeout_ms;
     char *exporter_headers;
+    char *queue_state_path;
 
     /* --- Batch Processor Settings --- */
     zend_long batch_processor_max_queue_size;
@@ -47,5 +48,22 @@ typedef struct _kg_open_telemetry_config_t {
 
 /* Module-global configuration instance. */
 extern kg_open_telemetry_config_t king_open_telemetry_config;
+
+/*
+ * Exporter endpoints stay full runtime URLs internally, but public telemetry
+ * surfaces must only expose a credential-safe collector origin.
+ */
+const char *king_open_telemetry_validate_exporter_endpoint_value(
+    const char *value,
+    size_t value_len
+);
+const char *king_open_telemetry_validate_exporter_headers_value(
+    const char *value,
+    size_t value_len
+);
+zend_string *king_open_telemetry_build_public_exporter_endpoint(
+    const char *value,
+    size_t value_len
+);
 
 #endif /* KING_CONFIG_OPEN_TELEMETRY_BASE_H */

@@ -22,6 +22,8 @@ static zend_result king_http3_execute_request(
     uint64_t request_stream_id = UINT64_MAX;
     size_t body_offset = 0;
     bool request_headers_sent = false;
+    zval effective_headers;
+    zval *request_headers_array = headers_array;
 
     memset(&target, 0, sizeof(target));
     memset(&runtime, 0, sizeof(runtime));
@@ -29,6 +31,7 @@ static zend_result king_http3_execute_request(
     memset(&response, 0, sizeof(response));
     array_init(&response.headers);
     response.headers_initialized = true;
+    ZVAL_UNDEF(&effective_headers);
 
     if (king_http3_request_target_from_url(
             url_str,
@@ -44,11 +47,18 @@ static zend_result king_http3_execute_request(
         goto failure;
     }
 
+    if (king_telemetry_has_injectable_current_context()) {
+        if (king_telemetry_inject_current_context_headers(&effective_headers, headers_array) != SUCCESS) {
+            goto failure;
+        }
+        request_headers_array = &effective_headers;
+    }
+
     if (king_http3_prepare_request_headers(
             &target,
             method_str,
             method_len,
-            headers_array,
+            request_headers_array,
             &request_headers,
             &request_header_count,
             &owned_strings,
@@ -454,6 +464,9 @@ static zend_result king_http3_execute_request(
     king_http3_request_target_destroy(parsed_url, &target);
     king_http3_runtime_destroy(&runtime);
     smart_str_free(&response.body);
+    if (Z_TYPE(effective_headers) != IS_UNDEF) {
+        zval_ptr_dtor(&effective_headers);
+    }
     king_set_error("");
     return SUCCESS;
 
@@ -462,6 +475,9 @@ failure:
     king_http3_request_target_destroy(parsed_url, &target);
     king_http3_runtime_destroy(&runtime);
     king_http3_response_destroy(&response);
+    if (Z_TYPE(effective_headers) != IS_UNDEF) {
+        zval_ptr_dtor(&effective_headers);
+    }
     return FAILURE;
 }
 

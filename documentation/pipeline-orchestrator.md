@@ -93,6 +93,15 @@ carries its effective backend, topology scope, and compensation status, which
 makes remote-boundary outcomes and post-failure cleanup duties visible at step
 granularity rather than only at the top level.
 
+Run snapshots now also carry a first-class `telemetry_adapter` block instead of
+leaving pipeline identity to collector-side guesswork. That adapter records the
+contract name, the run-level `attempt_identity`, optional `retry_identity`,
+counted partition and batch usage, and the stable `failure_identity` for a
+failed or cancelled attempt. Step snapshots mirror the same surface with their
+step-local `partition_id`, `batch_id`, and failed-step `failure_identity`, so a
+caller can line up one persisted run snapshot with exported spans, logs, and
+metrics after controller restart or worker recovery.
+
 This is the key reason the orchestrator feels like a control-plane subsystem
 instead of a convenience wrapper. The run is a system object with history.
 
@@ -351,6 +360,12 @@ worker queue path, remote host and port, recovery status, tool count, run
 history count, active run count, queued run count, last run ID, last run
 status, and the list of registered tools.
 
+It now also names the public telemetry adapter surface directly through
+`telemetry_adapter_contract` and `telemetry_identity_surface`. That makes it
+explicit that pipeline identity is not only visible in OTLP exports; it is also
+claimed through `king_pipeline_orchestrator_get_run()` and the component
+snapshot itself.
+
 The component snapshot also exposes a nested `distributed_observability` block
 with claimed-run count, recovered-run count, remote-attempted-run count, and
 the last run IDs and recovery reason seen through those paths. Together with
@@ -376,6 +391,22 @@ on or off. `orchestrator_execution_backend` selects `local`, `file_worker`, or
 file-worker backend. `orchestrator_remote_host` and
 `orchestrator_remote_port` select the remote execution peer. 
 `king.orchestrator_state_path` defines where persisted orchestrator state lives.
+
+When distributed tracing stays enabled, the orchestrator now does more than
+copy a caller-owned `trace_id` string into run metadata. `run()` and
+`dispatch()` persist the live caller span's distributed parent snapshot with the
+run, and `resume_run()` plus `worker_run_next()` reopen that lineage through an
+internal `pipeline-orchestrator-boundary` span. The resumed worker or process
+therefore stays on the original controller trace instead of silently forking a
+new local root when work crosses a restart or file-worker boundary.
+
+The runtime now also emits a concrete pipeline telemetry adapter on top of that
+trace lineage. Each execution attempt exports `pipeline-orchestrator-run` and
+`pipeline-orchestrator-step` spans, bounded pipeline counters, and a structured
+pipeline failure log when work terminates unsuccessfully. The exported
+attributes stay aligned with the persisted run snapshot: run ID, attempt
+identity, retry identity for recovered attempts, step-local partition and batch
+identity, and the same stable `failure_identity` that the run snapshot stores.
 
 The following runtime configuration example shows the general shape for a remote
 controller.

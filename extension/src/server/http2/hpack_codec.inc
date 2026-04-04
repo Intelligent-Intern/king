@@ -61,8 +61,192 @@ static zend_result king_server_http2_hpack_static_name_value(
             *name_out = ":status";
             *value_out = "500";
             return SUCCESS;
+        case 15:
+            *name_out = "accept-charset";
+            *value_out = "";
+            return SUCCESS;
+        case 16:
+            *name_out = "accept-encoding";
+            *value_out = "gzip, deflate";
+            return SUCCESS;
+        case 17:
+            *name_out = "accept-language";
+            *value_out = "";
+            return SUCCESS;
+        case 18:
+            *name_out = "accept-ranges";
+            *value_out = "";
+            return SUCCESS;
+        case 19:
+            *name_out = "accept";
+            *value_out = "";
+            return SUCCESS;
+        case 20:
+            *name_out = "access-control-allow-origin";
+            *value_out = "";
+            return SUCCESS;
+        case 21:
+            *name_out = "age";
+            *value_out = "";
+            return SUCCESS;
+        case 22:
+            *name_out = "allow";
+            *value_out = "";
+            return SUCCESS;
+        case 23:
+            *name_out = "authorization";
+            *value_out = "";
+            return SUCCESS;
+        case 24:
+            *name_out = "cache-control";
+            *value_out = "";
+            return SUCCESS;
+        case 25:
+            *name_out = "content-disposition";
+            *value_out = "";
+            return SUCCESS;
+        case 26:
+            *name_out = "content-encoding";
+            *value_out = "";
+            return SUCCESS;
+        case 27:
+            *name_out = "content-language";
+            *value_out = "";
+            return SUCCESS;
+        case 28:
+            *name_out = "content-length";
+            *value_out = "";
+            return SUCCESS;
+        case 29:
+            *name_out = "content-location";
+            *value_out = "";
+            return SUCCESS;
+        case 30:
+            *name_out = "content-range";
+            *value_out = "";
+            return SUCCESS;
         case 31:
             *name_out = "content-type";
+            *value_out = "";
+            return SUCCESS;
+        case 32:
+            *name_out = "cookie";
+            *value_out = "";
+            return SUCCESS;
+        case 33:
+            *name_out = "date";
+            *value_out = "";
+            return SUCCESS;
+        case 34:
+            *name_out = "etag";
+            *value_out = "";
+            return SUCCESS;
+        case 35:
+            *name_out = "expect";
+            *value_out = "";
+            return SUCCESS;
+        case 36:
+            *name_out = "expires";
+            *value_out = "";
+            return SUCCESS;
+        case 37:
+            *name_out = "from";
+            *value_out = "";
+            return SUCCESS;
+        case 38:
+            *name_out = "host";
+            *value_out = "";
+            return SUCCESS;
+        case 39:
+            *name_out = "if-match";
+            *value_out = "";
+            return SUCCESS;
+        case 40:
+            *name_out = "if-modified-since";
+            *value_out = "";
+            return SUCCESS;
+        case 41:
+            *name_out = "if-none-match";
+            *value_out = "";
+            return SUCCESS;
+        case 42:
+            *name_out = "if-range";
+            *value_out = "";
+            return SUCCESS;
+        case 43:
+            *name_out = "if-unmodified-since";
+            *value_out = "";
+            return SUCCESS;
+        case 44:
+            *name_out = "last-modified";
+            *value_out = "";
+            return SUCCESS;
+        case 45:
+            *name_out = "link";
+            *value_out = "";
+            return SUCCESS;
+        case 46:
+            *name_out = "location";
+            *value_out = "";
+            return SUCCESS;
+        case 47:
+            *name_out = "max-forwards";
+            *value_out = "";
+            return SUCCESS;
+        case 48:
+            *name_out = "proxy-authenticate";
+            *value_out = "";
+            return SUCCESS;
+        case 49:
+            *name_out = "proxy-authorization";
+            *value_out = "";
+            return SUCCESS;
+        case 50:
+            *name_out = "range";
+            *value_out = "";
+            return SUCCESS;
+        case 51:
+            *name_out = "referer";
+            *value_out = "";
+            return SUCCESS;
+        case 52:
+            *name_out = "refresh";
+            *value_out = "";
+            return SUCCESS;
+        case 53:
+            *name_out = "retry-after";
+            *value_out = "";
+            return SUCCESS;
+        case 54:
+            *name_out = "server";
+            *value_out = "";
+            return SUCCESS;
+        case 55:
+            *name_out = "set-cookie";
+            *value_out = "";
+            return SUCCESS;
+        case 56:
+            *name_out = "strict-transport-security";
+            *value_out = "";
+            return SUCCESS;
+        case 57:
+            *name_out = "transfer-encoding";
+            *value_out = "";
+            return SUCCESS;
+        case 58:
+            *name_out = "user-agent";
+            *value_out = "";
+            return SUCCESS;
+        case 59:
+            *name_out = "vary";
+            *value_out = "";
+            return SUCCESS;
+        case 60:
+            *name_out = "via";
+            *value_out = "";
+            return SUCCESS;
+        case 61:
+            *name_out = "www-authenticate";
             *value_out = "";
             return SUCCESS;
         default:
@@ -148,6 +332,7 @@ static zend_result king_server_http2_hpack_decode_string(
     const char *function_name
 )
 {
+    zend_bool huffman_encoded = 0;
     uint32_t string_len = 0;
     size_t consumed = 0;
 
@@ -159,13 +344,7 @@ static zend_result king_server_http2_hpack_decode_string(
         return FAILURE;
     }
 
-    if ((buffer[0] & 0x80) != 0) {
-        king_server_local_set_errorf(
-            "%s() does not accept Huffman-coded HPACK strings on the current HTTP/2 wire leaf.",
-            function_name
-        );
-        return FAILURE;
-    }
+    huffman_encoded = (buffer[0] & 0x80) != 0;
 
     if (
         king_server_http2_hpack_decode_integer(
@@ -188,11 +367,21 @@ static zend_result king_server_http2_hpack_decode_string(
         return FAILURE;
     }
 
-    *value_out = zend_string_init(
-        (const char *) buffer + consumed,
-        string_len,
-        0
-    );
+    if (huffman_encoded) {
+        if (king_server_http2_hpack_decode_huffman_string(
+            buffer + consumed,
+            string_len,
+            value_out,
+            function_name
+        ) != SUCCESS) {
+            return FAILURE;
+        }
+
+        *consumed_out = consumed + string_len;
+        return SUCCESS;
+    }
+
+    *value_out = zend_string_init((const char *) buffer + consumed, string_len, 0);
     *consumed_out = consumed + string_len;
     return SUCCESS;
 }
@@ -438,4 +627,3 @@ static zend_result king_server_http2_hpack_decode_headers(
 
     return SUCCESS;
 }
-

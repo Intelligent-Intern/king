@@ -382,20 +382,21 @@ metrics are exported, and what sampler policy traces use.
 | --- | --- | --- |
 | `king.otel_enable` | `1` | Enables the telemetry subsystem. |
 | `king.otel_service_name` | `king_application` | Sets the service name written into exported telemetry. |
-| `king.otel_exporter_endpoint` | `http://localhost:4317` | Points at the OTLP collector endpoint. |
+| `king.otel_exporter_endpoint` | `http://localhost:4317` | Points at the OTLP collector endpoint with an absolute `http://` or `https://` URL. Embedded credentials plus query/fragment components are rejected, and public telemetry metadata only echoes the collector origin. |
 | `king.otel_exporter_protocol` | `grpc` | Selects the OTLP transport protocol. |
 | `king.otel_exporter_timeout_ms` | `10000` | Sets the exporter request timeout. |
-| `king.otel_exporter_headers` | unset | Supplies static headers added to OTLP export requests. |
-| `king.otel_batch_processor_max_queue_size` | `2048` | Caps the telemetry retry queue size and the derived in-process telemetry byte budget (`64 KiB` per queue slot). |
+| `king.otel_exporter_headers` | unset | Supplies static headers added to OTLP export requests. The value must stay on one line, and King never echoes it back through public telemetry metadata. |
+| `king.otel_queue_state_path` | unset | Points at an optional local telemetry retry-queue snapshot file. When configured, already queued retry batches are rehydrated after process restart and replayed on the next flush. |
+| `king.otel_batch_processor_max_queue_size` | `2048` | Caps the telemetry retry queue size, the derived in-process telemetry byte budget (`64 KiB` per queue slot), and the number of distinct live metric names retained before a flush. |
 | `king.otel_batch_processor_schedule_delay_ms` | `5000` | Sets the telemetry batch scheduling delay. |
-| `king.otel_traces_sampler_type` | `parent_based_probability` | Selects the trace sampling strategy. |
-| `king.otel_traces_sampler_ratio` | `1.0` | Sets the probabilistic trace sampling ratio. |
+| `king.otel_traces_sampler_type` | `parent_based_probability` | Selects the trace sampling strategy: `always_on`, `always_off`, or `parent_based_probability`. |
+| `king.otel_traces_sampler_ratio` | `1.0` | Sets the probabilistic root-trace sampler ratio used when `parent_based_probability` opens a brand-new local root. |
 | `king.otel_traces_max_attributes_per_span` | `128` | Caps how many attributes may be attached to one span. |
 | `king.otel_metrics_enable` | `1` | Enables metric export. |
 | `king.otel_metrics_export_interval_ms` | `60000` | Sets the metric export interval. |
 | `king.otel_metrics_default_histogram_boundaries` | `0,5,10,25,50,75,100,250,500,1000` | Sets the default histogram bucket boundaries used for exported metrics. |
 | `king.otel_logs_enable` | `0` | Enables log export. |
-| `king.otel_logs_exporter_batch_size` | `512` | Caps the number of log records grouped into one export batch. |
+| `king.otel_logs_exporter_batch_size` | `512` | Caps the active mixed-signal export chunk size: one bounded flush batch may carry up to this many log records, spans, and metric snapshot entries before the next FIFO batch takes the remainder. |
 
 ## QUIC Transport
 

@@ -265,7 +265,7 @@ array(6) {
 }
 string(21) "pipeline_orchestrator"
 string(13) "config_backed"
-array(24) {
+array(26) {
   [0]=>
   string(27) "default_pipeline_timeout_ms"
   [1]=>
@@ -291,28 +291,32 @@ array(24) {
   [11]=>
   string(19) "compensation_policy"
   [12]=>
-  string(17) "worker_queue_path"
+  string(26) "telemetry_adapter_contract"
   [13]=>
-  string(11) "remote_host"
+  string(26) "telemetry_identity_surface"
   [14]=>
-  string(11) "remote_port"
+  string(17) "worker_queue_path"
   [15]=>
-  string(20) "recovered_from_state"
+  string(11) "remote_host"
   [16]=>
-  string(10) "tool_count"
+  string(11) "remote_port"
   [17]=>
-  string(17) "run_history_count"
+  string(20) "recovered_from_state"
   [18]=>
-  string(16) "active_run_count"
+  string(10) "tool_count"
   [19]=>
-  string(16) "queued_run_count"
+  string(17) "run_history_count"
   [20]=>
-  string(11) "last_run_id"
+  string(16) "active_run_count"
   [21]=>
-  string(15) "last_run_status"
+  string(16) "queued_run_count"
   [22]=>
-  string(16) "registered_tools"
+  string(11) "last_run_id"
   [23]=>
+  string(15) "last_run_status"
+  [24]=>
+  string(16) "registered_tools"
+  [25]=>
   string(25) "distributed_observability"
 }
 bool(true)

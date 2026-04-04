@@ -185,6 +185,16 @@ void king_orchestrator_append_component_info(zval *configuration)
     add_assoc_string(configuration, "compensation_policy", "caller_managed");
     add_assoc_string(
         configuration,
+        "telemetry_adapter_contract",
+        "run_partition_batch_retry_failure_identity"
+    );
+    add_assoc_string(
+        configuration,
+        "telemetry_identity_surface",
+        "king_pipeline_orchestrator_get_run+otlp_spans+otlp_logs+telemetry_metrics"
+    );
+    add_assoc_string(
+        configuration,
         "worker_queue_path",
         king_mcp_orchestrator_config.orchestrator_worker_queue_path != NULL
             ? king_mcp_orchestrator_config.orchestrator_worker_queue_path

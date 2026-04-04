@@ -147,6 +147,16 @@ static uint32_t king_telemetry_default_max_queue_size(void)
     return 2048;
 }
 
+static uint32_t king_telemetry_default_export_chunk_size(void)
+{
+    if (king_open_telemetry_config.logs_exporter_batch_size > 0
+        && king_open_telemetry_config.logs_exporter_batch_size <= UINT32_MAX) {
+        return (uint32_t) king_open_telemetry_config.logs_exporter_batch_size;
+    }
+
+    return 512;
+}
+
 static uint32_t king_telemetry_runtime_max_queue_size(void)
 {
     if (king_telemetry_runtime_config.max_queue_size > 0) {
@@ -154,6 +164,20 @@ static uint32_t king_telemetry_runtime_max_queue_size(void)
     }
 
     return king_telemetry_default_max_queue_size();
+}
+
+static uint32_t king_telemetry_runtime_export_chunk_size(void)
+{
+    if (king_telemetry_runtime_config.max_export_batch_size > 0) {
+        return king_telemetry_runtime_config.max_export_batch_size;
+    }
+
+    return king_telemetry_default_export_chunk_size();
+}
+
+uint32_t king_telemetry_get_export_chunk_size(void)
+{
+    return king_telemetry_runtime_export_chunk_size();
 }
 
 static uint64_t king_telemetry_runtime_memory_byte_limit_internal(void)
@@ -170,4 +194,3 @@ static uint64_t king_telemetry_runtime_memory_byte_limit_internal(void)
 
     return queue_slots * KING_TELEMETRY_BYTES_PER_QUEUE_SLOT;
 }
-

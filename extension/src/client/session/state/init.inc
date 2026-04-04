@@ -207,10 +207,16 @@ void king_client_session_init_config_state(king_client_session_t *session)
         &session->config_otel_service_name,
         king_open_telemetry_config.service_name
     );
-    king_client_session_set_string(
-        &session->config_otel_exporter_endpoint,
-        king_open_telemetry_config.exporter_endpoint
-    );
+    if (session->config_otel_exporter_endpoint != NULL) {
+        zend_string_release(session->config_otel_exporter_endpoint);
+    }
+    session->config_otel_exporter_endpoint =
+        king_open_telemetry_build_public_exporter_endpoint(
+            king_open_telemetry_config.exporter_endpoint,
+            king_open_telemetry_config.exporter_endpoint != NULL
+                ? strlen(king_open_telemetry_config.exporter_endpoint)
+                : 0
+        );
     king_client_session_set_string(
         &session->config_otel_exporter_protocol,
         king_open_telemetry_config.exporter_protocol

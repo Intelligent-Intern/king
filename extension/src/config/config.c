@@ -105,7 +105,9 @@ void king_config_release_module_globals(void)
     KING_CONFIG_FREE_PERSISTENT(king_native_object_store_config.node_discovery_mode);
     memset(&king_native_object_store_config, 0, sizeof(king_native_object_store_config));
 
+    KING_CONFIG_FREE_PERSISTENT(king_open_telemetry_config.exporter_endpoint);
     KING_CONFIG_FREE_PERSISTENT(king_open_telemetry_config.exporter_protocol);
+    KING_CONFIG_FREE_PERSISTENT(king_open_telemetry_config.exporter_headers);
     KING_CONFIG_FREE_PERSISTENT(king_open_telemetry_config.traces_sampler_type);
     KING_CONFIG_FREE_PERSISTENT(king_open_telemetry_config.metrics_default_histogram_boundaries);
     memset(&king_open_telemetry_config, 0, sizeof(king_open_telemetry_config));

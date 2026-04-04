@@ -86,6 +86,7 @@ for ($i = 0; $i < $iterations; $i++) {
 
     $work = king_pipeline_orchestrator_worker_run_next();
     $afterRun = king_telemetry_get_status();
+    $afterRunContext = king_telemetry_get_trace_context();
 
     king_telemetry_log('warn', 'worker-fresh-' . $i, [
         'phase' => 'fresh',
@@ -99,6 +100,7 @@ for ($i = 0; $i < $iterations; $i++) {
         'run_text' => $work['result']['text'] ?? null,
         'after_run_pending_log_count' => $afterRun['pending_log_count'],
         'after_run_pending_span_count' => $afterRun['pending_span_count'],
+        'after_run_context' => $afterRunContext,
         'after_flush_pending_log_count' => $afterFlush['pending_log_count'],
         'after_flush_pending_span_count' => $afterFlush['pending_span_count'],
     ];
@@ -165,9 +167,11 @@ foreach ($worker['iterations'] as $index => $iteration) {
     if (($iteration['run_text'] ?? null) !== 'worker-' . $index) {
         throw new RuntimeException('telemetry worker cleanup runner returned an unexpected payload.');
     }
-    if (($iteration['after_run_pending_log_count'] ?? -1) !== 0
-        || ($iteration['after_run_pending_span_count'] ?? -1) !== 0) {
-        throw new RuntimeException('worker-boundary cleanup left stale telemetry pending before the next flush.');
+    if (($iteration['after_run_pending_log_count'] ?? -1) !== 0) {
+        throw new RuntimeException('worker-boundary cleanup left stale logs pending before the next flush.');
+    }
+    if (array_key_exists('after_run_context', $iteration) && $iteration['after_run_context'] !== null) {
+        throw new RuntimeException('worker-boundary cleanup left a stale active span context before the next flush.');
     }
     if (($iteration['after_flush_pending_log_count'] ?? -1) !== 0
         || ($iteration['after_flush_pending_span_count'] ?? -1) !== 0) {
@@ -179,14 +183,20 @@ if (($worker['empty'] ?? true) !== false) {
 }
 
 $allBodies = '';
-if (count($collectorCapture) !== $iterations) {
-    throw new RuntimeException('telemetry worker cleanup collector did not observe the expected number of fresh flushes.');
-}
+$logFlushCount = 0;
 foreach ($collectorCapture as $entry) {
-    if (($entry['path'] ?? null) !== '/v1/logs') {
+    $path = $entry['path'] ?? null;
+    if ($path === '/v1/logs') {
+        $allBodies .= $entry['body'] ?? '';
+        $logFlushCount++;
+        continue;
+    }
+    if ($path !== '/v1/traces' && $path !== '/v1/metrics') {
         throw new RuntimeException('telemetry worker cleanup collector observed an unexpected OTLP path.');
     }
-    $allBodies .= $entry['body'] ?? '';
+}
+if ($logFlushCount !== $iterations) {
+    throw new RuntimeException('telemetry worker cleanup collector did not observe the expected number of fresh flushes.');
 }
 
 for ($i = 0; $i < $iterations; $i++) {
