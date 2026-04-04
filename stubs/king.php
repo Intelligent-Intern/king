@@ -1568,7 +1568,10 @@ namespace {
      * executable userland handler binding is a separate contract. The durable
      * cross-boundary handler identity is the tool-name string itself; any
      * later public handler API must bind executable handlers again inside the
-     * exact process that will execute that tool.
+     * exact process that will execute that tool. Unsupported non-rehydratable
+     * forms such as captured closures, resource-backed callables, and
+     * controller-memory-dependent handlers belong outside that durable
+     * contract and must fail closed.
      * @param array<string,mixed> $config
      */
     function king_pipeline_orchestrator_register_tool(string $tool_name, array $config): bool {}
@@ -1586,7 +1589,8 @@ namespace {
      * public surface does not claim that arbitrary userland callables were
      * persisted with the run. Any future userland handler API must therefore
      * re-bind handlers for the relevant tool names inside the worker process
-     * before it claims executable work.
+     * before it claims executable work, and must fail closed when the claimed
+     * work depends on unsupported non-rehydratable handler forms.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_worker_run_next(): array|false {}

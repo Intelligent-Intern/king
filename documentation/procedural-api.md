@@ -339,6 +339,12 @@ therefore require the exact controller, worker, or remote-peer process that
 will execute a step to bind a handler for that tool name again after restart or
 replacement.
 
+Fail-closed boundary: unsupported non-rehydratable forms such as captured
+closures, resource-backed callables, or handlers that depend on opaque
+controller memory are outside the durable public contract and must be rejected
+or treated as missing execution readiness instead of being serialized
+informally.
+
 ## Error Buffers And Reading Order
 
 Three functions exist specifically to expose the shared error buffers used by

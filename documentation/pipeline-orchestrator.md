@@ -226,6 +226,46 @@ that exact process, King must treat that as missing execution readiness. It
 must not silently borrow controller memory, infer closure state from persisted
 arrays, or pretend a previous process registration still exists after restart.
 
+## Unsupported Non-Rehydratable Handler Forms
+
+The fail-closed boundary now needs no guesswork.
+
+The following forms are outside the durable public handler contract and must be
+treated as unsupported for cross-restart, file-worker, or remote-peer
+execution:
+
+- closures with captured state
+- object instances whose executable meaning depends on constructor-time or
+  request-time mutable memory
+- resources and extension handles
+- handlers that depend on open sockets, streams, temporary files, or live
+  process-local descriptors
+- handlers whose executable identity depends on unserialized controller memory
+  instead of the durable tool-name string
+- handlers that require implicit global bootstrap side effects which a
+  replacement process cannot verify or reproduce explicitly
+
+The important point is not that such forms are "bad PHP". The point is that the
+orchestrator must not misrepresent them as durable execution state once work can
+cross queue, restart, or host boundaries.
+
+That gives the future public handler API an explicit fail-closed contract:
+
+- reject unsupported handler forms at registration time when the runtime can
+  tell they are non-rehydratable
+- otherwise refuse execution at claim or resume time when the exact process
+  cannot prove handler readiness honestly
+- classify the result as missing or unsupported handler readiness, not as a
+  successful durable rehydration
+- never synthesize fallback execution by reviving stale controller memory,
+  serializing closure internals informally, or silently downgrading the backend
+  to hide the unsupported form
+
+This is a contract-strengthening rule, not a convenience restriction. The
+orchestrator is preserving honest restart and topology semantics by refusing to
+pretend that non-durable PHP execution state became durable just because a run
+was persisted.
+
 ## What A Pipeline Looks Like
 
 A pipeline is an ordered array of step definitions. At minimum, each step names

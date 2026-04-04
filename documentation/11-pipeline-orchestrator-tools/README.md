@@ -91,6 +91,11 @@ restarted replacement worker, and a remote execution peer must each bind their
 own executable handler for that same tool name in the process that will
 actually execute the step.
 
+Forms that cannot be rehydrated honestly across those boundaries are outside the
+public durability claim. Captured closures, resource-backed callables, and
+handlers whose meaning depends on opaque controller memory must therefore be
+rejected or fail closed instead of being treated as portable execution state.
+
 ## Step 2: Define The Pipeline As Data
 
 After that, the example defines the pipeline itself as an array of step
