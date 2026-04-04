@@ -124,6 +124,8 @@ PHP_FUNCTION(king_system_get_component_info)
                 ? "best_effort_supported"
                 : "not_supported"
         );
+        add_assoc_string(&configuration, "ordering_guarantee",
+            "head_of_queue_fifo");
         add_assoc_string(&configuration, "drain_behavior",
             "single_batch_per_flush");
         add_assoc_string(&configuration, "memory_bound",

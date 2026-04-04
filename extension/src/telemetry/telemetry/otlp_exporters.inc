@@ -126,8 +126,13 @@ int king_telemetry_export_batch(void)
     } else {
         king_telemetry_export_failure_count++;
         if (king_telemetry_batch_has_signals(batch)) {
+            /*
+             * The oldest unresolved batch stays at the queue head until it is
+             * fully exported or locally dropped. Younger batches never
+             * overtake it just because one retryable export failed.
+             */
             king_telemetry_batch_refresh_estimated_bytes(batch);
-            king_telemetry_move_head_batch_to_tail_in_memory();
+            king_telemetry_refresh_queue_accounting();
             (void) king_telemetry_persist_queue_state();
             king_telemetry_retry_requeue_count++;
         } else {

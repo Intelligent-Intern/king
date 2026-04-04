@@ -59,8 +59,9 @@ the write path fast.
 
 The telemetry component exposes this contract directly through system
 introspection. The component reports a delivery contract of
-`best_effort_bounded_retry`, a drain behavior of `single_batch_per_flush`, and
-one of two queue contracts: without `king.otel_queue_state_path` it reports
+`best_effort_bounded_retry`, an ordering guarantee of
+`head_of_queue_fifo`, a drain behavior of `single_batch_per_flush`, and one of
+two queue contracts: without `king.otel_queue_state_path` it reports
 `process_local_non_persistent` plus `restart_replay=not_supported`, while a
 configured durable queue path upgrades that to
 `process_local_durable_file` plus `restart_replay=best_effort_supported`.
@@ -82,10 +83,12 @@ Process-local non-persistent means telemetry is not written to durable storage
 and does not survive process restart. The durable-file variant means already
 queued retry batches are snapshotted to one local state file and rehydrated by
 the next process on the same host, but the still-live metric registry and the
-pre-flush pending span/log buffers remain process-local scratch state. Single
-batch per flush means one call to `king_telemetry_flush()` gives the runtime
-one export opportunity for the next queued batch rather than draining the whole
-queue in one call.
+pre-flush pending span/log buffers remain process-local scratch state.
+Head-of-queue FIFO means the oldest unresolved batch stays ahead of every
+younger batch until it succeeds or is locally dropped. Single batch per flush
+means one call to `king_telemetry_flush()` gives the runtime one export
+opportunity for that oldest queued batch rather than draining the whole queue
+in one call.
 
 One subtle boundary matters here. Queued export batches stay process-local
 until they succeed, fail repeatedly, or the process exits. But the unfinished
@@ -231,13 +234,14 @@ queued batch."
 
 This detail matters because it explains why the queue exists and why the system
 component reports `single_batch_per_flush`. A flush call has two jobs. First it
-captures new local data into a batch. Second it advances the export queue by at
-most one delivery attempt.
+captures new local data into a batch. Second it advances the oldest queued
+batch by at most one delivery attempt.
 
 If the exporter succeeds, the batch is freed and the success counter grows. If
 the exporter fails, only the signals that still failed remain in the batch, and
-that batch is requeued for another attempt later. If the retry queue is already
-full, the runtime drops the new batch and increments `queue_drop_count`. If the
+that oldest unresolved batch stays at the queue head for another attempt later
+instead of rotating behind younger work. If the retry queue is already full,
+the runtime drops the new batch and increments `queue_drop_count`. If the
 pending span or pending log buffer is already at its capture ceiling before
 flush, the runtime drops the new signal immediately and increments
 `pending_drop_count`.
@@ -251,7 +255,7 @@ flowchart TD
     E --> F[Try to export one queued batch]
     F --> G{Collector success?}
     G -->|Yes| H[Increment export_success_count]
-    G -->|No| I[Requeue failed signals]
+    G -->|No| I[Keep failed signals at queue head]
 ```
 
 This is the core reliability story of the telemetry runtime. The queue is not
@@ -263,8 +267,9 @@ part of the contract when `king.otel_queue_state_path` is configured.
 A telemetry system is not defined only by success. It is defined by what it
 does when the collector is slow, unreachable, or returning errors.
 
-King handles failure by keeping the undelivered batch in the local retry queue
-until a later flush cycle can try again. This gives short outages a clean
+King handles failure by keeping the oldest undelivered batch at the head of the
+local retry queue until a later flush cycle can try again. This gives short
+outages a clean
 recovery path. At the same time, the queue has a fixed ceiling so exporter
 failure cannot grow memory without limit. When that ceiling is hit, the runtime
 starts dropping newly created batches and records that fact in
@@ -564,9 +569,11 @@ Another common question is whether exporter failure blocks the application. The
 runtime is designed so that it does not need an infinite or durable queue to
 remain safe. Exporter failures raise failure counters, leave failed batches in a
 bounded local retry queue, and eventually drop new batches when the queue cap is
-reached. The pending pre-flush span and log buffers are bounded too, so a long
-period without flush does not turn telemetry capture into unbounded memory
-growth.
+reached. Retryable failures also keep the oldest unresolved batch ahead of any
+younger queued work, so delivery order stays FIFO across batches instead of
+letting later work overtake an earlier export. The pending pre-flush span and
+log buffers are bounded too, so a long period without flush does not turn
+telemetry capture into unbounded memory growth.
 
 A third common question is how often to flush. The answer depends on your
 runtime shape. A request-driven application often flushes at meaningful request

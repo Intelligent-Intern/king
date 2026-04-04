@@ -69,24 +69,6 @@ static king_telemetry_batch_t *king_telemetry_remove_head_batch_in_memory(void)
     return batch;
 }
 
-static void king_telemetry_move_head_batch_to_tail_in_memory(void)
-{
-    king_telemetry_batch_t *batch;
-
-    if (king_telemetry_export_queue_head == NULL
-        || king_telemetry_export_queue_head == king_telemetry_export_queue_tail) {
-        king_telemetry_refresh_queue_accounting();
-        return;
-    }
-
-    batch = king_telemetry_export_queue_head;
-    king_telemetry_export_queue_head = batch->next;
-    batch->next = NULL;
-    king_telemetry_export_queue_tail->next = batch;
-    king_telemetry_export_queue_tail = batch;
-    king_telemetry_refresh_queue_accounting();
-}
-
 static void king_telemetry_free_export_queue_in_memory(void)
 {
     king_telemetry_batch_t *batch = king_telemetry_export_queue_head;

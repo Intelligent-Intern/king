@@ -318,8 +318,9 @@ PHP_FUNCTION(king_telemetry_flush)
     }
 
     /*
-     * Flush attempts exactly one queued export batch per call. Failed batches
-     * stay queued for retry instead of being silently discarded.
+     * Flush attempts exactly one queued export batch per call. Retryable
+     * failures keep the oldest unresolved batch at the queue head instead of
+     * letting younger work overtake it.
      */
     if (king_telemetry_queue_size > 0) {
         (void) king_telemetry_export_batch();
