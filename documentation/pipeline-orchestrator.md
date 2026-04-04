@@ -187,26 +187,36 @@ userland-backed queued runs after per-process re-registration: workers execute
 the boundary-marked steps through the registered handlers, persist the latest
 payload plus `completed_step_count` after each completed step, and let a
 replacement worker continue from that honest persisted progress after worker
-loss or restart. Remote-peer handler execution still needs its own execution
-closure.
+loss or restart. The remote-peer backend now consumes that same durable
+boundary over the TCP host/port request: the controller sends only the
+tool-name boundary plus durable tool configs, the remote execution peer must
+bind its own handlers locally, a ready peer executes those boundary-marked
+steps for real, and a peer without that process-local readiness fails closed
+explicitly instead of pretending controller memory crossed the network.
 
-Queued userland-backed file-worker runs now persist the durable
-handler-reference boundary they will need later too. When the dispatching
-process had bound executable handlers for queued worker tools, the persisted
-run snapshot exposes this as `handler_boundary`, which currently carries only
-the durable tool-name references plus step indexes for queued worker
-execution. That boundary is deliberately narrower than executable readiness:
+Non-local userland-backed runs now persist the durable handler-reference
+boundary they will need later too. When the dispatching or remote-calling
+process had bound executable handlers for non-local tools, the persisted run
+snapshot exposes this as `handler_boundary`, which currently carries only the
+durable tool-name references plus step indexes for queued worker execution or
+remote-peer replay. That boundary is deliberately narrower than executable
+readiness:
 
 - `handler_boundary` persists tool-name references only
 - `handler_boundary` is durable across queue, restart, and snapshot reload
 - `handler_boundary` does not persist PHP callback names, closures, object
   state, or controller memory
-- later worker readiness must still be satisfied by per-process handler
-  registration before execution begins
+- later worker or remote-peer readiness must still be satisfied by per-process
+  handler registration before execution begins
 - ready workers now execute those boundary-marked steps and persist progress
   after each completed step for later recovery
 - unready workers skip those queued or recovered runs before claim or recovery
   resume instead of failing late inside opaque worker execution
+- ready remote peers now receive that same boundary plus durable tool configs
+  over TCP and execute the marked steps through their own process-local
+  handler bindings
+- unready remote peers now fail closed explicitly instead of silently falling
+  back to controller memory or topology downgrade
 
 The local handler invocation contract is now explicit too. The callable
 receives one context array with these top-level keys:
@@ -264,10 +274,13 @@ The required registration matrix is:
 - file-worker restart continuation: any restarted replacement worker must
   re-register the executable handlers before claiming queued or recovered work
 - remote-peer backend: the remote execution peer must register the executable
-  handlers it may run; controller-side registration does not satisfy remote
-  execution readiness
+  handlers it may run; controller-side registration only persists the durable
+  boundary and tool-config snapshot that `run()` or `resume_run()` later send
+  to the peer, and does not satisfy remote execution readiness by itself
 - remote-peer return after loss: the returning peer must re-register the
-  executable handlers before it can execute resumed or new remote work again
+  executable handlers before it can execute resumed or new remote work again;
+  the restarted controller resends only the durable boundary and tool config,
+  not the old PHP callable state
 
 This means the handler-registration API cannot treat "I registered this once
 somewhere in the system" as a sufficient readiness claim. Readiness must be

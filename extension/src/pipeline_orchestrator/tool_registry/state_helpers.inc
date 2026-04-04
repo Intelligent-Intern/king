@@ -299,7 +299,11 @@ static zend_bool king_orchestrator_handler_boundary_requires_persistence(
     const char *execution_backend
 )
 {
-    return execution_backend != NULL && strcmp(execution_backend, "file_worker") == 0;
+    return execution_backend != NULL
+        && (
+            strcmp(execution_backend, "file_worker") == 0
+            || strcmp(execution_backend, "remote_peer") == 0
+        );
 }
 
 static zend_result king_orchestrator_build_handler_boundary_snapshot(

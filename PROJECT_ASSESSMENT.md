@@ -108,6 +108,7 @@ The current tree already proves:
 - queued file-worker runs now persist an explicit `handler_boundary` snapshot that carries only durable tool-name references plus step indexes for later worker readiness checks, with targeted PHPT proof that queued orchestrator state does not serialize executable PHP handler callables into durable state
 - userland-backed file-worker workers now rehydrate that persisted `handler_boundary` before claim or claimed-run recovery and only pick work when the current worker process has re-registered the required handlers; unready workers now skip such runs instead of failing late inside opaque worker execution, with PHPT coverage for both queued and recovered claimed runs
 - userland-backed file-worker workers now execute those boundary-marked steps through the re-registered handlers, persist the latest payload plus completed-step progress after each completed step, and let a replacement worker continue from honest file-worker progress after worker loss or restart instead of rerunning already-completed userland-backed steps
+- userland-backed remote-peer runs now persist that same durable `handler_boundary`, send only tool-name references plus durable tool configs across the TCP host/port request, execute boundary-marked steps through independently bootstrapped peer-local handlers, fail closed explicitly when the peer lacks a required handler, and prove controller-restart continuation without pretending controller callables crossed the network boundary
 
 ## What Is Still Not Finished
 

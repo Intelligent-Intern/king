@@ -1,13 +1,180 @@
 <?php
 
-/* Remote-peer harness server for orchestrator restart, resume and failure contracts. */
+/* Remote-peer harness server for orchestrator restart, resume and userland-handler contracts. */
 
 $capturePath = $argv[1] ?? null;
 $port = isset($argv[2]) ? (int) $argv[2] : 0;
 $bindHost = $argv[3] ?? '127.0.0.1';
+$handlerBootstrapPath = $argv[4] ?? null;
 
 if (!is_string($capturePath) || $capturePath === '' || $port <= 0) {
-    fwrite(STDERR, "usage: php orchestrator_remote_peer_server.inc <capture-path> <port> <bind-host>\n");
+    fwrite(
+        STDERR,
+        "usage: php orchestrator_remote_peer_server.inc <capture-path> <port> <bind-host> [handler-bootstrap]\n"
+    );
+    exit(1);
+}
+
+function king_orchestrator_remote_peer_persist_capture(array $capture, string $capturePath): void
+{
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+}
+
+function king_orchestrator_remote_peer_load_handlers(?string $bootstrapPath): array
+{
+    if (!is_string($bootstrapPath) || $bootstrapPath === '') {
+        return [];
+    }
+
+    if (!is_file($bootstrapPath)) {
+        throw new RuntimeException('remote peer handler bootstrap file does not exist');
+    }
+
+    $handlers = require $bootstrapPath;
+    if (!is_array($handlers)) {
+        throw new RuntimeException('remote peer handler bootstrap must return an array');
+    }
+
+    foreach ($handlers as $toolName => $handler) {
+        if (!is_string($toolName) || $toolName === '') {
+            throw new RuntimeException('remote peer handler bootstrap returned an invalid tool name');
+        }
+        if (!is_callable($handler)) {
+            throw new RuntimeException(
+                sprintf("remote peer handler bootstrap returned a non-callable handler for tool '%s'", $toolName)
+            );
+        }
+    }
+
+    return $handlers;
+}
+
+function king_orchestrator_remote_peer_handler_boundary_requires_process_registration(mixed $handlerBoundary): bool
+{
+    return is_array($handlerBoundary) && !empty($handlerBoundary['requires_process_registration']);
+}
+
+function king_orchestrator_remote_peer_step_uses_registered_handler(
+    mixed $handlerBoundary,
+    array $step,
+    int $stepIndex
+): bool {
+    $toolName = $step['tool'] ?? null;
+    $requiredStepRefs = $handlerBoundary['required_step_refs'] ?? null;
+
+    if (!is_string($toolName) || $toolName === '' || !is_array($requiredStepRefs)) {
+        return false;
+    }
+
+    foreach ($requiredStepRefs as $entry) {
+        if (
+            is_array($entry)
+            && ($entry['index'] ?? null) === $stepIndex
+            && ($entry['tool_name'] ?? null) === $toolName
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function king_orchestrator_remote_peer_first_required_step_index(mixed $handlerBoundary, string $toolName): int
+{
+    $requiredStepRefs = $handlerBoundary['required_step_refs'] ?? null;
+
+    if (!is_array($requiredStepRefs)) {
+        return -1;
+    }
+
+    foreach ($requiredStepRefs as $entry) {
+        if (
+            is_array($entry)
+            && ($entry['tool_name'] ?? null) === $toolName
+            && is_int($entry['index'] ?? null)
+        ) {
+            return $entry['index'];
+        }
+    }
+
+    return -1;
+}
+
+function king_orchestrator_remote_peer_invoke_registered_handler(
+    array $registeredHandlers,
+    array $toolConfigs,
+    string $runId,
+    array $step,
+    int $stepIndex,
+    mixed $currentPayload
+): array {
+    $toolName = $step['tool'] ?? null;
+    if (!is_string($toolName) || $toolName === '') {
+        throw new RuntimeException('remote peer step requires a non-empty tool name before registered handler execution');
+    }
+
+    if (!array_key_exists($toolName, $registeredHandlers)) {
+        throw new RuntimeException(sprintf("remote peer has no registered handler for tool '%s'.", $toolName));
+    }
+
+    $toolConfig = $toolConfigs[$toolName] ?? null;
+    if (!is_array($toolConfig)) {
+        throw new RuntimeException(
+            sprintf("remote peer did not receive a durable tool config for registered handler '%s'.", $toolName)
+        );
+    }
+
+    $handler = $registeredHandlers[$toolName];
+    $result = $handler([
+        'input' => $currentPayload,
+        'run_id' => $runId,
+        'tool' => [
+            'name' => $toolName,
+            'config' => $toolConfig,
+        ],
+        'run' => [
+            'run_id' => $runId,
+            'attempt_number' => 1,
+            'execution_backend' => 'remote_peer',
+            'topology_scope' => 'tcp_host_port_execution_peer',
+        ],
+        'step' => [
+            'index' => $stepIndex,
+            'tool_name' => $toolName,
+            'definition' => $step,
+        ],
+    ]);
+
+    if (!is_array($result)) {
+        throw new RuntimeException(
+            sprintf(
+                "remote peer registered handler for tool '%s' must return an array result contract.",
+                $toolName
+            )
+        );
+    }
+
+    if (!array_key_exists('output', $result) || !is_array($result['output'])) {
+        throw new RuntimeException(
+            sprintf(
+                "remote peer registered handler for tool '%s' must return an array result contract with key 'output'.",
+                $toolName
+            )
+        );
+    }
+
+    return $result['output'];
+}
+
+try {
+    $registeredHandlers = king_orchestrator_remote_peer_load_handlers(
+        is_string($handlerBootstrapPath) && $handlerBootstrapPath !== '' ? $handlerBootstrapPath : null
+    );
+} catch (Throwable $e) {
+    fwrite(STDERR, "failed to load remote peer handlers: {$e->getMessage()}\n");
     exit(1);
 }
 
@@ -23,15 +190,10 @@ if ($server === false) {
 
 stream_set_blocking($server, true);
 
-$capture = ['events' => []];
-
-function king_orchestrator_remote_peer_persist_capture(array $capture, string $capturePath): void
-{
-    file_put_contents(
-        $capturePath,
-        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
-    );
-}
+$capture = [
+    'events' => [],
+    'registered_handlers' => array_values(array_keys($registeredHandlers)),
+];
 
 $encodeError = static fn(string $message): string => "ERR\t" . base64_encode($message) . "\n";
 $encodeErrorMeta = static function (
@@ -79,15 +241,23 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
     }
 
     $parts = explode("\t", $line);
-    if (count($parts) !== 7 || $parts[0] !== 'RUN') {
+    if (($parts[0] ?? null) !== 'RUN' || (count($parts) !== 7 && count($parts) !== 9)) {
         fwrite($client, $encodeError('invalid remote orchestrator opcode'));
         fclose($client);
         continue;
     }
 
-    [$opcode, $runIdB64, $initialB64, $pipelineB64, $optionsB64, $timeoutBudgetMs, $deadlineBudgetMs] = $parts;
+    if (count($parts) === 9) {
+        [$opcode, $runIdB64, $initialB64, $pipelineB64, $optionsB64, $handlerBoundaryB64, $toolConfigsB64, $timeoutBudgetMs, $deadlineBudgetMs] = $parts;
+    } else {
+        [$opcode, $runIdB64, $initialB64, $pipelineB64, $optionsB64, $timeoutBudgetMs, $deadlineBudgetMs] = $parts;
+        $handlerBoundaryB64 = null;
+        $toolConfigsB64 = null;
+    }
+
     $event = [
         'remote_address' => $peer,
+        'registered_handlers' => array_values(array_keys($registeredHandlers)),
     ];
 
     try {
@@ -95,6 +265,8 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
         $event['initial_data'] = $decodeZval($initialB64);
         $event['pipeline'] = $decodeZval($pipelineB64);
         $event['options'] = $decodeZval($optionsB64);
+        $event['handler_boundary'] = $handlerBoundaryB64 !== null ? $decodeZval($handlerBoundaryB64) : null;
+        $event['tool_configs'] = $toolConfigsB64 !== null ? $decodeZval($toolConfigsB64) : null;
         $event['timeout_budget_ms'] = (int) $timeoutBudgetMs;
         $event['deadline_budget_ms'] = (int) $deadlineBudgetMs;
     } catch (Throwable $e) {
@@ -118,6 +290,71 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
         continue;
     }
 
+    if (king_orchestrator_remote_peer_handler_boundary_requires_process_registration($event['handler_boundary'])) {
+        if (!is_array($event['tool_configs'])) {
+            $event['remote_error'] = 'missing_tool_configs';
+            king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
+            fwrite(
+                $client,
+                $encodeErrorMeta(
+                    'remote peer expected durable tool configs for registered handler execution.',
+                    'backend',
+                    'caller_managed_retry',
+                    -1,
+                    'remote_peer'
+                )
+            );
+            fclose($client);
+            unset($event);
+            continue;
+        }
+
+        foreach (($event['handler_boundary']['required_tools'] ?? []) as $toolName) {
+            if (!is_string($toolName) || $toolName === '') {
+                $event['remote_error'] = 'invalid_required_tool';
+                king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
+                fwrite(
+                    $client,
+                    $encodeErrorMeta(
+                        'remote peer received an invalid required tool name in the handler boundary.',
+                        'backend',
+                        'caller_managed_retry',
+                        -1,
+                        'remote_peer'
+                    )
+                );
+                fclose($client);
+                unset($event);
+                continue 2;
+            }
+
+            if (!array_key_exists($toolName, $registeredHandlers)) {
+                $event['remote_error'] = sprintf(
+                    "remote peer has no registered handler for tool '%s'.",
+                    $toolName
+                );
+                $event['failed_step_index'] = king_orchestrator_remote_peer_first_required_step_index(
+                    $event['handler_boundary'],
+                    $toolName
+                );
+                king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
+                fwrite(
+                    $client,
+                    $encodeErrorMeta(
+                        $event['remote_error'],
+                        'backend',
+                        'caller_managed_retry',
+                        $event['failed_step_index'],
+                        'remote_peer'
+                    )
+                );
+                fclose($client);
+                unset($event);
+                continue 2;
+            }
+        }
+    }
+
     $startedAt = hrtime(true);
     $effectiveBudgetMs = 0;
     if ($event['timeout_budget_ms'] > 0 && $event['deadline_budget_ms'] > 0) {
@@ -129,6 +366,7 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
     }
 
     $failed = false;
+    $currentResult = $event['initial_data'];
     foreach ($event['pipeline'] as $stepIndex => $step) {
         if (!is_array($step)) {
             continue;
@@ -199,12 +437,45 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
                 }
             }
         }
+
+        if (
+            king_orchestrator_remote_peer_handler_boundary_requires_process_registration($event['handler_boundary'])
+            && king_orchestrator_remote_peer_step_uses_registered_handler($event['handler_boundary'], $step, $stepIndex)
+        ) {
+            try {
+                $currentResult = king_orchestrator_remote_peer_invoke_registered_handler(
+                    $registeredHandlers,
+                    $event['tool_configs'],
+                    (string) $event['run_id'],
+                    $step,
+                    $stepIndex,
+                    $currentResult
+                );
+            } catch (Throwable $e) {
+                $event['remote_error'] = $e->getMessage();
+                $event['failed_step_index'] = $stepIndex;
+                king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
+                fwrite(
+                    $client,
+                    $encodeErrorMeta(
+                        $event['remote_error'],
+                        'backend',
+                        'caller_managed_retry',
+                        $stepIndex,
+                        'remote_peer'
+                    )
+                );
+                $failed = true;
+                break;
+            }
+        }
     }
 
     if (!$failed) {
-        $result = $event['initial_data'];
+        $result = $currentResult;
         if (
-            is_array($event['pipeline'])
+            !king_orchestrator_remote_peer_handler_boundary_requires_process_registration($event['handler_boundary'])
+            && is_array($event['pipeline'])
             && isset($event['pipeline'][0])
             && is_array($event['pipeline'][0])
             && !empty($event['pipeline'][0]['remote_object_result'])
@@ -212,6 +483,7 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
             $result = (object) ['remote_object' => true];
         }
 
+        $event['result'] = $result;
         fwrite($client, $encodeResult($result));
     }
 

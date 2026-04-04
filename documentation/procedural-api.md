@@ -340,15 +340,13 @@ current process only. Executable handler readiness is still process-local, so
 the exact controller, worker, or remote-peer process that will execute a step
 must bind a handler for that tool name again after restart or replacement.
 
-Queued file-worker boundary: userland-backed
-`king_pipeline_orchestrator_dispatch()` runs now persist an explicit
-`handler_boundary` block inside the run snapshot returned later by
+Non-local boundary: userland-backed
+`king_pipeline_orchestrator_dispatch()` runs and `remote_peer` runs now persist
+an explicit `handler_boundary` block inside the run snapshot returned later by
 `king_pipeline_orchestrator_get_run()`. That block contains the durable
-tool-name references and step indexes needed for queued worker continuation,
-but it still does not serialize executable PHP callables or claim that worker
-readiness already exists. A worker process that has not re-registered those
-handlers now skips that queued or recovered run before claim/resume instead of
-failing late inside worker execution.
+tool-name references and step indexes needed for queued worker continuation or
+remote-peer replay, but it still does not serialize executable PHP callables
+or claim that worker/peer readiness already exists.
 
 Local execution boundary: when the active backend is local and those handlers
 have been bound in the current process, `king_pipeline_orchestrator_run()` and
@@ -364,6 +362,14 @@ marked steps through the registered handlers and persists the latest payload
 plus completed-step progress after each completed step. A replacement worker
 therefore resumes from honest file-worker progress after worker loss or
 restart instead of replaying already-completed userland-backed steps.
+
+Remote-peer execution boundary: when a remote-backed run carries that durable
+`handler_boundary`, `king_pipeline_orchestrator_run()` and
+`king_pipeline_orchestrator_resume_run()` now send only the tool-name boundary
+plus durable tool configs to the configured TCP peer. The remote peer must
+still satisfy its own process-local handler registration; a ready peer executes
+those marked steps for real, and a peer without the required handlers now fails
+closed explicitly instead of borrowing controller memory across the network.
 
 Local handler contract: the callable receives one context array with `input`,
 `tool`, `run`, and `step` blocks, plus the legacy top-level `run_id` alias.

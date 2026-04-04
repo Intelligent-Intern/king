@@ -143,6 +143,14 @@ payload plus completed-step progress after each completed step, and lets a
 replacement worker continue from honest persisted file-worker progress instead
 of replaying already-completed userland-backed work.
 
+When the active backend is `remote_peer` and the controller had bound handlers
+for those step tools, the persisted run snapshot now carries that same durable
+`handler_boundary` for remote replay too. `run()` and later `resume_run()`
+send only the tool-name boundary plus durable tool configs across the TCP
+request. The remote peer must still bind its own executable handlers locally;
+a ready peer executes the marked steps for real, and a peer without those
+handlers now fails closed explicitly instead of borrowing controller memory.
+
 ## Step 4: Inspect The Persisted Run
 
 Finally, the example reads the stored run with

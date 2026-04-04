@@ -1541,8 +1541,12 @@ namespace {
      * run must be queued via `king_pipeline_orchestrator_dispatch()` and
      * consumed by `king_pipeline_orchestrator_worker_run_next()`. When
      * `king.orchestrator_execution_backend=remote_peer`, the controller
-     * sends the run to the configured remote host/port worker peer and
-     * still persists the run snapshot locally. On the local backend, handlers
+     * sends the run to the configured remote host/port worker peer, still
+     * persists the run snapshot locally, and now includes any durable
+     * userland `handler_boundary` plus tool-config snapshot needed for remote
+     * replay. The remote peer must still satisfy its own process-local
+     * handler registration before it can execute those boundary-marked steps.
+     * On the local backend, handlers
      * bound through `king_pipeline_orchestrator_register_handler()` execute in
      * the current process and the runtime persists the latest local payload
      * plus completed-step progress after each completed local step.
@@ -1586,6 +1590,9 @@ namespace {
      * into orchestrator state, replayed across restart, or transported to a
      * file worker or remote peer automatically. Replacement processes must
      * bind their own handlers again for the same durable tool-name identity.
+     * On the `remote_peer` backend, controller-side registration only marks
+     * the durable boundary the controller may later send to the peer; it does
+     * not satisfy remote execution readiness by itself.
      * On the local backend the callable receives one context array with
      * top-level keys `input`, `tool`, `run`, and `step`, plus the legacy
      * `run_id` alias. The callable must return one array containing key
@@ -1628,7 +1635,10 @@ namespace {
      * and must be bound again inside the restarted process before continuation.
      * On the local backend, continuation resumes from the persisted local
      * payload and completed-step progress instead of replaying already
-     * completed local steps.
+     * completed local steps. On the `remote_peer` backend, continuation
+     * re-sends only the durable handler boundary plus tool-config snapshot to
+     * the configured peer; the restarted controller still does not transport
+     * old PHP callable state across the network.
      * @return array<string,mixed>
      */
     function king_pipeline_orchestrator_resume_run(string $run_id): array {}
@@ -1637,10 +1647,10 @@ namespace {
      * Read one persisted pipeline-run snapshot from the active orchestrator
      * state registry, including explicit `error_classification` and per-step
      * `steps` status snapshots plus the caller-managed `compensation` contract
-     * for failed multi-step runs when present. Userland-backed queued
-     * file-worker runs may also expose `handler_boundary`, which carries only
-     * the durable tool-name references and step indexes needed for later
-     * worker readiness checks.
+     * for failed multi-step runs when present. Userland-backed non-local runs
+     * may also expose `handler_boundary`, which carries only the durable
+     * tool-name references and step indexes needed for later worker readiness
+     * checks or remote-peer replay.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_get_run(string $run_id): array|false {}
