@@ -6,6 +6,9 @@ static uint64_t king_telemetry_current_memory_bytes_internal(void)
     );
 }
 
+static uint64_t king_telemetry_estimate_zval_bytes(zval *value);
+static zend_bool king_telemetry_buffer_has_entries(zval *buffer);
+
 static void king_telemetry_note_runtime_watermarks(void)
 {
     uint64_t current_memory_bytes = king_telemetry_current_memory_bytes_internal();
@@ -21,6 +24,32 @@ static void king_telemetry_note_runtime_watermarks(void)
     if (current_memory_bytes > king_telemetry_memory_high_water_bytes) {
         king_telemetry_memory_high_water_bytes = current_memory_bytes;
     }
+}
+
+static void king_telemetry_refresh_pending_accounting(void)
+{
+    if (!king_telemetry_pending_buffers_initialized) {
+        king_telemetry_pending_bytes = 0;
+        return;
+    }
+
+    king_telemetry_pending_bytes = 0;
+
+    if (king_telemetry_buffer_has_entries(&king_telemetry_pending_spans)) {
+        king_telemetry_pending_bytes = king_telemetry_saturated_add_u64(
+            king_telemetry_pending_bytes,
+            king_telemetry_estimate_zval_bytes(&king_telemetry_pending_spans)
+        );
+    }
+
+    if (king_telemetry_buffer_has_entries(&king_telemetry_pending_logs)) {
+        king_telemetry_pending_bytes = king_telemetry_saturated_add_u64(
+            king_telemetry_pending_bytes,
+            king_telemetry_estimate_zval_bytes(&king_telemetry_pending_logs)
+        );
+    }
+
+    king_telemetry_note_runtime_watermarks();
 }
 
 uint32_t king_telemetry_get_pending_entry_limit(void)
@@ -525,6 +554,45 @@ static void king_telemetry_buffer_move_entries(zval *target, zval *source)
     zend_hash_clean(Z_ARRVAL_P(source));
 }
 
+static uint32_t king_telemetry_buffer_move_entries_limited(
+    zval *target,
+    zval *source,
+    uint32_t limit
+)
+{
+    zval *entry;
+    zval remaining;
+    uint32_t moved = 0;
+
+    if (target == NULL || source == NULL) {
+        return 0;
+    }
+    if (Z_TYPE_P(target) != IS_ARRAY || Z_TYPE_P(source) != IS_ARRAY) {
+        return 0;
+    }
+
+    if (limit == 0) {
+        limit = UINT32_MAX;
+    }
+
+    array_init(&remaining);
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(source), entry) {
+        Z_TRY_ADDREF_P(entry);
+        if (moved < limit) {
+            add_next_index_zval(target, entry);
+            moved++;
+        } else {
+            add_next_index_zval(&remaining, entry);
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    zval_ptr_dtor(source);
+    ZVAL_COPY_VALUE(source, &remaining);
+
+    return moved;
+}
+
 static uint64_t king_telemetry_batch_refresh_estimated_bytes(king_telemetry_batch_t *batch)
 {
     uint64_t estimated_bytes = 0;
@@ -816,6 +884,21 @@ static void king_telemetry_config_apply_inline_array(
             config->max_queue_size = queue_limit > UINT32_MAX
                 ? UINT32_MAX
                 : (uint32_t) queue_limit;
+        }
+    }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "logs_exporter_batch_size",
+        sizeof("logs_exporter_batch_size") - 1
+    );
+    if (value != NULL) {
+        zend_long batch_size = zval_get_long(value);
+
+        if (batch_size > 0) {
+            config->max_export_batch_size = batch_size > UINT32_MAX
+                ? UINT32_MAX
+                : (uint32_t) batch_size;
         }
     }
 

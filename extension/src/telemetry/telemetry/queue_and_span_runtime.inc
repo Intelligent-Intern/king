@@ -180,6 +180,14 @@ zend_bool king_telemetry_has_pending_signals(void)
 
 void king_telemetry_append_pending_signals(king_telemetry_batch_t *batch)
 {
+    king_telemetry_append_pending_signals_limited(batch, 0);
+}
+
+void king_telemetry_append_pending_signals_limited(
+    king_telemetry_batch_t *batch,
+    uint32_t chunk_size
+)
+{
     if (batch == NULL) {
         return;
     }
@@ -188,9 +196,23 @@ void king_telemetry_append_pending_signals(king_telemetry_batch_t *batch)
         return;
     }
 
-    king_telemetry_buffer_move_entries(&batch->spans, &king_telemetry_pending_spans);
-    king_telemetry_buffer_move_entries(&batch->logs, &king_telemetry_pending_logs);
-    king_telemetry_pending_bytes = 0;
+    if (chunk_size == 0) {
+        king_telemetry_buffer_move_entries(&batch->spans, &king_telemetry_pending_spans);
+        king_telemetry_buffer_move_entries(&batch->logs, &king_telemetry_pending_logs);
+    } else {
+        king_telemetry_buffer_move_entries_limited(
+            &batch->spans,
+            &king_telemetry_pending_spans,
+            chunk_size
+        );
+        king_telemetry_buffer_move_entries_limited(
+            &batch->logs,
+            &king_telemetry_pending_logs,
+            chunk_size
+        );
+    }
+
+    king_telemetry_refresh_pending_accounting();
 }
 
 int king_telemetry_process_export_queue(void)

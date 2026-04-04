@@ -396,7 +396,7 @@ metrics are exported, and what sampler policy traces use.
 | `king.otel_metrics_export_interval_ms` | `60000` | Sets the metric export interval. |
 | `king.otel_metrics_default_histogram_boundaries` | `0,5,10,25,50,75,100,250,500,1000` | Sets the default histogram bucket boundaries used for exported metrics. |
 | `king.otel_logs_enable` | `0` | Enables log export. |
-| `king.otel_logs_exporter_batch_size` | `512` | Caps the number of log records grouped into one export batch. |
+| `king.otel_logs_exporter_batch_size` | `512` | Caps the active mixed-signal export chunk size: one bounded flush batch may carry up to this many log records, spans, and metric snapshot entries before the next FIFO batch takes the remainder. |
 
 ## QUIC Transport
 

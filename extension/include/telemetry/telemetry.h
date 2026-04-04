@@ -209,9 +209,14 @@ void king_telemetry_cleanup_export_queue(void);
 int king_telemetry_process_export_queue(void);
 zend_bool king_telemetry_has_pending_signals(void);
 void king_telemetry_append_pending_signals(king_telemetry_batch_t *batch);
+void king_telemetry_append_pending_signals_limited(
+    king_telemetry_batch_t *batch,
+    uint32_t chunk_size
+);
 uint32_t king_telemetry_get_pending_span_count(void);
 uint32_t king_telemetry_get_pending_log_count(void);
 uint32_t king_telemetry_get_pending_entry_limit(void);
+uint32_t king_telemetry_get_export_chunk_size(void);
 uint64_t king_telemetry_get_queue_bytes(void);
 uint64_t king_telemetry_get_pending_bytes(void);
 uint64_t king_telemetry_get_memory_bytes(void);

@@ -422,4 +422,4 @@ rewriting application code.
 | `otel.metrics_export_interval_ms` | Sets the metrics export interval. |
 | `otel.metrics_default_histogram_boundaries` | Sets default histogram bucket boundaries. |
 | `otel.logs_enable` | Enables or disables logs export. |
-| `otel.logs_exporter_batch_size` | Sets the log exporter batch size. |
+| `otel.logs_exporter_batch_size` | Sets the active mixed-signal export chunk size used when one flush must split metric, span, and log pressure across multiple FIFO batches. |

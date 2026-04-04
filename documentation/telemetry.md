@@ -235,14 +235,14 @@ The most important telemetry function to understand operationally is
 
 Flush does not mean "write everything durably right now." It means "take
 whatever is currently sitting in the live metric registry and pending signal
-buffers, put that material into an export batch, place that batch onto the
-bounded retry queue, and then give the export path one chance to send the next
-queued batch."
+buffers, snapshot that material into one or more bounded export batches, place
+those batches onto the bounded retry queue, and then give the export path one
+chance to send the next queued batch."
 
 This detail matters because it explains why the queue exists and why the system
 component reports `single_batch_per_flush`. A flush call has two jobs. First it
-captures new local data into a batch. Second it advances the oldest queued
-batch by at most one delivery attempt.
+captures new local data into one or more bounded queue batches. Second it
+advances the oldest queued batch by at most one delivery attempt.
 
 If the exporter succeeds, the batch is freed and the success counter grows. If
 the exporter fails, only the signals that still failed remain in the batch, and
@@ -255,14 +255,15 @@ flush, the runtime drops the new signal immediately and increments
 
 ```mermaid
 flowchart TD
-    A[king_telemetry_flush] --> B[Build batch from metrics, spans, logs]
-    B --> C{Retry queue has room?}
-    C -->|No| D[Drop batch and increment queue_drop_count]
-    C -->|Yes| E[Enqueue batch]
-    E --> F[Try to export one queued batch]
-    F --> G{Collector success?}
-    G -->|Yes| H[Increment export_success_count]
-    G -->|No| I[Keep failed signals at queue head]
+    A[king_telemetry_flush] --> B[Snapshot metrics plus pending spans/logs]
+    B --> C[Chunk mixed signals into bounded FIFO batches]
+    C --> D{Retry queue has room?}
+    D -->|No| E[Drop new batch chunk and increment queue_drop_count]
+    D -->|Yes| F[Enqueue batch chunk]
+    F --> G[Try to export one queued batch]
+    G --> H{Collector success?}
+    H -->|Yes| I[Increment export_success_count]
+    H -->|No| J[Keep failed signals at queue head]
 ```
 
 This is the core reliability story of the telemetry runtime. The queue is not
@@ -454,7 +455,10 @@ families individually. `metrics_export_interval_ms` defines the metrics export
 cadence. `metrics_default_histogram_boundaries` defines histogram bucket edges.
 `traces_sampler_type` and `traces_sampler_ratio` control trace sampling.
 `traces_max_attributes_per_span` limits attribute growth on one span.
-`logs_exporter_batch_size` shapes log exporter batching.
+`logs_exporter_batch_size` shapes the active export chunk size. In the current
+runtime that means one bounded mixed-signal flush batch may carry up to that
+many metric snapshot entries, spans, and logs before the next FIFO batch takes
+the remainder.
 
 Sampling semantics are now explicit instead of implied. `always_on` records new
 local root spans and exports them normally. `always_off` still gives you a live

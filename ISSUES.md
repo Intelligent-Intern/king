@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#16 Finalize telemetry batch formation under mixed span, metric, and log pressure.`
+- `#17 Validate OTLP JSON payloads against reference collectors.`
 
 ## Active Executable Items
 
@@ -61,7 +61,7 @@
 - [x] `#13 Implement telemetry queue replay after process restart where the delivery contract requires it.`
 - [x] `#14 Define export ordering guarantees across queued telemetry batches.`
 - [x] `#15 Define exporter idempotency behavior across retry and replay paths.`
-- [ ] `#16 Finalize telemetry batch formation under mixed span, metric, and log pressure.`
+- [x] `#16 Finalize telemetry batch formation under mixed span, metric, and log pressure.`
 - [ ] `#17 Validate OTLP JSON payloads against reference collectors.`
 - [ ] `#18 Provide complete export failure diagnostics across transport, TLS, HTTP, and collector errors.`
 - [ ] `#19 Finalize telemetry export endpoint and credential security boundaries.`
