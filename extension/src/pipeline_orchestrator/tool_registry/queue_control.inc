@@ -154,6 +154,7 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     zval initial_data;
     zval pipeline;
     zval options;
+    zval handler_boundary;
     zval result;
     zval error;
     int lock_fd = -1;
@@ -161,6 +162,7 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     ZVAL_NULL(&initial_data);
     ZVAL_NULL(&pipeline);
     ZVAL_NULL(&options);
+    ZVAL_NULL(&handler_boundary);
     ZVAL_NULL(&result);
     ZVAL_NULL(&error);
 
@@ -178,12 +180,17 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
         king_orchestrator_decode_base64_zval(run_state->initial_data_b64, &initial_data) != SUCCESS
         || king_orchestrator_decode_base64_zval(run_state->pipeline_b64, &pipeline) != SUCCESS
         || king_orchestrator_decode_base64_zval(run_state->options_b64, &options) != SUCCESS
+        || (
+            run_state->handler_boundary_b64 != NULL
+            && king_orchestrator_decode_base64_zval(run_state->handler_boundary_b64, &handler_boundary) != SUCCESS
+        )
         || king_orchestrator_decode_base64_zval(run_state->result_b64, &result) != SUCCESS
         || king_orchestrator_decode_base64_zval(run_state->error_b64, &error) != SUCCESS
     ) {
         zval_ptr_dtor(&initial_data);
         zval_ptr_dtor(&pipeline);
         zval_ptr_dtor(&options);
+        zval_ptr_dtor(&handler_boundary);
         zval_ptr_dtor(&result);
         zval_ptr_dtor(&error);
         king_orchestrator_state_lock_release(lock_fd);
@@ -210,6 +217,7 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     add_assoc_zval(return_value, "initial_data", &initial_data);
     add_assoc_zval(return_value, "pipeline", &pipeline);
     add_assoc_zval(return_value, "options", &options);
+    add_assoc_zval(return_value, "handler_boundary", &handler_boundary);
     add_assoc_zval(return_value, "result", &result);
     add_assoc_zval(return_value, "error", &error);
     king_orchestrator_append_error_classification(return_value, run_state, &pipeline);

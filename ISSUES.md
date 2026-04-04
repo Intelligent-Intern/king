@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#7 Persist the durable handler-reference boundary needed for queued runs without serializing arbitrary PHP callables into state.`
+- `#8 Rehydrate and validate handler readiness before file-worker claim or resume instead of failing late inside opaque worker execution.`
 
 ## Active Executable Items
 
@@ -52,7 +52,7 @@
 - [x] `#4 Add a public userland handler-registration API that binds a runtime handler to a registered orchestrator tool name.`
 - [x] `#5 Execute registered userland handlers on the local orchestrator backend with persisted run-state parity.`
 - [x] `#6 Pass step input, tool config, run metadata, and step metadata into local userland handler execution with an explicit result contract.`
-- [ ] `#7 Persist the durable handler-reference boundary needed for queued runs without serializing arbitrary PHP callables into state.`
+- [x] `#7 Persist the durable handler-reference boundary needed for queued runs without serializing arbitrary PHP callables into state.`
 - [ ] `#8 Rehydrate and validate handler readiness before file-worker claim or resume instead of failing late inside opaque worker execution.`
 - [ ] `#9 Execute registered userland handlers on the file-worker backend after controller and worker restart under the explicit re-registration contract.`
 - [ ] `#10 Define and implement the remote-peer userland handler contract without pretending controller memory crosses the TCP execution boundary.`
@@ -100,5 +100,6 @@
 - Leaf `#2` is now closed by the identity/re-registration pass across the public orchestrator docs, procedural index, stub docblocks, and root status documents.
 - Leaf `#3` is now closed by the fail-closed pass across the public orchestrator docs, procedural index, stub docblocks, and root status documents.
 - Leaf `#4` is now closed by the public handler-registration API pass across the extension surface, request-local runtime registry, PHPT proof, and root status documents.
+- Leaf `#7` is now closed by persisting a queued-run `handler_boundary` snapshot with durable tool-name references plus step indexes only, surfacing it through persisted run inspection, and adding PHPT proof that executable PHP handler callables are not serialized into orchestrator state.
 - The autoscaling / provisioning / readiness wave remains visible below as the deferred previous batch and resumes once the current userland orchestration batch is exhausted.
 - If a task is not listed here, it is not the current repo-local execution item.

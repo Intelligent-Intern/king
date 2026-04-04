@@ -264,10 +264,15 @@ zend_string *king_orchestrator_pipeline_run_begin(
     zend_string *pipeline_b64;
     zend_string *options_b64;
     zend_string *telemetry_parent_context_b64;
+    zend_string *handler_boundary_b64;
     zend_string *result_b64;
     zend_string *error_b64;
     zend_string *run_id;
     int lock_fd = -1;
+    zval handler_boundary;
+    const char *execution_backend;
+
+    ZVAL_NULL(&handler_boundary);
 
     if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
         return NULL;
@@ -279,6 +284,18 @@ zend_string *king_orchestrator_pipeline_run_begin(
     telemetry_parent_context_b64 = telemetry_parent_context != NULL
         ? king_orchestrator_encode_zval_base64(telemetry_parent_context)
         : king_orchestrator_encode_zval_base64(NULL);
+    execution_backend = king_orchestrator_current_execution_backend();
+    if (
+        king_orchestrator_build_handler_boundary_snapshot(
+            pipeline,
+            execution_backend,
+            &handler_boundary
+        ) != SUCCESS
+    ) {
+        handler_boundary_b64 = NULL;
+    } else {
+        handler_boundary_b64 = king_orchestrator_encode_zval_base64(&handler_boundary);
+    }
 
     {
         zval null_value;
@@ -293,6 +310,7 @@ zend_string *king_orchestrator_pipeline_run_begin(
         || pipeline_b64 == NULL
         || options_b64 == NULL
         || telemetry_parent_context_b64 == NULL
+        || handler_boundary_b64 == NULL
         || result_b64 == NULL
         || error_b64 == NULL
     ) {
@@ -308,12 +326,16 @@ zend_string *king_orchestrator_pipeline_run_begin(
         if (telemetry_parent_context_b64 != NULL) {
             zend_string_release(telemetry_parent_context_b64);
         }
+        if (handler_boundary_b64 != NULL) {
+            zend_string_release(handler_boundary_b64);
+        }
         if (result_b64 != NULL) {
             zend_string_release(result_b64);
         }
         if (error_b64 != NULL) {
             zend_string_release(error_b64);
         }
+        zval_ptr_dtor(&handler_boundary);
         king_orchestrator_state_lock_release(lock_fd);
         return NULL;
     }
@@ -329,8 +351,8 @@ zend_string *king_orchestrator_pipeline_run_begin(
     run_state->run_id = zend_string_dup(run_id, 1);
     run_state->status = zend_string_init(initial_status, strlen(initial_status), 1);
     run_state->execution_backend = zend_string_init(
-        king_orchestrator_current_execution_backend(),
-        strlen(king_orchestrator_current_execution_backend()),
+        execution_backend,
+        strlen(execution_backend),
         1
     );
     run_state->queue_phase = zend_string_init("not_queued", sizeof("not_queued") - 1, 1);
@@ -345,6 +367,7 @@ zend_string *king_orchestrator_pipeline_run_begin(
     run_state->pipeline_b64 = zend_string_dup(pipeline_b64, 1);
     run_state->options_b64 = zend_string_dup(options_b64, 1);
     run_state->telemetry_parent_context_b64 = zend_string_dup(telemetry_parent_context_b64, 1);
+    run_state->handler_boundary_b64 = zend_string_dup(handler_boundary_b64, 1);
     run_state->result_b64 = zend_string_dup(result_b64, 1);
     run_state->error_b64 = zend_string_dup(error_b64, 1);
     run_state->error_category = NULL;
@@ -362,8 +385,10 @@ zend_string *king_orchestrator_pipeline_run_begin(
     zend_string_release(pipeline_b64);
     zend_string_release(options_b64);
     zend_string_release(telemetry_parent_context_b64);
+    zend_string_release(handler_boundary_b64);
     zend_string_release(result_b64);
     zend_string_release(error_b64);
+    zval_ptr_dtor(&handler_boundary);
 
     ZVAL_PTR(&stored_run, run_state);
     {

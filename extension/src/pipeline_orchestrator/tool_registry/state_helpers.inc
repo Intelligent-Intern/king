@@ -35,6 +35,9 @@ static void king_orchestrator_run_state_free(king_orchestrator_run_state_t *run_
     if (run_state->telemetry_parent_context_b64 != NULL) {
         zend_string_release_ex(run_state->telemetry_parent_context_b64, 1);
     }
+    if (run_state->handler_boundary_b64 != NULL) {
+        zend_string_release_ex(run_state->handler_boundary_b64, 1);
+    }
     if (run_state->result_b64 != NULL) {
         zend_string_release_ex(run_state->result_b64, 1);
     }
@@ -290,4 +293,100 @@ static const char *king_orchestrator_run_execution_backend(const king_orchestrat
     }
 
     return king_orchestrator_current_execution_backend();
+}
+
+static zend_bool king_orchestrator_handler_boundary_requires_persistence(
+    const char *execution_backend
+)
+{
+    return execution_backend != NULL && strcmp(execution_backend, "file_worker") == 0;
+}
+
+static zend_result king_orchestrator_build_handler_boundary_snapshot(
+    zval *pipeline,
+    const char *execution_backend,
+    zval *return_value
+)
+{
+    zval required_tools;
+    zval required_step_refs;
+    zval *step;
+    uint32_t index = 0;
+
+    if (return_value == NULL) {
+        return FAILURE;
+    }
+
+    if (!king_orchestrator_handler_boundary_requires_persistence(execution_backend)) {
+        ZVAL_NULL(return_value);
+        return SUCCESS;
+    }
+
+    array_init(return_value);
+    add_assoc_string(return_value, "contract", "durable_tool_name_refs_only");
+    add_assoc_string(return_value, "binding_scope", "process_local_re_registration");
+    add_assoc_string(return_value, "execution_backend", (char *) execution_backend);
+    add_assoc_string(
+        return_value,
+        "topology_scope",
+        (char *) king_orchestrator_topology_scope_for_backend(execution_backend)
+    );
+
+    array_init(&required_tools);
+    array_init(&required_step_refs);
+    if (pipeline != NULL && Z_TYPE_P(pipeline) == IS_ARRAY) {
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(pipeline), step) {
+            zval *tool;
+            zval entry;
+            zval *required_tool_entry;
+            zend_bool seen_tool = 0;
+
+            if (step == NULL || Z_TYPE_P(step) != IS_ARRAY) {
+                index++;
+                continue;
+            }
+
+            tool = zend_hash_str_find(Z_ARRVAL_P(step), "tool", sizeof("tool") - 1);
+            if (tool == NULL || Z_TYPE_P(tool) != IS_STRING || Z_STRLEN_P(tool) == 0) {
+                index++;
+                continue;
+            }
+
+            ZEND_HASH_FOREACH_VAL(Z_ARRVAL(required_tools), required_tool_entry) {
+                if (
+                    required_tool_entry != NULL
+                    && Z_TYPE_P(required_tool_entry) == IS_STRING
+                    && zend_string_equals(Z_STR_P(required_tool_entry), Z_STR_P(tool))
+                ) {
+                    seen_tool = 1;
+                    break;
+                }
+            } ZEND_HASH_FOREACH_END();
+            if (!seen_tool) {
+                add_next_index_stringl(&required_tools, Z_STRVAL_P(tool), Z_STRLEN_P(tool));
+            }
+
+            array_init(&entry);
+            add_assoc_long(&entry, "index", (zend_long) index);
+            add_assoc_stringl(&entry, "tool_name", Z_STRVAL_P(tool), Z_STRLEN_P(tool));
+            add_next_index_zval(&required_step_refs, &entry);
+            index++;
+        } ZEND_HASH_FOREACH_END();
+    }
+
+    add_assoc_long(return_value, "required_tool_count", zend_hash_num_elements(Z_ARRVAL(required_tools)));
+    add_assoc_long(
+        return_value,
+        "required_step_count",
+        zend_hash_num_elements(Z_ARRVAL(required_step_refs))
+    );
+    add_assoc_bool(
+        return_value,
+        "requires_process_registration",
+        zend_hash_num_elements(Z_ARRVAL(required_step_refs)) > 0
+    );
+    add_assoc_zval(return_value, "required_tools", &required_tools);
+    add_assoc_zval(return_value, "required_step_refs", &required_step_refs);
+
+    return SUCCESS;
 }

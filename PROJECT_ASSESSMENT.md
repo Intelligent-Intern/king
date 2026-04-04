@@ -19,8 +19,8 @@ surfaces inside the local tree. They are now concentrated in the deeper
 control-plane, telemetry, and fleet-behavior proof still listed below.
 
 The active explicitly requested `20`-issue repo-local batch in `ISSUES.md` is
-in progress and currently centered on autoscaling, provider, and lifecycle
-proof depth after the telemetry wave closed.
+in progress and currently centered on the userland orchestrator execution and
+recovery surface needed for application workflows.
 
 ## Verified Baseline Snapshot
 
@@ -105,6 +105,7 @@ The current tree already proves:
 - the runtime now exposes a real public `king_pipeline_orchestrator_register_handler()` surface that binds or replaces one executable handler against a previously registered durable tool name inside the current PHP process only, with explicit re-registration after restart and a targeted PHPT proving durable tool-name recovery plus process-local handler rebinding
 - the local orchestrator backend now actually executes registered process-local userland handlers, persists the latest local step payload together with completed-step progress after each completed local step, and resumes persisted `running` runs from that honest local progress instead of rerunning already-completed local steps after controller restart or running-snapshot recovery; file-worker and remote-peer handler execution remain open follow-on work
 - the local userland handler contract is now explicit and verified: local handler invocation now receives the current `input` payload plus decoded durable `tool` config, structured `run` metadata, and structured `step` metadata, while the handler must return one array result contract containing `output` as the next persisted array payload instead of relying on an implicit bare-array return
+- queued file-worker runs now persist an explicit `handler_boundary` snapshot that carries only durable tool-name references plus step indexes for later worker readiness checks, with targeted PHPT proof that queued orchestrator state does not serialize executable PHP handler callables into durable state
 
 ## What Is Still Not Finished
 

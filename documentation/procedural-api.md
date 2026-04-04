@@ -340,6 +340,13 @@ current process only. Executable handler readiness is still process-local, so
 the exact controller, worker, or remote-peer process that will execute a step
 must bind a handler for that tool name again after restart or replacement.
 
+Queued file-worker boundary: `king_pipeline_orchestrator_dispatch()` now
+persists an explicit `handler_boundary` block inside the run snapshot returned
+later by `king_pipeline_orchestrator_get_run()`. That block contains the
+durable tool-name references and step indexes needed for queued worker
+continuation, but it still does not serialize executable PHP callables or
+claim that worker readiness already exists.
+
 Local execution boundary: when the active backend is local and those handlers
 have been bound in the current process, `king_pipeline_orchestrator_run()` and
 `king_pipeline_orchestrator_resume_run()` now execute them directly and persist
