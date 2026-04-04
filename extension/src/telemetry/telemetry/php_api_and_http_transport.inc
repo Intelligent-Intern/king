@@ -231,11 +231,13 @@ static int king_telemetry_http_post(
     const char *url,
     const char *json_payload,
     size_t json_payload_bytes,
+    const char *batch_id,
     king_telemetry_http_response_t *response)
 {
     CURL *curl = NULL;
     CURLcode res = CURLE_FAILED_INIT;
     struct curl_slist *headers = NULL;
+    char batch_id_header[96];
     int result = FAILURE;
 
     if (king_telemetry_ensure_libcurl_ready() != SUCCESS) {
@@ -250,6 +252,19 @@ static int king_telemetry_http_post(
     /* Set up headers for OTLP HTTP/JSON */
     headers = king_telemetry_libcurl.curl_slist_append_fn(headers, "Content-Type: application/json");
     headers = king_telemetry_libcurl.curl_slist_append_fn(headers, "User-Agent: king-telemetry/1.0");
+    if (batch_id != NULL && batch_id[0] != '\0') {
+        /*
+         * Keep one stable batch identity across retry and durable replay so a
+         * downstream collector can dedupe at-least-once re-delivery.
+         */
+        snprintf(
+            batch_id_header,
+            sizeof(batch_id_header),
+            "X-King-Telemetry-Batch-Id: %s",
+            batch_id
+        );
+        headers = king_telemetry_libcurl.curl_slist_append_fn(headers, batch_id_header);
+    }
     
     /* Initialize response buffer */
     memset(response, 0, sizeof(king_telemetry_http_response_t));

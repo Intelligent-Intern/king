@@ -1,5 +1,5 @@
 --TEST--
-King telemetry replays persisted retry batches after process restart when a durable queue state path is configured
+King telemetry keeps a stable exporter batch identity across retry and restart replay paths
 --INI--
 king.security_allow_config_override=1
 --FILE--
@@ -33,26 +33,29 @@ function king_telemetry_run_child_script(string $scriptPath, array $ini = []): a
     return $decoded;
 }
 
-$failurePort = king_telemetry_test_pick_unused_port();
-$statePath = tempnam(sys_get_temp_dir(), 'king-telemetry-replay-state-');
+$statePath = tempnam(sys_get_temp_dir(), 'king-telemetry-idempotency-state-');
 if ($statePath === false) {
     throw new RuntimeException('failed to reserve telemetry queue state path');
 }
 @unlink($statePath);
 
-$producerScript = tempnam(sys_get_temp_dir(), 'king-telemetry-producer-');
-$consumerScript = tempnam(sys_get_temp_dir(), 'king-telemetry-consumer-');
+$collector = king_telemetry_test_start_collector([
+    ['status' => 503, 'body' => 'retry-later'],
+    ['status' => 503, 'body' => 'retry-later'],
+    ['status' => 200, 'body' => 'ok'],
+    ['status' => 200, 'body' => 'ok'],
+]);
+
+$producerScript = tempnam(sys_get_temp_dir(), 'king-telemetry-idempotency-producer-');
+$consumerScript = tempnam(sys_get_temp_dir(), 'king-telemetry-idempotency-consumer-');
 
 file_put_contents($producerScript, <<<PHP
 <?php
 king_telemetry_init([
-    'otel_exporter_endpoint' => 'http://127.0.0.1:{$failurePort}',
-    'exporter_timeout_ms' => 50,
+    'otel_exporter_endpoint' => 'http://127.0.0.1:{$collector['port']}',
+    'exporter_timeout_ms' => 500,
 ]);
-\$spanId = king_telemetry_start_span('restart-span', ['phase' => 'producer']);
-king_telemetry_record_metric('restart.metric', 42, ['phase' => 'producer']);
-king_telemetry_log('warn', 'restart-log', ['phase' => 'producer']);
-king_telemetry_end_span(\$spanId, ['result' => 'queued']);
+king_telemetry_log('warn', 'first-batch', ['batch' => 'first']);
 king_telemetry_flush();
 \$status = king_telemetry_get_status();
 \$component = king_system_get_component_info('telemetry');
@@ -60,19 +63,9 @@ echo json_encode([
     'queue_size' => \$status['queue_size'],
     'export_failure_count' => \$status['export_failure_count'],
     'export_success_count' => \$status['export_success_count'],
-    'delivery_contract' => \$component['configuration']['delivery_contract'],
-    'queue_persistence' => \$component['configuration']['queue_persistence'],
-    'restart_replay' => \$component['configuration']['restart_replay'],
     'idempotency_policy' => \$component['configuration']['idempotency_policy'],
-    'drain_behavior' => \$component['configuration']['drain_behavior'],
 ], JSON_UNESCAPED_SLASHES);
 PHP);
-
-$collector = king_telemetry_test_start_collector([
-    ['status' => 200, 'body' => 'ok'],
-    ['status' => 200, 'body' => 'ok'],
-    ['status' => 200, 'body' => 'ok'],
-]);
 
 file_put_contents($consumerScript, <<<PHP
 <?php
@@ -80,20 +73,24 @@ king_telemetry_init([
     'otel_exporter_endpoint' => 'http://127.0.0.1:{$collector['port']}',
     'exporter_timeout_ms' => 500,
 ]);
-\$before = king_telemetry_get_status();
 \$component = king_system_get_component_info('telemetry');
+\$before = king_telemetry_get_status();
 king_telemetry_flush();
-\$after = king_telemetry_get_status();
+\$afterFirstFlush = king_telemetry_get_status();
+king_telemetry_flush();
+\$afterSecondFlush = king_telemetry_get_status();
+king_telemetry_log('warn', 'second-batch', ['batch' => 'second']);
+king_telemetry_flush();
+\$afterThirdFlush = king_telemetry_get_status();
 echo json_encode([
     'queue_size_before' => \$before['queue_size'],
-    'queue_size_after' => \$after['queue_size'],
-    'export_failure_count_after' => \$after['export_failure_count'],
-    'export_success_count_after' => \$after['export_success_count'],
-    'delivery_contract' => \$component['configuration']['delivery_contract'],
-    'queue_persistence' => \$component['configuration']['queue_persistence'],
-    'restart_replay' => \$component['configuration']['restart_replay'],
+    'queue_size_after_first_flush' => \$afterFirstFlush['queue_size'],
+    'queue_size_after_second_flush' => \$afterSecondFlush['queue_size'],
+    'queue_size_after_third_flush' => \$afterThirdFlush['queue_size'],
+    'export_failure_count_after_first_flush' => \$afterFirstFlush['export_failure_count'],
+    'export_success_count_after_second_flush' => \$afterSecondFlush['export_success_count'],
+    'export_success_count_after_third_flush' => \$afterThirdFlush['export_success_count'],
     'idempotency_policy' => \$component['configuration']['idempotency_policy'],
-    'drain_behavior' => \$component['configuration']['drain_behavior'],
 ], JSON_UNESCAPED_SLASHES);
 PHP);
 
@@ -107,33 +104,39 @@ try {
     $capture = king_telemetry_test_stop_collector($collector);
 }
 
+$firstBatchId = $capture[0]['headers']['x-king-telemetry-batch-id'] ?? '';
+$replayBatchId = $capture[1]['headers']['x-king-telemetry-batch-id'] ?? '';
+$retryBatchId = $capture[2]['headers']['x-king-telemetry-batch-id'] ?? '';
+$secondBatchId = $capture[3]['headers']['x-king-telemetry-batch-id'] ?? '';
+
 var_dump($producer['queue_size']);
 var_dump($producer['export_failure_count']);
 var_dump($producer['export_success_count']);
-var_dump($producer['delivery_contract']);
-var_dump($producer['queue_persistence']);
-var_dump($producer['restart_replay']);
 var_dump($producer['idempotency_policy']);
-var_dump($producer['drain_behavior']);
 
 var_dump($consumer['queue_size_before']);
-var_dump($consumer['queue_size_after']);
-var_dump($consumer['export_failure_count_after']);
-var_dump($consumer['export_success_count_after']);
-var_dump($consumer['delivery_contract']);
-var_dump($consumer['queue_persistence']);
-var_dump($consumer['restart_replay']);
+var_dump($consumer['queue_size_after_first_flush']);
+var_dump($consumer['queue_size_after_second_flush']);
+var_dump($consumer['queue_size_after_third_flush']);
+var_dump($consumer['export_failure_count_after_first_flush']);
+var_dump($consumer['export_success_count_after_second_flush']);
+var_dump($consumer['export_success_count_after_third_flush']);
 var_dump($consumer['idempotency_policy']);
-var_dump($consumer['drain_behavior']);
 
 var_dump(count($capture));
 var_dump($capture[0]['path']);
 var_dump($capture[1]['path']);
 var_dump($capture[2]['path']);
-var_dump(str_contains($capture[0]['body'], '"restart.metric"'));
-var_dump(str_contains($capture[1]['body'], '"restart-span"'));
-var_dump(str_contains($capture[2]['body'], '"restart-log"'));
-var_dump(is_file($statePath));
+var_dump($capture[3]['path']);
+var_dump($firstBatchId !== '');
+var_dump($firstBatchId === $replayBatchId);
+var_dump($firstBatchId === $retryBatchId);
+var_dump($secondBatchId !== '');
+var_dump($secondBatchId !== $firstBatchId);
+var_dump(str_contains($capture[0]['body'], '"first-batch"'));
+var_dump(str_contains($capture[1]['body'], '"first-batch"'));
+var_dump(str_contains($capture[2]['body'], '"first-batch"'));
+var_dump(str_contains($capture[3]['body'], '"second-batch"'));
 
 @unlink($statePath);
 ?>
@@ -141,25 +144,26 @@ var_dump(is_file($statePath));
 int(1)
 int(1)
 int(0)
-string(25) "best_effort_bounded_retry"
-string(26) "process_local_durable_file"
-string(21) "best_effort_supported"
 string(40) "at_least_once_with_stable_batch_identity"
-string(22) "single_batch_per_flush"
+int(1)
 int(1)
 int(0)
 int(0)
 int(1)
-string(25) "best_effort_bounded_retry"
-string(26) "process_local_durable_file"
-string(21) "best_effort_supported"
+int(1)
+int(2)
 string(40) "at_least_once_with_stable_batch_identity"
-string(22) "single_batch_per_flush"
-int(3)
-string(11) "/v1/metrics"
-string(10) "/v1/traces"
+int(4)
+string(8) "/v1/logs"
+string(8) "/v1/logs"
+string(8) "/v1/logs"
 string(8) "/v1/logs"
 bool(true)
 bool(true)
 bool(true)
-bool(false)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)

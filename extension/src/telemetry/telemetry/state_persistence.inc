@@ -11,6 +11,15 @@ static zend_bool king_telemetry_queue_state_path_is_configured(void)
     return king_telemetry_queue_state_path() != NULL;
 }
 
+static zend_bool king_telemetry_batch_identity_is_valid_zval(zval *value)
+{
+    if (value == NULL || Z_TYPE_P(value) != IS_STRING) {
+        return 0;
+    }
+
+    return Z_STRLEN_P(value) == 32;
+}
+
 static void king_telemetry_refresh_queue_accounting(void)
 {
     king_telemetry_batch_t *cursor = king_telemetry_export_queue_head;
@@ -379,6 +388,7 @@ static zend_result king_telemetry_build_queue_state_snapshot(zval *snapshot)
         ZVAL_COPY(&logs_copy, &cursor->logs);
         add_assoc_zval(&batch_state, "logs", &logs_copy);
 
+        add_assoc_string(&batch_state, "batch_id", cursor->batch_id);
         add_assoc_long(&batch_state, "created_at", (zend_long) cursor->created_at);
         add_next_index_zval(&queue, &batch_state);
 
@@ -591,6 +601,7 @@ static zend_result king_telemetry_rehydrate_queue_state(void)
         zval *metrics;
         zval *spans;
         zval *logs;
+        zval *batch_id;
         zval *created_at;
         king_telemetry_batch_t *batch;
 
@@ -622,6 +633,15 @@ static zend_result king_telemetry_rehydrate_queue_state(void)
         if (logs != NULL) {
             zval_ptr_dtor(&batch->logs);
             ZVAL_COPY(&batch->logs, logs);
+        }
+
+        batch_id = zend_hash_str_find(Z_ARRVAL_P(batch_state), "batch_id", sizeof("batch_id") - 1);
+        if (king_telemetry_batch_identity_is_valid_zval(batch_id)) {
+            memcpy(batch->batch_id, Z_STRVAL_P(batch_id), sizeof(batch->batch_id) - 1);
+            batch->batch_id[sizeof(batch->batch_id) - 1] = '\0';
+        } else {
+            king_telemetry_assign_batch_identity(batch);
+            normalized = 1;
         }
 
         created_at = zend_hash_str_find(Z_ARRVAL_P(batch_state), "created_at", sizeof("created_at") - 1);

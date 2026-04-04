@@ -126,6 +126,8 @@ PHP_FUNCTION(king_system_get_component_info)
         );
         add_assoc_string(&configuration, "ordering_guarantee",
             "head_of_queue_fifo");
+        add_assoc_string(&configuration, "idempotency_policy",
+            "at_least_once_with_stable_batch_identity");
         add_assoc_string(&configuration, "drain_behavior",
             "single_batch_per_flush");
         add_assoc_string(&configuration, "memory_bound",

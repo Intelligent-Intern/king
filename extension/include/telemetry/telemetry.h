@@ -110,6 +110,7 @@ typedef struct _king_telemetry_batch_t {
     zval metrics;      /* Array of metric data */
     zval spans;        /* Array of span data */
     zval logs;         /* Array of log data */
+    char batch_id[33]; /* Stable across retry and restart replay for collector dedupe */
     uint64_t estimated_bytes;
     time_t created_at;
     struct _king_telemetry_batch_t *next;
@@ -201,6 +202,7 @@ zend_result king_telemetry_inject_current_context_headers(
 
 /* Export queue functions */
 king_telemetry_batch_t* king_telemetry_create_batch(void);
+void king_telemetry_assign_batch_identity(king_telemetry_batch_t *batch);
 void king_telemetry_free_batch(king_telemetry_batch_t *batch);
 int king_telemetry_queue_batch(king_telemetry_batch_t *batch);
 void king_telemetry_cleanup_export_queue(void);
@@ -220,9 +222,9 @@ uint64_t king_telemetry_get_memory_high_water_bytes(void);
 uint32_t king_telemetry_get_retry_requeue_count(void);
 
 /* OTLP export functions */
-int king_telemetry_export_metrics_otlp(zval *metrics);
-int king_telemetry_export_spans_otlp(zval *spans);
-int king_telemetry_export_logs_otlp(zval *logs);
+int king_telemetry_export_metrics_otlp(zval *metrics, const char *batch_id);
+int king_telemetry_export_spans_otlp(zval *spans, const char *batch_id);
+int king_telemetry_export_logs_otlp(zval *logs, const char *batch_id);
 
 /* Export queue statistics */
 extern uint32_t king_telemetry_queue_size;

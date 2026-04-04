@@ -9,7 +9,11 @@ static zend_bool king_telemetry_batch_has_signals(king_telemetry_batch_t *batch)
         || zend_hash_num_elements(Z_ARRVAL(batch->logs)) > 0;
 }
 
-static int king_telemetry_dispatch_otlp_json_payload(const char *endpoint_url, smart_str *json_payload)
+static int king_telemetry_dispatch_otlp_json_payload(
+    const char *endpoint_url,
+    smart_str *json_payload,
+    const char *batch_id
+)
 {
     king_telemetry_http_response_t response;
     int result;
@@ -38,6 +42,7 @@ static int king_telemetry_dispatch_otlp_json_payload(const char *endpoint_url, s
         endpoint_url,
         ZSTR_VAL(json_payload->s),
         payload_bytes,
+        batch_id,
         &response
     );
 
@@ -74,7 +79,7 @@ int king_telemetry_export_batch(void)
     /* Export metrics via OTLP */
     if (zend_hash_num_elements(Z_ARRVAL(batch->metrics)) > 0) {
         attempted = 1;
-        metrics_result = king_telemetry_export_metrics_otlp(&batch->metrics);
+        metrics_result = king_telemetry_export_metrics_otlp(&batch->metrics, batch->batch_id);
         if (metrics_result != SUCCESS) {
             failed = 1;
         }
@@ -86,7 +91,7 @@ int king_telemetry_export_batch(void)
     /* Export spans via OTLP */
     if (zend_hash_num_elements(Z_ARRVAL(batch->spans)) > 0) {
         attempted = 1;
-        spans_result = king_telemetry_export_spans_otlp(&batch->spans);
+        spans_result = king_telemetry_export_spans_otlp(&batch->spans, batch->batch_id);
         if (spans_result != SUCCESS) {
             failed = 1;
         }
@@ -98,7 +103,7 @@ int king_telemetry_export_batch(void)
     /* Export logs via OTLP */
     if (zend_hash_num_elements(Z_ARRVAL(batch->logs)) > 0) {
         attempted = 1;
-        logs_result = king_telemetry_export_logs_otlp(&batch->logs);
+        logs_result = king_telemetry_export_logs_otlp(&batch->logs, batch->batch_id);
         if (logs_result != SUCCESS) {
             failed = 1;
         }
@@ -154,7 +159,7 @@ int king_telemetry_export_batch(void)
     return SUCCESS;
 }
 
-int king_telemetry_export_metrics_otlp(zval *metrics)
+int king_telemetry_export_metrics_otlp(zval *metrics, const char *batch_id)
 {
     if (!king_telemetry_runtime_config.otel_exporter_endpoint[0]) {
         return FAILURE; /* No endpoint configured */
@@ -260,14 +265,14 @@ int king_telemetry_export_metrics_otlp(zval *metrics)
     } ZEND_HASH_FOREACH_END();
     
     smart_str_appends(&json_payload, "]}]}]}");
-    int result = king_telemetry_dispatch_otlp_json_payload(endpoint_url, &json_payload);
+    int result = king_telemetry_dispatch_otlp_json_payload(endpoint_url, &json_payload, batch_id);
 
     smart_str_free(&json_payload);
 
     return result;
 }
 
-int king_telemetry_export_spans_otlp(zval *spans)
+int king_telemetry_export_spans_otlp(zval *spans, const char *batch_id)
 {
     if (!king_telemetry_runtime_config.otel_exporter_endpoint[0]) {
         return FAILURE; /* No endpoint configured */
@@ -382,14 +387,14 @@ int king_telemetry_export_spans_otlp(zval *spans)
     } ZEND_HASH_FOREACH_END();
     
     smart_str_appends(&json_payload, "]}]}]}");
-    int result = king_telemetry_dispatch_otlp_json_payload(endpoint_url, &json_payload);
+    int result = king_telemetry_dispatch_otlp_json_payload(endpoint_url, &json_payload, batch_id);
 
     smart_str_free(&json_payload);
 
     return result;
 }
 
-int king_telemetry_export_logs_otlp(zval *logs)
+int king_telemetry_export_logs_otlp(zval *logs, const char *batch_id)
 {
     if (!king_telemetry_runtime_config.otel_exporter_endpoint[0]) {
         return FAILURE; /* No endpoint configured */
@@ -515,7 +520,7 @@ int king_telemetry_export_logs_otlp(zval *logs)
     } ZEND_HASH_FOREACH_END();
     
     smart_str_appends(&json_payload, "]}]}]}");
-    int result = king_telemetry_dispatch_otlp_json_payload(endpoint_url, &json_payload);
+    int result = king_telemetry_dispatch_otlp_json_payload(endpoint_url, &json_payload, batch_id);
 
     smart_str_free(&json_payload);
 

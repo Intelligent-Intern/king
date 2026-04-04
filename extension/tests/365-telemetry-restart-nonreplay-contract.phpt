@@ -50,6 +50,7 @@ echo json_encode([
     'delivery_contract' => \$component['configuration']['delivery_contract'],
     'queue_persistence' => \$component['configuration']['queue_persistence'],
     'restart_replay' => \$component['configuration']['restart_replay'],
+    'idempotency_policy' => \$component['configuration']['idempotency_policy'],
     'drain_behavior' => \$component['configuration']['drain_behavior'],
 ], JSON_UNESCAPED_SLASHES);
 PHP);
@@ -65,6 +66,7 @@ echo json_encode([
     'delivery_contract' => $component['configuration']['delivery_contract'],
     'queue_persistence' => $component['configuration']['queue_persistence'],
     'restart_replay' => $component['configuration']['restart_replay'],
+    'idempotency_policy' => $component['configuration']['idempotency_policy'],
     'drain_behavior' => $component['configuration']['drain_behavior'],
 ], JSON_UNESCAPED_SLASHES);
 PHP);
@@ -83,6 +85,7 @@ var_dump($producer['export_success_count']);
 var_dump($producer['delivery_contract']);
 var_dump($producer['queue_persistence']);
 var_dump($producer['restart_replay']);
+var_dump($producer['idempotency_policy']);
 var_dump($producer['drain_behavior']);
 
 var_dump($consumer['queue_size']);
@@ -91,6 +94,7 @@ var_dump($consumer['export_success_count']);
 var_dump($consumer['delivery_contract']);
 var_dump($consumer['queue_persistence']);
 var_dump($consumer['restart_replay']);
+var_dump($consumer['idempotency_policy']);
 var_dump($consumer['drain_behavior']);
 ?>
 --EXPECT--
@@ -100,6 +104,7 @@ int(0)
 string(25) "best_effort_bounded_retry"
 string(28) "process_local_non_persistent"
 string(13) "not_supported"
+string(40) "at_least_once_with_stable_batch_identity"
 string(22) "single_batch_per_flush"
 int(0)
 int(0)
@@ -107,4 +112,5 @@ int(0)
 string(25) "best_effort_bounded_retry"
 string(28) "process_local_non_persistent"
 string(13) "not_supported"
+string(40) "at_least_once_with_stable_batch_identity"
 string(22) "single_batch_per_flush"

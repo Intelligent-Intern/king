@@ -123,6 +123,24 @@ void king_telemetry_free_batch(king_telemetry_batch_t *batch)
     }
 }
 
+void king_telemetry_assign_batch_identity(king_telemetry_batch_t *batch)
+{
+    char *generated_id;
+
+    if (batch == NULL) {
+        return;
+    }
+
+    generated_id = king_telemetry_generate_trace_id();
+    if (generated_id == NULL || generated_id[0] == '\0') {
+        batch->batch_id[0] = '\0';
+        return;
+    }
+
+    memcpy(batch->batch_id, generated_id, sizeof(batch->batch_id) - 1);
+    batch->batch_id[sizeof(batch->batch_id) - 1] = '\0';
+}
+
 king_telemetry_batch_t* king_telemetry_create_batch(void)
 {
     king_telemetry_batch_t *batch = emalloc(sizeof(king_telemetry_batch_t));
@@ -133,6 +151,7 @@ king_telemetry_batch_t* king_telemetry_create_batch(void)
     array_init(&batch->logs);
     batch->estimated_bytes = 0;
     batch->created_at = time(NULL);
+    king_telemetry_assign_batch_identity(batch);
     batch->next = NULL;
     
     return batch;

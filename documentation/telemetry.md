@@ -60,11 +60,13 @@ the write path fast.
 The telemetry component exposes this contract directly through system
 introspection. The component reports a delivery contract of
 `best_effort_bounded_retry`, an ordering guarantee of
-`head_of_queue_fifo`, a drain behavior of `single_batch_per_flush`, and one of
-two queue contracts: without `king.otel_queue_state_path` it reports
-`process_local_non_persistent` plus `restart_replay=not_supported`, while a
-configured durable queue path upgrades that to
-`process_local_durable_file` plus `restart_replay=best_effort_supported`.
+`head_of_queue_fifo`, an idempotency policy of
+`at_least_once_with_stable_batch_identity`, a drain behavior of
+`single_batch_per_flush`, and one of two queue contracts: without
+`king.otel_queue_state_path` it reports `process_local_non_persistent` plus
+`restart_replay=not_supported`, while a configured durable queue path upgrades
+that to `process_local_durable_file` plus
+`restart_replay=best_effort_supported`.
 
 Those phrases are worth translating into plain English.
 
@@ -89,6 +91,11 @@ younger batch until it succeeds or is locally dropped. Single batch per flush
 means one call to `king_telemetry_flush()` gives the runtime one export
 opportunity for that oldest queued batch rather than draining the whole queue
 in one call.
+At least once with stable batch identity means the exporter does not promise
+that a collector sees a batch only one time, but it does keep one stable
+`X-King-Telemetry-Batch-Id` value on that batch across retry and restart
+replay so a collector or downstream adapter can dedupe deliberate
+re-deliveries.
 
 One subtle boundary matters here. Queued export batches stay process-local
 until they succeed, fail repeatedly, or the process exits. But the unfinished
@@ -261,6 +268,10 @@ flowchart TD
 This is the core reliability story of the telemetry runtime. The queue is not
 infinite. The retry path is explicit. Drops are counted. Restart replay is only
 part of the contract when `king.otel_queue_state_path` is configured.
+The runtime is still honest `at_least_once`, not exactly-once. What it adds on
+top is one stable exporter batch id per queued batch, preserved across retry
+and restart replay so downstream storage can recognize duplicate delivery of
+the same batch.
 
 ## What Happens During Export Failure
 
@@ -302,6 +313,11 @@ mistake.
 This behavior is usually the right tradeoff for a runtime library. It protects
 the main application from turning telemetry failure into uncontrolled memory
 growth, while still making the delivery problem visible through status counters.
+Whenever the same batch is retried, the OTLP HTTP request also carries the same
+`X-King-Telemetry-Batch-Id` header. If the process exits and a later process
+rehydrates the queued batch from `king.otel_queue_state_path`, that replayed
+request keeps the same batch id too. A later newly formed batch gets a new
+batch id.
 
 ## Telemetry And The Collector
 
