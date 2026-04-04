@@ -116,6 +116,20 @@ typedef struct _king_telemetry_batch_t {
     struct _king_telemetry_batch_t *next;
 } king_telemetry_batch_t;
 
+typedef struct _king_telemetry_export_diagnostic_t {
+    zend_bool active;
+    char signal[16];
+    char stage[32];
+    char reason[64];
+    char disposition[16];
+    char batch_id[33];
+    char message[256];
+    zend_long curl_code;
+    zend_long http_status;
+    size_t request_bytes;
+    size_t response_bytes;
+} king_telemetry_export_diagnostic_t;
+
 /* --- PHP Function Prototypes --- */
 
 /* Initializes telemetry from a PHP config array. */
@@ -194,6 +208,7 @@ const char* king_metric_type_to_string(king_metric_type_t type);
 const char* king_span_kind_to_string(king_span_kind_t kind);
 zend_bool king_telemetry_build_trace_context_snapshot(zval *destination);
 zend_bool king_telemetry_build_distributed_parent_context(zval *destination);
+zend_bool king_telemetry_build_last_export_diagnostic(zval *destination);
 zend_bool king_telemetry_has_injectable_current_context(void);
 zend_result king_telemetry_inject_current_context_headers(
     zval *destination,

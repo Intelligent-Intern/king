@@ -144,7 +144,8 @@ static void king_telemetry_otlp_append_summary_metric(
 static int king_telemetry_dispatch_otlp_json_payload(
     const char *endpoint_url,
     smart_str *json_payload,
-    const char *batch_id
+    const char *batch_id,
+    const char *signal_name
 )
 {
     king_telemetry_http_response_t response;
@@ -166,6 +167,18 @@ static int king_telemetry_dispatch_otlp_json_payload(
      * let the caller drop the signal instead of poison-requeueing it forever.
      */
     if (payload_bytes > KING_TELEMETRY_MAX_REQUEST_SIZE) {
+        king_telemetry_record_export_diagnostic(
+            signal_name,
+            "pre_dispatch",
+            "request_size_limit_exceeded",
+            "drop",
+            batch_id,
+            "OTLP request exceeded the 1 MiB request cap before dispatch.",
+            0,
+            0,
+            payload_bytes,
+            0
+        );
         return KING_TELEMETRY_EXPORT_RESULT_DROP;
     }
 
@@ -175,6 +188,7 @@ static int king_telemetry_dispatch_otlp_json_payload(
         ZSTR_VAL(json_payload->s),
         payload_bytes,
         batch_id,
+        signal_name,
         &response
     );
 
@@ -186,6 +200,21 @@ static int king_telemetry_dispatch_otlp_json_payload(
 
     if (result == SUCCESS && response.status_code >= 200 && response.status_code < 300) {
         return SUCCESS;
+    }
+
+    if (result == SUCCESS) {
+        king_telemetry_record_export_diagnostic(
+            signal_name,
+            "http",
+            "non_2xx_status",
+            "retry",
+            batch_id,
+            "Collector returned a non-2xx HTTP status.",
+            0,
+            (zend_long) response.status_code,
+            payload_bytes,
+            response.bytes
+        );
     }
 
     return FAILURE;
@@ -294,6 +323,18 @@ int king_telemetry_export_batch(void)
 int king_telemetry_export_metrics_otlp(zval *metrics, const char *batch_id)
 {
     if (!king_telemetry_runtime_config.otel_exporter_endpoint[0]) {
+        king_telemetry_record_export_diagnostic(
+            "metrics",
+            "config",
+            "missing_endpoint",
+            "retry",
+            batch_id,
+            "Telemetry exporter endpoint is not configured for metrics.",
+            0,
+            0,
+            0,
+            0
+        );
         return FAILURE; /* No endpoint configured */
     }
     
@@ -405,7 +446,12 @@ int king_telemetry_export_metrics_otlp(zval *metrics, const char *batch_id)
     } ZEND_HASH_FOREACH_END();
     
     smart_str_appends(&json_payload, "]}]}]}");
-    int result = king_telemetry_dispatch_otlp_json_payload(endpoint_url, &json_payload, batch_id);
+    int result = king_telemetry_dispatch_otlp_json_payload(
+        endpoint_url,
+        &json_payload,
+        batch_id,
+        "metrics"
+    );
 
     smart_str_free(&json_payload);
 
@@ -415,6 +461,18 @@ int king_telemetry_export_metrics_otlp(zval *metrics, const char *batch_id)
 int king_telemetry_export_spans_otlp(zval *spans, const char *batch_id)
 {
     if (!king_telemetry_runtime_config.otel_exporter_endpoint[0]) {
+        king_telemetry_record_export_diagnostic(
+            "traces",
+            "config",
+            "missing_endpoint",
+            "retry",
+            batch_id,
+            "Telemetry exporter endpoint is not configured for traces.",
+            0,
+            0,
+            0,
+            0
+        );
         return FAILURE; /* No endpoint configured */
     }
     
@@ -527,7 +585,12 @@ int king_telemetry_export_spans_otlp(zval *spans, const char *batch_id)
     } ZEND_HASH_FOREACH_END();
     
     smart_str_appends(&json_payload, "]}]}]}");
-    int result = king_telemetry_dispatch_otlp_json_payload(endpoint_url, &json_payload, batch_id);
+    int result = king_telemetry_dispatch_otlp_json_payload(
+        endpoint_url,
+        &json_payload,
+        batch_id,
+        "traces"
+    );
 
     smart_str_free(&json_payload);
 
@@ -537,6 +600,18 @@ int king_telemetry_export_spans_otlp(zval *spans, const char *batch_id)
 int king_telemetry_export_logs_otlp(zval *logs, const char *batch_id)
 {
     if (!king_telemetry_runtime_config.otel_exporter_endpoint[0]) {
+        king_telemetry_record_export_diagnostic(
+            "logs",
+            "config",
+            "missing_endpoint",
+            "retry",
+            batch_id,
+            "Telemetry exporter endpoint is not configured for logs.",
+            0,
+            0,
+            0,
+            0
+        );
         return FAILURE; /* No endpoint configured */
     }
     
@@ -660,7 +735,12 @@ int king_telemetry_export_logs_otlp(zval *logs, const char *batch_id)
     } ZEND_HASH_FOREACH_END();
     
     smart_str_appends(&json_payload, "]}]}]}");
-    int result = king_telemetry_dispatch_otlp_json_payload(endpoint_url, &json_payload, batch_id);
+    int result = king_telemetry_dispatch_otlp_json_payload(
+        endpoint_url,
+        &json_payload,
+        batch_id,
+        "logs"
+    );
 
     smart_str_free(&json_payload);
 

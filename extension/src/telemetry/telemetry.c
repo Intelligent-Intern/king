@@ -72,6 +72,7 @@ static uint32_t king_telemetry_queue_high_watermark = 0;
 static uint64_t king_telemetry_queue_high_water_bytes = 0;
 static uint64_t king_telemetry_memory_high_water_bytes = 0;
 static uint32_t king_telemetry_retry_requeue_count = 0;
+static king_telemetry_export_diagnostic_t king_telemetry_last_export_diagnostic = {0};
 
 static king_telemetry_libcurl_api_t king_telemetry_libcurl = {0};
 static void king_telemetry_span_free(king_trace_context_t *span);

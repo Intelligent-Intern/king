@@ -186,7 +186,114 @@ typedef struct _king_telemetry_http_response_t {
     smart_str data;
     size_t bytes;
     long status_code;
+    zend_bool body_limit_exceeded;
+    CURLcode curl_code;
 } king_telemetry_http_response_t;
+
+static void king_telemetry_copy_export_diagnostic_string(
+    char *destination,
+    size_t destination_size,
+    const char *source)
+{
+    if (destination == NULL || destination_size == 0) {
+        return;
+    }
+
+    destination[0] = '\0';
+    if (source == NULL || source[0] == '\0') {
+        return;
+    }
+
+    strncpy(destination, source, destination_size - 1);
+    destination[destination_size - 1] = '\0';
+}
+
+static void king_telemetry_record_export_diagnostic(
+    const char *signal,
+    const char *stage,
+    const char *reason,
+    const char *disposition,
+    const char *batch_id,
+    const char *message,
+    zend_long curl_code,
+    zend_long http_status,
+    size_t request_bytes,
+    size_t response_bytes)
+{
+    memset(
+        &king_telemetry_last_export_diagnostic,
+        0,
+        sizeof(king_telemetry_last_export_diagnostic)
+    );
+    king_telemetry_last_export_diagnostic.active = 1;
+    king_telemetry_copy_export_diagnostic_string(
+        king_telemetry_last_export_diagnostic.signal,
+        sizeof(king_telemetry_last_export_diagnostic.signal),
+        signal
+    );
+    king_telemetry_copy_export_diagnostic_string(
+        king_telemetry_last_export_diagnostic.stage,
+        sizeof(king_telemetry_last_export_diagnostic.stage),
+        stage
+    );
+    king_telemetry_copy_export_diagnostic_string(
+        king_telemetry_last_export_diagnostic.reason,
+        sizeof(king_telemetry_last_export_diagnostic.reason),
+        reason
+    );
+    king_telemetry_copy_export_diagnostic_string(
+        king_telemetry_last_export_diagnostic.disposition,
+        sizeof(king_telemetry_last_export_diagnostic.disposition),
+        disposition
+    );
+    king_telemetry_copy_export_diagnostic_string(
+        king_telemetry_last_export_diagnostic.batch_id,
+        sizeof(king_telemetry_last_export_diagnostic.batch_id),
+        batch_id
+    );
+    king_telemetry_copy_export_diagnostic_string(
+        king_telemetry_last_export_diagnostic.message,
+        sizeof(king_telemetry_last_export_diagnostic.message),
+        message
+    );
+    king_telemetry_last_export_diagnostic.curl_code = curl_code;
+    king_telemetry_last_export_diagnostic.http_status = http_status;
+    king_telemetry_last_export_diagnostic.request_bytes = request_bytes;
+    king_telemetry_last_export_diagnostic.response_bytes = response_bytes;
+}
+
+zend_bool king_telemetry_build_last_export_diagnostic(zval *destination)
+{
+    if (destination == NULL || !king_telemetry_last_export_diagnostic.active) {
+        return 0;
+    }
+
+    array_init(destination);
+    add_assoc_string(destination, "signal", king_telemetry_last_export_diagnostic.signal);
+    add_assoc_string(destination, "stage", king_telemetry_last_export_diagnostic.stage);
+    add_assoc_string(destination, "reason", king_telemetry_last_export_diagnostic.reason);
+    add_assoc_string(
+        destination,
+        "disposition",
+        king_telemetry_last_export_diagnostic.disposition
+    );
+    add_assoc_string(destination, "batch_id", king_telemetry_last_export_diagnostic.batch_id);
+    add_assoc_string(destination, "message", king_telemetry_last_export_diagnostic.message);
+    add_assoc_long(destination, "curl_code", king_telemetry_last_export_diagnostic.curl_code);
+    add_assoc_long(destination, "http_status", king_telemetry_last_export_diagnostic.http_status);
+    add_assoc_long(
+        destination,
+        "request_bytes",
+        (zend_long) king_telemetry_last_export_diagnostic.request_bytes
+    );
+    add_assoc_long(
+        destination,
+        "response_bytes",
+        (zend_long) king_telemetry_last_export_diagnostic.response_bytes
+    );
+
+    return 1;
+}
 
 static size_t king_telemetry_http_write_callback(void *ptr, size_t size, size_t nmemb, void *userdata)
 {
@@ -199,6 +306,8 @@ static size_t king_telemetry_http_write_callback(void *ptr, size_t size, size_t 
          * retryable transport failure instead of buffering unbounded response
          * bytes inside the PHP process.
          */
+        response->body_limit_exceeded = 1;
+        response->bytes = (size_t) KING_TELEMETRY_MAX_RESPONSE_SIZE + total_size;
         return 0;
     }
     
@@ -208,21 +317,131 @@ static size_t king_telemetry_http_write_callback(void *ptr, size_t size, size_t 
     return total_size;
 }
 
-static int king_telemetry_http_result_from_curl_code(CURLcode res)
+static int king_telemetry_classify_curl_failure(
+    CURLcode res,
+    const char **stage_out,
+    const char **reason_out,
+    const char **disposition_out)
 {
+    if (stage_out != NULL) {
+        *stage_out = "transport";
+    }
+    if (reason_out != NULL) {
+        *reason_out = "curl_failure";
+    }
+    if (disposition_out != NULL) {
+        *disposition_out = "retry";
+    }
+
     switch (res) {
         case CURLE_COULDNT_RESOLVE_PROXY:
-        case CURLE_COULDNT_RESOLVE_HOST:
-        case CURLE_UNSUPPORTED_PROTOCOL:
-        case CURLE_URL_MALFORMAT:
-        case CURLE_NOT_BUILT_IN:
-            /*
-             * These failures point at a terminal exporter endpoint problem for
-             * the current payload, not a transient collector outage. Drop the
-             * batch locally so later healthy exports are not blocked behind an
-             * endpoint that this process can never reach.
-             */
+            if (reason_out != NULL) {
+                *reason_out = "could_not_resolve_proxy";
+            }
+            if (disposition_out != NULL) {
+                *disposition_out = "drop";
+            }
             return KING_TELEMETRY_EXPORT_RESULT_DROP;
+        case CURLE_COULDNT_RESOLVE_HOST:
+            if (reason_out != NULL) {
+                *reason_out = "could_not_resolve_host";
+            }
+            if (disposition_out != NULL) {
+                *disposition_out = "drop";
+            }
+            return KING_TELEMETRY_EXPORT_RESULT_DROP;
+        case CURLE_UNSUPPORTED_PROTOCOL:
+            if (reason_out != NULL) {
+                *reason_out = "unsupported_protocol";
+            }
+            if (disposition_out != NULL) {
+                *disposition_out = "drop";
+            }
+            return KING_TELEMETRY_EXPORT_RESULT_DROP;
+        case CURLE_URL_MALFORMAT:
+            if (reason_out != NULL) {
+                *reason_out = "url_malformat";
+            }
+            if (disposition_out != NULL) {
+                *disposition_out = "drop";
+            }
+            return KING_TELEMETRY_EXPORT_RESULT_DROP;
+        case CURLE_NOT_BUILT_IN:
+            if (reason_out != NULL) {
+                *reason_out = "feature_not_built_in";
+            }
+            if (disposition_out != NULL) {
+                *disposition_out = "drop";
+            }
+            return KING_TELEMETRY_EXPORT_RESULT_DROP;
+        case CURLE_SSL_CONNECT_ERROR:
+            if (stage_out != NULL) {
+                *stage_out = "tls";
+            }
+            if (reason_out != NULL) {
+                *reason_out = "ssl_connect_error";
+            }
+            return FAILURE;
+        case CURLE_PEER_FAILED_VERIFICATION:
+            if (stage_out != NULL) {
+                *stage_out = "tls";
+            }
+            if (reason_out != NULL) {
+                *reason_out = "peer_verification_failed";
+            }
+            return FAILURE;
+        case CURLE_SSL_CERTPROBLEM:
+            if (stage_out != NULL) {
+                *stage_out = "tls";
+            }
+            if (reason_out != NULL) {
+                *reason_out = "certificate_problem";
+            }
+            return FAILURE;
+        case CURLE_SSL_CIPHER:
+            if (stage_out != NULL) {
+                *stage_out = "tls";
+            }
+            if (reason_out != NULL) {
+                *reason_out = "cipher_negotiation_failed";
+            }
+            return FAILURE;
+        case CURLE_SSL_CACERT_BADFILE:
+            if (stage_out != NULL) {
+                *stage_out = "tls";
+            }
+            if (reason_out != NULL) {
+                *reason_out = "ca_bundle_invalid";
+            }
+            return FAILURE;
+        case CURLE_USE_SSL_FAILED:
+            if (stage_out != NULL) {
+                *stage_out = "tls";
+            }
+            if (reason_out != NULL) {
+                *reason_out = "use_ssl_failed";
+            }
+            return FAILURE;
+        case CURLE_OPERATION_TIMEDOUT:
+            if (reason_out != NULL) {
+                *reason_out = "timeout";
+            }
+            return FAILURE;
+        case CURLE_COULDNT_CONNECT:
+            if (reason_out != NULL) {
+                *reason_out = "connection_failed";
+            }
+            return FAILURE;
+        case CURLE_SEND_ERROR:
+            if (reason_out != NULL) {
+                *reason_out = "send_error";
+            }
+            return FAILURE;
+        case CURLE_RECV_ERROR:
+            if (reason_out != NULL) {
+                *reason_out = "receive_error";
+            }
+            return FAILURE;
         default:
             return FAILURE;
     }
@@ -233,20 +452,51 @@ static int king_telemetry_http_post(
     const char *json_payload,
     size_t json_payload_bytes,
     const char *batch_id,
+    const char *signal_name,
     king_telemetry_http_response_t *response)
 {
     CURL *curl = NULL;
     CURLcode res = CURLE_FAILED_INIT;
     struct curl_slist *headers = NULL;
     char batch_id_header[96];
+    const char *stage = "transport";
+    const char *reason = "curl_failure";
+    const char *disposition = "retry";
+    const char *message = "Telemetry export failed before the collector replied.";
     int result = FAILURE;
 
     if (king_telemetry_ensure_libcurl_ready() != SUCCESS) {
+        king_telemetry_record_export_diagnostic(
+            signal_name,
+            "transport",
+            "libcurl_unavailable",
+            "retry",
+            batch_id,
+            king_telemetry_libcurl.load_error[0] != '\0'
+                ? king_telemetry_libcurl.load_error
+                : "Telemetry exporter could not load libcurl.",
+            0,
+            0,
+            json_payload_bytes,
+            0
+        );
         return FAILURE;
     }
 
     curl = king_telemetry_libcurl.curl_easy_init_fn();
     if (!curl) {
+        king_telemetry_record_export_diagnostic(
+            signal_name,
+            "transport",
+            "curl_easy_init_failed",
+            "retry",
+            batch_id,
+            "Telemetry exporter could not initialize a libcurl handle.",
+            0,
+            0,
+            json_payload_bytes,
+            0
+        );
         return FAILURE;
     }
     
@@ -284,7 +534,8 @@ static int king_telemetry_http_post(
     
     /* Perform the request */
     res = king_telemetry_libcurl.curl_easy_perform_fn(curl);
-    
+    response->curl_code = res;
+
     if (res == CURLE_OK) {
         king_telemetry_libcurl.curl_easy_getinfo_fn(curl, CURLINFO_RESPONSE_CODE, &response->status_code);
     }
@@ -292,10 +543,47 @@ static int king_telemetry_http_post(
     /* Clean up */
     king_telemetry_libcurl.curl_slist_free_all_fn(headers);
     king_telemetry_libcurl.curl_easy_cleanup_fn(curl);
-    
+
     if (res != CURLE_OK) {
         smart_str_free(&response->data);
-        result = king_telemetry_http_result_from_curl_code(res);
+        if (response->body_limit_exceeded) {
+            king_telemetry_record_export_diagnostic(
+                signal_name,
+                "collector",
+                "response_size_limit_exceeded",
+                "retry",
+                batch_id,
+                "Collector response exceeded the 1 MiB response cap.",
+                0,
+                0,
+                json_payload_bytes,
+                response->bytes
+            );
+            result = FAILURE;
+            goto cleanup;
+        }
+
+        result = king_telemetry_classify_curl_failure(
+            res,
+            &stage,
+            &reason,
+            &disposition
+        );
+        if (king_telemetry_libcurl.curl_easy_strerror_fn != NULL) {
+            message = king_telemetry_libcurl.curl_easy_strerror_fn(res);
+        }
+        king_telemetry_record_export_diagnostic(
+            signal_name,
+            stage,
+            reason,
+            disposition,
+            batch_id,
+            message,
+            (zend_long) res,
+            0,
+            json_payload_bytes,
+            response->bytes
+        );
         goto cleanup;
     }
     

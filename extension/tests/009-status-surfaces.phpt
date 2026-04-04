@@ -7,6 +7,7 @@ var_dump(array_keys($telemetry));
 var_dump($telemetry['initialized']);
 var_dump($telemetry['flush_count']);
 var_dump($telemetry['active_metrics']);
+var_dump($telemetry['last_export_diagnostic']);
 
 $storage = king_object_store_get_stats();
 var_dump(array_keys($storage));
@@ -41,7 +42,7 @@ var_dump($storage['cdn']['cached_bytes']);
 var_dump($storage['cdn']['latest_cached_at']);
 ?>
 --EXPECT--
-array(24) {
+array(25) {
   [0]=>
   string(11) "initialized"
   [1]=>
@@ -90,10 +91,13 @@ array(24) {
   string(17) "last_flush_cpu_ns"
   [23]=>
   string(23) "flush_cpu_high_water_ns"
+  [24]=>
+  string(22) "last_export_diagnostic"
 }
 bool(false)
 int(0)
 int(0)
+NULL
 array(2) {
   [0]=>
   string(12) "object_store"

@@ -526,7 +526,12 @@ runtime cost: current `queue_bytes`, `pending_bytes`, and total
 `memory_bytes`, the derived `memory_byte_limit`, queue and memory high-water
 marks, `last_flush_cpu_ns`, `flush_cpu_high_water_ns`, and the
 `retry_requeue_count` that shows how often failed batches were put back under
-collector slowdown or outage.
+collector slowdown or outage. When a failure happens, the same status array now
+also carries `last_export_diagnostic`, a bounded snapshot of the latest failed
+export attempt with the signal name, failure stage, reason, retry-or-drop
+disposition, collector-visible batch id, curl code, HTTP status, request and
+response byte counts, and a short local message. The failure stages are
+currently `pre_dispatch`, `transport`, `tls`, `http`, and `collector`.
 
 `king_telemetry_get_metrics()` returns the current live metric registry before
 those metrics are moved into a flush batch. This is useful when you want to
@@ -566,8 +571,8 @@ flush captures it into an export batch.
 advances the bounded export queue by one delivery attempt. It is a bounded
 drain opportunity, not an unbounded exporter loop.
 
-`king_telemetry_get_status()` returns the current runtime counters and queue
-state for the telemetry subsystem.
+`king_telemetry_get_status()` returns the current runtime counters, queue state,
+and latest bounded export-failure diagnostic for the telemetry subsystem.
 
 `king_telemetry_get_metrics()` returns the current live metrics registry keyed
 by metric name until the next successful flush capture clears it.
@@ -603,7 +608,11 @@ reached. Retryable failures also keep the oldest unresolved batch ahead of any
 younger queued work, so delivery order stays FIFO across batches instead of
 letting later work overtake an earlier export. The pending pre-flush span and
 log buffers are bounded too, so a long period without flush does not turn
-telemetry capture into unbounded memory growth.
+telemetry capture into unbounded memory growth. If you need to know why the
+latest export failed, read `last_export_diagnostic` from
+`king_telemetry_get_status()` instead of inferring from queue counters alone.
+That snapshot intentionally stays local and bounded: it does not echo exporter
+credentials or raw endpoint URLs back into the status surface.
 
 A third common question is how often to flush. The answer depends on your
 runtime shape. A request-driven application often flushes at meaningful request

@@ -134,6 +134,8 @@ PHP_FUNCTION(king_system_get_component_info)
             "queue_slot_and_byte_bounded");
         add_assoc_string(&configuration, "self_metrics_surface",
             "king_telemetry_get_status");
+        add_assoc_string(&configuration, "failure_diagnostics_surface",
+            "king_telemetry_get_status.last_export_diagnostic");
     } else if (zend_string_equals_literal(component_name, "autoscaling")) {
         king_component_info_init(return_value, "autoscaling", "config_backed");
         array_init(&configuration);

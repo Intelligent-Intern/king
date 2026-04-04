@@ -432,6 +432,8 @@ PHP_FUNCTION(king_telemetry_flush)
 
 PHP_FUNCTION(king_telemetry_get_status)
 {
+    zval last_export_diagnostic;
+
     ZEND_PARSE_PARAMETERS_NONE();
 
     array_init(return_value);
@@ -459,4 +461,9 @@ PHP_FUNCTION(king_telemetry_get_status)
     add_assoc_long(return_value, "metric_registry_high_watermark", (zend_long) king_telemetry_metric_registry_high_watermark);
     add_assoc_long(return_value, "last_flush_cpu_ns", king_telemetry_u64_to_zend_long(king_telemetry_last_flush_cpu_ns));
     add_assoc_long(return_value, "flush_cpu_high_water_ns", king_telemetry_u64_to_zend_long(king_telemetry_flush_cpu_high_water_ns));
+    if (king_telemetry_build_last_export_diagnostic(&last_export_diagnostic)) {
+        add_assoc_zval(return_value, "last_export_diagnostic", &last_export_diagnostic);
+    } else {
+        add_assoc_null(return_value, "last_export_diagnostic");
+    }
 }

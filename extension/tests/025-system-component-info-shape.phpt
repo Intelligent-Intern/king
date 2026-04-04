@@ -37,7 +37,7 @@ array(6) {
 }
 string(9) "telemetry"
 string(13) "config_backed"
-array(14) {
+array(15) {
   [0]=>
   string(7) "enabled"
   [1]=>
@@ -66,6 +66,8 @@ array(14) {
   string(12) "memory_bound"
   [13]=>
   string(20) "self_metrics_surface"
+  [14]=>
+  string(27) "failure_diagnostics_surface"
 }
 bool(true)
 bool(true)
