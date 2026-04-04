@@ -74,6 +74,7 @@ PHP_FUNCTION(king_system_get_component_info)
 {
     zend_string *component_name;
     zval configuration;
+    zend_string *public_exporter_endpoint;
 
     ZEND_PARSE_PARAMETERS_START(1, 1)
         Z_PARAM_STR(component_name)
@@ -94,8 +95,13 @@ PHP_FUNCTION(king_system_get_component_info)
         add_assoc_bool(&configuration, "enabled", king_open_telemetry_config.enable ? 1 : 0);
         add_assoc_string(&configuration, "service_name",
             king_safe_string(king_open_telemetry_config.service_name));
-        add_assoc_string(&configuration, "exporter_endpoint",
-            king_safe_string(king_open_telemetry_config.exporter_endpoint));
+        public_exporter_endpoint = king_open_telemetry_build_public_exporter_endpoint(
+            king_open_telemetry_config.exporter_endpoint,
+            king_open_telemetry_config.exporter_endpoint != NULL
+                ? strlen(king_open_telemetry_config.exporter_endpoint)
+                : 0
+        );
+        add_assoc_str(&configuration, "exporter_endpoint", public_exporter_endpoint);
         add_assoc_string(&configuration, "exporter_protocol",
             king_safe_string(king_open_telemetry_config.exporter_protocol));
         add_assoc_bool(&configuration, "metrics_enable",

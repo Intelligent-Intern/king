@@ -781,14 +781,15 @@ static void king_telemetry_json_append_attributes(
     smart_str_appends(json_payload, "]");
 }
 
-static void king_telemetry_config_apply_inline_array(
+static zend_result king_telemetry_config_apply_inline_array(
     king_telemetry_config_t *config,
     zval *config_arr)
 {
     zval *value;
+    const char *validation_error;
 
     if (config == NULL || config_arr == NULL || Z_TYPE_P(config_arr) != IS_ARRAY) {
-        return;
+        return SUCCESS;
     }
 
     value = zend_hash_str_find(Z_ARRVAL_P(config_arr), "enabled", sizeof("enabled") - 1);
@@ -802,12 +803,47 @@ static void king_telemetry_config_apply_inline_array(
         sizeof("otel_exporter_endpoint") - 1
     );
     if (value != NULL && Z_TYPE_P(value) == IS_STRING) {
+        validation_error = king_open_telemetry_validate_exporter_endpoint_value(
+            Z_STRVAL_P(value),
+            Z_STRLEN_P(value)
+        );
+        if (validation_error != NULL) {
+            zend_throw_exception_ex(
+                spl_ce_InvalidArgumentException,
+                0,
+                "%s",
+                validation_error
+            );
+            return FAILURE;
+        }
+
         snprintf(
             config->otel_exporter_endpoint,
             sizeof(config->otel_exporter_endpoint),
             "%s",
             Z_STRVAL_P(value)
         );
+    }
+
+    value = zend_hash_str_find(
+        Z_ARRVAL_P(config_arr),
+        "otel_exporter_headers",
+        sizeof("otel_exporter_headers") - 1
+    );
+    if (value != NULL && Z_TYPE_P(value) == IS_STRING) {
+        validation_error = king_open_telemetry_validate_exporter_headers_value(
+            Z_STRVAL_P(value),
+            Z_STRLEN_P(value)
+        );
+        if (validation_error != NULL) {
+            zend_throw_exception_ex(
+                spl_ce_InvalidArgumentException,
+                0,
+                "%s",
+                validation_error
+            );
+            return FAILURE;
+        }
     }
 
     value = zend_hash_str_find(
@@ -916,6 +952,8 @@ static void king_telemetry_config_apply_inline_array(
                 : (uint32_t) timeout_ms;
         }
     }
+
+    return SUCCESS;
 }
 
 static const char *king_telemetry_metric_type_from_zval(zval *type_zval)

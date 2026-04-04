@@ -241,6 +241,8 @@ static zend_result king_server_telemetry_validate_config(
     const char *function_name
 )
 {
+    const char *validation_error;
+
     if (!config->enable) {
         king_server_control_set_errorf(
             "%s() requires telemetry to be enabled.",
@@ -273,6 +275,19 @@ static zend_result king_server_telemetry_validate_config(
         return FAILURE;
     }
 
+    validation_error = king_open_telemetry_validate_exporter_endpoint_value(
+        config->exporter_endpoint,
+        config->exporter_endpoint_len
+    );
+    if (validation_error != NULL) {
+        king_server_control_set_errorf(
+            "%s() %s",
+            function_name,
+            validation_error
+        );
+        return FAILURE;
+    }
+
     if (!king_server_telemetry_protocol_is_valid(
             config->exporter_protocol,
             config->exporter_protocol_len
@@ -292,6 +307,8 @@ static void king_server_telemetry_apply_snapshot(
     const king_server_telemetry_config_t *config
 )
 {
+    zend_string *public_endpoint;
+
     session->server_telemetry_active = true;
     session->server_telemetry_init_count++;
     session->server_telemetry_metrics_enable = config->metrics_enable;
@@ -303,11 +320,16 @@ static void king_server_telemetry_apply_snapshot(
         config->service_name,
         config->service_name_len
     );
-    king_server_control_set_string_bytes(
-        &session->server_telemetry_exporter_endpoint,
+    public_endpoint = king_open_telemetry_build_public_exporter_endpoint(
         config->exporter_endpoint,
         config->exporter_endpoint_len
     );
+    king_server_control_set_string_bytes(
+        &session->server_telemetry_exporter_endpoint,
+        ZSTR_VAL(public_endpoint),
+        ZSTR_LEN(public_endpoint)
+    );
+    zend_string_release(public_endpoint);
     king_server_control_set_string_bytes(
         &session->server_telemetry_exporter_protocol,
         config->exporter_protocol,

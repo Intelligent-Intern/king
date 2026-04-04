@@ -409,10 +409,10 @@ rewriting application code.
 | --- | --- |
 | `otel.enable` | Enables or disables the telemetry runtime. |
 | `otel.service_name` | Sets the service name attached to exported telemetry. |
-| `otel.exporter_endpoint` | Points at the collector endpoint. |
+| `otel.exporter_endpoint` | Points at the collector endpoint with an absolute `http://` or `https://` URL. Embedded credentials plus query/fragment components are rejected, and public telemetry metadata only echoes the collector origin. |
 | `otel.exporter_protocol` | Selects the collector protocol. |
 | `otel.exporter_timeout_ms` | Sets the exporter timeout. |
-| `otel.exporter_headers` | Adds static exporter headers. |
+| `otel.exporter_headers` | Adds static exporter headers. The value must stay on one line, and King never echoes it back through public telemetry metadata. |
 | `otel.batch_processor_max_queue_size` | Sets the telemetry retry queue size, the queue-derived byte budget, and the cap for distinct live metric names before flush. |
 | `otel.batch_processor_schedule_delay_ms` | Sets the batch processor schedule delay. |
 | `otel.traces_sampler_type` | Selects the trace sampler policy: `always_on`, `always_off`, or `parent_based_probability`. |

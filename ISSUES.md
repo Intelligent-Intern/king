@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#19 Finalize telemetry export endpoint and credential security boundaries.`
+- `#20 Implement the pipeline telemetry adapter contract for run, partition, batch, retry, and failure identity.`
 
 ## Active Executable Items
 
@@ -64,7 +64,7 @@
 - [x] `#16 Finalize telemetry batch formation under mixed span, metric, and log pressure.`
 - [x] `#17 Validate OTLP JSON payloads against reference collectors.`
 - [x] `#18 Provide complete export failure diagnostics across transport, TLS, HTTP, and collector errors.`
-- [ ] `#19 Finalize telemetry export endpoint and credential security boundaries.`
+- [x] `#19 Finalize telemetry export endpoint and credential security boundaries.`
 - [ ] `#20 Implement the pipeline telemetry adapter contract for run, partition, batch, retry, and failure identity.`
 
 ## Notes

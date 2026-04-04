@@ -432,7 +432,9 @@ snapshot still gives the handler an explicit view of the inbound trace
 identity, and it now also seeds the first request-root span opened during that
 handler so the local server trace joins the caller's trace instead of silently
 forking a new root. The inbound parent seed is discarded again before the next
-accepted request starts. Once that request-root span is active, outgoing
+accepted request starts. The same request telemetry metadata exposes only a
+public-safe collector origin for the configured exporter, never raw endpoint
+paths or credential material. Once that request-root span is active, outgoing
 HTTP/1, HTTP/2, and HTTP/3 client requests issued from the same handler now
 carry that live trace context automatically unless the handler pins an
 explicit `traceparent` or `tracestate` boundary in the request headers.

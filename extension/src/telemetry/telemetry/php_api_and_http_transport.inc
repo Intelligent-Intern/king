@@ -18,7 +18,9 @@ PHP_FUNCTION(king_telemetry_init)
     config.max_queue_size = king_telemetry_default_max_queue_size();
     config.max_export_batch_size = king_telemetry_default_export_chunk_size();
     config.traces_sampler_ratio = 1.0;
-    king_telemetry_config_apply_inline_array(&config, config_arr);
+    if (king_telemetry_config_apply_inline_array(&config, config_arr) != SUCCESS) {
+        RETURN_THROWS();
+    }
     
     king_telemetry_init_system(&config);
     RETURN_TRUE;

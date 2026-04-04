@@ -109,6 +109,48 @@ static ZEND_INI_MH(OnUpdateOtelAllowlist)
     return SUCCESS;
 }
 
+static ZEND_INI_MH(OnUpdateOtelEndpoint)
+{
+    const char *validation_error = king_open_telemetry_validate_exporter_endpoint_value(
+        ZSTR_VAL(new_value),
+        ZSTR_LEN(new_value)
+    );
+
+    if (validation_error != NULL) {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "%s",
+            validation_error
+        );
+        return FAILURE;
+    }
+
+    otel_replace_string(&king_open_telemetry_config.exporter_endpoint, new_value);
+    return SUCCESS;
+}
+
+static ZEND_INI_MH(OnUpdateOtelHeaders)
+{
+    const char *validation_error = king_open_telemetry_validate_exporter_headers_value(
+        ZSTR_VAL(new_value),
+        ZSTR_LEN(new_value)
+    );
+
+    if (validation_error != NULL) {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "%s",
+            validation_error
+        );
+        return FAILURE;
+    }
+
+    otel_replace_string(&king_open_telemetry_config.exporter_headers, new_value);
+    return SUCCESS;
+}
+
 static ZEND_INI_MH(OnUpdateOtelHistogramBoundaries)
 {
     const char *s = ZSTR_VAL(new_value);
@@ -156,10 +198,10 @@ static ZEND_INI_MH(OnUpdateOtelHistogramBoundaries)
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("king.otel_enable", "1", PHP_INI_SYSTEM, OnUpdateBool, enable, kg_open_telemetry_config_t, king_open_telemetry_config)
     STD_PHP_INI_ENTRY("king.otel_service_name", "king_application", PHP_INI_SYSTEM, OnUpdateString, service_name, kg_open_telemetry_config_t, king_open_telemetry_config)
-    STD_PHP_INI_ENTRY("king.otel_exporter_endpoint", "http://localhost:4317", PHP_INI_SYSTEM, OnUpdateString, exporter_endpoint, kg_open_telemetry_config_t, king_open_telemetry_config)
+    ZEND_INI_ENTRY("king.otel_exporter_endpoint", "http://localhost:4317", PHP_INI_SYSTEM, OnUpdateOtelEndpoint)
     ZEND_INI_ENTRY("king.otel_exporter_protocol", "grpc", PHP_INI_SYSTEM, OnUpdateOtelAllowlist)
     ZEND_INI_ENTRY("king.otel_exporter_timeout_ms", "10000", PHP_INI_SYSTEM, OnUpdateOtelPositiveLong)
-    STD_PHP_INI_ENTRY("king.otel_exporter_headers", "", PHP_INI_SYSTEM, OnUpdateString, exporter_headers, kg_open_telemetry_config_t, king_open_telemetry_config)
+    ZEND_INI_ENTRY("king.otel_exporter_headers", "", PHP_INI_SYSTEM, OnUpdateOtelHeaders)
     STD_PHP_INI_ENTRY("king.otel_queue_state_path", "", PHP_INI_SYSTEM, OnUpdateString, queue_state_path, kg_open_telemetry_config_t, king_open_telemetry_config)
     ZEND_INI_ENTRY("king.otel_batch_processor_max_queue_size", "2048", PHP_INI_SYSTEM, OnUpdateOtelPositiveLong)
     ZEND_INI_ENTRY("king.otel_batch_processor_schedule_delay_ms", "5000", PHP_INI_SYSTEM, OnUpdateOtelPositiveLong)

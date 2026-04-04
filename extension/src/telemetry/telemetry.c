@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <ext/json/php_json.h>
+#include <ext/spl/spl_exceptions.h>
 #include <ext/standard/php_var.h>
 #include "zend_smart_str.h"
 #include "include/config/open_telemetry/base_layer.h"

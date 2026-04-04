@@ -382,10 +382,10 @@ metrics are exported, and what sampler policy traces use.
 | --- | --- | --- |
 | `king.otel_enable` | `1` | Enables the telemetry subsystem. |
 | `king.otel_service_name` | `king_application` | Sets the service name written into exported telemetry. |
-| `king.otel_exporter_endpoint` | `http://localhost:4317` | Points at the OTLP collector endpoint. |
+| `king.otel_exporter_endpoint` | `http://localhost:4317` | Points at the OTLP collector endpoint with an absolute `http://` or `https://` URL. Embedded credentials plus query/fragment components are rejected, and public telemetry metadata only echoes the collector origin. |
 | `king.otel_exporter_protocol` | `grpc` | Selects the OTLP transport protocol. |
 | `king.otel_exporter_timeout_ms` | `10000` | Sets the exporter request timeout. |
-| `king.otel_exporter_headers` | unset | Supplies static headers added to OTLP export requests. |
+| `king.otel_exporter_headers` | unset | Supplies static headers added to OTLP export requests. The value must stay on one line, and King never echoes it back through public telemetry metadata. |
 | `king.otel_queue_state_path` | unset | Points at an optional local telemetry retry-queue snapshot file. When configured, already queued retry batches are rehydrated after process restart and replayed on the next flush. |
 | `king.otel_batch_processor_max_queue_size` | `2048` | Caps the telemetry retry queue size, the derived in-process telemetry byte budget (`64 KiB` per queue slot), and the number of distinct live metric names retained before a flush. |
 | `king.otel_batch_processor_schedule_delay_ms` | `5000` | Sets the telemetry batch scheduling delay. |

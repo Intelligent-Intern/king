@@ -381,8 +381,10 @@ That server API belongs to the server runtime chapter because it attaches
 telemetry state to one accepted session. Even so, it matters here because it
 shows how telemetry travels into request handling. A server request can carry a
 telemetry snapshot that tells you whether telemetry is enabled, which service
-name is active, which exporter endpoint is configured, and whether metrics and
-logs are enabled for that session-owned view.
+name is active, which public-safe collector origin is configured, and whether
+metrics and logs are enabled for that session-owned view. That request/session
+metadata intentionally exposes only the collector origin, not raw endpoint
+paths or credential material.
 
 That snapshot can now also expose `incoming_trace_context` when the accepted
 request carried a valid `traceparent` header and an optional `tracestate`
@@ -455,7 +457,9 @@ The most important settings are easy to describe in plain language.
 
 `enable` turns telemetry on or off. `service_name` tells the collector which
 service is sending the data. `exporter_endpoint` tells the runtime where the
-collector lives. `exporter_protocol` selects the OTLP protocol family.
+collector lives and must be an absolute `http://` or `https://` URL without
+embedded credentials, query strings, or fragments. `exporter_protocol`
+selects the OTLP protocol family.
 `exporter_timeout_ms` sets the maximum time one export attempt may take.
 `batch_processor_max_queue_size` sets the size of the retry queue and the live
 telemetry bounds derived from it.
@@ -469,6 +473,11 @@ cadence. `metrics_default_histogram_boundaries` defines histogram bucket edges.
 runtime that means one bounded mixed-signal flush batch may carry up to that
 many metric snapshot entries, spans, and logs before the next FIFO batch takes
 the remainder.
+
+`exporter_headers` is the write-only place for static collector credentials or
+other fixed OTLP headers. The value must stay on one line, and King never
+echoes it back through request, session, system, or export-diagnostic
+surfaces.
 
 Sampling semantics are now explicit instead of implied. `always_on` records new
 local root spans and exports them normally. `always_off` still gives you a live
@@ -612,7 +621,9 @@ telemetry capture into unbounded memory growth. If you need to know why the
 latest export failed, read `last_export_diagnostic` from
 `king_telemetry_get_status()` instead of inferring from queue counters alone.
 That snapshot intentionally stays local and bounded: it does not echo exporter
-credentials or raw endpoint URLs back into the status surface.
+credentials or raw endpoint URLs back into the status surface. The broader
+public telemetry metadata surfaces follow the same rule and expose only the
+collector origin, not a credential-bearing or path-bearing export URL.
 
 A third common question is how often to flush. The answer depends on your
 runtime shape. A request-driven application often flushes at meaningful request
