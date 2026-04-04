@@ -23,6 +23,10 @@ function king_orchestrator_remote_peer_persist_capture(array $capture, string $c
     );
 }
 
+final class KingOrchestratorRemotePeerMissingHandlerException extends RuntimeException {}
+final class KingOrchestratorRemotePeerBackendException extends RuntimeException {}
+final class KingOrchestratorRemotePeerValidationException extends InvalidArgumentException {}
+
 function king_orchestrator_remote_peer_load_handlers(?string $bootstrapPath): array
 {
     if (!is_string($bootstrapPath) || $bootstrapPath === '') {
@@ -113,16 +117,20 @@ function king_orchestrator_remote_peer_invoke_registered_handler(
 ): array {
     $toolName = $step['tool'] ?? null;
     if (!is_string($toolName) || $toolName === '') {
-        throw new RuntimeException('remote peer step requires a non-empty tool name before registered handler execution');
+        throw new KingOrchestratorRemotePeerValidationException(
+            'remote peer step requires a non-empty tool name before registered handler execution'
+        );
     }
 
     if (!array_key_exists($toolName, $registeredHandlers)) {
-        throw new RuntimeException(sprintf("remote peer has no registered handler for tool '%s'.", $toolName));
+        throw new KingOrchestratorRemotePeerMissingHandlerException(
+            sprintf("remote peer has no registered handler for tool '%s'.", $toolName)
+        );
     }
 
     $toolConfig = $toolConfigs[$toolName] ?? null;
     if (!is_array($toolConfig)) {
-        throw new RuntimeException(
+        throw new KingOrchestratorRemotePeerBackendException(
             sprintf("remote peer did not receive a durable tool config for registered handler '%s'.", $toolName)
         );
     }
@@ -167,6 +175,35 @@ function king_orchestrator_remote_peer_invoke_registered_handler(
     }
 
     return $result['output'];
+}
+
+function king_orchestrator_remote_peer_classify_handler_failure(Throwable $error): array
+{
+    if ($error instanceof KingOrchestratorRemotePeerMissingHandlerException) {
+        return [
+            'category' => 'missing_handler',
+            'retry_disposition' => 'caller_managed_retry',
+        ];
+    }
+
+    if ($error instanceof KingOrchestratorRemotePeerValidationException) {
+        return [
+            'category' => 'validation',
+            'retry_disposition' => 'non_retryable',
+        ];
+    }
+
+    if ($error instanceof KingOrchestratorRemotePeerBackendException) {
+        return [
+            'category' => 'backend',
+            'retry_disposition' => 'caller_managed_retry',
+        ];
+    }
+
+    return [
+        'category' => 'runtime',
+        'retry_disposition' => 'caller_managed_retry',
+    ];
 }
 
 try {
@@ -342,7 +379,7 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
                     $client,
                     $encodeErrorMeta(
                         $event['remote_error'],
-                        'backend',
+                        'missing_handler',
                         'caller_managed_retry',
                         $event['failed_step_index'],
                         'remote_peer'
@@ -452,6 +489,7 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
                     $currentResult
                 );
             } catch (Throwable $e) {
+                $classification = king_orchestrator_remote_peer_classify_handler_failure($e);
                 $event['remote_error'] = $e->getMessage();
                 $event['failed_step_index'] = $stepIndex;
                 king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
@@ -459,8 +497,8 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
                     $client,
                     $encodeErrorMeta(
                         $event['remote_error'],
-                        'backend',
-                        'caller_managed_retry',
+                        $classification['category'],
+                        $classification['retry_disposition'],
                         $stepIndex,
                         'remote_peer'
                     )

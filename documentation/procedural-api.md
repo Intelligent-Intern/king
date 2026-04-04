@@ -378,6 +378,16 @@ and `output` must be the next array payload. Missing `output`, a scalar
 result, or a bare payload array now fails closed as a runtime contract
 violation.
 
+Userland failure taxonomy: persisted run snapshots returned by
+`king_pipeline_orchestrator_get_run()` now classify userland-backed failures
+explicitly instead of collapsing them into generic backend folklore. Invalid
+input or contract-shape failures classify as `validation`, handler-thrown
+execution faults classify as `runtime`, explicit timeout faults classify as
+`timeout`, missing required process-local handler bindings classify as
+`missing_handler`, backend preparation faults classify as `backend`, and
+control-path cancellation classifies as run-scope `cancelled` when no concrete
+step can honestly own the stop condition.
+
 Fail-closed boundary: unsupported non-rehydratable forms such as captured
 closures, resource-backed callables, or handlers that depend on opaque
 controller memory are outside the durable public contract and must be rejected

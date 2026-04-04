@@ -202,6 +202,8 @@ try {
         'message' => $e->getMessage(),
         'status' => $run['status'] ?? null,
         'error' => $run['error'] ?? null,
+        'error_category' => $run['error_classification']['category'] ?? null,
+        'error_retry_disposition' => $run['error_classification']['retry_disposition'] ?? null,
         'error_backend' => $run['error_classification']['backend'] ?? null,
         'error_step_index' => $run['error_classification']['step_index'] ?? null,
         'handler_boundary' => $run['handler_boundary'] ?? null,
@@ -344,6 +346,8 @@ var_dump(($failed['exception_class'] ?? null) === 'King\\RuntimeException');
 var_dump(($failed['message'] ?? null) === "remote peer has no registered handler for tool 'finalize'.");
 var_dump(($failed['status'] ?? null) === 'failed');
 var_dump(($failed['error'] ?? null) === "remote peer has no registered handler for tool 'finalize'.");
+var_dump(($failed['error_category'] ?? null) === 'missing_handler');
+var_dump(($failed['error_retry_disposition'] ?? null) === 'caller_managed_retry');
 var_dump(($failed['error_backend'] ?? null) === 'remote_peer');
 var_dump(($failed['error_step_index'] ?? null) === 1);
 var_dump(($failed['handler_boundary']['required_tools'] ?? null) === ['prepare', 'finalize']);
@@ -386,6 +390,8 @@ bool(true)
 bool(true)
 bool(true)
 int(0)
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 bool(true)

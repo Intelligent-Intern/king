@@ -672,9 +672,17 @@ instead of replaying already-completed local steps.
 ID. The returned snapshot includes the persisted top-level run state plus a
 structured `error_classification` block, per-step `steps` status entries, and
 the run's distributed observability fields so callers can distinguish
-validation, timeout, backend, remote-transport, and cancelled failures, see
-which backend and topology owned each step, and explain queue, claim, recovery,
-and remote-attempt history without inferring it from exception strings.
+validation, runtime, timeout, backend, remote-transport, cancelled, and
+missing-handler failures, see whether the failure honestly belongs to one step
+or to the run as a whole, see which backend and topology owned each step, and
+explain queue, claim, recovery, and remote-attempt history without inferring it
+from exception strings. For userland-backed steps this classification now stays
+explicit across local, file-worker, and remote-peer execution: handler input or
+precondition failures classify as `validation`, handler-thrown general
+execution failures classify as `runtime`, explicit timeout failures classify as
+`timeout`, control-path stop conditions classify as run-scope `cancelled`,
+backend/runtime preparation faults classify as `backend`, and absent required
+process-local handler bindings classify as `missing_handler`.
 
 `king_pipeline_orchestrator_cancel_run()` requests cancellation for a persisted
 queued run on the file-worker backend.

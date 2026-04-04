@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#11 Classify validation, runtime, timeout, cancellation, backend, and missing-handler failures for userland-backed orchestrator steps at step and run scope.`
+- `#12 Propagate cancel, deadline, and timeout control into active userland handler execution wherever the public contract claims it.`
 
 ## Active Executable Items
 
@@ -56,7 +56,7 @@
 - [x] `#8 Rehydrate and validate handler readiness before file-worker claim or resume instead of failing late inside opaque worker execution.`
 - [x] `#9 Execute registered userland handlers on the file-worker backend after controller and worker restart under the explicit re-registration contract.`
 - [x] `#10 Define and implement the remote-peer userland handler contract without pretending controller memory crosses the TCP execution boundary.`
-- [ ] `#11 Classify validation, runtime, timeout, cancellation, backend, and missing-handler failures for userland-backed orchestrator steps at step and run scope.`
+- [x] `#11 Classify validation, runtime, timeout, cancellation, backend, and missing-handler failures for userland-backed orchestrator steps at step and run scope.`
 - [ ] `#12 Propagate cancel, deadline, and timeout control into active userland handler execution wherever the public contract claims it.`
 - [ ] `#13 Preserve completed-step, compensation, and terminal-state visibility for multi-step runs backed by userland handlers.`
 - [ ] `#14 Expose userland handler readiness, missing-handler state, and active handler-contract metadata through orchestrator component status and inspection surfaces.`
@@ -104,5 +104,6 @@
 - Leaf `#8` is now closed by rehydrating that persisted `handler_boundary` before file-worker claim or claimed-run recovery, skipping userland-backed runs when the current worker process has not re-registered the required handlers, and adding PHPT proof for both queued and recovered claimed readiness gates.
 - Leaf `#9` is now closed by executing boundary-marked userland-backed file-worker steps through re-registered handlers, persisting the latest payload plus completed-step progress after each completed step, and adding PHPT proof that replacement workers resume from honest file-worker progress after worker loss instead of replaying already-completed userland-backed work.
 - Leaf `#10` is now closed by persisting the same durable `handler_boundary` for remote-peer runs, sending only tool-name references plus durable tool configs across the TCP request, executing boundary-marked remote steps through peer-local handlers, failing closed when the peer lacks a required handler, and adding PHPT plus failover-harness proof that controller restart does not pretend old PHP callables crossed the host boundary.
+- Leaf `#11` is now closed by classifying userland-backed failures explicitly across local, file-worker, and remote-peer execution, preserving `validation`, `runtime`, `timeout`, `backend`, and `missing_handler` at honest step scope plus run-scope `cancelled`, and adding targeted PHPT proof for each category and scope.
 - The autoscaling / provisioning / readiness wave remains visible below as the deferred previous batch and resumes once the current userland orchestration batch is exhausted.
 - If a task is not listed here, it is not the current repo-local execution item.

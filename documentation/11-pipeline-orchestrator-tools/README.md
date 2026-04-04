@@ -161,7 +161,14 @@ That is another key lesson of the example. The output of an orchestrated run is
 not only the final result. It is also the stored record of what was asked,
 which backend handled it, what state the run reached, which completed steps now
 need caller-managed compensation after a terminal failure, and how the runtime
-can describe that contract later.
+can describe that contract later. For userland-backed steps that stored record
+now also carries an honest failure taxonomy instead of flattening everything
+into generic backend failure. Validation-style input or contract failures stay
+`validation`, handler-thrown execution faults stay `runtime`, explicit timeout
+faults stay `timeout`, missing process-local handler readiness stays
+`missing_handler`, backend preparation faults stay `backend`, and cancellation
+stays a run-scope `cancelled` control outcome when the runtime cannot honestly
+assign the stop to one concrete step.
 
 ## What You Should Watch
 

@@ -487,6 +487,78 @@ static zend_bool king_orchestrator_handler_boundary_step_uses_registered_handler
     return 0;
 }
 
+static const char *king_orchestrator_failure_retry_disposition_for_category(
+    const char *category
+)
+{
+    if (category == NULL || category[0] == '\0') {
+        return "caller_managed_retry";
+    }
+
+    if (strcmp(category, "validation") == 0) {
+        return "non_retryable";
+    }
+
+    if (strcmp(category, "cancelled") == 0) {
+        return "not_applicable";
+    }
+
+    return "caller_managed_retry";
+}
+
+static const char *king_orchestrator_exception_message_or_last_error(void)
+{
+    zval rv;
+    zval *message;
+    const char *last_error = king_get_error();
+
+    if (EG(exception) == NULL) {
+        return last_error;
+    }
+
+    message = zend_read_property(
+        zend_ce_exception,
+        EG(exception),
+        "message",
+        sizeof("message") - 1,
+        1,
+        &rv
+    );
+    if (message == NULL || Z_TYPE_P(message) != IS_STRING || Z_STRLEN_P(message) == 0) {
+        return last_error;
+    }
+
+    king_set_error(Z_STRVAL_P(message));
+    return king_get_error();
+}
+
+static void king_orchestrator_classify_handler_throwable_failure(
+    const char **category_out,
+    const char **retry_disposition_out
+)
+{
+    const char *category = "runtime";
+
+    if (
+        EG(exception) != NULL
+        && instanceof_function(EG(exception)->ce, king_ce_validation_exception)
+    ) {
+        category = "validation";
+    } else if (
+        EG(exception) != NULL
+        && instanceof_function(EG(exception)->ce, king_ce_timeout_exception)
+    ) {
+        category = "timeout";
+    }
+
+    if (category_out != NULL) {
+        *category_out = category;
+    }
+    if (retry_disposition_out != NULL) {
+        *retry_disposition_out = king_orchestrator_failure_retry_disposition_for_category(category);
+    }
+}
+
 static zend_result king_orchestrator_invoke_registered_tool_handler(
     zend_string *run_id,
     zval *step,
@@ -497,7 +569,9 @@ static zend_result king_orchestrator_invoke_registered_tool_handler(
     const char *topology_scope,
     zend_long attempt_number,
     const char *function_name,
-    zend_bool throw_on_error
+    zend_bool throw_on_error,
+    const char **failure_category_out,
+    const char **retry_disposition_out
 )
 {
     zval *tool;
@@ -515,12 +589,22 @@ static zend_result king_orchestrator_invoke_registered_tool_handler(
     zend_fcall_info_cache fcc;
     char message[KING_ERR_LEN];
 
+    if (failure_category_out != NULL) {
+        *failure_category_out = "backend";
+    }
+    if (retry_disposition_out != NULL) {
+        *retry_disposition_out = "caller_managed_retry";
+    }
+
     if (
         step == NULL
         || Z_TYPE_P(step) != IS_ARRAY
         || current_payload == NULL
         || step_output == NULL
     ) {
+        if (failure_category_out != NULL) {
+            *failure_category_out = "backend";
+        }
         return king_orchestrator_raise_error(
             "king_pipeline_orchestrator_run() could not prepare the registered userland handler invocation.",
             king_ce_runtime_exception,
@@ -531,6 +615,12 @@ static zend_result king_orchestrator_invoke_registered_tool_handler(
     ZVAL_NULL(step_output);
     tool = zend_hash_str_find(Z_ARRVAL_P(step), "tool", sizeof("tool") - 1);
     if (tool == NULL || Z_TYPE_P(tool) != IS_STRING || Z_STRLEN_P(tool) == 0) {
+        if (failure_category_out != NULL) {
+            *failure_category_out = "validation";
+        }
+        if (retry_disposition_out != NULL) {
+            *retry_disposition_out = "non_retryable";
+        }
         return king_orchestrator_raise_error(
             "king_pipeline_orchestrator_run() step requires a non-empty tool name before registered handler execution.",
             king_ce_validation_exception,
@@ -547,6 +637,9 @@ static zend_result king_orchestrator_invoke_registered_tool_handler(
             function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
             Z_STRVAL_P(tool)
         );
+        if (failure_category_out != NULL) {
+            *failure_category_out = "missing_handler";
+        }
         return king_orchestrator_raise_error(
             message,
             king_ce_runtime_exception,
@@ -569,6 +662,9 @@ static zend_result king_orchestrator_invoke_registered_tool_handler(
             function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
             Z_STRVAL_P(tool)
         );
+        if (failure_category_out != NULL) {
+            *failure_category_out = "backend";
+        }
         return king_orchestrator_raise_error(
             message,
             king_ce_runtime_exception,
@@ -585,6 +681,9 @@ static zend_result king_orchestrator_invoke_registered_tool_handler(
             function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
             Z_STRVAL_P(tool)
         );
+        if (failure_category_out != NULL) {
+            *failure_category_out = "missing_handler";
+        }
         return king_orchestrator_raise_error(
             message,
             king_ce_runtime_exception,
@@ -640,22 +739,35 @@ static zend_result king_orchestrator_invoke_registered_tool_handler(
             snprintf(
                 message,
                 sizeof(message),
-                "%s() failed while invoking the registered handler for tool '%s'.",
-                function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
-                Z_STRVAL_P(tool)
-            );
+                    "%s() failed while invoking the registered handler for tool '%s'.",
+                    function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
+                    Z_STRVAL_P(tool)
+                );
+            if (failure_category_out != NULL) {
+                *failure_category_out = "runtime";
+            }
             return king_orchestrator_raise_error(
                 message,
                 king_ce_runtime_exception,
                 throw_on_error
             );
         }
+        king_orchestrator_classify_handler_throwable_failure(
+            failure_category_out,
+            retry_disposition_out
+        );
+        (void) king_orchestrator_exception_message_or_last_error();
         return FAILURE;
     }
 
     zval_ptr_dtor(&context);
     if (EG(exception) != NULL) {
         zval_ptr_dtor(&handler_result);
+        king_orchestrator_classify_handler_throwable_failure(
+            failure_category_out,
+            retry_disposition_out
+        );
+        (void) king_orchestrator_exception_message_or_last_error();
         return FAILURE;
     }
 
@@ -668,6 +780,9 @@ static zend_result king_orchestrator_invoke_registered_tool_handler(
             function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
             Z_STRVAL_P(tool)
         );
+        if (failure_category_out != NULL) {
+            *failure_category_out = "runtime";
+        }
         return king_orchestrator_raise_error(
             message,
             king_ce_runtime_exception,
@@ -689,6 +804,9 @@ static zend_result king_orchestrator_invoke_registered_tool_handler(
             function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
             Z_STRVAL_P(tool)
         );
+        if (failure_category_out != NULL) {
+            *failure_category_out = "runtime";
+        }
         return king_orchestrator_raise_error(
             message,
             king_ce_runtime_exception,
@@ -1169,6 +1287,10 @@ static int king_orchestrator_execute_existing_run(
 
         ZVAL_UNDEF(&step_output);
         if (step_uses_registered_handler) {
+            const char *handler_failure_category = "backend";
+            const char *handler_retry_disposition = "caller_managed_retry";
+            const char *handler_error_message;
+
             if (
                 king_orchestrator_invoke_registered_tool_handler(
                     run_id,
@@ -1180,22 +1302,22 @@ static int king_orchestrator_execute_existing_run(
                     topology_scope,
                     attempt_number,
                     function_name,
-                    throw_on_error
+                    throw_on_error,
+                    &handler_failure_category,
+                    &handler_retry_disposition
                 ) != SUCCESS
             ) {
-                const char *category = "backend";
-
-                if (
-                    EG(exception) != NULL
-                    && instanceof_function(EG(exception)->ce, king_ce_timeout_exception)
-                ) {
-                    category = "timeout";
+                handler_error_message = king_orchestrator_exception_message_or_last_error();
+                if (handler_error_message == NULL || handler_error_message[0] == '\0') {
+                    handler_error_message =
+                        "king_pipeline_orchestrator_run() failed during registered userland handler execution.";
+                    king_set_error(handler_error_message);
                 }
                 if (attempt_identity != NULL) {
                     failure_identity = king_orchestrator_build_failure_identity(
                         run_id,
                         attempt_identity,
-                        category,
+                        handler_failure_category,
                         (zend_long) index,
                         "failed"
                     );
@@ -1203,15 +1325,15 @@ static int king_orchestrator_execute_existing_run(
                 king_orchestrator_finish_pipeline_span(
                     step_span,
                     "failed",
-                    category,
-                    "caller_managed_retry",
+                    handler_failure_category,
+                    handler_retry_disposition,
                     failure_identity
                 );
                 king_orchestrator_finish_pipeline_span(
                     run_span,
                     "failed",
-                    category,
-                    "caller_managed_retry",
+                    handler_failure_category,
+                    handler_retry_disposition,
                     failure_identity
                 );
                 king_orchestrator_emit_pipeline_failure_log(
@@ -1220,9 +1342,9 @@ static int king_orchestrator_execute_existing_run(
                     step,
                     (zend_long) index,
                     execution_backend,
-                    category,
-                    "caller_managed_retry",
-                    king_get_error(),
+                    handler_failure_category,
+                    handler_retry_disposition,
+                    handler_error_message,
                     "failed"
                 );
                 king_orchestrator_record_pipeline_counter(
@@ -1230,8 +1352,8 @@ static int king_orchestrator_execute_existing_run(
                     execution_backend,
                     topology_scope,
                     "failed",
-                    category,
-                    "caller_managed_retry"
+                    handler_failure_category,
+                    handler_retry_disposition
                 );
                 if (failure_identity != NULL) {
                     zend_string_release(failure_identity);
@@ -1241,9 +1363,9 @@ static int king_orchestrator_execute_existing_run(
                 if (!king_orchestrator_pipeline_run_is_terminal(run_id)) {
                     (void) king_orchestrator_pipeline_run_fail_classified(
                         run_id,
-                        king_get_error(),
-                        category,
-                        "caller_managed_retry",
+                        handler_error_message,
+                        handler_failure_category,
+                        handler_retry_disposition,
                         (zend_long) index,
                         execution_backend
                     );

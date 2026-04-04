@@ -1549,7 +1549,11 @@ namespace {
      * On the local backend, handlers
      * bound through `king_pipeline_orchestrator_register_handler()` execute in
      * the current process and the runtime persists the latest local payload
-     * plus completed-step progress after each completed local step.
+     * plus completed-step progress after each completed local step. When one
+     * of those userland-backed steps fails, the persisted run snapshot now
+     * classifies the fault explicitly as `validation`, `runtime`, `timeout`,
+     * `backend`, or `missing_handler` instead of flattening it into a generic
+     * backend string.
      * @param array<int,array<string,mixed>> $pipeline
      * @param array<string,mixed>|null $exec_options
      * @return array<string,mixed>
@@ -1596,7 +1600,10 @@ namespace {
      * On the local backend the callable receives one context array with
      * top-level keys `input`, `tool`, `run`, and `step`, plus the legacy
      * `run_id` alias. The callable must return one array containing key
-     * `output`, and `output` must be the next array payload.
+     * `output`, and `output` must be the next array payload. Handler-thrown
+     * validation, runtime, and timeout failures now remain distinguishable in
+     * persisted run classification instead of collapsing into one generic
+     * backend result.
      */
     function king_pipeline_orchestrator_register_handler(string $tool_name, callable $handler): bool {}
 
@@ -1638,7 +1645,9 @@ namespace {
      * completed local steps. On the `remote_peer` backend, continuation
      * re-sends only the durable handler boundary plus tool-config snapshot to
      * the configured peer; the restarted controller still does not transport
-     * old PHP callable state across the network.
+     * old PHP callable state across the network. Missing peer-local handler
+     * readiness is therefore reported as `missing_handler`, not as borrowed
+     * controller execution state.
      * @return array<string,mixed>
      */
     function king_pipeline_orchestrator_resume_run(string $run_id): array {}
@@ -1650,7 +1659,11 @@ namespace {
      * for failed multi-step runs when present. Userland-backed non-local runs
      * may also expose `handler_boundary`, which carries only the durable
      * tool-name references and step indexes needed for later worker readiness
-     * checks or remote-peer replay.
+     * checks or remote-peer replay. Userland-backed failure categories now
+     * remain explicit across local, file-worker, and remote-peer execution:
+     * `validation`, `runtime`, `timeout`, `backend`, and `missing_handler`
+     * stay step-owned where honest, while control-path cancellation remains a
+     * run-scope `cancelled` classification.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_get_run(string $run_id): array|false {}
