@@ -40,14 +40,20 @@ ci = YAML.safe_load(
   permitted_symbols: [],
   aliases: false
 )
+docker_publish = YAML.safe_load(
+  File.read(File.join(root_dir, ".github/workflows/docker-publish.yml")),
+  permitted_classes: [],
+  permitted_symbols: [],
+  aliases: false
+)
 ci_include = ci.dig("jobs", "install-package-matrix", "strategy", "matrix", "include")
 ci_versions = ci_include.map { |entry| entry["php-version"] }.uniq
 
-docker_runtime_versions = ci.dig("jobs", "docker-build-and-push", "strategy", "matrix", "php-version")
-docker_runtime_include = ci.dig("jobs", "docker-build-and-push", "strategy", "matrix", "include")
+docker_runtime_versions = docker_publish.dig("jobs", "docker-build-and-push", "strategy", "matrix", "php-version")
+docker_runtime_include = docker_publish.dig("jobs", "docker-build-and-push", "strategy", "matrix", "include")
 docker_runtime_include_versions = docker_runtime_include.map { |entry| entry["php-version"] }
-docker_demo_versions = ci.dig("jobs", "docker-build-demo", "strategy", "matrix", "php-version")
-docker_demo_include = ci.dig("jobs", "docker-build-demo", "strategy", "matrix", "include")
+docker_demo_versions = docker_publish.dig("jobs", "docker-build-demo", "strategy", "matrix", "php-version")
+docker_demo_include = docker_publish.dig("jobs", "docker-build-demo", "strategy", "matrix", "include")
 docker_demo_include_versions = docker_demo_include.map { |entry| entry["php-version"] }
 
 if docker_runtime_versions != expected
