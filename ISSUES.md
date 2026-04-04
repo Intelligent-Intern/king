@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#5 Execute registered userland handlers on the local orchestrator backend with persisted run-state parity.`
+- `#6 Pass step input, tool config, run metadata, and step metadata into local userland handler execution with an explicit result contract.`
 
 ## Active Executable Items
 
@@ -50,7 +50,7 @@
 - [x] `#2 Define the exact handler-identity and re-registration contract across local, file-worker, remote-peer, and restart boundaries.`
 - [x] `#3 Reject unsupported non-rehydratable userland handler forms honestly instead of pretending closures survive restart or host boundaries.`
 - [x] `#4 Add a public userland handler-registration API that binds a runtime handler to a registered orchestrator tool name.`
-- [ ] `#5 Execute registered userland handlers on the local orchestrator backend with persisted run-state parity.`
+- [x] `#5 Execute registered userland handlers on the local orchestrator backend with persisted run-state parity.`
 - [ ] `#6 Pass step input, tool config, run metadata, and step metadata into local userland handler execution with an explicit result contract.`
 - [ ] `#7 Persist the durable handler-reference boundary needed for queued runs without serializing arbitrary PHP callables into state.`
 - [ ] `#8 Rehydrate and validate handler readiness before file-worker claim or resume instead of failing late inside opaque worker execution.`

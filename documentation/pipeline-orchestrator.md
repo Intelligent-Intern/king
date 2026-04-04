@@ -175,10 +175,15 @@ therefore keeps the stronger contract explicit:
 - missing handler registration must be visible as an explicit runtime failure,
   not hidden behind fake fallback behavior
 
-The presence of the registration API does not yet mean every execution backend
-consumes those handlers for step execution. The important closure in this leaf
-is that the public binding surface now exists and the non-durable boundary is
-explicit in the runtime contract.
+The runtime contract is now narrower and more honest than "handlers work
+everywhere" but stronger than "the API only exists on paper". The local
+backend now consumes registered handlers for real step execution and persists
+the latest local payload together with `completed_step_count` after each
+completed local step. That lets `king_pipeline_orchestrator_resume_run()`
+continue a persisted local `running` run from honest local progress instead of
+rerunning already-completed local steps after controller restart or
+running-snapshot recovery. File-worker and remote-peer handler execution still
+need their own execution closures.
 
 ## Handler Identity And Re-Registration
 
@@ -584,7 +589,10 @@ orchestrator logging snapshot.
 execution backend. In local mode the run executes in the current process. In
 remote-peer mode the controller sends the run to the configured remote host and
 port. In file-worker mode this direct path is intentionally unavailable because
-queued execution should use dispatch instead.
+queued execution should use dispatch instead. When local userland handlers are
+registered for the step tool names, the local backend executes those handlers
+and persists the latest local payload after each completed step so restart-time
+continuation can resume from the last completed local step honestly.
 
 `king_pipeline_orchestrator_dispatch()` persists one run in queued state and
 places it onto the configured file-worker queue.
@@ -596,7 +604,10 @@ run payload, and returns `false` when the queue is empty.
 `king_pipeline_orchestrator_resume_run()` continues one persisted `running` run
 after controller restart on the local or `remote_peer` backends. This function
 is intentionally separate from `worker_run_next()` because the file-worker
-backend already has its own claim and recovery path.
+backend already has its own claim and recovery path. On the local backend, a
+restarted controller must re-register the relevant handlers first; continuation
+then resumes from the persisted local payload and `completed_step_count`
+instead of replaying already-completed local steps.
 
 `king_pipeline_orchestrator_get_run()` reads one persisted run snapshot by run
 ID. The returned snapshot includes the persisted top-level run state plus a

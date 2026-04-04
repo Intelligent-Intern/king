@@ -340,6 +340,13 @@ current process only. Executable handler readiness is still process-local, so
 the exact controller, worker, or remote-peer process that will execute a step
 must bind a handler for that tool name again after restart or replacement.
 
+Local execution boundary: when the active backend is local and those handlers
+have been bound in the current process, `king_pipeline_orchestrator_run()` and
+`king_pipeline_orchestrator_resume_run()` now execute them directly and persist
+the latest local payload together with completed-step progress so local restart
+continuation can resume from honest persisted progress instead of replaying
+already-completed local steps.
+
 Fail-closed boundary: unsupported non-rehydratable forms such as captured
 closures, resource-backed callables, or handlers that depend on opaque
 controller memory are outside the durable public contract and must be rejected

@@ -207,6 +207,16 @@ function king_orchestrator_telemetry_process_resume_scenario(int $collectorPort)
         $parentCapturePath = $harness['root'] . '/process-parent-context.json';
         $controllerScript = king_orchestrator_failover_harness_write_script($harness, 'process-boundary-controller', <<<'PHP'
 <?php
+function summarizer_handler(array $context): array
+{
+    $input = $context['input'] ?? null;
+    if (!is_array($input)) {
+        throw new RuntimeException('unexpected handler input');
+    }
+
+    return $input;
+}
+
 $collectorPort = (int) $argv[1];
 $capturePath = $argv[2];
 
@@ -218,6 +228,7 @@ king_pipeline_orchestrator_register_tool('summarizer', [
     'model' => 'gpt-sim',
     'max_tokens' => 64,
 ]);
+king_pipeline_orchestrator_register_handler('summarizer', 'summarizer_handler');
 king_telemetry_start_span('orchestrator-process-parent', [
     'boundary' => 'process_resume',
     'role' => 'controller_parent',
@@ -243,6 +254,16 @@ echo json_encode($run, JSON_UNESCAPED_SLASHES), "\n";
 PHP);
 $resumeScript = king_orchestrator_failover_harness_write_script($harness, 'process-boundary-resume', <<<'PHP'
 <?php
+function summarizer_handler(array $context): array
+{
+    $input = $context['input'] ?? null;
+    if (!is_array($input)) {
+        throw new RuntimeException('unexpected handler input');
+    }
+
+    return $input;
+}
+
 $collectorPort = (int) $argv[1];
 $runId = $argv[2];
 
@@ -250,6 +271,7 @@ king_telemetry_init([
     'otel_exporter_endpoint' => 'http://127.0.0.1:' . $collectorPort,
     'exporter_timeout_ms' => 500,
 ]);
+king_pipeline_orchestrator_register_handler('summarizer', 'summarizer_handler');
 $beforeContext = king_telemetry_get_trace_context();
 $result = king_pipeline_orchestrator_resume_run($runId);
 $afterRunContext = king_telemetry_get_trace_context();

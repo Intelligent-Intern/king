@@ -122,6 +122,12 @@ belong in a same-host worker for isolation. Some belong on a remote peer for
 topology or ownership reasons. The orchestrator keeps those backend choices
 explicit instead of hiding them inside one helper.
 
+When the active backend is local and the relevant tool handlers were bound with
+`king_pipeline_orchestrator_register_handler()`, `run()` now executes those
+handlers directly and persists the latest local step payload after each
+completed step. A later `resume_run()` can therefore continue from honest
+completed-step progress instead of replaying already-completed local work.
+
 ## Step 4: Inspect The Persisted Run
 
 Finally, the example reads the stored run with

@@ -454,6 +454,54 @@ int king_orchestrator_pipeline_run_record_completed_steps(
     return rc;
 }
 
+int king_orchestrator_pipeline_run_record_progress(
+    zend_string *run_id,
+    zend_long completed_step_count,
+    zval *result
+)
+{
+    king_orchestrator_run_state_t *run_state;
+    zend_string *result_b64;
+    int lock_fd = -1;
+    int rc;
+
+    if (result == NULL) {
+        return FAILURE;
+    }
+
+    if (completed_step_count < 0) {
+        completed_step_count = 0;
+    }
+
+    result_b64 = king_orchestrator_encode_zval_base64(result);
+    if (result_b64 == NULL) {
+        return FAILURE;
+    }
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        zend_string_release(result_b64);
+        return FAILURE;
+    }
+
+    run_state = king_orchestrator_find_run(run_id);
+    if (run_state == NULL) {
+        zend_string_release(result_b64);
+        king_orchestrator_state_lock_release(lock_fd);
+        return FAILURE;
+    }
+
+    if (completed_step_count > run_state->completed_step_count) {
+        run_state->completed_step_count = completed_step_count;
+    }
+    king_orchestrator_replace_runtime_string(&run_state->result_b64, zend_string_dup(result_b64, 1));
+
+    rc = king_orchestrator_persist_state_locked();
+    zend_string_release(result_b64);
+    king_orchestrator_state_lock_release(lock_fd);
+
+    return rc;
+}
+
 int king_orchestrator_pipeline_run_complete(zend_string *run_id, zval *result)
 {
     king_orchestrator_run_state_t *run_state;

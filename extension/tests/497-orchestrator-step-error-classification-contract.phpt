@@ -10,10 +10,21 @@ if (!function_exists('proc_open') || !function_exists('stream_socket_server')) {
 <?php
 require __DIR__ . '/orchestrator_remote_peer_helper.inc';
 
+function summarizer_handler(array $context): array
+{
+    $input = $context['input'] ?? null;
+    if (!is_array($input)) {
+        throw new RuntimeException('unexpected handler input');
+    }
+
+    return $input;
+}
+
 var_dump(king_pipeline_orchestrator_register_tool('summarizer', [
     'model' => 'gpt-sim',
     'max_tokens' => 64,
 ]));
+var_dump(king_pipeline_orchestrator_register_handler('summarizer', 'summarizer_handler'));
 
 try {
     king_pipeline_orchestrator_run(
@@ -177,6 +188,7 @@ var_dump(($remoteTransportCapture['events'][0]['failed_step_index'] ?? null) ===
 @unlink($remoteScript);
 ?>
 --EXPECT--
+bool(true)
 bool(true)
 string(21) "King\RuntimeException"
 bool(true)

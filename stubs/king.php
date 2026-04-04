@@ -1542,7 +1542,10 @@ namespace {
      * consumed by `king_pipeline_orchestrator_worker_run_next()`. When
      * `king.orchestrator_execution_backend=remote_peer`, the controller
      * sends the run to the configured remote host/port worker peer and
-     * still persists the run snapshot locally.
+     * still persists the run snapshot locally. On the local backend, handlers
+     * bound through `king_pipeline_orchestrator_register_handler()` execute in
+     * the current process and the runtime persists the latest local payload
+     * plus completed-step progress after each completed local step.
      * @param array<int,array<string,mixed>> $pipeline
      * @param array<string,mixed>|null $exec_options
      * @return array<string,mixed>
@@ -1612,6 +1615,9 @@ namespace {
      * `king_pipeline_orchestrator_worker_run_next()`. Handlers registered
      * through `king_pipeline_orchestrator_register_handler()` are process-local
      * and must be bound again inside the restarted process before continuation.
+     * On the local backend, continuation resumes from the persisted local
+     * payload and completed-step progress instead of replaying already
+     * completed local steps.
      * @return array<string,mixed>
      */
     function king_pipeline_orchestrator_resume_run(string $run_id): array {}

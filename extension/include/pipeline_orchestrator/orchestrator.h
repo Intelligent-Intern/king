@@ -37,6 +37,11 @@ int king_orchestrator_load_run_payload(
     zval *options,
     zval *telemetry_parent_context
 );
+int king_orchestrator_load_run_progress(
+    zend_string *run_id,
+    zval *result,
+    zend_long *completed_step_count_out
+);
 int king_orchestrator_enqueue_run(zend_string *run_id, zval *return_value);
 int king_orchestrator_claim_next_run(
     zend_string **run_id_out,
@@ -63,6 +68,11 @@ int king_orchestrator_pipeline_run_mark_running(
     zend_long claimed_by_pid
 );
 int king_orchestrator_pipeline_run_is_terminal(zend_string *run_id);
+int king_orchestrator_pipeline_run_record_progress(
+    zend_string *run_id,
+    zend_long completed_step_count,
+    zval *result
+);
 int king_orchestrator_pipeline_run_record_completed_steps(zend_string *run_id, zend_long completed_step_count);
 int king_orchestrator_pipeline_run_note_recovery(zend_string *run_id, const char *reason);
 int king_orchestrator_pipeline_run_note_remote_attempt(zend_string *run_id);

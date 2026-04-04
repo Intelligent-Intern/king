@@ -14,13 +14,44 @@ $resumeScript = tempnam(sys_get_temp_dir(), 'king-orchestrator-process-resume-')
 
 file_put_contents($controllerScript, <<<'PHP'
 <?php
-king_pipeline_orchestrator_register_tool('summarizer', [
+function prepare_handler(array $context): array
+{
+    $input = $context['input'] ?? null;
+    if (!is_array($input)) {
+        throw new RuntimeException('unexpected prepare input');
+    }
+
+    $input['history'][] = 'prepare';
+    return $input;
+}
+
+function finalize_handler(array $context): array
+{
+    $input = $context['input'] ?? null;
+    if (!is_array($input)) {
+        throw new RuntimeException('unexpected finalize input');
+    }
+
+    $input['history'][] = 'finalize';
+    return $input;
+}
+
+king_pipeline_orchestrator_register_tool('prepare', [
     'model' => 'gpt-sim',
     'max_tokens' => 64,
 ]);
+king_pipeline_orchestrator_register_handler('prepare', 'prepare_handler');
+king_pipeline_orchestrator_register_tool('finalize', [
+    'model' => 'gpt-sim',
+    'max_tokens' => 64,
+]);
+king_pipeline_orchestrator_register_handler('finalize', 'finalize_handler');
 king_pipeline_orchestrator_run(
-    ['text' => 'resume-after-restart'],
-    [['tool' => 'summarizer', 'delay_ms' => 2000]],
+    ['text' => 'resume-after-restart', 'history' => []],
+    [
+        ['tool' => 'prepare'],
+        ['tool' => 'finalize', 'delay_ms' => 2000],
+    ],
     ['trace_id' => 'process-restart-run']
 );
 PHP);
@@ -38,21 +69,48 @@ echo json_encode([
     'status' => $run['status'],
     'finished_at' => $run['finished_at'],
     'result_text' => $run['result']['text'] ?? null,
+    'result_history' => $run['result']['history'] ?? null,
     'error' => $run['error'],
 ]), "\n";
 PHP);
 
 file_put_contents($resumeScript, <<<'PHP'
 <?php
+function prepare_handler(array $context): array
+{
+    $input = $context['input'] ?? null;
+    if (!is_array($input)) {
+        throw new RuntimeException('unexpected prepare input');
+    }
+
+    $input['history'][] = 'prepare';
+    return $input;
+}
+
+function finalize_handler(array $context): array
+{
+    $input = $context['input'] ?? null;
+    if (!is_array($input)) {
+        throw new RuntimeException('unexpected finalize input');
+    }
+
+    $input['history'][] = 'finalize';
+    return $input;
+}
+
+king_pipeline_orchestrator_register_handler('prepare', 'prepare_handler');
+king_pipeline_orchestrator_register_handler('finalize', 'finalize_handler');
 $info = king_system_get_component_info('pipeline_orchestrator');
 var_dump($info['configuration']['recovered_from_state']);
 $result = king_pipeline_orchestrator_resume_run('run-1');
 var_dump($result['text']);
+var_dump($result['history']);
 $run = king_pipeline_orchestrator_get_run('run-1');
 var_dump($run['run_id']);
 var_dump($run['status']);
 var_dump($run['finished_at'] > 0);
 var_dump($run['result']['text']);
+var_dump($run['result']['history']);
 var_dump($run['error']);
 $info = king_system_get_component_info('pipeline_orchestrator');
 var_dump($info['configuration']['run_history_count']);
@@ -139,7 +197,8 @@ var_dump($observerAfterKillStatus);
 var_dump(($afterKill['run_id'] ?? null) === 'run-1');
 var_dump(($afterKill['status'] ?? null) === 'running');
 var_dump(($afterKill['finished_at'] ?? null) === 0);
-var_dump(($afterKill['result_text'] ?? null) === null);
+var_dump(($afterKill['result_text'] ?? null) === 'resume-after-restart');
+var_dump(($afterKill['result_history'] ?? null) === ['prepare']);
 var_dump(($afterKill['error'] ?? null) === null);
 
 $resumeOutput = [];
@@ -169,13 +228,26 @@ bool(true)
 bool(true)
 bool(true)
 bool(true)
+bool(true)
 int(0)
 bool(true)
 string(20) "resume-after-restart"
+array(2) {
+  [0]=>
+  string(7) "prepare"
+  [1]=>
+  string(8) "finalize"
+}
 string(5) "run-1"
 string(9) "completed"
 bool(true)
 string(20) "resume-after-restart"
+array(2) {
+  [0]=>
+  string(7) "prepare"
+  [1]=>
+  string(8) "finalize"
+}
 NULL
 int(1)
 int(0)
