@@ -1321,7 +1321,7 @@ static int king_orchestrator_execute_existing_run(
                     execution_backend,
                     topology_scope,
                     attempt_number,
-                    &control,
+                    control,
                     function_name,
                     throw_on_error,
                     &handler_failure_category,

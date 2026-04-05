@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#16 Add PHPT proof for file-worker userland tool execution with re-registration across processes.`
+- `#17 Add PHPT proof for restart recovery when a queued or running userland-backed run outlives the original controller process.`
 
 ## Active Executable Items
 
@@ -64,7 +64,7 @@
 - [x] `#13 Preserve completed-step, compensation, and terminal-state visibility for multi-step runs backed by userland handlers.`
 - [x] `#14 Expose userland handler readiness, missing-handler state, and active handler-contract metadata through orchestrator component status and inspection surfaces.`
 - [x] `#15 Add PHPT proof for local userland tool execution over a persisted run snapshot.`
-- [ ] `#16 Add PHPT proof for file-worker userland tool execution with re-registration across processes.`
+- [x] `#16 Add PHPT proof for file-worker userland tool execution with re-registration across processes.`
 - [ ] `#17 Add PHPT proof for restart recovery when a queued or running userland-backed run outlives the original controller process.`
 - [ ] `#18 Add PHPT proof for remote-peer userland tool execution or fail closed explicitly on unsupported remote-peer handler topologies.`
 - [ ] `#19 Add handbook and procedural-API documentation for the userland tool-handler contract, including unsupported forms and restart duties.`
@@ -78,6 +78,7 @@
 - `#13` is closed by adding the `594-orchestrator-userland-terminal-state-visibility-contract.phpt` PHPT, which verifies that multi-step userland-backed local runs expose terminal visibility with `completed_step_count`, per-step `status` and `compensation_status`, and top-level `compensation` details for completed and failed outcomes.
 - `#14` is now closed by exposing `handler_readiness` in each `king_pipeline_orchestrator_get_run()` snapshot and `active_handler_contract` in `king_system_get_component_info('pipeline_orchestrator')['configuration']`, then proving readiness/missing-handler behavior and handler metadata surfacing in PHPT coverage.
 - `#15` is now closed by adding `595-orchestrator-local-userland-persisted-snapshot-contract.phpt`, which runs a three-step local userland pipeline (snap-prepare → snap-enrich → snap-finalize), then reads back the persisted run snapshot from a fresh process and asserts: status=`completed`, execution_backend=`local`, topology=`local_in_process`, all three steps completed, chained result and step-context delivery correct, `handler_readiness.requires_process_registration=false`, `handler_readiness.ready=true`, compensation not required.
+- `#16` is now closed by adding `596-orchestrator-file-worker-userland-reregistration-contract.phpt`, which dispatches a three-step pipeline to the file-worker queue, verifies callable names are not in durable state, then a clean worker process re-registers handlers and processes the entire run via `king_pipeline_orchestrator_worker_run_next()`, asserting `execution_backend=file_worker`, `topology=same_host_file_worker`, correct chained result, step-context delivery, `handler_boundary.contract=durable_tool_name_refs_only`, `handler_readiness.ready=true`, and queue cleanup; a subsequent reader process then confirms the persisted snapshot.
 
 ## Deferred Previous Batch
 
