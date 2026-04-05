@@ -136,9 +136,13 @@ void king_orchestrator_append_component_info(zval *configuration)
     } king_orchestrator_observability_summary_t;
 
     zval registered_tools;
+    zval active_handler_contract;
+    zval active_handler_tools;
     zval distributed_observability;
     zend_string *tool_name;
     zval *run_entry;
+    zval *handler_entry;
+    zend_string *handler_name;
     const char *execution_backend;
     const char *topology_scope = "local_in_process";
     const char *scheduler_policy = "in_process_linear";
@@ -304,6 +308,39 @@ void king_orchestrator_append_component_info(zval *configuration)
     } ZEND_HASH_FOREACH_END();
     add_assoc_zval(configuration, "registered_tools", &registered_tools);
 
+    array_init(&active_handler_tools);
+    if (king_orchestrator_tool_handler_registry_initialized) {
+        ZEND_HASH_FOREACH_STR_KEY_PTR(&king_orchestrator_tool_handler_registry, handler_name, handler_entry) {
+            if (handler_name != NULL) {
+                add_next_index_stringl(
+                    &active_handler_tools,
+                    ZSTR_VAL(handler_name),
+                    ZSTR_LEN(handler_name)
+                );
+            }
+        } ZEND_HASH_FOREACH_END();
+    }
+    array_init(&active_handler_contract);
+    add_assoc_string(
+        &active_handler_contract,
+        "scope",
+        (char *) topology_scope
+    );
+    add_assoc_long(
+        &active_handler_contract,
+        "registered_handler_count",
+        king_orchestrator_tool_handler_registry_initialized
+            ? (zend_long) zend_hash_num_elements(&king_orchestrator_tool_handler_registry)
+            : 0
+    );
+    add_assoc_zval(&active_handler_contract, "registered_tools", &active_handler_tools);
+    add_assoc_bool(
+        &active_handler_contract,
+        "requires_process_registration",
+        king_orchestrator_tool_handler_registry_initialized
+    );
+    add_assoc_zval(configuration, "active_handler_contract", &active_handler_contract);
+
     array_init(&distributed_observability);
     add_assoc_long(
         &distributed_observability,
@@ -384,6 +421,67 @@ PHP_FUNCTION(king_pipeline_orchestrator_register_tool)
         king_ce_runtime_exception,
         0,
         "king_pipeline_orchestrator_register_tool() failed to persist the tool registry snapshot."
+    );
+    RETURN_THROWS();
+}
+
+PHP_FUNCTION(king_pipeline_orchestrator_register_handler)
+{
+    char *tool_name = NULL;
+    size_t tool_name_len = 0;
+    zval *handler;
+    char message[256];
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_STRING(tool_name, tool_name_len)
+        Z_PARAM_ZVAL(handler)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (tool_name_len == 0) {
+        king_set_error("king_pipeline_orchestrator_register_handler() requires a non-empty tool name.");
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "king_pipeline_orchestrator_register_handler() requires a non-empty tool name."
+        );
+        RETURN_THROWS();
+    }
+
+    if (zend_fcall_info_init(handler, 0, &fci, &fcc, NULL, NULL) != SUCCESS) {
+        zend_argument_type_error(2, "must be a valid callback");
+        RETURN_THROWS();
+    }
+
+    if (king_orchestrator_lookup_tool(tool_name, tool_name_len) == NULL) {
+        snprintf(
+            message,
+            sizeof(message),
+            "king_pipeline_orchestrator_register_handler() requires a previously registered tool '%s'.",
+            tool_name
+        );
+        king_set_error(message);
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "%s",
+            message
+        );
+        RETURN_THROWS();
+    }
+
+    if (king_orchestrator_register_tool_handler(tool_name, tool_name_len, handler) == SUCCESS) {
+        RETURN_TRUE;
+    }
+
+    king_set_error(
+        "king_pipeline_orchestrator_register_handler() failed to bind the process-local handler registry."
+    );
+    zend_throw_exception_ex(
+        king_ce_runtime_exception,
+        0,
+        "king_pipeline_orchestrator_register_handler() failed to bind the process-local handler registry."
     );
     RETURN_THROWS();
 }

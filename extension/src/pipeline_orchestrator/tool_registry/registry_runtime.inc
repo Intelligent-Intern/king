@@ -28,6 +28,25 @@ int king_orchestrator_registry_init(void)
     return king_orchestrator_load_state();
 }
 
+int king_orchestrator_runtime_handlers_init(void)
+{
+    if (king_orchestrator_tool_handler_registry_initialized) {
+        zend_hash_clean(&king_orchestrator_tool_handler_registry);
+        return SUCCESS;
+    }
+
+    zend_hash_init(
+        &king_orchestrator_tool_handler_registry,
+        8,
+        NULL,
+        ZVAL_PTR_DTOR,
+        0
+    );
+    king_orchestrator_tool_handler_registry_initialized = true;
+
+    return SUCCESS;
+}
+
 void king_orchestrator_registry_shutdown(void)
 {
     if (!king_orchestrator_registry_initialized) {
@@ -53,6 +72,16 @@ void king_orchestrator_registry_shutdown(void)
     king_orchestrator_registry_initialized = false;
     king_orchestrator_recovered_from_state = false;
     king_orchestrator_next_run_id = 1;
+}
+
+void king_orchestrator_runtime_handlers_shutdown(void)
+{
+    if (!king_orchestrator_tool_handler_registry_initialized) {
+        return;
+    }
+
+    zend_hash_destroy(&king_orchestrator_tool_handler_registry);
+    king_orchestrator_tool_handler_registry_initialized = false;
 }
 
 int king_orchestrator_register_tool(const char *name, size_t name_len, zval *config)
@@ -106,6 +135,94 @@ zval *king_orchestrator_lookup_tool(const char *name, size_t name_len)
     return entry;
 }
 
+int king_orchestrator_load_tool_config(const char *name, size_t name_len, zval *return_value)
+{
+    int lock_fd = -1;
+    zval *entry;
+
+    if (return_value == NULL || name == NULL || name_len == 0) {
+        return FAILURE;
+    }
+
+    ZVAL_NULL(return_value);
+
+    if (!king_orchestrator_registry_initialized) {
+        if (king_orchestrator_registry_init() != SUCCESS) {
+            return FAILURE;
+        }
+    }
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
+
+    entry = zend_hash_str_find(&king_orchestrator_tool_registry, name, name_len);
+    if (entry == NULL || Z_TYPE_P(entry) != IS_STRING) {
+        king_orchestrator_state_lock_release(lock_fd);
+        return FAILURE;
+    }
+
+    if (king_orchestrator_decode_base64_zval(Z_STR_P(entry), return_value) != SUCCESS) {
+        king_orchestrator_state_lock_release(lock_fd);
+        zval_ptr_dtor(return_value);
+        ZVAL_NULL(return_value);
+        return FAILURE;
+    }
+
+    king_orchestrator_state_lock_release(lock_fd);
+    return SUCCESS;
+}
+
+int king_orchestrator_register_tool_handler(const char *name, size_t name_len, zval *handler)
+{
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+    zval stored_handler;
+
+    if (name == NULL || name_len == 0 || handler == NULL) {
+        return FAILURE;
+    }
+
+    if (
+        !king_orchestrator_tool_handler_registry_initialized
+        && king_orchestrator_runtime_handlers_init() != SUCCESS
+    ) {
+        return FAILURE;
+    }
+
+    if (king_orchestrator_lookup_tool(name, name_len) == NULL) {
+        return FAILURE;
+    }
+
+    if (zend_fcall_info_init(handler, 0, &fci, &fcc, NULL, NULL) != SUCCESS) {
+        return FAILURE;
+    }
+
+    ZVAL_COPY(&stored_handler, handler);
+    if (
+        zend_hash_str_update(
+            &king_orchestrator_tool_handler_registry,
+            name,
+            name_len,
+            &stored_handler
+        ) == NULL
+    ) {
+        zval_ptr_dtor(&stored_handler);
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+zval *king_orchestrator_lookup_tool_handler(const char *name, size_t name_len)
+{
+    if (!king_orchestrator_tool_handler_registry_initialized) {
+        return NULL;
+    }
+
+    return zend_hash_str_find(&king_orchestrator_tool_handler_registry, name, name_len);
+}
+
 int king_orchestrator_configure_logging(zval *config)
 {
     zend_string *config_b64;
@@ -147,10 +264,15 @@ zend_string *king_orchestrator_pipeline_run_begin(
     zend_string *pipeline_b64;
     zend_string *options_b64;
     zend_string *telemetry_parent_context_b64;
+    zend_string *handler_boundary_b64;
     zend_string *result_b64;
     zend_string *error_b64;
     zend_string *run_id;
     int lock_fd = -1;
+    zval handler_boundary;
+    const char *execution_backend;
+
+    ZVAL_NULL(&handler_boundary);
 
     if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
         return NULL;
@@ -162,6 +284,18 @@ zend_string *king_orchestrator_pipeline_run_begin(
     telemetry_parent_context_b64 = telemetry_parent_context != NULL
         ? king_orchestrator_encode_zval_base64(telemetry_parent_context)
         : king_orchestrator_encode_zval_base64(NULL);
+    execution_backend = king_orchestrator_current_execution_backend();
+    if (
+        king_orchestrator_build_handler_boundary_snapshot(
+            pipeline,
+            execution_backend,
+            &handler_boundary
+        ) != SUCCESS
+    ) {
+        handler_boundary_b64 = NULL;
+    } else {
+        handler_boundary_b64 = king_orchestrator_encode_zval_base64(&handler_boundary);
+    }
 
     {
         zval null_value;
@@ -176,6 +310,7 @@ zend_string *king_orchestrator_pipeline_run_begin(
         || pipeline_b64 == NULL
         || options_b64 == NULL
         || telemetry_parent_context_b64 == NULL
+        || handler_boundary_b64 == NULL
         || result_b64 == NULL
         || error_b64 == NULL
     ) {
@@ -191,12 +326,16 @@ zend_string *king_orchestrator_pipeline_run_begin(
         if (telemetry_parent_context_b64 != NULL) {
             zend_string_release(telemetry_parent_context_b64);
         }
+        if (handler_boundary_b64 != NULL) {
+            zend_string_release(handler_boundary_b64);
+        }
         if (result_b64 != NULL) {
             zend_string_release(result_b64);
         }
         if (error_b64 != NULL) {
             zend_string_release(error_b64);
         }
+        zval_ptr_dtor(&handler_boundary);
         king_orchestrator_state_lock_release(lock_fd);
         return NULL;
     }
@@ -212,8 +351,8 @@ zend_string *king_orchestrator_pipeline_run_begin(
     run_state->run_id = zend_string_dup(run_id, 1);
     run_state->status = zend_string_init(initial_status, strlen(initial_status), 1);
     run_state->execution_backend = zend_string_init(
-        king_orchestrator_current_execution_backend(),
-        strlen(king_orchestrator_current_execution_backend()),
+        execution_backend,
+        strlen(execution_backend),
         1
     );
     run_state->queue_phase = zend_string_init("not_queued", sizeof("not_queued") - 1, 1);
@@ -228,6 +367,7 @@ zend_string *king_orchestrator_pipeline_run_begin(
     run_state->pipeline_b64 = zend_string_dup(pipeline_b64, 1);
     run_state->options_b64 = zend_string_dup(options_b64, 1);
     run_state->telemetry_parent_context_b64 = zend_string_dup(telemetry_parent_context_b64, 1);
+    run_state->handler_boundary_b64 = zend_string_dup(handler_boundary_b64, 1);
     run_state->result_b64 = zend_string_dup(result_b64, 1);
     run_state->error_b64 = zend_string_dup(error_b64, 1);
     run_state->error_category = NULL;
@@ -245,8 +385,10 @@ zend_string *king_orchestrator_pipeline_run_begin(
     zend_string_release(pipeline_b64);
     zend_string_release(options_b64);
     zend_string_release(telemetry_parent_context_b64);
+    zend_string_release(handler_boundary_b64);
     zend_string_release(result_b64);
     zend_string_release(error_b64);
+    zval_ptr_dtor(&handler_boundary);
 
     ZVAL_PTR(&stored_run, run_state);
     {
@@ -370,6 +512,54 @@ int king_orchestrator_pipeline_run_record_completed_steps(
 
     run_state->completed_step_count = completed_step_count;
     rc = king_orchestrator_persist_state_locked();
+    king_orchestrator_state_lock_release(lock_fd);
+
+    return rc;
+}
+
+int king_orchestrator_pipeline_run_record_progress(
+    zend_string *run_id,
+    zend_long completed_step_count,
+    zval *result
+)
+{
+    king_orchestrator_run_state_t *run_state;
+    zend_string *result_b64;
+    int lock_fd = -1;
+    int rc;
+
+    if (result == NULL) {
+        return FAILURE;
+    }
+
+    if (completed_step_count < 0) {
+        completed_step_count = 0;
+    }
+
+    result_b64 = king_orchestrator_encode_zval_base64(result);
+    if (result_b64 == NULL) {
+        return FAILURE;
+    }
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        zend_string_release(result_b64);
+        return FAILURE;
+    }
+
+    run_state = king_orchestrator_find_run(run_id);
+    if (run_state == NULL) {
+        zend_string_release(result_b64);
+        king_orchestrator_state_lock_release(lock_fd);
+        return FAILURE;
+    }
+
+    if (completed_step_count > run_state->completed_step_count) {
+        run_state->completed_step_count = completed_step_count;
+    }
+    king_orchestrator_replace_runtime_string(&run_state->result_b64, zend_string_dup(result_b64, 1));
+
+    rc = king_orchestrator_persist_state_locked();
+    zend_string_release(result_b64);
     king_orchestrator_state_lock_release(lock_fd);
 
     return rc;
