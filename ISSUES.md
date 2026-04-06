@@ -42,12 +42,6 @@
 
 ## Current Next Leaf
 
-<<<<<<< HEAD
-- `#1 Validate autoscaling CPU / memory / RPS / queue / latency signals under real operation.`
-
-## Active Executable Items
-
-=======
 - `#17 Add PHPT proof for restart recovery when a queued or running userland-backed run outlives the original controller process.`
 
 ## Active Executable Items
@@ -87,8 +81,6 @@
 - `#16` is now closed by adding `596-orchestrator-file-worker-userland-reregistration-contract.phpt`, which dispatches a three-step pipeline to the file-worker queue, verifies callable names are not in durable state, then a clean worker process re-registers handlers and processes the entire run via `king_pipeline_orchestrator_worker_run_next()`, asserting `execution_backend=file_worker`, `topology=same_host_file_worker`, correct chained result, step-context delivery, `handler_boundary.contract=durable_tool_name_refs_only`, `handler_readiness.ready=true`, and queue cleanup; a subsequent reader process then confirms the persisted snapshot.
 
 ## Deferred Previous Batch
-
->>>>>>> develop/v0.2.7-alpha
 - [ ] `#1 Validate autoscaling CPU / memory / RPS / queue / latency signals under real operation.`
 - [ ] `#2 Validate autoscaling drain-before-delete under real live connections.`
 - [ ] `#3 Validate autoscaling scale-up policy limits under burst load.`
@@ -113,11 +105,6 @@
 ## Notes
 
 - The previous telemetry wave is exhausted; its closed leaves now live in `PROJECT_ASSESSMENT.md`.
-<<<<<<< HEAD
-- This batch was pulled immediately from `READYNESS_TRACKER.md` because continuous batch execution is enabled.
-- This wave pulls the next executable leaves from `READYNESS_TRACKER.md` sections `L`, `M`, and the first still-open lifecycle gate in `N`.
-- Keep this autoscaling / provisioning / readiness wave visible until it is exhausted; do not refill it with unrelated work mid-flight.
-=======
 - This new active batch is an explicit user-priority override because current application-workflow work now depends on a real public userland orchestrator surface.
 - The new active batch takes the next `20` leaves because `ISSUES.md` is organized as a `20`-issue execution batch and the user explicitly requested that this gap move ahead of the existing autoscaling wave.
 - This userland orchestration batch is grounded in the open userland-facing integration direction in `READYNESS_TRACKER.md` section `Q`, but is narrowed here to the immediately blocking public orchestrator gap around application tool execution and recovery.
@@ -135,5 +122,4 @@
 - Leaf `#22` is now closed by aligning public docs and handbooks with the same durable-state-versus-executable-handler boundary and removing callback-transport assumptions from workflow examples.
 - Leaf `#23` is now closed by adding the app-worker boundary smoke PHPT that verifies remote-peer dispatch does not persist handler callback names in state or peer execution payloads.
 - The autoscaling / provisioning / readiness wave remains visible below as the deferred previous batch and resumes once the current userland orchestration batch is exhausted.
->>>>>>> develop/v0.2.7-alpha
 - If a task is not listed here, it is not the current repo-local execution item.
