@@ -2,6 +2,16 @@
 King pipeline orchestrator seeded registry churn keeps tool registration and pipeline execution stable
 --FILE--
 <?php
+function seeded_registry_handler(array $context): array
+{
+    $input = $context['input'] ?? null;
+    if (!is_array($input)) {
+        throw new RuntimeException('unexpected handler input');
+    }
+
+    return ['output' => $input];
+}
+
 $registered = true;
 for ($i = 0; $i < 32; $i++) {
     $registered = $registered && king_pipeline_orchestrator_register_tool(
@@ -11,6 +21,10 @@ for ($i = 0; $i < 32; $i++) {
             'weight' => $i,
             'bucket' => $i % 4,
         ]
+    );
+    $registered = $registered && king_pipeline_orchestrator_register_handler(
+        sprintf('tool_%02d', $i % 10),
+        'seeded_registry_handler'
     );
 }
 

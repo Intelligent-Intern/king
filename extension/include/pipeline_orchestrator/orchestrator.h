@@ -20,8 +20,13 @@ typedef struct _king_orchestrator_tool {
 /* Registry and persisted run-state management */
 int king_orchestrator_registry_init(void);
 void king_orchestrator_registry_shutdown(void);
+int king_orchestrator_runtime_handlers_init(void);
+void king_orchestrator_runtime_handlers_shutdown(void);
 int king_orchestrator_register_tool(const char *name, size_t name_len, zval *config);
 zval *king_orchestrator_lookup_tool(const char *name, size_t name_len);
+int king_orchestrator_load_tool_config(const char *name, size_t name_len, zval *return_value);
+int king_orchestrator_register_tool_handler(const char *name, size_t name_len, zval *handler);
+zval *king_orchestrator_lookup_tool_handler(const char *name, size_t name_len);
 int king_orchestrator_configure_logging(zval *config);
 size_t king_orchestrator_count_active_runs(void);
 void king_orchestrator_append_component_info(zval *configuration);
@@ -33,6 +38,12 @@ int king_orchestrator_load_run_payload(
     zval *options,
     zval *telemetry_parent_context
 );
+int king_orchestrator_load_run_progress(
+    zend_string *run_id,
+    zval *result,
+    zend_long *completed_step_count_out
+);
+int king_orchestrator_load_run_handler_boundary(zend_string *run_id, zval *return_value);
 int king_orchestrator_enqueue_run(zend_string *run_id, zval *return_value);
 int king_orchestrator_claim_next_run(
     zend_string **run_id_out,
@@ -59,6 +70,11 @@ int king_orchestrator_pipeline_run_mark_running(
     zend_long claimed_by_pid
 );
 int king_orchestrator_pipeline_run_is_terminal(zend_string *run_id);
+int king_orchestrator_pipeline_run_record_progress(
+    zend_string *run_id,
+    zend_long completed_step_count,
+    zval *result
+);
 int king_orchestrator_pipeline_run_record_completed_steps(zend_string *run_id, zend_long completed_step_count);
 int king_orchestrator_pipeline_run_note_recovery(zend_string *run_id, const char *reason);
 int king_orchestrator_pipeline_run_note_remote_attempt(zend_string *run_id);

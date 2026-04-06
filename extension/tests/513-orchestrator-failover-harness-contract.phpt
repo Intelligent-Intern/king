@@ -79,10 +79,21 @@ function king_orchestrator_failover_controller_loss_scenario(): void
     try {
         $controllerScript = king_orchestrator_failover_harness_write_script($harness, 'controller-loss-controller', <<<'PHP'
 <?php
+function summarizer_handler(array $context): array
+{
+    $input = $context['input'] ?? null;
+    if (!is_array($input)) {
+        throw new RuntimeException('unexpected handler input');
+    }
+
+    return ['output' => $input];
+}
+
 king_pipeline_orchestrator_register_tool('summarizer', [
     'model' => 'gpt-sim',
     'max_tokens' => 64,
 ]);
+king_pipeline_orchestrator_register_handler('summarizer', 'summarizer_handler');
 king_pipeline_orchestrator_run(
     ['text' => 'controller-failover'],
     [['tool' => 'summarizer', 'delay_ms' => 15000]],
@@ -100,7 +111,18 @@ echo json_encode($run), "\n";
 PHP);
         $resumeScript = king_orchestrator_failover_harness_write_script($harness, 'controller-loss-resume', <<<'PHP'
 <?php
+function summarizer_handler(array $context): array
+{
+    $input = $context['input'] ?? null;
+    if (!is_array($input)) {
+        throw new RuntimeException('unexpected handler input');
+    }
+
+    return ['output' => $input];
+}
+
 $runId = $argv[1];
+king_pipeline_orchestrator_register_handler('summarizer', 'summarizer_handler');
 $infoBefore = king_system_get_component_info('pipeline_orchestrator');
 $result = king_pipeline_orchestrator_resume_run($runId);
 $run = king_pipeline_orchestrator_get_run($runId);

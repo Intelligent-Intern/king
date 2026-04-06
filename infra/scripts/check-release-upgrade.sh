@@ -22,6 +22,7 @@ PHP_BIN="${PHP_BIN:-php}"
 ARTIFACTS_DIR=""
 SCRATCH_DIR=""
 PREVIOUS_WORKTREE=""
+BASELINE_REF=""
 DIRECTION="upgrade"
 
 resolve_existing_path() {
@@ -167,22 +168,20 @@ package_tree() {
     local tree_root="$1"
     local output_dir="$2"
     local log_path="$3"
-    local package_output=""
     local archive_path=""
 
     mkdir -p "${output_dir}"
 
-    package_output="$(
-        (
-            cd "${tree_root}"
-            ./infra/scripts/package-release.sh --output-dir "${output_dir}"
-        ) 2>&1 | tee "${log_path}"
-    )"
+    if ! (
+        cd "${tree_root}"
+        ./infra/scripts/package-release.sh --output-dir "${output_dir}"
+    ) >"${log_path}" 2>&1; then
+        return 1
+    fi
 
-    archive_path="$(printf '%s\n' "${package_output}" | sed -n 's/^Package created: //p' | tail -n 1)"
+    archive_path="$(sed -n 's/^Package created: //p' "${log_path}" | tail -n 1)"
     if [[ -z "${archive_path}" ]]; then
-        echo "Failed to resolve package archive from ${tree_root}." >&2
-        exit 1
+        return 1
     fi
 
     resolve_existing_path "${archive_path}"
@@ -212,13 +211,49 @@ install_archive_to_prefix() {
     ) 2>&1 | tee "${log_path}"
 }
 
-printf 'Preparing previous release archive from %s\n' "${FROM_REF}"
-PREVIOUS_WORKTREE="$(mktemp -d)"
-rm -rf "${PREVIOUS_WORKTREE}"
-git -C "${ROOT_DIR}" worktree add --detach "${PREVIOUS_WORKTREE}" "${FROM_REF}" >/dev/null
-git -C "${PREVIOUS_WORKTREE}" submodule update --init --recursive >/dev/null
+prepare_previous_archive() {
+    local candidate_ref="$1"
+    local package_log=""
+    local next_candidate=""
+    local attempt=0
 
-PREVIOUS_ARCHIVE="$(package_tree "${PREVIOUS_WORKTREE}" "${PREVIOUS_BUILD_DIR}/dist" "${PREVIOUS_BUILD_DIR}/package.log")"
+    while [[ -n "${candidate_ref}" ]]; do
+        package_log="${PREVIOUS_BUILD_DIR}/package-$(git -C "${ROOT_DIR}" rev-parse --short "${candidate_ref}").log"
+
+        printf 'Preparing previous release archive from %s\n' "${candidate_ref}"
+        PREVIOUS_WORKTREE="$(mktemp -d)"
+        rm -rf "${PREVIOUS_WORKTREE}"
+        git -C "${ROOT_DIR}" worktree add --detach "${PREVIOUS_WORKTREE}" "${candidate_ref}" >/dev/null
+        git -C "${PREVIOUS_WORKTREE}" submodule update --init --recursive >/dev/null
+
+        if PREVIOUS_ARCHIVE="$(package_tree "${PREVIOUS_WORKTREE}" "${PREVIOUS_BUILD_DIR}/dist" "${package_log}")"; then
+            BASELINE_REF="${candidate_ref}"
+            return 0
+        fi
+
+        echo "Failed to package from ${candidate_ref}. Last 40 log lines from ${package_log}:" >&2
+        if [[ -f "${package_log}" ]]; then
+            tail -n 40 "${package_log}" >&2
+        fi
+
+        next_candidate="$(git -C "${ROOT_DIR}" rev-parse "${candidate_ref}^" 2>/dev/null || true)"
+        if [[ -z "${next_candidate}" ]]; then
+            break
+        fi
+
+        echo "Packaging baseline ${candidate_ref} failed. Trying parent ${next_candidate} (attempt $((attempt + 1)))." >&2
+        attempt=$((attempt + 1))
+
+        rm -rf "${PREVIOUS_WORKTREE}"
+        PREVIOUS_WORKTREE=""
+        candidate_ref="${next_candidate}"
+    done
+
+    echo "Failed to build a package from ${FROM_REF} or any first-parent ancestor." >&2
+    exit 1
+}
+
+prepare_previous_archive "${FROM_REF}"
 
 if [[ -z "${CURRENT_ARCHIVE}" ]]; then
     printf 'Preparing current release archive from working tree\n'
@@ -247,7 +282,7 @@ fi
 
 cat > "${ARTIFACTS_DIR}/summary.txt" <<EOF
 release_${DIRECTION}_compatibility=ok
-previous_ref=${FROM_REF}
+previous_ref=${BASELINE_REF}
 previous_archive=${PREVIOUS_ARCHIVE}
 current_archive=${CURRENT_ARCHIVE}
 php_bin=${PHP_BIN}

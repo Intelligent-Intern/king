@@ -1,8 +1,8 @@
 # 11: Pipeline Orchestrator Tools
 
 This guide is the first place in the handbook where the reader can watch King
-treat workflow execution as an operational system rather than as a chain of
-callbacks.
+treat workflow execution as an operational system rather than as a callback
+chain between in-process steps.
 
 Many projects begin with a few direct calls wired together in a controller.
 That is usually enough until the workflow becomes important enough that people
@@ -79,6 +79,26 @@ governable. The platform can list tools, inspect tool metadata, and reject
 pipelines that reference undefined capabilities instead of discovering mistakes
 only after work has already begun.
 
+The important boundary is that this registration step defines a durable tool
+name and configuration snapshot, not executable PHP callbacks for later host or
+process execution. The current
+public contract does not claim that userland closures or controller memory are
+serialized into persisted run state. `king_pipeline_orchestrator_register_handler()`
+now binds an executable handler by tool name inside the current process, but
+that runtime binding is still separate from durable orchestrator state. This
+crosses only at the app-worker boundary.
+
+That registration identity is now explicit too: the durable cross-boundary
+anchor is the tool name itself. A local controller, a same-host file worker, a
+restarted replacement worker, and a remote execution peer must each bind their
+own executable handler for that same tool name in the process that will
+actually execute the step.
+
+Forms that cannot be rehydrated honestly across those boundaries are outside the
+public durability claim. Captured closures, resource-backed callables, and
+handlers whose meaning depends on opaque controller memory must therefore be
+rejected or fail closed instead of being treated as portable execution state.
+
 ## Step 2: Define The Pipeline As Data
 
 After that, the example defines the pipeline itself as an array of step
@@ -104,6 +124,35 @@ belong in a same-host worker for isolation. Some belong on a remote peer for
 topology or ownership reasons. The orchestrator keeps those backend choices
 explicit instead of hiding them inside one helper.
 
+When the active backend is local and the relevant tool handlers were bound with
+`king_pipeline_orchestrator_register_handler()`, `run()` now executes those
+handlers directly and persists the latest local step payload after each
+completed step. A later `resume_run()` can therefore continue from honest
+completed-step progress instead of replaying already-completed local work.
+The local callable now receives one context array with `input`, `tool`, `run`,
+and `step` blocks and must return one array containing `output` as the next
+array payload.
+
+Queued userland-backed file-worker runs now persist the durable
+handler-reference boundary too. If you inspect one of those queued runs with
+`king_pipeline_orchestrator_get_run()`, the snapshot includes
+`handler_boundary` with the required tool names and step indexes for later
+worker execution. That is intentionally only a durable reference surface, not
+a serialized PHP callback, and a worker without those re-registered handlers
+now skips that run before claim or recovery resume. A ready worker executes the
+boundary-marked steps through those registered handlers, persists the latest
+payload plus completed-step progress after each completed step, and lets a
+replacement worker continue from honest persisted file-worker progress instead
+of replaying already-completed userland-backed work.
+
+When the active backend is `remote_peer` and the controller had bound handlers
+for those step tools, the persisted run snapshot now carries that same durable
+`handler_boundary` for remote replay too. `run()` and later `resume_run()`
+send only the tool-name boundary plus durable tool configs across the TCP
+request. The remote peer must still bind its own executable handlers locally;
+a ready peer executes the marked steps for real, and a peer without those
+handlers now fails closed explicitly instead of borrowing controller memory.
+
 ## Step 4: Inspect The Persisted Run
 
 Finally, the example reads the stored run with
@@ -114,7 +163,14 @@ That is another key lesson of the example. The output of an orchestrated run is
 not only the final result. It is also the stored record of what was asked,
 which backend handled it, what state the run reached, which completed steps now
 need caller-managed compensation after a terminal failure, and how the runtime
-can describe that contract later.
+can describe that contract later. For userland-backed steps that stored record
+now also carries an honest failure taxonomy instead of flattening everything
+into generic backend failure. Validation-style input or contract failures stay
+`validation`, handler-thrown execution faults stay `runtime`, explicit timeout
+faults stay `timeout`, missing process-local handler readiness stays
+`missing_handler`, backend preparation faults stay `backend`, and cancellation
+stays a run-scope `cancelled` control outcome when the runtime cannot honestly
+assign the stop to one concrete step.
 
 ## What You Should Watch
 

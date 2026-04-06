@@ -37,6 +37,12 @@ function king_orchestrator_distributed_peer_persist_capture(array $capture, stri
     );
 }
 
+function king_orchestrator_distributed_peer_handler_boundary_requires_process_registration(
+    mixed $handlerBoundary
+): bool {
+    return is_array($handlerBoundary) && !empty($handlerBoundary['requires_process_registration']);
+}
+
 function king_orchestrator_distributed_peer_cleanup_workers(array &$workers): void
 {
     foreach ($workers as &$worker) {
@@ -99,6 +105,21 @@ for ($i = 0; $i < $workerCount; $i++) {
 }
 
 $encodeError = static fn(string $message): string => "ERR\t" . base64_encode($message) . "\n";
+$encodeErrorMeta = static function (
+    string $message,
+    string $category,
+    string $retryDisposition,
+    int $stepIndex = -1,
+    ?string $backend = null
+): string {
+    return "ERRMETA\t" . base64_encode(serialize([
+        'message' => $message,
+        'category' => $category,
+        'retry_disposition' => $retryDisposition,
+        'step_index' => $stepIndex,
+        'backend' => $backend,
+    ])) . "\n";
+};
 $encodeResult = static fn(mixed $value): string => "OK\t" . base64_encode(serialize($value)) . "\n";
 $encodeWorkerPayload = static fn(array $value): string => base64_encode(serialize($value));
 $decodeWorkerResult = static function (string $payload): array {
@@ -143,13 +164,19 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
     }
 
     $parts = explode("\t", $line);
-    if (count($parts) !== 7 || $parts[0] !== 'RUN') {
+    if (($parts[0] ?? null) !== 'RUN' || (count($parts) !== 7 && count($parts) !== 9)) {
         fwrite($client, $encodeError('invalid remote orchestrator opcode'));
         fclose($client);
         continue;
     }
 
-    [$opcode, $runIdB64, $initialB64, $pipelineB64, $optionsB64, $timeoutBudgetMs, $deadlineBudgetMs] = $parts;
+    if (count($parts) === 9) {
+        [$opcode, $runIdB64, $initialB64, $pipelineB64, $optionsB64, $handlerBoundaryB64, $toolConfigsB64, $timeoutBudgetMs, $deadlineBudgetMs] = $parts;
+    } else {
+        [$opcode, $runIdB64, $initialB64, $pipelineB64, $optionsB64, $timeoutBudgetMs, $deadlineBudgetMs] = $parts;
+        $handlerBoundaryB64 = null;
+        $toolConfigsB64 = null;
+    }
     $event = [
         'remote_address' => $peer,
         'claims' => [],
@@ -160,6 +187,8 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
         $event['initial_data'] = $decodeZval($initialB64);
         $event['pipeline'] = $decodeZval($pipelineB64);
         $event['options'] = $decodeZval($optionsB64);
+        $event['handler_boundary'] = $handlerBoundaryB64 !== null ? $decodeZval($handlerBoundaryB64) : null;
+        $event['tool_configs'] = $toolConfigsB64 !== null ? $decodeZval($toolConfigsB64) : null;
         $event['timeout_budget_ms'] = (int) $timeoutBudgetMs;
         $event['deadline_budget_ms'] = (int) $deadlineBudgetMs;
     } catch (Throwable $e) {
@@ -178,6 +207,24 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
         $event['remote_error'] = 'invalid_pipeline';
         king_orchestrator_distributed_peer_persist_capture($capture, $capturePath);
         fwrite($client, $encodeError('distributed peer expected an array pipeline definition'));
+        fclose($client);
+        unset($event);
+        continue;
+    }
+
+    if (king_orchestrator_distributed_peer_handler_boundary_requires_process_registration($event['handler_boundary'])) {
+        $event['remote_error'] = 'distributed peer server does not provide a registered userland handler runtime';
+        king_orchestrator_distributed_peer_persist_capture($capture, $capturePath);
+        fwrite(
+            $client,
+            $encodeErrorMeta(
+                'distributed peer server does not provide a registered userland handler runtime',
+                'backend',
+                'caller_managed_retry',
+                -1,
+                'remote_peer'
+            )
+        );
         fclose($client);
         unset($event);
         continue;

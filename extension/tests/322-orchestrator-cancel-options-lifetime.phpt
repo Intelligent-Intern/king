@@ -4,10 +4,21 @@ King pipeline orchestrator keeps cancel option ownership stable across persisted
 king.security_allow_config_override=1
 --FILE--
 <?php
+function summarizer_handler(array $context): array
+{
+    $input = $context['input'] ?? null;
+    if (!is_array($input)) {
+        throw new RuntimeException('unexpected handler input');
+    }
+
+    return ['output' => $input];
+}
+
 var_dump(king_pipeline_orchestrator_register_tool('summarizer', [
     'model' => 'gpt-sim',
     'max_tokens' => 64,
 ]));
+var_dump(king_pipeline_orchestrator_register_handler('summarizer', 'summarizer_handler'));
 
 $initial = ['text' => 'stable'];
 $pipeline = [['tool' => 'summarizer']];
@@ -37,6 +48,7 @@ try {
 }
 ?>
 --EXPECTF--
+bool(true)
 bool(true)
 bool(true)
 bool(true)

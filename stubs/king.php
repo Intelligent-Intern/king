@@ -1541,8 +1541,19 @@ namespace {
      * run must be queued via `king_pipeline_orchestrator_dispatch()` and
      * consumed by `king_pipeline_orchestrator_worker_run_next()`. When
      * `king.orchestrator_execution_backend=remote_peer`, the controller
-     * sends the run to the configured remote host/port worker peer and
-     * still persists the run snapshot locally.
+     * sends the run to the configured remote host/port worker peer, still
+     * persists the run snapshot locally, and now includes any durable
+     * userland `handler_boundary` plus tool-config snapshot needed for remote
+     * replay. The remote peer must still satisfy its own process-local
+     * handler registration before it can execute those boundary-marked steps.
+     * On the local backend, handlers
+     * bound through `king_pipeline_orchestrator_register_handler()` execute in
+     * the current process and the runtime persists the latest local payload
+     * plus completed-step progress after each completed local step. When one
+     * of those userland-backed steps fails, the persisted run snapshot now
+     * classifies the fault explicitly as `validation`, `runtime`, `timeout`,
+     * `backend`, or `missing_handler` instead of flattening it into a generic
+     * backend string.
      * @param array<int,array<string,mixed>> $pipeline
      * @param array<string,mixed>|null $exec_options
      * @return array<string,mixed>
@@ -1562,9 +1573,39 @@ namespace {
     /**
      * Register or replace one tool definition in the active pipeline
      * orchestrator registry.
+     * This stores the durable tool name and configuration snapshot only.
+     * It does not register a PHP callable or claim closure/object/resource
+     * serialization across restart, file-worker, or remote-peer boundaries;
+     * executable userland handler binding is a separate contract. The durable
+     * cross-boundary handler identity is the tool-name string itself; any
+     * later public handler API must bind executable handlers again inside the
+     * exact process that will execute that tool. Unsupported non-rehydratable
+     * forms such as captured closures, resource-backed callables, and
+     * controller-memory-dependent handlers belong outside that durable
+     * contract and must fail closed.
      * @param array<string,mixed> $config
      */
     function king_pipeline_orchestrator_register_tool(string $tool_name, array $config): bool {}
+
+    /**
+     * Register or replace one executable userland handler for a previously
+     * registered orchestrator tool name inside the current PHP process.
+     * This binding is process-local runtime state only. It is not persisted
+     * into orchestrator state, replayed across restart, or transported to a
+     * file worker or remote peer automatically. Replacement processes must
+     * bind their own handlers again for the same durable tool-name identity.
+     * On the `remote_peer` backend, controller-side registration only marks
+     * the durable boundary the controller may later send to the peer; it does
+     * not satisfy remote execution readiness by itself.
+     * On the local backend the callable receives one context array with
+     * top-level keys `input`, `tool`, `run`, and `step`, plus the legacy
+     * `run_id` alias. The callable must return one array containing key
+     * `output`, and `output` must be the next array payload. Handler-thrown
+     * validation, runtime, and timeout failures now remain distinguishable in
+     * persisted run classification instead of collapsing into one generic
+     * backend result.
+     */
+    function king_pipeline_orchestrator_register_handler(string $tool_name, callable $handler): bool {}
 
     /**
      * Configure the active pipeline-orchestrator logging snapshot.
@@ -1575,6 +1616,19 @@ namespace {
     /**
      * Claim and execute the next queued file-worker run from the configured
      * orchestrator queue. Returns `false` when the queue is empty.
+     * Persisted tool definitions and run state rehydrate here, but the current
+     * public surface does not claim that handlers registered through
+     * `king_pipeline_orchestrator_register_handler()` were persisted with the
+     * run. Worker processes must therefore bind the relevant tool handlers
+     * again before they claim executable work. Userland-backed queued run
+     * snapshots may expose a durable `handler_boundary` with tool-name
+     * references and step indexes, but that boundary is still not executable
+     * handler state. Ready workers now execute those boundary-marked steps
+     * through the re-registered handlers and persist the latest payload plus
+     * completed-step progress after each completed step; workers without those
+     * handlers skip the queued or recovered run before claim/recovery resume
+     * instead of failing late inside execution, and unsupported
+     * non-rehydratable forms must still fail closed.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_worker_run_next(): array|false {}
@@ -1583,7 +1637,17 @@ namespace {
      * Resume one persisted non-terminal pipeline run after controller
      * restart. This continuation path is for the local and `remote_peer`
      * orchestrator backends. The file-worker backend continues work through
-     * `king_pipeline_orchestrator_worker_run_next()`.
+     * `king_pipeline_orchestrator_worker_run_next()`. Handlers registered
+     * through `king_pipeline_orchestrator_register_handler()` are process-local
+     * and must be bound again inside the restarted process before continuation.
+     * On the local backend, continuation resumes from the persisted local
+     * payload and completed-step progress instead of replaying already
+     * completed local steps. On the `remote_peer` backend, continuation
+     * re-sends only the durable handler boundary plus tool-config snapshot to
+     * the configured peer; the restarted controller still does not transport
+     * old PHP callable state across the network. Missing peer-local handler
+     * readiness is therefore reported as `missing_handler`, not as borrowed
+     * controller execution state.
      * @return array<string,mixed>
      */
     function king_pipeline_orchestrator_resume_run(string $run_id): array {}
@@ -1592,7 +1656,14 @@ namespace {
      * Read one persisted pipeline-run snapshot from the active orchestrator
      * state registry, including explicit `error_classification` and per-step
      * `steps` status snapshots plus the caller-managed `compensation` contract
-     * for failed multi-step runs when present.
+     * for failed multi-step runs when present. Userland-backed non-local runs
+     * may also expose `handler_boundary`, which carries only the durable
+     * tool-name references and step indexes needed for later worker readiness
+     * checks or remote-peer replay. Userland-backed failure categories now
+     * remain explicit across local, file-worker, and remote-peer execution:
+     * `validation`, `runtime`, `timeout`, `backend`, and `missing_handler`
+     * stay step-owned where honest, while control-path cancellation remains a
+     * run-scope `cancelled` classification.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_get_run(string $run_id): array|false {}

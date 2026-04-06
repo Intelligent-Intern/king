@@ -396,6 +396,34 @@ static int king_orchestrator_queue_name_is_claimed_job(const char *name)
         && strcmp(name + name_len - (sizeof(".job") - 1), ".job") == 0;
 }
 
+static zend_string *king_orchestrator_queue_entry_run_id(const char *name)
+{
+    const char *run_start;
+    const char *suffix;
+    size_t run_id_len;
+
+    if (name == NULL) {
+        return NULL;
+    }
+
+    run_start = strstr(name, "run-");
+    if (run_start == NULL) {
+        return NULL;
+    }
+
+    suffix = strstr(run_start, ".job");
+    if (suffix == NULL || suffix <= run_start) {
+        return NULL;
+    }
+
+    run_id_len = (size_t) (suffix - run_start);
+    if (run_id_len == 0) {
+        return NULL;
+    }
+
+    return zend_string_init(run_start, run_id_len, 0);
+}
+
 static zend_long king_orchestrator_queue_entry_sequence(const char *name)
 {
     const char *run_start;
@@ -567,4 +595,3 @@ static int king_orchestrator_decode_base64_zval(zend_string *encoded_value, zval
 
     return SUCCESS;
 }
-

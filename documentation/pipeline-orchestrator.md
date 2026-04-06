@@ -138,6 +138,203 @@ orchestrator component reports how many tools are registered and exposes the
 list of tool names in `registered_tools`. That makes the registry inspectable at
 runtime instead of being hidden inside application code.
 
+## Userland Tool Handlers
+
+The public orchestrator contract now separates two things that are easy to blur
+together if they are only discussed informally.
+
+The first thing is the durable tool definition. That is what
+`king_pipeline_orchestrator_register_tool()` stores today: a tool name plus a
+configuration snapshot that pipelines and persisted run state can refer to
+honestly across restart, file-worker claim, and remote-peer execution.
+
+The second thing is the executable userland handler that application code wants
+to run for that tool. That handler is not the same kind of state. It belongs to
+the PHP process that currently owns execution. Controller memory, worker
+memory, remote-peer memory, closure captures, object instances, resources, and
+arbitrary userland callables are therefore not part of the current durable
+orchestrator state contract.
+
+That boundary is now part of the public documentation on purpose. King does not
+claim that a registered tool definition already means a PHP callable was
+serialized, persisted, or transported safely across process or host boundaries.
+`king_pipeline_orchestrator_register_handler()` now binds an executable
+userland handler to that tool-name identity inside the current PHP process, but
+that binding is still non-durable runtime state. The handler-registration API
+therefore keeps the stronger contract explicit:
+
+- the durable run state persists tool names, tool config, pipeline data, and
+  run metadata
+- executable handlers are registered per process, not smuggled through
+  persisted run state
+- every controller, file-worker, and remote execution peer that may execute a
+  step must register the handlers it intends to run
+- unsupported non-rehydratable forms such as captured closures, opaque object
+  graphs, or resource-backed callables must fail closed instead of being
+  treated as durable
+- missing handler registration must be visible as an explicit runtime failure,
+  not hidden behind fake fallback behavior
+
+The runtime contract is now narrower and more honest than "handlers work
+everywhere" but stronger than "the API only exists on paper". The local
+backend now consumes registered handlers for real step execution and persists
+the latest local payload together with `completed_step_count` after each
+completed local step. That lets `king_pipeline_orchestrator_resume_run()`
+continue a persisted local `running` run from honest local progress instead of
+rerunning already-completed local steps after controller restart or
+running-snapshot recovery. The file-worker backend now does the same for
+userland-backed queued runs after per-process re-registration: workers execute
+the boundary-marked steps through the registered handlers, persist the latest
+payload plus `completed_step_count` after each completed step, and let a
+replacement worker continue from that honest persisted progress after worker
+loss or restart. The remote-peer backend now consumes that same durable
+boundary over the TCP host/port request: the controller sends only the
+tool-name boundary plus durable tool configs, the remote execution peer must
+bind its own handlers locally, a ready peer executes those boundary-marked
+steps for real, and a peer without that process-local readiness fails closed
+explicitly instead of pretending controller memory crossed the network.
+
+Non-local userland-backed runs now persist the durable handler-reference
+boundary they will need later too. When the dispatching or remote-calling
+process had bound executable handlers for non-local tools, the persisted run
+snapshot exposes this as `handler_boundary`, which currently carries only the
+durable tool-name references plus step indexes for queued worker execution or
+remote-peer replay. That boundary is deliberately narrower than executable
+readiness:
+
+- `handler_boundary` persists tool-name references only
+- `handler_boundary` is durable across queue, restart, and snapshot reload
+- `handler_boundary` does not persist PHP callback names, closures, object
+  state, or controller memory
+- later worker or remote-peer readiness must still be satisfied by per-process
+  handler registration before execution begins
+- each persisted run now also exposes `handler_readiness`, which reports whether
+  the currently observed process can execute the required userland boundary
+  and which tools are still missing for each queued or resumed claim
+- ready workers now execute those boundary-marked steps and persist progress
+  after each completed step for later recovery
+- unready workers skip those queued or recovered runs before claim or recovery
+  resume instead of failing late inside opaque worker execution
+- ready remote peers now receive that same boundary plus durable tool configs
+  over TCP and execute the marked steps through their own process-local
+  handler bindings
+- unready remote peers now fail closed explicitly instead of silently falling
+  back to controller memory or topology downgrade
+
+The local handler invocation contract is now explicit too. The callable
+receives one context array with these top-level keys:
+
+- `input`: the current step input payload
+- `tool`: an array containing the durable `name` plus decoded durable `config`
+- `run`: an array containing `run_id`, `attempt_number`,
+  `execution_backend`, and `topology_scope`
+- `step`: an array containing `index`, `tool_name`, and the full step
+  `definition`
+
+For compatibility with the first local slice, the top-level `run_id` alias is
+still present too, but the structured `run` block is now the public contract.
+
+The local result contract is explicit and fail-closed: the handler must return
+one array containing key `output`, and `output` must itself be the next array
+payload that should flow into the next step and persisted run state. Returning
+a bare payload array, a scalar, or an array without `output` is now a runtime
+contract violation instead of an implied shortcut.
+
+## Handler Identity And Re-Registration
+
+The exact public identity boundary is now explicit.
+
+The durable orchestrator identity for executable userland work is the tool name
+string that appears in the pipeline step and in the tool registry. That is the
+only cross-process, cross-restart, and cross-host identifier the current public
+contract is willing to treat as durable at the handler boundary.
+
+Tool configuration is durable input to that tool identity, but it is not a
+second executable-handler identity. Closure captures, object-instance state,
+resource handles, and controller memory are not handler identity either. They
+may influence a process-local registration call in the future, but they are not
+part of the persisted orchestrator contract.
+
+The practical rule is therefore simple: if a process may execute a step for
+tool `X`, that process must register the executable handler for tool `X`
+locally before execution starts. The orchestrator may persist the run, the tool
+definition, and the step metadata, but executable handler readiness is still a
+per-process obligation.
+
+The required registration matrix is:
+
+- local backend: the controller process that calls `run()` must register the
+  handler for every tool it may execute locally
+- file-worker backend: the controller may queue a run after registering the
+  durable tool definition, but each worker process that may call
+  `worker_run_next()` must register the executable handlers it may run; the
+  queued userland-backed run now persists only the durable tool-name boundary
+  needed to check that readiness later, ready workers execute those marked
+  steps and persist progress after each completed step, and unready workers
+  skip that run before claim or recovery resume
+- local restart continuation: the restarted controller process must re-register
+  the executable handlers before `resume_run()`
+- file-worker restart continuation: any restarted replacement worker must
+  re-register the executable handlers before claiming queued or recovered work
+- remote-peer backend: the remote execution peer must register the executable
+  handlers it may run; controller-side registration only persists the durable
+  boundary and tool-config snapshot that `run()` or `resume_run()` later send
+  to the peer, and does not satisfy remote execution readiness by itself
+- remote-peer return after loss: the returning peer must re-register the
+  executable handlers before it can execute resumed or new remote work again;
+  the restarted controller resends only the durable boundary and tool config,
+  not the old PHP callable state
+
+This means the handler-registration API cannot treat "I registered this once
+somewhere in the system" as a sufficient readiness claim. Readiness must be
+true in the exact process that will execute the step.
+
+The same rule also defines the honest fail-closed line. If a run, worker, or
+remote peer reaches a step whose tool name has no executable handler bound in
+that exact process, King must treat that as missing execution readiness. It
+must not silently borrow controller memory, infer closure state from persisted
+arrays, or pretend a previous process registration still exists after restart.
+
+## Unsupported Non-Rehydratable Handler Forms
+
+The fail-closed boundary now needs no guesswork.
+
+The following forms are outside the durable public handler contract and must be
+treated as unsupported for cross-restart, file-worker, or remote-peer
+execution:
+
+- closures with captured state
+- object instances whose executable meaning depends on constructor-time or
+  request-time mutable memory
+- resources and extension handles
+- handlers that depend on open sockets, streams, temporary files, or live
+  process-local descriptors
+- handlers whose executable identity depends on unserialized controller memory
+  instead of the durable tool-name string
+- handlers that require implicit global bootstrap side effects which a
+  replacement process cannot verify or reproduce explicitly
+
+The important point is not that such forms are "bad PHP". The point is that the
+orchestrator must not misrepresent them as durable execution state once work can
+cross queue, restart, or host boundaries.
+
+That gives the handler-registration API an explicit fail-closed contract:
+
+- reject unsupported handler forms at registration time when the runtime can
+  tell they are non-rehydratable
+- otherwise refuse execution at claim or resume time when the exact process
+  cannot prove handler readiness honestly
+- classify the result as missing or unsupported handler readiness, not as a
+  successful durable rehydration
+- never synthesize fallback execution by reviving stale controller memory,
+  serializing closure internals informally, or silently downgrading the backend
+  to hide the unsupported form
+
+This is a contract-strengthening rule, not a convenience restriction. The
+orchestrator is preserving honest restart and topology semantics by refusing to
+pretend that non-durable PHP execution state became durable just because a run
+was persisted.
+
 ## What A Pipeline Looks Like
 
 A pipeline is an ordered array of step definitions. At minimum, each step names
@@ -150,7 +347,9 @@ Because the pipeline is data, King can validate it, persist it, queue it,
 rehydrate it, send it to a remote peer, and inspect it after the fact.
 
 That is one of the biggest practical differences between an orchestrated
-workflow and a chain of ad-hoc PHP calls.
+workflow and in-process callback chaining. In King, workflow data crosses
+durable boundaries while executable handlers are re-registered on the process
+that owns execution (the app-worker boundary).
 
 ## Run Lifecycle
 
@@ -367,6 +566,9 @@ claimed through `king_pipeline_orchestrator_get_run()` and the component
 snapshot itself.
 
 The component snapshot also exposes a nested `distributed_observability` block
+and `active_handler_contract` block with process-local registration-state
+metadata, including scope, registered handler count, active handler names, and
+whether that process-local boundary is currently required.
 with claimed-run count, recovered-run count, remote-attempted-run count, and
 the last run IDs and recovery reason seen through those paths. Together with
 the per-run snapshot, this gives both fleet-level and run-level visibility into
@@ -454,7 +656,10 @@ orchestrator logging snapshot.
 execution backend. In local mode the run executes in the current process. In
 remote-peer mode the controller sends the run to the configured remote host and
 port. In file-worker mode this direct path is intentionally unavailable because
-queued execution should use dispatch instead.
+queued execution should use dispatch instead. When local userland handlers are
+registered for the step tool names, the local backend executes those handlers
+and persists the latest local payload after each completed step so restart-time
+continuation can resume from the last completed local step honestly.
 
 `king_pipeline_orchestrator_dispatch()` persists one run in queued state and
 places it onto the configured file-worker queue.
@@ -466,15 +671,26 @@ run payload, and returns `false` when the queue is empty.
 `king_pipeline_orchestrator_resume_run()` continues one persisted `running` run
 after controller restart on the local or `remote_peer` backends. This function
 is intentionally separate from `worker_run_next()` because the file-worker
-backend already has its own claim and recovery path.
+backend already has its own claim and recovery path. On the local backend, a
+restarted controller must re-register the relevant handlers first; continuation
+then resumes from the persisted local payload and `completed_step_count`
+instead of replaying already-completed local steps.
 
 `king_pipeline_orchestrator_get_run()` reads one persisted run snapshot by run
 ID. The returned snapshot includes the persisted top-level run state plus a
 structured `error_classification` block, per-step `steps` status entries, and
 the run's distributed observability fields so callers can distinguish
-validation, timeout, backend, remote-transport, and cancelled failures, see
-which backend and topology owned each step, and explain queue, claim, recovery,
-and remote-attempt history without inferring it from exception strings.
+validation, runtime, timeout, backend, remote-transport, cancelled, and
+missing-handler failures, see whether the failure honestly belongs to one step
+or to the run as a whole, see which backend and topology owned each step, and
+explain queue, claim, recovery, and remote-attempt history without inferring it
+from exception strings. For userland-backed steps this classification now stays
+explicit across local, file-worker, and remote-peer execution: handler input or
+precondition failures classify as `validation`, handler-thrown general
+execution failures classify as `runtime`, explicit timeout failures classify as
+`timeout`, control-path stop conditions classify as run-scope `cancelled`,
+backend/runtime preparation faults classify as `backend`, and absent required
+process-local handler bindings classify as `missing_handler`.
 
 `king_pipeline_orchestrator_cancel_run()` requests cancellation for a persisted
 queued run on the file-worker backend.

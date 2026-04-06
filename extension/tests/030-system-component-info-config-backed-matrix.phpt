@@ -265,7 +265,7 @@ array(6) {
 }
 string(21) "pipeline_orchestrator"
 string(13) "config_backed"
-array(26) {
+array(27) {
   [0]=>
   string(27) "default_pipeline_timeout_ms"
   [1]=>
@@ -317,6 +317,8 @@ array(26) {
   [24]=>
   string(16) "registered_tools"
   [25]=>
+  string(23) "active_handler_contract"
+  [26]=>
   string(25) "distributed_observability"
 }
 bool(true)

@@ -320,12 +320,83 @@ cancellation.
 | --- | --- | --- |
 | `king_pipeline_orchestrator_run()` | Executes one pipeline immediately through the active backend. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_dispatch()` | Queues one pipeline run onto the worker backend. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
-| `king_pipeline_orchestrator_register_tool()` | Registers or replaces one tool definition. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
+| `king_pipeline_orchestrator_register_tool()` | Registers or replaces one durable tool definition. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
+| `king_pipeline_orchestrator_register_handler()` | Binds or replaces one process-local executable handler for a registered tool name. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_configure_logging()` | Configures orchestrator logging. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_worker_run_next()` | Claims and executes the next queued worker run. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_resume_run()` | Continues one persisted `running` run after controller restart. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_get_run()` | Returns one persisted run snapshot. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
 | `king_pipeline_orchestrator_cancel_run()` | Requests cancellation for one persisted run. | [Pipeline Orchestrator](./pipeline-orchestrator.md) |
+
+Important boundary: `king_pipeline_orchestrator_register_tool()` stores the
+durable tool name plus configuration snapshot only. The current public
+orchestrator API does not claim that arbitrary userland callables, closure
+captures, or controller memory are persisted or transported as executable
+handler state across restart, file-worker, or remote-peer boundaries.
+`king_pipeline_orchestrator_register_tool()` and
+`king_pipeline_orchestrator_register_handler()` together form the app-worker
+boundary in this contract: durable state stores the tool definition, and the
+runtime process that will execute each step stores the executable callback.
+
+Handler binding boundary: `king_pipeline_orchestrator_register_handler()`
+attaches an executable callable to that durable tool-name identity inside the
+current process only. Executable handler readiness is still process-local, so
+the exact controller, worker, or remote-peer process that will execute a step
+must bind a handler for that tool name again after restart or replacement.
+
+Non-local boundary: userland-backed
+`king_pipeline_orchestrator_dispatch()` runs and `remote_peer` runs now persist
+an explicit `handler_boundary` block inside the run snapshot returned later by
+`king_pipeline_orchestrator_get_run()`. That block contains the durable
+tool-name references and step indexes needed for queued worker continuation or
+remote-peer replay, but it still does not serialize executable PHP callables
+or claim that worker/peer readiness already exists.
+
+Local execution boundary: when the active backend is local and those handlers
+have been bound in the current process, `king_pipeline_orchestrator_run()` and
+`king_pipeline_orchestrator_resume_run()` now execute them directly and persist
+the latest local payload together with completed-step progress so local restart
+continuation can resume from honest persisted progress instead of replaying
+already-completed local steps.
+
+File-worker execution boundary: when a queued run carries that durable
+`handler_boundary` and the current worker has re-registered the required
+handlers, `king_pipeline_orchestrator_worker_run_next()` now executes those
+marked steps through the registered handlers and persists the latest payload
+plus completed-step progress after each completed step. A replacement worker
+therefore resumes from honest file-worker progress after worker loss or
+restart instead of replaying already-completed userland-backed steps.
+
+Remote-peer execution boundary: when a remote-backed run carries that durable
+`handler_boundary`, `king_pipeline_orchestrator_run()` and
+`king_pipeline_orchestrator_resume_run()` now send only the tool-name boundary
+plus durable tool configs to the configured TCP peer. The remote peer must
+still satisfy its own process-local handler registration; a ready peer executes
+those marked steps for real, and a peer without the required handlers now fails
+closed explicitly instead of borrowing controller memory across the network.
+
+Local handler contract: the callable receives one context array with `input`,
+`tool`, `run`, and `step` blocks, plus the legacy top-level `run_id` alias.
+The callable must return one array result contract containing key `output`,
+and `output` must be the next array payload. Missing `output`, a scalar
+result, or a bare payload array now fails closed as a runtime contract
+violation.
+
+Userland failure taxonomy: persisted run snapshots returned by
+`king_pipeline_orchestrator_get_run()` now classify userland-backed failures
+explicitly instead of collapsing them into generic backend folklore. Invalid
+input or contract-shape failures classify as `validation`, handler-thrown
+execution faults classify as `runtime`, explicit timeout faults classify as
+`timeout`, missing required process-local handler bindings classify as
+`missing_handler`, backend preparation faults classify as `backend`, and
+control-path cancellation classifies as run-scope `cancelled` when no concrete
+step can honestly own the stop condition.
+
+Fail-closed boundary: unsupported non-rehydratable forms such as captured
+closures, resource-backed callables, or handlers that depend on opaque
+controller memory are outside the durable public contract and must be rejected
+or treated as missing execution readiness instead of being serialized
+informally.
 
 ## Error Buffers And Reading Order
 

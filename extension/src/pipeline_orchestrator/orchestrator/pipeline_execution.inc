@@ -177,6 +177,151 @@ static zend_result king_orchestrator_validate_pipeline_definition(
     return SUCCESS;
 }
 
+static zend_bool king_orchestrator_remote_handler_boundary_requires_process_registration(
+    zval *handler_boundary
+)
+{
+    zval *requires_process_registration;
+
+    if (handler_boundary == NULL || Z_TYPE_P(handler_boundary) != IS_ARRAY) {
+        return 0;
+    }
+
+    requires_process_registration = zend_hash_str_find(
+        Z_ARRVAL_P(handler_boundary),
+        "requires_process_registration",
+        sizeof("requires_process_registration") - 1
+    );
+
+    return requires_process_registration != NULL && zend_is_true(requires_process_registration);
+}
+
+static zend_result king_orchestrator_remote_build_tool_config_map(
+    zval *handler_boundary,
+    zval *return_value,
+    const char *function_name
+)
+{
+    zval *required_tools;
+    zval *tool_name;
+    char message[KING_ERR_LEN];
+
+    if (return_value == NULL) {
+        return FAILURE;
+    }
+
+    ZVAL_NULL(return_value);
+    if (!king_orchestrator_remote_handler_boundary_requires_process_registration(handler_boundary)) {
+        return SUCCESS;
+    }
+
+    required_tools = zend_hash_str_find(
+        Z_ARRVAL_P(handler_boundary),
+        "required_tools",
+        sizeof("required_tools") - 1
+    );
+    if (required_tools == NULL || Z_TYPE_P(required_tools) != IS_ARRAY) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() could not load the durable remote-peer handler boundary tool list.",
+            function_name != NULL ? function_name : "king_pipeline_orchestrator_run"
+        );
+        king_set_error(message);
+        return FAILURE;
+    }
+
+    array_init(return_value);
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(required_tools), tool_name) {
+        zval tool_config;
+
+        if (tool_name == NULL || Z_TYPE_P(tool_name) != IS_STRING || Z_STRLEN_P(tool_name) == 0) {
+            zval_ptr_dtor(return_value);
+            ZVAL_NULL(return_value);
+            snprintf(
+                message,
+                sizeof(message),
+                "%s() encountered an invalid remote-peer handler tool name in the durable boundary snapshot.",
+                function_name != NULL ? function_name : "king_pipeline_orchestrator_run"
+            );
+            king_set_error(message);
+            return FAILURE;
+        }
+
+        ZVAL_NULL(&tool_config);
+        if (
+            king_orchestrator_load_tool_config(
+                Z_STRVAL_P(tool_name),
+                Z_STRLEN_P(tool_name),
+                &tool_config
+            ) != SUCCESS
+        ) {
+            zval_ptr_dtor(return_value);
+            ZVAL_NULL(return_value);
+            snprintf(
+                message,
+                sizeof(message),
+                "%s() could not load the persisted tool config for remote-peer handler '%s'.",
+                function_name != NULL ? function_name : "king_pipeline_orchestrator_run",
+                Z_STRVAL_P(tool_name)
+            );
+            king_set_error(message);
+            return FAILURE;
+        }
+
+        add_assoc_zval_ex(
+            return_value,
+            Z_STRVAL_P(tool_name),
+            Z_STRLEN_P(tool_name),
+            &tool_config
+        );
+    } ZEND_HASH_FOREACH_END();
+
+    return SUCCESS;
+}
+
+static zend_result king_orchestrator_remote_load_handler_contract(
+    zend_string *run_id,
+    zval *handler_boundary_out,
+    zval *tool_configs_out,
+    const char *function_name
+)
+{
+    char message[KING_ERR_LEN];
+
+    if (handler_boundary_out == NULL || tool_configs_out == NULL || run_id == NULL) {
+        return FAILURE;
+    }
+
+    ZVAL_NULL(handler_boundary_out);
+    ZVAL_NULL(tool_configs_out);
+
+    if (king_orchestrator_load_run_handler_boundary(run_id, handler_boundary_out) != SUCCESS) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() could not load the persisted remote-peer handler boundary.",
+            function_name != NULL ? function_name : "king_pipeline_orchestrator_run"
+        );
+        king_set_error(message);
+        return FAILURE;
+    }
+
+    if (
+        king_orchestrator_remote_build_tool_config_map(
+            handler_boundary_out,
+            tool_configs_out,
+            function_name
+        ) != SUCCESS
+    ) {
+        zval_ptr_dtor(handler_boundary_out);
+        ZVAL_NULL(handler_boundary_out);
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
 static int king_orchestrator_execute_remote_run(
     zend_string *run_id,
     zval *initial_data,
@@ -193,6 +338,8 @@ static int king_orchestrator_execute_remote_run(
     zend_string *encoded_initial = NULL;
     zend_string *encoded_pipeline = NULL;
     zend_string *encoded_options = NULL;
+    zend_string *encoded_handler_boundary = NULL;
+    zend_string *encoded_tool_configs = NULL;
     smart_str command = {0};
     zend_long timeout_budget_ms;
     zend_long deadline_budget_ms;
@@ -203,8 +350,12 @@ static int king_orchestrator_execute_remote_run(
     const char *error_message;
     zend_long failed_step_index = -1;
     king_orchestrator_error_meta_t remote_error_meta;
+    zval handler_boundary;
+    zval remote_tool_configs;
 
     king_orchestrator_error_meta_init(&remote_error_meta);
+    ZVAL_NULL(&handler_boundary);
+    ZVAL_NULL(&remote_tool_configs);
 
     if (control != NULL) {
         control->run_id = run_id;
@@ -234,7 +385,33 @@ static int king_orchestrator_execute_remote_run(
         return FAILURE;
     }
 
+    if (
+        king_orchestrator_remote_load_handler_contract(
+            run_id,
+            &handler_boundary,
+            &remote_tool_configs,
+            function_name
+        ) != SUCCESS
+    ) {
+        ZVAL_FALSE(return_value);
+        (void) king_orchestrator_pipeline_run_fail_classified(
+            run_id,
+            king_get_error(),
+            "backend",
+            "caller_managed_retry",
+            -1,
+            "controller"
+        );
+        return king_orchestrator_raise_error(
+            king_get_error(),
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+
     if (king_orchestrator_pipeline_run_note_remote_attempt(run_id) != SUCCESS) {
+        zval_ptr_dtor(&handler_boundary);
+        zval_ptr_dtor(&remote_tool_configs);
         ZVAL_FALSE(return_value);
         (void) king_orchestrator_pipeline_run_fail_classified(
             run_id,
@@ -253,6 +430,8 @@ static int king_orchestrator_execute_remote_run(
 
     target = king_orchestrator_remote_build_target();
     if (target == NULL) {
+        zval_ptr_dtor(&handler_boundary);
+        zval_ptr_dtor(&remote_tool_configs);
         error_message = "king_pipeline_orchestrator_run() requires a non-empty orchestrator_remote_host when orchestrator_execution_backend=remote_peer.";
         king_set_error(error_message);
         ZVAL_FALSE(return_value);
@@ -274,6 +453,8 @@ static int king_orchestrator_execute_remote_run(
     timeout_budget_ms = king_orchestrator_control_effective_budget_ms(control);
     if (timeout_budget_ms <= 0) {
         zend_string_release(target);
+        zval_ptr_dtor(&handler_boundary);
+        zval_ptr_dtor(&remote_tool_configs);
         ZVAL_FALSE(return_value);
         king_set_error("king_pipeline_orchestrator_run() exceeded the active orchestrator timeout budget.");
         (void) king_orchestrator_pipeline_run_fail_classified(
@@ -309,6 +490,8 @@ static int king_orchestrator_execute_remote_run(
     target = NULL;
 
     if (stream == NULL) {
+        zval_ptr_dtor(&handler_boundary);
+        zval_ptr_dtor(&remote_tool_configs);
         if (transport_error != NULL) {
             king_set_error(ZSTR_VAL(transport_error));
             zend_string_release(transport_error);
@@ -342,6 +525,8 @@ static int king_orchestrator_execute_remote_run(
 
     if (king_orchestrator_remote_prepare_stream(stream, timeout_budget_ms) != SUCCESS) {
         php_stream_close(stream);
+        zval_ptr_dtor(&handler_boundary);
+        zval_ptr_dtor(&remote_tool_configs);
         ZVAL_FALSE(return_value);
         (void) king_orchestrator_pipeline_run_fail_classified(
             run_id,
@@ -365,11 +550,15 @@ static int king_orchestrator_execute_remote_run(
     encoded_initial = king_orchestrator_remote_encode_zval_base64(initial_data);
     encoded_pipeline = king_orchestrator_remote_encode_zval_base64(pipeline_array);
     encoded_options = king_orchestrator_remote_encode_zval_base64(options);
+    encoded_handler_boundary = king_orchestrator_remote_encode_zval_base64(&handler_boundary);
+    encoded_tool_configs = king_orchestrator_remote_encode_zval_base64(&remote_tool_configs);
     if (
         encoded_run_id == NULL
         || encoded_initial == NULL
         || encoded_pipeline == NULL
         || encoded_options == NULL
+        || encoded_handler_boundary == NULL
+        || encoded_tool_configs == NULL
     ) {
         php_stream_close(stream);
         if (encoded_run_id != NULL) {
@@ -384,6 +573,14 @@ static int king_orchestrator_execute_remote_run(
         if (encoded_options != NULL) {
             zend_string_release(encoded_options);
         }
+        if (encoded_handler_boundary != NULL) {
+            zend_string_release(encoded_handler_boundary);
+        }
+        if (encoded_tool_configs != NULL) {
+            zend_string_release(encoded_tool_configs);
+        }
+        zval_ptr_dtor(&handler_boundary);
+        zval_ptr_dtor(&remote_tool_configs);
         ZVAL_FALSE(return_value);
         (void) king_orchestrator_pipeline_run_fail_classified(
             run_id,
@@ -409,6 +606,10 @@ static int king_orchestrator_execute_remote_run(
     smart_str_append(&command, encoded_pipeline);
     smart_str_appendc(&command, '\t');
     smart_str_append(&command, encoded_options);
+    smart_str_appendc(&command, '\t');
+    smart_str_append(&command, encoded_handler_boundary);
+    smart_str_appendc(&command, '\t');
+    smart_str_append(&command, encoded_tool_configs);
     smart_str_append_printf(&command, "\t%ld\t%ld\n", timeout_budget_ms, deadline_budget_ms);
     smart_str_0(&command);
 
@@ -416,6 +617,10 @@ static int king_orchestrator_execute_remote_run(
     zend_string_release(encoded_initial);
     zend_string_release(encoded_pipeline);
     zend_string_release(encoded_options);
+    zend_string_release(encoded_handler_boundary);
+    zend_string_release(encoded_tool_configs);
+    zval_ptr_dtor(&handler_boundary);
+    zval_ptr_dtor(&remote_tool_configs);
 
     if (command.s == NULL) {
         php_stream_close(stream);
@@ -510,4 +715,3 @@ static int king_orchestrator_execute_remote_run(
 
     return SUCCESS;
 }
-

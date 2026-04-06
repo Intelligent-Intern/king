@@ -344,6 +344,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_pipeline_register_tool, 0, 0, 2)
     ZEND_ARG_TYPE_INFO(0, config, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_pipeline_register_handler, 0, 0, 2)
+    ZEND_ARG_TYPE_INFO(0, tool_name, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, handler, IS_CALLABLE, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_pipeline_get_run, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, run_id, IS_STRING, 0)
 ZEND_END_ARG_INFO()
