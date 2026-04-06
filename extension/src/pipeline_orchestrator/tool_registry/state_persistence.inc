@@ -255,7 +255,7 @@ static int king_orchestrator_persist_state_locked(void)
 
         fprintf(
             stream,
-            "run\t%s\t%s\t%ld\t%ld\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%ld\t%ld\t%s\t%s\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%ld\t%ld\t%s\n",
+            "run\t%s\t%s\t%ld\t%ld\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%ld\t%ld\t%s\t%s\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%ld\t%ld\t%s\t%s\n",
             ZSTR_VAL(run_state->run_id),
             ZSTR_VAL(run_state->status),
             (long) run_state->started_at,
@@ -284,6 +284,9 @@ static int king_orchestrator_persist_state_locked(void)
             (long) run_state->last_claimed_by_pid,
             run_state->telemetry_parent_context_b64 != NULL
                 ? ZSTR_VAL(run_state->telemetry_parent_context_b64)
+                : "",
+            run_state->handler_boundary_b64 != NULL
+                ? ZSTR_VAL(run_state->handler_boundary_b64)
                 : ""
         );
     } ZEND_HASH_FOREACH_END();
@@ -480,12 +483,13 @@ static int king_orchestrator_load_state(void)
             char *remote_attempt_count = NULL;
             char *last_claimed_by_pid = NULL;
             char *telemetry_parent_context_b64 = NULL;
+            char *handler_boundary_b64 = NULL;
             king_orchestrator_run_state_t *run_state;
             zval stored_run;
             zend_string *persistent_key;
             zend_long sequence;
 
-            if (field_count != 10 && field_count != 16 && field_count != 27 && field_count != 28) {
+            if (field_count != 10 && field_count != 16 && field_count != 27 && field_count != 28 && field_count != 29) {
                 continue;
             }
 
@@ -506,7 +510,7 @@ static int king_orchestrator_load_state(void)
                 error_step_index = fields[14];
                 completed_step_count = fields[15];
             }
-            if (field_count == 27 || field_count == 28) {
+            if (field_count == 27 || field_count == 28 || field_count == 29) {
                 execution_backend = fields[16];
                 queue_phase = fields[17];
                 enqueued_at = fields[18];
@@ -521,6 +525,10 @@ static int king_orchestrator_load_state(void)
             }
             if (field_count == 28) {
                 telemetry_parent_context_b64 = fields[27];
+            }
+            if (field_count == 29) {
+                telemetry_parent_context_b64 = fields[27];
+                handler_boundary_b64 = fields[28];
             }
 
             if (
@@ -571,6 +579,9 @@ static int king_orchestrator_load_state(void)
             run_state->telemetry_parent_context_b64 = (
                 telemetry_parent_context_b64 != NULL && telemetry_parent_context_b64[0] != '\0'
             ) ? king_orchestrator_dup_state_field(telemetry_parent_context_b64) : NULL;
+            run_state->handler_boundary_b64 = (
+                handler_boundary_b64 != NULL && handler_boundary_b64[0] != '\0'
+            ) ? king_orchestrator_dup_state_field(handler_boundary_b64) : NULL;
             run_state->result_b64 = king_orchestrator_dup_state_field(result_b64);
             run_state->error_b64 = king_orchestrator_dup_state_field(error_b64);
             run_state->error_category = (
@@ -693,6 +704,97 @@ int king_orchestrator_load_run_payload(
         ZVAL_NULL(pipeline);
         ZVAL_NULL(options);
         ZVAL_NULL(telemetry_parent_context);
+        king_orchestrator_state_lock_release(lock_fd);
+        return FAILURE;
+    }
+
+    king_orchestrator_state_lock_release(lock_fd);
+    return SUCCESS;
+}
+
+int king_orchestrator_load_run_progress(
+    zend_string *run_id,
+    zval *result,
+    zend_long *completed_step_count_out
+)
+{
+    king_orchestrator_run_state_t *run_state;
+    int lock_fd = -1;
+
+    if (result == NULL) {
+        return FAILURE;
+    }
+
+    ZVAL_NULL(result);
+    if (completed_step_count_out != NULL) {
+        *completed_step_count_out = 0;
+    }
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
+
+    run_state = king_orchestrator_find_run(run_id);
+    if (run_state == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
+        return FAILURE;
+    }
+
+    if (completed_step_count_out != NULL) {
+        *completed_step_count_out = run_state->completed_step_count;
+    }
+
+    if (
+        run_state->result_b64 != NULL
+        && king_orchestrator_decode_base64_zval(run_state->result_b64, result) != SUCCESS
+    ) {
+        zval_ptr_dtor(result);
+        ZVAL_NULL(result);
+        if (completed_step_count_out != NULL) {
+            *completed_step_count_out = 0;
+        }
+        king_orchestrator_state_lock_release(lock_fd);
+        return FAILURE;
+    }
+
+    king_orchestrator_state_lock_release(lock_fd);
+    return SUCCESS;
+}
+
+int king_orchestrator_load_run_handler_boundary(zend_string *run_id, zval *return_value)
+{
+    king_orchestrator_run_state_t *run_state;
+    int lock_fd = -1;
+
+    if (return_value == NULL) {
+        return FAILURE;
+    }
+
+    ZVAL_NULL(return_value);
+
+    if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
+        return FAILURE;
+    }
+
+    run_state = king_orchestrator_find_run(run_id);
+    if (run_state == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
+        return FAILURE;
+    }
+
+    if (run_state->handler_boundary_b64 == NULL) {
+        king_orchestrator_state_lock_release(lock_fd);
+        return SUCCESS;
+    }
+
+    if (
+        king_orchestrator_decode_base64_zval(
+            run_state->handler_boundary_b64,
+            return_value
+        ) != SUCCESS
+    ) {
+        zval_ptr_dtor(return_value);
+        ZVAL_NULL(return_value);
         king_orchestrator_state_lock_release(lock_fd);
         return FAILURE;
     }

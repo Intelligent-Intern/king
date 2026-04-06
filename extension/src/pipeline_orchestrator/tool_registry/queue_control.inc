@@ -154,15 +154,19 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     zval initial_data;
     zval pipeline;
     zval options;
+    zval handler_boundary;
     zval result;
     zval error;
+    zval handler_readiness;
     int lock_fd = -1;
 
     ZVAL_NULL(&initial_data);
     ZVAL_NULL(&pipeline);
     ZVAL_NULL(&options);
+    ZVAL_NULL(&handler_boundary);
     ZVAL_NULL(&result);
     ZVAL_NULL(&error);
+    ZVAL_NULL(&handler_readiness);
 
     if (king_orchestrator_state_transaction_begin(&lock_fd) != SUCCESS) {
         return FAILURE;
@@ -178,12 +182,17 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
         king_orchestrator_decode_base64_zval(run_state->initial_data_b64, &initial_data) != SUCCESS
         || king_orchestrator_decode_base64_zval(run_state->pipeline_b64, &pipeline) != SUCCESS
         || king_orchestrator_decode_base64_zval(run_state->options_b64, &options) != SUCCESS
+        || (
+            run_state->handler_boundary_b64 != NULL
+            && king_orchestrator_decode_base64_zval(run_state->handler_boundary_b64, &handler_boundary) != SUCCESS
+        )
         || king_orchestrator_decode_base64_zval(run_state->result_b64, &result) != SUCCESS
         || king_orchestrator_decode_base64_zval(run_state->error_b64, &error) != SUCCESS
     ) {
         zval_ptr_dtor(&initial_data);
         zval_ptr_dtor(&pipeline);
         zval_ptr_dtor(&options);
+        zval_ptr_dtor(&handler_boundary);
         zval_ptr_dtor(&result);
         zval_ptr_dtor(&error);
         king_orchestrator_state_lock_release(lock_fd);
@@ -210,6 +219,14 @@ int king_orchestrator_get_run_snapshot(zend_string *run_id, zval *return_value)
     add_assoc_zval(return_value, "initial_data", &initial_data);
     add_assoc_zval(return_value, "pipeline", &pipeline);
     add_assoc_zval(return_value, "options", &options);
+    add_assoc_zval(return_value, "handler_boundary", &handler_boundary);
+    king_orchestrator_append_handler_readiness(
+        Z_TYPE(handler_boundary) == IS_ARRAY
+            ? &handler_boundary
+            : NULL,
+        &handler_readiness
+    );
+    add_assoc_zval(return_value, "handler_readiness", &handler_readiness);
     add_assoc_zval(return_value, "result", &result);
     add_assoc_zval(return_value, "error", &error);
     king_orchestrator_append_error_classification(return_value, run_state, &pipeline);
@@ -300,6 +317,89 @@ void king_orchestrator_clear_run_cancel_request(zend_string *run_id)
     }
 
     unlink(marker_path);
+}
+
+static zend_result king_orchestrator_worker_handler_boundary_is_ready(
+    zend_string *run_id,
+    zend_bool *ready_out
+)
+{
+    zval handler_boundary;
+    zval *requires_process_registration;
+    zval *required_step_refs;
+    zval *entry;
+
+    if (ready_out == NULL) {
+        return FAILURE;
+    }
+
+    *ready_out = 1;
+    ZVAL_NULL(&handler_boundary);
+
+    if (king_orchestrator_load_run_handler_boundary(run_id, &handler_boundary) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (Z_TYPE(handler_boundary) != IS_ARRAY) {
+        zval_ptr_dtor(&handler_boundary);
+        return SUCCESS;
+    }
+
+    requires_process_registration = zend_hash_str_find(
+        Z_ARRVAL(handler_boundary),
+        "requires_process_registration",
+        sizeof("requires_process_registration") - 1
+    );
+    if (
+        requires_process_registration == NULL
+        || !zend_is_true(requires_process_registration)
+    ) {
+        zval_ptr_dtor(&handler_boundary);
+        return SUCCESS;
+    }
+
+    required_step_refs = zend_hash_str_find(
+        Z_ARRVAL(handler_boundary),
+        "required_step_refs",
+        sizeof("required_step_refs") - 1
+    );
+    if (required_step_refs == NULL || Z_TYPE_P(required_step_refs) != IS_ARRAY) {
+        zval_ptr_dtor(&handler_boundary);
+        return FAILURE;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(required_step_refs), entry) {
+        zval *tool_name;
+
+        if (entry == NULL || Z_TYPE_P(entry) != IS_ARRAY) {
+            zval_ptr_dtor(&handler_boundary);
+            return FAILURE;
+        }
+
+        tool_name = zend_hash_str_find(
+            Z_ARRVAL_P(entry),
+            "tool_name",
+            sizeof("tool_name") - 1
+        );
+        if (tool_name == NULL || Z_TYPE_P(tool_name) != IS_STRING || Z_STRLEN_P(tool_name) == 0) {
+            zval_ptr_dtor(&handler_boundary);
+            return FAILURE;
+        }
+
+        if (
+            king_orchestrator_lookup_tool_handler(
+                Z_STRVAL_P(tool_name),
+                Z_STRLEN_P(tool_name)
+            ) == NULL
+        ) {
+            *ready_out = 0;
+            zval_ptr_dtor(&handler_boundary);
+            return SUCCESS;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    zval_ptr_dtor(&handler_boundary);
+    return SUCCESS;
 }
 
 int king_orchestrator_request_run_cancel(zend_string *run_id)
@@ -558,6 +658,44 @@ int king_orchestrator_claim_next_run(
 
         if (selected_name[0] == '\0') {
             return SUCCESS;
+        }
+
+        {
+            zend_string *candidate_run_id;
+            zend_bool handler_ready = 1;
+
+            candidate_run_id = king_orchestrator_queue_entry_run_id(selected_name);
+            if (candidate_run_id == NULL) {
+                attempt++;
+                if (attempt >= 64) {
+                    return SUCCESS;
+                }
+                continue;
+            }
+
+            if (
+                king_orchestrator_worker_handler_boundary_is_ready(
+                    candidate_run_id,
+                    &handler_ready
+                ) != SUCCESS
+            ) {
+                zend_string_release(candidate_run_id);
+                return FAILURE;
+            }
+            zend_string_release(candidate_run_id);
+
+            if (!handler_ready) {
+                if (busy_count < (sizeof(busy_names) / sizeof(busy_names[0]))) {
+                    strncpy(busy_names[busy_count], selected_name, sizeof(busy_names[busy_count]) - 1);
+                    busy_names[busy_count][sizeof(busy_names[busy_count]) - 1] = '\0';
+                    busy_count++;
+                }
+                attempt++;
+                if (attempt >= 64) {
+                    return SUCCESS;
+                }
+                continue;
+            }
         }
 
         if (selected_is_claimed) {

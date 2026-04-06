@@ -42,6 +42,15 @@ if ($mode === 'write') {
         fail_migration('Failed to persist migration-beta.');
     }
 
+    $summarizer_handler = static function(array $context): array {
+        $input = $context['input'] ?? null;
+        if (!is_array($input)) {
+            throw new RuntimeException('unexpected orchestrator input');
+        }
+
+        return ['output' => $input];
+    };
+
     $metadata = king_object_store_get_metadata('migration-alpha');
     if (($metadata['content_length'] ?? null) !== 13) {
         fail_migration('Unexpected content length for migration-alpha.');
@@ -52,6 +61,9 @@ if ($mode === 'write') {
         'max_tokens' => 64,
     ])) {
         fail_migration('Failed to register orchestrator tool.');
+    }
+    if (!king_pipeline_orchestrator_register_handler('summarizer', $summarizer_handler)) {
+        fail_migration('Failed to register orchestrator handler.');
     }
 
     $result = king_pipeline_orchestrator_run(

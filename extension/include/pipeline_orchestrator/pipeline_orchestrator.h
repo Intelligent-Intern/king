@@ -46,6 +46,9 @@ PHP_FUNCTION(king_pipeline_orchestrator_dispatch);
 /* Registers or replaces one persisted tool configuration. */
 PHP_FUNCTION(king_pipeline_orchestrator_register_tool);
 
+/* Registers or replaces one process-local executable handler binding. */
+PHP_FUNCTION(king_pipeline_orchestrator_register_handler);
+
 /* Persists the active orchestrator logging snapshot. */
 PHP_FUNCTION(king_pipeline_orchestrator_configure_logging);
 
