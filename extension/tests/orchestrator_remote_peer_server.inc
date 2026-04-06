@@ -85,6 +85,10 @@ function king_orchestrator_remote_peer_validate_required_step_refs(array $handle
 
         $index = $entry['index'] ?? null;
         $toolName = $entry['tool_name'] ?? null;
+        if (is_string($index) && $index !== '' && ctype_digit($index)) {
+            $index = (int) $index;
+        }
+
         if (
             !is_int($index)
             || $index < 0

@@ -47,7 +47,7 @@ function mutate_remote_peer_step_refs_to_invalid(string $statePath, string $runI
             continue;
         }
 
-        $boundary['required_step_refs'] = [['index' => '0', 'tool_name' => 'summarizer']];
+        $boundary['required_step_refs'] = [['index' => -1, 'tool_name' => 'summarizer']];
         $parts[28] = base64_encode(serialize($boundary));
         $lines[$lineIndex] = implode("\t", $parts);
         $updated = true;
@@ -277,7 +277,7 @@ var_dump(($resumed['run_error'] ?? null) === 'remote peer received an invalid ha
 var_dump(($resumed['error_classification']['category'] ?? null) === 'backend');
 var_dump(($resumed['error_classification']['scope'] ?? null) === 'run');
 var_dump(($resumed['error_classification']['backend'] ?? null) === 'remote_peer');
-var_dump(($resumed['handler_boundary']['required_step_refs'] ?? null) === [['index' => '0', 'tool_name' => 'summarizer']]);
+var_dump(($resumed['handler_boundary']['required_step_refs'] ?? null) === [['index' => -1, 'tool_name' => 'summarizer']]);
 
 $capture = king_orchestrator_remote_peer_stop($server);
 var_dump(count($capture['events']) >= 1);
