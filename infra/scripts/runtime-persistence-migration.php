@@ -20,7 +20,7 @@ if (!is_string($objectStoreRoot) || $objectStoreRoot === '') {
 }
 
 if ($mode !== 'write' && $mode !== 'read') {
-    fail_migration('Expected migration mode write or read.');
+    fail_migration('Expected migration mode write or read, got: ' . $mode);
 }
 
 $semanticConfig = [
