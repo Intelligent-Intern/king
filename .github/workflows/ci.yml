@@ -31,7 +31,6 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       run-heavy-jobs: ${{ steps.decide.outputs.run-heavy-jobs }}
-      release-mode: ${{ steps.decide.outputs.release-mode }}
       reason: ${{ steps.decide.outputs.reason }}
 
     steps:
@@ -42,100 +41,23 @@ jobs:
           script: |
             const eventName = context.eventName;
             const refName = process.env.GITHUB_REF_NAME || '';
-            const refType = process.env.GITHUB_REF_TYPE || '';
             const planningBranch = (eventName === 'pull_request'
               ? context.payload.pull_request?.head?.ref
               : refName
             ) || '';
             let runHeavyJobs = 'true';
-            let releaseMode = 'full';
             let reason = `${eventName} on ${refName || planningBranch}: run canonical pipeline`;
-
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
             const isPlanningBranch = planningBranch.startsWith('planning/');
-            const isReleaseBranch = planningBranch.startsWith('release/');
-
-            const sameAsMain = async () => {
-              if (!isReleaseBranch) {
-                return false;
-              }
-
-              try {
-                const compare = await github.rest.repos.compareCommits({
-                  owner,
-                  repo,
-                  base: 'main',
-                  head: planningBranch,
-                });
-
-                return compare.data.ahead_by === 0 && compare.data.behind_by === 0;
-              } catch (error) {
-                core.notice(`Could not compare ${planningBranch} against main: ${error.message}`);
-                return false;
-              }
-            };
-
-            const prHeadEqualsBase = async () => {
-              if (!isReleaseBranch || eventName !== 'pull_request') {
-                return false;
-              }
-
-              try {
-                const baseRef = context.payload.pull_request?.base?.sha;
-                const headRef = context.payload.pull_request?.head?.sha;
-                if (!baseRef || !headRef) {
-                  return false;
-                }
-
-                const compare = await github.rest.repos.compareCommits({
-                  owner,
-                  repo,
-                  base: baseRef,
-                  head: headRef,
-                });
-
-                return compare.data.ahead_by === 0 && compare.data.behind_by === 0;
-              } catch (error) {
-                core.notice(`Could not compare pull request ${context.payload.pull_request?.number || '<unknown>'}: ${error.message}`);
-                return false;
-              }
-            };
 
             if (isPlanningBranch) {
               runHeavyJobs = 'false';
-              releaseMode = 'skip';
               reason = `Skipping canonical baseline for planning branch ${planningBranch}; docs-only guard is required.`;
-            } else if (isReleaseBranch && eventName === 'push' && refType === 'branch') {
-              if (await sameAsMain()) {
-                runHeavyJobs = 'false';
-                releaseMode = 'fast-release';
-                reason = `Release branch ${planningBranch} equals main; executing fast release path.`;
-              } else {
-                runHeavyJobs = 'true';
-                releaseMode = 'full-release';
-                reason = `Release branch ${planningBranch} diverges from main; executing full pipeline before release.`;
-              }
-            } else if (isReleaseBranch && eventName === 'pull_request') {
-              if (await prHeadEqualsBase()) {
-                runHeavyJobs = 'false';
-                releaseMode = 'skip';
-                reason = `Release PR ${planningBranch} is already aligned with target; skipping PR build.`;
-              } else {
-                runHeavyJobs = 'true';
-                releaseMode = 'full-release';
-                reason = `Release PR ${planningBranch} diverges from target; executing full pipeline before merge.`;
-              }
             } else {
-              if (eventName === 'pull_request' || eventName === 'push') {
-                runHeavyJobs = 'true';
-                releaseMode = 'full';
-              }
+              runHeavyJobs = 'true';
               reason = `${eventName} on ${planningBranch}: full pipeline.`;
             }
 
             core.setOutput('run-heavy-jobs', runHeavyJobs);
-            core.setOutput('release-mode', releaseMode);
             core.setOutput('reason', reason);
             core.notice(reason);
 
@@ -348,129 +270,6 @@ jobs:
           - php-version: "8.4"
             runner: ubuntu-24.04-arm
             arch-label: linux-arm64
-          - php-version: "8.5"
-            runner: ubuntu-24.04-arm
-            arch-label: linux-arm64
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          submodules: recursive
-
-      - name: Setup PHP ${{ matrix.php-version }}
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: "${{ matrix.php-version }}"
-          coverage: none
-          extensions: curl, mbstring, openssl, sockets
-
-      - name: Setup Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-${{ matrix.arch-label }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
-
-      - name: Build canonical release profile
-        working-directory: extension
-        run: ../infra/scripts/build-profile.sh release
-
-      - name: Package canonical release archive
-        id: package
-        working-directory: extension
-        run: |
-          output="$(../infra/scripts/package-release.sh --output-dir ../dist)"
-          printf '%s\n' "${output}"
-          archive_path="$(printf '%s\n' "${output}" | sed -n 's/^Package created: //p' | tail -n 1)"
-          if [[ -z "${archive_path}" ]]; then
-            echo "Failed to resolve packaged archive path." >&2
-            exit 1
-          fi
-          echo "archive_path=${archive_path}" >> "${GITHUB_OUTPUT}"
-
-      - name: Verify packaged clean-host install path
-        working-directory: extension
-        run: ../infra/scripts/install-package-matrix.sh --archive "${{ steps.package.outputs.archive_path }}" --php-bins php
-
-      - name: Upload release package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: king-release-package-php${{ matrix.php-version }}-${{ matrix.arch-label }}
-          if-no-files-found: error
-          path: |
-            dist/*.tar.gz
-            dist/*.tar.gz.sha256
-
-      - name: Upload package install failure artifacts
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: king-package-install-${{ matrix.php-version }}-${{ matrix.arch-label }}-failures
-          if-no-files-found: ignore
-          path: |
-            dist/*.tar.gz
-            dist/*.tar.gz.sha256
-            extension/config.log
-
-  release-package-matrix-fast:
-    name: Fast release package build PHP ${{ matrix.php-version }} ${{ matrix.arch-label }}
-    needs: branch-push-dedupe
-    if: needs.branch-push-dedupe.outputs.release-mode == 'fast-release' && github.event_name == 'push'
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - php-version: "8.1"
-            runner: ubuntu-24.04
-            arch-label: linux-amd64
-          - php-version: "8.1"
-            runner: ubuntu-24.04-arm
-            arch-label: linux-arm64
-          - php-version: "8.2"
-            runner: ubuntu-24.04
-            arch-label: linux-amd64
-          - php-version: "8.2"
-            runner: ubuntu-24.04-arm
-            arch-label: linux-arm64
-          - php-version: "8.3"
-            runner: ubuntu-24.04
-            arch-label: linux-amd64
-          - php-version: "8.3"
-            runner: ubuntu-24.04-arm
-            arch-label: linux-arm64
-          - php-version: "8.4"
-            runner: ubuntu-24.04
-            arch-label: linux-amd64
-          - php-version: "8.4"
-            runner: ubuntu-24.04-arm
-            arch-label: linux-arm64
-          - php-version: "8.5"
-            runner: ubuntu-24.04
-            arch-label: linux-amd64
           - php-version: "8.5"
             runner: ubuntu-24.04-arm
             arch-label: linux-arm64
@@ -962,7 +761,7 @@ jobs:
       - release-config-state-compatibility
       - sanitizer-soak
       - branch-push-dedupe
-    if: needs.branch-push-dedupe.outputs.release-mode == 'full-release'
+    if: needs.branch-push-dedupe.outputs.run-heavy-jobs == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: Full release pipeline passed
