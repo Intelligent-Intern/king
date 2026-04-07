@@ -528,7 +528,7 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
             $sleepMs = min($delayMs, 10);
             usleep($sleepMs * 1000);
             $delayMs -= $sleepMs;
-
+                    $event['remote_error'] = 'Remote peer execution exceeded the active orchestrator timeout budget.';
             if ($effectiveBudgetMs > 0) {
                 $elapsedMs = (int) ((hrtime(true) - $startedAt) / 1000000);
                 if ($elapsedMs >= $effectiveBudgetMs) {
