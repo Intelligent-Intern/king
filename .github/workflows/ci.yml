@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - '**'
-    tags:
-      - 'v*'
   pull_request:
     branches:
       - main
@@ -50,6 +48,9 @@ jobs:
             if (planningBranch.startsWith('planning/')) {
               runHeavyJobs = 'false';
               reason = `Skipping canonical baseline for planning branch ${planningBranch}; docs-only planning guard is the required gate.`;
+            } else if (planningBranch.startsWith('release/')) {
+              runHeavyJobs = 'true';
+              reason = `Running canonical baseline for release branch ${planningBranch}; release publishes require full pipeline execution.`;
             } else if (eventName === 'push' && refType === 'branch') {
               const { data: pulls } = await github.rest.pulls.list({
                 owner: context.repo.owner,
@@ -365,7 +366,7 @@ jobs:
             extension/config.log
 
   release-publish:
-    name: Publish Tag Release Assets
+    name: Publish Release Branch Assets
     needs:
       - canonical-baseline
       - install-package-matrix
@@ -373,13 +374,11 @@ jobs:
       - release-downgrade-compatibility
       - release-persistence-migration
       - release-config-state-compatibility
-    if: github.event_name == 'push' && github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'branch' && startsWith(github.ref, 'refs/heads/release/')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: write
-    env:
-      RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -452,10 +451,26 @@ jobs:
       - name: Verify release assets
         run: |
           set -euo pipefail
+
+          RELEASE_BRANCH="${GITHUB_REF_NAME}"
+          RELEASE_VERSION="${RELEASE_BRANCH#release/}"
+          RELEASE_TAG="${RELEASE_VERSION}"
+
+          if [[ -z "${RELEASE_VERSION}" ]]; then
+            echo "Release branch must be in the form release/<version>: ${RELEASE_BRANCH}" >&2
+            exit 1
+          fi
+
+          if [[ "${RELEASE_TAG}" != v* ]]; then
+            RELEASE_TAG="v${RELEASE_TAG}"
+          fi
+
           if [ ! -d release-assets ]; then
             echo "Missing release-assets staging directory." >&2
             exit 1
           fi
+
+          printf 'Release branch %s -> release tag %s\n' "${RELEASE_BRANCH}" "${RELEASE_TAG}"
           if ! compgen -G "release-assets/*.tgz" > /dev/null; then
             echo "No PIE source asset found in release-assets." >&2
             exit 1
@@ -471,6 +486,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+
+          RELEASE_BRANCH="${GITHUB_REF_NAME}"
+          RELEASE_VERSION="${RELEASE_BRANCH#release/}"
+          RELEASE_TAG="${RELEASE_VERSION}"
+
+          if [[ -z "${RELEASE_VERSION}" ]]; then
+            echo "Release branch must be in the form release/<version>: ${RELEASE_BRANCH}" >&2
+            exit 1
+          fi
+
+          if [[ "${RELEASE_TAG}" != v* ]]; then
+            RELEASE_TAG="v${RELEASE_TAG}"
+          fi
 
           prerelease_args=()
           if [[ "${RELEASE_TAG}" == *-* ]]; then
@@ -489,7 +517,6 @@ jobs:
               --title "King ${RELEASE_TAG}" \
               --target "${GITHUB_SHA}" \
               --notes-from-tag \
-              --verify-tag \
               "${prerelease_args[@]}" \
               release-assets/*
           fi
