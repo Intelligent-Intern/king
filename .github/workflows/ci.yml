@@ -40,21 +40,44 @@ jobs:
         with:
           script: |
             const eventName = context.eventName;
-            const refName = process.env.GITHUB_REF_NAME || '';
+            const refName = process.env.GITHUB_REF_NAME;
+            const refType = process.env.GITHUB_REF_TYPE;
             const planningBranch = (eventName === 'pull_request'
-              ? context.payload.pull_request?.head?.ref
+              ? context.payload.pull_request.head.ref
               : refName
             ) || '';
             let runHeavyJobs = 'true';
-            let reason = `${eventName} on ${refName || planningBranch}: run canonical pipeline`;
-            const isPlanningBranch = planningBranch.startsWith('planning/');
+            let reason = `${eventName} runs the canonical pipeline`;
 
-            if (isPlanningBranch) {
+            if (planningBranch.startsWith('planning/')) {
               runHeavyJobs = 'false';
-              reason = `Skipping canonical baseline for planning branch ${planningBranch}; docs-only guard is required.`;
-            } else {
-              runHeavyJobs = 'true';
-              reason = `${eventName} on ${planningBranch}: full pipeline.`;
+              reason = `Skipping canonical baseline for planning branch ${planningBranch}; docs-only planning guard is the required gate.`;
+            } else if (planningBranch.startsWith('release/')) {
+              runHeavyJobs = 'false';
+              reason = `Skipping canonical baseline for release branch ${planningBranch}; release publish is now handled on PR merge.`;
+            } else if (eventName === 'push' && refType === 'branch') {
+              if (refName === 'main') {
+                const headLine = (context.payload.head_commit?.message || '').split('\n')[0] || '';
+                const isReleaseMerge = /^Merge pull request #\d+ from .*\/release\//.test(headLine);
+
+                if (isReleaseMerge) {
+                  runHeavyJobs = 'false';
+                  reason = `Skipping canonical baseline for release branch merge on ${refName}; publish is handled by release merge workflow.`;
+                }
+              }
+
+              const { data: pulls } = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: `${context.repo.owner}:${refName}`,
+                per_page: 1,
+              });
+
+              if (pulls.length > 0) {
+                runHeavyJobs = 'false';
+                reason = `Skipping duplicate push run for ${refName}; open PR #${pulls[0].number} will run the canonical pipeline.`;
+              }
             }
 
             core.setOutput('run-heavy-jobs', runHeavyJobs);
@@ -748,21 +771,3 @@ jobs:
             extension/tests/*.exp
             extension/tests/*.log
             extension/tests/*.out
-
-  release-full-gate:
-    name: Full pipeline completed
-    needs:
-      - canonical-baseline
-      - profile-smoke
-      - install-package-matrix
-      - release-upgrade-compatibility
-      - release-downgrade-compatibility
-      - release-persistence-migration
-      - release-config-state-compatibility
-      - sanitizer-soak
-      - branch-push-dedupe
-    if: needs.branch-push-dedupe.outputs.run-heavy-jobs == 'true'
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Full release pipeline passed
-        run: echo "Full pipeline passed and release packages are ready."
