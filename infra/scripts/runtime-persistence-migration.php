@@ -8,7 +8,11 @@ function fail_migration(string $message): never
     exit(1);
 }
 
-$mode = $argv[1] ?? '';
+if ($argc < 2) {
+    fail_migration('Missing required migration mode argument (expected "write" or "read").');
+}
+
+$mode = $argv[1];
 $objectStoreRoot = getenv('KING_PERSIST_OBJECT_STORE_ROOT');
 
 if (!is_string($objectStoreRoot) || $objectStoreRoot === '') {
@@ -163,3 +167,4 @@ if (($route['service_id'] ?? null) !== 'migration-api-1') {
 }
 
 echo "read ok\n";
+exit(0);
