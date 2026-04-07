@@ -265,9 +265,13 @@ try {
     exit(1);
 }
 
-$endpoint = strpos($bindHost, ':') !== false && !preg_match('/^\[.*\]$/', $bindHost)
-    ? 'tcp://[' . $bindHost . ']:' . $port
-    : 'tcp://' . $bindHost . ':' . $port;
+$isIpv6 = filter_var($bindHost, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
+
+if ($isIpv6 && !preg_match('/^\[.*\]$/', $bindHost)) {
+    $bindHost = '[' . $bindHost . ']';
+}
+
+$endpoint = 'tcp://' . $bindHost . ':' . $port;
 
 $server = @stream_socket_server($endpoint, $errno, $errstr);
 if ($server === false) {
@@ -528,7 +532,7 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
             if ($effectiveBudgetMs > 0) {
                 $elapsedMs = (int) ((hrtime(true) - $startedAt) / 1000000);
                 if ($elapsedMs >= $effectiveBudgetMs) {
-                    $event['remote_error'] = 'king_pipeline_orchestrator_run() exceeded the active orchestrator timeout budget.';
+                    $event['remote_error'] = 'Remote peer execution exceeded the active orchestrator timeout budget.';
                     $event['failed_step_index'] = $stepIndex;
                     king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
                     fwrite(
