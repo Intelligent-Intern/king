@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 const MIGRATION_MAX_STORAGE_BYTES = 1048576;
-const MIGRATION_MIN_ORCHESTRATOR_RUN_HISTORY_COUNT = 4;
 
 function fail_migration(string $message): never
 {
@@ -229,17 +228,8 @@ if (($orchestrator['configuration']['recovered_from_state'] ?? null) !== true) {
 if (($orchestrator['configuration']['tool_count'] ?? null) !== 1) {
     fail_migration('Unexpected recovered orchestrator tool count.');
 }
-if (($orchestrator['configuration']['run_history_count'] ?? null) < MIGRATION_MIN_ORCHESTRATOR_RUN_HISTORY_COUNT) {
-    $runHistoryCount = $orchestrator['configuration']['run_history_count'] ?? null;
-    if (!is_int($runHistoryCount)) {
-        fail_migration('Unexpected recovered orchestrator run history count format.');
-    }
-    fail_migration(
-        'Recovered orchestrator run history count is too low. Expected at least ' .
-        MIGRATION_MIN_ORCHESTRATOR_RUN_HISTORY_COUNT .
-        ', got: ' .
-        $runHistoryCount
-    );
+if (($orchestrator['configuration']['run_history_count'] ?? null) !== 1) {
+    fail_migration('Unexpected recovered orchestrator run history count.');
 }
 
 initialize_semantic_dns($mode, $semanticConfig, $semanticConfigInfo);
