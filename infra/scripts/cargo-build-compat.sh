@@ -13,6 +13,141 @@ last_status=0
 status=0
 retry_status=0
 retry_output=""
+confirm="${KING_QUICHE_TOOLCHAIN_CONFIRM:-prompt}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFEST_PATH=""
+
+ensure_confirmation() {
+    local response=""
+
+    if [[ "${confirm}" != "yes" && "${confirm}" != "no" && "${confirm}" != "prompt" ]]; then
+        echo "Invalid KING_QUICHE_TOOLCHAIN_CONFIRM='${confirm}'. Use 'prompt', 'yes' or 'no'." >&2
+        return 1
+    fi
+
+    if [[ "${confirm}" == "yes" ]]; then
+        return 0
+    fi
+
+    if [[ "${confirm}" == "no" ]]; then
+        return 1
+    fi
+
+    if [[ ! -t 0 ]]; then
+        return 1
+    fi
+
+    while true; do
+        read -r -p "Do you want to retry after setting up/upgrading Rust now? [y/N]: " response
+        case "${response}" in
+            [Yy]|[Yy][Ee][Ss])
+                return 0
+                ;;
+            [Nn]|[Nn][Oo]|"")
+                return 1
+                ;;
+            *)
+                echo "Please answer y or n."
+                ;;
+        esac
+    done
+}
+
+print_install_solution() {
+    cat <<'EOF'
+Missing compatible Rust toolchain for this cargo command.
+
+Use one of:
+
+  1) Fast path (recommended):
+     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+     . "$HOME/.cargo/env"
+     rustup update stable
+     rustup default stable
+
+  2) Or install your distro package (examples):
+     - apt: sudo apt-get install -y rustc cargo
+     - dnf: sudo dnf install -y rust cargo
+     - pacman: sudo pacman -S --noconfirm rust
+
+After installation, rerun the command.
+EOF
+}
+
+run_rust_upgrade() {
+    local installed=0
+
+    if command -v rustup >/dev/null 2>&1; then
+        rustup update stable
+        installed=1
+    elif command -v curl >/dev/null 2>&1; then
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        installed=1
+    else
+        echo "Cannot auto-upgrade: rustup/curl are not available." >&2
+        return 1
+    fi
+
+    if [[ -f "${HOME}/.cargo/env" ]]; then
+        # shellcheck disable=SC1091
+        . "${HOME}/.cargo/env"
+    fi
+
+    if [[ ${installed} -eq 1 ]] && command -v cargo >/dev/null 2>&1 && command -v rustc >/dev/null 2>&1; then
+        rustup default stable
+        return 0
+    fi
+
+    return 1
+}
+
+extract_manifest_path() {
+    local i=0
+    for (( i = 0; i < ${#cmd[@]}; i++ )); do
+        if [[ "${cmd[$i]}" == "--manifest-path" ]]; then
+            MANIFEST_PATH="${cmd[$((i + 1))]:-}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+attempt_toolchain_fixup() {
+    if [[ -z "${MANIFEST_PATH}" ]]; then
+        return 1
+    fi
+
+    if [[ -n "${MANIFEST_PATH}" ]] && [[ ! -f "${MANIFEST_PATH}" ]]; then
+        echo "Missing manifest path for lockfile compatibility check: ${MANIFEST_PATH}" >&2
+        return 1
+    fi
+
+    if [[ ! -x "${SCRIPT_DIR}/ensure-quiche-toolchain.sh" ]]; then
+        if ! command -v cargo >/dev/null 2>&1 || ! command -v rustc >/dev/null 2>&1; then
+            echo "cargo/rustc are missing in PATH. King requires a compatible Rust toolchain." >&2
+            print_install_solution >&2
+            if ! ensure_confirmation; then
+                echo "Aborted per confirmation (KING_QUICHE_TOOLCHAIN_CONFIRM=${confirm})." >&2
+                return 1
+            fi
+            if ! run_rust_upgrade; then
+                return 1
+            fi
+        elif ! ensure_confirmation; then
+            echo "Aborted per confirmation (KING_QUICHE_TOOLCHAIN_CONFIRM=${confirm})." >&2
+            return 1
+        else
+            if ! run_rust_upgrade; then
+                echo "Failed to auto-upgrade rust toolchain for lockfile-v4 compatibility." >&2
+                return 1
+            fi
+        fi
+        return 0
+    fi
+
+    KING_QUICHE_TOOLCHAIN_CONFIRM="${confirm}" \
+        "${SCRIPT_DIR}/ensure-quiche-toolchain.sh" "${MANIFEST_PATH}"
+}
 
 is_lockfile_version4_error() {
     local output="$1"
@@ -94,6 +229,17 @@ if [[ "${last_status}" -ne 0 ]]; then
     if is_lockfile_version4_error "${error_output}"; then
         echo "Cargo lockfile format is unsupported with current toolchain; retrying with nightly lockfile-bump compatibility." >&2
 
+        extract_manifest_path
+        if ! attempt_toolchain_fixup; then
+            printf 'Fallback cargo command failed with exit code %s.\n' "${last_status}" >&2
+            printf '%s\n' "${error_output}" >&2
+            cat <<'EOF' >&2
+This project requires a cargo toolchain that can read lockfile v4.
+Either install a modern rust toolchain (or nightly with `-Z next-lockfile-bump` support)
+or rerun with a compatible build environment.
+EOF
+            exit 1
+        fi
         run_with_nightly_lockfile_bump cmd retry_status retry_output
         status="${retry_status}"
 

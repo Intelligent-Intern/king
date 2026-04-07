@@ -329,6 +329,12 @@ jobs:
           name: king-release-pie-source
           path: release-assets
 
+      - name: Checkout release merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve-release-merge.outputs.release-commit }}
+          submodules: recursive
+
       - name: Verify release assets
         run: |
           set -euo pipefail
