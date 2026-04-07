@@ -40,8 +40,6 @@ jobs:
           SHOULD_PUBLISH="false"
           if [[ "${RELEASE_BRANCH}" == develop/v* ]]; then
             RELEASE_VERSION="${RELEASE_BRANCH#develop/}"
-          elif [[ "${RELEASE_BRANCH}" == release/* ]]; then
-            RELEASE_VERSION="${RELEASE_BRANCH#release/}"
           else
             echo "Release workflow ignored for branch ${RELEASE_BRANCH}." >&2
             SHOULD_PUBLISH="false"
@@ -311,7 +309,7 @@ jobs:
           RELEASE_VERSION="${{ needs.resolve-release-merge.outputs.release-version }}"
 
           if [[ -z "${RELEASE_VERSION}" ]]; then
-            echo "Release branch must be in the form develop/v<version> or release/<version>: ${RELEASE_BRANCH}" >&2
+            echo "Release branch must be in the form develop/v<version>: ${RELEASE_BRANCH}" >&2
             exit 1
           fi
 
@@ -344,7 +342,7 @@ jobs:
           RELEASE_VERSION="${{ needs.resolve-release-merge.outputs.release-version }}"
 
           if [[ -z "${RELEASE_VERSION}" ]]; then
-            echo "Release branch must be in the form develop/v<version> or release/<version>: ${RELEASE_BRANCH}" >&2
+            echo "Release branch must be in the form develop/v<version>: ${RELEASE_BRANCH}" >&2
             exit 1
           fi
 
