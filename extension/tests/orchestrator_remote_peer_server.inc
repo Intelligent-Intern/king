@@ -528,7 +528,7 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
             if ($effectiveBudgetMs > 0) {
                 $elapsedMs = (int) ((hrtime(true) - $startedAt) / 1000000);
                 if ($elapsedMs >= $effectiveBudgetMs) {
-                    $event['remote_error'] = 'king_pipeline_orchestrator_run() exceeded the active orchestrator timeout budget.';
+                    $event['remote_error'] = 'Remote peer execution exceeded the active orchestrator timeout budget.';
                     $event['failed_step_index'] = $stepIndex;
                     king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
                     fwrite(
