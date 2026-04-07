@@ -29,8 +29,9 @@ function mutate_remote_peer_step_refs_to_invalid(string $statePath, string $runI
             continue;
         }
 
-        $boundaryEncoded = $parts[28];
-        if ($fieldCount < 29) {
+        if ($fieldCount >= 29) {
+            $boundaryEncoded = $parts[28];
+        } else {
             $boundaryEncoded = $parts[27];
         }
         if ($boundaryEncoded === '') {
