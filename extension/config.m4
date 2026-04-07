@@ -5,8 +5,8 @@ dnl PURPOSE:
 dnl This config.m4 drives the active King extension build with the current
 dnl runtime source list compiled into one shared module.
 dnl Mandatory inputs come from the PHP build toolchain plus the in-tree
-dnl headers the build already probes for, while optional quiche paths can be
-dnl layered in for extended transport builds.
+dnl headers the build already probes for, while external quiche paths can be
+dnl layered in for custom transport package layouts.
 dnl
 dnl USE:
 dnl   cd extension
@@ -17,9 +17,8 @@ dnl
 dnl This runtime is the integration integrity check. All real subsystem
 dnl implementations are added here as they are transferred from src_bak/.
 dnl
-dnl Optional quiche wiring is prepared here, but the default active transport
-dnl runtime still stays on the local UDP substrate when no quiche path is
-dnl configured.
+dnl Quiche linking paths are optional overrides. The bundled runtime remains the
+dnl default deployment path for PIE/install flows.
 dnl =========================================================================
 
 PHP_ARG_ENABLE([king],
@@ -27,24 +26,13 @@ PHP_ARG_ENABLE([king],
     [AS_HELP_STRING([--enable-king], [Enable King extension])],
     [yes])
 
-PHP_ARG_WITH([king-quiche],
+    PHP_ARG_WITH([king-quiche],
     [optional quiche include/library root for extended transport builds],
-    [AS_HELP_STRING([--with-king-quiche[=DIR]], [Prepare optional quiche include/library paths while keeping the active build on the local transport runtime])],
+    [AS_HELP_STRING([--with-king-quiche[=DIR]], [Optional quiche include/library paths overriding the default bundled runtime path])],
     [no],
     [no])
 
 if test "$PHP_KING" != "no"; then
-    AC_PATH_PROG([CARGO], [cargo], [no])
-    AC_PATH_PROG([RUSTC], [rustc], [no])
-
-    if test "$CARGO" = "no"; then
-        AC_MSG_ERROR([King requires cargo to build the bundled QUIC runtime.])
-    fi
-
-    if test "$RUSTC" = "no"; then
-        AC_MSG_ERROR([King requires rustc to build the bundled QUIC runtime.])
-    fi
-
     if test "$PHP_KING_QUICHE" != "no"; then
         AC_MSG_CHECKING([for optional quiche build paths])
 
@@ -90,7 +78,7 @@ if test "$PHP_KING" != "no"; then
         AC_DEFINE([HAVE_KING_QUICHE], [1], [Whether optional quiche build paths were configured])
         AC_MSG_RESULT([enabled])
     else
-        AC_MSG_NOTICE([Building king without optional quiche path; active transport runtime stays on the local UDP substrate.])
+        AC_MSG_NOTICE([Building king without --with-king-quiche; using the default bundled runtime paths.])
     fi
 
     dnl ---------------------------------------------------------------------------

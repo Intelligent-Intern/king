@@ -349,7 +349,7 @@ Docker publish flow runs only after a successful canonical baseline on `main`.
 
 Release publication is not a separate branch workflow. A release is created only
 when a `develop/v<version>` branch is merged into `main` (for example:
-`develop/v0.2.8-alpha` -> `main`) and the merge passes the full canonical gate.
+`develop/v1.0.0-beta` -> `main`) and the merge passes the full canonical gate.
 The release branch no longer exists as an independent publishing path.
 
 ## A Practical Release Sequence

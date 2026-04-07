@@ -4817,7 +4817,7 @@ printf "%s\n" "#define HAVE_KING_QUICHE 1" >>confdefs.h
         { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: enabled" >&5
 printf "%s\n" "enabled" >&6; }
     else
-        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: Building king without optional quiche path; active transport runtime stays on the local UDP substrate." >&5
+        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: Building king without --with-king-quiche; using the default bundled runtime path." >&5
 printf "%s\n" "$as_me: Building king without optional quiche path; active transport runtime stays on the local UDP substrate." >&6;}
     fi
 

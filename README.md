@@ -53,8 +53,8 @@ with [documentation/getting-started.md](./documentation/getting-started.md).
 King is also being wired for the first honest
 [PIE](https://github.com/php/pie) install path. The maintainer workflow lives in
 [`documentation/pie-install.md`](./documentation/pie-install.md). PIE is the
-successor to PECL, and the first release-ready tag is `v0.2.8-alpha`.
-Use `pie install intelligent-intern/king-ext` once the `v0.2.8-alpha` release
+successor to PECL, and the first public tag is `v0.2.10-alpha`.
+Use `pie install intelligent-intern/king-ext` once the `v0.2.10-alpha` release
 assets are published.
 
 ## Small But Oho
