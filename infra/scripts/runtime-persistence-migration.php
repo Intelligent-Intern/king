@@ -8,7 +8,11 @@ function fail_migration(string $message): never
     exit(1);
 }
 
-$mode = $argv[1] ?? '';
+if ($argc < 2) {
+    fail_migration('Missing required migration mode argument (expected "write" or "read").');
+}
+
+$mode = $argv[1];
 $objectStoreRoot = getenv('KING_PERSIST_OBJECT_STORE_ROOT');
 
 if (!is_string($objectStoreRoot) || $objectStoreRoot === '') {
@@ -16,7 +20,7 @@ if (!is_string($objectStoreRoot) || $objectStoreRoot === '') {
 }
 
 if ($mode !== 'write' && $mode !== 'read') {
-    fail_migration('Expected migration mode write or read.');
+    fail_migration('Expected migration mode write or read, got: ' . $mode);
 }
 
 $semanticConfig = [
@@ -45,7 +49,7 @@ if ($mode === 'write') {
     $summarizer_handler = static function(array $context): array {
         $input = $context['input'] ?? null;
         if (!is_array($input)) {
-            throw new RuntimeException('unexpected orchestrator input');
+            throw new RuntimeException('Unexpected orchestrator input: expected array.');
         }
 
         return ['output' => $input];
@@ -163,3 +167,4 @@ if (($route['service_id'] ?? null) !== 'migration-api-1') {
 }
 
 echo "read ok\n";
+exit(0);

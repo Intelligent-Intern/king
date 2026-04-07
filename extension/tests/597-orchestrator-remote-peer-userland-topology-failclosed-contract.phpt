@@ -29,8 +29,9 @@ function mutate_remote_peer_step_refs_to_invalid(string $statePath, string $runI
             continue;
         }
 
-        $boundaryEncoded = $parts[28];
-        if ($fieldCount < 29) {
+        if ($fieldCount >= 29) {
+            $boundaryEncoded = $parts[28];
+        } else {
             $boundaryEncoded = $parts[27];
         }
         if ($boundaryEncoded === '') {
@@ -196,7 +197,7 @@ $controllerArgv = [
     $controllerScript,
 ];
 $controllerProcess = proc_open($controllerArgv, [
-    0 => ['file', '/dev/null', 'r'],
+    0 => ['file', 'php://stdin', 'r'],
     1 => ['pipe', 'w'],
     2 => ['pipe', 'w'],
 ], $controllerPipes);
@@ -207,7 +208,7 @@ for ($i = 0; $i < 1200; $i++) {
     $observerStatus = -1;
     exec($observerCommand('run-1'), $observerOutput, $observerStatus);
     $snapshot = json_decode(trim($observerOutput[0] ?? ''), true);
-    if (($i % 50) === 0) {
+    if (($i % 50) === 0 && getenv('KING_597_DEBUG_LOG')) {
         file_put_contents(
             '/tmp/king-597-remote-peer-debug.log',
             json_encode([
@@ -244,7 +245,14 @@ $controllerStatusInfo = proc_get_status($controllerProcess);
 $controllerPid = (int) ($controllerStatusInfo['pid'] ?? 0);
 $killStatus = -1;
 if ($controllerPid > 0 && ($controllerStatusInfo['running'] ?? false)) {
-    exec('/bin/kill -9 ' . $controllerPid, $killOutput, $killStatus);
+    // Prefer proc_terminate over executing an external kill command for portability and safety.
+    $terminated = @proc_terminate($controllerProcess, 9);
+    if ($terminated) {
+        $killStatus = 0;
+    } elseif (function_exists('posix_kill')) {
+        // Fallback to posix_kill if available; map boolean result to an int status.
+        $killStatus = posix_kill($controllerPid, 9) ? 0 : 1;
+    }
 }
 var_dump($killStatus === 0);
 

@@ -10,7 +10,7 @@ if (!function_exists('proc_open')) {
 <?php
 require __DIR__ . '/orchestrator_failover_harness.inc';
 
-function king_orchestrator_userland_restart_assert(bool $condition, string $label): void
+function test_assert(bool $condition, string $label): void
 {
     if (!$condition) {
         throw new RuntimeException($label);
@@ -19,17 +19,17 @@ function king_orchestrator_userland_restart_assert(bool $condition, string $labe
 
 function king_orchestrator_userland_restart_decode_json(array $result, string $label): array
 {
-    king_orchestrator_userland_restart_assert(
+    test_assert(
         $result['status'] === 0,
         $label . ' exited with status ' . json_encode($result['status']) . ' and stderr ' . json_encode($result['stderr'])
     );
-    king_orchestrator_userland_restart_assert(
+    test_assert(
         trim($result['stderr']) === '',
         $label . ' wrote unexpected stderr: ' . json_encode($result['stderr'])
     );
 
     $decoded = json_decode(trim($result['stdout']), true);
-    king_orchestrator_userland_restart_assert(
+    test_assert(
         is_array($decoded),
         $label . ' did not return valid JSON: ' . json_encode($result['stdout'])
     );
@@ -37,7 +37,7 @@ function king_orchestrator_userland_restart_decode_json(array $result, string $l
     return $decoded;
 }
 
-function king_orchestrator_userland_restart_read_run_snapshot(
+function read_run_snapshot(
     array $harness,
     string $backend,
     string $observerScript,
@@ -433,10 +433,10 @@ PHP);
             king_orchestrator_failover_harness_exec($harness, 'file_worker', $workerScript),
             'worker/file_worker/recovery'
         );
-        king_orchestrator_userland_restart_assert(( $work['run_id'] ?? null) === 'run-1', 'queued file-worker scenario worker reclaimed wrong run id');
-        king_orchestrator_userland_restart_assert(( $work['status'] ?? null) === 'completed', 'queued file-worker scenario worker did not complete run');
-        king_orchestrator_userland_restart_assert(( $work['execution_backend'] ?? null) === 'file_worker', 'queued file-worker scenario lost backend');
-        king_orchestrator_userland_restart_assert(( $work['topology_scope'] ?? null) === 'same_host_file_worker', 'queued file-worker scenario lost topology');
+        king_orchestrator_userland_restart_assert(($work['run_id'] ?? null) === 'run-1', 'queued file-worker scenario worker reclaimed wrong run id');
+        king_orchestrator_userland_restart_assert(($work['status'] ?? null) === 'completed', 'queued file-worker scenario worker did not complete run');
+        king_orchestrator_userland_restart_assert(($work['execution_backend'] ?? null) === 'file_worker', 'queued file-worker scenario lost backend');
+        king_orchestrator_userland_restart_assert(($work['topology_scope'] ?? null) === 'same_host_file_worker', 'queued file-worker scenario lost topology');
         king_orchestrator_userland_restart_assert(
             (($work['result']['text'] ?? null) === 'queued-userland-restart'),
             'queued file-worker scenario result text drifted'
@@ -445,7 +445,7 @@ PHP);
             (($work['result']['history'] ?? null) === ['queued-prepare', 'queued-finalize']),
             'queued file-worker scenario lost step history'
         );
-        king_orchestrator_userland_restart_assert(( $work['error'] ?? null) === null, 'queued file-worker scenario surfaced stale error');
+        king_orchestrator_userland_restart_assert(($work['error'] ?? null) === null, 'queued file-worker scenario surfaced stale error');
 
         $final = king_orchestrator_userland_restart_read_run_snapshot($harness, 'file_worker', $observerScript, 'run-1');
         king_orchestrator_userland_restart_assert(
