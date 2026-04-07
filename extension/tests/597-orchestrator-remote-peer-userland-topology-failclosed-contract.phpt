@@ -31,8 +31,12 @@ function mutate_remote_peer_step_refs_to_invalid(string $statePath, string $runI
 
         if ($fieldCount >= 29) {
             $boundaryEncoded = $parts[28];
-        } else {
+            $boundaryPartIndex = 28;
+        } elseif ($fieldCount === 28) {
             $boundaryEncoded = $parts[27];
+            $boundaryPartIndex = 27;
+        } else {
+            continue;
         }
         if ($boundaryEncoded === '') {
             continue;
@@ -49,7 +53,7 @@ function mutate_remote_peer_step_refs_to_invalid(string $statePath, string $runI
         }
 
         $boundary['required_step_refs'] = [['index' => -1, 'tool_name' => 'summarizer']];
-        $parts[28] = base64_encode(serialize($boundary));
+        $parts[$boundaryPartIndex] = base64_encode(serialize($boundary));
         $lines[$lineIndex] = implode("\t", $parts);
         $updated = true;
         break;
@@ -243,23 +247,37 @@ var_dump($runningObserved);
 
 $controllerStatusInfo = proc_get_status($controllerProcess);
 $controllerPid = (int) ($controllerStatusInfo['pid'] ?? 0);
-$killStatus = -1;
-if ($controllerPid > 0 && ($controllerStatusInfo['running'] ?? false)) {
-    // Prefer proc_terminate over executing an external kill command for portability and safety.
-    $terminated = @proc_terminate($controllerProcess, 9);
-    if ($terminated) {
-        $killStatus = 0;
-    } elseif (function_exists('posix_kill')) {
-        // Fallback to posix_kill if available; map boolean result to an int status.
-        $killStatus = posix_kill($controllerPid, 9) ? 0 : 1;
-    }
-}
-var_dump($killStatus === 0);
-
+stream_set_blocking($controllerPipes[1], false);
+stream_set_blocking($controllerPipes[2], false);
 $controllerStdout = stream_get_contents($controllerPipes[1]);
 $controllerStderr = stream_get_contents($controllerPipes[2]);
 fclose($controllerPipes[1]);
 fclose($controllerPipes[2]);
+$killStatus = -1;
+if ($controllerPid > 0) {
+    if ($controllerStatusInfo['running'] ?? false) {
+        $terminatedGracefully = @proc_terminate($controllerProcess);
+        if ($terminatedGracefully) {
+            usleep(100000);
+            $controllerStatusInfo = proc_get_status($controllerProcess);
+        }
+
+        if ($controllerStatusInfo['running'] ?? false) {
+            $terminated = function_exists('posix_kill')
+                ? (bool) @posix_kill($controllerPid, 9)
+                : (bool) @proc_terminate($controllerProcess, 9);
+            if ($terminated) {
+                usleep(100000);
+                $controllerStatusInfo = proc_get_status($controllerProcess);
+            }
+        }
+    } else {
+        $killStatus = 0;
+    }
+
+    $killStatus = ($controllerStatusInfo['running'] ?? false) ? 1 : 0;
+}
+var_dump($killStatus === 0);
 $controllerExit = proc_close($controllerProcess);
 var_dump($controllerExit !== 0);
 var_dump(trim($controllerStdout) === '');

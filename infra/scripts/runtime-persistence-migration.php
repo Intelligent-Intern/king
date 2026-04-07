@@ -23,16 +23,23 @@ if ($mode !== 'write' && $mode !== 'read') {
     fail_migration('Expected migration mode write or read, got: ' . $mode);
 }
 
-$semanticConfig = [
-    'enabled' => true,
-    'bind_address' => '127.0.0.1',
-    'dns_port' => 5453,
-    'service_discovery_max_ips_per_response' => 8,
-    'semantic_mode_enable' => true,
-    'mothernode_uri' => 'mother://migration-seed',
-];
+/**
+ * @return array<string, mixed>
+ */
+function make_persistence_migration_semantic_config(): array
+{
+    return [
+        'enabled' => true,
+        'bind_address' => '127.0.0.1',
+        'dns_port' => 5453,
+        'service_discovery_max_ips_per_response' => 8,
+        'semantic_mode_enable' => true,
+        'mothernode_uri' => 'mother://migration-seed',
+    ];
+}
 
 if ($mode === 'write') {
+    $semanticConfig = make_persistence_migration_semantic_config();
     king_object_store_init([
         'storage_root_path' => $objectStoreRoot,
         'primary_backend' => 'local_fs',
@@ -76,7 +83,10 @@ if ($mode === 'write') {
         ['trace_id' => 'persist-migration-1']
     );
     if (($result['text'] ?? null) !== 'persisted text') {
-        fail_migration('Unexpected orchestrator write result.');
+        $actualText = $result['text'] ?? null;
+        fail_migration(
+            'Expected orchestrator result text "persisted text", got: ' . ($actualText === null ? 'null' : (string) $actualText)
+        );
     }
 
     if (!king_semantic_dns_init($semanticConfig)) {
@@ -141,6 +151,8 @@ if (($orchestrator['configuration']['tool_count'] ?? null) !== 1) {
 if (($orchestrator['configuration']['run_history_count'] ?? null) !== 1) {
     fail_migration('Unexpected recovered orchestrator run history count.');
 }
+
+$semanticConfig = make_persistence_migration_semantic_config();
 
 if (!king_semantic_dns_init($semanticConfig)) {
     fail_migration('Semantic DNS init failed in read mode.');

@@ -160,7 +160,7 @@ PHP);
 
         $runningObserved = king_orchestrator_failover_harness_wait_for(
             static function () use ($harness, $observerScript): bool {
-                $snapshot = king_orchestrator_userland_restart_read_run_snapshot(
+                $snapshot = read_run_snapshot(
                     $harness,
                     'local',
                     $observerScript,
@@ -174,41 +174,41 @@ PHP);
                     && ($snapshot['completed_step_count'] ?? null) === 0;
             }
         );
-        king_orchestrator_userland_restart_assert($runningObserved, 'local-running scenario never observed a running run');
+        test_assert($runningObserved, 'local-running scenario never observed a running run');
 
         $controllerCrash = king_orchestrator_failover_harness_crash_process($controller);
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             $controllerCrash['status'] !== 0,
             'local-running scenario controller exited cleanly after forced crash'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             trim($controllerCrash['stdout']) === '',
             'local-running scenario controller wrote unexpected stdout'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             trim($controllerCrash['stderr']) === '',
             'local-running scenario controller wrote unexpected stderr'
         );
 
-        $afterCrash = king_orchestrator_userland_restart_read_run_snapshot(
+        $afterCrash = read_run_snapshot(
             $harness,
             'local',
             $observerScript,
             'run-1'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($afterCrash['status'] ?? null) === 'running',
             'local-running scenario did not preserve running status after controller loss'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($afterCrash['finished_at'] ?? null) === 0,
             'local-running scenario unexpectedly finished after controller loss'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($afterCrash['completed_step_count'] ?? null) === 0,
             'local-running scenario changed progress unexpectedly after controller loss'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($afterCrash['result'] ?? null) === null,
             'local-running scenario unexpectedly wrote partial result before controller recovery'
         );
@@ -217,40 +217,40 @@ PHP);
             king_orchestrator_failover_harness_exec($harness, 'local', $resumeScript, ['run-1']),
             'resume/local-running'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($resume['recovered_from_state'] ?? null) === true,
             'local-running scenario did not recover state before resume'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($resume['execution_backend'] ?? null) === 'local',
             'local-running scenario execution backend drifted'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($resume['topology_scope'] ?? null) === 'local_in_process',
             'local-running scenario topology drifted'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($resume['result_text'] ?? null) === 'local-running-userland',
             'local-running scenario resumed output drifted'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($resume['run']['status'] ?? null) === 'completed',
             'local-running scenario did not complete after resume'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($resume['run']['completed_step_count'] ?? null) === 1,
             'local-running scenario completion step count drifted'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             (($resume['run']['handler_readiness']['requires_process_registration'] ?? null) === false)
             || (($resume['run']['handler_readiness']['ready'] ?? null) === true),
             'local-running scenario lost handler readiness after resume'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($resume['run']['error'] ?? null) === null,
             'local-running scenario left stale error after resume'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($resume['last_run_status'] ?? null) === 'completed',
             'local-running scenario component info did not record resumed completion'
         );
@@ -376,7 +376,7 @@ PHP);
 
         $dispatched = king_orchestrator_failover_harness_wait_for(
             static function () use ($harness, $observerScript): bool {
-                $snapshot = king_orchestrator_userland_restart_read_run_snapshot(
+                $snapshot = read_run_snapshot(
                     $harness,
                     'file_worker',
                     $observerScript,
@@ -390,41 +390,41 @@ PHP);
                     && count($snapshot['handler_boundary']['required_step_refs']) === 2;
             }
         );
-        king_orchestrator_userland_restart_assert($dispatched, 'queued file-worker scenario never observed the queued run');
+        test_assert($dispatched, 'queued file-worker scenario never observed the queued run');
 
         $queuedCount = count(glob($harness['queue_path'] . '/queued-*.job') ?: []);
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             $queuedCount === 1,
             'queued file-worker scenario did not create exactly one queued job file'
         );
 
         $controllerCrash = king_orchestrator_failover_harness_crash_process($controller);
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             $controllerCrash['status'] !== 0,
             'queued file-worker scenario controller exited cleanly after forced crash'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             trim($controllerCrash['stderr']) === '',
             'queued file-worker scenario controller wrote unexpected stderr'
         );
 
-        $afterCrash = king_orchestrator_userland_restart_read_run_snapshot(
+        $afterCrash = read_run_snapshot(
             $harness,
             'file_worker',
             $observerScript,
             'run-1'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($afterCrash['status'] ?? null) === 'queued',
             'queued file-worker scenario did not retain queued state after controller crash'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($afterCrash['queue_phase'] ?? null) === 'queued',
             'queued file-worker scenario did not retain queue phase after controller crash'
         );
 
         $queuedAfterCrash = count(glob($harness['queue_path'] . '/queued-*.job') ?: []);
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             $queuedAfterCrash === 1,
             'queued file-worker scenario lost queued job file after controller crash'
         );
@@ -433,30 +433,30 @@ PHP);
             king_orchestrator_failover_harness_exec($harness, 'file_worker', $workerScript),
             'worker/file_worker/recovery'
         );
-        king_orchestrator_userland_restart_assert(($work['run_id'] ?? null) === 'run-1', 'queued file-worker scenario worker reclaimed wrong run id');
-        king_orchestrator_userland_restart_assert(($work['status'] ?? null) === 'completed', 'queued file-worker scenario worker did not complete run');
-        king_orchestrator_userland_restart_assert(($work['execution_backend'] ?? null) === 'file_worker', 'queued file-worker scenario lost backend');
-        king_orchestrator_userland_restart_assert(($work['topology_scope'] ?? null) === 'same_host_file_worker', 'queued file-worker scenario lost topology');
-        king_orchestrator_userland_restart_assert(
+        test_assert(($work['run_id'] ?? null) === 'run-1', 'queued file-worker scenario worker reclaimed wrong run id');
+        test_assert(($work['status'] ?? null) === 'completed', 'queued file-worker scenario worker did not complete run');
+        test_assert(($work['execution_backend'] ?? null) === 'file_worker', 'queued file-worker scenario lost backend');
+        test_assert(($work['topology_scope'] ?? null) === 'same_host_file_worker', 'queued file-worker scenario lost topology');
+        test_assert(
             (($work['result']['text'] ?? null) === 'queued-userland-restart'),
             'queued file-worker scenario result text drifted'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             (($work['result']['history'] ?? null) === ['queued-prepare', 'queued-finalize']),
             'queued file-worker scenario lost step history'
         );
-        king_orchestrator_userland_restart_assert(($work['error'] ?? null) === null, 'queued file-worker scenario surfaced stale error');
+        test_assert(($work['error'] ?? null) === null, 'queued file-worker scenario surfaced stale error');
 
-        $final = king_orchestrator_userland_restart_read_run_snapshot($harness, 'file_worker', $observerScript, 'run-1');
-        king_orchestrator_userland_restart_assert(
+        $final = read_run_snapshot($harness, 'file_worker', $observerScript, 'run-1');
+        test_assert(
             ($final['status'] ?? null) === 'completed',
             'queued file-worker scenario final snapshot not completed'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             ($final['queue_phase'] ?? null) === 'dequeued',
             'queued file-worker scenario final queue phase not dequeued'
         );
-        king_orchestrator_userland_restart_assert(
+        test_assert(
             count(glob($harness['queue_path'] . '/queued-*.job') ?: []) === 0,
             'queued file-worker scenario queue leak after recovery'
         );
