@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#17 Add PHPT proof for restart recovery when a queued or running userland-backed run outlives the original controller process.`
+- `(no active next leaf; waiting for your next requested item)`
 
 ## Active Executable Items
 
@@ -65,10 +65,10 @@
 - [x] `#14 Expose userland handler readiness, missing-handler state, and active handler-contract metadata through orchestrator component status and inspection surfaces.`
 - [x] `#15 Add PHPT proof for local userland tool execution over a persisted run snapshot.`
 - [x] `#16 Add PHPT proof for file-worker userland tool execution with re-registration across processes.`
-- [ ] `#17 Add PHPT proof for restart recovery when a queued or running userland-backed run outlives the original controller process.`
-- [ ] `#18 Add PHPT proof for remote-peer userland tool execution or fail closed explicitly on unsupported remote-peer handler topologies.`
-- [ ] `#19 Add handbook and procedural-API documentation for the userland tool-handler contract, including unsupported forms and restart duties.`
-- [ ] `#20 Update PROJECT_ASSESSMENT.md and READYNESS_TRACKER.md once the userland orchestration surface is real, verified, and no longer caveated.`
+- [x] `#17 Add PHPT proof for restart recovery when a queued or running userland-backed run outlives the original controller process.`
+- [x] `#18 Add PHPT proof for remote-peer userland tool execution or fail closed explicitly on unsupported remote-peer handler topologies.`
+- [x] `#19 Add handbook and procedural-API documentation for the userland tool-handler contract, including unsupported forms and restart duties.`
+- [x] `#20 Update PROJECT_ASSESSMENT.md and READYNESS_TRACKER.md once the userland orchestration surface is real, verified, and no longer caveated.`
 
 ## Notes (Urgent Batch Insert)
 
@@ -79,6 +79,9 @@
 - `#14` is now closed by exposing `handler_readiness` in each `king_pipeline_orchestrator_get_run()` snapshot and `active_handler_contract` in `king_system_get_component_info('pipeline_orchestrator')['configuration']`, then proving readiness/missing-handler behavior and handler metadata surfacing in PHPT coverage.
 - `#15` is now closed by adding `595-orchestrator-local-userland-persisted-snapshot-contract.phpt`, which runs a three-step local userland pipeline (snap-prepare → snap-enrich → snap-finalize), then reads back the persisted run snapshot from a fresh process and asserts: status=`completed`, execution_backend=`local`, topology=`local_in_process`, all three steps completed, chained result and step-context delivery correct, `handler_readiness.requires_process_registration=false`, `handler_readiness.ready=true`, compensation not required.
 - `#16` is now closed by adding `596-orchestrator-file-worker-userland-reregistration-contract.phpt`, which dispatches a three-step pipeline to the file-worker queue, verifies callable names are not in durable state, then a clean worker process re-registers handlers and processes the entire run via `king_pipeline_orchestrator_worker_run_next()`, asserting `execution_backend=file_worker`, `topology=same_host_file_worker`, correct chained result, step-context delivery, `handler_boundary.contract=durable_tool_name_refs_only`, `handler_readiness.ready=true`, and queue cleanup; a subsequent reader process then confirms the persisted snapshot.
+- `#17` is now closed by adding `598-orchestrator-userland-controller-loss-restart-contract.phpt`, which proves restart recovery for both running and queued userland-backed runs after controller process loss (including handler re-registration, preserved queue/job phase, recovered backend/topology, result completion, and queue cleanup).
+- `#18` is now closed by adding two PHPTs: `591-orchestrator-remote-peer-userland-handler-contract.phpt` (remote-peer registered handler execution and missing-handler fail-closed behavior) and `597-orchestrator-remote-peer-userland-topology-failclosed-contract.phpt` (explicit fail-closed classification for unsupported remote-peer handler topology snapshots).
+- `#20` is now closed by aligning `PROJECT_ASSESSMENT.md` and `READYNESS_TRACKER.md` to the completed userland orchestrator surface state: no remaining caveat language on durable-vs-executable handler boundary claims, and explicit verification coverage across local, file-worker, and remote-peer userland paths is now reflected in both status documents.
 
 ## Deferred Previous Batch
 - [ ] `#1 Validate autoscaling CPU / memory / RPS / queue / latency signals under real operation.`
@@ -121,5 +124,6 @@
 - Leaf `#21` is now closed by defining the workflow execution boundary as process-local app-worker callback execution with durable orchestrator state storing only tool-name/config snapshots.
 - Leaf `#22` is now closed by aligning public docs and handbooks with the same durable-state-versus-executable-handler boundary and removing callback-transport assumptions from workflow examples.
 - Leaf `#23` is now closed by adding the app-worker boundary smoke PHPT that verifies remote-peer dispatch does not persist handler callback names in state or peer execution payloads.
+- Leaf `#19` is now closed by adding explicit restart-duty and unsupported-form documentation in the handbook and procedural API, including `pipeline-orchestrator.md`, `11-pipeline-orchestrator-tools/README.md`, and `procedural-api.md`.
 - The autoscaling / provisioning / readiness wave remains visible below as the deferred previous batch and resumes once the current userland orchestration batch is exhausted.
 - If a task is not listed here, it is not the current repo-local execution item.
