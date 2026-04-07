@@ -10,6 +10,7 @@ on:
 permissions:
   contents: write
   pull-requests: read
+  packages: write
 
 concurrency:
   group: king-release-publish-${{ github.event.pull_request.number }}
@@ -17,6 +18,7 @@ concurrency:
 
 env:
   DEBIAN_FRONTEND: noninteractive
+  REGISTRY: ghcr.io
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
@@ -28,6 +30,8 @@ jobs:
       release-branch: ${{ steps.resolve.outputs.release-branch }}
       release-tag: ${{ steps.resolve.outputs.release-tag }}
       release-version: ${{ steps.resolve.outputs.release-version }}
+      is-merge-to-main: ${{ steps.resolve.outputs.is-merge-to-main }}
+      release-commit: ${{ steps.resolve.outputs.release-commit }}
     steps:
       - name: Resolve release target
         id: resolve
@@ -37,18 +41,35 @@ jobs:
           set -euo pipefail
 
           RELEASE_BRANCH="${{ github.event.pull_request.head.ref }}"
+          MERGE_TO_MAIN="${{ github.event.pull_request.merged }}"
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
           SHOULD_PUBLISH="false"
+          IS_MERGE_TO_MAIN="false"
+
+          if [[ "${MERGE_TO_MAIN}" != "true" || "${BASE_REF}" != "main" ]]; then
+              echo "::notice::Release merge publish skipped because the event is not a merged PR into main." >&2
+              echo "is-merge-to-main=${IS_MERGE_TO_MAIN}" >> "${GITHUB_OUTPUT}"
+              echo "should-publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
+              echo "release-commit=" >> "${GITHUB_OUTPUT}"
+              echo "release-branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
+              echo "release-version=" >> "${GITHUB_OUTPUT}"
+              echo "release-tag=" >> "${GITHUB_OUTPUT}"
+              exit 0
+          fi
+
+          IS_MERGE_TO_MAIN="true"
+
           if [[ "${RELEASE_BRANCH}" == develop/v* ]]; then
             RELEASE_VERSION="${RELEASE_BRANCH#develop/}"
           else
-            echo "Release workflow ignored for branch ${RELEASE_BRANCH}." >&2
-            SHOULD_PUBLISH="false"
-            echo "should-publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
-            echo "branch-kind=" >> "${GITHUB_OUTPUT}"
-            echo "release-branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
-            echo "release-version=" >> "${GITHUB_OUTPUT}"
-            echo "release-tag=" >> "${GITHUB_OUTPUT}"
-            exit 0
+              echo "Release workflow ignored for branch ${RELEASE_BRANCH}." >&2
+              SHOULD_PUBLISH="false"
+              echo "release-commit=" >> "${GITHUB_OUTPUT}"
+              echo "should-publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
+              echo "release-branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
+              echo "release-version=" >> "${GITHUB_OUTPUT}"
+              echo "release-tag=" >> "${GITHUB_OUTPUT}"
+              exit 0
           fi
 
           if [[ -z "${RELEASE_VERSION}" ]]; then
@@ -68,16 +89,24 @@ jobs:
             SHOULD_PUBLISH="true"
           fi
 
+          RELEASE_COMMIT="${{ github.event.pull_request.merge_commit_sha }}"
+          if [[ -z "${RELEASE_COMMIT}" ]]; then
+              echo "::error::Pull request merge commit SHA is missing." >&2
+              exit 1
+          fi
+
+          echo "is-merge-to-main=${IS_MERGE_TO_MAIN}" >> "${GITHUB_OUTPUT}"
           echo "should-publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
           echo "release-branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
           echo "release-version=${RELEASE_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "release-tag=${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "release-commit=${RELEASE_COMMIT}" >> "${GITHUB_OUTPUT}"
 
   build-release-packages:
     name: Build release artifacts for ${{ matrix.php-version }} / ${{ matrix.arch-label }}
     needs:
       - resolve-release-merge
-    if: github.event.pull_request.merged == true && needs.resolve-release-merge.outputs.should-publish == 'true'
+    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
@@ -119,7 +148,7 @@ jobs:
       - name: Checkout release merge commit
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          ref: ${{ needs.resolve-release-merge.outputs.release-commit }}
           submodules: recursive
 
       - name: Setup PHP ${{ matrix.php-version }}
@@ -202,14 +231,14 @@ jobs:
     name: Build PIE source asset
     needs:
       - resolve-release-merge
-    if: github.event.pull_request.merged == true && needs.resolve-release-merge.outputs.should-publish == 'true'
+    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout release merge commit
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          ref: ${{ needs.resolve-release-merge.outputs.release-commit }}
           submodules: recursive
 
       - name: Build PIE source package
@@ -228,7 +257,7 @@ jobs:
       - resolve-release-merge
       - build-release-packages
       - build-release-pie-source
-    if: github.event.pull_request.merged == true && needs.resolve-release-merge.outputs.should-publish == 'true'
+    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
@@ -337,7 +366,7 @@ jobs:
           set -euo pipefail
 
           RELEASE_BRANCH="${{ github.event.pull_request.head.ref }}"
-          RELEASE_TARGET="${{ github.event.pull_request.merge_commit_sha || github.sha }}"
+          RELEASE_TARGET="${{ needs.resolve-release-merge.outputs.release-commit }}"
           RELEASE_TAG="${{ needs.resolve-release-merge.outputs.release-tag }}"
           RELEASE_VERSION="${{ needs.resolve-release-merge.outputs.release-version }}"
 
@@ -366,3 +395,216 @@ jobs:
               "${prerelease_args[@]}" \
               release-assets/*
           fi
+
+  docker-build-and-push:
+    name: Build and push King PHP ${{ matrix.php-version }}
+    needs:
+      - resolve-release-merge
+      - build-release-packages
+    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']
+        include:
+          - php-version: '8.1'
+            platforms: linux/amd64,linux/arm64
+            latest: false
+          - php-version: '8.2'
+            platforms: linux/amd64,linux/arm64
+            latest: false
+          - php-version: '8.3'
+            platforms: linux/amd64,linux/arm64
+            latest: false
+          - php-version: '8.4'
+            platforms: linux/amd64,linux/arm64
+            latest: false
+          - php-version: '8.5'
+            platforms: linux/amd64,linux/arm64
+            latest: true
+
+    steps:
+      - name: Checkout release merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve-release-merge.outputs.release-commit }}
+          submodules: recursive
+
+      - name: Download amd64 release package
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php${{ matrix.php-version }}-linux-amd64
+          path: dist/docker-packages/php${{ matrix.php-version }}/linux-amd64
+
+      - name: Download arm64 release package
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php${{ matrix.php-version }}-linux-arm64
+          path: dist/docker-packages/php${{ matrix.php-version }}/linux-arm64
+
+      - name: Prepare runtime image metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          image_name="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          image="${REGISTRY}/${image_name}"
+          revision="${{ needs.resolve-release-merge.outputs.release-commit }}"
+          short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
+
+          tags=(
+            "${image}:php${{ matrix.php-version }}"
+            "${image}:sha-${short_sha}-php${{ matrix.php-version }}"
+          )
+
+          if [[ "${{ matrix.latest }}" == "true" && "${{ github.event.pull_request.base.ref }}" == "main" ]]; then
+            tags+=("${image}:main" "${image}:latest")
+          fi
+
+          created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          {
+            printf 'tags<<EOF\n'
+            printf '%s\n' "${tags[@]}"
+            printf 'EOF\n'
+            printf 'labels<<EOF\n'
+            printf 'org.opencontainers.image.title=king\n'
+            printf 'org.opencontainers.image.description=King PHP extension runtime image\n'
+            printf 'org.opencontainers.image.created=%s\n' "${created_at}"
+            printf 'org.opencontainers.image.revision=%s\n' "${revision}"
+            printf 'org.opencontainers.image.source=https://github.com/%s\n' "${GITHUB_REPOSITORY}"
+            printf 'EOF\n'
+            printf 'created_at=%s\n' "${created_at}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push King PHP ${{ matrix.php-version }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./infra/php-runtime.Dockerfile
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            PHP_VERSION=${{ matrix.php-version }}
+            BUILD_DATE=${{ steps.meta.outputs.created_at }}
+            VCS_REF=${{ needs.resolve-release-merge.outputs.release-commit }}
+
+  docker-build-demo:
+    name: Build and push demo application PHP ${{ matrix.php-version }}
+    needs:
+      - resolve-release-merge
+      - build-release-packages
+    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']
+        include:
+          - php-version: '8.1'
+            latest: false
+          - php-version: '8.2'
+            latest: false
+          - php-version: '8.3'
+            latest: false
+          - php-version: '8.4'
+            latest: false
+          - php-version: '8.5'
+            latest: true
+
+    steps:
+      - name: Checkout release merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve-release-merge.outputs.release-commit }}
+          submodules: recursive
+
+      - name: Download amd64 release package
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php${{ matrix.php-version }}-linux-amd64
+          path: dist/docker-packages/php${{ matrix.php-version }}/linux-amd64
+
+      - name: Download arm64 release package
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php${{ matrix.php-version }}-linux-arm64
+          path: dist/docker-packages/php${{ matrix.php-version }}/linux-arm64
+
+      - name: Prepare demo image metadata
+        id: meta-demo
+        run: |
+          set -euo pipefail
+          image_name="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          image="${REGISTRY}/${image_name}-demo"
+          revision="${{ needs.resolve-release-merge.outputs.release-commit }}"
+          short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
+
+          tags=(
+            "${image}:php${{ matrix.php-version }}"
+            "${image}:sha-${short_sha}-php${{ matrix.php-version }}"
+          )
+
+          if [[ "${{ matrix.latest }}" == "true" && "${{ github.event.pull_request.base.ref }}" == "main" ]]; then
+            tags+=("${image}:main" "${image}:latest")
+          fi
+
+          created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          {
+            printf 'tags<<EOF\n'
+            printf '%s\n' "${tags[@]}"
+            printf 'EOF\n'
+            printf 'labels<<EOF\n'
+            printf 'org.opencontainers.image.title=king-demo-server\n'
+            printf 'org.opencontainers.image.description=King demo server runtime image\n'
+            printf 'org.opencontainers.image.created=%s\n' "${created_at}"
+            printf 'org.opencontainers.image.revision=%s\n' "${revision}"
+            printf 'org.opencontainers.image.source=https://github.com/%s\n' "${GITHUB_REPOSITORY}"
+            printf 'EOF\n'
+            printf 'created_at=%s\n' "${created_at}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push demo application
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./infra/demo-server/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta-demo.outputs.tags }}
+          labels: ${{ steps.meta-demo.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            PHP_VERSION=${{ matrix.php-version }}
+            BUILD_DATE=${{ steps.meta-demo.outputs.created_at }}
+            VCS_REF=${{ needs.resolve-release-merge.outputs.release-commit }}
