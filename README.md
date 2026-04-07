@@ -53,8 +53,9 @@ with [documentation/getting-started.md](./documentation/getting-started.md).
 King is also being wired for the first honest
 [PIE](https://github.com/php/pie) install path. The maintainer workflow lives in
 [`documentation/pie-install.md`](./documentation/pie-install.md). PIE is the
-successor to PECL, and the packaged alpha target is
-`pie install intelligent-intern/king-ext` once the release asset is published.
+successor to PECL, and the first release-ready tag is `v0.2.8-alpha`.
+Use `pie install intelligent-intern/king-ext` once the `v0.2.8-alpha` release
+assets are published.
 
 ## Small But Oho
 
@@ -441,6 +442,9 @@ That source asset is the important part. King cannot rely on the default
 repository ZIP for PIE because the bundled `quiche/` tree is part of the active
 build. The maintainer workflow is documented in
 [`documentation/pie-install.md`](documentation/pie-install.md).
+
+Release publishing is now triggered only by merging a `develop/v...` branch into
+`main`; there is no separate `release/` branch publish workflow.
 
 ## Contributing
 

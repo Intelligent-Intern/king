@@ -84,6 +84,10 @@ PIE source asset, the intended install command is:
 pie install intelligent-intern/king-ext
 ```
 
+The first release tag prepared for public installation is `v0.2.8-alpha`.
+After that tag is available in GitHub Releases, users can install the same command
+as the alpha release stream for now.
+
 PIE then enters the King build path under `extension/`, runs `phpize`,
 `./configure`, `make`, and `make install`, and the King build hook compiles and
 installs the QUIC runtime artifacts beside the extension.
@@ -133,4 +137,9 @@ dist/php_king-<version>-src.tgz
 
 3. Upload the generated `php_king-<version>-src.tgz` asset to that release.
 
-4. Submit the repository to Packagist using the root `composer.json`.
+4. After the release is published, ensure that the release merge path used is:
+   - only from `develop/v...` branches into `main`
+   - with the release tag generated as `v<version>`, where `<version>` is the
+     release branch suffix
+
+5. Submit the repository to Packagist using the root `composer.json`.
