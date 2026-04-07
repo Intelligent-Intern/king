@@ -433,10 +433,10 @@ PHP);
             king_orchestrator_failover_harness_exec($harness, 'file_worker', $workerScript),
             'worker/file_worker/recovery'
         );
-        king_orchestrator_userland_restart_assert(( $work['run_id'] ?? null) === 'run-1', 'queued file-worker scenario worker reclaimed wrong run id');
-        king_orchestrator_userland_restart_assert(( $work['status'] ?? null) === 'completed', 'queued file-worker scenario worker did not complete run');
-        king_orchestrator_userland_restart_assert(( $work['execution_backend'] ?? null) === 'file_worker', 'queued file-worker scenario lost backend');
-        king_orchestrator_userland_restart_assert(( $work['topology_scope'] ?? null) === 'same_host_file_worker', 'queued file-worker scenario lost topology');
+        king_orchestrator_userland_restart_assert(($work['run_id'] ?? null) === 'run-1', 'queued file-worker scenario worker reclaimed wrong run id');
+        king_orchestrator_userland_restart_assert(($work['status'] ?? null) === 'completed', 'queued file-worker scenario worker did not complete run');
+        king_orchestrator_userland_restart_assert(($work['execution_backend'] ?? null) === 'file_worker', 'queued file-worker scenario lost backend');
+        king_orchestrator_userland_restart_assert(($work['topology_scope'] ?? null) === 'same_host_file_worker', 'queued file-worker scenario lost topology');
         king_orchestrator_userland_restart_assert(
             (($work['result']['text'] ?? null) === 'queued-userland-restart'),
             'queued file-worker scenario result text drifted'
@@ -445,7 +445,7 @@ PHP);
             (($work['result']['history'] ?? null) === ['queued-prepare', 'queued-finalize']),
             'queued file-worker scenario lost step history'
         );
-        king_orchestrator_userland_restart_assert(( $work['error'] ?? null) === null, 'queued file-worker scenario surfaced stale error');
+        king_orchestrator_userland_restart_assert(($work['error'] ?? null) === null, 'queued file-worker scenario surfaced stale error');
 
         $final = king_orchestrator_userland_restart_read_run_snapshot($harness, 'file_worker', $observerScript, 'run-1');
         king_orchestrator_userland_restart_assert(
