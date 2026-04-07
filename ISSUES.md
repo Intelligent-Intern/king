@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `(no active next leaf; waiting for your next requested item)`
+- `#2 Validate autoscaling drain-before-delete under real live connections.`
 
 ## Active Executable Items
 
@@ -84,7 +84,7 @@
 - `#20` is now closed by aligning `PROJECT_ASSESSMENT.md` and `READYNESS_TRACKER.md` to the completed userland orchestrator surface state: no remaining caveat language on durable-vs-executable handler boundary claims, and explicit verification coverage across local, file-worker, and remote-peer userland paths is now reflected in both status documents.
 
 ## Deferred Previous Batch
-- [ ] `#1 Validate autoscaling CPU / memory / RPS / queue / latency signals under real operation.`
+- [x] `#1 Validate autoscaling CPU / memory / RPS / queue / latency signals under real operation.`
 - [ ] `#2 Validate autoscaling drain-before-delete under real live connections.`
 - [ ] `#3 Validate autoscaling scale-up policy limits under burst load.`
 - [ ] `#4 Validate autoscaling scale-down policy limits under active traffic.`
@@ -125,5 +125,6 @@
 - Leaf `#22` is now closed by aligning public docs and handbooks with the same durable-state-versus-executable-handler boundary and removing callback-transport assumptions from workflow examples.
 - Leaf `#23` is now closed by adding the app-worker boundary smoke PHPT that verifies remote-peer dispatch does not persist handler callback names in state or peer execution payloads.
 - Leaf `#19` is now closed by adding explicit restart-duty and unsupported-form documentation in the handbook and procedural API, including `pipeline-orchestrator.md`, `11-pipeline-orchestrator-tools/README.md`, and `procedural-api.md`.
+- Leaf `#1` in the deferred autoscaling batch is now closed by adding `599-autoscaling-real-operation-signal-contract.phpt`, which runs a live HTTP/1 request harness that measures CPU time, memory usage, request rate, connection count, response latency, and backlog depth during real request work, publishes those `autoscaling.*` gauges, and proves the next monitor tick surfaces all six live signals plus pressure/relief decisions without a stub-only shortcut.
 - The autoscaling / provisioning / readiness wave remains visible below as the deferred previous batch and resumes once the current userland orchestration batch is exhausted.
 - If a task is not listed here, it is not the current repo-local execution item.
