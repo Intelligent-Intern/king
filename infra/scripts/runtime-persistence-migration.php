@@ -20,7 +20,7 @@ if (!is_string($objectStoreRoot) || $objectStoreRoot === '') {
 }
 
 if ($mode !== 'write' && $mode !== 'read') {
-    fail_migration('Expected migration mode write or read.');
+    fail_migration('Expected migration mode write or read, got: ' . $mode);
 }
 
 $semanticConfig = [
@@ -49,7 +49,7 @@ if ($mode === 'write') {
     $summarizer_handler = static function(array $context): array {
         $input = $context['input'] ?? null;
         if (!is_array($input)) {
-            throw new RuntimeException('unexpected orchestrator input');
+            throw new RuntimeException('Unexpected orchestrator input: expected array.');
         }
 
         return ['output' => $input];
