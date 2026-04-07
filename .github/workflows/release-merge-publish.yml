@@ -29,6 +29,7 @@ jobs:
       release-tag: ${{ steps.resolve.outputs.release-tag }}
       release-version: ${{ steps.resolve.outputs.release-version }}
       is-merge-to-main: ${{ steps.resolve.outputs.is-merge-to-main }}
+      release-commit: ${{ steps.resolve.outputs.release-commit }}
     steps:
       - name: Resolve release target
         id: resolve
@@ -47,6 +48,7 @@ jobs:
               echo "::notice::Release merge publish skipped because the event is not a merged PR into main." >&2
               echo "is-merge-to-main=${IS_MERGE_TO_MAIN}" >> "${GITHUB_OUTPUT}"
               echo "should-publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
+              echo "release-commit=" >> "${GITHUB_OUTPUT}"
               echo "release-branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
               echo "release-version=" >> "${GITHUB_OUTPUT}"
               echo "release-tag=" >> "${GITHUB_OUTPUT}"
@@ -58,13 +60,14 @@ jobs:
           if [[ "${RELEASE_BRANCH}" == develop/v* ]]; then
             RELEASE_VERSION="${RELEASE_BRANCH#develop/}"
           else
-            echo "Release workflow ignored for branch ${RELEASE_BRANCH}." >&2
-            SHOULD_PUBLISH="false"
-            echo "should-publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
-            echo "release-branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
-            echo "release-version=" >> "${GITHUB_OUTPUT}"
-            echo "release-tag=" >> "${GITHUB_OUTPUT}"
-            exit 0
+              echo "Release workflow ignored for branch ${RELEASE_BRANCH}." >&2
+              SHOULD_PUBLISH="false"
+              echo "release-commit=" >> "${GITHUB_OUTPUT}"
+              echo "should-publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
+              echo "release-branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
+              echo "release-version=" >> "${GITHUB_OUTPUT}"
+              echo "release-tag=" >> "${GITHUB_OUTPUT}"
+              exit 0
           fi
 
           if [[ -z "${RELEASE_VERSION}" ]]; then
@@ -84,11 +87,18 @@ jobs:
             SHOULD_PUBLISH="true"
           fi
 
+          RELEASE_COMMIT="${{ github.event.pull_request.merge_commit_sha }}"
+          if [[ -z "${RELEASE_COMMIT}" ]]; then
+              echo "::error::Pull request merge commit SHA is missing." >&2
+              exit 1
+          fi
+
           echo "is-merge-to-main=${IS_MERGE_TO_MAIN}" >> "${GITHUB_OUTPUT}"
           echo "should-publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
           echo "release-branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
           echo "release-version=${RELEASE_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "release-tag=${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "release-commit=${RELEASE_COMMIT}" >> "${GITHUB_OUTPUT}"
 
   build-release-packages:
     name: Build release artifacts for ${{ matrix.php-version }} / ${{ matrix.arch-label }}
@@ -136,7 +146,7 @@ jobs:
       - name: Checkout release merge commit
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          ref: ${{ needs.resolve-release-merge.outputs.release-commit }}
           submodules: recursive
 
       - name: Setup PHP ${{ matrix.php-version }}
@@ -226,7 +236,7 @@ jobs:
       - name: Checkout release merge commit
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          ref: ${{ needs.resolve-release-merge.outputs.release-commit }}
           submodules: recursive
 
       - name: Build PIE source package
@@ -354,7 +364,7 @@ jobs:
           set -euo pipefail
 
           RELEASE_BRANCH="${{ github.event.pull_request.head.ref }}"
-          RELEASE_TARGET="${{ github.event.pull_request.merge_commit_sha || github.sha }}"
+          RELEASE_TARGET="${{ needs.resolve-release-merge.outputs.release-commit }}"
           RELEASE_TAG="${{ needs.resolve-release-merge.outputs.release-tag }}"
           RELEASE_VERSION="${{ needs.resolve-release-merge.outputs.release-version }}"
 
