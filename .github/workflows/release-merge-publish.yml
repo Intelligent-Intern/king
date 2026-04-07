@@ -20,9 +20,66 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  resolve-release-merge:
+    name: Resolve release merge requirements
+    runs-on: ubuntu-24.04
+    outputs:
+      should-publish: ${{ steps.resolve.outputs.should-publish }}
+      release-branch: ${{ steps.resolve.outputs.release-branch }}
+      release-tag: ${{ steps.resolve.outputs.release-tag }}
+      release-version: ${{ steps.resolve.outputs.release-version }}
+    steps:
+      - name: Resolve release target
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          RELEASE_BRANCH="${{ github.event.pull_request.head.ref }}"
+          SHOULD_PUBLISH="false"
+          if [[ "${RELEASE_BRANCH}" == release/* ]]; then
+            RELEASE_VERSION="${RELEASE_BRANCH#release/}"
+          elif [[ "${RELEASE_BRANCH}" == hotfix-release/* ]]; then
+            RELEASE_VERSION="${RELEASE_BRANCH#hotfix-release/}"
+          else
+            echo "Release workflow ignored for branch ${RELEASE_BRANCH}." >&2
+            SHOULD_PUBLISH="false"
+            echo "should-publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
+            echo "branch-kind=" >> "${GITHUB_OUTPUT}"
+            echo "release-branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
+            echo "release-version=" >> "${GITHUB_OUTPUT}"
+            echo "release-tag=" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [[ -z "${RELEASE_VERSION}" ]]; then
+            echo "::error::Could not resolve release version from branch ${RELEASE_BRANCH}" >&2
+            exit 1
+          fi
+
+          if [[ "${RELEASE_VERSION}" == v* ]]; then
+            RELEASE_TAG="${RELEASE_VERSION}"
+          else
+            RELEASE_TAG="v${RELEASE_VERSION}"
+          fi
+
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            SHOULD_PUBLISH="false"
+          else
+            SHOULD_PUBLISH="true"
+          fi
+
+          echo "should-publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
+          echo "release-branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
+          echo "release-version=${RELEASE_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "release-tag=${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
+
   build-release-packages:
     name: Build release artifacts for ${{ matrix.php-version }} / ${{ matrix.arch-label }}
-    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/')
+    needs:
+      - resolve-release-merge
+    if: github.event.pull_request.merged == true && needs.resolve-release-merge.outputs.should-publish == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
@@ -145,7 +202,9 @@ jobs:
 
   build-release-pie-source:
     name: Build PIE source asset
-    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/')
+    needs:
+      - resolve-release-merge
+    if: github.event.pull_request.merged == true && needs.resolve-release-merge.outputs.should-publish == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -168,9 +227,10 @@ jobs:
   publish-release:
     name: Publish release artifacts
     needs:
+      - resolve-release-merge
       - build-release-packages
       - build-release-pie-source
-    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/')
+    if: github.event.pull_request.merged == true && needs.resolve-release-merge.outputs.should-publish == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
@@ -247,16 +307,12 @@ jobs:
           set -euo pipefail
 
           RELEASE_BRANCH="${{ github.event.pull_request.head.ref }}"
-          RELEASE_VERSION="${RELEASE_BRANCH#release/}"
-          RELEASE_TAG="${RELEASE_VERSION}"
+          RELEASE_TAG="${{ needs.resolve-release-merge.outputs.release-tag }}"
+          RELEASE_VERSION="${{ needs.resolve-release-merge.outputs.release-version }}"
 
           if [[ -z "${RELEASE_VERSION}" ]]; then
-            echo "Release branch must be in the form release/<version>: ${RELEASE_BRANCH}" >&2
+            echo "Release branch must be in the form release/<version> or hotfix-release/<version>: ${RELEASE_BRANCH}" >&2
             exit 1
-          fi
-
-          if [[ "${RELEASE_TAG}" != v* ]]; then
-            RELEASE_TAG="v${RELEASE_TAG}"
           fi
 
           if [ ! -d release-assets ]; then
@@ -283,17 +339,13 @@ jobs:
           set -euo pipefail
 
           RELEASE_BRANCH="${{ github.event.pull_request.head.ref }}"
-          RELEASE_VERSION="${RELEASE_BRANCH#release/}"
-          RELEASE_TAG="${RELEASE_VERSION}"
           RELEASE_TARGET="${{ github.event.pull_request.merge_commit_sha || github.sha }}"
+          RELEASE_TAG="${{ needs.resolve-release-merge.outputs.release-tag }}"
+          RELEASE_VERSION="${{ needs.resolve-release-merge.outputs.release-version }}"
 
           if [[ -z "${RELEASE_VERSION}" ]]; then
-            echo "Release branch must be in the form release/<version>: ${RELEASE_BRANCH}" >&2
+            echo "Release branch must be in the form release/<version> or hotfix-release/<version>: ${RELEASE_BRANCH}" >&2
             exit 1
-          fi
-
-          if [[ "${RELEASE_TAG}" != v* ]]; then
-            RELEASE_TAG="v${RELEASE_TAG}"
           fi
 
           prerelease_args=()
