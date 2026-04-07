@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./infra/scripts/package-pie-source.sh [--output-dir DIR]
+Usage: ./infra/scripts/package-pie-source.sh [--output-dir DIR] [--release-tag TAG]
 
 Creates the PIE pre-packaged source asset:
   dist/php_king-<version>-src.tgz
@@ -17,6 +17,7 @@ EOF
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 OUTPUT_DIR="${ROOT_DIR}/dist"
+RELEASE_TAG="${KING_PIE_RELEASE_TAG:-}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -26,6 +27,14 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        --release-tag)
+            if [[ $# -lt 2 ]]; then
+                echo "Missing value for --release-tag." >&2
+                exit 1
+            fi
+            RELEASE_TAG="$2"
             shift 2
             ;;
         -h|--help)
@@ -50,6 +59,9 @@ resolve_source_epoch() {
 }
 
 VERSION="$(resolve_version)"
+if [[ -n "${RELEASE_TAG}" ]]; then
+    VERSION="${RELEASE_TAG}"
+fi
 if [[ -z "${VERSION}" ]]; then
     echo "Failed to resolve PHP_KING_VERSION." >&2
     exit 1
@@ -97,14 +109,17 @@ SOURCE_DATE_EPOCH="$(resolve_source_epoch)"
 
 mkdir -p "${STAGE_ROOT}"
 
-tar \
-    --exclude-vcs \
-    --exclude='./dist' \
-    --exclude='./compat-artifacts' \
-    --exclude='./extension/build' \
-    --exclude='./extension/modules' \
-    --exclude='./extension/Makefile' \
-    --exclude='./extension/config.cache' \
+    tar \
+        --exclude-vcs \
+        --exclude='./dist' \
+        --exclude='./compat-artifacts' \
+        --exclude='./.cargo' \
+        --exclude='./extension/build' \
+        --exclude='./extension/quiche/target' \
+        --exclude='./extension/tests/http3_ticket_server/target' \
+        --exclude='./extension/modules' \
+        --exclude='./extension/Makefile' \
+        --exclude='./extension/config.cache' \
     --exclude='./extension/config.log' \
     --exclude='./extension/config.status' \
     --exclude='./quiche/target' \

@@ -242,7 +242,7 @@ jobs:
           submodules: recursive
 
       - name: Build PIE source package
-        run: ./infra/scripts/package-pie-source.sh --output-dir release-assets
+        run: ./infra/scripts/package-pie-source.sh --output-dir release-assets --release-tag "${{ needs.resolve-release-merge.outputs.release-tag }}"
 
       - name: Upload PIE source asset
         uses: actions/upload-artifact@v4
@@ -388,7 +388,6 @@ jobs:
               release-assets/*
           else
             gh release create "${RELEASE_TAG}" \
-              --repo "${GITHUB_REPOSITORY}" \
               --title "King ${RELEASE_TAG}" \
               --target "${RELEASE_TARGET}" \
               --notes-from-tag \
