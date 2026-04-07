@@ -196,7 +196,7 @@ $controllerArgv = [
     $controllerScript,
 ];
 $controllerProcess = proc_open($controllerArgv, [
-    0 => ['file', '/dev/null', 'r'],
+    0 => ['file', 'php://stdin', 'r'],
     1 => ['pipe', 'w'],
     2 => ['pipe', 'w'],
 ], $controllerPipes);
