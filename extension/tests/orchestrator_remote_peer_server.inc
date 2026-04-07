@@ -265,9 +265,13 @@ try {
     exit(1);
 }
 
-$endpoint = strpos($bindHost, ':') !== false && !preg_match('/^\[.*\]$/', $bindHost)
-    ? 'tcp://[' . $bindHost . ']:' . $port
-    : 'tcp://' . $bindHost . ':' . $port;
+$isIpv6 = filter_var($bindHost, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
+
+if ($isIpv6 && !preg_match('/^\[.*\]$/', $bindHost)) {
+    $bindHost = '[' . $bindHost . ']';
+}
+
+$endpoint = 'tcp://' . $bindHost . ':' . $port;
 
 $server = @stream_socket_server($endpoint, $errno, $errstr);
 if ($server === false) {
