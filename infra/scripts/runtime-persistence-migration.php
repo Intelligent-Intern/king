@@ -49,7 +49,7 @@ if ($mode === 'write') {
     $summarizer_handler = static function(array $context): array {
         $input = $context['input'] ?? null;
         if (!is_array($input)) {
-            throw new RuntimeException('unexpected orchestrator input');
+            throw new RuntimeException('Unexpected orchestrator input: expected array.');
         }
 
         return ['output' => $input];
