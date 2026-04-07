@@ -28,6 +28,7 @@ jobs:
       release-branch: ${{ steps.resolve.outputs.release-branch }}
       release-tag: ${{ steps.resolve.outputs.release-tag }}
       release-version: ${{ steps.resolve.outputs.release-version }}
+      is-merge-to-main: ${{ steps.resolve.outputs.is-merge-to-main }}
     steps:
       - name: Resolve release target
         id: resolve
@@ -37,14 +38,29 @@ jobs:
           set -euo pipefail
 
           RELEASE_BRANCH="${{ github.event.pull_request.head.ref }}"
+          MERGE_TO_MAIN="${{ github.event.pull_request.merged }}"
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
           SHOULD_PUBLISH="false"
+          IS_MERGE_TO_MAIN="false"
+
+          if [[ "${MERGE_TO_MAIN}" != "true" || "${BASE_REF}" != "main" ]]; then
+              echo "::notice::Release merge publish skipped because the event is not a merged PR into main." >&2
+              echo "is-merge-to-main=${IS_MERGE_TO_MAIN}" >> "${GITHUB_OUTPUT}"
+              echo "should-publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
+              echo "release-branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
+              echo "release-version=" >> "${GITHUB_OUTPUT}"
+              echo "release-tag=" >> "${GITHUB_OUTPUT}"
+              exit 0
+          fi
+
+          IS_MERGE_TO_MAIN="true"
+
           if [[ "${RELEASE_BRANCH}" == develop/v* ]]; then
             RELEASE_VERSION="${RELEASE_BRANCH#develop/}"
           else
             echo "Release workflow ignored for branch ${RELEASE_BRANCH}." >&2
             SHOULD_PUBLISH="false"
             echo "should-publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
-            echo "branch-kind=" >> "${GITHUB_OUTPUT}"
             echo "release-branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
             echo "release-version=" >> "${GITHUB_OUTPUT}"
             echo "release-tag=" >> "${GITHUB_OUTPUT}"
@@ -68,6 +84,7 @@ jobs:
             SHOULD_PUBLISH="true"
           fi
 
+          echo "is-merge-to-main=${IS_MERGE_TO_MAIN}" >> "${GITHUB_OUTPUT}"
           echo "should-publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
           echo "release-branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
           echo "release-version=${RELEASE_VERSION}" >> "${GITHUB_OUTPUT}"
@@ -77,7 +94,7 @@ jobs:
     name: Build release artifacts for ${{ matrix.php-version }} / ${{ matrix.arch-label }}
     needs:
       - resolve-release-merge
-    if: github.event.pull_request.merged == true && needs.resolve-release-merge.outputs.should-publish == 'true'
+    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
@@ -202,7 +219,7 @@ jobs:
     name: Build PIE source asset
     needs:
       - resolve-release-merge
-    if: github.event.pull_request.merged == true && needs.resolve-release-merge.outputs.should-publish == 'true'
+    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -228,7 +245,7 @@ jobs:
       - resolve-release-merge
       - build-release-packages
       - build-release-pie-source
-    if: github.event.pull_request.merged == true && needs.resolve-release-merge.outputs.should-publish == 'true'
+    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
