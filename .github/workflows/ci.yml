@@ -7,6 +7,10 @@ on:
   pull_request:
     branches:
       - main
+    types:
+      - opened
+      - synchronize
+      - reopened
   workflow_dispatch:
 
 concurrency:
@@ -36,34 +40,21 @@ jobs:
         with:
           script: |
             const eventName = context.eventName;
-            const refName = process.env.GITHUB_REF_NAME;
-            const refType = process.env.GITHUB_REF_TYPE;
+            const refName = process.env.GITHUB_REF_NAME || '';
             const planningBranch = (eventName === 'pull_request'
-              ? context.payload.pull_request.head.ref
+              ? context.payload.pull_request?.head?.ref
               : refName
             ) || '';
             let runHeavyJobs = 'true';
-            let reason = `${eventName} runs the canonical pipeline`;
+            let reason = `${eventName} on ${refName || planningBranch}: run canonical pipeline`;
+            const isPlanningBranch = planningBranch.startsWith('planning/');
 
-            if (planningBranch.startsWith('planning/')) {
+            if (isPlanningBranch) {
               runHeavyJobs = 'false';
-              reason = `Skipping canonical baseline for planning branch ${planningBranch}; docs-only planning guard is the required gate.`;
-            } else if (planningBranch.startsWith('release/')) {
+              reason = `Skipping canonical baseline for planning branch ${planningBranch}; docs-only guard is required.`;
+            } else {
               runHeavyJobs = 'true';
-              reason = `Running canonical baseline for release branch ${planningBranch}; release publishes require full pipeline execution.`;
-            } else if (eventName === 'push' && refType === 'branch') {
-              const { data: pulls } = await github.rest.pulls.list({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-                head: `${context.repo.owner}:${refName}`,
-                per_page: 1,
-              });
-
-              if (pulls.length > 0) {
-                runHeavyJobs = 'false';
-                reason = `Skipping duplicate push run for ${refName}; open PR #${pulls[0].number} will run the canonical pipeline.`;
-              }
+              reason = `${eventName} on ${planningBranch}: full pipeline.`;
             }
 
             core.setOutput('run-heavy-jobs', runHeavyJobs);
@@ -364,162 +355,6 @@ jobs:
             dist/*.tar.gz
             dist/*.tar.gz.sha256
             extension/config.log
-
-  release-publish:
-    name: Publish Release Branch Assets
-    needs:
-      - canonical-baseline
-      - install-package-matrix
-      - release-upgrade-compatibility
-      - release-downgrade-compatibility
-      - release-persistence-migration
-      - release-config-state-compatibility
-    if: github.event_name == 'push' && github.ref_type == 'branch' && startsWith(github.ref, 'refs/heads/release/')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          submodules: recursive
-
-      - name: Download release package php 8.1 linux amd64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.1-linux-amd64
-          path: release-assets
-
-      - name: Download release package php 8.1 linux arm64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.1-linux-arm64
-          path: release-assets
-
-      - name: Download release package php 8.2 linux amd64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.2-linux-amd64
-          path: release-assets
-
-      - name: Download release package php 8.2 linux arm64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.2-linux-arm64
-          path: release-assets
-
-      - name: Download release package php 8.3 linux amd64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.3-linux-amd64
-          path: release-assets
-
-      - name: Download release package php 8.3 linux arm64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.3-linux-arm64
-          path: release-assets
-
-      - name: Download release package php 8.4 linux amd64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.4-linux-amd64
-          path: release-assets
-
-      - name: Download release package php 8.4 linux arm64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.4-linux-arm64
-          path: release-assets
-
-      - name: Download release package php 8.5 linux arm64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.5-linux-arm64
-          path: release-assets
-
-      - name: Download release package php 8.5 linux amd64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.5-linux-amd64
-          path: release-assets
-
-      - name: Generate PIE source asset
-        run: ./infra/scripts/package-pie-source.sh --output-dir release-assets
-
-      - name: Verify release assets
-        run: |
-          set -euo pipefail
-
-          RELEASE_BRANCH="${GITHUB_REF_NAME}"
-          RELEASE_VERSION="${RELEASE_BRANCH#release/}"
-          RELEASE_TAG="${RELEASE_VERSION}"
-
-          if [[ -z "${RELEASE_VERSION}" ]]; then
-            echo "Release branch must be in the form release/<version>: ${RELEASE_BRANCH}" >&2
-            exit 1
-          fi
-
-          if [[ "${RELEASE_TAG}" != v* ]]; then
-            RELEASE_TAG="v${RELEASE_TAG}"
-          fi
-
-          if [ ! -d release-assets ]; then
-            echo "Missing release-assets staging directory." >&2
-            exit 1
-          fi
-
-          printf 'Release branch %s -> release tag %s\n' "${RELEASE_BRANCH}" "${RELEASE_TAG}"
-          if ! compgen -G "release-assets/*.tgz" > /dev/null; then
-            echo "No PIE source asset found in release-assets." >&2
-            exit 1
-          fi
-          if ! compgen -G "release-assets/*.tar.gz" > /dev/null; then
-            echo "No release package archive found in release-assets." >&2
-            exit 1
-          fi
-          ls -lah release-assets
-
-      - name: Publish to GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-
-          RELEASE_BRANCH="${GITHUB_REF_NAME}"
-          RELEASE_VERSION="${RELEASE_BRANCH#release/}"
-          RELEASE_TAG="${RELEASE_VERSION}"
-
-          if [[ -z "${RELEASE_VERSION}" ]]; then
-            echo "Release branch must be in the form release/<version>: ${RELEASE_BRANCH}" >&2
-            exit 1
-          fi
-
-          if [[ "${RELEASE_TAG}" != v* ]]; then
-            RELEASE_TAG="v${RELEASE_TAG}"
-          fi
-
-          prerelease_args=()
-          if [[ "${RELEASE_TAG}" == *-* ]]; then
-            prerelease_args+=(--prerelease)
-          fi
-
-          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            gh release upload \
-              "${RELEASE_TAG}" \
-              --repo "${GITHUB_REPOSITORY}" \
-              --clobber \
-              release-assets/*
-          else
-            gh release create "${RELEASE_TAG}" \
-              --repo "${GITHUB_REPOSITORY}" \
-              --title "King ${RELEASE_TAG}" \
-              --target "${GITHUB_SHA}" \
-              --notes-from-tag \
-              "${prerelease_args[@]}" \
-              release-assets/*
-          fi
 
   release-upgrade-compatibility:
     name: Release Upgrade Compatibility
@@ -913,3 +748,21 @@ jobs:
             extension/tests/*.exp
             extension/tests/*.log
             extension/tests/*.out
+
+  release-full-gate:
+    name: Full pipeline completed
+    needs:
+      - canonical-baseline
+      - profile-smoke
+      - install-package-matrix
+      - release-upgrade-compatibility
+      - release-downgrade-compatibility
+      - release-persistence-migration
+      - release-config-state-compatibility
+      - sanitizer-soak
+      - branch-push-dedupe
+    if: needs.branch-push-dedupe.outputs.run-heavy-jobs == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Full release pipeline passed
+        run: echo "Full pipeline passed and release packages are ready."

@@ -2,10 +2,57 @@
 
 declare(strict_types=1);
 
+const MIGRATION_MAX_STORAGE_BYTES = 1048576;
+const MIGRATION_MIN_ORCHESTRATOR_RUN_HISTORY_COUNT = 4;
+
 function fail_migration(string $message): never
 {
     fwrite(STDERR, $message . "\n");
     exit(1);
+}
+
+/**
+ * Initialize and start semantic DNS for the current migration mode.
+ */
+function initialize_semantic_dns(string $mode, array $config, string $configInfo): void
+{
+    if (!king_semantic_dns_init($config)) {
+        fail_migration(
+            'Semantic DNS init failed in ' . $mode . ' mode. Mode: ' . $mode . '. Config: ' . $configInfo .
+            '. Check semantic DNS environment, module initialization rights, and config consistency.'
+        );
+    }
+
+    if (!king_semantic_dns_start_server()) {
+        $dnsPort = $config['dns_port'] ?? 'unknown';
+        fail_migration(
+            'Semantic DNS start failed in ' . $mode . ' mode on port ' . (string) $dnsPort .
+            '. Verify the process has bind permissions and that no other process occupies the address/port.'
+        );
+    }
+}
+
+/**
+ * @param array<int, array<string, mixed>> $tools
+ * @param string $traceId
+ *
+ * @return array<string, mixed>
+ */
+function run_persistence_orchestrator(array $input, array $tools, string $traceId): array
+{
+    $result = king_pipeline_orchestrator_run(
+        $input,
+        $tools,
+        ['trace_id' => $traceId]
+    );
+
+    if (!is_array($result)) {
+        fail_migration(
+            'Orchestrator did not return an array for trace id ' . $traceId . '.'
+        );
+    }
+
+    return $result;
 }
 
 if ($argc < 2) {
@@ -46,7 +93,7 @@ if ($mode === 'write') {
     king_object_store_init([
         'storage_root_path' => $objectStoreRoot,
         'primary_backend' => 'local_fs',
-        'max_storage_size_bytes' => 1048576,
+        'max_storage_size_bytes' => MIGRATION_MAX_STORAGE_BYTES,
     ]);
 
     if (!king_object_store_put('migration-alpha', 'alpha-payload')) {
@@ -62,7 +109,11 @@ if ($mode === 'write') {
             throw new RuntimeException('Unexpected orchestrator input: expected array.');
         }
 
-        return ['output' => $input];
+        return [
+            'text' => $input['text'] ?? '',
+            'output' => $input,
+            'meta' => $input['meta'] ?? null,
+        ];
     };
 
     $metadata = king_object_store_get_metadata('migration-alpha');
@@ -80,10 +131,11 @@ if ($mode === 'write') {
         fail_migration('Failed to register orchestrator handler.');
     }
 
-    $result = king_pipeline_orchestrator_run(
+    $orchestratorTools = [['tool' => 'summarizer', 'params' => ['ratio' => 0.5]]];
+    $result = run_persistence_orchestrator(
         ['text' => 'persisted text'],
-        [['tool' => 'summarizer', 'params' => ['ratio' => 0.5]]],
-        ['trace_id' => 'persist-migration-1']
+        $orchestratorTools,
+        'persist-migration-1'
     );
     if (($result['text'] ?? null) !== 'persisted text') {
         $actualText = $result['text'] ?? null;
@@ -92,18 +144,38 @@ if ($mode === 'write') {
         );
     }
 
-    if (!king_semantic_dns_init($semanticConfig)) {
-        fail_migration(
-            'Semantic DNS init failed in write mode. Mode: ' . $mode . '. Config: ' . $semanticConfigInfo .
-            '. Check semantic DNS environment, module initialization rights, and config consistency.'
-        );
+    run_persistence_orchestrator(
+        [],
+        $orchestratorTools,
+        'persist-migration-empty-input'
+    );
+
+    run_persistence_orchestrator(
+        ['other_key' => 'value'],
+        $orchestratorTools,
+        'persist-migration-missing-text'
+    );
+
+    $complexInput = [
+        'text' => 'persisted complex text',
+        'meta' => [
+            'tags' => ['migration', 'persistence', 'orchestrator'],
+            'nested' => [
+                'level' => 2,
+                'data' => ['alpha', 'beta', 'gamma'],
+            ],
+        ],
+    ];
+    $complexResult = run_persistence_orchestrator(
+        $complexInput,
+        $orchestratorTools,
+        'persist-migration-complex-input'
+    );
+    if (!array_key_exists('meta', $complexResult)) {
+        fail_migration('Orchestrator result for complex input is missing expected "meta" key.');
     }
-    if (!king_semantic_dns_start_server()) {
-        fail_migration(
-            'Semantic DNS start failed in write mode on port ' . $semanticConfig['dns_port'] .
-            '. Verify the process has bind permissions and that no other process occupies the address/port.'
-        );
-    }
+
+    initialize_semantic_dns($mode, $semanticConfig, $semanticConfigInfo);
     if (!king_semantic_dns_register_service([
         'service_id' => 'migration-api-1',
         'service_name' => 'migration-api',
@@ -135,7 +207,7 @@ if ($mode === 'write') {
 king_object_store_init([
     'storage_root_path' => $objectStoreRoot,
     'primary_backend' => 'local_fs',
-    'max_storage_size_bytes' => 1048576,
+    'max_storage_size_bytes' => MIGRATION_MAX_STORAGE_BYTES,
 ]);
 
 if (king_object_store_get('migration-alpha') !== 'alpha-payload') {
@@ -157,26 +229,33 @@ if (($orchestrator['configuration']['recovered_from_state'] ?? null) !== true) {
 if (($orchestrator['configuration']['tool_count'] ?? null) !== 1) {
     fail_migration('Unexpected recovered orchestrator tool count.');
 }
-if (($orchestrator['configuration']['run_history_count'] ?? null) !== 1) {
-    fail_migration('Unexpected recovered orchestrator run history count.');
+if (($orchestrator['configuration']['run_history_count'] ?? null) < MIGRATION_MIN_ORCHESTRATOR_RUN_HISTORY_COUNT) {
+    $runHistoryCount = $orchestrator['configuration']['run_history_count'] ?? null;
+    if (!is_int($runHistoryCount)) {
+        fail_migration('Unexpected recovered orchestrator run history count format.');
+    }
+    fail_migration(
+        'Recovered orchestrator run history count is too low. Expected at least ' .
+        MIGRATION_MIN_ORCHESTRATOR_RUN_HISTORY_COUNT .
+        ', got: ' .
+        $runHistoryCount
+    );
 }
 
-if (!king_semantic_dns_init($semanticConfig)) {
-    fail_migration(
-        'Semantic DNS init failed in read mode. Mode: ' . $mode . '. Config: ' . $semanticConfigInfo .
-        '. Verify environment/permissions and re-check persisted semantic state restoration.'
-    );
-}
-if (!king_semantic_dns_start_server()) {
-    fail_migration(
-        'Semantic DNS start failed in read mode on port ' . $semanticConfig['dns_port'] .
-        '. Verify process ownership and local bind conflicts before rerunning migration.'
-    );
-}
+initialize_semantic_dns($mode, $semanticConfig, $semanticConfigInfo);
 
 $topology = king_semantic_dns_get_service_topology();
+if (!is_array($topology) || !isset($topology['statistics']) || !is_array($topology['statistics'])) {
+    fail_migration('Failed to retrieve semantic DNS topology: unexpected result structure.');
+}
 $discovery = king_semantic_dns_discover_service('pipeline_orchestrator');
+if (!is_array($discovery)) {
+    fail_migration('Failed to retrieve semantic DNS discovery information for "pipeline_orchestrator": unexpected result structure.');
+}
 $route = king_semantic_dns_get_optimal_route('migration-api');
+if (!is_array($route)) {
+    fail_migration('Failed to retrieve semantic DNS optimal route for "migration-api": unexpected result structure.');
+}
 
 if (($topology['statistics']['total_services'] ?? null) !== 1) {
     fail_migration('Unexpected recovered semantic DNS service count.');
