@@ -244,7 +244,14 @@ $controllerStatusInfo = proc_get_status($controllerProcess);
 $controllerPid = (int) ($controllerStatusInfo['pid'] ?? 0);
 $killStatus = -1;
 if ($controllerPid > 0 && ($controllerStatusInfo['running'] ?? false)) {
-    exec('/bin/kill -9 ' . $controllerPid, $killOutput, $killStatus);
+    // Prefer proc_terminate over executing an external kill command for portability and safety.
+    $terminated = @proc_terminate($controllerProcess, 9);
+    if ($terminated) {
+        $killStatus = 0;
+    } elseif (function_exists('posix_kill')) {
+        // Fallback to posix_kill if available; map boolean result to an int status.
+        $killStatus = posix_kill($controllerPid, 9) ? 0 : 1;
+    }
 }
 var_dump($killStatus === 0);
 
