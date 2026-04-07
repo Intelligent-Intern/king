@@ -55,15 +55,30 @@ if [[ -z "${VERSION}" ]]; then
     exit 1
 fi
 
-if [[ -d "${ROOT_DIR}/quiche/.git" ]]; then
-    "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" --verify-current
+if [[ -f "${ROOT_DIR}/infra/scripts/quiche-bootstrap.lock" && -f "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" ]]; then
+    if [[ -d "${ROOT_DIR}/quiche/.git" ]]; then
+        "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" --verify-current
+    else
+        "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh"
+    fi
+else
+    echo "Quiche bootstrap metadata missing; assuming repository checkout provides required files." >&2
+fi
+
+if [[ -f "${ROOT_DIR}/quiche/quiche/Cargo.toml" ]]; then
+    QUICHE_CORE_CARGO="${ROOT_DIR}/quiche/quiche/Cargo.toml"
+elif [[ -f "${ROOT_DIR}/quiche/Cargo.toml" ]]; then
+    QUICHE_CORE_CARGO="${ROOT_DIR}/quiche/Cargo.toml"
+else
+    echo "Missing required PIE source-package input: ${ROOT_DIR}/quiche/Cargo.toml (and ${ROOT_DIR}/quiche/quiche/Cargo.toml)." >&2
+    exit 1
 fi
 
 for required in \
     "${ROOT_DIR}/composer.json" \
     "${ROOT_DIR}/extension/config.m4" \
     "${ROOT_DIR}/extension/Makefile.frag" \
-    "${ROOT_DIR}/quiche/quiche/Cargo.toml" \
+    "${QUICHE_CORE_CARGO}" \
     "${ROOT_DIR}/quiche/apps/Cargo.toml"; do
     if [[ ! -e "${required}" ]]; then
         echo "Missing required PIE source-package input: ${required}" >&2
