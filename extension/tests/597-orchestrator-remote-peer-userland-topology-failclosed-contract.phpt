@@ -207,7 +207,7 @@ for ($i = 0; $i < 1200; $i++) {
     $observerStatus = -1;
     exec($observerCommand('run-1'), $observerOutput, $observerStatus);
     $snapshot = json_decode(trim($observerOutput[0] ?? ''), true);
-    if (($i % 50) === 0) {
+    if (($i % 50) === 0 && getenv('KING_597_DEBUG_LOG')) {
         file_put_contents(
             '/tmp/king-597-remote-peer-debug.log',
             json_encode([
