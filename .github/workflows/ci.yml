@@ -55,8 +55,6 @@ jobs:
             const repo = context.repo.repo;
             const isPlanningBranch = planningBranch.startsWith('planning/');
             const isReleaseBranch = planningBranch.startsWith('release/');
-            const isHotfixReleaseBranch = planningBranch.startsWith('hotfix-release/');
-            const isMainMerge = eventName === 'push' && refType === 'branch' && refName === 'main';
 
             const sameAsMain = async () => {
               if (!isReleaseBranch) {
@@ -108,10 +106,6 @@ jobs:
               runHeavyJobs = 'false';
               releaseMode = 'skip';
               reason = `Skipping canonical baseline for planning branch ${planningBranch}; docs-only guard is required.`;
-            } else if (isHotfixReleaseBranch) {
-              runHeavyJobs = 'false';
-              releaseMode = 'skip';
-              reason = `Skipping canonical baseline for hotfix-release branch ${planningBranch}; build/release deferred to merge workflow.`;
             } else if (isReleaseBranch && eventName === 'push' && refType === 'branch') {
               if (await sameAsMain()) {
                 runHeavyJobs = 'false';
@@ -131,15 +125,6 @@ jobs:
                 runHeavyJobs = 'true';
                 releaseMode = 'full-release';
                 reason = `Release PR ${planningBranch} diverges from target; executing full pipeline before merge.`;
-              }
-            } else if (isMainMerge) {
-              const mergeMessage = (context.payload.head_commit?.message || '').split('\n')[0] || '';
-              const isReleaseMerge = /^Merge pull request #\d+ from .*\/(release|hotfix-release)\//.test(mergeMessage);
-
-              if (isReleaseMerge) {
-                runHeavyJobs = 'false';
-                releaseMode = 'skip';
-                reason = `Skipping canonical baseline for ${planningBranch} merge; release publish handled by merge workflow.`;
               }
             } else {
               if (eventName === 'pull_request' || eventName === 'push') {

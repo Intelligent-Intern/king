@@ -45,13 +45,7 @@ jobs:
             exit 1
           fi
 
-          merge_message="$(jq -r '.workflow_run.head_commit.message // ""' "$GITHUB_EVENT_PATH")"
           publish_enabled="true"
-
-          if echo "${merge_message}" | grep -Eq '^Merge pull request #[0-9]+ from .*/(release|hotfix-release)/'; then
-            publish_enabled="false"
-            echo "Skipping docker publish for merged release branch." >&2
-          fi
 
           {
             printf 'source-run-id=%s\n' "${{ github.event.workflow_run.id }}"
