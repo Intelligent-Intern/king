@@ -86,6 +86,13 @@ In practice, these signals are often downstream of the telemetry system. That is
 why the autoscaling chapter belongs close to the telemetry chapter in the
 handbook. Observability feeds control.
 
+The repo-local proof for that contract is now a live one-shot HTTP request
+harness rather than a doc-only or array-only shortcut. Real requests perform
+CPU work, carry a measurable response time, maintain a backlog counter, compute
+their current request rate and connection count, publish a live memory snapshot,
+and the next autoscaling monitor tick consumes those six `autoscaling.*`
+signals intact.
+
 ## Status: What The Controller Believes
 
 `king_autoscaling_get_status()` is the broad controller summary. This is the
