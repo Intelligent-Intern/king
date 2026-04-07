@@ -398,6 +398,28 @@ controller memory are outside the durable public contract and must be rejected
 or treated as missing execution readiness instead of being serialized
 informally.
 
+### Userland Handler Restart Duties
+
+The procedural surface is strongest when the duties are explicit:
+
+- Local backend execution with `run()` or `resume_run()` requires process-local
+  registrations in the same controller process for each tool that will execute in
+  that run.
+- File-worker execution requires durable tool definitions in the controller for
+  `dispatch()`, and re-registrations in every worker process before
+  `worker_run_next()`, including restart after worker replacement.
+- Remote-peer execution requires the controller to persist only durable boundary and
+  tool config data; the peer must independently register tool definitions and
+  executable handlers in the peer process before accepting any remote workflow
+  step.
+- After any restart or replacement, the process that will execute a userland step
+  must run the same process-local handler registration before attempting to
+  execute that step again.
+
+If these duties are not met, the run is fail-closed by design. Missing or
+unsupported handler readiness is surfaced through explicit handler readiness
+classification and does not fallback to stale callable assumptions.
+
 ## Error Buffers And Reading Order
 
 Three functions exist specifically to expose the shared error buffers used by

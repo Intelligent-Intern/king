@@ -335,6 +335,42 @@ orchestrator is preserving honest restart and topology semantics by refusing to
 pretend that non-durable PHP execution state became durable just because a run
 was persisted.
 
+## Userland Restart Duties
+
+The runtime contract is role-based. The same process that executes a step must
+own a local executable binding for the step tool before that process can execute
+it.
+
+Use this practical checklist for every userland-backed path:
+
+- A controller that runs userland-backed steps on the local backend must call
+  `king_pipeline_orchestrator_register_tool()` for each required tool, then
+  `king_pipeline_orchestrator_register_handler()` in the same process for the
+  same tool names before `run()` or `king_pipeline_orchestrator_resume_run()`.
+- A file-worker process that may run queued work must call
+  `king_pipeline_orchestrator_register_tool()` and re-register the exact same
+  userland handlers in that worker process before calling
+  `king_pipeline_orchestrator_worker_run_next()` and before claiming recovered
+  jobs.
+- A remote-peer process that receives userland-backed execution must register tool
+  definitions and executable handlers locally before accepting remote work.
+- Controller-side handler registration does not satisfy worker or peer execution.
+  On any restart or replacement, each execution process (`controller`,
+  `file_worker`, `remote_peer`) must repeat the local binding step before
+  resuming or claiming work.
+- If a process cannot complete that checklist, it must fail closed as
+  `missing_handler` (or unsupported readiness) instead of pretending callable
+  state still exists.
+
+The explicit consequence is this:
+
+- `dispatch()` stores durable `handler_boundary` state and a handler registry
+  snapshot so restart and restart/recovery can discover what is required.
+- `worker_run_next()` and `resume_run()` re-validate that the current process has
+  re-registered the required tool handlers before execution starts.
+- unsupported handler forms never become durable state and are rejected by form or
+  by process-local readiness at claim/resume boundaries.
+
 ## What A Pipeline Looks Like
 
 A pipeline is an ordered array of step definitions. At minimum, each step names

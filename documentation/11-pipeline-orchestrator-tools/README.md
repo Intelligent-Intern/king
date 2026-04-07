@@ -99,6 +99,27 @@ public durability claim. Captured closures, resource-backed callables, and
 handlers whose meaning depends on opaque controller memory must therefore be
 rejected or fail closed instead of being treated as portable execution state.
 
+## Step 1b: Keep Restart Duties Explicit
+
+A real workflow is only as stable as its restart behavior. Treat registration as a
+per-process duty:
+
+- The local controller process executing userland steps must register each tool
+  definition and executable handler before calling `run()` or
+  `resume_run()`.
+- Any file-worker process that may call `worker_run_next()` must register those
+  same tool definitions and executable handlers again in that worker process before
+  claiming queued work, after worker restart, and after replacement process start.
+- The controller-side handler registration does not satisfy remote execution.
+  A remote worker peer must boot with the same durable tool definitions and re-bind
+  executable handlers locally before it can execute remote-peer workflows.
+- If a process cannot satisfy these duties, `missing_handler` and unsupported handler
+  readiness outcomes are now the contractually correct fail-closed behavior instead
+  of an implicit fallback to stale process memory.
+
+This is intentionally repetitive. It is a restart-heavy boundary, and the same tool
+name must be re-established wherever executable userland work happens.
+
 ## Step 2: Define The Pipeline As Data
 
 After that, the example defines the pipeline itself as an array of step
