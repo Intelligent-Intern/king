@@ -266,9 +266,13 @@ try {
 }
 
 $isIpv6 = filter_var($bindHost, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
-
+    $bindHost = '[' . $bindHost . ']';
 if ($isIpv6 && !preg_match('/^\[.*\]$/', $bindHost)) {
     $bindHost = '[' . $bindHost . ']';
+}
+
+$endpoint = 'tcp://' . $bindHost . ':' . $port;
+
 }
 
 $endpoint = 'tcp://' . $bindHost . ':' . $port;
