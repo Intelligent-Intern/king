@@ -4,6 +4,7 @@ KING_QUICHE_PROFILE = release
 KING_QUICHE_LIBRARY = $(KING_QUICHE_TARGET_DIR)/$(KING_QUICHE_PROFILE)/libquiche.so
 KING_QUICHE_SERVER = $(KING_QUICHE_TARGET_DIR)/$(KING_QUICHE_PROFILE)/quiche-server
 KING_RUNTIME_INSTALL_DIR = $(INSTALL_ROOT)$(EXTENSION_DIR)/king/runtime
+KING_CARGO_BUILD_COMPAT = $(srcdir)/../infra/scripts/cargo-build-compat.sh
 
 all: king-quiche-runtime
 install: install-king-runtime
@@ -23,13 +24,13 @@ king-quiche-runtime:
 		exit 1; \
 	fi
 	@echo "Building King QUIC runtime artifacts"
-	@CARGO_TARGET_DIR="$(KING_QUICHE_TARGET_DIR)" cargo build \
+	@CARGO_TARGET_DIR="$(KING_QUICHE_TARGET_DIR)" $(KING_CARGO_BUILD_COMPAT) cargo build \
 		--manifest-path "$(KING_QUICHE_SOURCE_ROOT)/quiche/Cargo.toml" \
 		--package quiche \
 		--release \
 		--locked \
 		--features ffi
-	@CARGO_TARGET_DIR="$(KING_QUICHE_TARGET_DIR)" cargo build \
+	@CARGO_TARGET_DIR="$(KING_QUICHE_TARGET_DIR)" $(KING_CARGO_BUILD_COMPAT) cargo build \
 		--manifest-path "$(KING_QUICHE_SOURCE_ROOT)/apps/Cargo.toml" \
 		--release \
 		--locked \
