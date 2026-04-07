@@ -14,6 +14,7 @@ Status note:
 - Recent handler-identity closure: the exact durable identity for future userland handler execution is now fixed to the tool-name string, with explicit per-process re-registration duties for local controllers, file workers, restarted replacements, and remote peers instead of vague "the system already knows the handler" folklore.
 - Recent fail-closed closure: unsupported non-rehydratable handler forms are now documented as explicit fail-closed cases instead of an implied future serialization story.
 - Recent handler-registration API closure: the runtime now exposes `king_pipeline_orchestrator_register_handler()` as a real process-local binding surface over previously registered durable tool names, with explicit PHPT proof for restart-time re-registration against recovered tool definitions.
+- Recent userland handler docs closure: the handbook workflow guide and procedural API now include explicit restart-duty checklists for local controllers, file workers, and remote peers, with unsupported-form behavior spelled out at each boundary.
 - Recent local handler-shape closure: the local userland execution path now passes structured `input`, `tool`, `run`, and `step` context into handlers and enforces an explicit `['output' => <array payload>]` result contract instead of a folklore bare-array return.
 - Recent queued handler-boundary closure: queued file-worker runs now persist an explicit `handler_boundary` snapshot with only durable tool-name references plus step indexes, and targeted PHPT proof now verifies that executable PHP handler callables themselves are not serialized into orchestrator state.
 - Recent file-worker readiness closure: userland-backed worker processes now rehydrate `handler_boundary` before claim or claimed-run recovery and skip work they are not ready to execute, with PHPT proof for both queued and recovered claimed runs.
@@ -174,6 +175,8 @@ Status note:
   done when: documentation and implementation describe and enforce execution as process-local callback invocation on controller/file-worker/remote-peer processes, with durable tool definitions/config only crossing boundary state
 - [x] Remove callback-transport assumptions from public workflow documentation
   done when: `11-pipeline-orchestrator-tools`/`pipeline-orchestrator`/procedural docs now consistently distinguish durable tool definitions from local callback execution and align examples with the app-worker boundary
+- [x] Document the userland handler contract with restart duties and unsupported forms across handbook and procedural surfaces
+  done when: the handbook and procedural API describe the exact per-process binding duties for local, file-worker, and remote-peer userland handlers, including restart/replacement re-registration and explicit unsupported-form fail-closed behavior
 - [x] Add smoke-level app-worker boundary proof
   done when: a dedicated PHPT (`593-orchestrator-app-worker-boundary-smoke.phpt`) runs a Spark-style remote dispatch and proves handler callback names are not serialized into durable state or peer transport payloads
 - [x] Move orchestrator from local kernel execution to real worker/backend boundaries

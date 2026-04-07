@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#19 Add handbook and procedural-API documentation for the userland tool-handler contract, including unsupported forms and restart duties.`
+- `#20 Update PROJECT_ASSESSMENT.md and READYNESS_TRACKER.md once the userland orchestration surface is real, verified, and no longer caveated.`
 
 ## Active Executable Items
 
@@ -67,7 +67,7 @@
 - [x] `#16 Add PHPT proof for file-worker userland tool execution with re-registration across processes.`
 - [x] `#17 Add PHPT proof for restart recovery when a queued or running userland-backed run outlives the original controller process.`
 - [x] `#18 Add PHPT proof for remote-peer userland tool execution or fail closed explicitly on unsupported remote-peer handler topologies.`
-- [ ] `#19 Add handbook and procedural-API documentation for the userland tool-handler contract, including unsupported forms and restart duties.`
+- [x] `#19 Add handbook and procedural-API documentation for the userland tool-handler contract, including unsupported forms and restart duties.`
 - [ ] `#20 Update PROJECT_ASSESSMENT.md and READYNESS_TRACKER.md once the userland orchestration surface is real, verified, and no longer caveated.`
 
 ## Notes (Urgent Batch Insert)
@@ -123,5 +123,6 @@
 - Leaf `#21` is now closed by defining the workflow execution boundary as process-local app-worker callback execution with durable orchestrator state storing only tool-name/config snapshots.
 - Leaf `#22` is now closed by aligning public docs and handbooks with the same durable-state-versus-executable-handler boundary and removing callback-transport assumptions from workflow examples.
 - Leaf `#23` is now closed by adding the app-worker boundary smoke PHPT that verifies remote-peer dispatch does not persist handler callback names in state or peer execution payloads.
+- Leaf `#19` is now closed by adding explicit restart-duty and unsupported-form documentation in the handbook and procedural API, including `pipeline-orchestrator.md`, `11-pipeline-orchestrator-tools/README.md`, and `procedural-api.md`.
 - The autoscaling / provisioning / readiness wave remains visible below as the deferred previous batch and resumes once the current userland orchestration batch is exhausted.
 - If a task is not listed here, it is not the current repo-local execution item.
