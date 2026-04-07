@@ -29,6 +29,7 @@ is_lockfile_version4_error() {
 run_without_lockfile_once() {
     local -n _cmd_ref="$1"
     local -n _lockfile_ref="$2"
+    local -n _error_ref="$3"
     local _status=0
     local capture_file=""
 
@@ -36,16 +37,18 @@ run_without_lockfile_once() {
         return 1
     fi
 
-    if ! mv "${_lockfile_ref}" "${_lockfile_ref}.king-backup"; then
+    if ! mv -- "${_lockfile_ref}" "${_lockfile_ref}.king-backup"; then
         return 1
     fi
 
     capture_file="$(mktemp)"
     run_command_capture _status "${capture_file}" "${_cmd_ref[@]}"
-    removed_lockfile_error="$(cat "${capture_file}")"
+    _error_ref="$(cat "${capture_file}")"
     rm -f "${capture_file}"
 
-    mv "${_lockfile_ref}.king-backup" "${_lockfile_ref}"
+    if ! mv -- "${_lockfile_ref}.king-backup" "${_lockfile_ref}"; then
+        return 1
+    fi
 
     return "${_status}"
 }
@@ -85,7 +88,10 @@ extract_manifest_path() {
 
     if [[ -n "${lockfile_path}" ]]; then
         lockfile_path="${lockfile_path%/*}/Cargo.lock"
+        return 0
     fi
+
+    lockfile_path="${PWD}/Cargo.lock"
 }
 
 tmp="$(mktemp)"
@@ -112,6 +118,12 @@ if [[ "${last_status}" -ne 0 ]]; then
             exit "${status}"
         fi
 
+        extract_manifest_path fallback_cmd
+        if run_without_lockfile_once fallback_cmd lockfile_path removed_lockfile_error; then
+            echo "Retrying without lockfile constraint and without lockfile file." >&2
+            exit 0
+        fi
+
         tmp="$(mktemp)"
         run_command_capture status "${tmp}" "${fallback_cmd[@]}"
         error_output="$(cat "${tmp}")"
@@ -119,12 +131,6 @@ if [[ "${last_status}" -ne 0 ]]; then
         if [[ "${status}" -ne 0 ]]; then
             printf 'Fallback cargo command failed with exit code %s.\n' "${status}" >&2
             rm -f "${tmp}"
-
-            extract_manifest_path fallback_cmd
-            if run_without_lockfile_once fallback_cmd lockfile_path; then
-                echo "Retrying without lockfile constraint and without lockfile file." >&2
-                exit 0
-            fi
             if [[ -n "${removed_lockfile_error}" ]]; then
                 printf '%s\n' "${removed_lockfile_error}" >&2
             else
