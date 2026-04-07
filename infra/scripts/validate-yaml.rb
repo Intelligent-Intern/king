@@ -15,7 +15,7 @@ unless File.file?(path) && File.readable?(path)
 end
 
 begin
-    parsed_yaml = YAML.safe_load(
+    YAML.safe_load(
         File.read(path),
         permitted_classes: [],
         permitted_symbols: [],
