@@ -266,9 +266,13 @@ try {
 }
 
 $isIpv6 = filter_var($bindHost, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
-
+    $bindHost = '[' . $bindHost . ']';
 if ($isIpv6 && !preg_match('/^\[.*\]$/', $bindHost)) {
     $bindHost = '[' . $bindHost . ']';
+}
+
+$endpoint = 'tcp://' . $bindHost . ':' . $port;
+
 }
 
 $endpoint = 'tcp://' . $bindHost . ':' . $port;
@@ -528,7 +532,7 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
             $sleepMs = min($delayMs, 10);
             usleep($sleepMs * 1000);
             $delayMs -= $sleepMs;
-
+                    $event['remote_error'] = 'Remote peer execution exceeded the active orchestrator timeout budget.';
             if ($effectiveBudgetMs > 0) {
                 $elapsedMs = (int) ((hrtime(true) - $startedAt) / 1000000);
                 if ($elapsedMs >= $effectiveBudgetMs) {
