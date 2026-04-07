@@ -38,8 +38,11 @@ function make_persistence_migration_semantic_config(): array
     ];
 }
 
+$semanticConfig = make_persistence_migration_semantic_config();
+$semanticConfigInfo = json_encode($semanticConfig);
+$semanticConfigInfo = $semanticConfigInfo !== false ? $semanticConfigInfo : '<unserializable semantic config>';
+
 if ($mode === 'write') {
-    $semanticConfig = make_persistence_migration_semantic_config();
     king_object_store_init([
         'storage_root_path' => $objectStoreRoot,
         'primary_backend' => 'local_fs',
@@ -53,7 +56,7 @@ if ($mode === 'write') {
         fail_migration('Failed to persist migration-beta.');
     }
 
-    $summarizer_handler = static function(array $context): array {
+    $summarizerHandler = static function(array $context): array {
         $input = $context['input'] ?? null;
         if (!is_array($input)) {
             throw new RuntimeException('Unexpected orchestrator input: expected array.');
@@ -73,7 +76,7 @@ if ($mode === 'write') {
     ])) {
         fail_migration('Failed to register orchestrator tool.');
     }
-    if (!king_pipeline_orchestrator_register_handler('summarizer', $summarizer_handler)) {
+    if (!king_pipeline_orchestrator_register_handler('summarizer', $summarizerHandler)) {
         fail_migration('Failed to register orchestrator handler.');
     }
 
@@ -90,10 +93,16 @@ if ($mode === 'write') {
     }
 
     if (!king_semantic_dns_init($semanticConfig)) {
-        fail_migration('Semantic DNS init failed in write mode.');
+        fail_migration(
+            'Semantic DNS init failed in write mode. Mode: ' . $mode . '. Config: ' . $semanticConfigInfo .
+            '. Check semantic DNS environment, module initialization rights, and config consistency.'
+        );
     }
     if (!king_semantic_dns_start_server()) {
-        fail_migration('Semantic DNS start failed in write mode.');
+        fail_migration(
+            'Semantic DNS start failed in write mode on port ' . $semanticConfig['dns_port'] .
+            '. Verify the process has bind permissions and that no other process occupies the address/port.'
+        );
     }
     if (!king_semantic_dns_register_service([
         'service_id' => 'migration-api-1',
@@ -152,13 +161,17 @@ if (($orchestrator['configuration']['run_history_count'] ?? null) !== 1) {
     fail_migration('Unexpected recovered orchestrator run history count.');
 }
 
-$semanticConfig = make_persistence_migration_semantic_config();
-
 if (!king_semantic_dns_init($semanticConfig)) {
-    fail_migration('Semantic DNS init failed in read mode.');
+    fail_migration(
+        'Semantic DNS init failed in read mode. Mode: ' . $mode . '. Config: ' . $semanticConfigInfo .
+        '. Verify environment/permissions and re-check persisted semantic state restoration.'
+    );
 }
 if (!king_semantic_dns_start_server()) {
-    fail_migration('Semantic DNS start failed in read mode.');
+    fail_migration(
+        'Semantic DNS start failed in read mode on port ' . $semanticConfig['dns_port'] .
+        '. Verify process ownership and local bind conflicts before rerunning migration.'
+    );
 }
 
 $topology = king_semantic_dns_get_service_topology();
