@@ -29,4 +29,5 @@ rescue Psych::SyntaxError, Psych::DisallowedClass, Psych::BadAlias => error
     exit 1
 end
 
-parsed_yaml
+puts "YAML validation successful for '#{path}'."
+exit 0
