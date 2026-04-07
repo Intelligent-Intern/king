@@ -113,8 +113,10 @@ mkdir -p "${STAGE_ROOT}"
         --exclude-vcs \
         --exclude='./dist' \
         --exclude='./compat-artifacts' \
+        --exclude='./.cargo' \
         --exclude='./extension/build' \
         --exclude='./extension/quiche/target' \
+        --exclude='./extension/tests/http3_ticket_server/target' \
         --exclude='./extension/modules' \
         --exclude='./extension/Makefile' \
         --exclude='./extension/config.cache' \
