@@ -163,3 +163,4 @@ if (($route['service_id'] ?? null) !== 'migration-api-1') {
 }
 
 echo "read ok\n";
+exit(0);
