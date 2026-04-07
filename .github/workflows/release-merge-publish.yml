@@ -1,0 +1,318 @@
+name: King Release Publish on Merge
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: king-release-publish-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build-release-packages:
+    name: Build release artifacts for ${{ matrix.php-version }} / ${{ matrix.arch-label }}
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/')
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php-version: "8.1"
+            runner: ubuntu-24.04
+            arch-label: linux-amd64
+          - php-version: "8.1"
+            runner: ubuntu-24.04-arm
+            arch-label: linux-arm64
+          - php-version: "8.2"
+            runner: ubuntu-24.04
+            arch-label: linux-amd64
+          - php-version: "8.2"
+            runner: ubuntu-24.04-arm
+            arch-label: linux-arm64
+          - php-version: "8.3"
+            runner: ubuntu-24.04
+            arch-label: linux-amd64
+          - php-version: "8.3"
+            runner: ubuntu-24.04-arm
+            arch-label: linux-arm64
+          - php-version: "8.4"
+            runner: ubuntu-24.04
+            arch-label: linux-amd64
+          - php-version: "8.4"
+            runner: ubuntu-24.04-arm
+            arch-label: linux-arm64
+          - php-version: "8.5"
+            runner: ubuntu-24.04-arm
+            arch-label: linux-arm64
+          - php-version: "8.5"
+            runner: ubuntu-24.04
+            arch-label: linux-amd64
+
+    steps:
+      - name: Checkout release merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          submodules: recursive
+
+      - name: Setup PHP ${{ matrix.php-version }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "${{ matrix.php-version }}"
+          coverage: none
+          extensions: curl, mbstring, openssl, sockets
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-${{ matrix.arch-label }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            bison \
+            build-essential \
+            clang \
+            cmake \
+            libssl-dev \
+            libcurl4-openssl-dev \
+            libtool \
+            ninja-build \
+            pkg-config \
+            re2c
+
+      - name: Build canonical release profile
+        working-directory: extension
+        run: ../infra/scripts/build-profile.sh release
+
+      - name: Package canonical release archive
+        id: package
+        working-directory: extension
+        run: |
+          output="$(../infra/scripts/package-release.sh --output-dir ../dist)"
+          printf '%s\n' "${output}"
+          archive_path="$(printf '%s\n' "${output}" | sed -n 's/^Package created: //p' | tail -n 1)"
+          if [[ -z "${archive_path}" ]]; then
+            echo "Failed to resolve packaged archive path." >&2
+            exit 1
+          fi
+          echo "archive_path=${archive_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify packaged clean-host install path
+        working-directory: extension
+        run: ../infra/scripts/install-package-matrix.sh --archive "${{ steps.package.outputs.archive_path }}" --php-bins php
+
+      - name: Upload release package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: king-release-package-php${{ matrix.php-version }}-${{ matrix.arch-label }}
+          if-no-files-found: error
+          path: |
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256
+
+      - name: Upload package install failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: king-package-install-${{ matrix.php-version }}-${{ matrix.arch-label }}-failures
+          if-no-files-found: ignore
+          path: |
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256
+            extension/config.log
+
+  build-release-pie-source:
+    name: Build PIE source asset
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout release merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          submodules: recursive
+
+      - name: Build PIE source package
+        run: ./infra/scripts/package-pie-source.sh --output-dir release-assets
+
+      - name: Upload PIE source asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: king-release-pie-source
+          if-no-files-found: error
+          path: release-assets/*.tgz
+
+  publish-release:
+    name: Publish release artifacts
+    needs:
+      - build-release-packages
+      - build-release-pie-source
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - name: Download packaged release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.1-linux-amd64
+          path: release-assets
+
+      - name: Download packaged release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.1-linux-arm64
+          path: release-assets
+
+      - name: Download packaged release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.2-linux-amd64
+          path: release-assets
+
+      - name: Download packaged release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.2-linux-arm64
+          path: release-assets
+
+      - name: Download packaged release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.3-linux-amd64
+          path: release-assets
+
+      - name: Download packaged release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.3-linux-arm64
+          path: release-assets
+
+      - name: Download packaged release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.4-linux-amd64
+          path: release-assets
+
+      - name: Download packaged release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.4-linux-arm64
+          path: release-assets
+
+      - name: Download packaged release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.5-linux-amd64
+          path: release-assets
+
+      - name: Download packaged release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.5-linux-arm64
+          path: release-assets
+
+      - name: Download PIE source artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-pie-source
+          path: release-assets
+
+      - name: Verify release assets
+        run: |
+          set -euo pipefail
+
+          RELEASE_BRANCH="${{ github.event.pull_request.head.ref }}"
+          RELEASE_VERSION="${RELEASE_BRANCH#release/}"
+          RELEASE_TAG="${RELEASE_VERSION}"
+
+          if [[ -z "${RELEASE_VERSION}" ]]; then
+            echo "Release branch must be in the form release/<version>: ${RELEASE_BRANCH}" >&2
+            exit 1
+          fi
+
+          if [[ "${RELEASE_TAG}" != v* ]]; then
+            RELEASE_TAG="v${RELEASE_TAG}"
+          fi
+
+          if [ ! -d release-assets ]; then
+            echo "Missing release-assets staging directory." >&2
+            exit 1
+          fi
+
+          printf 'Release branch %s -> release tag %s\n' "${RELEASE_BRANCH}" "${RELEASE_TAG}"
+
+          if ! compgen -G "release-assets/*.tgz" > /dev/null; then
+            echo "No PIE source asset found in release-assets." >&2
+            exit 1
+          fi
+          if ! compgen -G "release-assets/*.tar.gz" > /dev/null; then
+            echo "No release package archive found in release-assets." >&2
+            exit 1
+          fi
+          ls -lah release-assets
+
+      - name: Publish to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          RELEASE_BRANCH="${{ github.event.pull_request.head.ref }}"
+          RELEASE_VERSION="${RELEASE_BRANCH#release/}"
+          RELEASE_TAG="${RELEASE_VERSION}"
+          RELEASE_TARGET="${{ github.event.pull_request.merge_commit_sha || github.sha }}"
+
+          if [[ -z "${RELEASE_VERSION}" ]]; then
+            echo "Release branch must be in the form release/<version>: ${RELEASE_BRANCH}" >&2
+            exit 1
+          fi
+
+          if [[ "${RELEASE_TAG}" != v* ]]; then
+            RELEASE_TAG="v${RELEASE_TAG}"
+          fi
+
+          prerelease_args=()
+          if [[ "${RELEASE_TAG}" == *-* ]]; then
+            prerelease_args+=(--prerelease)
+          fi
+
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload \
+              "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --clobber \
+              release-assets/*
+          else
+            gh release create "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "King ${RELEASE_TAG}" \
+              --target "${RELEASE_TARGET}" \
+              --notes-from-tag \
+              "${prerelease_args[@]}" \
+              release-assets/*
+          fi

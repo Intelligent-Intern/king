@@ -7,6 +7,10 @@ on:
   pull_request:
     branches:
       - main
+    types:
+      - opened
+      - synchronize
+      - reopened
   workflow_dispatch:
 
 concurrency:
@@ -49,9 +53,19 @@ jobs:
               runHeavyJobs = 'false';
               reason = `Skipping canonical baseline for planning branch ${planningBranch}; docs-only planning guard is the required gate.`;
             } else if (planningBranch.startsWith('release/')) {
-              runHeavyJobs = 'true';
-              reason = `Running canonical baseline for release branch ${planningBranch}; release publishes require full pipeline execution.`;
+              runHeavyJobs = 'false';
+              reason = `Skipping canonical baseline for release branch ${planningBranch}; release publish is now handled on PR merge.`;
             } else if (eventName === 'push' && refType === 'branch') {
+              if (refName === 'main') {
+                const headLine = (context.payload.head_commit?.message || '').split('\n')[0] || '';
+                const isReleaseMerge = /^Merge pull request #\d+ from .*\/release\//.test(headLine);
+
+                if (isReleaseMerge) {
+                  runHeavyJobs = 'false';
+                  reason = `Skipping canonical baseline for release branch merge on ${refName}; publish is handled by release merge workflow.`;
+                }
+              }
+
               const { data: pulls } = await github.rest.pulls.list({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -364,162 +378,6 @@ jobs:
             dist/*.tar.gz
             dist/*.tar.gz.sha256
             extension/config.log
-
-  release-publish:
-    name: Publish Release Branch Assets
-    needs:
-      - canonical-baseline
-      - install-package-matrix
-      - release-upgrade-compatibility
-      - release-downgrade-compatibility
-      - release-persistence-migration
-      - release-config-state-compatibility
-    if: github.event_name == 'push' && github.ref_type == 'branch' && startsWith(github.ref, 'refs/heads/release/')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          submodules: recursive
-
-      - name: Download release package php 8.1 linux amd64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.1-linux-amd64
-          path: release-assets
-
-      - name: Download release package php 8.1 linux arm64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.1-linux-arm64
-          path: release-assets
-
-      - name: Download release package php 8.2 linux amd64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.2-linux-amd64
-          path: release-assets
-
-      - name: Download release package php 8.2 linux arm64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.2-linux-arm64
-          path: release-assets
-
-      - name: Download release package php 8.3 linux amd64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.3-linux-amd64
-          path: release-assets
-
-      - name: Download release package php 8.3 linux arm64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.3-linux-arm64
-          path: release-assets
-
-      - name: Download release package php 8.4 linux amd64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.4-linux-amd64
-          path: release-assets
-
-      - name: Download release package php 8.4 linux arm64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.4-linux-arm64
-          path: release-assets
-
-      - name: Download release package php 8.5 linux arm64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.5-linux-arm64
-          path: release-assets
-
-      - name: Download release package php 8.5 linux amd64
-        uses: actions/download-artifact@v4
-        with:
-          name: king-release-package-php8.5-linux-amd64
-          path: release-assets
-
-      - name: Generate PIE source asset
-        run: ./infra/scripts/package-pie-source.sh --output-dir release-assets
-
-      - name: Verify release assets
-        run: |
-          set -euo pipefail
-
-          RELEASE_BRANCH="${GITHUB_REF_NAME}"
-          RELEASE_VERSION="${RELEASE_BRANCH#release/}"
-          RELEASE_TAG="${RELEASE_VERSION}"
-
-          if [[ -z "${RELEASE_VERSION}" ]]; then
-            echo "Release branch must be in the form release/<version>: ${RELEASE_BRANCH}" >&2
-            exit 1
-          fi
-
-          if [[ "${RELEASE_TAG}" != v* ]]; then
-            RELEASE_TAG="v${RELEASE_TAG}"
-          fi
-
-          if [ ! -d release-assets ]; then
-            echo "Missing release-assets staging directory." >&2
-            exit 1
-          fi
-
-          printf 'Release branch %s -> release tag %s\n' "${RELEASE_BRANCH}" "${RELEASE_TAG}"
-          if ! compgen -G "release-assets/*.tgz" > /dev/null; then
-            echo "No PIE source asset found in release-assets." >&2
-            exit 1
-          fi
-          if ! compgen -G "release-assets/*.tar.gz" > /dev/null; then
-            echo "No release package archive found in release-assets." >&2
-            exit 1
-          fi
-          ls -lah release-assets
-
-      - name: Publish to GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-
-          RELEASE_BRANCH="${GITHUB_REF_NAME}"
-          RELEASE_VERSION="${RELEASE_BRANCH#release/}"
-          RELEASE_TAG="${RELEASE_VERSION}"
-
-          if [[ -z "${RELEASE_VERSION}" ]]; then
-            echo "Release branch must be in the form release/<version>: ${RELEASE_BRANCH}" >&2
-            exit 1
-          fi
-
-          if [[ "${RELEASE_TAG}" != v* ]]; then
-            RELEASE_TAG="v${RELEASE_TAG}"
-          fi
-
-          prerelease_args=()
-          if [[ "${RELEASE_TAG}" == *-* ]]; then
-            prerelease_args+=(--prerelease)
-          fi
-
-          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            gh release upload \
-              "${RELEASE_TAG}" \
-              --repo "${GITHUB_REPOSITORY}" \
-              --clobber \
-              release-assets/*
-          else
-            gh release create "${RELEASE_TAG}" \
-              --repo "${GITHUB_REPOSITORY}" \
-              --title "King ${RELEASE_TAG}" \
-              --target "${GITHUB_SHA}" \
-              --notes-from-tag \
-              "${prerelease_args[@]}" \
-              release-assets/*
-          fi
 
   release-upgrade-compatibility:
     name: Release Upgrade Compatibility
