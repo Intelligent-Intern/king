@@ -37,7 +37,7 @@ function king_orchestrator_userland_restart_decode_json(array $result, string $l
     return $decoded;
 }
 
-function king_orchestrator_userland_restart_read_run_snapshot(
+function read_run_snapshot(
     array $harness,
     string $backend,
     string $observerScript,
