@@ -10,7 +10,7 @@ if (!function_exists('proc_open')) {
 <?php
 require __DIR__ . '/orchestrator_failover_harness.inc';
 
-function king_orchestrator_userland_restart_assert(bool $condition, string $label): void
+function test_assert(bool $condition, string $label): void
 {
     if (!$condition) {
         throw new RuntimeException($label);
@@ -19,17 +19,17 @@ function king_orchestrator_userland_restart_assert(bool $condition, string $labe
 
 function king_orchestrator_userland_restart_decode_json(array $result, string $label): array
 {
-    king_orchestrator_userland_restart_assert(
+    test_assert(
         $result['status'] === 0,
         $label . ' exited with status ' . json_encode($result['status']) . ' and stderr ' . json_encode($result['stderr'])
     );
-    king_orchestrator_userland_restart_assert(
+    test_assert(
         trim($result['stderr']) === '',
         $label . ' wrote unexpected stderr: ' . json_encode($result['stderr'])
     );
 
     $decoded = json_decode(trim($result['stdout']), true);
-    king_orchestrator_userland_restart_assert(
+    test_assert(
         is_array($decoded),
         $label . ' did not return valid JSON: ' . json_encode($result['stdout'])
     );
