@@ -59,11 +59,11 @@ installed PHP versions.
 ## What King Expects From PIE
 
 King is not only `king.so`. The active runtime also needs the bundled QUIC
-artifacts. That means the honest PIE package shape for King must do all of this
+artifacts. That means the PIE package shape for King does all of this
 in one install:
 
 - build the extension from `extension/`
-- compile the bundled QUIC runtime with Cargo and Rust
+- compile the bundled QUIC runtime with Cargo and Rust (mandatory)
 - install `king.so`
 - install `libquiche.so`
 - install `quiche-server`
@@ -84,13 +84,32 @@ PIE source asset, the intended install command is:
 pie install intelligent-intern/king-ext
 ```
 
-The first release tag prepared for public installation is `v0.2.8-alpha`.
-After that tag is available in GitHub Releases, users can install the same command
-as the alpha release stream for now.
+The first public release tag is `v0.2.10-alpha`.
+The first beta track is `v1.0.0-beta`; publish from
+`develop/v1.0.0-beta` into `main` when you want to open the beta stream.
+After the matching tag is available in GitHub Releases, users can use the same
+command for PIE installation.
 
 PIE then enters the King build path under `extension/`, runs `phpize`,
 `./configure`, `make`, and `make install`, and the King build hook compiles and
-installs the QUIC runtime artifacts beside the extension.
+installs the QUIC runtime artifacts beside the extension by default.
+
+If a build runs in CI/non-interactive mode and your Rust toolchain is missing or
+outdated, set:
+
+```bash
+KING_QUICHE_TOOLCHAIN_CONFIRM=yes pie install intelligent-intern/king-ext
+```
+
+for automatic in-script upgrade attempts, or:
+
+```bash
+KING_QUICHE_TOOLCHAIN_CONFIRM=no pie install intelligent-intern/king-ext
+```
+
+to fail fast with clear instructions.
+
+Default behavior (if the variable is unset) is interactive `prompt` mode.
 
 Depending on the target PHP installation and how PIE configures it, you may
 also need to enable the extension explicitly in `php.ini`:
@@ -104,7 +123,7 @@ PHP binary, you are done.
 
 ## Host Requirements
 
-For the current King alpha path, assume a Linux source install and make sure
+For the current King release path, assume a Linux source install and make sure
 the host has:
 
 - PHP development toolchain for the target PHP version
@@ -112,8 +131,8 @@ the host has:
 - `autoconf`
 - `make`
 - a C compiler
-- `cargo`
-- `rustc`
+- `cargo` and `rustc` (always, because Quiche is a mandatory runtime component)
+- `KING_QUICHE_TOOLCHAIN_CONFIRM` (`prompt`, `yes`, or `no`) for installer automation
 - libcurl development headers and libraries
 
 King currently excludes Windows from this first PIE path. The current v1 target
@@ -140,6 +159,6 @@ dist/php_king-<version>-src.tgz
 4. After the release is published, ensure that the release merge path used is:
    - only from `develop/v...` branches into `main`
    - with the release tag generated as `v<version>`, where `<version>` is the
-     release branch suffix
+     release branch suffix (for example `develop/v1.0.0-beta` → `v1.0.0-beta`)
 
 5. Submit the repository to Packagist using the root `composer.json`.
