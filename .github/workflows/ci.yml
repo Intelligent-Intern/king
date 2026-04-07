@@ -364,6 +364,136 @@ jobs:
             dist/*.tar.gz.sha256
             extension/config.log
 
+  release-publish:
+    name: Publish Tag Release Assets
+    needs:
+      - canonical-baseline
+      - install-package-matrix
+      - release-upgrade-compatibility
+      - release-downgrade-compatibility
+      - release-persistence-migration
+      - release-config-state-compatibility
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Download release package php 8.1 linux amd64
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.1-linux-amd64
+          path: release-assets
+
+      - name: Download release package php 8.1 linux arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.1-linux-arm64
+          path: release-assets
+
+      - name: Download release package php 8.2 linux amd64
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.2-linux-amd64
+          path: release-assets
+
+      - name: Download release package php 8.2 linux arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.2-linux-arm64
+          path: release-assets
+
+      - name: Download release package php 8.3 linux amd64
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.3-linux-amd64
+          path: release-assets
+
+      - name: Download release package php 8.3 linux arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.3-linux-arm64
+          path: release-assets
+
+      - name: Download release package php 8.4 linux amd64
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.4-linux-amd64
+          path: release-assets
+
+      - name: Download release package php 8.4 linux arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.4-linux-arm64
+          path: release-assets
+
+      - name: Download release package php 8.5 linux arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.5-linux-arm64
+          path: release-assets
+
+      - name: Download release package php 8.5 linux amd64
+        uses: actions/download-artifact@v4
+        with:
+          name: king-release-package-php8.5-linux-amd64
+          path: release-assets
+
+      - name: Generate PIE source asset
+        run: ./infra/scripts/package-pie-source.sh --output-dir release-assets
+
+      - name: Verify release assets
+        run: |
+          set -euo pipefail
+          if [ ! -d release-assets ]; then
+            echo "Missing release-assets staging directory." >&2
+            exit 1
+          fi
+          if ! compgen -G "release-assets/*.tgz" > /dev/null; then
+            echo "No PIE source asset found in release-assets." >&2
+            exit 1
+          fi
+          if ! compgen -G "release-assets/*.tar.gz" > /dev/null; then
+            echo "No release package archive found in release-assets." >&2
+            exit 1
+          fi
+          ls -lah release-assets
+
+      - name: Publish to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          prerelease_args=()
+          if [[ "${RELEASE_TAG}" == *-* ]]; then
+            prerelease_args+=(--prerelease)
+          fi
+
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload \
+              "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --clobber \
+              release-assets/*
+          else
+            gh release create "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "King ${RELEASE_TAG}" \
+              --target "${GITHUB_SHA}" \
+              --notes-from-tag \
+              --verify-tag \
+              "${prerelease_args[@]}" \
+              release-assets/*
+          fi
+
   release-upgrade-compatibility:
     name: Release Upgrade Compatibility
     needs: canonical-baseline
