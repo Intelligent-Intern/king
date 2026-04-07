@@ -366,7 +366,7 @@ jobs:
             extension/config.log
 
   release-publish:
-    name: Publish Release Branch Assets
+    name: Publish Release Merge Assets
     needs:
       - canonical-baseline
       - install-package-matrix
@@ -374,7 +374,11 @@ jobs:
       - release-downgrade-compatibility
       - release-persistence-migration
       - release-config-state-compatibility
-    if: github.event_name == 'push' && github.ref_type == 'branch' && startsWith(github.ref, 'refs/heads/release/')
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      startsWith(github.event.head_commit.message, 'Merge pull request') &&
+      contains(github.event.head_commit.message, 'release/')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -385,85 +389,122 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Resolve release version from merge commit
+        id: resolve_release
+        run: |
+          set -euo pipefail
+
+          merge_message="${GITHUB_EVENT_PATH}"
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update >/dev/null
+            sudo apt-get install -y jq >/dev/null
+          fi
+
+          release_branch="$(jq -r '.head_commit.message' < "${merge_message}" | grep -oE 'release/[^[:space:]]+' | head -n 1 || true)"
+
+          if [[ -z "${release_branch}" || "${release_branch}" == "null" ]]; then
+            echo "Could not resolve release branch from merge commit message." >&2
+            echo "is_release_merge=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          release_version="${release_branch#release/}"
+          if [[ -z "${release_version}" || "${release_version}" == "null" ]]; then
+            echo "Could not resolve release version from branch '${release_branch}'." >&2
+            echo "is_release_merge=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          release_tag="${release_version}"
+          if [[ "${release_tag}" != v* ]]; then
+            release_tag="v${release_tag}"
+          fi
+
+          echo "is_release_merge=true" >> "${GITHUB_OUTPUT}"
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "release_branch=${release_branch}" >> "${GITHUB_OUTPUT}"
+          echo "release_version=${release_version}" >> "${GITHUB_OUTPUT}"
+
       - name: Download release package php 8.1 linux amd64
+        if: steps.resolve_release.outputs.is_release_merge == 'true'
         uses: actions/download-artifact@v4
         with:
           name: king-release-package-php8.1-linux-amd64
           path: release-assets
 
       - name: Download release package php 8.1 linux arm64
+        if: steps.resolve_release.outputs.is_release_merge == 'true'
         uses: actions/download-artifact@v4
         with:
           name: king-release-package-php8.1-linux-arm64
           path: release-assets
 
       - name: Download release package php 8.2 linux amd64
+        if: steps.resolve_release.outputs.is_release_merge == 'true'
         uses: actions/download-artifact@v4
         with:
           name: king-release-package-php8.2-linux-amd64
           path: release-assets
 
       - name: Download release package php 8.2 linux arm64
+        if: steps.resolve_release.outputs.is_release_merge == 'true'
         uses: actions/download-artifact@v4
         with:
           name: king-release-package-php8.2-linux-arm64
           path: release-assets
 
       - name: Download release package php 8.3 linux amd64
+        if: steps.resolve_release.outputs.is_release_merge == 'true'
         uses: actions/download-artifact@v4
         with:
           name: king-release-package-php8.3-linux-amd64
           path: release-assets
 
       - name: Download release package php 8.3 linux arm64
+        if: steps.resolve_release.outputs.is_release_merge == 'true'
         uses: actions/download-artifact@v4
         with:
           name: king-release-package-php8.3-linux-arm64
           path: release-assets
 
       - name: Download release package php 8.4 linux amd64
+        if: steps.resolve_release.outputs.is_release_merge == 'true'
         uses: actions/download-artifact@v4
         with:
           name: king-release-package-php8.4-linux-amd64
           path: release-assets
 
       - name: Download release package php 8.4 linux arm64
+        if: steps.resolve_release.outputs.is_release_merge == 'true'
         uses: actions/download-artifact@v4
         with:
           name: king-release-package-php8.4-linux-arm64
           path: release-assets
 
       - name: Download release package php 8.5 linux arm64
+        if: steps.resolve_release.outputs.is_release_merge == 'true'
         uses: actions/download-artifact@v4
         with:
           name: king-release-package-php8.5-linux-arm64
           path: release-assets
 
       - name: Download release package php 8.5 linux amd64
+        if: steps.resolve_release.outputs.is_release_merge == 'true'
         uses: actions/download-artifact@v4
         with:
           name: king-release-package-php8.5-linux-amd64
           path: release-assets
 
       - name: Generate PIE source asset
+        if: steps.resolve_release.outputs.is_release_merge == 'true'
         run: ./infra/scripts/package-pie-source.sh --output-dir release-assets
 
       - name: Verify release assets
+        if: steps.resolve_release.outputs.is_release_merge == 'true'
         run: |
           set -euo pipefail
-
-          RELEASE_BRANCH="${GITHUB_REF_NAME}"
-          RELEASE_VERSION="${RELEASE_BRANCH#release/}"
-          RELEASE_TAG="${RELEASE_VERSION}"
-
-          if [[ -z "${RELEASE_VERSION}" ]]; then
-            echo "Release branch must be in the form release/<version>: ${RELEASE_BRANCH}" >&2
-            exit 1
-          fi
-
-          if [[ "${RELEASE_TAG}" != v* ]]; then
-            RELEASE_TAG="v${RELEASE_TAG}"
-          fi
+          RELEASE_BRANCH="${{ steps.resolve_release.outputs.release_branch }}"
+          RELEASE_TAG="${{ steps.resolve_release.outputs.release_tag }}"
 
           if [ ! -d release-assets ]; then
             echo "Missing release-assets staging directory." >&2
@@ -482,23 +523,14 @@ jobs:
           ls -lah release-assets
 
       - name: Publish to GitHub release
+        if: steps.resolve_release.outputs.is_release_merge == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
-          RELEASE_BRANCH="${GITHUB_REF_NAME}"
-          RELEASE_VERSION="${RELEASE_BRANCH#release/}"
-          RELEASE_TAG="${RELEASE_VERSION}"
-
-          if [[ -z "${RELEASE_VERSION}" ]]; then
-            echo "Release branch must be in the form release/<version>: ${RELEASE_BRANCH}" >&2
-            exit 1
-          fi
-
-          if [[ "${RELEASE_TAG}" != v* ]]; then
-            RELEASE_TAG="v${RELEASE_TAG}"
-          fi
+          RELEASE_BRANCH="${{ steps.resolve_release.outputs.release_branch }}"
+          RELEASE_TAG="${{ steps.resolve_release.outputs.release_tag }}"
 
           prerelease_args=()
           if [[ "${RELEASE_TAG}" == *-* ]]; then
