@@ -61,6 +61,51 @@ function king_orchestrator_remote_peer_handler_boundary_requires_process_registr
     return is_array($handlerBoundary) && !empty($handlerBoundary['requires_process_registration']);
 }
 
+function king_orchestrator_remote_peer_validate_required_step_refs(array $handlerBoundary): bool
+{
+    $requiredTools = $handlerBoundary['required_tools'] ?? null;
+    $requiredStepRefs = $handlerBoundary['required_step_refs'] ?? null;
+    if (!is_array($requiredTools) || !is_array($requiredStepRefs) || $requiredStepRefs === []) {
+        return false;
+    }
+
+    $toolLookup = [];
+    foreach ($requiredTools as $toolName) {
+        if (!is_string($toolName) || $toolName === '') {
+            return false;
+        }
+        $toolLookup[$toolName] = true;
+    }
+
+    $seenIndexes = [];
+    foreach ($requiredStepRefs as $entry) {
+        if (!is_array($entry)) {
+            return false;
+        }
+
+        $index = $entry['index'] ?? null;
+        $toolName = $entry['tool_name'] ?? null;
+        if (is_string($index) && $index !== '' && ctype_digit($index)) {
+            $index = (int) $index;
+        }
+
+        if (
+            !is_int($index)
+            || $index < 0
+            || !is_string($toolName)
+            || $toolName === ''
+            || !isset($toolLookup[$toolName])
+            || isset($seenIndexes[$index])
+        ) {
+            return false;
+        }
+
+        $seenIndexes[$index] = true;
+    }
+
+    return true;
+}
+
 function king_orchestrator_remote_peer_step_uses_registered_handler(
     mixed $handlerBoundary,
     array $step,
@@ -333,6 +378,28 @@ while (($client = @stream_socket_accept($server, -1)) !== false) {
     }
 
     if (king_orchestrator_remote_peer_handler_boundary_requires_process_registration($event['handler_boundary'])) {
+        if (
+            !is_array($event['handler_boundary'])
+            || !king_orchestrator_remote_peer_validate_required_step_refs($event['handler_boundary'])
+        ) {
+            $event['remote_error'] = 'remote peer received an invalid handler boundary topology.';
+            $event['failed_step_index'] = -1;
+            king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
+            fwrite(
+                $client,
+                $encodeErrorMeta(
+                    $event['remote_error'],
+                    'backend',
+                    'caller_managed_retry',
+                    -1,
+                    'remote_peer'
+                )
+            );
+            fclose($client);
+            unset($event);
+            continue;
+        }
+
         if (!is_array($event['tool_configs'])) {
             $event['remote_error'] = 'missing_tool_configs';
             king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
