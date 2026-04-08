@@ -609,7 +609,7 @@ Flow::extract($king->objectStore()->source('raw/orders/*.ndjson'))
 - [ ] Transition `PROJECT_ASSESSMENT.md` to a state with no remaining caveats
 - [ ] Empty `ISSUES.md` completely
 - [ ] Synchronize `EPIC.md` with the final end-state
-- [ ] Align `CONTRIBUTE.md` with final build / test / release process
+- [ ] Align `CONTRIBUTE` with final build / test / release process
 - [ ] Keep `stubs/king.php` permanently exact with runtime
 - [ ] Leave no public API without real runtime coverage
 - [ ] Leave no documentation containing "simulated", "local-first", "incomplete", or equivalent residual states

@@ -184,7 +184,7 @@ Use the root documents like this:
   long-form completion tracker and broad closure reference
 - `PROJECT_ASSESSMENT.md`
   verified current state and caveats
-- `CONTRIBUTE.md`
+- `CONTRIBUTE`
   workflow and verification discipline
 - `stubs/king.php`
   public PHP signature surface
