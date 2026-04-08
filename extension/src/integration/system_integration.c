@@ -184,6 +184,38 @@ const char *king_component_status_to_string(king_component_status_t status)
     return king_system_component_statuses[(int) status];
 }
 
+/*
+ * Export one aggregate lifecycle so callers do not have to infer process
+ * state from the per-component map on every status read.
+ */
+static const char *king_system_resolve_lifecycle(
+    bool initialized,
+    uint32_t component_count,
+    uint32_t ready_count,
+    bool has_starting,
+    bool has_draining,
+    bool has_error
+)
+{
+    if (!initialized || component_count == 0) {
+        return "stopped";
+    }
+
+    if (has_error) {
+        return "failed";
+    }
+
+    if (has_draining) {
+        return "draining";
+    }
+
+    if (has_starting || ready_count < component_count) {
+        return "starting";
+    }
+
+    return "ready";
+}
+
 static int king_system_set_component_status(
     king_component_type_t type,
     king_component_status_t status
@@ -446,9 +478,13 @@ PHP_FUNCTION(king_system_get_status)
     ZEND_PARSE_PARAMETERS_NONE();
     zval component_entry;
     zval components;
+    const char *lifecycle;
     time_t now;
     int draining_count = 0;
     int ready_count = 0;
+    bool has_draining = false;
+    bool has_error = false;
+    bool has_starting = false;
     uint32_t component_count = 0;
     zend_ulong idx;
     king_component_info_t *info;
@@ -459,10 +495,6 @@ PHP_FUNCTION(king_system_get_status)
     component_count = king_system_initialized
         ? (uint32_t) zend_hash_num_elements(&king_system_components)
         : 0;
-
-    array_init(return_value);
-    add_assoc_bool(return_value, "initialized", king_system_initialized);
-    add_assoc_long(return_value, "component_count", component_count);
 
     array_init(&components);
     if (king_system_initialized) {
@@ -480,16 +512,41 @@ PHP_FUNCTION(king_system_get_status)
             add_assoc_long(&component_entry, "last_health_check", (zend_long) last_health_check);
             add_assoc_long(&component_entry, "up_for_seconds", (zend_long) (now - last_health_check));
 
-            if (info->status == KING_COMPONENT_STATUS_INITIALIZING ||
-                info->status == KING_COMPONENT_STATUS_SHUTTING_DOWN) {
-                draining_count++;
-            } else if (info->status == KING_COMPONENT_STATUS_RUNNING) {
-                ready_count++;
+            switch (info->status) {
+                case KING_COMPONENT_STATUS_RUNNING:
+                    ready_count++;
+                    break;
+                case KING_COMPONENT_STATUS_SHUTTING_DOWN:
+                    draining_count++;
+                    has_draining = true;
+                    break;
+                case KING_COMPONENT_STATUS_INITIALIZING:
+                case KING_COMPONENT_STATUS_UNINITIALIZED:
+                case KING_COMPONENT_STATUS_SHUTDOWN:
+                    has_starting = true;
+                    break;
+                case KING_COMPONENT_STATUS_ERROR:
+                    has_error = true;
+                    break;
             }
 
             add_assoc_zval(&components, info->name, &component_entry);
         } ZEND_HASH_FOREACH_END();
     }
+
+    lifecycle = king_system_resolve_lifecycle(
+        king_system_initialized,
+        component_count,
+        (uint32_t) ready_count,
+        has_starting,
+        has_draining,
+        has_error
+    );
+
+    array_init(return_value);
+    add_assoc_bool(return_value, "initialized", king_system_initialized);
+    add_assoc_string(return_value, "lifecycle", (char *) lifecycle);
+    add_assoc_long(return_value, "component_count", component_count);
     add_assoc_zval(return_value, "components", &components);
     add_assoc_long(return_value, "components_ready", (zend_long) ready_count);
     add_assoc_long(return_value, "components_draining", (zend_long) draining_count);

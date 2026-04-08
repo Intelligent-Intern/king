@@ -13,7 +13,7 @@
 - keep the active batch visible here until it is exhausted; mark closed leaves as `[x]` instead of deleting them mid-batch
 - every item must be narrow enough to implement and verify inside this repo
 - if a tracker item is still too broad, split it before adding it here
-- when a leaf closes, update code, touched comments/docblocks, tests, docs, `PROJECT_ASSESSMENT.md`, and `READYNESS_TRACKER.md` in the same change
+- when a leaf closes, update code, touched comments/docblocks, and tests in the same change; handbook docs and `READYNESS_TRACKER.md` may be deferred only when the current batch explicitly says so by user request
 - when a leaf closes, also verify the affected runtime with the strongest relevant tests/harnesses available before committing
 - when a leaf closes, make exactly one commit for that checkbox; do not batch multiple checkbox closures into one commit
 - do not pull new items from `READYNESS_TRACKER.md` into this file unless the user explicitly asks for the next `20`-issue batch or enables continuous batch execution
@@ -27,9 +27,9 @@
 - update the runtime/backend code needed for the leaf
 - update any touched comments, docblocks, headers, and contract wording so code and prose stay aligned
 - add or tighten tests that prove the leaf on the strongest honest runtime path available
-- update repo docs affected by the leaf
+- update repo docs affected by the leaf, unless the current batch explicitly defers handbook closeout to the end
 - update `PROJECT_ASSESSMENT.md`
-- update `READYNESS_TRACKER.md`
+- update `READYNESS_TRACKER.md`, unless the current batch explicitly defers tracker closeout to the end
 - run the strongest relevant verification available for that leaf before committing
 - make exactly one commit for the checkbox
 - before any PR refresh or release-candidate handoff, re-check `https://github.com/Intelligent-Intern/king/security/quality/ai-findings` and fix every outstanding finding on the branch
@@ -38,11 +38,12 @@
 
 - The user is advancing the current batch manually with `w`.
 - Close exactly one checkbox, make exactly one commit, and then wait for the next `w`.
-- When the current visible batch is exhausted, push `develop/v1.0.1-beta`, open the PR, and wait instead of auto-refilling from `READYNESS_TRACKER.md`.
+- For the current visible batch, defer repo docs and `READYNESS_TRACKER.md` updates until every visible checkbox is closed, then do the closeout sweep once before pushing `develop/v1.0.2-beta` and opening the PR.
+- After the PR is open, each further `w` means wait instead of auto-refilling from `READYNESS_TRACKER.md`.
 
 ## Current Next Leaf
 
-- Active batch exhausted. Push `develop/v1.0.1-beta`, open the PR, and then wait.
+- `#2 Define component-level readiness reasons and blocker semantics in the system runtime status surface.`
 
 ## Active Executable Items
 
@@ -199,10 +200,43 @@ Flow::extract($king->objectStore()->source('raw/orders/*.ndjson'))
     );
 ```
 
+### R. System Lifecycle / Readiness / Drain / Failover
+
+King already exposes subsystem health, restart, object-store, orchestrator,
+telemetry, and autoscaling primitives, but v1 still needs one honest
+process-wide lifecycle over those pieces. The expected `R` end-state is one
+coordinated runtime that can say when it is stopped, starting, ready,
+draining, or failed, can admit or reject new work honestly, can start and stop
+in an ordered way, and can recover centrally across the repo-local component
+set without pretending live fleet behavior it does not yet prove.
+
+By explicit user request, this batch defers repo-doc and
+`READYNESS_TRACKER.md` closeout until the whole visible block is complete.
+
+- [x] `#1 Define and expose the canonical aggregate system lifecycle states through king_system_get_status().`
+- [ ] `#2 Define component-level readiness reasons and blocker semantics in the system runtime status surface.`
+- [ ] `#3 Expose aggregate readiness blockers and admission booleans for the coordinated runtime.`
+- [ ] `#4 Gate king_system_process_request() and new HTTP listener accepts on aggregate readiness.`
+- [ ] `#5 Gate new WebSocket upgrades and accepted peers on aggregate readiness.`
+- [ ] `#6 Gate new orchestrator local submissions on aggregate readiness.`
+- [ ] `#7 Gate file-worker claim and resume on aggregate readiness.`
+- [ ] `#8 Gate remote-peer dispatch and resume on aggregate readiness.`
+- [ ] `#9 Define and expose system-wide drain intent and allowed transitions.`
+- [ ] `#10 Stop new HTTP listener work during drain while preserving admitted in-flight work.`
+- [ ] `#11 Stop new orchestrator work admission during drain while preserving admitted runs.`
+- [ ] `#12 Stop new worker claims during drain while preserving already-claimed execution.`
+- [ ] `#13 Define ordered component startup dependencies and visibility.`
+- [ ] `#14 Implement ordered component startup transitions in the local system runtime.`
+- [ ] `#15 Define ordered component shutdown dependencies and visibility.`
+- [ ] `#16 Implement ordered component shutdown with drain-first behavior.`
+- [ ] `#17 Build the object-store failover harness for central lifecycle coordination.`
+- [ ] `#18 Implement coordinated recovery after component failure with one visible aggregate status path.`
+- [ ] `#19 Implement coordinated recovery after node failure for the repo-local coordinated runtime.`
+- [ ] `#20 Validate coordinated recovery plus rolling restart and any publicly claimed network-partition behavior across the repo-local component set.`
+
 ## Notes
 
-- The active batch is now the full `Flow PHP` / ETL integration block imported from `READYNESS_TRACKER.md` section `Q` by explicit user request.
-- The imported block is kept complete here so the next working area is visible in one place; broad items still need splitting before individual implementation/verification passes when necessary.
+- The active batch is now the `R` system lifecycle / readiness / drain / failover block.
+- The closed `Q` Flow PHP / ETL integration block remains visible above until the release cut by explicit user request.
 - Closed leaves inside the visible blocks stay in `ISSUES.md` as `[x]` until the release cut instead of being deleted early.
-- The previous userland orchestrator wave is exhausted and its closed work now lives in `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, and `main`.
 - If a task is not listed here, it is not the current repo-local execution item.

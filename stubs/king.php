@@ -1462,10 +1462,23 @@ namespace {
 
     /**
      * System status summary for the active runtime.
+     * The aggregate `lifecycle` is one of `stopped`, `starting`, `ready`,
+     * `draining`, or `failed`.
      * @return array{
-     *   system_info: array<string,mixed>,
-     *   configuration: array<string,mixed>,
-     *   autoscaling: array<string,mixed>
+     *   initialized:bool,
+     *   lifecycle:string,
+     *   component_count:int,
+     *   components: array<string,array{
+     *     status:string,
+     *     ready:bool,
+     *     requests_handled:int,
+     *     errors_encountered:int,
+     *     last_health_check:int,
+     *     up_for_seconds:int
+     *   }>,
+     *   components_ready:int,
+     *   components_draining:int,
+     *   health_check_interval_seconds:int
      * }
      */
     function king_system_get_status(): array {}
