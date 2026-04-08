@@ -77,7 +77,7 @@ with the runtime instead of being deferred to a later cleanup pass.
   done when: the repo documents a stable integration boundary that treats King as runtime substrate and `Flow PHP`-style ETL as userland orchestration/dataflow semantics, without silently shrinking existing King runtime guarantees
 - [x] `#2 Define a reusable object-store / dataflow runtime configuration model for secure storage topology, encryption, integrity, lifecycle, upload, and replication policy.`
   done when: one shared config object can describe primary plus replica/backups, credential sources, encryption mode, integrity policy, expiry/lifecycle policy, upload policy, and dataflow-facing checkpoint/temp-storage policy without every pipeline restating those concerns ad hoc
-- [ ] `#3 Implement a streaming source adapter contract on top of King object-store, MCP, HTTP, and other runtime-owned transports.`
+- [x] `#3 Implement a streaming source adapter contract on top of King object-store, MCP, HTTP, and other runtime-owned transports.`
   done when: a dataflow source can consume records or blobs from King-backed transports with bounded-memory reads, resume-aware progress, and backpressure instead of requiring whole-object materialization first
 - [ ] `#4 Implement a streaming sink adapter contract on top of King object-store, MCP, HTTP, and other runtime-owned transports.`
   done when: a dataflow sink can flush output through King-backed transports with bounded-memory writes, multipart/resumable upload where available, and explicit partial-failure handling

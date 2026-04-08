@@ -213,6 +213,52 @@ Future Flow PHP-style adapters on King should follow these rules:
 - keep the config object declarative; it describes topology and policy, not
   executable callbacks or process-local resources
 
+## Repo-Local Streaming Source Contract
+
+The repository now also carries one real userland source contract under
+[`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
+[`../userland/flow-php/src/StreamingSource.php`](../userland/flow-php/src/StreamingSource.php).
+
+That code is intentionally repo-local. It is not presented as the final public
+Composer package. The important thing for this phase is that the source
+boundary is now real and test-backed instead of only described in the tracker.
+
+The current source contract has three shared pieces:
+
+- `SourceCursor`, a serializable progress snapshot that later checkpoint work
+  can persist without inventing transport-specific ad hoc arrays
+- `SourcePumpResult`, which reports completion, delivered chunks, delivered
+  bytes, and the latest cursor
+- `pumpBytes()` and `pumpLines()`, which keep byte/blob movement and simple
+  record framing in one userland-facing contract
+
+The current adapters are:
+
+- `ObjectStoreByteSource`, which uses `king_object_store_get_to_stream()` plus
+  byte-range offsets for direct bounded-memory chunk pulls and
+  `resume_strategy=range_offset`
+- `HttpByteSource`, which uses `response_stream` plus `King\Response::read()`
+  for pull-based backpressure and `resume_strategy=replay_and_skip`
+- `McpByteSource`, which uses `king_mcp_download_to_stream()` against a
+  writable callback stream so the runtime only advances as the userland chunk
+  callback returns, also with `resume_strategy=replay_and_skip`
+
+Those resume strategies are intentionally explicit because they are not all the
+same strength. Object-store can resume directly from byte offsets today. HTTP
+and MCP are currently restart-aware by replaying from the beginning and
+discarding already-consumed bytes until the saved cursor boundary is reached.
+That is still a real resumable source contract, but it is honestly weaker than
+transport-native range resume.
+
+The current PHPT proof covers:
+
+- object-store record streaming with resumable cursors:
+  `600-flow-php-object-store-source-contract.phpt`
+- HTTP byte streaming with replay-and-skip resume:
+  `601-flow-php-http-source-contract.phpt`
+- MCP transfer streaming with replay-and-skip resume:
+  `602-flow-php-mcp-source-contract.phpt`
+
 ## What This Chapter Does Not Claim Yet
 
 This chapter is a contract statement, not a claim that every adapter in that
