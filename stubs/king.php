@@ -1455,7 +1455,9 @@ namespace {
 
     /**
      * Initialize the active system-integration runtime from an inline config
-     * array and materialize the coordinated component snapshot.
+     * array and materialize the coordinated component snapshot. The returned
+     * runtime may remain in aggregate `starting` until the ordered component
+     * startup waves have finished.
      * @param array<string,mixed> $config
      */
     function king_system_init(array $config): bool {}

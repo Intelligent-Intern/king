@@ -108,6 +108,20 @@ function king_autoscaling_stop_chaos_mock(array $server): void
     @unlink($script);
 }
 
+function king_system_wait_until_ready_for_chaos(int $maxSeconds = 8): void
+{
+    for ($i = 0; $i < $maxSeconds; $i++) {
+        $status = king_system_get_status();
+        if (($status['lifecycle'] ?? null) === 'ready') {
+            return;
+        }
+
+        sleep(1);
+    }
+
+    throw new RuntimeException('system did not become ready before chaos restart sequence');
+}
+
 $statePath = tempnam(sys_get_temp_dir(), 'king-chaos-state-');
 $logFile = tempnam(sys_get_temp_dir(), 'king-chaos-log-');
 $server = king_autoscaling_start_chaos_mock($logFile);
@@ -125,6 +139,7 @@ $config = [
 
 try {
     var_dump(king_system_init(['component_timeout_seconds' => 1]));
+    king_system_wait_until_ready_for_chaos();
     var_dump(king_autoscaling_init($config));
     var_dump(king_autoscaling_scale_up(2));
 

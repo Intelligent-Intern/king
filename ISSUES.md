@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#14 Implement ordered component startup transitions in the local system runtime.`
+- `#15 Define ordered component shutdown dependencies and visibility.`
 
 ## Active Executable Items
 
@@ -226,7 +226,7 @@ By explicit user request, this batch defers repo-doc and
 - [x] `#11 Stop new orchestrator work admission during drain while preserving admitted runs.`
 - [x] `#12 Stop new worker claims during drain while preserving already-claimed execution.`
 - [x] `#13 Define ordered component startup dependencies and visibility.`
-- [ ] `#14 Implement ordered component startup transitions in the local system runtime.`
+- [x] `#14 Implement ordered component startup transitions in the local system runtime.`
 - [ ] `#15 Define ordered component shutdown dependencies and visibility.`
 - [ ] `#16 Implement ordered component shutdown with drain-first behavior.`
 - [ ] `#17 Build the object-store failover harness for central lifecycle coordination.`
