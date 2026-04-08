@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#10 Stop new HTTP listener work during drain while preserving admitted in-flight work.`
+- `#11 Stop new orchestrator work admission during drain while preserving admitted runs.`
 
 ## Active Executable Items
 
@@ -222,7 +222,7 @@ By explicit user request, this batch defers repo-doc and
 - [x] `#7 Gate file-worker claim and resume on aggregate readiness.`
 - [x] `#8 Gate remote-peer dispatch and resume on aggregate readiness.`
 - [x] `#9 Define and expose system-wide drain intent and allowed transitions.`
-- [ ] `#10 Stop new HTTP listener work during drain while preserving admitted in-flight work.`
+- [x] `#10 Stop new HTTP listener work during drain while preserving admitted in-flight work.`
 - [ ] `#11 Stop new orchestrator work admission during drain while preserving admitted runs.`
 - [ ] `#12 Stop new worker claims during drain while preserving already-claimed execution.`
 - [ ] `#13 Define ordered component startup dependencies and visibility.`
