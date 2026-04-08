@@ -9,6 +9,8 @@ var_dump(king_system_init(['environment' => 'development']));
 $status = king_system_get_status();
 var_dump($status['initialized']);
 var_dump($status['component_count'] > 0);
+var_dump($status['readiness_blocker_count']);
+var_dump($status['admission']['process_requests']);
 
 // 3. Telemetry integration check
 king_telemetry_init([]);
@@ -34,6 +36,8 @@ var_dump($status['initialized']);
 --EXPECT--
 bool(true)
 bool(true)
+bool(true)
+int(0)
 bool(true)
 bool(true)
 int(3)

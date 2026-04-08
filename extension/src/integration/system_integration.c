@@ -504,11 +504,16 @@ PHP_FUNCTION(king_system_shutdown)
 PHP_FUNCTION(king_system_get_status)
 {
     ZEND_PARSE_PARAMETERS_NONE();
+    zval admission;
+    zval blocker_entry;
     zval component_entry;
     zval components;
+    zval readiness_blockers;
+    zend_bool aggregate_ready = 0;
     const char *lifecycle;
     time_t now;
     int draining_count = 0;
+    int readiness_blocker_count = 0;
     int ready_count = 0;
     bool has_draining = false;
     bool has_error = false;
@@ -525,9 +530,13 @@ PHP_FUNCTION(king_system_get_status)
         : 0;
 
     array_init(&components);
+    array_init(&readiness_blockers);
     if (king_system_initialized) {
         ZEND_HASH_FOREACH_NUM_KEY_PTR(&king_system_components, idx, info) {
             time_t last_health_check = info->last_health_check;
+            zend_bool readiness_blocking = king_system_component_readiness_blocking(
+                info->status
+            );
             const char *readiness_reason = king_system_component_readiness_reason(
                 info->status
             );
@@ -542,7 +551,7 @@ PHP_FUNCTION(king_system_get_status)
             add_assoc_bool(
                 &component_entry,
                 "readiness_blocking",
-                king_system_component_readiness_blocking(info->status)
+                readiness_blocking
             );
             add_assoc_long(&component_entry, "requests_handled", (zend_long) info->requests_handled);
             add_assoc_long(&component_entry, "errors_encountered", (zend_long) info->errors_encountered);
@@ -567,6 +576,22 @@ PHP_FUNCTION(king_system_get_status)
                     break;
             }
 
+            if (readiness_blocking) {
+                readiness_blocker_count++;
+                array_init(&blocker_entry);
+                add_assoc_string(
+                    &blocker_entry,
+                    "status",
+                    king_component_status_to_string(info->status)
+                );
+                add_assoc_string(
+                    &blocker_entry,
+                    "readiness_reason",
+                    (char *) readiness_reason
+                );
+                add_assoc_zval(&readiness_blockers, info->name, &blocker_entry);
+            }
+
             add_assoc_zval(&components, info->name, &component_entry);
         } ZEND_HASH_FOREACH_END();
     }
@@ -579,6 +604,10 @@ PHP_FUNCTION(king_system_get_status)
         has_draining,
         has_error
     );
+    aggregate_ready = king_system_initialized
+        && component_count > 0
+        && readiness_blocker_count == 0
+        && strcmp(lifecycle, "ready") == 0;
 
     array_init(return_value);
     add_assoc_bool(return_value, "initialized", king_system_initialized);
@@ -587,6 +616,23 @@ PHP_FUNCTION(king_system_get_status)
     add_assoc_zval(return_value, "components", &components);
     add_assoc_long(return_value, "components_ready", (zend_long) ready_count);
     add_assoc_long(return_value, "components_draining", (zend_long) draining_count);
+    add_assoc_long(
+        return_value,
+        "readiness_blocker_count",
+        (zend_long) readiness_blocker_count
+    );
+    add_assoc_zval(return_value, "readiness_blockers", &readiness_blockers);
+    array_init(&admission);
+    add_assoc_bool(&admission, "process_requests", aggregate_ready);
+    add_assoc_bool(&admission, "http_listener_accepts", aggregate_ready);
+    add_assoc_bool(&admission, "websocket_upgrades", aggregate_ready);
+    add_assoc_bool(&admission, "websocket_peer_accepts", aggregate_ready);
+    add_assoc_bool(&admission, "orchestrator_submissions", aggregate_ready);
+    add_assoc_bool(&admission, "file_worker_claims", aggregate_ready);
+    add_assoc_bool(&admission, "file_worker_resumes", aggregate_ready);
+    add_assoc_bool(&admission, "remote_peer_dispatches", aggregate_ready);
+    add_assoc_bool(&admission, "remote_peer_resumes", aggregate_ready);
+    add_assoc_zval(return_value, "admission", &admission);
     add_assoc_long(
         return_value,
         "health_check_interval_seconds",
