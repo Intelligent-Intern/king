@@ -1039,6 +1039,13 @@ back to bounded local replay staging plus `king_object_store_put_from_stream()`
 elsewhere, keeping partial-failure and resume state explicit instead of
 downgrading object-store writes to one whole-payload string API.
 
+That chapter now also documents the repo-local `ObjectStoreCheckpointStore`
+helper. It persists checkpoint envelopes on the same durable object-store
+surface, uses `integrity_sha256` plus `if_none_match` / `if_match` /
+`expected_version` for honest conflict detection, and maps logical checkpoint
+namespaces onto object-store-safe IDs because the current runtime forbids raw
+path separators in public object ids.
+
 ## The Questions Operators Should Ask
 
 When operators evaluate a storage setup, they should ask the same questions the

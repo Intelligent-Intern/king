@@ -312,6 +312,52 @@ The current PHPT proof covers:
 - MCP upload failure, retained replay state, and later retry success:
   `605-flow-php-mcp-sink-contract.phpt`
 
+## Repo-Local Checkpoint Store Contract
+
+The repository now also carries one real userland checkpoint-store contract
+under [`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
+[`../userland/flow-php/src/CheckpointStore.php`](../userland/flow-php/src/CheckpointStore.php).
+
+This piece exists because restart-aware source and sink adapters are not enough
+by themselves. A pipeline still needs one honest durable place to persist the
+latest offsets, cursors, and replay boundary that should survive process loss
+and later resume.
+
+The current checkpoint contract has four shared pieces:
+
+- `CheckpointState`, which packages offsets, replay boundary state, source
+  cursor state, sink cursor state, and arbitrary progress metadata into one
+  serializable value
+- `CheckpointRecord`, which adds the real object-store `etag`, `version`,
+  metadata snapshot, and committed object identity around one saved state
+- `CheckpointCommitResult`, which makes successful commits and version
+  conflicts explicit instead of collapsing them into silent last-writer-wins
+- `ObjectStoreCheckpointStore`, which persists checkpoints on the ordinary
+  King object-store surface using integrity hashes plus `if_none_match`,
+  `if_match`, and `expected_version` preconditions
+
+The current repo-local implementation intentionally maps logical
+`prefix + checkpoint_id` namespaces onto object-store-safe IDs. That is not a
+quirk of the helper layer. It is the honest adapter to the current runtime,
+which does not allow raw `/` path separators inside public object ids.
+
+The important semantic point is stronger than the key-shape detail:
+
+- checkpoint state is durable on a real King persistence surface
+- full checkpoint reads validate stored integrity on the ordinary object-store
+  path
+- later writers must present the last committed `etag` and `version` or they
+  get an explicit conflict result instead of silently overwriting newer state
+- saved `SourceCursor` and `SinkCursor` snapshots can be reconstructed after a
+  restart without ETL callers inventing a second persistence system
+
+The current PHPT proof covers:
+
+- local object-store restart, reload, and cursor reconstruction:
+  `606-flow-php-checkpoint-store-restart-contract.phpt`
+- stale-writer conflict reporting through real object-store preconditions:
+  `607-flow-php-checkpoint-store-conflict-contract.phpt`
+
 ## What This Chapter Does Not Claim Yet
 
 This chapter is a contract statement, not a claim that every adapter in that
