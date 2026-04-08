@@ -501,6 +501,60 @@ The current PHPT proof covers:
 - remote-peer controller loss, durable boundary replay, and resumed completion:
   `610-flow-php-execution-backend-remote-peer-contract.phpt`
 
+## Repo-Local Control-Plane Contract
+
+The repository now also carries one real userland control-plane helper under
+[`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
+[`../userland/flow-php/src/ControlPlane.php`](../userland/flow-php/src/ControlPlane.php).
+
+This piece exists because execution capabilities plus checkpoint persistence
+still leave one operational gap: a dataflow run needs one explicit place where
+`start`, `pause`, `cancel`, `resume`, `inspect`, and replacement recovery live
+as durable runtime state instead of as controller-memory branching.
+
+The current contract keeps that state explicit:
+
+- `ObjectStoreFlowControlStore` persists one control record per logical
+  dataflow run on the same ordinary King object-store surface already used by
+  checkpoints
+- `FlowControlPlane` composes `ExecutionBackend`, `CheckpointStore`, and the
+  control store into one repo-local userland control surface instead of
+  inventing a second hidden run registry
+- `CheckpointRecoveryPlan` keeps the recovery boundary honest by saying whether
+  replacement starts from checkpoint state, checkpoint progress, or persisted
+  initial input merged with that checkpoint material
+- `FlowControlSnapshot` returns the stored control record plus the current
+  backend snapshot and checkpoint record so callers can inspect both the
+  durable intent and the live execution state together
+
+The important behavior is backend-specific on purpose:
+
+- `file_worker` pause and cancel use the stronger persisted queued-run
+  cancellation path, so a run paused before worker claim becomes
+  `pause_mode=cancelled_before_claim` instead of pretending a live worker still
+  owns it
+- `local` and `remote_peer` control-plane start persists a control record
+  before the blocking immediate-run call returns by using the orchestrator's
+  stable sequential `run-N` identity, which keeps `inspect()` honest during an
+  already-running controller-owned run
+- `resume()` continues the same persisted local or remote run when the
+  execution backend honestly supports `continueRun($runId)`, but starts a new
+  replacement run when the stored control state says pause/cancel/failure now
+  requires recovery instead
+- when a checkpoint exists, replacement recovery records the checkpoint ID and
+  version inside the new run options; when no checkpoint exists, the control
+  plane still has enough persisted state to restart from the original initial
+  input instead of failing closed into controller-memory assumptions
+
+The current PHPT proof covers:
+
+- queued file-worker start, inspect, pause, cancel, and checkpoint-aware
+  replacement recovery:
+  `619-flow-php-control-plane-file-worker-contract.phpt`
+- local immediate-run inspectability during controller execution plus
+  controller-loss resume through the same control-plane wrapper:
+  `620-flow-php-control-plane-local-resume-contract.phpt`
+
 ## Repo-Local Failure Taxonomy Contract
 
 The repository now also carries one real userland failure-taxonomy helper

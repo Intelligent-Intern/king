@@ -33,6 +33,11 @@ interface ExecutionBackend
     public function capabilities(): ExecutionBackendCapabilities;
 }
 
+interface PredictiveRunIdExecutionBackend extends ExecutionBackend
+{
+    public function predictNextRunId(): string;
+}
+
 final class ExecutionBackendCapabilities
 {
     public function __construct(
@@ -257,7 +262,7 @@ final class ExecutionRunSnapshot
     }
 }
 
-final class OrchestratorExecutionBackend implements ExecutionBackend
+final class OrchestratorExecutionBackend implements PredictiveRunIdExecutionBackend
 {
     /**
      * @param array<string,mixed> $config
@@ -320,6 +325,18 @@ final class OrchestratorExecutionBackend implements ExecutionBackend
                 'same_process_registered_handlers'
             ),
         };
+    }
+
+    public function predictNextRunId(): string
+    {
+        $config = $this->componentConfiguration();
+        $lastRunId = is_string($config['last_run_id'] ?? null) ? $config['last_run_id'] : '';
+
+        if (preg_match('/^run-(\d+)$/', $lastRunId, $matches) === 1) {
+            return 'run-' . (((int) $matches[1]) + 1);
+        }
+
+        return 'run-' . (((int) ($config['run_history_count'] ?? 0)) + 1);
     }
 
     public function start(mixed $initialData, array $pipeline, array $options = []): ExecutionRunSnapshot

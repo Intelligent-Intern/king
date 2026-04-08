@@ -438,6 +438,12 @@ now wraps this exact split with `ExecutionBackendCapabilities`,
 `OrchestratorExecutionBackend::claimNext()` instead of pretending one hidden
 resume path exists for every backend.
 
+The repo-local Flow PHP control-plane helper at
+`userland/flow-php/src/ControlPlane.php` composes those same procedural
+surfaces with the object-store-backed checkpoint APIs, so userland ETL code can
+persist `start`, `pause`, `cancel`, `resume`, `inspect`, and recovery intent as
+ordinary runtime state instead of hiding that logic in controller memory.
+
 ## Error Buffers And Reading Order
 
 Three functions exist specifically to expose the shared error buffers used by

@@ -8,14 +8,15 @@ public package layout. The point is to keep real userland adapter code in the
 repository while the contract is still being proven.
 
 The current source, sink, dataset-bridge, serialization/schema bridge,
-checkpoint, execution-backend, failure-taxonomy, and partitioning/backpressure
-contracts live in
+checkpoint, execution-backend, control-plane, failure-taxonomy, and
+partitioning/backpressure contracts live in
 `userland/flow-php/src/StreamingSource.php`,
 `userland/flow-php/src/StreamingSink.php`, and
 `userland/flow-php/src/ObjectStoreDataset.php`, and
 `userland/flow-php/src/SerializationBridge.php`, and
 `userland/flow-php/src/CheckpointStore.php`, and
 `userland/flow-php/src/ExecutionBackend.php`, and
+`userland/flow-php/src/ControlPlane.php`, and
 `userland/flow-php/src/FailureTaxonomy.php`, and
 `userland/flow-php/src/Partitioning.php`.
 
@@ -54,7 +55,15 @@ Current helpers:
 - `King\Flow\CheckpointCommitResult`
 - `King\Flow\ExecutionBackendCapabilities`
 - `King\Flow\ExecutionRunSnapshot`
+- `King\Flow\PredictiveRunIdExecutionBackend`
 - `King\Flow\OrchestratorExecutionBackend`
+- `King\Flow\FlowControlStore`
+- `King\Flow\FlowControlRecord`
+- `King\Flow\FlowControlCommitResult`
+- `King\Flow\ObjectStoreFlowControlStore`
+- `King\Flow\CheckpointRecoveryPlan`
+- `King\Flow\FlowControlSnapshot`
+- `King\Flow\FlowControlPlane`
 - `King\Flow\FlowFailure`
 - `King\Flow\FlowFailureTaxonomy`
 - `King\Flow\PartitionBatch`
@@ -103,6 +112,21 @@ The contract is intentionally small:
   `file_worker` runs
 - treat pre-claim file-worker cancellation as already-terminal queue state
   rather than pretending the worker still owns a live in-flight cancel path
+- persist an explicit control-plane record on the ordinary object-store path so
+  `start`, `pause`, `cancel`, `resume`, `inspect`, and checkpoint-aware
+  recovery are restart-visible runtime state instead of controller-memory
+  folklore
+- keep immediate `local` and `remote_peer` control records inspectable during a
+  live run by persisting the predicted sequential orchestrator `run-N` identity
+  before the blocking start call returns
+- map queued file-worker pause and cancel onto the stronger persisted
+  `cancelRun()` contract, but keep running local or remote pause/cancel
+  requests honest about their intent-only boundary unless a checkpoint-driven
+  replacement run is started
+- allow resume to continue the same persisted local or remote run when that
+  stronger contract exists, or start a new run from persisted initial data or
+  checkpoint progress when the durable control record says replacement is the
+  honest recovery path
 - map source, sink, checkpoint, and execution failures onto one stable
   category-plus-retry taxonomy instead of forcing ETL callers to parse
   transport-specific exception strings
