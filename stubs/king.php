@@ -1612,6 +1612,17 @@ namespace {
     function king_system_restart_component(string $name): bool {}
 
     /**
+     * Inject one named component failure into the active coordinated runtime.
+     */
+    function king_system_fail_component(string $name): bool {}
+
+    /**
+     * Recover the active coordinated runtime from aggregate `failed` back
+     * through the ordered drain/start path toward `ready`.
+     */
+    function king_system_recover(): bool {}
+
+    /**
      * Shut down the active system-integration runtime and coordinated
      * component snapshots.
      */

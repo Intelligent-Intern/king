@@ -168,4 +168,6 @@ PHP_FUNCTION(king_autoscaling_drain_node);
 PHP_FUNCTION(king_system_init);
 PHP_FUNCTION(king_system_process_request);
 PHP_FUNCTION(king_system_restart_component);
+PHP_FUNCTION(king_system_fail_component);
+PHP_FUNCTION(king_system_recover);
 PHP_FUNCTION(king_system_shutdown);

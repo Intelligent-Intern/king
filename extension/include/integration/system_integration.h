@@ -122,6 +122,12 @@ PHP_FUNCTION(king_system_get_component_info);
 /* Marks one local component for the current restart/drain transition path. */
 PHP_FUNCTION(king_system_restart_component);
 
+/* Injects one local component failure into the coordinated runtime. */
+PHP_FUNCTION(king_system_fail_component);
+
+/* Requests a coordinated recovery path after the aggregate runtime failed. */
+PHP_FUNCTION(king_system_recover);
+
 /* Returns the compact local performance snapshot from the introspection layer. */
 PHP_FUNCTION(king_system_get_performance_report);
 
