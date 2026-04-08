@@ -148,6 +148,10 @@ try {
     var_dump($system['components']['autoscaling']['status']);
     var_dump($system['components']['telemetry']['ready']);
     var_dump($system['components']['autoscaling']['ready']);
+    var_dump($system['components']['telemetry']['readiness_reason']);
+    var_dump($system['components']['autoscaling']['readiness_reason']);
+    var_dump($system['components']['telemetry']['readiness_blocking']);
+    var_dump($system['components']['autoscaling']['readiness_blocking']);
     var_dump(king_system_process_request([]));
 
     sleep(1);
@@ -156,6 +160,10 @@ try {
     var_dump($system['components_draining']);
     var_dump($system['components']['telemetry']['status']);
     var_dump($system['components']['autoscaling']['status']);
+    var_dump($system['components']['telemetry']['readiness_reason']);
+    var_dump($system['components']['autoscaling']['readiness_reason']);
+    var_dump($system['components']['telemetry']['readiness_blocking']);
+    var_dump($system['components']['autoscaling']['readiness_blocking']);
     var_dump(king_system_process_request([]));
 
     sleep(1);
@@ -164,6 +172,10 @@ try {
     var_dump($system['components_draining']);
     var_dump($system['components']['telemetry']['status']);
     var_dump($system['components']['autoscaling']['status']);
+    var_dump($system['components']['telemetry']['readiness_reason']);
+    var_dump($system['components']['autoscaling']['readiness_reason']);
+    var_dump($system['components']['telemetry']['readiness_blocking']);
+    var_dump($system['components']['autoscaling']['readiness_blocking']);
     var_dump(king_system_process_request([]));
 
     var_dump(king_autoscaling_init($config));
@@ -208,16 +220,28 @@ string(13) "shutting_down"
 string(13) "shutting_down"
 bool(false)
 bool(false)
+string(23) "component_shutting_down"
+string(23) "component_shutting_down"
+bool(true)
+bool(true)
 bool(false)
 string(8) "starting"
 int(0)
 string(12) "initializing"
 string(12) "initializing"
+string(22) "component_initializing"
+string(22) "component_initializing"
+bool(true)
+bool(true)
 bool(false)
 string(5) "ready"
 int(0)
 string(7) "running"
 string(7) "running"
+string(5) "ready"
+string(5) "ready"
+bool(false)
+bool(false)
 bool(true)
 bool(true)
 string(14) "hetzner_active"
