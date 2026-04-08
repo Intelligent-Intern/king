@@ -10,6 +10,7 @@
 static king_system_config_t king_system_runtime_config;
 static bool king_system_initialized = false;
 static bool king_system_shutdown_requested = false;
+static bool king_system_recovery_requested = false;
 static HashTable king_system_components;
 
 typedef struct _king_system_component_name_entry {
@@ -38,6 +39,7 @@ typedef struct _king_system_startup_entry {
 typedef enum _king_system_drain_reason {
     KING_SYSTEM_DRAIN_REASON_NONE,
     KING_SYSTEM_DRAIN_REASON_COMPONENT_RESTART,
+    KING_SYSTEM_DRAIN_REASON_COMPONENT_RECOVERY,
     KING_SYSTEM_DRAIN_REASON_SYSTEM_SHUTDOWN
 } king_system_drain_reason_t;
 
@@ -173,6 +175,7 @@ static void king_component_info_dtor(zval *zv)
 static void king_system_reset_drain_state(void)
 {
     king_system_shutdown_requested = false;
+    king_system_recovery_requested = false;
     king_system_drain_reason = KING_SYSTEM_DRAIN_REASON_NONE;
 }
 
@@ -200,6 +203,8 @@ static const char *king_system_drain_reason_to_string(
     switch (reason) {
         case KING_SYSTEM_DRAIN_REASON_COMPONENT_RESTART:
             return "component_restart";
+        case KING_SYSTEM_DRAIN_REASON_COMPONENT_RECOVERY:
+            return "component_recovery";
         case KING_SYSTEM_DRAIN_REASON_SYSTEM_SHUTDOWN:
             return "system_shutdown";
         case KING_SYSTEM_DRAIN_REASON_NONE:
@@ -887,7 +892,10 @@ static void king_system_schedule_shutdown_components(void)
     time_t now;
     zval pending_dependents;
 
-    if (!king_system_initialized || !king_system_shutdown_requested) {
+    if (
+        !king_system_initialized
+        || (!king_system_shutdown_requested && !king_system_recovery_requested)
+    ) {
         return;
     }
 
@@ -1008,6 +1016,12 @@ static void king_system_collect_admission_state(
         }
     } ZEND_HASH_FOREACH_END();
 
+    if (
+        (king_system_shutdown_requested || king_system_recovery_requested)
+        && (state->has_draining || state->has_error)
+    ) {
+        state->lifecycle = "draining";
+    } else {
     state->lifecycle = king_system_resolve_lifecycle(
         king_system_initialized,
         state->component_count,
@@ -1016,6 +1030,7 @@ static void king_system_collect_admission_state(
         state->has_draining,
         state->has_error
     );
+    }
     state->aggregate_ready = king_system_initialized
         && state->component_count > 0
         && state->readiness_blocker_count == 0
@@ -1071,7 +1086,7 @@ static void king_system_apply_component_transition(king_component_info_t *info)
 
     if (info->status == KING_COMPONENT_STATUS_SHUTTING_DOWN &&
         age >= king_system_runtime_config.component_timeout_seconds) {
-        info->status = king_system_shutdown_requested
+        info->status = (king_system_shutdown_requested || king_system_recovery_requested)
             ? KING_COMPONENT_STATUS_SHUTDOWN
             : KING_COMPONENT_STATUS_INITIALIZING;
         info->last_health_check = now;
@@ -1104,6 +1119,16 @@ static void king_system_apply_all_transitions(void)
             king_system_shutdown_all_components();
         }
         return;
+    }
+
+    if (king_system_recovery_requested) {
+        king_system_schedule_shutdown_components();
+        if (king_system_count_started_components() > 0) {
+            return;
+        }
+
+        king_system_recovery_requested = false;
+        king_system_drain_reason = KING_SYSTEM_DRAIN_REASON_NONE;
     }
 
     king_system_schedule_startup_components();
@@ -1358,6 +1383,54 @@ PHP_FUNCTION(king_system_restart_component)
     RETURN_TRUE;
 }
 
+PHP_FUNCTION(king_system_fail_component)
+{
+    char *name;
+    size_t name_len;
+    king_component_info_t *info;
+
+    if (zend_parse_parameters(1, "s", &name, &name_len) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    (void) name_len;
+
+    info = king_system_get_component_by_name(name);
+    if (!king_system_initialized || info == NULL) {
+        RETURN_FALSE;
+    }
+
+    RETURN_BOOL(
+        king_system_handle_component_error(
+            info->type,
+            "manual component failure"
+        ) == SUCCESS
+    );
+}
+
+PHP_FUNCTION(king_system_recover)
+{
+    king_system_admission_state_t state;
+
+    if (!king_system_initialized || king_system_shutdown_requested) {
+        RETURN_FALSE;
+    }
+
+    if (king_system_recovery_requested) {
+        RETURN_TRUE;
+    }
+
+    king_system_collect_admission_state(&state);
+    if (strcmp(state.lifecycle, "failed") != 0) {
+        RETURN_FALSE;
+    }
+
+    king_system_recovery_requested = true;
+    king_system_drain_reason = KING_SYSTEM_DRAIN_REASON_COMPONENT_RECOVERY;
+    king_system_apply_all_transitions();
+    RETURN_TRUE;
+}
+
 PHP_FUNCTION(king_system_shutdown)
 {
     if (!king_system_initialized) {
@@ -1501,7 +1574,7 @@ PHP_FUNCTION(king_system_get_status)
             );
 
             if (
-                (king_system_shutdown_requested &&
+                ((king_system_shutdown_requested || king_system_recovery_requested) &&
                     king_system_component_started(info->status)) ||
                 info->status == KING_COMPONENT_STATUS_SHUTTING_DOWN
             ) {
@@ -1549,7 +1622,13 @@ PHP_FUNCTION(king_system_get_status)
     );
     add_assoc_zval(return_value, "readiness_blockers", &readiness_blockers);
     array_init(&drain_intent);
-    add_assoc_bool(&drain_intent, "requested", admission_state.has_draining ? 1 : 0);
+    add_assoc_bool(
+        &drain_intent,
+        "requested",
+        (king_system_shutdown_requested
+            || king_system_recovery_requested
+            || admission_state.has_draining) ? 1 : 0
+    );
     add_assoc_bool(
         &drain_intent,
         "active",
@@ -1559,7 +1638,9 @@ PHP_FUNCTION(king_system_get_status)
         &drain_intent,
         "reason",
         (char *) (
-            king_system_shutdown_requested || admission_state.has_draining
+            king_system_shutdown_requested
+                || king_system_recovery_requested
+                || admission_state.has_draining
                 ? king_system_drain_reason_to_string(king_system_drain_reason)
                 : "none"
         )
@@ -1567,6 +1648,8 @@ PHP_FUNCTION(king_system_get_status)
     add_assoc_long(&drain_intent, "requested_at", (zend_long) drain_requested_at);
     if (king_system_shutdown_requested) {
         add_assoc_string(&drain_intent, "target_lifecycle", "stopped");
+    } else if (king_system_recovery_requested) {
+        add_assoc_string(&drain_intent, "target_lifecycle", "ready");
     } else if (admission_state.has_draining) {
         add_assoc_string(&drain_intent, "target_lifecycle", "starting");
     } else {

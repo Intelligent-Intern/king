@@ -154,6 +154,8 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_system_get_component_info, arginfo_king_one_string)
     PHP_FE(king_system_process_request, arginfo_king_system_process_request)
     PHP_FE(king_system_restart_component, arginfo_king_one_string)
+    PHP_FE(king_system_fail_component, arginfo_king_one_string)
+    PHP_FE(king_system_recover, arginfo_king_no_args)
     PHP_FE(king_system_shutdown, arginfo_king_no_args)
 
     PHP_FE_END
