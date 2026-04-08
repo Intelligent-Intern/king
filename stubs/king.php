@@ -1485,6 +1485,16 @@ namespace {
      *     status:string,
      *     readiness_reason:string
      *   }>,
+     *   drain_intent: array{
+     *     requested:bool,
+     *     active:bool,
+     *     reason:string,
+     *     requested_at:int,
+     *     target_lifecycle:?string,
+     *     target_component_count:int,
+     *     target_components:list<string>
+     *   },
+     *   allowed_lifecycle_transitions:list<string>,
      *   admission: array{
      *     process_requests:bool,
      *     http_listener_accepts:bool,

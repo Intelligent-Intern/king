@@ -14,6 +14,8 @@ var_dump(array_keys($status));
 var_dump($status['initialized']);
 var_dump($status['lifecycle']);
 var_dump($status['component_count']);
+var_dump($status['drain_intent']['reason']);
+var_dump($status['allowed_lifecycle_transitions']);
 
 var_dump(king_system_init([]));
 $status = king_system_get_status();
@@ -23,6 +25,10 @@ var_dump($status['lifecycle']);
 var_dump($status['component_count'] > 0);
 var_dump($status['readiness_blocker_count']);
 var_dump(count($status['readiness_blockers']));
+var_dump($status['drain_intent']['requested']);
+var_dump($status['drain_intent']['reason']);
+var_dump($status['drain_intent']['target_component_count']);
+var_dump($status['allowed_lifecycle_transitions']);
 var_dump($status['admission']['process_requests']);
 var_dump($status['admission']['http_listener_accepts']);
 var_dump($status['admission']['remote_peer_dispatches']);
@@ -35,6 +41,8 @@ $status = king_system_get_status();
 var_dump($status['initialized']);
 var_dump($status['lifecycle']);
 var_dump($status['component_count']);
+var_dump($status['drain_intent']['reason']);
+var_dump($status['allowed_lifecycle_transitions']);
 ?>
 --EXPECTF--
 array(4) {
@@ -51,7 +59,7 @@ bool(true)
 bool(true)
 string(%d) "%s"
 bool(false)
-array(10) {
+array(12) {
   [0]=>
   string(11) "initialized"
   [1]=>
@@ -69,15 +77,24 @@ array(10) {
   [7]=>
   string(18) "readiness_blockers"
   [8]=>
-  string(9) "admission"
+  string(12) "drain_intent"
   [9]=>
+  string(29) "allowed_lifecycle_transitions"
+  [10]=>
+  string(9) "admission"
+  [11]=>
   string(29) "health_check_interval_seconds"
 }
 bool(false)
 string(7) "stopped"
 int(0)
+string(4) "none"
+array(1) {
+  [0]=>
+  string(5) "ready"
+}
 bool(true)
-array(10) {
+array(12) {
   [0]=>
   string(11) "initialized"
   [1]=>
@@ -95,8 +112,12 @@ array(10) {
   [7]=>
   string(18) "readiness_blockers"
   [8]=>
-  string(9) "admission"
+  string(12) "drain_intent"
   [9]=>
+  string(29) "allowed_lifecycle_transitions"
+  [10]=>
+  string(9) "admission"
+  [11]=>
   string(29) "health_check_interval_seconds"
 }
 bool(true)
@@ -104,6 +125,17 @@ string(5) "ready"
 bool(true)
 int(0)
 int(0)
+bool(false)
+string(4) "none"
+int(0)
+array(3) {
+  [0]=>
+  string(8) "draining"
+  [1]=>
+  string(6) "failed"
+  [2]=>
+  string(7) "stopped"
+}
 bool(true)
 bool(true)
 bool(true)
@@ -114,3 +146,8 @@ bool(true)
 bool(false)
 string(7) "stopped"
 int(0)
+string(4) "none"
+array(1) {
+  [0]=>
+  string(5) "ready"
+}
