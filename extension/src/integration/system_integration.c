@@ -9,6 +9,7 @@
 
 static king_system_config_t king_system_runtime_config;
 static bool king_system_initialized = false;
+static bool king_system_shutdown_requested = false;
 static HashTable king_system_components;
 
 typedef struct _king_system_component_name_entry {
@@ -33,6 +34,12 @@ typedef struct _king_system_startup_entry {
     const char *name;
     uint32_t order;
 } king_system_startup_entry_t;
+
+typedef enum _king_system_drain_reason {
+    KING_SYSTEM_DRAIN_REASON_NONE,
+    KING_SYSTEM_DRAIN_REASON_COMPONENT_RESTART,
+    KING_SYSTEM_DRAIN_REASON_SYSTEM_SHUTDOWN
+} king_system_drain_reason_t;
 
 static const king_system_component_name_entry_t king_system_component_names[] = {
     {KING_COMPONENT_CONFIG, "config"},
@@ -91,6 +98,9 @@ static const char *king_system_component_statuses[] = {
     "shutdown"
 };
 
+static king_system_drain_reason_t king_system_drain_reason =
+    KING_SYSTEM_DRAIN_REASON_NONE;
+
 static king_component_info_t *king_system_get_component_internal(
     king_component_type_t type
 );
@@ -143,6 +153,12 @@ static void king_system_build_component_pending_shutdown_dependents(
 static void king_system_build_startup_visibility(zval *startup);
 static void king_system_build_shutdown_visibility(zval *shutdown);
 static void king_system_schedule_startup_components(void);
+static void king_system_schedule_shutdown_components(void);
+static void king_system_reset_drain_state(void);
+static const char *king_system_drain_reason_to_string(
+    king_system_drain_reason_t reason
+);
+static uint32_t king_system_count_started_components(void);
 
 static void king_component_info_dtor(zval *zv)
 {
@@ -152,6 +168,12 @@ static void king_component_info_dtor(zval *zv)
         zval_ptr_dtor(&info->configuration);
         efree(info);
     }
+}
+
+static void king_system_reset_drain_state(void)
+{
+    king_system_shutdown_requested = false;
+    king_system_drain_reason = KING_SYSTEM_DRAIN_REASON_NONE;
 }
 
 static void king_system_apply_default_config(king_system_config_t *config)
@@ -169,6 +191,21 @@ static void king_system_apply_default_config(king_system_config_t *config)
     config->node_id[0] = '\0';
     strncpy(config->environment, "development", sizeof(config->environment) - 1);
     ZVAL_UNDEF(&config->global_configuration);
+}
+
+static const char *king_system_drain_reason_to_string(
+    king_system_drain_reason_t reason
+)
+{
+    switch (reason) {
+        case KING_SYSTEM_DRAIN_REASON_COMPONENT_RESTART:
+            return "component_restart";
+        case KING_SYSTEM_DRAIN_REASON_SYSTEM_SHUTDOWN:
+            return "system_shutdown";
+        case KING_SYSTEM_DRAIN_REASON_NONE:
+        default:
+            return "none";
+    }
 }
 
 static void king_system_apply_config(king_system_config_t *config, zval *config_arr)
@@ -837,6 +874,56 @@ static void king_system_schedule_startup_components(void)
 }
 
 /*
+ * During a coordinated shutdown, stop only components whose dependents are
+ * already inactive. This preserves the canonical reverse-startup order and
+ * keeps the runtime in a visible drain state until the final root component
+ * can stop safely.
+ */
+static void king_system_schedule_shutdown_components(void)
+{
+    const king_system_startup_entry_t *entry;
+    king_component_info_t *info;
+    size_t idx;
+    time_t now;
+    zval pending_dependents;
+
+    if (!king_system_initialized || !king_system_shutdown_requested) {
+        return;
+    }
+
+    now = time(NULL);
+    for (
+        idx = 0;
+        idx < sizeof(king_system_shutdown_plan) / sizeof(king_system_shutdown_plan[0]);
+        idx++
+    ) {
+        entry = &king_system_shutdown_plan[idx];
+        info = king_system_get_component_internal(entry->type);
+        if (info == NULL) {
+            continue;
+        }
+
+        if (!king_system_component_started(info->status)) {
+            continue;
+        }
+
+        if (info->status == KING_COMPONENT_STATUS_SHUTTING_DOWN) {
+            continue;
+        }
+
+        king_system_build_component_pending_shutdown_dependents(
+            &pending_dependents,
+            entry->type
+        );
+        if (zend_hash_num_elements(Z_ARRVAL(pending_dependents)) == 0) {
+            info->status = KING_COMPONENT_STATUS_SHUTTING_DOWN;
+            info->last_health_check = now;
+        }
+        zval_ptr_dtor(&pending_dependents);
+    }
+}
+
+/*
  * Publish the repo-local lifecycle graph explicitly so callers do not have to
  * infer the current state's next legal aggregate transitions themselves.
  */
@@ -860,7 +947,9 @@ static void king_system_build_allowed_lifecycle_transitions(
     }
 
     if (strcmp(lifecycle, "draining") == 0) {
-        add_next_index_string(transitions, "starting");
+        if (!king_system_shutdown_requested) {
+            add_next_index_string(transitions, "starting");
+        }
         add_next_index_string(transitions, "failed");
         add_next_index_string(transitions, "stopped");
         return;
@@ -933,6 +1022,25 @@ static void king_system_collect_admission_state(
         && strcmp(state->lifecycle, "ready") == 0;
 }
 
+static uint32_t king_system_count_started_components(void)
+{
+    king_component_info_t *info;
+    zend_ulong idx;
+    uint32_t started_count = 0;
+
+    if (!king_system_initialized) {
+        return 0;
+    }
+
+    ZEND_HASH_FOREACH_NUM_KEY_PTR(&king_system_components, idx, info) {
+        if (info != NULL && king_system_component_started(info->status)) {
+            started_count++;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return started_count;
+}
+
 static int king_system_set_component_status(
     king_component_type_t type,
     king_component_status_t status
@@ -963,7 +1071,9 @@ static void king_system_apply_component_transition(king_component_info_t *info)
 
     if (info->status == KING_COMPONENT_STATUS_SHUTTING_DOWN &&
         age >= king_system_runtime_config.component_timeout_seconds) {
-        info->status = KING_COMPONENT_STATUS_INITIALIZING;
+        info->status = king_system_shutdown_requested
+            ? KING_COMPONENT_STATUS_SHUTDOWN
+            : KING_COMPONENT_STATUS_INITIALIZING;
         info->last_health_check = now;
         return;
     }
@@ -987,6 +1097,14 @@ static void king_system_apply_all_transitions(void)
     ZEND_HASH_FOREACH_NUM_KEY_PTR(&king_system_components, idx, info) {
         king_system_apply_component_transition(info);
     } ZEND_HASH_FOREACH_END();
+
+    if (king_system_shutdown_requested) {
+        king_system_schedule_shutdown_components();
+        if (king_system_count_started_components() == 0) {
+            king_system_shutdown_all_components();
+        }
+        return;
+    }
 
     king_system_schedule_startup_components();
 }
@@ -1099,6 +1217,8 @@ int king_system_init_all_components(king_system_config_t *config)
         king_system_initialized = true;
     }
 
+    king_system_reset_drain_state();
+
     if (config) {
         memcpy(&king_system_runtime_config, config, sizeof(king_system_config_t));
     }
@@ -1131,6 +1251,8 @@ void king_system_shutdown_all_components(void)
         zend_hash_destroy(&king_system_components);
         king_system_initialized = false;
     }
+
+    king_system_reset_drain_state();
 }
 
 int king_system_register_component(king_component_type_t type, const char *name, const char *version)
@@ -1229,13 +1351,22 @@ PHP_FUNCTION(king_system_restart_component)
 
     info->status = KING_COMPONENT_STATUS_SHUTTING_DOWN;
     info->last_health_check = time(NULL);
+    if (!king_system_shutdown_requested) {
+        king_system_drain_reason = KING_SYSTEM_DRAIN_REASON_COMPONENT_RESTART;
+    }
 
     RETURN_TRUE;
 }
 
 PHP_FUNCTION(king_system_shutdown)
 {
-    king_system_shutdown_all_components();
+    if (!king_system_initialized) {
+        RETURN_TRUE;
+    }
+
+    king_system_shutdown_requested = true;
+    king_system_drain_reason = KING_SYSTEM_DRAIN_REASON_SYSTEM_SHUTDOWN;
+    king_system_apply_all_transitions();
     RETURN_TRUE;
 }
 
@@ -1369,7 +1500,11 @@ PHP_FUNCTION(king_system_get_status)
                     startup_pending_dependency_count == 0
             );
 
-            if (info->status == KING_COMPONENT_STATUS_SHUTTING_DOWN) {
+            if (
+                (king_system_shutdown_requested &&
+                    king_system_component_started(info->status)) ||
+                info->status == KING_COMPONENT_STATUS_SHUTTING_DOWN
+            ) {
                 add_next_index_string(&drain_targets, info->name);
                 drain_target_count++;
                 if (drain_requested_at == 0 || last_health_check < drain_requested_at) {
@@ -1423,10 +1558,16 @@ PHP_FUNCTION(king_system_get_status)
     add_assoc_string(
         &drain_intent,
         "reason",
-        (char *) (admission_state.has_draining ? "component_restart" : "none")
+        (char *) (
+            king_system_shutdown_requested || admission_state.has_draining
+                ? king_system_drain_reason_to_string(king_system_drain_reason)
+                : "none"
+        )
     );
     add_assoc_long(&drain_intent, "requested_at", (zend_long) drain_requested_at);
-    if (admission_state.has_draining) {
+    if (king_system_shutdown_requested) {
+        add_assoc_string(&drain_intent, "target_lifecycle", "stopped");
+    } else if (admission_state.has_draining) {
         add_assoc_string(&drain_intent, "target_lifecycle", "starting");
     } else {
         add_assoc_null(&drain_intent, "target_lifecycle");

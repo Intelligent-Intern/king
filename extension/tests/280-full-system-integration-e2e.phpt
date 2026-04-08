@@ -16,6 +16,20 @@ function king_system_wait_until_ready_for_e2e(int $maxSeconds = 8): array
     return king_system_get_status();
 }
 
+function king_system_wait_until_stopped_for_e2e(int $maxSeconds = 8): array
+{
+    for ($i = 0; $i < $maxSeconds; $i++) {
+        $status = king_system_get_status();
+        if (($status['initialized'] ?? true) === false) {
+            return $status;
+        }
+
+        sleep(1);
+    }
+
+    return king_system_get_status();
+}
+
 // 1. Initialize the entire system
 var_dump(king_system_init([
     'environment' => 'development',
@@ -51,7 +65,7 @@ var_dump(king_system_process_request(['action' => 'test']));
 
 // 5. Clean shutdown
 var_dump(king_system_shutdown());
-$status = king_system_get_status();
+$status = king_system_wait_until_stopped_for_e2e();
 var_dump($status['initialized']);
 ?>
 --EXPECT--
