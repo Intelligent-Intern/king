@@ -127,7 +127,7 @@ like when it becomes a real workflow.
 | [`14-config-policy-and-overrides`](./14-config-policy-and-overrides/README.md) | Configuration policy, namespaced overrides, and safe changes. |
 | [`15-cancel-token-across-clients`](./15-cancel-token-across-clients/README.md) | Cancellation across requests, MCP, and orchestration. |
 | [`16-proto-wire-compatibility`](./16-proto-wire-compatibility/README.md) | Binary compatibility and schema evolution on the wire. |
-| [`17-system-lifecycle-coordination`](./17-system-lifecycle-coordination/README.md) | System init, restart, shutdown, and coordinated lifecycle control. |
+| [`17-system-lifecycle-coordination`](./17-system-lifecycle-coordination/README.md) | System init, readiness and drain gating, recovery, rolling restart, and coordinated lifecycle control. |
 | [`18-benchmark-baseline-compare`](./18-benchmark-baseline-compare/README.md) | Benchmark runs, baseline comparison, and repeatable measurement. |
 | [`19-release-package-verification`](./19-release-package-verification/README.md) | Package verification and reproducible release validation. |
 | [`20-fuzz-and-stress-harnesses`](./20-fuzz-and-stress-harnesses/README.md) | Fuzzing and stress coverage for high-risk surfaces. |

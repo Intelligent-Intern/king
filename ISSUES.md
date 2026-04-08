@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#20 Validate coordinated recovery plus rolling restart and any publicly claimed network-partition behavior across the repo-local component set.`
+- batch `R` is exhausted on `develop/v1.0.2-beta`; wait for the PR handoff and the next explicit batch.
 
 ## Active Executable Items
 
@@ -232,11 +232,12 @@ By explicit user request, this batch defers repo-doc and
 - [x] `#17 Build the object-store failover harness for central lifecycle coordination.`
 - [x] `#18 Implement coordinated recovery after component failure with one visible aggregate status path.`
 - [x] `#19 Implement coordinated recovery after node failure for the repo-local coordinated runtime.`
-- [ ] `#20 Validate coordinated recovery plus rolling restart and any publicly claimed network-partition behavior across the repo-local component set.`
+- [x] `#20 Validate coordinated recovery plus rolling restart and any publicly claimed network-partition behavior across the repo-local component set.`
 
 ## Notes
 
 - The active batch is now the `R` system lifecycle / readiness / drain / failover block.
 - The closed `Q` Flow PHP / ETL integration block remains visible above until the release cut by explicit user request.
 - Closed leaves inside the visible blocks stay in `ISSUES.md` as `[x]` until the release cut instead of being deleted early.
+- Batch `R` is exhausted locally; repo docs and `READYNESS_TRACKER.md` are now closed out before the PR handoff.
 - If a task is not listed here, it is not the current repo-local execution item.
