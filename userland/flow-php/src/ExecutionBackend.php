@@ -211,6 +211,36 @@ final class ExecutionRunSnapshot
     /**
      * @return array<string,mixed>|null
      */
+    public function telemetryAdapter(): ?array
+    {
+        $adapter = $this->snapshot['telemetry_adapter'] ?? null;
+
+        return is_array($adapter) ? $adapter : null;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function distributedObservability(): ?array
+    {
+        $observability = $this->snapshot['distributed_observability'] ?? null;
+
+        return is_array($observability) ? $observability : null;
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    public function steps(): array
+    {
+        $steps = $this->snapshot['steps'] ?? null;
+
+        return is_array($steps) ? $steps : [];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
     public function handlerBoundary(): ?array
     {
         $boundary = $this->snapshot['handler_boundary'] ?? null;

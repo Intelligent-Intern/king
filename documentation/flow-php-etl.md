@@ -470,6 +470,65 @@ The current PHPT proof covers:
 - checkpoint stale-writer conflict plus execution runtime and backend mapping:
   `612-flow-php-failure-taxonomy-checkpoint-execution-contract.phpt`
 
+## Repo-Local Partitioning And Backpressure Contract
+
+The repository now also carries one real userland partitioning and
+backpressure helper under
+[`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
+[`../userland/flow-php/src/Partitioning.php`](../userland/flow-php/src/Partitioning.php).
+
+This piece exists because distributed ETL still needs one honest answer to
+three operational questions:
+
+- how work is split into partitions and bounded batches
+- where `partition_id` and `batch_id` live on the actual runtime surface
+- how the controller decides whether fan-out should keep dispatching or wait
+
+The current contract keeps those answers explicit instead of hiding them in
+controller-local loops:
+
+- `PartitionPlan::fromRowsByField()` builds a deterministic plan by sorting
+  normalized partition keys, preserving row order inside each partition, and
+  then cutting bounded batches by `maxBatchRecords` and `maxBatchBytes`
+- `PartitionBatch` carries the stable `partition_id`, `batch_id`, record
+  count, estimated bytes, and one `annotateStep()` helper that writes
+  partition identity onto the actual orchestrator step definition
+- `PartitionAttempt::fromExecutionSnapshot()` reads partition and batch
+  identity back from the persisted orchestrator snapshot instead of inventing a
+  second ETL-only run registry
+- `PartitionBackpressureWindow` gates further dispatch from live active
+  attempts, respecting backend submission mode, queue pressure, concurrent
+  batch ceilings, and active-partition ceilings
+- `PartitionMergeResult` only merges completed batches in explicit
+  `partition_then_batch` order, reports pending or failed batches separately,
+  and therefore does not pretend distributed fan-in can recreate one hidden
+  original interleaving once work has been partitioned
+
+The important runtime rule is that partition and batch identity belongs on the
+step boundary, not on a made-up controller side-channel. On the current King
+runtime, the durable step snapshot is where `partition_id` and `batch_id`
+become visible for distributed ETL accounting, recovery, and later fan-in.
+
+The important backpressure rule is backend-sensitive on purpose:
+
+- `queue_dispatch` backends such as `file_worker` can cap both total active
+  batches and still-queued batches before claim
+- `run_immediately` backends use the same active-batch and active-partition
+  ceilings, but there is no separate queue budget because the backend does not
+  persist a queued pre-claim phase
+- hot or uneven partitions can continue within the currently admitted active
+  partition set, but the contract can still block fan-out into additional
+  partitions until the window drains
+
+The current PHPT proof covers:
+
+- deterministic partition IDs, bounded batch cutting, step-identity
+  annotation, and honest merge order:
+  `613-flow-php-partition-plan-contract.phpt`
+- real file-worker queued snapshot gating, queue-budget enforcement,
+  active-partition enforcement, and relief after the queue drains:
+  `614-flow-php-backpressure-window-contract.phpt`
+
 ## What This Chapter Does Not Claim Yet
 
 This chapter is a contract statement, not a claim that every adapter in that
