@@ -1457,7 +1457,10 @@ namespace {
      * Initialize the active system-integration runtime from an inline config
      * array and materialize the coordinated component snapshot. The returned
      * runtime may remain in aggregate `starting` until the ordered component
-     * startup waves have finished.
+     * startup waves have finished. When `state_root_path` is provided, King
+     * also persists a small coordinator-state file under that root so a later
+     * process can detect and recover an unclean prior node loss for the same
+     * cluster/node coordination scope.
      * @param array<string,mixed> $config
      */
     function king_system_init(array $config): bool {}
@@ -1505,6 +1508,22 @@ namespace {
      *     target_components:list<string>
      *   },
      *   allowed_lifecycle_transitions:list<string>,
+     *   recovery: array{
+     *     active:bool,
+     *     recovered:bool,
+     *     reason:string,
+     *     source_node_id:?string,
+     *     active_node_id:?string,
+     *     cluster_id:?string,
+     *     coordinator_state_present:bool,
+     *     coordinator_state_status:string,
+     *     coordinator_state_path:?string,
+     *     coordinator_state_version:int,
+     *     coordinator_generation:int,
+     *     coordinator_created_at:int,
+     *     coordinator_last_loaded_at:int,
+     *     coordinator_state_error:string
+     *   },
      *   startup: array{
      *     catalog_component_count:int,
      *     ordered_components:list<string>,

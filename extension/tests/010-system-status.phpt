@@ -44,6 +44,9 @@ var_dump($status['lifecycle']);
 var_dump($status['component_count']);
 var_dump($status['drain_intent']['reason']);
 var_dump($status['allowed_lifecycle_transitions']);
+var_dump($status['recovery']['reason']);
+var_dump($status['recovery']['coordinator_state_status']);
+var_dump($status['recovery']['coordinator_state_present']);
 var_dump($status['startup']['catalog_component_count']);
 var_dump(($status['startup']['ordered_components'][0] ?? null) === 'config');
 var_dump(($status['startup']['ordered_components'][11] ?? null) === 'autoscaling');
@@ -70,6 +73,10 @@ var_dump($status['drain_intent']['requested']);
 var_dump($status['drain_intent']['reason']);
 var_dump($status['drain_intent']['target_component_count']);
 var_dump($status['allowed_lifecycle_transitions']);
+var_dump($status['recovery']['active']);
+var_dump($status['recovery']['recovered']);
+var_dump($status['recovery']['reason']);
+var_dump($status['recovery']['coordinator_state_status']);
 var_dump($status['startup']['catalog_component_count']);
 var_dump($status['startup']['started_components']);
 var_dump(count($status['startup']['pending_components']));
@@ -79,6 +86,9 @@ var_dump(($status['shutdown']['drain_first_required'] ?? null) === true);
 var_dump($status['admission']['process_requests']);
 var_dump($status['admission']['http_listener_accepts']);
 var_dump($status['admission']['remote_peer_dispatches']);
+var_dump($status['recovery']['active']);
+var_dump($status['recovery']['recovered']);
+var_dump($status['recovery']['reason']);
 var_dump($status['components']['config']['status']);
 var_dump($status['components']['config']['ready']);
 var_dump($status['components']['config']['readiness_reason']);
@@ -123,6 +133,9 @@ var_dump($status['lifecycle']);
 var_dump($status['component_count']);
 var_dump($status['drain_intent']['reason']);
 var_dump($status['allowed_lifecycle_transitions']);
+var_dump($status['recovery']['reason']);
+var_dump($status['recovery']['coordinator_state_status']);
+var_dump($status['recovery']['coordinator_state_present']);
 ?>
 --EXPECTF--
 array(4) {
@@ -139,7 +152,7 @@ bool(true)
 bool(true)
 string(%d) "%s"
 bool(false)
-array(14) {
+array(15) {
   [0]=>
   string(11) "initialized"
   [1]=>
@@ -161,12 +174,14 @@ array(14) {
   [9]=>
   string(29) "allowed_lifecycle_transitions"
   [10]=>
-  string(7) "startup"
+  string(8) "recovery"
   [11]=>
-  string(8) "shutdown"
+  string(7) "startup"
   [12]=>
-  string(9) "admission"
+  string(8) "shutdown"
   [13]=>
+  string(9) "admission"
+  [14]=>
   string(29) "health_check_interval_seconds"
 }
 bool(false)
@@ -177,6 +192,9 @@ array(1) {
   [0]=>
   string(5) "ready"
 }
+string(4) "none"
+string(8) "inactive"
+bool(false)
 int(12)
 bool(true)
 bool(true)
@@ -196,7 +214,7 @@ bool(true)
 int(0)
 bool(true)
 bool(true)
-array(14) {
+array(15) {
   [0]=>
   string(11) "initialized"
   [1]=>
@@ -218,12 +236,14 @@ array(14) {
   [9]=>
   string(29) "allowed_lifecycle_transitions"
   [10]=>
-  string(7) "startup"
+  string(8) "recovery"
   [11]=>
-  string(8) "shutdown"
+  string(7) "startup"
   [12]=>
-  string(9) "admission"
+  string(8) "shutdown"
   [13]=>
+  string(9) "admission"
+  [14]=>
   string(29) "health_check_interval_seconds"
 }
 bool(true)
@@ -245,6 +265,10 @@ array(4) {
   [3]=>
   string(7) "stopped"
 }
+bool(false)
+bool(false)
+string(4) "none"
+string(8) "inactive"
 int(12)
 array(1) {
   [0]=>
@@ -258,6 +282,9 @@ bool(true)
 bool(false)
 bool(false)
 bool(false)
+bool(false)
+bool(false)
+string(4) "none"
 string(12) "initializing"
 bool(false)
 string(22) "component_initializing"
@@ -296,3 +323,6 @@ array(1) {
   [0]=>
   string(5) "ready"
 }
+string(4) "none"
+string(8) "inactive"
+bool(false)
