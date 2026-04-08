@@ -154,9 +154,8 @@ dist/php_king-<version>-src.tgz
 
 3. Upload the generated `php_king-<version>-src.tgz` asset to that release.
 
-4. After the release is published, ensure that the release merge path used is:
-   - only from `develop/v...` branches into `main`
-   - with the release tag generated as `v<version>`, where `<version>` is the
-     release branch suffix (for example `develop/v1.0.0-beta` → `v1.0.0-beta`)
+4. After the release is published, verify that the release page exposes the
+   matching `php_king-<version>-src.tgz` asset and that the published version
+   is the same one intended for `pie install intelligent-intern/king-ext`.
 
 5. Submit the repository to Packagist using the root `composer.json`.
