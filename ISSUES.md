@@ -70,6 +70,8 @@ This block is intentionally mirrored here in full by explicit user request so
 the current working queue matches the intended `Flow PHP` implementation area.
 Where an item is still too broad for one repo-local change, split it before
 closing it.
+Keep docs in scope for each leaf so handbook, procedural API, and examples move
+with the runtime instead of being deferred to a later cleanup pass.
 
 - [ ] `#1 Define the Flow PHP / ETL-on-King contract explicitly as a userland integration layer on top of King runtime services, not as hard-wired C-core pipeline semantics.`
   done when: the repo documents a stable integration boundary that treats King as runtime substrate and `Flow PHP`-style ETL as userland orchestration/dataflow semantics, without silently shrinking existing King runtime guarantees
@@ -191,26 +193,13 @@ Flow::extract($king->objectStore()->source('raw/orders/*.ndjson'))
 - [ ] `#3 Validate autoscaling scale-up policy limits under burst load.`
 - [ ] `#4 Validate autoscaling scale-down policy limits under active traffic.`
 - [ ] `#5 Finalize autoscaling metrics and decision explanations.`
-- [ ] `#6 Define the real Hetzner-only production contract and remove placeholder provider expectations from the live provisioning path.`
-- [ ] `#7 Implement automated post-bootstrap node registration on the Hetzner path.`
-- [ ] `#8 Make post-bootstrap node registration robust across retry, restart, and duplicate-success cases.`
-- [ ] `#9 Implement automated post-bootstrap node readiness on the Hetzner path.`
-- [ ] `#10 Make post-bootstrap node readiness robust across retry, restart, and duplicate-success cases.`
-- [ ] `#11 Validate Hetzner node drain before delete under real traffic.`
-- [ ] `#12 Make Hetzner node delete robust under failures and timeouts.`
-- [ ] `#13 Classify and handle Hetzner provider API failures.`
-- [ ] `#14 Classify and handle Hetzner provider rate limits.`
-- [ ] `#15 Classify and handle Hetzner provider quota limits.`
-- [ ] `#16 Securely load and rotate provider credentials where publicly claimed.`
-- [ ] `#17 Validate firewalls, placement, labels, and networks against real provider APIs.`
-- [ ] `#18 Either drop non-Hetzner provider claims from docs and surface or implement a second real provider path.`
-- [ ] `#19 Remove or fully implement remaining simulated provider paths.`
 - [ ] `#20 Define system-wide readiness transitions across startup, drain, and autoscaling boundaries.`
 
 ## Notes
 
 - The active batch is now the full `Flow PHP` / ETL integration block imported from `READYNESS_TRACKER.md` section `Q` by explicit user request.
 - The imported block is kept complete here so the next working area is visible in one place; broad items still need splitting before individual implementation/verification passes when necessary.
+- Closed leaves inside the visible blocks stay in `ISSUES.md` as `[x]` until the release cut instead of being deleted early.
 - The previous userland orchestrator wave is exhausted and its closed work now lives in `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, and `main`.
-- The autoscaling / provisioning / readiness wave remains visible below as the deferred previous batch and resumes once the current `Flow PHP` / ETL batch is exhausted or reprioritized.
+- The deferred block now keeps only the still-relevant autoscaling/readiness leaves; the Hetzner/provider wave stays open in `READYNESS_TRACKER.md` instead of cluttering the active queue here.
 - If a task is not listed here, it is not the current repo-local execution item.
