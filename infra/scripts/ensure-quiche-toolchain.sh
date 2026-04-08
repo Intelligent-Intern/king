@@ -139,7 +139,7 @@ check_lockfile_compat() {
         return 0
     fi
 
-    if cat "${tmp_file}" | grep -qi "lock file version 4"; then
+    if grep -qi "lock file version 4" "${tmp_file}"; then
         rm -f "${tmp_file}"
         return 2
     fi
