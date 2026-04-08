@@ -1662,7 +1662,11 @@ namespace {
      * completed-step progress after each completed step; workers without those
      * handlers skip the queued or recovered run before claim/recovery resume
      * instead of failing late inside execution, and unsupported
-     * non-rehydratable forms must still fail closed.
+     * non-rehydratable forms must still fail closed. When the coordinated
+     * `king_system_init()` runtime is active, new worker claims and claimed-job
+     * recovery also require aggregate `file_worker_claims` or
+     * `file_worker_resumes` readiness; standalone file-worker polling without
+     * the coordinated runtime remains available.
      * @return array<string,mixed>|false
      */
     function king_pipeline_orchestrator_worker_run_next(): array|false {}
