@@ -2022,6 +2022,46 @@ cleanup:
     return rc;
 }
 
+static int king_orchestrator_worker_release_unadmitted_claim(
+    zend_string *run_id,
+    char *claimed_path,
+    int *claimed_fd,
+    zend_bool recovered_claim
+)
+{
+    char queued_path[1024];
+    int rc = SUCCESS;
+
+    if (!recovered_claim) {
+        if (
+            run_id == NULL
+            || claimed_path == NULL
+            || claimed_path[0] == '\0'
+            || king_mcp_orchestrator_config.orchestrator_worker_queue_path == NULL
+            || king_mcp_orchestrator_config.orchestrator_worker_queue_path[0] == '\0'
+            || snprintf(
+                queued_path,
+                sizeof(queued_path),
+                "%s/queued-%s.job",
+                king_mcp_orchestrator_config.orchestrator_worker_queue_path,
+                ZSTR_VAL(run_id)
+            ) >= (int) sizeof(queued_path)
+            || rename(claimed_path, queued_path) != 0
+        ) {
+            rc = FAILURE;
+        } else {
+            claimed_path[0] = '\0';
+        }
+    }
+
+    if (claimed_fd != NULL && *claimed_fd >= 0) {
+        close(*claimed_fd);
+        *claimed_fd = -1;
+    }
+
+    return rc;
+}
+
 int king_orchestrator_worker_run_next(zval *return_value)
 {
     zend_string *run_id = NULL;
@@ -2090,6 +2130,35 @@ int king_orchestrator_worker_run_next(zval *return_value)
         }
         zend_string_release(run_id);
         return SUCCESS;
+    }
+
+    if (
+        king_system_require_admission(
+            "king_pipeline_orchestrator_worker_run_next",
+            recovered_claim ? "file_worker_resumes" : "file_worker_claims"
+        ) != SUCCESS
+    ) {
+        if (
+            king_orchestrator_worker_release_unadmitted_claim(
+                run_id,
+                claimed_path,
+                &claimed_fd,
+                recovered_claim
+            ) != SUCCESS
+        ) {
+            zend_string_release(run_id);
+            return king_orchestrator_raise_error(
+                "king_pipeline_orchestrator_worker_run_next() could not restore the unadmitted file-worker claim after readiness gating.",
+                king_ce_runtime_exception,
+                1
+            );
+        }
+        zend_string_release(run_id);
+        return king_orchestrator_raise_error(
+            king_get_error(),
+            king_ce_runtime_exception,
+            1
+        );
     }
 
     if (king_orchestrator_pipeline_run_mark_running(run_id, recovered_claim, (zend_long) getpid()) != SUCCESS) {
