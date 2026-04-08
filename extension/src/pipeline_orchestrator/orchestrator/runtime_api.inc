@@ -1825,6 +1825,20 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
     }
 
     if (
+        king_orchestrator_backend_is_remote_peer()
+        && king_system_require_admission(
+            "king_pipeline_orchestrator_run",
+            "remote_peer_dispatches"
+        ) != SUCCESS
+    ) {
+        return king_orchestrator_raise_error(
+            king_get_error(),
+            king_ce_runtime_exception,
+            1
+        );
+    }
+
+    if (
         king_orchestrator_executes_userland_handlers_locally()
         && king_system_require_admission(
             "king_pipeline_orchestrator_run",
@@ -2398,6 +2412,22 @@ PHP_FUNCTION(king_pipeline_orchestrator_resume_run)
     }
 
     zval_ptr_dtor(&run_snapshot);
+
+    if (
+        king_orchestrator_backend_is_remote_peer()
+        && king_system_require_admission(
+            "king_pipeline_orchestrator_resume_run",
+            "remote_peer_resumes"
+        ) != SUCCESS
+    ) {
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "%s",
+            king_get_error()
+        );
+        RETURN_THROWS();
+    }
 
     if (king_orchestrator_pipeline_run_note_recovery(run_id, "resume_run") != SUCCESS) {
         king_set_error("king_pipeline_orchestrator_resume_run() failed to persist recovery observability.");
