@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#9 Define partitioning, fan-out/fan-in, and backpressure semantics for distributed dataflow execution on top of King runtime primitives.`
+- `#10 Implement an object-store dataset bridge with bounded-memory streaming, range reads, multipart upload, integrity, expiry, and multi-backend topology semantics preserved.`
 
 ## Active Executable Items
 
@@ -89,7 +89,7 @@ with the runtime instead of being deferred to a later cleanup pass.
   done when: dataflow runs produce first-class King telemetry instead of opaque application logs, and pipeline observability preserves per-run and per-step identity across workers
 - [x] `#8 Define stable error and retry taxonomy mapping between ETL/dataflow failures and King validation, runtime, transport, and backend failures.`
   done when: callers can distinguish invalid input, missing data, transient transport failure, backend outage, quota pressure, and retryable checkpoint/resume conditions without reverse-engineering adapter-specific strings
-- [ ] `#9 Define partitioning, fan-out/fan-in, and backpressure semantics for distributed dataflow execution on top of King runtime primitives.`
+- [x] `#9 Define partitioning, fan-out/fan-in, and backpressure semantics for distributed dataflow execution on top of King runtime primitives.`
   done when: distributed dataflow can split work predictably, merge it honestly, and keep memory/throughput bounded under slow consumers or uneven partitions
 - [ ] `#10 Implement an object-store dataset bridge with bounded-memory streaming, range reads, multipart upload, integrity, expiry, and multi-backend topology semantics preserved.`
   done when: `Flow PHP`-style datasets can read and write through King object-store without discarding the stronger runtime semantics that now exist for local, distributed, and real cloud backends
