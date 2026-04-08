@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#8 Gate remote-peer dispatch and resume on aggregate readiness.`
+- `#9 Define and expose system-wide drain intent and allowed transitions.`
 
 ## Active Executable Items
 
@@ -220,7 +220,7 @@ By explicit user request, this batch defers repo-doc and
 - [x] `#5 Gate new WebSocket upgrades and accepted peers on aggregate readiness.`
 - [x] `#6 Gate new orchestrator local submissions on aggregate readiness.`
 - [x] `#7 Gate file-worker claim and resume on aggregate readiness.`
-- [ ] `#8 Gate remote-peer dispatch and resume on aggregate readiness.`
+- [x] `#8 Gate remote-peer dispatch and resume on aggregate readiness.`
 - [ ] `#9 Define and expose system-wide drain intent and allowed transitions.`
 - [ ] `#10 Stop new HTTP listener work during drain while preserving admitted in-flight work.`
 - [ ] `#11 Stop new orchestrator work admission during drain while preserving admitted runs.`
