@@ -2,8 +2,26 @@
 King router/loadbalancer is exposed as an explicit config-backed system component
 --FILE--
 <?php
-var_dump(king_system_init([]));
+function wait_until_ready(): array
+{
+    for ($i = 0; $i < 12; $i++) {
+        $status = king_system_get_status();
+        if (($status['lifecycle'] ?? null) === 'ready') {
+            return $status;
+        }
+
+        sleep(1);
+    }
+
+    throw new RuntimeException('router/loadbalancer component did not become ready');
+}
+
+var_dump(king_system_init(['component_timeout_seconds' => 1]));
 $status = king_system_get_status();
+var_dump($status['components']['router_loadbalancer']['status']);
+var_dump($status['components']['router_loadbalancer']['ready']);
+
+$status = wait_until_ready();
 var_dump(isset($status['components']['router_loadbalancer']));
 var_dump($status['components']['router_loadbalancer']['status']);
 var_dump($status['components']['router_loadbalancer']['ready']);
@@ -23,6 +41,8 @@ var_dump(king_system_shutdown());
 ?>
 --EXPECT--
 bool(true)
+string(13) "uninitialized"
+bool(false)
 bool(true)
 string(7) "running"
 bool(true)
