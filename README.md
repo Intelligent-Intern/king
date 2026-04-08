@@ -445,7 +445,7 @@ build. The maintainer workflow is documented in
 
 ## Contributing
 
-See [CONTRIBUTE.md](CONTRIBUTE.md).
+See [CONTRIBUTE](CONTRIBUTE).
 
 ## License
 

@@ -9,7 +9,7 @@
 
 ## Working Rules
 
-- read `CONTRIBUTE.md` before starting, replenishing, or reshaping any `20`-issue batch
+- read `CONTRIBUTE` before starting, replenishing, or reshaping any `20`-issue batch
 - keep the active batch visible here until it is exhausted; mark closed leaves as `[x]` instead of deleting them mid-batch
 - every item must be narrow enough to implement and verify inside this repo
 - if a tracker item is still too broad, split it before adding it here
