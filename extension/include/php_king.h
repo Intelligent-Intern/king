@@ -327,6 +327,7 @@ struct _king_ws_server_object {
 
 void king_set_error(const char *msg);
 const char *king_get_error(void);
+int king_system_require_admission(const char *function_name, const char *admission_name);
 void king_add_runtime_surface(zval *target);
 const char *king_get_active_runtime_summary(void);
 const char *king_get_stubbed_api_summary(void);
