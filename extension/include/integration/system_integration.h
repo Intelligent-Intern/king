@@ -63,7 +63,7 @@ typedef struct _king_component_info_t {
     uint64_t requests_handled;
     uint64_t errors_encountered;
     double avg_response_time_ms;
-    zval dependencies; /* Reserved PHP array; currently initialized empty. */
+    zval dependencies; /* Canonical startup dependency names for this component. */
     zval configuration; /* Reserved PHP array; currently initialized empty. */
 } king_component_info_t;
 

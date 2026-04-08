@@ -16,6 +16,11 @@ var_dump($status['lifecycle']);
 var_dump($status['component_count']);
 var_dump($status['drain_intent']['reason']);
 var_dump($status['allowed_lifecycle_transitions']);
+var_dump($status['startup']['catalog_component_count']);
+var_dump($status['startup']['ordered_components']);
+var_dump($status['startup']['ready_to_start_components']);
+var_dump($status['startup']['components']['config']['ready_to_start']);
+var_dump($status['startup']['components']['client']['pending_dependencies']);
 
 var_dump(king_system_init([]));
 $status = king_system_get_status();
@@ -29,12 +34,20 @@ var_dump($status['drain_intent']['requested']);
 var_dump($status['drain_intent']['reason']);
 var_dump($status['drain_intent']['target_component_count']);
 var_dump($status['allowed_lifecycle_transitions']);
+var_dump($status['startup']['catalog_component_count']);
+var_dump(count($status['startup']['started_components']) === $status['component_count']);
+var_dump(count($status['startup']['pending_components']));
+var_dump($status['startup']['ready_to_start_components']);
 var_dump($status['admission']['process_requests']);
 var_dump($status['admission']['http_listener_accepts']);
 var_dump($status['admission']['remote_peer_dispatches']);
 var_dump($status['components']['config']['ready']);
 var_dump($status['components']['config']['readiness_reason']);
 var_dump($status['components']['config']['readiness_blocking']);
+var_dump($status['components']['config']['startup_order']);
+var_dump($status['components']['config']['startup_dependencies']);
+var_dump($status['components']['config']['startup_pending_dependencies']);
+var_dump($status['components']['config']['startup_ready_to_start']);
 
 var_dump(king_system_shutdown());
 $status = king_system_get_status();
@@ -59,7 +72,7 @@ bool(true)
 bool(true)
 string(%d) "%s"
 bool(false)
-array(12) {
+array(13) {
   [0]=>
   string(11) "initialized"
   [1]=>
@@ -81,8 +94,10 @@ array(12) {
   [9]=>
   string(29) "allowed_lifecycle_transitions"
   [10]=>
-  string(9) "admission"
+  string(7) "startup"
   [11]=>
+  string(9) "admission"
+  [12]=>
   string(29) "health_check_interval_seconds"
 }
 bool(false)
@@ -93,8 +108,44 @@ array(1) {
   [0]=>
   string(5) "ready"
 }
-bool(true)
+int(12)
 array(12) {
+  [0]=>
+  string(6) "config"
+  [1]=>
+  string(6) "client"
+  [2]=>
+  string(6) "server"
+  [3]=>
+  string(9) "telemetry"
+  [4]=>
+  string(12) "object_store"
+  [5]=>
+  string(5) "iibin"
+  [6]=>
+  string(3) "mcp"
+  [7]=>
+  string(12) "semantic_dns"
+  [8]=>
+  string(19) "router_loadbalancer"
+  [9]=>
+  string(12) "orchestrator"
+  [10]=>
+  string(3) "cdn"
+  [11]=>
+  string(11) "autoscaling"
+}
+array(1) {
+  [0]=>
+  string(6) "config"
+}
+bool(true)
+array(1) {
+  [0]=>
+  string(6) "config"
+}
+bool(true)
+array(13) {
   [0]=>
   string(11) "initialized"
   [1]=>
@@ -116,8 +167,10 @@ array(12) {
   [9]=>
   string(29) "allowed_lifecycle_transitions"
   [10]=>
-  string(9) "admission"
+  string(7) "startup"
   [11]=>
+  string(9) "admission"
+  [12]=>
   string(29) "health_check_interval_seconds"
 }
 bool(true)
@@ -136,11 +189,22 @@ array(3) {
   [2]=>
   string(7) "stopped"
 }
+int(12)
+bool(true)
+int(0)
+array(0) {
+}
 bool(true)
 bool(true)
 bool(true)
 bool(true)
 string(5) "ready"
+bool(false)
+int(1)
+array(0) {
+}
+array(0) {
+}
 bool(false)
 bool(true)
 bool(false)
