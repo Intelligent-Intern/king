@@ -396,7 +396,7 @@ jobs:
             gh release create "${RELEASE_TAG}" \
               --title "King ${RELEASE_TAG}" \
               --target "${RELEASE_TARGET}" \
-              --notes-from-tag \
+              --generate-notes \
               "${prerelease_args[@]}" \
               release-assets/*
           fi
