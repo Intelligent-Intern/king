@@ -473,6 +473,15 @@ PHP_FUNCTION(king_server_upgrade_to_websocket)
     }
 
     if (
+        king_system_require_admission(
+            "king_server_upgrade_to_websocket",
+            "websocket_upgrades"
+        ) != SUCCESS
+    ) {
+        RETURN_FALSE;
+    }
+
+    if (
         king_server_websocket_upgrade_session(
             session,
             stream_id,
