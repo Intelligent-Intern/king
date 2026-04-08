@@ -408,6 +408,68 @@ The current PHPT proof covers:
 - remote-peer controller loss, durable boundary replay, and resumed completion:
   `610-flow-php-execution-backend-remote-peer-contract.phpt`
 
+## Repo-Local Failure Taxonomy Contract
+
+The repository now also carries one real userland failure-taxonomy helper
+under [`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
+[`../userland/flow-php/src/FailureTaxonomy.php`](../userland/flow-php/src/FailureTaxonomy.php).
+
+This piece exists because restart-aware sources, sinks, checkpoints, and
+execution backends still leave one important question open for ETL callers:
+what failed, and what kind of retry is still honest?
+
+The current contract keeps that answer explicit instead of forcing callers to
+reverse-engineer adapter-specific exception strings or provider messages:
+
+- `FlowFailure`, which packages one stable surface-level failure with its
+  surface, stage, category, reason, retry disposition, retryability, backend,
+  transport, summary, and raw message detail
+- `FlowFailureTaxonomy`, which normalizes source, sink, checkpoint, and
+  execution outcomes into one repo-local contract instead of four unrelated
+  error stories
+
+The current stable categories and retry dispositions include:
+
+- `validation` with `non_retryable` for invalid cursor, contract, or input
+  shape failures
+- `missing_data` with `wait_for_data` when the requested payload or replay
+  material is not present yet
+- `transport` with `retry_with_backoff` for retryable network, stream, or
+  throttling pressure, and `non_retryable` for protocol or TLS faults
+- `quota` with `retry_after_quota_relief` when a backend reports exhausted
+  capacity or storage quota
+- `resume_conflict` with `reload_checkpoint_and_resume` when checkpoint state
+  changed under a stale writer
+- `backend` with `retry_after_backend_recovery` when the configured execution
+  or storage backend could not accept the work
+- `runtime` with `caller_managed_retry` when the runtime hit a non-validation
+  execution fault that still belongs to the caller's compensation or retry
+  policy
+- `timeout`, `missing_handler`, and `cancelled` so ETL callers can preserve
+  the stronger control and execution distinctions the orchestrator already
+  exposes instead of flattening them into generic runtime failure
+
+The important behavior is cross-surface on purpose:
+
+- source adapters can classify invalid resume cursors, missing payloads, and
+  transient transport outages without inventing a separate ETL-only error enum
+- sink adapters keep explicit partial-failure state on `SinkFailure`, then map
+  quota, throttling, runtime, and backend outcomes into the same stable
+  taxonomy
+- checkpoint writes preserve stale-writer conflicts as a retryable
+  `resume_conflict` instead of falling back to silent overwrite or generic
+  runtime failure
+- execution snapshots can be read back through the same taxonomy so later ETL
+  control logic can distinguish runtime, backend, timeout, missing-handler,
+  and cancellation outcomes from persisted orchestrator state
+
+The current PHPT proof covers:
+
+- source validation, missing-data, transport, and sink quota mapping:
+  `611-flow-php-failure-taxonomy-source-sink-contract.phpt`
+- checkpoint stale-writer conflict plus execution runtime and backend mapping:
+  `612-flow-php-failure-taxonomy-checkpoint-execution-contract.phpt`
+
 ## What This Chapter Does Not Claim Yet
 
 This chapter is a contract statement, not a claim that every adapter in that

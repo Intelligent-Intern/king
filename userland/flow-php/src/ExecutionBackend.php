@@ -201,6 +201,16 @@ final class ExecutionRunSnapshot
     /**
      * @return array<string,mixed>|null
      */
+    public function errorClassification(): ?array
+    {
+        $classification = $this->snapshot['error_classification'] ?? null;
+
+        return is_array($classification) ? $classification : null;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
     public function handlerBoundary(): ?array
     {
         $boundary = $this->snapshot['handler_boundary'] ?? null;

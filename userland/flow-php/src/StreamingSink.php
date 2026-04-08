@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace King\Flow;
 
+require_once __DIR__ . '/FailureTaxonomy.php';
+
 use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
@@ -280,6 +282,18 @@ abstract class AbstractStreamingSink implements StreamingSink
         int $writesAccepted,
         array $details = []
     ): SinkWriteResult {
+        $classification = FlowFailureTaxonomy::fromThrowable(
+            $error,
+            'sink',
+            $stage,
+            [
+                'transport' => $cursor->transport(),
+                'identity' => $cursor->identity(),
+                'native_category' => $this->classifyCategory($error),
+                'native_retryable' => $this->isRetryable($error),
+            ]
+        );
+
         return new SinkWriteResult(
             $cursor,
             false,
@@ -288,11 +302,11 @@ abstract class AbstractStreamingSink implements StreamingSink
             $writesAccepted,
             new SinkFailure(
                 $stage,
-                $this->classifyCategory($error),
+                $classification->category(),
                 $error::class,
                 $error->getMessage(),
                 $partialFailure,
-                $this->isRetryable($error)
+                $classification->retryable()
             ),
             $details
         );

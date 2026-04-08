@@ -36,13 +36,13 @@
 
 ## Batch Mode
 
-- The user has explicitly requested continuous execution across batches.
-- When the current `20`-issue batch is exhausted, immediately pull the next `20` executable leaves from `READYNESS_TRACKER.md` into this file instead of waiting.
-- Keep preserving tracker order and split broad items into repo-local executable leaves before adding them here.
+- The user is advancing the current batch manually with `w`.
+- Close exactly one checkbox, make exactly one commit, and then wait for the next `w`.
+- When the current visible batch is exhausted, push `develop/v1.0.1-beta`, open the PR, and wait instead of auto-refilling from `READYNESS_TRACKER.md`.
 
 ## Current Next Leaf
 
-- `#6 Implement an execution-backend contract that can run dataflow pipelines over King local, file-worker, and remote-peer orchestrator backends.`
+- `#9 Define partitioning, fan-out/fan-in, and backpressure semantics for distributed dataflow execution on top of King runtime primitives.`
 
 ## Active Executable Items
 
@@ -87,7 +87,7 @@ with the runtime instead of being deferred to a later cleanup pass.
   done when: a dataflow run can target the same verified King execution modes that the orchestrator already exposes, including restart-aware continuation and cancellation semantics
 - [x] `#7 Implement a telemetry adapter contract that maps pipeline runs, partitions, batches, retries, and failures into King tracing, metrics, and runtime status.`
   done when: dataflow runs produce first-class King telemetry instead of opaque application logs, and pipeline observability preserves per-run and per-step identity across workers
-- [ ] `#8 Define stable error and retry taxonomy mapping between ETL/dataflow failures and King validation, runtime, transport, and backend failures.`
+- [x] `#8 Define stable error and retry taxonomy mapping between ETL/dataflow failures and King validation, runtime, transport, and backend failures.`
   done when: callers can distinguish invalid input, missing data, transient transport failure, backend outage, quota pressure, and retryable checkpoint/resume conditions without reverse-engineering adapter-specific strings
 - [ ] `#9 Define partitioning, fan-out/fan-in, and backpressure semantics for distributed dataflow execution on top of King runtime primitives.`
   done when: distributed dataflow can split work predictably, merge it honestly, and keep memory/throughput bounded under slow consumers or uneven partitions
