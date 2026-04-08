@@ -67,6 +67,21 @@ static const king_system_startup_entry_t king_system_startup_plan[] = {
     {KING_COMPONENT_AUTOSCALING, "autoscaling", 12},
 };
 
+static const king_system_startup_entry_t king_system_shutdown_plan[] = {
+    {KING_COMPONENT_AUTOSCALING, "autoscaling", 1},
+    {KING_COMPONENT_CDN, "cdn", 2},
+    {KING_COMPONENT_PIPELINE_ORCHESTRATOR, "orchestrator", 3},
+    {KING_COMPONENT_ROUTER_LOADBALANCER, "router_loadbalancer", 4},
+    {KING_COMPONENT_SEMANTIC_DNS, "semantic_dns", 5},
+    {KING_COMPONENT_MCP, "mcp", 6},
+    {KING_COMPONENT_IIBIN, "iibin", 7},
+    {KING_COMPONENT_OBJECT_STORE, "object_store", 8},
+    {KING_COMPONENT_TELEMETRY, "telemetry", 9},
+    {KING_COMPONENT_SERVER, "server", 10},
+    {KING_COMPONENT_CLIENT, "client", 11},
+    {KING_COMPONENT_CONFIG, "config", 12},
+};
+
 static const char *king_system_component_statuses[] = {
     "uninitialized",
     "initializing",
@@ -99,6 +114,9 @@ static void king_system_build_allowed_lifecycle_transitions(
 static const king_system_startup_entry_t *king_system_get_startup_entry(
     king_component_type_t type
 );
+static const king_system_startup_entry_t *king_system_get_shutdown_entry(
+    king_component_type_t type
+);
 static zend_bool king_system_component_started(king_component_status_t status);
 static zend_bool king_system_component_startup_dependency_ready(
     const char *dependency_name
@@ -114,7 +132,16 @@ static void king_system_build_component_pending_startup_dependencies(
     zval *pending_dependencies,
     king_component_type_t type
 );
+static void king_system_build_component_shutdown_dependents(
+    zval *dependents,
+    king_component_type_t type
+);
+static void king_system_build_component_pending_shutdown_dependents(
+    zval *pending_dependents,
+    king_component_type_t type
+);
 static void king_system_build_startup_visibility(zval *startup);
+static void king_system_build_shutdown_visibility(zval *shutdown);
 static void king_system_schedule_startup_components(void);
 
 static void king_component_info_dtor(zval *zv)
@@ -323,6 +350,25 @@ static const king_system_startup_entry_t *king_system_get_startup_entry(
     return NULL;
 }
 
+static const king_system_startup_entry_t *king_system_get_shutdown_entry(
+    king_component_type_t type
+)
+{
+    size_t idx;
+
+    for (
+        idx = 0;
+        idx < sizeof(king_system_shutdown_plan) / sizeof(king_system_shutdown_plan[0]);
+        idx++
+    ) {
+        if (king_system_shutdown_plan[idx].type == type) {
+            return &king_system_shutdown_plan[idx];
+        }
+    }
+
+    return NULL;
+}
+
 static zend_bool king_system_component_started(king_component_status_t status)
 {
     switch (status) {
@@ -456,6 +502,92 @@ static void king_system_build_component_pending_startup_dependencies(
     zval_ptr_dtor(&dependencies);
 }
 
+static void king_system_build_component_shutdown_dependents(
+    zval *dependents,
+    king_component_type_t type
+)
+{
+    const king_system_startup_entry_t *target_entry;
+    zval dependency_name_list;
+    zval *dependency_name;
+    size_t idx;
+
+    array_init(dependents);
+    target_entry = king_system_get_startup_entry(type);
+    if (target_entry == NULL) {
+        return;
+    }
+
+    for (
+        idx = 0;
+        idx < sizeof(king_system_startup_plan) / sizeof(king_system_startup_plan[0]);
+        idx++
+    ) {
+        const king_system_startup_entry_t *entry = &king_system_startup_plan[idx];
+        zend_bool depends_on_target = 0;
+
+        if (entry->type == type) {
+            continue;
+        }
+
+        king_system_build_component_startup_dependencies(
+            &dependency_name_list,
+            entry->type
+        );
+
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL(dependency_name_list), dependency_name) {
+            if (
+                Z_TYPE_P(dependency_name) == IS_STRING &&
+                strcmp(Z_STRVAL_P(dependency_name), target_entry->name) == 0
+            ) {
+                depends_on_target = 1;
+                break;
+            }
+        } ZEND_HASH_FOREACH_END();
+
+        zval_ptr_dtor(&dependency_name_list);
+
+        if (depends_on_target) {
+            add_next_index_string(dependents, (char *) entry->name);
+        }
+    }
+}
+
+static void king_system_build_component_pending_shutdown_dependents(
+    zval *pending_dependents,
+    king_component_type_t type
+)
+{
+    zval dependents;
+    zval *dependent_name;
+
+    array_init(pending_dependents);
+    king_system_build_component_shutdown_dependents(&dependents, type);
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL(dependents), dependent_name) {
+        king_component_info_t *dependent_info;
+
+        if (Z_TYPE_P(dependent_name) != IS_STRING) {
+            continue;
+        }
+
+        dependent_info = king_system_get_component_by_name(
+            Z_STRVAL_P(dependent_name)
+        );
+        if (
+            dependent_info != NULL &&
+            king_system_component_started(dependent_info->status)
+        ) {
+            add_next_index_string(
+                pending_dependents,
+                Z_STRVAL_P(dependent_name)
+            );
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    zval_ptr_dtor(&dependents);
+}
+
 /*
  * Publish the canonical startup graph even before ordered startup transitions
  * are implemented so callers can inspect the intended dependency plan without
@@ -555,6 +687,109 @@ static void king_system_build_startup_visibility(zval *startup)
     );
     add_assoc_zval(startup, "blocked_components", &blocked_components);
     add_assoc_zval(startup, "components", &components);
+}
+
+/*
+ * Publish the canonical shutdown graph separately from the startup graph so
+ * operators can inspect which components are leaf shutdown candidates, which
+ * still have live dependents, and that King requires a drain-first stop path.
+ */
+static void king_system_build_shutdown_visibility(zval *shutdown)
+{
+    zval active_components;
+    zval blocked_components;
+    zval component_entry;
+    zval components;
+    zval inactive_components;
+    zval ordered_components;
+    zval ready_to_stop_components;
+    zval status_copy;
+    size_t idx;
+
+    array_init(shutdown);
+    array_init(&active_components);
+    array_init(&blocked_components);
+    array_init(&components);
+    array_init(&inactive_components);
+    array_init(&ordered_components);
+    array_init(&ready_to_stop_components);
+
+    for (
+        idx = 0;
+        idx < sizeof(king_system_shutdown_plan) / sizeof(king_system_shutdown_plan[0]);
+        idx++
+    ) {
+        const king_system_startup_entry_t *entry = &king_system_shutdown_plan[idx];
+        king_component_info_t *info = king_system_get_component_internal(entry->type);
+        zval component_pending_dependents;
+        zval component_dependents;
+        zend_bool started = 0;
+        zend_bool ready_to_stop = 0;
+
+        if (info != NULL) {
+            started = king_system_component_started(info->status);
+        }
+
+        add_next_index_string(&ordered_components, (char *) entry->name);
+        king_system_build_component_shutdown_dependents(
+            &component_dependents,
+            entry->type
+        );
+        king_system_build_component_pending_shutdown_dependents(
+            &component_pending_dependents,
+            entry->type
+        );
+        ready_to_stop = started
+            && zend_hash_num_elements(
+                Z_ARRVAL(component_pending_dependents)
+            ) == 0;
+
+        if (started) {
+            add_next_index_string(&active_components, (char *) entry->name);
+        } else {
+            add_next_index_string(&inactive_components, (char *) entry->name);
+        }
+
+        if (ready_to_stop) {
+            add_next_index_string(&ready_to_stop_components, (char *) entry->name);
+        }
+
+        if (
+            started &&
+            zend_hash_num_elements(Z_ARRVAL(component_pending_dependents)) > 0
+        ) {
+            ZVAL_COPY(&status_copy, &component_pending_dependents);
+            add_assoc_zval(&blocked_components, entry->name, &status_copy);
+        }
+
+        array_init(&component_entry);
+        add_assoc_long(&component_entry, "order", (zend_long) entry->order);
+        add_assoc_zval(&component_entry, "dependents", &component_dependents);
+        add_assoc_zval(
+            &component_entry,
+            "pending_dependents",
+            &component_pending_dependents
+        );
+        add_assoc_bool(&component_entry, "status_visible", info != NULL ? 1 : 0);
+        add_assoc_bool(&component_entry, "started", started);
+        add_assoc_bool(&component_entry, "ready_to_stop", ready_to_stop);
+        add_assoc_zval(&components, entry->name, &component_entry);
+    }
+
+    add_assoc_bool(shutdown, "drain_first_required", 1);
+    add_assoc_long(
+        shutdown,
+        "catalog_component_count",
+        (zend_long) (
+            sizeof(king_system_shutdown_plan) / sizeof(king_system_shutdown_plan[0])
+        )
+    );
+    add_assoc_zval(shutdown, "ordered_components", &ordered_components);
+    add_assoc_zval(shutdown, "active_components", &active_components);
+    add_assoc_zval(shutdown, "inactive_components", &inactive_components);
+    add_assoc_zval(shutdown, "ready_to_stop_components", &ready_to_stop_components);
+    add_assoc_zval(shutdown, "blocked_components", &blocked_components);
+    add_assoc_zval(shutdown, "components", &components);
 }
 
 /*
@@ -1015,6 +1250,7 @@ PHP_FUNCTION(king_system_get_status)
     zval drain_intent;
     zval drain_targets;
     zval readiness_blockers;
+    zval shutdown;
     zval startup;
     time_t now;
     time_t drain_requested_at = 0;
@@ -1032,6 +1268,7 @@ PHP_FUNCTION(king_system_get_status)
     array_init(&readiness_blockers);
     if (king_system_initialized) {
         ZEND_HASH_FOREACH_NUM_KEY_PTR(&king_system_components, idx, info) {
+            uint32_t shutdown_pending_dependent_count = 0;
             time_t last_health_check = info->last_health_check;
             uint32_t startup_pending_dependency_count = 0;
             zend_bool readiness_blocking = king_system_component_readiness_blocking(
@@ -1040,11 +1277,26 @@ PHP_FUNCTION(king_system_get_status)
             const char *readiness_reason = king_system_component_readiness_reason(
                 info->status
             );
+            const king_system_startup_entry_t *shutdown_entry =
+                king_system_get_shutdown_entry(info->type);
             const king_system_startup_entry_t *startup_entry =
                 king_system_get_startup_entry(info->type);
+            zval shutdown_dependents;
+            zval shutdown_pending_dependents;
             zval startup_dependencies;
             zval startup_pending_dependencies;
 
+            king_system_build_component_shutdown_dependents(
+                &shutdown_dependents,
+                info->type
+            );
+            king_system_build_component_pending_shutdown_dependents(
+                &shutdown_pending_dependents,
+                info->type
+            );
+            shutdown_pending_dependent_count = (uint32_t) zend_hash_num_elements(
+                Z_ARRVAL(shutdown_pending_dependents)
+            );
             king_system_build_component_startup_dependencies(
                 &startup_dependencies,
                 info->type
@@ -1074,6 +1326,27 @@ PHP_FUNCTION(king_system_get_status)
             add_assoc_long(&component_entry, "errors_encountered", (zend_long) info->errors_encountered);
             add_assoc_long(&component_entry, "last_health_check", (zend_long) last_health_check);
             add_assoc_long(&component_entry, "up_for_seconds", (zend_long) (now - last_health_check));
+            add_assoc_long(
+                &component_entry,
+                "shutdown_order",
+                shutdown_entry != NULL ? (zend_long) shutdown_entry->order : 0
+            );
+            add_assoc_zval(
+                &component_entry,
+                "shutdown_dependents",
+                &shutdown_dependents
+            );
+            add_assoc_zval(
+                &component_entry,
+                "shutdown_pending_dependents",
+                &shutdown_pending_dependents
+            );
+            add_assoc_bool(
+                &component_entry,
+                "shutdown_ready_to_stop",
+                king_system_component_started(info->status) &&
+                    shutdown_pending_dependent_count == 0
+            );
             add_assoc_long(
                 &component_entry,
                 "startup_order",
@@ -1176,6 +1449,8 @@ PHP_FUNCTION(king_system_get_status)
     );
     king_system_build_startup_visibility(&startup);
     add_assoc_zval(return_value, "startup", &startup);
+    king_system_build_shutdown_visibility(&shutdown);
+    add_assoc_zval(return_value, "shutdown", &shutdown);
     array_init(&admission);
     add_assoc_bool(&admission, "process_requests", admission_state.aggregate_ready);
     add_assoc_bool(&admission, "http_listener_accepts", admission_state.aggregate_ready);

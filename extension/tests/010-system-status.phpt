@@ -1,5 +1,5 @@
 --TEST--
-King system status functions expose health, startup, and runtime lifecycle state
+King system status functions expose health, startup, shutdown, and runtime lifecycle state
 --FILE--
 <?php
 function king_test_wait_until_ready(int $maxSeconds = 8): array
@@ -31,10 +31,17 @@ var_dump($status['component_count']);
 var_dump($status['drain_intent']['reason']);
 var_dump($status['allowed_lifecycle_transitions']);
 var_dump($status['startup']['catalog_component_count']);
-var_dump($status['startup']['ordered_components']);
+var_dump(($status['startup']['ordered_components'][0] ?? null) === 'config');
+var_dump(($status['startup']['ordered_components'][11] ?? null) === 'autoscaling');
 var_dump($status['startup']['ready_to_start_components']);
 var_dump($status['startup']['components']['config']['ready_to_start']);
 var_dump($status['startup']['components']['client']['pending_dependencies']);
+var_dump($status['shutdown']['catalog_component_count']);
+var_dump(($status['shutdown']['ordered_components'][0] ?? null) === 'autoscaling');
+var_dump(($status['shutdown']['ordered_components'][11] ?? null) === 'config');
+var_dump($status['shutdown']['drain_first_required']);
+var_dump(count($status['shutdown']['ready_to_stop_components']));
+var_dump(($status['shutdown']['components']['autoscaling']['ready_to_stop'] ?? null) === false);
 
 var_dump(king_system_init(['component_timeout_seconds' => 1]));
 $status = king_system_get_status();
@@ -53,6 +60,8 @@ var_dump($status['startup']['catalog_component_count']);
 var_dump($status['startup']['started_components']);
 var_dump(count($status['startup']['pending_components']));
 var_dump($status['startup']['ready_to_start_components']);
+var_dump(($status['shutdown']['catalog_component_count'] ?? null) === 12);
+var_dump(($status['shutdown']['drain_first_required'] ?? null) === true);
 var_dump($status['admission']['process_requests']);
 var_dump($status['admission']['http_listener_accepts']);
 var_dump($status['admission']['remote_peer_dispatches']);
@@ -64,6 +73,10 @@ var_dump($status['components']['config']['startup_order']);
 var_dump($status['components']['config']['startup_dependencies']);
 var_dump($status['components']['config']['startup_pending_dependencies']);
 var_dump($status['components']['config']['startup_ready_to_start']);
+var_dump(($status['components']['autoscaling']['shutdown_order'] ?? null) === 1);
+var_dump(($status['components']['autoscaling']['shutdown_dependents'] ?? []) === []);
+var_dump(($status['components']['autoscaling']['shutdown_pending_dependents'] ?? []) === []);
+var_dump(($status['components']['autoscaling']['shutdown_ready_to_stop'] ?? null) === false);
 
 $status = king_test_wait_until_ready();
 var_dump($status['lifecycle']);
@@ -77,6 +90,17 @@ var_dump($status['components']['config']['status']);
 var_dump($status['components']['config']['ready']);
 var_dump($status['components']['config']['readiness_reason']);
 var_dump($status['components']['config']['readiness_blocking']);
+var_dump(($status['shutdown']['ready_to_stop_components'] ?? null) === [
+    'autoscaling',
+    'cdn',
+    'orchestrator',
+    'router_loadbalancer',
+    'mcp',
+    'iibin',
+]);
+var_dump(($status['components']['autoscaling']['shutdown_ready_to_stop'] ?? null) === true);
+var_dump(($status['components']['config']['shutdown_order'] ?? null) === 12);
+var_dump(($status['components']['config']['shutdown_ready_to_stop'] ?? null) === false);
 
 var_dump(king_system_shutdown());
 $status = king_system_get_status();
@@ -101,7 +125,7 @@ bool(true)
 bool(true)
 string(%d) "%s"
 bool(false)
-array(13) {
+array(14) {
   [0]=>
   string(11) "initialized"
   [1]=>
@@ -125,8 +149,10 @@ array(13) {
   [10]=>
   string(7) "startup"
   [11]=>
-  string(9) "admission"
+  string(8) "shutdown"
   [12]=>
+  string(9) "admission"
+  [13]=>
   string(29) "health_check_interval_seconds"
 }
 bool(false)
@@ -138,32 +164,8 @@ array(1) {
   string(5) "ready"
 }
 int(12)
-array(12) {
-  [0]=>
-  string(6) "config"
-  [1]=>
-  string(6) "client"
-  [2]=>
-  string(6) "server"
-  [3]=>
-  string(9) "telemetry"
-  [4]=>
-  string(12) "object_store"
-  [5]=>
-  string(5) "iibin"
-  [6]=>
-  string(3) "mcp"
-  [7]=>
-  string(12) "semantic_dns"
-  [8]=>
-  string(19) "router_loadbalancer"
-  [9]=>
-  string(12) "orchestrator"
-  [10]=>
-  string(3) "cdn"
-  [11]=>
-  string(11) "autoscaling"
-}
+bool(true)
+bool(true)
 array(1) {
   [0]=>
   string(6) "config"
@@ -173,8 +175,14 @@ array(1) {
   [0]=>
   string(6) "config"
 }
+int(12)
 bool(true)
-array(13) {
+bool(true)
+bool(true)
+int(0)
+bool(true)
+bool(true)
+array(14) {
   [0]=>
   string(11) "initialized"
   [1]=>
@@ -198,8 +206,10 @@ array(13) {
   [10]=>
   string(7) "startup"
   [11]=>
-  string(9) "admission"
+  string(8) "shutdown"
   [12]=>
+  string(9) "admission"
+  [13]=>
   string(29) "health_check_interval_seconds"
 }
 bool(true)
@@ -229,6 +239,8 @@ array(1) {
 int(11)
 array(0) {
 }
+bool(true)
+bool(true)
 bool(false)
 bool(false)
 bool(false)
@@ -242,6 +254,10 @@ array(0) {
 array(0) {
 }
 bool(false)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
 string(5) "ready"
 bool(true)
 int(0)
@@ -253,6 +269,10 @@ string(7) "running"
 bool(true)
 string(5) "ready"
 bool(false)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
 bool(true)
 bool(false)
 string(7) "stopped"
