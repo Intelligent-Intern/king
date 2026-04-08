@@ -1586,8 +1586,9 @@ namespace {
      * `backend`, or `missing_handler` instead of flattening it into a generic
      * backend string. When the coordinated `king_system_init()` runtime is
      * active, new local submissions also require aggregate
-     * `orchestrator_submissions` readiness; standalone orchestrator use
-     * without the coordinated runtime remains available.
+     * `orchestrator_submissions` readiness, and `remote_peer` dispatch also
+     * requires aggregate `remote_peer_dispatches` readiness; standalone
+     * orchestrator use without the coordinated runtime remains available.
      * @param array<int,array<string,mixed>> $pipeline
      * @param array<string,mixed>|null $exec_options
      * @return array<string,mixed>
@@ -1685,7 +1686,10 @@ namespace {
      * the configured peer; the restarted controller still does not transport
      * old PHP callable state across the network. Missing peer-local handler
      * readiness is therefore reported as `missing_handler`, not as borrowed
-     * controller execution state.
+     * controller execution state. When the coordinated `king_system_init()`
+     * runtime is active, `remote_peer` continuation also requires aggregate
+     * `remote_peer_resumes` readiness; standalone resume without the
+     * coordinated runtime remains available.
      * @return array<string,mixed>
      */
     function king_pipeline_orchestrator_resume_run(string $run_id): array {}
