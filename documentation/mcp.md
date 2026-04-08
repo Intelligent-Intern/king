@@ -426,6 +426,15 @@ Another mistake is using tiny in-memory payloads for everything, even when the
 data clearly wants streamed upload or streamed download. That throws away the
 main reason the transfer API exists.
 
+That same transfer path is now also part of the repo-local Flow PHP userland
+adapter contract documented in [Flow PHP and ETL on King](./flow-php-etl.md).
+`McpByteSource` uses `downloadToStream()` through a writable callback-stream
+boundary, while `McpByteSink` keeps an explicit bounded local replay spool and
+commits it with `uploadFromStream()`. That is intentionally honest: MCP can
+move large payloads today, but it does not yet expose remote append/resume
+semantics, so the current sink contract retries from the saved local spool
+instead of pretending the peer already supports upload-session resume.
+
 Another mistake is treating timeout, deadline, and cancellation as the same
 thing. They are different controls and exist because real control-plane traffic
 needs all three.

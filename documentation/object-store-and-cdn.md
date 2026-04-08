@@ -1030,10 +1030,14 @@ target-shape wrapper above these real storage families without pretending the
 extension already exports every helper class shown there.
 
 That same chapter now also documents the repo-local `ObjectStoreByteSource`
-userland helper, which consumes object payloads through repeated
-`king_object_store_get_to_stream()` byte ranges and exports a serializable
-cursor with `resume_strategy=range_offset` instead of flattening the read path
-back into whole-object strings.
+and `ObjectStoreByteSink` userland helpers. The source side consumes object
+payloads through repeated `king_object_store_get_to_stream()` byte ranges and
+exports a serializable cursor with `resume_strategy=range_offset` instead of
+flattening the read path back into whole-object strings. The sink side uses
+provider-native resumable upload sessions on real cloud primaries and falls
+back to bounded local replay staging plus `king_object_store_put_from_stream()`
+elsewhere, keeping partial-failure and resume state explicit instead of
+downgrading object-store writes to one whole-payload string API.
 
 ## The Questions Operators Should Ask
 

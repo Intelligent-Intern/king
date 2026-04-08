@@ -259,6 +259,59 @@ The current PHPT proof covers:
 - MCP transfer streaming with replay-and-skip resume:
   `602-flow-php-mcp-source-contract.phpt`
 
+## Repo-Local Streaming Sink Contract
+
+The repository now also carries one real userland sink contract under
+[`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
+[`../userland/flow-php/src/StreamingSink.php`](../userland/flow-php/src/StreamingSink.php).
+
+Again, that code is intentionally repo-local. The important point for this
+phase is that sink behavior is now real and test-backed instead of being left
+as a target-shape sentence in the tracker.
+
+The current sink contract has three shared pieces:
+
+- `SinkCursor`, a serializable progress snapshot that later checkpoint work
+  can persist without inventing ad hoc per-transport write arrays
+- `SinkWriteResult`, which reports current accepted bytes, accepted write
+  count, terminal completion, transport commit status, and the latest cursor
+- `SinkFailure`, which makes stage, category, retryability, and partial-failure
+  state explicit instead of burying that meaning in one transport-specific
+  exception string
+
+The current adapters are:
+
+- `ObjectStoreByteSink`, which uses provider-native
+  `king_object_store_begin_resumable_upload()` /
+  `king_object_store_append_resumable_upload_chunk()` /
+  `king_object_store_complete_resumable_upload()` sessions on cloud primary
+  backends and falls back to bounded local replay-spool staging plus
+  `king_object_store_put_from_stream()` on non-cloud backends
+- `HttpByteSink`, which uses `King\Session::sendRequest()` plus
+  `King\Stream::send()`, `finish()`, and `receiveResponse()` for live
+  request-body streaming with explicit terminal response state and
+  `resume_strategy=restart_request`
+- `McpByteSink`, which uses a bounded local replay spool plus
+  `king_mcp_upload_from_stream()` / `MCP::uploadFromStream()` and
+  `resume_strategy=replay_local_spool`
+
+Those write strategies are intentionally not all the same strength.
+Object-store can preserve a real upload-session cursor today on real cloud
+primaries. HTTP has a live request-body stream, but no public mid-request
+resume primitive, so honest recovery means replaying a fresh request. MCP has
+large-payload upload, but not remote append/resume, so the honest adapter keeps
+explicit local replay state and retries from byte zero instead of pretending
+the transport has stronger semantics than it exposes.
+
+The current PHPT proof covers:
+
+- object-store resumable upload progress plus cursor-based resume:
+  `603-flow-php-object-store-sink-contract.phpt`
+- HTTP request-body streaming plus terminal response state:
+  `604-flow-php-http-sink-contract.phpt`
+- MCP upload failure, retained replay state, and later retry success:
+  `605-flow-php-mcp-sink-contract.phpt`
+
 ## What This Chapter Does Not Claim Yet
 
 This chapter is a contract statement, not a claim that every adapter in that

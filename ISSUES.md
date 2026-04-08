@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#1 Define the Flow PHP / ETL-on-King contract explicitly as a userland integration layer on top of King runtime services, not as hard-wired C-core pipeline semantics.`
+- `#5 Implement a checkpoint-store contract for offsets, cursors, resumable progress, and replay boundaries on top of King persistence surfaces.`
 
 ## Active Executable Items
 
@@ -79,7 +79,7 @@ with the runtime instead of being deferred to a later cleanup pass.
   done when: one shared config object can describe primary plus replica/backups, credential sources, encryption mode, integrity policy, expiry/lifecycle policy, upload policy, and dataflow-facing checkpoint/temp-storage policy without every pipeline restating those concerns ad hoc
 - [x] `#3 Implement a streaming source adapter contract on top of King object-store, MCP, HTTP, and other runtime-owned transports.`
   done when: a dataflow source can consume records or blobs from King-backed transports with bounded-memory reads, resume-aware progress, and backpressure instead of requiring whole-object materialization first
-- [ ] `#4 Implement a streaming sink adapter contract on top of King object-store, MCP, HTTP, and other runtime-owned transports.`
+- [x] `#4 Implement a streaming sink adapter contract on top of King object-store, MCP, HTTP, and other runtime-owned transports.`
   done when: a dataflow sink can flush output through King-backed transports with bounded-memory writes, multipart/resumable upload where available, and explicit partial-failure handling
 - [ ] `#5 Implement a checkpoint-store contract for offsets, cursors, resumable progress, and replay boundaries on top of King persistence surfaces.`
   done when: checkpoint state survives restart, can be versioned and resumed honestly, and does not require ETL callers to invent their own persistence layer outside King
