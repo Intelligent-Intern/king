@@ -100,6 +100,12 @@ static const king_system_startup_entry_t *king_system_get_startup_entry(
     king_component_type_t type
 );
 static zend_bool king_system_component_started(king_component_status_t status);
+static zend_bool king_system_component_startup_dependency_ready(
+    const char *dependency_name
+);
+static zend_bool king_system_component_dependencies_running(
+    king_component_type_t type
+);
 static void king_system_build_component_startup_dependencies(
     zval *dependencies,
     king_component_type_t type
@@ -109,6 +115,7 @@ static void king_system_build_component_pending_startup_dependencies(
     king_component_type_t type
 );
 static void king_system_build_startup_visibility(zval *startup);
+static void king_system_schedule_startup_components(void);
 
 static void king_component_info_dtor(zval *zv)
 {
@@ -331,6 +338,49 @@ static zend_bool king_system_component_started(king_component_status_t status)
     }
 }
 
+static zend_bool king_system_component_startup_dependency_ready(
+    const char *dependency_name
+)
+{
+    king_component_info_t *dependency_info;
+
+    dependency_info = king_system_get_component_by_name(dependency_name);
+    if (dependency_info == NULL) {
+        return 0;
+    }
+
+    return dependency_info->status == KING_COMPONENT_STATUS_RUNNING ? 1 : 0;
+}
+
+static zend_bool king_system_component_dependencies_running(
+    king_component_type_t type
+)
+{
+    zval dependencies;
+    zval *dependency_name;
+    zend_bool ready = 1;
+
+    king_system_build_component_startup_dependencies(&dependencies, type);
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL(dependencies), dependency_name) {
+        if (Z_TYPE_P(dependency_name) != IS_STRING) {
+            continue;
+        }
+
+        if (
+            !king_system_component_startup_dependency_ready(
+                Z_STRVAL_P(dependency_name)
+            )
+        ) {
+            ready = 0;
+            break;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    zval_ptr_dtor(&dependencies);
+    return ready;
+}
+
 static void king_system_build_component_startup_dependencies(
     zval *dependencies,
     king_component_type_t type
@@ -398,10 +448,7 @@ static void king_system_build_component_pending_startup_dependencies(
 
         dependency = Z_STRVAL_P(dependency_name);
         dependency_info = king_system_get_component_by_name(dependency);
-        if (
-            dependency_info == NULL ||
-            !king_system_component_started(dependency_info->status)
-        ) {
+        if (dependency_info == NULL || !king_system_component_startup_dependency_ready(dependency)) {
             add_next_index_string(pending_dependencies, dependency);
         }
     } ZEND_HASH_FOREACH_END();
@@ -508,6 +555,50 @@ static void king_system_build_startup_visibility(zval *startup)
     );
     add_assoc_zval(startup, "blocked_components", &blocked_components);
     add_assoc_zval(startup, "components", &components);
+}
+
+/*
+ * Start every currently eligible component wave once its declared startup
+ * dependencies are already running. This keeps the canonical graph from #13
+ * honest in the local runtime instead of leaving it as pure metadata.
+ */
+static void king_system_schedule_startup_components(void)
+{
+    const king_system_startup_entry_t *entry;
+    king_component_info_t *info;
+    size_t idx;
+    time_t now;
+
+    if (!king_system_initialized) {
+        return;
+    }
+
+    now = time(NULL);
+    for (
+        idx = 0;
+        idx < sizeof(king_system_startup_plan) / sizeof(king_system_startup_plan[0]);
+        idx++
+    ) {
+        entry = &king_system_startup_plan[idx];
+        info = king_system_get_component_internal(entry->type);
+        if (info == NULL) {
+            continue;
+        }
+
+        if (
+            info->status != KING_COMPONENT_STATUS_UNINITIALIZED &&
+            info->status != KING_COMPONENT_STATUS_SHUTDOWN
+        ) {
+            continue;
+        }
+
+        if (!king_system_component_dependencies_running(entry->type)) {
+            continue;
+        }
+
+        info->status = KING_COMPONENT_STATUS_INITIALIZING;
+        info->last_health_check = now;
+    }
 }
 
 /*
@@ -661,6 +752,8 @@ static void king_system_apply_all_transitions(void)
     ZEND_HASH_FOREACH_NUM_KEY_PTR(&king_system_components, idx, info) {
         king_system_apply_component_transition(info);
     } ZEND_HASH_FOREACH_END();
+
+    king_system_schedule_startup_components();
 }
 
 int king_system_update_component_status(
@@ -792,6 +885,7 @@ int king_system_init_all_components(king_system_config_t *config)
     king_system_register_component(KING_COMPONENT_CDN, "cdn", "0.2.1-alpha");
     king_system_register_component(KING_COMPONENT_IIBIN, "iibin", "0.2.1-alpha");
     king_system_register_component(KING_COMPONENT_SEMANTIC_DNS, "semantic_dns", "0.2.1-alpha");
+    king_system_schedule_startup_components();
 
     return SUCCESS;
 }
@@ -814,7 +908,7 @@ int king_system_register_component(king_component_type_t type, const char *name,
     info->type = type;
     strncpy(info->name, name, sizeof(info->name) - 1);
     strncpy(info->version, version, sizeof(info->version) - 1);
-    info->status = KING_COMPONENT_STATUS_RUNNING;
+    info->status = KING_COMPONENT_STATUS_UNINITIALIZED;
     info->initialized_at = now;
     info->last_health_check = now;
     

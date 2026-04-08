@@ -2,6 +2,20 @@
 King system status exposes explicit drain intent and allowed lifecycle transitions for the coordinated runtime
 --FILE--
 <?php
+function king_system_wait_until_ready_for_drain_intent(int $maxSeconds = 8): void
+{
+    for ($i = 0; $i < $maxSeconds; $i++) {
+        $status = king_system_get_status();
+        if (($status['lifecycle'] ?? null) === 'ready') {
+            return;
+        }
+
+        sleep(1);
+    }
+
+    throw new RuntimeException('system did not become ready before drain intent scenario');
+}
+
 $status = king_system_get_status();
 var_dump($status['lifecycle']);
 var_dump($status['drain_intent']['requested']);
@@ -14,6 +28,7 @@ var_dump($status['drain_intent']['target_components']);
 var_dump($status['allowed_lifecycle_transitions']);
 
 var_dump(king_system_init(['component_timeout_seconds' => 1]));
+king_system_wait_until_ready_for_drain_intent();
 $status = king_system_get_status();
 var_dump($status['lifecycle']);
 var_dump($status['drain_intent']['requested']);

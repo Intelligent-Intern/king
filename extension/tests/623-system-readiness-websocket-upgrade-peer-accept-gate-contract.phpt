@@ -21,12 +21,27 @@ function king_system_readiness_pick_tcp_port(): int
     return (int) $port;
 }
 
+function king_system_readiness_wait_until_ready_for_websocket(int $maxSeconds = 8): void
+{
+    for ($i = 0; $i < $maxSeconds; $i++) {
+        $status = king_system_get_status();
+        if (($status['lifecycle'] ?? null) === 'ready') {
+            return;
+        }
+
+        sleep(1);
+    }
+
+    throw new RuntimeException('system did not become ready before websocket readiness gate scenario');
+}
+
 $blockedUpgrade = [];
 $readyStatus = [];
 $acceptExceptionClass = '';
 $acceptExceptionMessage = '';
 
 var_dump(king_system_init(['component_timeout_seconds' => 1]));
+king_system_readiness_wait_until_ready_for_websocket();
 var_dump(king_system_restart_component('telemetry'));
 
 $status = king_system_get_status();

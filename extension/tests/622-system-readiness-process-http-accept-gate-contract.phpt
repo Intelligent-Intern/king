@@ -93,7 +93,22 @@ function king_system_readiness_run_listener_gate_child(string $protocol, int $po
     return $capture;
 }
 
+function king_system_readiness_wait_until_ready(int $maxSeconds = 8): void
+{
+    for ($i = 0; $i < $maxSeconds; $i++) {
+        $status = king_system_get_status();
+        if (($status['lifecycle'] ?? null) === 'ready') {
+            return;
+        }
+
+        sleep(1);
+    }
+
+    throw new RuntimeException('system did not become ready before readiness gate scenario');
+}
+
 var_dump(king_system_init(['component_timeout_seconds' => 1]));
+king_system_readiness_wait_until_ready();
 var_dump(king_system_restart_component('telemetry'));
 
 $status = king_system_get_status();

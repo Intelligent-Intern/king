@@ -98,6 +98,20 @@ PHP);
 
 file_put_contents($workerScript, <<<'PHP'
 <?php
+function drain_wait_until_ready(int $maxAttempts = 80): void
+{
+    for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+        $status = king_system_get_status();
+        if (($status['lifecycle'] ?? null) === 'ready') {
+            return;
+        }
+
+        usleep(100000);
+    }
+
+    throw new RuntimeException('worker runtime did not become ready before first claim');
+}
+
 function drain_prepare_handler(array $context): array
 {
     $input = $context['input'] ?? null;
@@ -176,6 +190,7 @@ $queuedRunId = $argv[2] ?? '';
 $payload = [
     'init' => king_system_init(['component_timeout_seconds' => 1]),
 ];
+drain_wait_until_ready();
 
 foreach (['drain-prepare', 'drain-finalize', 'drain-queued'] as $tool) {
     king_pipeline_orchestrator_register_tool($tool, [
