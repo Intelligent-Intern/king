@@ -343,6 +343,14 @@ core part of the application.
 | `storage.metadata_cache_max_entries` | Caps how many metadata entries the runtime keeps in its process-local cache before evicting older entries. |
 | `storage.enable_directstorage` | Enables or disables DirectStorage integration. |
 
+If userland ETL or dataflow code needs one reusable runtime descriptor instead
+of scattering these keys across job code, read
+[Flow PHP and ETL on King](./flow-php-etl.md). That chapter defines the
+target-shape wrapper that groups `storage.*`, storage-facing `tls.*`, object
+write defaults, upload policy, and checkpoint/temp-storage policy into one
+declarative config object while this page remains the source of truth for the
+current live keys.
+
 ## CDN: `cdn.*`
 
 Use the `cdn.*` namespace for cache shape and origin behavior. These keys define

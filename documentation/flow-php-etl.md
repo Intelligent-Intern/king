@@ -94,6 +94,125 @@ orchestrator: durable state stores stable runtime identity and config, while
 executable userland handlers remain process-local and must be registered by
 the process that will actually execute them.
 
+## One Reusable Runtime Configuration Model
+
+The next boundary after "ETL stays in userland" is "how userland selects the
+runtime."
+
+One pipeline should not restate storage topology in one array, upload policy in
+another helper, integrity defaults in ad hoc write options, lifecycle policy in
+scattered metadata calls, and checkpoint or temp-storage prefixes in random job
+code. That repeats one runtime contract in too many places.
+
+The target shape is one reusable userland configuration object that packages
+the runtime decisions a dataflow job depends on.
+
+`*` The example below is still target-shape documentation. It makes the
+contract concrete, but it is not a claim that the exact classes are already the
+live exported PHP surface today.
+
+```php
+<?php
+
+use King\ObjectStore\RuntimeConfig;
+use King\ObjectStore\Backend\{S3, AzureBlob};
+use King\ObjectStore\Encryption\{ServerSide, ClientSide};
+use King\ObjectStore\{
+    CheckpointPolicy,
+    IntegrityPolicy,
+    LifecyclePolicy,
+    ReplicationPolicy,
+    TemporaryStoragePolicy,
+    UploadPolicy
+};
+
+$store = new RuntimeConfig(
+    primary: new S3(
+        bucket: 'etl-primary',
+        endpoint: 'https://fsn1.your-s3.example',
+        credentials: 'env:KING_S3_PRIMARY',
+        encryption: new ServerSide('AES256'),
+    ),
+    replicas: [
+        new AzureBlob(
+            container: 'etl-replica',
+            endpoint: 'https://etl.blob.core.windows.net',
+            credentials: 'env:KING_AZURE_REPLICA',
+            encryption: new ClientSide('vault:etl-replica-key'),
+        ),
+    ],
+    integrity: new IntegrityPolicy(
+        algorithm: 'sha256',
+        verifyOnRead: true,
+        verifyOnWrite: true,
+    ),
+    lifecycle: new LifecyclePolicy(
+        ttlSeconds: 86400,
+        purgeExpired: true,
+    ),
+    replication: new ReplicationPolicy(
+        mode: 'async',
+        minCopiesRequired: 2,
+    ),
+    uploads: new UploadPolicy(
+        resumable: true,
+        chunkSizeBytes: 8 * 1024 * 1024,
+        parallelParts: 4,
+    ),
+    checkpoints: new CheckpointPolicy(
+        objectPrefix: 'checkpoints/orders-import',
+        resumeMode: 'latest_committed',
+        retainVersions: 5,
+    ),
+    temporaryStorage: new TemporaryStoragePolicy(
+        objectPrefix: 'tmp/orders-import',
+        cleanup: 'on_success',
+        maxBytes: 20 * 1024 * 1024 * 1024,
+    ),
+);
+```
+
+The important design point is not the class name. The important design point is
+that source, sink, checkpoint, and temp-storage adapters all receive the same
+runtime descriptor instead of each inventing their own partial config story.
+
+## How The Target Shape Maps To The Real Runtime
+
+The current extension already exposes the low-level pieces that this config
+model must compose. The reusable ETL runtime object sits above those pieces; it
+does not replace or fictionalize them.
+
+| Target-shape field | Current real runtime surfaces it wraps | What that grouping achieves |
+| --- | --- | --- |
+| `primary`, `replicas`, and credential references | `king_object_store_init()` config such as `primary_backend`, `backup_backend`, `storage_root_path`, `cloud_credentials`, plus runtime `storage.*` topology settings | One job-level description of where durable data lives and which replica or backup routes belong to the same pipeline family. |
+| `integrity` | Write options such as `integrity_sha256`, full-read validation, restore-time validation, and import-time validation | One place to state whether the ETL job requires integrity material and when verification is mandatory. |
+| `lifecycle` | Object metadata such as `expires_at` and `cache_ttl_sec`, plus object-store cleanup behavior | One default policy for TTL, expiry, and cleanup instead of per-step folklore. |
+| `replication` | `replication_factor`, `storage.default_replication_factor`, and `storage.default_redundancy_mode` | One explicit durability policy for the pipeline's outputs and checkpoints. |
+| `uploads` | `chunk_size_kb` plus the resumable upload family beginning at `king_object_store_begin_resumable_upload()` | One bounded-memory upload policy for sinks and checkpoint writers. |
+| `checkpoints` | Ordinary King object-store prefixes and metadata on top of the same durable store | Checkpoint state stays on the real King persistence surface instead of on ad hoc temp files outside the runtime. |
+| `temporaryStorage` | Ordinary King object-store prefixes, lifecycle metadata, and cleanup policy on the same durable store | Temp or staging payloads follow the same security, lifecycle, and storage-topology contract as the rest of the job. |
+
+The same object should also carry credential references rather than raw secret
+material where possible. `env:...`, file-path, or vault-style references are
+the stronger contract for worker and remote-peer boundaries than copying secret
+bytes through arbitrary process-local arrays.
+
+## Rules For Future Adapters
+
+Future Flow PHP-style adapters on King should follow these rules:
+
+- select one runtime config object per logical dataset family or pipeline run
+  and pass it to sources, sinks, checkpoint stores, and temp-storage helpers
+- treat `storage.*`, `tls.*`, and object-store write or upload options as the
+  authoritative low-level runtime surfaces underneath that wrapper
+- keep checkpoint and temporary-state policy on King durability surfaces unless
+  a weaker out-of-band store is explicitly chosen and documented
+- preserve credential references and durable config identity across local,
+  file-worker, and remote-peer boundaries instead of smuggling live process
+  state through execution backends
+- keep the config object declarative; it describes topology and policy, not
+  executable callbacks or process-local resources
+
 ## What This Chapter Does Not Claim Yet
 
 This chapter is a contract statement, not a claim that every adapter in that
@@ -103,6 +222,8 @@ It does not claim:
 
 - that King already exposes a finished built-in ETL framework in C
 - that the repo already ships a complete public Flow PHP adapter package
+- that `King\ObjectStore\RuntimeConfig` and the policy classes above are
+  already the exact exported runtime surface today
 - that every storage, checkpoint, execution, telemetry, and schema bridge is
   already implemented end to end
 - that target-shape examples elsewhere in the repo are already the exact live
