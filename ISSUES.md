@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#11 Stop new orchestrator work admission during drain while preserving admitted runs.`
+- `#12 Stop new worker claims during drain while preserving already-claimed execution.`
 
 ## Active Executable Items
 
@@ -223,7 +223,7 @@ By explicit user request, this batch defers repo-doc and
 - [x] `#8 Gate remote-peer dispatch and resume on aggregate readiness.`
 - [x] `#9 Define and expose system-wide drain intent and allowed transitions.`
 - [x] `#10 Stop new HTTP listener work during drain while preserving admitted in-flight work.`
-- [ ] `#11 Stop new orchestrator work admission during drain while preserving admitted runs.`
+- [x] `#11 Stop new orchestrator work admission during drain while preserving admitted runs.`
 - [ ] `#12 Stop new worker claims during drain while preserving already-claimed execution.`
 - [ ] `#13 Define ordered component startup dependencies and visibility.`
 - [ ] `#14 Implement ordered component startup transitions in the local system runtime.`
