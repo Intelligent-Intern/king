@@ -21,6 +21,9 @@ var_dump(array_keys($status));
 var_dump($status['initialized']);
 var_dump($status['lifecycle']);
 var_dump($status['component_count'] > 0);
+var_dump($status['components']['config']['ready']);
+var_dump($status['components']['config']['readiness_reason']);
+var_dump($status['components']['config']['readiness_blocking']);
 
 var_dump(king_system_shutdown());
 $status = king_system_get_status();
@@ -82,6 +85,9 @@ array(7) {
 bool(true)
 string(5) "ready"
 bool(true)
+bool(true)
+string(5) "ready"
+bool(false)
 bool(true)
 bool(false)
 string(7) "stopped"

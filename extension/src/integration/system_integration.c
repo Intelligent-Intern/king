@@ -216,6 +216,34 @@ static const char *king_system_resolve_lifecycle(
     return "ready";
 }
 
+static const char *king_system_component_readiness_reason(
+    king_component_status_t status
+)
+{
+    switch (status) {
+        case KING_COMPONENT_STATUS_RUNNING:
+            return "ready";
+        case KING_COMPONENT_STATUS_INITIALIZING:
+            return "component_initializing";
+        case KING_COMPONENT_STATUS_SHUTTING_DOWN:
+            return "component_shutting_down";
+        case KING_COMPONENT_STATUS_ERROR:
+            return "component_failed";
+        case KING_COMPONENT_STATUS_SHUTDOWN:
+            return "component_shutdown";
+        case KING_COMPONENT_STATUS_UNINITIALIZED:
+        default:
+            return "component_uninitialized";
+    }
+}
+
+static zend_bool king_system_component_readiness_blocking(
+    king_component_status_t status
+)
+{
+    return status == KING_COMPONENT_STATUS_RUNNING ? 0 : 1;
+}
+
 static int king_system_set_component_status(
     king_component_type_t type,
     king_component_status_t status
@@ -500,12 +528,21 @@ PHP_FUNCTION(king_system_get_status)
     if (king_system_initialized) {
         ZEND_HASH_FOREACH_NUM_KEY_PTR(&king_system_components, idx, info) {
             time_t last_health_check = info->last_health_check;
+            const char *readiness_reason = king_system_component_readiness_reason(
+                info->status
+            );
             array_init(&component_entry);
             add_assoc_string(&component_entry, "status", king_component_status_to_string(info->status));
             add_assoc_bool(
                 &component_entry,
                 "ready",
                 info->status == KING_COMPONENT_STATUS_RUNNING ? 1 : 0
+            );
+            add_assoc_string(&component_entry, "readiness_reason", (char *) readiness_reason);
+            add_assoc_bool(
+                &component_entry,
+                "readiness_blocking",
+                king_system_component_readiness_blocking(info->status)
             );
             add_assoc_long(&component_entry, "requests_handled", (zend_long) info->requests_handled);
             add_assoc_long(&component_entry, "errors_encountered", (zend_long) info->errors_encountered);
