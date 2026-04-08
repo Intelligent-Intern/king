@@ -347,10 +347,9 @@ Published GHCR Docker images are intentionally a mainline-only follow-up. Branch
 and pull-request runs stop at package and container verification; the actual
 Docker publish flow runs only after a successful canonical baseline on `main`.
 
-Release publication is not a separate branch workflow. A release is created only
-when a `develop/v<version>` branch is merged into `main` (for example:
-`develop/v1.0.0-beta` -> `main`) and the merge passes the full canonical gate.
-The release branch no longer exists as an independent publishing path.
+Release publication follows the canonical release gate on the mainline. There
+is no parallel ad-hoc publish path that bypasses the same validation and
+packaging flow used everywhere else in this document.
 
 ## A Practical Release Sequence
 

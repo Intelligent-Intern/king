@@ -50,11 +50,12 @@ local release profile. If you only want the extension build, use
 If you want the beginner path from zero to a local WebSocket roundtrip, start
 with [documentation/getting-started.md](./documentation/getting-started.md).
 
-King is also being wired for the first honest
-[PIE](https://github.com/php/pie) install path. The maintainer workflow lives in
-[`documentation/pie-install.md`](./documentation/pie-install.md). PIE is the
-successor to PECL. For tagged releases that publish the matching PIE source
-asset, install with `pie install intelligent-intern/king-ext`.
+King also ships a
+[PIE](https://github.com/php/pie) install path. PIE is the successor to PECL.
+Tagged releases that publish the matching PIE source asset can be installed
+with `pie install intelligent-intern/king-ext`. Packaging details and local
+verification steps live in
+[`documentation/pie-install.md`](./documentation/pie-install.md).
 
 ## Small But Oho
 
