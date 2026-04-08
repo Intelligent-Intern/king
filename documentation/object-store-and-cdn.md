@@ -1022,6 +1022,13 @@ The sixth family is CDN behavior. `cdn.enable`, `cdn.cache_mode`,
 `cdn.origin_mcp_endpoint`, `cdn.origin_request_timeout_ms`,
 `cdn.serve_stale_on_error`, and related keys decide how edge delivery behaves.
 
+If a userland ETL layer needs to package those storage, encryption, integrity,
+upload, and checkpoint choices into one reusable job-level config object
+instead of scattering them through pipeline code, read
+[Flow PHP and ETL on King](./flow-php-etl.md). That chapter defines the
+target-shape wrapper above these real storage families without pretending the
+extension already exports every helper class shown there.
+
 ## The Questions Operators Should Ask
 
 When operators evaluate a storage setup, they should ask the same questions the
@@ -1057,7 +1064,10 @@ an ordinary upload utility would have.
 If you want to see how durable data enters and leaves the platform through a
 control-plane path, read [MCP](./mcp.md). If you want to see how stored objects
 feed later work, read [Pipeline Orchestrator](./pipeline-orchestrator.md). If
-you want the configuration keys in full detail, read
+you want to see how ETL or batch jobs should package storage topology,
+integrity, upload policy, and checkpoint/temp-storage defaults into one
+reusable runtime descriptor, read [Flow PHP and ETL on King](./flow-php-etl.md).
+If you want the configuration keys in full detail, read
 [Runtime Configuration Reference](./runtime-configuration.md). If you want a
 walkthrough centered on one important artifact and its edge and recovery story,
 read the example guide

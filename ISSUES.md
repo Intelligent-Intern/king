@@ -75,7 +75,7 @@ with the runtime instead of being deferred to a later cleanup pass.
 
 - [x] `#1 Define the Flow PHP / ETL-on-King contract explicitly as a userland integration layer on top of King runtime services, not as hard-wired C-core pipeline semantics.`
   done when: the repo documents a stable integration boundary that treats King as runtime substrate and `Flow PHP`-style ETL as userland orchestration/dataflow semantics, without silently shrinking existing King runtime guarantees
-- [ ] `#2 Define a reusable object-store / dataflow runtime configuration model for secure storage topology, encryption, integrity, lifecycle, upload, and replication policy.`
+- [x] `#2 Define a reusable object-store / dataflow runtime configuration model for secure storage topology, encryption, integrity, lifecycle, upload, and replication policy.`
   done when: one shared config object can describe primary plus replica/backups, credential sources, encryption mode, integrity policy, expiry/lifecycle policy, upload policy, and dataflow-facing checkpoint/temp-storage policy without every pipeline restating those concerns ad hoc
 - [ ] `#3 Implement a streaming source adapter contract on top of King object-store, MCP, HTTP, and other runtime-owned transports.`
   done when: a dataflow source can consume records or blobs from King-backed transports with bounded-memory reads, resume-aware progress, and backpressure instead of requiring whole-object materialization first
@@ -109,9 +109,11 @@ use King\ObjectStore\RuntimeConfig;
 use King\ObjectStore\Backend\{S3, AzureBlob};
 use King\ObjectStore\Encryption\{ServerSide, ClientSide};
 use King\ObjectStore\{
+    CheckpointPolicy,
     IntegrityPolicy,
     LifecyclePolicy,
     ReplicationPolicy,
+    TemporaryStoragePolicy,
     UploadPolicy
 };
 
@@ -147,6 +149,16 @@ $store = new RuntimeConfig(
         resumable: true,
         chunkSizeBytes: 8 * 1024 * 1024,
         parallelParts: 4,
+    ),
+    checkpoints: new CheckpointPolicy(
+        objectPrefix: 'checkpoints/orders-import',
+        resumeMode: 'latest_committed',
+        retainVersions: 5,
+    ),
+    temporaryStorage: new TemporaryStoragePolicy(
+        objectPrefix: 'tmp/orders-import',
+        cleanup: 'on_success',
+        maxBytes: 20 * 1024 * 1024 * 1024,
     ),
 );
 ```
