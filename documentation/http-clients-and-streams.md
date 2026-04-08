@@ -487,11 +487,15 @@ This is usually the real decision the reader needs to make.
 One common mistake is buffering every response even when the body is large or
 progressive. That throws away the value of the streaming response path.
 
-That same response path is now also the repo-local foundation for the Flow PHP
-userland source contract documented in [Flow PHP and ETL on King](./flow-php-etl.md).
+That same response path is now also part of the repo-local Flow PHP userland
+adapter contract documented in [Flow PHP and ETL on King](./flow-php-etl.md).
 `HttpByteSource` uses `response_stream` plus `King\Response::read()` so the
 consumer can apply pull-based backpressure and keep a serializable byte cursor
-without first materializing the whole response body.
+without first materializing the whole response body. `HttpByteSink` uses
+`King\Session::sendRequest()` plus `King\Stream::send()` / `finish()` /
+`receiveResponse()` so a pipeline can stream a request body incrementally and
+still keep explicit terminal response state instead of flattening the write
+path into one prebuilt string.
 
 Another mistake is treating HTTP/2 as if it were only HTTP/1 with a newer name.
 The whole point is multiplexing and pooled reuse through one session.
