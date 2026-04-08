@@ -42,46 +42,148 @@
 
 ## Current Next Leaf
 
-- `#2 Validate autoscaling drain-before-delete under real live connections.`
+- `#1 Define the Flow PHP / ETL-on-King contract explicitly as a userland integration layer on top of King runtime services, not as hard-wired C-core pipeline semantics.`
 
 ## Active Executable Items
 
-- [x] `#21 Represent workflow execution as an app-worker boundary, not as direct public callback transport in the userland tool contract.`
-- [x] `#22 Refactor public-facing workflow docs and examples to match the non-rehydratable callback boundary between orchestrator state and app-worker execution.`
-- [x] `#23 Add a smoke-level PHPT proving Spark-style workflow dispatch uses the app-worker boundary and does not rely on transporting userland callbacks across host/process boundaries.`
-- [x] `#1 Define the public userland tool-handler contract for application workflows on top of the pipeline orchestrator.`
-- [x] `#2 Define the exact handler-identity and re-registration contract across local, file-worker, remote-peer, and restart boundaries.`
-- [x] `#3 Reject unsupported non-rehydratable userland handler forms honestly instead of pretending closures survive restart or host boundaries.`
-- [x] `#4 Add a public userland handler-registration API that binds a runtime handler to a registered orchestrator tool name.`
-- [x] `#5 Execute registered userland handlers on the local orchestrator backend with persisted run-state parity.`
-- [x] `#6 Pass step input, tool config, run metadata, and step metadata into local userland handler execution with an explicit result contract.`
-- [x] `#7 Persist the durable handler-reference boundary needed for queued runs without serializing arbitrary PHP callables into state.`
-- [x] `#8 Rehydrate and validate handler readiness before file-worker claim or resume instead of failing late inside opaque worker execution.`
-- [x] `#9 Execute registered userland handlers on the file-worker backend after controller and worker restart under the explicit re-registration contract.`
-- [x] `#10 Define and implement the remote-peer userland handler contract without pretending controller memory crosses the TCP execution boundary.`
-- [x] `#11 Classify validation, runtime, timeout, cancellation, backend, and missing-handler failures for userland-backed orchestrator steps at step and run scope.`
-- [x] `#12 Propagate cancel, deadline, and timeout control into active userland handler execution wherever the public contract claims it.`
-- [x] `#13 Preserve completed-step, compensation, and terminal-state visibility for multi-step runs backed by userland handlers.`
-- [x] `#14 Expose userland handler readiness, missing-handler state, and active handler-contract metadata through orchestrator component status and inspection surfaces.`
-- [x] `#15 Add PHPT proof for local userland tool execution over a persisted run snapshot.`
-- [x] `#16 Add PHPT proof for file-worker userland tool execution with re-registration across processes.`
-- [x] `#17 Add PHPT proof for restart recovery when a queued or running userland-backed run outlives the original controller process.`
-- [x] `#18 Add PHPT proof for remote-peer userland tool execution or fail closed explicitly on unsupported remote-peer handler topologies.`
-- [x] `#19 Add handbook and procedural-API documentation for the userland tool-handler contract, including unsupported forms and restart duties.`
-- [x] `#20 Update PROJECT_ASSESSMENT.md and READYNESS_TRACKER.md once the userland orchestration surface is real, verified, and no longer caveated.`
+### Q. Dataflow / ETL / Flow PHP Integration
 
-## Notes (Urgent Batch Insert)
+King should not absorb ETL semantics as a hardwired C-core subsystem just
+because the runtime can already transport, store, and orchestrate data. The
+expected `Q` end-state is a userland-facing dataflow/ETL layer, such as `Flow
+PHP`, running on top of King runtime primitives without losing the stronger
+runtime guarantees that King already has around bounded-memory I/O, recovery,
+real object-store backends, distributed execution, telemetry, and security.
 
-- `#21` is closed by the public contract update in runtime docs and stub-facing guidance that durable tool definitions are separate from executable callbacks and that workflow execution crosses only the app-worker boundary.
-- `#22` is closed by handbook, procedural API, and orchestrator-tool documentation updates that remove the callback transport model from public workflow examples.
-- `#23` is closed by adding the `593-orchestrator-app-worker-boundary-smoke.phpt` PHPT showing a full remote-peer Spark-style dispatch path that proves handler names are not transported in durable state or peer events.
-- `#13` is closed by adding the `594-orchestrator-userland-terminal-state-visibility-contract.phpt` PHPT, which verifies that multi-step userland-backed local runs expose terminal visibility with `completed_step_count`, per-step `status` and `compensation_status`, and top-level `compensation` details for completed and failed outcomes.
-- `#14` is now closed by exposing `handler_readiness` in each `king_pipeline_orchestrator_get_run()` snapshot and `active_handler_contract` in `king_system_get_component_info('pipeline_orchestrator')['configuration']`, then proving readiness/missing-handler behavior and handler metadata surfacing in PHPT coverage.
-- `#15` is now closed by adding `595-orchestrator-local-userland-persisted-snapshot-contract.phpt`, which runs a three-step local userland pipeline (snap-prepare → snap-enrich → snap-finalize), then reads back the persisted run snapshot from a fresh process and asserts: status=`completed`, execution_backend=`local`, topology=`local_in_process`, all three steps completed, chained result and step-context delivery correct, `handler_readiness.requires_process_registration=false`, `handler_readiness.ready=true`, compensation not required.
-- `#16` is now closed by adding `596-orchestrator-file-worker-userland-reregistration-contract.phpt`, which dispatches a three-step pipeline to the file-worker queue, verifies callable names are not in durable state, then a clean worker process re-registers handlers and processes the entire run via `king_pipeline_orchestrator_worker_run_next()`, asserting `execution_backend=file_worker`, `topology=same_host_file_worker`, correct chained result, step-context delivery, `handler_boundary.contract=durable_tool_name_refs_only`, `handler_readiness.ready=true`, and queue cleanup; a subsequent reader process then confirms the persisted snapshot.
-- `#17` is now closed by adding `598-orchestrator-userland-controller-loss-restart-contract.phpt`, which proves restart recovery for both running and queued userland-backed runs after controller process loss (including handler re-registration, preserved queue/job phase, recovered backend/topology, result completion, and queue cleanup).
-- `#18` is now closed by adding two PHPTs: `591-orchestrator-remote-peer-userland-handler-contract.phpt` (remote-peer registered handler execution and missing-handler fail-closed behavior) and `597-orchestrator-remote-peer-userland-topology-failclosed-contract.phpt` (explicit fail-closed classification for unsupported remote-peer handler topology snapshots).
-- `#20` is now closed by aligning `PROJECT_ASSESSMENT.md` and `READYNESS_TRACKER.md` to the completed userland orchestrator surface state: no remaining caveat language on durable-vs-executable handler boundary claims, and explicit verification coverage across local, file-worker, and remote-peer userland paths is now reflected in both status documents.
+The expected shape is:
+- one reusable runtime/configuration model for secure storage and execution, rather than ad hoc per-pipeline arrays
+- explicit adapters for source, sink, checkpoint, execution, telemetry, and schema concerns
+- preservation of King object-store semantics such as integrity, expiry, multipart upload, range reads, recovery, and multi-backend topology instead of flattening them away behind a weaker ETL abstraction
+- a real end-to-end proof that a dataflow pipeline can run locally and over remote workers while keeping restart recovery, backpressure, and observability intact
+
+`*` Example code below is intentionally target-shape illustration for this
+section. It shows the kind of API and runtime model this block is trying to
+make real; it is not a claim that the exact userland surface already exists
+today.
+
+This block is intentionally mirrored here in full by explicit user request so
+the current working queue matches the intended `Flow PHP` implementation area.
+Where an item is still too broad for one repo-local change, split it before
+closing it.
+
+- [ ] `#1 Define the Flow PHP / ETL-on-King contract explicitly as a userland integration layer on top of King runtime services, not as hard-wired C-core pipeline semantics.`
+  done when: the repo documents a stable integration boundary that treats King as runtime substrate and `Flow PHP`-style ETL as userland orchestration/dataflow semantics, without silently shrinking existing King runtime guarantees
+- [ ] `#2 Define a reusable object-store / dataflow runtime configuration model for secure storage topology, encryption, integrity, lifecycle, upload, and replication policy.`
+  done when: one shared config object can describe primary plus replica/backups, credential sources, encryption mode, integrity policy, expiry/lifecycle policy, upload policy, and dataflow-facing checkpoint/temp-storage policy without every pipeline restating those concerns ad hoc
+- [ ] `#3 Implement a streaming source adapter contract on top of King object-store, MCP, HTTP, and other runtime-owned transports.`
+  done when: a dataflow source can consume records or blobs from King-backed transports with bounded-memory reads, resume-aware progress, and backpressure instead of requiring whole-object materialization first
+- [ ] `#4 Implement a streaming sink adapter contract on top of King object-store, MCP, HTTP, and other runtime-owned transports.`
+  done when: a dataflow sink can flush output through King-backed transports with bounded-memory writes, multipart/resumable upload where available, and explicit partial-failure handling
+- [ ] `#5 Implement a checkpoint-store contract for offsets, cursors, resumable progress, and replay boundaries on top of King persistence surfaces.`
+  done when: checkpoint state survives restart, can be versioned and resumed honestly, and does not require ETL callers to invent their own persistence layer outside King
+- [ ] `#6 Implement an execution-backend contract that can run dataflow pipelines over King local, file-worker, and remote-peer orchestrator backends.`
+  done when: a dataflow run can target the same verified King execution modes that the orchestrator already exposes, including restart-aware continuation and cancellation semantics
+- [x] `#7 Implement a telemetry adapter contract that maps pipeline runs, partitions, batches, retries, and failures into King tracing, metrics, and runtime status.`
+  done when: dataflow runs produce first-class King telemetry instead of opaque application logs, and pipeline observability preserves per-run and per-step identity across workers
+- [ ] `#8 Define stable error and retry taxonomy mapping between ETL/dataflow failures and King validation, runtime, transport, and backend failures.`
+  done when: callers can distinguish invalid input, missing data, transient transport failure, backend outage, quota pressure, and retryable checkpoint/resume conditions without reverse-engineering adapter-specific strings
+- [ ] `#9 Define partitioning, fan-out/fan-in, and backpressure semantics for distributed dataflow execution on top of King runtime primitives.`
+  done when: distributed dataflow can split work predictably, merge it honestly, and keep memory/throughput bounded under slow consumers or uneven partitions
+- [ ] `#10 Implement an object-store dataset bridge with bounded-memory streaming, range reads, multipart upload, integrity, expiry, and multi-backend topology semantics preserved.`
+  done when: `Flow PHP`-style datasets can read and write through King object-store without discarding the stronger runtime semantics that now exist for local, distributed, and real cloud backends
+- [ ] `#11 Implement schema / serialization bridges for JSON, CSV, NDJSON, IIBIN, Proto, and binary object payload workflows.`
+  done when: dataflow pipelines can move between structured row formats and King-native binary/runtime formats without re-implementing serialization glue in every job
+- [ ] `#12 Implement control-plane surfaces for start, pause, cancel, resume, inspect, and checkpoint-aware recovery of dataflow runs.`
+  done when: dataflow runs can be controlled through explicit runtime state instead of hidden process-local control flow, and restart-aware resume can pick up from persisted checkpoints
+- [ ] `#13 Validate a real end-to-end ETL/dataflow pipeline on top of King runtime services under local and remote-worker execution.`
+  done when: the repo proves one non-trivial pipeline with secure object-store config, checkpointing, streaming source/sink adapters, telemetry, and orchestrated remote execution instead of only disconnected adapter slices
+
+Examples `*`
+
+```php
+<?php
+
+use King\ObjectStore\RuntimeConfig;
+use King\ObjectStore\Backend\{S3, AzureBlob};
+use King\ObjectStore\Encryption\{ServerSide, ClientSide};
+use King\ObjectStore\{
+    IntegrityPolicy,
+    LifecyclePolicy,
+    ReplicationPolicy,
+    UploadPolicy
+};
+
+$store = new RuntimeConfig(
+    primary: new S3(
+        bucket: 'etl-primary',
+        endpoint: 'https://fsn1.your-s3.example',
+        credentials: 'env:KING_S3_PRIMARY',
+        encryption: new ServerSide('AES256'),
+    ),
+    replicas: [
+        new AzureBlob(
+            container: 'etl-replica',
+            endpoint: 'https://etl.blob.core.windows.net',
+            credentials: 'env:KING_AZURE_REPLICA',
+            encryption: new ClientSide('vault:etl-replica-key'),
+        ),
+    ],
+    integrity: new IntegrityPolicy(
+        algorithm: 'sha256',
+        verifyOnRead: true,
+        verifyOnWrite: true,
+    ),
+    lifecycle: new LifecyclePolicy(
+        ttlSeconds: 86400,
+        purgeExpired: true,
+    ),
+    replication: new ReplicationPolicy(
+        mode: 'async',
+        minCopiesRequired: 2,
+    ),
+    uploads: new UploadPolicy(
+        resumable: true,
+        chunkSizeBytes: 8 * 1024 * 1024,
+        parallelParts: 4,
+    ),
+);
+```
+
+```php
+<?php
+
+use Flow\ETL\Flow;
+use Flow\ETL\Adapter\King\KingRuntime;
+
+$king = new KingRuntime(objectStore: $store);
+
+Flow::extract($king->objectStore()->source('raw/orders/*.ndjson'))
+    ->withCheckpointStore(
+        $king->objectStore()->checkpointStore('checkpoints/orders-import')
+    )
+    ->map(fn (array $row) => [
+        'id' => $row['id'],
+        'country' => strtoupper($row['country']),
+        'total' => (float) $row['total'],
+    ])
+    ->load(
+        $king->objectStore()->sink('warehouse/orders/{country}/part-{partition}.parquet')
+    )
+    ->withTelemetry(
+        $king->telemetry()->pipeline(
+            serviceName: 'orders-etl',
+            traceName: 'nightly-orders-import'
+        )
+    )
+    ->run(
+        $king->executionBackend(
+            mode: 'remote_peer',
+            workers: 12,
+            maxConcurrency: 8,
+            autoscaling: true
+        )
+    );
+```
 
 ## Deferred Previous Batch
 - [x] `#1 Validate autoscaling CPU / memory / RPS / queue / latency signals under real operation.`
@@ -107,24 +209,8 @@
 
 ## Notes
 
-- The previous telemetry wave is exhausted; its closed leaves now live in `PROJECT_ASSESSMENT.md`.
-- This new active batch is an explicit user-priority override because current application-workflow work now depends on a real public userland orchestrator surface.
-- The new active batch takes the next `20` leaves because `ISSUES.md` is organized as a `20`-issue execution batch and the user explicitly requested that this gap move ahead of the existing autoscaling wave.
-- This userland orchestration batch is grounded in the open userland-facing integration direction in `READYNESS_TRACKER.md` section `Q`, but is narrowed here to the immediately blocking public orchestrator gap around application tool execution and recovery.
-- Leaf `#1` is now closed by the contract-definition pass across the public orchestrator docs, procedural index, stub docblocks, and root status documents.
-- Leaf `#2` is now closed by the identity/re-registration pass across the public orchestrator docs, procedural index, stub docblocks, and root status documents.
-- Leaf `#3` is now closed by the fail-closed pass across the public orchestrator docs, procedural index, stub docblocks, and root status documents.
-- Leaf `#4` is now closed by the public handler-registration API pass across the extension surface, request-local runtime registry, PHPT proof, and root status documents.
-- Leaf `#7` is now closed by persisting a queued-run `handler_boundary` snapshot with durable tool-name references plus step indexes only, surfacing it through persisted run inspection, and adding PHPT proof that executable PHP handler callables are not serialized into orchestrator state.
-- Leaf `#8` is now closed by rehydrating that persisted `handler_boundary` before file-worker claim or claimed-run recovery, skipping userland-backed runs when the current worker process has not re-registered the required handlers, and adding PHPT proof for both queued and recovered claimed readiness gates.
-- Leaf `#9` is now closed by executing boundary-marked userland-backed file-worker steps through re-registered handlers, persisting the latest payload plus completed-step progress after each completed step, and adding PHPT proof that replacement workers resume from honest file-worker progress after worker loss instead of replaying already-completed userland-backed work.
-- Leaf `#10` is now closed by persisting the same durable `handler_boundary` for remote-peer runs, sending only tool-name references plus durable tool configs across the TCP request, executing boundary-marked remote steps through peer-local handlers, failing closed when the peer lacks a required handler, and adding PHPT plus failover-harness proof that controller restart does not pretend old PHP callables crossed the host boundary.
-- Leaf `#11` is now closed by classifying userland-backed failures explicitly across local, file-worker, and remote-peer execution, preserving `validation`, `runtime`, `timeout`, `backend`, and `missing_handler` at honest step scope plus run-scope `cancelled`, and adding targeted PHPT proof for each category and scope.
-- Leaf `#12` is now closed by propagating `cancel`, `timeout_budget_ms`, and `deadline_budget_ms` into local, file-worker, and remote-peer userland handler context whenever the public contract claims it, with PHPT assertions proving presence and type stability on successful runs.
-- Leaf `#21` is now closed by defining the workflow execution boundary as process-local app-worker callback execution with durable orchestrator state storing only tool-name/config snapshots.
-- Leaf `#22` is now closed by aligning public docs and handbooks with the same durable-state-versus-executable-handler boundary and removing callback-transport assumptions from workflow examples.
-- Leaf `#23` is now closed by adding the app-worker boundary smoke PHPT that verifies remote-peer dispatch does not persist handler callback names in state or peer execution payloads.
-- Leaf `#19` is now closed by adding explicit restart-duty and unsupported-form documentation in the handbook and procedural API, including `pipeline-orchestrator.md`, `11-pipeline-orchestrator-tools/README.md`, and `procedural-api.md`.
-- Leaf `#1` in the deferred autoscaling batch is now closed by adding `599-autoscaling-real-operation-signal-contract.phpt`, which runs a live HTTP/1 request harness that measures CPU time, memory usage, request rate, connection count, response latency, and backlog depth during real request work, publishes those `autoscaling.*` gauges, and proves the next monitor tick surfaces all six live signals plus pressure/relief decisions without a stub-only shortcut.
-- The autoscaling / provisioning / readiness wave remains visible below as the deferred previous batch and resumes once the current userland orchestration batch is exhausted.
+- The active batch is now the full `Flow PHP` / ETL integration block imported from `READYNESS_TRACKER.md` section `Q` by explicit user request.
+- The imported block is kept complete here so the next working area is visible in one place; broad items still need splitting before individual implementation/verification passes when necessary.
+- The previous userland orchestrator wave is exhausted and its closed work now lives in `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, and `main`.
+- The autoscaling / provisioning / readiness wave remains visible below as the deferred previous batch and resumes once the current `Flow PHP` / ETL batch is exhausted or reprioritized.
 - If a task is not listed here, it is not the current repo-local execution item.

@@ -473,6 +473,9 @@ tracker section. It shows the kind of API and runtime model this block is
 trying to make real; it is not a claim that the exact userland surface already
 exists today.
 
+The active repo-local execution breakdown for this block now lives in
+`ISSUES.md`.
+
 - [ ] Define the `Flow PHP` / ETL-on-King contract explicitly as a userland integration layer on top of King runtime services, not as hard-wired C-core pipeline semantics
   done when: the repo documents a stable integration boundary that treats King as runtime substrate and `Flow PHP`-style ETL as userland orchestration/dataflow semantics, without silently shrinking existing King runtime guarantees
 - [ ] Define a reusable object-store / dataflow runtime configuration model for secure storage topology, encryption, integrity, lifecycle, upload, and replication policy
