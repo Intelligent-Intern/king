@@ -28,6 +28,20 @@ function king_system_readiness_wait_until_ready_for_orchestrator(int $maxSeconds
     throw new RuntimeException('system did not become ready before orchestrator readiness gate scenario');
 }
 
+function king_system_readiness_wait_until_stopped_for_orchestrator(int $maxSeconds = 8): array
+{
+    for ($i = 0; $i < $maxSeconds; $i++) {
+        $status = king_system_get_status();
+        if (($status['initialized'] ?? true) === false) {
+            return $status;
+        }
+
+        sleep(1);
+    }
+
+    throw new RuntimeException('system did not stop after orchestrator shutdown request');
+}
+
 var_dump(king_system_init(['component_timeout_seconds' => 1]));
 king_system_readiness_wait_until_ready_for_orchestrator();
 var_dump(king_pipeline_orchestrator_register_tool('summarizer', [
@@ -85,7 +99,7 @@ $run = king_pipeline_orchestrator_get_run($info['configuration']['last_run_id'])
 var_dump($run['status']);
 var_dump(($run['result']['handled_by'] ?? null) === 'summarizer');
 var_dump(king_system_shutdown());
-var_dump(king_system_get_status()['initialized']);
+var_dump(king_system_readiness_wait_until_stopped_for_orchestrator()['initialized']);
 ?>
 --EXPECTF--
 bool(true)

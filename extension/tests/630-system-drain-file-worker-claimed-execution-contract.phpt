@@ -112,6 +112,20 @@ function drain_wait_until_ready(int $maxAttempts = 80): void
     throw new RuntimeException('worker runtime did not become ready before first claim');
 }
 
+function drain_wait_until_stopped(int $maxAttempts = 80): void
+{
+    for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+        $status = king_system_get_status();
+        if (($status['initialized'] ?? true) === false) {
+            return;
+        }
+
+        usleep(100000);
+    }
+
+    throw new RuntimeException('worker runtime did not stop after shutdown request');
+}
+
 function drain_prepare_handler(array $context): array
 {
     $input = $context['input'] ?? null;
@@ -227,6 +241,7 @@ $payload['queued_files_final'] = count(glob(ini_get('king.orchestrator_worker_qu
 $payload['claimed_files_final'] = count(glob(ini_get('king.orchestrator_worker_queue_path') . '/claimed-*.job') ?: []);
 $payload['empty_after_second'] = king_pipeline_orchestrator_worker_run_next();
 $payload['shutdown'] = king_system_shutdown();
+drain_wait_until_stopped();
 $payload['initialized_after_shutdown'] = king_system_get_status()['initialized'];
 
 echo json_encode($payload), "\n";

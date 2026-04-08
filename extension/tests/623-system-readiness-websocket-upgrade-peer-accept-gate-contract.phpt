@@ -35,6 +35,20 @@ function king_system_readiness_wait_until_ready_for_websocket(int $maxSeconds = 
     throw new RuntimeException('system did not become ready before websocket readiness gate scenario');
 }
 
+function king_system_readiness_wait_until_stopped_for_websocket(int $maxSeconds = 8): array
+{
+    for ($i = 0; $i < $maxSeconds; $i++) {
+        $status = king_system_get_status();
+        if (($status['initialized'] ?? true) === false) {
+            return $status;
+        }
+
+        sleep(1);
+    }
+
+    throw new RuntimeException('system did not stop after websocket shutdown request');
+}
+
 $blockedUpgrade = [];
 $readyStatus = [];
 $acceptExceptionClass = '';
@@ -102,7 +116,7 @@ var_dump($readyStatus['lifecycle']);
 var_dump($readyStatus['admission']['websocket_upgrades']);
 var_dump($readyStatus['admission']['websocket_peer_accepts']);
 var_dump(king_system_shutdown());
-var_dump(king_system_get_status()['initialized']);
+var_dump(king_system_readiness_wait_until_stopped_for_websocket()['initialized']);
 ?>
 --EXPECTF--
 bool(true)
