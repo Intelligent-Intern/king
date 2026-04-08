@@ -18,7 +18,7 @@ Use the repository docs like this:
   Single moving roadmap and execution queue.
 - `READYNESS_TRACKER.md`
   Long-form completion tracker and closure reference.
-- `CONTRIBUTE.md`
+- `CONTRIBUTE`
   Contribution and workflow rules.
 - `stubs/king.php`
   Public PHP signature surface.
@@ -35,7 +35,7 @@ multiple docs.
 
 Use it with these rules:
 
-- read `CONTRIBUTE.md` before starting or replenishing any `20`-issue batch
+- read `CONTRIBUTE` before starting or replenishing any `20`-issue batch
 - only work items that are currently open in `ISSUES.md`
 - do not pull new items from `READYNESS_TRACKER.md` into `ISSUES.md` unless the user explicitly asks for a new `20`-issue batch
 - when the current batch is exhausted, stop and wait instead of self-refilling the queue

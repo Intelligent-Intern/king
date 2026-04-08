@@ -22,10 +22,10 @@ require_line() {
 require_line "${ROOT_DIR}/infra/scripts/container-smoke-matrix.sh" \
     "PHP_VERSIONS_CSV=\"\${PHP_VERSIONS:-${EXPECTED_CSV}}\""
 
-require_line "${ROOT_DIR}/CONTRIBUTE.md" \
+require_line "${ROOT_DIR}/CONTRIBUTE" \
     "./infra/scripts/container-smoke-matrix.sh --php-versions ${EXPECTED_CSV}"
 
-require_line "${ROOT_DIR}/CONTRIBUTE.md" \
+require_line "${ROOT_DIR}/CONTRIBUTE" \
     "./infra/scripts/php-version-docker-matrix.sh --php-versions ${EXPECTED_CSV}"
 
 ruby - "${ROOT_DIR}" "${EXPECTED_CSV}" <<'RUBY'

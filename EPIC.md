@@ -99,7 +99,7 @@ Use the root documents like this:
   single moving roadmap and execution queue
 - `PROJECT_ASSESSMENT.md`
   verified implementation state and current caveats
-- `CONTRIBUTE.md`
+- `CONTRIBUTE`
   workflow and change discipline
 
 ## When To Change This File
