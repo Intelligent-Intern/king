@@ -42,7 +42,7 @@ array(10) {
 }
 string(2) "ok"
 string(2) "v1"
-string(11) "0.2.1-alpha"
+string(10) "1.0.0-beta"
 bool(true)
 bool(true)
 bool(true)
