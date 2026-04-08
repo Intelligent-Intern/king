@@ -251,6 +251,13 @@ it gives you a better way to move job state, policies, and events than loose
 arrays or text blobs. In storage-backed systems, it gives you payloads that are
 compact enough to keep hot and explicit enough to evolve safely.
 
+The current repo-local Flow PHP / ETL bridge now also wraps this same surface
+through `ProtoSchemaCodec` and `IibinSchemaCodec` in
+[Flow PHP and ETL on King](./flow-php-etl.md), so ETL jobs can move between
+row-shaped records and King-native schema-defined binary payloads without each
+job hand-wiring `king_proto_encode()`, `king_proto_decode()`,
+`King\IIBIN::encode()`, and `King\IIBIN::decode()` from scratch.
+
 This is why the IIBIN chapter belongs near the center of the manual. It is one
 of the pieces that lets the rest of the platform share one data language.
 

@@ -245,6 +245,12 @@ Read [IIBIN](./iibin.md) first. This group is the procedural surface for schema
 registration, enum registration, binary encoding, binary decoding, and registry
 inspection.
 
+The current repo-local Flow PHP / ETL serialization bridge also wraps these
+same functions through the schema codecs documented in
+[Flow PHP and ETL on King](./flow-php-etl.md), so userland dataflow code does
+not need to rebuild `king_proto_encode()` and `king_proto_decode()` plumbing
+for every job.
+
 | Function | What it does | Read first |
 | --- | --- | --- |
 | `king_proto_get_defined_schemas()` | Lists the currently defined schemas. | [IIBIN](./iibin.md) |
