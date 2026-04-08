@@ -109,17 +109,17 @@ SOURCE_DATE_EPOCH="$(resolve_source_epoch)"
 
 mkdir -p "${STAGE_ROOT}"
 
-    tar \
-        --exclude-vcs \
-        --exclude='./dist' \
-        --exclude='./compat-artifacts' \
-        --exclude='./.cargo' \
-        --exclude='./extension/build' \
-        --exclude='./extension/quiche/target' \
-        --exclude='./extension/tests/http3_ticket_server/target' \
-        --exclude='./extension/modules' \
-        --exclude='./extension/Makefile' \
-        --exclude='./extension/config.cache' \
+tar \
+    --exclude-vcs \
+    --exclude='./dist' \
+    --exclude='./compat-artifacts' \
+    --exclude='./.cargo' \
+    --exclude='./extension/build' \
+    --exclude='./extension/quiche/target' \
+    --exclude='./extension/tests/http3_ticket_server/target' \
+    --exclude='./extension/modules' \
+    --exclude='./extension/Makefile' \
+    --exclude='./extension/config.cache' \
     --exclude='./extension/config.log' \
     --exclude='./extension/config.status' \
     --exclude='./quiche/target' \
