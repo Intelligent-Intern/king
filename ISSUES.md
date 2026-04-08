@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#2 Define component-level readiness reasons and blocker semantics in the system runtime status surface.`
+- `#3 Expose aggregate readiness blockers and admission booleans for the coordinated runtime.`
 
 ## Active Executable Items
 
@@ -214,7 +214,7 @@ By explicit user request, this batch defers repo-doc and
 `READYNESS_TRACKER.md` closeout until the whole visible block is complete.
 
 - [x] `#1 Define and expose the canonical aggregate system lifecycle states through king_system_get_status().`
-- [ ] `#2 Define component-level readiness reasons and blocker semantics in the system runtime status surface.`
+- [x] `#2 Define component-level readiness reasons and blocker semantics in the system runtime status surface.`
 - [ ] `#3 Expose aggregate readiness blockers and admission booleans for the coordinated runtime.`
 - [ ] `#4 Gate king_system_process_request() and new HTTP listener accepts on aggregate readiness.`
 - [ ] `#5 Gate new WebSocket upgrades and accepted peers on aggregate readiness.`

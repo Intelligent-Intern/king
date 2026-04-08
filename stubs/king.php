@@ -1471,6 +1471,8 @@ namespace {
      *   components: array<string,array{
      *     status:string,
      *     ready:bool,
+     *     readiness_reason:string,
+     *     readiness_blocking:bool,
      *     requests_handled:int,
      *     errors_encountered:int,
      *     last_health_check:int,
