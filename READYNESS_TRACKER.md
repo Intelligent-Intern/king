@@ -16,6 +16,7 @@ Status note:
 - Recent handler-registration API closure: the runtime now exposes `king_pipeline_orchestrator_register_handler()` as a real process-local binding surface over previously registered durable tool names, with explicit PHPT proof for restart-time re-registration against recovered tool definitions.
 - Recent userland handler docs closure: the handbook workflow guide and procedural API now include explicit restart-duty checklists for local controllers, file workers, and remote peers, with unsupported-form behavior spelled out at each boundary.
 - Recent Flow PHP / ETL contract closure: the handbook now explicitly fixes ETL-on-King as a userland integration layer over object-store, orchestration, telemetry, transport, and runtime-configuration services instead of a hard-wired C-core ETL semantics claim, while keeping target-shape examples honest about what is not implemented yet.
+- Recent Flow PHP runtime-config closure: the handbook now also defines the target-shape reusable object-store/dataflow runtime config wrapper for topology, credential references, encryption, integrity, lifecycle, upload policy, and checkpoint/temp-storage policy above the existing runtime keys and object-store APIs, without pretending that the exact helper classes are already exported today.
 - Recent local handler-shape closure: the local userland execution path now passes structured `input`, `tool`, `run`, and `step` context into handlers and enforces an explicit `['output' => <array payload>]` result contract instead of a folklore bare-array return.
 - Recent userland no-caveat closure: the userland orchestrator surface no longer carries outstanding caveated claims in project status documents; durable tool definitions and configs are now the only persisted contract across boundaries, while executable handlers remain process-local and are re-registered before execution or resume on every local, file-worker, and remote-peer boundary.
 - Recent queued handler-boundary closure: queued file-worker runs now persist an explicit `handler_boundary` snapshot with only durable tool-name references plus step indexes, and targeted PHPT proof now verifies that executable PHP handler callables themselves are not serialized into orchestrator state.
@@ -479,7 +480,7 @@ The active repo-local execution breakdown for this block now lives in
 
 - [x] Define the `Flow PHP` / ETL-on-King contract explicitly as a userland integration layer on top of King runtime services, not as hard-wired C-core pipeline semantics
   done when: the repo documents a stable integration boundary that treats King as runtime substrate and `Flow PHP`-style ETL as userland orchestration/dataflow semantics, without silently shrinking existing King runtime guarantees
-- [ ] Define a reusable object-store / dataflow runtime configuration model for secure storage topology, encryption, integrity, lifecycle, upload, and replication policy
+- [x] Define a reusable object-store / dataflow runtime configuration model for secure storage topology, encryption, integrity, lifecycle, upload, and replication policy
   done when: one shared config object can describe primary plus replica/backups, credential sources, encryption mode, integrity policy, expiry/lifecycle policy, upload policy, and dataflow-facing checkpoint/temp-storage policy without every pipeline restating those concerns ad hoc
 - [ ] Implement a streaming source adapter contract on top of King object-store, MCP, HTTP, and other runtime-owned transports
   done when: a dataflow source can consume records or blobs from King-backed transports with bounded-memory reads, resume-aware progress, and backpressure instead of requiring whole-object materialization first
@@ -513,9 +514,11 @@ use King\ObjectStore\RuntimeConfig;
 use King\ObjectStore\Backend\{S3, AzureBlob};
 use King\ObjectStore\Encryption\{ServerSide, ClientSide};
 use King\ObjectStore\{
+    CheckpointPolicy,
     IntegrityPolicy,
     LifecyclePolicy,
     ReplicationPolicy,
+    TemporaryStoragePolicy,
     UploadPolicy
 };
 
@@ -551,6 +554,16 @@ $store = new RuntimeConfig(
         resumable: true,
         chunkSizeBytes: 8 * 1024 * 1024,
         parallelParts: 4,
+    ),
+    checkpoints: new CheckpointPolicy(
+        objectPrefix: 'checkpoints/orders-import',
+        resumeMode: 'latest_committed',
+        retainVersions: 5,
+    ),
+    temporaryStorage: new TemporaryStoragePolicy(
+        objectPrefix: 'tmp/orders-import',
+        cleanup: 'on_success',
+        maxBytes: 20 * 1024 * 1024 * 1024,
     ),
 );
 ```
