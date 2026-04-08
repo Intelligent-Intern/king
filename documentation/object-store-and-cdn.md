@@ -1029,6 +1029,12 @@ instead of scattering them through pipeline code, read
 target-shape wrapper above these real storage families without pretending the
 extension already exports every helper class shown there.
 
+That same chapter now also documents the repo-local `ObjectStoreByteSource`
+userland helper, which consumes object payloads through repeated
+`king_object_store_get_to_stream()` byte ranges and exports a serializable
+cursor with `resume_strategy=range_offset` instead of flattening the read path
+back into whole-object strings.
+
 ## The Questions Operators Should Ask
 
 When operators evaluate a storage setup, they should ask the same questions the
