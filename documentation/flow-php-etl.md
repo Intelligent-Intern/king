@@ -312,6 +312,55 @@ The current PHPT proof covers:
 - MCP upload failure, retained replay state, and later retry success:
   `605-flow-php-mcp-sink-contract.phpt`
 
+## Repo-Local Object-Store Dataset Bridge Contract
+
+The repository now also carries one real userland object-store dataset bridge
+under [`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
+[`../userland/flow-php/src/ObjectStoreDataset.php`](../userland/flow-php/src/ObjectStoreDataset.php).
+
+This piece exists because plain byte sources and sinks are not yet the full
+dataset story. An ETL layer still needs one honest handle that can describe a
+dataset, open bounded-memory range reads, and write through the same stronger
+object-store semantics that King already exposes underneath.
+
+The current dataset bridge has five shared pieces:
+
+- `ObjectStoreDataset`, which keeps one object id plus chunk budget together
+  and exposes `describe()`, `source()`, and `sink()` on top of the ordinary
+  object-store runtime
+- `ObjectStoreDatasetDescriptor`, which preserves content length, `etag`,
+  version, integrity, expiry, object type, cache policy, and the raw metadata
+  array instead of collapsing a dataset down to only bytes
+- `ObjectStoreDatasetTopology`, which keeps local, distributed, and cloud
+  backend presence flags, backup state, replication status, and distributed
+  peer count explicit
+- `ObjectStoreDatasetSource`, which opens bounded-memory object-store reads for
+  the whole dataset or a caller-selected byte window with
+  `resume_strategy=range_offset`
+- `ObjectStoreDatasetWriter`, which keeps the existing `ObjectStoreByteSink`
+  behavior available through the dataset handle, including staged local replay
+  on non-cloud backends and provider-native resumable multipart upload sessions
+  on cloud primaries
+
+The important semantic point is that the bridge keeps stronger runtime
+behavior visible instead of hiding it:
+
+- range reads stay byte-windowed and resumable instead of forcing whole-object
+  materialization before ETL code can start
+- cloud dataset writes still preserve resumable multipart upload-session state
+  instead of pretending every dataset write is just one opaque string put
+- dataset metadata still carries integrity hashes, expiry, version, cache, and
+  topology state so later ETL stages can reason about backup and residency
+  honestly across local, distributed, and real cloud backends
+
+The current PHPT proof covers:
+
+- hybrid local-plus-distributed dataset descriptors plus bounded range reads:
+  `615-flow-php-object-store-dataset-bridge-local-contract.phpt`
+- cloud GCS resumable multipart upload, resumed completion, and streamed
+  dataset readback through the bridge:
+  `616-flow-php-object-store-dataset-bridge-cloud-contract.phpt`
+
 ## Repo-Local Checkpoint Store Contract
 
 The repository now also carries one real userland checkpoint-store contract
