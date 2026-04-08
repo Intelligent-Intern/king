@@ -187,19 +187,10 @@ Flow::extract($king->objectStore()->source('raw/orders/*.ndjson'))
     );
 ```
 
-## Deferred Previous Batch
-- [x] `#1 Validate autoscaling CPU / memory / RPS / queue / latency signals under real operation.`
-- [ ] `#2 Validate autoscaling drain-before-delete under real live connections.`
-- [ ] `#3 Validate autoscaling scale-up policy limits under burst load.`
-- [ ] `#4 Validate autoscaling scale-down policy limits under active traffic.`
-- [ ] `#5 Finalize autoscaling metrics and decision explanations.`
-- [ ] `#20 Define system-wide readiness transitions across startup, drain, and autoscaling boundaries.`
-
 ## Notes
 
 - The active batch is now the full `Flow PHP` / ETL integration block imported from `READYNESS_TRACKER.md` section `Q` by explicit user request.
 - The imported block is kept complete here so the next working area is visible in one place; broad items still need splitting before individual implementation/verification passes when necessary.
 - Closed leaves inside the visible blocks stay in `ISSUES.md` as `[x]` until the release cut instead of being deleted early.
 - The previous userland orchestrator wave is exhausted and its closed work now lives in `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, and `main`.
-- The deferred block now keeps only the still-relevant autoscaling/readiness leaves; the Hetzner/provider wave stays open in `READYNESS_TRACKER.md` instead of cluttering the active queue here.
 - If a task is not listed here, it is not the current repo-local execution item.
