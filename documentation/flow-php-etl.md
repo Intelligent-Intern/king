@@ -358,6 +358,56 @@ The current PHPT proof covers:
 - stale-writer conflict reporting through real object-store preconditions:
   `607-flow-php-checkpoint-store-conflict-contract.phpt`
 
+## Repo-Local Execution Backend Contract
+
+The repository now also carries one real userland execution-backend contract
+under [`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
+[`../userland/flow-php/src/ExecutionBackend.php`](../userland/flow-php/src/ExecutionBackend.php).
+
+This piece exists because bounded-memory transport adapters and durable
+checkpoints still do not answer one operational question: which King execution
+boundary owns the run right now, and what does resume or cancel honestly mean
+on that boundary.
+
+The current contract keeps that answer explicit instead of flattening it into
+one pretend helper method:
+
+- `ExecutionBackendCapabilities` surfaces the active backend, topology scope,
+  submission mode, continuation mode, claim mode, cancellation mode, and the
+  controller-versus-executor handler duties for that backend
+- `ExecutionRunSnapshot` wraps the persisted orchestrator snapshot instead of
+  inventing a separate ETL-only run registry
+- `OrchestratorExecutionBackend` keeps durable tool registration,
+  process-local handler registration, start, resume, claim, inspect, and
+  cancel on top of the already-proven orchestrator runtime
+
+The important behavior is backend-specific on purpose:
+
+- `local` runs execute immediately after controller-side tool plus handler
+  registration, and restart-aware continuation stays on
+  `continueRun($runId)` against the persisted local snapshot
+- `file_worker` runs queue through `start()`, but userland-backed queued steps
+  still need controller-side handler registration first so the persisted
+  `handler_boundary` can honestly name which tool refs a worker must satisfy
+- `file_worker` workers re-register the executable handlers locally and use
+  `claimNext()` for both fresh queued work and recovered claimed work; a
+  queued run cancelled before claim is already terminal, so the later worker
+  claim returns `false` instead of pretending there is still a live in-flight
+  cancellation window
+- `remote_peer` runs execute immediately from the controller side, but the
+  peer still owns the executable handlers; restart-aware continuation re-sends
+  only the durable boundary plus tool config through `continueRun($runId)`
+  without claiming controller PHP callables crossed the network
+
+The current PHPT proof covers:
+
+- local controller restart and persisted resume through the wrapper contract:
+  `608-flow-php-execution-backend-local-contract.phpt`
+- file-worker queue submission, worker claim, and pre-claim cancellation:
+  `609-flow-php-execution-backend-file-worker-contract.phpt`
+- remote-peer controller loss, durable boundary replay, and resumed completion:
+  `610-flow-php-execution-backend-remote-peer-contract.phpt`
+
 ## What This Chapter Does Not Claim Yet
 
 This chapter is a contract statement, not a claim that every adapter in that

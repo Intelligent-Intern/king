@@ -410,7 +410,9 @@ The procedural surface is strongest when the duties are explicit:
   registrations in the same controller process for each tool that will execute in
   that run.
 - File-worker execution requires durable tool definitions in the controller for
-  `dispatch()`, and re-registrations in every worker process before
+  `dispatch()`, controller-side handler registration when the queued run is
+  meant to carry a userland `handler_boundary`, and re-registrations in every
+  worker process before
   `worker_run_next()`, including restart after worker replacement.
 - Remote-peer execution requires the controller to persist only durable boundary and
   tool config data; the peer must independently register tool definitions and
@@ -423,6 +425,12 @@ The procedural surface is strongest when the duties are explicit:
 If these duties are not met, the run is fail-closed by design. Missing or
 unsupported handler readiness is surfaced through explicit handler readiness
 classification and does not fallback to stale callable assumptions.
+
+The repo-local Flow PHP helper at `userland/flow-php/src/ExecutionBackend.php`
+now wraps this exact split with `ExecutionBackendCapabilities`,
+`OrchestratorExecutionBackend::continueRun()`, and
+`OrchestratorExecutionBackend::claimNext()` instead of pretending one hidden
+resume path exists for every backend.
 
 ## Error Buffers And Reading Order
 
