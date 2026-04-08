@@ -1476,7 +1476,11 @@ namespace {
      *     requests_handled:int,
      *     errors_encountered:int,
      *     last_health_check:int,
-     *     up_for_seconds:int
+     *     up_for_seconds:int,
+     *     startup_order:int,
+     *     startup_dependencies:list<string>,
+     *     startup_pending_dependencies:list<string>,
+     *     startup_ready_to_start:bool
      *   }>,
      *   components_ready:int,
      *   components_draining:int,
@@ -1495,6 +1499,22 @@ namespace {
      *     target_components:list<string>
      *   },
      *   allowed_lifecycle_transitions:list<string>,
+     *   startup: array{
+     *     catalog_component_count:int,
+     *     ordered_components:list<string>,
+     *     started_components:list<string>,
+     *     pending_components:list<string>,
+     *     ready_to_start_components:list<string>,
+     *     blocked_components: array<string,list<string>>,
+     *     components: array<string,array{
+     *       order:int,
+     *       dependencies:list<string>,
+     *       pending_dependencies:list<string>,
+     *       status_visible:bool,
+     *       started:bool,
+     *       ready_to_start:bool
+     *     }>
+     *   },
      *   admission: array{
      *     process_requests:bool,
      *     http_listener_accepts:bool,
