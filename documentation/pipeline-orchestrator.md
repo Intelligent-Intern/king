@@ -387,6 +387,15 @@ surfaces backend capabilities and keeps `continueRun()` separate from
 `claimNext()` so userland ETL code does not accidentally collapse local,
 file-worker, and remote-peer control paths into one inaccurate abstraction.
 
+The repo-local Flow PHP control-plane helper under
+`userland/flow-php/src/ControlPlane.php` builds one layer above that. It keeps
+logical dataflow-run state on the ordinary object-store path, maps file-worker
+pause or cancel onto the persisted queued-run cancel surface, and keeps local
+or remote immediate runs inspectable by persisting the predicted sequential
+`run-N` identity before the blocking start call returns. That helper does not
+invent new backend semantics; it composes the existing orchestrator lifecycle
+and checkpoint boundaries into one ETL-facing control surface.
+
 ## What A Pipeline Looks Like
 
 A pipeline is an ordered array of step definitions. At minimum, each step names
@@ -587,6 +596,12 @@ route. The tree now also carries one reusable failover harness that proves
 controller loss, file-worker loss, and remote-peer return through the same
 persisted-state contract instead of relying on one-off scenario-specific
 recovery tests each time.
+
+The repo-local Flow PHP control-plane helper builds directly on this split. It
+uses run-level orchestrator continuation when the run is still the same
+persisted `local` or `remote_peer` attempt, and only starts a replacement run
+when its own stored control state says pause, cancel, or failure has crossed
+into checkpoint-driven or persisted-input recovery.
 
 ## Logging Configuration
 
