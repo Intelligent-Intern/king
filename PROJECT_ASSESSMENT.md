@@ -1,6 +1,6 @@
 # King Project Assessment
 
-> Stand: 2026-04-04
+> Stand: 2026-04-08
 > Scope: verified repo-local v1 state inside this repository
 > This file records what is actually verified now.
 > `README.md` stays product-level.
@@ -19,8 +19,8 @@ surfaces inside the local tree. They are now concentrated in the deeper
 control-plane, telemetry, and fleet-behavior proof still listed below.
 
 The active explicitly requested `20`-issue repo-local batch in `ISSUES.md` is
-in progress and currently centered on the userland orchestrator execution and
-recovery surface needed for application workflows.
+in progress and currently centered on the `Flow PHP` / ETL integration
+boundary on top of the existing King runtime services.
 
 ## Verified Baseline Snapshot
 
@@ -116,6 +116,7 @@ The current tree already proves:
 - The new app-worker boundary smoke proof (`593-orchestrator-app-worker-boundary-smoke.phpt`) demonstrates a Spark-style two-step remote-peer dispatch path where durable `handler_boundary` state contains only tool names/config and peer/controller snapshots never carry callback names, confirming the contract at execution boundary and restart boundary for workflow examples.
 - the userland orchestrator surface is now explicitly no longer caveated in the project-state documents: public contract text, implementation behavior, and PHPT proof consistently agree that durable state is tool-name/config based and executable handler callbacks remain process-local, with process-local re-registration required at each execution boundary after restart or host process handoff
 - the public handbook and procedural API now explicitly document handler restart duties and unsupported forms for userland-backed orchestrator execution: local controllers, file workers, and remote peers each must re-register executable handlers in-process before execution or resume, and unsupported non-rehydratable forms are documented as explicit fail-closed cases.
+- the public handbook now explicitly defines `Flow PHP` / ETL-on-King as a userland integration layer over King runtime services instead of a hard-wired C-core pipeline semantics claim, with storage, execution, telemetry, transport, and recovery guarantees preserved as the stronger underlying contract for later adapter work
 
 ## What Is Still Not Finished
 
