@@ -24,6 +24,10 @@ WebSocket might never call the object store. A data-heavy pipeline may care
 about the object store, IIBIN, telemetry, and orchestration far more than about
 the server listener surface.
 
+For that shape, also read [Flow PHP and ETL on King](./flow-php-etl.md). That
+chapter defines the contract between userland ETL semantics and the runtime
+services this reference exposes.
+
 ```mermaid
 flowchart TD
     A[Procedural API] --> B[Transport and HTTP]

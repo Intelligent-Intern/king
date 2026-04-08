@@ -15,6 +15,7 @@ Status note:
 - Recent fail-closed closure: unsupported non-rehydratable handler forms are now documented as explicit fail-closed cases instead of an implied future serialization story.
 - Recent handler-registration API closure: the runtime now exposes `king_pipeline_orchestrator_register_handler()` as a real process-local binding surface over previously registered durable tool names, with explicit PHPT proof for restart-time re-registration against recovered tool definitions.
 - Recent userland handler docs closure: the handbook workflow guide and procedural API now include explicit restart-duty checklists for local controllers, file workers, and remote peers, with unsupported-form behavior spelled out at each boundary.
+- Recent Flow PHP / ETL contract closure: the handbook now explicitly fixes ETL-on-King as a userland integration layer over object-store, orchestration, telemetry, transport, and runtime-configuration services instead of a hard-wired C-core ETL semantics claim, while keeping target-shape examples honest about what is not implemented yet.
 - Recent local handler-shape closure: the local userland execution path now passes structured `input`, `tool`, `run`, and `step` context into handlers and enforces an explicit `['output' => <array payload>]` result contract instead of a folklore bare-array return.
 - Recent userland no-caveat closure: the userland orchestrator surface no longer carries outstanding caveated claims in project status documents; durable tool definitions and configs are now the only persisted contract across boundaries, while executable handlers remain process-local and are re-registered before execution or resume on every local, file-worker, and remote-peer boundary.
 - Recent queued handler-boundary closure: queued file-worker runs now persist an explicit `handler_boundary` snapshot with only durable tool-name references plus step indexes, and targeted PHPT proof now verifies that executable PHP handler callables themselves are not serialized into orchestrator state.
@@ -476,7 +477,7 @@ exists today.
 The active repo-local execution breakdown for this block now lives in
 `ISSUES.md`.
 
-- [ ] Define the `Flow PHP` / ETL-on-King contract explicitly as a userland integration layer on top of King runtime services, not as hard-wired C-core pipeline semantics
+- [x] Define the `Flow PHP` / ETL-on-King contract explicitly as a userland integration layer on top of King runtime services, not as hard-wired C-core pipeline semantics
   done when: the repo documents a stable integration boundary that treats King as runtime substrate and `Flow PHP`-style ETL as userland orchestration/dataflow semantics, without silently shrinking existing King runtime guarantees
 - [ ] Define a reusable object-store / dataflow runtime configuration model for secure storage topology, encryption, integrity, lifecycle, upload, and replication policy
   done when: one shared config object can describe primary plus replica/backups, credential sources, encryption mode, integrity policy, expiry/lifecycle policy, upload policy, and dataflow-facing checkpoint/temp-storage policy without every pipeline restating those concerns ad hoc

@@ -15,6 +15,12 @@ the line of code that started them has returned. You often need to know which
 run was started, whether it is queued or running, whether it completed or
 failed, whether it was cancelled, and which backend handled it.
 
+If the workload is a userland dataflow or ETL system, read
+[Flow PHP and ETL on King](./flow-php-etl.md) alongside this chapter. The
+orchestrator supplies execution, durability, recovery, and control-plane
+boundaries; it does not redefine row, dataset, or transform semantics inside
+the C core.
+
 ## Start With The Problem
 
 Application code often grows from single calls into workflows. One request may
