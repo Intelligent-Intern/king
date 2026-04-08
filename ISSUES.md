@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#5 Implement a checkpoint-store contract for offsets, cursors, resumable progress, and replay boundaries on top of King persistence surfaces.`
+- `#6 Implement an execution-backend contract that can run dataflow pipelines over King local, file-worker, and remote-peer orchestrator backends.`
 
 ## Active Executable Items
 
@@ -81,7 +81,7 @@ with the runtime instead of being deferred to a later cleanup pass.
   done when: a dataflow source can consume records or blobs from King-backed transports with bounded-memory reads, resume-aware progress, and backpressure instead of requiring whole-object materialization first
 - [x] `#4 Implement a streaming sink adapter contract on top of King object-store, MCP, HTTP, and other runtime-owned transports.`
   done when: a dataflow sink can flush output through King-backed transports with bounded-memory writes, multipart/resumable upload where available, and explicit partial-failure handling
-- [ ] `#5 Implement a checkpoint-store contract for offsets, cursors, resumable progress, and replay boundaries on top of King persistence surfaces.`
+- [x] `#5 Implement a checkpoint-store contract for offsets, cursors, resumable progress, and replay boundaries on top of King persistence surfaces.`
   done when: checkpoint state survives restart, can be versioned and resumed honestly, and does not require ETL callers to invent their own persistence layer outside King
 - [ ] `#6 Implement an execution-backend contract that can run dataflow pipelines over King local, file-worker, and remote-peer orchestrator backends.`
   done when: a dataflow run can target the same verified King execution modes that the orchestrator already exposes, including restart-aware continuation and cancellation semantics

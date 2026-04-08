@@ -7,9 +7,10 @@ It is not a published Composer package and it is not presented as the final
 public package layout. The point is to keep real userland adapter code in the
 repository while the contract is still being proven.
 
-The current source and sink adapter contracts live in
-`userland/flow-php/src/StreamingSource.php` and
-`userland/flow-php/src/StreamingSink.php`.
+The current source, sink, and checkpoint contracts live in
+`userland/flow-php/src/StreamingSource.php`,
+`userland/flow-php/src/StreamingSink.php`, and
+`userland/flow-php/src/CheckpointStore.php`.
 
 Current helpers:
 
@@ -24,6 +25,10 @@ Current helpers:
 - `King\Flow\SinkCursor`
 - `King\Flow\SinkWriteResult`
 - `King\Flow\SinkFailure`
+- `King\Flow\ObjectStoreCheckpointStore`
+- `King\Flow\CheckpointState`
+- `King\Flow\CheckpointRecord`
+- `King\Flow\CheckpointCommitResult`
 
 The contract is intentionally small:
 
@@ -36,3 +41,5 @@ The contract is intentionally small:
   the public contract
 - keep partial-failure state explicit through serializable sink cursors and
   failure results instead of transport-specific folklore
+- persist offsets, source cursors, sink cursors, and replay boundaries on real
+  King durability surfaces with explicit version-conflict reporting
