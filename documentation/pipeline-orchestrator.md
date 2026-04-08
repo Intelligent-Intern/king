@@ -353,6 +353,10 @@ Use this practical checklist for every userland-backed path:
   `king_pipeline_orchestrator_register_tool()` for each required tool, then
   `king_pipeline_orchestrator_register_handler()` in the same process for the
   same tool names before `run()` or `king_pipeline_orchestrator_resume_run()`.
+- A controller that queues userland-backed steps onto `file_worker` must still
+  register the same tool handlers before `dispatch()` so the persisted
+  `handler_boundary` can honestly name which steps require worker-side
+  readiness later.
 - A file-worker process that may run queued work must call
   `king_pipeline_orchestrator_register_tool()` and re-register the exact same
   userland handlers in that worker process before calling
@@ -376,6 +380,12 @@ The explicit consequence is this:
   re-registered the required tool handlers before execution starts.
 - unsupported handler forms never become durable state and are rejected by form or
   by process-local readiness at claim/resume boundaries.
+
+The repo-local Flow PHP execution helper under
+`userland/flow-php/src/ExecutionBackend.php` mirrors this split directly. It
+surfaces backend capabilities and keeps `continueRun()` separate from
+`claimNext()` so userland ETL code does not accidentally collapse local,
+file-worker, and remote-peer control paths into one inaccurate abstraction.
 
 ## What A Pipeline Looks Like
 

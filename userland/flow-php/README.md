@@ -7,10 +7,11 @@ It is not a published Composer package and it is not presented as the final
 public package layout. The point is to keep real userland adapter code in the
 repository while the contract is still being proven.
 
-The current source, sink, and checkpoint contracts live in
+The current source, sink, checkpoint, and execution-backend contracts live in
 `userland/flow-php/src/StreamingSource.php`,
 `userland/flow-php/src/StreamingSink.php`, and
-`userland/flow-php/src/CheckpointStore.php`.
+`userland/flow-php/src/CheckpointStore.php`, and
+`userland/flow-php/src/ExecutionBackend.php`.
 
 Current helpers:
 
@@ -29,6 +30,9 @@ Current helpers:
 - `King\Flow\CheckpointState`
 - `King\Flow\CheckpointRecord`
 - `King\Flow\CheckpointCommitResult`
+- `King\Flow\ExecutionBackendCapabilities`
+- `King\Flow\ExecutionRunSnapshot`
+- `King\Flow\OrchestratorExecutionBackend`
 
 The contract is intentionally small:
 
@@ -43,3 +47,12 @@ The contract is intentionally small:
   failure results instead of transport-specific folklore
 - persist offsets, source cursors, sink cursors, and replay boundaries on real
   King durability surfaces with explicit version-conflict reporting
+- expose backend capabilities instead of pretending `local`, `file_worker`,
+  and `remote_peer` all share one hidden execution path
+- preserve the durable tool-name boundary separately from process-local handler
+  registration duties across controller, worker, and peer processes
+- map restart-aware continuation honestly: `continueRun()` for persisted
+  `local` or `remote_peer` runs, `claimNext()` for queued or recovered
+  `file_worker` runs
+- treat pre-claim file-worker cancellation as already-terminal queue state
+  rather than pretending the worker still owns a live in-flight cancel path
