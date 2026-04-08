@@ -497,6 +497,19 @@ PHP_METHOD(King_WebSocket_Server, accept)
     }
 
     if (
+        king_system_require_admission(
+            "WebSocket\\Server::accept",
+            "websocket_peer_accepts"
+        ) != SUCCESS
+    ) {
+        king_websocket_server_throw_last_error(
+            king_ce_runtime_exception,
+            "WebSocket\\Server::accept() cannot admit new websocket peers."
+        );
+        RETURN_THROWS();
+    }
+
+    if (
         king_websocket_server_open_listener(
             intern,
             "WebSocket\\Server::accept"
@@ -600,6 +613,19 @@ PHP_METHOD(King_WebSocket_Server, accept)
         king_websocket_server_throw_last_error(
             king_ce_ws_protocol_error,
             "WebSocket\\Server::accept() requires a websocket upgrade request."
+        );
+        goto fail_cleanup;
+    }
+
+    if (
+        king_system_require_admission(
+            "WebSocket\\Server::accept",
+            "websocket_upgrades"
+        ) != SUCCESS
+    ) {
+        king_websocket_server_throw_last_error(
+            king_ce_runtime_exception,
+            "WebSocket\\Server::accept() cannot admit websocket upgrades."
         );
         goto fail_cleanup;
     }
