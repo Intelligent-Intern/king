@@ -361,6 +361,50 @@ The current PHPT proof covers:
   dataset readback through the bridge:
   `616-flow-php-object-store-dataset-bridge-cloud-contract.phpt`
 
+## Repo-Local Serialization And Schema Bridge Contract
+
+The repository now also carries one real repo-local serialization bridge under
+[`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
+[`../userland/flow-php/src/SerializationBridge.php`](../userland/flow-php/src/SerializationBridge.php).
+
+This piece exists because a dataset handle by itself still leaves one common
+ETL burden unsolved: every job would otherwise have to rebuild the same
+JSON/CSV/NDJSON parsing, the same `king_proto_*` or `King\IIBIN` glue, and the
+same raw binary payload handoff on top of the object-store or stream layer.
+
+The current serialization bridge has three layers:
+
+- `SerializedRecordReader` and `SerializedRecordWriter`, which sit on top of
+  the existing source and sink contracts and keep serialization-specific cursor
+  state separate from the underlying transport cursor
+- line-delimited codecs such as `NdjsonCodec` and `CsvCodec`, which can decode
+  or encode records incrementally while preserving restart through the wrapped
+  line cursor
+- payload codecs such as `JsonDocumentCodec`, `ProtoSchemaCodec`,
+  `IibinSchemaCodec`, and `BinaryObjectCodec`, which keep JSON document, proto,
+  IIBIN, and binary-object workflows on the same bridge while being explicit
+  that current decode surfaces are whole-payload APIs and therefore resume by
+  replaying the payload rather than by mid-message binary continuation
+
+The important semantic point is that framing stays honest instead of hidden:
+
+- NDJSON and CSV are true line-delimited record streams on top of bounded
+  source and sink movement
+- JSON document workflows are one payload record per object and currently use
+  `replay_document`
+- IIBIN, Proto, and raw binary object workflows are payload-oriented and
+  currently use `replay_payload`, because `king_proto_decode()`,
+  `King\IIBIN::decode()`, and raw object consumers all operate on complete
+  payload bytes rather than a public incremental message-decoder surface
+
+The current PHPT proof covers:
+
+- NDJSON resume, CSV header-aware write/read, and JSON document replay through
+  the bridge:
+  `617-flow-php-serialization-bridge-text-contract.phpt`
+- Proto, IIBIN, and raw binary object payload round-trips through the bridge:
+  `618-flow-php-serialization-bridge-binary-contract.phpt`
+
 ## Repo-Local Checkpoint Store Contract
 
 The repository now also carries one real userland checkpoint-store contract

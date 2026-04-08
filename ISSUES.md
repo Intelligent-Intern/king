@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#11 Implement schema / serialization bridges for JSON, CSV, NDJSON, IIBIN, Proto, and binary object payload workflows.`
+- `#12 Implement control-plane surfaces for start, pause, cancel, resume, inspect, and checkpoint-aware recovery of dataflow runs.`
 
 ## Active Executable Items
 
@@ -93,7 +93,7 @@ with the runtime instead of being deferred to a later cleanup pass.
   done when: distributed dataflow can split work predictably, merge it honestly, and keep memory/throughput bounded under slow consumers or uneven partitions
 - [x] `#10 Implement an object-store dataset bridge with bounded-memory streaming, range reads, multipart upload, integrity, expiry, and multi-backend topology semantics preserved.`
   done when: `Flow PHP`-style datasets can read and write through King object-store without discarding the stronger runtime semantics that now exist for local, distributed, and real cloud backends
-- [ ] `#11 Implement schema / serialization bridges for JSON, CSV, NDJSON, IIBIN, Proto, and binary object payload workflows.`
+- [x] `#11 Implement schema / serialization bridges for JSON, CSV, NDJSON, IIBIN, Proto, and binary object payload workflows.`
   done when: dataflow pipelines can move between structured row formats and King-native binary/runtime formats without re-implementing serialization glue in every job
 - [ ] `#12 Implement control-plane surfaces for start, pause, cancel, resume, inspect, and checkpoint-aware recovery of dataflow runs.`
   done when: dataflow runs can be controlled through explicit runtime state instead of hidden process-local control flow, and restart-aware resume can pick up from persisted checkpoints
