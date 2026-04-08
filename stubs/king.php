@@ -1479,6 +1479,10 @@ namespace {
      *     errors_encountered:int,
      *     last_health_check:int,
      *     up_for_seconds:int,
+     *     shutdown_order:int,
+     *     shutdown_dependents:list<string>,
+     *     shutdown_pending_dependents:list<string>,
+     *     shutdown_ready_to_stop:bool,
      *     startup_order:int,
      *     startup_dependencies:list<string>,
      *     startup_pending_dependencies:list<string>,
@@ -1515,6 +1519,23 @@ namespace {
      *       status_visible:bool,
      *       started:bool,
      *       ready_to_start:bool
+     *     }>
+     *   },
+     *   shutdown: array{
+     *     drain_first_required:bool,
+     *     catalog_component_count:int,
+     *     ordered_components:list<string>,
+     *     active_components:list<string>,
+     *     inactive_components:list<string>,
+     *     ready_to_stop_components:list<string>,
+     *     blocked_components: array<string,list<string>>,
+     *     components: array<string,array{
+     *       order:int,
+     *       dependents:list<string>,
+     *       pending_dependents:list<string>,
+     *       status_visible:bool,
+     *       started:bool,
+     *       ready_to_stop:bool
      *     }>
      *   },
      *   admission: array{
