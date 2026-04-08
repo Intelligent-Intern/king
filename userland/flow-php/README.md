@@ -135,3 +135,10 @@ The contract is intentionally small:
   boundary with `partition_id` plus `batch_id`, merge completed results only
   in honest `partition_then_batch` order, and gate new fan-out through live
   queue plus active-partition backpressure windows
+
+The current repo-local end-to-end proof is
+`extension/tests/621-flow-php-etl-e2e-local-remote-contract.phpt`. It composes
+the source, sink, checkpoint, partitioning, dataset, serialization, and
+execution-backend helpers into one object-store-backed NDJSON pipeline, proves
+local OTLP export on the controller-owned path, and separately proves real
+`remote_peer` execution through the captured durable handler boundary.
