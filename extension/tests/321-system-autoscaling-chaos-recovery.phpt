@@ -142,6 +142,7 @@ try {
     var_dump(king_system_restart_component('autoscaling'));
 
     $system = king_system_get_status();
+    var_dump($system['lifecycle']);
     var_dump($system['components_draining']);
     var_dump($system['components']['telemetry']['status']);
     var_dump($system['components']['autoscaling']['status']);
@@ -151,12 +152,16 @@ try {
 
     sleep(1);
     $system = king_system_get_status();
+    var_dump($system['lifecycle']);
+    var_dump($system['components_draining']);
     var_dump($system['components']['telemetry']['status']);
     var_dump($system['components']['autoscaling']['status']);
     var_dump(king_system_process_request([]));
 
     sleep(1);
     $system = king_system_get_status();
+    var_dump($system['lifecycle']);
+    var_dump($system['components_draining']);
     var_dump($system['components']['telemetry']['status']);
     var_dump($system['components']['autoscaling']['status']);
     var_dump(king_system_process_request([]));
@@ -197,15 +202,20 @@ int(1)
 int(1)
 bool(true)
 bool(true)
+string(8) "draining"
 int(2)
 string(13) "shutting_down"
 string(13) "shutting_down"
 bool(false)
 bool(false)
 bool(false)
+string(8) "starting"
+int(0)
 string(12) "initializing"
 string(12) "initializing"
 bool(false)
+string(5) "ready"
+int(0)
 string(7) "running"
 string(7) "running"
 bool(true)
