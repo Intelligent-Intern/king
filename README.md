@@ -23,7 +23,7 @@ short request handlers and thin application wrappers. It can own live sessions,
 streams, protocol state, routing decisions, telemetry, persistence, scaling
 signals, and cluster-facing workflows in one coherent runtime model.
 
-The current line is alpha. The repo-local baseline is green, the multi-backend
+The current line is beta. The repo-local baseline is green, the multi-backend
 object-store and control-plane surfaces are real, and the remaining closure
 work is now about narrower hardening, distributed-operating proof, and
 multi-node fleet behavior rather than placeholder subsystem stories.
@@ -53,9 +53,8 @@ with [documentation/getting-started.md](./documentation/getting-started.md).
 King is also being wired for the first honest
 [PIE](https://github.com/php/pie) install path. The maintainer workflow lives in
 [`documentation/pie-install.md`](./documentation/pie-install.md). PIE is the
-successor to PECL, and the first public tag is `v0.2.10-alpha`.
-Use `pie install intelligent-intern/king-ext` once the `v0.2.10-alpha` release
-assets are published.
+successor to PECL. For tagged releases that publish the matching PIE source
+asset, install with `pie install intelligent-intern/king-ext`.
 
 ## Small But Oho
 
@@ -442,9 +441,6 @@ That source asset is the important part. King cannot rely on the default
 repository ZIP for PIE because the bundled `quiche/` tree is part of the active
 build. The maintainer workflow is documented in
 [`documentation/pie-install.md`](documentation/pie-install.md).
-
-Release publishing is now triggered only by merging a `develop/v...` branch into
-`main`; there is no separate `release/` branch publish workflow.
 
 ## Contributing
 
