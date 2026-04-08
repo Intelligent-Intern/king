@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#17 Build the object-store failover harness for central lifecycle coordination.`
+- `#18 Implement coordinated recovery after component failure with one visible aggregate status path.`
 
 ## Active Executable Items
 
@@ -229,7 +229,7 @@ By explicit user request, this batch defers repo-doc and
 - [x] `#14 Implement ordered component startup transitions in the local system runtime.`
 - [x] `#15 Define ordered component shutdown dependencies and visibility.`
 - [x] `#16 Implement ordered component shutdown with drain-first behavior.`
-- [ ] `#17 Build the object-store failover harness for central lifecycle coordination.`
+- [x] `#17 Build the object-store failover harness for central lifecycle coordination.`
 - [ ] `#18 Implement coordinated recovery after component failure with one visible aggregate status path.`
 - [ ] `#19 Implement coordinated recovery after node failure for the repo-local coordinated runtime.`
 - [ ] `#20 Validate coordinated recovery plus rolling restart and any publicly claimed network-partition behavior across the repo-local component set.`
