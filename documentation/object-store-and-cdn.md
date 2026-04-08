@@ -1039,6 +1039,14 @@ back to bounded local replay staging plus `king_object_store_put_from_stream()`
 elsewhere, keeping partial-failure and resume state explicit instead of
 downgrading object-store writes to one whole-payload string API.
 
+That chapter now also documents the repo-local `ObjectStoreDataset` bridge.
+It keeps one dataset handle on top of those same runtime paths, preserves
+typed metadata and topology state through `ObjectStoreDatasetDescriptor` and
+`ObjectStoreDatasetTopology`, opens bounded-memory dataset range windows
+through `ObjectStoreDatasetSource`, and keeps cloud multipart upload-session
+resume or local replay staging visible through `ObjectStoreDatasetWriter`
+instead of flattening ETL dataset work into a weaker file-like abstraction.
+
 That chapter now also documents the repo-local `ObjectStoreCheckpointStore`
 helper. It persists checkpoint envelopes on the same durable object-store
 surface, uses `integrity_sha256` plus `if_none_match` / `if_match` /

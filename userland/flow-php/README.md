@@ -7,10 +7,11 @@ It is not a published Composer package and it is not presented as the final
 public package layout. The point is to keep real userland adapter code in the
 repository while the contract is still being proven.
 
-The current source, sink, checkpoint, execution-backend, failure-taxonomy, and
-partitioning/backpressure contracts live in
+The current source, sink, dataset-bridge, checkpoint, execution-backend,
+failure-taxonomy, and partitioning/backpressure contracts live in
 `userland/flow-php/src/StreamingSource.php`,
 `userland/flow-php/src/StreamingSink.php`, and
+`userland/flow-php/src/ObjectStoreDataset.php`, and
 `userland/flow-php/src/CheckpointStore.php`, and
 `userland/flow-php/src/ExecutionBackend.php`, and
 `userland/flow-php/src/FailureTaxonomy.php`, and
@@ -29,6 +30,11 @@ Current helpers:
 - `King\Flow\SinkCursor`
 - `King\Flow\SinkWriteResult`
 - `King\Flow\SinkFailure`
+- `King\Flow\ObjectStoreDataset`
+- `King\Flow\ObjectStoreDatasetDescriptor`
+- `King\Flow\ObjectStoreDatasetTopology`
+- `King\Flow\ObjectStoreDatasetSource`
+- `King\Flow\ObjectStoreDatasetWriter`
 - `King\Flow\ObjectStoreCheckpointStore`
 - `King\Flow\CheckpointState`
 - `King\Flow\CheckpointRecord`
@@ -56,6 +62,12 @@ The contract is intentionally small:
   the public contract
 - keep partial-failure state explicit through serializable sink cursors and
   failure results instead of transport-specific folklore
+- surface dataset descriptors that keep integrity, expiry, version, and
+  multi-backend topology visible instead of reducing object-store datasets to
+  anonymous file-like handles
+- expose bounded-memory range-window dataset reads and preserve cloud multipart
+  upload-session resume through the dataset bridge instead of forcing ETL
+  callers to flatten those runtime semantics back into whole-object strings
 - persist offsets, source cursors, sink cursors, and replay boundaries on real
   King durability surfaces with explicit version-conflict reporting
 - expose backend capabilities instead of pretending `local`, `file_worker`,
