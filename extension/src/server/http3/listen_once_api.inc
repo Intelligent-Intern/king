@@ -24,6 +24,15 @@ PHP_FUNCTION(king_http3_server_listen_once)
         Z_PARAM_ZVAL(handler)
     ZEND_PARSE_PARAMETERS_END();
 
+    if (
+        king_system_require_admission(
+            "king_http3_server_listen_once",
+            "http_listener_accepts"
+        ) != SUCCESS
+    ) {
+        RETURN_FALSE;
+    }
+
     memset(&runtime, 0, sizeof(runtime));
     runtime.socket_fd = -1;
     request_state.headers_initialized = false;
