@@ -1824,6 +1824,20 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
         );
     }
 
+    if (
+        king_orchestrator_executes_userland_handlers_locally()
+        && king_system_require_admission(
+            "king_pipeline_orchestrator_run",
+            "orchestrator_submissions"
+        ) != SUCCESS
+    ) {
+        return king_orchestrator_raise_error(
+            king_get_error(),
+            king_ce_runtime_exception,
+            1
+        );
+    }
+
     if (king_orchestrator_exec_control_parse(
             options,
             "king_pipeline_orchestrator_run",
