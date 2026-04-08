@@ -17,6 +17,11 @@
 #include <php.h>
 #include <stdint.h>
 #include <time.h>
+#include <limits.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 /* Component headers referenced by the system runtime / introspection layer. */
 #include "include/config/config.h"
@@ -72,6 +77,7 @@ typedef struct _king_system_config_t {
     char environment[32]; /* development, staging, production */
     char cluster_id[64];
     char node_id[64];
+    char state_root_path[PATH_MAX];
     uint32_t max_concurrent_requests;
     uint32_t health_check_interval_seconds;
     uint32_t component_timeout_seconds;
