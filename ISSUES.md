@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#4 Gate king_system_process_request() and new HTTP listener accepts on aggregate readiness.`
+- `#5 Gate new WebSocket upgrades and accepted peers on aggregate readiness.`
 
 ## Active Executable Items
 
@@ -216,7 +216,7 @@ By explicit user request, this batch defers repo-doc and
 - [x] `#1 Define and expose the canonical aggregate system lifecycle states through king_system_get_status().`
 - [x] `#2 Define component-level readiness reasons and blocker semantics in the system runtime status surface.`
 - [x] `#3 Expose aggregate readiness blockers and admission booleans for the coordinated runtime.`
-- [ ] `#4 Gate king_system_process_request() and new HTTP listener accepts on aggregate readiness.`
+- [x] `#4 Gate king_system_process_request() and new HTTP listener accepts on aggregate readiness.`
 - [ ] `#5 Gate new WebSocket upgrades and accepted peers on aggregate readiness.`
 - [ ] `#6 Gate new orchestrator local submissions on aggregate readiness.`
 - [ ] `#7 Gate file-worker claim and resume on aggregate readiness.`

@@ -102,6 +102,15 @@ PHP_FUNCTION(king_http2_server_listen_once)
         Z_PARAM_ZVAL(handler)
     ZEND_PARSE_PARAMETERS_END();
 
+    if (
+        king_system_require_admission(
+            "king_http2_server_listen_once",
+            "http_listener_accepts"
+        ) != SUCCESS
+    ) {
+        RETURN_FALSE;
+    }
+
     ZVAL_UNDEF(&request);
     ZVAL_UNDEF(&retval);
 

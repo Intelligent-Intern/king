@@ -16,6 +16,18 @@ typedef struct _king_system_component_name_entry {
     const char *name;
 } king_system_component_name_entry_t;
 
+typedef struct _king_system_admission_state {
+    const char *lifecycle;
+    uint32_t component_count;
+    uint32_t ready_count;
+    uint32_t draining_count;
+    uint32_t readiness_blocker_count;
+    bool has_starting;
+    bool has_draining;
+    bool has_error;
+    zend_bool aggregate_ready;
+} king_system_admission_state_t;
+
 static const king_system_component_name_entry_t king_system_component_names[] = {
     {KING_COMPONENT_CONFIG, "config"},
     {KING_COMPONENT_CLIENT, "client"},
@@ -56,6 +68,9 @@ static int king_system_set_component_status(
 );
 static void king_system_apply_default_config(king_system_config_t *config);
 static void king_system_apply_config(king_system_config_t *config, zval *config_arr);
+static void king_system_collect_admission_state(
+    king_system_admission_state_t *state
+);
 
 static void king_component_info_dtor(zval *zv)
 {
@@ -244,6 +259,59 @@ static zend_bool king_system_component_readiness_blocking(
     return status == KING_COMPONENT_STATUS_RUNNING ? 0 : 1;
 }
 
+static void king_system_collect_admission_state(
+    king_system_admission_state_t *state
+)
+{
+    king_component_info_t *info;
+    zend_ulong idx;
+
+    memset(state, 0, sizeof(*state));
+    state->lifecycle = "stopped";
+
+    if (!king_system_initialized) {
+        return;
+    }
+
+    state->component_count = (uint32_t) zend_hash_num_elements(&king_system_components);
+    ZEND_HASH_FOREACH_NUM_KEY_PTR(&king_system_components, idx, info) {
+        switch (info->status) {
+            case KING_COMPONENT_STATUS_RUNNING:
+                state->ready_count++;
+                break;
+            case KING_COMPONENT_STATUS_SHUTTING_DOWN:
+                state->draining_count++;
+                state->has_draining = true;
+                break;
+            case KING_COMPONENT_STATUS_INITIALIZING:
+            case KING_COMPONENT_STATUS_UNINITIALIZED:
+            case KING_COMPONENT_STATUS_SHUTDOWN:
+                state->has_starting = true;
+                break;
+            case KING_COMPONENT_STATUS_ERROR:
+                state->has_error = true;
+                break;
+        }
+
+        if (king_system_component_readiness_blocking(info->status)) {
+            state->readiness_blocker_count++;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    state->lifecycle = king_system_resolve_lifecycle(
+        king_system_initialized,
+        state->component_count,
+        state->ready_count,
+        state->has_starting,
+        state->has_draining,
+        state->has_error
+    );
+    state->aggregate_ready = king_system_initialized
+        && state->component_count > 0
+        && state->readiness_blocker_count == 0
+        && strcmp(state->lifecycle, "ready") == 0;
+}
+
 static int king_system_set_component_status(
     king_component_type_t type,
     king_component_status_t status
@@ -343,6 +411,41 @@ int king_system_check_all_components_health(void)
     } ZEND_HASH_FOREACH_END();
 
     return all_running ? SUCCESS : FAILURE;
+}
+
+int king_system_require_admission(
+    const char *function_name,
+    const char *admission_name
+)
+{
+    king_system_admission_state_t state;
+    zend_string *message;
+
+    king_system_apply_all_transitions();
+    king_system_collect_admission_state(&state);
+
+    if (!king_system_initialized || state.component_count == 0) {
+        king_set_error("");
+        return SUCCESS;
+    }
+
+    if (state.aggregate_ready) {
+        king_set_error("");
+        return SUCCESS;
+    }
+
+    message = strpprintf(
+        0,
+        "%s() cannot admit %s while the coordinated runtime lifecycle is '%s' with %u readiness blocker(s).",
+        function_name,
+        admission_name,
+        state.lifecycle,
+        state.readiness_blocker_count
+    );
+
+    king_set_error(ZSTR_VAL(message));
+    zend_string_release(message);
+    return FAILURE;
 }
 
 int king_system_handle_component_error(
@@ -457,8 +560,19 @@ PHP_FUNCTION(king_system_process_request)
     zval *request_data;
     if (zend_parse_parameters(1, "a", &request_data) == FAILURE) RETURN_FALSE;
 
-    king_system_apply_all_transitions();
-    if (!king_system_initialized || king_system_check_all_components_health() != SUCCESS) {
+    if (!king_system_initialized) {
+        king_set_error(
+            "king_system_process_request() cannot process requests because the coordinated runtime is not initialized."
+        );
+        RETURN_FALSE;
+    }
+
+    if (
+        king_system_require_admission(
+            "king_system_process_request",
+            "process_requests"
+        ) != SUCCESS
+    ) {
         RETURN_FALSE;
     }
 
@@ -509,25 +623,14 @@ PHP_FUNCTION(king_system_get_status)
     zval component_entry;
     zval components;
     zval readiness_blockers;
-    zend_bool aggregate_ready = 0;
-    const char *lifecycle;
     time_t now;
-    int draining_count = 0;
-    int readiness_blocker_count = 0;
-    int ready_count = 0;
-    bool has_draining = false;
-    bool has_error = false;
-    bool has_starting = false;
-    uint32_t component_count = 0;
+    king_system_admission_state_t admission_state;
     zend_ulong idx;
     king_component_info_t *info;
 
     now = time(NULL);
     king_system_apply_all_transitions();
-
-    component_count = king_system_initialized
-        ? (uint32_t) zend_hash_num_elements(&king_system_components)
-        : 0;
+    king_system_collect_admission_state(&admission_state);
 
     array_init(&components);
     array_init(&readiness_blockers);
@@ -558,26 +661,7 @@ PHP_FUNCTION(king_system_get_status)
             add_assoc_long(&component_entry, "last_health_check", (zend_long) last_health_check);
             add_assoc_long(&component_entry, "up_for_seconds", (zend_long) (now - last_health_check));
 
-            switch (info->status) {
-                case KING_COMPONENT_STATUS_RUNNING:
-                    ready_count++;
-                    break;
-                case KING_COMPONENT_STATUS_SHUTTING_DOWN:
-                    draining_count++;
-                    has_draining = true;
-                    break;
-                case KING_COMPONENT_STATUS_INITIALIZING:
-                case KING_COMPONENT_STATUS_UNINITIALIZED:
-                case KING_COMPONENT_STATUS_SHUTDOWN:
-                    has_starting = true;
-                    break;
-                case KING_COMPONENT_STATUS_ERROR:
-                    has_error = true;
-                    break;
-            }
-
             if (readiness_blocking) {
-                readiness_blocker_count++;
                 array_init(&blocker_entry);
                 add_assoc_string(
                     &blocker_entry,
@@ -596,42 +680,33 @@ PHP_FUNCTION(king_system_get_status)
         } ZEND_HASH_FOREACH_END();
     }
 
-    lifecycle = king_system_resolve_lifecycle(
-        king_system_initialized,
-        component_count,
-        (uint32_t) ready_count,
-        has_starting,
-        has_draining,
-        has_error
-    );
-    aggregate_ready = king_system_initialized
-        && component_count > 0
-        && readiness_blocker_count == 0
-        && strcmp(lifecycle, "ready") == 0;
-
     array_init(return_value);
     add_assoc_bool(return_value, "initialized", king_system_initialized);
-    add_assoc_string(return_value, "lifecycle", (char *) lifecycle);
-    add_assoc_long(return_value, "component_count", component_count);
+    add_assoc_string(return_value, "lifecycle", (char *) admission_state.lifecycle);
+    add_assoc_long(return_value, "component_count", admission_state.component_count);
     add_assoc_zval(return_value, "components", &components);
-    add_assoc_long(return_value, "components_ready", (zend_long) ready_count);
-    add_assoc_long(return_value, "components_draining", (zend_long) draining_count);
+    add_assoc_long(return_value, "components_ready", (zend_long) admission_state.ready_count);
+    add_assoc_long(
+        return_value,
+        "components_draining",
+        (zend_long) admission_state.draining_count
+    );
     add_assoc_long(
         return_value,
         "readiness_blocker_count",
-        (zend_long) readiness_blocker_count
+        (zend_long) admission_state.readiness_blocker_count
     );
     add_assoc_zval(return_value, "readiness_blockers", &readiness_blockers);
     array_init(&admission);
-    add_assoc_bool(&admission, "process_requests", aggregate_ready);
-    add_assoc_bool(&admission, "http_listener_accepts", aggregate_ready);
-    add_assoc_bool(&admission, "websocket_upgrades", aggregate_ready);
-    add_assoc_bool(&admission, "websocket_peer_accepts", aggregate_ready);
-    add_assoc_bool(&admission, "orchestrator_submissions", aggregate_ready);
-    add_assoc_bool(&admission, "file_worker_claims", aggregate_ready);
-    add_assoc_bool(&admission, "file_worker_resumes", aggregate_ready);
-    add_assoc_bool(&admission, "remote_peer_dispatches", aggregate_ready);
-    add_assoc_bool(&admission, "remote_peer_resumes", aggregate_ready);
+    add_assoc_bool(&admission, "process_requests", admission_state.aggregate_ready);
+    add_assoc_bool(&admission, "http_listener_accepts", admission_state.aggregate_ready);
+    add_assoc_bool(&admission, "websocket_upgrades", admission_state.aggregate_ready);
+    add_assoc_bool(&admission, "websocket_peer_accepts", admission_state.aggregate_ready);
+    add_assoc_bool(&admission, "orchestrator_submissions", admission_state.aggregate_ready);
+    add_assoc_bool(&admission, "file_worker_claims", admission_state.aggregate_ready);
+    add_assoc_bool(&admission, "file_worker_resumes", admission_state.aggregate_ready);
+    add_assoc_bool(&admission, "remote_peer_dispatches", admission_state.aggregate_ready);
+    add_assoc_bool(&admission, "remote_peer_resumes", admission_state.aggregate_ready);
     add_assoc_zval(return_value, "admission", &admission);
     add_assoc_long(
         return_value,

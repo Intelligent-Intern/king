@@ -135,6 +135,7 @@ king_component_info_t* king_system_get_component(king_component_type_t type);
 int king_system_check_component_health(king_component_type_t type);
 int king_system_check_all_components_health(void);
 int king_system_handle_component_error(king_component_type_t type, const char *error_message);
+int king_system_require_admission(const char *function_name, const char *admission_name);
 const char* king_component_type_to_string(king_component_type_t type);
 const char* king_component_status_to_string(king_component_status_t status);
 
