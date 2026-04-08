@@ -84,7 +84,7 @@ PIE source asset, the intended install command is:
 pie install intelligent-intern/king-ext
 ```
 
-The current beta install track is `v1.0.0-beta`.
+The current beta install track is `v1.0.2-beta`.
 After the matching tag is available in GitHub Releases, users can use the same
 command for PIE installation.
 
