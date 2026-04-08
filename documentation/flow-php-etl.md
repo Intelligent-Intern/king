@@ -676,6 +676,39 @@ The current PHPT proof covers:
   active-partition enforcement, and relief after the queue drains:
   `614-flow-php-backpressure-window-contract.phpt`
 
+## Repo-Local End-To-End ETL Proof
+
+The repository now also carries one end-to-end ETL/dataflow proof in
+[`../extension/tests/621-flow-php-etl-e2e-local-remote-contract.phpt`](../extension/tests/621-flow-php-etl-e2e-local-remote-contract.phpt).
+
+That proof intentionally composes the repo-local helpers from this chapter
+instead of testing them as isolated leaves:
+
+- raw NDJSON input is written through the ordinary object-store sink path with
+  integrity material, expiry, and hybrid `local_fs + distributed` topology
+- `SerializedRecordReader` plus `ObjectStoreByteSource` perform one partial
+  bounded read, persist the resumable `SourceCursor` into
+  `ObjectStoreCheckpointStore`, and then resume from that saved boundary
+- `PartitionPlan::fromRowsByField()` turns the recovered rows into stable
+  `partition_id` plus `batch_id` work units
+- `OrchestratorExecutionBackend` executes the transform locally and through a
+  real TCP `remote_peer`, while output rows are written back through the same
+  NDJSON sink and read again through `ObjectStoreDataset`
+- `PartitionAttempt` and `PartitionMergeResult` read the persisted execution
+  snapshots back instead of inventing ETL-only shadow state
+
+The current end-to-end proof is intentionally honest about observability
+surfaces:
+
+- the `local` path proves exported OTLP metrics and spans by flushing each
+  completed batch to a real collector harness
+- the `remote_peer` path proves the real handler boundary and execution result
+  through persisted run snapshots plus the captured peer-side server events
+- the same harness does not currently claim collector-visible OTLP export from
+  that remote-peer controller path; it only claims the remote execution,
+  checkpoint, manifest, and durable boundary behavior that the test actually
+  sees
+
 ## What This Chapter Does Not Claim Yet
 
 This chapter is a contract statement, not a claim that every adapter in that
@@ -687,15 +720,16 @@ It does not claim:
 - that the repo already ships a complete public Flow PHP adapter package
 - that `King\ObjectStore\RuntimeConfig` and the policy classes above are
   already the exact exported runtime surface today
-- that every storage, checkpoint, execution, telemetry, and schema bridge is
-  already implemented end to end
+- that every possible storage, checkpoint, execution, telemetry, and schema
+  bridge combination is already implemented end to end
 - that target-shape examples elsewhere in the repo are already the exact live
   public PHP surface
 
 The honest claim is narrower and more useful: the repository now states
 clearly where ETL semantics belong, which runtime services they build on, and
 which stronger King guarantees later adapter work must preserve instead of
-flattening away.
+flattening away. It also now proves one concrete object-store-backed ETL run
+end to end on the local execution path plus the real `remote_peer` boundary.
 
 ## How To Read This With The Rest Of The Handbook
 
