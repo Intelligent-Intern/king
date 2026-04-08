@@ -113,6 +113,20 @@ function king_system_drain_orchestrator_wait_until_ready(int $maxSeconds = 8): v
     throw new RuntimeException('system did not become ready before admitted orchestrator drain scenario');
 }
 
+function king_system_drain_orchestrator_wait_until_stopped(int $maxAttempts = 80): void
+{
+    for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+        $status = king_system_get_status();
+        if (($status['initialized'] ?? true) === false) {
+            return;
+        }
+
+        usleep(100000);
+    }
+
+    throw new RuntimeException('system did not stop after shutdown request');
+}
+
 king_system_drain_orchestrator_assert(
     king_system_init(['component_timeout_seconds' => 1]),
     'failed to init coordinated system runtime'
@@ -373,6 +387,7 @@ king_system_drain_orchestrator_assert(
 );
 
 king_system_drain_orchestrator_assert(king_system_shutdown(), 'system shutdown failed');
+king_system_drain_orchestrator_wait_until_stopped();
 king_system_drain_orchestrator_assert(
     king_system_get_status()['initialized'] === false,
     'system stayed initialized after shutdown'

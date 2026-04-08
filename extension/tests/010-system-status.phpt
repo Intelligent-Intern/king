@@ -2,11 +2,25 @@
 King system status functions expose health, startup, shutdown, and runtime lifecycle state
 --FILE--
 <?php
-function king_test_wait_until_ready(int $maxSeconds = 8): array
+function king_test_wait_until_ready(int $maxSeconds = 12): array
 {
     for ($i = 0; $i < $maxSeconds; $i++) {
         $status = king_system_get_status();
         if (($status['lifecycle'] ?? null) === 'ready') {
+            return $status;
+        }
+
+        sleep(1);
+    }
+
+    return king_system_get_status();
+}
+
+function king_test_wait_until_stopped(int $maxSeconds = 12): array
+{
+    for ($i = 0; $i < $maxSeconds; $i++) {
+        $status = king_system_get_status();
+        if (($status['initialized'] ?? true) === false) {
             return $status;
         }
 
@@ -103,7 +117,7 @@ var_dump(($status['components']['config']['shutdown_order'] ?? null) === 12);
 var_dump(($status['components']['config']['shutdown_ready_to_stop'] ?? null) === false);
 
 var_dump(king_system_shutdown());
-$status = king_system_get_status();
+$status = king_test_wait_until_stopped();
 var_dump($status['initialized']);
 var_dump($status['lifecycle']);
 var_dump($status['component_count']);

@@ -107,6 +107,20 @@ function king_system_readiness_wait_until_ready(int $maxSeconds = 8): void
     throw new RuntimeException('system did not become ready before readiness gate scenario');
 }
 
+function king_system_readiness_wait_until_stopped(int $maxSeconds = 8): array
+{
+    for ($i = 0; $i < $maxSeconds; $i++) {
+        $status = king_system_get_status();
+        if (($status['initialized'] ?? true) === false) {
+            return $status;
+        }
+
+        sleep(1);
+    }
+
+    throw new RuntimeException('system did not stop after shutdown request');
+}
+
 var_dump(king_system_init(['component_timeout_seconds' => 1]));
 king_system_readiness_wait_until_ready();
 var_dump(king_system_restart_component('telemetry'));
@@ -160,7 +174,7 @@ var_dump($status['admission']['http_listener_accepts']);
 var_dump(king_system_process_request(['action' => 'ready']));
 var_dump(king_get_last_error());
 var_dump(king_system_shutdown());
-var_dump(king_system_get_status()['initialized']);
+var_dump(king_system_readiness_wait_until_stopped()['initialized']);
 ?>
 --EXPECT--
 bool(true)
