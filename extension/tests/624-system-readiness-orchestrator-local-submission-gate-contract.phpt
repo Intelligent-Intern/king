@@ -14,7 +14,22 @@ function king_system_readiness_orchestrator_handler(array $context): array
     return ['output' => $input];
 }
 
+function king_system_readiness_wait_until_ready_for_orchestrator(int $maxSeconds = 8): void
+{
+    for ($i = 0; $i < $maxSeconds; $i++) {
+        $status = king_system_get_status();
+        if (($status['lifecycle'] ?? null) === 'ready') {
+            return;
+        }
+
+        sleep(1);
+    }
+
+    throw new RuntimeException('system did not become ready before orchestrator readiness gate scenario');
+}
+
 var_dump(king_system_init(['component_timeout_seconds' => 1]));
+king_system_readiness_wait_until_ready_for_orchestrator();
 var_dump(king_pipeline_orchestrator_register_tool('summarizer', [
     'model' => 'gpt-sim',
     'max_tokens' => 64,

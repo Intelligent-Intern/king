@@ -99,10 +99,25 @@ function king_system_drain_recovery_handler(array $context): array
     return ['output' => $input];
 }
 
+function king_system_drain_orchestrator_wait_until_ready(int $maxSeconds = 8): void
+{
+    for ($i = 0; $i < $maxSeconds; $i++) {
+        $status = king_system_get_status();
+        if (($status['lifecycle'] ?? null) === 'ready') {
+            return;
+        }
+
+        sleep(1);
+    }
+
+    throw new RuntimeException('system did not become ready before admitted orchestrator drain scenario');
+}
+
 king_system_drain_orchestrator_assert(
     king_system_init(['component_timeout_seconds' => 1]),
     'failed to init coordinated system runtime'
 );
+king_system_drain_orchestrator_wait_until_ready();
 
 foreach ([
     'drain-stage-1',

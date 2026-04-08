@@ -23,6 +23,20 @@ function king_system_drain_http_listener_capture_status(): array
     ];
 }
 
+function king_system_drain_http_listener_wait_until_ready(int $maxSeconds = 12): void
+{
+    for ($i = 0; $i < $maxSeconds; $i++) {
+        $status = king_system_get_status();
+        if (($status['lifecycle'] ?? null) === 'ready') {
+            return;
+        }
+
+        sleep(1);
+    }
+
+    throw new RuntimeException('system did not become ready before on-wire drain listener start');
+}
+
 $capturePath = $argv[1];
 $protocol = $argv[2];
 $port = (int) $argv[3];
@@ -60,8 +74,9 @@ $listener = $listeners[$protocol];
 $capture = [
     'protocol' => $protocol,
     'init_ok' => king_system_init(['component_timeout_seconds' => 2]),
-    'initial_status' => king_system_drain_http_listener_capture_status(),
 ];
+king_system_drain_http_listener_wait_until_ready();
+$capture['initial_status'] = king_system_drain_http_listener_capture_status();
 
 fwrite(STDOUT, "READY\n");
 fflush(STDOUT);

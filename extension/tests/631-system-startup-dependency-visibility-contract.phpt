@@ -69,33 +69,88 @@ array(6) {
   bool(false)
 }
 bool(true)
-array(12) {
+array(1) {
   [0]=>
   string(6) "config"
-  [1]=>
-  string(6) "client"
-  [2]=>
-  string(6) "server"
-  [3]=>
-  string(9) "telemetry"
-  [4]=>
-  string(12) "object_store"
-  [5]=>
-  string(5) "iibin"
-  [6]=>
-  string(3) "mcp"
-  [7]=>
-  string(12) "semantic_dns"
-  [8]=>
-  string(19) "router_loadbalancer"
-  [9]=>
-  string(12) "orchestrator"
-  [10]=>
-  string(3) "cdn"
-  [11]=>
-  string(11) "autoscaling"
 }
-array(0) {
+array(11) {
+  ["client"]=>
+  array(1) {
+    [0]=>
+    string(6) "config"
+  }
+  ["server"]=>
+  array(1) {
+    [0]=>
+    string(6) "config"
+  }
+  ["telemetry"]=>
+  array(1) {
+    [0]=>
+    string(6) "config"
+  }
+  ["object_store"]=>
+  array(1) {
+    [0]=>
+    string(6) "config"
+  }
+  ["iibin"]=>
+  array(1) {
+    [0]=>
+    string(6) "config"
+  }
+  ["mcp"]=>
+  array(2) {
+    [0]=>
+    string(6) "config"
+    [1]=>
+    string(6) "client"
+  }
+  ["semantic_dns"]=>
+  array(2) {
+    [0]=>
+    string(6) "config"
+    [1]=>
+    string(6) "client"
+  }
+  ["router_loadbalancer"]=>
+  array(3) {
+    [0]=>
+    string(6) "config"
+    [1]=>
+    string(6) "client"
+    [2]=>
+    string(6) "server"
+  }
+  ["orchestrator"]=>
+  array(3) {
+    [0]=>
+    string(6) "config"
+    [1]=>
+    string(9) "telemetry"
+    [2]=>
+    string(12) "object_store"
+  }
+  ["cdn"]=>
+  array(3) {
+    [0]=>
+    string(6) "config"
+    [1]=>
+    string(6) "server"
+    [2]=>
+    string(12) "object_store"
+  }
+  ["autoscaling"]=>
+  array(4) {
+    [0]=>
+    string(6) "config"
+    [1]=>
+    string(9) "telemetry"
+    [2]=>
+    string(6) "server"
+    [3]=>
+    string(12) "semantic_dns"
+  }
 }
 array(6) {
   ["order"]=>
@@ -112,12 +167,20 @@ array(6) {
     string(12) "semantic_dns"
   }
   ["pending_dependencies"]=>
-  array(0) {
+  array(4) {
+    [0]=>
+    string(6) "config"
+    [1]=>
+    string(9) "telemetry"
+    [2]=>
+    string(6) "server"
+    [3]=>
+    string(12) "semantic_dns"
   }
   ["status_visible"]=>
   bool(true)
   ["started"]=>
-  bool(true)
+  bool(false)
   ["ready_to_start"]=>
   bool(false)
 }
@@ -130,7 +193,13 @@ array(3) {
   [2]=>
   string(12) "object_store"
 }
-array(0) {
+array(3) {
+  [0]=>
+  string(6) "config"
+  [1]=>
+  string(9) "telemetry"
+  [2]=>
+  string(12) "object_store"
 }
 bool(false)
 bool(true)
