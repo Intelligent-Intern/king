@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#6 Gate new orchestrator local submissions on aggregate readiness.`
+- `#7 Gate file-worker claim and resume on aggregate readiness.`
 
 ## Active Executable Items
 
@@ -218,7 +218,7 @@ By explicit user request, this batch defers repo-doc and
 - [x] `#3 Expose aggregate readiness blockers and admission booleans for the coordinated runtime.`
 - [x] `#4 Gate king_system_process_request() and new HTTP listener accepts on aggregate readiness.`
 - [x] `#5 Gate new WebSocket upgrades and accepted peers on aggregate readiness.`
-- [ ] `#6 Gate new orchestrator local submissions on aggregate readiness.`
+- [x] `#6 Gate new orchestrator local submissions on aggregate readiness.`
 - [ ] `#7 Gate file-worker claim and resume on aggregate readiness.`
 - [ ] `#8 Gate remote-peer dispatch and resume on aggregate readiness.`
 - [ ] `#9 Define and expose system-wide drain intent and allowed transitions.`

@@ -1584,7 +1584,10 @@ namespace {
      * of those userland-backed steps fails, the persisted run snapshot now
      * classifies the fault explicitly as `validation`, `runtime`, `timeout`,
      * `backend`, or `missing_handler` instead of flattening it into a generic
-     * backend string.
+     * backend string. When the coordinated `king_system_init()` runtime is
+     * active, new local submissions also require aggregate
+     * `orchestrator_submissions` readiness; standalone orchestrator use
+     * without the coordinated runtime remains available.
      * @param array<int,array<string,mixed>> $pipeline
      * @param array<string,mixed>|null $exec_options
      * @return array<string,mixed>
