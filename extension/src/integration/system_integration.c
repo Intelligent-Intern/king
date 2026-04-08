@@ -71,6 +71,10 @@ static void king_system_apply_config(king_system_config_t *config, zval *config_
 static void king_system_collect_admission_state(
     king_system_admission_state_t *state
 );
+static void king_system_build_allowed_lifecycle_transitions(
+    zval *transitions,
+    const char *lifecycle
+);
 
 static void king_component_info_dtor(zval *zv)
 {
@@ -257,6 +261,50 @@ static zend_bool king_system_component_readiness_blocking(
 )
 {
     return status == KING_COMPONENT_STATUS_RUNNING ? 0 : 1;
+}
+
+/*
+ * Publish the repo-local lifecycle graph explicitly so callers do not have to
+ * infer the current state's next legal aggregate transitions themselves.
+ */
+static void king_system_build_allowed_lifecycle_transitions(
+    zval *transitions,
+    const char *lifecycle
+)
+{
+    array_init(transitions);
+
+    if (lifecycle == NULL || strcmp(lifecycle, "stopped") == 0) {
+        add_next_index_string(transitions, "ready");
+        return;
+    }
+
+    if (strcmp(lifecycle, "ready") == 0) {
+        add_next_index_string(transitions, "draining");
+        add_next_index_string(transitions, "failed");
+        add_next_index_string(transitions, "stopped");
+        return;
+    }
+
+    if (strcmp(lifecycle, "draining") == 0) {
+        add_next_index_string(transitions, "starting");
+        add_next_index_string(transitions, "failed");
+        add_next_index_string(transitions, "stopped");
+        return;
+    }
+
+    if (strcmp(lifecycle, "starting") == 0) {
+        add_next_index_string(transitions, "ready");
+        add_next_index_string(transitions, "draining");
+        add_next_index_string(transitions, "failed");
+        add_next_index_string(transitions, "stopped");
+        return;
+    }
+
+    if (strcmp(lifecycle, "failed") == 0) {
+        add_next_index_string(transitions, "draining");
+        add_next_index_string(transitions, "stopped");
+    }
 }
 
 static void king_system_collect_admission_state(
@@ -619,13 +667,18 @@ PHP_FUNCTION(king_system_get_status)
 {
     ZEND_PARSE_PARAMETERS_NONE();
     zval admission;
+    zval allowed_lifecycle_transitions;
     zval blocker_entry;
     zval component_entry;
     zval components;
+    zval drain_intent;
+    zval drain_targets;
     zval readiness_blockers;
     time_t now;
+    time_t drain_requested_at = 0;
     king_system_admission_state_t admission_state;
     zend_ulong idx;
+    uint32_t drain_target_count = 0;
     king_component_info_t *info;
 
     now = time(NULL);
@@ -633,6 +686,7 @@ PHP_FUNCTION(king_system_get_status)
     king_system_collect_admission_state(&admission_state);
 
     array_init(&components);
+    array_init(&drain_targets);
     array_init(&readiness_blockers);
     if (king_system_initialized) {
         ZEND_HASH_FOREACH_NUM_KEY_PTR(&king_system_components, idx, info) {
@@ -660,6 +714,14 @@ PHP_FUNCTION(king_system_get_status)
             add_assoc_long(&component_entry, "errors_encountered", (zend_long) info->errors_encountered);
             add_assoc_long(&component_entry, "last_health_check", (zend_long) last_health_check);
             add_assoc_long(&component_entry, "up_for_seconds", (zend_long) (now - last_health_check));
+
+            if (info->status == KING_COMPONENT_STATUS_SHUTTING_DOWN) {
+                add_next_index_string(&drain_targets, info->name);
+                drain_target_count++;
+                if (drain_requested_at == 0 || last_health_check < drain_requested_at) {
+                    drain_requested_at = last_health_check;
+                }
+            }
 
             if (readiness_blocking) {
                 array_init(&blocker_entry);
@@ -697,6 +759,40 @@ PHP_FUNCTION(king_system_get_status)
         (zend_long) admission_state.readiness_blocker_count
     );
     add_assoc_zval(return_value, "readiness_blockers", &readiness_blockers);
+    array_init(&drain_intent);
+    add_assoc_bool(&drain_intent, "requested", admission_state.has_draining ? 1 : 0);
+    add_assoc_bool(
+        &drain_intent,
+        "active",
+        strcmp(admission_state.lifecycle, "draining") == 0 ? 1 : 0
+    );
+    add_assoc_string(
+        &drain_intent,
+        "reason",
+        (char *) (admission_state.has_draining ? "component_restart" : "none")
+    );
+    add_assoc_long(&drain_intent, "requested_at", (zend_long) drain_requested_at);
+    if (admission_state.has_draining) {
+        add_assoc_string(&drain_intent, "target_lifecycle", "starting");
+    } else {
+        add_assoc_null(&drain_intent, "target_lifecycle");
+    }
+    add_assoc_long(
+        &drain_intent,
+        "target_component_count",
+        (zend_long) drain_target_count
+    );
+    add_assoc_zval(&drain_intent, "target_components", &drain_targets);
+    add_assoc_zval(return_value, "drain_intent", &drain_intent);
+    king_system_build_allowed_lifecycle_transitions(
+        &allowed_lifecycle_transitions,
+        admission_state.lifecycle
+    );
+    add_assoc_zval(
+        return_value,
+        "allowed_lifecycle_transitions",
+        &allowed_lifecycle_transitions
+    );
     array_init(&admission);
     add_assoc_bool(&admission, "process_requests", admission_state.aggregate_ready);
     add_assoc_bool(&admission, "http_listener_accepts", admission_state.aggregate_ready);
