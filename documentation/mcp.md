@@ -237,6 +237,12 @@ the configured local queue even when the restarted peer no longer has the
 payload in its process memory. The queue is then consumed only after the
 download has been written successfully.
 
+That same `downloadToStream()` boundary is now also used by the repo-local Flow
+PHP source contract documented in [Flow PHP and ETL on King](./flow-php-etl.md).
+The current `McpByteSource` pushes transfer bytes into a writable callback
+stream so userland chunk handling can apply backpressure directly while keeping
+resume progress as an explicit serializable cursor.
+
 ## Transfer Identity Matters
 
 The transfer identifier is one of the most important parts of the MCP story.
