@@ -42,7 +42,7 @@
 
 ## Current Next Leaf
 
-- `#13 Validate a real end-to-end ETL/dataflow pipeline on top of King runtime services under local and remote-worker execution.`
+- Active batch exhausted. Push `develop/v1.0.1-beta`, open the PR, and then wait.
 
 ## Active Executable Items
 
@@ -97,8 +97,8 @@ with the runtime instead of being deferred to a later cleanup pass.
   done when: dataflow pipelines can move between structured row formats and King-native binary/runtime formats without re-implementing serialization glue in every job
 - [x] `#12 Implement control-plane surfaces for start, pause, cancel, resume, inspect, and checkpoint-aware recovery of dataflow runs.`
   done when: dataflow runs can be controlled through explicit runtime state instead of hidden process-local control flow, and restart-aware resume can pick up from persisted checkpoints
-- [ ] `#13 Validate a real end-to-end ETL/dataflow pipeline on top of King runtime services under local and remote-worker execution.`
-  done when: the repo proves one non-trivial pipeline with secure object-store config, checkpointing, streaming source/sink adapters, telemetry, and orchestrated remote execution instead of only disconnected adapter slices
+- [x] `#13 Validate a real end-to-end ETL/dataflow pipeline on top of King runtime services under local and remote-worker execution.`
+  done when: the repo proves one non-trivial pipeline with secure object-store config, checkpointing, streaming source/sink adapters, controller-visible telemetry on the local execution path, and orchestrated remote execution plus durable remote-peer boundary proof instead of only disconnected adapter slices
 
 Examples `*`
 

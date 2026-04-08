@@ -18,9 +18,9 @@ The remaining gaps are no longer about broad runtime parity or placeholder
 surfaces inside the local tree. They are now concentrated in the deeper
 control-plane, telemetry, and fleet-behavior proof still listed below.
 
-The active explicitly requested `20`-issue repo-local batch in `ISSUES.md` is
-in progress and currently centered on the `Flow PHP` / ETL integration
-boundary on top of the existing King runtime services.
+The explicitly requested `20`-issue repo-local batch in `ISSUES.md` is now
+exhausted on `develop/v1.0.1-beta` after closing the `Flow PHP` / ETL
+integration block, and the branch is ready for the next PR handoff.
 
 ## Verified Baseline Snapshot
 
@@ -52,7 +52,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `566` PHPT files
+- `extension/tests`: `600` PHPT files
 - public stub parity: `138` functions, `44` classes, `56` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception
@@ -127,6 +127,7 @@ The current tree already proves:
 - the repo now also carries a real userland Flow PHP object-store dataset bridge under `userland/flow-php/src/ObjectStoreDataset.php`, with `ObjectStoreDataset` / `ObjectStoreDatasetDescriptor` / `ObjectStoreDatasetTopology` / `ObjectStoreDatasetSource` / `ObjectStoreDatasetWriter` preserving bounded range-window reads, resumable cloud multipart upload, integrity, expiry, and multi-backend topology state on top of the ordinary object-store runtime, verified by targeted PHPTs for hybrid local-plus-distributed dataset descriptors and cloud GCS resumed upload plus streamed readback through the bridge
 - the repo now also carries a real userland Flow PHP serialization and schema bridge under `userland/flow-php/src/SerializationBridge.php`, with `SerializedRecordReader` / `SerializedRecordWriter` plus JSON, CSV, NDJSON, Proto, IIBIN, and raw binary codecs keeping per-format framing honest on top of the same dataset/source/sink contracts, verified by targeted PHPTs for NDJSON resume, CSV header-aware write/read, JSON document replay, Proto object hydration, IIBIN class-map decode, and raw binary-object round-trip
 - the repo now also carries a real userland Flow PHP control-plane contract under `userland/flow-php/src/ControlPlane.php`, with `ObjectStoreFlowControlStore` / `CheckpointRecoveryPlan` / `FlowControlSnapshot` / `FlowControlPlane` making logical dataflow-run control state explicit above the ordinary execution-backend and checkpoint surfaces, verified by targeted PHPTs for file-worker pause/cancel plus checkpoint-aware replacement recovery and local immediate-run inspectability plus controller-loss resume without reducing the stronger local, file-worker, and remote-peer backend distinctions
+- the repo now also proves one non-trivial Flow PHP-style ETL/dataflow run end to end in `621-flow-php-etl-e2e-local-remote-contract.phpt`, with object-store-backed NDJSON ingest, partial-read plus resumed checkpointed source progress, deterministic partition planning, per-batch orchestrator execution, manifest-backed dataset writeback, local OTLP metrics-plus-span export on the controller-owned path, and honest `remote_peer` execution proven through persisted snapshots plus captured durable handler-boundary events from the TCP peer harness
 
 ## What Is Still Not Finished
 
