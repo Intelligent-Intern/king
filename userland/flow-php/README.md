@@ -7,11 +7,13 @@ It is not a published Composer package and it is not presented as the final
 public package layout. The point is to keep real userland adapter code in the
 repository while the contract is still being proven.
 
-The current source, sink, checkpoint, and execution-backend contracts live in
+The current source, sink, checkpoint, execution-backend, and failure-taxonomy
+contracts live in
 `userland/flow-php/src/StreamingSource.php`,
 `userland/flow-php/src/StreamingSink.php`, and
 `userland/flow-php/src/CheckpointStore.php`, and
-`userland/flow-php/src/ExecutionBackend.php`.
+`userland/flow-php/src/ExecutionBackend.php`, and
+`userland/flow-php/src/FailureTaxonomy.php`.
 
 Current helpers:
 
@@ -33,6 +35,8 @@ Current helpers:
 - `King\Flow\ExecutionBackendCapabilities`
 - `King\Flow\ExecutionRunSnapshot`
 - `King\Flow\OrchestratorExecutionBackend`
+- `King\Flow\FlowFailure`
+- `King\Flow\FlowFailureTaxonomy`
 
 The contract is intentionally small:
 
@@ -56,3 +60,6 @@ The contract is intentionally small:
   `file_worker` runs
 - treat pre-claim file-worker cancellation as already-terminal queue state
   rather than pretending the worker still owns a live in-flight cancel path
+- map source, sink, checkpoint, and execution failures onto one stable
+  category-plus-retry taxonomy instead of forcing ETL callers to parse
+  transport-specific exception strings
