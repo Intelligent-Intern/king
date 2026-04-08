@@ -27,8 +27,8 @@ basic runtime state.
 `king_system_health_check()` answers whether the coordinated runtime is healthy
 enough to proceed.
 
-`king_system_init()` and `king_system_shutdown()` define the lifecycle
-boundaries of the integrated runtime.
+`king_system_init()`, `king_system_recover()`, and `king_system_shutdown()`
+define the lifecycle boundaries of the integrated runtime.
 
 `king_system_get_status()`, `king_system_get_metrics()`, and
 `king_system_get_performance_report()` answer different operational questions
@@ -150,16 +150,29 @@ convenient wrapper around `king_new_config()`. `king_new_config()` creates a
 validated config snapshot. `king_system_init()` uses configuration to create the
 coordinated system runtime itself.
 
+When you provide `state_root_path`, `cluster_id`, and `node_id`, the
+coordinated runtime also persists one small coordinator record under that state
+root. That record is what lets the runtime distinguish a clean rolling restart
+from an unclean predecessor loss. A node that shut down cleanly leaves a clean
+coordinator marker behind, so the next node can start on the same persisted
+state without pretending recovery happened. A node that disappeared without the
+clean shutdown marker does the opposite: the replacement node reports recovery
+through `king_system_get_status()['recovery']` and does not flatten that event
+into an ordinary restart.
+
 ## Status, Metrics, And Performance Are Not The Same
 
 Many runtimes compress everything into one status call. King keeps three
 separate views because they answer three different questions.
 
 `king_system_get_status()` returns a coordinated system snapshot. In the current
-public build that snapshot is centered on lifecycle state:
-`initialized`, `component_count`, per-component status entries, readiness and
-draining counts, and the configured health-check interval. This is the best
-first answer to "what does the runtime think is active right now?"
+public build that snapshot is centered on lifecycle plus admission state:
+`initialized`, aggregate `lifecycle`, per-component status entries,
+readiness blockers and blocker counts, admission booleans for the work classes
+the coordinated runtime can currently accept, explicit `drain_intent`, allowed
+lifecycle transitions, `recovery` metadata for rolling restart versus
+node-failure takeover, and ordered `startup` / `shutdown` visibility. This is
+the best first answer to "what does the runtime think is active right now?"
 
 `king_system_get_metrics()` returns resource-oriented numbers. The stable public
 shape includes current memory usage, peak memory usage, and the collection
@@ -281,6 +294,46 @@ leaving their own state behind in a confusing form.
 In practice this is the right place to think about telemetry flush, object-store
 state, control-plane disconnects, and any component snapshot that should not be
 left half-finished.
+
+## Recovery And Rolling Restart Are Separate Contracts
+
+`king_system_recover()` is the explicit aggregate recovery request. When the
+coordinated runtime enters `failed`, recovery now follows one visible path:
+`failed -> draining -> starting -> ready`. That path is intentionally separate
+from clean rolling restart.
+
+Rolling restart uses the persisted coordinator state under `state_root_path`
+plus a clean shutdown marker. The replacement node reuses the same state root
+and comes back without claiming `node_failure` recovery. Unclean predecessor
+loss does not get that exemption. In that case the replacement node reports
+`recovery.reason = node_failure`, carries the prior `source_node_id`, and only
+returns to ordinary ready admission once the startup waves complete.
+
+This distinction matters operationally. "The node restarted on purpose" and
+"the node disappeared and another process took over" are not the same event,
+and the status surface now keeps them separate.
+
+## Public Repo-Local Failover Boundary
+
+The current repo-local failover story is deliberately strong where the tree has
+proof and deliberately narrow where it does not.
+
+- The coordinated system runtime now proves ordered startup, aggregate
+  readiness/drain gating, drain-first shutdown, component-failure recovery, and
+  node-failure takeover on the shared `king_system_get_status()` surface.
+- The object store has one reusable outage/heal harness under that same system
+  lifecycle, so object-store failover is part of the coordinated runtime story
+  instead of a disconnected backend-only check.
+- The orchestrator has one reusable failover harness for controller loss,
+  file-worker loss, and remote-peer return on persisted state.
+- MCP has one reusable named-peer failover harness that proves peer loss,
+  sibling-peer survival, same-host host/port rejoin, and partial-topology
+  breakage for the currently documented `tcp_host_port_peer` scope.
+
+That last point is the current public boundary for partition-like behavior in
+this repository. King now validates the named-peer failover shape it actually
+claims. It does not pretend broader distributed network-partition semantics
+beyond that proof.
 
 ## A Complete Example Flow
 

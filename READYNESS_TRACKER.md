@@ -41,6 +41,7 @@ Status note:
 - Recent file-worker re-registration PHPT closure: a dedicated PHPT (`596-orchestrator-file-worker-userland-reregistration-contract.phpt`) now proves that a clean worker process can re-register handlers, claim a queued file-worker run, execute all steps through those handlers, and produce a completed snapshot readable by a subsequent fresh process, with correct handler_boundary, handler_readiness, topology, chained result, step-context delivery, and queue cleanup.
 - Recent telemetry export closure: metrics, traces, and logs now share the bounded batch/retry path, are verified against real local collectors for success plus non-2xx, timeout, response-size-limit, request-size fail-closed pre-dispatch, outage-recovery slices, and reference-collector OTLP JSON payload validation, now expose an explicit restart contract that stays process-local and non-replaying by default but upgrades to best-effort local durable replay when `king.otel_queue_state_path` is configured, now discard stale active-span plus pre-flush span/log scratch state at the next request or worker boundary instead of leaking it into later work units, now seed the first request-local server span from a valid incoming `traceparent`/`tracestate` pair instead of leaving inbound propagation as metadata-only folklore, now auto-inject the live current span into outgoing HTTP/1, HTTP/2, and HTTP/3 client requests while preserving explicit caller-supplied `traceparent` and `tracestate` boundaries, now preserve caller span lineage across orchestrator process-resume and file-worker boundaries through persisted distributed parent context plus exported `pipeline-orchestrator-boundary` spans, now enforce a queue-size-derived in-process byte budget with live self-metrics for queue growth, drops, retry pressure, and flush CPU cost, now keep retryable export batches in explicit head-of-queue FIFO order so younger batches cannot overtake an older unresolved batch, now keep one stable exporter batch identity across retry plus restart replay so downstream collectors can dedupe the honest at-least-once delivery path, now split mixed metric/span/log flush pressure into bounded FIFO batch chunks instead of collapsing one large local snapshot into an unbounded monolith, now expose a live `last_export_diagnostic` surface that classifies the latest export failure across pre-dispatch, transport, TLS, HTTP, and collector-response failure stages without leaking endpoint secrets, and now enforce endpoint/credential boundaries by rejecting URL-embedded credentials plus query/fragment exporter endpoints while exposing only a public-safe collector origin on request/session/system telemetry metadata; the remaining open boxes below are longer-haul degraded-exporter characterization.
 - Recent transport/admin closure: the active tree now verifies the full repo-local HTTP/1, HTTP/2, HTTP/3, QUIC, WebSocket, listener, upgrade, admin-API, CORS/header, fairness, shutdown, and cleanup slices carried in sections `A` and `B`; the remaining transport-adjacent open boxes below are the broader security-review and final-closure gates, not missing runtime proofs in those execution sections.
+- Recent coordinated-system closure: the runtime now exposes one aggregate readiness/drain/recovery surface with ordered startup and shutdown, gates new HTTP/WebSocket/orchestrator/file-worker/remote-peer admission on that shared lifecycle, persists a coordinator state under `state_root_path` so clean rolling restart stays distinct from unclean node-failure takeover, and now closes the repo-local failover matrix with object-store outage/heal, orchestrator remote-peer return, and MCP named-peer partial-topology failover proof instead of leaving those slices as disconnected folklore.
 - Recent QUIC bootstrap closure: the build path now rehydrates a pinned `quiche` commit, pinned BoringSSL submodule commit, tracked workspace lockfile, and pinned `wirefilter` revision without branch-based fallbacks or unlocked cargo retries.
 - Recent Smart-DNS closure: the local DNS-shaped query surface now fails closed on undersized response budgets and rehydrates cleanly after restart, the active runtime now proves a bounded real on-wire UDP listener with honest request, timeout, truncation, and recovery behavior, stale peers can now heal partial durable-state loss by merging only missing service and mother-node entries back into the shared topology without overwriting newer overlapping state, and mother-node re-election pressure now carries persisted tombstones so departed leaders are not silently resurrected by stale writers before an explicit rejoin; the broader distributed-topology boxes below remain open.
 - Recent autoscaling closure: real load-shape decision explanations, live request-operation signal capture for CPU/memory/active-connections/RPS/response-latency/queue-depth, partial persisted fleet-state recovery against live Hetzner inventory, and preserved fresh-node rollout bootstrap propagation are now verified; the remaining open boxes below are real drain-before-delete, policy-limit, and broader multi-node fleet-behavior slices.
@@ -401,19 +402,19 @@ Status note:
 
 ## N. System Lifecycle / Readiness / Drain / Failover
 
-- [ ] Define and implement system-wide readiness transitions
-- [ ] Define and implement system-wide drain transitions
-- [ ] Implement rolling restart across all relevant components
-- [ ] Implement ordered component shutdown
-- [ ] Implement ordered component startup
+- [x] Define and implement system-wide readiness transitions
+- [x] Define and implement system-wide drain transitions
+- [x] Implement rolling restart across all relevant components
+- [x] Implement ordered component shutdown
+- [x] Implement ordered component startup
 - [x] Implement telemetry failover harness
 - [x] Implement autoscaling failover harness
-- [ ] Implement object-store failover harness
+- [x] Implement object-store failover harness
 - [x] Implement MCP failover harness
 - [x] Implement orchestrator failover harness
-- [ ] Implement coordinated recovery after component failures
-- [ ] Implement coordinated recovery after node failure
-- [ ] Validate coordinated recovery after network partition where publicly claimed
+- [x] Implement coordinated recovery after component failures
+- [x] Implement coordinated recovery after node failure
+- [x] Validate coordinated recovery after network partition where publicly claimed
 - [x] Establish chaos tests for central components
 - [x] Integrate chaos tests into CI / release gates where economically acceptable
 
