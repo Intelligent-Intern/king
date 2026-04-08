@@ -152,6 +152,12 @@ try {
     var_dump($system['components']['autoscaling']['readiness_reason']);
     var_dump($system['components']['telemetry']['readiness_blocking']);
     var_dump($system['components']['autoscaling']['readiness_blocking']);
+    var_dump($system['readiness_blocker_count']);
+    var_dump(isset($system['readiness_blockers']['telemetry']));
+    var_dump(isset($system['readiness_blockers']['autoscaling']));
+    var_dump($system['readiness_blockers']['telemetry']['readiness_reason']);
+    var_dump($system['admission']['process_requests']);
+    var_dump($system['admission']['http_listener_accepts']);
     var_dump(king_system_process_request([]));
 
     sleep(1);
@@ -164,6 +170,10 @@ try {
     var_dump($system['components']['autoscaling']['readiness_reason']);
     var_dump($system['components']['telemetry']['readiness_blocking']);
     var_dump($system['components']['autoscaling']['readiness_blocking']);
+    var_dump($system['readiness_blocker_count']);
+    var_dump($system['readiness_blockers']['telemetry']['readiness_reason']);
+    var_dump($system['admission']['process_requests']);
+    var_dump($system['admission']['remote_peer_dispatches']);
     var_dump(king_system_process_request([]));
 
     sleep(1);
@@ -176,6 +186,10 @@ try {
     var_dump($system['components']['autoscaling']['readiness_reason']);
     var_dump($system['components']['telemetry']['readiness_blocking']);
     var_dump($system['components']['autoscaling']['readiness_blocking']);
+    var_dump($system['readiness_blocker_count']);
+    var_dump(count($system['readiness_blockers']));
+    var_dump($system['admission']['process_requests']);
+    var_dump($system['admission']['remote_peer_dispatches']);
     var_dump(king_system_process_request([]));
 
     var_dump(king_autoscaling_init($config));
@@ -224,6 +238,12 @@ string(23) "component_shutting_down"
 string(23) "component_shutting_down"
 bool(true)
 bool(true)
+int(2)
+bool(true)
+bool(true)
+string(23) "component_shutting_down"
+bool(false)
+bool(false)
 bool(false)
 string(8) "starting"
 int(0)
@@ -233,6 +253,10 @@ string(22) "component_initializing"
 string(22) "component_initializing"
 bool(true)
 bool(true)
+int(2)
+string(22) "component_initializing"
+bool(false)
+bool(false)
 bool(false)
 string(5) "ready"
 int(0)
@@ -242,6 +266,10 @@ string(5) "ready"
 string(5) "ready"
 bool(false)
 bool(false)
+int(0)
+int(0)
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 string(14) "hetzner_active"

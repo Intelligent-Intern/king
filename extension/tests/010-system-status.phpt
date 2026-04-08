@@ -21,6 +21,11 @@ var_dump(array_keys($status));
 var_dump($status['initialized']);
 var_dump($status['lifecycle']);
 var_dump($status['component_count'] > 0);
+var_dump($status['readiness_blocker_count']);
+var_dump(count($status['readiness_blockers']));
+var_dump($status['admission']['process_requests']);
+var_dump($status['admission']['http_listener_accepts']);
+var_dump($status['admission']['remote_peer_dispatches']);
 var_dump($status['components']['config']['ready']);
 var_dump($status['components']['config']['readiness_reason']);
 var_dump($status['components']['config']['readiness_blocking']);
@@ -46,7 +51,7 @@ bool(true)
 bool(true)
 string(%d) "%s"
 bool(false)
-array(7) {
+array(10) {
   [0]=>
   string(11) "initialized"
   [1]=>
@@ -60,13 +65,19 @@ array(7) {
   [5]=>
   string(19) "components_draining"
   [6]=>
+  string(23) "readiness_blocker_count"
+  [7]=>
+  string(18) "readiness_blockers"
+  [8]=>
+  string(9) "admission"
+  [9]=>
   string(29) "health_check_interval_seconds"
 }
 bool(false)
 string(7) "stopped"
 int(0)
 bool(true)
-array(7) {
+array(10) {
   [0]=>
   string(11) "initialized"
   [1]=>
@@ -80,10 +91,21 @@ array(7) {
   [5]=>
   string(19) "components_draining"
   [6]=>
+  string(23) "readiness_blocker_count"
+  [7]=>
+  string(18) "readiness_blockers"
+  [8]=>
+  string(9) "admission"
+  [9]=>
   string(29) "health_check_interval_seconds"
 }
 bool(true)
 string(5) "ready"
+bool(true)
+int(0)
+int(0)
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 string(5) "ready"

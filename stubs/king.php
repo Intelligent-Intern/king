@@ -1480,6 +1480,22 @@ namespace {
      *   }>,
      *   components_ready:int,
      *   components_draining:int,
+     *   readiness_blocker_count:int,
+     *   readiness_blockers: array<string,array{
+     *     status:string,
+     *     readiness_reason:string
+     *   }>,
+     *   admission: array{
+     *     process_requests:bool,
+     *     http_listener_accepts:bool,
+     *     websocket_upgrades:bool,
+     *     websocket_peer_accepts:bool,
+     *     orchestrator_submissions:bool,
+     *     file_worker_claims:bool,
+     *     file_worker_resumes:bool,
+     *     remote_peer_dispatches:bool,
+     *     remote_peer_resumes:bool
+     *   },
      *   health_check_interval_seconds:int
      * }
      */
