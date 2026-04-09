@@ -16,6 +16,12 @@
 #define PATH_MAX 4096
 #endif
 
+typedef enum _king_system_recovery_mode {
+    KING_SYSTEM_RECOVERY_MODE_NONE,
+    KING_SYSTEM_RECOVERY_MODE_NODE,
+    KING_SYSTEM_RECOVERY_MODE_COMPONENT
+} king_system_recovery_mode_t;
+
 static king_system_config_t king_system_runtime_config;
 static bool king_system_initialized = false;
 static bool king_system_shutdown_requested = false;
@@ -31,6 +37,11 @@ static char king_system_coordinator_state_path[PATH_MAX];
 static char king_system_coordinator_state_error[256];
 static char king_system_coordinator_state_status[32] = "inactive";
 static char king_system_recovery_source_node_id[64];
+static king_system_recovery_mode_t king_system_recovery_mode =
+    KING_SYSTEM_RECOVERY_MODE_NONE;
+static char king_system_recovery_plan_id[64];
+static time_t king_system_recovery_plan_requested_at = 0;
+static uint32_t king_system_recovery_plan_window_seconds = 0;
 
 typedef struct _king_system_component_name_entry {
     king_component_type_t type;
@@ -180,6 +191,16 @@ static void king_system_reset_coordinator_state_runtime(void);
 static const char *king_system_drain_reason_to_string(
     king_system_drain_reason_t reason
 );
+static uint32_t king_system_recovery_window_seconds(
+    king_system_recovery_mode_t mode
+);
+static const char *king_system_recovery_mode_to_string(
+    king_system_recovery_mode_t mode
+);
+static void king_system_start_recovery_plan(
+    king_system_recovery_mode_t mode,
+    const char *source_node_id
+);
 static const char *king_system_recovery_reason_to_string(void);
 static uint32_t king_system_count_started_components(void);
 static void king_system_apply_default_node_identity(king_system_config_t *config);
@@ -237,6 +258,10 @@ static void king_system_reset_coordinator_state_runtime(void)
     king_system_coordinator_state_path[0] = '\0';
     king_system_coordinator_state_error[0] = '\0';
     king_system_recovery_source_node_id[0] = '\0';
+    king_system_recovery_mode = KING_SYSTEM_RECOVERY_MODE_NONE;
+    king_system_recovery_plan_id[0] = '\0';
+    king_system_recovery_plan_requested_at = 0;
+    king_system_recovery_plan_window_seconds = 0;
     snprintf(
         king_system_coordinator_state_status,
         sizeof(king_system_coordinator_state_status),
@@ -280,9 +305,72 @@ static const char *king_system_drain_reason_to_string(
     }
 }
 
+static uint32_t king_system_recovery_window_seconds(
+    king_system_recovery_mode_t mode
+)
+{
+    switch (mode) {
+        case KING_SYSTEM_RECOVERY_MODE_NODE:
+            return 30;
+        case KING_SYSTEM_RECOVERY_MODE_COMPONENT:
+            return 15;
+        case KING_SYSTEM_RECOVERY_MODE_NONE:
+        default:
+            return 0;
+    }
+}
+
+static const char *king_system_recovery_mode_to_string(
+    king_system_recovery_mode_t mode
+)
+{
+    switch (mode) {
+        case KING_SYSTEM_RECOVERY_MODE_NODE:
+            return "node_failure";
+        case KING_SYSTEM_RECOVERY_MODE_COMPONENT:
+            return "component_failure";
+        case KING_SYSTEM_RECOVERY_MODE_NONE:
+        default:
+            return "none";
+    }
+}
+
+static void king_system_start_recovery_plan(
+    king_system_recovery_mode_t mode,
+    const char *source_node_id
+)
+{
+    king_system_recovery_mode = mode;
+    king_system_recovery_plan_requested_at = time(NULL);
+    king_system_recovery_plan_window_seconds = king_system_recovery_window_seconds(mode);
+    if (source_node_id != NULL && source_node_id[0] != '\0') {
+        snprintf(
+            king_system_recovery_source_node_id,
+            sizeof(king_system_recovery_source_node_id),
+            "%s",
+            source_node_id
+        );
+    } else {
+        king_system_recovery_source_node_id[0] = '\0';
+    }
+
+    snprintf(
+        king_system_recovery_plan_id,
+        sizeof(king_system_recovery_plan_id),
+        "%s:%s:%ld:%llu:%llu",
+        king_system_recovery_mode_to_string(mode),
+        king_system_recovery_source_node_id[0] != '\0'
+            ? king_system_recovery_source_node_id
+            : "local",
+        (long) king_system_recovery_plan_requested_at,
+        (unsigned long long) king_system_coordinator_state_version,
+        (unsigned long long) king_system_coordinator_generation
+    );
+}
+
 static const char *king_system_recovery_reason_to_string(void)
 {
-    return king_system_coordinator_state_recovered ? "node_failure" : "none";
+    return king_system_recovery_mode_to_string(king_system_recovery_mode);
 }
 
 static void king_system_apply_config(king_system_config_t *config, zval *config_arr)
@@ -714,10 +802,9 @@ static int king_system_initialize_coordinator_state(void)
 
         if (!clean_shutdown && loaded_node_id[0] != '\0') {
             king_system_coordinator_state_recovered = true;
-            strncpy(
-                king_system_recovery_source_node_id,
-                loaded_node_id,
-                sizeof(king_system_recovery_source_node_id) - 1
+            king_system_start_recovery_plan(
+                KING_SYSTEM_RECOVERY_MODE_NODE,
+                loaded_node_id
             );
         }
 
@@ -1953,6 +2040,10 @@ PHP_FUNCTION(king_system_recover)
     }
 
     king_system_recovery_requested = true;
+    king_system_start_recovery_plan(
+        KING_SYSTEM_RECOVERY_MODE_COMPONENT,
+        king_system_runtime_config.node_id
+    );
     king_system_drain_reason = KING_SYSTEM_DRAIN_REASON_COMPONENT_RECOVERY;
     king_system_apply_all_transitions();
     RETURN_TRUE;
@@ -1986,6 +2077,7 @@ PHP_FUNCTION(king_system_get_status)
     zval startup;
     time_t now;
     time_t drain_requested_at = 0;
+    bool recovery_active = false;
     king_system_admission_state_t admission_state;
     zend_ulong idx;
     uint32_t drain_target_count = 0;
@@ -1994,6 +2086,11 @@ PHP_FUNCTION(king_system_get_status)
     now = time(NULL);
     king_system_apply_all_transitions();
     king_system_collect_admission_state(&admission_state);
+    recovery_active = (
+        king_system_recovery_mode != KING_SYSTEM_RECOVERY_MODE_NONE
+        && king_system_initialized
+        && strcmp(admission_state.lifecycle, "ready") != 0
+    ) ? 1 : 0;
 
     array_init(&components);
     array_init(&drain_targets);
@@ -2203,10 +2300,7 @@ PHP_FUNCTION(king_system_get_status)
     add_assoc_bool(
         &recovery,
         "active",
-        king_system_coordinator_state_recovered
-            && king_system_initialized
-            && strcmp(admission_state.lifecycle, "ready") != 0
-            ? 1 : 0
+        recovery_active
     );
     add_assoc_bool(
         &recovery,
@@ -2217,6 +2311,26 @@ PHP_FUNCTION(king_system_get_status)
         &recovery,
         "reason",
         (char *) king_system_recovery_reason_to_string()
+    );
+    add_assoc_string(
+        &recovery,
+        "mode",
+        king_system_recovery_mode_to_string(king_system_recovery_mode)
+    );
+    if (king_system_recovery_plan_id[0] != '\0') {
+        add_assoc_string(&recovery, "plan_id", king_system_recovery_plan_id);
+    } else {
+        add_assoc_null(&recovery, "plan_id");
+    }
+    add_assoc_long(
+        &recovery,
+        "plan_requested_at",
+        (zend_long) king_system_recovery_plan_requested_at
+    );
+    add_assoc_long(
+        &recovery,
+        "plan_window_seconds",
+        (zend_long) king_system_recovery_plan_window_seconds
     );
     if (king_system_recovery_source_node_id[0] != '\0') {
         add_assoc_string(
