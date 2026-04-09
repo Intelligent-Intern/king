@@ -14,7 +14,7 @@ function king_autoscaling_test_format_tcp_endpoint(string $host, int $port): str
 function king_autoscaling_hetzner_mock_start(array $options = []): array
 {
     $bindHost = $options['host'] ?? '127.0.0.1';
-    $deleteStatus = (int) ($options['delete_status'] ?? 204);
+    $deleteStatus = $options['delete_status'] ?? 204;
     $createStatus = (int) ($options['create_status'] ?? 201);
     $listStatus = (int) ($options['list_status'] ?? 200);
     $startId = (int) ($options['start_id'] ?? 9000);
@@ -59,7 +59,17 @@ function king_autoscaling_hetzner_mock_start(array $options = []): array
         __DIR__ . '/autoscaling_hetzner_mock_server.inc',
         $logFile,
         (string) $port,
-        (string) $deleteStatus,
+        (string) (
+            is_array($deleteStatus)
+                ? implode(
+                    ',',
+                    array_map(
+                        static fn($entry): int => (int) $entry,
+                        $deleteStatus
+                    )
+                )
+                : (string) (int) $deleteStatus
+        ),
         (string) $createStatus,
         (string) $startId,
         $bindHost,
