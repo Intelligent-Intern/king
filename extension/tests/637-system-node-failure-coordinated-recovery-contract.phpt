@@ -136,6 +136,7 @@ PHP);
     var_dump(($nodeAReady['status']['lifecycle'] ?? null) === 'ready');
     var_dump(($nodeAReady['status']['recovery']['active'] ?? null) === false);
     var_dump(($nodeAReady['status']['recovery']['recovered'] ?? null) === false);
+    var_dump(($nodeAReady['status']['recovery']['mode'] ?? null) === 'none');
     var_dump(($nodeAReady['status']['recovery']['coordinator_state_present'] ?? null) === true);
     var_dump(($nodeAReady['status']['recovery']['coordinator_state_status'] ?? null) === 'initialized');
     var_dump(($nodeAReady['object_store']['runtime_distributed_coordinator_state_status'] ?? null) === 'initialized');
@@ -158,9 +159,13 @@ PHP);
     var_dump(($nodeBResult['starting']['recovery']['active'] ?? null) === true);
     var_dump(($nodeBResult['starting']['recovery']['recovered'] ?? null) === true);
     var_dump(($nodeBResult['starting']['recovery']['reason'] ?? null) === 'node_failure');
+    var_dump(($nodeBResult['starting']['recovery']['mode'] ?? null) === 'node_failure');
     var_dump(($nodeBResult['starting']['recovery']['source_node_id'] ?? null) === 'node-a');
     var_dump(($nodeBResult['starting']['recovery']['active_node_id'] ?? null) === 'node-b');
     var_dump(($nodeBResult['starting']['recovery']['cluster_id'] ?? null) === 'cluster-a');
+    var_dump((bool) ($nodeBResult['starting']['recovery']['plan_id'] ?? null));
+    var_dump(str_starts_with($nodeBResult['starting']['recovery']['plan_id'] ?? '', 'node_failure:node-a:'));
+    var_dump(($nodeBResult['starting']['recovery']['plan_window_seconds'] ?? null) === 30);
     var_dump(($nodeBResult['starting']['recovery']['coordinator_state_status'] ?? null) === 'recovered');
     var_dump((int) ($nodeBResult['starting']['recovery']['coordinator_generation'] ?? 0) > $firstGeneration);
     var_dump(($nodeBResult['starting']['admission']['process_requests'] ?? null) === false);
@@ -169,6 +174,7 @@ PHP);
     var_dump(($nodeBResult['ready']['recovery']['active'] ?? null) === false);
     var_dump(($nodeBResult['ready']['recovery']['recovered'] ?? null) === true);
     var_dump(($nodeBResult['ready']['recovery']['reason'] ?? null) === 'node_failure');
+    var_dump(($nodeBResult['ready']['recovery']['mode'] ?? null) === 'node_failure');
     var_dump(($nodeBResult['ready']['admission']['process_requests'] ?? null) === true);
     var_dump(($nodeBResult['payload'] ?? null) === 'node-failure-payload');
     var_dump(($nodeBResult['has_doc'] ?? null) === true);
@@ -182,6 +188,11 @@ PHP);
 }
 ?>
 --EXPECT--
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 bool(true)

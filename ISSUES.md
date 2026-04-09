@@ -63,7 +63,7 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
   done when: router policy uses measured load/health deltas and produces explainable routing decisions with bounded stale-state impact.
 - [x] `#7 Enforce system-wide readiness and drain state transitions across the entire runtime fabric.`
   done when: all runtime entrypoints observe ordered state transitions for start, ready, drain, stop, and fail conditions, including controlled admission behavior during drain.
-- [ ] `#8 Implement coordinated recovery across node and component failures with explicit state replay policy.`
+- [x] `#8 Implement coordinated recovery across node and component failures with explicit state replay policy.`
   done when: recovery plans are proven for at least one node failure and one component failure path, including bounded divergence recovery windows.
 - [ ] `#9 Validate autoscaling in load-representative traffic and recovery conditions.`
   done when: autoscaling decisions are explained from observed CPU/memory/RPS/queue/latency signals and recover correctly after controller restart or partial state loss.
