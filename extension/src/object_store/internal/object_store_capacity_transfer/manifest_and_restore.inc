@@ -126,6 +126,39 @@ static int king_object_store_snapshot_manifest_write(
     return SUCCESS;
 }
 
+static int king_object_store_snapshot_manifest_parse_count(
+    const char *value,
+    size_t *count_out
+)
+{
+    const unsigned char *cursor;
+    size_t parsed = 0;
+    const size_t max_size = (size_t) -1;
+
+    if (value == NULL || value[0] == '\0' || count_out == NULL) {
+        return FAILURE;
+    }
+
+    for (cursor = (const unsigned char *) value; *cursor != '\0'; ++cursor) {
+        if (*cursor < '0' || *cursor > '9') {
+            return FAILURE;
+        }
+
+        if (parsed > (max_size / 10)) {
+            return FAILURE;
+        }
+        parsed *= 10;
+
+        if ((size_t) (*cursor - '0') > (max_size - parsed)) {
+            return FAILURE;
+        }
+        parsed += (size_t) (*cursor - '0');
+    }
+
+    *count_out = parsed;
+    return SUCCESS;
+}
+
 static int king_object_store_snapshot_manifest_parse(
     const char *manifest_path,
     zval *inventory,
@@ -140,6 +173,15 @@ static int king_object_store_snapshot_manifest_parse(
     int saw_format = 0;
     int saw_kind = 0;
     int saw_consistency = 0;
+    int saw_inventory_count = 0;
+    int saw_upsert_count = 0;
+    int saw_delete_count = 0;
+    size_t expected_inventory_count = 0;
+    size_t expected_upsert_count = 0;
+    size_t expected_delete_count = 0;
+    size_t actual_inventory_count = 0;
+    size_t actual_upsert_count = 0;
+    size_t actual_delete_count = 0;
     char pending_inventory_object_id[128] = {0};
     int status = FAILURE;
 
@@ -204,6 +246,30 @@ static int king_object_store_snapshot_manifest_parse(
             saw_consistency = 1;
             continue;
         }
+        if (strcmp(line, "inventory_count") == 0) {
+            if (saw_inventory_count
+                || king_object_store_snapshot_manifest_parse_count(value, &expected_inventory_count) != SUCCESS) {
+                goto cleanup;
+            }
+            saw_inventory_count = 1;
+            continue;
+        }
+        if (strcmp(line, "upsert_count") == 0) {
+            if (saw_upsert_count
+                || king_object_store_snapshot_manifest_parse_count(value, &expected_upsert_count) != SUCCESS) {
+                goto cleanup;
+            }
+            saw_upsert_count = 1;
+            continue;
+        }
+        if (strcmp(line, "delete_count") == 0) {
+            if (saw_delete_count
+                || king_object_store_snapshot_manifest_parse_count(value, &expected_delete_count) != SUCCESS) {
+                goto cleanup;
+            }
+            saw_delete_count = 1;
+            continue;
+        }
         if (strcmp(line, "inventory_object_id") == 0) {
             if (pending_inventory_object_id[0] != '\0'
                 || king_object_store_object_id_validate(value) != NULL) {
@@ -229,6 +295,7 @@ static int king_object_store_snapshot_manifest_parse(
                 goto cleanup;
             }
 
+            actual_inventory_count++;
             pending_inventory_object_id[0] = '\0';
             continue;
         }
@@ -237,6 +304,7 @@ static int king_object_store_snapshot_manifest_parse(
                 || king_object_store_snapshot_string_list_push(upserts, value) != SUCCESS) {
                 goto cleanup;
             }
+            actual_upsert_count++;
             if (strcmp(line, "object_id") == 0
                 && zend_hash_str_find(Z_ARRVAL_P(inventory), value, strlen(value)) == NULL
                 && king_object_store_snapshot_inventory_set(inventory, value, "") != SUCCESS) {
@@ -249,6 +317,7 @@ static int king_object_store_snapshot_manifest_parse(
                 || king_object_store_snapshot_string_list_push(deletes, value) != SUCCESS) {
                 goto cleanup;
             }
+            actual_delete_count++;
         }
     }
 
@@ -256,7 +325,22 @@ static int king_object_store_snapshot_manifest_parse(
         goto cleanup;
     }
 
-    status = (saw_format && saw_kind && saw_consistency) ? SUCCESS : FAILURE;
+    if (!saw_format || !saw_kind || !saw_consistency) {
+        goto cleanup;
+    }
+
+    if (saw_inventory_count || saw_upsert_count || saw_delete_count) {
+        if (!saw_inventory_count || !saw_upsert_count || !saw_delete_count) {
+            goto cleanup;
+        }
+        if (expected_inventory_count != actual_inventory_count
+            || expected_upsert_count != actual_upsert_count
+            || expected_delete_count != actual_delete_count) {
+            goto cleanup;
+        }
+    }
+
+    status = SUCCESS;
 
 cleanup:
     fclose(fp);
