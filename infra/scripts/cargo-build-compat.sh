@@ -63,6 +63,7 @@ Use one of:
      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
      . "$HOME/.cargo/env"
      rustup update stable
+     rustup toolchain install nightly
      rustup default stable
 
   2) Or install your distro package (examples):
@@ -76,9 +77,14 @@ EOF
 
 run_rust_upgrade() {
     local installed=0
+    local ensure_nightly=0
 
     if command -v rustup >/dev/null 2>&1; then
         rustup update stable
+        if ! rustup toolchain list --installed 2>/dev/null | awk '{print $1}' | grep -q '^nightly'; then
+            rustup toolchain install nightly
+            ensure_nightly=1
+        fi
         installed=1
     elif command -v curl >/dev/null 2>&1; then
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -94,6 +100,10 @@ run_rust_upgrade() {
     fi
 
     if [[ ${installed} -eq 1 ]] && command -v cargo >/dev/null 2>&1 && command -v rustc >/dev/null 2>&1; then
+        if [[ "${ensure_nightly}" -eq 1 ]] && ! rustup toolchain list --installed 2>/dev/null | awk '{print $1}' | grep -q '^nightly'; then
+            echo "Warning: nightly toolchain installation did not complete; lockfile-v4 fallback will likely fail." >&2
+        fi
+
         rustup default stable
         return 0
     fi
