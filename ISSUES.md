@@ -51,7 +51,7 @@
 
 The next batch focuses on closing the biggest remaining public-reliability gaps before the next beta gate: on-wire distribution, system recovery, provider behavior, security-hardening, and release determinism.
 
-- [ ] `#1 Implement verifiable distributed WebSocket fanout and upgrade-forwarding so HTTP listeners can route live sessions across nodes under sustained load.`
+- [x] `#1 Implement verifiable distributed WebSocket fanout and upgrade-forwarding so HTTP listeners can route live sessions across nodes under sustained load.`
   done when: the repo proves on-wire websocket fanout and node-to-node upgrade forwarding for real multi-node traffic, including routing fairness and backpressure behavior.
 - [ ] `#3 Prove sustained QUIC/HTTP/3 runtime stability under stress and partial failure.`
   done when: long-duration soak tests cover stream/session lifecycle, congestion and flow control, zero-RTT/resumption, interruption recovery, and deterministic error mapping.
