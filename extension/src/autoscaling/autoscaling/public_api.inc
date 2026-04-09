@@ -143,6 +143,11 @@ PHP_FUNCTION(king_autoscaling_get_status)
         "managed_nodes",
         (zend_long) king_autoscaling_runtime.managed_node_count
     );
+    add_assoc_bool(
+        return_value,
+        "state_load_incomplete",
+        king_autoscaling_runtime.state_load_incomplete
+    );
     add_assoc_long(
         return_value,
         "active_managed_nodes",

@@ -12,6 +12,7 @@ $expectedKeys = [
     'provider_mode',
     'controller_token_configured',
     'managed_nodes',
+    'state_load_incomplete',
     'active_managed_nodes',
     'provisioned_managed_nodes',
     'registered_managed_nodes',
@@ -47,7 +48,7 @@ var_dump($status['current_instances']);
 ?>
 --EXPECT--
 bool(true)
-int(34)
+int(35)
 bool(true)
 bool(false)
 int(1)
