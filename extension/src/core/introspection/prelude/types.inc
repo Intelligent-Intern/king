@@ -45,6 +45,7 @@ typedef struct _king_semantic_dns_service {
     zend_long current_load_percent;
     zend_long active_connections;
     zend_long total_requests;
+    time_t last_health_check;
     time_t registered_at;
 } king_semantic_dns_service;
 
