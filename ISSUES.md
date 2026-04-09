@@ -38,12 +38,12 @@
 
 - The user is advancing the current batch manually with `w`.
 - Close exactly one checkbox, make exactly one commit, and then wait for the next `w`.
-- For the current visible batch, defer repo docs and `READYNESS_TRACKER.md` updates until every visible checkbox is closed, then do the closeout sweep once before pushing `develop/v1.0.2-beta` and opening the PR.
+- For the current visible batch, defer repo docs and `READYNESS_TRACKER.md` updates until every visible checkbox is closed, then do the closeout sweep once before pushing `develop/v1.0.3-beta` and opening the PR.
 - After the PR is open, each further `w` means wait instead of auto-refilling from `READYNESS_TRACKER.md`.
 
 ## Current Next Leaf
 
-- batch `R` is exhausted on `develop/v1.0.2-beta`; wait for the PR handoff and the next explicit batch.
+- batch `S` is active on `develop/v1.0.3-beta`.
 
 ## Active Executable Items
 
@@ -234,10 +234,55 @@ By explicit user request, this batch defers repo-doc and
 - [x] `#19 Implement coordinated recovery after node failure for the repo-local coordinated runtime.`
 - [x] `#20 Validate coordinated recovery plus rolling restart and any publicly claimed network-partition behavior across the repo-local component set.`
 
+### S. Distribution Proof, Multi-Node Operations, and V1 Hardening
+
+The next batch focuses on closing the biggest remaining public-reliability gaps before the next beta gate: on-wire distribution, system recovery, provider behavior, security-hardening, and release determinism.
+
+- [ ] `#1 Implement verifiable distributed WebSocket fanout and upgrade-forwarding so HTTP listeners can route live sessions across nodes under sustained load.`
+  done when: the repo proves on-wire websocket fanout and node-to-node upgrade forwarding for real multi-node traffic, including routing fairness and backpressure behavior.
+- [ ] `#2 Complete King\WebSocket\Server on real runtime behavior, including lifecycle-shutdown and draining semantics under active sessions.`
+  done when: the public runtime API is backed by proven real runtime code paths and passes long-lived upgrade and drain/restart harnesses.
+- [ ] `#3 Prove sustained QUIC/HTTP/3 runtime stability under stress and partial failure.`
+  done when: long-duration soak tests cover stream/session lifecycle, congestion and flow control, zero-RTT/resumption, interruption recovery, and deterministic error mapping.
+- [ ] `#4 Finish HTTP/1, HTTP/2, and HTTP/3 listener verification for real on-wire request/response and session behavior.`
+  done when: server listeners survive heavy traffic with normalization, cleanup, Early Hints, TLS reload, mTLS admin paths, fairness, and restart-safe drain behavior.
+- [ ] `#5 Promote Semantic DNS from local-only mode to real network listener behavior.`
+  done when: discovery, registration, and gossip-like topology behavior run over real sockets with persistence, rehydration, and partial split-brain recovery.
+- [ ] `#6 Validate routing decisions against real health and load signals instead of static or local-only heuristics.`
+  done when: router policy uses measured load/health deltas and produces explainable routing decisions with bounded stale-state impact.
+- [ ] `#7 Enforce system-wide readiness and drain state transitions across the entire runtime fabric.`
+  done when: all runtime entrypoints observe ordered state transitions for start, ready, drain, stop, and fail conditions, including controlled admission behavior during drain.
+- [ ] `#8 Implement coordinated recovery across node and component failures with explicit state replay policy.`
+  done when: recovery plans are proven for at least one node failure and one component failure path, including bounded divergence recovery windows.
+- [ ] `#9 Validate autoscaling in load-representative traffic and recovery conditions.`
+  done when: autoscaling decisions are explained from observed CPU/memory/RPS/queue/latency signals and recover correctly after controller restart or partial state loss.
+- [ ] `#10 Implement drain-before-delete behavior with active-connections preservation and safe teardown.`
+  done when: node deletion under live traffic preserves in-flight work and only closes at a controlled boundary with bounded loss.
+- [ ] `#11 Harden Hetzner provision/deletion path as production-grade.`
+  done when: bootstrap, registration, readiness propagation, delete/retry behavior, and failure modes are proven end-to-end in real Hetzner API conditions.
+- [ ] `#12 Reconstruct provider fleet state after controller restart without losing pending decisions.`
+  done when: controller recovery rehydrates live provider state and safely resumes pending actions with deterministic conflict handling.
+- [ ] `#13 Finalize OTLP export behavior under real collectors and failure modes.`
+  done when: success/failure/rate-limit/retry/timeouts/request-size/response-size are all represented with deterministic ordering and bounded replay policy.
+- [ ] `#14 Close telemetry lifecycle gaps around memory bounds, residue prevention, and context propagation.`
+  done when: telemetry state cannot leak across requests/workers, queue policies prevent unbounded growth, and propagation stays intact under resumptions.
+- [ ] `#15 Implement end-to-end backup and restore flows for snapshots and metadata with integrity checks.`
+  done when: restore from full/incremental payloads is validated and idempotent under partial corruption and schema-migration pressure.
+- [ ] `#16 Prove restart-rehydration consistency across all persistence modes in one matrix.`
+  done when: local restart and crash recovery preserve contracts for store, runtime state, and in-flight recovery semantics under all supported persistence modes.
+- [ ] `#17 Harden real S3 path with multi-backend fallback and failure-aware recovery.`
+  done when: cloud-backed object operations survive credential/rate-limit/network faults and keep replica/failover semantics coherent.
+- [ ] `#18 Strengthen cache/CDN behavior under real traffic and pressure.`
+  done when: cache fill/invalidation/TTL/recovery semantics are verified under load, stale-object handling, and memory pressure.
+- [ ] `#19 Execute a full hardening sweep across public entry points, persistence, transport, credentials, and untrusted inputs.`
+  done when: path traversal, injection, UAF, leak/double-free, and secret-handling risks are systematically closed with regression tests for negative inputs.
+- [ ] `#20 Make release/build determinism a hard floor across clean hosts and environments.`
+  done when: dependency pinning, reproducible artifacts, deterministic runtime bootstrap, and release gates are enforced for toolchain and build-path variability.
+
 ## Notes
 
-- The active batch is now the `R` system lifecycle / readiness / drain / failover block.
+- The active batch is now the `S` distributed runtime and v1 hardening block.
 - The closed `Q` Flow PHP / ETL integration block remains visible above until the release cut by explicit user request.
 - Closed leaves inside the visible blocks stay in `ISSUES.md` as `[x]` until the release cut instead of being deleted early.
-- Batch `R` is exhausted locally; repo docs and `READYNESS_TRACKER.md` are now closed out before the PR handoff.
+- Batch `R` was exhausted previously; `S` is now the open block for `develop/v1.0.3-beta`.
 - If a task is not listed here, it is not the current repo-local execution item.
