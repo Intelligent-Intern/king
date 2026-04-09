@@ -581,7 +581,9 @@ int king_autoscaling_init_system(const kg_cloud_autoscale_config_t *config)
 
     king_autoscaling_runtime_load_state();
     if (
-        king_autoscaling_runtime.state_load_incomplete
+        king_autoscaling_runtime.provider_kind == KING_AUTOSCALING_PROVIDER_HETZNER
+        && king_autoscaling_runtime.config.state_path != NULL
+        && king_autoscaling_runtime.config.state_path[0] != '\0'
         && king_autoscaling_provider_reconcile_inventory() != SUCCESS
     ) {
         return FAILURE;
@@ -594,4 +596,3 @@ void king_autoscaling_shutdown_system(void)
 {
     king_autoscaling_runtime_reset();
 }
-
