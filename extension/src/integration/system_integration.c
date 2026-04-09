@@ -1504,6 +1504,7 @@ static void king_system_collect_admission_state(
 {
     king_component_info_t *info;
     zend_ulong idx;
+    bool draining_request = king_system_shutdown_requested || king_system_recovery_requested;
 
     memset(state, 0, sizeof(*state));
     state->lifecycle = "stopped";
@@ -1537,10 +1538,7 @@ static void king_system_collect_admission_state(
         }
     } ZEND_HASH_FOREACH_END();
 
-    if (
-        (king_system_shutdown_requested || king_system_recovery_requested)
-        && (state->has_draining || state->has_error)
-    ) {
+    if (draining_request || state->has_error) {
         state->lifecycle = "draining";
     } else {
     state->lifecycle = king_system_resolve_lifecycle(
