@@ -274,6 +274,8 @@ static bool king_semantic_dns_service_apply_probe_snapshot(
         return false;
     }
 
+    service->last_health_check = time(NULL);
+
     if (!zend_string_equals_cstr(service->status, status_literal, strlen(status_literal))) {
         zend_string_release_ex(service->status, 1);
         service->status = zend_string_init(status_literal, strlen(status_literal), 1);

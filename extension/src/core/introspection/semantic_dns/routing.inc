@@ -46,6 +46,10 @@ PHP_FUNCTION(king_semantic_dns_get_optimal_route)
                 continue;
             }
 
+            if (king_semantic_dns_route_rank(service) >= 2) {
+                continue;
+            }
+
             memset(&native_record, 0, sizeof(native_record));
             if (service->hostname != NULL) {
                 strncpy(native_record.hostname, ZSTR_VAL(service->hostname), 255);
