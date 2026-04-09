@@ -57,7 +57,7 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
   done when: long-duration soak tests cover stream/session lifecycle, congestion and flow control, zero-RTT/resumption, interruption recovery, and deterministic error mapping.
 - [x] `#4 Finish HTTP/1, HTTP/2, and HTTP/3 listener verification for real on-wire request/response and session behavior.`
   done when: server listeners survive heavy traffic with normalization, cleanup, Early Hints, TLS reload, mTLS admin paths, fairness, and restart-safe drain behavior.
-- [ ] `#5 Promote Semantic DNS from local-only mode to real network listener behavior.`
+- [x] `#5 Promote Semantic DNS from local-only mode to real network listener behavior.`
   done when: discovery, registration, and gossip-like topology behavior run over real sockets with persistence, rehydration, and partial split-brain recovery.
 - [x] `#6 Validate routing decisions against real health and load signals instead of static or local-only heuristics.`
   done when: router policy uses measured load/health deltas and produces explainable routing decisions with bounded stale-state impact.
