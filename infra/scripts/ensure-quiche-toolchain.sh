@@ -42,6 +42,7 @@ Use one of:
      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
      . "$HOME/.cargo/env"
      rustup update stable
+     rustup toolchain install nightly
      rustup default stable
 
   2) Or install your distro package (examples):
@@ -92,9 +93,14 @@ prompt_or_default() {
 
 run_rust_upgrade() {
     local installed=0
+    local ensure_nightly=0
 
     if command -v rustup >/dev/null 2>&1; then
         rustup update stable
+        if ! rustup toolchain list --installed 2>/dev/null | awk '{print $1}' | grep -q '^nightly'; then
+            rustup toolchain install nightly
+            ensure_nightly=1
+        fi
         installed=1
     elif command -v curl >/dev/null 2>&1; then
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -110,6 +116,9 @@ run_rust_upgrade() {
     fi
 
     if [[ "${installed}" -eq 1 ]] && command -v cargo >/dev/null 2>&1 && command -v rustc >/dev/null 2>&1; then
+        if [[ "${ensure_nightly}" -eq 1 ]] && ! rustup toolchain list --installed 2>/dev/null | awk '{print $1}' | grep -q '^nightly'; then
+            echo "Warning: nightly toolchain installation did not complete; lockfile-v4 fallback likely still fails." >&2
+        fi
         rustup default stable
         return 0
     fi
@@ -118,6 +127,8 @@ run_rust_upgrade() {
 }
 
 check_lockfile_compat() {
+    local toolchain="${1:-}"
+    local -a cargo_cmd=("${CARGO_COMPAT_SCRIPT}")
     local tmp_file
     local cargo_status=0
 
@@ -126,10 +137,16 @@ check_lockfile_compat() {
         return 1
     fi
 
+    if [[ -n "${toolchain}" ]]; then
+        cargo_cmd+=( "${toolchain}" )
+    fi
+
+    cargo_cmd+=( cargo metadata --locked --format-version=1 --manifest-path "${MANIFEST_PATH}" )
+
     tmp_file="$(mktemp)"
     set +e
     CARGO_TARGET_DIR="$(dirname "${MANIFEST_PATH}")/../target" \
-        "${CARGO_COMPAT_SCRIPT}" cargo metadata --locked --format-version=1 --manifest-path "${MANIFEST_PATH}" \
+        "${cargo_cmd[@]}" \
         >"${tmp_file}" 2>&1
     cargo_status=$?
     set -e
@@ -177,8 +194,10 @@ if ! check_lockfile_compat; then
                 exit 1
             fi
             if ! check_lockfile_compat; then
-                echo "Toolchain still cannot process lockfile-v4 after upgrade." >&2
-                exit 1
+                if ! check_lockfile_compat "+nightly"; then
+                    echo "Toolchain still cannot process lockfile-v4 after upgrade." >&2
+                    exit 1
+                fi
             fi
             ;;
         *)
