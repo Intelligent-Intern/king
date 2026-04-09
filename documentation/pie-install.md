@@ -93,13 +93,14 @@ PIE then enters the King build path under `extension/`, runs `phpize`,
 installs the QUIC runtime artifacts beside the extension by default.
 
 If a build runs in CI/non-interactive mode and your Rust toolchain is missing or
-outdated, set:
+outdated (including lockfile-v4 readers), set:
 
 ```bash
 KING_QUICHE_TOOLCHAIN_CONFIRM=yes pie install intelligent-intern/king-ext
 ```
 
-for automatic in-script upgrade attempts, or:
+for automatic in-script upgrade attempts (which also installs `nightly` when needed
+for lockfile-v4 compatibility), or:
 
 ```bash
 KING_QUICHE_TOOLCHAIN_CONFIRM=no pie install intelligent-intern/king-ext
