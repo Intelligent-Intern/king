@@ -89,7 +89,7 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
   done when: cache fill/invalidation/TTL/recovery semantics are verified under load, stale-object handling, and memory pressure.
 - [ ] `#19 Execute a full hardening sweep across public entry points, persistence, transport, credentials, and untrusted inputs.`
   done when: path traversal, injection, UAF, leak/double-free, and secret-handling risks are systematically closed with regression tests for negative inputs.
-- [ ] `#20 Make release/build determinism a hard floor across clean hosts and environments.`
+- [x] `#20 Make release/build determinism a hard floor across clean hosts and environments.`
   done when: dependency pinning, reproducible artifacts, deterministic runtime bootstrap, and release gates are enforced for toolchain and build-path variability.
 
 ## Notes
