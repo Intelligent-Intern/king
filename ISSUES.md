@@ -61,7 +61,7 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
   done when: discovery, registration, and gossip-like topology behavior run over real sockets with persistence, rehydration, and partial split-brain recovery.
 - [ ] `#6 Validate routing decisions against real health and load signals instead of static or local-only heuristics.`
   done when: router policy uses measured load/health deltas and produces explainable routing decisions with bounded stale-state impact.
-- [ ] `#7 Enforce system-wide readiness and drain state transitions across the entire runtime fabric.`
+- [x] `#7 Enforce system-wide readiness and drain state transitions across the entire runtime fabric.`
   done when: all runtime entrypoints observe ordered state transitions for start, ready, drain, stop, and fail conditions, including controlled admission behavior during drain.
 - [ ] `#8 Implement coordinated recovery across node and component failures with explicit state replay policy.`
   done when: recovery plans are proven for at least one node failure and one component failure path, including bounded divergence recovery windows.
