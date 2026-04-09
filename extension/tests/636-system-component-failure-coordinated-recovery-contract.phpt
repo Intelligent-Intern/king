@@ -83,6 +83,7 @@ var_dump($failed['components']['telemetry']['status']);
 var_dump($failed['components']['telemetry']['readiness_reason']);
 var_dump($failed['components']['telemetry']['errors_encountered']);
 var_dump($failed['readiness_blocker_count']);
+var_dump($failed['recovery']['mode']);
 var_dump($failed['drain_intent']['reason']);
 var_dump($failed['admission']['process_requests']);
 var_dump(king_system_process_request([]));
@@ -103,10 +104,18 @@ var_dump($draining['drain_intent']['target_lifecycle']);
 var_dump(in_array('telemetry', $draining['drain_intent']['target_components'], true));
 var_dump($draining['admission']['process_requests']);
 var_dump($draining['allowed_lifecycle_transitions']);
+var_dump($draining['recovery']['mode']);
+var_dump((bool) $draining['recovery']['plan_id']);
+var_dump(str_starts_with($draining['recovery']['plan_id'], 'component_failure:'));
+var_dump($draining['recovery']['plan_window_seconds']);
 
 var_dump($starting['lifecycle']);
 var_dump($starting['drain_intent']['reason']);
 var_dump($starting['admission']['process_requests']);
+var_dump($starting['recovery']['mode']);
+var_dump($starting['recovery']['plan_requested_at'] > 0);
+var_dump($starting['recovery']['plan_window_seconds']);
+var_dump($starting['recovery']['active']);
 
 var_dump($ready['lifecycle']);
 var_dump($ready['components']['telemetry']['status']);
@@ -116,6 +125,8 @@ var_dump($ready['components_ready'] === $ready['component_count']);
 var_dump($ready['readiness_blocker_count']);
 var_dump($ready['admission']['process_requests']);
 var_dump($ready['admission']['remote_peer_dispatches']);
+var_dump($ready['recovery']['active']);
+var_dump($ready['recovery']['mode']);
 
 var_dump(king_system_shutdown());
 $stopped = king_system_wait_until_stopped_after_component_recovery();
@@ -129,6 +140,7 @@ string(6) "failed"
 string(5) "error"
 string(16) "component_failed"
 int(1)
+string(4) "none"
 int(1)
 string(4) "none"
 bool(false)
@@ -163,9 +175,17 @@ array(3) {
   [2]=>
   string(7) "stopped"
 }
+string(17) "component_failure"
+bool(true)
+bool(true)
+int(15)
 string(8) "starting"
-string(4) "none"
+string(18) "component_recovery"
 bool(false)
+string(17) "component_failure"
+bool(true)
+int(15)
+bool(true)
 string(5) "ready"
 string(7) "running"
 string(5) "ready"
@@ -173,7 +193,8 @@ int(1)
 bool(true)
 int(0)
 bool(true)
-bool(true)
+bool(false)
+string(17) "component_failure"
 bool(true)
 bool(false)
 string(7) "stopped"
