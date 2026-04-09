@@ -73,7 +73,7 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
   done when: bootstrap, registration, readiness propagation, delete/retry behavior, and failure modes are proven end-to-end in real Hetzner API conditions.
 - [x] `#12 Reconstruct provider fleet state after controller restart without losing pending decisions.`
   done when: controller recovery rehydrates live provider state and safely resumes pending actions with deterministic conflict handling.
-- [ ] `#13 Finalize OTLP export behavior under real collectors and failure modes.`
+- [x] `#13 Finalize OTLP export behavior under real collectors and failure modes.`
   done when: success/failure/rate-limit/retry/timeouts/request-size/response-size are all represented with deterministic ordering and bounded replay policy.
 - [ ] `#14 Close telemetry lifecycle gaps around memory bounds, residue prevention, and context propagation.`
   done when: telemetry state cannot leak across requests/workers, queue policies prevent unbounded growth, and propagation stays intact under resumptions.
