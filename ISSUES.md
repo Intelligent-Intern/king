@@ -79,7 +79,7 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
   done when: telemetry state cannot leak across requests/workers, queue policies prevent unbounded growth, and propagation stays intact under resumptions.
 - [x] `#15 Implement end-to-end backup and restore flows for snapshots and metadata with integrity checks.`
   done when: restore from full/incremental payloads is validated and idempotent under partial corruption and schema-migration pressure.
-- [ ] `#16 Prove restart-rehydration consistency across all persistence modes in one matrix.`
+- [x] `#16 Prove restart-rehydration consistency across all persistence modes in one matrix.`
   done when: local restart and crash recovery preserve contracts for store, runtime state, and in-flight recovery semantics under all supported persistence modes.
 - [ ] `#17 Harden real S3 path with multi-backend fallback and failure-aware recovery.`
   done when: cloud-backed object operations survive credential/rate-limit/network faults and keep replica/failover semantics coherent.
