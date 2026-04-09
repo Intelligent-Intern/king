@@ -67,7 +67,7 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
   done when: recovery plans are proven for at least one node failure and one component failure path, including bounded divergence recovery windows.
 - [ ] `#9 Validate autoscaling in load-representative traffic and recovery conditions.`
   done when: autoscaling decisions are explained from observed CPU/memory/RPS/queue/latency signals and recover correctly after controller restart or partial state loss.
-- [ ] `#10 Implement drain-before-delete behavior with active-connections preservation and safe teardown.`
+- [x] `#10 Implement drain-before-delete behavior with active-connections preservation and safe teardown.`
   done when: node deletion under live traffic preserves in-flight work and only closes at a controlled boundary with bounded loss.
 - [ ] `#11 Harden Hetzner provision/deletion path as production-grade.`
   done when: bootstrap, registration, readiness propagation, delete/retry behavior, and failure modes are proven end-to-end in real Hetzner API conditions.

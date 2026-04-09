@@ -240,7 +240,7 @@ static zend_result king_autoscaling_hetzner_delete_node(
 
     smart_str_free(&response);
 
-    if (http_code < 200 || http_code >= 300) {
+    if ((http_code < 200 || http_code >= 300) && http_code != 404 && http_code != 410) {
         snprintf(
             king_autoscaling_runtime.last_error,
             sizeof(king_autoscaling_runtime.last_error),
