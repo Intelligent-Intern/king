@@ -75,7 +75,7 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
   done when: controller recovery rehydrates live provider state and safely resumes pending actions with deterministic conflict handling.
 - [x] `#13 Finalize OTLP export behavior under real collectors and failure modes.`
   done when: success/failure/rate-limit/retry/timeouts/request-size/response-size are all represented with deterministic ordering and bounded replay policy.
-- [ ] `#14 Close telemetry lifecycle gaps around memory bounds, residue prevention, and context propagation.`
+- [x] `#14 Close telemetry lifecycle gaps around memory bounds, residue prevention, and context propagation.`
   done when: telemetry state cannot leak across requests/workers, queue policies prevent unbounded growth, and propagation stays intact under resumptions.
 - [ ] `#15 Implement end-to-end backup and restore flows for snapshots and metadata with integrity checks.`
   done when: restore from full/incremental payloads is validated and idempotent under partial corruption and schema-migration pressure.
