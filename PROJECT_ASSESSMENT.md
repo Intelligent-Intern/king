@@ -1,6 +1,6 @@
 # King Project Assessment
 
-> Stand: 2026-04-08
+> Stand: 2026-04-10
 > Scope: verified repo-local v1 state inside this repository
 > This file records what is actually verified now.
 > `README.md` stays product-level.
@@ -18,10 +18,10 @@ The remaining gaps are no longer about broad runtime parity or placeholder
 surfaces inside the local tree. They are now concentrated in the deeper
 control-plane, telemetry, and fleet-behavior proof still listed below.
 
-The explicitly requested `20`-issue repo-local batch in `ISSUES.md` is now
-exhausted on `develop/v1.0.2-beta` after closing the system lifecycle /
-readiness / drain / failover block, and the branch is ready for the next PR
-handoff.
+The explicitly requested `S` repo-local execution batch in `ISSUES.md` is now
+exhausted on `develop/v1.0.3-beta`, including the distributed runtime and
+hardening closure leaves (`#1`, `#3`-`#19`), and the branch is in closeout/wait
+state for the next explicitly selected batch.
 
 ## Verified Baseline Snapshot
 
@@ -53,7 +53,7 @@ Current tree facts:
 
 - `extension/src`: `177` C files
 - `extension/include`: `172` headers
-- `extension/tests`: `617` PHPT files
+- `extension/tests`: `649` PHPT files
 - public stub parity: `138` functions, `44` classes, `56` declared public methods
 - `king_health()['stubbed_api_group_count']`: `0`
 - project-owned headers now live under `extension/include` with generated `extension/config.h` as the only root-level exception

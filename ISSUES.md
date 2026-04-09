@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- batch `S` is active on `develop/v1.0.3-beta`.
+- batch `S` is exhausted on `develop/v1.0.3-beta`; waiting for explicit next batch selection.
 
 ## Active Executable Items
 
@@ -91,5 +91,6 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
 ## Notes
 
 - The active batch is now the `S` distributed runtime and v1 hardening block.
+- Batch `S` is fully closed (`#1`, `#3`-`#19`) and is in closeout/wait state.
 - The `Q` and `R` blocks are fully completed and recorded in `PROJECT_ASSESSMENT.md`.
 - If a task is not listed here, it is not the current repo-local execution item.
