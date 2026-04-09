@@ -81,7 +81,7 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
   done when: restore from full/incremental payloads is validated and idempotent under partial corruption and schema-migration pressure.
 - [x] `#16 Prove restart-rehydration consistency across all persistence modes in one matrix.`
   done when: local restart and crash recovery preserve contracts for store, runtime state, and in-flight recovery semantics under all supported persistence modes.
-- [ ] `#17 Harden real S3 path with multi-backend fallback and failure-aware recovery.`
+- [x] `#17 Harden real S3 path with multi-backend fallback and failure-aware recovery.`
   done when: cloud-backed object operations survive credential/rate-limit/network faults and keep replica/failover semantics coherent.
 - [ ] `#18 Strengthen cache/CDN behavior under real traffic and pressure.`
   done when: cache fill/invalidation/TTL/recovery semantics are verified under load, stale-object handling, and memory pressure.
