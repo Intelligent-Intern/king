@@ -203,13 +203,21 @@ static int king_telemetry_dispatch_otlp_json_payload(
     }
 
     if (result == SUCCESS) {
+        const char *reason = "non_2xx_status";
+        const char *message = "Collector returned a non-2xx HTTP status.";
+
+        if (response.status_code == 429) {
+            reason = "rate_limited";
+            message = "Collector rate limited the export request (HTTP 429).";
+        }
+
         king_telemetry_record_export_diagnostic(
             signal_name,
             "http",
-            "non_2xx_status",
+            reason,
             "retry",
             batch_id,
-            "Collector returned a non-2xx HTTP status.",
+            message,
             0,
             (zend_long) response.status_code,
             payload_bytes,
