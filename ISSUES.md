@@ -53,8 +53,6 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
 
 - [ ] `#1 Implement verifiable distributed WebSocket fanout and upgrade-forwarding so HTTP listeners can route live sessions across nodes under sustained load.`
   done when: the repo proves on-wire websocket fanout and node-to-node upgrade forwarding for real multi-node traffic, including routing fairness and backpressure behavior.
-- [x] `#2 Complete King\WebSocket\Server on real runtime behavior, including lifecycle-shutdown and draining semantics under active sessions.`
-  done when: the public runtime API is backed by proven real runtime code paths and passes long-lived upgrade and drain/restart harnesses.
 - [ ] `#3 Prove sustained QUIC/HTTP/3 runtime stability under stress and partial failure.`
   done when: long-duration soak tests cover stream/session lifecycle, congestion and flow control, zero-RTT/resumption, interruption recovery, and deterministic error mapping.
 - [ ] `#4 Finish HTTP/1, HTTP/2, and HTTP/3 listener verification for real on-wire request/response and session behavior.`
@@ -89,8 +87,6 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
   done when: cache fill/invalidation/TTL/recovery semantics are verified under load, stale-object handling, and memory pressure.
 - [ ] `#19 Execute a full hardening sweep across public entry points, persistence, transport, credentials, and untrusted inputs.`
   done when: path traversal, injection, UAF, leak/double-free, and secret-handling risks are systematically closed with regression tests for negative inputs.
-- [x] `#20 Make release/build determinism a hard floor across clean hosts and environments.`
-  done when: dependency pinning, reproducible artifacts, deterministic runtime bootstrap, and release gates are enforced for toolchain and build-path variability.
 
 ## Notes
 
