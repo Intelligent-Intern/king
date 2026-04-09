@@ -4,12 +4,26 @@
 
 $logFile = $argv[1] ?? '';
 $port = (int) ($argv[2] ?? 0);
-$deleteStatus = (int) ($argv[3] ?? 204);
+$deleteStatus = (string) ($argv[3] ?? '204');
 $createStatus = (int) ($argv[4] ?? 201);
 $nextId = (int) ($argv[5] ?? 9000);
 $bindHost = $argv[6] ?? '127.0.0.1';
 $listStatus = (int) ($argv[7] ?? 200);
 $stateFile = $argv[8] ?? '';
+$deleteStatuses = [];
+$deleteAttempt = 0;
+
+foreach (explode(',', $deleteStatus) as $entry) {
+    $entry = trim((string) $entry);
+    if ($entry === '') {
+        continue;
+    }
+    $deleteStatuses[] = (int) $entry;
+}
+
+if ($deleteStatuses === []) {
+    $deleteStatuses[] = 204;
+}
 
 function king_autoscaling_hetzner_mock_load_state(string $stateFile, int $fallbackNextId): array
 {
@@ -144,6 +158,9 @@ while (true) {
             . $payload;
         fwrite($conn, $response);
     } elseif ($method === 'DELETE' && preg_match('#^/v1/servers/\d+$#', $path) === 1) {
+        $deleteStatus = $deleteStatuses[$deleteAttempt] ?? $deleteStatuses[count($deleteStatuses) - 1];
+        $deleteAttempt++;
+
         if ($deleteStatus === 204) {
             $state = king_autoscaling_hetzner_mock_load_state($stateFile, $nextId);
             $serverId = (int) basename($path);
