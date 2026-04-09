@@ -85,7 +85,7 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
   done when: cloud-backed object operations survive credential/rate-limit/network faults and keep replica/failover semantics coherent.
 - [x] `#18 Strengthen cache/CDN behavior under real traffic and pressure.`
   done when: cache fill/invalidation/TTL/recovery semantics are verified under load, stale-object handling, and memory pressure.
-- [ ] `#19 Execute a full hardening sweep across public entry points, persistence, transport, credentials, and untrusted inputs.`
+- [x] `#19 Execute a full hardening sweep across public entry points, persistence, transport, credentials, and untrusted inputs.`
   done when: path traversal, injection, UAF, leak/double-free, and secret-handling risks are systematically closed with regression tests for negative inputs.
 
 ## Notes
