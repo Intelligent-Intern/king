@@ -203,11 +203,23 @@ static king_autoscaling_managed_node_t *king_autoscaling_runtime_pick_delete_can
     return NULL;
 }
 
+static const long king_autoscaling_hetzner_delete_max_attempts = 3;
+static const long king_autoscaling_hetzner_delete_retry_delay_us = 100000;
+
+static zend_bool king_autoscaling_http_status_is_retryable_delete(long http_code)
+{
+    return http_code == 429 || (http_code >= 500 && http_code <= 599);
+}
+
 static zend_result king_autoscaling_hetzner_delete_node(
     king_autoscaling_managed_node_t *node,
     const char *error_context)
 {
     char url[512];
+    const char *effective_error_context = error_context != NULL
+        ? error_context
+        : "Hetzner delete server request";
+    long attempt;
     long http_code = 0;
     smart_str response = {0};
     const char *token = king_autoscaling_runtime.config.hetzner_api_token;
@@ -233,26 +245,63 @@ static zend_result king_autoscaling_hetzner_delete_node(
         (long) node->server_id
     );
 
-    if (king_autoscaling_http_request("DELETE", url, token, NULL, &http_code, &response) != SUCCESS) {
+    for (attempt = 1; attempt <= king_autoscaling_hetzner_delete_max_attempts; attempt++) {
+        if (king_autoscaling_http_request(
+            "DELETE",
+            url,
+            token,
+            NULL,
+            &http_code,
+            &response
+        ) != SUCCESS) {
+            smart_str_free(&response);
+            if (attempt < king_autoscaling_hetzner_delete_max_attempts) {
+                usleep(king_autoscaling_hetzner_delete_retry_delay_us);
+                continue;
+            }
+            return FAILURE;
+        }
+
+        if (
+            (http_code >= 200 && http_code < 300)
+            || http_code == 404
+            || http_code == 410
+        ) {
+            smart_str_free(&response);
+            return SUCCESS;
+        }
+
+        if (king_autoscaling_http_status_is_retryable_delete(http_code)
+            && attempt < king_autoscaling_hetzner_delete_max_attempts
+        ) {
+            smart_str_free(&response);
+            usleep(king_autoscaling_hetzner_delete_retry_delay_us);
+            continue;
+        }
+
+        snprintf(
+            king_autoscaling_runtime.last_error,
+            sizeof(king_autoscaling_runtime.last_error),
+            "%s for %ld returned HTTP %ld after %ld attempt(s).",
+            effective_error_context,
+            (long) node->server_id,
+            http_code,
+            attempt
+        );
         smart_str_free(&response);
         return FAILURE;
     }
 
     smart_str_free(&response);
-
-    if ((http_code < 200 || http_code >= 300) && http_code != 404 && http_code != 410) {
-        snprintf(
-            king_autoscaling_runtime.last_error,
-            sizeof(king_autoscaling_runtime.last_error),
-            "%s for %ld returned HTTP %ld.",
-            error_context != NULL ? error_context : "Hetzner delete server request",
-            (long) node->server_id,
-            http_code
-        );
-        return FAILURE;
-    }
-
-    return SUCCESS;
+    snprintf(
+        king_autoscaling_runtime.last_error,
+        sizeof(king_autoscaling_runtime.last_error),
+        "%s for %ld failed after %ld attempt(s).",
+        effective_error_context,
+        (long) node->server_id,
+        king_autoscaling_hetzner_delete_max_attempts
+    );
+    return FAILURE;
 }
 
 static void king_autoscaling_runtime_mark_node_deleted(

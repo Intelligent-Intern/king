@@ -69,7 +69,7 @@ The next batch focuses on closing the biggest remaining public-reliability gaps 
   done when: autoscaling decisions are explained from observed CPU/memory/RPS/queue/latency signals and recover correctly after controller restart or partial state loss.
 - [x] `#10 Implement drain-before-delete behavior with active-connections preservation and safe teardown.`
   done when: node deletion under live traffic preserves in-flight work and only closes at a controlled boundary with bounded loss.
-- [ ] `#11 Harden Hetzner provision/deletion path as production-grade.`
+- [x] `#11 Harden Hetzner provision/deletion path as production-grade.`
   done when: bootstrap, registration, readiness propagation, delete/retry behavior, and failure modes are proven end-to-end in real Hetzner API conditions.
 - [ ] `#12 Reconstruct provider fleet state after controller restart without losing pending decisions.`
   done when: controller recovery rehydrates live provider state and safely resumes pending actions with deterministic conflict handling.
