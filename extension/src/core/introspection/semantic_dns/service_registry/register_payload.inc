@@ -198,6 +198,7 @@ static king_semantic_dns_service *king_semantic_dns_service_create_from_payload(
     }
 
     service->registered_at = time(NULL);
+    service->last_health_check = service->registered_at;
     return service;
 
 fail:

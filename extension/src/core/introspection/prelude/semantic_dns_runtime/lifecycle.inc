@@ -255,6 +255,22 @@ static king_semantic_dns_service *king_semantic_dns_registry_get_service(
 
 static int king_semantic_dns_route_rank(const king_semantic_dns_service *service)
 {
+    bool fresh_signal;
+
+    if (service == NULL || service->status == NULL) {
+        return 3;
+    }
+
+    fresh_signal = service->last_health_check > 0
+        && service->status != NULL
+        && (king_smart_dns_config.default_record_ttl_sec <= 0
+            || (time(NULL) - service->last_health_check)
+                <= king_smart_dns_config.default_record_ttl_sec);
+
+    if (!fresh_signal) {
+        return 2;
+    }
+
     if (zend_string_equals_literal(service->status, "healthy")) {
         return 0;
     }

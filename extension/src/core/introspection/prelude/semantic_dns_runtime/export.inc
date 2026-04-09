@@ -44,6 +44,7 @@ static void king_semantic_dns_export_service(
     add_assoc_long(target, "current_load_percent", service->current_load_percent);
     add_assoc_long(target, "active_connections", service->active_connections);
     add_assoc_long(target, "total_requests", service->total_requests);
+    add_assoc_long(target, "last_health_check", (zend_long) service->last_health_check);
     king_semantic_dns_export_attributes(&attributes, &service->attributes);
     add_assoc_zval(target, "attributes", &attributes);
     add_assoc_long(target, "registered_at", (zend_long) service->registered_at);

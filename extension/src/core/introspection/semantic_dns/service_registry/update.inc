@@ -16,6 +16,7 @@ PHP_FUNCTION(king_semantic_dns_update_service_status)
     zend_long previous_current_load_percent = 0;
     zend_long previous_active_connections = 0;
     zend_long previous_total_requests = 0;
+    time_t previous_last_health_check = 0;
 
     ZEND_PARSE_PARAMETERS_START(2, 3)
         Z_PARAM_STR(service_id)
@@ -77,6 +78,8 @@ PHP_FUNCTION(king_semantic_dns_update_service_status)
         state_changed = true;
     }
 
+    previous_last_health_check = service->last_health_check;
+
     previous_current_load_percent = service->current_load_percent;
     previous_active_connections = service->active_connections;
     previous_total_requests = service->total_requests;
@@ -95,6 +98,11 @@ PHP_FUNCTION(king_semantic_dns_update_service_status)
     if (service->current_load_percent != previous_current_load_percent
         || service->active_connections != previous_active_connections
         || service->total_requests != previous_total_requests) {
+        state_changed = true;
+    }
+
+    service->last_health_check = time(NULL);
+    if (service->last_health_check != previous_last_health_check) {
         state_changed = true;
     }
 

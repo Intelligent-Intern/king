@@ -252,6 +252,17 @@ static king_semantic_dns_service *king_semantic_dns_service_create_from_state_en
         return NULL;
     }
 
+    field = zend_hash_str_find(source, "last_health_check", sizeof("last_health_check") - 1);
+    if (field != NULL) {
+        if (Z_TYPE_P(field) != IS_LONG || Z_LVAL_P(field) <= 0) {
+            king_semantic_dns_service_free(service);
+            return NULL;
+        }
+        service->last_health_check = (time_t) Z_LVAL_P(field);
+    } else {
+        service->last_health_check = time(NULL);
+    }
+
     field = zend_hash_str_find(source, "registered_at", sizeof("registered_at") - 1);
     if (field != NULL && Z_TYPE_P(field) == IS_LONG && Z_LVAL_P(field) > 0) {
         service->registered_at = (time_t) Z_LVAL_P(field);
