@@ -20,6 +20,8 @@ EOF
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
+QUICHE_DIR="${KING_QUICHE_DIR:-${ROOT_DIR}/quiche}"
+QUICHE_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-quiche.sh"
 PROFILE_DIR="${EXT_DIR}/build/profiles/release"
 DEFAULT_OUTPUT_DIR="${ROOT_DIR}/dist"
 PHPIZE_GENERATED_LIST="${SCRIPT_DIR}/phpize-generated-files.list"
@@ -197,8 +199,8 @@ ensure_release_git_lock_state() {
         exit 1
     fi
 
-    if [[ ! -x "${SCRIPT_DIR}/bootstrap-quiche.sh" ]]; then
-        echo "Missing executable bootstrap script: ${SCRIPT_DIR}/bootstrap-quiche.sh" >&2
+    if [[ ! -x "${QUICHE_BOOTSTRAP_SCRIPT}" ]]; then
+        echo "Missing executable bootstrap script: ${QUICHE_BOOTSTRAP_SCRIPT}" >&2
         exit 1
     fi
 
@@ -213,8 +215,26 @@ ensure_release_git_lock_state() {
         fi
     done
 
-    "${SCRIPT_DIR}/bootstrap-quiche.sh" --verify-lock
-    "${SCRIPT_DIR}/bootstrap-quiche.sh" --verify-current
+    if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        "${QUICHE_BOOTSTRAP_SCRIPT}" --verify-lock
+
+        # CI checkouts may not contain a pre-populated quiche tree (for example
+        # when no gitlink-backed submodule is present in the fetched tree). Fall
+        # back to deterministic bootstrap from the pinned lock in that case.
+        if [[ -d "${QUICHE_DIR}" ]] && git -C "${QUICHE_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            if ! "${QUICHE_BOOTSTRAP_SCRIPT}" --verify-current; then
+                echo "Pinned quiche checkout verification failed; bootstrapping pinned checkout." >&2
+                "${QUICHE_BOOTSTRAP_SCRIPT}"
+            fi
+        else
+            echo "Pinned quiche checkout is missing in CI; bootstrapping pinned checkout." >&2
+            "${QUICHE_BOOTSTRAP_SCRIPT}"
+        fi
+
+        return 0
+    fi
+
+    "${QUICHE_BOOTSTRAP_SCRIPT}"
 }
 
 VERSION="$(resolve_version)"

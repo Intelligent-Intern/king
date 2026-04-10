@@ -3,7 +3,22 @@
 # Build scripts restore these to their pre-build content so local and CI release
 # packaging does not report host-generated churn as source dirtiness.
 #
+extension/build/Makefile.global
+extension/build/ax_check_compile_flag.m4
+extension/build/ax_gcc_func_attribute.m4
+extension/build/config.guess
+extension/build/config.sub
 extension/build/gen_stub.php
+extension/build/libtool.m4
+extension/build/ltmain.sh
+extension/build/ltoptions.m4
+extension/build/ltsugar.m4
+extension/build/ltversion.m4
+extension/build/lt~obsolete.m4
+extension/build/php.m4
+extension/build/php_cxx_compile_stdcxx.m4
+extension/build/pkg.m4
+extension/build/shtool
 extension/config.h
 extension/config.h.in
 extension/libtool
