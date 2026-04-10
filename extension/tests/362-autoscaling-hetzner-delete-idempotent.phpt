@@ -60,8 +60,8 @@ bool(true)
 bool(true)
 bool(true)
 bool(true)
-int(2)
+int(1)
 int(0)
 string(0) ""
 int(3)
-string(10) "/v1/servers"
+string(11) "/v1/servers"
