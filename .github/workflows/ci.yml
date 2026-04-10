@@ -151,7 +151,13 @@ jobs:
         env:
           SHARD_TOTAL: "3"
           SHARD_INDEX: "${{ matrix.shard-index }}"
-        run: ../infra/scripts/test-extension.sh
+        run: |
+          mkdir -p ../compat-artifacts/phpt/canonical-shard-${{ matrix.shard-index }}
+          set +e
+          ../infra/scripts/test-extension.sh 2>&1 | tee ../compat-artifacts/phpt/canonical-shard-${{ matrix.shard-index }}/run-tests.log
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "${status}"
 
       - name: Run final go-live readiness checks
         if: matrix.shard-index == 1
@@ -168,6 +174,17 @@ jobs:
             dist/*.tar.gz
             dist/*.tar.gz.sha256
 
+      - name: Collect canonical shard PHPT diagnostics
+        if: failure()
+        working-directory: extension
+        run: |
+          ../infra/scripts/collect-phpt-failure-artifacts.sh \
+            --job-name "canonical-baseline-shard-${{ matrix.shard-index }}" \
+            --tests-dir tests \
+            --config-log config.log \
+            --run-log ../compat-artifacts/phpt/canonical-shard-${{ matrix.shard-index }}/run-tests.log \
+            --output-dir ../compat-artifacts/phpt/canonical-shard-${{ matrix.shard-index }}
+
       - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -175,11 +192,7 @@ jobs:
           name: king-canonical-baseline-failures-shard-${{ matrix.shard-index }}
           if-no-files-found: ignore
           path: |
-            extension/config.log
-            extension/tests/*.diff
-            extension/tests/*.exp
-            extension/tests/*.log
-            extension/tests/*.out
+            compat-artifacts/phpt/canonical-shard-${{ matrix.shard-index }}/
 
   profile-smoke:
     name: ${{ matrix.profile }} profile smoke
@@ -253,6 +266,16 @@ jobs:
         working-directory: extension
         run: ../infra/scripts/smoke-profile.sh "${{ matrix.profile }}"
 
+      - name: Collect profile PHPT diagnostics
+        if: failure()
+        working-directory: extension
+        run: |
+          ../infra/scripts/collect-phpt-failure-artifacts.sh \
+            --job-name "profile-smoke-${{ matrix.profile }}" \
+            --tests-dir tests \
+            --config-log config.log \
+            --output-dir ../compat-artifacts/phpt/profile-${{ matrix.profile }}
+
       - name: Upload profile failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -260,12 +283,8 @@ jobs:
           name: king-${{ matrix.profile }}-profile-failures
           if-no-files-found: ignore
           path: |
-            extension/config.log
+            compat-artifacts/phpt/profile-${{ matrix.profile }}/
             extension/build/profiles/${{ matrix.profile }}/
-            extension/tests/*.diff
-            extension/tests/*.exp
-            extension/tests/*.log
-            extension/tests/*.out
 
   install-package-matrix:
     name: Release Package Build & Install Smoke PHP ${{ matrix.php-version }} ${{ matrix.arch-label }}
@@ -472,6 +491,16 @@ jobs:
         working-directory: extension
         run: ../infra/scripts/check-release-upgrade.sh --from-ref "${{ steps.previous.outputs.ref }}" --artifacts-dir ../compat-artifacts/release-upgrade
 
+      - name: Collect release upgrade PHPT diagnostics
+        if: failure()
+        working-directory: extension
+        run: |
+          ../infra/scripts/collect-phpt-failure-artifacts.sh \
+            --job-name "release-upgrade-compatibility" \
+            --tests-dir tests \
+            --config-log config.log \
+            --output-dir ../compat-artifacts/phpt/release-upgrade
+
       - name: Upload release upgrade failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -480,11 +509,7 @@ jobs:
           if-no-files-found: ignore
           path: |
             compat-artifacts/release-upgrade/
-            extension/config.log
-            extension/tests/*.diff
-            extension/tests/*.exp
-            extension/tests/*.log
-            extension/tests/*.out
+            compat-artifacts/phpt/release-upgrade/
 
   release-downgrade-compatibility:
     name: Release Downgrade Compatibility
@@ -563,6 +588,16 @@ jobs:
         working-directory: extension
         run: ../infra/scripts/check-release-downgrade.sh --from-ref "${{ steps.previous.outputs.ref }}" --artifacts-dir ../compat-artifacts/release-downgrade
 
+      - name: Collect release downgrade PHPT diagnostics
+        if: failure()
+        working-directory: extension
+        run: |
+          ../infra/scripts/collect-phpt-failure-artifacts.sh \
+            --job-name "release-downgrade-compatibility" \
+            --tests-dir tests \
+            --config-log config.log \
+            --output-dir ../compat-artifacts/phpt/release-downgrade
+
       - name: Upload release downgrade failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -571,11 +606,7 @@ jobs:
           if-no-files-found: ignore
           path: |
             compat-artifacts/release-downgrade/
-            extension/config.log
-            extension/tests/*.diff
-            extension/tests/*.exp
-            extension/tests/*.log
-            extension/tests/*.out
+            compat-artifacts/phpt/release-downgrade/
 
   release-persistence-migration:
     name: Release Persistence Migration
@@ -654,6 +685,16 @@ jobs:
         working-directory: extension
         run: ../infra/scripts/check-persistence-migration.sh --from-ref "${{ steps.previous.outputs.ref }}" --artifacts-dir ../compat-artifacts/release-persistence-migration
 
+      - name: Collect release persistence PHPT diagnostics
+        if: failure()
+        working-directory: extension
+        run: |
+          ../infra/scripts/collect-phpt-failure-artifacts.sh \
+            --job-name "release-persistence-migration" \
+            --tests-dir tests \
+            --config-log config.log \
+            --output-dir ../compat-artifacts/phpt/release-persistence-migration
+
       - name: Upload release persistence migration failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -662,11 +703,7 @@ jobs:
           if-no-files-found: ignore
           path: |
             compat-artifacts/release-persistence-migration/
-            extension/config.log
-            extension/tests/*.diff
-            extension/tests/*.exp
-            extension/tests/*.log
-            extension/tests/*.out
+            compat-artifacts/phpt/release-persistence-migration/
 
   release-config-state-compatibility:
     name: Release Config-State Compatibility
@@ -728,6 +765,16 @@ jobs:
         working-directory: extension
         run: ../infra/scripts/check-config-compatibility-matrix.sh --artifacts-dir ../compat-artifacts/release-config-state
 
+      - name: Collect release config-state PHPT diagnostics
+        if: failure()
+        working-directory: extension
+        run: |
+          ../infra/scripts/collect-phpt-failure-artifacts.sh \
+            --job-name "release-config-state-compatibility" \
+            --tests-dir tests \
+            --config-log config.log \
+            --output-dir ../compat-artifacts/phpt/release-config-state
+
       - name: Upload release config-state failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -736,11 +783,7 @@ jobs:
           if-no-files-found: ignore
           path: |
             compat-artifacts/release-config-state/
-            extension/config.log
-            extension/tests/*.diff
-            extension/tests/*.exp
-            extension/tests/*.log
-            extension/tests/*.out
+            compat-artifacts/phpt/release-config-state/
 
   sanitizer-soak:
     name: ${{ matrix.mode }} sanitizer soak
@@ -819,6 +862,16 @@ jobs:
         working-directory: extension
         run: ../infra/scripts/soak-runtime.sh "${{ matrix.mode }}" --iterations "${{ matrix.iterations }}" --artifacts-dir ../soak-artifacts/${{ matrix.mode }}
 
+      - name: Collect sanitizer PHPT diagnostics
+        if: failure()
+        working-directory: extension
+        run: |
+          ../infra/scripts/collect-phpt-failure-artifacts.sh \
+            --job-name "sanitizer-soak-${{ matrix.mode }}" \
+            --tests-dir tests \
+            --config-log config.log \
+            --output-dir ../compat-artifacts/phpt/sanitizer-${{ matrix.mode }}
+
       - name: Upload sanitizer soak failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -827,11 +880,7 @@ jobs:
           if-no-files-found: ignore
           path: |
             soak-artifacts/${{ matrix.mode }}/
-            extension/config.log
-            extension/tests/*.diff
-            extension/tests/*.exp
-            extension/tests/*.log
-            extension/tests/*.out
+            compat-artifacts/phpt/sanitizer-${{ matrix.mode }}/
 
   release-full-gate:
     name: Full pipeline completed
