@@ -85,6 +85,92 @@ static zend_long king_websocket_resolve_default_port(php_url *parsed_url)
     return 80;
 }
 
+static zend_result king_websocket_validate_raw_url_line_breaks(
+    const char *url_str,
+    size_t url_len,
+    const char *function_name
+)
+{
+    bool found_line_break = false;
+    bool has_scheme_authority = false;
+    bool has_query = false;
+    size_t first_line_break = 0;
+    size_t authority_start = 0;
+    size_t authority_end = 0;
+    size_t query_start = 0;
+    size_t i;
+
+    for (i = 0; i < url_len; ++i) {
+        if (url_str[i] == '\r' || url_str[i] == '\n') {
+            first_line_break = i;
+            found_line_break = true;
+            break;
+        }
+    }
+
+    if (!found_line_break) {
+        return SUCCESS;
+    }
+
+    for (i = 0; i + 2 < url_len; ++i) {
+        if (url_str[i] == ':' && url_str[i + 1] == '/' && url_str[i + 2] == '/') {
+            authority_start = i + 3;
+            has_scheme_authority = true;
+            break;
+        }
+    }
+
+    if (!has_scheme_authority) {
+        king_websocket_set_error(
+            "%s() URL path contains invalid line breaks.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    authority_end = url_len;
+    for (i = authority_start; i < url_len; ++i) {
+        if (url_str[i] == '/' || url_str[i] == '?' || url_str[i] == '#') {
+            authority_end = i;
+            break;
+        }
+    }
+
+    if (first_line_break < authority_end) {
+        king_websocket_set_error(
+            "%s() URL host contains invalid line breaks.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    for (i = authority_end; i < url_len; ++i) {
+        if (url_str[i] == '#') {
+            break;
+        }
+
+        if (url_str[i] == '?') {
+            has_query = true;
+            query_start = i + 1;
+            break;
+        }
+    }
+
+    if (has_query && first_line_break >= query_start) {
+        king_websocket_set_error(
+            "%s() URL query contains invalid line breaks.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    king_websocket_set_error(
+        "%s() URL path contains invalid line breaks.",
+        function_name
+    );
+    return FAILURE;
+}
+
 static zend_result king_websocket_parse_url(
     const char *url_str,
     size_t url_len,
@@ -99,6 +185,16 @@ static zend_result king_websocket_parse_url(
             "%s() requires a non-empty WebSocket URL.",
             function_name
         );
+        return FAILURE;
+    }
+
+    if (
+        king_websocket_validate_raw_url_line_breaks(
+            url_str,
+            url_len,
+            function_name
+        ) != SUCCESS
+    ) {
         return FAILURE;
     }
 

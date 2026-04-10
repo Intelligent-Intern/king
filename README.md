@@ -85,8 +85,7 @@ handing the work to a sidecar or an external glue service.
 
 The bucket-subscription registry in this example is intentionally
 application-managed and process-local. King already gives you the real object
-store and WebSocket runtime needed for it, but it does not currently claim a
-built-in distributed bucket-watch API. For the same reason, this README example
+store and WebSocket runtime needed for it, but it does not currently claim a built-in distributed bucket-watch API. For the same reason, this README example
 stays single-node on purpose instead of pretending the current router or
 load-balancer control-plane layer is already a verified WebSocket forwarding
 dataplane.
