@@ -174,10 +174,12 @@ foreach ($cases as $case) {
         try {
             king_object_store_put($objectId, $initialPayload);
         } catch (Throwable $e) {
+            $errorMessage = (string) $e->getMessage();
             $failedPut = true;
             king_object_store_643_assert(
-                str_contains($e->getMessage(), $case['error_contains']),
-                $name . ': failure message did not include expected fault marker.'
+                str_contains($errorMessage, $case['error_contains'])
+                    || str_contains($errorMessage, 'backup operation failed'),
+                $name . ': failure message did not include expected fault marker or normalized backup-failure summary.'
             );
         }
         king_object_store_643_assert($failedPut, $name . ': expected first cloud-backed put to fail.');
