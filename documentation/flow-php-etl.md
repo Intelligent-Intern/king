@@ -216,8 +216,8 @@ Future Flow PHP-style adapters on King should follow these rules:
 ## Repo-Local Streaming Source Contract
 
 The repository now also carries one real userland source contract under
-[`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
-[`../userland/flow-php/src/StreamingSource.php`](../userland/flow-php/src/StreamingSource.php).
+[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`../demo/userland/flow-php/src/StreamingSource.php`](../demo/userland/flow-php/src/StreamingSource.php).
 
 That code is intentionally repo-local. It is not presented as the final public
 Composer package. The important thing for this phase is that the source
@@ -262,8 +262,8 @@ The current PHPT proof covers:
 ## Repo-Local Streaming Sink Contract
 
 The repository now also carries one real userland sink contract under
-[`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
-[`../userland/flow-php/src/StreamingSink.php`](../userland/flow-php/src/StreamingSink.php).
+[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`../demo/userland/flow-php/src/StreamingSink.php`](../demo/userland/flow-php/src/StreamingSink.php).
 
 Again, that code is intentionally repo-local. The important point for this
 phase is that sink behavior is now real and test-backed instead of being left
@@ -315,8 +315,8 @@ The current PHPT proof covers:
 ## Repo-Local Object-Store Dataset Bridge Contract
 
 The repository now also carries one real userland object-store dataset bridge
-under [`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
-[`../userland/flow-php/src/ObjectStoreDataset.php`](../userland/flow-php/src/ObjectStoreDataset.php).
+under [`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`../demo/userland/flow-php/src/ObjectStoreDataset.php`](../demo/userland/flow-php/src/ObjectStoreDataset.php).
 
 This piece exists because plain byte sources and sinks are not yet the full
 dataset story. An ETL layer still needs one honest handle that can describe a
@@ -364,8 +364,8 @@ The current PHPT proof covers:
 ## Repo-Local Serialization And Schema Bridge Contract
 
 The repository now also carries one real repo-local serialization bridge under
-[`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
-[`../userland/flow-php/src/SerializationBridge.php`](../userland/flow-php/src/SerializationBridge.php).
+[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`../demo/userland/flow-php/src/SerializationBridge.php`](../demo/userland/flow-php/src/SerializationBridge.php).
 
 This piece exists because a dataset handle by itself still leaves one common
 ETL burden unsolved: every job would otherwise have to rebuild the same
@@ -408,8 +408,8 @@ The current PHPT proof covers:
 ## Repo-Local Checkpoint Store Contract
 
 The repository now also carries one real userland checkpoint-store contract
-under [`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
-[`../userland/flow-php/src/CheckpointStore.php`](../userland/flow-php/src/CheckpointStore.php).
+under [`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`../demo/userland/flow-php/src/CheckpointStore.php`](../demo/userland/flow-php/src/CheckpointStore.php).
 
 This piece exists because restart-aware source and sink adapters are not enough
 by themselves. A pipeline still needs one honest durable place to persist the
@@ -454,8 +454,8 @@ The current PHPT proof covers:
 ## Repo-Local Execution Backend Contract
 
 The repository now also carries one real userland execution-backend contract
-under [`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
-[`../userland/flow-php/src/ExecutionBackend.php`](../userland/flow-php/src/ExecutionBackend.php).
+under [`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`../demo/userland/flow-php/src/ExecutionBackend.php`](../demo/userland/flow-php/src/ExecutionBackend.php).
 
 This piece exists because bounded-memory transport adapters and durable
 checkpoints still do not answer one operational question: which King execution
@@ -504,8 +504,8 @@ The current PHPT proof covers:
 ## Repo-Local Control-Plane Contract
 
 The repository now also carries one real userland control-plane helper under
-[`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
-[`../userland/flow-php/src/ControlPlane.php`](../userland/flow-php/src/ControlPlane.php).
+[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`../demo/userland/flow-php/src/ControlPlane.php`](../demo/userland/flow-php/src/ControlPlane.php).
 
 This piece exists because execution capabilities plus checkpoint persistence
 still leave one operational gap: a dataflow run needs one explicit place where
@@ -558,8 +558,8 @@ The current PHPT proof covers:
 ## Repo-Local Failure Taxonomy Contract
 
 The repository now also carries one real userland failure-taxonomy helper
-under [`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
-[`../userland/flow-php/src/FailureTaxonomy.php`](../userland/flow-php/src/FailureTaxonomy.php).
+under [`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`../demo/userland/flow-php/src/FailureTaxonomy.php`](../demo/userland/flow-php/src/FailureTaxonomy.php).
 
 This piece exists because restart-aware sources, sinks, checkpoints, and
 execution backends still leave one important question open for ETL callers:
@@ -621,8 +621,8 @@ The current PHPT proof covers:
 
 The repository now also carries one real userland partitioning and
 backpressure helper under
-[`../userland/flow-php/README.md`](../userland/flow-php/README.md) and
-[`../userland/flow-php/src/Partitioning.php`](../userland/flow-php/src/Partitioning.php).
+[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`../demo/userland/flow-php/src/Partitioning.php`](../demo/userland/flow-php/src/Partitioning.php).
 
 This piece exists because distributed ETL still needs one honest answer to
 three operational questions:

@@ -10,11 +10,11 @@ if (!function_exists('proc_open')) {
 king.security_allow_config_override=1
 --FILE--
 <?php
-require_once __DIR__ . '/../../userland/flow-php/src/StreamingSource.php';
-require_once __DIR__ . '/../../userland/flow-php/src/StreamingSink.php';
-require_once __DIR__ . '/../../userland/flow-php/src/CheckpointStore.php';
-require_once __DIR__ . '/../../userland/flow-php/src/ExecutionBackend.php';
-require_once __DIR__ . '/../../userland/flow-php/src/FailureTaxonomy.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/StreamingSource.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/StreamingSink.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/CheckpointStore.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/ExecutionBackend.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/FailureTaxonomy.php';
 
 use King\Flow\CheckpointState;
 use King\Flow\FlowFailureTaxonomy;
@@ -159,8 +159,8 @@ file_put_contents(
     str_replace(
         ['__EXECUTION_BACKEND_PATH__', '__FAILURE_TAXONOMY_PATH__'],
         [
-            var_export(dirname(__DIR__, 2) . '/userland/flow-php/src/ExecutionBackend.php', true),
-            var_export(dirname(__DIR__, 2) . '/userland/flow-php/src/FailureTaxonomy.php', true),
+            var_export(dirname(__DIR__, 2) . '/demo/userland/flow-php/src/ExecutionBackend.php', true),
+            var_export(dirname(__DIR__, 2) . '/demo/userland/flow-php/src/FailureTaxonomy.php', true),
         ],
         $backendTemplate
     )

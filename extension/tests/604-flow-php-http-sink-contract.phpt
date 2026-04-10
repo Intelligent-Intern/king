@@ -10,7 +10,7 @@ if (!function_exists('proc_open') || !function_exists('stream_socket_server')) {
 king.security_allow_config_override=1
 --FILE--
 <?php
-require_once __DIR__ . '/../../userland/flow-php/src/StreamingSink.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/StreamingSink.php';
 
 use King\Flow\HttpByteSink;
 

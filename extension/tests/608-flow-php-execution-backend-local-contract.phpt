@@ -12,7 +12,7 @@ king.security_allow_config_override=1
 <?php
 $statePath = tempnam(sys_get_temp_dir(), 'king-flow-exec-local-state-');
 $extensionPath = dirname(__DIR__) . '/modules/king.so';
-$executionBackendPath = dirname(__DIR__, 2) . '/userland/flow-php/src/ExecutionBackend.php';
+$executionBackendPath = dirname(__DIR__, 2) . '/demo/userland/flow-php/src/ExecutionBackend.php';
 $controllerScript = tempnam(sys_get_temp_dir(), 'king-flow-exec-local-controller-');
 $observerScript = tempnam(sys_get_temp_dir(), 'king-flow-exec-local-observer-');
 $resumeScript = tempnam(sys_get_temp_dir(), 'king-flow-exec-local-resume-');

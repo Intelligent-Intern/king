@@ -222,7 +222,7 @@ function king_flow_etl_filter_pipeline_spans(array $spans, string $name, string 
 }
 
 $extensionPath = dirname(__DIR__) . '/modules/king.so';
-$flowSrcDir = dirname(__DIR__, 2) . '/userland/flow-php/src';
+$flowSrcDir = dirname(__DIR__, 2) . '/demo/userland/flow-php/src';
 $controllerScript = tempnam(sys_get_temp_dir(), 'king-flow-etl-e2e-controller-');
 $remoteBootstrapScript = tempnam(sys_get_temp_dir(), 'king-flow-etl-e2e-remote-bootstrap-');
 $localStatePath = tempnam(sys_get_temp_dir(), 'king-flow-etl-e2e-local-state-');
