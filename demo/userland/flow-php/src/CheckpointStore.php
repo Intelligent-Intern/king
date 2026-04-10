@@ -259,6 +259,9 @@ final class CheckpointCommitResult
 
 final class ObjectStoreCheckpointStore implements CheckpointStore
 {
+    private const OBJECT_ID_V2_PREFIX = 'checkpoint-v2!';
+    private const OBJECT_ID_V2_SEPARATOR = '!';
+
     /** @var array<string,mixed> */
     private array $writeOptions;
 
@@ -280,44 +283,12 @@ final class ObjectStoreCheckpointStore implements CheckpointStore
 
     public function load(string $checkpointId): ?CheckpointRecord
     {
-        $objectId = $this->objectIdFor($checkpointId);
-        $metadata = \king_object_store_get_metadata($objectId);
-        if ($metadata === false) {
-            return null;
+        $record = $this->loadFromObjectId($checkpointId, $this->objectIdFor($checkpointId));
+        if ($record instanceof CheckpointRecord) {
+            return $record;
         }
 
-        $payload = \king_object_store_get($objectId);
-        if (!is_string($payload)) {
-            throw new \RuntimeException('checkpoint payload disappeared before it could be read.');
-        }
-
-        try {
-            $decoded = json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
-        } catch (JsonException $error) {
-            throw new \RuntimeException('checkpoint payload is not valid JSON.', previous: $error);
-        }
-
-        if (!is_array($decoded)) {
-            throw new \RuntimeException('checkpoint payload is not a valid object.');
-        }
-
-        if (($decoded['checkpoint_schema_version'] ?? null) !== 1) {
-            throw new \RuntimeException('checkpoint payload uses an unsupported schema version.');
-        }
-
-        if (($decoded['checkpoint_id'] ?? null) !== $checkpointId) {
-            throw new \RuntimeException('checkpoint payload identity does not match the requested checkpoint id.');
-        }
-
-        return new CheckpointRecord(
-            $checkpointId,
-            $objectId,
-            (int) ($metadata['version'] ?? 0),
-            (string) ($metadata['etag'] ?? ''),
-            CheckpointState::fromArray(is_array($decoded['state'] ?? null) ? $decoded['state'] : []),
-            $metadata,
-            isset($decoded['checkpointed_at']) ? (string) $decoded['checkpointed_at'] : null
-        );
+        return $this->loadFromObjectId($checkpointId, $this->legacyObjectIdFor($checkpointId));
     }
 
     public function create(string $checkpointId, CheckpointState $state): CheckpointCommitResult
@@ -337,8 +308,12 @@ final class ObjectStoreCheckpointStore implements CheckpointStore
         }
 
         $objectId = $this->objectIdFor($checkpointId);
-        if ($expected->objectId() !== $objectId) {
+        $legacyObjectId = $this->legacyObjectIdFor($checkpointId);
+        if ($expected->objectId() !== $objectId && $expected->objectId() !== $legacyObjectId) {
             throw new InvalidArgumentException('expected checkpoint record does not belong to this checkpoint store prefix.');
+        }
+        if ($expected->objectId() === $legacyObjectId) {
+            $objectId = $legacyObjectId;
         }
 
         $payload = $this->encodePayload($checkpointId, $state);
@@ -361,10 +336,12 @@ final class ObjectStoreCheckpointStore implements CheckpointStore
             }
         } catch (Throwable $error) {
             if ($this->isPreconditionConflict($error)) {
+                $current = $this->loadFromObjectId($checkpointId, $objectId) ?? $this->load($checkpointId);
+
                 return new CheckpointCommitResult(
                     false,
                     true,
-                    $this->load($checkpointId),
+                    $current,
                     $error->getMessage()
                 );
             }
@@ -372,7 +349,7 @@ final class ObjectStoreCheckpointStore implements CheckpointStore
             throw $error;
         }
 
-        $record = $this->load($checkpointId);
+        $record = $this->loadFromObjectId($checkpointId, $objectId) ?? $this->load($checkpointId);
         if (!$record instanceof CheckpointRecord) {
             throw new \RuntimeException('checkpoint write succeeded but the committed record could not be reloaded.');
         }
@@ -410,12 +387,71 @@ final class ObjectStoreCheckpointStore implements CheckpointStore
 
     private function objectIdFor(string $checkpointId): string
     {
+        $checkpointId = $this->normalizeObjectKeyCheckpointId($checkpointId);
+
+        return self::OBJECT_ID_V2_PREFIX
+            . rawurlencode($this->prefix)
+            . self::OBJECT_ID_V2_SEPARATOR
+            . rawurlencode($checkpointId)
+            . '.json';
+    }
+
+    private function legacyObjectIdFor(string $checkpointId): string
+    {
+        $checkpointId = $this->normalizeObjectKeyCheckpointId($checkpointId);
+
+        return rawurlencode($this->prefix) . '--' . rawurlencode($checkpointId) . '.json';
+    }
+
+    private function normalizeObjectKeyCheckpointId(string $checkpointId): string
+    {
         $checkpointId = trim($checkpointId);
         if ($checkpointId === '') {
             throw new InvalidArgumentException('checkpointId must not be empty.');
         }
 
-        return rawurlencode($this->prefix) . '--' . rawurlencode($checkpointId) . '.json';
+        return $checkpointId;
+    }
+
+    private function loadFromObjectId(string $checkpointId, string $objectId): ?CheckpointRecord
+    {
+        $metadata = \king_object_store_get_metadata($objectId);
+        if ($metadata === false) {
+            return null;
+        }
+
+        $payload = \king_object_store_get($objectId);
+        if (!is_string($payload)) {
+            throw new \RuntimeException('checkpoint payload disappeared before it could be read.');
+        }
+
+        try {
+            $decoded = json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $error) {
+            throw new \RuntimeException('checkpoint payload is not valid JSON.', previous: $error);
+        }
+
+        if (!is_array($decoded)) {
+            throw new \RuntimeException('checkpoint payload is not a valid object.');
+        }
+
+        if (($decoded['checkpoint_schema_version'] ?? null) !== 1) {
+            throw new \RuntimeException('checkpoint payload uses an unsupported schema version.');
+        }
+
+        if (($decoded['checkpoint_id'] ?? null) !== $checkpointId) {
+            throw new \RuntimeException('checkpoint payload identity does not match the requested checkpoint id.');
+        }
+
+        return new CheckpointRecord(
+            $checkpointId,
+            $objectId,
+            (int) ($metadata['version'] ?? 0),
+            (string) ($metadata['etag'] ?? ''),
+            CheckpointState::fromArray(is_array($decoded['state'] ?? null) ? $decoded['state'] : []),
+            $metadata,
+            isset($decoded['checkpointed_at']) ? (string) $decoded['checkpointed_at'] : null
+        );
     }
 
     private function isPreconditionConflict(Throwable $error): bool
