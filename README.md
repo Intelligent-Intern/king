@@ -90,10 +90,13 @@ stays single-node on purpose instead of pretending the current router or
 load-balancer control-plane layer is already a verified WebSocket forwarding
 dataplane.
 
-The core shape looks like this:
+The core shape looks like this. It keeps WebSocket handling procedural while
+using the `King\ObjectStore` OO facade for durable writes:
 
 ```php
 <?php
+
+use King\ObjectStore;
 
 $subscribers = [];
 
@@ -124,7 +127,7 @@ function king_demo_publish(array &$subscribers, string $bucket, array $event): v
     }
 }
 
-king_object_store_init([
+ObjectStore::init([
     'primary_backend' => 'local_fs',
     'storage_root_path' => __DIR__ . '/storage',
     'max_storage_size_bytes' => 50 * 1024 * 1024,
@@ -156,7 +159,7 @@ $uploadHandler = static function (array $request) use (&$subscribers): array {
     fwrite($source, (string) ($request['body'] ?? ''));
     rewind($source);
 
-    king_object_store_put_from_stream($storageKey, $source, [
+    ObjectStore::putFromStream($storageKey, $source, [
         'content_type' => 'text/plain',
     ]);
 
