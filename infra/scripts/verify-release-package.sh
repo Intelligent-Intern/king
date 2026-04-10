@@ -261,6 +261,24 @@ if (!is_array($manifest['platform'] ?? null) || !is_string($manifest['platform']
     exit(1);
 }
 
+$provenance = $manifest['provenance'] ?? null;
+if (!is_array($provenance)) {
+    fwrite(STDERR, "Manifest provenance metadata is missing.\n");
+    exit(1);
+}
+
+foreach ([
+    'quiche_bootstrap_lock_sha256',
+    'toolchain_lock_sha256',
+    'quiche_workspace_lock_sha256',
+] as $provenanceKey) {
+    $value = $provenance[$provenanceKey] ?? null;
+    if (!is_string($value) || preg_match('/^[a-f0-9]{64}$/', $value) !== 1) {
+        fwrite(STDERR, "Manifest provenance hash is invalid for {$provenanceKey}.\n");
+        exit(1);
+    }
+}
+
 $files = $manifest['files'] ?? null;
 if (!is_array($files)) {
     fwrite(STDERR, "Manifest files payload is missing.\n");
