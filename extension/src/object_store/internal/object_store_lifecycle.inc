@@ -1,45 +1,36 @@
 /* --- System lifecycle --- */
 
-int king_cdn_cache_registry_minit(void);
-void king_cdn_cache_registry_mshutdown(void);
-
 int king_object_store_init_system(king_object_store_config_t *config)
 {
     char error[256];
-    int previous_backend;
-    bool had_runtime;
-    bool reset_cdn_cache_registry;
-    char previous_storage_root_path[sizeof(king_object_store_runtime.config.storage_root_path)];
+    zend_bool preserve_cloud_cdn_registry = 0;
 
     if (config == NULL) {
         return FAILURE;
     }
 
-    had_runtime = king_object_store_runtime.initialized;
-    previous_backend = had_runtime ? king_object_store_runtime.config.primary_backend : -1;
-    if (had_runtime) {
-        memcpy(
-            previous_storage_root_path,
-            king_object_store_runtime.config.storage_root_path,
-            sizeof(previous_storage_root_path)
-        );
-    } else {
-        previous_storage_root_path[0] = '\0';
+    if (king_cdn_cache_registry_initialized
+        && king_object_store_runtime.initialized
+        && (king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_S3
+            || king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_GCS
+            || king_object_store_runtime.config.primary_backend == KING_STORAGE_BACKEND_CLOUD_AZURE)
+        && config->primary_backend == king_object_store_runtime.config.primary_backend
+        && config->storage_root_path[0] != '\0'
+        && king_object_store_runtime.config.storage_root_path[0] != '\0'
+        && strcmp(config->storage_root_path, king_object_store_runtime.config.storage_root_path) == 0) {
+        /*
+         * Preserve retained stale CDN bodies across cloud endpoint re-init of
+         * the same backend/root so stale-on-error remains available during
+         * backend failure drills.
+         */
+        preserve_cloud_cdn_registry = 1;
     }
-
-    reset_cdn_cache_registry = !had_runtime
-        || config->primary_backend == KING_STORAGE_BACKEND_LOCAL_FS
-        || previous_backend != config->primary_backend
-        || strcmp(previous_storage_root_path, config->storage_root_path) != 0;
 
     king_object_store_upload_sessions_reset();
     king_object_store_runtime_metadata_cache_reset();
     king_object_store_mutation_barrier_fds_reset();
-    if (reset_cdn_cache_registry) {
-        king_cdn_cache_registry_mshutdown();
-        if (king_cdn_cache_registry_minit() != SUCCESS) {
-            return FAILURE;
-        }
+    if (king_cdn_cache_registry_initialized && !preserve_cloud_cdn_registry) {
+        zend_hash_clean(&king_cdn_cache_registry);
     }
     king_object_store_config_clear(&king_object_store_runtime.config);
     memset(&king_object_store_runtime, 0, sizeof(king_object_store_runtime));
