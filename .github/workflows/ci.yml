@@ -185,6 +185,15 @@ jobs:
             --run-log ../compat-artifacts/phpt/canonical-shard-${{ matrix.shard-index }}/run-tests.log \
             --output-dir ../compat-artifacts/phpt/canonical-shard-${{ matrix.shard-index }}
 
+      - name: Classify canonical PHPT flaky failures
+        if: failure()
+        working-directory: extension
+        run: |
+          ../infra/scripts/classify-phpt-flakes.sh \
+            --job-name "canonical-baseline-shard-${{ matrix.shard-index }}" \
+            --failed-tests ../compat-artifacts/phpt/canonical-shard-${{ matrix.shard-index }}/failed-tests.txt \
+            --output-dir ../compat-artifacts/phpt/canonical-shard-${{ matrix.shard-index }}/flake-classification
+
       - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
