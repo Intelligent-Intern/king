@@ -1785,6 +1785,9 @@ int king_system_check_all_components_health(void)
     bool all_running = true;
 
     king_system_apply_all_transitions();
+    if (!king_system_initialized) {
+        return FAILURE;
+    }
 
     ZEND_HASH_FOREACH_NUM_KEY_PTR(&king_system_components, idx, info) {
         if (info == NULL || info->status != KING_COMPONENT_STATUS_RUNNING) {
