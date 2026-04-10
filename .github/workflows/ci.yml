@@ -146,6 +146,13 @@ jobs:
         working-directory: extension
         run: ../infra/scripts/build-profile.sh release
 
+      - name: Verify public contract truthfulness gates
+        if: matrix.shard-index == 1
+        working-directory: extension
+        run: |
+          ../infra/scripts/check-stub-parity.sh
+          ../infra/scripts/check-public-contract-claims.sh
+
       - name: Run canonical PHPT suite
         working-directory: extension
         env:

@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#9` from batch `T1` on `develop/v1.0.4-beta`.
+- `T1 closeout sweep` on `develop/v1.0.4-beta` (docs + `READYNESS_TRACKER.md` deferrals).
 
 ## Active Executable Items
 
@@ -67,7 +67,7 @@ This batch is intentionally repo-local and CI-verifiable only: no manual provide
   done when: failure uploads always include structured summaries plus the relevant `.diff/.exp/.log/.out` payloads.
 - [x] `#8 Add flaky-test detection pass for canonical PHPT failures.`
   done when: CI reruns failing subsets and reports flaky-vs-deterministic classification in artifacts.
-- [ ] `#9 Add CI truthfulness gates for public contracts.`
+- [x] `#9 Add CI truthfulness gates for public contracts.`
   done when: stub/runtime parity and public-claim checks are enforced so unsupported caveat text cannot silently regress.
 
 ## Notes
