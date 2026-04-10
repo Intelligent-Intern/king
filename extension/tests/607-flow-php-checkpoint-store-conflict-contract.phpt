@@ -4,9 +4,9 @@ Repo-local Flow PHP checkpoint store reports version conflicts instead of losing
 king.security_allow_config_override=1
 --FILE--
 <?php
-require_once __DIR__ . '/../../userland/flow-php/src/StreamingSource.php';
-require_once __DIR__ . '/../../userland/flow-php/src/StreamingSink.php';
-require_once __DIR__ . '/../../userland/flow-php/src/CheckpointStore.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/StreamingSource.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/StreamingSink.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/CheckpointStore.php';
 
 use King\Flow\CheckpointState;
 use King\Flow\ObjectStoreCheckpointStore;

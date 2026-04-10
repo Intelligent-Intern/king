@@ -12,7 +12,7 @@ require __DIR__ . '/orchestrator_remote_peer_helper.inc';
 
 $statePath = tempnam(sys_get_temp_dir(), 'king-flow-exec-remote-state-');
 $extensionPath = dirname(__DIR__) . '/modules/king.so';
-$executionBackendPath = dirname(__DIR__, 2) . '/userland/flow-php/src/ExecutionBackend.php';
+$executionBackendPath = dirname(__DIR__, 2) . '/demo/userland/flow-php/src/ExecutionBackend.php';
 $controllerScript = tempnam(sys_get_temp_dir(), 'king-flow-exec-remote-controller-');
 $observerScript = tempnam(sys_get_temp_dir(), 'king-flow-exec-remote-observer-');
 $resumeScript = tempnam(sys_get_temp_dir(), 'king-flow-exec-remote-resume-');

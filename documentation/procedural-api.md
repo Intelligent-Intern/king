@@ -432,14 +432,14 @@ If these duties are not met, the run is fail-closed by design. Missing or
 unsupported handler readiness is surfaced through explicit handler readiness
 classification and does not fallback to stale callable assumptions.
 
-The repo-local Flow PHP helper at `userland/flow-php/src/ExecutionBackend.php`
+The repo-local Flow PHP helper at `demo/userland/flow-php/src/ExecutionBackend.php`
 now wraps this exact split with `ExecutionBackendCapabilities`,
 `OrchestratorExecutionBackend::continueRun()`, and
 `OrchestratorExecutionBackend::claimNext()` instead of pretending one hidden
 resume path exists for every backend.
 
 The repo-local Flow PHP control-plane helper at
-`userland/flow-php/src/ControlPlane.php` composes those same procedural
+`demo/userland/flow-php/src/ControlPlane.php` composes those same procedural
 surfaces with the object-store-backed checkpoint APIs, so userland ETL code can
 persist `start`, `pause`, `cancel`, `resume`, `inspect`, and recovery intent as
 ordinary runtime state instead of hiding that logic in controller memory.

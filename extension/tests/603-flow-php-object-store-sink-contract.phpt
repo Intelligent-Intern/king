@@ -11,7 +11,7 @@ king.security_allow_config_override=1
 --FILE--
 <?php
 require __DIR__ . '/object_store_s3_mock_helper.inc';
-require_once __DIR__ . '/../../userland/flow-php/src/StreamingSink.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/StreamingSink.php';
 
 use King\Flow\ObjectStoreByteSink;
 use King\Flow\SinkCursor;
