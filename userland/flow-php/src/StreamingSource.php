@@ -172,7 +172,6 @@ abstract class AbstractStreamingSource implements StreamingSource
         $carry = (string) (($cursor?->state()['line_buffer'] ?? ''));
         $recordsDelivered = 0;
 
-        $recordsDelivered = 0;
         $byteCursor = $cursor;
         $complete = true;
         $chunksDelivered = 0;
