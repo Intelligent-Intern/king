@@ -103,6 +103,7 @@ static int king_object_store_upload_session_persist(
     int temp_fd = -1;
     zval *part_value;
     zend_ulong part_number;
+    HashTable *provider_parts = NULL;
 
     if (error != NULL && error_size > 0) {
         error[0] = '\0';
@@ -185,7 +186,8 @@ static int king_object_store_upload_session_persist(
         (int) session->aborted
     );
 
-    ZEND_HASH_FOREACH_NUM_KEY_VAL(&session->provider_parts, part_number, part_value) {
+    provider_parts = (HashTable *) &session->provider_parts;
+    ZEND_HASH_FOREACH_NUM_KEY_VAL(provider_parts, part_number, part_value) {
         if (Z_TYPE_P(part_value) != IS_STRING) {
             continue;
         }
@@ -491,4 +493,3 @@ static int king_object_store_rehydrate_upload_sessions(char *error, size_t error
     closedir(dir);
     return SUCCESS;
 }
-
