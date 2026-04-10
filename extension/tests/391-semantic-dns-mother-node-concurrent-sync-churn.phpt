@@ -4,6 +4,9 @@ King Smart-DNS keeps mother-node sync statistics coherent under concurrent large
 king.security_allow_config_override=1
 --FILE--
 <?php
+require __DIR__ . '/semantic_dns_wire_helper.inc';
+
+$dnsPort = king_semantic_dns_wire_allocate_udp_port();
 $stateDir = '/tmp/king_semantic_dns_state';
 $stateFile = $stateDir . '/durable_state.bin';
 $lockFile = $stateFile . '.lock';
@@ -25,7 +28,7 @@ chmod($stateDir, 0700);
 @unlink($stateFile);
 @unlink($lockFile);
 
-file_put_contents($writerAScript, <<<'PHP'
+$writerATemplate = <<<'PHP'
 <?php
 function king_sdns_require(bool $value, string $message): void
 {
@@ -38,7 +41,7 @@ function king_sdns_require(bool $value, string $message): void
 king_sdns_require(king_semantic_dns_init([
     'enabled' => true,
     'bind_address' => '127.0.0.1',
-    'dns_port' => 5454,
+    'dns_port' => __DNS_PORT__,
     'default_record_ttl_sec' => 60,
     'service_discovery_max_ips_per_response' => 8,
     'semantic_mode_enable' => true,
@@ -78,9 +81,10 @@ king_sdns_require(king_semantic_dns_register_mother_node([
 
 echo "writer-a-complete\n";
 PHP
-);
+;
+file_put_contents($writerAScript, str_replace('__DNS_PORT__', (string) $dnsPort, $writerATemplate));
 
-file_put_contents($writerBScript, <<<'PHP'
+$writerBTemplate = <<<'PHP'
 <?php
 function king_sdns_require(bool $value, string $message): void
 {
@@ -95,7 +99,7 @@ usleep(40000);
 king_sdns_require(king_semantic_dns_init([
     'enabled' => true,
     'bind_address' => '127.0.0.1',
-    'dns_port' => 5454,
+    'dns_port' => __DNS_PORT__,
     'default_record_ttl_sec' => 60,
     'service_discovery_max_ips_per_response' => 8,
     'semantic_mode_enable' => true,
@@ -135,14 +139,15 @@ king_sdns_require(king_semantic_dns_register_mother_node([
 
 echo "writer-b-complete\n";
 PHP
-);
+;
+file_put_contents($writerBScript, str_replace('__DNS_PORT__', (string) $dnsPort, $writerBTemplate));
 
-file_put_contents($observerScript, <<<'PHP'
+$observerTemplate = <<<'PHP'
 <?php
 king_semantic_dns_init([
     'enabled' => true,
     'bind_address' => '127.0.0.1',
-    'dns_port' => 5454,
+    'dns_port' => __DNS_PORT__,
     'default_record_ttl_sec' => 60,
     'service_discovery_max_ips_per_response' => 8,
     'semantic_mode_enable' => true,
@@ -169,7 +174,8 @@ echo json_encode([
     'shared_east' => $motherById['shared-east'] ?? null,
 ], JSON_UNESCAPED_SLASHES), "\n";
 PHP
-);
+;
+file_put_contents($observerScript, str_replace('__DNS_PORT__', (string) $dnsPort, $observerTemplate));
 
 function king_build_sdns_command(string $phpBinary, string $extensionPath, string $scriptPath): array
 {

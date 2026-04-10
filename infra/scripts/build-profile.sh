@@ -42,6 +42,7 @@ EXT_DIR="${ROOT_DIR}/extension"
 QUICHE_DIR="${ROOT_DIR}/quiche"
 QUICHE_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-quiche.sh"
 TOOLCHAIN_LOCK_SCRIPT="${SCRIPT_DIR}/toolchain-lock.sh"
+PHPIZE_GENERATED_LIST="${SCRIPT_DIR}/phpize-generated-files.list"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
 JOBS="${JOBS:-$(nproc)}"
 
@@ -59,9 +60,165 @@ profile_cxx=""
 profile_cflags=""
 profile_cppflags="${BASE_CPPFLAGS}"
 profile_ldflags="${BASE_LDFLAGS}"
-sanitizer_runtime=""
+sanitizer_kind=""
 cargo_target="release"
 cargo_args=(--release)
+declare -a PHPIZE_GENERATED_RELATIVE_PATHS=()
+PHPIZE_SNAPSHOT_DIR=""
+
+trim_ascii_whitespace() {
+    local value="$1"
+
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    printf '%s\n' "${value}"
+}
+
+load_phpize_generated_relative_paths() {
+    local raw_line=""
+    local normalized_line=""
+
+    if [[ ! -f "${PHPIZE_GENERATED_LIST}" ]]; then
+        echo "Missing phpize generated-file list: ${PHPIZE_GENERATED_LIST}" >&2
+        exit 1
+    fi
+
+    while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
+        normalized_line="${raw_line%%#*}"
+        normalized_line="$(trim_ascii_whitespace "${normalized_line}")"
+        if [[ -z "${normalized_line}" ]]; then
+            continue
+        fi
+
+        if [[ "${normalized_line}" != extension/* ]]; then
+            echo "Invalid path in ${PHPIZE_GENERATED_LIST}: ${normalized_line}" >&2
+            exit 1
+        fi
+
+        PHPIZE_GENERATED_RELATIVE_PATHS+=("${normalized_line#extension/}")
+    done < "${PHPIZE_GENERATED_LIST}"
+}
+
+snapshot_phpize_generated_files() {
+    local relative_path=""
+    local source_path=""
+    local snapshot_path=""
+    local state_path=""
+
+    PHPIZE_SNAPSHOT_DIR="$(mktemp -d)"
+
+    for relative_path in "${PHPIZE_GENERATED_RELATIVE_PATHS[@]}"; do
+        source_path="${EXT_DIR}/${relative_path}"
+        snapshot_path="${PHPIZE_SNAPSHOT_DIR}/${relative_path}"
+        state_path="${snapshot_path}.state"
+        mkdir -p "$(dirname "${snapshot_path}")"
+
+        if [[ -e "${source_path}" ]]; then
+            cp -a "${source_path}" "${snapshot_path}"
+            printf '%s\n' "present" > "${state_path}"
+        else
+            printf '%s\n' "absent" > "${state_path}"
+        fi
+    done
+}
+
+restore_phpize_generated_files() {
+    local relative_path=""
+    local snapshot_path=""
+    local state_path=""
+    local target_path=""
+    local state_value=""
+
+    if [[ -z "${PHPIZE_SNAPSHOT_DIR}" || ! -d "${PHPIZE_SNAPSHOT_DIR}" ]]; then
+        return 0
+    fi
+
+    for relative_path in "${PHPIZE_GENERATED_RELATIVE_PATHS[@]}"; do
+        snapshot_path="${PHPIZE_SNAPSHOT_DIR}/${relative_path}"
+        state_path="${snapshot_path}.state"
+        target_path="${EXT_DIR}/${relative_path}"
+        state_value=""
+        if [[ -f "${state_path}" ]]; then
+            state_value="$(<"${state_path}")"
+        fi
+
+        if [[ "${state_value}" == "present" ]]; then
+            mkdir -p "$(dirname "${target_path}")"
+            cp -a "${snapshot_path}" "${target_path}"
+        else
+            rm -f "${target_path}"
+        fi
+    done
+
+    rm -rf "${PHPIZE_SNAPSHOT_DIR}"
+    PHPIZE_SNAPSHOT_DIR=""
+}
+
+resolve_sanitizer_arch_suffix() {
+    local compiler_bin="$1"
+    local machine=""
+
+    machine="$("${compiler_bin}" -dumpmachine 2>/dev/null || true)"
+    case "${machine}" in
+        x86_64*|amd64*)
+            printf '%s\n' "x86_64"
+            return 0
+            ;;
+        aarch64*|arm64*)
+            printf '%s\n' "aarch64"
+            return 0
+            ;;
+        armv7*|armv6*|arm*)
+            printf '%s\n' "armhf"
+            return 0
+            ;;
+        riscv64*)
+            printf '%s\n' "riscv64"
+            return 0
+            ;;
+    esac
+
+    printf '%s\n' ""
+}
+
+resolve_sanitizer_runtime_path() {
+    local kind="$1"
+    local compiler_bin="$2"
+    local suffix=""
+    local candidate=""
+    local runtime_path=""
+    local -a candidates=()
+
+    suffix="$(resolve_sanitizer_arch_suffix "${compiler_bin}")"
+
+    case "${kind}" in
+        asan)
+            if [[ -n "${suffix}" ]]; then
+                candidates+=("libclang_rt.asan-${suffix}.so")
+            fi
+            candidates+=("libclang_rt.asan.so")
+            ;;
+        ubsan)
+            if [[ -n "${suffix}" ]]; then
+                candidates+=("libclang_rt.ubsan_standalone-${suffix}.so")
+            fi
+            candidates+=("libclang_rt.ubsan_standalone.so")
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    for candidate in "${candidates[@]}"; do
+        runtime_path="$("${compiler_bin}" -print-file-name="${candidate}" 2>/dev/null || true)"
+        if [[ -n "${runtime_path}" && "${runtime_path}" != "${candidate}" && -f "${runtime_path}" ]]; then
+            printf '%s\n' "${runtime_path}"
+            return 0
+        fi
+    done
+
+    return 1
+}
 
 case "${PROFILE}" in
     release)
@@ -81,14 +238,14 @@ case "${PROFILE}" in
         profile_cxx="${BASE_CXX:-clang++}"
         profile_cflags="-O1 -g -fno-omit-frame-pointer -fsanitize=address"
         profile_ldflags="-fsanitize=address${BASE_LDFLAGS:+ ${BASE_LDFLAGS}}"
-        sanitizer_runtime="libclang_rt.asan-x86_64.so"
+        sanitizer_kind="asan"
         ;;
     ubsan)
         profile_cc="${BASE_CC:-clang}"
         profile_cxx="${BASE_CXX:-clang++}"
         profile_cflags="-O1 -g -fno-omit-frame-pointer -fsanitize=undefined -fno-sanitize-recover=all"
         profile_ldflags="-fsanitize=undefined -fno-sanitize-recover=all${BASE_LDFLAGS:+ ${BASE_LDFLAGS}}"
-        sanitizer_runtime="libclang_rt.ubsan_standalone-x86_64.so"
+        sanitizer_kind="ubsan"
         ;;
 esac
 
@@ -222,6 +379,10 @@ cargo build \
     --locked \
     --bin quiche-server
 
+load_phpize_generated_relative_paths
+snapshot_phpize_generated_files
+trap restore_phpize_generated_files EXIT
+
 cd "${EXT_DIR}"
 
 if [[ -f Makefile ]]; then
@@ -246,16 +407,19 @@ cp "${EXT_DIR}/modules/king.so" "${PROFILE_DIR}/king.so"
 cp "${QUICHE_DIR}/target/${cargo_target}/libquiche.so" "${PROFILE_DIR}/libquiche.so"
 cp "${QUICHE_DIR}/target/${cargo_target}/quiche-server" "${PROFILE_DIR}/quiche-server"
 
-if [[ -n "${sanitizer_runtime}" ]]; then
+if [[ -n "${sanitizer_kind}" ]]; then
     compiler_bin="${profile_cc%% *}"
-    runtime_path="$("${compiler_bin}" -print-file-name="${sanitizer_runtime}")"
+    runtime_path="$(resolve_sanitizer_runtime_path "${sanitizer_kind}" "${compiler_bin}")"
 
-    if [[ -z "${runtime_path}" || "${runtime_path}" == "${sanitizer_runtime}" || ! -f "${runtime_path}" ]]; then
-        echo "Failed to resolve sanitizer runtime '${sanitizer_runtime}' via ${compiler_bin}." >&2
+    if [[ -z "${runtime_path}" || ! -f "${runtime_path}" ]]; then
+        echo "Failed to resolve ${sanitizer_kind} runtime via ${compiler_bin}." >&2
         exit 1
     fi
 
     cp "${runtime_path}" "${PROFILE_DIR}/$(basename "${runtime_path}")"
 fi
+
+restore_phpize_generated_files
+trap - EXIT
 
 echo "Staged ${PROFILE} artifacts under ${PROFILE_DIR}"
