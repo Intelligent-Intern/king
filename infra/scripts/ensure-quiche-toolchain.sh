@@ -27,11 +27,6 @@ MANIFEST_PATH="$1"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CARGO_COMPAT_SCRIPT="${SCRIPT_DIR}/cargo-build-compat.sh"
 
-ensure_prompt_env() {
-    local env_name="$1"
-    printf '%s=%s\n' "${env_name}" "${!env_name:-<unset>}"
-}
-
 print_install_solution() {
     cat <<'EOF'
 Missing compatible Rust toolchain for QUIC build.
