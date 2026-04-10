@@ -119,6 +119,7 @@ bool(true)
 bool(true)
 bool(true)
 bool(true)
+bool(true)
 string(8) "alpha-v1"
 string(7) "beta-v1"
 bool(true)
