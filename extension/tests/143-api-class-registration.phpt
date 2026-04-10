@@ -10,6 +10,8 @@ $classes = [
     'King\\Response',
     'King\\MCP',
     'King\\IIBIN',
+    'King\\ObjectStore',
+    'King\\Autoscaling',
     'King\\Client\\HttpClient',
     'King\\Client\\Http1Client',
     'King\\Client\\Http2Client',
@@ -70,6 +72,18 @@ array (
     'parent' => NULL,
   ),
   'King\\IIBIN' => 
+  array (
+    'internal' => true,
+    'final' => true,
+    'parent' => NULL,
+  ),
+  'King\\ObjectStore' => 
+  array (
+    'internal' => true,
+    'final' => true,
+    'parent' => NULL,
+  ),
+  'King\\Autoscaling' => 
   array (
     'internal' => true,
     'final' => true,
