@@ -169,7 +169,12 @@ abstract class AbstractStreamingSource implements StreamingSource
             throw new InvalidArgumentException('delimiter must not be empty.');
         }
 
-        $carry = (string) (($cursor?->state()['line_buffer'] ?? ''));
+        $lineBuffer = $cursor?->state()['line_buffer'] ?? null;
+        if ($lineBuffer !== null && !is_string($lineBuffer)) {
+            throw new InvalidArgumentException('cursor state "line_buffer" must be a string or null.');
+        }
+
+        $carry = $lineBuffer ?? '';
         $recordsDelivered = 0;
 
         $byteCursor = $cursor;
@@ -307,7 +312,8 @@ final class ObjectStoreByteSource extends AbstractStreamingSource
 
         while ($offset < $contentLength) {
             $length = min($this->chunkBytes, $contentLength - $offset);
-            $stream = fopen('php://temp/maxmemory:' . (string) max($length, 1), 'w+');
+            $maxMemoryBytes = max($length, 1024);
+            $stream = fopen('php://temp/maxmemory:' . (string) $maxMemoryBytes, 'w+');
             if (!is_resource($stream)) {
                 throw new RuntimeException('object-store source could not allocate a bounded read buffer.');
             }
@@ -747,7 +753,7 @@ final class CallbackWriteSession
         while ($data !== '') {
             if ($this->skipBytesRemaining > 0) {
                 $skip = min($this->skipBytesRemaining, strlen($data));
-                $data = (string) substr($data, $skip);
+                $data = substr($data, $skip);
                 $this->skipBytesRemaining -= $skip;
                 if ($data === '') {
                     break;
@@ -755,7 +761,7 @@ final class CallbackWriteSession
             }
 
             $slice = substr($data, 0, $this->chunkBytes);
-            $data = (string) substr($data, strlen($slice));
+            $data = substr($data, strlen($slice));
             $this->bytesDelivered += strlen($slice);
             $this->chunksDelivered++;
 
