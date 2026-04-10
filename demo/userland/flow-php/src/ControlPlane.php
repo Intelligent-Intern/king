@@ -628,20 +628,11 @@ final class FlowControlPlane
             $backendSnapshot = $this->backend->start($initialData, $pipeline, $options);
         } catch (Throwable $error) {
             if ($record instanceof FlowControlRecord) {
-                $observedSnapshot = $predictedRunId === null ? null : $this->backend->inspect($predictedRunId);
                 $failedState = $record->state();
-                $failedState['control_status'] = $observedSnapshot instanceof ExecutionRunSnapshot
-                    ? $this->mapBackendStatus($observedSnapshot->status())
-                    : 'failed';
+                $failedState['active_backend_run_id'] = null;
+                $failedState['backend_run_ids'] = [];
+                $failedState['control_status'] = 'failed';
                 $failedState['last_action'] = 'start_failed';
-
-                if ($observedSnapshot instanceof ExecutionRunSnapshot) {
-                    $failedState['active_backend_run_id'] = $observedSnapshot->runId();
-                    $failedState['backend_run_ids'] = array_values(array_unique([
-                        ...$record->backendRunIds(),
-                        $observedSnapshot->runId(),
-                    ]));
-                }
 
                 try {
                     $this->replaceState($record, $failedState);
@@ -653,14 +644,18 @@ final class FlowControlPlane
             throw $error;
         }
 
+        $state = $record?->state() ?? $prospectiveState;
+        $existingRunIds = $record?->backendRunIds() ?? [];
         if ($predictedRunId !== null && $backendSnapshot->runId() !== $predictedRunId) {
-            throw new RuntimeException('control-plane start predicted the wrong backend run id.');
+            $existingRunIds = array_values(array_filter(
+                $existingRunIds,
+                static fn (string $runId): bool => $runId !== $predictedRunId
+            ));
         }
 
-        $state = $record?->state() ?? $prospectiveState;
         $state['active_backend_run_id'] = $backendSnapshot->runId();
         $state['backend_run_ids'] = array_values(array_unique([
-            ...($record?->backendRunIds() ?? []),
+            ...$existingRunIds,
             $backendSnapshot->runId(),
         ]));
         $state['control_status'] = $this->mapBackendStatus($backendSnapshot->status());
