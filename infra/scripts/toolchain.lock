@@ -1,0 +1,4 @@
+# shellcheck shell=bash
+
+KING_CANONICAL_PHP_VERSION="8.5"
+KING_RUST_TOOLCHAIN_VERSION="1.86.0"

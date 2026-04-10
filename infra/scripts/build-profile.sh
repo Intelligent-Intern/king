@@ -41,6 +41,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
 QUICHE_DIR="${ROOT_DIR}/quiche"
 QUICHE_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-quiche.sh"
+TOOLCHAIN_LOCK_SCRIPT="${SCRIPT_DIR}/toolchain-lock.sh"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
 JOBS="${JOBS:-$(nproc)}"
 
@@ -188,6 +189,7 @@ apply_pkg_config_curl_cppflags() {
 validate_curl_headers
 apply_pkg_config_curl_cppflags
 
+bash "${TOOLCHAIN_LOCK_SCRIPT}" --verify-rust
 "${QUICHE_BOOTSTRAP_SCRIPT}"
 
 echo "Building King profile: ${PROFILE}"
