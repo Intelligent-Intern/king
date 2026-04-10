@@ -349,8 +349,8 @@ The core programming model is:
 - `King\Stream` represents one unit of protocol work inside a session.
 - `King\Response` represents structured receive state for request flows.
 - `King\Client\*` and `King\Server\*` expose higher-level protocol roles.
-- `King\MCP`, `King\IIBIN`, and `King\WebSocket\Connection` expose
-  subsystem-specific runtime surfaces.
+- `King\MCP`, `King\IIBIN`, `King\ObjectStore`, `King\Autoscaling`, and
+  `King\WebSocket\Connection` expose subsystem-specific runtime surfaces.
 
 The procedural API exists for direct systems work and low-friction interop.
 The OO API exists for typed composition and long-lived application structure.

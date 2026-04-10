@@ -389,3 +389,42 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_system_process_request, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, request_data, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
+
+const zend_function_entry king_object_store_class_methods[] = {
+    ZEND_ME_MAPPING(init, king_object_store_init, arginfo_king_config_array, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(put, king_object_store_put, arginfo_king_object_store_put, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(putFromStream, king_object_store_put_from_stream, arginfo_king_object_store_put_from_stream, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(beginResumableUpload, king_object_store_begin_resumable_upload, arginfo_king_object_store_begin_resumable_upload, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(appendResumableUploadChunk, king_object_store_append_resumable_upload_chunk, arginfo_king_object_store_append_resumable_upload_chunk, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(completeResumableUpload, king_object_store_complete_resumable_upload, arginfo_king_object_id, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(abortResumableUpload, king_object_store_abort_resumable_upload, arginfo_king_object_id, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(getResumableUploadStatus, king_object_store_get_resumable_upload_status, arginfo_king_object_id, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(get, king_object_store_get, arginfo_king_object_lookup, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(getToStream, king_object_store_get_to_stream, arginfo_king_object_store_get_to_stream, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(delete, king_object_store_delete, arginfo_king_object_id, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(backupObject, king_object_store_backup_object, arginfo_king_object_store_backup, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(restoreObject, king_object_store_restore_object, arginfo_king_object_store_restore, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(backupAllObjects, king_object_store_backup_all_objects, arginfo_king_object_store_backup_all_objects, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(restoreAllObjects, king_object_store_restore_all_objects, arginfo_king_object_store_all_objects_path, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(listObjects, king_object_store_list, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(getStats, king_object_store_get_stats, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(optimize, king_object_store_optimize, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(cleanupExpiredObjects, king_object_store_cleanup_expired_objects, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(getMetadata, king_object_store_get_metadata, arginfo_king_object_id, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    PHP_FE_END
+};
+
+const zend_function_entry king_autoscaling_class_methods[] = {
+    ZEND_ME_MAPPING(init, king_autoscaling_init, arginfo_king_config_array, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(startMonitoring, king_autoscaling_start_monitoring, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(stopMonitoring, king_autoscaling_stop_monitoring, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(getMetrics, king_autoscaling_get_metrics, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(getStatus, king_autoscaling_get_status, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(getNodes, king_autoscaling_get_nodes, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(scaleUp, king_autoscaling_scale_up, arginfo_king_optional_instances, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(scaleDown, king_autoscaling_scale_down, arginfo_king_optional_instances, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(registerNode, king_autoscaling_register_node, arginfo_king_autoscaling_register_node, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(markNodeReady, king_autoscaling_mark_node_ready, arginfo_king_one_long, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(drainNode, king_autoscaling_drain_node, arginfo_king_one_long, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    PHP_FE_END
+};

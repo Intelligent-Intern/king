@@ -49,6 +49,12 @@ shows the current managed-node inventory. `king_autoscaling_scale_up()` and
 `king_autoscaling_register_node()`, `king_autoscaling_mark_node_ready()`, and
 `king_autoscaling_drain_node()` manage node lifecycle transitions.
 
+The same contract is also exported through `King\Autoscaling` as static methods:
+`init()`, `startMonitoring()`, `stopMonitoring()`, `getStatus()`,
+`getMetrics()`, `getNodes()`, `scaleUp()`, `scaleDown()`, `registerNode()`,
+`markNodeReady()`, and `drainNode()`. This OO facade maps directly to the same
+runtime behavior rather than introducing a separate autoscaling model.
+
 The point is not that there are many function names. The point is that each one
 maps to a real controller question.
 

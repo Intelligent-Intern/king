@@ -112,6 +112,8 @@ extern zend_class_entry
     *king_ce_stream,
     *king_ce_response,
     *king_ce_mcp,
+    *king_ce_object_store,
+    *king_ce_autoscaling,
     *king_ce_client_http,
     *king_ce_client_http1,
     *king_ce_client_http2,
@@ -576,6 +578,8 @@ extern const zend_function_entry king_session_class_methods[];
 extern const zend_function_entry king_stream_class_methods[];
 extern const zend_function_entry king_response_class_methods[];
 extern const zend_function_entry king_mcp_class_methods[];
+extern const zend_function_entry king_object_store_class_methods[];
+extern const zend_function_entry king_autoscaling_class_methods[];
 extern const zend_function_entry king_http_client_class_methods[];
 extern const zend_function_entry king_ws_server_class_methods[];
 extern const zend_function_entry king_ws_connection_class_methods[];

@@ -152,6 +152,12 @@ restore, and telemetry. When the system later calls `king_object_store_get()`,
 `king_object_store_backup_object()`, it is referring to the same object
 identity, not to five unrelated path conventions.
 
+The same storage contract is also exported through `King\ObjectStore` static
+methods such as `init()`, `put()`, `get()`, `listObjects()`, `getStats()`,
+`putFromStream()`, and the resumable-upload lifecycle helpers. The OO facade
+maps directly to the same runtime behavior and error classes as the procedural
+surface.
+
 This becomes even more important in distributed or operational settings. A
 cache, a backup, an import operation, and a restore operation can all agree on
 one identity if the object store remains the source of truth.
