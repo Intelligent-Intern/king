@@ -62,11 +62,15 @@ jobs:
             core.notice(reason);
 
   canonical-baseline:
-    name: Audit, Build, Test, Go-Live
+    name: Audit, Build, Test shard ${{ matrix.shard-index }}/3, Go-Live
     needs: branch-push-dedupe
     if: needs.branch-push-dedupe.outputs.run-heavy-jobs == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard-index: [1, 2, 3]
 
     steps:
       - name: Checkout repository
@@ -116,13 +120,16 @@ jobs:
           cargo --version
 
       - name: Lint public PHP stub surface
+        if: matrix.shard-index == 1
         run: php -l stubs/king.php
 
       - name: Run repo-local static checks
+        if: matrix.shard-index == 1
         working-directory: extension
         run: ../infra/scripts/static-checks.sh
 
       - name: Audit active runtime surface
+        if: matrix.shard-index == 1
         working-directory: extension
         run: ../infra/scripts/audit-runtime-surface.sh
 
@@ -132,13 +139,18 @@ jobs:
 
       - name: Run canonical PHPT suite
         working-directory: extension
+        env:
+          SHARD_TOTAL: "3"
+          SHARD_INDEX: "${{ matrix.shard-index }}"
         run: ../infra/scripts/test-extension.sh
 
       - name: Run final go-live readiness checks
+        if: matrix.shard-index == 1
         working-directory: extension
         run: ../infra/scripts/go-live-readiness.sh --skip-baseline --output-dir ../dist --benchmark-iterations 5000 --benchmark-warmup 500 --benchmark-samples 3 --benchmark-budget-file benchmarks/budgets/canonical-ci.json
 
       - name: Upload canonical release package artifact
+        if: matrix.shard-index == 1
         uses: actions/upload-artifact@v4
         with:
           name: king-release-package-php8.5-linux-amd64
@@ -151,7 +163,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: king-canonical-baseline-failures
+          name: king-canonical-baseline-failures-shard-${{ matrix.shard-index }}
           if-no-files-found: ignore
           path: |
             extension/config.log
