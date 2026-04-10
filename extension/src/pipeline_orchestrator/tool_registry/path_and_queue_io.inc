@@ -499,6 +499,7 @@ static int king_orchestrator_build_cancel_marker_path(
         run_id == NULL
         || path == NULL
         || path_len == 0
+        || !king_orchestrator_run_id_is_valid_literal(ZSTR_VAL(run_id), ZSTR_LEN(run_id))
         || !king_orchestrator_queue_path_is_configured()
     ) {
         return FAILURE;
@@ -527,6 +528,7 @@ static int king_orchestrator_build_run_queue_path(
         run_id == NULL
         || path == NULL
         || path_len == 0
+        || !king_orchestrator_run_id_is_valid_literal(ZSTR_VAL(run_id), ZSTR_LEN(run_id))
         || !king_orchestrator_queue_path_is_configured()
     ) {
         return FAILURE;

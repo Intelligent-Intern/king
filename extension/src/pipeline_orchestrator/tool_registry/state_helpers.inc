@@ -184,6 +184,36 @@ static void king_orchestrator_set_last_run(zend_string *run_id, const char *stat
     king_orchestrator_replace_runtime_string(&king_orchestrator_last_run_status, persistent_status);
 }
 
+int king_orchestrator_run_id_is_valid_literal(const char *run_id, size_t run_id_len)
+{
+    size_t index;
+
+    if (run_id == NULL || run_id_len <= sizeof("run-") - 1) {
+        return 0;
+    }
+
+    if (memcmp(run_id, "run-", sizeof("run-") - 1) != 0) {
+        return 0;
+    }
+
+    for (index = sizeof("run-") - 1; index < run_id_len; index++) {
+        if (run_id[index] < '0' || run_id[index] > '9') {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+int king_orchestrator_run_id_is_valid(zend_string *run_id)
+{
+    if (run_id == NULL) {
+        return 0;
+    }
+
+    return king_orchestrator_run_id_is_valid_literal(ZSTR_VAL(run_id), ZSTR_LEN(run_id));
+}
+
 static zend_bool king_orchestrator_run_id_has_prefix(
     const zend_string *run_id,
     const char *prefix

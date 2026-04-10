@@ -533,6 +533,7 @@ int king_orchestrator_claim_next_run(
     int claimed_fd = -1;
     char run_id_buffer[256];
     char *newline;
+    size_t run_id_len;
     unsigned int attempt = 0;
     char busy_names[64][256];
     size_t busy_count = 0;
@@ -828,7 +829,16 @@ int king_orchestrator_claim_next_run(
             return FAILURE;
         }
 
-        *run_id_out = zend_string_init(run_id_buffer, strlen(run_id_buffer), 0);
+        run_id_len = strlen(run_id_buffer);
+        if (!king_orchestrator_run_id_is_valid_literal(run_id_buffer, run_id_len)) {
+            close(claimed_fd);
+            claimed_fd = -1;
+            unlink(claimed_path);
+            claimed_path[0] = '\0';
+            return FAILURE;
+        }
+
+        *run_id_out = zend_string_init(run_id_buffer, run_id_len, 0);
         if (claimed_fd_out != NULL) {
             *claimed_fd_out = claimed_fd;
         } else {
