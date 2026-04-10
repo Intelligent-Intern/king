@@ -83,12 +83,12 @@ function king_http3_645_run_stress_round(array $fixture, $config, int $round): v
 
     $connectionId = (string) ($slow['connectionId'] ?? '');
     king_http3_645_assert($connectionId !== '', 'stress round ' . $round . ' emitted an empty connection id');
-    king_http3_645_assert(($wave1A['connectionId'] ?? '') === $connectionId, 'stress round ' . $round . ' wave1A connection drifted');
-    king_http3_645_assert(($wave1B['connectionId'] ?? '') === $connectionId, 'stress round ' . $round . ' wave1B connection drifted');
-    king_http3_645_assert(($wave2A['connectionId'] ?? '') === $connectionId, 'stress round ' . $round . ' wave2A connection drifted');
-    king_http3_645_assert(($wave2B['connectionId'] ?? '') === $connectionId, 'stress round ' . $round . ' wave2B connection drifted');
-    king_http3_645_assert(($wave3A['connectionId'] ?? '') === $connectionId, 'stress round ' . $round . ' wave3A connection drifted');
-    king_http3_645_assert(($wave3B['connectionId'] ?? '') === $connectionId, 'stress round ' . $round . ' wave3B connection drifted');
+    king_http3_645_assert((string) ($wave1A['connectionId'] ?? '') === $connectionId, 'stress round ' . $round . ' wave1A connection drifted');
+    king_http3_645_assert((string) ($wave1B['connectionId'] ?? '') === $connectionId, 'stress round ' . $round . ' wave1B connection drifted');
+    king_http3_645_assert((string) ($wave2A['connectionId'] ?? '') === $connectionId, 'stress round ' . $round . ' wave2A connection drifted');
+    king_http3_645_assert((string) ($wave2B['connectionId'] ?? '') === $connectionId, 'stress round ' . $round . ' wave2B connection drifted');
+    king_http3_645_assert((string) ($wave3A['connectionId'] ?? '') === $connectionId, 'stress round ' . $round . ' wave3A connection drifted');
+    king_http3_645_assert((string) ($wave3B['connectionId'] ?? '') === $connectionId, 'stress round ' . $round . ' wave3B connection drifted');
 
     king_http3_645_assert((int) ($wave1A['finishOrder'] ?? 0) === 1, 'stress round ' . $round . ' wave1A finish order drifted');
     king_http3_645_assert((int) ($wave1B['finishOrder'] ?? 0) === 2, 'stress round ' . $round . ' wave1B finish order drifted');
