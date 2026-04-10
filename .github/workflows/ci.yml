@@ -97,6 +97,10 @@ jobs:
       - name: Verify pinned Rust toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
 
+      - name: Verify dependency provenance documentation
+        if: matrix.shard-index == 1
+        run: bash ./infra/scripts/check-dependency-provenance-doc.sh
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:

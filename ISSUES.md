@@ -43,9 +43,33 @@
 
 ## Current Next Leaf
 
-- `none` (batch `T1` closeout completed on `develop/v1.0.4-beta`; waiting for next user-directed batch).
+- `#2` from batch `T2` on `develop/v1.0.4-beta`.
 
 ## Active Executable Items
+
+### T2. Deterministic Build Evidence and CI Hardening (9er Batch)
+
+This batch stays repo-local and CI-verifiable. No manual provider checks, no
+external runtime probes.
+
+- [x] `#1 Fully document pinned dependency provenance and enforce doc-lock sync in CI.`
+  done when: lock-backed dependency pins are documented in-repo and CI fails on doc/lock drift.
+- [ ] `#2 Enforce reproducibility of container package builds as a required CI gate.`
+  done when: container package jobs fail if same-commit rebuild outputs are not byte-identical.
+- [ ] `#3 Eliminate remaining host-specific special cases from release build outputs.`
+  done when: release packaging metadata and output shape no longer depend on ambient host specifics.
+- [ ] `#4 Eliminate remaining host-specific special cases from debug/ASan/UBSan profile outputs.`
+  done when: profile artifacts are produced by pinned, explicit inputs only and do not drift by host defaults.
+- [ ] `#5 Add release-artifact supply-chain integrity verification gate.`
+  done when: CI verifies deterministic checksums plus provenance metadata integrity before publishing artifacts.
+- [ ] `#6 Expand deterministic transport fuzz coverage in CI.`
+  done when: seeded transport fuzz subset runs in CI with reproducible inputs and fail-closed assertions.
+- [ ] `#7 Expand deterministic object-store fuzz coverage in CI.`
+  done when: seeded object-store fuzz subset runs in CI with reproducible inputs and fail-closed assertions.
+- [ ] `#8 Expand deterministic MCP/transfer fuzz coverage in CI.`
+  done when: seeded MCP/transfer fuzz subset runs in CI with reproducible inputs and fail-closed assertions.
+- [ ] `#9 Eliminate top classified flaky PHPT cases from canonical baseline.`
+  done when: currently classified flaky failures are removed or stabilized with stronger deterministic assertions.
 
 ### T1. CI Determinism and No-Manual-Test Hardening (9er Batch)
 
@@ -72,6 +96,7 @@ This batch is intentionally repo-local and CI-verifiable only: no manual provide
 
 ## Notes
 
+- The active batch is now `T2` on `develop/v1.0.4-beta`.
 - Batch `T1` is fully closed on `develop/v1.0.4-beta`; deferred docs and tracker closeout are completed.
 - `READYNESS_TRACKER.md` and `PROJECT_ASSESSMENT.md` now include the `T1` closure updates.
 - Batch `S` remains fully closed (`#1`, `#3`-`#19`) and stays recorded in `PROJECT_ASSESSMENT.md`.
