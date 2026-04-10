@@ -175,7 +175,9 @@ if ! command -v cargo >/dev/null 2>&1 || ! command -v rustc >/dev/null 2>&1; the
 fi
 
 check_lockfile_compat_status=0
-if ! check_lockfile_compat; then
+if check_lockfile_compat; then
+    :
+else
     check_lockfile_compat_status=$?
     case ${check_lockfile_compat_status} in
         2)
