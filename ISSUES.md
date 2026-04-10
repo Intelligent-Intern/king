@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#6` from batch `T1` on `develop/v1.0.4-beta`.
+- `#7` from batch `T1` on `develop/v1.0.4-beta`.
 
 ## Active Executable Items
 
@@ -61,7 +61,7 @@ This batch is intentionally repo-local and CI-verifiable only: no manual provide
   done when: package jobs run deterministic rebuild checks and fail if same-commit artifacts are not byte-identical.
 - [x] `#5 Expand transport-facing untrusted-input negative PHPT matrix.`
   done when: malformed/oversized/protocol-invalid transport payloads are covered with stable fail-closed assertions.
-- [ ] `#6 Expand object-store negative PHPT matrix for traversal/injection/corrupt-manifest inputs.`
+- [x] `#6 Expand object-store negative PHPT matrix for traversal/injection/corrupt-manifest inputs.`
   done when: unsafe path and snapshot-import edge cases are covered and proven to fail closed.
 - [ ] `#7 Emit deterministic regression diagnostics artifacts on PHPT failures across all shards/jobs.`
   done when: failure uploads always include structured summaries plus the relevant `.diff/.exp/.log/.out` payloads.
