@@ -2049,6 +2049,7 @@ static int king_orchestrator_worker_release_unadmitted_claim(
     if (!recovered_claim) {
         if (
             run_id == NULL
+            || !king_orchestrator_run_id_is_valid(run_id)
             || claimed_path == NULL
             || claimed_path[0] == '\0'
             || king_mcp_orchestrator_config.orchestrator_worker_queue_path == NULL

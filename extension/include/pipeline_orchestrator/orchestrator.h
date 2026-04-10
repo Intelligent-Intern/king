@@ -52,6 +52,8 @@ int king_orchestrator_claim_next_run(
     int *claimed_fd_out,
     zend_bool *recovered_claim_out
 );
+int king_orchestrator_run_id_is_valid(zend_string *run_id);
+int king_orchestrator_run_id_is_valid_literal(const char *run_id, size_t run_id_len);
 int king_orchestrator_request_run_cancel(zend_string *run_id);
 int king_orchestrator_run_cancel_requested(zend_string *run_id);
 void king_orchestrator_clear_run_cancel_request(zend_string *run_id);
