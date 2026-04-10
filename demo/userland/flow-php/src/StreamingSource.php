@@ -381,6 +381,9 @@ final class ObjectStoreByteSource extends AbstractStreamingSource
 
 final class HttpByteSource extends AbstractStreamingSource
 {
+    private const MAX_CONSECUTIVE_EMPTY_READS = 200;
+    private const EMPTY_READ_BACKOFF_MICROSECONDS = 5_000;
+
     /** @var array<string,mixed> */
     private array $headers;
 
@@ -430,13 +433,20 @@ final class HttpByteSource extends AbstractStreamingSource
         $chunksDelivered = 0;
         $bytesDelivered = 0;
         $bytesConsumed = $offset;
+        $consecutiveEmptyReads = 0;
 
         while (!$response->isEndOfBody()) {
             $chunk = $response->read($this->chunkBytes);
             if ($chunk === '') {
+                if ($response->isEndOfBody()) {
+                    break;
+                }
+
+                $this->guardAgainstEmptyReadSpin($consecutiveEmptyReads, 'reading the response body');
                 continue;
             }
 
+            $consecutiveEmptyReads = 0;
             $bytesConsumed += strlen($chunk);
             $bytesDelivered += strlen($chunk);
             $chunksDelivered++;
@@ -480,18 +490,35 @@ final class HttpByteSource extends AbstractStreamingSource
     private function discardHttpPrefix(\King\Response $response, int $offset): void
     {
         $remaining = $offset;
+        $consecutiveEmptyReads = 0;
         while ($remaining > 0) {
             $discard = $response->read(min($this->chunkBytes, $remaining));
-            if ($discard === '' && $response->isEndOfBody()) {
-                break;
+            if ($discard === '') {
+                if ($response->isEndOfBody()) {
+                    break;
+                }
+
+                $this->guardAgainstEmptyReadSpin($consecutiveEmptyReads, 'discarding replay bytes from the response');
+                continue;
             }
 
+            $consecutiveEmptyReads = 0;
             $remaining -= strlen($discard);
         }
 
         if ($remaining > 0) {
             throw new RuntimeException('http source could not resume because the response ended before the requested offset.');
         }
+    }
+
+    private function guardAgainstEmptyReadSpin(int &$consecutiveEmptyReads, string $phase): void
+    {
+        $consecutiveEmptyReads++;
+        if ($consecutiveEmptyReads >= self::MAX_CONSECUTIVE_EMPTY_READS) {
+            throw new RuntimeException('http source stalled without making progress while ' . $phase . '.');
+        }
+
+        usleep(self::EMPTY_READ_BACKOFF_MICROSECONDS);
     }
 }
 
