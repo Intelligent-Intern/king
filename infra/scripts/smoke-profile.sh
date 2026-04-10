@@ -37,21 +37,73 @@ EXT_SO="${PROFILE_DIR}/king.so"
 QUICHE_LIB="${PROFILE_DIR}/libquiche.so"
 QUICHE_SERVER="${PROFILE_DIR}/quiche-server"
 
+resolve_clang_arch_suffix() {
+    local machine=""
+
+    machine="$(clang -dumpmachine 2>/dev/null || true)"
+    case "${machine}" in
+        x86_64*|amd64*)
+            printf '%s\n' "x86_64"
+            return 0
+            ;;
+        aarch64*|arm64*)
+            printf '%s\n' "aarch64"
+            return 0
+            ;;
+        armv7*|armv6*|arm*)
+            printf '%s\n' "armhf"
+            return 0
+            ;;
+        riscv64*)
+            printf '%s\n' "riscv64"
+            return 0
+            ;;
+    esac
+
+    printf '%s\n' ""
+}
+
 resolve_sanitizer_runtime() {
-    local runtime_name="$1"
-    local staged_runtime="${PROFILE_DIR}/${runtime_name}"
+    local kind="$1"
+    local suffix=""
+    local runtime_name=""
     local runtime_path=""
+    local staged_runtime=""
+    local -a candidates=()
 
-    if [[ -f "${staged_runtime}" ]]; then
-        printf '%s\n' "${staged_runtime}"
-        return 0
-    fi
+    suffix="$(resolve_clang_arch_suffix)"
 
-    runtime_path="$(clang -print-file-name="${runtime_name}")"
-    if [[ -n "${runtime_path}" && "${runtime_path}" != "${runtime_name}" && -f "${runtime_path}" ]]; then
-        printf '%s\n' "${runtime_path}"
-        return 0
-    fi
+    case "${kind}" in
+        asan)
+            if [[ -n "${suffix}" ]]; then
+                candidates+=("libclang_rt.asan-${suffix}.so")
+            fi
+            candidates+=("libclang_rt.asan.so")
+            ;;
+        ubsan)
+            if [[ -n "${suffix}" ]]; then
+                candidates+=("libclang_rt.ubsan_standalone-${suffix}.so")
+            fi
+            candidates+=("libclang_rt.ubsan_standalone.so")
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    for runtime_name in "${candidates[@]}"; do
+        staged_runtime="${PROFILE_DIR}/${runtime_name}"
+        if [[ -f "${staged_runtime}" ]]; then
+            printf '%s\n' "${staged_runtime}"
+            return 0
+        fi
+
+        runtime_path="$(clang -print-file-name="${runtime_name}" 2>/dev/null || true)"
+        if [[ -n "${runtime_path}" && "${runtime_path}" != "${runtime_name}" && -f "${runtime_path}" ]]; then
+            printf '%s\n' "${runtime_path}"
+            return 0
+        fi
+    done
 
     return 1
 }
@@ -78,13 +130,13 @@ export LD_LIBRARY_PATH="${PROFILE_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
 case "${PROFILE}" in
     asan)
-        asan_runtime="$(resolve_sanitizer_runtime libclang_rt.asan-x86_64.so)"
+        asan_runtime="$(resolve_sanitizer_runtime asan)"
         export USE_ZEND_ALLOC=0
         export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0:abort_on_error=1:symbolize=1}"
         export LD_PRELOAD="${asan_runtime}${LD_PRELOAD:+ ${LD_PRELOAD}}"
         ;;
     ubsan)
-        ubsan_runtime="$(resolve_sanitizer_runtime libclang_rt.ubsan_standalone-x86_64.so)"
+        ubsan_runtime="$(resolve_sanitizer_runtime ubsan)"
         export USE_ZEND_ALLOC=0
         export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
         export LD_PRELOAD="${ubsan_runtime}${LD_PRELOAD:+ ${LD_PRELOAD}}"

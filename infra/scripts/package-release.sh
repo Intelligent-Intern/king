@@ -22,6 +22,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
 PROFILE_DIR="${EXT_DIR}/build/profiles/release"
 DEFAULT_OUTPUT_DIR="${ROOT_DIR}/dist"
+PHPIZE_GENERATED_LIST="${SCRIPT_DIR}/phpize-generated-files.list"
 
 OUTPUT_DIR="${DEFAULT_OUTPUT_DIR}"
 REBUILD=0
@@ -61,6 +62,62 @@ umask 022
 export LC_ALL=C
 export TZ=UTC
 
+trim_ascii_whitespace() {
+    local value="$1"
+
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    printf '%s\n' "${value}"
+}
+
+normalize_os_name() {
+    local raw_os="$1"
+
+    raw_os="$(printf '%s' "${raw_os}" | tr '[:upper:]' '[:lower:]')"
+    case "${raw_os}" in
+        linux)
+            printf '%s\n' "linux"
+            return 0
+            ;;
+        darwin)
+            printf '%s\n' "darwin"
+            return 0
+            ;;
+        *)
+            printf '%s\n' "${raw_os}"
+            return 0
+            ;;
+    esac
+}
+
+normalize_arch_name() {
+    local raw_arch="$1"
+
+    case "${raw_arch}" in
+        x86_64|amd64)
+            printf '%s\n' "amd64"
+            return 0
+            ;;
+        aarch64|arm64)
+            printf '%s\n' "arm64"
+            return 0
+            ;;
+        armv7l)
+            printf '%s\n' "armv7"
+            return 0
+            ;;
+        *)
+            printf '%s\n' "${raw_arch}"
+            return 0
+            ;;
+    esac
+}
+
+sha256_file() {
+    local path="$1"
+    sha256sum "${path}" | awk '{print $1}'
+}
+
 resolve_version() {
     sed -n 's/^#  define PHP_KING_VERSION[[:space:]]*"\(.*\)"/\1/p' "${EXT_DIR}/include/php_king.h" | head -n 1
 }
@@ -79,20 +136,41 @@ resolve_source_epoch() {
 
 resolve_dirty_state() {
     local status_output=""
+    local raw_line=""
+    local normalized_line=""
+    local -a status_args=(
+        status
+        --porcelain
+        --untracked-files=no
+        --ignore-submodules=all
+        --
+        .
+    )
 
     if ! git -C "${ROOT_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         printf '%s\n' "0"
         return 0
     fi
 
+    if [[ -f "${PHPIZE_GENERATED_LIST}" ]]; then
+        while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
+            normalized_line="${raw_line%%#*}"
+            normalized_line="$(trim_ascii_whitespace "${normalized_line}")"
+            if [[ -z "${normalized_line}" ]]; then
+                continue
+            fi
+
+            if [[ "${normalized_line}" != extension/* ]]; then
+                echo "Invalid path in ${PHPIZE_GENERATED_LIST}: ${normalized_line}" >&2
+                exit 1
+            fi
+
+            status_args+=(":(exclude)${normalized_line}")
+        done < "${PHPIZE_GENERATED_LIST}"
+    fi
+
     status_output="$(
-        git -C "${ROOT_DIR}" status \
-            --porcelain \
-            --untracked-files=no \
-            --ignore-submodules=all \
-            -- \
-            . \
-            ':(exclude)extension/config.h'
+        git -C "${ROOT_DIR}" "${status_args[@]}"
     )"
 
     if [[ -n "${status_output}" ]]; then
@@ -124,6 +202,17 @@ ensure_release_git_lock_state() {
         exit 1
     fi
 
+    for required_lock in \
+        "${SCRIPT_DIR}/toolchain.lock" \
+        "${SCRIPT_DIR}/quiche-workspace.Cargo.lock" \
+        "${SCRIPT_DIR}/phpize-generated-files.list"
+    do
+        if [[ ! -f "${required_lock}" ]]; then
+            echo "Missing required release provenance input: ${required_lock}" >&2
+            exit 1
+        fi
+    done
+
     "${SCRIPT_DIR}/bootstrap-quiche.sh" --verify-lock
     "${SCRIPT_DIR}/bootstrap-quiche.sh" --verify-current
 }
@@ -140,13 +229,16 @@ if [[ -z "${PHP_API}" ]]; then
     exit 1
 fi
 
-OS_NAME="$(uname -s | tr '[:upper:]' '[:lower:]')"
-ARCH_NAME="$(uname -m)"
+OS_NAME="$(normalize_os_name "$(uname -s)")"
+ARCH_NAME="$(normalize_arch_name "$(uname -m)")"
 GIT_SHORT="$(resolve_git_short)"
 GIT_COMMIT="$(resolve_git_commit)"
 SOURCE_DATE_EPOCH="$(resolve_source_epoch)"
 SOURCE_DIRTY="$(resolve_dirty_state)"
 BUILD_REF="git.${GIT_SHORT}"
+PROVENANCE_QUICHE_BOOTSTRAP_LOCK_SHA256="$(sha256_file "${SCRIPT_DIR}/quiche-bootstrap.lock")"
+PROVENANCE_TOOLCHAIN_LOCK_SHA256="$(sha256_file "${SCRIPT_DIR}/toolchain.lock")"
+PROVENANCE_QUICHE_WORKSPACE_LOCK_SHA256="$(sha256_file "${SCRIPT_DIR}/quiche-workspace.Cargo.lock")"
 
 if [[ "${SOURCE_DIRTY}" == "1" ]]; then
     BUILD_REF="${BUILD_REF}.dirty"
@@ -278,6 +370,9 @@ generate_manifest() {
     PKG_OS="${OS_NAME}" \
     PKG_ARCH="${ARCH_NAME}" \
     PKG_PHP_API="${PHP_API}" \
+    PKG_PROVENANCE_QUICHE_BOOTSTRAP_LOCK_SHA256="${PROVENANCE_QUICHE_BOOTSTRAP_LOCK_SHA256}" \
+    PKG_PROVENANCE_TOOLCHAIN_LOCK_SHA256="${PROVENANCE_TOOLCHAIN_LOCK_SHA256}" \
+    PKG_PROVENANCE_QUICHE_WORKSPACE_LOCK_SHA256="${PROVENANCE_QUICHE_WORKSPACE_LOCK_SHA256}" \
     php <<'PHP' > "${package_root}/manifest.json"
 <?php
 $root = getenv('PKG_ROOT');
@@ -313,6 +408,11 @@ $manifest = [
         'os' => getenv('PKG_OS'),
         'arch' => getenv('PKG_ARCH'),
         'php_api' => getenv('PKG_PHP_API'),
+    ],
+    'provenance' => [
+        'quiche_bootstrap_lock_sha256' => getenv('PKG_PROVENANCE_QUICHE_BOOTSTRAP_LOCK_SHA256'),
+        'toolchain_lock_sha256' => getenv('PKG_PROVENANCE_TOOLCHAIN_LOCK_SHA256'),
+        'quiche_workspace_lock_sha256' => getenv('PKG_PROVENANCE_QUICHE_WORKSPACE_LOCK_SHA256'),
     ],
     'files' => $files,
 ];

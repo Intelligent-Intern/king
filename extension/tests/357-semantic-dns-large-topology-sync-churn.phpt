@@ -4,7 +4,10 @@ King semantic DNS large topology churn keeps discovery routing and mother-node s
 king.security_allow_config_override=1
 --FILE--
 <?php
+require __DIR__ . '/semantic_dns_wire_helper.inc';
+
 mt_srand(357);
+$dnsPort = king_semantic_dns_wire_allocate_udp_port();
 
 $stateDir = '/tmp/king_semantic_dns_state';
 $statePath = $stateDir . '/durable_state.bin';
@@ -26,7 +29,7 @@ register_shutdown_function(static function () use ($statePath, $backupPath): voi
 var_dump(king_semantic_dns_init([
     'enabled' => true,
     'bind_address' => '127.0.0.1',
-    'dns_port' => 8053,
+    'dns_port' => $dnsPort,
     'default_record_ttl_sec' => 120,
     'service_discovery_max_ips_per_response' => 8,
     'semantic_mode_enable' => true,

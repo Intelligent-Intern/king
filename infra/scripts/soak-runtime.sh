@@ -102,20 +102,64 @@ TEST_LIST_FILE="${ARTIFACTS_DIR}/test-list.txt"
 EMPTY_PHP_INI_FILE="${ARTIFACTS_DIR}/php-empty.ini"
 
 resolve_sanitizer_runtime() {
-    local runtime_name="$1"
-    local staged_runtime="${PROFILE_DIR}/${runtime_name}"
+    local kind="$1"
+    local suffix=""
+    local runtime_name=""
+    local staged_runtime=""
     local runtime_path=""
+    local machine=""
+    local -a candidates=()
 
-    if [[ -f "${staged_runtime}" ]]; then
-        printf '%s\n' "${staged_runtime}"
-        return 0
-    fi
+    machine="$(clang -dumpmachine 2>/dev/null || true)"
+    case "${machine}" in
+        x86_64*|amd64*)
+            suffix="x86_64"
+            ;;
+        aarch64*|arm64*)
+            suffix="aarch64"
+            ;;
+        armv7*|armv6*|arm*)
+            suffix="armhf"
+            ;;
+        riscv64*)
+            suffix="riscv64"
+            ;;
+        *)
+            suffix=""
+            ;;
+    esac
 
-    runtime_path="$(clang -print-file-name="${runtime_name}")"
-    if [[ -n "${runtime_path}" && "${runtime_path}" != "${runtime_name}" && -f "${runtime_path}" ]]; then
-        printf '%s\n' "${runtime_path}"
-        return 0
-    fi
+    case "${kind}" in
+        asan)
+            if [[ -n "${suffix}" ]]; then
+                candidates+=("libclang_rt.asan-${suffix}.so")
+            fi
+            candidates+=("libclang_rt.asan.so")
+            ;;
+        ubsan)
+            if [[ -n "${suffix}" ]]; then
+                candidates+=("libclang_rt.ubsan_standalone-${suffix}.so")
+            fi
+            candidates+=("libclang_rt.ubsan_standalone.so")
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    for runtime_name in "${candidates[@]}"; do
+        staged_runtime="${PROFILE_DIR}/${runtime_name}"
+        if [[ -f "${staged_runtime}" ]]; then
+            printf '%s\n' "${staged_runtime}"
+            return 0
+        fi
+
+        runtime_path="$(clang -print-file-name="${runtime_name}" 2>/dev/null || true)"
+        if [[ -n "${runtime_path}" && "${runtime_path}" != "${runtime_name}" && -f "${runtime_path}" ]]; then
+            printf '%s\n' "${runtime_path}"
+            return 0
+        fi
+    done
 
     return 1
 }
@@ -215,17 +259,17 @@ export PHP_INI_SCAN_DIR=
 SANITIZER_RUNTIME_PATH=""
 case "${MODE}" in
     asan)
-        SANITIZER_RUNTIME_PATH="$(resolve_sanitizer_runtime libclang_rt.asan-x86_64.so)"
+        SANITIZER_RUNTIME_PATH="$(resolve_sanitizer_runtime asan)"
         export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0:abort_on_error=1:symbolize=1}"
         export LD_PRELOAD="${SANITIZER_RUNTIME_PATH}${LD_PRELOAD:+ ${LD_PRELOAD}}"
         ;;
     leak)
-        SANITIZER_RUNTIME_PATH="$(resolve_sanitizer_runtime libclang_rt.asan-x86_64.so)"
+        SANITIZER_RUNTIME_PATH="$(resolve_sanitizer_runtime asan)"
         export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1:abort_on_error=1:symbolize=1}"
         export LD_PRELOAD="${SANITIZER_RUNTIME_PATH}${LD_PRELOAD:+ ${LD_PRELOAD}}"
         ;;
     ubsan)
-        SANITIZER_RUNTIME_PATH="$(resolve_sanitizer_runtime libclang_rt.ubsan_standalone-x86_64.so)"
+        SANITIZER_RUNTIME_PATH="$(resolve_sanitizer_runtime ubsan)"
         export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
         export LD_PRELOAD="${SANITIZER_RUNTIME_PATH}${LD_PRELOAD:+ ${LD_PRELOAD}}"
         ;;

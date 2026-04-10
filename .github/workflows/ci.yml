@@ -410,6 +410,10 @@ jobs:
           fi
           echo "archive_path=${archive_path}" >> "${GITHUB_OUTPUT}"
 
+      - name: Verify release-artifact supply-chain integrity
+        working-directory: extension
+        run: ../infra/scripts/verify-release-supply-chain.sh --archive "${{ steps.package.outputs.archive_path }}" --expected-git-commit "$(git rev-parse HEAD)"
+
       - name: Verify packaged clean-host install path
         working-directory: extension
         run: ../infra/scripts/install-package-matrix.sh --archive "${{ steps.package.outputs.archive_path }}" --php-bins php
