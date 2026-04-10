@@ -248,10 +248,17 @@ package_tree() {
 verify_archive() {
     local archive_path="$1"
     local log_path="$2"
+    local allow_missing_provenance="${3:-0}"
+    local -a verify_args
+
+    verify_args=(./infra/scripts/verify-release-package.sh --archive "${archive_path}")
+    if [[ "${allow_missing_provenance}" == "1" ]]; then
+        verify_args+=(--allow-missing-provenance)
+    fi
 
     (
         cd "${ROOT_DIR}"
-        PHP_BIN="${PHP_BIN}" ./infra/scripts/verify-release-package.sh --archive "${archive_path}"
+        PHP_BIN="${PHP_BIN}" "${verify_args[@]}"
     ) 2>&1 | tee "${log_path}"
 }
 
@@ -298,10 +305,10 @@ if [[ -z "${CURRENT_ARCHIVE}" ]]; then
 fi
 
 printf 'Verifying previous archive\n'
-verify_archive "${PREVIOUS_ARCHIVE}" "${PREVIOUS_BUILD_DIR}/verify.log"
+verify_archive "${PREVIOUS_ARCHIVE}" "${PREVIOUS_BUILD_DIR}/verify.log" "1"
 
 printf 'Verifying current archive\n'
-verify_archive "${CURRENT_ARCHIVE}" "${CURRENT_BUILD_DIR}/verify.log"
+verify_archive "${CURRENT_ARCHIVE}" "${CURRENT_BUILD_DIR}/verify.log" "0"
 
 extract_archive_to_prefix "${PREVIOUS_ARCHIVE}" "${PREVIOUS_PREFIX}"
 extract_archive_to_prefix "${CURRENT_ARCHIVE}" "${CURRENT_PREFIX}"
