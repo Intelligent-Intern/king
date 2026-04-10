@@ -543,7 +543,7 @@ final class ObjectStoreByteSink extends AbstractStreamingSink
                 throw new InvalidArgumentException('staged object-store cursor is missing spool_path.');
             }
 
-            $this->spool = LocalReplaySpool::resume($path);
+            $this->spool = LocalReplaySpool::resume($path, 'king-flow-object-store-sink-');
             $this->bytesAccepted = $this->spool->bytesWritten();
 
             if ($this->bytesAccepted !== $cursor->bytesAccepted()) {
@@ -1071,7 +1071,7 @@ final class McpByteSink extends AbstractStreamingSink
             throw new InvalidArgumentException('mcp sink cursor is missing spool_path.');
         }
 
-        $this->spool = LocalReplaySpool::resume($path);
+        $this->spool = LocalReplaySpool::resume($path, 'king-flow-mcp-sink-');
         $this->bytesAccepted = $this->spool->bytesWritten();
         $this->writesAccepted = (int) ($state['writes_accepted'] ?? 0);
 
@@ -1118,6 +1118,8 @@ final class McpByteSink extends AbstractStreamingSink
 
 final class LocalReplaySpool
 {
+    private const SPOOL_DIRECTORY = 'king-flow-replay-spool';
+
     private mixed $stream;
 
     private int $bytesWritten;
@@ -1131,11 +1133,12 @@ final class LocalReplaySpool
 
     public static function create(string $prefix): self
     {
-        $path = tempnam(sys_get_temp_dir(), $prefix);
+        $path = tempnam(self::spoolRootPath(), $prefix);
         if ($path === false) {
             throw new RuntimeException('failed to allocate a local replay spool.');
         }
 
+        @chmod($path, 0600);
         $stream = fopen($path, 'c+b');
         if (!is_resource($stream)) {
             @unlink($path);
@@ -1145,18 +1148,61 @@ final class LocalReplaySpool
         return new self($path, $stream);
     }
 
-    public static function resume(string $path): self
+    public static function resume(string $path, string $expectedPrefix): self
     {
-        if (!is_file($path)) {
-            throw new RuntimeException('local replay spool could not be resumed because the file is missing.');
-        }
+        self::assertResumablePath($path, $expectedPrefix);
 
-        $stream = fopen($path, 'c+b');
+        $stream = fopen($path, 'r+b');
         if (!is_resource($stream)) {
             throw new RuntimeException('local replay spool could not be reopened.');
         }
 
         return new self($path, $stream);
+    }
+
+    private static function spoolRootPath(): string
+    {
+        $root = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR
+            . self::SPOOL_DIRECTORY;
+
+        if (!is_dir($root) && !@mkdir($root, 0700, true) && !is_dir($root)) {
+            throw new RuntimeException('failed to initialize local replay spool root.');
+        }
+
+        @chmod($root, 0700);
+        $resolved = realpath($root);
+        if ($resolved === false || $resolved === '') {
+            throw new RuntimeException('failed to resolve local replay spool root.');
+        }
+
+        return $resolved;
+    }
+
+    private static function assertResumablePath(string $path, string $expectedPrefix): void
+    {
+        if ($path === '') {
+            throw new RuntimeException('local replay spool could not be resumed because spool_path is missing.');
+        }
+
+        if (is_link($path) || !is_file($path)) {
+            throw new RuntimeException('local replay spool could not be resumed because spool_path is invalid.');
+        }
+
+        $resolvedPath = realpath($path);
+        if ($resolvedPath === false || $resolvedPath === '') {
+            throw new RuntimeException('local replay spool could not be resumed because spool_path is invalid.');
+        }
+
+        $spoolRoot = self::spoolRootPath();
+        $spoolRootPrefix = $spoolRoot . DIRECTORY_SEPARATOR;
+        if (!str_starts_with($resolvedPath, $spoolRootPrefix)) {
+            throw new RuntimeException('local replay spool could not be resumed because spool_path is outside the local replay spool root.');
+        }
+
+        if ($expectedPrefix === '' || !str_starts_with(basename($resolvedPath), $expectedPrefix)) {
+            throw new RuntimeException('local replay spool could not be resumed because spool_path does not match the expected spool prefix.');
+        }
     }
 
     public function path(): string
