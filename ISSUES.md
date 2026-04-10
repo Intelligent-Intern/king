@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#4` from batch `T1` on `develop/v1.0.4-beta`.
+- `#5` from batch `T1` on `develop/v1.0.4-beta`.
 
 ## Active Executable Items
 
@@ -57,7 +57,7 @@ This batch is intentionally repo-local and CI-verifiable only: no manual provide
   done when: CI hard-fails if quiche/boringssl/wirefilter lock provenance differs from tracked pins.
 - [x] `#3 Remove remaining non-deterministic Cargo/Git resolution paths from release packaging.`
   done when: release scripts only resolve locked refs and never fall back to branch-based or host-state-dependent resolution.
-- [ ] `#4 Add reproducible release-archive verification as a required CI gate.`
+- [x] `#4 Add reproducible release-archive verification as a required CI gate.`
   done when: package jobs run deterministic rebuild checks and fail if same-commit artifacts are not byte-identical.
 - [ ] `#5 Expand transport-facing untrusted-input negative PHPT matrix.`
   done when: malformed/oversized/protocol-invalid transport payloads are covered with stable fail-closed assertions.

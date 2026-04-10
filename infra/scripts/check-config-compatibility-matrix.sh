@@ -135,7 +135,7 @@ package_tree() {
     package_output="$(
         (
             cd "${tree_root}"
-            ./infra/scripts/package-release.sh --output-dir "${output_dir}"
+            ./infra/scripts/package-release.sh --verify-reproducible --output-dir "${output_dir}"
         ) 2>&1 | tee "${log_path}"
     )"
 
