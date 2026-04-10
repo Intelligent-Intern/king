@@ -1625,7 +1625,7 @@ static void king_system_collect_admission_state(
         }
     } ZEND_HASH_FOREACH_END();
 
-    if (draining_request || state->has_error) {
+    if (draining_request && (state->has_draining || state->has_error)) {
         state->lifecycle = "draining";
     } else {
     state->lifecycle = king_system_resolve_lifecycle(
