@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#2` from batch `T2` on `develop/v1.0.4-beta`.
+- `#3` from batch `T2` on `develop/v1.0.4-beta`.
 
 ## Active Executable Items
 
@@ -54,7 +54,7 @@ external runtime probes.
 
 - [x] `#1 Fully document pinned dependency provenance and enforce doc-lock sync in CI.`
   done when: lock-backed dependency pins are documented in-repo and CI fails on doc/lock drift.
-- [ ] `#2 Enforce reproducibility of container package builds as a required CI gate.`
+- [x] `#2 Enforce reproducibility of container package builds as a required CI gate.`
   done when: container package jobs fail if same-commit rebuild outputs are not byte-identical.
 - [ ] `#3 Eliminate remaining host-specific special cases from release build outputs.`
   done when: release packaging metadata and output shape no longer depend on ambient host specifics.
