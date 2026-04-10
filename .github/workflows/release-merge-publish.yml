@@ -194,7 +194,7 @@ jobs:
         id: package
         working-directory: extension
         run: |
-          output="$(../infra/scripts/package-release.sh --output-dir ../dist)"
+          output="$(../infra/scripts/package-release.sh --verify-reproducible --output-dir ../dist)"
           printf '%s\n' "${output}"
           archive_path="$(printf '%s\n' "${output}" | sed -n 's/^Package created: //p' | tail -n 1)"
           if [[ -z "${archive_path}" ]]; then
