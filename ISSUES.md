@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#8` from batch `T1` on `develop/v1.0.4-beta`.
+- `#9` from batch `T1` on `develop/v1.0.4-beta`.
 
 ## Active Executable Items
 
@@ -65,7 +65,7 @@ This batch is intentionally repo-local and CI-verifiable only: no manual provide
   done when: unsafe path and snapshot-import edge cases are covered and proven to fail closed.
 - [x] `#7 Emit deterministic regression diagnostics artifacts on PHPT failures across all shards/jobs.`
   done when: failure uploads always include structured summaries plus the relevant `.diff/.exp/.log/.out` payloads.
-- [ ] `#8 Add flaky-test detection pass for canonical PHPT failures.`
+- [x] `#8 Add flaky-test detection pass for canonical PHPT failures.`
   done when: CI reruns failing subsets and reports flaky-vs-deterministic classification in artifacts.
 - [ ] `#9 Add CI truthfulness gates for public contracts.`
   done when: stub/runtime parity and public-claim checks are enforced so unsupported caveat text cannot silently regress.
