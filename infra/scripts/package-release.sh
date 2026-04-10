@@ -78,13 +78,24 @@ resolve_source_epoch() {
 }
 
 resolve_dirty_state() {
+    local status_output=""
+
     if ! git -C "${ROOT_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         printf '%s\n' "0"
         return 0
     fi
 
-    if ! git -C "${ROOT_DIR}" diff --no-ext-diff --quiet --ignore-submodules=all HEAD -- \
-        || ! git -C "${ROOT_DIR}" diff --no-ext-diff --cached --quiet --ignore-submodules=all HEAD --; then
+    status_output="$(
+        git -C "${ROOT_DIR}" status \
+            --porcelain \
+            --untracked-files=no \
+            --ignore-submodules=all \
+            -- \
+            . \
+            ':(exclude)extension/config.h'
+    )"
+
+    if [[ -n "${status_output}" ]]; then
         printf '%s\n' "1"
         return 0
     fi
