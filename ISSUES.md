@@ -38,59 +38,41 @@
 
 - The user is advancing the current batch manually with `w`.
 - Close exactly one checkbox, make exactly one commit, and then wait for the next `w`.
-- For the current visible batch, defer repo docs and `READYNESS_TRACKER.md` updates until every visible checkbox is closed, then do the closeout sweep once before pushing `develop/v1.0.3-beta` and opening the PR.
+- For the current visible batch, defer repo docs and `READYNESS_TRACKER.md` updates until every visible checkbox is closed, then do the closeout sweep once before pushing `develop/v1.0.4-beta` and opening the PR.
 - After the PR is open, each further `w` means wait instead of auto-refilling from `READYNESS_TRACKER.md`.
 
 ## Current Next Leaf
 
-- batch `S` is exhausted on `develop/v1.0.3-beta`; waiting for explicit next batch selection.
+- `#1` from batch `T1` on `develop/v1.0.4-beta`.
 
 ## Active Executable Items
 
-### S. Distribution Proof, Multi-Node Operations, and V1 Hardening
+### T1. CI Determinism and No-Manual-Test Hardening (9er Batch)
 
-The next batch focuses on closing the biggest remaining public-reliability gaps before the next beta gate: on-wire distribution, system recovery, provider behavior, security-hardening, and release determinism.
+This batch is intentionally repo-local and CI-verifiable only: no manual provider validation, no manual runtime probes, no external hand-testing gates.
 
-- [x] `#1 Implement verifiable distributed WebSocket fanout and upgrade-forwarding so HTTP listeners can route live sessions across nodes under sustained load.`
-  done when: the repo proves on-wire websocket fanout and node-to-node upgrade forwarding for real multi-node traffic, including routing fairness and backpressure behavior.
-- [x] `#3 Prove sustained QUIC/HTTP/3 runtime stability under stress and partial failure.`
-  done when: long-duration soak tests cover stream/session lifecycle, congestion and flow control, zero-RTT/resumption, interruption recovery, and deterministic error mapping.
-- [x] `#4 Finish HTTP/1, HTTP/2, and HTTP/3 listener verification for real on-wire request/response and session behavior.`
-  done when: server listeners survive heavy traffic with normalization, cleanup, Early Hints, TLS reload, mTLS admin paths, fairness, and restart-safe drain behavior.
-- [x] `#5 Promote Semantic DNS from local-only mode to real network listener behavior.`
-  done when: discovery, registration, and gossip-like topology behavior run over real sockets with persistence, rehydration, and partial split-brain recovery.
-- [x] `#6 Validate routing decisions against real health and load signals instead of static or local-only heuristics.`
-  done when: router policy uses measured load/health deltas and produces explainable routing decisions with bounded stale-state impact.
-- [x] `#7 Enforce system-wide readiness and drain state transitions across the entire runtime fabric.`
-  done when: all runtime entrypoints observe ordered state transitions for start, ready, drain, stop, and fail conditions, including controlled admission behavior during drain.
-- [x] `#8 Implement coordinated recovery across node and component failures with explicit state replay policy.`
-  done when: recovery plans are proven for at least one node failure and one component failure path, including bounded divergence recovery windows.
-- [x] `#9 Validate autoscaling in load-representative traffic and recovery conditions.`
-  done when: autoscaling decisions are explained from observed CPU/memory/RPS/queue/latency signals and recover correctly after controller restart or partial state loss.
-- [x] `#10 Implement drain-before-delete behavior with active-connections preservation and safe teardown.`
-  done when: node deletion under live traffic preserves in-flight work and only closes at a controlled boundary with bounded loss.
-- [x] `#11 Harden Hetzner provision/deletion path as production-grade.`
-  done when: bootstrap, registration, readiness propagation, delete/retry behavior, and failure modes are proven end-to-end in real Hetzner API conditions.
-- [x] `#12 Reconstruct provider fleet state after controller restart without losing pending decisions.`
-  done when: controller recovery rehydrates live provider state and safely resumes pending actions with deterministic conflict handling.
-- [x] `#13 Finalize OTLP export behavior under real collectors and failure modes.`
-  done when: success/failure/rate-limit/retry/timeouts/request-size/response-size are all represented with deterministic ordering and bounded replay policy.
-- [x] `#14 Close telemetry lifecycle gaps around memory bounds, residue prevention, and context propagation.`
-  done when: telemetry state cannot leak across requests/workers, queue policies prevent unbounded growth, and propagation stays intact under resumptions.
-- [x] `#15 Implement end-to-end backup and restore flows for snapshots and metadata with integrity checks.`
-  done when: restore from full/incremental payloads is validated and idempotent under partial corruption and schema-migration pressure.
-- [x] `#16 Prove restart-rehydration consistency across all persistence modes in one matrix.`
-  done when: local restart and crash recovery preserve contracts for store, runtime state, and in-flight recovery semantics under all supported persistence modes.
-- [x] `#17 Harden real S3 path with multi-backend fallback and failure-aware recovery.`
-  done when: cloud-backed object operations survive credential/rate-limit/network faults and keep replica/failover semantics coherent.
-- [x] `#18 Strengthen cache/CDN behavior under real traffic and pressure.`
-  done when: cache fill/invalidation/TTL/recovery semantics are verified under load, stale-object handling, and memory pressure.
-- [x] `#19 Execute a full hardening sweep across public entry points, persistence, transport, credentials, and untrusted inputs.`
-  done when: path traversal, injection, UAF, leak/double-free, and secret-handling risks are systematically closed with regression tests for negative inputs.
+- [ ] `#1 Pin and freeze build/release toolchain versions in one canonical source used by scripts and CI.`
+  done when: release and CI builds fail on toolchain drift and no ambient host version silently changes outputs.
+- [ ] `#2 Enforce pinned QUIC/bootstrap dependency provenance before any build starts.`
+  done when: CI hard-fails if quiche/boringssl/wirefilter lock provenance differs from tracked pins.
+- [ ] `#3 Remove remaining non-deterministic Cargo/Git resolution paths from release packaging.`
+  done when: release scripts only resolve locked refs and never fall back to branch-based or host-state-dependent resolution.
+- [ ] `#4 Add reproducible release-archive verification as a required CI gate.`
+  done when: package jobs run deterministic rebuild checks and fail if same-commit artifacts are not byte-identical.
+- [ ] `#5 Expand transport-facing untrusted-input negative PHPT matrix.`
+  done when: malformed/oversized/protocol-invalid transport payloads are covered with stable fail-closed assertions.
+- [ ] `#6 Expand object-store negative PHPT matrix for traversal/injection/corrupt-manifest inputs.`
+  done when: unsafe path and snapshot-import edge cases are covered and proven to fail closed.
+- [ ] `#7 Emit deterministic regression diagnostics artifacts on PHPT failures across all shards/jobs.`
+  done when: failure uploads always include structured summaries plus the relevant `.diff/.exp/.log/.out` payloads.
+- [ ] `#8 Add flaky-test detection pass for canonical PHPT failures.`
+  done when: CI reruns failing subsets and reports flaky-vs-deterministic classification in artifacts.
+- [ ] `#9 Add CI truthfulness gates for public contracts.`
+  done when: stub/runtime parity and public-claim checks are enforced so unsupported caveat text cannot silently regress.
 
 ## Notes
 
-- The active batch is now the `S` distributed runtime and v1 hardening block.
-- Batch `S` is fully closed (`#1`, `#3`-`#19`) and is in closeout/wait state.
+- The active batch is now `T1` on `develop/v1.0.4-beta`.
+- Batch `S` remains fully closed (`#1`, `#3`-`#19`) and stays recorded in `PROJECT_ASSESSMENT.md`.
 - The `Q` and `R` blocks are fully completed and recorded in `PROJECT_ASSESSMENT.md`.
 - If a task is not listed here, it is not the current repo-local execution item.
