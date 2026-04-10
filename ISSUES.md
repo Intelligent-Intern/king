@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#5` from batch `T1` on `develop/v1.0.4-beta`.
+- `#6` from batch `T1` on `develop/v1.0.4-beta`.
 
 ## Active Executable Items
 
@@ -59,7 +59,7 @@ This batch is intentionally repo-local and CI-verifiable only: no manual provide
   done when: release scripts only resolve locked refs and never fall back to branch-based or host-state-dependent resolution.
 - [x] `#4 Add reproducible release-archive verification as a required CI gate.`
   done when: package jobs run deterministic rebuild checks and fail if same-commit artifacts are not byte-identical.
-- [ ] `#5 Expand transport-facing untrusted-input negative PHPT matrix.`
+- [x] `#5 Expand transport-facing untrusted-input negative PHPT matrix.`
   done when: malformed/oversized/protocol-invalid transport payloads are covered with stable fail-closed assertions.
 - [ ] `#6 Expand object-store negative PHPT matrix for traversal/injection/corrupt-manifest inputs.`
   done when: unsafe path and snapshot-import edge cases are covered and proven to fail closed.
