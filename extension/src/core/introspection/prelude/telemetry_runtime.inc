@@ -69,6 +69,7 @@ static void king_telemetry_export_metric_record(
     const king_telemetry_metric_record *record
 )
 {
+    HashTable *iterable_labels;
     zend_string *label_name;
     zval *label_value;
     zval labels;
@@ -79,7 +80,9 @@ static void king_telemetry_export_metric_record(
     add_assoc_double(target, "value", record->value);
 
     array_init(&labels);
-    ZEND_HASH_FOREACH_STR_KEY_VAL(&record->labels, label_name, label_value) {
+    /* Zend foreach macros are not const-correct on PHP 8.x hash APIs. */
+    iterable_labels = (HashTable *) &record->labels;
+    ZEND_HASH_FOREACH_STR_KEY_VAL(iterable_labels, label_name, label_value) {
         zval copy;
 
         if (label_name == NULL) {
