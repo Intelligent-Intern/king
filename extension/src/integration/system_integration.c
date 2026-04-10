@@ -660,27 +660,37 @@ static int king_system_load_coordinator_state(
          line != NULL;
          line = strtok_r(NULL, "\n", &saveptr)) {
         char *eq = strchr(line, '=');
+        const char *value = NULL;
+        size_t value_len = 0;
 
         if (eq == NULL) {
             continue;
         }
 
         *eq = '\0';
+        value = eq + 1;
+        value_len = strlen(value);
         if (strcmp(line, "version") == 0) {
-            version = strtoull(eq + 1, NULL, 10);
+            version = strtoull(value, NULL, 10);
             has_version = 1;
         } else if (strcmp(line, "generation") == 0) {
-            generation = strtoull(eq + 1, NULL, 10);
+            generation = strtoull(value, NULL, 10);
             has_generation = 1;
         } else if (strcmp(line, "created_at") == 0) {
-            created_at = strtoull(eq + 1, NULL, 10);
+            created_at = strtoull(value, NULL, 10);
             has_created_at = 1;
         } else if (strcmp(line, "cluster_id") == 0) {
-            strncpy(cluster_id_out, eq + 1, cluster_id_out_len - 1);
+            if (value_len >= cluster_id_out_len) {
+                return FAILURE;
+            }
+            memcpy(cluster_id_out, value, value_len + 1);
         } else if (strcmp(line, "active_node_id") == 0) {
-            strncpy(active_node_id_out, eq + 1, active_node_id_out_len - 1);
+            if (value_len >= active_node_id_out_len) {
+                return FAILURE;
+            }
+            memcpy(active_node_id_out, value, value_len + 1);
         } else if (strcmp(line, "clean_shutdown") == 0) {
-            clean_shutdown = atoi(eq + 1) != 0 ? 1 : 0;
+            clean_shutdown = atoi(value) != 0 ? 1 : 0;
             has_clean_shutdown = 1;
         }
     }
