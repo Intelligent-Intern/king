@@ -21,5 +21,6 @@ extension/build/pkg.m4
 extension/build/shtool
 extension/config.h
 extension/config.h.in
+extension/configure.ac
 extension/libtool
 extension/run-tests.php
