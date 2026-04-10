@@ -12,6 +12,10 @@ Verifies a packaged King release archive by checking:
   - package-local SHA256SUMS
   - manifest.json file metadata
   - packaged smoke test
+
+Options:
+  --archive PATH                 Archive path to verify
+  --allow-missing-provenance     Permit legacy manifests without provenance metadata
 EOF
 }
 
@@ -19,6 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARCHIVE_PATH=""
 PHP_BIN="${PHP_BIN:-php}"
 PACKAGE_DIR=""
+ALLOW_MISSING_PROVENANCE=0
 
 archive_entry_path_is_safe() {
     local entry="$1"
@@ -125,6 +130,10 @@ while [[ $# -gt 0 ]]; do
             ARCHIVE_PATH="$2"
             shift 2
             ;;
+        --allow-missing-provenance)
+            ALLOW_MISSING_PROVENANCE=1
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -221,12 +230,15 @@ echo "Verifying package-local checksums..."
 )
 
 echo "Verifying manifest metadata..."
-PACKAGE_DIR="${PACKAGE_DIR}" "${PHP_BIN}" <<'PHP'
+PACKAGE_DIR="${PACKAGE_DIR}" \
+ALLOW_MISSING_PROVENANCE="${ALLOW_MISSING_PROVENANCE}" \
+"${PHP_BIN}" <<'PHP'
 <?php
 
 declare(strict_types=1);
 
 $packageDir = getenv('PACKAGE_DIR');
+$allowMissingProvenance = getenv('ALLOW_MISSING_PROVENANCE') === '1';
 if (!is_string($packageDir) || $packageDir === '') {
     fwrite(STDERR, "Missing PACKAGE_DIR environment variable.\n");
     exit(1);
@@ -263,19 +275,25 @@ if (!is_array($manifest['platform'] ?? null) || !is_string($manifest['platform']
 
 $provenance = $manifest['provenance'] ?? null;
 if (!is_array($provenance)) {
-    fwrite(STDERR, "Manifest provenance metadata is missing.\n");
-    exit(1);
+    if ($allowMissingProvenance) {
+        $provenance = null;
+    } else {
+        fwrite(STDERR, "Manifest provenance metadata is missing.\n");
+        exit(1);
+    }
 }
 
-foreach ([
-    'quiche_bootstrap_lock_sha256',
-    'toolchain_lock_sha256',
-    'quiche_workspace_lock_sha256',
-] as $provenanceKey) {
-    $value = $provenance[$provenanceKey] ?? null;
-    if (!is_string($value) || preg_match('/^[a-f0-9]{64}$/', $value) !== 1) {
-        fwrite(STDERR, "Manifest provenance hash is invalid for {$provenanceKey}.\n");
-        exit(1);
+if (is_array($provenance)) {
+    foreach ([
+        'quiche_bootstrap_lock_sha256',
+        'toolchain_lock_sha256',
+        'quiche_workspace_lock_sha256',
+    ] as $provenanceKey) {
+        $value = $provenance[$provenanceKey] ?? null;
+        if (!is_string($value) || preg_match('/^[a-f0-9]{64}$/', $value) !== 1) {
+            fwrite(STDERR, "Manifest provenance hash is invalid for {$provenanceKey}.\n");
+            exit(1);
+        }
     }
 }
 
