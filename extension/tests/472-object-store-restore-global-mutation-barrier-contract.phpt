@@ -49,9 +49,28 @@ function king_object_store_472_finish_process($process, array $pipes): array
     ];
 }
 
+function king_object_store_472_restore_barrier_locked(string $barrierPath): bool
+{
+    $handle = @fopen($barrierPath, 'c');
+    if (!is_resource($handle)) {
+        return false;
+    }
+
+    $wouldBlock = 0;
+    $locked = @flock($handle, LOCK_SH | LOCK_NB, $wouldBlock);
+    if ($locked) {
+        @flock($handle, LOCK_UN);
+    }
+
+    fclose($handle);
+
+    return !$locked && (int) $wouldBlock === 1;
+}
+
 $base = sys_get_temp_dir() . '/king_object_store_restore_barrier_472_' . getmypid();
 $liveRoot = $base . '/live-store';
 $snapshotDir = $liveRoot . '/snapshots/full';
+$barrierPath = $liveRoot . '/.king_object_mutation_barrier.lock';
 $childScript = sys_get_temp_dir() . '/king_object_store_restore_barrier_child_472_' . getmypid() . '.php';
 $extensionPath = dirname(__DIR__) . '/modules/king.so';
 
@@ -105,32 +124,57 @@ $command = [
 $process = proc_open($command, $descriptors, $pipes);
 fclose($pipes[0]);
 
-$mutationBlocked = false;
-for ($i = 0; $i < 500; $i++) {
+$restoreBarrierObserved = false;
+for ($i = 0; $i < 4000; $i++) {
     $status = proc_get_status($process);
+    if (!$status['running']) {
+        break;
+    }
+
+    if (king_object_store_472_restore_barrier_locked($barrierPath)) {
+        $restoreBarrierObserved = true;
+        break;
+    }
+
+    usleep(1000);
+}
+
+$mutationBlocked = false;
+for ($i = 0; $i < 5000; $i++) {
+    $status = proc_get_status($process);
+    if (!$status['running']) {
+        break;
+    }
 
     try {
-        king_object_store_put('probe-live', 'value');
-        king_object_store_delete('probe-live');
+        $putResult = king_object_store_put('probe-live', 'value');
+        if ($putResult === false) {
+            $mutationBlocked = true;
+            break;
+        }
+
+        $deleteResult = king_object_store_delete('probe-live');
+        if ($deleteResult === false) {
+            $mutationBlocked = true;
+            break;
+        }
     } catch (Throwable $e) {
         if (str_contains($e->getMessage(), 'restore')) {
             $mutationBlocked = true;
             break;
         }
     }
-
-    if (!$status['running']) {
-        break;
-    }
-
-    usleep(10000);
+    usleep(1000);
 }
 
 $childResult = king_object_store_472_finish_process($process, $pipes);
+$childStdout = trim($childResult['stdout']);
+$childRestoreSucceeded = preg_match('/bool\((true|false)\)/', $childStdout, $restoreMatch) === 1
+    && (($restoreMatch[1] ?? '') === 'true');
 
-var_dump($mutationBlocked);
+var_dump($restoreBarrierObserved && $mutationBlocked);
 var_dump($childResult['status'] === 0);
-var_dump(trim($childResult['stdout']) === 'bool(true)');
+var_dump($childRestoreSucceeded);
 var_dump(trim($childResult['stderr']) === '');
 var_dump(king_object_store_put('probe-live', 'value'));
 var_dump(king_object_store_get('snapshot-0000') === str_repeat('A', 8192));
