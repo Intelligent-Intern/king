@@ -2044,6 +2044,87 @@ namespace King {
         public static function getDefinedEnums(): array {}
     }
 
+    /* ===========================
+     * Object Store
+     * =========================== */
+    final class ObjectStore {
+        /** @param array<string,mixed> $config */
+        public static function init(array $config): bool {}
+
+        public static function put(string $object_id, string $data, ?array $options = null): bool {}
+
+        public static function putFromStream(string $object_id, mixed $stream, ?array $options = null): bool {}
+
+        public static function beginResumableUpload(string $object_id, ?array $options = null): array {}
+
+        public static function appendResumableUploadChunk(string $upload_id, mixed $stream, ?array $options = null): array {}
+
+        public static function completeResumableUpload(string $upload_id): array {}
+
+        public static function abortResumableUpload(string $upload_id): bool {}
+
+        public static function getResumableUploadStatus(string $upload_id): array|false {}
+
+        public static function get(string $object_id, ?array $options = null): string|false {}
+
+        public static function getToStream(string $object_id, mixed $stream, ?array $options = null): bool {}
+
+        public static function delete(string $object_id): bool {}
+
+        public static function backupObject(string $object_id, string $destination_path): bool {}
+
+        public static function restoreObject(string $object_id, string $source_path): bool {}
+
+        public static function backupAllObjects(string $path, ?array $options = null): bool {}
+
+        public static function restoreAllObjects(string $path): bool {}
+
+        /** @return list<string> */
+        public static function listObjects(): array {}
+
+        /** @return array<string,mixed> */
+        public static function getStats(): array {}
+
+        /** @return array<string,mixed> */
+        public static function optimize(): array {}
+
+        /** @return array<string,mixed> */
+        public static function cleanupExpiredObjects(): array {}
+
+        public static function getMetadata(string $object_id): array|false {}
+    }
+
+    /* ===========================
+     * Autoscaling
+     * =========================== */
+    final class Autoscaling {
+        /** @param array<string,mixed> $config */
+        public static function init(array $config): bool {}
+
+        public static function startMonitoring(): bool {}
+
+        public static function stopMonitoring(): bool {}
+
+        /** @return array<string,mixed> */
+        public static function getStatus(): array {}
+
+        /** @return array<string,mixed> */
+        public static function getMetrics(): array {}
+
+        /** @return list<array<string,mixed>> */
+        public static function getNodes(): array {}
+
+        public static function scaleUp(int $instances = 1): bool {}
+
+        public static function scaleDown(int $instances = 1): bool {}
+
+        public static function registerNode(int $server_id, ?string $name = null): bool {}
+
+        public static function markNodeReady(int $server_id): bool {}
+
+        public static function drainNode(int $server_id): bool {}
+    }
+
 }
 
 /* ===========================
