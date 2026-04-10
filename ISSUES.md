@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `T1 closeout sweep` on `develop/v1.0.4-beta` (docs + `READYNESS_TRACKER.md` deferrals).
+- `none` (batch `T1` closeout completed on `develop/v1.0.4-beta`; waiting for next user-directed batch).
 
 ## Active Executable Items
 
@@ -72,7 +72,8 @@ This batch is intentionally repo-local and CI-verifiable only: no manual provide
 
 ## Notes
 
-- The active batch is now `T1` on `develop/v1.0.4-beta`.
+- Batch `T1` is fully closed on `develop/v1.0.4-beta`; deferred docs and tracker closeout are completed.
+- `READYNESS_TRACKER.md` and `PROJECT_ASSESSMENT.md` now include the `T1` closure updates.
 - Batch `S` remains fully closed (`#1`, `#3`-`#19`) and stays recorded in `PROJECT_ASSESSMENT.md`.
 - The `Q` and `R` blocks are fully completed and recorded in `PROJECT_ASSESSMENT.md`.
 - If a task is not listed here, it is not the current repo-local execution item.

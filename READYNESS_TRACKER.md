@@ -428,10 +428,10 @@ Status note:
 - [x] Eliminate branch-based fallbacks from critical bootstrap
 - [ ] Eliminate host-specific special cases from release builds
 - [ ] Eliminate host-specific special cases from debug / ASan / UBSan builds
-- [ ] Eliminate unstable Cargo / Git resolution paths from release builds
+- [x] Eliminate unstable Cargo / Git resolution paths from release builds
 - [x] Enforce reproducibility of release artifacts as a hard gate
 - [ ] Enforce reproducibility of container builds as a hard gate
-- [ ] Freeze toolchain versions completely
+- [x] Freeze toolchain versions completely
 - [ ] Fully document dependency provenance
 - [ ] Secure supply-chain integrity for release artifacts
 - [ ] Enable offline / air-gapped rebuild path where publicly claimed
@@ -455,10 +455,12 @@ Status note:
 - [ ] Expand fuzzing for transport surfaces
 - [ ] Expand fuzzing for object-store surfaces
 - [ ] Expand fuzzing for MCP / transfer surfaces
-- [ ] Expand negative test matrices for malformed input
+- [x] Expand negative test matrices for malformed input
 - [x] Archive failure artifacts for every gate violation
-- [ ] Emit automated regression diagnostics
-- [ ] Identify and eliminate flaky tests
+- [x] Emit automated regression diagnostics
+- [x] Identify flaky tests via deterministic rerun classification
+- [ ] Eliminate flaky tests
+- [x] Enforce public-contract truthfulness gates in CI
 - [ ] Integrate soak / chaos / recovery gates into release decisions
 
 ## Q. Dataflow / ETL / Flow PHP Integration

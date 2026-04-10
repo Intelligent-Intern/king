@@ -161,6 +161,7 @@ The repo is still short of a "nothing left to caveat" v1 in these areas:
 ### Build, Compatibility, and Release Confidence
 
 - QUIC and HTTP/3 now bootstrap from a pinned repo-owned dependency path instead of ad hoc local `quiche` resurrection or unlocked cargo retries.
+- Toolchain determinism and CI truthfulness gates are now explicit and hard-failing: the canonical toolchain is pinned through repo-owned lock metadata, release packaging no longer uses unlocked cargo/git fallback resolution, canonical PHPT failures now emit deterministic diagnostics plus flaky-vs-deterministic rerun classification artifacts, and shard-1 CI now enforces both stub/runtime parity and README public-claim caveat checks before baseline PHPT execution.
 - Clean-host package install and published-container smoke are first-class gates, and the repo-owned CI/workflow matrix now targets host/runtime PHP `8.1`/`8.2`/`8.3`/`8.4`/`8.5` instead of silently dropping older supported lines from those paths.
 - Upgrade and downgrade compatibility for release artifacts are now explicit script/CI gates that package a previous git ref, verify both archives, and smoke-test both install orders against the same install prefix.
 - Release-artifact upgrade, downgrade, representative persisted-state migration, and old/new configuration-state behavior are now all explicit script and CI gates.
