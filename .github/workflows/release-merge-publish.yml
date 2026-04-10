@@ -411,7 +411,7 @@ jobs:
       - resolve-release-merge
       - build-release-packages
       - publish-release
-    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true' && secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != ''
+    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
