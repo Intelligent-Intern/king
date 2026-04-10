@@ -190,24 +190,59 @@ package_tree() {
     local output_dir="$2"
     local log_path="$3"
     local package_output=""
+    local package_status=0
     local archive_path=""
 
+    rm -rf "${output_dir}"
     mkdir -p "${output_dir}"
 
+    set +e
     package_output="$(
         (
             cd "${tree_root}"
             ./infra/scripts/package-release.sh --verify-reproducible --output-dir "${output_dir}"
         ) 2>&1 | tee "${log_path}"
     )"
+    package_status=$?
+    set -e
 
-    archive_path="$(printf '%s\n' "${package_output}" | sed -n 's/^Package created: //p' | tail -n 1)"
+    if [[ "${package_status}" -ne 0 ]]; then
+        echo "Failed to package release archive from ${tree_root}." >&2
+        if [[ -f "${log_path}" ]]; then
+            echo "Last 40 log lines from ${log_path}:" >&2
+            tail -n 40 "${log_path}" >&2
+        fi
+        exit "${package_status}"
+    fi
+
+    archive_path="$(
+        printf '%s\n' "${package_output}" \
+            | tr -d '\r' \
+            | sed -n 's/^.*Package created:[[:space:]]*//p' \
+            | tail -n 1
+    )"
+
+    if [[ -z "${archive_path}" ]]; then
+        archive_path="$(
+            find "${output_dir}" -maxdepth 1 -type f -name '*.tar.gz' -print \
+                | LC_ALL=C sort \
+                | tail -n 1
+        )"
+    fi
+
+    if [[ -n "${archive_path}" && "${archive_path}" != /* ]]; then
+        archive_path="${tree_root}/${archive_path}"
+    fi
+
     if [[ -z "${archive_path}" ]]; then
         echo "Failed to resolve package archive from ${tree_root}." >&2
         exit 1
     fi
 
-    resolve_existing_path "${archive_path}"
+    resolve_existing_path "${archive_path}" || {
+        echo "Resolved package archive path does not exist: ${archive_path}" >&2
+        exit 1
+    }
 }
 
 verify_archive() {

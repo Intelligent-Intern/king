@@ -168,23 +168,51 @@ package_tree() {
     local tree_root="$1"
     local output_dir="$2"
     local log_path="$3"
+    local package_output=""
+    local package_status=0
     local archive_path=""
 
+    rm -rf "${output_dir}"
     mkdir -p "${output_dir}"
 
-    if ! (
-        cd "${tree_root}"
-        ./infra/scripts/package-release.sh --verify-reproducible --output-dir "${output_dir}"
-    ) >"${log_path}" 2>&1; then
+    set +e
+    package_output="$(
+        (
+            cd "${tree_root}"
+            ./infra/scripts/package-release.sh --verify-reproducible --output-dir "${output_dir}"
+        ) 2>&1 | tee "${log_path}"
+    )"
+    package_status=$?
+    set -e
+
+    if [[ "${package_status}" -ne 0 ]]; then
         return 1
     fi
 
-    archive_path="$(sed -n 's/^Package created: //p' "${log_path}" | tail -n 1)"
+    archive_path="$(
+        printf '%s\n' "${package_output}" \
+            | tr -d '\r' \
+            | sed -n 's/^.*Package created:[[:space:]]*//p' \
+            | tail -n 1
+    )"
+
+    if [[ -z "${archive_path}" ]]; then
+        archive_path="$(
+            find "${output_dir}" -maxdepth 1 -type f -name '*.tar.gz' -print \
+                | LC_ALL=C sort \
+                | tail -n 1
+        )"
+    fi
+
+    if [[ -n "${archive_path}" && "${archive_path}" != /* ]]; then
+        archive_path="${tree_root}/${archive_path}"
+    fi
+
     if [[ -z "${archive_path}" ]]; then
         return 1
     fi
 
-    resolve_existing_path "${archive_path}"
+    resolve_existing_path "${archive_path}" || return 1
 }
 
 verify_archive() {

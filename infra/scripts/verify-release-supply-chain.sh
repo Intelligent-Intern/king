@@ -26,6 +26,7 @@ ARCHIVE_PATH=""
 ARTIFACT_DIR=""
 EXPECTED_GIT_COMMIT=""
 ALLOW_SOURCE_DIRTY=0
+PHP_BIN="${PHP_BIN:-php}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -80,6 +81,11 @@ if [[ -z "${ARCHIVE_PATH}" && -z "${ARTIFACT_DIR}" ]]; then
     exit 1
 fi
 
+if ! command -v "${PHP_BIN}" >/dev/null 2>&1; then
+    echo "Missing requested PHP binary: ${PHP_BIN}" >&2
+    exit 1
+fi
+
 if [[ -n "${EXPECTED_GIT_COMMIT}" ]] && ! [[ "${EXPECTED_GIT_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
     echo "Expected git commit must be a 40-character lowercase hex SHA." >&2
     exit 1
@@ -107,14 +113,17 @@ if [[ "${#ARCHIVES[@]}" -eq 0 ]]; then
 fi
 
 for archive in "${ARCHIVES[@]}"; do
+    manifest_listing=""
+
     if [[ ! -f "${archive}" ]]; then
         echo "Missing archive: ${archive}" >&2
         exit 1
     fi
 
-    "${SCRIPT_DIR}/verify-release-package.sh" --archive "${archive}"
+    PHP_BIN="${PHP_BIN}" "${SCRIPT_DIR}/verify-release-package.sh" --archive "${archive}"
 
-    manifest_entry="$(tar -tzf "${archive}" | LC_ALL=C grep -m1 '/manifest\.json$' || true)"
+    manifest_listing="$(tar -tzf "${archive}")"
+    manifest_entry="$(printf '%s\n' "${manifest_listing}" | LC_ALL=C sed -n '/\/manifest\.json$/p' | head -n 1)"
     if [[ -z "${manifest_entry}" ]]; then
         echo "Could not locate manifest.json in archive: ${archive}" >&2
         exit 1
@@ -129,7 +138,7 @@ for archive in "${ARCHIVES[@]}"; do
     PROVENANCE_QUICHE_BOOTSTRAP_LOCK="${SCRIPT_DIR}/quiche-bootstrap.lock" \
     PROVENANCE_TOOLCHAIN_LOCK="${SCRIPT_DIR}/toolchain.lock" \
     PROVENANCE_QUICHE_WORKSPACE_LOCK="${SCRIPT_DIR}/quiche-workspace.Cargo.lock" \
-    php <<'PHP'
+    "${PHP_BIN}" <<'PHP'
 <?php
 
 declare(strict_types=1);
@@ -138,10 +147,19 @@ $manifestJson = getenv('MANIFEST_JSON');
 $archivePath = getenv('MANIFEST_ARCHIVE_PATH');
 $expectedCommit = getenv('EXPECTED_GIT_COMMIT');
 $allowSourceDirty = getenv('ALLOW_SOURCE_DIRTY') === '1';
+$stderr = defined('STDERR') ? STDERR : fopen('php://stderr', 'wb');
+
+$fail = static function (string $message) use ($stderr): void {
+    if (is_resource($stderr)) {
+        fwrite($stderr, $message);
+    } else {
+        echo $message;
+    }
+    exit(1);
+};
 
 if (!is_string($manifestJson) || $manifestJson === '') {
-    fwrite(STDERR, "Missing manifest payload.\n");
-    exit(1);
+    $fail("Missing manifest payload.\n");
 }
 
 $manifest = json_decode($manifestJson, true, 512, JSON_THROW_ON_ERROR);
@@ -151,33 +169,27 @@ $sourceDirty = $manifest['source_dirty'] ?? null;
 $provenance = $manifest['provenance'] ?? null;
 
 if (!is_string($gitCommit) || preg_match('/^[0-9a-f]{40}$/', $gitCommit) !== 1) {
-    fwrite(STDERR, "Manifest git_commit is invalid for {$archivePath}.\n");
-    exit(1);
+    $fail("Manifest git_commit is invalid for {$archivePath}.\n");
 }
 
 if (!is_string($gitShort) || $gitShort !== substr($gitCommit, 0, 12)) {
-    fwrite(STDERR, "Manifest git_short does not match git_commit for {$archivePath}.\n");
-    exit(1);
+    $fail("Manifest git_short does not match git_commit for {$archivePath}.\n");
 }
 
 if (!is_bool($sourceDirty)) {
-    fwrite(STDERR, "Manifest source_dirty flag is invalid for {$archivePath}.\n");
-    exit(1);
+    $fail("Manifest source_dirty flag is invalid for {$archivePath}.\n");
 }
 
 if (!$allowSourceDirty && $sourceDirty) {
-    fwrite(STDERR, "Manifest source_dirty must be false for release artifacts: {$archivePath}.\n");
-    exit(1);
+    $fail("Manifest source_dirty must be false for release artifacts: {$archivePath}.\n");
 }
 
 if (is_string($expectedCommit) && $expectedCommit !== '' && $gitCommit !== $expectedCommit) {
-    fwrite(STDERR, "Manifest git_commit mismatch for {$archivePath}.\n");
-    exit(1);
+    $fail("Manifest git_commit mismatch for {$archivePath}.\n");
 }
 
 if (!is_array($provenance)) {
-    fwrite(STDERR, "Manifest provenance section is missing for {$archivePath}.\n");
-    exit(1);
+    $fail("Manifest provenance section is missing for {$archivePath}.\n");
 }
 
 $required = [
@@ -188,20 +200,17 @@ $required = [
 
 foreach ($required as $key => $path) {
     if (!is_string($path) || $path === '' || !is_file($path)) {
-        fwrite(STDERR, "Missing local provenance input for {$key}.\n");
-        exit(1);
+        $fail("Missing local provenance input for {$key}.\n");
     }
 
     $expectedHash = $provenance[$key] ?? null;
     if (!is_string($expectedHash) || preg_match('/^[a-f0-9]{64}$/', $expectedHash) !== 1) {
-        fwrite(STDERR, "Invalid manifest provenance hash for {$key}.\n");
-        exit(1);
+        $fail("Invalid manifest provenance hash for {$key}.\n");
     }
 
     $actualHash = hash_file('sha256', $path);
     if ($actualHash !== $expectedHash) {
-        fwrite(STDERR, "Provenance hash mismatch for {$key} in {$archivePath}.\n");
-        exit(1);
+        $fail("Provenance hash mismatch for {$key} in {$archivePath}.\n");
     }
 }
 

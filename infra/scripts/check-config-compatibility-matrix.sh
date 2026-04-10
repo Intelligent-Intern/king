@@ -128,17 +128,30 @@ package_tree() {
     local output_dir="$2"
     local log_path="$3"
     local package_output=""
+    local package_status=0
     local archive_path=""
 
     rm -rf "${output_dir}"
     mkdir -p "${output_dir}"
 
+    set +e
     package_output="$(
         (
             cd "${tree_root}"
             ./infra/scripts/package-release.sh --verify-reproducible --output-dir "${output_dir}"
         ) 2>&1 | tee "${log_path}"
     )"
+    package_status=$?
+    set -e
+
+    if [[ "${package_status}" -ne 0 ]]; then
+        echo "Failed to package release archive from ${tree_root}." >&2
+        if [[ -f "${log_path}" ]]; then
+            echo "Last 40 log lines from ${log_path}:" >&2
+            tail -n 40 "${log_path}" >&2
+        fi
+        exit "${package_status}"
+    fi
 
     archive_path="$(
         printf '%s\n' "${package_output}" \
