@@ -17,6 +17,7 @@
 
 #include "include/validation/config_param/validate_generic_string.h"
 #include "include/validation/config_param/validate_long_range.h"
+#include "include/validation/config_param/validate_non_negative_long.h"
 #include "include/validation/config_param/validate_positive_long.h"
 #include "include/validation/config_param/validate_string_from_allowlist.h"
 
@@ -89,7 +90,7 @@ int kg_config_cloud_autoscale_apply_userland_config_to(
         } else if (zend_string_equals_literal(key, "quota_hard_limit_percent")) {
             if (kg_validate_long_range(value, 0, 100, &target->quota_hard_limit_percent) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "cooldown_period_sec")) {
-            if (kg_validate_positive_long(value, &target->cooldown_period_sec) != SUCCESS) return FAILURE;
+            if (kg_validate_non_negative_long(value, "cooldown_period_sec", &target->cooldown_period_sec) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "idle_node_timeout_sec")) {
             if (kg_validate_positive_long(value, &target->idle_node_timeout_sec) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "instance_type")) {

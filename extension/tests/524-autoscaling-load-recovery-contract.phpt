@@ -84,7 +84,7 @@ bool(true)
 bool(true)
 int(3)
 int(2)
-string(7) "scale_up"
+string(8) "scale_up"
 string(9) "telemetry"
 bool(true)
 bool(true)
@@ -92,6 +92,7 @@ bool(true)
 bool(true)
 int(3)
 int(2)
+bool(true)
 bool(true)
 int(1)
 int(1)
