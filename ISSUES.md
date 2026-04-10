@@ -43,7 +43,7 @@
 
 ## Current Next Leaf
 
-- `#1` from batch `T1` on `develop/v1.0.4-beta`.
+- `#2` from batch `T1` on `develop/v1.0.4-beta`.
 
 ## Active Executable Items
 
@@ -51,7 +51,7 @@
 
 This batch is intentionally repo-local and CI-verifiable only: no manual provider validation, no manual runtime probes, no external hand-testing gates.
 
-- [ ] `#1 Pin and freeze build/release toolchain versions in one canonical source used by scripts and CI.`
+- [x] `#1 Pin and freeze build/release toolchain versions in one canonical source used by scripts and CI.`
   done when: release and CI builds fail on toolchain drift and no ambient host version silently changes outputs.
 - [ ] `#2 Enforce pinned QUIC/bootstrap dependency provenance before any build starts.`
   done when: CI hard-fails if quiche/boringssl/wirefilter lock provenance differs from tracked pins.

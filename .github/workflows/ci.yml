@@ -78,15 +78,24 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup PHP 8.5
+      - name: Resolve pinned toolchain versions
+        id: toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
+
+      - name: Setup PHP pinned canonical
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.5"
+          php-version: "${{ steps.toolchain.outputs.canonical_php_version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust stable
+      - name: Setup Rust pinned toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
+
+      - name: Verify pinned Rust toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -192,15 +201,24 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup PHP 8.5
+      - name: Resolve pinned toolchain versions
+        id: toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
+
+      - name: Setup PHP pinned canonical
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.5"
+          php-version: "${{ steps.toolchain.outputs.canonical_php_version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust stable
+      - name: Setup Rust pinned toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
+
+      - name: Verify pinned Rust toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -292,6 +310,10 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Resolve pinned toolchain versions
+        id: toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
+
       - name: Setup PHP ${{ matrix.php-version }}
         uses: shivammathur/setup-php@v2
         with:
@@ -299,8 +321,13 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust stable
+      - name: Setup Rust pinned toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
+
+      - name: Verify pinned Rust toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -381,15 +408,24 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Setup PHP 8.5
+      - name: Resolve pinned toolchain versions
+        id: toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
+
+      - name: Setup PHP pinned canonical
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.5"
+          php-version: "${{ steps.toolchain.outputs.canonical_php_version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust stable
+      - name: Setup Rust pinned toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
+
+      - name: Verify pinned Rust toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -463,15 +499,24 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Setup PHP 8.5
+      - name: Resolve pinned toolchain versions
+        id: toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
+
+      - name: Setup PHP pinned canonical
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.5"
+          php-version: "${{ steps.toolchain.outputs.canonical_php_version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust stable
+      - name: Setup Rust pinned toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
+
+      - name: Verify pinned Rust toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -545,15 +590,24 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Setup PHP 8.5
+      - name: Resolve pinned toolchain versions
+        id: toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
+
+      - name: Setup PHP pinned canonical
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.5"
+          php-version: "${{ steps.toolchain.outputs.canonical_php_version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust stable
+      - name: Setup Rust pinned toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
+
+      - name: Verify pinned Rust toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -626,15 +680,24 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup PHP 8.5
+      - name: Resolve pinned toolchain versions
+        id: toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
+
+      - name: Setup PHP pinned canonical
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.5"
+          php-version: "${{ steps.toolchain.outputs.canonical_php_version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust stable
+      - name: Setup Rust pinned toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
+
+      - name: Verify pinned Rust toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -704,15 +767,24 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup PHP 8.5
+      - name: Resolve pinned toolchain versions
+        id: toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
+
+      - name: Setup PHP pinned canonical
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.5"
+          php-version: "${{ steps.toolchain.outputs.canonical_php_version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust stable
+      - name: Setup Rust pinned toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
+
+      - name: Verify pinned Rust toolchain
+        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
 
       - name: Cache cargo registry
         uses: actions/cache@v4
