@@ -140,8 +140,8 @@ string(6) "failed"
 string(5) "error"
 string(16) "component_failed"
 int(1)
-string(4) "none"
 int(1)
+string(4) "none"
 string(4) "none"
 bool(false)
 bool(false)
@@ -180,7 +180,7 @@ bool(true)
 bool(true)
 int(15)
 string(8) "starting"
-string(18) "component_recovery"
+string(4) "none"
 bool(false)
 string(17) "component_failure"
 bool(true)
@@ -192,6 +192,7 @@ string(5) "ready"
 int(1)
 bool(true)
 int(0)
+bool(true)
 bool(true)
 bool(false)
 string(17) "component_failure"
