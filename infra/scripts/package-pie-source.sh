@@ -74,7 +74,7 @@ if [[ -f "${ROOT_DIR}/infra/scripts/quiche-bootstrap.lock" && -f "${ROOT_DIR}/in
         "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh"
     fi
 else
-    echo "Quiche bootstrap metadata missing; assuming repository checkout provides required files." >&2
+    echo "Missing infra/scripts/quiche-bootstrap.lock or infra/scripts/bootstrap-quiche.sh. Ensure the repository checkout includes these files or run infra/scripts/bootstrap-quiche.sh manually if needed." >&2
 fi
 
 if [[ -f "${ROOT_DIR}/quiche/quiche/Cargo.toml" ]]; then
