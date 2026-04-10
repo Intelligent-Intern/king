@@ -6,12 +6,15 @@
 
 static void king_semantic_dns_export_attributes(zval *target, const HashTable *attributes)
 {
+    HashTable *iterable_attributes;
     zend_string *attribute_name;
     zval *attribute_value;
 
     array_init(target);
 
-    ZEND_HASH_FOREACH_STR_KEY_VAL(attributes, attribute_name, attribute_value) {
+    /* Zend foreach macros are not const-correct on PHP 8.x hash APIs. */
+    iterable_attributes = (HashTable *) attributes;
+    ZEND_HASH_FOREACH_STR_KEY_VAL(iterable_attributes, attribute_name, attribute_value) {
         zval copy;
 
         if (attribute_name == NULL) {
