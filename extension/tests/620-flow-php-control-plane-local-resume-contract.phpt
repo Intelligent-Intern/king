@@ -35,7 +35,7 @@ function king_flow_control_plane_local_cleanup(string $path): void
 $statePath = tempnam(sys_get_temp_dir(), 'king-flow-control-local-state-');
 $objectStoreRoot = sys_get_temp_dir() . '/king-flow-control-local-store-' . getmypid();
 $extensionPath = dirname(__DIR__) . '/modules/king.so';
-$controlPlanePath = dirname(__DIR__, 2) . '/userland/flow-php/src/ControlPlane.php';
+$controlPlanePath = dirname(__DIR__, 2) . '/demo/userland/flow-php/src/ControlPlane.php';
 $controllerScript = tempnam(sys_get_temp_dir(), 'king-flow-control-local-controller-');
 $observerScript = tempnam(sys_get_temp_dir(), 'king-flow-control-local-observer-');
 $resumeScript = tempnam(sys_get_temp_dir(), 'king-flow-control-local-resume-');

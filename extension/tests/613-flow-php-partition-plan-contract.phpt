@@ -2,8 +2,8 @@
 Repo-local Flow PHP partition plan splits batches deterministically and merges completed partition snapshots honestly
 --FILE--
 <?php
-require_once __DIR__ . '/../../userland/flow-php/src/ExecutionBackend.php';
-require_once __DIR__ . '/../../userland/flow-php/src/Partitioning.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/ExecutionBackend.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/Partitioning.php';
 
 use King\Flow\OrchestratorExecutionBackend;
 use King\Flow\PartitionMergeResult;

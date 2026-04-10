@@ -4,7 +4,7 @@ Repo-local Flow PHP serialization bridge preserves NDJSON resume plus CSV and JS
 king.security_allow_config_override=1
 --FILE--
 <?php
-require_once __DIR__ . '/../../userland/flow-php/src/SerializationBridge.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/SerializationBridge.php';
 
 use King\Flow\CsvCodec;
 use King\Flow\JsonDocumentCodec;

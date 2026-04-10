@@ -382,13 +382,13 @@ The explicit consequence is this:
   by process-local readiness at claim/resume boundaries.
 
 The repo-local Flow PHP execution helper under
-`userland/flow-php/src/ExecutionBackend.php` mirrors this split directly. It
+`demo/userland/flow-php/src/ExecutionBackend.php` mirrors this split directly. It
 surfaces backend capabilities and keeps `continueRun()` separate from
 `claimNext()` so userland ETL code does not accidentally collapse local,
 file-worker, and remote-peer control paths into one inaccurate abstraction.
 
 The repo-local Flow PHP control-plane helper under
-`userland/flow-php/src/ControlPlane.php` builds one layer above that. It keeps
+`demo/userland/flow-php/src/ControlPlane.php` builds one layer above that. It keeps
 logical dataflow-run state on the ordinary object-store path, maps file-worker
 pause or cancel onto the persisted queued-run cancel surface, and keeps local
 or remote immediate runs inspectable by persisting the predicted sequential

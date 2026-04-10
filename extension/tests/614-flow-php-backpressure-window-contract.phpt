@@ -11,8 +11,8 @@ if (!function_exists('proc_open')) {
 $statePath = tempnam(sys_get_temp_dir(), 'king-flow-partition-fw-state-');
 $queuePath = sys_get_temp_dir() . '/king-flow-partition-fw-queue-' . getmypid();
 $extensionPath = dirname(__DIR__) . '/modules/king.so';
-$executionBackendPath = dirname(__DIR__, 2) . '/userland/flow-php/src/ExecutionBackend.php';
-$partitioningPath = dirname(__DIR__, 2) . '/userland/flow-php/src/Partitioning.php';
+$executionBackendPath = dirname(__DIR__, 2) . '/demo/userland/flow-php/src/ExecutionBackend.php';
+$partitioningPath = dirname(__DIR__, 2) . '/demo/userland/flow-php/src/Partitioning.php';
 $controllerScript = tempnam(sys_get_temp_dir(), 'king-flow-partition-fw-controller-');
 $workerScript = tempnam(sys_get_temp_dir(), 'king-flow-partition-fw-worker-');
 

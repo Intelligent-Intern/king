@@ -10,15 +10,15 @@ repository while the contract is still being proven.
 The current source, sink, dataset-bridge, serialization/schema bridge,
 checkpoint, execution-backend, control-plane, failure-taxonomy, and
 partitioning/backpressure contracts live in
-`userland/flow-php/src/StreamingSource.php`,
-`userland/flow-php/src/StreamingSink.php`, and
-`userland/flow-php/src/ObjectStoreDataset.php`, and
-`userland/flow-php/src/SerializationBridge.php`, and
-`userland/flow-php/src/CheckpointStore.php`, and
-`userland/flow-php/src/ExecutionBackend.php`, and
-`userland/flow-php/src/ControlPlane.php`, and
-`userland/flow-php/src/FailureTaxonomy.php`, and
-`userland/flow-php/src/Partitioning.php`.
+`demo/userland/flow-php/src/StreamingSource.php`,
+`demo/userland/flow-php/src/StreamingSink.php`, and
+`demo/userland/flow-php/src/ObjectStoreDataset.php`, and
+`demo/userland/flow-php/src/SerializationBridge.php`, and
+`demo/userland/flow-php/src/CheckpointStore.php`, and
+`demo/userland/flow-php/src/ExecutionBackend.php`, and
+`demo/userland/flow-php/src/ControlPlane.php`, and
+`demo/userland/flow-php/src/FailureTaxonomy.php`, and
+`demo/userland/flow-php/src/Partitioning.php`.
 
 Current helpers:
 

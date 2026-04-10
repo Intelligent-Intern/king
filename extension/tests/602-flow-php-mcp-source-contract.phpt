@@ -11,7 +11,7 @@ king.security_allow_config_override=1
 --FILE--
 <?php
 require __DIR__ . '/mcp_test_helper.inc';
-require_once __DIR__ . '/../../userland/flow-php/src/StreamingSource.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/StreamingSource.php';
 
 use King\Flow\McpByteSource;
 use King\Flow\SourceCursor;

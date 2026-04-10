@@ -4,7 +4,7 @@ Repo-local Flow PHP object-store dataset bridge preserves hybrid topology metada
 king.security_allow_config_override=1
 --FILE--
 <?php
-require_once __DIR__ . '/../../userland/flow-php/src/ObjectStoreDataset.php';
+require_once __DIR__ . '/../../demo/userland/flow-php/src/ObjectStoreDataset.php';
 
 use King\Flow\ObjectStoreDataset;
 use King\Flow\SourceCursor;
