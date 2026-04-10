@@ -155,7 +155,7 @@ for php_version in "${php_versions[@]}"; do
                 exit 1
             fi
             package_output_dir="/tmp/docker-packages/php${MATRIX_PHP_VERSION}/linux-amd64"
-            ./infra/scripts/package-release.sh --output-dir "${package_output_dir}"
+            ./infra/scripts/package-release.sh --verify-reproducible --output-dir "${package_output_dir}"
             archive="$(find "${package_output_dir}" -maxdepth 1 -type f -name "*.tar.gz" | head -n 1)"
             test -n "${archive}"
             tar -tzf "${archive}" >/dev/null
