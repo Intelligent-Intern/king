@@ -5,6 +5,8 @@
  * surfaces reuse.
  */
 
+#include "include/semantic_dns/semantic_dns_internal.h"
+
 static void king_semantic_dns_attribute_zval_dtor(zval *zv)
 {
     if (Z_TYPE_P(zv) == IS_STRING) {
@@ -255,17 +257,22 @@ static king_semantic_dns_service *king_semantic_dns_registry_get_service(
 
 static int king_semantic_dns_route_rank(const king_semantic_dns_service *service)
 {
+    zend_long service_ttl_seconds;
     bool fresh_signal;
 
     if (service == NULL || service->status == NULL) {
         return 3;
     }
 
+    service_ttl_seconds = king_semantic_dns_runtime.initialized
+        ? (zend_long) king_semantic_dns_runtime.config.service_ttl_seconds
+        : king_smart_dns_config.default_record_ttl_sec;
+
     fresh_signal = service->last_health_check > 0
         && service->status != NULL
-        && (king_smart_dns_config.default_record_ttl_sec <= 0
+        && (service_ttl_seconds <= 0
             || (time(NULL) - service->last_health_check)
-                <= king_smart_dns_config.default_record_ttl_sec);
+                <= service_ttl_seconds);
 
     if (!fresh_signal) {
         return 2;
