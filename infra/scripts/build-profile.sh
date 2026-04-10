@@ -190,7 +190,12 @@ validate_curl_headers
 apply_pkg_config_curl_cppflags
 
 bash "${TOOLCHAIN_LOCK_SCRIPT}" --verify-rust
-"${QUICHE_BOOTSTRAP_SCRIPT}"
+if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
+    "${QUICHE_BOOTSTRAP_SCRIPT}" --verify-lock
+    "${QUICHE_BOOTSTRAP_SCRIPT}" --verify-current
+else
+    "${QUICHE_BOOTSTRAP_SCRIPT}"
+fi
 
 echo "Building King profile: ${PROFILE}"
 echo "Compiler: ${profile_cc}"
