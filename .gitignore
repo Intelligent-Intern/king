@@ -15,7 +15,9 @@ extension/**/.libs/
 extension/config.nice
 extension/config.log
 extension/config.status
+extension/configure
 extension/configure~
+extension/Makefile.fragments
 extension/*.la
 extension/modules/*.so
 extension/modules/*.la
