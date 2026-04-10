@@ -46,34 +46,40 @@ king_object_store_init([
 $storeA = new ObjectStoreCheckpointStore('checkpoints/foo');
 $storeB = new ObjectStoreCheckpointStore('checkpoints/foo--bar');
 
-$reflection = new ReflectionClass(ObjectStoreCheckpointStore::class);
-$objectIdFor = $reflection->getMethod('objectIdFor');
-$objectIdFor->setAccessible(true);
+$createdA = $storeA->create(
+    'bar--baz',
+    new CheckpointState([], [], null, null, ['seed' => 'a'])
+);
+$createdB = $storeB->create(
+    'baz',
+    new CheckpointState([], [], null, null, ['seed' => 'b'])
+);
 
-$newA = $objectIdFor->invoke($storeA, 'bar--baz');
-$newB = $objectIdFor->invoke($storeB, 'baz');
+$newA = (string) $createdA->record()?->objectId();
+$newB = (string) $createdB->record()?->objectId();
 
 var_dump($newA !== $newB);
 var_dump(str_starts_with($newA, 'checkpoint-v2!'));
 var_dump(str_starts_with($newB, 'checkpoint-v2!'));
 
-$legacyObjectId = rawurlencode('checkpoints/foo') . '--' . rawurlencode('bar--baz') . '.json';
+$legacyCheckpointId = 'legacy--only';
+$legacyObjectId = rawurlencode('checkpoints/foo') . '--' . rawurlencode($legacyCheckpointId) . '.json';
 $legacyPayload = json_encode([
     'checkpoint_schema_version' => 1,
-    'checkpoint_id' => 'bar--baz',
+    'checkpoint_id' => $legacyCheckpointId,
     'checkpointed_at' => gmdate(DATE_ATOM),
     'state' => (new CheckpointState([], [], null, null, ['seed' => 'legacy']))->toArray(),
 ], JSON_UNESCAPED_SLASHES);
 
 var_dump(king_object_store_put($legacyObjectId, $legacyPayload) === true);
 
-$loadedLegacy = $storeA->load('bar--baz');
+$loadedLegacy = $storeA->load($legacyCheckpointId);
 var_dump($loadedLegacy !== null);
 var_dump($loadedLegacy?->objectId() === $legacyObjectId);
 var_dump(($loadedLegacy?->state()->progress()['seed'] ?? null) === 'legacy');
 
 $replacedLegacy = $storeA->replace(
-    'bar--baz',
+    $legacyCheckpointId,
     new CheckpointState([], [], null, null, ['seed' => 'updated']),
     $loadedLegacy
 );
