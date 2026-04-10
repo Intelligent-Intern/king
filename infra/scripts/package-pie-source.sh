@@ -67,14 +67,21 @@ if [[ -z "${VERSION}" ]]; then
     exit 1
 fi
 
-if [[ -f "${ROOT_DIR}/infra/scripts/quiche-bootstrap.lock" && -f "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" ]]; then
-    if [[ -d "${ROOT_DIR}/quiche/.git" ]]; then
-        "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" --verify-current
-    else
-        "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh"
-    fi
+if [[ ! -f "${ROOT_DIR}/infra/scripts/quiche-bootstrap.lock" ]]; then
+    echo "Missing pinned quiche lock file: ${ROOT_DIR}/infra/scripts/quiche-bootstrap.lock" >&2
+    exit 1
+fi
+
+if [[ ! -x "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" ]]; then
+    echo "Missing executable quiche bootstrap script: ${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" >&2
+    exit 1
+fi
+
+if [[ -d "${ROOT_DIR}/quiche/.git" ]]; then
+    "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" --verify-lock
+    "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" --verify-current
 else
-    echo "Missing infra/scripts/quiche-bootstrap.lock or infra/scripts/bootstrap-quiche.sh. Ensure the repository checkout includes these files or run infra/scripts/bootstrap-quiche.sh manually if needed." >&2
+    "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh"
 fi
 
 if [[ -f "${ROOT_DIR}/quiche/quiche/Cargo.toml" ]]; then

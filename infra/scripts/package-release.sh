@@ -103,6 +103,31 @@ resolve_dirty_state() {
     printf '%s\n' "0"
 }
 
+ensure_release_git_lock_state() {
+    if ! git -C "${ROOT_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo "Release packaging requires a git checkout with pinned lock metadata." >&2
+        exit 1
+    fi
+
+    if ! git -C "${ROOT_DIR}" cat-file -e HEAD >/dev/null 2>&1; then
+        echo "Release packaging requires a valid HEAD commit." >&2
+        exit 1
+    fi
+
+    if [[ ! -f "${SCRIPT_DIR}/quiche-bootstrap.lock" ]]; then
+        echo "Missing pinned quiche lock file: ${SCRIPT_DIR}/quiche-bootstrap.lock" >&2
+        exit 1
+    fi
+
+    if [[ ! -x "${SCRIPT_DIR}/bootstrap-quiche.sh" ]]; then
+        echo "Missing executable bootstrap script: ${SCRIPT_DIR}/bootstrap-quiche.sh" >&2
+        exit 1
+    fi
+
+    "${SCRIPT_DIR}/bootstrap-quiche.sh" --verify-lock
+    "${SCRIPT_DIR}/bootstrap-quiche.sh" --verify-current
+}
+
 VERSION="$(resolve_version)"
 if [[ -z "${VERSION}" ]]; then
     echo "Failed to resolve PHP_KING_VERSION from ${EXT_DIR}/include/php_king.h." >&2
@@ -128,6 +153,8 @@ if [[ "${SOURCE_DIRTY}" == "1" ]]; then
 fi
 
 PACKAGE_BASENAME="king-${VERSION}-${BUILD_REF}-${OS_NAME}-${ARCH_NAME}-phpapi-${PHP_API}"
+
+ensure_release_git_lock_state
 
 require_release_profile() {
     local missing=0
