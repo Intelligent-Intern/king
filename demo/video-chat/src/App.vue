@@ -1,816 +1,1620 @@
 <template>
-  <div id="app">
-    <header class="app-header">
-      <h1>🚀 King IIBIN WebSocket Demo</h1>
-      <div class="connection-status" :class="{ connected: isConnected }">
-        {{ isConnected ? '🟢 Connected' : '🔴 Disconnected' }}
+  <div class="app-root">
+    <section v-if="!isAuthenticated" class="auth-screen">
+      <div class="auth-card">
+        <h1>King Video Workspace</h1>
+        <p>Sign in to join rooms, chat with multiple users, and start video calls.</p>
+
+        <form class="auth-form" @submit.prevent="signIn">
+          <label>
+            Display name
+            <input
+              v-model.trim="authForm.name"
+              type="text"
+              maxlength="48"
+              placeholder="Your name"
+              required
+            />
+          </label>
+
+          <label>
+            Accent color
+            <input v-model="authForm.color" type="color" />
+          </label>
+
+          <button type="submit">Continue</button>
+        </form>
       </div>
-    </header>
+    </section>
 
-    <main class="app-main">
-      <!-- Connection Panel -->
-      <div class="connection-panel">
-        <div class="input-group">
-          <label>WebSocket URL:</label>
-          <input 
-            v-model="websocketUrl" 
-            type="text" 
-            placeholder="ws://your-host:8080/ws"
-            :disabled="isConnected"
-          />
-        </div>
-        <div class="input-group">
-          <label>Your Name:</label>
-          <input 
-            v-model="userName" 
-            type="text" 
-            placeholder="Enter your name"
-            :disabled="isConnected"
-          />
-        </div>
-        <button 
-          @click="toggleConnection" 
-          :disabled="isConnecting"
-          class="connect-btn"
-        >
-          {{ isConnecting ? 'Connecting...' : (isConnected ? 'Disconnect' : 'Connect') }}
-        </button>
-      </div>
+    <section v-else class="workspace">
+      <aside class="rail">
+        <header class="rail-header">
+          <div class="user-chip">
+            <span :style="{ backgroundColor: sessionView.color }" class="user-dot"></span>
+            <div>
+              <strong>{{ sessionView.name }}</strong>
+              <p>{{ connectionLabel }}</p>
+            </div>
+          </div>
+          <button class="quiet-btn" @click="signOut">Sign out</button>
+        </header>
 
-      <!-- Stress Test Panel -->
-      <div v-if="isConnected" class="stress-test-panel">
-        <h3>⚡ WebSocket Stress Test</h3>
-        <div class="stress-test-controls">
-          <div class="input-group">
-            <label>Duration (seconds):</label>
-            <input v-model.number="stressTestConfig.duration" type="number" min="1" max="300" :disabled="isStressTesting" />
-          </div>
-          <div class="input-group">
-            <label>Messages/Second:</label>
-            <input v-model.number="stressTestConfig.messagesPerSecond" type="number" min="1" max="1000" :disabled="isStressTesting" />
-          </div>
-          <div class="input-group">
-            <label>Message Size (bytes):</label>
-            <input v-model.number="stressTestConfig.messageSize" type="number" min="1" max="65536" :disabled="isStressTesting" />
-          </div>
-          <button 
-            @click="startStressTest" 
-            :disabled="isStressTesting"
-            class="stress-test-btn"
-          >
-            {{ isStressTesting ? 'Running...' : 'Start Stress Test' }}
-          </button>
-        </div>
+        <section class="rail-section">
+          <h2>Rooms</h2>
+          <form class="inline-form" @submit.prevent="createRoom">
+            <input
+              v-model.trim="createRoomName"
+              type="text"
+              maxlength="48"
+              placeholder="Create room"
+            />
+            <button type="submit">Add</button>
+          </form>
 
-        <!-- Stress Test Progress -->
-        <div v-if="isStressTesting" class="stress-test-progress">
-          <div class="progress-bar">
-            <div class="progress-fill" :style="{ width: stressTestProgress + '%' }"></div>
-          </div>
-          <div class="progress-stats">
-            <span>Messages Sent: {{ stressTestStats.messagesSent }}</span>
-            <span>Errors: {{ stressTestStats.errorCount }}</span>
-            <span>Elapsed: {{ stressTestStats.elapsedTime }}ms</span>
-          </div>
-        </div>
+          <ul class="room-list">
+            <li
+              v-for="room in rooms"
+              :key="room.id"
+              :class="{ active: room.id === activeRoomId }"
+              @click="switchRoom(room.id)"
+            >
+              <div>
+                <strong>{{ room.name }}</strong>
+                <p>{{ room.memberCount }} online</p>
+              </div>
+            </li>
+          </ul>
+        </section>
 
-        <!-- Stress Test Results -->
-        <div v-if="stressTestResults" class="stress-test-results">
-          <h4>📈 Test Results</h4>
-          <div class="results-grid">
-            <div class="result-item">
-              <span class="result-label">Total Messages:</span>
-              <span class="result-value">{{ stressTestResults.totalMessages.toLocaleString() }}</span>
-            </div>
-            <div class="result-item">
-              <span class="result-label">Total Bytes:</span>
-              <span class="result-value">{{ formatBytes(stressTestResults.totalBytes) }}</span>
-            </div>
-            <div class="result-item">
-              <span class="result-label">Messages/Second:</span>
-              <span class="result-value">{{ stressTestResults.messagesPerSecond.toFixed(2) }}</span>
-            </div>
-            <div class="result-item">
-              <span class="result-label">Bytes/Second:</span>
-              <span class="result-value">{{ formatBytes(stressTestResults.bytesPerSecond) }}/s</span>
-            </div>
-            <div class="result-item">
-              <span class="result-label">Average Latency:</span>
-              <span class="result-value">{{ stressTestResults.averageLatency.toFixed(2) }}ms</span>
-            </div>
-            <div class="result-item">
-              <span class="result-label">P95 Latency:</span>
-              <span class="result-value">{{ stressTestResults.p95Latency.toFixed(2) }}ms</span>
-            </div>
-            <div class="result-item">
-              <span class="result-label">P99 Latency:</span>
-              <span class="result-value">{{ stressTestResults.p99Latency.toFixed(2) }}ms</span>
-            </div>
-            <div class="result-item">
-              <span class="result-label">Error Rate:</span>
-              <span class="result-value">{{ ((stressTestResults.errorCount / stressTestResults.totalMessages) * 100).toFixed(2) }}%</span>
-            </div>
-          </div>
-        </div>
-      </div>
+        <section class="rail-section">
+          <h2>Join with invite</h2>
+          <form class="inline-form" @submit.prevent="redeemInvite">
+            <input
+              v-model.trim="inviteCodeInput"
+              type="text"
+              maxlength="48"
+              placeholder="Invite code"
+            />
+            <button type="submit">Join</button>
+          </form>
+        </section>
+      </aside>
 
-      <!-- Chat Interface -->
-      <div v-if="isConnected" class="chat-container">
-        <h3>💬 Real-time Chat (IIBIN Protocol)</h3>
-        <div class="messages-container" ref="messagesContainer">
-          <div 
-            v-for="message in messages" 
-            :key="message.id"
-            class="message"
-            :class="{ 'own-message': message.sender === userName }"
-          >
-            <div class="message-header">
-              <span class="sender">{{ message.sender }}</span>
-              <span class="timestamp">{{ formatTime(message.timestamp) }}</span>
-              <span class="protocol-badge">IIBIN</span>
-            </div>
-            <div class="message-content">{{ message.content }}</div>
+      <main class="stage">
+        <header class="stage-header">
+          <div>
+            <h2>{{ activeRoom?.name || 'Room' }}</h2>
+            <p>{{ activeParticipants.length }} participants</p>
           </div>
-        </div>
 
-        <div class="message-input-container">
-          <input 
-            v-model="newMessage"
-            @keyup.enter="sendMessage"
-            type="text"
-            placeholder="Type a message... (using IIBIN binary protocol)"
-            class="message-input"
-          />
-          <button @click="sendMessage" :disabled="!newMessage.trim()" class="send-btn">
-            Send
-          </button>
-        </div>
-      </div>
+          <div class="stage-actions">
+            <button :class="{ active: activeTab === 'chat' }" @click="activeTab = 'chat'">Chat</button>
+            <button :class="{ active: activeTab === 'call' }" @click="activeTab = 'call'">Call</button>
+            <button class="quiet-btn" @click="createInvite">Create invite</button>
+          </div>
+        </header>
 
-      <!-- Performance Metrics -->
-      <div v-if="isConnected" class="metrics-panel">
-        <h3>📊 Real-time Performance Metrics</h3>
-        <div class="metrics-grid">
-          <div class="metric">
-            <span class="metric-label">Messages Sent:</span>
-            <span class="metric-value">{{ metrics.messagesSent.toLocaleString() }}</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Messages Received:</span>
-            <span class="metric-value">{{ metrics.messagesReceived.toLocaleString() }}</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Bytes Transferred:</span>
-            <span class="metric-value">{{ formatBytes(metrics.bytesTransferred) }}</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Average Latency:</span>
-            <span class="metric-value">{{ metrics.averageLatency.toFixed(2) }}ms</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Uptime:</span>
-            <span class="metric-value">{{ formatUptime(metrics.uptime) }}</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Protocol Efficiency:</span>
-            <span class="metric-value">{{ calculateProtocolEfficiency() }}%</span>
-          </div>
-        </div>
-      </div>
+        <Transition name="slide-panel" mode="out-in">
+          <section v-if="activeTab === 'chat'" key="chat" class="chat-panel">
+            <div ref="messageListRef" class="messages">
+              <article
+                v-for="message in activeMessages"
+                :key="message.id"
+                :class="{ mine: message.sender.userId === sessionView.userId }"
+                class="message"
+              >
+                <header>
+                  <strong>{{ message.sender.name }}</strong>
+                  <time>{{ formatTime(message.serverTime) }}</time>
+                </header>
+                <p>{{ message.text }}</p>
+              </article>
+            </div>
 
-      <!-- Protocol Comparison -->
-      <div v-if="isConnected" class="protocol-comparison">
-        <h3>🔬 Protocol Efficiency Comparison</h3>
-        <div class="comparison-chart">
-          <div class="comparison-item">
-            <span class="protocol-name">IIBIN Binary</span>
-            <div class="efficiency-bar">
-              <div class="efficiency-fill iibin" :style="{ width: '100%' }"></div>
+            <div v-if="typingUsers.length > 0" class="typing-line">
+              {{ typingUsers.join(', ') }} typing...
             </div>
-            <span class="efficiency-value">{{ formatBytes(iibinSize) }}</span>
-          </div>
-          <div class="comparison-item">
-            <span class="protocol-name">JSON Text</span>
-            <div class="efficiency-bar">
-              <div class="efficiency-fill json" :style="{ width: jsonEfficiencyPercent + '%' }"></div>
+
+            <form class="composer" @submit.prevent="sendMessage">
+              <input
+                v-model="messageInput"
+                type="text"
+                maxlength="4000"
+                placeholder="Write a message"
+                @input="onMessageInput"
+              />
+              <button type="submit" :disabled="!messageInput.trim()">Send</button>
+            </form>
+          </section>
+
+          <section v-else key="call" class="call-panel">
+            <div v-if="!callJoined" class="prejoin">
+              <video ref="previewVideoRef" autoplay muted playsinline></video>
+              <div class="prejoin-actions">
+                <button @click="handleJoinCallClick">Join call</button>
+              </div>
             </div>
-            <span class="efficiency-value">{{ formatBytes(jsonSize) }}</span>
-          </div>
-          <div class="savings-indicator">
-            <strong>💾 Space Savings: {{ protocolSavings.toFixed(1) }}%</strong>
-          </div>
-        </div>
-      </div>
-    </main>
+
+            <div v-else class="call-live">
+              <div class="video-grid" :class="{ single: remoteTiles.length === 0 }">
+                <article class="video-tile local">
+                  <video ref="localVideoRef" autoplay muted playsinline></video>
+                  <footer>You</footer>
+                </article>
+
+                <article v-for="tile in remoteTiles" :key="tile.userId" class="video-tile">
+                  <video :ref="(el) => bindRemoteVideo(tile.userId, el as HTMLVideoElement | null)" autoplay playsinline></video>
+                  <footer>{{ tile.name }}</footer>
+                </article>
+              </div>
+
+              <div class="call-controls">
+                <button :class="{ active: isCameraEnabled }" @click="toggleCamera">
+                  {{ isCameraEnabled ? 'Camera on' : 'Camera off' }}
+                </button>
+                <button :class="{ active: isMicEnabled }" @click="toggleMic">
+                  {{ isMicEnabled ? 'Mic on' : 'Mic off' }}
+                </button>
+                <button class="danger" @click="leaveCall">Leave call</button>
+              </div>
+            </div>
+          </section>
+        </Transition>
+      </main>
+
+      <aside class="context">
+        <section class="context-section">
+          <h3>Invite</h3>
+          <p v-if="lastInviteCode" class="invite-code">{{ lastInviteCode }}</p>
+          <p v-else>Create an invite code for this room.</p>
+          <button class="quiet-btn" :disabled="!lastInviteCode" @click="copyInviteCode">Copy code</button>
+        </section>
+
+        <section class="context-section">
+          <h3>Participants</h3>
+          <ul class="participant-list">
+            <li v-for="participant in activeParticipants" :key="participant.userId">
+              <span class="presence" :class="{ live: participant.callJoined }"></span>
+              <div>
+                <strong>{{ participant.name }}</strong>
+                <p>{{ participant.callJoined ? 'In call' : 'Chat only' }}</p>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <section class="context-section compact">
+          <h3>Live status</h3>
+          <dl>
+            <div>
+              <dt>Room</dt>
+              <dd>{{ activeRoom?.name || '-' }}</dd>
+            </div>
+            <div>
+              <dt>Signal</dt>
+              <dd>{{ connectionLabel }}</dd>
+            </div>
+            <div>
+              <dt>Peers</dt>
+              <dd>{{ remoteTiles.length }}</dd>
+            </div>
+          </dl>
+        </section>
+      </aside>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { IIBINClient, MessageType, createTextMessage, compareWithJSON } from './lib/iibin'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
-function resolveDefaultWebSocketUrl(): string {
-  if (typeof window === 'undefined') {
-    return 'ws://127.0.0.1:8080/ws'
-  }
-
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = window.location.host || '127.0.0.1:8080'
-  return `${protocol}//${host}/ws`
+interface Session {
+  userId: string
+  name: string
+  color: string
 }
 
-// Connection state
-const websocketUrl = ref(resolveDefaultWebSocketUrl())
-const userName = ref('User' + Math.floor(Math.random() * 1000))
-const isConnected = ref(false)
-const isConnecting = ref(false)
-
-// IIBIN client
-let iibinClient: IIBINClient | null = null
-
-// Chat state
-const messages = ref<Array<{
+interface Room {
   id: string
-  sender: string
-  content: string
-  timestamp: number
-}>>([])
-const newMessage = ref('')
-
-// Stress test state
-const isStressTesting = ref(false)
-const stressTestConfig = reactive({
-  duration: 30,
-  messagesPerSecond: 100,
-  messageSize: 1024
-})
-
-const stressTestProgress = ref(0)
-const stressTestStats = reactive({
-  messagesSent: 0,
-  errorCount: 0,
-  elapsedTime: 0
-})
-
-const stressTestResults = ref<any>(null)
-
-// Performance metrics
-const metrics = reactive({
-  messagesSent: 0,
-  messagesReceived: 0,
-  bytesTransferred: 0,
-  averageLatency: 0,
-  uptime: 0
-})
-
-// Protocol comparison
-const iibinSize = ref(0)
-const jsonSize = ref(0)
-const protocolSavings = computed(() => {
-  if (jsonSize.value === 0) return 0
-  return ((jsonSize.value - iibinSize.value) / jsonSize.value) * 100
-})
-const jsonEfficiencyPercent = computed(() => {
-  if (iibinSize.value === 0) return 100
-  return (jsonSize.value / iibinSize.value) * 100
-})
-
-// Connection management
-async function toggleConnection() {
-  if (isConnected.value) {
-    disconnect()
-  } else {
-    await connect()
-  }
+  name: string
+  inviteCode: string
+  memberCount: number
 }
 
-async function connect() {
-  if (isConnecting.value) return
-  
-  isConnecting.value = true
-  
+interface Participant {
+  userId: string
+  name: string
+  roomId: string
+  callJoined: boolean
+}
+
+interface ChatMessage {
+  id: string
+  roomId: string
+  sender: {
+    userId: string
+    name: string
+  }
+  text: string
+  serverTime: number
+}
+
+type ConnectionState = 'offline' | 'connecting' | 'online' | 'reconnecting'
+
+const SESSION_STORAGE_KEY = 'king.video.chat.session.v2'
+const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
+
+const authForm = reactive({
+  name: '',
+  color: '#0f62fe',
+})
+
+const currentSession = ref<Session | null>(restoreSession())
+const connectionState = ref<ConnectionState>('offline')
+const activeTab = ref<'chat' | 'call'>('chat')
+const createRoomName = ref('')
+const inviteCodeInput = ref('')
+const lastInviteCode = ref('')
+
+const rooms = ref<Room[]>([])
+const activeRoomId = ref('lobby')
+
+const messagesByRoom = reactive<Record<string, ChatMessage[]>>({})
+const participantsByRoom = reactive<Record<string, Participant[]>>({})
+const typingByRoom = reactive<Record<string, string[]>>({})
+
+const messageInput = ref('')
+const messageListRef = ref<HTMLElement | null>(null)
+let typingDebounce: ReturnType<typeof setTimeout> | null = null
+
+const ws = ref<WebSocket | null>(null)
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let reconnectAttempt = 0
+
+const callJoined = ref(false)
+const callStatus = ref<'idle' | 'preparing' | 'live' | 'error'>('idle')
+const isMicEnabled = ref(true)
+const isCameraEnabled = ref(true)
+
+const previewVideoRef = ref<HTMLVideoElement | null>(null)
+const localVideoRef = ref<HTMLVideoElement | null>(null)
+let localStream: MediaStream | null = null
+
+const peerConnections = new Map<string, RTCPeerConnection>()
+const remoteVideoElements = new Map<string, HTMLVideoElement>()
+const remoteTiles = ref<Array<{ userId: string; name: string; stream: MediaStream }>>([])
+
+const isAuthenticated = computed(() => currentSession.value !== null)
+const sessionView = computed<Session>(() => currentSession.value || {
+  userId: '',
+  name: '',
+  color: '#0f62fe',
+})
+
+const activeRoom = computed(() => rooms.value.find((room) => room.id === activeRoomId.value) || null)
+const activeMessages = computed(() => messagesByRoom[activeRoomId.value] || [])
+const activeParticipants = computed(() => participantsByRoom[activeRoomId.value] || [])
+
+const typingUsers = computed(() => {
+  const users = typingByRoom[activeRoomId.value] || []
+  const me = currentSession.value?.userId
+  return users.filter((userId) => userId !== me).map((userId) => participantName(userId))
+})
+
+const connectionLabel = computed(() => {
+  if (connectionState.value === 'online') return 'Connected'
+  if (connectionState.value === 'connecting') return 'Connecting'
+  if (connectionState.value === 'reconnecting') return 'Reconnecting'
+  return 'Offline'
+})
+
+function restoreSession(): Session | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
   try {
-    iibinClient = new IIBINClient()
-    
-    // Set up event handlers
-    iibinClient.on(MessageType.TEXT_MESSAGE, handleTextMessage)
-    iibinClient.on(MessageType.PONG, handlePong)
-    
-    await iibinClient.connect(websocketUrl.value)
-    
-    isConnected.value = true
-    
-    // Start metrics update interval
-    startMetricsUpdate()
-    
-    // Send join message
-    const joinMessage = createTextMessage(`${userName.value} joined the chat`)
-    iibinClient.send(joinMessage)
-    
-  } catch (error) {
-    console.error('Connection failed:', error)
-    alert('Failed to connect to WebSocket server')
-  } finally {
-    isConnecting.value = false
+    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY)
+    if (!raw) {
+      return null
+    }
+    const parsed = JSON.parse(raw)
+    if (
+      typeof parsed?.userId === 'string'
+      && typeof parsed?.name === 'string'
+      && typeof parsed?.color === 'string'
+    ) {
+      return {
+        userId: parsed.userId,
+        name: parsed.name,
+        color: parsed.color,
+      }
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+function persistSession(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (!currentSession.value) {
+    window.localStorage.removeItem(SESSION_STORAGE_KEY)
+    return
+  }
+
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(currentSession.value))
+}
+
+function normalizeRoomId(value: string): string {
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-')
+  return normalized || 'lobby'
+}
+
+function wsUrl(roomId: string): string {
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+  const host = window.location.host || '127.0.0.1:3000'
+  const session = currentSession.value
+  if (!session) {
+    return `${protocol}://${host}/ws`
+  }
+
+  const query = new URLSearchParams({
+    userId: session.userId,
+    name: session.name,
+    room: roomId,
+  })
+
+  return `${protocol}://${host}/ws?${query.toString()}`
+}
+
+function ensureRoomState(roomId: string): void {
+  if (!messagesByRoom[roomId]) {
+    messagesByRoom[roomId] = []
+  }
+  if (!participantsByRoom[roomId]) {
+    participantsByRoom[roomId] = []
+  }
+  if (!typingByRoom[roomId]) {
+    typingByRoom[roomId] = []
   }
 }
 
-function disconnect() {
-  if (iibinClient) {
-    // Send leave message
-    const leaveMessage = createTextMessage(`${userName.value} left the chat`)
-    iibinClient.send(leaveMessage)
-    
-    iibinClient.disconnect()
-    iibinClient = null
-  }
-  
-  isConnected.value = false
-  stopMetricsUpdate()
-}
-
-// Message handling
-function handleTextMessage(message: any) {
-  if (message.data && message.data.text) {
-    messages.value.push({
-      id: message.id || crypto.randomUUID(),
-      sender: 'Remote User',
-      content: message.data.text,
-      timestamp: message.timestamp || Date.now()
-    })
-    
-    nextTick(() => {
-      scrollToBottom()
-    })
-  }
-}
-
-function handlePong() {
-  console.log('Received pong')
-}
-
-function sendMessage() {
-  if (!newMessage.value.trim() || !iibinClient) return
-  
-  const message = createTextMessage(newMessage.value.trim())
-  iibinClient.send(message)
-  
-  // Add to local messages
-  messages.value.push({
-    id: message.id!,
-    sender: userName.value,
-    content: newMessage.value.trim(),
-    timestamp: message.timestamp!
-  })
-  
-  // Update protocol comparison
-  updateProtocolComparison(newMessage.value.trim())
-  
-  newMessage.value = ''
-  
-  nextTick(() => {
-    scrollToBottom()
-  })
-}
-
-// Stress testing
-async function startStressTest() {
-  if (!iibinClient || isStressTesting.value) return
-  
-  isStressTesting.value = true
-  stressTestResults.value = null
-  stressTestProgress.value = 0
-  
-  // Reset stats
-  Object.assign(stressTestStats, {
-    messagesSent: 0,
-    errorCount: 0,
-    elapsedTime: 0
-  })
-  
-  const startTime = Date.now()
-  const testPayload = 'X'.repeat(stressTestConfig.messageSize)
-  const totalMessages = stressTestConfig.duration * stressTestConfig.messagesPerSecond
-  const interval = 1000 / stressTestConfig.messagesPerSecond
-  
-  let messagesSent = 0
-  let errors = 0
-  
-  const sendTestMessage = () => {
-    if (!isStressTesting.value || messagesSent >= totalMessages) {
+async function refreshRooms(): Promise<void> {
+  try {
+    const response = await fetch('/api/rooms')
+    if (!response.ok) {
       return
     }
-    
+
+    const payload = await response.json()
+    const nextRooms = Array.isArray(payload.rooms) ? payload.rooms : []
+    rooms.value = nextRooms.map((room: any) => ({
+      id: String(room.id || 'lobby'),
+      name: String(room.name || room.id || 'Room'),
+      inviteCode: String(room.inviteCode || room.id || ''),
+      memberCount: Number(room.memberCount || 0),
+    }))
+
+    for (const room of rooms.value) {
+      ensureRoomState(room.id)
+    }
+
+    if (!rooms.value.some((room) => room.id === activeRoomId.value)) {
+      activeRoomId.value = rooms.value[0]?.id || 'lobby'
+    }
+  } catch {
+    // ignore network errors in UI refresh path
+  }
+}
+
+function connectSocket(): void {
+  if (!currentSession.value) {
+    return
+  }
+
+  if (ws.value) {
+    ws.value.close()
+    ws.value = null
+  }
+
+  connectionState.value = reconnectAttempt > 0 ? 'reconnecting' : 'connecting'
+
+  const socket = new WebSocket(wsUrl(activeRoomId.value))
+  ws.value = socket
+
+  socket.onopen = () => {
+    reconnectAttempt = 0
+    connectionState.value = 'online'
+  }
+
+  socket.onmessage = async (event) => {
+    const payload = typeof event.data === 'string' ? event.data : ''
+    if (!payload) {
+      return
+    }
+
+    let message: any
     try {
-      const testMessage = createTextMessage(`STRESS_TEST_${messagesSent}: ${testPayload}`)
-      iibinClient!.send(testMessage)
-      messagesSent++
-      stressTestStats.messagesSent = messagesSent
-    } catch (error) {
-      errors++
-      stressTestStats.errorCount = errors
-      console.error('Stress test message failed:', error)
+      message = JSON.parse(payload)
+    } catch {
+      return
     }
-    
-    // Update progress
-    stressTestProgress.value = (messagesSent / totalMessages) * 100
-    stressTestStats.elapsedTime = Date.now() - startTime
-    
-    if (messagesSent < totalMessages) {
-      setTimeout(sendTestMessage, interval)
+
+    handleServerEvent(message)
+    await nextTick()
+    scrollMessagesToBottom()
+  }
+
+  socket.onclose = () => {
+    connectionState.value = 'offline'
+    scheduleReconnect()
+  }
+
+  socket.onerror = () => {
+    connectionState.value = 'offline'
+  }
+}
+
+function scheduleReconnect(): void {
+  if (!currentSession.value) {
+    return
+  }
+
+  reconnectAttempt += 1
+  const backoff = Math.min(4000, 500 * reconnectAttempt)
+  connectionState.value = 'reconnecting'
+
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+  }
+
+  reconnectTimer = setTimeout(() => {
+    connectSocket()
+  }, backoff)
+}
+
+function emit(type: string, data: Record<string, unknown> = {}): void {
+  const socket = ws.value
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    return
+  }
+
+  socket.send(JSON.stringify({ type, ...data }))
+}
+
+function updateRoomCounters(roomId: string): void {
+  const room = rooms.value.find((entry) => entry.id === roomId)
+  const participants = participantsByRoom[roomId] || []
+  if (room) {
+    room.memberCount = participants.length
+  }
+}
+
+function handleServerEvent(message: any): void {
+  const type = String(message.type || '')
+
+  if (type === 'session/ready') {
+    const roomId = normalizeRoomId(String(message.roomId || activeRoomId.value))
+    activeRoomId.value = roomId
+
+    const serverRooms = Array.isArray(message.rooms) ? message.rooms : []
+    rooms.value = serverRooms.map((room: any) => ({
+      id: String(room.id || 'lobby'),
+      name: String(room.name || room.id || 'Room'),
+      inviteCode: String(room.inviteCode || room.id || ''),
+      memberCount: Number(room.memberCount || 0),
+    }))
+
+    for (const room of rooms.value) {
+      ensureRoomState(room.id)
+    }
+    return
+  }
+
+  if (type === 'room/switched') {
+    const nextRoomId = normalizeRoomId(String(message.roomId || activeRoomId.value))
+    activeRoomId.value = nextRoomId
+    callReset(false)
+    syncLocationRoom(nextRoomId)
+    return
+  }
+
+  if (type === 'room/snapshot') {
+    const roomId = normalizeRoomId(String(message.roomId || 'lobby'))
+    ensureRoomState(roomId)
+
+    participantsByRoom[roomId] = (Array.isArray(message.participants) ? message.participants : []).map((participant: any) => ({
+      userId: String(participant.userId || ''),
+      name: String(participant.name || 'User'),
+      roomId,
+      callJoined: Boolean(participant.callJoined),
+    }))
+
+    updateRoomCounters(roomId)
+    if (roomId === activeRoomId.value) {
+      syncPeerTopology()
+    }
+    return
+  }
+
+  if (type === 'chat/message') {
+    const roomId = normalizeRoomId(String(message.roomId || activeRoomId.value))
+    ensureRoomState(roomId)
+
+    messagesByRoom[roomId].push({
+      id: String(message.id || `${Date.now()}-${Math.random()}`),
+      roomId,
+      sender: {
+        userId: String(message.sender?.userId || ''),
+        name: String(message.sender?.name || 'User'),
+      },
+      text: String(message.text || ''),
+      serverTime: Number(message.serverTime || Date.now()),
+    })
+    return
+  }
+
+  if (type === 'typing/start' || type === 'typing/stop') {
+    const roomId = normalizeRoomId(String(message.roomId || activeRoomId.value))
+    const userId = String(message.user?.userId || '')
+    if (!userId) {
+      return
+    }
+
+    ensureRoomState(roomId)
+    const next = new Set(typingByRoom[roomId])
+
+    if (type === 'typing/start') {
+      next.add(userId)
     } else {
-      finishStressTest()
+      next.delete(userId)
     }
+
+    typingByRoom[roomId] = [...next]
+    return
   }
-  
-  // Start sending messages
-  sendTestMessage()
-  
-  // Auto-finish after duration + buffer
-  setTimeout(() => {
-    if (isStressTesting.value) {
-      finishStressTest()
+
+  if (type.startsWith('call/')) {
+    handleCallSignal(message)
+  }
+}
+
+async function createRoom(): Promise<void> {
+  const name = createRoomName.value.trim()
+  if (!name) {
+    return
+  }
+
+  try {
+    const response = await fetch('/api/rooms', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+
+    if (!response.ok) {
+      return
     }
-  }, (stressTestConfig.duration + 5) * 1000)
-}
 
-function finishStressTest() {
-  isStressTesting.value = false
-  
-  const endTime = Date.now()
-  const duration = stressTestStats.elapsedTime
-  
-  stressTestResults.value = {
-    totalMessages: stressTestStats.messagesSent,
-    totalBytes: stressTestStats.messagesSent * stressTestConfig.messageSize,
-    duration,
-    messagesPerSecond: (stressTestStats.messagesSent / duration) * 1000,
-    bytesPerSecond: (stressTestStats.messagesSent * stressTestConfig.messageSize / duration) * 1000,
-    averageLatency: metrics.averageLatency,
-    p95Latency: metrics.averageLatency * 1.2, // Simulated
-    p99Latency: metrics.averageLatency * 1.5, // Simulated
-    errorCount: stressTestStats.errorCount
+    const payload = await response.json()
+    const roomId = normalizeRoomId(String(payload.room?.id || 'lobby'))
+    createRoomName.value = ''
+    await refreshRooms()
+    switchRoom(roomId)
+  } catch {
+    // ignore API errors in optimistic demo flow
   }
-  
-  console.log('Stress test completed:', stressTestResults.value)
 }
 
-// Metrics and utilities
-let metricsInterval: ReturnType<typeof setInterval> | null = null
+function switchRoom(roomId: string): void {
+  const nextRoomId = normalizeRoomId(roomId)
+  emit('room/switch', { roomId: nextRoomId })
+}
 
-function startMetricsUpdate() {
-  metricsInterval = setInterval(() => {
-    if (iibinClient) {
-      const clientMetrics = iibinClient.getMetrics()
-      Object.assign(metrics, clientMetrics)
+async function createInvite(): Promise<void> {
+  if (!activeRoom.value) {
+    return
+  }
+
+  try {
+    const response = await fetch(`/api/rooms/${encodeURIComponent(activeRoom.value.id)}/invite`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+
+    if (!response.ok) {
+      return
     }
-  }, 1000)
-}
 
-function stopMetricsUpdate() {
-  if (metricsInterval) {
-    clearInterval(metricsInterval)
-    metricsInterval = null
+    const payload = await response.json()
+    lastInviteCode.value = String(payload.inviteCode || '')
+  } catch {
+    // ignore
   }
 }
 
-function updateProtocolComparison(text: string) {
-  const comparison = compareWithJSON({ text, timestamp: Date.now(), sender: userName.value })
-  iibinSize.value = comparison.iibin
-  jsonSize.value = comparison.json
-}
+async function redeemInvite(): Promise<void> {
+  const code = inviteCodeInput.value.trim()
+  if (!code) {
+    return
+  }
 
-function calculateProtocolEfficiency(): number {
-  if (metrics.bytesTransferred === 0) return 100
-  // Simulate efficiency calculation
-  return Math.min(100, 85 + (protocolSavings.value / 10))
-}
+  try {
+    const response = await fetch('/api/invite/redeem', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code }),
+    })
 
-function scrollToBottom() {
-  const container = document.querySelector('.messages-container')
-  if (container) {
-    container.scrollTop = container.scrollHeight
+    if (!response.ok) {
+      return
+    }
+
+    const payload = await response.json()
+    const roomId = normalizeRoomId(String(payload.room?.id || 'lobby'))
+    inviteCodeInput.value = ''
+    await refreshRooms()
+    switchRoom(roomId)
+  } catch {
+    // ignore
   }
 }
 
-function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString()
+async function copyInviteCode(): Promise<void> {
+  if (!lastInviteCode.value) {
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(lastInviteCode.value)
+  } catch {
+    // clipboard can fail on non-secure contexts
+  }
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+function sendMessage(): void {
+  const text = messageInput.value.trim()
+  if (!text) {
+    return
+  }
+
+  emit('chat/send', {
+    roomId: activeRoomId.value,
+    text,
+  })
+
+  messageInput.value = ''
+  emit('typing/stop', { roomId: activeRoomId.value })
 }
 
-function formatUptime(ms: number): string {
-  const seconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-  
-  if (hours > 0) {
-    return `${hours}h ${minutes % 60}m ${seconds % 60}s`
-  } else if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`
+function onMessageInput(): void {
+  emit('typing/start', { roomId: activeRoomId.value })
+
+  if (typingDebounce) {
+    clearTimeout(typingDebounce)
+  }
+
+  typingDebounce = setTimeout(() => {
+    emit('typing/stop', { roomId: activeRoomId.value })
+  }, 900)
+}
+
+function scrollMessagesToBottom(): void {
+  const container = messageListRef.value
+  if (!container) {
+    return
+  }
+  container.scrollTop = container.scrollHeight
+}
+
+function participantName(userId: string): string {
+  const participant = activeParticipants.value.find((entry) => entry.userId === userId)
+  return participant ? participant.name : userId.slice(0, 8)
+}
+
+async function prepareLocalStream(): Promise<void> {
+  if (localStream) {
+    return
+  }
+
+  localStream = await navigator.mediaDevices.getUserMedia({
+    audio: true,
+    video: true,
+  })
+
+  applyTrackState()
+  attachLocalPreview()
+}
+
+function attachLocalPreview(): void {
+  if (previewVideoRef.value && localStream) {
+    previewVideoRef.value.srcObject = localStream
+  }
+  if (localVideoRef.value && localStream) {
+    localVideoRef.value.srcObject = localStream
+  }
+}
+
+function applyTrackState(): void {
+  if (!localStream) {
+    return
+  }
+
+  for (const track of localStream.getAudioTracks()) {
+    track.enabled = isMicEnabled.value
+  }
+  for (const track of localStream.getVideoTracks()) {
+    track.enabled = isCameraEnabled.value
+  }
+}
+
+function bindRemoteVideo(userId: string, element: HTMLVideoElement | null): void {
+  if (!element) {
+    remoteVideoElements.delete(userId)
+    return
+  }
+
+  remoteVideoElements.set(userId, element)
+  const tile = remoteTiles.value.find((entry) => entry.userId === userId)
+  if (tile) {
+    element.srcObject = tile.stream
+  }
+}
+
+function setRemoteStream(userId: string, stream: MediaStream): void {
+  const existing = remoteTiles.value.find((entry) => entry.userId === userId)
+  if (existing) {
+    existing.stream = stream
+    existing.name = participantName(userId)
   } else {
-    return `${seconds}s`
+    remoteTiles.value.push({
+      userId,
+      name: participantName(userId),
+      stream,
+    })
+  }
+
+  const element = remoteVideoElements.get(userId)
+  if (element) {
+    element.srcObject = stream
   }
 }
 
-// Lifecycle
-onMounted(() => {
-  console.log('🚀 King IIBIN WebSocket chat and stress shell loaded')
+function removeRemoteStream(userId: string): void {
+  remoteTiles.value = remoteTiles.value.filter((entry) => entry.userId !== userId)
+  remoteVideoElements.delete(userId)
+}
+
+function shouldInitiateOffer(peerUserId: string): boolean {
+  const myId = currentSession.value?.userId || ''
+  return myId > peerUserId
+}
+
+function createPeerConnection(peerUserId: string): RTCPeerConnection {
+  const connection = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+
+  if (localStream) {
+    for (const track of localStream.getTracks()) {
+      connection.addTrack(track, localStream)
+    }
+  }
+
+  connection.onicecandidate = (event) => {
+    if (!event.candidate) {
+      return
+    }
+
+    emit('call/ice', {
+      roomId: activeRoomId.value,
+      targetUserId: peerUserId,
+      payload: event.candidate.toJSON(),
+    })
+  }
+
+  connection.ontrack = (event) => {
+    const [stream] = event.streams
+    if (stream) {
+      setRemoteStream(peerUserId, stream)
+    }
+  }
+
+  connection.onconnectionstatechange = () => {
+    if (['failed', 'closed', 'disconnected'].includes(connection.connectionState)) {
+      closePeer(peerUserId, false)
+    }
+  }
+
+  peerConnections.set(peerUserId, connection)
+  return connection
+}
+
+async function ensureOffer(peerUserId: string): Promise<void> {
+  const participant = activeParticipants.value.find((entry) => entry.userId === peerUserId)
+  if (!participant || !participant.callJoined) {
+    return
+  }
+
+  let connection = peerConnections.get(peerUserId)
+  if (!connection) {
+    connection = createPeerConnection(peerUserId)
+  }
+
+  if (!shouldInitiateOffer(peerUserId)) {
+    return
+  }
+
+  const offer = await connection.createOffer()
+  await connection.setLocalDescription(offer)
+
+  emit('call/offer', {
+    roomId: activeRoomId.value,
+    targetUserId: peerUserId,
+    payload: offer,
+  })
+}
+
+function closePeer(peerUserId: string, notify = true): void {
+  const connection = peerConnections.get(peerUserId)
+  if (connection) {
+    peerConnections.delete(peerUserId)
+    connection.onicecandidate = null
+    connection.ontrack = null
+    connection.onconnectionstatechange = null
+    connection.close()
+  }
+
+  removeRemoteStream(peerUserId)
+
+  if (notify) {
+    emit('call/hangup', {
+      roomId: activeRoomId.value,
+      targetUserId: peerUserId,
+      payload: null,
+    })
+  }
+}
+
+function syncPeerTopology(): void {
+  if (!callJoined.value) {
+    return
+  }
+
+  const me = currentSession.value?.userId
+  if (!me) {
+    return
+  }
+
+  const targetUsers = activeParticipants.value
+    .filter((entry) => entry.userId !== me && entry.callJoined)
+    .map((entry) => entry.userId)
+
+  for (const userId of targetUsers) {
+    if (!peerConnections.has(userId)) {
+      void ensureOffer(userId)
+    }
+  }
+
+  for (const existingUserId of [...peerConnections.keys()]) {
+    if (!targetUsers.includes(existingUserId)) {
+      closePeer(existingUserId, false)
+    }
+  }
+}
+
+async function handleCallSignal(message: any): Promise<void> {
+  const roomId = normalizeRoomId(String(message.roomId || activeRoomId.value))
+  if (roomId !== activeRoomId.value) {
+    return
+  }
+
+  const senderUserId = String(message.sender?.userId || '')
+  const me = currentSession.value?.userId
+  if (!senderUserId || senderUserId === me) {
+    return
+  }
+
+  const targetUserId = message.targetUserId ? String(message.targetUserId) : ''
+  if (targetUserId && targetUserId !== me) {
+    return
+  }
+
+  if (!callJoined.value && ['call/offer', 'call/answer', 'call/ice'].includes(String(message.type))) {
+    await joinCall(true)
+  }
+
+  let connection = peerConnections.get(senderUserId)
+  if (!connection) {
+    connection = createPeerConnection(senderUserId)
+  }
+
+  const payload = message.payload || null
+  const type = String(message.type || '')
+
+  if (type === 'call/offer') {
+    if (!payload) {
+      return
+    }
+    await connection.setRemoteDescription(new RTCSessionDescription(payload))
+    const answer = await connection.createAnswer()
+    await connection.setLocalDescription(answer)
+
+    emit('call/answer', {
+      roomId: activeRoomId.value,
+      targetUserId: senderUserId,
+      payload: answer,
+    })
+    return
+  }
+
+  if (type === 'call/answer') {
+    if (!payload) {
+      return
+    }
+    await connection.setRemoteDescription(new RTCSessionDescription(payload))
+    return
+  }
+
+  if (type === 'call/ice') {
+    if (!payload) {
+      return
+    }
+    await connection.addIceCandidate(new RTCIceCandidate(payload))
+    return
+  }
+
+  if (type === 'call/hangup') {
+    closePeer(senderUserId, false)
+  }
+}
+
+async function joinCall(silent = false): Promise<void> {
+  if (callJoined.value) {
+    return
+  }
+
+  callStatus.value = 'preparing'
+
+  try {
+    await prepareLocalStream()
+    callJoined.value = true
+    callStatus.value = 'live'
+
+    emit('call/join', {
+      roomId: activeRoomId.value,
+      silent,
+    })
+
+    syncPeerTopology()
+  } catch {
+    callStatus.value = 'error'
+  }
+}
+
+function handleJoinCallClick(): void {
+  void joinCall(false)
+}
+
+function callReset(notify = true): void {
+  for (const peerId of [...peerConnections.keys()]) {
+    closePeer(peerId, false)
+  }
+
+  if (notify) {
+    emit('call/leave', { roomId: activeRoomId.value })
+  }
+
+  callJoined.value = false
+  callStatus.value = 'idle'
+  remoteTiles.value = []
+}
+
+function leaveCall(): void {
+  callReset(true)
+}
+
+function toggleMic(): void {
+  isMicEnabled.value = !isMicEnabled.value
+  applyTrackState()
+}
+
+function toggleCamera(): void {
+  isCameraEnabled.value = !isCameraEnabled.value
+  applyTrackState()
+}
+
+function stopLocalStream(): void {
+  if (!localStream) {
+    return
+  }
+  for (const track of localStream.getTracks()) {
+    track.stop()
+  }
+  localStream = null
+}
+
+function syncLocationRoom(roomId: string): void {
+  const url = new URL(window.location.href)
+  url.searchParams.set('room', roomId)
+  window.history.replaceState({}, '', url)
+}
+
+function signIn(): void {
+  const name = authForm.name.trim()
+  if (!name) {
+    return
+  }
+
+  currentSession.value = {
+    userId: `u-${crypto.randomUUID().slice(0, 8)}`,
+    name,
+    color: authForm.color,
+  }
+
+  persistSession()
+  connectSocket()
+  refreshRooms()
+}
+
+function signOut(): void {
+  callReset(true)
+  stopLocalStream()
+
+  if (ws.value) {
+    ws.value.close()
+    ws.value = null
+  }
+
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+
+  currentSession.value = null
+  persistSession()
+  connectionState.value = 'offline'
+}
+
+function formatTime(value: number): string {
+  return new Date(value).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+watch(isAuthenticated, (value) => {
+  if (!value) {
+    return
+  }
+
+  const urlRoom = normalizeRoomId(new URLSearchParams(window.location.search).get('room') || 'lobby')
+  activeRoomId.value = urlRoom
+  ensureRoomState(urlRoom)
+
+  connectSocket()
+  refreshRooms()
+})
+
+watch(activeMessages, () => {
+  nextTick().then(() => {
+    scrollMessagesToBottom()
+  })
+})
+
+watch(activeParticipants, () => {
+  syncPeerTopology()
+}, { deep: true })
+
+onMounted(async () => {
+  if (currentSession.value) {
+    authForm.name = currentSession.value.name
+    authForm.color = currentSession.value.color
+    connectSocket()
+    await refreshRooms()
+  }
+
+  try {
+    await prepareLocalStream()
+  } catch {
+    // device permissions can fail before call join
+  }
 })
 
 onUnmounted(() => {
-  disconnect()
-  stopMetricsUpdate()
+  callReset(false)
+  stopLocalStream()
+
+  if (ws.value) {
+    ws.value.close()
+  }
+
+  if (typingDebounce) {
+    clearTimeout(typingDebounce)
+  }
+
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+  }
 })
 </script>
 
 <style scoped>
-#app {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.app-root {
   min-height: 100vh;
-  color: white;
+  color: var(--king-text);
 }
 
-.app-header {
-  background: rgba(0, 0, 0, 0.2);
-  padding: 1rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  backdrop-filter: blur(10px);
+.auth-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
 }
 
-.app-header h1 {
+.auth-card {
+  width: min(28rem, 100%);
+  background: var(--king-surface);
+  border: 1px solid var(--king-border);
+  border-radius: 0.75rem;
+  padding: 2rem;
+  box-shadow: var(--king-shadow-2);
+}
+
+.auth-card h1 {
   margin: 0;
-  font-size: 1.8rem;
+  font-size: 1.5rem;
+}
+
+.auth-card p {
+  margin: 0.6rem 0 1.5rem;
+  color: var(--king-muted);
+}
+
+.auth-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+}
+
+.auth-form input,
+.inline-form input,
+.composer input {
+  border: 1px solid var(--king-border);
+  border-radius: 0.45rem;
+  padding: 0.62rem 0.75rem;
+  background: #fff;
+  color: var(--king-text);
+}
+
+.auth-form button,
+.inline-form button,
+.composer button,
+.stage-actions button,
+.prejoin-actions button,
+.call-controls button,
+.quiet-btn {
+  border: 1px solid var(--king-border);
+  border-radius: 0.45rem;
+  background: var(--king-surface);
+  color: var(--king-text);
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.auth-form button,
+.inline-form button,
+.composer button,
+.prejoin-actions button {
+  background: var(--king-accent);
+  border-color: var(--king-accent);
+  color: #fff;
   font-weight: 600;
 }
 
-.connection-status {
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.1);
-  font-weight: 500;
-  transition: all 0.3s ease;
+.stage-actions button.active,
+.call-controls button.active {
+  border-color: var(--king-accent);
+  color: var(--king-accent);
+  background: #f2f7ff;
 }
 
-.connection-status.connected {
-  background: rgba(76, 175, 80, 0.3);
-  box-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+.call-controls button.danger {
+  background: #b42318;
+  border-color: #b42318;
+  color: #fff;
 }
 
-.app-main {
-  padding: 2rem;
+.workspace {
+  min-height: 100vh;
   display: grid;
-  gap: 2rem;
-  grid-template-columns: 1fr 1fr;
-  max-width: 1400px;
-  margin: 0 auto;
+  grid-template-columns: 18rem minmax(0, 1fr) 19rem;
+  gap: 1rem;
+  padding: 1rem;
 }
 
-.connection-panel,
-.stress-test-panel,
-.chat-container,
-.metrics-panel,
-.protocol-comparison {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-radius: 15px;
-  padding: 1.5rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+.rail,
+.stage,
+.context {
+  background: var(--king-surface);
+  border: 1px solid var(--king-border);
+  border-radius: 0.75rem;
+  box-shadow: var(--king-shadow-1);
 }
 
-.stress-test-panel {
-  grid-column: 1 / -1;
+.rail,
+.context {
+  padding: 1rem;
+  display: grid;
+  align-content: start;
+  gap: 1rem;
 }
 
-.input-group {
-  margin-bottom: 1rem;
+.rail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
-.input-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
 }
 
-.input-group input {
-  width: 100%;
-  padding: 0.75rem;
-  border: none;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #333;
+.user-dot {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 999px;
+}
+
+.user-chip p {
+  margin: 0.1rem 0 0;
+  color: var(--king-muted);
+  font-size: 0.82rem;
+}
+
+.rail-section h2,
+.context-section h3 {
+  margin: 0;
   font-size: 1rem;
 }
 
-.connect-btn,
-.send-btn,
-.stress-test-btn {
-  background: linear-gradient(45deg, #ff6b6b, #ee5a24);
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.connect-btn:hover,
-.send-btn:hover,
-.stress-test-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-}
-
-.connect-btn:disabled,
-.send-btn:disabled,
-.stress-test-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.stress-test-controls {
+.inline-form {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
 }
 
-.progress-bar {
-  width: 100%;
-  height: 20px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
+.room-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.room-list li {
+  border: 1px solid var(--king-border);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  cursor: pointer;
+}
+
+.room-list li.active {
+  border-color: var(--king-accent);
+  background: #f2f7ff;
+}
+
+.room-list li p {
+  margin: 0.2rem 0 0;
+  color: var(--king-muted);
+  font-size: 0.82rem;
+}
+
+.stage {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
-  margin-bottom: 1rem;
 }
 
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #4CAF50, #8BC34A);
-  transition: width 0.3s ease;
-}
-
-.progress-stats {
+.stage-header {
+  padding: 1rem;
+  border-bottom: 1px solid var(--king-border);
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 1rem;
+}
+
+.stage-header h2 {
+  margin: 0;
+}
+
+.stage-header p {
+  margin: 0.2rem 0 0;
+  color: var(--king-muted);
   font-size: 0.9rem;
 }
 
-.results-grid,
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-}
-
-.result-item,
-.metric {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 1rem;
-  border-radius: 8px;
+.stage-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 
-.result-label,
-.metric-label {
-  font-weight: 500;
-}
-
-.result-value,
-.metric-value {
-  font-weight: 600;
-  color: #4CAF50;
-}
-
-.messages-container {
-  height: 300px;
-  overflow-y: auto;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
+.chat-panel,
+.call-panel {
   padding: 1rem;
-  margin-bottom: 1rem;
+  min-height: 0;
+  display: grid;
+}
+
+.chat-panel {
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: 0.7rem;
+}
+
+.messages {
+  border: 1px solid var(--king-border);
+  border-radius: 0.6rem;
+  background: #fff;
+  padding: 0.85rem;
+  overflow: auto;
+  display: grid;
+  gap: 0.6rem;
 }
 
 .message {
-  margin-bottom: 1rem;
-  padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  max-width: 78%;
+  border: 1px solid var(--king-border);
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.65rem;
+  background: #fff;
 }
 
-.message.own-message {
-  background: rgba(76, 175, 80, 0.2);
-  margin-left: 2rem;
+.message.mine {
+  margin-left: auto;
+  background: #f5f9ff;
+  border-color: #bad1ff;
 }
 
-.message-header {
+.message header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
+  gap: 0.75rem;
   font-size: 0.8rem;
-  opacity: 0.8;
+  color: var(--king-muted);
 }
 
-.protocol-badge {
-  background: #ff6b6b;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.7rem;
-  font-weight: 600;
+.message p {
+  margin: 0.25rem 0 0;
+  line-height: 1.45;
 }
 
-.message-input-container {
-  display: flex;
+.typing-line {
+  color: var(--king-muted);
+  font-size: 0.85rem;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.5rem;
 }
 
-.message-input {
-  flex: 1;
-  padding: 0.75rem;
-  border: none;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #333;
-}
-
-.comparison-chart {
-  space-y: 1rem;
-}
-
-.comparison-item {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.protocol-name {
-  min-width: 120px;
-  font-weight: 500;
-}
-
-.efficiency-bar {
-  flex: 1;
-  height: 20px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.efficiency-fill {
+.prejoin {
   height: 100%;
-  transition: width 0.3s ease;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0.8rem;
 }
 
-.efficiency-fill.iibin {
-  background: linear-gradient(90deg, #4CAF50, #8BC34A);
+.prejoin video,
+.video-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #111827;
+  border-radius: 0.6rem;
 }
 
-.efficiency-fill.json {
-  background: linear-gradient(90deg, #ff6b6b, #ee5a24);
+.prejoin-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
-.efficiency-value {
-  min-width: 80px;
-  text-align: right;
-  font-weight: 600;
+.call-live {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0.8rem;
 }
 
-.savings-indicator {
-  text-align: center;
-  padding: 1rem;
-  background: rgba(76, 175, 80, 0.2);
-  border-radius: 8px;
-  margin-top: 1rem;
+.video-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.7rem;
 }
 
-@media (max-width: 768px) {
-  .app-main {
-    grid-template-columns: 1fr;
-    padding: 1rem;
+.video-grid.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.video-tile {
+  border: 1px solid var(--king-border);
+  border-radius: 0.6rem;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 10rem;
+}
+
+.video-tile footer {
+  padding: 0.5rem 0.65rem;
+  border-top: 1px solid var(--king-border);
+  background: #fff;
+  font-size: 0.82rem;
+}
+
+.call-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.context {
+  gap: 0.9rem;
+}
+
+.context-section {
+  border: 1px solid var(--king-border);
+  border-radius: 0.55rem;
+  padding: 0.75rem;
+}
+
+.context-section p {
+  margin: 0.5rem 0;
+  color: var(--king-muted);
+}
+
+.invite-code {
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  background: #f6f8fb;
+  border: 1px solid var(--king-border);
+  border-radius: 0.45rem;
+  padding: 0.45rem 0.5rem;
+  color: var(--king-text);
+}
+
+.participant-list {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.participant-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.presence {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: #8e98a8;
+}
+
+.presence.live {
+  background: #12715b;
+}
+
+.participant-list p {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+}
+
+.context-section dl {
+  margin: 0.6rem 0 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.context-section dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+}
+
+.context-section dt {
+  color: var(--king-muted);
+}
+
+.slide-panel-enter-active,
+.slide-panel-leave-active {
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+.slide-panel-enter-from {
+  opacity: 0;
+  transform: translateX(14px);
+}
+
+.slide-panel-leave-to {
+  opacity: 0;
+  transform: translateX(-14px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-panel-enter-active,
+  .slide-panel-leave-active,
+  button {
+    transition: none !important;
   }
-  
-  .stress-test-controls {
+}
+
+@media (max-width: 1180px) {
+  .workspace {
+    grid-template-columns: 16rem minmax(0, 1fr);
+  }
+
+  .context {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    padding: 0.75rem;
+  }
+
+  .rail {
+    order: 0;
+  }
+
+  .stage {
+    order: 1;
+    min-height: 70vh;
+  }
+
+  .context {
+    order: 2;
     grid-template-columns: 1fr;
   }
-  
-  .results-grid,
-  .metrics-grid {
-    grid-template-columns: 1fr;
+
+  .stage-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .call-controls {
+    justify-content: stretch;
+  }
+
+  .call-controls button {
+    flex: 1;
   }
 }
 </style>

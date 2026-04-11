@@ -1,12 +1,18 @@
 :root {
-  color-scheme: dark;
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  line-height: 1.5;
+  --king-bg: #eef1f5;
+  --king-surface: #ffffff;
+  --king-border: #d5dbe3;
+  --king-text: #0f1724;
+  --king-muted: #5f6b7a;
+  --king-accent: #0f62fe;
+  --king-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 2px 6px rgba(16, 24, 40, 0.04);
+  --king-shadow-2: 0 6px 18px rgba(16, 24, 40, 0.08);
+
+  font-family: 'IBM Plex Sans', 'Segoe UI Variable Text', 'Segoe UI', 'Noto Sans', sans-serif;
+  line-height: 1.45;
   font-weight: 400;
-  background:
-    radial-gradient(circle at top, rgba(56, 189, 248, 0.18), transparent 32%),
-    linear-gradient(180deg, #020617 0%, #0f172a 100%);
-  color: #e2e8f0;
+  color: var(--king-text);
+  background: var(--king-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -25,10 +31,13 @@ body,
 
 body {
   margin: 0;
+  background: var(--king-bg);
+  color: var(--king-text);
 }
 
 a {
   color: inherit;
+  text-decoration: none;
 }
 
 button,
@@ -36,4 +45,14 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
