@@ -95,6 +95,9 @@ Those boundaries include:
   explicit failover order
 - OO ingest adapters that keep originals, extracted artifacts, streamed
   uploads, and viewer delivery on one explicit `King\ObjectStore` path
+- orchestration reference flows that keep chat turn handling, ingest, parse,
+  embed, retrieve, and worker lifecycle progression explicit on the same
+  execution backend contract
 
 For execution specifically, Flow PHP-style transforms that run on workers or
 remote peers follow the same rule already documented for the pipeline
@@ -535,6 +538,39 @@ The current PHPT proof covers:
   `617-flow-php-serialization-bridge-text-contract.phpt`
 - Proto, IIBIN, and raw binary object payload round-trips through the bridge:
   `618-flow-php-serialization-bridge-binary-contract.phpt`
+
+## Canonical Multi-Service RAG Orchestration Reference Flow
+
+The repository now also carries one canonical reference flow under
+[`../demo/userland/flow-php/src/RagOrchestrationReference.php`](../demo/userland/flow-php/src/RagOrchestrationReference.php).
+
+This piece exists because "RAG architecture" is often left as disconnected
+slides. The runtime already has the needed building blocks, so the reference
+flow keeps the actual sequence explicit:
+
+1. Chat turn arrives with user query plus document asset.
+2. Original is ingested on object store through OO ingest path.
+3. Parse step runs on orchestrator worker contract.
+4. Embed step runs on embedding service role.
+5. Retrieve step runs on retrieval service role.
+6. Respond step builds final answer with retrieved context.
+7. Worker lifecycle events are tracked from submission to terminal status.
+
+The current reference helper composes those jobs through existing contracts:
+
+- `ObjectStoreIngestor` for original/artifact/viewer object handling
+- `McpServiceDiscovery` for retrieval/embedding/document endpoint resolution
+- `OrchestratorExecutionBackend` for run start/claim/continue lifecycle
+- `RagReferencePlan` and `RagReferenceRun` for explicit plan and run snapshots
+
+This is intentionally a reference flow, not a hidden framework. It shows one
+honest orchestration shape on top of the runtime surfaces already proven in the
+repository.
+
+The current PHPT proof covers chat + ingest + parse + embed + retrieve + worker
+lifecycle progression:
+
+- `674-flow-php-rag-orchestration-reference-contract.phpt`
 
 ## Repo-Local Checkpoint Store Contract
 
