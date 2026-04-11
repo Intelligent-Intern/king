@@ -11,6 +11,7 @@ What is wired today:
 - authenticated workspace gating so room/chat/call actions and local media init only run with a valid signed-in session
 - room directory is fetched from backend API and normalized to deterministic ordering with live member counters
 - room directory with create/join/switch behavior
+- room creation submits to backend with optimistic list updates and automatic room-id conflict retries
 - invite-code create/redeem flow per room
 - multi-user room chat over websocket fanout
 - browser video call signaling (`offer`/`answer`/`ice`) with peer tiles

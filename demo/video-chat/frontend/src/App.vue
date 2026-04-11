@@ -52,8 +52,11 @@
               maxlength="48"
               placeholder="Create room"
             />
-            <button type="submit">Add</button>
+            <button type="submit" :disabled="createRoomState.submitting || !canCreateRoom">
+              {{ createRoomState.submitting ? 'Adding...' : 'Add' }}
+            </button>
           </form>
+          <p v-if="createRoomState.error" class="inline-error">{{ createRoomState.error }}</p>
 
           <ul class="room-list">
             <li
@@ -219,6 +222,7 @@ import {
   restorePersistedSession,
   type SessionIdentity,
 } from './lib/authSession'
+import { normalizeRoomCreateName, optimisticRoomId, roomIdCandidateForAttempt } from './lib/roomCreate'
 import { normalizeRoomDirectory } from './lib/roomDirectory'
 import type { Room } from './lib/types'
 import { hasAuthenticatedSession } from './lib/workspaceAuth'
@@ -262,6 +266,10 @@ const currentSession = ref<Session | null>(restoreSession())
 const connectionState = ref<ConnectionState>('offline')
 const activeTab = ref<'chat' | 'call'>('chat')
 const createRoomName = ref('')
+const createRoomState = reactive({
+  submitting: false,
+  error: '',
+})
 const inviteCodeInput = ref('')
 const lastInviteCode = ref('')
 
@@ -296,6 +304,7 @@ const remoteTiles = ref<Array<{ userId: string; name: string; stream: MediaStrea
 
 const isAuthenticated = computed(() => currentSession.value !== null)
 const canSubmitAuth = computed(() => normalizeDisplayName(authForm.name).length > 0)
+const canCreateRoom = computed(() => normalizeRoomCreateName(createRoomName.value).length > 0)
 const sessionView = computed<Session>(() => currentSession.value || {
   userId: '',
   name: '',
@@ -450,6 +459,19 @@ async function refreshRooms(): Promise<void> {
   } catch {
     // ignore network errors in UI refresh path
   }
+}
+
+function upsertRoomDirectoryEntry(room: Room): void {
+  const nextRooms = rooms.value.filter((entry) => entry.id !== room.id)
+  nextRooms.push(room)
+  rooms.value = normalizeRoomDirectory(nextRooms)
+  for (const entry of rooms.value) {
+    ensureRoomState(entry.id)
+  }
+}
+
+function removeRoomDirectoryEntry(roomId: string): void {
+  rooms.value = rooms.value.filter((entry) => entry.id !== roomId)
 }
 
 function connectSocket(): void {
@@ -631,29 +653,76 @@ async function createRoom(): Promise<void> {
     return
   }
 
-  const name = createRoomName.value.trim()
+  const name = normalizeRoomCreateName(createRoomName.value)
+  createRoomName.value = name
+  createRoomState.error = ''
+
   if (!name) {
     return
   }
 
-  try {
-    const response = await fetch('/api/rooms', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name }),
-    })
+  createRoomState.submitting = true
+  const baseRoomId = normalizeRoomId(name)
+  const pendingRoomId = optimisticRoomId(baseRoomId, Date.now())
+  upsertRoomDirectoryEntry({
+    id: pendingRoomId,
+    name,
+    inviteCode: pendingRoomId,
+    memberCount: 0,
+    createdAt: Date.now(),
+  })
 
-    if (!response.ok) {
+  try {
+    let createdRoom: Room | null = null
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const candidateId = roomIdCandidateForAttempt(baseRoomId, attempt)
+      const response = await fetch('/api/rooms', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name, id: candidateId }),
+      })
+
+      if (response.status === 409) {
+        continue
+      }
+
+      if (!response.ok) {
+        createRoomState.error = 'Could not create room right now.'
+        break
+      }
+
+      const payload = await response.json()
+      const mapped = normalizeRoomDirectory([payload.room])[0] ?? null
+      if (!mapped) {
+        createRoomState.error = 'Room creation returned an invalid payload.'
+        break
+      }
+
+      createdRoom = {
+        ...mapped,
+        createdAt: mapped.createdAt > 0 ? mapped.createdAt : Date.now(),
+      }
+      break
+    }
+
+    if (!createdRoom) {
+      if (createRoomState.error === '') {
+        createRoomState.error = 'Room ID conflict could not be resolved automatically.'
+      }
       return
     }
 
-    const payload = await response.json()
-    const roomId = normalizeRoomId(String(payload.room?.id || 'lobby'))
     createRoomName.value = ''
-    await refreshRooms()
-    switchRoom(roomId)
+    createRoomState.error = ''
+    upsertRoomDirectoryEntry(createdRoom)
+    switchRoom(createdRoom.id)
+    void refreshRooms()
   } catch {
-    // ignore API errors in optimistic demo flow
+    createRoomState.error = 'Could not create room right now.'
+  } finally {
+    removeRoomDirectoryEntry(pendingRoomId)
+    createRoomState.submitting = false
   }
 }
 
@@ -1218,6 +1287,8 @@ function signOut(): void {
   reconnectAttempt = 0
   activeTab.value = 'chat'
   createRoomName.value = ''
+  createRoomState.submitting = false
+  createRoomState.error = ''
   inviteCodeInput.value = ''
   lastInviteCode.value = ''
   messageInput.value = ''
@@ -1511,6 +1582,12 @@ onUnmounted(() => {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--king-space-tight);
   margin-top: var(--king-space-2);
+}
+
+.inline-error {
+  margin: var(--king-space-sm) 0 0;
+  color: var(--king-color-danger);
+  font-size: var(--king-font-size-150);
 }
 
 .room-list {
