@@ -110,7 +110,7 @@ Design guardrails for this batch:
   done when: joining/leaving call updates local and remote participant call presence reliably.
 - [x] `#21 Introduce peer-connection manager keyed by remote user id.`
   done when: each remote participant has an isolated RTCPeerConnection lifecycle with clean map ownership.
-- [ ] `#22 Implement targeted offer/answer signaling path per peer.`
+- [x] `#22 Implement targeted offer/answer signaling path per peer.`
   done when: offers and answers are routed to intended peer ids and support multi-peer room negotiation.
 - [ ] `#23 Implement targeted ICE candidate forwarding per peer.`
   done when: ICE candidates route to correct remote peer and are applied safely on receiving side.

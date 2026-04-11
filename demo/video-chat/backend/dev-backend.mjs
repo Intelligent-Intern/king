@@ -452,6 +452,17 @@ function handleClientMessage(socket, message) {
 
   if (type === 'call/offer' || type === 'call/answer' || type === 'call/ice' || type === 'call/hangup') {
     const targetUserId = typeof message.targetUserId === 'string' ? message.targetUserId.trim() : ''
+    const requiresTarget = type === 'call/offer' || type === 'call/answer'
+
+    if (requiresTarget && !targetUserId) {
+      send(socket, {
+        type: 'error',
+        code: 'target_required',
+        message: `${type} requires a targetUserId.`,
+      })
+      return
+    }
+
     const signalEvent = {
       type,
       roomId: state.roomId,
@@ -463,8 +474,15 @@ function handleClientMessage(socket, message) {
 
     if (targetUserId) {
       const target = socketsByUser.get(targetUserId)
-      if (target) {
+      const targetState = target ? clients.get(target) : null
+      if (target && targetState && targetState.roomId === state.roomId) {
         send(target, signalEvent)
+      } else {
+        send(socket, {
+          type: 'error',
+          code: 'target_unavailable',
+          message: `Target peer '${targetUserId}' is not available in this room.`,
+        })
       }
       return
     }

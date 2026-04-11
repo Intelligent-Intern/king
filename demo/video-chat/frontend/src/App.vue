@@ -254,6 +254,7 @@ import {
   normalizeFanoutChatMessage,
 } from './lib/chatFanout'
 import { applyCallPresenceSignal, setParticipantCallJoined } from './lib/callPresence'
+import { shouldAcceptInboundCallSignal } from './lib/callNegotiationRouting'
 import { formatChatTimestamp } from './lib/chatTimestamp'
 import {
   CHAT_COMPOSER_MAX_LENGTH,
@@ -1276,30 +1277,30 @@ function syncPeerTopology(): void {
 }
 
 async function handleCallSignal(message: any): Promise<void> {
+  const type = String(message.type || '')
   const roomId = normalizeRoomId(String(message.roomId || activeRoomId.value))
-  if (roomId !== activeRoomId.value) {
-    return
-  }
-
   const senderUserId = String(message.sender?.userId || '')
-  const me = currentSession.value?.userId
-  if (!senderUserId || senderUserId === me) {
+  const me = currentSession.value?.userId || ''
+  const targetUserId = typeof message.targetUserId === 'string' ? message.targetUserId.trim() : ''
+
+  if (!shouldAcceptInboundCallSignal({
+    type,
+    roomId,
+    activeRoomId: activeRoomId.value,
+    senderUserId,
+    currentUserId: me,
+    targetUserId,
+  })) {
     return
   }
 
-  const targetUserId = message.targetUserId ? String(message.targetUserId) : ''
-  if (targetUserId && targetUserId !== me) {
-    return
-  }
-
-  if (!callJoined.value && ['call/offer', 'call/answer', 'call/ice'].includes(String(message.type))) {
+  if (!callJoined.value && ['call/offer', 'call/answer', 'call/ice'].includes(type)) {
     await joinCall(true)
   }
 
   const connection = peerConnections.getOrCreate(senderUserId, () => createPeerConnection(senderUserId))
 
   const payload = message.payload || null
-  const type = String(message.type || '')
 
   if (type === 'call/offer') {
     if (!payload) {
