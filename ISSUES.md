@@ -86,7 +86,7 @@ Design guardrails for this batch:
   done when: room list comes from backend API, displays deterministic ordering, and reflects live member counts.
 - [x] `#9 Implement room creation flow with backend roundtrip and optimistic UI refresh.`
   done when: create-room submits to backend, resolves conflicts, and updates the active room list without page reload.
-- [ ] `#10 Implement room switching with state reset boundaries.`
+- [x] `#10 Implement room switching with state reset boundaries.`
   done when: switching rooms updates active context and resets room-scoped typing/call state safely.
 - [ ] `#11 Implement invite-code generation for active room.`
   done when: active room can produce an invite code via API and display it in context panel.

@@ -224,6 +224,7 @@ import {
 } from './lib/authSession'
 import { normalizeRoomCreateName, optimisticRoomId, roomIdCandidateForAttempt } from './lib/roomCreate'
 import { normalizeRoomDirectory } from './lib/roomDirectory'
+import { decideRoomSwitch, roomSwitchUiReset } from './lib/roomSwitch'
 import type { Room } from './lib/types'
 import { hasAuthenticatedSession } from './lib/workspaceAuth'
 
@@ -581,7 +582,31 @@ function handleServerEvent(message: any): void {
   }
 
   if (type === 'room/switched') {
-    const nextRoomId = normalizeRoomId(String(message.roomId || activeRoomId.value))
+    const decision = decideRoomSwitch(
+      activeRoomId.value,
+      String(message.roomId || activeRoomId.value)
+    )
+    const nextRoomId = decision.nextRoomId
+    ensureRoomState(nextRoomId)
+
+    const myUserId = currentSession.value?.userId || ''
+    if (decision.shouldSwitch && myUserId) {
+      const previousTyping = new Set(typingByRoom[decision.previousRoomId] || [])
+      if (previousTyping.delete(myUserId)) {
+        typingByRoom[decision.previousRoomId] = [...previousTyping]
+      }
+    }
+
+    if (typingDebounce) {
+      clearTimeout(typingDebounce)
+      typingDebounce = null
+    }
+
+    const reset = roomSwitchUiReset()
+    activeTab.value = reset.activeTab
+    messageInput.value = reset.messageInput
+    lastInviteCode.value = reset.lastInviteCode
+
     activeRoomId.value = nextRoomId
     callReset(false)
     syncLocationRoom(nextRoomId)
@@ -731,8 +756,21 @@ function switchRoom(roomId: string): void {
     return
   }
 
-  const nextRoomId = normalizeRoomId(roomId)
-  emit('room/switch', { roomId: nextRoomId })
+  const decision = decideRoomSwitch(activeRoomId.value, roomId)
+  if (!decision.shouldSwitch) {
+    return
+  }
+
+  if (typingDebounce) {
+    clearTimeout(typingDebounce)
+    typingDebounce = null
+  }
+
+  if (decision.shouldEmitTypingStop) {
+    emit('typing/stop', { roomId: decision.previousRoomId })
+  }
+
+  emit('room/switch', { roomId: decision.nextRoomId })
 }
 
 async function createInvite(): Promise<void> {

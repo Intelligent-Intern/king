@@ -12,6 +12,7 @@ What is wired today:
 - room directory is fetched from backend API and normalized to deterministic ordering with live member counters
 - room directory with create/join/switch behavior
 - room creation submits to backend with optimistic list updates and automatic room-id conflict retries
+- room switching applies explicit room-scoped reset boundaries for typing/call/ui draft state
 - invite-code create/redeem flow per room
 - multi-user room chat over websocket fanout
 - browser video call signaling (`offer`/`answer`/`ice`) with peer tiles
