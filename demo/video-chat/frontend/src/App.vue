@@ -248,6 +248,7 @@ import { normalizeParticipantRosterSnapshot } from './lib/participantRoster'
 import { normalizeRoomCreateName, optimisticRoomId, roomIdCandidateForAttempt } from './lib/roomCreate'
 import { normalizeRoomDirectory } from './lib/roomDirectory'
 import { decideRoomSwitch, roomSwitchUiReset } from './lib/roomSwitch'
+import { activeTypingUsers, applyTypingSignal } from './lib/typingPresence'
 import type { Room } from './lib/types'
 import { hasAuthenticatedSession } from './lib/workspaceAuth'
 
@@ -275,6 +276,8 @@ interface ChatMessage {
 type ConnectionState = 'offline' | 'connecting' | 'online' | 'reconnecting'
 
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
+const TYPING_IDLE_TIMEOUT_MS = 3000
+const TYPING_SWEEP_INTERVAL_MS = 1000
 const wireEncoder = new IIBINEncoder()
 const DEFAULT_ACCENT_COLOR = resolveCssAccentColor()
 
@@ -313,12 +316,14 @@ const activeRoomId = ref('lobby')
 const messagesByRoom = reactive<Record<string, ChatMessage[]>>({})
 const participantsByRoom = reactive<Record<string, Participant[]>>({})
 const participantSnapshotAtByRoom = reactive<Record<string, number>>({})
+const typingStateByRoom = reactive<Record<string, Record<string, number>>>({})
 const typingByRoom = reactive<Record<string, string[]>>({})
 
 const messageInput = ref('')
 const messageListRef = ref<HTMLElement | null>(null)
 let typingDebounce: ReturnType<typeof setTimeout> | null = null
 let copyInviteResetTimer: ReturnType<typeof setTimeout> | null = null
+let typingSweepTimer: ReturnType<typeof setInterval> | null = null
 
 const ws = ref<WebSocket | null>(null)
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -431,8 +436,22 @@ function ensureRoomState(roomId: string): void {
   if (!participantSnapshotAtByRoom[roomId]) {
     participantSnapshotAtByRoom[roomId] = 0
   }
+  if (!typingStateByRoom[roomId]) {
+    typingStateByRoom[roomId] = {}
+  }
   if (!typingByRoom[roomId]) {
     typingByRoom[roomId] = []
+  }
+}
+
+function refreshTypingUsersForRoom(roomId: string, now: number = Date.now()): void {
+  ensureRoomState(roomId)
+  typingByRoom[roomId] = activeTypingUsers(typingStateByRoom[roomId], TYPING_IDLE_TIMEOUT_MS, now)
+}
+
+function sweepTypingUsers(now: number = Date.now()): void {
+  for (const roomId of Object.keys(typingStateByRoom)) {
+    refreshTypingUsersForRoom(roomId, now)
   }
 }
 
@@ -630,10 +649,13 @@ function handleServerEvent(message: any): void {
 
     const myUserId = currentSession.value?.userId || ''
     if (decision.shouldSwitch && myUserId) {
-      const previousTyping = new Set(typingByRoom[decision.previousRoomId] || [])
-      if (previousTyping.delete(myUserId)) {
-        typingByRoom[decision.previousRoomId] = [...previousTyping]
-      }
+      applyTypingSignal(
+        typingStateByRoom[decision.previousRoomId],
+        'typing/stop',
+        myUserId,
+        Date.now()
+      )
+      refreshTypingUsersForRoom(decision.previousRoomId)
     }
 
     if (typingDebounce) {
@@ -661,6 +683,13 @@ function handleServerEvent(message: any): void {
 
     participantsByRoom[roomId] = normalizeParticipantRosterSnapshot(message.participants, roomId)
     participantSnapshotAtByRoom[roomId] = Number(message.serverTime || Date.now())
+    const roomUsers = new Set(participantsByRoom[roomId].map((participant) => participant.userId))
+    for (const userId of Object.keys(typingStateByRoom[roomId])) {
+      if (!roomUsers.has(userId)) {
+        delete typingStateByRoom[roomId][userId]
+      }
+    }
+    refreshTypingUsersForRoom(roomId)
 
     updateRoomCounters(roomId)
     if (roomId === activeRoomId.value) {
@@ -688,15 +717,13 @@ function handleServerEvent(message: any): void {
     }
 
     ensureRoomState(roomId)
-    const next = new Set(typingByRoom[roomId])
-
-    if (type === 'typing/start') {
-      next.add(userId)
-    } else {
-      next.delete(userId)
-    }
-
-    typingByRoom[roomId] = [...next]
+    applyTypingSignal(
+      typingStateByRoom[roomId],
+      type,
+      userId,
+      Number(message.serverTime || Date.now())
+    )
+    refreshTypingUsersForRoom(roomId)
     return
   }
 
@@ -1427,6 +1454,10 @@ function signOut(): void {
     delete typingByRoom[roomId]
   }
 
+  for (const roomId of Object.keys(typingStateByRoom)) {
+    delete typingStateByRoom[roomId]
+  }
+
   authForm.name = ''
   authForm.color = DEFAULT_ACCENT_COLOR
   syncLocationRoom('lobby')
@@ -1472,6 +1503,12 @@ watch(activeParticipants, () => {
 }, { deep: true })
 
 onMounted(async () => {
+  if (!typingSweepTimer) {
+    typingSweepTimer = setInterval(() => {
+      sweepTypingUsers()
+    }, TYPING_SWEEP_INTERVAL_MS)
+  }
+
   const session = authenticatedSession()
   if (session) {
     authForm.name = session.name
@@ -1509,6 +1546,11 @@ onUnmounted(() => {
   if (copyInviteResetTimer) {
     clearTimeout(copyInviteResetTimer)
     copyInviteResetTimer = null
+  }
+
+  if (typingSweepTimer) {
+    clearInterval(typingSweepTimer)
+    typingSweepTimer = null
   }
 })
 </script>
