@@ -97,7 +97,13 @@
           <div class="stage-actions">
             <button :class="{ active: activeTab === 'chat' }" @click="activeTab = 'chat'">Chat</button>
             <button :class="{ active: activeTab === 'call' }" @click="activeTab = 'call'">Call</button>
-            <button class="quiet-btn" @click="createInvite">Create invite</button>
+            <button
+              class="quiet-btn"
+              :disabled="createInviteState.submitting || !activeRoom"
+              @click="createInvite"
+            >
+              {{ createInviteState.submitting ? 'Creating invite...' : 'Create invite' }}
+            </button>
           </div>
         </header>
 
@@ -174,6 +180,7 @@
           <h3>Invite</h3>
           <p v-if="lastInviteCode" class="invite-code">{{ lastInviteCode }}</p>
           <p v-else>Create an invite code for this room.</p>
+          <p v-if="createInviteState.error" class="inline-error">{{ createInviteState.error }}</p>
           <button class="quiet-btn" :disabled="!lastInviteCode" @click="copyInviteCode">Copy code</button>
         </section>
 
@@ -222,6 +229,7 @@ import {
   restorePersistedSession,
   type SessionIdentity,
 } from './lib/authSession'
+import { resolveInviteCodeFromCreatePayload } from './lib/inviteCreate'
 import { normalizeRoomCreateName, optimisticRoomId, roomIdCandidateForAttempt } from './lib/roomCreate'
 import { normalizeRoomDirectory } from './lib/roomDirectory'
 import { decideRoomSwitch, roomSwitchUiReset } from './lib/roomSwitch'
@@ -268,6 +276,10 @@ const connectionState = ref<ConnectionState>('offline')
 const activeTab = ref<'chat' | 'call'>('chat')
 const createRoomName = ref('')
 const createRoomState = reactive({
+  submitting: false,
+  error: '',
+})
+const createInviteState = reactive({
   submitting: false,
   error: '',
 })
@@ -606,6 +618,8 @@ function handleServerEvent(message: any): void {
     activeTab.value = reset.activeTab
     messageInput.value = reset.messageInput
     lastInviteCode.value = reset.lastInviteCode
+    createInviteState.error = ''
+    createInviteState.submitting = false
 
     activeRoomId.value = nextRoomId
     callReset(false)
@@ -782,6 +796,9 @@ async function createInvite(): Promise<void> {
     return
   }
 
+  createInviteState.error = ''
+  createInviteState.submitting = true
+
   try {
     const response = await fetch(`/api/rooms/${encodeURIComponent(activeRoom.value.id)}/invite`, {
       method: 'POST',
@@ -790,13 +807,16 @@ async function createInvite(): Promise<void> {
     })
 
     if (!response.ok) {
+      createInviteState.error = 'Invite code could not be created right now.'
       return
     }
 
     const payload = await response.json()
-    lastInviteCode.value = String(payload.inviteCode || '')
+    lastInviteCode.value = resolveInviteCodeFromCreatePayload(payload)
   } catch {
-    // ignore
+    createInviteState.error = 'Invite code could not be created right now.'
+  } finally {
+    createInviteState.submitting = false
   }
 }
 
@@ -1327,6 +1347,8 @@ function signOut(): void {
   createRoomName.value = ''
   createRoomState.submitting = false
   createRoomState.error = ''
+  createInviteState.submitting = false
+  createInviteState.error = ''
   inviteCodeInput.value = ''
   lastInviteCode.value = ''
   messageInput.value = ''
