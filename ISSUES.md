@@ -94,7 +94,7 @@ Design guardrails for this batch:
   done when: valid invite code resolves target room and joins/switches user to that room.
 - [x] `#13 Implement copy-invite action with graceful clipboard fallback handling.`
   done when: invite copy works in secure contexts and fails silently/cleanly otherwise.
-- [ ] `#14 Add room participant roster backed by live room snapshots.`
+- [x] `#14 Add room participant roster backed by live room snapshots.`
   done when: participant list is sourced from server snapshots and updates in near-real-time.
 - [ ] `#15 Implement multi-user chat fanout contract end-to-end.`
   done when: chat messages from one user are delivered to all peers in room, not echoed locally only.

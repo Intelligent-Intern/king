@@ -190,6 +190,9 @@
 
         <section class="context-section">
           <h3>Participants</h3>
+          <p v-if="activeParticipantSnapshotAt > 0" class="inline-note">
+            Live snapshot {{ formatTime(activeParticipantSnapshotAt) }}
+          </p>
           <ul class="participant-list">
             <li v-for="participant in activeParticipants" :key="participant.userId">
               <span class="presence" :class="{ live: participant.callJoined }"></span>
@@ -199,6 +202,7 @@
               </div>
             </li>
           </ul>
+          <p v-if="activeParticipants.length === 0" class="inline-note">No participants in this room yet.</p>
         </section>
 
         <section class="context-section compact">
@@ -236,6 +240,7 @@ import {
 import { copyTextWithFallback } from './lib/copyText'
 import { resolveInviteCodeFromCreatePayload } from './lib/inviteCreate'
 import { resolveRoomIdFromInviteRedeemPayload } from './lib/inviteRedeem'
+import { normalizeParticipantRosterSnapshot } from './lib/participantRoster'
 import { normalizeRoomCreateName, optimisticRoomId, roomIdCandidateForAttempt } from './lib/roomCreate'
 import { normalizeRoomDirectory } from './lib/roomDirectory'
 import { decideRoomSwitch, roomSwitchUiReset } from './lib/roomSwitch'
@@ -249,6 +254,7 @@ interface Participant {
   name: string
   roomId: string
   callJoined: boolean
+  connectedAt: number
 }
 
 interface ChatMessage {
@@ -302,6 +308,7 @@ const activeRoomId = ref('lobby')
 
 const messagesByRoom = reactive<Record<string, ChatMessage[]>>({})
 const participantsByRoom = reactive<Record<string, Participant[]>>({})
+const participantSnapshotAtByRoom = reactive<Record<string, number>>({})
 const typingByRoom = reactive<Record<string, string[]>>({})
 
 const messageInput = ref('')
@@ -339,6 +346,7 @@ const sessionView = computed<Session>(() => currentSession.value || {
 const activeRoom = computed(() => rooms.value.find((room) => room.id === activeRoomId.value) || null)
 const activeMessages = computed(() => messagesByRoom[activeRoomId.value] || [])
 const activeParticipants = computed(() => participantsByRoom[activeRoomId.value] || [])
+const activeParticipantSnapshotAt = computed(() => participantSnapshotAtByRoom[activeRoomId.value] || 0)
 
 const typingUsers = computed(() => {
   const users = typingByRoom[activeRoomId.value] || []
@@ -415,6 +423,9 @@ function ensureRoomState(roomId: string): void {
   }
   if (!participantsByRoom[roomId]) {
     participantsByRoom[roomId] = []
+  }
+  if (!participantSnapshotAtByRoom[roomId]) {
+    participantSnapshotAtByRoom[roomId] = 0
   }
   if (!typingByRoom[roomId]) {
     typingByRoom[roomId] = []
@@ -644,12 +655,8 @@ function handleServerEvent(message: any): void {
     const roomId = normalizeRoomId(String(message.roomId || 'lobby'))
     ensureRoomState(roomId)
 
-    participantsByRoom[roomId] = (Array.isArray(message.participants) ? message.participants : []).map((participant: any) => ({
-      userId: String(participant.userId || ''),
-      name: String(participant.name || 'User'),
-      roomId,
-      callJoined: Boolean(participant.callJoined),
-    }))
+    participantsByRoom[roomId] = normalizeParticipantRosterSnapshot(message.participants, roomId)
+    participantSnapshotAtByRoom[roomId] = Number(message.serverTime || Date.now())
 
     updateRoomCounters(roomId)
     if (roomId === activeRoomId.value) {
@@ -1412,6 +1419,10 @@ function signOut(): void {
 
   for (const roomId of Object.keys(participantsByRoom)) {
     delete participantsByRoom[roomId]
+  }
+
+  for (const roomId of Object.keys(participantSnapshotAtByRoom)) {
+    delete participantSnapshotAtByRoom[roomId]
   }
 
   for (const roomId of Object.keys(typingByRoom)) {
