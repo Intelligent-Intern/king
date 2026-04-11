@@ -253,6 +253,7 @@ import {
   appendFanoutChatMessage,
   normalizeFanoutChatMessage,
 } from './lib/chatFanout'
+import { applyCallPresenceSignal, setParticipantCallJoined } from './lib/callPresence'
 import { formatChatTimestamp } from './lib/chatTimestamp'
 import {
   CHAT_COMPOSER_MAX_LENGTH,
@@ -766,6 +767,23 @@ function handleServerEvent(message: any): void {
     return
   }
 
+  if (type === 'call/joined' || type === 'call/left') {
+    const roomId = normalizeRoomId(String(message.roomId || activeRoomId.value))
+    ensureRoomState(roomId)
+    participantsByRoom[roomId] = applyCallPresenceSignal(
+      participantsByRoom[roomId],
+      type,
+      message.user,
+      roomId,
+      Number(message.serverTime || Date.now())
+    )
+    updateRoomCounters(roomId)
+    if (roomId === activeRoomId.value) {
+      syncPeerTopology()
+    }
+    return
+  }
+
   if (type.startsWith('call/')) {
     handleCallSignal(message)
   }
@@ -1040,6 +1058,17 @@ function scrollMessagesToBottom(): void {
 function participantName(userId: string): string {
   const participant = activeParticipants.value.find((entry) => entry.userId === userId)
   return participant ? participant.name : userId.slice(0, 8)
+}
+
+function setLocalCallPresence(joined: boolean): void {
+  const me = currentSession.value?.userId || ''
+  if (me === '') {
+    return
+  }
+
+  const roomId = activeRoomId.value
+  ensureRoomState(roomId)
+  participantsByRoom[roomId] = setParticipantCallJoined(participantsByRoom[roomId], me, joined)
 }
 
 async function prepareLocalStream(): Promise<void> {
@@ -1347,6 +1376,7 @@ async function joinCall(silent = false): Promise<void> {
       silent,
     })
 
+    setLocalCallPresence(true)
     syncPeerTopology()
   } catch {
     callStatus.value = 'error'
@@ -1358,16 +1388,21 @@ function handleJoinCallClick(): void {
 }
 
 function callReset(notify = true): void {
+  const wasJoined = callJoined.value
+
   for (const peerId of [...peerConnections.keys()]) {
     closePeer(peerId, false)
   }
 
-  if (notify) {
+  if (notify && wasJoined) {
     emit('call/leave', { roomId: activeRoomId.value })
   }
 
   callJoined.value = false
   callStatus.value = 'idle'
+  if (wasJoined) {
+    setLocalCallPresence(false)
+  }
   mediaPreviewState.status = localStream ? 'ready' : 'idle'
   mediaPreviewState.error = ''
   attachLocalPreview()

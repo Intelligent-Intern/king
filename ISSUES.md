@@ -106,7 +106,7 @@ Design guardrails for this batch:
   done when: messages render consistent timestamp formatting across clients.
 - [x] `#19 Implement pre-call local media preview as first-class join gate.`
   done when: users can preview camera feed before joining call and permission failures are handled explicitly.
-- [ ] `#20 Implement call join/leave signaling lifecycle at room scope.`
+- [x] `#20 Implement call join/leave signaling lifecycle at room scope.`
   done when: joining/leaving call updates local and remote participant call presence reliably.
 - [ ] `#21 Introduce peer-connection manager keyed by remote user id.`
   done when: each remote participant has an isolated RTCPeerConnection lifecycle with clean map ownership.
