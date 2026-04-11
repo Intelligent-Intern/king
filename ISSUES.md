@@ -120,7 +120,7 @@ Design guardrails for this batch:
   done when: microphone enable/disable flips local track state and propagates expected call behavior.
 - [x] `#26 Implement camera toggle via track state without call teardown.`
   done when: camera enable/disable flips local video track state while preserving active peer connections.
-- [ ] `#27 Implement full call teardown on room-switch/sign-out/unmount boundaries.`
+- [x] `#27 Implement full call teardown on room-switch/sign-out/unmount boundaries.`
   done when: all peer connections/media tracks close deterministically on boundary transitions.
 - [ ] `#28 Add websocket reconnect with bounded backoff and room resync.`
   done when: connection loss triggers bounded reconnect attempts and restores room/session state on recovery.

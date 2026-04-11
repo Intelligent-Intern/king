@@ -274,6 +274,7 @@ import { resolveInviteCodeFromCreatePayload } from './lib/inviteCreate'
 import { resolveRoomIdFromInviteRedeemPayload } from './lib/inviteRedeem'
 import { normalizeParticipantRosterSnapshot } from './lib/participantRoster'
 import { createPeerConnectionManager } from './lib/peerConnectionManager'
+import { callResetOptionsForBoundary } from './lib/callTeardown'
 import { applyMediaTrackPreferences, setTrackKindEnabled } from './lib/mediaTrackToggle'
 import { pruneRemoteTiles, upsertRemoteTile } from './lib/remoteTiles'
 import {
@@ -717,8 +718,8 @@ function handleServerEvent(message: any): void {
     createInviteState.submitting = false
     resetCopyInviteStatus()
 
+    callReset(callResetOptionsForBoundary('room-switch', decision.previousRoomId))
     activeRoomId.value = nextRoomId
-    callReset(false)
     syncLocationRoom(nextRoomId)
     return
   }
@@ -1066,13 +1067,12 @@ function participantName(userId: string): string {
   return participant ? participant.name : userId.slice(0, 8)
 }
 
-function setLocalCallPresence(joined: boolean): void {
+function setLocalCallPresence(joined: boolean, roomId: string = activeRoomId.value): void {
   const me = currentSession.value?.userId || ''
   if (me === '') {
     return
   }
 
-  const roomId = activeRoomId.value
   ensureRoomState(roomId)
   participantsByRoom[roomId] = setParticipantCallJoined(participantsByRoom[roomId], me, joined)
 }
@@ -1430,7 +1430,14 @@ function handleJoinCallClick(): void {
   void joinCall(false)
 }
 
-function callReset(notify = true): void {
+function callReset(options: {
+  notify?: boolean
+  roomId?: string
+  stopLocalMedia?: boolean
+} = {}): void {
+  const notify = options.notify ?? true
+  const roomId = normalizeRoomId(options.roomId ?? activeRoomId.value)
+  const stopLocalMedia = options.stopLocalMedia ?? false
   const wasJoined = callJoined.value
 
   for (const peerId of peerConnections.keys()) {
@@ -1443,13 +1450,18 @@ function callReset(notify = true): void {
   }
 
   if (notify && wasJoined) {
-    emit('call/leave', { roomId: activeRoomId.value })
+    emit('call/leave', { roomId })
   }
 
   callJoined.value = false
   callStatus.value = 'idle'
   if (wasJoined) {
-    setLocalCallPresence(false)
+    setLocalCallPresence(false, roomId)
+  }
+
+  if (stopLocalMedia) {
+    stopLocalStream()
+    return
   }
   mediaPreviewState.status = localStream ? 'ready' : 'idle'
   mediaPreviewState.error = ''
@@ -1461,7 +1473,7 @@ function leaveCall(): void {
     return
   }
 
-  callReset(true)
+  callReset({ notify: true })
 }
 
 function toggleMic(): void {
@@ -1576,8 +1588,7 @@ function signOut(): void {
   }
 
   emit('typing/stop', { roomId: activeRoomId.value })
-  callReset(true)
-  stopLocalStream()
+  callReset(callResetOptionsForBoundary('sign-out', activeRoomId.value))
 
   if (ws.value) {
     const socket = ws.value
@@ -1681,8 +1692,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   reconnectSuppressed = true
-  callReset(false)
-  stopLocalStream()
+  callReset(callResetOptionsForBoundary('unmount', activeRoomId.value))
 
   if (ws.value) {
     ws.value.close()
