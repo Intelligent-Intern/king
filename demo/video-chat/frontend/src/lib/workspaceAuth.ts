@@ -9,5 +9,6 @@ export function hasAuthenticatedSession(session: SessionIdentity | null): sessio
     session.userId.trim() !== ''
     && session.name.trim() !== ''
     && session.color.trim() !== ''
+    && session.token.trim() !== ''
   )
 }

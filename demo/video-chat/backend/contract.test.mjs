@@ -208,6 +208,47 @@ async function ensureRoom(roomId, name) {
   assert.ok([201, 409].includes(response.status))
 }
 
+async function loginSession({ name, color, userId = null, token = null }) {
+  const { response, payload } = await requestJson(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    body: JSON.stringify({
+      userId,
+      token,
+      name,
+      color,
+    }),
+  })
+
+  assert.equal(response.status, 200)
+  assert.equal(typeof payload?.session?.userId, 'string')
+  assert.equal(typeof payload?.session?.token, 'string')
+  assert.ok(payload.session.userId.trim() !== '')
+  assert.ok(payload.session.token.trim() !== '')
+
+  return payload.session
+}
+
+async function expectSocketCloseCode(url, timeoutMs = 4000) {
+  const socket = new WebSocket(url)
+
+  return await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.terminate()
+      reject(new Error('Timed out waiting for websocket close event.'))
+    }, timeoutMs)
+
+    socket.on('close', (code) => {
+      clearTimeout(timer)
+      resolve(code)
+    })
+
+    socket.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+  })
+}
+
 before(async () => {
   port = await reservePort()
   baseUrl = `http://${host}:${port}`
@@ -259,34 +300,34 @@ describe('video-chat backend contract', () => {
     assert.equal(health.payload?.ok, true)
     assert.equal(health.payload?.service, 'king-video-chat-backend')
 
-    const loginA = await requestJson(`${baseUrl}/api/auth/login`, {
-      method: 'POST',
-      body: JSON.stringify({
-        userId: 'contract-a',
-        name: 'Contract A',
-        color: '#112233',
-      }),
+    const sessionA = await loginSession({
+      name: 'Contract A',
+      color: '#112233',
+      userId: 'contract-a',
+      token: null,
     })
-    assert.equal(loginA.response.status, 200)
-    assert.equal(loginA.payload?.session?.userId, 'contract-a')
-    assert.equal(loginA.payload?.session?.name, 'Contract A')
+    assert.equal(sessionA.name, 'Contract A')
 
-    const loginB = await requestJson(`${baseUrl}/api/auth/login`, {
-      method: 'POST',
-      body: JSON.stringify({
-        userId: 'contract-b',
-        name: 'Contract B',
-        color: '#223344',
-      }),
+    const sessionARefresh = await loginSession({
+      name: 'Contract A',
+      color: '#112233',
+      userId: sessionA.userId,
+      token: sessionA.token,
     })
-    assert.equal(loginB.response.status, 200)
-    assert.equal(loginB.payload?.session?.userId, 'contract-b')
+    assert.equal(sessionARefresh.userId, sessionA.userId)
+
+    const sessionB = await loginSession({
+      name: 'Contract B',
+      color: '#223344',
+      userId: 'contract-b',
+      token: null,
+    })
 
     const users = await requestJson(`${baseUrl}/api/users`, { method: 'GET', headers: {} })
     assert.equal(users.response.status, 200)
     assert.ok(Array.isArray(users.payload?.users))
-    assert.ok(users.payload.users.some((entry) => entry.userId === 'contract-a'))
-    assert.ok(users.payload.users.some((entry) => entry.userId === 'contract-b'))
+    assert.ok(users.payload.users.some((entry) => entry.userId === sessionA.userId))
+    assert.ok(users.payload.users.some((entry) => entry.userId === sessionB.userId))
 
     const rooms = await requestJson(`${baseUrl}/api/rooms`, { method: 'GET', headers: {} })
     assert.equal(rooms.response.status, 200)
@@ -324,48 +365,61 @@ describe('video-chat backend contract', () => {
   it('serves websocket contract for room/presence/chat/call signaling', async () => {
     await ensureRoom('contract-room-ws', 'Contract Room WS')
 
+    const aliceSession = await loginSession({
+      name: 'Alice',
+      color: '#112233',
+      userId: null,
+      token: null,
+    })
+    const bobSession = await loginSession({
+      name: 'Bob',
+      color: '#223344',
+      userId: null,
+      token: null,
+    })
+
     const alice = await SignalClient.connect(
-      `${wsBaseUrl}?userId=alice-contract&name=Alice&color=%23112233&room=lobby`
+      `${wsBaseUrl}?userId=${encodeURIComponent(aliceSession.userId)}&token=${encodeURIComponent(aliceSession.token)}&name=Alice&color=%23112233&room=lobby`
     )
     const bob = await SignalClient.connect(
-      `${wsBaseUrl}?userId=bob-contract&name=Bob&color=%23223344&room=lobby`
+      `${wsBaseUrl}?userId=${encodeURIComponent(bobSession.userId)}&token=${encodeURIComponent(bobSession.token)}&name=Bob&color=%23223344&room=lobby`
     )
 
     try {
       const aliceReady = await alice.waitFor((message) => message.type === 'session/ready')
       const bobReady = await bob.waitFor((message) => message.type === 'session/ready')
-      assert.equal(aliceReady.me?.userId, 'alice-contract')
-      assert.equal(bobReady.me?.userId, 'bob-contract')
+      assert.equal(aliceReady.me?.userId, aliceSession.userId)
+      assert.equal(bobReady.me?.userId, bobSession.userId)
 
       alice.sendJson('typing/start')
       const typingStart = await bob.waitFor((message) => {
-        return message.type === 'typing/start' && message.user?.userId === 'alice-contract'
+        return message.type === 'typing/start' && message.user?.userId === aliceSession.userId
       })
       assert.equal(typingStart.roomId, 'lobby')
 
       alice.sendIibin('chat/send', { text: 'hello via iibin contract' })
       const chatMessage = await bob.waitFor((message) => {
-        return message.type === 'chat/message' && message.sender?.userId === 'alice-contract'
+        return message.type === 'chat/message' && message.sender?.userId === aliceSession.userId
       })
       assert.equal(chatMessage.text, 'hello via iibin contract')
 
       alice.sendJson('call/join')
       const callJoined = await bob.waitFor((message) => {
-        return message.type === 'call/joined' && message.user?.userId === 'alice-contract'
+        return message.type === 'call/joined' && message.user?.userId === aliceSession.userId
       })
       assert.equal(callJoined.roomId, 'lobby')
 
       alice.sendJson('call/offer', {
-        targetUserId: 'bob-contract',
+        targetUserId: bobSession.userId,
         payload: {
           type: 'offer',
           sdp: 'v=0\\r\\ncontract-offer',
         },
       })
       const offer = await bob.waitFor((message) => {
-        return message.type === 'call/offer' && message.sender?.userId === 'alice-contract'
+        return message.type === 'call/offer' && message.sender?.userId === aliceSession.userId
       })
-      assert.equal(offer.targetUserId, 'bob-contract')
+      assert.equal(offer.targetUserId, bobSession.userId)
       assert.equal(offer.payload?.type, 'offer')
 
       alice.sendJson('call/offer', {
@@ -381,7 +435,7 @@ describe('video-chat backend contract', () => {
 
       alice.sendJson('call/leave')
       const callLeft = await bob.waitFor((message) => {
-        return message.type === 'call/left' && message.user?.userId === 'alice-contract'
+        return message.type === 'call/left' && message.user?.userId === aliceSession.userId
       })
       assert.equal(callLeft.roomId, 'lobby')
 
@@ -397,5 +451,25 @@ describe('video-chat backend contract', () => {
       await alice.close()
       await bob.close()
     }
+  })
+
+  it('rejects websocket identity spoofing when token and userId do not match', async () => {
+    const victimSession = await loginSession({
+      name: 'Victim',
+      color: '#334455',
+      userId: null,
+      token: null,
+    })
+    const attackerSession = await loginSession({
+      name: 'Attacker',
+      color: '#445566',
+      userId: null,
+      token: null,
+    })
+
+    const closeCode = await expectSocketCloseCode(
+      `${wsBaseUrl}?userId=${encodeURIComponent(victimSession.userId)}&token=${encodeURIComponent(attackerSession.token)}&room=lobby`
+    )
+    assert.equal(closeCode, 1008)
   })
 })

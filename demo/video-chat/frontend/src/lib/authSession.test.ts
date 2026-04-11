@@ -35,11 +35,13 @@ describe('authSession', () => {
       userId: 'u-123',
       name: '  Jochen  Admin ',
       color: '#0f62fe',
+      token: 'token-123',
     })
     expect(parseStoredSession(valid)).toEqual({
       userId: 'u-123',
       name: 'Jochen Admin',
       color: '#0f62fe',
+      token: 'token-123',
     })
     expect(parseStoredSession('{"userId":1}')).toBeNull()
     expect(parseStoredSession(null)).toBeNull()
@@ -51,12 +53,14 @@ describe('authSession', () => {
       userId: 'u-abc',
       name: 'Ada',
       color: '#123456',
+      token: 'token-abc',
     })
 
     expect(restorePersistedSession(storage)).toEqual({
       userId: 'u-abc',
       name: 'Ada',
       color: '#123456',
+      token: 'token-abc',
     })
 
     persistSessionIdentity(storage, null)
@@ -70,12 +74,14 @@ describe('authSession', () => {
           userId: ' ',
           name: '  Test   User ',
           color: '',
+          token: ' token-fallback ',
         },
       },
       {
         userId: 'u-fallback',
         name: 'Fallback Name',
         color: '#abcdef',
+        token: '',
       }
     )
 
@@ -83,6 +89,7 @@ describe('authSession', () => {
       userId: 'u-fallback',
       name: 'Test User',
       color: '#abcdef',
+      token: 'token-fallback',
     })
   })
 })

@@ -2,6 +2,7 @@ export interface SessionIdentity {
   userId: string
   name: string
   color: string
+  token: string
 }
 
 export interface LoginPayload {
@@ -33,14 +34,17 @@ export function parseStoredSession(raw: string | null): SessionIdentity | null {
       typeof parsed?.userId === 'string'
       && typeof parsed?.name === 'string'
       && typeof parsed?.color === 'string'
+      && typeof parsed?.token === 'string'
       && parsed.userId.trim() !== ''
       && parsed.name.trim() !== ''
       && parsed.color.trim() !== ''
+      && parsed.token.trim() !== ''
     ) {
       return {
         userId: parsed.userId,
         name: normalizeDisplayName(parsed.name),
         color: parsed.color,
+        token: parsed.token,
       }
     }
   } catch {
@@ -68,18 +72,20 @@ export function persistSessionIdentity(
 
 export function buildSessionFromLogin(
   payload: LoginPayload | null,
-  fallback: { userId?: string | null; name: string; color: string }
+  fallback: { userId?: string | null; name: string; color: string; token?: string | null }
 ): SessionIdentity {
   const fallbackUserId = normalizeUserId(fallback.userId)
   const payloadSession = payload?.session ?? null
   const userId = normalizeUserId(payloadSession?.userId) || fallbackUserId || generateUserId()
   const name = normalizeDisplayName(String(payloadSession?.name ?? fallback.name))
   const color = normalizeColor(String(payloadSession?.color ?? ''), fallback.color)
+  const token = normalizeToken(String(payloadSession?.token ?? fallback.token ?? ''))
 
   return {
     userId,
     name: name || 'User',
     color,
+    token,
   }
 }
 
@@ -94,6 +100,10 @@ function normalizeColor(value: string, fallbackColor = DEFAULT_ACCENT_COLOR): st
   const color = value.trim()
   const fallback = fallbackColor.trim()
   return color || fallback || DEFAULT_ACCENT_COLOR
+}
+
+function normalizeToken(value: string): string {
+  return value.trim()
 }
 
 function generateUserId(): string {

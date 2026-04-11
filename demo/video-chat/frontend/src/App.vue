@@ -399,6 +399,7 @@ const sessionView = computed<Session>(() => currentSession.value || {
   userId: '',
   name: '',
   color: DEFAULT_ACCENT_COLOR,
+  token: '',
 })
 
 const activeRoom = computed(() => rooms.value.find((room) => room.id === activeRoomId.value) || null)
@@ -467,6 +468,7 @@ function wsUrl(roomId: string): string {
 
   const query = new URLSearchParams({
     userId: session.userId,
+    token: session.token,
     name: session.name,
     color: session.color,
     room: roomId,
@@ -1587,6 +1589,7 @@ async function signIn(): Promise<void> {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         userId: currentSession.value?.userId || null,
+        token: currentSession.value?.token || null,
         name,
         color: authForm.color,
       }),
@@ -1598,12 +1601,14 @@ async function signIn(): Promise<void> {
         userId: currentSession.value?.userId || null,
         name,
         color: authForm.color,
+        token: currentSession.value?.token || null,
       })
     } else {
       currentSession.value = buildSessionFromLogin(null, {
         userId: currentSession.value?.userId || null,
         name,
         color: authForm.color,
+        token: currentSession.value?.token || null,
       })
     }
   } catch {
@@ -1611,12 +1616,14 @@ async function signIn(): Promise<void> {
       userId: currentSession.value?.userId || null,
       name,
       color: authForm.color,
+      token: currentSession.value?.token || null,
     })
   } finally {
     authState.submitting = false
   }
 
-  if (!currentSession.value) {
+  if (!hasAuthenticatedSession(currentSession.value)) {
+    currentSession.value = null
     authState.error = 'Sign-in failed. Please retry.'
     return
   }

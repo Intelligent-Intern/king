@@ -42,6 +42,7 @@ Current boundaries:
 - demo-local signaling backend (`backend/dev-backend.mjs`)
 - login/user directory is persisted in SQLite (`KING_DEMO_DB_PATH`)
 - websocket signaling identity is query-param based (`userId`, `name`, `color`, `room`) and not a hardened authn/authz model
+- websocket identity now requires the login-issued session token; `userId` without a matching token is rejected
 - no durable room/message persistence across backend restart
 - no TURN relay setup (STUN-only by default)
 - no production moderation/audit policy
@@ -158,7 +159,7 @@ IIBIN_SOURCE='1.0.5-beta' VIDEOCHAT_FRONTEND_PORT=3000 VIDEOCHAT_BACKEND_PORT=18
 - health endpoint: `GET /health`
 - auth endpoint: `POST /api/auth/login`
 - user directory endpoint: `GET /api/users`
-- signaling endpoint: `WS /ws?userId=<id>&name=<display>&color=<hex>&room=<roomId>`
+- signaling endpoint: `WS /ws?userId=<id>&token=<sessionToken>&name=<display>&color=<hex>&room=<roomId>`
 
 ## Scope
 

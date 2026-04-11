@@ -7,6 +7,7 @@ describe('workspaceAuth', () => {
       userId: 'u-123',
       name: 'Ada',
       color: '#0f62fe',
+      token: 'token-123',
     })).toBe(true)
   })
 
@@ -16,16 +17,25 @@ describe('workspaceAuth', () => {
       userId: '',
       name: 'Ada',
       color: '#0f62fe',
+      token: 'token-123',
     })).toBe(false)
     expect(hasAuthenticatedSession({
       userId: 'u-123',
       name: ' ',
       color: '#0f62fe',
+      token: 'token-123',
     })).toBe(false)
     expect(hasAuthenticatedSession({
       userId: 'u-123',
       name: 'Ada',
       color: '  ',
+      token: 'token-123',
+    })).toBe(false)
+    expect(hasAuthenticatedSession({
+      userId: 'u-123',
+      name: 'Ada',
+      color: '#0f62fe',
+      token: '   ',
     })).toBe(false)
   })
 })

@@ -11,6 +11,8 @@ import { IIBINDecoder, IIBINEncoder, MessageType } from '@intelligentintern/iibi
 const host = process.env.KING_DEMO_HOST || '127.0.0.1'
 const port = Number(process.env.KING_DEMO_PORT || 8080)
 const dbPath = process.env.KING_DEMO_DB_PATH || path.join(process.cwd(), '.data', 'video-chat.sqlite')
+const sessionTokenTtlMs = Math.max(60_000, Number(process.env.KING_DEMO_SESSION_TOKEN_TTL_MS || 86_400_000))
+const sessionTokenSecret = process.env.KING_DEMO_SESSION_SECRET || crypto.randomBytes(32).toString('hex')
 
 const app = express()
 app.use(cors())
@@ -121,12 +123,122 @@ function normalizeColor(value) {
 }
 
 function normalizeUserId(value) {
-  const input = typeof value === 'string' ? value.trim().toLowerCase() : ''
-  if (!input) {
+  const safe = sanitizeUserId(value)
+  if (!safe) {
     return `u-${crypto.randomUUID().slice(0, 8)}`
   }
+
+  return safe
+}
+
+function sanitizeUserId(value) {
+  const input = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (!input) {
+    return ''
+  }
   const safe = input.replace(/[^a-z0-9-_]/g, '-').slice(0, 48)
-  return safe || `u-${crypto.randomUUID().slice(0, 8)}`
+  return safe || ''
+}
+
+function normalizeSessionToken(value) {
+  if (typeof value !== 'string') {
+    return ''
+  }
+  return value.trim()
+}
+
+function encodeTokenPayload(payload) {
+  return Buffer.from(payload, 'utf8').toString('base64url')
+}
+
+function decodeTokenPayload(encodedPayload) {
+  if (typeof encodedPayload !== 'string' || encodedPayload === '') {
+    return null
+  }
+
+  try {
+    return Buffer.from(encodedPayload, 'base64url').toString('utf8')
+  } catch {
+    return null
+  }
+}
+
+function signSessionTokenPayload(encodedPayload) {
+  return crypto
+    .createHmac('sha256', sessionTokenSecret)
+    .update(encodedPayload)
+    .digest('base64url')
+}
+
+function issueSessionToken(userId, nowMs = Date.now()) {
+  const expiresAt = nowMs + sessionTokenTtlMs
+  const payload = JSON.stringify({
+    userId,
+    issuedAt: nowMs,
+    expiresAt,
+  })
+  const encodedPayload = encodeTokenPayload(payload)
+  const signature = signSessionTokenPayload(encodedPayload)
+
+  return {
+    token: `${encodedPayload}.${signature}`,
+    expiresAt,
+  }
+}
+
+function verifySessionToken(token, expectedUserId = null, nowMs = Date.now()) {
+  const normalizedToken = normalizeSessionToken(token)
+  if (normalizedToken === '') {
+    return { valid: false, reason: 'missing_token' }
+  }
+
+  const parts = normalizedToken.split('.')
+  if (parts.length !== 2) {
+    return { valid: false, reason: 'malformed_token' }
+  }
+
+  const [encodedPayload, encodedSignature] = parts
+  if (encodedPayload === '' || encodedSignature === '') {
+    return { valid: false, reason: 'malformed_token' }
+  }
+
+  const expectedSignature = signSessionTokenPayload(encodedPayload)
+  const expectedBuffer = Buffer.from(expectedSignature)
+  const providedBuffer = Buffer.from(encodedSignature)
+  if (
+    expectedBuffer.length !== providedBuffer.length
+    || !crypto.timingSafeEqual(expectedBuffer, providedBuffer)
+  ) {
+    return { valid: false, reason: 'invalid_signature' }
+  }
+
+  const decodedPayload = decodeTokenPayload(encodedPayload)
+  if (!decodedPayload) {
+    return { valid: false, reason: 'invalid_payload_encoding' }
+  }
+
+  let parsedPayload = null
+  try {
+    parsedPayload = JSON.parse(decodedPayload)
+  } catch {
+    return { valid: false, reason: 'invalid_payload_json' }
+  }
+
+  const tokenUserId = sanitizeUserId(parsedPayload?.userId)
+  const expiresAt = Number(parsedPayload?.expiresAt || 0)
+  if (tokenUserId === '' || !Number.isFinite(expiresAt) || expiresAt <= nowMs) {
+    return { valid: false, reason: 'expired_or_invalid' }
+  }
+
+  if (expectedUserId && tokenUserId !== expectedUserId) {
+    return { valid: false, reason: 'user_mismatch' }
+  }
+
+  return {
+    valid: true,
+    userId: tokenUserId,
+    expiresAt,
+  }
 }
 
 function upsertUser(userId, name, color) {
@@ -366,7 +478,10 @@ function closePeer(socket) {
   }
 
   clients.delete(socket)
-  socketsByUser.delete(state.userId)
+  const mappedSocket = socketsByUser.get(state.userId)
+  if (mappedSocket === socket) {
+    socketsByUser.delete(state.userId)
+  }
 
   const room = rooms.get(state.roomId)
   if (room) {
@@ -517,14 +632,22 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const color = normalizeColor(req.body?.color)
-  const userId = normalizeUserId(req.body?.userId)
+  const requestedUserId = sanitizeUserId(req.body?.userId)
+  const providedToken = normalizeSessionToken(req.body?.token)
+  const verifiedToken = verifySessionToken(providedToken, requestedUserId || null)
+  const userId = verifiedToken.valid && verifiedToken.userId
+    ? verifiedToken.userId
+    : normalizeUserId('')
   const record = upsertUser(userId, name, color)
+  const issuedSession = issueSessionToken(record.userId)
 
   res.json({
     session: {
       userId: record.userId,
       name: record.name,
       color: record.color,
+      token: issuedSession.token,
+      tokenExpiresAt: issuedSession.expiresAt,
       lastLoginAt: Number(record.lastLoginAt || Date.now()),
       loginCount: Number(record.loginCount || 1),
     },
@@ -597,14 +720,35 @@ server.on('upgrade', (request, socket, head) => {
 })
 
 wss.on('connection', (socket, _request, requestUrl) => {
-  const userId = normalizeUserId(requestUrl.searchParams.get('userId'))
-  const fallbackName = normalizeName(requestUrl.searchParams.get('name'), userId)
+  const requestedUserId = sanitizeUserId(requestUrl.searchParams.get('userId'))
+  const verifiedToken = verifySessionToken(requestUrl.searchParams.get('token'), requestedUserId || null)
+  if (!verifiedToken.valid || !verifiedToken.userId) {
+    socket.close(1008, 'unauthorized')
+    return
+  }
+
+  const userId = verifiedToken.userId
+  const fallbackName = normalizeName(requestUrl.searchParams.get('name'), `user-${userId.slice(0, 8)}`)
   const fallbackColor = normalizeColor(requestUrl.searchParams.get('color'))
   const knownUser = findUserByIdStatement.get(userId)
+  if (!knownUser) {
+    socket.close(1008, 'unknown_user')
+    return
+  }
+
   const userName = knownUser ? String(knownUser.name || fallbackName) : fallbackName
   const userColor = knownUser ? String(knownUser.color || fallbackColor) : fallbackColor
   const roomId = normalizeRoomId(requestUrl.searchParams.get('room') || 'lobby')
-  upsertUser(userId, userName, userColor)
+
+  const existingSocket = socketsByUser.get(userId)
+  if (existingSocket && existingSocket !== socket) {
+    send(existingSocket, {
+      type: 'session/replaced',
+      user: { userId, name: userName },
+      serverTime: Date.now(),
+    })
+    existingSocket.close(4001, 'session_replaced')
+  }
 
   const state = {
     userId,
