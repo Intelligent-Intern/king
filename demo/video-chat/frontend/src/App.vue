@@ -274,6 +274,7 @@ import { resolveInviteCodeFromCreatePayload } from './lib/inviteCreate'
 import { resolveRoomIdFromInviteRedeemPayload } from './lib/inviteRedeem'
 import { normalizeParticipantRosterSnapshot } from './lib/participantRoster'
 import { createPeerConnectionManager } from './lib/peerConnectionManager'
+import { pruneRemoteTiles, upsertRemoteTile } from './lib/remoteTiles'
 import {
   canJoinFromPreview,
   mapPreviewAccessError,
@@ -382,6 +383,7 @@ let localStream: MediaStream | null = null
 
 const peerConnections = createPeerConnectionManager<RTCPeerConnection>()
 const remoteVideoElements = new Map<string, HTMLVideoElement>()
+const remoteStreamWatchers = new Map<string, () => void>()
 const remoteTiles = ref<Array<{ userId: string; name: string; stream: MediaStream }>>([])
 
 const isAuthenticated = computed(() => currentSession.value !== null)
@@ -1137,6 +1139,10 @@ function applyTrackState(): void {
 
 function bindRemoteVideo(userId: string, element: HTMLVideoElement | null): void {
   if (!element) {
+    const previous = remoteVideoElements.get(userId)
+    if (previous) {
+      previous.srcObject = null
+    }
     remoteVideoElements.delete(userId)
     return
   }
@@ -1148,18 +1154,58 @@ function bindRemoteVideo(userId: string, element: HTMLVideoElement | null): void
   }
 }
 
-function setRemoteStream(userId: string, stream: MediaStream): void {
-  const existing = remoteTiles.value.find((entry) => entry.userId === userId)
-  if (existing) {
-    existing.stream = stream
-    existing.name = participantName(userId)
-  } else {
-    remoteTiles.value.push({
-      userId,
-      name: participantName(userId),
-      stream,
+function clearRemoteStreamWatcher(userId: string): void {
+  const dispose = remoteStreamWatchers.get(userId)
+  if (!dispose) {
+    return
+  }
+
+  remoteStreamWatchers.delete(userId)
+  dispose()
+}
+
+function watchRemoteStream(userId: string, stream: MediaStream): void {
+  clearRemoteStreamWatcher(userId)
+
+  const trackTeardowns: Array<() => void> = []
+  const onStreamInactive = () => {
+    removeRemoteStream(userId)
+  }
+  stream.addEventListener('inactive', onStreamInactive)
+
+  for (const track of stream.getTracks()) {
+    const onTrackEnded = () => {
+      removeRemoteStream(userId)
+    }
+    track.addEventListener('ended', onTrackEnded)
+    trackTeardowns.push(() => {
+      track.removeEventListener('ended', onTrackEnded)
     })
   }
+
+  remoteStreamWatchers.set(userId, () => {
+    stream.removeEventListener('inactive', onStreamInactive)
+    for (const teardown of trackTeardowns) {
+      teardown()
+    }
+  })
+}
+
+function detachRemoteVideo(userId: string): void {
+  const element = remoteVideoElements.get(userId)
+  if (element) {
+    element.srcObject = null
+  }
+  remoteVideoElements.delete(userId)
+}
+
+function setRemoteStream(userId: string, stream: MediaStream): void {
+  remoteTiles.value = upsertRemoteTile(remoteTiles.value, {
+    userId,
+    name: participantName(userId),
+    stream,
+  })
+  watchRemoteStream(userId, stream)
 
   const element = remoteVideoElements.get(userId)
   if (element) {
@@ -1168,8 +1214,9 @@ function setRemoteStream(userId: string, stream: MediaStream): void {
 }
 
 function removeRemoteStream(userId: string): void {
+  clearRemoteStreamWatcher(userId)
   remoteTiles.value = remoteTiles.value.filter((entry) => entry.userId !== userId)
-  remoteVideoElements.delete(userId)
+  detachRemoteVideo(userId)
 }
 
 function shouldInitiateOffer(peerUserId: string): boolean {
@@ -1275,6 +1322,13 @@ function syncPeerTopology(): void {
       closePeer(existingUserId, false)
     }
   }
+
+  const prunedTiles = pruneRemoteTiles(remoteTiles.value, targetUsers)
+  for (const removedUserId of prunedTiles.removedUserIds) {
+    clearRemoteStreamWatcher(removedUserId)
+    detachRemoteVideo(removedUserId)
+  }
+  remoteTiles.value = prunedTiles.tiles
 }
 
 async function handleCallSignal(message: any): Promise<void> {
@@ -1388,6 +1442,11 @@ function callReset(notify = true): void {
     closePeer(peerId, false)
   }
 
+  const staleRemoteUserIds = remoteTiles.value.map((tile) => tile.userId)
+  for (const staleUserId of staleRemoteUserIds) {
+    removeRemoteStream(staleUserId)
+  }
+
   if (notify && wasJoined) {
     emit('call/leave', { roomId: activeRoomId.value })
   }
@@ -1400,7 +1459,6 @@ function callReset(notify = true): void {
   mediaPreviewState.status = localStream ? 'ready' : 'idle'
   mediaPreviewState.error = ''
   attachLocalPreview()
-  remoteTiles.value = []
 }
 
 function leaveCall(): void {

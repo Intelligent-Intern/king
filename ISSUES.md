@@ -114,7 +114,7 @@ Design guardrails for this batch:
   done when: offers and answers are routed to intended peer ids and support multi-peer room negotiation.
 - [x] `#23 Implement targeted ICE candidate forwarding per peer.`
   done when: ICE candidates route to correct remote peer and are applied safely on receiving side.
-- [ ] `#24 Bind remote tracks to dynamic call tiles with safe attach/detach.`
+- [x] `#24 Bind remote tracks to dynamic call tiles with safe attach/detach.`
   done when: remote streams appear/disappear with participant lifecycle and no stale tile remnants.
 - [ ] `#25 Implement mic toggle via track state without renegotiation churn.`
   done when: microphone enable/disable flips local track state and propagates expected call behavior.
