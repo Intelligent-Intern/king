@@ -991,6 +991,74 @@ What is still open for multi-gigabyte remote payloads is the stronger next
 step: restart persistence for upload sessions and provider-tuned multipart
 planning.
 
+## OO Ingest Pattern For Originals, Artifacts, Streams, And Viewer Delivery
+
+If an application is built around the OO surface, the ingest path can stay
+fully OO as well. The key is to keep one explicit path that covers:
+
+- original upload persistence from stream bodies
+- extracted artifact persistence after parse/transcode/OCR steps
+- streamed multipart/resumable upload for large originals
+- viewer delivery by streaming from object store into the response body
+
+The same runtime contract shown above can be composed through
+`King\ObjectStore` directly or through the repo-local helper in
+`demo/userland/flow-php/src/ObjectStoreIngest.php`.
+
+```php
+<?php
+
+use King\Flow\ObjectStoreIngestor;
+use King\ObjectStore;
+
+ObjectStore::init([
+    'primary_backend' => 'local_fs',
+    'storage_root_path' => __DIR__ . '/storage',
+    'chunk_size_kb' => 1024,
+]);
+
+$ingest = new ObjectStoreIngestor();
+
+// 1) Persist the uploaded original stream.
+$originalStream = fopen(__DIR__ . '/uploads/doc-42.pdf', 'rb');
+$originalObjectId = $ingest->storeOriginalFromStream('doc-42', $originalStream, [
+    'content_type' => 'application/pdf',
+    'object_type' => 'document',
+    'cache_policy' => 'etag',
+]);
+
+// 2) Persist extracted artifact text for retrieval.
+$artifactObjectId = $ingest->storeExtractedArtifact(
+    'doc-42',
+    'text-v1',
+    'Extracted fulltext...',
+    [
+        'content_type' => 'text/plain',
+        'object_type' => 'document',
+        'cache_policy' => 'smart_cdn',
+    ]
+);
+
+// 3) Stream large original chunks through resumable upload.
+$upload = $ingest->startStreamedOriginalUpload('video-42', [
+    'content_type' => 'video/mp4',
+    'object_type' => 'binary_data',
+]);
+foreach ([__DIR__ . '/chunks/a.bin', __DIR__ . '/chunks/b.bin'] as $index => $path) {
+    $chunk = fopen($path, 'rb');
+    $upload->appendChunk($chunk, $index === 1);
+}
+$upload->complete();
+
+// 4) Deliver viewer bytes as bounded stream output.
+$viewerBody = fopen('php://temp', 'w+');
+$ingest->deliverToViewer($artifactObjectId, $viewerBody, 0, 4096);
+```
+
+This pattern is intentionally simple: one Object Store identity contract, one
+OO ingest path, and one viewer-delivery stream path without dropping back to
+out-of-band storage helpers.
+
 ## Configuration Families
 
 The detailed key lists live in the runtime configuration reference, but the
