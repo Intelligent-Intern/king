@@ -42,6 +42,7 @@ EXT_DIR="${ROOT_DIR}/extension"
 QUICHE_DIR="${ROOT_DIR}/quiche"
 QUICHE_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-quiche.sh"
 TOOLCHAIN_LOCK_SCRIPT="${SCRIPT_DIR}/toolchain-lock.sh"
+TOOLCHAIN_LOCK_FILE="${SCRIPT_DIR}/toolchain.lock"
 PHPIZE_GENERATED_LIST="${SCRIPT_DIR}/phpize-generated-files.list"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
 JOBS="${JOBS:-$(nproc)}"
@@ -65,6 +66,7 @@ cargo_target="release"
 cargo_args=(--release)
 declare -a PHPIZE_GENERATED_RELATIVE_PATHS=()
 PHPIZE_SNAPSHOT_DIR=""
+PINNED_RUST_TOOLCHAIN=""
 
 trim_ascii_whitespace() {
     local value="$1"
@@ -97,6 +99,64 @@ load_phpize_generated_relative_paths() {
 
         PHPIZE_GENERATED_RELATIVE_PATHS+=("${normalized_line#extension/}")
     done < "${PHPIZE_GENERATED_LIST}"
+}
+
+load_pinned_toolchain_version() {
+    if [[ ! -f "${TOOLCHAIN_LOCK_FILE}" ]]; then
+        echo "Missing toolchain lock file: ${TOOLCHAIN_LOCK_FILE}" >&2
+        exit 1
+    fi
+
+    # shellcheck source=/dev/null
+    source "${TOOLCHAIN_LOCK_FILE}"
+
+    if [[ -z "${KING_RUST_TOOLCHAIN_VERSION:-}" ]]; then
+        echo "KING_RUST_TOOLCHAIN_VERSION is empty in ${TOOLCHAIN_LOCK_FILE}." >&2
+        exit 1
+    fi
+
+    PINNED_RUST_TOOLCHAIN="${KING_RUST_TOOLCHAIN_VERSION}"
+}
+
+activate_pinned_rust_toolchain() {
+    local rustup_bin=""
+    local rustc_version=""
+    local cargo_version=""
+    local toolchain_installed=0
+
+    if [[ -z "${PINNED_RUST_TOOLCHAIN}" ]]; then
+        return 1
+    fi
+
+    rustup_bin="$(command -v rustup || true)"
+    if [[ -z "${rustup_bin}" ]]; then
+        return 1
+    fi
+
+    if [[ ":${PATH}:" != *":${HOME}/.cargo/bin:"* && -d "${HOME}/.cargo/bin" ]]; then
+        export PATH="${HOME}/.cargo/bin:${PATH}"
+    fi
+
+    if rustup toolchain list --installed 2>/dev/null | awk '{print $1}' | grep -Fq "${PINNED_RUST_TOOLCHAIN}"; then
+        toolchain_installed=1
+    fi
+
+    if [[ "${toolchain_installed}" -ne 1 ]]; then
+        echo "Installing pinned Rust toolchain ${PINNED_RUST_TOOLCHAIN} via rustup." >&2
+        rustup toolchain install "${PINNED_RUST_TOOLCHAIN}" --profile minimal
+    fi
+
+    export RUSTUP_TOOLCHAIN="${PINNED_RUST_TOOLCHAIN}"
+
+    rustc_version="$(rustc --version 2>/dev/null | awk '{print $2}')"
+    cargo_version="$(cargo --version 2>/dev/null | awk '{print $2}')"
+
+    if [[ "${rustc_version}" != "${PINNED_RUST_TOOLCHAIN}" || "${cargo_version}" != "${PINNED_RUST_TOOLCHAIN}" ]]; then
+        return 1
+    fi
+
+    echo "Activated pinned Rust toolchain ${PINNED_RUST_TOOLCHAIN}." >&2
+    return 0
 }
 
 snapshot_phpize_generated_files() {
@@ -346,7 +406,14 @@ apply_pkg_config_curl_cppflags() {
 validate_curl_headers
 apply_pkg_config_curl_cppflags
 
-bash "${TOOLCHAIN_LOCK_SCRIPT}" --verify-rust
+load_pinned_toolchain_version
+if ! bash "${TOOLCHAIN_LOCK_SCRIPT}" --verify-rust; then
+    if ! activate_pinned_rust_toolchain; then
+        echo "Unable to activate pinned Rust toolchain ${PINNED_RUST_TOOLCHAIN}." >&2
+        exit 1
+    fi
+    bash "${TOOLCHAIN_LOCK_SCRIPT}" --verify-rust
+fi
 if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
     "${QUICHE_BOOTSTRAP_SCRIPT}" --verify-lock
 
