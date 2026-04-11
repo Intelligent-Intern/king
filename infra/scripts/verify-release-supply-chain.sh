@@ -86,9 +86,13 @@ if ! command -v "${PHP_BIN}" >/dev/null 2>&1; then
     exit 1
 fi
 
-if [[ -n "${EXPECTED_GIT_COMMIT}" ]] && ! [[ "${EXPECTED_GIT_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
-    echo "Expected git commit must be a 40-character lowercase hex SHA." >&2
+if [[ -n "${EXPECTED_GIT_COMMIT}" ]] && ! [[ "${EXPECTED_GIT_COMMIT}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    echo "Expected git commit must be a 40-character hex SHA." >&2
     exit 1
+fi
+
+if [[ -n "${EXPECTED_GIT_COMMIT}" ]]; then
+    EXPECTED_GIT_COMMIT="$(printf '%s' "${EXPECTED_GIT_COMMIT}" | tr '[:upper:]' '[:lower:]')"
 fi
 
 declare -a ARCHIVES=()
@@ -204,9 +208,10 @@ foreach ($required as $key => $path) {
     }
 
     $expectedHash = $provenance[$key] ?? null;
-    if (!is_string($expectedHash) || preg_match('/^[a-f0-9]{64}$/', $expectedHash) !== 1) {
+    if (!is_string($expectedHash) || preg_match('/^[A-Fa-f0-9]{64}$/', $expectedHash) !== 1) {
         $fail("Invalid manifest provenance hash for {$key}.\n");
     }
+    $expectedHash = strtolower($expectedHash);
 
     $actualHash = hash_file('sha256', $path);
     if ($actualHash !== $expectedHash) {
