@@ -8,7 +8,7 @@ public package layout. The point is to keep real userland adapter code in the
 repository while the contract is still being proven.
 
 The current source, sink, dataset-bridge, serialization/schema bridge,
-checkpoint, execution-backend, control-plane, failure-taxonomy, and
+checkpoint, execution-backend, control-plane, MCP-host, failure-taxonomy, and
 partitioning/backpressure contracts live in
 `demo/userland/flow-php/src/StreamingSource.php`,
 `demo/userland/flow-php/src/StreamingSink.php`, and
@@ -17,6 +17,7 @@ partitioning/backpressure contracts live in
 `demo/userland/flow-php/src/CheckpointStore.php`, and
 `demo/userland/flow-php/src/ExecutionBackend.php`, and
 `demo/userland/flow-php/src/ControlPlane.php`, and
+`demo/userland/flow-php/src/McpHost.php`, and
 `demo/userland/flow-php/src/FailureTaxonomy.php`, and
 `demo/userland/flow-php/src/Partitioning.php`.
 
@@ -64,6 +65,10 @@ Current helpers:
 - `King\Flow\CheckpointRecoveryPlan`
 - `King\Flow\FlowControlSnapshot`
 - `King\Flow\FlowControlPlane`
+- `King\Flow\McpHost`
+- `King\Flow\McpHostRequest`
+- `King\Flow\McpHostResponse`
+- `King\Flow\McpHostServeResult`
 - `King\Flow\FlowFailure`
 - `King\Flow\FlowFailureTaxonomy`
 - `King\Flow\PartitionBatch`
@@ -116,6 +121,9 @@ The contract is intentionally small:
   `start`, `pause`, `cancel`, `resume`, `inspect`, and checkpoint-aware
   recovery are restart-visible runtime state instead of controller-memory
   folklore
+- keep a small OO MCP host lifecycle for repo-local service processes with
+  explicit `start`, `serve`, `STOP`/shutdown, and protocol/handler error
+  accounting instead of ad-hoc per-test socket loops
 - keep immediate `local` and `remote_peer` control records inspectable during a
   live run by persisting the predicted sequential orchestrator `run-N` identity
   before the blocking start call returns

@@ -312,6 +312,29 @@ The current PHPT proof covers:
 - MCP upload failure, retained replay state, and later retry success:
   `605-flow-php-mcp-sink-contract.phpt`
 
+## Repo-Local MCP Host Contract
+
+The repository now also carries one real repo-local MCP host helper under
+[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`../demo/userland/flow-php/src/McpHost.php`](../demo/userland/flow-php/src/McpHost.php).
+
+This piece exists because service composition for real app topologies needs an
+honest server-side MCP lifecycle, not only MCP client calls.
+
+The current host contract keeps the server boundary explicit:
+
+- `McpHost::start()` opens a real TCP listener on the configured host and port
+- `McpHost::serve()` accepts MCP frames and dispatches typed
+  `McpHostRequest` values into one handler callback
+- `McpHostResponse::ok()`, `::miss()`, and `::error()` map explicitly to MCP
+  wire outcomes (`OK`, `MISS`, `ERR`)
+- `STOP` support and `McpHostServeResult` keep shutdown, protocol errors, and
+  handler failures visible instead of hidden in ad-hoc socket loops
+
+The current PHPT proof covers startup, dispatch, and shutdown/error behavior:
+
+- `669-flow-php-mcp-host-surface-contract.phpt`
+
 ## Repo-Local Object-Store Dataset Bridge Contract
 
 The repository now also carries one real userland object-store dataset bridge
