@@ -68,11 +68,16 @@ ENV KING_QUICHE_LIBRARY=/opt/king/package/runtime/libquiche.so \
 RUN printf '%s\n' \
     'extension=/opt/king/package/modules/king.so' \
     > "/etc/php/${PHP_VERSION}/cli/conf.d/zz-king.ini" \
+    # xsl depends on libgcrypt through libxslt; disable it in this runtime image
+    # so we can remove libgcrypt20 without startup warnings.
+    && if command -v phpdismod >/dev/null 2>&1; then phpdismod -v "${PHP_VERSION}" -s cli xsl || true; fi \
+    && rm -f /etc/php/${PHP_VERSION}/cli/conf.d/*xsl.ini /etc/php/${PHP_VERSION}/mods-available/xsl.ini \
     && php -m | grep -qx 'king' \
     && PHP_BIN=php /opt/king/package/bin/smoke.sh \
     # Keep the runtime image immutable and drop packages carrying known CVEs
     # that are not required after build-time provisioning.
     && dpkg --remove --force-remove-essential --force-depends \
+        libgcrypt20 \
         login \
         passwd \
         tar

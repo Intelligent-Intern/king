@@ -697,6 +697,30 @@ jobs:
             BUILD_DATE=${{ steps.meta-dockerhub.outputs.created_at }}
             VCS_REF=${{ needs.resolve-release-merge.outputs.release-commit }}
 
+      - name: Generate Docker Hub runtime CVE inventory
+        id: dockerhub-cve-inventory
+        run: |
+          set -euo pipefail
+          release_version="${{ needs.resolve-release-merge.outputs.release-version }}"
+          inventory_path="dist/release-cve-inventory-${release_version}.json"
+          ./infra/scripts/inventory-release-cves.sh \
+            --images "intelligentintern/king:${release_version}" \
+            --output "${inventory_path}"
+          echo "inventory_path=${inventory_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Enforce Docker Hub runtime CVE gate
+        run: |
+          set -euo pipefail
+          ./infra/scripts/check-release-cve-gate.sh \
+            --inventory "${{ steps.dockerhub-cve-inventory.outputs.inventory_path }}" \
+            --require-clear-cves "CVE-2025-45582,CVE-2024-56433,CVE-2024-2236"
+
+      - name: Upload Docker Hub runtime CVE inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: dockerhub-runtime-cve-inventory
+          path: ${{ steps.dockerhub-cve-inventory.outputs.inventory_path }}
+
   docker-build-and-push:
     name: Build and push King PHP ${{ matrix.php-version }}
     needs:

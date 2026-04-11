@@ -74,6 +74,7 @@ easier to remember.
 | `./infra/scripts/install-package-matrix.sh` | Does the packaged release install on every supported PHP version? |
 | `./infra/scripts/container-smoke-matrix.sh` | Do the published runtime containers build and pass the common smoke checks? |
 | `./infra/scripts/inventory-release-cves.sh` | Can we produce a deterministic CVE inventory for release container images and targeted CVEs? |
+| `./infra/scripts/check-release-cve-gate.sh` | Do the required release CVEs resolve to zero affected packages on the runtime image? |
 | `./infra/scripts/php-version-docker-matrix.sh` | Do the repo build, PHPT suite, runtime container smoke, and demo network probe stay green across every supported PHP version? |
 | `./infra/scripts/go-live-readiness.sh` | Does the complete release bar pass in one operator-facing command? |
 
@@ -376,6 +377,7 @@ In command form, that usually looks like this:
 ./infra/scripts/install-package-matrix.sh --archive ../dist/king-<version>.tar.gz --php-bins php8.1,php8.2,php8.3,php8.4,php8.5
 ./infra/scripts/container-smoke-matrix.sh --php-versions 8.1,8.2,8.3,8.4,8.5
 ./infra/scripts/inventory-release-cves.sh --images intelligentintern/king:<version> --output ../dist/release-cve-inventory.json
+./infra/scripts/check-release-cve-gate.sh --inventory ../dist/release-cve-inventory.json
 ./infra/scripts/go-live-readiness.sh --output-dir ../dist --benchmark-budget-file ../benchmarks/budgets/canonical-ci.json
 ```
 

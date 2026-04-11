@@ -45,6 +45,8 @@ The currently verified baseline is:
 - `./infra/scripts/container-smoke-matrix.sh --php-versions 8.3`: passing
 - `./infra/scripts/inventory-release-cves.sh --images intelligentintern/king:v1.0.5-beta`: passing
 - `./infra/scripts/inventory-release-cves.sh --images king-runtime-cve-fix:local --platforms linux/amd64`: passing (`CVE-2025-45582` and `CVE-2024-56433` clear; `CVE-2024-2236` remains for the next gate)
+- `./infra/scripts/inventory-release-cves.sh --images king-runtime-cve-gate:local --platforms linux/amd64`: passing (`CVE-2025-45582`, `CVE-2024-56433`, and `CVE-2024-2236` clear)
+- `./infra/scripts/check-release-cve-gate.sh --inventory documentation/release-cve-inventory-v1.0.6-beta-candidate-local.json`: passing (fail-closed negative check against `documentation/release-cve-inventory-v1.0.5-beta.json`)
 - `./infra/scripts/soak-runtime.sh asan|ubsan|leak --iterations 1`: passing
 - `./infra/scripts/go-live-readiness.sh`: passing
 - `./infra/scripts/build-profile.sh release|debug|asan|ubsan`: passing
