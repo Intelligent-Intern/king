@@ -116,7 +116,7 @@ Design guardrails for this batch:
   done when: ICE candidates route to correct remote peer and are applied safely on receiving side.
 - [x] `#24 Bind remote tracks to dynamic call tiles with safe attach/detach.`
   done when: remote streams appear/disappear with participant lifecycle and no stale tile remnants.
-- [ ] `#25 Implement mic toggle via track state without renegotiation churn.`
+- [x] `#25 Implement mic toggle via track state without renegotiation churn.`
   done when: microphone enable/disable flips local track state and propagates expected call behavior.
 - [ ] `#26 Implement camera toggle via track state without call teardown.`
   done when: camera enable/disable flips local video track state while preserving active peer connections.

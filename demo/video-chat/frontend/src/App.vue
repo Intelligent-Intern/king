@@ -274,6 +274,7 @@ import { resolveInviteCodeFromCreatePayload } from './lib/inviteCreate'
 import { resolveRoomIdFromInviteRedeemPayload } from './lib/inviteRedeem'
 import { normalizeParticipantRosterSnapshot } from './lib/participantRoster'
 import { createPeerConnectionManager } from './lib/peerConnectionManager'
+import { applyMediaTrackPreferences, setTrackKindEnabled } from './lib/mediaTrackToggle'
 import { pruneRemoteTiles, upsertRemoteTile } from './lib/remoteTiles'
 import {
   canJoinFromPreview,
@@ -1125,16 +1126,10 @@ function attachLocalPreview(): void {
 }
 
 function applyTrackState(): void {
-  if (!localStream) {
-    return
-  }
-
-  for (const track of localStream.getAudioTracks()) {
-    track.enabled = isMicEnabled.value
-  }
-  for (const track of localStream.getVideoTracks()) {
-    track.enabled = isCameraEnabled.value
-  }
+  applyMediaTrackPreferences(localStream, {
+    audioEnabled: isMicEnabled.value,
+    videoEnabled: isCameraEnabled.value,
+  })
 }
 
 function bindRemoteVideo(userId: string, element: HTMLVideoElement | null): void {
@@ -1475,7 +1470,7 @@ function toggleMic(): void {
   }
 
   isMicEnabled.value = !isMicEnabled.value
-  applyTrackState()
+  setTrackKindEnabled(localStream, 'audio', isMicEnabled.value)
 }
 
 function toggleCamera(): void {
