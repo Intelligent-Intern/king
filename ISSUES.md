@@ -124,7 +124,7 @@ Design guardrails for this batch:
   done when: all peer connections/media tracks close deterministically on boundary transitions.
 - [x] `#28 Add websocket reconnect with bounded backoff and room resync.`
   done when: connection loss triggers bounded reconnect attempts and restores room/session state on recovery.
-- [ ] `#29 Add local demo backend contract for room/invite/presence/chat/call signaling.`
+- [x] `#29 Add local demo backend contract for room/invite/presence/chat/call signaling.`
   done when: `dev-backend.mjs` exposes health/API/ws flows that satisfy current frontend contracts.
 - [ ] `#30 Add verification and docs closure for the new video-call stack.`
   done when: build passes, smoke checks are documented, and README startup/runtime boundaries are updated honestly.

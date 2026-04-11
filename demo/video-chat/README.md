@@ -103,6 +103,7 @@ Useful commands:
 - `cd demo/video-chat/frontend && npm run type-check`
 - `cd demo/video-chat/frontend && npm run test`
 - `cd demo/video-chat/backend && npm run start`
+- `cd demo/video-chat/backend && npm run test`
 
 ## Docker Compose (Frontend + Backend)
 

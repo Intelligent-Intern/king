@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node dev-backend.mjs"
+    "start": "node dev-backend.mjs",
+    "test": "node --test ./contract.test.mjs"
   },
   "dependencies": {
     "@intelligentintern/iibin": "^1.0.5-beta",
