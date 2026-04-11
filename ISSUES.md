@@ -102,7 +102,7 @@ Design guardrails for this batch:
   done when: typing state is room-scoped, excludes self-display, and auto-clears after bounded idle window.
 - [x] `#17 Add bounded chat composer constraints (length and empty rejection).`
   done when: composer enforces max length and rejects empty/whitespace payloads before transport.
-- [ ] `#18 Add deterministic chat timestamp rendering with stable locale-safe formatting.`
+- [x] `#18 Add deterministic chat timestamp rendering with stable locale-safe formatting.`
   done when: messages render consistent timestamp formatting across clients.
 - [ ] `#19 Implement pre-call local media preview as first-class join gate.`
   done when: users can preview camera feed before joining call and permission failures are handled explicitly.

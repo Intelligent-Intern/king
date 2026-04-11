@@ -121,7 +121,7 @@
               >
                 <header>
                   <strong>{{ message.sender.name }}</strong>
-                  <time>{{ formatTime(message.serverTime) }}</time>
+                  <time>{{ formatChatTimestamp(message.serverTime) }}</time>
                 </header>
                 <p>{{ message.text }}</p>
               </article>
@@ -191,7 +191,7 @@
         <section class="context-section">
           <h3>Participants</h3>
           <p v-if="activeParticipantSnapshotAt > 0" class="inline-note">
-            Live snapshot {{ formatTime(activeParticipantSnapshotAt) }}
+            Live snapshot {{ formatChatTimestamp(activeParticipantSnapshotAt) }}
           </p>
           <ul class="participant-list">
             <li v-for="participant in activeParticipants" :key="participant.userId">
@@ -234,6 +234,7 @@ import {
   appendFanoutChatMessage,
   normalizeFanoutChatMessage,
 } from './lib/chatFanout'
+import { formatChatTimestamp } from './lib/chatTimestamp'
 import {
   CHAT_COMPOSER_MAX_LENGTH,
   clampComposerDraft,
@@ -1481,13 +1482,6 @@ function signOut(): void {
   currentSession.value = null
   persistSession()
   connectionState.value = 'offline'
-}
-
-function formatTime(value: number): string {
-  return new Date(value).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 watch(isAuthenticated, (value) => {
