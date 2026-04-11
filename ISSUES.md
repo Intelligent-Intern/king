@@ -96,7 +96,7 @@ Design guardrails for this batch:
   done when: invite copy works in secure contexts and fails silently/cleanly otherwise.
 - [x] `#14 Add room participant roster backed by live room snapshots.`
   done when: participant list is sourced from server snapshots and updates in near-real-time.
-- [ ] `#15 Implement multi-user chat fanout contract end-to-end.`
+- [x] `#15 Implement multi-user chat fanout contract end-to-end.`
   done when: chat messages from one user are delivered to all peers in room, not echoed locally only.
 - [ ] `#16 Add typing indicator start/stop signaling with debounce discipline.`
   done when: typing state is room-scoped, excludes self-display, and auto-clears after bounded idle window.

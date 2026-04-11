@@ -231,6 +231,10 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { IIBINDecoder, IIBINEncoder, MessageType } from '@intelligentintern/iibin'
 import {
+  appendFanoutChatMessage,
+  normalizeFanoutChatMessage,
+} from './lib/chatFanout'
+import {
   buildSessionFromLogin,
   normalizeDisplayName,
   persistSessionIdentity,
@@ -666,19 +670,13 @@ function handleServerEvent(message: any): void {
   }
 
   if (type === 'chat/message') {
-    const roomId = normalizeRoomId(String(message.roomId || activeRoomId.value))
-    ensureRoomState(roomId)
+    const normalized = normalizeFanoutChatMessage(message, activeRoomId.value)
+    if (!normalized) {
+      return
+    }
 
-    messagesByRoom[roomId].push({
-      id: String(message.id || `${Date.now()}-${Math.random()}`),
-      roomId,
-      sender: {
-        userId: String(message.sender?.userId || ''),
-        name: String(message.sender?.name || 'User'),
-      },
-      text: String(message.text || ''),
-      serverTime: Number(message.serverTime || Date.now()),
-    })
+    ensureRoomState(normalized.roomId)
+    appendFanoutChatMessage(messagesByRoom[normalized.roomId], normalized)
     return
   }
 
