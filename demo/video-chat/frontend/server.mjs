@@ -17,7 +17,7 @@ const wsProxy = createProxyMiddleware({
   target: backendWsOrigin,
   changeOrigin: true,
   ws: true,
-  pathRewrite: (requestPath) => `/ws${requestPath}`,
+  pathRewrite: () => '/ws',
 })
 
 app.use('/api', createProxyMiddleware({

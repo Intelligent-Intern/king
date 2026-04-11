@@ -531,8 +531,9 @@ app.post('/api/invite/redeem', (req, res) => {
 server.on('upgrade', (request, socket, head) => {
   const hostHeader = request.headers.host || `${host}:${port}`
   const requestUrl = new URL(request.url || '/', `http://${hostHeader}`)
+  const normalizedPath = requestUrl.pathname.replace(/\/+$/, '') || '/'
 
-  if (requestUrl.pathname !== '/ws') {
+  if (normalizedPath !== '/ws') {
     socket.destroy()
     return
   }
