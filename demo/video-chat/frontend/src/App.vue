@@ -219,16 +219,11 @@ import {
   restorePersistedSession,
   type SessionIdentity,
 } from './lib/authSession'
+import { normalizeRoomDirectory } from './lib/roomDirectory'
+import type { Room } from './lib/types'
 import { hasAuthenticatedSession } from './lib/workspaceAuth'
 
 type Session = SessionIdentity
-
-interface Room {
-  id: string
-  name: string
-  inviteCode: string
-  memberCount: number
-}
 
 interface Participant {
   userId: string
@@ -443,13 +438,7 @@ async function refreshRooms(): Promise<void> {
     }
 
     const payload = await response.json()
-    const nextRooms = Array.isArray(payload.rooms) ? payload.rooms : []
-    rooms.value = nextRooms.map((room: any) => ({
-      id: String(room.id || 'lobby'),
-      name: String(room.name || room.id || 'Room'),
-      inviteCode: String(room.inviteCode || room.id || ''),
-      memberCount: Number(room.memberCount || 0),
-    }))
+    rooms.value = normalizeRoomDirectory(payload.rooms)
 
     for (const room of rooms.value) {
       ensureRoomState(room.id)
@@ -553,14 +542,16 @@ function handleServerEvent(message: any): void {
     const roomId = normalizeRoomId(String(message.roomId || activeRoomId.value))
     activeRoomId.value = roomId
 
-    const serverRooms = Array.isArray(message.rooms) ? message.rooms : []
-    rooms.value = serverRooms.map((room: any) => ({
-      id: String(room.id || 'lobby'),
-      name: String(room.name || room.id || 'Room'),
-      inviteCode: String(room.inviteCode || room.id || ''),
-      memberCount: Number(room.memberCount || 0),
-    }))
+    rooms.value = normalizeRoomDirectory(message.rooms)
 
+    for (const room of rooms.value) {
+      ensureRoomState(room.id)
+    }
+    return
+  }
+
+  if (type === 'rooms/directory') {
+    rooms.value = normalizeRoomDirectory(message.rooms)
     for (const room of rooms.value) {
       ensureRoomState(room.id)
     }

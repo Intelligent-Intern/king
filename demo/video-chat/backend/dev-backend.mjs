@@ -166,7 +166,27 @@ function listRooms() {
       memberCount: room.members.size,
       createdAt: room.createdAt,
     }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort(compareRoomDirectoryEntry)
+}
+
+function compareRoomDirectoryEntry(a, b) {
+  if (a.id === 'lobby' && b.id !== 'lobby') {
+    return -1
+  }
+  if (b.id === 'lobby' && a.id !== 'lobby') {
+    return 1
+  }
+
+  const nameOrder = a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })
+  if (nameOrder !== 0) {
+    return nameOrder
+  }
+
+  if (a.createdAt !== b.createdAt) {
+    return a.createdAt - b.createdAt
+  }
+
+  return a.id.localeCompare(b.id, undefined, { sensitivity: 'base', numeric: true })
 }
 
 function participantsForRoom(roomId) {
@@ -285,6 +305,18 @@ function pushRoomSnapshot(roomId) {
   }
 }
 
+function pushRoomDirectory() {
+  const directory = {
+    type: 'rooms/directory',
+    rooms: listRooms(),
+    serverTime: Date.now(),
+  }
+
+  for (const socket of clients.keys()) {
+    send(socket, directory)
+  }
+}
+
 function joinRoom(socket, nextRoomId) {
   const state = clients.get(socket)
   if (!state) {
@@ -324,6 +356,7 @@ function joinRoom(socket, nextRoomId) {
   }, state.userId)
 
   pushRoomSnapshot(targetRoom.id)
+  pushRoomDirectory()
 }
 
 function closePeer(socket) {
@@ -345,6 +378,7 @@ function closePeer(socket) {
       serverTime: Date.now(),
     }, state.userId)
     pushRoomSnapshot(room.id)
+    pushRoomDirectory()
   }
 }
 
@@ -497,6 +531,7 @@ app.post('/api/rooms', (req, res) => {
   }
 
   const room = ensureRoom(roomId, name)
+  pushRoomDirectory()
   res.status(201).json({ room: { id: room.id, name: room.name, inviteCode: room.inviteCode } })
 })
 
@@ -582,6 +617,7 @@ wss.on('connection', (socket, _request, requestUrl) => {
   }, userId)
 
   pushRoomSnapshot(roomId)
+  pushRoomDirectory()
 
   socket.on('message', (raw, isBinary) => {
     const message = decodeSocketPayload(raw, isBinary)

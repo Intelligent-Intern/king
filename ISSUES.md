@@ -82,7 +82,7 @@ Design guardrails for this batch:
   done when: sign-out reliably tears down websocket/media state and returns to unauthenticated entry.
 - [x] `#7 Enforce authenticated workspace gating in the UI flow.`
   done when: room/chat/call surfaces are not reachable before successful sign-in state.
-- [ ] `#8 Implement room directory fetch with stable ordering and member counters.`
+- [x] `#8 Implement room directory fetch with stable ordering and member counters.`
   done when: room list comes from backend API, displays deterministic ordering, and reflects live member counts.
 - [ ] `#9 Implement room creation flow with backend roundtrip and optimistic UI refresh.`
   done when: create-room submits to backend, resolves conflicts, and updates the active room list without page reload.
