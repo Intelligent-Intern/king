@@ -1,21 +1,23 @@
 # King IIBIN WebSocket Demo
 
-This demo currently ships as a single-page Vue application for the King
-runtime's browser-side IIBIN/WebSocket slice.
+This demo ships as a responsive multi-user workspace for room chat and browser
+video calls.
 
 What is wired today:
 
-- manual WebSocket connect/disconnect against a King-compatible `/ws` endpoint
-- binary IIBIN text-message exchange in the main chat panel
-- synthetic stress runs with configurable duration, rate, and payload size
-- live transport counters plus a simple IIBIN-vs-JSON size comparison
+- login surface with persisted local session identity
+- room directory with create/join/switch behavior
+- invite-code create/redeem flow per room
+- multi-user room chat over websocket fanout
+- browser video call signaling (`offer`/`answer`/`ice`) with peer tiles
+- responsive shell layout with slide transitions for chat/call stage switching
 
-What is not yet an honest shipped contract here:
+Current boundaries:
 
-- persistent chat rooms or history
-- a real production video-call flow
-- packaged PWA/service-worker behavior
-- standalone `stress-test` or `performance-test` Node scripts
+- demo-local signaling backend (`dev-backend.mjs`), no external auth provider
+- no durable room/message persistence across backend restart
+- no TURN relay setup (STUN-only by default)
+- no production moderation/audit policy
 
 ## Repeated + Nested Frame Example
 
@@ -54,9 +56,16 @@ older readers keep shared fields and ignore newly added fields.
 
 ## Commands
 
+Run backend and frontend in separate terminals:
+
 ```bash
 cd demo/video-chat
 npm install
+npm run dev:backend
+```
+
+```bash
+cd demo/video-chat
 npm run dev
 ```
 
@@ -69,12 +78,10 @@ Useful commands:
 
 ## Runtime Notes
 
-- the default WebSocket target resolves from the current page origin and uses
-  `/ws`
-- for local development, the Vite dev server proxies `/ws` to
-  `ws://localhost:8080`
-- the demo depends on the browser-side IIBIN helpers in
-  [src/lib/iibin.ts](/home/jochen/projects/king.site/king/demo/video-chat/src/lib/iibin.ts)
+- the local backend listens on `http://127.0.0.1:8080` by default
+- Vite proxies `/api` and `/ws` to that backend
+- health endpoint: `GET /health`
+- signaling endpoint: `WS /ws?userId=<id>&name=<display>&room=<roomId>`
 
 ## Scope
 
