@@ -174,7 +174,7 @@ $peer = $server->accept();
 $connections = $server->getConnections();
 $connectionId = array_key_first($connections);
 
-$message = king_client_websocket_receive($peer, 1000);
+$message = $peer->receive(1000);
 $server->send($connectionId, 'ack:' . $message);
 $server->broadcast('server-broadcast');
 $server->stop();
@@ -263,10 +263,15 @@ designs.
 
 ## Receiving Messages
 
-The receive side of the procedural API is `king_client_websocket_receive()`.
-The call waits for the next message and can use a timeout in milliseconds. If
-it fails, `king_client_websocket_get_last_error()` returns the last recorded
-error string for that connection.
+The object surface receives through `Connection::receive(?int $timeout_ms =
+null): ?string`.
+- it returns a `string` when one full message is available
+- it returns `null` when the timeout expires while the connection is still open
+- it throws `King\WebSocketClosedException` when called after close
+
+The procedural receive call `king_client_websocket_receive()` remains available
+for resource-oriented flows and returns `false` on failure with details in
+`king_client_websocket_get_last_error()`.
 
 ```php
 <?php

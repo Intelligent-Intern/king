@@ -44,8 +44,10 @@ if ($mode === 'oo-runtime') {
         $capture['accept_is_object'] = is_object($connection);
         $capture['accept_class'] = is_object($connection) ? get_class($connection) : gettype($connection);
         $capture['accept_info'] = $connection->getInfo();
-        $capture['received'] = king_client_websocket_receive($connection, 1000);
+        $capture['received'] = $connection->receive(1000);
         $capture['receive_error'] = king_get_last_error();
+        $capture['received_after_drain'] = $connection->receive(0);
+        $capture['received_after_drain_is_null'] = $capture['received_after_drain'] === null;
 
         try {
             $connection->send('beta');
@@ -63,6 +65,12 @@ if ($mode === 'oo-runtime') {
         } catch (Throwable $e) {
             $capture['close_ok'] = false;
             $capture['close_error'] = $e->getMessage();
+        }
+        try {
+            $connection->receive(0);
+        } catch (Throwable $e) {
+            $capture['receive_after_close_exception'] = get_class($e);
+            $capture['receive_after_close_error'] = $e->getMessage();
         }
 
         $server->stop();

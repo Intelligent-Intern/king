@@ -1,5 +1,5 @@
 --TEST--
-King WebSocket Server accepts real on-wire websocket peers and returns OO connection handles over the shared runtime
+King WebSocket Server accepted peers support a documented OO receive path with open-timeout null and closed-connection exceptions
 --FILE--
 <?php
 require __DIR__ . '/server_websocket_wire_helper.inc';
@@ -35,10 +35,13 @@ var_dump($capture['accept_info']['id'] === 'ws://127.0.0.1:' . $server['port'] .
 var_dump(count($capture['accept_info']['headers'] ?? []) > 0);
 var_dump($capture['received'] ?? '');
 var_dump($capture['receive_error'] ?? '');
+var_dump($capture['received_after_drain_is_null'] ?? false);
 var_dump($capture['send_ok'] ?? false);
 var_dump($capture['send_error'] ?? '');
 var_dump($capture['close_ok'] ?? false);
 var_dump($capture['close_error'] ?? '');
+var_dump($capture['receive_after_close_exception'] ?? '');
+var_dump($capture['receive_after_close_error'] ?? '');
 var_dump($capture['stop_error'] ?? '');
 var_dump($capture['accept_after_stop_exception'] ?? '');
 var_dump($capture['accept_after_stop_error'] ?? '');
@@ -62,9 +65,12 @@ bool(true)
 string(5) "alpha"
 string(0) ""
 bool(true)
+bool(true)
 string(0) ""
 bool(true)
 string(0) ""
+string(%d) "King\WebSocketClosedException"
+string(%d) "WebSocket\Connection::receive() cannot run on a closed WebSocket connection."
 string(0) ""
 string(%d) "King\RuntimeException"
 string(%d) "WebSocket\Server::accept() cannot run on a stopped WebSocket server."

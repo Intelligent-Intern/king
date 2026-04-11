@@ -224,6 +224,7 @@ the bounded server-side accept object and the live connection object.
 | `__construct(string $url, ?array $headers = null, ?array $options = null)` | Opens a WebSocket connection. |
 | `send(string $message)` | Sends a text frame. |
 | `sendBinary(string $payload)` | Sends a binary frame. |
+| `receive(?int $timeout_ms = null)` | Receives one message; returns `null` on open-timeout and throws after close. |
 | `ping(?string $data = null)` | Sends a ping frame. |
 | `close(int $code = 1000, ?string $reason = null)` | Sends a close frame and closes the connection. |
 | `getInfo()` | Returns connection metadata, including the stable URL-style `id`, the targeted-send `connection_id`, and live queue diagnostics. |
