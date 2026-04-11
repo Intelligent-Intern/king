@@ -246,10 +246,11 @@ type ConnectionState = 'offline' | 'connecting' | 'online' | 'reconnecting'
 const SESSION_STORAGE_KEY = 'king.video.chat.session.v2'
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
 const wireEncoder = new IIBINEncoder()
+const DEFAULT_ACCENT_COLOR = resolveCssAccentColor()
 
 const authForm = reactive({
   name: '',
-  color: '#0f62fe',
+  color: DEFAULT_ACCENT_COLOR,
 })
 
 const currentSession = ref<Session | null>(restoreSession())
@@ -291,7 +292,7 @@ const isAuthenticated = computed(() => currentSession.value !== null)
 const sessionView = computed<Session>(() => currentSession.value || {
   userId: '',
   name: '',
-  color: '#0f62fe',
+  color: DEFAULT_ACCENT_COLOR,
 })
 
 const activeRoom = computed(() => rooms.value.find((room) => room.id === activeRoomId.value) || null)
@@ -338,6 +339,18 @@ function restoreSession(): Session | null {
   }
 
   return null
+}
+
+function resolveCssAccentColor(): string {
+  if (typeof window === 'undefined') {
+    return '#0f62fe'
+  }
+
+  const color = window.getComputedStyle(document.documentElement)
+    .getPropertyValue('--king-color-accent')
+    .trim()
+
+  return color || '#0f62fe'
 }
 
 function persistSession(): void {
@@ -1207,16 +1220,16 @@ onUnmounted(() => {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 1.5rem;
+  padding: var(--king-space-5);
 }
 
 .auth-card {
   width: min(28rem, 100%);
   background: var(--king-surface);
-  border: 1px solid var(--king-border);
-  border-radius: 0.75rem;
-  padding: 2rem;
-  box-shadow: var(--king-shadow-2);
+  border: var(--king-border-default);
+  border-radius: var(--king-radius-4);
+  padding: var(--king-space-6);
+  box-shadow: var(--king-elevation-2);
 }
 
 .auth-card h1 {
@@ -1225,28 +1238,28 @@ onUnmounted(() => {
 }
 
 .auth-card p {
-  margin: 0.6rem 0 1.5rem;
+  margin: var(--king-space-dense) 0 var(--king-space-5);
   color: var(--king-muted);
 }
 
 .auth-form {
   display: grid;
-  gap: 0.9rem;
+  gap: var(--king-space-panel);
 }
 
 .auth-form label {
   display: grid;
-  gap: 0.35rem;
+  gap: var(--king-space-sm);
   font-size: 0.92rem;
 }
 
 .auth-form input,
 .inline-form input,
 .composer input {
-  border: 1px solid var(--king-border);
-  border-radius: 0.45rem;
-  padding: 0.62rem 0.75rem;
-  background: #fff;
+  border: var(--king-border-default);
+  border-radius: var(--king-radius-1);
+  padding: var(--king-space-input-y) var(--king-space-input-x);
+  background: var(--king-color-bg-surface);
   color: var(--king-text);
 }
 
@@ -1257,13 +1270,13 @@ onUnmounted(() => {
 .prejoin-actions button,
 .call-controls button,
 .quiet-btn {
-  border: 1px solid var(--king-border);
-  border-radius: 0.45rem;
+  border: var(--king-border-default);
+  border-radius: var(--king-radius-1);
   background: var(--king-surface);
   color: var(--king-text);
-  padding: 0.55rem 0.8rem;
+  padding: var(--king-space-control-y) var(--king-space-control-x);
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+  transition: transform var(--king-motion-fast) var(--king-motion-ease), border-color var(--king-motion-fast) var(--king-motion-ease), background-color var(--king-motion-fast) var(--king-motion-ease);
 }
 
 .auth-form button,
@@ -1272,7 +1285,7 @@ onUnmounted(() => {
 .prejoin-actions button {
   background: var(--king-accent);
   border-color: var(--king-accent);
-  color: #fff;
+  color: var(--king-color-on-accent);
   font-weight: 600;
 }
 
@@ -1280,13 +1293,13 @@ onUnmounted(() => {
 .call-controls button.active {
   border-color: var(--king-accent);
   color: var(--king-accent);
-  background: #f2f7ff;
+  background: var(--king-color-bg-selected);
 }
 
 .call-controls button.danger {
-  background: #b42318;
-  border-color: #b42318;
-  color: #fff;
+  background: var(--king-color-danger);
+  border-color: var(--king-color-danger);
+  color: var(--king-color-on-danger);
 }
 
 .workspace {
@@ -1294,17 +1307,17 @@ onUnmounted(() => {
   display: grid;
   grid-template-areas: 'rail stage context';
   grid-template-columns: clamp(15.5rem, 20vw, 18rem) minmax(0, 1fr) clamp(16rem, 22vw, 19rem);
-  gap: 1rem;
-  padding: 1rem;
+  gap: var(--king-space-4);
+  padding: var(--king-space-4);
 }
 
 .rail,
 .stage,
 .context {
   background: var(--king-surface);
-  border: 1px solid var(--king-border);
-  border-radius: 0.75rem;
-  box-shadow: var(--king-shadow-1);
+  border: var(--king-border-default);
+  border-radius: var(--king-radius-4);
+  box-shadow: var(--king-elevation-1);
   min-height: 0;
 }
 
@@ -1322,10 +1335,10 @@ onUnmounted(() => {
 
 .rail,
 .context {
-  padding: 1rem;
+  padding: var(--king-space-4);
   display: grid;
   align-content: start;
-  gap: 1rem;
+  gap: var(--king-space-4);
   overflow: auto;
 }
 
@@ -1333,23 +1346,23 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--king-space-3);
 }
 
 .user-chip {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: var(--king-space-cozy);
 }
 
 .user-dot {
-  width: 0.85rem;
-  height: 0.85rem;
-  border-radius: 999px;
+  width: var(--king-size-user-dot);
+  height: var(--king-size-user-dot);
+  border-radius: var(--king-radius-pill);
 }
 
 .user-chip p {
-  margin: 0.1rem 0 0;
+  margin: var(--king-space-micro) 0 0;
   color: var(--king-muted);
   font-size: 0.82rem;
 }
@@ -1363,32 +1376,32 @@ onUnmounted(() => {
 .inline-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.45rem;
-  margin-top: 0.5rem;
+  gap: var(--king-space-tight);
+  margin-top: var(--king-space-2);
 }
 
 .room-list {
   list-style: none;
-  margin: 0.75rem 0 0;
+  margin: var(--king-space-3) 0 0;
   padding: 0;
   display: grid;
-  gap: 0.35rem;
+  gap: var(--king-space-sm);
 }
 
 .room-list li {
-  border: 1px solid var(--king-border);
-  border-radius: 0.5rem;
-  padding: 0.6rem 0.7rem;
+  border: var(--king-border-default);
+  border-radius: var(--king-radius-0);
+  padding: var(--king-space-dense) var(--king-space-relaxed);
   cursor: pointer;
 }
 
 .room-list li.active {
   border-color: var(--king-accent);
-  background: #f2f7ff;
+  background: var(--king-color-bg-selected);
 }
 
 .room-list li p {
-  margin: 0.2rem 0 0;
+  margin: var(--king-space-xs) 0 0;
   color: var(--king-muted);
   font-size: 0.82rem;
 }
@@ -1400,12 +1413,12 @@ onUnmounted(() => {
 }
 
 .stage-header {
-  padding: 1rem;
-  border-bottom: 1px solid var(--king-border);
+  padding: var(--king-space-4);
+  border-bottom: var(--king-border-default);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--king-space-4);
 }
 
 .stage-header h2 {
@@ -1413,63 +1426,63 @@ onUnmounted(() => {
 }
 
 .stage-header p {
-  margin: 0.2rem 0 0;
+  margin: var(--king-space-xs) 0 0;
   color: var(--king-muted);
   font-size: 0.9rem;
 }
 
 .stage-actions {
   display: flex;
-  gap: 0.45rem;
+  gap: var(--king-space-tight);
   flex-wrap: wrap;
 }
 
 .chat-panel,
 .call-panel {
-  padding: 1rem;
+  padding: var(--king-space-4);
   min-height: 0;
   display: grid;
 }
 
 .chat-panel {
   grid-template-rows: minmax(0, 1fr) auto auto;
-  gap: 0.7rem;
+  gap: var(--king-space-relaxed);
 }
 
 .messages {
-  border: 1px solid var(--king-border);
-  border-radius: 0.6rem;
-  background: #fff;
-  padding: 0.85rem;
+  border: var(--king-border-default);
+  border-radius: var(--king-radius-3);
+  background: var(--king-color-bg-surface);
+  padding: var(--king-space-loose);
   overflow: auto;
   display: grid;
-  gap: 0.6rem;
+  gap: var(--king-space-dense);
 }
 
 .message {
   max-width: 78%;
-  border: 1px solid var(--king-border);
-  border-radius: 0.55rem;
-  padding: 0.55rem 0.65rem;
-  background: #fff;
+  border: var(--king-border-default);
+  border-radius: var(--king-radius-2);
+  padding: var(--king-space-soft) var(--king-space-cozy);
+  background: var(--king-color-bg-surface);
 }
 
 .message.mine {
   margin-left: auto;
-  background: #f5f9ff;
-  border-color: #bad1ff;
+  background: var(--king-color-bg-message-mine);
+  border-color: var(--king-color-border-accent);
 }
 
 .message header {
   display: flex;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--king-space-3);
   font-size: 0.8rem;
   color: var(--king-muted);
 }
 
 .message p {
-  margin: 0.25rem 0 0;
+  margin: var(--king-space-1) 0 0;
   line-height: 1.45;
 }
 
@@ -1481,14 +1494,14 @@ onUnmounted(() => {
 .composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.5rem;
+  gap: var(--king-space-2);
 }
 
 .prejoin {
   height: 100%;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  gap: 0.8rem;
+  gap: var(--king-space-control-x);
 }
 
 .prejoin video,
@@ -1496,8 +1509,8 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  background: #111827;
-  border-radius: 0.6rem;
+  background: var(--king-color-bg-video);
+  border-radius: var(--king-radius-3);
 }
 
 .prejoin-actions {
@@ -1508,14 +1521,14 @@ onUnmounted(() => {
 .call-live {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  gap: 0.8rem;
+  gap: var(--king-space-control-x);
 }
 
 .video-grid {
   min-height: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: 0.7rem;
+  gap: var(--king-space-relaxed);
 }
 
 .video-grid.single {
@@ -1523,8 +1536,8 @@ onUnmounted(() => {
 }
 
 .video-tile {
-  border: 1px solid var(--king-border);
-  border-radius: 0.6rem;
+  border: var(--king-border-default);
+  border-radius: var(--king-radius-3);
   overflow: hidden;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
@@ -1532,84 +1545,84 @@ onUnmounted(() => {
 }
 
 .video-tile footer {
-  padding: 0.5rem 0.65rem;
-  border-top: 1px solid var(--king-border);
-  background: #fff;
+  padding: var(--king-space-2) var(--king-space-cozy);
+  border-top: var(--king-border-default);
+  background: var(--king-color-bg-surface);
   font-size: 0.82rem;
 }
 
 .call-controls {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: var(--king-space-2);
   flex-wrap: wrap;
 }
 
 .context {
-  gap: 0.9rem;
+  gap: var(--king-space-panel);
 }
 
 .context-section {
-  border: 1px solid var(--king-border);
-  border-radius: 0.55rem;
-  padding: 0.75rem;
+  border: var(--king-border-default);
+  border-radius: var(--king-radius-2);
+  padding: var(--king-space-3);
 }
 
 .context-section p {
-  margin: 0.5rem 0;
+  margin: var(--king-space-2) 0;
   color: var(--king-muted);
 }
 
 .invite-code {
   font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
-  background: #f6f8fb;
-  border: 1px solid var(--king-border);
-  border-radius: 0.45rem;
-  padding: 0.45rem 0.5rem;
+  background: var(--king-color-bg-surface-alt);
+  border: var(--king-border-default);
+  border-radius: var(--king-radius-1);
+  padding: var(--king-space-tight) var(--king-space-2);
   color: var(--king-text);
 }
 
 .participant-list {
   list-style: none;
-  margin: 0.7rem 0 0;
+  margin: var(--king-space-relaxed) 0 0;
   padding: 0;
   display: grid;
-  gap: 0.45rem;
+  gap: var(--king-space-tight);
 }
 
 .participant-list li {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.55rem;
+  gap: var(--king-space-soft);
   align-items: center;
 }
 
 .presence {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 999px;
-  background: #8e98a8;
+  width: var(--king-size-presence-dot);
+  height: var(--king-size-presence-dot);
+  border-radius: var(--king-radius-pill);
+  background: var(--king-color-presence-idle);
 }
 
 .presence.live {
-  background: #12715b;
+  background: var(--king-color-presence-live);
 }
 
 .participant-list p {
-  margin: 0.15rem 0 0;
+  margin: var(--king-space-min) 0 0;
   font-size: 0.8rem;
 }
 
 .context-section dl {
-  margin: 0.6rem 0 0;
+  margin: var(--king-space-dense) 0 0;
   display: grid;
-  gap: 0.35rem;
+  gap: var(--king-space-sm);
 }
 
 .context-section dl div {
   display: flex;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: var(--king-space-2);
   font-size: 0.88rem;
 }
 
@@ -1619,7 +1632,7 @@ onUnmounted(() => {
 
 .slide-panel-enter-active,
 .slide-panel-leave-active {
-  transition: transform 0.22s ease, opacity 0.22s ease;
+  transition: transform var(--king-motion-standard) var(--king-motion-ease), opacity var(--king-motion-standard) var(--king-motion-ease);
 }
 
 .slide-panel-enter-from {
@@ -1660,8 +1673,8 @@ onUnmounted(() => {
       'stage'
       'context';
     grid-template-columns: 1fr;
-    padding: 0.75rem;
-    gap: 0.75rem;
+    padding: var(--king-space-3);
+    gap: var(--king-space-3);
   }
 
   .rail {

@@ -1,12 +1,80 @@
 :root {
-  --king-bg: #eef1f5;
-  --king-surface: #ffffff;
-  --king-border: #d5dbe3;
-  --king-text: #0f1724;
-  --king-muted: #5f6b7a;
-  --king-accent: #0f62fe;
-  --king-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 2px 6px rgba(16, 24, 40, 0.04);
-  --king-shadow-2: 0 6px 18px rgba(16, 24, 40, 0.08);
+  /* Color tokens */
+  --king-color-bg-canvas: #eef1f5;
+  --king-color-bg-surface: #ffffff;
+  --king-color-bg-surface-alt: #f6f8fb;
+  --king-color-bg-selected: #f2f7ff;
+  --king-color-bg-message-mine: #f5f9ff;
+  --king-color-bg-video: #111827;
+  --king-color-text-primary: #0f1724;
+  --king-color-text-secondary: #5f6b7a;
+  --king-color-border-default: #d5dbe3;
+  --king-color-border-accent: #bad1ff;
+  --king-color-accent: #0f62fe;
+  --king-color-danger: #b42318;
+  --king-color-on-accent: #ffffff;
+  --king-color-on-danger: #ffffff;
+  --king-color-presence-idle: #8e98a8;
+  --king-color-presence-live: #12715b;
+
+  /* Spacing tokens */
+  --king-space-1: 0.25rem;
+  --king-space-2: 0.5rem;
+  --king-space-3: 0.75rem;
+  --king-space-4: 1rem;
+  --king-space-5: 1.5rem;
+  --king-space-6: 2rem;
+  --king-space-tight: 0.45rem;
+  --king-space-soft: 0.55rem;
+  --king-space-dense: 0.6rem;
+  --king-space-cozy: 0.65rem;
+  --king-space-relaxed: 0.7rem;
+  --king-space-loose: 0.85rem;
+  --king-space-panel: 0.9rem;
+  --king-space-micro: 0.1rem;
+  --king-space-min: 0.15rem;
+  --king-space-xs: 0.2rem;
+  --king-space-sm: 0.35rem;
+  --king-space-input-y: 0.62rem;
+  --king-space-input-x: 0.75rem;
+  --king-space-control-y: 0.55rem;
+  --king-space-control-x: 0.8rem;
+
+  /* Size tokens */
+  --king-size-user-dot: 0.85rem;
+  --king-size-presence-dot: 0.7rem;
+
+  /* Radius tokens */
+  --king-radius-0: 0.5rem;
+  --king-radius-1: 0.45rem;
+  --king-radius-2: 0.55rem;
+  --king-radius-3: 0.6rem;
+  --king-radius-4: 0.75rem;
+  --king-radius-pill: 999px;
+
+  /* Border tokens */
+  --king-border-width: 1px;
+  --king-border-default: var(--king-border-width) solid var(--king-color-border-default);
+  --king-border-accent: var(--king-border-width) solid var(--king-color-accent);
+
+  /* Elevation tokens */
+  --king-elevation-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 2px 6px rgba(16, 24, 40, 0.04);
+  --king-elevation-2: 0 6px 18px rgba(16, 24, 40, 0.08);
+
+  /* Motion tokens */
+  --king-motion-fast: 0.2s;
+  --king-motion-standard: 0.22s;
+  --king-motion-ease: ease;
+
+  /* Backward-compatible aliases */
+  --king-bg: var(--king-color-bg-canvas);
+  --king-surface: var(--king-color-bg-surface);
+  --king-border: var(--king-color-border-default);
+  --king-text: var(--king-color-text-primary);
+  --king-muted: var(--king-color-text-secondary);
+  --king-accent: var(--king-color-accent);
+  --king-shadow-1: var(--king-elevation-1);
+  --king-shadow-2: var(--king-elevation-2);
 
   font-family: 'IBM Plex Sans', 'Segoe UI Variable Text', 'Segoe UI', 'Noto Sans', sans-serif;
   line-height: 1.45;

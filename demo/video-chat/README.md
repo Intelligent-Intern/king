@@ -12,6 +12,7 @@ What is wired today:
 - multi-user room chat over websocket fanout
 - browser video call signaling (`offer`/`answer`/`ice`) with peer tiles
 - responsive shell layout with slide transitions for chat/call stage switching
+- shared UI token layer in `frontend/src/style.css` for color, spacing, border, radius, and elevation
 
 Current boundaries:
 
