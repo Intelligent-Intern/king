@@ -146,8 +146,27 @@
           <section v-else key="call" class="call-panel">
             <div v-if="!callJoined" class="prejoin">
               <video ref="previewVideoRef" autoplay muted playsinline></video>
+              <p v-if="mediaPreviewState.error" class="inline-error">{{ mediaPreviewState.error }}</p>
+              <p v-else-if="mediaPreviewState.status === 'ready'" class="inline-note">
+                Preview ready. Join when you are ready.
+              </p>
               <div class="prejoin-actions">
-                <button @click="handleJoinCallClick">Join call</button>
+                <button
+                  class="quiet-btn"
+                  :disabled="mediaPreviewState.status === 'requesting'"
+                  @click="requestCallPreview"
+                >
+                  {{
+                    mediaPreviewState.status === 'requesting'
+                      ? 'Starting preview...'
+                      : mediaPreviewState.status === 'ready'
+                        ? 'Refresh preview'
+                        : 'Enable preview'
+                  }}
+                </button>
+                <button :disabled="!canJoinCallFromPreview || callStatus === 'preparing'" @click="handleJoinCallClick">
+                  {{ callStatus === 'preparing' ? 'Joining...' : 'Join call' }}
+                </button>
               </div>
             </div>
 
@@ -251,6 +270,11 @@ import { copyTextWithFallback } from './lib/copyText'
 import { resolveInviteCodeFromCreatePayload } from './lib/inviteCreate'
 import { resolveRoomIdFromInviteRedeemPayload } from './lib/inviteRedeem'
 import { normalizeParticipantRosterSnapshot } from './lib/participantRoster'
+import {
+  canJoinFromPreview,
+  mapPreviewAccessError,
+  type MediaPreviewState,
+} from './lib/prejoinPreview'
 import { normalizeRoomCreateName, optimisticRoomId, roomIdCandidateForAttempt } from './lib/roomCreate'
 import { normalizeRoomDirectory } from './lib/roomDirectory'
 import { decideRoomSwitch, roomSwitchUiReset } from './lib/roomSwitch'
@@ -338,6 +362,13 @@ let reconnectSuppressed = false
 
 const callJoined = ref(false)
 const callStatus = ref<'idle' | 'preparing' | 'live' | 'error'>('idle')
+const mediaPreviewState = reactive<{
+  status: MediaPreviewState
+  error: string
+}>({
+  status: 'idle',
+  error: '',
+})
 const isMicEnabled = ref(true)
 const isCameraEnabled = ref(true)
 
@@ -353,6 +384,7 @@ const isAuthenticated = computed(() => currentSession.value !== null)
 const canSubmitAuth = computed(() => normalizeDisplayName(authForm.name).length > 0)
 const canCreateRoom = computed(() => normalizeRoomCreateName(createRoomName.value).length > 0)
 const canSendMessage = computed(() => resolveComposerPayload(messageInput.value) !== null)
+const canJoinCallFromPreview = computed(() => canJoinFromPreview(mediaPreviewState.status))
 const sessionView = computed<Session>(() => currentSession.value || {
   userId: '',
   name: '',
@@ -1016,6 +1048,7 @@ async function prepareLocalStream(): Promise<void> {
   }
 
   if (localStream) {
+    attachLocalPreview()
     return
   }
 
@@ -1026,6 +1059,26 @@ async function prepareLocalStream(): Promise<void> {
 
   applyTrackState()
   attachLocalPreview()
+}
+
+async function requestCallPreview(): Promise<boolean> {
+  if (!authenticatedSession()) {
+    return false
+  }
+
+  mediaPreviewState.error = ''
+  mediaPreviewState.status = 'requesting'
+
+  try {
+    await prepareLocalStream()
+    mediaPreviewState.status = 'ready'
+    mediaPreviewState.error = ''
+    return true
+  } catch (error) {
+    mediaPreviewState.status = 'error'
+    mediaPreviewState.error = mapPreviewAccessError(error)
+    return false
+  }
 }
 
 function attachLocalPreview(): void {
@@ -1278,10 +1331,14 @@ async function joinCall(silent = false): Promise<void> {
     return
   }
 
-  callStatus.value = 'preparing'
-
   try {
-    await prepareLocalStream()
+    const previewReady = await requestCallPreview()
+    if (!previewReady) {
+      callStatus.value = 'error'
+      return
+    }
+
+    callStatus.value = 'preparing'
     callJoined.value = true
     callStatus.value = 'live'
 
@@ -1311,6 +1368,9 @@ function callReset(notify = true): void {
 
   callJoined.value = false
   callStatus.value = 'idle'
+  mediaPreviewState.status = localStream ? 'ready' : 'idle'
+  mediaPreviewState.error = ''
+  attachLocalPreview()
   remoteTiles.value = []
 }
 
@@ -1342,12 +1402,23 @@ function toggleCamera(): void {
 
 function stopLocalStream(): void {
   if (!localStream) {
+    mediaPreviewState.status = 'idle'
+    mediaPreviewState.error = ''
     return
   }
   for (const track of localStream.getTracks()) {
     track.stop()
   }
   localStream = null
+  mediaPreviewState.status = 'idle'
+  mediaPreviewState.error = ''
+
+  if (previewVideoRef.value) {
+    previewVideoRef.value.srcObject = null
+  }
+  if (localVideoRef.value) {
+    localVideoRef.value.srcObject = null
+  }
 }
 
 function syncLocationRoom(roomId: string): void {
@@ -1497,9 +1568,6 @@ watch(isAuthenticated, (value) => {
 
   connectSocket()
   refreshRooms()
-  void prepareLocalStream().catch(() => {
-    // device permissions can fail before call join
-  })
 })
 
 watch(activeMessages, () => {
@@ -1526,11 +1594,6 @@ onMounted(async () => {
     reconnectSuppressed = false
     connectSocket()
     await refreshRooms()
-    try {
-      await prepareLocalStream()
-    } catch {
-      // device permissions can fail before call join
-    }
   }
 })
 
@@ -1896,7 +1959,7 @@ onUnmounted(() => {
 .prejoin {
   height: 100%;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: var(--king-space-control-x);
 }
 
@@ -1912,6 +1975,8 @@ onUnmounted(() => {
 .prejoin-actions {
   display: flex;
   justify-content: flex-end;
+  gap: var(--king-space-tight);
+  flex-wrap: wrap;
 }
 
 .call-live {

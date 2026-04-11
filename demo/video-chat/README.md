@@ -21,6 +21,7 @@ What is wired today:
 - typing indicators are room-scoped, exclude self display, and auto-expire on idle timeout windows
 - chat composer enforces bounded draft length and rejects empty/whitespace payloads before websocket send
 - chat and roster timestamps are rendered in deterministic locale-independent UTC `HH:MM UTC` format
+- pre-call local media preview is an explicit gate; join is enabled only after preview succeeds, with visible permission/device errors
 - multi-user room chat over websocket fanout
 - browser video call signaling (`offer`/`answer`/`ice`) with peer tiles
 - responsive shell layout with reduced-motion-safe slide transitions for chat/call stage switching

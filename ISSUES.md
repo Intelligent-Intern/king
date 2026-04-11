@@ -104,7 +104,7 @@ Design guardrails for this batch:
   done when: composer enforces max length and rejects empty/whitespace payloads before transport.
 - [x] `#18 Add deterministic chat timestamp rendering with stable locale-safe formatting.`
   done when: messages render consistent timestamp formatting across clients.
-- [ ] `#19 Implement pre-call local media preview as first-class join gate.`
+- [x] `#19 Implement pre-call local media preview as first-class join gate.`
   done when: users can preview camera feed before joining call and permission failures are handled explicitly.
 - [ ] `#20 Implement call join/leave signaling lifecycle at room scope.`
   done when: joining/leaving call updates local and remote participant call presence reliably.
