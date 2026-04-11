@@ -8,6 +8,7 @@ What is wired today:
 
 - required login surface (display name) with persisted local session identity across reloads
 - explicit sign-out lifecycle that tears down websocket reconnect loops, call peers, and local media tracks
+- authenticated workspace gating so room/chat/call actions and local media init only run with a valid signed-in session
 - room directory with create/join/switch behavior
 - invite-code create/redeem flow per room
 - multi-user room chat over websocket fanout

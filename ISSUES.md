@@ -80,7 +80,7 @@ Design guardrails for this batch:
   done when: a user must sign in with display name before workspace access and session identity survives reload.
 - [x] `#6 Add explicit sign-out lifecycle with full connection and call cleanup.`
   done when: sign-out reliably tears down websocket/media state and returns to unauthenticated entry.
-- [ ] `#7 Enforce authenticated workspace gating in the UI flow.`
+- [x] `#7 Enforce authenticated workspace gating in the UI flow.`
   done when: room/chat/call surfaces are not reachable before successful sign-in state.
 - [ ] `#8 Implement room directory fetch with stable ordering and member counters.`
   done when: room list comes from backend API, displays deterministic ordering, and reflects live member counts.

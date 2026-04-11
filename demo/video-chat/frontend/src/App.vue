@@ -219,6 +219,7 @@ import {
   restorePersistedSession,
   type SessionIdentity,
 } from './lib/authSession'
+import { hasAuthenticatedSession } from './lib/workspaceAuth'
 
 type Session = SessionIdentity
 
@@ -323,6 +324,11 @@ const connectionLabel = computed(() => {
   return 'Offline'
 })
 
+function authenticatedSession(): Session | null {
+  const session = currentSession.value
+  return hasAuthenticatedSession(session) ? session : null
+}
+
 function restoreSession(): Session | null {
   if (typeof window === 'undefined') {
     return null
@@ -359,7 +365,7 @@ function normalizeRoomId(value: string): string {
 function wsUrl(roomId: string): string {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
   const host = window.location.host || '127.0.0.1:3000'
-  const session = currentSession.value
+  const session = authenticatedSession()
   if (!session) {
     return `${protocol}://${host}/ws`
   }
@@ -426,6 +432,10 @@ async function decodeSocketMessage(payload: string | ArrayBuffer | Blob): Promis
 }
 
 async function refreshRooms(): Promise<void> {
+  if (!authenticatedSession()) {
+    return
+  }
+
   try {
     const response = await fetch('/api/rooms')
     if (!response.ok) {
@@ -454,7 +464,7 @@ async function refreshRooms(): Promise<void> {
 }
 
 function connectSocket(): void {
-  if (!currentSession.value) {
+  if (!authenticatedSession()) {
     return
   }
 
@@ -626,6 +636,10 @@ function handleServerEvent(message: any): void {
 }
 
 async function createRoom(): Promise<void> {
+  if (!authenticatedSession()) {
+    return
+  }
+
   const name = createRoomName.value.trim()
   if (!name) {
     return
@@ -653,11 +667,19 @@ async function createRoom(): Promise<void> {
 }
 
 function switchRoom(roomId: string): void {
+  if (!authenticatedSession()) {
+    return
+  }
+
   const nextRoomId = normalizeRoomId(roomId)
   emit('room/switch', { roomId: nextRoomId })
 }
 
 async function createInvite(): Promise<void> {
+  if (!authenticatedSession()) {
+    return
+  }
+
   if (!activeRoom.value) {
     return
   }
@@ -681,6 +703,10 @@ async function createInvite(): Promise<void> {
 }
 
 async function redeemInvite(): Promise<void> {
+  if (!authenticatedSession()) {
+    return
+  }
+
   const code = inviteCodeInput.value.trim()
   if (!code) {
     return
@@ -708,6 +734,10 @@ async function redeemInvite(): Promise<void> {
 }
 
 async function copyInviteCode(): Promise<void> {
+  if (!authenticatedSession()) {
+    return
+  }
+
   if (!lastInviteCode.value) {
     return
   }
@@ -720,6 +750,10 @@ async function copyInviteCode(): Promise<void> {
 }
 
 function sendMessage(): void {
+  if (!authenticatedSession()) {
+    return
+  }
+
   const text = messageInput.value.trim()
   if (!text) {
     return
@@ -735,6 +769,10 @@ function sendMessage(): void {
 }
 
 function onMessageInput(): void {
+  if (!authenticatedSession()) {
+    return
+  }
+
   emit('typing/start', { roomId: activeRoomId.value })
 
   if (typingDebounce) {
@@ -760,6 +798,10 @@ function participantName(userId: string): string {
 }
 
 async function prepareLocalStream(): Promise<void> {
+  if (!authenticatedSession()) {
+    return
+  }
+
   if (localStream) {
     return
   }
@@ -1015,6 +1057,10 @@ async function handleCallSignal(message: any): Promise<void> {
 }
 
 async function joinCall(silent = false): Promise<void> {
+  if (!authenticatedSession()) {
+    return
+  }
+
   if (callJoined.value) {
     return
   }
@@ -1056,15 +1102,27 @@ function callReset(notify = true): void {
 }
 
 function leaveCall(): void {
+  if (!authenticatedSession()) {
+    return
+  }
+
   callReset(true)
 }
 
 function toggleMic(): void {
+  if (!authenticatedSession()) {
+    return
+  }
+
   isMicEnabled.value = !isMicEnabled.value
   applyTrackState()
 }
 
 function toggleCamera(): void {
+  if (!authenticatedSession()) {
+    return
+  }
+
   isCameraEnabled.value = !isCameraEnabled.value
   applyTrackState()
 }
@@ -1218,6 +1276,9 @@ watch(isAuthenticated, (value) => {
 
   connectSocket()
   refreshRooms()
+  void prepareLocalStream().catch(() => {
+    // device permissions can fail before call join
+  })
 })
 
 watch(activeMessages, () => {
@@ -1231,18 +1292,18 @@ watch(activeParticipants, () => {
 }, { deep: true })
 
 onMounted(async () => {
-  if (currentSession.value) {
-    authForm.name = currentSession.value.name
-    authForm.color = currentSession.value.color
+  const session = authenticatedSession()
+  if (session) {
+    authForm.name = session.name
+    authForm.color = session.color
     reconnectSuppressed = false
     connectSocket()
     await refreshRooms()
-  }
-
-  try {
-    await prepareLocalStream()
-  } catch {
-    // device permissions can fail before call join
+    try {
+      await prepareLocalStream()
+    } catch {
+      // device permissions can fail before call join
+    }
   }
 })
 
