@@ -1,7 +1,7 @@
 FROM node:20-alpine AS build
 WORKDIR /repo/demo/video-chat
 
-ARG IIBIN_SOURCE=file:../../packages/iibin
+ARG IIBIN_SOURCE=1.0.5-beta
 
 COPY . /repo
 RUN npm pkg set "dependencies.@intelligentintern/iibin=${IIBIN_SOURCE}" \

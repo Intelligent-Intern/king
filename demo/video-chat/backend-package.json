@@ -6,7 +6,7 @@
     "start": "node dev-backend.mjs"
   },
   "dependencies": {
-    "@intelligentintern/iibin": "^1.0.6-beta",
+    "@intelligentintern/iibin": "^1.0.5-beta",
     "better-sqlite3": "^12.4.1",
     "cors": "^2.8.5",
     "express": "^4.22.1",

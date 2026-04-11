@@ -14,7 +14,7 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@intelligentintern/iibin": "file:../../packages/iibin",
+    "@intelligentintern/iibin": "^1.0.5-beta",
     "@vueuse/components": "^10.7.0",
     "@vueuse/core": "^10.7.0",
     "better-sqlite3": "^12.4.1",

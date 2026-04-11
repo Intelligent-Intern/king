@@ -99,7 +99,7 @@ The backend persists user login records in a Docker volume:
 Override versions/ports when needed:
 
 ```bash
-IIBIN_SOURCE='@intelligentintern/iibin@1.0.6-beta' VIDEOCHAT_FRONTEND_PORT=3000 VIDEOCHAT_BACKEND_PORT=18080 docker compose up --build
+IIBIN_SOURCE='1.0.5-beta' VIDEOCHAT_FRONTEND_PORT=3000 VIDEOCHAT_BACKEND_PORT=18080 docker compose up --build
 ```
 
 ## Runtime Notes

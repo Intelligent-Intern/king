@@ -5,7 +5,7 @@ services:
       context: ../..
       dockerfile: demo/video-chat/Dockerfile.backend
       args:
-        IIBIN_SOURCE: ${IIBIN_SOURCE:-file:../../packages/iibin}
+        IIBIN_SOURCE: ${IIBIN_SOURCE:-1.0.5-beta}
     environment:
       KING_DEMO_HOST: 0.0.0.0
       KING_DEMO_PORT: 8080
@@ -22,7 +22,7 @@ services:
       context: ../..
       dockerfile: demo/video-chat/Dockerfile.frontend
       args:
-        IIBIN_SOURCE: ${IIBIN_SOURCE:-file:../../packages/iibin}
+        IIBIN_SOURCE: ${IIBIN_SOURCE:-1.0.5-beta}
     depends_on:
       - videochat-backend
     ports:
