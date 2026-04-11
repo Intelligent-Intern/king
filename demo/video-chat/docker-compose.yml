@@ -1,0 +1,33 @@
+services:
+  videochat-backend:
+    container_name: king-videochat-backend
+    build:
+      context: ../..
+      dockerfile: demo/video-chat/Dockerfile.backend
+      args:
+        IIBIN_SOURCE: ${IIBIN_SOURCE:-file:../../packages/iibin}
+    environment:
+      KING_DEMO_HOST: 0.0.0.0
+      KING_DEMO_PORT: 8080
+      KING_DEMO_DB_PATH: /data/video-chat.sqlite
+    ports:
+      - "${VIDEOCHAT_BACKEND_PORT:-8080}:8080"
+    volumes:
+      - videochat-sqlite:/data
+    restart: unless-stopped
+
+  videochat-frontend:
+    container_name: king-videochat-frontend
+    build:
+      context: ../..
+      dockerfile: demo/video-chat/Dockerfile.frontend
+      args:
+        IIBIN_SOURCE: ${IIBIN_SOURCE:-file:../../packages/iibin}
+    depends_on:
+      - videochat-backend
+    ports:
+      - "${VIDEOCHAT_FRONTEND_PORT:-5173}:80"
+    restart: unless-stopped
+
+volumes:
+  videochat-sqlite:

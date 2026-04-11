@@ -1,0 +1,25 @@
+FROM node:20-bookworm-slim
+WORKDIR /app
+
+ARG IIBIN_SOURCE=file:../../packages/iibin
+
+ENV NODE_ENV=production
+ENV KING_DEMO_HOST=0.0.0.0
+ENV KING_DEMO_PORT=8080
+ENV KING_DEMO_DB_PATH=/data/video-chat.sqlite
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY demo/video-chat/backend-package.json ./package.json
+COPY packages/iibin /packages/iibin
+RUN npm pkg set "dependencies.@intelligentintern/iibin=${IIBIN_SOURCE}" \
+  && npm install --omit=dev --no-package-lock
+
+COPY demo/video-chat/dev-backend.mjs ./dev-backend.mjs
+
+RUN mkdir -p /data
+VOLUME ["/data"]
+EXPOSE 8080
+CMD ["npm", "run", "start"]

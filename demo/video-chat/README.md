@@ -1,7 +1,8 @@
 # King IIBIN WebSocket Demo
 
 This demo ships as a responsive multi-user workspace for room chat and browser
-video calls.
+video calls. The frontend and backend transport now bind to
+`@intelligentintern/iibin` from `node_modules`.
 
 What is wired today:
 
@@ -14,7 +15,8 @@ What is wired today:
 
 Current boundaries:
 
-- demo-local signaling backend (`dev-backend.mjs`), no external auth provider
+- demo-local signaling backend (`dev-backend.mjs`)
+- login/user directory is persisted in SQLite (`KING_DEMO_DB_PATH`)
 - no durable room/message persistence across backend restart
 - no TURN relay setup (STUN-only by default)
 - no production moderation/audit policy
@@ -76,12 +78,38 @@ Useful commands:
 - `npm run type-check`
 - `npm run test`
 
+## Docker Compose (Frontend + Backend)
+
+Run from `demo/video-chat`:
+
+```bash
+docker compose up --build
+```
+
+Default host ports:
+
+- frontend: `http://127.0.0.1:5173`
+- backend: `http://127.0.0.1:8080`
+
+The backend persists user login records in a Docker volume:
+
+- volume: `videochat-sqlite`
+- database path in container: `/data/video-chat.sqlite`
+
+Override versions/ports when needed:
+
+```bash
+IIBIN_SOURCE='@intelligentintern/iibin@1.0.6-beta' VIDEOCHAT_FRONTEND_PORT=3000 VIDEOCHAT_BACKEND_PORT=18080 docker compose up --build
+```
+
 ## Runtime Notes
 
 - the local backend listens on `http://127.0.0.1:8080` by default
 - Vite proxies `/api` and `/ws` to that backend
 - health endpoint: `GET /health`
-- signaling endpoint: `WS /ws?userId=<id>&name=<display>&room=<roomId>`
+- auth endpoint: `POST /api/auth/login`
+- user directory endpoint: `GET /api/users`
+- signaling endpoint: `WS /ws?userId=<id>&name=<display>&color=<hex>&room=<roomId>`
 
 ## Scope
 

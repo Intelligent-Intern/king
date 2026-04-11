@@ -1,11 +1,16 @@
 import crypto from 'node:crypto'
+import fs from 'node:fs'
 import http from 'node:http'
+import path from 'node:path'
+import Database from 'better-sqlite3'
 import cors from 'cors'
 import express from 'express'
 import { WebSocketServer } from 'ws'
+import { IIBINDecoder, IIBINEncoder, MessageType } from '@intelligentintern/iibin'
 
 const host = process.env.KING_DEMO_HOST || '127.0.0.1'
 const port = Number(process.env.KING_DEMO_PORT || 8080)
+const dbPath = process.env.KING_DEMO_DB_PATH || path.join(process.cwd(), '.data', 'video-chat.sqlite')
 
 const app = express()
 app.use(cors())
@@ -13,10 +18,71 @@ app.use(express.json({ limit: '1mb' }))
 
 const server = http.createServer(app)
 const wss = new WebSocketServer({ noServer: true })
+const wireEncoder = new IIBINEncoder()
+
+fs.mkdirSync(path.dirname(dbPath), { recursive: true })
+const db = new Database(dbPath)
+db.pragma('journal_mode = WAL')
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    user_id TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    display_color TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    last_login_at INTEGER NOT NULL,
+    login_count INTEGER NOT NULL DEFAULT 1
+  )
+`)
+
+const upsertUserStatement = db.prepare(`
+  INSERT INTO users (
+    user_id,
+    display_name,
+    display_color,
+    created_at,
+    last_login_at,
+    login_count
+  ) VALUES (
+    @user_id,
+    @display_name,
+    @display_color,
+    @created_at,
+    @last_login_at,
+    1
+  )
+  ON CONFLICT(user_id) DO UPDATE SET
+    display_name = excluded.display_name,
+    display_color = excluded.display_color,
+    last_login_at = excluded.last_login_at,
+    login_count = users.login_count + 1
+`)
+const findUserByIdStatement = db.prepare(`
+  SELECT
+    user_id AS userId,
+    display_name AS name,
+    display_color AS color,
+    created_at AS createdAt,
+    last_login_at AS lastLoginAt,
+    login_count AS loginCount
+  FROM users
+  WHERE user_id = ?
+`)
+const listUsersStatement = db.prepare(`
+  SELECT
+    user_id AS userId,
+    display_name AS name,
+    display_color AS color,
+    created_at AS createdAt,
+    last_login_at AS lastLoginAt,
+    login_count AS loginCount
+  FROM users
+  ORDER BY last_login_at DESC
+  LIMIT 200
+`)
 
 /** @type {Map<string, {id: string, name: string, inviteCode: string, createdAt: number, members: Set<WebSocket>}>} */
 const rooms = new Map()
-/** @type {Map<WebSocket, {userId: string, name: string, roomId: string, callJoined: boolean, connectedAt: number}>} */
+/** @type {Map<WebSocket, {userId: string, name: string, color: string, roomId: string, callJoined: boolean, connectedAt: number}>} */
 const clients = new Map()
 /** @type {Map<string, WebSocket>} */
 const socketsByUser = new Map()
@@ -44,6 +110,35 @@ function normalizeName(value, fallback) {
     return fallback
   }
   return input.slice(0, 48)
+}
+
+function normalizeColor(value) {
+  const input = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (/^#[0-9a-f]{6}$/.test(input)) {
+    return input
+  }
+  return '#0f62fe'
+}
+
+function normalizeUserId(value) {
+  const input = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (!input) {
+    return `u-${crypto.randomUUID().slice(0, 8)}`
+  }
+  const safe = input.replace(/[^a-z0-9-_]/g, '-').slice(0, 48)
+  return safe || `u-${crypto.randomUUID().slice(0, 8)}`
+}
+
+function upsertUser(userId, name, color) {
+  const timestamp = Date.now()
+  upsertUserStatement.run({
+    user_id: userId,
+    display_name: name,
+    display_color: color,
+    created_at: timestamp,
+    last_login_at: timestamp,
+  })
+  return findUserByIdStatement.get(userId)
 }
 
 function ensureRoom(roomId, roomName = null) {
@@ -105,11 +200,53 @@ function send(socket, message) {
   }
 
   try {
-    socket.send(JSON.stringify(message))
+    const wirePayload = wireEncoder.encode({
+      type: MessageType.TEXT_MESSAGE,
+      data: message,
+      timestamp: Date.now(),
+    })
+    socket.send(Buffer.from(new Uint8Array(wirePayload)))
     return true
   } catch {
     return false
   }
+}
+
+function decodeSocketPayload(raw, isBinary) {
+  if (!isBinary) {
+    try {
+      return JSON.parse(String(raw))
+    } catch {
+      return null
+    }
+  }
+
+  let binaryPayload = raw
+  if (Array.isArray(binaryPayload)) {
+    binaryPayload = Buffer.concat(binaryPayload)
+  }
+
+  if (!(binaryPayload instanceof ArrayBuffer) && !Buffer.isBuffer(binaryPayload)) {
+    return null
+  }
+
+  const buffer = binaryPayload instanceof ArrayBuffer
+    ? binaryPayload
+    : binaryPayload.buffer.slice(
+      binaryPayload.byteOffset,
+      binaryPayload.byteOffset + binaryPayload.byteLength
+    )
+
+  try {
+    const decoded = new IIBINDecoder(buffer).decode()
+    if (decoded.type === MessageType.TEXT_MESSAGE && decoded.data && typeof decoded.data === 'object') {
+      return decoded.data
+    }
+  } catch {
+    return null
+  }
+
+  return null
 }
 
 function broadcastRoom(roomId, message, excludeUserId = null) {
@@ -211,17 +348,9 @@ function closePeer(socket) {
   }
 }
 
-function handleClientMessage(socket, payload) {
+function handleClientMessage(socket, message) {
   const state = clients.get(socket)
   if (!state) {
-    return
-  }
-
-  let message
-  try {
-    message = JSON.parse(payload)
-  } catch {
-    send(socket, { type: 'error', code: 'invalid_json', message: 'Message must be valid JSON.' })
     return
   }
 
@@ -323,8 +452,35 @@ app.get('/health', (_req, res) => {
     service: 'king-video-chat-backend',
     rooms: rooms.size,
     peers: clients.size,
+    users: Number(db.prepare('SELECT COUNT(*) AS count FROM users').get().count || 0),
     time: nowIso(),
   })
+})
+
+app.post('/api/auth/login', (req, res) => {
+  const name = normalizeName(req.body?.name, '')
+  if (!name) {
+    res.status(400).json({ error: 'name_required' })
+    return
+  }
+
+  const color = normalizeColor(req.body?.color)
+  const userId = normalizeUserId(req.body?.userId)
+  const record = upsertUser(userId, name, color)
+
+  res.json({
+    session: {
+      userId: record.userId,
+      name: record.name,
+      color: record.color,
+      lastLoginAt: Number(record.lastLoginAt || Date.now()),
+      loginCount: Number(record.loginCount || 1),
+    },
+  })
+})
+
+app.get('/api/users', (_req, res) => {
+  res.json({ users: listUsersStatement.all() })
 })
 
 app.get('/api/rooms', (_req, res) => {
@@ -387,13 +543,19 @@ server.on('upgrade', (request, socket, head) => {
 })
 
 wss.on('connection', (socket, _request, requestUrl) => {
-  const userId = normalizeName(requestUrl.searchParams.get('userId'), `u-${crypto.randomUUID().slice(0, 8)}`)
-  const userName = normalizeName(requestUrl.searchParams.get('name'), userId)
+  const userId = normalizeUserId(requestUrl.searchParams.get('userId'))
+  const fallbackName = normalizeName(requestUrl.searchParams.get('name'), userId)
+  const fallbackColor = normalizeColor(requestUrl.searchParams.get('color'))
+  const knownUser = findUserByIdStatement.get(userId)
+  const userName = knownUser ? String(knownUser.name || fallbackName) : fallbackName
+  const userColor = knownUser ? String(knownUser.color || fallbackColor) : fallbackColor
   const roomId = normalizeRoomId(requestUrl.searchParams.get('room') || 'lobby')
+  upsertUser(userId, userName, userColor)
 
   const state = {
     userId,
     name: userName,
+    color: userColor,
     roomId,
     callJoined: false,
     connectedAt: Date.now(),
@@ -405,7 +567,7 @@ wss.on('connection', (socket, _request, requestUrl) => {
 
   send(socket, {
     type: 'session/ready',
-    me: { userId, name: userName },
+    me: { userId, name: userName, color: userColor },
     roomId,
     rooms: listRooms(),
     serverTime: Date.now(),
@@ -421,10 +583,16 @@ wss.on('connection', (socket, _request, requestUrl) => {
   pushRoomSnapshot(roomId)
 
   socket.on('message', (raw, isBinary) => {
-    if (isBinary) {
+    const message = decodeSocketPayload(raw, isBinary)
+    if (!message || typeof message !== 'object') {
+      send(socket, {
+        type: 'error',
+        code: 'invalid_payload',
+        message: 'Message must be valid JSON or IIBIN payload.',
+      })
       return
     }
-    handleClientMessage(socket, String(raw))
+    handleClientMessage(socket, message)
   })
 
   socket.on('close', () => {

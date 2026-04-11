@@ -208,6 +208,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { IIBINDecoder, IIBINEncoder, MessageType } from '@intelligentintern/iibin'
 
 interface Session {
   userId: string
@@ -244,6 +245,7 @@ type ConnectionState = 'offline' | 'connecting' | 'online' | 'reconnecting'
 
 const SESSION_STORAGE_KEY = 'king.video.chat.session.v2'
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
+const wireEncoder = new IIBINEncoder()
 
 const authForm = reactive({
   name: '',
@@ -367,6 +369,7 @@ function wsUrl(roomId: string): string {
   const query = new URLSearchParams({
     userId: session.userId,
     name: session.name,
+    color: session.color,
     room: roomId,
   })
 
@@ -383,6 +386,45 @@ function ensureRoomState(roomId: string): void {
   if (!typingByRoom[roomId]) {
     typingByRoom[roomId] = []
   }
+}
+
+function encodeSocketMessage(type: string, data: Record<string, unknown> = {}): ArrayBuffer {
+  return wireEncoder.encode({
+    type: MessageType.TEXT_MESSAGE,
+    data: {
+      type,
+      ...data,
+    },
+    timestamp: Date.now(),
+  })
+}
+
+async function decodeSocketMessage(payload: string | ArrayBuffer | Blob): Promise<any | null> {
+  if (typeof payload === 'string') {
+    try {
+      return JSON.parse(payload)
+    } catch {
+      return null
+    }
+  }
+
+  let buffer: ArrayBuffer
+  if (payload instanceof ArrayBuffer) {
+    buffer = payload
+  } else {
+    buffer = await payload.arrayBuffer()
+  }
+
+  try {
+    const decoded = new IIBINDecoder(buffer).decode()
+    if (decoded.type === MessageType.TEXT_MESSAGE && decoded.data && typeof decoded.data === 'object') {
+      return decoded.data
+    }
+  } catch {
+    return null
+  }
+
+  return null
 }
 
 async function refreshRooms(): Promise<void> {
@@ -426,6 +468,7 @@ function connectSocket(): void {
   connectionState.value = reconnectAttempt > 0 ? 'reconnecting' : 'connecting'
 
   const socket = new WebSocket(wsUrl(activeRoomId.value))
+  socket.binaryType = 'arraybuffer'
   ws.value = socket
 
   socket.onopen = () => {
@@ -434,15 +477,8 @@ function connectSocket(): void {
   }
 
   socket.onmessage = async (event) => {
-    const payload = typeof event.data === 'string' ? event.data : ''
-    if (!payload) {
-      return
-    }
-
-    let message: any
-    try {
-      message = JSON.parse(payload)
-    } catch {
+    const message = await decodeSocketMessage(event.data as string | ArrayBuffer | Blob)
+    if (!message) {
       return
     }
 
@@ -485,7 +521,7 @@ function emit(type: string, data: Record<string, unknown> = {}): void {
     return
   }
 
-  socket.send(JSON.stringify({ type, ...data }))
+  socket.send(encodeSocketMessage(type, data))
 }
 
 function updateRoomCounters(roomId: string): void {
@@ -1045,21 +1081,38 @@ function syncLocationRoom(roomId: string): void {
   window.history.replaceState({}, '', url)
 }
 
-function signIn(): void {
+async function signIn(): Promise<void> {
   const name = authForm.name.trim()
   if (!name) {
     return
   }
 
-  currentSession.value = {
-    userId: `u-${crypto.randomUUID().slice(0, 8)}`,
-    name,
-    color: authForm.color,
-  }
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        userId: currentSession.value?.userId || null,
+        name,
+        color: authForm.color,
+      }),
+    })
 
-  persistSession()
-  connectSocket()
-  refreshRooms()
+    if (!response.ok) {
+      return
+    }
+
+    const payload = await response.json()
+    currentSession.value = {
+      userId: String(payload.session?.userId || `u-${crypto.randomUUID().slice(0, 8)}`),
+      name: String(payload.session?.name || name),
+      color: String(payload.session?.color || authForm.color),
+    }
+
+    persistSession()
+  } catch {
+    // ignore auth API failures in demo mode
+  }
 }
 
 function signOut(): void {
