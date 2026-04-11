@@ -48,7 +48,7 @@
 
 ## Active Executable Items
 
-### V0. Release Blocker Security Remediation (3er Batch)
+### V0. Release Blocker Security Remediation (4er Batch)
 
 - [ ] `#1 Produce a deterministic CVE inventory for Docker/runtime images (CVE-2025-45582, CVE-2024-56433, CVE-2024-2236).`
   done when: CI or local reproducible scan output maps each CVE to exact affected image/package/version and records fixed-target versions.
@@ -56,6 +56,8 @@
   done when: the affected Dockerfiles/workflows are updated, builds stay green, and rescans show both CVEs no longer present.
 - [ ] `#3 Resolve CVE-2024-2236 for release gate (fix, replace component, or documented non-exploitable path with explicit control).`
   done when: release CI has an enforceable gate for this CVE and the branch contains either a real remediation or a justified, tested fail-closed mitigation.
+- [ ] `#4 Switch demo/video-chat IIBIN usage to the published npm package (@intelligentintern/iibin) from node_modules.`
+  done when: frontend imports resolve from `@intelligentintern/iibin`, local duplicate protocol sources are removed from app usage paths, and build/tests stay green.
 
 After V0 closes, resume `U2` from `#1`.
 
