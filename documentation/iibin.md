@@ -148,6 +148,53 @@ parameters. A command may accept one of several payload shapes but never more
 than one at once. The reason to use a schema system is to express these shapes
 directly rather than smuggling them through vague arrays.
 
+## Repeated And Nested Messages On Real Transport Paths
+
+The most important repeated-plus-nested pattern in practice is not a toy local
+array roundtrip. It is a live transport message where one frame carries a
+batch with repeated entries and each entry includes nested state.
+
+```php
+<?php
+
+King\IIBIN::defineSchema('RealtimeMember', [
+    'id' => ['tag' => 1, 'type' => 'int32', 'required' => true],
+    'role' => ['tag' => 2, 'type' => 'string'],
+    'labels' => ['tag' => 3, 'type' => 'repeated_string'],
+]);
+
+King\IIBIN::defineSchema('RealtimeBatchV2', [
+    'topic' => ['tag' => 1, 'type' => 'string', 'required' => true],
+    'members' => ['tag' => 2, 'type' => 'repeated_RealtimeMember', 'required' => true],
+    'request_id' => ['tag' => 3, 'type' => 'string'],
+    'ack_ids' => ['tag' => 4, 'type' => 'repeated_string'],
+]);
+
+$binary = King\IIBIN::encode('RealtimeBatchV2', [
+    'topic' => 'control.room.sync',
+    'request_id' => 'req-7001',
+    'members' => [
+        ['id' => 7, 'role' => 'speaker', 'labels' => ['moderator', 'eu']],
+        ['id' => 9, 'role' => 'viewer', 'labels' => ['mobile']],
+    ],
+    'ack_ids' => ['req-6998', 'req-6999'],
+]);
+
+king_websocket_send($socket, $binary, true);
+```
+
+This shape is exactly where compatibility semantics matter:
+
+- newer readers decode the full repeated+nested shape
+- older readers keep the shared field numbers and ignore unknown additions such
+  as new repeated fields or nested members
+- newer readers can still decode older payloads that never sent the newer
+  fields
+
+The contract for this exact repeated+nested compatibility behavior on a real
+WebSocket transport path is now verified in
+`670-iibin-repeated-nested-websocket-compatibility-contract.phpt`.
+
 ## Enums Make Integer Fields Human
 
 `king_proto_define_enum()` lets the application bind names to integer values.
