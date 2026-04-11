@@ -108,7 +108,7 @@ Design guardrails for this batch:
   done when: users can preview camera feed before joining call and permission failures are handled explicitly.
 - [x] `#20 Implement call join/leave signaling lifecycle at room scope.`
   done when: joining/leaving call updates local and remote participant call presence reliably.
-- [ ] `#21 Introduce peer-connection manager keyed by remote user id.`
+- [x] `#21 Introduce peer-connection manager keyed by remote user id.`
   done when: each remote participant has an isolated RTCPeerConnection lifecycle with clean map ownership.
 - [ ] `#22 Implement targeted offer/answer signaling path per peer.`
   done when: offers and answers are routed to intended peer ids and support multi-peer room negotiation.

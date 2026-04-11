@@ -271,6 +271,7 @@ import { copyTextWithFallback } from './lib/copyText'
 import { resolveInviteCodeFromCreatePayload } from './lib/inviteCreate'
 import { resolveRoomIdFromInviteRedeemPayload } from './lib/inviteRedeem'
 import { normalizeParticipantRosterSnapshot } from './lib/participantRoster'
+import { createPeerConnectionManager } from './lib/peerConnectionManager'
 import {
   canJoinFromPreview,
   mapPreviewAccessError,
@@ -377,7 +378,7 @@ const previewVideoRef = ref<HTMLVideoElement | null>(null)
 const localVideoRef = ref<HTMLVideoElement | null>(null)
 let localStream: MediaStream | null = null
 
-const peerConnections = new Map<string, RTCPeerConnection>()
+const peerConnections = createPeerConnectionManager<RTCPeerConnection>()
 const remoteVideoElements = new Map<string, HTMLVideoElement>()
 const remoteTiles = ref<Array<{ userId: string; name: string; stream: MediaStream }>>([])
 
@@ -1208,7 +1209,6 @@ function createPeerConnection(peerUserId: string): RTCPeerConnection {
     }
   }
 
-  peerConnections.set(peerUserId, connection)
   return connection
 }
 
@@ -1218,10 +1218,7 @@ async function ensureOffer(peerUserId: string): Promise<void> {
     return
   }
 
-  let connection = peerConnections.get(peerUserId)
-  if (!connection) {
-    connection = createPeerConnection(peerUserId)
-  }
+  const connection = peerConnections.getOrCreate(peerUserId, () => createPeerConnection(peerUserId))
 
   if (!shouldInitiateOffer(peerUserId)) {
     return
@@ -1238,14 +1235,7 @@ async function ensureOffer(peerUserId: string): Promise<void> {
 }
 
 function closePeer(peerUserId: string, notify = true): void {
-  const connection = peerConnections.get(peerUserId)
-  if (connection) {
-    peerConnections.delete(peerUserId)
-    connection.onicecandidate = null
-    connection.ontrack = null
-    connection.onconnectionstatechange = null
-    connection.close()
-  }
+  peerConnections.release(peerUserId)
 
   removeRemoteStream(peerUserId)
 
@@ -1278,7 +1268,7 @@ function syncPeerTopology(): void {
     }
   }
 
-  for (const existingUserId of [...peerConnections.keys()]) {
+  for (const existingUserId of peerConnections.keys()) {
     if (!targetUsers.includes(existingUserId)) {
       closePeer(existingUserId, false)
     }
@@ -1306,10 +1296,7 @@ async function handleCallSignal(message: any): Promise<void> {
     await joinCall(true)
   }
 
-  let connection = peerConnections.get(senderUserId)
-  if (!connection) {
-    connection = createPeerConnection(senderUserId)
-  }
+  const connection = peerConnections.getOrCreate(senderUserId, () => createPeerConnection(senderUserId))
 
   const payload = message.payload || null
   const type = String(message.type || '')
@@ -1390,7 +1377,7 @@ function handleJoinCallClick(): void {
 function callReset(notify = true): void {
   const wasJoined = callJoined.value
 
-  for (const peerId of [...peerConnections.keys()]) {
+  for (const peerId of peerConnections.keys()) {
     closePeer(peerId, false)
   }
 

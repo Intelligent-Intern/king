@@ -23,6 +23,7 @@ What is wired today:
 - chat and roster timestamps are rendered in deterministic locale-independent UTC `HH:MM UTC` format
 - pre-call local media preview is an explicit gate; join is enabled only after preview succeeds, with visible permission/device errors
 - call join/leave lifecycle updates participant call presence immediately from room-scoped signaling and snapshot reconciliation
+- peer connection ownership is managed by a dedicated remote-user-id keyed manager with deterministic release cleanup
 - multi-user room chat over websocket fanout
 - browser video call signaling (`offer`/`answer`/`ice`) with peer tiles
 - responsive shell layout with reduced-motion-safe slide transitions for chat/call stage switching
