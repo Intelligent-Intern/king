@@ -52,7 +52,7 @@
 
 - [x] `#1 Produce a deterministic CVE inventory for Docker/runtime images (CVE-2025-45582, CVE-2024-56433, CVE-2024-2236).`
   done when: CI or local reproducible scan output maps each CVE to exact affected image/package/version and records fixed-target versions.
-- [ ] `#2 Apply highest-priority dependency/base-image updates to remove CVE-2025-45582 and CVE-2024-56433 from release images.`
+- [x] `#2 Apply highest-priority dependency/base-image updates to remove CVE-2025-45582 and CVE-2024-56433 from release images.`
   done when: the affected Dockerfiles/workflows are updated, builds stay green, and rescans show both CVEs no longer present.
 - [ ] `#3 Resolve CVE-2024-2236 for release gate (fix, replace component, or documented non-exploitable path with explicit control).`
   done when: release CI has an enforceable gate for this CVE and the branch contains either a real remediation or a justified, tested fail-closed mitigation.

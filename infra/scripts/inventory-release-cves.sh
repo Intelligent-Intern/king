@@ -142,6 +142,11 @@ if [[ -z "${TRIVY_VERSION}" ]]; then
     exit 1
 fi
 
+TRIVY_DOCKER_RUN_ARGS=(--rm)
+if [[ -S /var/run/docker.sock ]]; then
+    TRIVY_DOCKER_RUN_ARGS+=(-v /var/run/docker.sock:/var/run/docker.sock)
+fi
+
 TMP_DIR="$(mktemp -d)"
 cleanup() {
     rm -rf "${TMP_DIR}"
@@ -169,7 +174,7 @@ for ((i = 0; i < SCAN_COUNT; i++)); do
     NORMALIZED_SCAN_PATH="${TMP_DIR}/scan-${i}.json"
 
     echo "Scanning ${IMAGE} (${PLATFORM}) with ${SCANNER_IMAGE}" >&2
-    docker run --rm "${SCANNER_IMAGE}" image \
+    docker run "${TRIVY_DOCKER_RUN_ARGS[@]}" "${SCANNER_IMAGE}" image \
         --quiet \
         --format json \
         --scanners vuln \

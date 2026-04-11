@@ -69,7 +69,13 @@ RUN printf '%s\n' \
     'extension=/opt/king/package/modules/king.so' \
     > "/etc/php/${PHP_VERSION}/cli/conf.d/zz-king.ini" \
     && php -m | grep -qx 'king' \
-    && PHP_BIN=php /opt/king/package/bin/smoke.sh
+    && PHP_BIN=php /opt/king/package/bin/smoke.sh \
+    # Keep the runtime image immutable and drop packages carrying known CVEs
+    # that are not required after build-time provisioning.
+    && dpkg --remove --force-remove-essential --force-depends \
+        login \
+        passwd \
+        tar
 
 WORKDIR /workspace
 
