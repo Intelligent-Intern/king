@@ -130,10 +130,10 @@ is now living with a channel whose next message might arrive immediately, much
 later, or not at all. The runtime therefore exposes message receipt as its own
 operation.
 
-In the current public surface, pull-style receive is procedural. The
-object-oriented `King\WebSocket\Connection` wrapper currently covers connect,
-send, ping, close, and info inspection, while `king_client_websocket_receive()`
-is the explicit receive path. The OO server-side sibling is now
+In the current public surface, pull-style receive is available on both styles.
+`King\WebSocket\Connection::receive()` is the OO path, and
+`king_client_websocket_receive()` remains the resource-oriented path. The OO
+server-side sibling is
 `King\WebSocket\Server`, which accepts real on-wire HTTP/1 websocket upgrades
 and returns accepted peers as `Connection` objects, plus a live
 `getConnections()` registry for targeted server-owned sends by opaque
@@ -159,7 +159,7 @@ registry entry around.
 ```php
 <?php
 
-$handle = king_client_websocket_connect(
+$handle = new King\WebSocket\Connection(
     'ws://127.0.0.1:9000/realtime',
     ['x-client-id' => 'example-reader'],
     [
@@ -169,10 +169,10 @@ $handle = king_client_websocket_connect(
     ]
 );
 
-$payload = king_client_websocket_receive($handle, 1000);
+$payload = $handle->receive(1000);
 
-if ($payload === false) {
-    throw new RuntimeException(king_client_websocket_get_last_error());
+if ($payload === null) {
+    throw new RuntimeException('no message received before timeout');
 }
 ```
 

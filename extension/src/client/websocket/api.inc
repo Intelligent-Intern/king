@@ -211,6 +211,88 @@ PHP_METHOD(King_WebSocket_Connection, sendBinary)
     }
 }
 
+PHP_METHOD(King_WebSocket_Connection, receive)
+{
+    zend_long timeout_ms = -1;
+    bool timeout_is_null = true;
+    king_ws_state *state;
+    king_ws_message *message;
+    zend_string *payload;
+
+    ZEND_PARSE_PARAMETERS_START(0, 1)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_LONG_OR_NULL(timeout_ms, timeout_is_null)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (timeout_is_null) {
+        timeout_ms = -1;
+    }
+    if (timeout_ms < -1) {
+        king_websocket_set_error(
+            "WebSocket\\Connection::receive() timeout_ms must be -1 or >= 0."
+        );
+        king_websocket_throw_last_error(
+            king_ce_validation_exception,
+            "WebSocket receive timeout validation failed."
+        );
+        RETURN_THROWS();
+    }
+
+    state = king_websocket_object_fetch_state(ZEND_THIS, "WebSocket\\Connection::receive");
+    if (state == NULL) {
+        RETURN_THROWS();
+    }
+
+    message = king_websocket_message_queue_shift(state);
+    if (message != NULL) {
+        payload = message->payload;
+        efree(message);
+        king_set_error("");
+        RETURN_STR(payload);
+    }
+
+    if (state->transport_stream != NULL && !state->closed) {
+        if (
+            king_websocket_pump_transport(
+                state,
+                timeout_ms,
+                "WebSocket\\Connection::receive"
+            ) != SUCCESS
+        ) {
+            king_websocket_throw_last_error(
+                king_ce_ws_connection_error,
+                "Failed to receive the next WebSocket message."
+            );
+            RETURN_THROWS();
+        }
+
+        message = king_websocket_message_queue_shift(state);
+        if (message != NULL) {
+            payload = message->payload;
+            efree(message);
+            king_set_error("");
+            RETURN_STR(payload);
+        }
+    }
+
+    if (
+        (state->state == KING_WS_STATE_OPEN || state->state == KING_WS_STATE_CONNECTING)
+        && !state->closed
+    ) {
+        king_set_error("");
+        RETURN_NULL();
+    }
+
+    king_websocket_set_error(
+        "WebSocket\\Connection::receive() cannot run on a closed WebSocket connection."
+    );
+    king_websocket_throw_last_error(
+        king_ce_ws_closed,
+        "WebSocket connection is closed."
+    );
+    RETURN_THROWS();
+}
+
 PHP_METHOD(King_WebSocket_Connection, ping)
 {
     zend_string *payload_str = NULL;
@@ -690,6 +772,7 @@ const zend_function_entry king_ws_connection_class_methods[] = {
     PHP_ME(King_WebSocket_Connection, __construct, arginfo_class_King_WebSocket_Connection___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
     PHP_ME(King_WebSocket_Connection, send, arginfo_class_King_WebSocket_Connection_send, ZEND_ACC_PUBLIC)
     PHP_ME(King_WebSocket_Connection, sendBinary, arginfo_class_King_WebSocket_Connection_sendBinary, ZEND_ACC_PUBLIC)
+    PHP_ME(King_WebSocket_Connection, receive, arginfo_class_King_WebSocket_Connection_receive, ZEND_ACC_PUBLIC)
     PHP_ME(King_WebSocket_Connection, ping, arginfo_class_King_WebSocket_Connection_ping, ZEND_ACC_PUBLIC)
     PHP_ME(King_WebSocket_Connection, close, arginfo_class_King_WebSocket_Connection_close, ZEND_ACC_PUBLIC)
     PHP_ME(King_WebSocket_Connection, getInfo, arginfo_class_King_WebSocket_Connection_getInfo, ZEND_ACC_PUBLIC)

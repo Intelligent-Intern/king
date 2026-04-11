@@ -2183,6 +2183,7 @@ namespace King\WebSocket {
         public function __construct(string $url, ?array $headers = null, ?array $options = null) {}
         public function send(string $message): void {}
         public function sendBinary(string $payload): void {}
+        public function receive(?int $timeout_ms = null): ?string {}
         public function ping(?string $data = null): void {}
         public function close(int $code = 1000, ?string $reason = null): void {}
         /**
