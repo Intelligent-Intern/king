@@ -184,6 +184,7 @@
           <p v-if="lastInviteCode" class="invite-code">{{ lastInviteCode }}</p>
           <p v-else>Create an invite code for this room.</p>
           <p v-if="createInviteState.error" class="inline-error">{{ createInviteState.error }}</p>
+          <p v-if="copyInviteStatus === 'copied'" class="inline-note">Invite code copied.</p>
           <button class="quiet-btn" :disabled="!lastInviteCode" @click="copyInviteCode">Copy code</button>
         </section>
 
@@ -232,6 +233,7 @@ import {
   restorePersistedSession,
   type SessionIdentity,
 } from './lib/authSession'
+import { copyTextWithFallback } from './lib/copyText'
 import { resolveInviteCodeFromCreatePayload } from './lib/inviteCreate'
 import { resolveRoomIdFromInviteRedeemPayload } from './lib/inviteRedeem'
 import { normalizeRoomCreateName, optimisticRoomId, roomIdCandidateForAttempt } from './lib/roomCreate'
@@ -291,6 +293,7 @@ const redeemInviteState = reactive({
   submitting: false,
   error: '',
 })
+const copyInviteStatus = ref<'idle' | 'copied'>('idle')
 const inviteCodeInput = ref('')
 const lastInviteCode = ref('')
 
@@ -304,6 +307,7 @@ const typingByRoom = reactive<Record<string, string[]>>({})
 const messageInput = ref('')
 const messageListRef = ref<HTMLElement | null>(null)
 let typingDebounce: ReturnType<typeof setTimeout> | null = null
+let copyInviteResetTimer: ReturnType<typeof setTimeout> | null = null
 
 const ws = ref<WebSocket | null>(null)
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -628,6 +632,7 @@ function handleServerEvent(message: any): void {
     lastInviteCode.value = reset.lastInviteCode
     createInviteState.error = ''
     createInviteState.submitting = false
+    resetCopyInviteStatus()
 
     activeRoomId.value = nextRoomId
     callReset(false)
@@ -882,11 +887,30 @@ async function copyInviteCode(): Promise<void> {
     return
   }
 
-  try {
-    await navigator.clipboard.writeText(lastInviteCode.value)
-  } catch {
-    // clipboard can fail on non-secure contexts
+  const copied = await copyTextWithFallback(lastInviteCode.value)
+  if (!copied) {
+    resetCopyInviteStatus()
+    return
   }
+
+  copyInviteStatus.value = 'copied'
+
+  if (copyInviteResetTimer) {
+    clearTimeout(copyInviteResetTimer)
+  }
+
+  copyInviteResetTimer = setTimeout(() => {
+    copyInviteStatus.value = 'idle'
+    copyInviteResetTimer = null
+  }, 1800)
+}
+
+function resetCopyInviteStatus(): void {
+  if (copyInviteResetTimer) {
+    clearTimeout(copyInviteResetTimer)
+    copyInviteResetTimer = null
+  }
+  copyInviteStatus.value = 'idle'
 }
 
 function sendMessage(): void {
@@ -1373,6 +1397,7 @@ function signOut(): void {
   createInviteState.error = ''
   redeemInviteState.submitting = false
   redeemInviteState.error = ''
+  resetCopyInviteStatus()
   inviteCodeInput.value = ''
   lastInviteCode.value = ''
   messageInput.value = ''
@@ -1470,6 +1495,11 @@ onUnmounted(() => {
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
+  }
+
+  if (copyInviteResetTimer) {
+    clearTimeout(copyInviteResetTimer)
+    copyInviteResetTimer = null
   }
 })
 </script>
@@ -1671,6 +1701,12 @@ onUnmounted(() => {
 .inline-error {
   margin: var(--king-space-sm) 0 0;
   color: var(--king-color-danger);
+  font-size: var(--king-font-size-150);
+}
+
+.inline-note {
+  margin: var(--king-space-sm) 0 0;
+  color: var(--king-muted);
   font-size: var(--king-font-size-150);
 }
 

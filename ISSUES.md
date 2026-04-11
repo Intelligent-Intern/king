@@ -92,7 +92,7 @@ Design guardrails for this batch:
   done when: active room can produce an invite code via API and display it in context panel.
 - [x] `#12 Implement invite-code redeem/join flow.`
   done when: valid invite code resolves target room and joins/switches user to that room.
-- [ ] `#13 Implement copy-invite action with graceful clipboard fallback handling.`
+- [x] `#13 Implement copy-invite action with graceful clipboard fallback handling.`
   done when: invite copy works in secure contexts and fails silently/cleanly otherwise.
 - [ ] `#14 Add room participant roster backed by live room snapshots.`
   done when: participant list is sourced from server snapshots and updates in near-real-time.
