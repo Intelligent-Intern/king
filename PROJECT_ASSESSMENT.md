@@ -1,6 +1,6 @@
 # King Project Assessment
 
-> Stand: 2026-04-10
+> Stand: 2026-04-11
 > Scope: verified repo-local v1 state inside this repository
 > This file records what is actually verified now.
 > `README.md` stays product-level.
@@ -43,6 +43,7 @@ The currently verified baseline is:
 - `./infra/scripts/check-config-compatibility-matrix.sh`: passing
 - `./infra/scripts/verify-release-package.sh`: passing
 - `./infra/scripts/container-smoke-matrix.sh --php-versions 8.3`: passing
+- `./infra/scripts/inventory-release-cves.sh --images intelligentintern/king:v1.0.5-beta`: passing
 - `./infra/scripts/soak-runtime.sh asan|ubsan|leak --iterations 1`: passing
 - `./infra/scripts/go-live-readiness.sh`: passing
 - `./infra/scripts/build-profile.sh release|debug|asan|ubsan`: passing
