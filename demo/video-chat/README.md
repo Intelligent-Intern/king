@@ -19,6 +19,7 @@ What is wired today:
 - participant roster is sourced from live `room/snapshot` events with normalized ordering and live snapshot timestamp
 - chat timeline is server-fanout driven with message normalization and room-local dedupe by message id
 - typing indicators are room-scoped, exclude self display, and auto-expire on idle timeout windows
+- chat composer enforces bounded draft length and rejects empty/whitespace payloads before websocket send
 - multi-user room chat over websocket fanout
 - browser video call signaling (`offer`/`answer`/`ice`) with peer tiles
 - responsive shell layout with reduced-motion-safe slide transitions for chat/call stage switching

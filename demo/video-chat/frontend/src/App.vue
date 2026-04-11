@@ -135,11 +135,11 @@
               <input
                 v-model="messageInput"
                 type="text"
-                maxlength="4000"
+                :maxlength="CHAT_COMPOSER_MAX_LENGTH"
                 placeholder="Write a message"
                 @input="onMessageInput"
               />
-              <button type="submit" :disabled="!messageInput.trim()">Send</button>
+              <button type="submit" :disabled="!canSendMessage">Send</button>
             </form>
           </section>
 
@@ -234,6 +234,11 @@ import {
   appendFanoutChatMessage,
   normalizeFanoutChatMessage,
 } from './lib/chatFanout'
+import {
+  CHAT_COMPOSER_MAX_LENGTH,
+  clampComposerDraft,
+  resolveComposerPayload,
+} from './lib/chatComposer'
 import {
   buildSessionFromLogin,
   normalizeDisplayName,
@@ -346,6 +351,7 @@ const remoteTiles = ref<Array<{ userId: string; name: string; stream: MediaStrea
 const isAuthenticated = computed(() => currentSession.value !== null)
 const canSubmitAuth = computed(() => normalizeDisplayName(authForm.name).length > 0)
 const canCreateRoom = computed(() => normalizeRoomCreateName(createRoomName.value).length > 0)
+const canSendMessage = computed(() => resolveComposerPayload(messageInput.value) !== null)
 const sessionView = computed<Session>(() => currentSession.value || {
   userId: '',
   name: '',
@@ -950,14 +956,14 @@ function sendMessage(): void {
     return
   }
 
-  const text = messageInput.value.trim()
-  if (!text) {
+  const payload = resolveComposerPayload(messageInput.value)
+  if (payload === null) {
     return
   }
 
   emit('chat/send', {
     roomId: activeRoomId.value,
-    text,
+    text: payload,
   })
 
   messageInput.value = ''
@@ -966,6 +972,16 @@ function sendMessage(): void {
 
 function onMessageInput(): void {
   if (!authenticatedSession()) {
+    return
+  }
+
+  messageInput.value = clampComposerDraft(messageInput.value)
+  if (resolveComposerPayload(messageInput.value) === null) {
+    emit('typing/stop', { roomId: activeRoomId.value })
+    if (typingDebounce) {
+      clearTimeout(typingDebounce)
+      typingDebounce = null
+    }
     return
   }
 
