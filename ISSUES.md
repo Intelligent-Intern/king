@@ -72,7 +72,7 @@ Design guardrails for this batch:
   done when: the video-chat app uses one responsive shell architecture with explicit breakpoints and no legacy stress-panel fragmentation.
 - [x] `#2 Introduce one shared UI token layer for color, spacing, border, radius, and elevation.`
   done when: components consume design tokens from a single source and remove ad-hoc inline visual constants.
-- [ ] `#3 Normalize typography and control sizing to a consistent enterprise baseline.`
+- [x] `#3 Normalize typography and control sizing to a consistent enterprise baseline.`
   done when: inputs, buttons, headers, and body text follow one coherent scale and alignment contract across views.
 - [ ] `#4 Add reduced-motion-safe slide transitions for stage view switching.`
   done when: chat/call transitions animate cleanly by default and disable motion under `prefers-reduced-motion`.

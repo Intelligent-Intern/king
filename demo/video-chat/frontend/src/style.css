@@ -44,6 +44,27 @@
   --king-size-user-dot: 0.85rem;
   --king-size-presence-dot: 0.7rem;
 
+  /* Typography tokens */
+  --king-font-size-100: 0.8rem;
+  --king-font-size-150: 0.82rem;
+  --king-font-size-200: 0.88rem;
+  --king-font-size-250: 0.9rem;
+  --king-font-size-300: 0.92rem;
+  --king-font-size-400: 1rem;
+  --king-font-size-500: 1.125rem;
+  --king-font-size-600: 1.5rem;
+  --king-font-weight-regular: 400;
+  --king-font-weight-medium: 500;
+  --king-font-weight-semibold: 600;
+  --king-line-height-tight: 1.3;
+  --king-line-height-body: 1.45;
+  --king-line-height-loose: 1.55;
+
+  /* Control tokens */
+  --king-control-height: 2.25rem;
+  --king-control-font-size: var(--king-font-size-200);
+  --king-control-font-weight: var(--king-font-weight-medium);
+
   /* Radius tokens */
   --king-radius-0: 0.5rem;
   --king-radius-1: 0.45rem;
@@ -77,8 +98,8 @@
   --king-shadow-2: var(--king-elevation-2);
 
   font-family: 'IBM Plex Sans', 'Segoe UI Variable Text', 'Segoe UI', 'Noto Sans', sans-serif;
-  line-height: 1.45;
-  font-weight: 400;
+  line-height: var(--king-line-height-body);
+  font-weight: var(--king-font-weight-regular);
   color: var(--king-text);
   background: var(--king-bg);
   font-synthesis: none;

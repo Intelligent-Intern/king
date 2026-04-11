@@ -1214,6 +1214,8 @@ onUnmounted(() => {
 .app-root {
   min-height: 100vh;
   color: var(--king-text);
+  font-size: var(--king-font-size-400);
+  line-height: var(--king-line-height-body);
 }
 
 .auth-screen {
@@ -1234,12 +1236,15 @@ onUnmounted(() => {
 
 .auth-card h1 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--king-font-size-600);
+  line-height: var(--king-line-height-tight);
+  font-weight: var(--king-font-weight-semibold);
 }
 
 .auth-card p {
   margin: var(--king-space-dense) 0 var(--king-space-5);
   color: var(--king-muted);
+  font-size: var(--king-font-size-250);
 }
 
 .auth-form {
@@ -1250,7 +1255,8 @@ onUnmounted(() => {
 .auth-form label {
   display: grid;
   gap: var(--king-space-sm);
-  font-size: 0.92rem;
+  font-size: var(--king-font-size-300);
+  font-weight: var(--king-font-weight-medium);
 }
 
 .auth-form input,
@@ -1259,8 +1265,11 @@ onUnmounted(() => {
   border: var(--king-border-default);
   border-radius: var(--king-radius-1);
   padding: var(--king-space-input-y) var(--king-space-input-x);
+  min-height: var(--king-control-height);
   background: var(--king-color-bg-surface);
   color: var(--king-text);
+  font-size: var(--king-control-font-size);
+  line-height: var(--king-line-height-tight);
 }
 
 .auth-form button,
@@ -1275,7 +1284,14 @@ onUnmounted(() => {
   background: var(--king-surface);
   color: var(--king-text);
   padding: var(--king-space-control-y) var(--king-space-control-x);
+  min-height: var(--king-control-height);
   cursor: pointer;
+  font-size: var(--king-control-font-size);
+  font-weight: var(--king-control-font-weight);
+  line-height: var(--king-line-height-tight);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: transform var(--king-motion-fast) var(--king-motion-ease), border-color var(--king-motion-fast) var(--king-motion-ease), background-color var(--king-motion-fast) var(--king-motion-ease);
 }
 
@@ -1286,7 +1302,7 @@ onUnmounted(() => {
   background: var(--king-accent);
   border-color: var(--king-accent);
   color: var(--king-color-on-accent);
-  font-weight: 600;
+  font-weight: var(--king-font-weight-semibold);
 }
 
 .stage-actions button.active,
@@ -1364,13 +1380,15 @@ onUnmounted(() => {
 .user-chip p {
   margin: var(--king-space-micro) 0 0;
   color: var(--king-muted);
-  font-size: 0.82rem;
+  font-size: var(--king-font-size-150);
 }
 
 .rail-section h2,
 .context-section h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--king-font-size-400);
+  line-height: var(--king-line-height-tight);
+  font-weight: var(--king-font-weight-semibold);
 }
 
 .inline-form {
@@ -1403,7 +1421,7 @@ onUnmounted(() => {
 .room-list li p {
   margin: var(--king-space-xs) 0 0;
   color: var(--king-muted);
-  font-size: 0.82rem;
+  font-size: var(--king-font-size-150);
 }
 
 .stage {
@@ -1423,12 +1441,15 @@ onUnmounted(() => {
 
 .stage-header h2 {
   margin: 0;
+  font-size: var(--king-font-size-500);
+  line-height: var(--king-line-height-tight);
+  font-weight: var(--king-font-weight-semibold);
 }
 
 .stage-header p {
   margin: var(--king-space-xs) 0 0;
   color: var(--king-muted);
-  font-size: 0.9rem;
+  font-size: var(--king-font-size-250);
 }
 
 .stage-actions {
@@ -1477,18 +1498,20 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   gap: var(--king-space-3);
-  font-size: 0.8rem;
+  font-size: var(--king-font-size-100);
+  line-height: var(--king-line-height-tight);
   color: var(--king-muted);
 }
 
 .message p {
   margin: var(--king-space-1) 0 0;
-  line-height: 1.45;
+  font-size: var(--king-font-size-200);
+  line-height: var(--king-line-height-body);
 }
 
 .typing-line {
   color: var(--king-muted);
-  font-size: 0.85rem;
+  font-size: var(--king-font-size-150);
 }
 
 .composer {
@@ -1548,7 +1571,7 @@ onUnmounted(() => {
   padding: var(--king-space-2) var(--king-space-cozy);
   border-top: var(--king-border-default);
   background: var(--king-color-bg-surface);
-  font-size: 0.82rem;
+  font-size: var(--king-font-size-150);
 }
 
 .call-controls {
@@ -1610,7 +1633,7 @@ onUnmounted(() => {
 
 .participant-list p {
   margin: var(--king-space-min) 0 0;
-  font-size: 0.8rem;
+  font-size: var(--king-font-size-100);
 }
 
 .context-section dl {
@@ -1623,7 +1646,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   gap: var(--king-space-2);
-  font-size: 0.88rem;
+  font-size: var(--king-font-size-200);
 }
 
 .context-section dt {
