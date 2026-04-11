@@ -10,7 +10,8 @@ repository while the contract is still being proven.
 The current source, sink, dataset-bridge, serialization/schema bridge,
 checkpoint, execution-backend, control-plane, MCP-host, failure-taxonomy,
 partitioning/backpressure, SQL/pgvector bridge, and MCP service-discovery
-contracts, and OO object-store ingest guidance live in
+contracts, OO object-store ingest guidance, and canonical RAG orchestration
+reference flow helpers live in
 `demo/userland/flow-php/src/StreamingSource.php`,
 `demo/userland/flow-php/src/StreamingSink.php`, and
 `demo/userland/flow-php/src/ObjectStoreDataset.php`, and
@@ -23,7 +24,8 @@ contracts, and OO object-store ingest guidance live in
 `demo/userland/flow-php/src/Partitioning.php`, and
 `demo/userland/flow-php/src/SqlVectorBridge.php`, and
 `demo/userland/flow-php/src/McpServiceDiscovery.php`, and
-`demo/userland/flow-php/src/ObjectStoreIngest.php`.
+`demo/userland/flow-php/src/ObjectStoreIngest.php`, and
+`demo/userland/flow-php/src/RagOrchestrationReference.php`.
 
 Current helpers:
 
@@ -94,6 +96,9 @@ Current helpers:
 - `King\Flow\McpServiceDiscovery`
 - `King\Flow\ObjectStoreIngestor`
 - `King\Flow\ObjectStoreIngestUpload`
+- `King\Flow\RagReferencePlan`
+- `King\Flow\RagReferenceRun`
+- `King\Flow\RagOrchestrationReference`
 
 The contract is intentionally small:
 
@@ -171,6 +176,10 @@ The contract is intentionally small:
   streamed multipart/resumable uploads, and viewer delivery reads through the
   same `King\ObjectStore` facade instead of splitting those operations across
   ad-hoc procedural utility code
+- publish one canonical multi-service RAG orchestration flow that composes
+  chat + ingest + parse + embed + retrieve + worker lifecycle through
+  `RagOrchestrationReference`, `OrchestratorExecutionBackend`, and the same
+  service-discovery and object-store helper contracts
 
 The current repo-local end-to-end proof is
 `extension/tests/621-flow-php-etl-e2e-local-remote-contract.phpt`. It composes
@@ -187,3 +196,6 @@ The current repo-local MCP discovery and failover contract is proven by
 
 The current repo-local OO object-store ingest contract is proven by
 `extension/tests/673-flow-php-oo-object-store-ingest-contract.phpt`.
+
+The current repo-local canonical RAG orchestration reference flow is proven by
+`extension/tests/674-flow-php-rag-orchestration-reference-contract.phpt`.
