@@ -1,7 +1,7 @@
 {
   "name": "king-video-chat",
   "version": "1.0.0",
-  "description": "King IIBIN WebSocket chat and stress demo",
+  "description": "King IIBIN video workspace demo",
   "type": "module",
   "scripts": {
     "dev": "vite",

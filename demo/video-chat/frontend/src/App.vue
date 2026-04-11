@@ -1292,7 +1292,8 @@ onUnmounted(() => {
 .workspace {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 18rem minmax(0, 1fr) 19rem;
+  grid-template-areas: 'rail stage context';
+  grid-template-columns: clamp(15.5rem, 20vw, 18rem) minmax(0, 1fr) clamp(16rem, 22vw, 19rem);
   gap: 1rem;
   padding: 1rem;
 }
@@ -1304,6 +1305,19 @@ onUnmounted(() => {
   border: 1px solid var(--king-border);
   border-radius: 0.75rem;
   box-shadow: var(--king-shadow-1);
+  min-height: 0;
+}
+
+.rail {
+  grid-area: rail;
+}
+
+.stage {
+  grid-area: stage;
+}
+
+.context {
+  grid-area: context;
 }
 
 .rail,
@@ -1312,6 +1326,7 @@ onUnmounted(() => {
   display: grid;
   align-content: start;
   gap: 1rem;
+  overflow: auto;
 }
 
 .rail-header {
@@ -1625,35 +1640,40 @@ onUnmounted(() => {
   }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1200px) {
   .workspace {
-    grid-template-columns: 16rem minmax(0, 1fr);
+    grid-template-areas:
+      'rail stage'
+      'context context';
+    grid-template-columns: minmax(15rem, 16.5rem) minmax(0, 1fr);
   }
 
   .context {
-    grid-column: 1 / -1;
-    display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .workspace {
+    grid-template-areas:
+      'rail'
+      'stage'
+      'context';
     grid-template-columns: 1fr;
     padding: 0.75rem;
+    gap: 0.75rem;
   }
 
   .rail {
-    order: 0;
+    overflow: visible;
   }
 
   .stage {
-    order: 1;
     min-height: 70vh;
   }
 
   .context {
-    order: 2;
+    overflow: visible;
     grid-template-columns: 1fr;
   }
 

@@ -20,6 +20,6 @@ if (import.meta.env.DEV) {
 
 app.mount('#app')
 
-console.log('🚀 King IIBIN WebSocket Demo initialized!')
-console.log('📱 Features: Real-time messaging, stress testing, live metrics')
-console.log('⚡ Powered by IIBIN binary protocol')
+console.log('King video workspace initialized.')
+console.log('Features: room collaboration, multi-user chat, and video calling.')
+console.log('Powered by IIBIN binary protocol.')

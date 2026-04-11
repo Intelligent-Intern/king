@@ -68,7 +68,7 @@ Design guardrails for this batch:
 - visual language: clean enterprise blend (IBM Carbon x Fiori x Microsoft style)
 - responsive first: mobile, tablet, and desktop must all remain usable
 
-- [ ] `#1 Build a canonical workspace shell layout (rail + stage + context) with deterministic breakpoints.`
+- [x] `#1 Build a canonical workspace shell layout (rail + stage + context) with deterministic breakpoints.`
   done when: the video-chat app uses one responsive shell architecture with explicit breakpoints and no legacy stress-panel fragmentation.
 - [ ] `#2 Introduce one shared UI token layer for color, spacing, border, radius, and elevation.`
   done when: components consume design tokens from a single source and remove ad-hoc inline visual constants.
