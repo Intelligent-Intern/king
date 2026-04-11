@@ -11,7 +11,7 @@ What is wired today:
 - invite-code create/redeem flow per room
 - multi-user room chat over websocket fanout
 - browser video call signaling (`offer`/`answer`/`ice`) with peer tiles
-- responsive shell layout with slide transitions for chat/call stage switching
+- responsive shell layout with reduced-motion-safe slide transitions for chat/call stage switching
 - shared UI token layer in `frontend/src/style.css` for color, spacing, border, radius, and elevation
 - normalized typography and control sizing (inputs/buttons/headlines/body text) from one baseline scale
 

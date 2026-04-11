@@ -1655,22 +1655,42 @@ onUnmounted(() => {
 
 .slide-panel-enter-active,
 .slide-panel-leave-active {
-  transition: transform var(--king-motion-standard) var(--king-motion-ease), opacity var(--king-motion-standard) var(--king-motion-ease);
+  transition:
+    transform var(--king-motion-stage-duration) var(--king-motion-stage-ease),
+    opacity var(--king-motion-stage-duration) var(--king-motion-stage-ease);
+  will-change: transform, opacity;
 }
 
 .slide-panel-enter-from {
-  opacity: 0;
-  transform: translateX(14px);
+  opacity: var(--king-motion-stage-fade-start);
+  transform: translateX(var(--king-motion-stage-shift));
+}
+
+.slide-panel-enter-to,
+.slide-panel-leave-from {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .slide-panel-leave-to {
-  opacity: 0;
-  transform: translateX(-14px);
+  opacity: var(--king-motion-stage-fade-start);
+  transform: translateX(calc(var(--king-motion-stage-shift) * -1));
 }
 
 @media (prefers-reduced-motion: reduce) {
   .slide-panel-enter-active,
-  .slide-panel-leave-active,
+  .slide-panel-leave-active {
+    transition: none !important;
+  }
+
+  .slide-panel-enter-from,
+  .slide-panel-enter-to,
+  .slide-panel-leave-from,
+  .slide-panel-leave-to {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
   button {
     transition: none !important;
   }

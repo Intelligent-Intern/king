@@ -74,7 +74,7 @@ Design guardrails for this batch:
   done when: components consume design tokens from a single source and remove ad-hoc inline visual constants.
 - [x] `#3 Normalize typography and control sizing to a consistent enterprise baseline.`
   done when: inputs, buttons, headers, and body text follow one coherent scale and alignment contract across views.
-- [ ] `#4 Add reduced-motion-safe slide transitions for stage view switching.`
+- [x] `#4 Add reduced-motion-safe slide transitions for stage view switching.`
   done when: chat/call transitions animate cleanly by default and disable motion under `prefers-reduced-motion`.
 - [ ] `#5 Implement login entry with persisted local session identity.`
   done when: a user must sign in with display name before workspace access and session identity survives reload.

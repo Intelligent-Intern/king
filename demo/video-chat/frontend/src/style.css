@@ -85,7 +85,11 @@
   /* Motion tokens */
   --king-motion-fast: 0.2s;
   --king-motion-standard: 0.22s;
+  --king-motion-stage-duration: 0.24s;
+  --king-motion-stage-shift: 1rem;
+  --king-motion-stage-fade-start: 0;
   --king-motion-ease: ease;
+  --king-motion-stage-ease: cubic-bezier(0.2, 0, 0, 1);
 
   /* Backward-compatible aliases */
   --king-bg: var(--king-color-bg-canvas);
