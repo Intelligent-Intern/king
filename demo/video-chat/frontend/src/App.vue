@@ -261,6 +261,7 @@ import {
   clampComposerDraft,
   resolveComposerPayload,
 } from './lib/chatComposer'
+import { normalizeInboundIceCandidate } from './lib/iceCandidate'
 import {
   buildSessionFromLogin,
   normalizeDisplayName,
@@ -1327,10 +1328,15 @@ async function handleCallSignal(message: any): Promise<void> {
   }
 
   if (type === 'call/ice') {
-    if (!payload) {
+    const candidate = normalizeInboundIceCandidate(payload)
+    if (!candidate) {
       return
     }
-    await connection.addIceCandidate(new RTCIceCandidate(payload))
+    try {
+      await connection.addIceCandidate(new RTCIceCandidate(candidate))
+    } catch {
+      // ignore malformed/out-of-order candidate application failures
+    }
     return
   }
 

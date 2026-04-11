@@ -10,7 +10,7 @@ export interface InboundCallRoutingInput {
 }
 
 export function requiresDirectCallTarget(type: string): boolean {
-  return type === 'call/offer' || type === 'call/answer'
+  return type === 'call/offer' || type === 'call/answer' || type === 'call/ice'
 }
 
 export function shouldAcceptInboundCallSignal(input: InboundCallRoutingInput): boolean {

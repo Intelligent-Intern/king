@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { requiresDirectCallTarget, shouldAcceptInboundCallSignal } from './callNegotiationRouting'
 
 describe('callNegotiationRouting helpers', () => {
-  it('marks offer/answer as strictly targeted negotiation signals', () => {
+  it('marks offer/answer/ice as strictly targeted negotiation signals', () => {
     expect(requiresDirectCallTarget('call/offer')).toBe(true)
     expect(requiresDirectCallTarget('call/answer')).toBe(true)
-    expect(requiresDirectCallTarget('call/ice')).toBe(false)
+    expect(requiresDirectCallTarget('call/ice')).toBe(true)
     expect(requiresDirectCallTarget('call/hangup')).toBe(false)
   })
 
@@ -58,7 +58,7 @@ describe('callNegotiationRouting helpers', () => {
     })).toBe(false)
   })
 
-  it('allows untargeted ICE/hangup signals for active room participants', () => {
+  it('requires targeted ice but allows untargeted hangup for active room participants', () => {
     expect(shouldAcceptInboundCallSignal({
       type: 'call/ice',
       roomId: 'lobby',
@@ -66,6 +66,15 @@ describe('callNegotiationRouting helpers', () => {
       senderUserId: 'u-2',
       currentUserId: 'u-1',
       targetUserId: '',
+    })).toBe(false)
+
+    expect(shouldAcceptInboundCallSignal({
+      type: 'call/ice',
+      roomId: 'lobby',
+      activeRoomId: 'lobby',
+      senderUserId: 'u-2',
+      currentUserId: 'u-1',
+      targetUserId: 'u-1',
     })).toBe(true)
 
     expect(shouldAcceptInboundCallSignal({

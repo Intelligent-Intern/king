@@ -452,7 +452,7 @@ function handleClientMessage(socket, message) {
 
   if (type === 'call/offer' || type === 'call/answer' || type === 'call/ice' || type === 'call/hangup') {
     const targetUserId = typeof message.targetUserId === 'string' ? message.targetUserId.trim() : ''
-    const requiresTarget = type === 'call/offer' || type === 'call/answer'
+    const requiresTarget = type === 'call/offer' || type === 'call/answer' || type === 'call/ice'
 
     if (requiresTarget && !targetUserId) {
       send(socket, {

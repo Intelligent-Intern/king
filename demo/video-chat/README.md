@@ -25,6 +25,7 @@ What is wired today:
 - call join/leave lifecycle updates participant call presence immediately from room-scoped signaling and snapshot reconciliation
 - peer connection ownership is managed by a dedicated remote-user-id keyed manager with deterministic release cleanup
 - offer/answer negotiation is enforced as targeted peer-to-peer signaling (no broadcast fallback) for multi-peer rooms
+- ICE candidate forwarding is targeted per peer and candidate payloads are normalized before safe client-side apply
 - multi-user room chat over websocket fanout
 - browser video call signaling (`offer`/`answer`/`ice`) with peer tiles
 - responsive shell layout with reduced-motion-safe slide transitions for chat/call stage switching

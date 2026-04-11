@@ -112,7 +112,7 @@ Design guardrails for this batch:
   done when: each remote participant has an isolated RTCPeerConnection lifecycle with clean map ownership.
 - [x] `#22 Implement targeted offer/answer signaling path per peer.`
   done when: offers and answers are routed to intended peer ids and support multi-peer room negotiation.
-- [ ] `#23 Implement targeted ICE candidate forwarding per peer.`
+- [x] `#23 Implement targeted ICE candidate forwarding per peer.`
   done when: ICE candidates route to correct remote peer and are applied safely on receiving side.
 - [ ] `#24 Bind remote tracks to dynamic call tiles with safe attach/detach.`
   done when: remote streams appear/disappear with participant lifecycle and no stale tile remnants.
