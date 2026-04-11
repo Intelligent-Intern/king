@@ -80,6 +80,14 @@ The object-oriented mirror is `King\MCP`. Its methods are `__construct()`,
 The important point is that the OO and procedural paths are mirrors of one
 runtime, not separate protocol implementations.
 
+For server-side MCP hosting in this repository, there is now also a repo-local
+OO helper surface under
+[`../demo/userland/flow-php/src/McpHost.php`](../demo/userland/flow-php/src/McpHost.php):
+`King\Flow\McpHost`, `McpHostRequest`, `McpHostResponse`, and
+`McpHostServeResult`. That host contract is intentionally documented as
+repo-local userland integration code, not a claim that the core extension now
+exports a native server-host API class.
+
 ## The Connection Model
 
 Everything begins with a remote peer connection. `king_mcp_connect()` and
