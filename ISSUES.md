@@ -118,7 +118,7 @@ Design guardrails for this batch:
   done when: remote streams appear/disappear with participant lifecycle and no stale tile remnants.
 - [x] `#25 Implement mic toggle via track state without renegotiation churn.`
   done when: microphone enable/disable flips local track state and propagates expected call behavior.
-- [ ] `#26 Implement camera toggle via track state without call teardown.`
+- [x] `#26 Implement camera toggle via track state without call teardown.`
   done when: camera enable/disable flips local video track state while preserving active peer connections.
 - [ ] `#27 Implement full call teardown on room-switch/sign-out/unmount boundaries.`
   done when: all peer connections/media tracks close deterministically on boundary transitions.

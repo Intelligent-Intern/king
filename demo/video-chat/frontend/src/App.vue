@@ -1479,7 +1479,7 @@ function toggleCamera(): void {
   }
 
   isCameraEnabled.value = !isCameraEnabled.value
-  applyTrackState()
+  setTrackKindEnabled(localStream, 'video', isCameraEnabled.value)
 }
 
 function stopLocalStream(): void {

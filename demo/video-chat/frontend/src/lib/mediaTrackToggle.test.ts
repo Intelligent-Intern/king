@@ -32,6 +32,18 @@ describe('mediaTrackToggle helpers', () => {
     expect(videoTracks.map((track) => track.enabled)).toEqual([true])
   })
 
+  it('toggles only video tracks for camera updates', () => {
+    const audioTracks = [{ enabled: true }]
+    const videoTracks = [{ enabled: true }, { enabled: true }]
+    const stream = makeStream(audioTracks, videoTracks)
+
+    const changed = setTrackKindEnabled(stream, 'video', false)
+
+    expect(changed).toBe(2)
+    expect(audioTracks.map((track) => track.enabled)).toEqual([true])
+    expect(videoTracks.map((track) => track.enabled)).toEqual([false, false])
+  })
+
   it('applies both audio and video preferences in one pass', () => {
     const audioTracks = [{ enabled: true }]
     const videoTracks = [{ enabled: true }, { enabled: true }]

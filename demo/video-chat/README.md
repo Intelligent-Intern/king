@@ -28,6 +28,7 @@ What is wired today:
 - ICE candidate forwarding is targeted per peer and candidate payloads are normalized before safe client-side apply
 - remote track tiles now attach/detach safely via lifecycle watchers and participant-based pruning to avoid stale remnants
 - microphone toggles now mutate only local audio-track enabled state in place (no renegotiation churn)
+- camera toggles now mutate only local video-track enabled state in place while preserving active peer connections
 - multi-user room chat over websocket fanout
 - browser video call signaling (`offer`/`answer`/`ice`) with peer tiles
 - responsive shell layout with reduced-motion-safe slide transitions for chat/call stage switching
