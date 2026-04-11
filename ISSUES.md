@@ -126,7 +126,7 @@ Design guardrails for this batch:
   done when: connection loss triggers bounded reconnect attempts and restores room/session state on recovery.
 - [x] `#29 Add local demo backend contract for room/invite/presence/chat/call signaling.`
   done when: `dev-backend.mjs` exposes health/API/ws flows that satisfy current frontend contracts.
-- [ ] `#30 Add verification and docs closure for the new video-call stack.`
+- [x] `#30 Add verification and docs closure for the new video-call stack.`
   done when: build passes, smoke checks are documented, and README startup/runtime boundaries are updated honestly.
 
 ## Notes

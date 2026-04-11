@@ -41,9 +41,11 @@ Current boundaries:
 
 - demo-local signaling backend (`backend/dev-backend.mjs`)
 - login/user directory is persisted in SQLite (`KING_DEMO_DB_PATH`)
+- websocket signaling identity is query-param based (`userId`, `name`, `color`, `room`) and not a hardened authn/authz model
 - no durable room/message persistence across backend restart
 - no TURN relay setup (STUN-only by default)
 - no production moderation/audit policy
+- frontend runtime proxy may emit Node deprecation warnings from transitive proxy dependencies; behavior remains functional
 
 ## Repeated + Nested Frame Example
 
@@ -104,6 +106,24 @@ Useful commands:
 - `cd demo/video-chat/frontend && npm run test`
 - `cd demo/video-chat/backend && npm run start`
 - `cd demo/video-chat/backend && npm run test`
+- `cd demo/video-chat && ./scripts/smoke.sh`
+
+## Verification Closure
+
+Release-candidate smoke for this demo stack:
+
+```bash
+cd demo/video-chat
+./scripts/smoke.sh
+```
+
+Smoke runner scope (`scripts/smoke.sh`):
+
+- frontend type-check
+- frontend tests
+- frontend production build
+- backend contract test (`backend/contract.test.mjs`) for health/API/ws room/presence/chat/call flows
+- backend syntax check
 
 ## Docker Compose (Frontend + Backend)
 
