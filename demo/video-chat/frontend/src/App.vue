@@ -283,6 +283,7 @@ let typingDebounce: ReturnType<typeof setTimeout> | null = null
 const ws = ref<WebSocket | null>(null)
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let reconnectAttempt = 0
+let reconnectSuppressed = false
 
 const callJoined = ref(false)
 const callStatus = ref<'idle' | 'preparing' | 'live' | 'error'>('idle')
@@ -457,6 +458,8 @@ function connectSocket(): void {
     return
   }
 
+  reconnectSuppressed = false
+
   if (ws.value) {
     ws.value.close()
     ws.value = null
@@ -485,7 +488,11 @@ function connectSocket(): void {
   }
 
   socket.onclose = () => {
+    ws.value = null
     connectionState.value = 'offline'
+    if (reconnectSuppressed) {
+      return
+    }
     scheduleReconnect()
   }
 
@@ -495,7 +502,7 @@ function connectSocket(): void {
 }
 
 function scheduleReconnect(): void {
-  if (!currentSession.value) {
+  if (!currentSession.value || reconnectSuppressed) {
     return
   }
 
@@ -1136,18 +1143,55 @@ async function signIn(): Promise<void> {
 
 function signOut(): void {
   authState.error = ''
+  authState.submitting = false
+  reconnectSuppressed = true
+
+  if (typingDebounce) {
+    clearTimeout(typingDebounce)
+    typingDebounce = null
+  }
+
+  emit('typing/stop', { roomId: activeRoomId.value })
   callReset(true)
   stopLocalStream()
 
   if (ws.value) {
-    ws.value.close()
+    const socket = ws.value
     ws.value = null
+    socket.close()
   }
 
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
   }
+
+  reconnectAttempt = 0
+  activeTab.value = 'chat'
+  createRoomName.value = ''
+  inviteCodeInput.value = ''
+  lastInviteCode.value = ''
+  messageInput.value = ''
+  isMicEnabled.value = true
+  isCameraEnabled.value = true
+  activeRoomId.value = 'lobby'
+  rooms.value = []
+
+  for (const roomId of Object.keys(messagesByRoom)) {
+    delete messagesByRoom[roomId]
+  }
+
+  for (const roomId of Object.keys(participantsByRoom)) {
+    delete participantsByRoom[roomId]
+  }
+
+  for (const roomId of Object.keys(typingByRoom)) {
+    delete typingByRoom[roomId]
+  }
+
+  authForm.name = ''
+  authForm.color = DEFAULT_ACCENT_COLOR
+  syncLocationRoom('lobby')
 
   currentSession.value = null
   persistSession()
@@ -1163,9 +1207,11 @@ function formatTime(value: number): string {
 
 watch(isAuthenticated, (value) => {
   if (!value) {
+    reconnectSuppressed = true
     return
   }
 
+  reconnectSuppressed = false
   const urlRoom = normalizeRoomId(new URLSearchParams(window.location.search).get('room') || 'lobby')
   activeRoomId.value = urlRoom
   ensureRoomState(urlRoom)
@@ -1188,6 +1234,7 @@ onMounted(async () => {
   if (currentSession.value) {
     authForm.name = currentSession.value.name
     authForm.color = currentSession.value.color
+    reconnectSuppressed = false
     connectSocket()
     await refreshRooms()
   }
@@ -1200,6 +1247,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  reconnectSuppressed = true
   callReset(false)
   stopLocalStream()
 
@@ -1209,10 +1257,12 @@ onUnmounted(() => {
 
   if (typingDebounce) {
     clearTimeout(typingDebounce)
+    typingDebounce = null
   }
 
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
+    reconnectTimer = null
   }
 })
 </script>

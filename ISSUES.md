@@ -78,7 +78,7 @@ Design guardrails for this batch:
   done when: chat/call transitions animate cleanly by default and disable motion under `prefers-reduced-motion`.
 - [x] `#5 Implement login entry with persisted local session identity.`
   done when: a user must sign in with display name before workspace access and session identity survives reload.
-- [ ] `#6 Add explicit sign-out lifecycle with full connection and call cleanup.`
+- [x] `#6 Add explicit sign-out lifecycle with full connection and call cleanup.`
   done when: sign-out reliably tears down websocket/media state and returns to unauthenticated entry.
 - [ ] `#7 Enforce authenticated workspace gating in the UI flow.`
   done when: room/chat/call surfaces are not reachable before successful sign-in state.

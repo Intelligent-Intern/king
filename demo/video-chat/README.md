@@ -7,6 +7,7 @@ video calls. The frontend and backend transport now bind to
 What is wired today:
 
 - required login surface (display name) with persisted local session identity across reloads
+- explicit sign-out lifecycle that tears down websocket reconnect loops, call peers, and local media tracks
 - room directory with create/join/switch behavior
 - invite-code create/redeem flow per room
 - multi-user room chat over websocket fanout
