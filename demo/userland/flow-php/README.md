@@ -8,8 +8,8 @@ public package layout. The point is to keep real userland adapter code in the
 repository while the contract is still being proven.
 
 The current source, sink, dataset-bridge, serialization/schema bridge,
-checkpoint, execution-backend, control-plane, MCP-host, failure-taxonomy, and
-partitioning/backpressure contracts live in
+checkpoint, execution-backend, control-plane, MCP-host, failure-taxonomy,
+partitioning/backpressure, and SQL/pgvector bridge contracts live in
 `demo/userland/flow-php/src/StreamingSource.php`,
 `demo/userland/flow-php/src/StreamingSink.php`, and
 `demo/userland/flow-php/src/ObjectStoreDataset.php`, and
@@ -19,7 +19,8 @@ partitioning/backpressure contracts live in
 `demo/userland/flow-php/src/ControlPlane.php`, and
 `demo/userland/flow-php/src/McpHost.php`, and
 `demo/userland/flow-php/src/FailureTaxonomy.php`, and
-`demo/userland/flow-php/src/Partitioning.php`.
+`demo/userland/flow-php/src/Partitioning.php`, and
+`demo/userland/flow-php/src/SqlVectorBridge.php`.
 
 Current helpers:
 
@@ -77,6 +78,12 @@ Current helpers:
 - `King\Flow\PartitionBackpressureWindow`
 - `King\Flow\PartitionDispatchDecision`
 - `King\Flow\PartitionMergeResult`
+- `King\Flow\SqlVectorBridgeTransport`
+- `King\Flow\McpResourceSqlVectorTransport`
+- `King\Flow\SqlVectorSearchRequest`
+- `King\Flow\SqlVectorMatch`
+- `King\Flow\SqlVectorSearchResponse`
+- `King\Flow\McpSqlVectorBridge`
 
 The contract is intentionally small:
 
@@ -143,6 +150,9 @@ The contract is intentionally small:
   boundary with `partition_id` plus `batch_id`, merge completed results only
   in honest `partition_then_batch` order, and gate new fan-out through live
   queue plus active-partition backpressure windows
+- keep SQL execution and pgvector indexes outside native King while exposing
+  one typed MCP bridge contract (`king.sql_vector.query.v1` ->
+  `king.sql_vector.result.v1`) for similarity-search request and result flow
 
 The current repo-local end-to-end proof is
 `extension/tests/621-flow-php-etl-e2e-local-remote-contract.phpt`. It composes
@@ -150,3 +160,6 @@ the source, sink, checkpoint, partitioning, dataset, serialization, and
 execution-backend helpers into one object-store-backed NDJSON pipeline, proves
 local OTLP export on the controller-owned path, and separately proves real
 `remote_peer` execution through the captured durable handler boundary.
+
+The current repo-local SQL/pgvector non-native bridge contract is proven by
+`extension/tests/671-flow-php-sql-pgvector-bridge-contract.phpt`.
