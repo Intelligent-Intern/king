@@ -1,0 +1,45 @@
+{
+  "name": "@intelligentintern/iibin",
+  "version": "1.0.6-beta",
+  "description": "IIBIN JavaScript/TypeScript protocol library from King",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Intelligent-Intern/king.git",
+    "directory": "packages/iibin"
+  },
+  "bugs": {
+    "url": "https://github.com/Intelligent-Intern/king/issues"
+  },
+  "homepage": "https://github.com/Intelligent-Intern/king/tree/main/packages/iibin",
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3"
+  }
+}
