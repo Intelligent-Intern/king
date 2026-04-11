@@ -76,7 +76,7 @@ Design guardrails for this batch:
   done when: inputs, buttons, headers, and body text follow one coherent scale and alignment contract across views.
 - [x] `#4 Add reduced-motion-safe slide transitions for stage view switching.`
   done when: chat/call transitions animate cleanly by default and disable motion under `prefers-reduced-motion`.
-- [ ] `#5 Implement login entry with persisted local session identity.`
+- [x] `#5 Implement login entry with persisted local session identity.`
   done when: a user must sign in with display name before workspace access and session identity survives reload.
 - [ ] `#6 Add explicit sign-out lifecycle with full connection and call cleanup.`
   done when: sign-out reliably tears down websocket/media state and returns to unauthenticated entry.

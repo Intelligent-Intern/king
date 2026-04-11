@@ -22,7 +22,10 @@
             <input v-model="authForm.color" type="color" />
           </label>
 
-          <button type="submit">Continue</button>
+          <p v-if="authState.error" class="auth-error">{{ authState.error }}</p>
+          <button type="submit" :disabled="authState.submitting || !canSubmitAuth">
+            {{ authState.submitting ? 'Signing in...' : 'Continue' }}
+          </button>
         </form>
       </div>
     </section>
@@ -209,12 +212,15 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { IIBINDecoder, IIBINEncoder, MessageType } from '@intelligentintern/iibin'
+import {
+  buildSessionFromLogin,
+  normalizeDisplayName,
+  persistSessionIdentity,
+  restorePersistedSession,
+  type SessionIdentity,
+} from './lib/authSession'
 
-interface Session {
-  userId: string
-  name: string
-  color: string
-}
+type Session = SessionIdentity
 
 interface Room {
   id: string
@@ -243,7 +249,6 @@ interface ChatMessage {
 
 type ConnectionState = 'offline' | 'connecting' | 'online' | 'reconnecting'
 
-const SESSION_STORAGE_KEY = 'king.video.chat.session.v2'
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
 const wireEncoder = new IIBINEncoder()
 const DEFAULT_ACCENT_COLOR = resolveCssAccentColor()
@@ -251,6 +256,10 @@ const DEFAULT_ACCENT_COLOR = resolveCssAccentColor()
 const authForm = reactive({
   name: '',
   color: DEFAULT_ACCENT_COLOR,
+})
+const authState = reactive({
+  submitting: false,
+  error: '',
 })
 
 const currentSession = ref<Session | null>(restoreSession())
@@ -289,6 +298,7 @@ const remoteVideoElements = new Map<string, HTMLVideoElement>()
 const remoteTiles = ref<Array<{ userId: string; name: string; stream: MediaStream }>>([])
 
 const isAuthenticated = computed(() => currentSession.value !== null)
+const canSubmitAuth = computed(() => normalizeDisplayName(authForm.name).length > 0)
 const sessionView = computed<Session>(() => currentSession.value || {
   userId: '',
   name: '',
@@ -317,28 +327,7 @@ function restoreSession(): Session | null {
     return null
   }
 
-  try {
-    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY)
-    if (!raw) {
-      return null
-    }
-    const parsed = JSON.parse(raw)
-    if (
-      typeof parsed?.userId === 'string'
-      && typeof parsed?.name === 'string'
-      && typeof parsed?.color === 'string'
-    ) {
-      return {
-        userId: parsed.userId,
-        name: parsed.name,
-        color: parsed.color,
-      }
-    }
-  } catch {
-    return null
-  }
-
-  return null
+  return restorePersistedSession(window.localStorage)
 }
 
 function resolveCssAccentColor(): string {
@@ -358,12 +347,7 @@ function persistSession(): void {
     return
   }
 
-  if (!currentSession.value) {
-    window.localStorage.removeItem(SESSION_STORAGE_KEY)
-    return
-  }
-
-  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(currentSession.value))
+  persistSessionIdentity(window.localStorage, currentSession.value)
 }
 
 function normalizeRoomId(value: string): string {
@@ -1095,10 +1079,15 @@ function syncLocationRoom(roomId: string): void {
 }
 
 async function signIn(): Promise<void> {
-  const name = authForm.name.trim()
+  const name = normalizeDisplayName(authForm.name)
+  authForm.name = name
+  authState.error = ''
   if (!name) {
+    authState.error = 'Display name is required.'
     return
   }
+
+  authState.submitting = true
 
   try {
     const response = await fetch('/api/auth/login', {
@@ -1111,24 +1100,42 @@ async function signIn(): Promise<void> {
       }),
     })
 
-    if (!response.ok) {
-      return
+    if (response.ok) {
+      const payload = await response.json()
+      currentSession.value = buildSessionFromLogin(payload, {
+        userId: currentSession.value?.userId || null,
+        name,
+        color: authForm.color,
+      })
+    } else {
+      currentSession.value = buildSessionFromLogin(null, {
+        userId: currentSession.value?.userId || null,
+        name,
+        color: authForm.color,
+      })
     }
-
-    const payload = await response.json()
-    currentSession.value = {
-      userId: String(payload.session?.userId || `u-${crypto.randomUUID().slice(0, 8)}`),
-      name: String(payload.session?.name || name),
-      color: String(payload.session?.color || authForm.color),
-    }
-
-    persistSession()
   } catch {
-    // ignore auth API failures in demo mode
+    currentSession.value = buildSessionFromLogin(null, {
+      userId: currentSession.value?.userId || null,
+      name,
+      color: authForm.color,
+    })
+  } finally {
+    authState.submitting = false
   }
+
+  if (!currentSession.value) {
+    authState.error = 'Sign-in failed. Please retry.'
+    return
+  }
+
+  authForm.name = currentSession.value.name
+  authForm.color = currentSession.value.color
+  persistSession()
 }
 
 function signOut(): void {
+  authState.error = ''
   callReset(true)
   stopLocalStream()
 
@@ -1250,6 +1257,12 @@ onUnmounted(() => {
 .auth-form {
   display: grid;
   gap: var(--king-space-panel);
+}
+
+.auth-error {
+  margin: 0;
+  color: var(--king-color-danger);
+  font-size: var(--king-font-size-200);
 }
 
 .auth-form label {

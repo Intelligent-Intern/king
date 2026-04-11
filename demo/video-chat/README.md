@@ -6,7 +6,7 @@ video calls. The frontend and backend transport now bind to
 
 What is wired today:
 
-- login surface with persisted local session identity
+- required login surface (display name) with persisted local session identity across reloads
 - room directory with create/join/switch behavior
 - invite-code create/redeem flow per room
 - multi-user room chat over websocket fanout
