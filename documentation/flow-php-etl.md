@@ -90,6 +90,9 @@ Those boundaries include:
 - SQL/vector retrieval bridges that keep SQL engines and pgvector indexes
   outside native King while using one typed MCP request/response contract for
   search traffic
+- service-discovery adapters that resolve MCP-backed retrieval, embedding, and
+  document services through Semantic-DNS discover/route primitives with an
+  explicit failover order
 
 For execution specifically, Flow PHP-style transforms that run on workers or
 remote peers follow the same rule already documented for the pipeline
@@ -369,6 +372,42 @@ The current PHPT proof covers request/response shape and fail-closed schema
 validation:
 
 - `671-flow-php-sql-pgvector-bridge-contract.phpt`
+
+## Repo-Local MCP Service Discovery And Failover Contract
+
+The repository now also carries one real repo-local MCP service-discovery
+helper under
+[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`../demo/userland/flow-php/src/McpServiceDiscovery.php`](../demo/userland/flow-php/src/McpServiceDiscovery.php).
+
+This piece exists because MCP client adapters and host lifecycle alone are not
+enough for multi-node app services. Real retrieval, embedding, and document
+pipelines still need one explicit way to resolve which MCP node to hit first
+and how to fail over when that node fails.
+
+The current contract is explicit and role-oriented:
+
+- `McpServiceDiscovery` maps logical roles (`retrieval`, `embedding`,
+  `document`) to service-name and service-type pairs
+- `SemanticDnsServiceDirectory` calls
+  `king_semantic_dns_get_optimal_route()` and
+  `king_semantic_dns_discover_service()` as the runtime discovery primitives
+- `McpServiceResolution` keeps one ordered candidate list and exposes
+  `failover()` so role routing can move to the next explicit target on failure
+
+The failover order is also explicit:
+
+- first: the route winner returned by Semantic-DNS
+- then: other healthy discovered services for that role
+- last: degraded discovered services as final fallback targets
+
+That keeps multi-node role resolution honest without pretending a hidden
+in-core distributed scheduler exists for MCP app services.
+
+The current PHPT proof covers retrieval, embedding, and document role
+resolution plus explicit failover progression:
+
+- `672-flow-php-mcp-service-discovery-failover-contract.phpt`
 
 ## Repo-Local Object-Store Dataset Bridge Contract
 
