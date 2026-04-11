@@ -28,6 +28,35 @@ EXPECTED_GIT_COMMIT=""
 ALLOW_SOURCE_DIRTY=0
 PHP_BIN="${PHP_BIN:-php}"
 
+archive_entry_path_is_safe() {
+    local entry="$1"
+    local normalized_entry=""
+
+    if [[ -z "${entry}" || "${entry}" == /* ]]; then
+        return 1
+    fi
+
+    normalized_entry="${entry#./}"
+
+    if [[ "${normalized_entry}" == -* ]]; then
+        return 1
+    fi
+
+    if [[ "${normalized_entry}" =~ (^|/)-[^/]+(/|$) ]]; then
+        return 1
+    fi
+
+    if [[ "${entry}" =~ (^|/)\.\.(/|$) ]]; then
+        return 1
+    fi
+
+    if [[ "${entry}" == *$'\n'* || "${entry}" == *$'\r'* ]]; then
+        return 1
+    fi
+
+    return 0
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --archive)
@@ -118,6 +147,7 @@ fi
 
 for archive in "${ARCHIVES[@]}"; do
     manifest_listing=""
+    manifest_entry=""
 
     if [[ ! -f "${archive}" ]]; then
         echo "Missing archive: ${archive}" >&2
@@ -133,7 +163,12 @@ for archive in "${ARCHIVES[@]}"; do
         exit 1
     fi
 
-    manifest_json="$(tar -xOf "${archive}" "${manifest_entry}")"
+    if ! archive_entry_path_is_safe "${manifest_entry}"; then
+        echo "Unsafe manifest entry path: ${manifest_entry}" >&2
+        exit 1
+    fi
+
+    manifest_json="$(tar -xOf "${archive}" -- "${manifest_entry}")"
 
     MANIFEST_JSON="${manifest_json}" \
     MANIFEST_ARCHIVE_PATH="${archive}" \
