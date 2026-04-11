@@ -285,6 +285,7 @@ import {
 import { normalizeRoomCreateName, optimisticRoomId, roomIdCandidateForAttempt } from './lib/roomCreate'
 import { normalizeRoomDirectory } from './lib/roomDirectory'
 import { decideRoomSwitch, roomSwitchUiReset } from './lib/roomSwitch'
+import { planReconnectAttempt } from './lib/socketReconnect'
 import { activeTypingUsers, applyTypingSignal } from './lib/typingPresence'
 import type { Room } from './lib/types'
 import { hasAuthenticatedSession } from './lib/workspaceAuth'
@@ -366,6 +367,7 @@ const ws = ref<WebSocket | null>(null)
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let reconnectAttempt = 0
 let reconnectSuppressed = false
+let reconnectNeedsResync = false
 
 const callJoined = ref(false)
 const callStatus = ref<'idle' | 'preparing' | 'live' | 'error'>('idle')
@@ -599,8 +601,22 @@ function connectSocket(): void {
   ws.value = socket
 
   socket.onopen = () => {
+    if (ws.value !== socket) {
+      return
+    }
+
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+
+    const recoveredConnection = reconnectAttempt > 0
     reconnectAttempt = 0
     connectionState.value = 'online'
+    if (recoveredConnection) {
+      reconnectNeedsResync = true
+      void refreshRooms()
+    }
   }
 
   socket.onmessage = async (event) => {
@@ -615,6 +631,10 @@ function connectSocket(): void {
   }
 
   socket.onclose = () => {
+    if (ws.value !== socket) {
+      return
+    }
+
     ws.value = null
     connectionState.value = 'offline'
     if (reconnectSuppressed) {
@@ -624,17 +644,25 @@ function connectSocket(): void {
   }
 
   socket.onerror = () => {
+    if (ws.value !== socket) {
+      return
+    }
     connectionState.value = 'offline'
   }
 }
 
 function scheduleReconnect(): void {
-  if (!currentSession.value || reconnectSuppressed) {
+  if (!authenticatedSession() || reconnectSuppressed) {
     return
   }
 
-  reconnectAttempt += 1
-  const backoff = Math.min(4000, 500 * reconnectAttempt)
+  const nextAttempt = planReconnectAttempt(reconnectAttempt)
+  if (!nextAttempt) {
+    connectionState.value = 'offline'
+    return
+  }
+
+  reconnectAttempt = nextAttempt.attempt
   connectionState.value = 'reconnecting'
 
   if (reconnectTimer) {
@@ -642,8 +670,9 @@ function scheduleReconnect(): void {
   }
 
   reconnectTimer = setTimeout(() => {
+    reconnectTimer = null
     connectSocket()
-  }, backoff)
+  }, nextAttempt.delayMs)
 }
 
 function emit(type: string, data: Record<string, unknown> = {}): void {
@@ -663,6 +692,22 @@ function updateRoomCounters(roomId: string): void {
   }
 }
 
+function resyncSessionAfterReconnect(roomId: string): void {
+  reconnectNeedsResync = false
+  ensureRoomState(roomId)
+  void refreshRooms()
+
+  if (callJoined.value) {
+    emit('call/join', {
+      roomId,
+      silent: true,
+      reconnect: true,
+    })
+    setLocalCallPresence(true, roomId)
+    syncPeerTopology()
+  }
+}
+
 function handleServerEvent(message: any): void {
   const type = String(message.type || '')
 
@@ -674,6 +719,10 @@ function handleServerEvent(message: any): void {
 
     for (const room of rooms.value) {
       ensureRoomState(room.id)
+    }
+
+    if (reconnectNeedsResync) {
+      resyncSessionAfterReconnect(roomId)
     }
     return
   }

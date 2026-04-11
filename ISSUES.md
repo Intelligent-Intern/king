@@ -122,7 +122,7 @@ Design guardrails for this batch:
   done when: camera enable/disable flips local video track state while preserving active peer connections.
 - [x] `#27 Implement full call teardown on room-switch/sign-out/unmount boundaries.`
   done when: all peer connections/media tracks close deterministically on boundary transitions.
-- [ ] `#28 Add websocket reconnect with bounded backoff and room resync.`
+- [x] `#28 Add websocket reconnect with bounded backoff and room resync.`
   done when: connection loss triggers bounded reconnect attempts and restores room/session state on recovery.
 - [ ] `#29 Add local demo backend contract for room/invite/presence/chat/call signaling.`
   done when: `dev-backend.mjs` exposes health/API/ws flows that satisfy current frontend contracts.

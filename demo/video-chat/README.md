@@ -30,6 +30,7 @@ What is wired today:
 - microphone toggles now mutate only local audio-track enabled state in place (no renegotiation churn)
 - camera toggles now mutate only local video-track enabled state in place while preserving active peer connections
 - room-switch, sign-out, and component-unmount boundaries now enforce full call teardown (peers + local media tracks)
+- websocket reconnect now uses bounded exponential backoff and re-syncs room/call state on recovery
 - multi-user room chat over websocket fanout
 - browser video call signaling (`offer`/`answer`/`ice`) with peer tiles
 - responsive shell layout with reduced-motion-safe slide transitions for chat/call stage switching
