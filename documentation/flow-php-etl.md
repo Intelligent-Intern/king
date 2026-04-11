@@ -93,6 +93,8 @@ Those boundaries include:
 - service-discovery adapters that resolve MCP-backed retrieval, embedding, and
   document services through Semantic-DNS discover/route primitives with an
   explicit failover order
+- OO ingest adapters that keep originals, extracted artifacts, streamed
+  uploads, and viewer delivery on one explicit `King\ObjectStore` path
 
 For execution specifically, Flow PHP-style transforms that run on workers or
 remote peers follow the same rule already documented for the pipeline
@@ -408,6 +410,38 @@ The current PHPT proof covers retrieval, embedding, and document role
 resolution plus explicit failover progression:
 
 - `672-flow-php-mcp-service-discovery-failover-contract.phpt`
+
+## Repo-Local OO Object-Store Ingest Guidance
+
+The repository now also carries one real repo-local OO ingest helper under
+[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`../demo/userland/flow-php/src/ObjectStoreIngest.php`](../demo/userland/flow-php/src/ObjectStoreIngest.php).
+
+This piece exists because dataflow-heavy application services often need one
+consistent ingest shape across four jobs that are usually split into unrelated
+utility code:
+
+- storing original file uploads from stream bodies
+- storing extracted or normalized artifacts for later retrieval
+- ingesting very large originals via resumable streamed chunks
+- delivering viewer payload slices back as bounded stream reads
+
+The current OO helper keeps those jobs on one explicit runtime surface:
+
+- `ObjectStoreIngestor::storeOriginalFromStream()` -> `ObjectStore::putFromStream()`
+- `ObjectStoreIngestor::storeExtractedArtifact()` -> `ObjectStore::put()`
+- `ObjectStoreIngestor::startStreamedOriginalUpload()` ->
+  `ObjectStore::beginResumableUpload()` plus
+  `ObjectStoreIngestUpload::appendChunk()/complete()`
+- `ObjectStoreIngestor::deliverToViewer()` -> `ObjectStore::getToStream()`
+
+That keeps ingest and viewer delivery OO-consistent while preserving the same
+strong object-store runtime semantics already verified underneath.
+
+The current PHPT proof covers originals, extracted artifacts, streamed uploads,
+and viewer delivery on this OO path:
+
+- `673-flow-php-oo-object-store-ingest-contract.phpt`
 
 ## Repo-Local Object-Store Dataset Bridge Contract
 

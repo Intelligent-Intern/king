@@ -10,7 +10,7 @@ repository while the contract is still being proven.
 The current source, sink, dataset-bridge, serialization/schema bridge,
 checkpoint, execution-backend, control-plane, MCP-host, failure-taxonomy,
 partitioning/backpressure, SQL/pgvector bridge, and MCP service-discovery
-contracts live in
+contracts, and OO object-store ingest guidance live in
 `demo/userland/flow-php/src/StreamingSource.php`,
 `demo/userland/flow-php/src/StreamingSink.php`, and
 `demo/userland/flow-php/src/ObjectStoreDataset.php`, and
@@ -22,7 +22,8 @@ contracts live in
 `demo/userland/flow-php/src/FailureTaxonomy.php`, and
 `demo/userland/flow-php/src/Partitioning.php`, and
 `demo/userland/flow-php/src/SqlVectorBridge.php`, and
-`demo/userland/flow-php/src/McpServiceDiscovery.php`.
+`demo/userland/flow-php/src/McpServiceDiscovery.php`, and
+`demo/userland/flow-php/src/ObjectStoreIngest.php`.
 
 Current helpers:
 
@@ -91,6 +92,8 @@ Current helpers:
 - `King\Flow\McpServiceNode`
 - `King\Flow\McpServiceResolution`
 - `King\Flow\McpServiceDiscovery`
+- `King\Flow\ObjectStoreIngestor`
+- `King\Flow\ObjectStoreIngestUpload`
 
 The contract is intentionally small:
 
@@ -164,6 +167,10 @@ The contract is intentionally small:
   discovery and route primitives, then apply one explicit failover order where
   the routed service is first, healthy alternates follow, and degraded nodes
   are last-resort fallbacks
+- keep one explicit OO ingest pattern for originals, extracted artifacts,
+  streamed multipart/resumable uploads, and viewer delivery reads through the
+  same `King\ObjectStore` facade instead of splitting those operations across
+  ad-hoc procedural utility code
 
 The current repo-local end-to-end proof is
 `extension/tests/621-flow-php-etl-e2e-local-remote-contract.phpt`. It composes
@@ -177,3 +184,6 @@ The current repo-local SQL/pgvector non-native bridge contract is proven by
 
 The current repo-local MCP discovery and failover contract is proven by
 `extension/tests/672-flow-php-mcp-service-discovery-failover-contract.phpt`.
+
+The current repo-local OO object-store ingest contract is proven by
+`extension/tests/673-flow-php-oo-object-store-ingest-contract.phpt`.

@@ -164,6 +164,39 @@ session state.
 | `getDefinedSchemas()` | Returns the list of defined schemas. |
 | `getDefinedEnums()` | Returns the list of defined enums. |
 
+### `King\ObjectStore`
+
+Read [Object Store and CDN](./object-store-and-cdn.md) first. `King\ObjectStore`
+is the OO facade over the same native object-store kernels exposed by the
+procedural `king_object_store_*` family.
+
+| Method | What it does |
+| --- | --- |
+| `init(array $config)` | Initializes the object-store runtime from config. |
+| `put(string $objectId, string $data, ?array $options = null)` | Stores one full payload body. |
+| `putFromStream(string $objectId, mixed $stream, ?array $options = null)` | Stores one payload from a stream source. |
+| `beginResumableUpload(string $objectId, ?array $options = null)` | Starts a streamed upload session. |
+| `appendResumableUploadChunk(string $uploadId, mixed $stream, ?array $options = null)` | Appends one sequential upload chunk. |
+| `completeResumableUpload(string $uploadId)` | Completes a streamed upload session. |
+| `abortResumableUpload(string $uploadId)` | Aborts a streamed upload session. |
+| `getResumableUploadStatus(string $uploadId)` | Returns the current streamed-upload session snapshot. |
+| `get(string $objectId, ?array $options = null)` | Reads one object payload (or byte range when requested). |
+| `getToStream(string $objectId, mixed $stream, ?array $options = null)` | Streams one object payload (or byte range) into a destination stream. |
+| `delete(string $objectId)` | Deletes one object. |
+| `backupObject(string $objectId, string $destinationPath)` | Exports one object snapshot. |
+| `restoreObject(string $objectId, string $sourcePath)` | Restores one object snapshot. |
+| `backupAllObjects(string $path, ?array $options = null)` | Exports a full snapshot set. |
+| `restoreAllObjects(string $path)` | Restores a full snapshot set. |
+| `listObjects()` | Returns object inventory entries. |
+| `getStats()` | Returns object-store runtime stats. |
+| `optimize()` | Runs object-store optimization work and returns summary stats. |
+| `cleanupExpiredObjects()` | Deletes expired object entries and returns cleanup summary stats. |
+| `getMetadata(string $objectId)` | Returns one object metadata snapshot. |
+
+For an explicit OO ingest flow (original uploads, extracted artifacts, streamed
+uploads, and viewer delivery), see the pattern in
+[Object Store and CDN](./object-store-and-cdn.md#oo-ingest-pattern-for-originals-artifacts-streams-and-viewer-delivery).
+
 ## HTTP Client Objects
 
 Read [HTTP Clients and Streams](./http-clients-and-streams.md) first. The
