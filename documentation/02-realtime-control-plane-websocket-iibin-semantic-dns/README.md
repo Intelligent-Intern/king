@@ -140,6 +140,47 @@ The important point is that the WebSocket frame is binary on purpose. The
 channel is carrying a defined message contract, not only text that both sides
 hope they are interpreting the same way.
 
+### Repeated And Nested Command Batches
+
+Realtime control systems often need to send more than one participant, stream,
+or target in a single command. That is where repeated+nested schema shapes are
+the practical default.
+
+```php
+<?php
+
+king_proto_define_schema('RealtimeMember', [
+    'id' => ['tag' => 1, 'type' => 'int32', 'required' => true],
+    'role' => ['tag' => 2, 'type' => 'string'],
+    'labels' => ['tag' => 3, 'type' => 'repeated_string'],
+]);
+
+king_proto_define_schema('RealtimeEnvelopeV2', [
+    'kind' => ['tag' => 1, 'type' => 'RealtimeKind', 'required' => true],
+    'topic' => ['tag' => 2, 'type' => 'string'],
+    'request_id' => ['tag' => 3, 'type' => 'string'],
+    'members' => ['tag' => 4, 'type' => 'repeated_RealtimeMember'],
+    'ack_ids' => ['tag' => 5, 'type' => 'repeated_string'],
+]);
+
+$batch = king_proto_encode('RealtimeEnvelopeV2', [
+    'kind' => 'command',
+    'topic' => 'cluster.session.sync',
+    'request_id' => 'req-1002',
+    'members' => [
+        ['id' => 7, 'role' => 'speaker', 'labels' => ['moderator', 'eu']],
+        ['id' => 9, 'role' => 'viewer', 'labels' => ['mobile']],
+    ],
+    'ack_ids' => ['req-998', 'req-999'],
+]);
+
+king_websocket_send($ws, $batch, true);
+```
+
+When this evolves, the rule stays the same: preserve existing field numbers and
+add new fields with new tags. Older readers keep the shared fields and skip the
+unknown additions.
+
 ## Step 5: Decode Replies Into Structured State
 
 When the edge or backend replies, the same schema can be used to decode the

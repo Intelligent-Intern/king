@@ -17,6 +17,41 @@ What is not yet an honest shipped contract here:
 - packaged PWA/service-worker behavior
 - standalone `stress-test` or `performance-test` Node scripts
 
+## Repeated + Nested Frame Example
+
+The same `/ws` path can carry repeated+nested control frames, not only one flat
+chat record per message. A typical server-side IIBIN shape is:
+
+```php
+<?php
+
+king_proto_define_schema('PeerState', [
+    'peer_id' => ['tag' => 1, 'type' => 'string', 'required' => true],
+    'tracks' => ['tag' => 2, 'type' => 'repeated_string'],
+]);
+
+king_proto_define_schema('RoomSyncEnvelope', [
+    'room' => ['tag' => 1, 'type' => 'string', 'required' => true],
+    'peers' => ['tag' => 2, 'type' => 'repeated_PeerState', 'required' => true],
+    'ack_ids' => ['tag' => 3, 'type' => 'repeated_string'],
+]);
+
+$payload = king_proto_encode('RoomSyncEnvelope', [
+    'room' => 'general',
+    'peers' => [
+        ['peer_id' => 'ada', 'tracks' => ['cam', 'mic']],
+        ['peer_id' => 'lin', 'tracks' => ['mic']],
+    ],
+    'ack_ids' => ['req-42', 'req-43'],
+]);
+
+king_websocket_send($socket, $payload, true);
+```
+
+This is the same repeated+nested compatibility model documented in
+[`documentation/iibin.md`](/home/jochen/projects/king.site/king/documentation/iibin.md):
+older readers keep shared fields and ignore newly added fields.
+
 ## Commands
 
 ```bash
