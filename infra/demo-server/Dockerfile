@@ -6,10 +6,10 @@ FROM node:22-bookworm-slim AS frontend-build
 
 WORKDIR /app
 
-COPY demo/video-chat/package.json demo/video-chat/package-lock.json ./
+COPY demo/video-chat/frontend/package.json demo/video-chat/frontend/package-lock.json ./
 RUN npm ci
 
-COPY demo/video-chat/ ./
+COPY demo/video-chat/frontend/ ./
 RUN npm run build
 
 FROM debian:bookworm-slim AS package

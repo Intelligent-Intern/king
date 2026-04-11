@@ -12,11 +12,11 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
-COPY demo/video-chat/backend-package.json ./package.json
+COPY demo/video-chat/backend/package.json ./package.json
 RUN npm pkg set "dependencies.@intelligentintern/iibin=${IIBIN_SOURCE}" \
   && npm install --omit=dev --no-package-lock
 
-COPY demo/video-chat/dev-backend.mjs ./dev-backend.mjs
+COPY demo/video-chat/backend/dev-backend.mjs ./dev-backend.mjs
 
 RUN mkdir -p /data
 VOLUME ["/data"]

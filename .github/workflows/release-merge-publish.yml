@@ -524,11 +524,11 @@ jobs:
       matrix:
         include:
           - component: frontend
-            dockerfile: ./demo/video-chat/Dockerfile.frontend
+            dockerfile: ./demo/video-chat/frontend/Dockerfile
             image_suffix: -videochat-frontend
             platforms: linux/amd64,linux/arm64
           - component: backend
-            dockerfile: ./demo/video-chat/Dockerfile.backend
+            dockerfile: ./demo/video-chat/backend/Dockerfile
             image_suffix: -videochat-backend
             platforms: linux/amd64,linux/arm64
     steps:

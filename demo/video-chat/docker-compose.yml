@@ -3,7 +3,7 @@ services:
     container_name: king-videochat-backend
     build:
       context: ../..
-      dockerfile: demo/video-chat/Dockerfile.backend
+      dockerfile: demo/video-chat/backend/Dockerfile
       args:
         IIBIN_SOURCE: ${IIBIN_SOURCE:-1.0.5-beta}
     environment:
@@ -20,13 +20,15 @@ services:
     container_name: king-videochat-frontend
     build:
       context: ../..
-      dockerfile: demo/video-chat/Dockerfile.frontend
+      dockerfile: demo/video-chat/frontend/Dockerfile
       args:
         IIBIN_SOURCE: ${IIBIN_SOURCE:-1.0.5-beta}
     depends_on:
       - videochat-backend
+    environment:
+      VIDEOCHAT_BACKEND_ORIGIN: http://videochat-backend:8080
     ports:
-      - "${VIDEOCHAT_FRONTEND_PORT:-5173}:80"
+      - "${VIDEOCHAT_FRONTEND_PORT:-5173}:5173"
     restart: unless-stopped
 
 volumes:

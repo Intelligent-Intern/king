@@ -1,5 +1,8 @@
 node_modules/
-dist/
+frontend/node_modules/
+backend/node_modules/
+frontend/dist/
+frontend/.vite/
 .git/
 coverage/
 *.log

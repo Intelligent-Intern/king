@@ -15,7 +15,7 @@ What is wired today:
 
 Current boundaries:
 
-- demo-local signaling backend (`dev-backend.mjs`)
+- demo-local signaling backend (`backend/dev-backend.mjs`)
 - login/user directory is persisted in SQLite (`KING_DEMO_DB_PATH`)
 - no durable room/message persistence across backend restart
 - no TURN relay setup (STUN-only by default)
@@ -61,22 +61,24 @@ older readers keep shared fields and ignore newly added fields.
 Run backend and frontend in separate terminals:
 
 ```bash
-cd demo/video-chat
+cd demo/video-chat/backend
 npm install
-npm run dev:backend
+npm run start
 ```
 
 ```bash
-cd demo/video-chat
+cd demo/video-chat/frontend
+npm install
 npm run dev
 ```
 
 Useful commands:
 
-- `npm run build`
-- `npm run preview`
-- `npm run type-check`
-- `npm run test`
+- `cd demo/video-chat/frontend && npm run build`
+- `cd demo/video-chat/frontend && npm run preview`
+- `cd demo/video-chat/frontend && npm run type-check`
+- `cd demo/video-chat/frontend && npm run test`
+- `cd demo/video-chat/backend && npm run start`
 
 ## Docker Compose (Frontend + Backend)
 
@@ -105,7 +107,9 @@ IIBIN_SOURCE='1.0.5-beta' VIDEOCHAT_FRONTEND_PORT=3000 VIDEOCHAT_BACKEND_PORT=18
 ## Runtime Notes
 
 - the local backend listens on `http://127.0.0.1:8080` by default
-- Vite proxies `/api` and `/ws` to that backend
+- the docker frontend container serves static assets with a small Node proxy server (no Nginx)
+- the frontend container proxies `/api` and `/ws` to `videochat-backend:8080`
+- local frontend dev (`npm run dev`) still proxies `/api` and `/ws` to `http://localhost:8080` via Vite
 - health endpoint: `GET /health`
 - auth endpoint: `POST /api/auth/login`
 - user directory endpoint: `GET /api/users`
@@ -113,6 +117,6 @@ IIBIN_SOURCE='1.0.5-beta' VIDEOCHAT_FRONTEND_PORT=3000 VIDEOCHAT_BACKEND_PORT=18
 
 ## Scope
 
-This directory is a frontend demo surface, not the source of truth for King v1
-runtime guarantees. Repo-level runtime and transport contracts stay in the
-extension tests and root documentation.
+This directory is a demo application surface (frontend + backend), not the
+source of truth for King v1 runtime guarantees. Repo-level runtime and
+transport contracts stay in the extension tests and root documentation.
