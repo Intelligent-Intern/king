@@ -90,7 +90,7 @@ Design guardrails for this batch:
   done when: switching rooms updates active context and resets room-scoped typing/call state safely.
 - [x] `#11 Implement invite-code generation for active room.`
   done when: active room can produce an invite code via API and display it in context panel.
-- [ ] `#12 Implement invite-code redeem/join flow.`
+- [x] `#12 Implement invite-code redeem/join flow.`
   done when: valid invite code resolves target room and joins/switches user to that room.
 - [ ] `#13 Implement copy-invite action with graceful clipboard fallback handling.`
   done when: invite copy works in secure contexts and fails silently/cleanly otherwise.

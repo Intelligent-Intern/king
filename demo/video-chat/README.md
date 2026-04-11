@@ -14,6 +14,7 @@ What is wired today:
 - room creation submits to backend with optimistic list updates and automatic room-id conflict retries
 - room switching applies explicit room-scoped reset boundaries for typing/call/ui draft state
 - invite-code generation roundtrip for active room with context-panel code display
+- invite-code redeem/join flow resolves target room id and switches active room on success
 - multi-user room chat over websocket fanout
 - browser video call signaling (`offer`/`answer`/`ice`) with peer tiles
 - responsive shell layout with reduced-motion-safe slide transitions for chat/call stage switching

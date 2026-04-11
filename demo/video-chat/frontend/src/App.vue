@@ -82,8 +82,11 @@
               maxlength="48"
               placeholder="Invite code"
             />
-            <button type="submit">Join</button>
+            <button type="submit" :disabled="redeemInviteState.submitting || !inviteCodeInput.trim()">
+              {{ redeemInviteState.submitting ? 'Joining...' : 'Join' }}
+            </button>
           </form>
+          <p v-if="redeemInviteState.error" class="inline-error">{{ redeemInviteState.error }}</p>
         </section>
       </aside>
 
@@ -230,6 +233,7 @@ import {
   type SessionIdentity,
 } from './lib/authSession'
 import { resolveInviteCodeFromCreatePayload } from './lib/inviteCreate'
+import { resolveRoomIdFromInviteRedeemPayload } from './lib/inviteRedeem'
 import { normalizeRoomCreateName, optimisticRoomId, roomIdCandidateForAttempt } from './lib/roomCreate'
 import { normalizeRoomDirectory } from './lib/roomDirectory'
 import { decideRoomSwitch, roomSwitchUiReset } from './lib/roomSwitch'
@@ -280,6 +284,10 @@ const createRoomState = reactive({
   error: '',
 })
 const createInviteState = reactive({
+  submitting: false,
+  error: '',
+})
+const redeemInviteState = reactive({
   submitting: false,
   error: '',
 })
@@ -830,6 +838,9 @@ async function redeemInvite(): Promise<void> {
     return
   }
 
+  redeemInviteState.error = ''
+  redeemInviteState.submitting = true
+
   try {
     const response = await fetch('/api/invite/redeem', {
       method: 'POST',
@@ -838,16 +849,27 @@ async function redeemInvite(): Promise<void> {
     })
 
     if (!response.ok) {
+      redeemInviteState.error = response.status === 404
+        ? 'Invite code was not found.'
+        : 'Invite could not be redeemed right now.'
       return
     }
 
     const payload = await response.json()
-    const roomId = normalizeRoomId(String(payload.room?.id || 'lobby'))
+    const roomId = resolveRoomIdFromInviteRedeemPayload(payload)
+    const room = normalizeRoomDirectory([payload.room])[0] ?? null
+    if (room) {
+      upsertRoomDirectoryEntry(room)
+    }
+
     inviteCodeInput.value = ''
+    redeemInviteState.error = ''
     await refreshRooms()
     switchRoom(roomId)
   } catch {
-    // ignore
+    redeemInviteState.error = 'Invite could not be redeemed right now.'
+  } finally {
+    redeemInviteState.submitting = false
   }
 }
 
@@ -1349,6 +1371,8 @@ function signOut(): void {
   createRoomState.error = ''
   createInviteState.submitting = false
   createInviteState.error = ''
+  redeemInviteState.submitting = false
+  redeemInviteState.error = ''
   inviteCodeInput.value = ''
   lastInviteCode.value = ''
   messageInput.value = ''
