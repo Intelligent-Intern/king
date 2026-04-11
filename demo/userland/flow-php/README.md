@@ -9,7 +9,8 @@ repository while the contract is still being proven.
 
 The current source, sink, dataset-bridge, serialization/schema bridge,
 checkpoint, execution-backend, control-plane, MCP-host, failure-taxonomy,
-partitioning/backpressure, and SQL/pgvector bridge contracts live in
+partitioning/backpressure, SQL/pgvector bridge, and MCP service-discovery
+contracts live in
 `demo/userland/flow-php/src/StreamingSource.php`,
 `demo/userland/flow-php/src/StreamingSink.php`, and
 `demo/userland/flow-php/src/ObjectStoreDataset.php`, and
@@ -20,7 +21,8 @@ partitioning/backpressure, and SQL/pgvector bridge contracts live in
 `demo/userland/flow-php/src/McpHost.php`, and
 `demo/userland/flow-php/src/FailureTaxonomy.php`, and
 `demo/userland/flow-php/src/Partitioning.php`, and
-`demo/userland/flow-php/src/SqlVectorBridge.php`.
+`demo/userland/flow-php/src/SqlVectorBridge.php`, and
+`demo/userland/flow-php/src/McpServiceDiscovery.php`.
 
 Current helpers:
 
@@ -84,6 +86,11 @@ Current helpers:
 - `King\Flow\SqlVectorMatch`
 - `King\Flow\SqlVectorSearchResponse`
 - `King\Flow\McpSqlVectorBridge`
+- `King\Flow\ServiceDirectory`
+- `King\Flow\SemanticDnsServiceDirectory`
+- `King\Flow\McpServiceNode`
+- `King\Flow\McpServiceResolution`
+- `King\Flow\McpServiceDiscovery`
 
 The contract is intentionally small:
 
@@ -153,6 +160,10 @@ The contract is intentionally small:
 - keep SQL execution and pgvector indexes outside native King while exposing
   one typed MCP bridge contract (`king.sql_vector.query.v1` ->
   `king.sql_vector.result.v1`) for similarity-search request and result flow
+- resolve MCP-backed retrieval, embedding, and document services from Semantic-DNS
+  discovery and route primitives, then apply one explicit failover order where
+  the routed service is first, healthy alternates follow, and degraded nodes
+  are last-resort fallbacks
 
 The current repo-local end-to-end proof is
 `extension/tests/621-flow-php-etl-e2e-local-remote-contract.phpt`. It composes
@@ -163,3 +174,6 @@ local OTLP export on the controller-owned path, and separately proves real
 
 The current repo-local SQL/pgvector non-native bridge contract is proven by
 `extension/tests/671-flow-php-sql-pgvector-bridge-contract.phpt`.
+
+The current repo-local MCP discovery and failover contract is proven by
+`extension/tests/672-flow-php-mcp-service-discovery-failover-contract.phpt`.
