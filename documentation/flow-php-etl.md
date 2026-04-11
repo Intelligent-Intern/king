@@ -87,6 +87,9 @@ Those boundaries include:
 - schema and serialization bridges that move between userland row models and
   King-facing payload formats such as JSON, CSV, NDJSON, IIBIN, Proto, and
   other binary object workflows
+- SQL/vector retrieval bridges that keep SQL engines and pgvector indexes
+  outside native King while using one typed MCP request/response contract for
+  search traffic
 
 For execution specifically, Flow PHP-style transforms that run on workers or
 remote peers follow the same rule already documented for the pipeline
@@ -334,6 +337,38 @@ The current host contract keeps the server boundary explicit:
 The current PHPT proof covers startup, dispatch, and shutdown/error behavior:
 
 - `669-flow-php-mcp-host-surface-contract.phpt`
+
+## Repo-Local SQL/pgvector Bridge Contract (Non-Native Boundary)
+
+The repository now also carries one real repo-local SQL/vector bridge under
+[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`../demo/userland/flow-php/src/SqlVectorBridge.php`](../demo/userland/flow-php/src/SqlVectorBridge.php).
+
+This boundary is explicit on purpose:
+
+- SQL query execution and pgvector index ownership are not native King kernel
+  features today
+- those concerns stay in an external SQL or vector service
+- King is the transport, execution-boundary, and durability substrate around
+  that service composition
+
+The canonical integration pattern in this repository is MCP bridge traffic:
+
+- `SqlVectorSearchRequest` emits a typed query payload with
+  `schema=king.sql_vector.query.v1`
+- `McpSqlVectorBridge` sends that payload through
+  `McpResourceSqlVectorTransport` (`king_mcp_request()` underneath)
+- `SqlVectorSearchResponse::fromArray()` validates
+  `schema=king.sql_vector.result.v1` and fails closed on malformed response
+  shape
+
+That gives ETL or retrieval pipelines one stable request/response contract
+without pretending SQL or pgvector suddenly became an in-core subsystem.
+
+The current PHPT proof covers request/response shape and fail-closed schema
+validation:
+
+- `671-flow-php-sql-pgvector-bridge-contract.phpt`
 
 ## Repo-Local Object-Store Dataset Bridge Contract
 
@@ -743,6 +778,8 @@ It does not claim:
 - that the repo already ships a complete public Flow PHP adapter package
 - that `King\ObjectStore\RuntimeConfig` and the policy classes above are
   already the exact exported runtime surface today
+- that SQL execution or pgvector indexing are built-in native King runtime
+  kernels today
 - that every possible storage, checkpoint, execution, telemetry, and schema
   bridge combination is already implemented end to end
 - that target-shape examples elsewhere in the repo are already the exact live
