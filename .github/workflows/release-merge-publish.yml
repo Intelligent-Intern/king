@@ -512,6 +512,102 @@ jobs:
           fi
           npm publish --access public --tag "${NPM_TAG}"
 
+  docker-build-video-chat:
+    name: Build and push video-chat ${{ matrix.component }} image
+    needs:
+      - resolve-release-merge
+      - publish-iibin
+    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: frontend
+            dockerfile: ./demo/video-chat/Dockerfile.frontend
+            image_suffix: -videochat-frontend
+            platforms: linux/amd64,linux/arm64
+          - component: backend
+            dockerfile: ./demo/video-chat/Dockerfile.backend
+            image_suffix: -videochat-backend
+            platforms: linux/amd64,linux/arm64
+    steps:
+      - name: Checkout release merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve-release-merge.outputs.release-commit }}
+          submodules: recursive
+
+      - name: Prepare video-chat image metadata
+        id: meta-video-chat
+        run: |
+          set -euo pipefail
+          image_name="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          image="${REGISTRY}/${image_name}${{ matrix.image_suffix }}"
+          release_version="${{ needs.resolve-release-merge.outputs.release-version }}"
+          revision="${{ needs.resolve-release-merge.outputs.release-commit }}"
+          short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
+          iibin_version="${release_version#v}"
+          iibin_package_spec="@intelligentintern/iibin@${iibin_version}"
+
+          if [[ -z "${release_version}" || -z "${iibin_version}" ]]; then
+            echo "Missing release version output from resolve-release-merge." >&2
+            exit 1
+          fi
+
+          tags=(
+            "${image}:${release_version}"
+            "${image}:sha-${short_sha}"
+          )
+          if [[ "${release_version}" != *-* ]]; then
+            tags+=("${image}:latest")
+          fi
+
+          created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          {
+            printf 'tags<<EOF\n'
+            printf '%s\n' "${tags[@]}"
+            printf 'EOF\n'
+            printf 'labels<<EOF\n'
+            printf 'org.opencontainers.image.title=king-video-chat-%s\n' "${{ matrix.component }}"
+            printf 'org.opencontainers.image.description=King video chat %s image\n' "${{ matrix.component }}"
+            printf 'org.opencontainers.image.created=%s\n' "${created_at}"
+            printf 'org.opencontainers.image.revision=%s\n' "${revision}"
+            printf 'org.opencontainers.image.source=https://github.com/%s\n' "${GITHUB_REPOSITORY}"
+            printf 'org.opencontainers.image.version=%s\n' "${release_version}"
+            printf 'EOF\n'
+            printf 'created_at=%s\n' "${created_at}"
+            printf 'iibin_version=%s\n' "${iibin_version}"
+            printf 'iibin_package_spec=%s\n' "${iibin_package_spec}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push video-chat ${{ matrix.component }} image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: ${{ steps.meta-video-chat.outputs.tags }}
+          labels: ${{ steps.meta-video-chat.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            IIBIN_SOURCE=${{ steps.meta-video-chat.outputs.iibin_package_spec }}
+
   dockerhub-runtime-release:
     name: Build and push Docker Hub runtime image
     needs:
