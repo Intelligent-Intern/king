@@ -125,9 +125,14 @@ function videochat_admin_validate_create_user_payload(array $payload): array
         $errors['display_name'] = 'display_name_too_long';
     }
 
-    $role = strtolower(trim((string) ($payload['role'] ?? '')));
-    if (!in_array($role, videochat_admin_allowed_roles(), true)) {
-        $errors['role'] = 'required_valid_role';
+    $role = 'user';
+    if (array_key_exists('role', $payload)) {
+        $candidateRole = strtolower(trim((string) $payload['role']));
+        if ($candidateRole === '' || !in_array($candidateRole, videochat_admin_allowed_roles(), true)) {
+            $errors['role'] = 'required_valid_role';
+        } else {
+            $role = $candidateRole;
+        }
     }
 
     $password = (string) ($payload['password'] ?? '');

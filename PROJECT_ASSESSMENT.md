@@ -147,6 +147,7 @@ The current tree already proves:
 - the active video-chat realtime surface now enforces session revocation propagation into live websocket loops by revalidating session liveness per receive cycle and closing revoked/expired sessions fail-closed (`system/error` `websocket_session_invalidated` + policy close), proven by `backend-king-php/tests/realtime-session-revocation-contract.sh`
 - the active video-chat route middleware now enforces one explicit transport-aware RBAC permission matrix for admin/moderator/user actions with typed forbidden diagnostics (`rule_id`, role, allowed_roles, path), proven by `backend-king-php/tests/rbac-middleware-contract.sh`
 - the active video-chat admin directory surface now enforces one deterministic `GET /api/admin/users` contract (`query`, `page`, `page_size`, `order`) with stable total/page counters, role-priority ordering, explicit secondary asc/desc display-name policy, and dedicated proof in `backend-king-php/tests/admin-user-list-contract.sh`
+- the active video-chat admin create surface now enforces one explicit `POST /api/admin/users` endpoint contract with typed validation failures, duplicate-email conflict envelopes, and omitted-role defaulting to `user`, proven by `backend-king-php/tests/admin-user-create-contract.sh`
 
 ## What Is Still Not Finished
 

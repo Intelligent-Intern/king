@@ -199,6 +199,7 @@ Response includes:
 
 `POST /api/admin/users` + `PATCH /api/admin/users/{id}` mutation contract:
 
+- create payload role is optional; omitted role defaults to `user`
 - validation failures: `422 admin_user_validation_failed` with `error.details.fields`
 - duplicate email: `409 admin_user_conflict` with `error.details.fields.email = already_exists`
 - missing target user (update/deactivate): `404 admin_user_not_found`
@@ -390,6 +391,12 @@ Run the admin user list contract test (search + pagination + deterministic sorti
 
 ```bash
 demo/video-chat/backend-king-php/tests/admin-user-list-contract.sh
+```
+
+Run the admin user create endpoint contract test (validation + role defaults + duplicate-email conflict envelope):
+
+```bash
+demo/video-chat/backend-king-php/tests/admin-user-create-contract.sh
 ```
 
 Run the admin user mutation contract test (create/update/deactivate + validation/conflict semantics):

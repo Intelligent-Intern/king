@@ -220,7 +220,7 @@ Execution guardrails for this extension:
   done when: restricted actions fail closed with typed forbidden responses and role-allowed actions remain functional.
 - [x] `#37 Implement admin user list contract with deterministic search, sorting, pagination, and total counters.`
   done when: list endpoint supports query/page/page_size/order consistently and frontend receives stable totals.
-- [ ] `#38 Implement admin user create endpoint with validation and duplicate-email conflict handling.`
+- [x] `#38 Implement admin user create endpoint with validation and duplicate-email conflict handling.`
   done when: valid users are persisted with role defaults, invalid payloads fail typed validation, and duplicate emails return explicit conflict.
 - [ ] `#39 Implement admin user update endpoint for role/status/profile fields with RBAC enforcement.`
   done when: updates persist safely, forbidden field mutations fail closed, and audit-relevant fields are normalized.

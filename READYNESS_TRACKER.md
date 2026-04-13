@@ -56,6 +56,7 @@ Status note:
 - Recent video-chat websocket revocation closure: active websocket receive loops now revalidate session liveness and fail closed with policy-close semantics on revoked/expired tokens, with dedicated contract proof in `backend-king-php/tests/realtime-session-revocation-contract.sh`.
 - Recent video-chat RBAC middleware closure: the dispatcher now enforces an explicit transport-aware permission matrix (`admin`/`moderator`/`user`) with stable `rule_id` diagnostics on typed forbidden responses, and contract proof in `backend-king-php/tests/rbac-middleware-contract.sh`.
 - Recent video-chat admin-user list closure: `GET /api/admin/users` now supports one deterministic filter contract (`query`, `page`, `page_size`, `order`) with stable totals/page counts and role-priority sorting plus explicit secondary asc/desc ordering, proven by `backend-king-php/tests/admin-user-list-contract.sh`.
+- Recent video-chat admin-user create closure: `POST /api/admin/users` now enforces typed validation/conflict envelopes and defaults omitted role to `user`, with dedicated endpoint proof in `backend-king-php/tests/admin-user-create-contract.sh`.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 

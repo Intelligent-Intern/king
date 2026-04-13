@@ -55,6 +55,17 @@ try {
     videochat_admin_user_mutation_assert($createdUserId > 0, 'created user id should be positive');
     videochat_admin_user_mutation_assert((string) ($createdUser['role'] ?? '') === 'moderator', 'created user role mismatch');
 
+    $defaultRoleCreate = videochat_admin_create_user($pdo, [
+        'email' => 'default-role-user@intelligent-intern.com',
+        'display_name' => 'Default Role User',
+        'password' => 'default-role-password',
+    ]);
+    videochat_admin_user_mutation_assert($defaultRoleCreate['ok'] === true, 'create without role should succeed');
+    videochat_admin_user_mutation_assert(
+        (string) (($defaultRoleCreate['user'] ?? [])['role'] ?? '') === 'user',
+        'create without role should default role to user'
+    );
+
     $duplicateCreate = videochat_admin_create_user($pdo, [
         'email' => 'ops-user@intelligent-intern.com',
         'display_name' => 'Ops User Duplicate',
