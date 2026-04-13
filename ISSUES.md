@@ -234,7 +234,7 @@ Execution guardrails for this extension:
   done when: admin/user list semantics are role-safe, totals remain stable, and ordering is deterministic.
 - [x] `#44 Implement create-call endpoint with internal participant ids and external invitee rows under one transaction boundary.`
   done when: call and participant rows persist atomically and response returns one normalized call payload.
-- [ ] `#45 Implement edit-call endpoint with participant diff updates and no implicit global invite resend.`
+- [x] `#45 Implement edit-call endpoint with participant diff updates and no implicit global invite resend.`
   done when: edits only mutate targeted schedule/participant state and resend remains explicit separate action.
 - [ ] `#46 Implement cancel-call endpoint with persisted cancellation reason/message payload for notification workflows.`
   done when: cancelled call state is explicit, cancellation payload is queryable, and cancelled calls are excluded from active joins.

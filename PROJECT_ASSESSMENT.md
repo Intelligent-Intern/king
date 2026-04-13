@@ -154,6 +154,7 @@ The current tree already proves:
 - the active video-chat avatar surface now enforces one explicit `POST /api/user/avatar` plus `GET /api/user/avatar-files/{filename}` endpoint contract for strict type/size validation, deterministic storage-safe path mapping, replacement cleanup of prior avatar files, and `GET /api/auth/session` avatar-path parity after upload, proven by `backend-king-php/tests/avatar-upload-endpoint-contract.sh`
 - the active video-chat calls-list surface now enforces one explicit `GET /api/calls` endpoint contract for owner-bound scope semantics (`user all -> my`), deterministic paging/sort envelopes, and typed list-filter validation failures, proven by `backend-king-php/tests/calls-list-endpoint-contract.sh`
 - the active video-chat call-create surface now enforces one explicit `POST /api/calls` endpoint contract for typed request-body validation, normalized call-plus-participants create envelopes, and persisted call/participant atomicity expectations under rejected duplicate-participant payloads, proven by `backend-king-php/tests/call-create-endpoint-contract.sh`
+- the active video-chat call-update surface now enforces one explicit `PATCH /api/calls/{id}` endpoint contract for participant-diff updates, typed validation/forbidden/not-found envelopes, immutable-status rejection, and explicit no-global-resend invite dispatch semantics (`global_resend_triggered=false`, `explicit_action_required=true`), proven by `backend-king-php/tests/call-update-endpoint-contract.sh`
 
 ## What Is Still Not Finished
 

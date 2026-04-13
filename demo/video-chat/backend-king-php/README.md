@@ -476,6 +476,12 @@ Run the call update contract test (schedule/participant updates + no implicit in
 demo/video-chat/backend-king-php/tests/call-update-contract.sh
 ```
 
+Run the call update endpoint contract test (`PATCH /api/calls/{id}` participant-diff updates + explicit invite-dispatch semantics):
+
+```bash
+demo/video-chat/backend-king-php/tests/call-update-endpoint-contract.sh
+```
+
 Run the call cancel contract test (state transition + cancellation payload persistence + active-join exclusion):
 
 ```bash
