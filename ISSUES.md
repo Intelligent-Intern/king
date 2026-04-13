@@ -245,7 +245,7 @@ Execution guardrails for this extension:
 
 #### Track B2. Realtime Completion (King WebSocket + IIBIN)
 
-- [ ] `#49 Implement authenticated websocket gateway with strict handshake validation and structured close reasons.`
+- [x] `#49 Implement authenticated websocket gateway with strict handshake validation and structured close reasons.`
   done when: invalid/expired/missing auth is rejected deterministically and valid sessions enter authenticated channel lifecycle.
 - [ ] `#50 Implement room presence snapshot and join/leave stream from server-authoritative membership state.`
   done when: clients receive consistent snapshots plus deltas and reconnect restores current room presence without phantom users.

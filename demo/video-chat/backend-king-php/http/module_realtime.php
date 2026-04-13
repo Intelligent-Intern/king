@@ -2,6 +2,202 @@
 
 declare(strict_types=1);
 
+function videochat_realtime_normalize_ws_path(string $wsPath): string
+{
+    $normalized = trim($wsPath);
+    if ($normalized === '') {
+        return '/ws';
+    }
+
+    return str_starts_with($normalized, '/') ? $normalized : ('/' . $normalized);
+}
+
+function videochat_realtime_connection_has_upgrade_token(string $connectionHeader): bool
+{
+    $tokens = preg_split('/\s*,\s*/', strtolower(trim($connectionHeader))) ?: [];
+    foreach ($tokens as $token) {
+        if ($token === 'upgrade') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @param array<string, mixed> $request
+ * @return array{
+ *   ok: bool,
+ *   status: int,
+ *   code: string,
+ *   message: string,
+ *   details: array<string, mixed>
+ * }
+ */
+function videochat_realtime_validate_websocket_handshake(array $request, string $wsPath): array
+{
+    $normalizedPath = videochat_realtime_normalize_ws_path($wsPath);
+    $requestPath = $request['path'] ?? null;
+    if (!is_string($requestPath) || $requestPath === '') {
+        $uri = is_string($request['uri'] ?? null) ? (string) $request['uri'] : '';
+        $requestPath = (string) (parse_url($uri, PHP_URL_PATH) ?: '/');
+    }
+    $requestPath = trim((string) $requestPath);
+    if ($requestPath === '') {
+        $requestPath = '/';
+    }
+
+    if ($requestPath !== $normalizedPath) {
+        return [
+            'ok' => false,
+            'status' => 400,
+            'code' => 'websocket_handshake_invalid',
+            'message' => 'WebSocket handshake request path is invalid.',
+            'details' => [
+                'reason' => 'ws_path_mismatch',
+                'expected_path' => $normalizedPath,
+                'actual_path' => $requestPath,
+            ],
+        ];
+    }
+
+    $method = strtoupper(trim((string) ($request['method'] ?? 'GET')));
+    if ($method !== 'GET') {
+        return [
+            'ok' => false,
+            'status' => 405,
+            'code' => 'websocket_invalid_method',
+            'message' => 'WebSocket handshake requires GET.',
+            'details' => [
+                'reason' => 'invalid_method',
+                'allowed_methods' => ['GET'],
+                'method' => $method,
+            ],
+        ];
+    }
+
+    $upgrade = strtolower(videochat_request_header_value($request, 'upgrade'));
+    if ($upgrade === '') {
+        return [
+            'ok' => false,
+            'status' => 400,
+            'code' => 'websocket_handshake_invalid',
+            'message' => 'WebSocket handshake is missing Upgrade header.',
+            'details' => [
+                'reason' => 'missing_upgrade_header',
+                'required_upgrade' => 'websocket',
+            ],
+        ];
+    }
+    if ($upgrade !== 'websocket') {
+        return [
+            'ok' => false,
+            'status' => 400,
+            'code' => 'websocket_handshake_invalid',
+            'message' => 'WebSocket handshake Upgrade header is invalid.',
+            'details' => [
+                'reason' => 'invalid_upgrade_header',
+                'required_upgrade' => 'websocket',
+                'upgrade' => $upgrade,
+            ],
+        ];
+    }
+
+    $connection = videochat_request_header_value($request, 'connection');
+    if (!videochat_realtime_connection_has_upgrade_token($connection)) {
+        return [
+            'ok' => false,
+            'status' => 400,
+            'code' => 'websocket_handshake_invalid',
+            'message' => 'WebSocket handshake Connection header must contain Upgrade.',
+            'details' => [
+                'reason' => 'missing_connection_upgrade_token',
+            ],
+        ];
+    }
+
+    $websocketKey = videochat_request_header_value($request, 'sec-websocket-key');
+    if ($websocketKey === '') {
+        return [
+            'ok' => false,
+            'status' => 400,
+            'code' => 'websocket_handshake_invalid',
+            'message' => 'WebSocket handshake is missing Sec-WebSocket-Key header.',
+            'details' => [
+                'reason' => 'missing_sec_websocket_key',
+            ],
+        ];
+    }
+    $decodedKey = base64_decode($websocketKey, true);
+    if (!is_string($decodedKey) || strlen($decodedKey) !== 16) {
+        return [
+            'ok' => false,
+            'status' => 400,
+            'code' => 'websocket_handshake_invalid',
+            'message' => 'WebSocket handshake Sec-WebSocket-Key is invalid.',
+            'details' => [
+                'reason' => 'invalid_sec_websocket_key',
+            ],
+        ];
+    }
+
+    $websocketVersion = videochat_request_header_value($request, 'sec-websocket-version');
+    if ($websocketVersion === '') {
+        return [
+            'ok' => false,
+            'status' => 400,
+            'code' => 'websocket_handshake_invalid',
+            'message' => 'WebSocket handshake is missing Sec-WebSocket-Version header.',
+            'details' => [
+                'reason' => 'missing_sec_websocket_version',
+                'supported_versions' => ['13'],
+            ],
+        ];
+    }
+    if ($websocketVersion !== '13') {
+        return [
+            'ok' => false,
+            'status' => 426,
+            'code' => 'websocket_handshake_invalid',
+            'message' => 'WebSocket handshake version is not supported.',
+            'details' => [
+                'reason' => 'unsupported_sec_websocket_version',
+                'supported_versions' => ['13'],
+                'version' => $websocketVersion,
+            ],
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'status' => 0,
+        'code' => '',
+        'message' => '',
+        'details' => [],
+    ];
+}
+
+/**
+ * @return array{close_code: int, close_reason: string, close_category: string}
+ */
+function videochat_realtime_close_descriptor_for_reason(string $reason): array
+{
+    $normalizedReason = strtolower(trim($reason));
+    if ($normalizedReason === 'auth_backend_error') {
+        return [
+            'close_code' => 1011,
+            'close_reason' => 'auth_backend_error',
+            'close_category' => 'internal',
+        ];
+    }
+
+    return [
+        'close_code' => 1008,
+        'close_reason' => 'session_invalidated',
+        'close_category' => 'policy',
+    ];
+}
+
 /**
  * @return array<string, mixed>
  */
@@ -68,6 +264,16 @@ function videochat_handle_realtime_routes(
     callable $openDatabase
 ): ?array {
     if ($path === $wsPath) {
+        $handshakeValidation = videochat_realtime_validate_websocket_handshake($request, $wsPath);
+        if (!(bool) ($handshakeValidation['ok'] ?? false)) {
+            return $errorResponse(
+                (int) ($handshakeValidation['status'] ?? 400),
+                (string) ($handshakeValidation['code'] ?? 'websocket_handshake_invalid'),
+                (string) ($handshakeValidation['message'] ?? 'WebSocket handshake is invalid.'),
+                is_array($handshakeValidation['details'] ?? null) ? $handshakeValidation['details'] : []
+            );
+        }
+
         $websocketAuth = $authenticateRequest($request, 'websocket');
         if (!(bool) ($websocketAuth['ok'] ?? false)) {
             return $authFailureResponse('websocket', (string) ($websocketAuth['reason'] ?? 'invalid_session'));
@@ -228,6 +434,9 @@ function videochat_handle_realtime_routes(
                     $wsPath
                 );
                 if (!(bool) ($sessionLiveness['ok'] ?? false)) {
+                    $sessionCloseDescriptor = videochat_realtime_close_descriptor_for_reason(
+                        (string) ($sessionLiveness['reason'] ?? 'invalid_session')
+                    );
                     videochat_presence_send_frame(
                         $websocket,
                         [
@@ -236,13 +445,18 @@ function videochat_handle_realtime_routes(
                             'message' => 'Session is no longer valid for realtime commands.',
                             'details' => [
                                 'reason' => (string) ($sessionLiveness['reason'] ?? 'invalid_session'),
+                                'close' => $sessionCloseDescriptor,
                             ],
                             'time' => gmdate('c'),
                         ]
                     );
 
                     try {
-                        king_client_websocket_close($websocket, 1008, 'session_invalidated');
+                        king_client_websocket_close(
+                            $websocket,
+                            (int) ($sessionCloseDescriptor['close_code'] ?? 1008),
+                            (string) ($sessionCloseDescriptor['close_reason'] ?? 'session_invalidated')
+                        );
                     } catch (Throwable) {
                         // Best-effort close; detach/cleanup runs in finally.
                     }

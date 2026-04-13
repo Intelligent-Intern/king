@@ -335,6 +335,12 @@ Presence channel contract on `WS /ws`:
   - `{"type":"call/hangup","target_user_id":123,"payload":{...}}`
   - `{"type":"ping"}`
 - behavior:
+  - websocket gateway handshake is strict and fail-closed before upgrade:
+    - method must be `GET`
+    - `Upgrade` must be `websocket`
+    - `Connection` must include `upgrade`
+    - `Sec-WebSocket-Key` must be valid base64 for a 16-byte key
+    - `Sec-WebSocket-Version` must be `13`
   - initial room snapshot is sent immediately after authenticated websocket attach
   - room changes stream join/leave deltas to room peers
   - chat fanout is room-scoped and server-authoritative (`chat/message` with stable server timestamps)
@@ -348,7 +354,7 @@ Presence channel contract on `WS /ws`:
   - invalid signaling targets (missing/invalid/self/not-in-room) fail closed as `system/error` without cross-room leakage
   - accepted signaling publishes emit `call/ack` to the sender with `signal_id`, `signal_type`, and `sent_count`
   - reconnecting clients receive a fresh `room/snapshot` resync on attach
-  - active websocket loops revalidate session liveness on receive; revoked/expired sessions get `system/error` (`websocket_session_invalidated`) and are closed with policy code `1008`
+  - active websocket loops revalidate session liveness on receive; revoked/expired sessions get `system/error` (`websocket_session_invalidated`) with structured close metadata (`close_code`, `close_reason`, `close_category`) and are closed accordingly
 
 ## Contract checks
 
@@ -390,6 +396,12 @@ Run the realtime session-revocation contract test (revoked/expired token propaga
 
 ```bash
 demo/video-chat/backend-king-php/tests/realtime-session-revocation-contract.sh
+```
+
+Run the realtime websocket-gateway contract test (strict handshake validation + structured close descriptors for session invalidation):
+
+```bash
+demo/video-chat/backend-king-php/tests/realtime-websocket-gateway-contract.sh
 ```
 
 Run the admin user list contract test (search + pagination + deterministic sorting):
