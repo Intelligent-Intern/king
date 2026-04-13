@@ -45,6 +45,9 @@ emcc $CXX_FLAGS \
     -s INITIAL_MEMORY=16777216 \
     -s MAXIMUM_MEMORY=134217728 \
     -s STACK_SIZE=1048576 \
+    -s MODULARIZE=1 \
+    -s EXPORT_ES6=1 \
+    -s ENVIRONMENT=web \
     -o wlvc.js \
     cpp/dwt.cpp cpp/quantize.cpp cpp/entropy.cpp cpp/motion.cpp cpp/audio.cpp cpp/codec.cpp cpp/exports.cpp
 

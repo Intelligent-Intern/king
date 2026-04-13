@@ -420,6 +420,8 @@ const messageListRef = ref<HTMLElement | null>(null)
 let typingDebounce: ReturnType<typeof setTimeout> | null = null
 let copyInviteResetTimer: ReturnType<typeof setTimeout> | null = null
 let typingSweepTimer: ReturnType<typeof setInterval> | null = null
+let statsPollingInterval: ReturnType<typeof setInterval> | null = null
+let waveletStatsIntervalId: ReturnType<typeof setInterval> | null = null
 
 const ws = ref<WebSocket | null>(null)
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -2060,18 +2062,20 @@ onMounted(async () => {
     await refreshRooms()
   }
 
-  setInterval(async () => {
+  if (statsPollingInterval) clearInterval(statsPollingInterval)
+  statsPollingInterval = setInterval(async () => {
     try {
       const res = await fetch('/api/stats')
       if (res.ok) {
         backendStats.value = await res.json()
       }
     } catch {}
-  }, 5000)
-  
+  }, 30000)
+
   // Throttled wavelet stats update
   let lastWaveletUpdate = 0
-  setInterval(() => {
+  if (waveletStatsIntervalId) clearInterval(waveletStatsIntervalId)
+  waveletStatsIntervalId = setInterval(() => {
     if (waveletProcessor && waveletEnabled.value && showStats.value) {
       const now = Date.now()
       if (now - lastWaveletUpdate > 1000) {
@@ -2084,6 +2088,13 @@ onMounted(async () => {
     }
   }, 500)
 })
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    if (statsPollingInterval) clearInterval(statsPollingInterval)
+    if (waveletStatsIntervalId) clearInterval(waveletStatsIntervalId)
+  })
+}
 
 const backendStats = ref<any>(null)
 
