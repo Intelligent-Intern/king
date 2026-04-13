@@ -206,7 +206,7 @@ Execution guardrails for this extension:
 
 #### Track B1. Backend Core Completion (King-PHP Priority)
 
-- [ ] `#31 Refactor backend into explicit modules (auth/session/rbac/users/calls/invites/realtime) and remove mixed-responsibility handler structure.`
+- [x] `#31 Refactor backend into explicit modules (auth/session/rbac/users/calls/invites/realtime) and remove mixed-responsibility handler structure.`
   done when: backend entrypoint wires focused modules only, each module has one responsibility, and route/realtime registration is deterministic.
 - [ ] `#32 Add canonical API/WS contract catalog for new stack and keep server/client schema alignment under versioned fixtures.`
   done when: one source-of-truth contract file exists, runtime payloads validate against it, and drift checks fail fast in CI.

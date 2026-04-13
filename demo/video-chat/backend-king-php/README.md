@@ -12,6 +12,24 @@ This directory is the active King-based backend track for video-chat.
 - logs bound HTTP/WS addresses at startup
 - keeps shutdown logging on process exit
 
+## Route/Realtime modules
+
+`server.php` now only wires runtime state + the deterministic dispatcher in
+`http/router.php`.
+
+The active route/realtime modules are registered in fixed order:
+
+1. `runtime` (`http/module_runtime.php`)
+2. `auth_session` (`http/module_auth_session.php`)
+3. `users` (`http/module_users.php`)
+4. `invites` (`http/module_invites.php`)
+5. `calls` (`http/module_calls.php`)
+6. `realtime` (`http/module_realtime.php`)
+
+Contract check:
+
+- `tests/router-module-order-contract.sh`
+
 ## Run locally
 
 ```bash
