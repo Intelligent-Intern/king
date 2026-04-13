@@ -16,28 +16,11 @@ if (!extension_loaded('king')) {
     exit(1);
 }
 
-$shutdownRequested = false;
-
 $log = static function (string $message): void {
     fwrite(STDERR, '[video-chat][king-php-backend] ' . $message . "\n");
 };
 
-if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
-    pcntl_async_signals(true);
-    pcntl_signal(SIGINT, static function () use (&$shutdownRequested, $log): void {
-        $shutdownRequested = true;
-        $log('received SIGINT, stopping listener.');
-        exit(0);
-    });
-    pcntl_signal(SIGTERM, static function () use (&$shutdownRequested, $log): void {
-        $shutdownRequested = true;
-        $log('received SIGTERM, stopping listener.');
-        exit(0);
-    });
-}
-
-register_shutdown_function(static function () use (&$shutdownRequested, $log): void {
-    $shutdownRequested = true;
+register_shutdown_function(static function () use ($log): void {
     $error = error_get_last();
     if (is_array($error)) {
         $log(sprintf('shutdown with last error: %s (%s:%d)', (string) ($error['message'] ?? 'unknown'), (string) ($error['file'] ?? 'n/a'), (int) ($error['line'] ?? 0)));
@@ -100,6 +83,12 @@ $handler = static function (array $request) use ($jsonResponse, $pathFromRequest
     if ($path === $wsPath) {
         $session = $request['session'] ?? null;
         $streamId = (int) ($request['stream_id'] ?? 0);
+        if ($session !== null && $streamId > 0) {
+            king_server_on_cancel($session, $streamId, static function (): void {
+                // Keep cancel registration explicit for long-lived websocket flows.
+            });
+        }
+
         $websocket = king_server_upgrade_to_websocket($session, $streamId);
         if ($websocket === false) {
             return $jsonResponse(400, [
@@ -130,13 +119,10 @@ $handler = static function (array $request) use ($jsonResponse, $pathFromRequest
     ]);
 };
 
-$log('starting on-wire one-shot listener loop...');
-while (!$shutdownRequested) {
+$log('starting King HTTP/1 one-shot listener loop...');
+while (true) {
     $ok = king_http1_server_listen_once($host, $port, null, $handler);
     if ($ok === false) {
-        if ($shutdownRequested) {
-            break;
-        }
         usleep(50_000);
     }
 }

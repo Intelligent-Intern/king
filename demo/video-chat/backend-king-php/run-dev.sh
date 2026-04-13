@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 HOST="${VIDEOCHAT_KING_HOST:-127.0.0.1}"
 PORT="${VIDEOCHAT_KING_PORT:-18080}"
 WS_PATH="${VIDEOCHAT_KING_WS_PATH:-/ws}"
+DB_PATH="${VIDEOCHAT_KING_DB_PATH:-/data/video-chat.sqlite}"
 PHP_BIN="${PHP_BIN:-php}"
 DEFAULT_EXT="${REPO_ROOT}/extension/modules/king.so"
 KING_EXTENSION_PATH="${KING_EXTENSION_PATH:-${DEFAULT_EXT}}"
@@ -27,6 +28,9 @@ fi
 echo "[video-chat][king-php-backend] extension source: ${ext_source}"
 echo "[video-chat][king-php-backend] starting http://$HOST:$PORT/"
 echo "[video-chat][king-php-backend] websocket ws://$HOST:$PORT$WS_PATH"
+mkdir -p "$(dirname "${DB_PATH}")"
+touch "${DB_PATH}"
+echo "[video-chat][king-php-backend] sqlite path ${DB_PATH}"
 
 "${PHP_BIN}" "${php_args[@]}" "${SCRIPT_DIR}/server.php" &
 backend_pid=$!

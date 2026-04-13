@@ -143,8 +143,31 @@ Current scaffold scope:
 
 ## Docker Compose (Frontend + Backend)
 
-Compose stack for the new runtime is part of V1 follow-up leaves.
-Use direct local commands above until compose wiring lands.
+New-stack compose file:
+
+- `demo/video-chat/docker-compose.v1.yml`
+
+Run from `demo/video-chat`:
+
+```bash
+docker compose -f docker-compose.v1.yml up --build
+```
+
+Default host ports:
+
+- frontend: `http://127.0.0.1:5174`
+- backend: `http://127.0.0.1:18080`
+
+Override host ports when needed:
+
+```bash
+VIDEOCHAT_V1_FRONTEND_PORT=35174 VIDEOCHAT_V1_BACKEND_PORT=38080 docker compose -f docker-compose.v1.yml up --build
+```
+
+SQLite data is persisted in a mounted Docker volume:
+
+- volume: `videochat-v1-sqlite`
+- path in backend container: `/data/video-chat.sqlite`
 
 ## Runtime Notes
 

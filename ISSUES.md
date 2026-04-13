@@ -143,7 +143,7 @@ Contract guardrails for this batch:
   done when: routes resolve, shared app shell renders, and route guards are wired for authenticated/role-aware navigation.
 - [x] `#4 Scaffold King PHP backend bootstrap for HTTP + WebSocket video-chat services with one reproducible local start command.`
   done when: backend process starts with King extension loaded, exposes bound addresses in logs, and shutdown is clean.
-- [ ] `#5 Add docker compose for the new stack (frontend-vue + backend-king-php + sqlite volume) without removing existing demo compose paths.`
+- [x] `#5 Add docker compose for the new stack (frontend-vue + backend-king-php + sqlite volume) without removing existing demo compose paths.`
   done when: `docker compose up` starts both services for the new stack, data persists in a mounted sqlite volume, and docs list ports.
 - [ ] `#6 Implement backend health/version endpoint for the new King PHP video-chat backend.`
   done when: endpoint returns runtime health plus app/version metadata and frontend preflight can consume it.
