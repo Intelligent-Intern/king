@@ -224,7 +224,7 @@ Execution guardrails for this extension:
   done when: valid users are persisted with role defaults, invalid payloads fail typed validation, and duplicate emails return explicit conflict.
 - [x] `#39 Implement admin user update endpoint for role/status/profile fields with RBAC enforcement.`
   done when: updates persist safely, forbidden field mutations fail closed, and audit-relevant fields are normalized.
-- [ ] `#40 Implement admin user deactivate/reactivate endpoint with session invalidation policy for disabled accounts.`
+- [x] `#40 Implement admin user deactivate/reactivate endpoint with session invalidation policy for disabled accounts.`
   done when: deactivated users lose active session validity and cannot access protected REST/WS flows.
 - [ ] `#41 Implement profile/settings endpoint for current user (display name, avatar ref, theme, time format).`
   done when: profile changes persist and session-check payload reflects updated preferences.

@@ -634,3 +634,59 @@ function videochat_admin_deactivate_user(PDO $pdo, int $userId): array
         'revoked_sessions' => $revokedSessions,
     ];
 }
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   errors: array<string, string>,
+ *   user: ?array<string, mixed>
+ * }
+ */
+function videochat_admin_reactivate_user(PDO $pdo, int $userId): array
+{
+    if ($userId <= 0) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'user' => null,
+        ];
+    }
+
+    $existing = videochat_admin_fetch_user_by_id($pdo, $userId);
+    if ($existing === null) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'user' => null,
+        ];
+    }
+
+    if ((string) $existing['status'] !== 'active') {
+        $reactivate = $pdo->prepare('UPDATE users SET status = :status, updated_at = :updated_at WHERE id = :id');
+        $reactivate->execute([
+            ':status' => 'active',
+            ':updated_at' => gmdate('c'),
+            ':id' => $userId,
+        ]);
+    }
+
+    $updated = videochat_admin_fetch_user_by_id($pdo, $userId);
+    if ($updated === null) {
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'errors' => [],
+            'user' => null,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'reason' => (string) $existing['status'] === 'active' ? 'already_active' : 'reactivated',
+        'errors' => [],
+        'user' => $updated,
+    ];
+}

@@ -58,6 +58,7 @@ Status note:
 - Recent video-chat admin-user list closure: `GET /api/admin/users` now supports one deterministic filter contract (`query`, `page`, `page_size`, `order`) with stable totals/page counts and role-priority sorting plus explicit secondary asc/desc ordering, proven by `backend-king-php/tests/admin-user-list-contract.sh`.
 - Recent video-chat admin-user create closure: `POST /api/admin/users` now enforces typed validation/conflict envelopes and defaults omitted role to `user`, with dedicated endpoint proof in `backend-king-php/tests/admin-user-create-contract.sh`.
 - Recent video-chat admin-user update closure: `PATCH /api/admin/users/{id}` now enforces fail-closed update-field whitelisting (`field_not_updatable`), preserves normalized role/status/profile mutations only, and returns deterministic conflict/not-found envelopes, proven by `backend-king-php/tests/admin-user-update-contract.sh`.
+- Recent video-chat admin-user status closure: `POST /api/admin/users/{id}/deactivate` and `POST /api/admin/users/{id}/reactivate` now expose idempotent state transitions with deterministic not-found handling, enforce disabled-user session invalidation, and keep revoked sessions invalid even after reactivation, proven by `backend-king-php/tests/admin-user-status-contract.sh`.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 

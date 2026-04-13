@@ -236,6 +236,46 @@ function videochat_handle_user_routes(
         ]);
     }
 
+    if (preg_match('#^/api/admin/users/(\d+)/reactivate$#', $path, $matches) === 1) {
+        $userId = (int) ($matches[1] ?? 0);
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/admin/users/{id}/reactivate.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $reactivateResult = videochat_admin_reactivate_user($pdo, $userId);
+        } catch (Throwable) {
+            return $errorResponse(500, 'admin_user_reactivate_failed', 'Could not reactivate user.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        $reactivateReason = (string) ($reactivateResult['reason'] ?? 'internal_error');
+        if (!(bool) ($reactivateResult['ok'] ?? false)) {
+            if ($reactivateReason === 'not_found') {
+                return $errorResponse(404, 'admin_user_not_found', 'The requested user does not exist.', [
+                    'user_id' => $userId,
+                ]);
+            }
+
+            return $errorResponse(500, 'admin_user_reactivate_failed', 'Could not reactivate user.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => $reactivateReason,
+                'user' => $reactivateResult['user'] ?? null,
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if ($path === '/api/moderation/ping') {
         if ($method !== 'GET') {
             return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/moderation/ping.', [

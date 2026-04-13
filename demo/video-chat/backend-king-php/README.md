@@ -58,6 +58,7 @@ cd demo/video-chat/backend-king-php
 - `POST /api/admin/users` (requires `admin` role)
 - `PATCH /api/admin/users/{id}` (requires `admin` role)
 - `POST /api/admin/users/{id}/deactivate` (requires `admin` role)
+- `POST /api/admin/users/{id}/reactivate` (requires `admin` role)
 - `GET /api/moderation/ping` (requires `admin` or `moderator` role)
 - `GET /api/user/ping` (requires authenticated `admin`/`moderator`/`user` role)
 - `GET /api/user/settings` (requires authenticated `admin`/`moderator`/`user` role)
@@ -203,7 +204,9 @@ Response includes:
 - validation failures: `422 admin_user_validation_failed` with `error.details.fields`
 - update payload rejects unsupported fields fail-closed (`field_not_updatable`)
 - duplicate email: `409 admin_user_conflict` with `error.details.fields.email = already_exists`
-- missing target user (update/deactivate): `404 admin_user_not_found`
+- deactivate/reactivate are idempotent (`deactivated`/`already_disabled`, `reactivated`/`already_active`)
+- reactivating a user does not reinstate previously revoked sessions
+- missing target user (update/deactivate/reactivate): `404 admin_user_not_found`
 - success: `result.user` with normalized role/status/profile fields
 
 `GET /api/user/settings` + `PATCH /api/user/settings` contract:
@@ -406,7 +409,13 @@ Run the admin user update endpoint contract test (normalization + fail-closed un
 demo/video-chat/backend-king-php/tests/admin-user-update-contract.sh
 ```
 
-Run the admin user mutation contract test (create/update/deactivate + validation/conflict semantics):
+Run the admin user status endpoint contract test (deactivate/reactivate idempotency + session invalidation policy):
+
+```bash
+demo/video-chat/backend-king-php/tests/admin-user-status-contract.sh
+```
+
+Run the admin user mutation contract test (create/update/deactivate/reactivate + validation/conflict semantics):
 
 ```bash
 demo/video-chat/backend-king-php/tests/admin-user-mutation-contract.sh

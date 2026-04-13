@@ -51,6 +51,7 @@ function videochat_handle_runtime_routes(
             'admin_users_endpoint' => '/api/admin/users',
             'admin_user_update_endpoint_template' => '/api/admin/users/{id}',
             'admin_user_deactivate_endpoint_template' => '/api/admin/users/{id}/deactivate',
+            'admin_user_reactivate_endpoint_template' => '/api/admin/users/{id}/reactivate',
             'moderation_probe_endpoint' => '/api/moderation/ping',
             'user_probe_endpoint' => '/api/user/ping',
             'user_avatar_upload_endpoint' => '/api/user/avatar',

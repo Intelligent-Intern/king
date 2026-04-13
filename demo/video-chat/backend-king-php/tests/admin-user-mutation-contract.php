@@ -178,6 +178,22 @@ SQL
     videochat_admin_user_mutation_assert($deactivateMissing['ok'] === false, 'deactivate missing user should fail');
     videochat_admin_user_mutation_assert($deactivateMissing['reason'] === 'not_found', 'deactivate missing user reason mismatch');
 
+    $reactivateResult = videochat_admin_reactivate_user($pdo, $createdUserId);
+    videochat_admin_user_mutation_assert($reactivateResult['ok'] === true, 'reactivate should succeed');
+    videochat_admin_user_mutation_assert($reactivateResult['reason'] === 'reactivated', 'reactivate reason mismatch');
+    videochat_admin_user_mutation_assert(
+        (string) (($reactivateResult['user'] ?? [])['status'] ?? '') === 'active',
+        'reactivated user status should be active'
+    );
+
+    $reactivateAgain = videochat_admin_reactivate_user($pdo, $createdUserId);
+    videochat_admin_user_mutation_assert($reactivateAgain['ok'] === true, 'second reactivate should still succeed');
+    videochat_admin_user_mutation_assert($reactivateAgain['reason'] === 'already_active', 'second reactivate reason mismatch');
+
+    $reactivateMissing = videochat_admin_reactivate_user($pdo, 999999);
+    videochat_admin_user_mutation_assert($reactivateMissing['ok'] === false, 'reactivate missing user should fail');
+    videochat_admin_user_mutation_assert($reactivateMissing['reason'] === 'not_found', 'reactivate missing user reason mismatch');
+
     @unlink($databasePath);
     fwrite(STDOUT, "[admin-user-mutation-contract] PASS\n");
     exit(0);
