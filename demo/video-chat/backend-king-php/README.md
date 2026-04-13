@@ -82,8 +82,11 @@ Environment overrides:
 - `VIDEOCHAT_SESSION_TTL_SECONDS` (default `43200`, min `60`, max `2592000`)
 - `VIDEOCHAT_DEMO_ADMIN_EMAIL` (default `admin@intelligent-intern.com`)
 - `VIDEOCHAT_DEMO_ADMIN_PASSWORD` (default `admin123`)
+- `VIDEOCHAT_DEMO_MODERATOR_EMAIL` (default `moderator@intelligent-intern.com`)
+- `VIDEOCHAT_DEMO_MODERATOR_PASSWORD` (default `moderator123`)
 - `VIDEOCHAT_DEMO_USER_EMAIL` (default `user@intelligent-intern.com`)
 - `VIDEOCHAT_DEMO_USER_PASSWORD` (default `user123`)
+- `VIDEOCHAT_DEMO_SEED_CALLS` (default `0`; `run-dev.sh` and `docker-compose.v1.yml` set default `1`)
 - `VIDEOCHAT_AVATAR_STORAGE_ROOT` (default `dirname(VIDEOCHAT_KING_DB_PATH)/avatars`)
 - `VIDEOCHAT_AVATAR_MAX_BYTES` (default `5242880`, clamped to `64KB..10MB`)
 - `VIDEOCHAT_INVITE_CALL_TTL_SECONDS` (default `21600`, clamped to `300..2592000`)
@@ -129,7 +132,8 @@ Current schema coverage includes:
 - `invite_codes`
 
 `/health` and `/api/runtime` now include the database migration/runtime
-snapshot (schema version, migration counts, and table inventory).
+snapshot (schema version, migration counts, table inventory, seeded demo users,
+and seeded demo calls when enabled).
 
 API and realtime contracts are expanded in subsequent V1 leaves.
 

@@ -38,6 +38,7 @@ echo "[video-chat][king-php-backend] websocket ws://$HOST:$PORT$WS_PATH"
 mkdir -p "$(dirname "${DB_PATH}")"
 touch "${DB_PATH}"
 export VIDEOCHAT_KING_DB_PATH="${DB_PATH}"
+export VIDEOCHAT_DEMO_SEED_CALLS="${VIDEOCHAT_DEMO_SEED_CALLS:-1}"
 echo "[video-chat][king-php-backend] sqlite path ${DB_PATH}"
 
 "${PHP_BIN}" "${php_args[@]}" "${SCRIPT_DIR}/server.php" &

@@ -10,6 +10,7 @@ services:
       VIDEOCHAT_KING_PORT: 18080
       VIDEOCHAT_KING_WS_PATH: /ws
       VIDEOCHAT_KING_DB_PATH: /data/video-chat.sqlite
+      VIDEOCHAT_DEMO_SEED_CALLS: "${VIDEOCHAT_DEMO_SEED_CALLS:-1}"
     ports:
       - "${VIDEOCHAT_V1_BACKEND_PORT:-18080}:18080"
     volumes:

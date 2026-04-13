@@ -38,8 +38,10 @@ function videochat_demo_user_blueprint(): array
 {
     $adminEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_ADMIN_EMAIL') ?: 'admin@intelligent-intern.com')));
     $userEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_USER_EMAIL') ?: 'user@intelligent-intern.com')));
+    $moderatorEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_MODERATOR_EMAIL') ?: 'moderator@intelligent-intern.com')));
     $adminPassword = trim((string) (getenv('VIDEOCHAT_DEMO_ADMIN_PASSWORD') ?: 'admin123'));
     $userPassword = trim((string) (getenv('VIDEOCHAT_DEMO_USER_PASSWORD') ?: 'user123'));
+    $moderatorPassword = trim((string) (getenv('VIDEOCHAT_DEMO_MODERATOR_PASSWORD') ?: 'moderator123'));
 
     if ($adminEmail === '' || filter_var($adminEmail, FILTER_VALIDATE_EMAIL) === false) {
         throw new InvalidArgumentException('VIDEOCHAT_DEMO_ADMIN_EMAIL must be a valid email address.');
@@ -47,19 +49,33 @@ function videochat_demo_user_blueprint(): array
     if ($userEmail === '' || filter_var($userEmail, FILTER_VALIDATE_EMAIL) === false) {
         throw new InvalidArgumentException('VIDEOCHAT_DEMO_USER_EMAIL must be a valid email address.');
     }
+    if ($moderatorEmail === '' || filter_var($moderatorEmail, FILTER_VALIDATE_EMAIL) === false) {
+        throw new InvalidArgumentException('VIDEOCHAT_DEMO_MODERATOR_EMAIL must be a valid email address.');
+    }
     if ($adminPassword === '') {
         throw new InvalidArgumentException('VIDEOCHAT_DEMO_ADMIN_PASSWORD must not be empty.');
     }
     if ($userPassword === '') {
         throw new InvalidArgumentException('VIDEOCHAT_DEMO_USER_PASSWORD must not be empty.');
     }
+    if ($moderatorPassword === '') {
+        throw new InvalidArgumentException('VIDEOCHAT_DEMO_MODERATOR_PASSWORD must not be empty.');
+    }
 
-    return [
+    $users = [
         [
             'email' => $adminEmail,
             'display_name' => 'Platform Admin',
             'role' => 'admin',
             'password' => $adminPassword,
+            'time_format' => '24h',
+            'theme' => 'dark',
+        ],
+        [
+            'email' => $moderatorEmail,
+            'display_name' => 'Call Moderator',
+            'role' => 'moderator',
+            'password' => $moderatorPassword,
             'time_format' => '24h',
             'theme' => 'dark',
         ],
@@ -72,6 +88,19 @@ function videochat_demo_user_blueprint(): array
             'theme' => 'dark',
         ],
     ];
+
+    $deduplicated = [];
+    $seenByEmail = [];
+    foreach ($users as $user) {
+        $email = strtolower(trim((string) ($user['email'] ?? '')));
+        if ($email === '' || isset($seenByEmail[$email])) {
+            continue;
+        }
+        $seenByEmail[$email] = true;
+        $deduplicated[] = $user;
+    }
+
+    return $deduplicated;
 }
 
 /**
@@ -192,6 +221,314 @@ SQL
             'email' => $demoUser['email'],
             'display_name' => $demoUser['display_name'],
             'role' => $demoUser['role'],
+        ];
+    }
+
+    return $seeded;
+}
+
+function videochat_demo_seed_calls_enabled(): bool
+{
+    $raw = getenv('VIDEOCHAT_DEMO_SEED_CALLS');
+    if ($raw === false) {
+        return false;
+    }
+
+    $normalized = strtolower(trim((string) $raw));
+    if ($normalized === '') {
+        return false;
+    }
+
+    return !in_array($normalized, ['0', 'false', 'off', 'no'], true);
+}
+
+/**
+ * @param array<string, array{id: int, email: string, display_name: string, role: string}> $usersByEmail
+ * @return array<int, array{
+ *   id: string,
+ *   room_id: string,
+ *   title: string,
+ *   status: string,
+ *   owner_email: string,
+ *   starts_at: string,
+ *   ends_at: string,
+ *   cancelled_at: ?string,
+ *   cancel_reason: ?string,
+ *   cancel_message: ?string,
+ *   participants: array<int, array{
+ *     source: string,
+ *     email: string,
+ *     display_name: string,
+ *     invite_state: string,
+ *     joined_at: ?string,
+ *     left_at: ?string
+ *   }>
+ * }>
+ */
+function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null): array
+{
+    if ($usersByEmail === []) {
+        return [];
+    }
+
+    $effectiveNow = $nowUnix ?? time();
+    $adminEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_ADMIN_EMAIL') ?: 'admin@intelligent-intern.com')));
+    $moderatorEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_MODERATOR_EMAIL') ?: 'moderator@intelligent-intern.com')));
+
+    if (!isset($usersByEmail[$adminEmail])) {
+        return [];
+    }
+
+    $internalEmails = [$adminEmail];
+    if (isset($usersByEmail[$moderatorEmail])) {
+        $internalEmails[] = $moderatorEmail;
+    }
+
+    $baseInternalParticipants = [];
+    foreach ($internalEmails as $email) {
+        $user = $usersByEmail[$email] ?? null;
+        if (!is_array($user)) {
+            continue;
+        }
+
+        $baseInternalParticipants[] = [
+            'source' => 'internal',
+            'email' => strtolower(trim((string) ($user['email'] ?? ''))),
+            'display_name' => (string) ($user['display_name'] ?? 'User'),
+            'invite_state' => 'accepted',
+            'joined_at' => null,
+            'left_at' => null,
+        ];
+    }
+
+    $activeParticipants = [];
+    foreach ($baseInternalParticipants as $participant) {
+        $participant['joined_at'] = gmdate('c', $effectiveNow - 600);
+        $activeParticipants[] = $participant;
+    }
+
+    return [
+        [
+            'id' => 'demo-call-architecture-sync',
+            'room_id' => 'lobby',
+            'title' => 'Architecture Sync',
+            'status' => 'scheduled',
+            'owner_email' => $adminEmail,
+            'starts_at' => gmdate('c', $effectiveNow + 3600),
+            'ends_at' => gmdate('c', $effectiveNow + 7200),
+            'cancelled_at' => null,
+            'cancel_reason' => null,
+            'cancel_message' => null,
+            'participants' => [
+                ...$baseInternalParticipants,
+                [
+                    'source' => 'external',
+                    'email' => 'guest.architecture@example.com',
+                    'display_name' => 'Guest Architect',
+                    'invite_state' => 'pending',
+                    'joined_at' => null,
+                    'left_at' => null,
+                ],
+            ],
+        ],
+        [
+            'id' => 'demo-call-platform-standup',
+            'room_id' => 'lobby',
+            'title' => 'Platform Standup',
+            'status' => 'active',
+            'owner_email' => $adminEmail,
+            'starts_at' => gmdate('c', $effectiveNow - 900),
+            'ends_at' => gmdate('c', $effectiveNow + 2700),
+            'cancelled_at' => null,
+            'cancel_reason' => null,
+            'cancel_message' => null,
+            'participants' => $activeParticipants,
+        ],
+        [
+            'id' => 'demo-call-retro-weekly',
+            'room_id' => 'lobby',
+            'title' => 'Weekly Retrospective',
+            'status' => 'ended',
+            'owner_email' => $adminEmail,
+            'starts_at' => gmdate('c', $effectiveNow - 7200),
+            'ends_at' => gmdate('c', $effectiveNow - 3600),
+            'cancelled_at' => null,
+            'cancel_reason' => null,
+            'cancel_message' => null,
+            'participants' => $baseInternalParticipants,
+        ],
+    ];
+}
+
+/**
+ * @return array<int, array{
+ *   id: string,
+ *   room_id: string,
+ *   title: string,
+ *   status: string,
+ *   owner_email: string,
+ *   starts_at: string,
+ *   ends_at: string
+ * }>
+ */
+function videochat_seed_demo_calls(PDO $pdo): array
+{
+    if (!videochat_demo_seed_calls_enabled()) {
+        return [];
+    }
+
+    $userRows = $pdo->query(
+        <<<'SQL'
+SELECT users.id, users.email, users.display_name, roles.slug AS role_slug
+FROM users
+INNER JOIN roles ON roles.id = users.role_id
+WHERE users.status = 'active'
+SQL
+    )->fetchAll();
+
+    $usersByEmail = [];
+    if (is_array($userRows)) {
+        foreach ($userRows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $email = strtolower(trim((string) ($row['email'] ?? '')));
+            if ($email === '') {
+                continue;
+            }
+
+            $usersByEmail[$email] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'email' => $email,
+                'display_name' => (string) ($row['display_name'] ?? $email),
+                'role' => (string) ($row['role_slug'] ?? 'user'),
+            ];
+        }
+    }
+
+    $blueprint = videochat_demo_call_blueprint($usersByEmail);
+    if ($blueprint === []) {
+        return [];
+    }
+
+    $selectCall = $pdo->prepare('SELECT id FROM calls WHERE id = :id LIMIT 1');
+    $insertCall = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO calls(id, room_id, title, owner_user_id, status, starts_at, ends_at, cancelled_at, cancel_reason, cancel_message, created_at, updated_at)
+VALUES(:id, :room_id, :title, :owner_user_id, :status, :starts_at, :ends_at, :cancelled_at, :cancel_reason, :cancel_message, :created_at, :updated_at)
+SQL
+    );
+    $updateCall = $pdo->prepare(
+        <<<'SQL'
+UPDATE calls
+SET room_id = :room_id,
+    title = :title,
+    owner_user_id = :owner_user_id,
+    status = :status,
+    starts_at = :starts_at,
+    ends_at = :ends_at,
+    cancelled_at = :cancelled_at,
+    cancel_reason = :cancel_reason,
+    cancel_message = :cancel_message,
+    updated_at = :updated_at
+WHERE id = :id
+SQL
+    );
+    $deleteParticipants = $pdo->prepare('DELETE FROM call_participants WHERE call_id = :call_id');
+    $insertParticipant = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO call_participants(call_id, user_id, email, display_name, source, invite_state, joined_at, left_at)
+VALUES(:call_id, :user_id, :email, :display_name, :source, :invite_state, :joined_at, :left_at)
+SQL
+    );
+
+    $seeded = [];
+    foreach ($blueprint as $call) {
+        $callId = trim((string) ($call['id'] ?? ''));
+        $ownerEmail = strtolower(trim((string) ($call['owner_email'] ?? '')));
+        $owner = $usersByEmail[$ownerEmail] ?? null;
+        if ($callId === '' || !is_array($owner) || (int) ($owner['id'] ?? 0) <= 0) {
+            continue;
+        }
+
+        $callPayload = [
+            ':id' => $callId,
+            ':room_id' => (string) ($call['room_id'] ?? 'lobby'),
+            ':title' => (string) ($call['title'] ?? 'Demo Call'),
+            ':owner_user_id' => (int) ($owner['id'] ?? 0),
+            ':status' => (string) ($call['status'] ?? 'scheduled'),
+            ':starts_at' => (string) ($call['starts_at'] ?? gmdate('c')),
+            ':ends_at' => (string) ($call['ends_at'] ?? gmdate('c')),
+            ':cancelled_at' => is_string($call['cancelled_at'] ?? null) ? (string) $call['cancelled_at'] : null,
+            ':cancel_reason' => is_string($call['cancel_reason'] ?? null) ? (string) $call['cancel_reason'] : null,
+            ':cancel_message' => is_string($call['cancel_message'] ?? null) ? (string) $call['cancel_message'] : null,
+            ':created_at' => gmdate('c'),
+            ':updated_at' => gmdate('c'),
+        ];
+
+        $selectCall->execute([':id' => $callId]);
+        $existing = $selectCall->fetch();
+        if (is_array($existing)) {
+            $updateCall->execute($callPayload);
+        } else {
+            $insertCall->execute($callPayload);
+        }
+
+        $deleteParticipants->execute([':call_id' => $callId]);
+        $participants = is_array($call['participants'] ?? null) ? $call['participants'] : [];
+
+        foreach ($participants as $participant) {
+            if (!is_array($participant)) {
+                continue;
+            }
+
+            $source = strtolower(trim((string) ($participant['source'] ?? '')));
+            $email = strtolower(trim((string) ($participant['email'] ?? '')));
+            if ($email === '' || !in_array($source, ['internal', 'external'], true)) {
+                continue;
+            }
+
+            $internalUser = $usersByEmail[$email] ?? null;
+            $userId = null;
+            $displayName = trim((string) ($participant['display_name'] ?? ''));
+
+            if ($source === 'internal') {
+                if (!is_array($internalUser) || (int) ($internalUser['id'] ?? 0) <= 0) {
+                    continue;
+                }
+                $userId = (int) ($internalUser['id'] ?? 0);
+                if ($displayName === '') {
+                    $displayName = (string) ($internalUser['display_name'] ?? $email);
+                }
+            } elseif ($displayName === '') {
+                $displayName = $email;
+            }
+
+            $inviteState = strtolower(trim((string) ($participant['invite_state'] ?? 'pending')));
+            if (!in_array($inviteState, ['pending', 'accepted', 'declined', 'cancelled'], true)) {
+                $inviteState = 'pending';
+            }
+
+            $insertParticipant->execute([
+                ':call_id' => $callId,
+                ':user_id' => $userId,
+                ':email' => $email,
+                ':display_name' => $displayName,
+                ':source' => $source,
+                ':invite_state' => $inviteState,
+                ':joined_at' => is_string($participant['joined_at'] ?? null) ? (string) $participant['joined_at'] : null,
+                ':left_at' => is_string($participant['left_at'] ?? null) ? (string) $participant['left_at'] : null,
+            ]);
+        }
+
+        $seeded[] = [
+            'id' => $callId,
+            'room_id' => (string) ($call['room_id'] ?? 'lobby'),
+            'title' => (string) ($call['title'] ?? 'Demo Call'),
+            'status' => (string) ($call['status'] ?? 'scheduled'),
+            'owner_email' => $ownerEmail,
+            'starts_at' => (string) ($call['starts_at'] ?? gmdate('c')),
+            'ends_at' => (string) ($call['ends_at'] ?? gmdate('c')),
         ];
     }
 
@@ -368,7 +705,8 @@ SQL,
  *   table_count: int,
  *   table_names: array<int, string>,
  *   journal_mode: string,
- *   demo_users: array<int, array{email: string, display_name: string, role: string}>
+ *   demo_users: array<int, array{email: string, display_name: string, role: string}>,
+ *   demo_calls: array<int, array{id: string, room_id: string, title: string, status: string, owner_email: string, starts_at: string, ends_at: string}>
  * }
  */
 function videochat_bootstrap_sqlite(string $databasePath): array
@@ -428,6 +766,7 @@ SQL
     }
 
     $seededDemoUsers = videochat_seed_demo_users($pdo);
+    $seededDemoCalls = videochat_seed_demo_calls($pdo);
 
     $tableNames = [];
     $tableRows = $pdo->query(
@@ -456,5 +795,6 @@ SQL
         'table_names' => $tableNames,
         'journal_mode' => strtoupper($journalMode),
         'demo_users' => $seededDemoUsers,
+        'demo_calls' => $seededDemoCalls,
     ];
 }
