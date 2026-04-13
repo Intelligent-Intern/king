@@ -283,7 +283,6 @@ if test "$PHP_KING" != "no"; then
         src/core/version.c       \
         src/core/health.c        \
         src/core/introspection.c \
-        src/media/rtp.c \
     "
 
     PHP_NEW_EXTENSION([king], [$KING_SRC], [$ext_shared])
