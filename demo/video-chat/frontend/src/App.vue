@@ -1259,9 +1259,9 @@ async function prepareLocalStream(): Promise<void> {
   if (waveletEnabled.value) {
     try {
       waveletProcessor = createWaveletProcessor({
-        quality: 60,
+        quality: 65,
         enableKalman: true,
-        keyFrameInterval: 30,
+        keyFrameInterval: 5,
       })
       localStream = await waveletProcessor.processStream(cameraStream)
       
@@ -1783,9 +1783,9 @@ async function toggleWavelet(): Promise<void> {
   if (waveletEnabled.value) {
     try {
       waveletProcessor = createWaveletProcessor({
-        quality: 60,
+        quality: 65,
         enableKalman: true,
-        keyFrameInterval: 30,
+        keyFrameInterval: 5,
       })
       const processedStream = await waveletProcessor.processStream(cameraStream)
       

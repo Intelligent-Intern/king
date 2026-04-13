@@ -110,8 +110,8 @@ function quantize2D(
   data: Float32Array, w: number, h: number, levels: number, quality: number
 ): Int16Array {
   const out = new Int16Array(data.length)
-  const llStep = baseStep(quality)
-  const llDz   = llStep * 0.5
+  const llStep = baseStep(quality) * 0.5   // finer LL quantization preserves faces/gradients
+  const llDz   = llStep * 0.25
   const llW    = w >> levels
   const llH    = h >> levels
 
@@ -126,7 +126,7 @@ function quantize2D(
   // Detail subbands — iterate level by level
   for (let lv = 0; lv < levels; lv++) {
     const step = detailStep(lv, levels, quality)
-    const dz   = step * 0.5
+    const dz   = step * 0.25  // smaller dead-zone preserves texture/edges
     const cw   = w >> lv
     const ch   = h >> lv
     const hw   = cw >> 1  // half-width  = start of horizontal-detail columns
@@ -161,7 +161,7 @@ function dequantize2D(
 
   for (let r = 0; r < llH; r++)
     for (let c = 0; c < llW; c++)
-      out[r * w + c] = quant[r * w + c] * step
+      out[r * w + c] = quant[r * w + c] * (step * 0.5)  // matches quantize2D LL step
 
   for (let lv = 0; lv < levels; lv++) {
     const s  = detailStep(lv, levels, quality)
@@ -250,7 +250,7 @@ export interface DecodedFrame {
   colorSpace?: PredefinedColorSpace
 }
 
-const LEVELS = 4
+const LEVELS = 3
 
 // ─── Encoder ─────────────────────────────────────────────────────────────────
 
@@ -305,7 +305,6 @@ export class WaveletVideoEncoder {
     } else {
       yEnc = Y
     }
-    this.previousY = Y  // save original Y (not residual) for next delta
 
     // ── Forward DWT ───────────────────────────────────────────────────────
     dwtFwd2D(yEnc, w, h, LEVELS)
@@ -316,6 +315,16 @@ export class WaveletVideoEncoder {
     const yQ = quantize2D(yEnc, w,   h,   LEVELS, this.quality)
     const uQ = quantize2D(U,    uvW, uvH, LEVELS, this.quality)
     const vQ = quantize2D(V,    uvW, uvH, LEVELS, this.quality)
+
+    // ── Closed-loop reference update ──────────────────────────────────────
+    // Reconstruct exactly what the decoder will produce, so encoder and
+    // decoder share the same previousY. This eliminates temporal drift.
+    const yRec = dequantize2D(yQ, w, h, LEVELS, this.quality)
+    dwtInv2D(yRec, w, h, LEVELS)
+    if (!isKey && this.previousY) {
+      for (let k = 0; k < yRec.length; k++) yRec[k] += this.previousY[k]
+    }
+    this.previousY = yRec
 
     // ── RLE encode ────────────────────────────────────────────────────────
     const yRle = rleEncode(yQ)

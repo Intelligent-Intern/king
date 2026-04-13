@@ -7,6 +7,7 @@
 
 import { createEncoder, createDecoder } from '../wavelet/codec.js'
 import { createKalmanFilter } from '../kalman/filter.js'
+import { WasmWaveletVideoEncoder, WasmWaveletVideoDecoder } from '../wasm/wasm-codec.js'
 
 export interface WaveletCodecConfig {
   quality: number
@@ -43,6 +44,7 @@ export class WaveletCodec {
   private frameCount: number
   private stats: CodecStats
   private encodedChunkId: number = 0
+  private usingWasm: boolean = false
 
   constructor(config: Partial<WaveletCodecConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
@@ -67,6 +69,36 @@ export class WaveletCodec {
       compressionRatio: 0,
       avgEncodeTimeMs: 0,
       avgDecodeTimeMs: 0,
+    }
+
+    // Kick off WASM init in background; swap in once ready
+    this.initWasm()
+  }
+
+  private async initWasm(): Promise<void> {
+    try {
+      const w = this.config.width
+      const h = this.config.height
+      const wasmEnc = new WasmWaveletVideoEncoder({
+        width: w, height: h,
+        quality: this.config.quality,
+        keyFrameInterval: this.config.keyFrameInterval,
+      })
+      const wasmDec = new WasmWaveletVideoDecoder({
+        width: w, height: h,
+        quality: this.config.quality,
+      })
+      const [encOk, decOk] = await Promise.all([wasmEnc.init(), wasmDec.init()])
+      if (encOk && decOk) {
+        this.encoder.reset()
+        this.decoder.reset()
+        this.encoder = wasmEnc as unknown as ReturnType<typeof createEncoder>
+        this.decoder = wasmDec as unknown as ReturnType<typeof createDecoder>
+        this.usingWasm = true
+        console.log('[WaveletCodec] Switched to WASM codec')
+      }
+    } catch (e) {
+      console.warn('[WaveletCodec] WASM init failed, staying on TS codec:', e)
     }
   }
 
@@ -123,7 +155,10 @@ export class WaveletCodec {
 
     try {
       const unpackaged = this.unpackageFrame(encodedData)
-      if (!unpackaged || !unpackaged.data) return null
+      if (!unpackaged || !unpackaged.data) {
+        this.recordDecodeMetric(performance.now() - startTime)
+        return null
+      }
 
       const { data, width, height, isKeyFrame } = unpackaged
 
@@ -137,30 +172,39 @@ export class WaveletCodec {
       }
 
       const decoded = this.decoder.decodeFrame(frameData)
-      if (!decoded) return null
+      if (!decoded) {
+        this.recordDecodeMetric(performance.now() - startTime)
+        return null
+      }
 
       const canvas = new OffscreenCanvas(width, height)
       const ctx = canvas.getContext('2d')
-      if (!ctx) return null
+      if (!ctx) {
+        this.recordDecodeMetric(performance.now() - startTime)
+        return null
+      }
 
       const imageData = new ImageData(new Uint8ClampedArray(decoded.data), width, height)
       ctx.putImageData(imageData, 0, 0)
-      
-      const decodeTime = performance.now() - startTime
-      this.stats.framesDecoded++
-      this.stats.avgDecodeTimeMs = 
-        (this.stats.avgDecodeTimeMs * (this.stats.framesDecoded - 1) + decodeTime) / this.stats.framesDecoded
 
+      this.recordDecodeMetric(performance.now() - startTime)
       return new VideoFrame(canvas, { timestamp })
     } catch (error) {
       console.error('[WaveletCodec] Decode error:', error)
+      this.recordDecodeMetric(performance.now() - startTime)
       return null
     }
   }
 
+  private recordDecodeMetric(decodeTime: number): void {
+    this.stats.framesDecoded++
+    this.stats.avgDecodeTimeMs =
+      (this.stats.avgDecodeTimeMs * (this.stats.framesDecoded - 1) + decodeTime) / this.stats.framesDecoded
+  }
+
   private packageFrame(frameData: { type: string; timestamp: number; data: ArrayBuffer; width: number; height: number; quality: number }, width: number, height: number): ArrayBuffer {
     const header = new Uint32Array([
-      0x574C4556,
+      0x574C5643,
       width,
       height,
       frameData.type === 'keyframe' ? 1 : 0,
@@ -177,16 +221,16 @@ export class WaveletCodec {
 
   private unpackageFrame(data: ArrayBuffer): { data: ArrayBuffer; width: number; height: number; isKeyFrame: boolean } | null {
     const view = new DataView(data)
-    const magic = view.getUint32(0)
-    
-    if (magic !== 0x574C4556) {
+    const magic = view.getUint32(0, true)  // Uint32Array writes LE, so read LE
+
+    if (magic !== 0x574C5643) {
       return null
     }
 
-    const width = view.getUint32(4)
-    const height = view.getUint32(8)
-    const isKeyFrame = view.getUint32(12) === 1
-    const byteLength = view.getUint32(16)
+    const width = view.getUint32(4, true)
+    const height = view.getUint32(8, true)
+    const isKeyFrame = view.getUint32(12, true) === 1
+    const byteLength = view.getUint32(16, true)
 
     const frameData = data.slice(24, 24 + byteLength)
 
