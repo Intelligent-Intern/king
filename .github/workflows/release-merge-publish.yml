@@ -414,6 +414,200 @@ jobs:
               release-assets/*
           fi
 
+  publish-iibin:
+    name: Publish @intelligentintern/iibin to npm
+    needs:
+      - resolve-release-merge
+      - publish-release
+    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout release merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve-release-merge.outputs.release-commit }}
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@intelligentintern"
+
+      - name: Resolve IIBIN package publish metadata
+        id: iibin-meta
+        run: |
+          set -euo pipefail
+
+          release_version="${{ needs.resolve-release-merge.outputs.release-version }}"
+          if [[ -z "${release_version}" ]]; then
+            echo "Missing release version output from resolve-release-merge." >&2
+            exit 1
+          fi
+
+          package_version="${release_version#v}"
+          if [[ -z "${package_version}" ]]; then
+            echo "Failed to derive package version from release version: ${release_version}" >&2
+            exit 1
+          fi
+
+          npm_tag="latest"
+          if [[ "${package_version}" == *-* ]]; then
+            npm_tag="beta"
+          fi
+
+          echo "package-version=${package_version}" >> "${GITHUB_OUTPUT}"
+          echo "npm-tag=${npm_tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Sync package version to release
+        env:
+          PACKAGE_VERSION: ${{ steps.iibin-meta.outputs.package-version }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'packages/iibin/package.json';
+          const version = process.env.PACKAGE_VERSION;
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+          pkg.version = version;
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          NODE
+
+      - name: Install package dependencies
+        working-directory: packages/iibin
+        run: npm ci
+
+      - name: Verify package build
+        working-directory: packages/iibin
+        run: npm run typecheck && npm run build
+
+      - name: Check if package version already exists
+        id: iibin-npm-check
+        env:
+          PACKAGE_VERSION: ${{ steps.iibin-meta.outputs.package-version }}
+        run: |
+          set -euo pipefail
+          if npm view "@intelligentintern/iibin@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
+            echo "::notice::@intelligentintern/iibin@${PACKAGE_VERSION} already exists on npm; skipping publish."
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Publish package to npm
+        if: steps.iibin-npm-check.outputs.exists != 'true'
+        working-directory: packages/iibin
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TAG: ${{ steps.iibin-meta.outputs.npm-tag }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
+            echo "NPM_TOKEN secret is required to publish @intelligentintern/iibin." >&2
+            exit 1
+          fi
+          npm publish --access public --tag "${NPM_TAG}"
+
+  docker-build-video-chat:
+    name: Build and push video-chat ${{ matrix.component }} image
+    needs:
+      - resolve-release-merge
+      - publish-iibin
+    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: frontend
+            dockerfile: ./demo/video-chat/frontend/Dockerfile
+            image_suffix: -videochat-frontend
+            platforms: linux/amd64,linux/arm64
+          - component: backend
+            dockerfile: ./demo/video-chat/backend/Dockerfile
+            image_suffix: -videochat-backend
+            platforms: linux/amd64,linux/arm64
+    steps:
+      - name: Checkout release merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve-release-merge.outputs.release-commit }}
+          submodules: recursive
+
+      - name: Prepare video-chat image metadata
+        id: meta-video-chat
+        run: |
+          set -euo pipefail
+          image_name="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          image="${REGISTRY}/${image_name}${{ matrix.image_suffix }}"
+          release_version="${{ needs.resolve-release-merge.outputs.release-version }}"
+          revision="${{ needs.resolve-release-merge.outputs.release-commit }}"
+          short_sha="$(printf '%s' "${revision}" | cut -c1-12)"
+          iibin_version="${release_version#v}"
+          iibin_package_spec="@intelligentintern/iibin@${iibin_version}"
+
+          if [[ -z "${release_version}" || -z "${iibin_version}" ]]; then
+            echo "Missing release version output from resolve-release-merge." >&2
+            exit 1
+          fi
+
+          tags=(
+            "${image}:${release_version}"
+            "${image}:sha-${short_sha}"
+          )
+          if [[ "${release_version}" != *-* ]]; then
+            tags+=("${image}:latest")
+          fi
+
+          created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          {
+            printf 'tags<<EOF\n'
+            printf '%s\n' "${tags[@]}"
+            printf 'EOF\n'
+            printf 'labels<<EOF\n'
+            printf 'org.opencontainers.image.title=king-video-chat-%s\n' "${{ matrix.component }}"
+            printf 'org.opencontainers.image.description=King video chat %s image\n' "${{ matrix.component }}"
+            printf 'org.opencontainers.image.created=%s\n' "${created_at}"
+            printf 'org.opencontainers.image.revision=%s\n' "${revision}"
+            printf 'org.opencontainers.image.source=https://github.com/%s\n' "${GITHUB_REPOSITORY}"
+            printf 'org.opencontainers.image.version=%s\n' "${release_version}"
+            printf 'EOF\n'
+            printf 'created_at=%s\n' "${created_at}"
+            printf 'iibin_version=%s\n' "${iibin_version}"
+            printf 'iibin_package_spec=%s\n' "${iibin_package_spec}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push video-chat ${{ matrix.component }} image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: ${{ steps.meta-video-chat.outputs.tags }}
+          labels: ${{ steps.meta-video-chat.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            IIBIN_SOURCE=${{ steps.meta-video-chat.outputs.iibin_package_spec }}
+
   dockerhub-runtime-release:
     name: Build and push Docker Hub runtime image
     needs:
@@ -502,6 +696,30 @@ jobs:
             PHP_VERSION=8.5
             BUILD_DATE=${{ steps.meta-dockerhub.outputs.created_at }}
             VCS_REF=${{ needs.resolve-release-merge.outputs.release-commit }}
+
+      - name: Generate Docker Hub runtime CVE inventory
+        id: dockerhub-cve-inventory
+        run: |
+          set -euo pipefail
+          release_version="${{ needs.resolve-release-merge.outputs.release-version }}"
+          inventory_path="dist/release-cve-inventory-${release_version}.json"
+          ./infra/scripts/inventory-release-cves.sh \
+            --images "intelligentintern/king:${release_version}" \
+            --output "${inventory_path}"
+          echo "inventory_path=${inventory_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Enforce Docker Hub runtime CVE gate
+        run: |
+          set -euo pipefail
+          ./infra/scripts/check-release-cve-gate.sh \
+            --inventory "${{ steps.dockerhub-cve-inventory.outputs.inventory_path }}" \
+            --require-clear-cves "CVE-2025-45582,CVE-2024-56433,CVE-2024-2236"
+
+      - name: Upload Docker Hub runtime CVE inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: dockerhub-runtime-cve-inventory
+          path: ${{ steps.dockerhub-cve-inventory.outputs.inventory_path }}
 
   docker-build-and-push:
     name: Build and push King PHP ${{ matrix.php-version }}

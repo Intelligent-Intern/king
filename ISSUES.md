@@ -38,68 +38,99 @@
 
 - The user is advancing the current batch manually with `w`.
 - Close exactly one checkbox, make exactly one commit, and then wait for the next `w`.
-- For the current visible batch, defer repo docs and `READYNESS_TRACKER.md` updates until every visible checkbox is closed, then do the closeout sweep once before pushing `develop/v1.0.4-beta` and opening the PR.
-- After the PR is open, each further `w` means wait instead of auto-refilling from `READYNESS_TRACKER.md`.
+- Do not auto-refill from `READYNESS_TRACKER.md`; only replenish when the user explicitly requests the next batch.
+- Keep `ISSUES.md` aligned with the active release branch and commit roadmap reshapes explicitly.
 
 ## Current Next Leaf
 
-- Batch `T2` is fully closed on `develop/v1.0.4-beta`; waiting for the next batch instruction.
+- Batch `V0` is active on `develop/v1.0.6-beta` (release-blocker security fixes first).
+- Start with `V0 #1`, close exactly one checkbox per `w`, and keep one commit per closed checkbox.
 
 ## Active Executable Items
 
-### T2. Deterministic Build Evidence and CI Hardening (9er Batch)
+### V0. Release Blocker Security Remediation (4er Batch)
 
-This batch stays repo-local and CI-verifiable. No manual provider checks, no
-external runtime probes.
+- [x] `#1 Produce a deterministic CVE inventory for Docker/runtime images (CVE-2025-45582, CVE-2024-56433, CVE-2024-2236).`
+  done when: CI or local reproducible scan output maps each CVE to exact affected image/package/version and records fixed-target versions.
+- [x] `#2 Apply highest-priority dependency/base-image updates to remove CVE-2025-45582 and CVE-2024-56433 from release images.`
+  done when: the affected Dockerfiles/workflows are updated, builds stay green, and rescans show both CVEs no longer present.
+- [x] `#3 Resolve CVE-2024-2236 for release gate (fix, replace component, or documented non-exploitable path with explicit control).`
+  done when: release CI has an enforceable gate for this CVE and the branch contains either a real remediation or a justified, tested fail-closed mitigation.
+- [x] `#4 Switch demo/video-chat IIBIN usage to the published npm package (@intelligentintern/iibin) from node_modules.`
+  done when: frontend imports resolve from `@intelligentintern/iibin`, local duplicate protocol sources are removed from app usage paths, and build/tests stay green.
 
-- [x] `#1 Fully document pinned dependency provenance and enforce doc-lock sync in CI.`
-  done when: lock-backed dependency pins are documented in-repo and CI fails on doc/lock drift.
-- [x] `#2 Enforce reproducibility of container package builds as a required CI gate.`
-  done when: container package jobs fail if same-commit rebuild outputs are not byte-identical.
-- [x] `#3 Eliminate remaining host-specific special cases from release build outputs.`
-  done when: release packaging metadata and output shape no longer depend on ambient host specifics.
-- [x] `#4 Eliminate remaining host-specific special cases from debug/ASan/UBSan profile outputs.`
-  done when: profile artifacts are produced by pinned, explicit inputs only and do not drift by host defaults.
-- [x] `#5 Add release-artifact supply-chain integrity verification gate.`
-  done when: CI verifies deterministic checksums plus provenance metadata integrity before publishing artifacts.
-- [x] `#6 Expand deterministic transport fuzz coverage in CI.`
-  done when: seeded transport fuzz subset runs in CI with reproducible inputs and fail-closed assertions.
-- [x] `#7 Expand deterministic object-store fuzz coverage in CI.`
-  done when: seeded object-store fuzz subset runs in CI with reproducible inputs and fail-closed assertions.
-- [x] `#8 Expand deterministic MCP/transfer fuzz coverage in CI.`
-  done when: seeded MCP/transfer fuzz subset runs in CI with reproducible inputs and fail-closed assertions.
-- [x] `#9 Eliminate top classified flaky PHPT cases from canonical baseline.`
-  done when: currently classified flaky failures are removed or stabilized with stronger deterministic assertions.
+After V0 closes, resume `U2` from `#1`.
 
-### T1. CI Determinism and No-Manual-Test Hardening (9er Batch)
+### U2. Video Call Productization (30er Batch)
 
-This batch is intentionally repo-local and CI-verifiable only: no manual provider validation, no manual runtime probes, no external hand-testing gates.
+Design guardrails for this batch:
+- no glassmorphism, no opacity-heavy overlays, no decorative noisy borders
+- visual language: clean enterprise blend (IBM Carbon x Fiori x Microsoft style)
+- responsive first: mobile, tablet, and desktop must all remain usable
 
-- [x] `#1 Pin and freeze build/release toolchain versions in one canonical source used by scripts and CI.`
-  done when: release and CI builds fail on toolchain drift and no ambient host version silently changes outputs.
-- [x] `#2 Enforce pinned QUIC/bootstrap dependency provenance before any build starts.`
-  done when: CI hard-fails if quiche/boringssl/wirefilter lock provenance differs from tracked pins.
-- [x] `#3 Remove remaining non-deterministic Cargo/Git resolution paths from release packaging.`
-  done when: release scripts only resolve locked refs and never fall back to branch-based or host-state-dependent resolution.
-- [x] `#4 Add reproducible release-archive verification as a required CI gate.`
-  done when: package jobs run deterministic rebuild checks and fail if same-commit artifacts are not byte-identical.
-- [x] `#5 Expand transport-facing untrusted-input negative PHPT matrix.`
-  done when: malformed/oversized/protocol-invalid transport payloads are covered with stable fail-closed assertions.
-- [x] `#6 Expand object-store negative PHPT matrix for traversal/injection/corrupt-manifest inputs.`
-  done when: unsafe path and snapshot-import edge cases are covered and proven to fail closed.
-- [x] `#7 Emit deterministic regression diagnostics artifacts on PHPT failures across all shards/jobs.`
-  done when: failure uploads always include structured summaries plus the relevant `.diff/.exp/.log/.out` payloads.
-- [x] `#8 Add flaky-test detection pass for canonical PHPT failures.`
-  done when: CI reruns failing subsets and reports flaky-vs-deterministic classification in artifacts.
-- [x] `#9 Add CI truthfulness gates for public contracts.`
-  done when: stub/runtime parity and public-claim checks are enforced so unsupported caveat text cannot silently regress.
+- [x] `#1 Build a canonical workspace shell layout (rail + stage + context) with deterministic breakpoints.`
+  done when: the video-chat app uses one responsive shell architecture with explicit breakpoints and no legacy stress-panel fragmentation.
+- [x] `#2 Introduce one shared UI token layer for color, spacing, border, radius, and elevation.`
+  done when: components consume design tokens from a single source and remove ad-hoc inline visual constants.
+- [x] `#3 Normalize typography and control sizing to a consistent enterprise baseline.`
+  done when: inputs, buttons, headers, and body text follow one coherent scale and alignment contract across views.
+- [x] `#4 Add reduced-motion-safe slide transitions for stage view switching.`
+  done when: chat/call transitions animate cleanly by default and disable motion under `prefers-reduced-motion`.
+- [x] `#5 Implement login entry with persisted local session identity.`
+  done when: a user must sign in with display name before workspace access and session identity survives reload.
+- [x] `#6 Add explicit sign-out lifecycle with full connection and call cleanup.`
+  done when: sign-out reliably tears down websocket/media state and returns to unauthenticated entry.
+- [x] `#7 Enforce authenticated workspace gating in the UI flow.`
+  done when: room/chat/call surfaces are not reachable before successful sign-in state.
+- [x] `#8 Implement room directory fetch with stable ordering and member counters.`
+  done when: room list comes from backend API, displays deterministic ordering, and reflects live member counts.
+- [x] `#9 Implement room creation flow with backend roundtrip and optimistic UI refresh.`
+  done when: create-room submits to backend, resolves conflicts, and updates the active room list without page reload.
+- [x] `#10 Implement room switching with state reset boundaries.`
+  done when: switching rooms updates active context and resets room-scoped typing/call state safely.
+- [x] `#11 Implement invite-code generation for active room.`
+  done when: active room can produce an invite code via API and display it in context panel.
+- [x] `#12 Implement invite-code redeem/join flow.`
+  done when: valid invite code resolves target room and joins/switches user to that room.
+- [x] `#13 Implement copy-invite action with graceful clipboard fallback handling.`
+  done when: invite copy works in secure contexts and fails silently/cleanly otherwise.
+- [x] `#14 Add room participant roster backed by live room snapshots.`
+  done when: participant list is sourced from server snapshots and updates in near-real-time.
+- [x] `#15 Implement multi-user chat fanout contract end-to-end.`
+  done when: chat messages from one user are delivered to all peers in room, not echoed locally only.
+- [x] `#16 Add typing indicator start/stop signaling with debounce discipline.`
+  done when: typing state is room-scoped, excludes self-display, and auto-clears after bounded idle window.
+- [x] `#17 Add bounded chat composer constraints (length and empty rejection).`
+  done when: composer enforces max length and rejects empty/whitespace payloads before transport.
+- [x] `#18 Add deterministic chat timestamp rendering with stable locale-safe formatting.`
+  done when: messages render consistent timestamp formatting across clients.
+- [x] `#19 Implement pre-call local media preview as first-class join gate.`
+  done when: users can preview camera feed before joining call and permission failures are handled explicitly.
+- [x] `#20 Implement call join/leave signaling lifecycle at room scope.`
+  done when: joining/leaving call updates local and remote participant call presence reliably.
+- [x] `#21 Introduce peer-connection manager keyed by remote user id.`
+  done when: each remote participant has an isolated RTCPeerConnection lifecycle with clean map ownership.
+- [x] `#22 Implement targeted offer/answer signaling path per peer.`
+  done when: offers and answers are routed to intended peer ids and support multi-peer room negotiation.
+- [x] `#23 Implement targeted ICE candidate forwarding per peer.`
+  done when: ICE candidates route to correct remote peer and are applied safely on receiving side.
+- [x] `#24 Bind remote tracks to dynamic call tiles with safe attach/detach.`
+  done when: remote streams appear/disappear with participant lifecycle and no stale tile remnants.
+- [x] `#25 Implement mic toggle via track state without renegotiation churn.`
+  done when: microphone enable/disable flips local track state and propagates expected call behavior.
+- [x] `#26 Implement camera toggle via track state without call teardown.`
+  done when: camera enable/disable flips local video track state while preserving active peer connections.
+- [x] `#27 Implement full call teardown on room-switch/sign-out/unmount boundaries.`
+  done when: all peer connections/media tracks close deterministically on boundary transitions.
+- [x] `#28 Add websocket reconnect with bounded backoff and room resync.`
+  done when: connection loss triggers bounded reconnect attempts and restores room/session state on recovery.
+- [x] `#29 Add local demo backend contract for room/invite/presence/chat/call signaling.`
+  done when: `dev-backend.mjs` exposes health/API/ws flows that satisfy current frontend contracts.
+- [x] `#30 Add verification and docs closure for the new video-call stack.`
+  done when: build passes, smoke checks are documented, and README startup/runtime boundaries are updated honestly.
 
 ## Notes
 
-- The active batch is now `T2` on `develop/v1.0.4-beta`.
-- Batch `T1` is fully closed on `develop/v1.0.4-beta`; deferred docs and tracker closeout are completed.
-- `READYNESS_TRACKER.md` and `PROJECT_ASSESSMENT.md` now include the `T1` closure updates.
-- Batch `S` remains fully closed (`#1`, `#3`-`#19`) and stays recorded in `PROJECT_ASSESSMENT.md`.
-- The `Q` and `R` blocks are fully completed and recorded in `PROJECT_ASSESSMENT.md`.
-- Batch `T2` is fully closed on `develop/v1.0.4-beta`; deferred tracker and assessment closeout are completed.
+- Closed batches (`Q`, `R`, `S`, `T1`, `T2`) stay tracked in `PROJECT_ASSESSMENT.md`.
+- This file now contains only the active executable queue for the next batch.
 - If a task is not listed here, it is not the current repo-local execution item.

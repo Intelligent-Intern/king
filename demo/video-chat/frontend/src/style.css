@@ -1,0 +1,151 @@
+:root {
+  /* Color tokens */
+  --king-color-bg-canvas: #eef1f5;
+  --king-color-bg-surface: #ffffff;
+  --king-color-bg-surface-alt: #f6f8fb;
+  --king-color-bg-selected: #f2f7ff;
+  --king-color-bg-message-mine: #f5f9ff;
+  --king-color-bg-video: #111827;
+  --king-color-text-primary: #0f1724;
+  --king-color-text-secondary: #5f6b7a;
+  --king-color-border-default: #d5dbe3;
+  --king-color-border-accent: #bad1ff;
+  --king-color-accent: #0f62fe;
+  --king-color-danger: #b42318;
+  --king-color-on-accent: #ffffff;
+  --king-color-on-danger: #ffffff;
+  --king-color-presence-idle: #8e98a8;
+  --king-color-presence-live: #12715b;
+
+  /* Spacing tokens */
+  --king-space-1: 0.25rem;
+  --king-space-2: 0.5rem;
+  --king-space-3: 0.75rem;
+  --king-space-4: 1rem;
+  --king-space-5: 1.5rem;
+  --king-space-6: 2rem;
+  --king-space-tight: 0.45rem;
+  --king-space-soft: 0.55rem;
+  --king-space-dense: 0.6rem;
+  --king-space-cozy: 0.65rem;
+  --king-space-relaxed: 0.7rem;
+  --king-space-loose: 0.85rem;
+  --king-space-panel: 0.9rem;
+  --king-space-micro: 0.1rem;
+  --king-space-min: 0.15rem;
+  --king-space-xs: 0.2rem;
+  --king-space-sm: 0.35rem;
+  --king-space-input-y: 0.62rem;
+  --king-space-input-x: 0.75rem;
+  --king-space-control-y: 0.55rem;
+  --king-space-control-x: 0.8rem;
+
+  /* Size tokens */
+  --king-size-user-dot: 0.85rem;
+  --king-size-presence-dot: 0.7rem;
+
+  /* Typography tokens */
+  --king-font-size-100: 0.8rem;
+  --king-font-size-150: 0.82rem;
+  --king-font-size-200: 0.88rem;
+  --king-font-size-250: 0.9rem;
+  --king-font-size-300: 0.92rem;
+  --king-font-size-400: 1rem;
+  --king-font-size-500: 1.125rem;
+  --king-font-size-600: 1.5rem;
+  --king-font-weight-regular: 400;
+  --king-font-weight-medium: 500;
+  --king-font-weight-semibold: 600;
+  --king-line-height-tight: 1.3;
+  --king-line-height-body: 1.45;
+  --king-line-height-loose: 1.55;
+
+  /* Control tokens */
+  --king-control-height: 2.25rem;
+  --king-control-font-size: var(--king-font-size-200);
+  --king-control-font-weight: var(--king-font-weight-medium);
+
+  /* Radius tokens */
+  --king-radius-0: 0.5rem;
+  --king-radius-1: 0.45rem;
+  --king-radius-2: 0.55rem;
+  --king-radius-3: 0.6rem;
+  --king-radius-4: 0.75rem;
+  --king-radius-pill: 999px;
+
+  /* Border tokens */
+  --king-border-width: 1px;
+  --king-border-default: var(--king-border-width) solid var(--king-color-border-default);
+  --king-border-accent: var(--king-border-width) solid var(--king-color-accent);
+
+  /* Elevation tokens */
+  --king-elevation-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 2px 6px rgba(16, 24, 40, 0.04);
+  --king-elevation-2: 0 6px 18px rgba(16, 24, 40, 0.08);
+
+  /* Motion tokens */
+  --king-motion-fast: 0.2s;
+  --king-motion-standard: 0.22s;
+  --king-motion-stage-duration: 0.24s;
+  --king-motion-stage-shift: 1rem;
+  --king-motion-stage-fade-start: 0;
+  --king-motion-ease: ease;
+  --king-motion-stage-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Backward-compatible aliases */
+  --king-bg: var(--king-color-bg-canvas);
+  --king-surface: var(--king-color-bg-surface);
+  --king-border: var(--king-color-border-default);
+  --king-text: var(--king-color-text-primary);
+  --king-muted: var(--king-color-text-secondary);
+  --king-accent: var(--king-color-accent);
+  --king-shadow-1: var(--king-elevation-1);
+  --king-shadow-2: var(--king-elevation-2);
+
+  font-family: 'IBM Plex Sans', 'Segoe UI Variable Text', 'Segoe UI', 'Noto Sans', sans-serif;
+  line-height: var(--king-line-height-body);
+  font-weight: var(--king-font-weight-regular);
+  color: var(--king-text);
+  background: var(--king-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--king-bg);
+  color: var(--king-text);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}

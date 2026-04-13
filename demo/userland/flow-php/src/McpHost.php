@@ -363,6 +363,7 @@ final class McpHost
     {
         stream_set_blocking($client, true);
         stream_set_timeout($client, 5);
+        $loopbackPeer = $this->isLoopbackPeer($client);
 
         while (($line = stream_get_line($client, $this->maxLineBytes, "\n")) !== false) {
             $line = rtrim($line, "\r");
@@ -373,6 +374,14 @@ final class McpHost
             $this->commandsHandled++;
 
             if ($line === 'STOP') {
+                if (!$loopbackPeer) {
+                    $this->protocolErrors++;
+                    $this->writeFrame($client, McpHostResponse::error(
+                        'mcp host STOP command is restricted to loopback clients.'
+                    )->toFrame());
+                    continue;
+                }
+
                 $this->writeFrame($client, 'OK');
                 $this->stopRequested = true;
                 break;
@@ -518,6 +527,58 @@ final class McpHost
     {
         fwrite($client, $frame . "\n");
         fflush($client);
+    }
+
+    private function isLoopbackPeer($client): bool
+    {
+        $peerName = stream_socket_get_name($client, true);
+        if (!is_string($peerName) || $peerName === '') {
+            return false;
+        }
+
+        $host = $this->hostFromSocketName($peerName);
+        if ($host === '') {
+            return false;
+        }
+
+        return $this->isLoopbackHost($host);
+    }
+
+    private function hostFromSocketName(string $socketName): string
+    {
+        if (preg_match('/^\[(.*)\]:(\d+)$/', $socketName, $matches) === 1) {
+            return (string) $matches[1];
+        }
+
+        $separatorPosition = strrpos($socketName, ':');
+        if ($separatorPosition === false) {
+            return trim($socketName, '[]');
+        }
+
+        return trim(substr($socketName, 0, $separatorPosition), '[]');
+    }
+
+    private function isLoopbackHost(string $host): bool
+    {
+        $normalized = strtolower(trim($host));
+        if ($normalized === '') {
+            return false;
+        }
+
+        $zoneSeparator = strpos($normalized, '%');
+        if ($zoneSeparator !== false) {
+            $normalized = substr($normalized, 0, $zoneSeparator);
+        }
+
+        if ($normalized === 'localhost' || $normalized === '::1') {
+            return true;
+        }
+
+        if (str_starts_with($normalized, '127.') || str_starts_with($normalized, '::ffff:127.')) {
+            return true;
+        }
+
+        return false;
     }
 
     private function endpointFor(string $host, int $port): string

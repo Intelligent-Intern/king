@@ -34,6 +34,8 @@ extension/tests/*.sh
 benchmarks/results/
 compat-artifacts/
 dist/
+!packages/iibin/dist/
+!packages/iibin/dist/**
 .cache/
 __pycache__/
 .pytest_cache/

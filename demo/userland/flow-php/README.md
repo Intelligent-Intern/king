@@ -144,8 +144,8 @@ The contract is intentionally small:
   recovery are restart-visible runtime state instead of controller-memory
   folklore
 - keep a small OO MCP host lifecycle for repo-local service processes with
-  explicit `start`, `serve`, `STOP`/shutdown, and protocol/handler error
-  accounting instead of ad-hoc per-test socket loops
+  explicit `start`, `serve`, loopback-only `STOP`/shutdown control, and
+  protocol/handler error accounting instead of ad-hoc per-test socket loops
 - keep immediate `local` and `remote_peer` control records inspectable during a
   live run by persisting the predicted sequential orchestrator `run-N` identity
   before the blocking start call returns

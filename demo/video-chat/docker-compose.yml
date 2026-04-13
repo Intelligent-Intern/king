@@ -1,0 +1,75 @@
+services:
+  videochat-backend:
+    container_name: king-videochat-backend
+    build:
+      context: ../..
+      dockerfile: demo/video-chat/backend/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      DATABASE_PATH: /data/king.db
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
+      SSL_ENABLED: ${SSL_ENABLED:-false}
+      SSL_CERT_PATH: /app/certs/server.crt
+      SSL_KEY_PATH: /app/certs/server.key
+      TURN_ENABLED: ${TURN_ENABLED:-false}
+      TURN_SERVER: ${TURN_SERVER:-}
+      TURN_USERNAME: ${TURN_USERNAME:-}
+      TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      RATE_LIMIT_WINDOW_MS: 900000
+      RATE_LIMIT_MAX_REQUESTS: 100
+    ports:
+      - "${VIDEOCHAT_BACKEND_PORT:-8080}:8080"
+    volumes:
+      - videochat-sqlite:/data
+      - ${SSL_CERT_PATH:-./certs:/app/certs}:/app/certs:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  videochat-frontend:
+    container_name: king-videochat-frontend
+    build:
+      context: ../..
+      dockerfile: demo/video-chat/frontend/Dockerfile
+    depends_on:
+      videochat-backend:
+        condition: service_healthy
+    environment:
+      VIDEOCHAT_BACKEND_ORIGIN: http://videochat-backend:8080
+    ports:
+      - "${VIDEOCHAT_FRONTEND_PORT:-5173}:5173"
+    restart: unless-stopped
+
+  coturn:
+    image: coturn/coturn:latest
+    container_name: king-videochat-turn
+    environment:
+      - TURNSERVER_ENABLED=1
+      - LISTENING_PORT=3478
+      - TLS_LISTENING_PORT=5349
+      - REALM=${TURN_REALM:-videochat.example.com}
+      - SERVER_NAME=${TURN_REALM:-videochat.example.com}
+      - SECRET=${TURN_STATIC_AUTH_SECRET:-change-me-in-production}
+      - EXTERNAL_IP=${EXTERNAL_IP:-}
+      - USE_AUTH_SECRET=1
+      - VERBOSE=1
+    ports:
+      - "${TURN_PORT:-3478}:3478/udp"
+      - "${TURN_TLS_PORT:-5349}:5349"
+    volumes:
+      - coturn-data:/var/lib/coturn
+    restart: unless-stopped
+    profiles:
+      - production
+
+volumes:
+  videochat-sqlite:
+  coturn-data:

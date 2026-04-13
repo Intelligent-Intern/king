@@ -158,5 +158,14 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_system_recover, arginfo_king_no_args)
     PHP_FE(king_system_shutdown, arginfo_king_no_args)
 
+    /* RTP / SFU */
+    PHP_FE(king_rtp_bind,             arginfo_king_rtp_bind)
+    PHP_FE(king_rtp_ice_credentials,  arginfo_king_rtp_socket)
+    PHP_FE(king_rtp_dtls_fingerprint, arginfo_king_rtp_socket)
+    PHP_FE(king_rtp_dtls_accept,      arginfo_king_rtp_dtls_accept)
+    PHP_FE(king_rtp_recv,             arginfo_king_rtp_recv)
+    PHP_FE(king_rtp_send,             arginfo_king_rtp_send)
+    PHP_FE(king_rtp_close,            arginfo_king_rtp_socket)
+
     PHP_FE_END
 };

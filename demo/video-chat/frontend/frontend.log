@@ -1,0 +1,269 @@
+
+> king-video-chat@1.0.0 dev
+> vite --host
+
+
+  VITE v8.0.8  ready in 401 ms
+
+  ➜  Local:   http://localhost:3000/
+  ➜  Network: http://192.168.0.104:3000/
+3:23:51 p.m. [vite] (client) hmr update /src/App.vue
+3:24:04 p.m. [vite] (client) hmr update /src/App.vue
+3:24:22 p.m. [vite] (client) hmr update /src/App.vue
+3:24:30 p.m. [vite] (client) hmr update /src/App.vue
+3:24:37 p.m. [vite] (client) hmr update /src/App.vue
+3:24:49 p.m. [vite] ws proxy error:
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
+3:24:50 p.m. [vite] ws proxy error:
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
+3:26:13 p.m. [vite] (client) hmr update /src/App.vue
+3:27:51 p.m. [vite] (client) hmr update /src/App.vue
+3:28:05 p.m. [vite] (client) hmr update /src/App.vue
+3:28:18 p.m. [vite] (client) hmr update /src/App.vue
+3:31:34 p.m. [vite] (client) hmr update /src/App.vue
+3:31:48 p.m. [vite] (client) hmr update /src/App.vue
+3:31:59 p.m. [vite] (client) hmr update /src/App.vue
+3:32:09 p.m. [vite] (client) hmr update /src/App.vue
+3:32:21 p.m. [vite] (client) hmr update /src/App.vue
+3:32:40 p.m. [vite] (client) hmr update /src/App.vue
+3:32:49 p.m. [vite] (client) hmr update /src/App.vue
+3:33:23 p.m. [vite] (client) hmr update /src/App.vue
+3:33:35 p.m. [vite] (client) hmr update /src/App.vue
+3:33:43 p.m. [vite] (client) hmr update /src/App.vue
+3:33:54 p.m. [vite] (client) hmr update /src/App.vue
+3:34:33 p.m. [vite] (client) hmr update /src/App.vue
+3:38:12 p.m. [vite] ws proxy error:
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
+3:38:13 p.m. [vite] ws proxy error:
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
+3:42:13 p.m. [vite] (client) hmr update /src/App.vue
+3:42:21 p.m. [vite] (client) hmr update /src/App.vue
+3:42:40 p.m. [vite] (client) hmr update /src/App.vue
+3:42:49 p.m. [vite] (client) hmr update /src/App.vue
+3:43:07 p.m. [vite] (client) hmr update /src/App.vue
+3:43:23 p.m. [vite] (client) hmr update /src/App.vue?vue&type=style&index=0&scoped=7a7a37b1&lang.css
+3:43:37 p.m. [vite] (client) hmr update /src/App.vue?vue&type=style&index=0&scoped=7a7a37b1&lang.css
+3:43:54 p.m. [vite] (client) hmr update /src/App.vue
+3:44:06 p.m. [vite] (client) hmr update /src/App.vue
+3:44:15 p.m. [vite] (client) hmr update /src/App.vue?vue&type=style&index=0&scoped=7a7a37b1&lang.css
+3:44:47 p.m. [vite] (client) hmr update /src/App.vue
+3:47:01 p.m. [vite] (client) hmr update /src/App.vue
+3:47:14 p.m. [vite] (client) hmr update /src/App.vue
+3:49:23 p.m. [vite] http proxy error: /api/stats
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:218:20)
+3:49:24 p.m. [vite] ws proxy error:
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
+3:49:24 p.m. [vite] http proxy error: /api/stats
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
+3:49:25 p.m. [vite] ws proxy error:
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
+3:49:25 p.m. [vite] http proxy error: /api/stats
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1122:18)
+    at afterConnectMultiple (node:net:1689:7)
+3:52:23 p.m. [vite] (client) hmr update /src/App.vue
+3:52:32 p.m. [vite] (client) hmr update /src/App.vue
+3:52:40 p.m. [vite] (client) hmr update /src/App.vue
+3:52:51 p.m. [vite] (client) hmr update /src/App.vue
+3:53:01 p.m. [vite] (client) hmr update /src/App.vue
+3:55:14 p.m. [vite] (client) hmr update /src/App.vue
+3:55:26 p.m. [vite] (client) hmr update /src/App.vue
+3:57:23 p.m. [vite] (client) hmr update /src/App.vue
+3:57:49 p.m. [vite] (client) hmr update /src/App.vue
+3:57:58 p.m. [vite] (client) hmr update /src/App.vue
+3:58:11 p.m. [vite] (client) hmr update /src/App.vue
+3:58:24 p.m. [vite] (client) hmr update /src/App.vue
+5:36:38 p.m. [vite] (client) hmr update /src/App.vue
+5:36:50 p.m. [vite] (client) hmr update /src/App.vue
+5:38:51 p.m. [vite] (client) hmr update /src/App.vue
+5:39:04 p.m. [vite] (client) hmr update /src/App.vue
+5:39:26 p.m. [vite] (client) hmr update /src/App.vue
+5:39:47 p.m. [vite] (client) hmr update /src/App.vue
+5:40:06 p.m. [vite] (client) hmr update /src/App.vue?vue&type=style&index=0&scoped=7a7a37b1&lang.css
+5:41:03 p.m. [vite] (client) hmr update /src/App.vue
+5:41:14 p.m. [vite] (client) hmr update /src/App.vue
+5:41:24 p.m. [vite] (client) hmr update /src/App.vue
+5:41:54 p.m. [vite] (client) hmr update /src/App.vue
+5:41:58 p.m. [vite] (client) hmr update /src/App.vue
+5:42:08 p.m. [vite] (client) hmr update /src/App.vue
+5:42:15 p.m. [vite] (client) hmr update /src/App.vue
+5:42:36 p.m. [vite] (client) hmr update /src/App.vue
+5:43:04 p.m. [vite] (client) hmr update /src/App.vue
+5:43:16 p.m. [vite] (client) hmr update /src/App.vue
+5:44:04 p.m. [vite] (client) hmr update /src/App.vue
+5:44:16 p.m. [vite] (client) hmr update /src/App.vue
+5:44:50 p.m. [vite] (client) hmr update /src/App.vue
+5:45:14 p.m. [vite] (client) hmr update /src/App.vue
+5:45:26 p.m. [vite] (client) hmr update /src/App.vue
+5:45:35 p.m. [vite] (client) hmr update /src/App.vue
+5:45:42 p.m. [vite] (client) hmr update /src/App.vue
+5:46:05 p.m. [vite] (client) hmr update /src/App.vue
+5:46:15 p.m. [vite] (client) hmr update /src/App.vue
+5:50:48 p.m. [vite] (client) hmr update /src/App.vue
+5:51:06 p.m. [vite] (client) hmr update /src/App.vue
+5:51:41 p.m. [vite] (client) hmr update /src/App.vue
+5:51:55 p.m. [vite] (client) hmr update /src/App.vue
+5:52:07 p.m. [vite] (client) hmr update /src/App.vue
+5:52:24 p.m. [vite] (client) hmr update /src/App.vue
+5:52:32 p.m. [vite] (client) hmr update /src/App.vue
+5:53:00 p.m. [vite] (client) hmr update /src/App.vue
+5:53:12 p.m. [vite] (client) hmr update /src/App.vue
+5:53:25 p.m. [vite] (client) hmr update /src/App.vue
+5:53:37 p.m. [vite] (client) hmr update /src/App.vue
+5:53:46 p.m. [vite] (client) hmr update /src/App.vue
+5:54:00 p.m. [vite] (client) hmr update /src/App.vue
+6:31:17 p.m. [vite] (client) hmr update /src/App.vue
+6:31:32 p.m. [vite] (client) hmr update /src/App.vue
+6:31:32 p.m. [vite] Internal server error: Element is missing end tag.
+  Plugin: vite:vue
+  File: /Users/sasha/king/demo/video-chat/frontend/src/App.vue:146:11
+  144 |            </section>
+  145 |  
+  146 |            <section v-else key="call" class="call-panel">
+      |             ^
+  147 |              <div v-if="!callJoined" class="prejoin">
+  148 |                <video ref="previewVideoRef" autoplay muted playsinline></video>
+      at createCompilerError (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:1378:17)
+      at emitError (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:3014:5)
+      at Object.onclosetag (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:2381:13)
+      at Tokenizer.stateInClosingTagName (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:799:16)
+      at Tokenizer.parse (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:1157:16)
+      at Object.baseParse (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:3053:13)
+      at Object.parse (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-dom/dist/compiler-dom.cjs.js:910:23)
+      at Object.parse$1 [as parse] (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-sfc/dist/compiler-sfc.cjs.js:1824:24)
+      at createDescriptor (file:///Users/sasha/king/demo/video-chat/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs:54:42)
+      at handleHotUpdate (file:///Users/sasha/king/demo/video-chat/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs:1162:25)
+6:31:32 p.m. [vite] Internal server error: Element is missing end tag.
+  Plugin: vite:vue
+  File: /Users/sasha/king/demo/video-chat/frontend/src/App.vue:146:11
+  144 |            </section>
+  145 |  
+  146 |            <section v-else key="call" class="call-panel">
+      |             ^
+  147 |              <div v-if="!callJoined" class="prejoin">
+  148 |                <video ref="previewVideoRef" autoplay muted playsinline></video>
+      at createCompilerError (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:1378:17)
+      at emitError (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:3014:5)
+      at Object.onclosetag (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:2381:13)
+      at Tokenizer.stateInClosingTagName (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:799:16)
+      at Tokenizer.parse (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:1157:16)
+      at Object.baseParse (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:3053:13)
+      at Object.parse (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-dom/dist/compiler-dom.cjs.js:910:23)
+      at Object.parse$1 [as parse] (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-sfc/dist/compiler-sfc.cjs.js:1824:24)
+      at createDescriptor (file:///Users/sasha/king/demo/video-chat/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs:54:42)
+      at handleHotUpdate (file:///Users/sasha/king/demo/video-chat/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs:1162:25)
+6:31:37 p.m. [vite] (client) Pre-transform error: Element is missing end tag.
+  Plugin: vite:vue
+  File: /Users/sasha/king/demo/video-chat/frontend/src/App.vue:146:11
+  144 |            </section>
+  145 |  
+  146 |            <section v-else key="call" class="call-panel">
+      |             ^
+  147 |              <div v-if="!callJoined" class="prejoin">
+  148 |                <video ref="previewVideoRef" autoplay muted playsinline></video>
+6:31:37 p.m. [vite] Internal server error: Element is missing end tag.
+  Plugin: vite:vue
+  File: /Users/sasha/king/demo/video-chat/frontend/src/App.vue:146:11
+  144 |            </section>
+  145 |  
+  146 |            <section v-else key="call" class="call-panel">
+      |             ^
+  147 |              <div v-if="!callJoined" class="prejoin">
+  148 |                <video ref="previewVideoRef" autoplay muted playsinline></video>
+      at createCompilerError (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:1378:17)
+      at emitError (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:3014:5)
+      at Object.onclosetag (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:2381:13)
+      at Tokenizer.stateInClosingTagName (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:799:16)
+      at Tokenizer.parse (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:1157:16)
+      at Object.baseParse (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:3053:13)
+      at Object.parse (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-dom/dist/compiler-dom.cjs.js:910:23)
+      at Object.parse$1 [as parse] (/Users/sasha/king/demo/video-chat/frontend/node_modules/@vue/compiler-sfc/dist/compiler-sfc.cjs.js:1824:24)
+      at createDescriptor (file:///Users/sasha/king/demo/video-chat/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs:54:42)
+      at handleHotUpdate (file:///Users/sasha/king/demo/video-chat/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs:1162:25)
+6:31:45 p.m. [vite] (client) hmr update /src/App.vue
+6:32:00 p.m. [vite] (client) hmr update /src/App.vue
+6:32:09 p.m. [vite] (client) hmr update /src/App.vue
+6:32:44 p.m. [vite] (client) hmr update /src/App.vue
+6:33:04 p.m. [vite] (client) hmr update /src/App.vue
+6:33:13 p.m. [vite] (client) hmr update /src/App.vue
+6:33:25 p.m. [vite] (client) hmr update /src/App.vue
+6:33:32 p.m. [vite] (client) hmr update /src/App.vue
+6:33:46 p.m. [vite] (client) hmr update /src/App.vue
+6:36:24 p.m. [vite] (client) hmr update /src/App.vue
+6:36:38 p.m. [vite] (client) hmr update /src/App.vue
+6:36:44 p.m. [vite] (client) hmr update /src/App.vue
+6:36:56 p.m. [vite] (client) hmr update /src/App.vue
+6:37:15 p.m. [vite] (client) hmr update /src/App.vue
+6:37:25 p.m. [vite] (client) hmr update /src/App.vue
+6:44:00 p.m. [vite] (client) hmr update /src/App.vue
+6:44:30 p.m. [vite] (client) hmr update /src/App.vue
+6:44:45 p.m. [vite] (client) hmr update /src/App.vue?vue&type=style&index=0&scoped=7a7a37b1&lang.css
+6:45:06 p.m. [vite] (client) hmr update /src/App.vue
+7:06:42 p.m. [vite] (client) hmr update /src/App.vue
+7:09:50 p.m. [vite] (client) hmr update /src/App.vue
+7:10:47 p.m. [vite] (client) hmr update /src/App.vue
+7:10:59 p.m. [vite] (client) hmr update /src/App.vue
+7:11:15 p.m. [vite] (client) hmr update /src/App.vue
+7:11:31 p.m. [vite] (client) hmr update /src/App.vue
+7:11:52 p.m. [vite] (client) hmr update /src/App.vue
+7:12:45 p.m. [vite] (client) hmr update /src/App.vue
+7:12:54 p.m. [vite] (client) hmr update /src/App.vue
+7:13:08 p.m. [vite] (client) hmr update /src/App.vue
+7:13:20 p.m. [vite] (client) hmr update /src/App.vue
+7:13:38 p.m. [vite] (client) hmr update /src/App.vue
+7:14:00 p.m. [vite] (client) hmr update /src/App.vue
+7:14:22 p.m. [vite] (client) hmr update /src/App.vue
+7:14:52 p.m. [vite] (client) hmr update /src/App.vue
+7:16:17 p.m. [vite] (client) hmr update /src/App.vue
+7:16:43 p.m. [vite] (client) hmr update /src/App.vue
+7:16:50 p.m. [vite] (client) hmr update /src/App.vue
+7:31:25 p.m. [vite] (client) hmr update /src/App.vue
+7:31:30 p.m. [vite] (client) hmr update /src/App.vue
+7:49:06 p.m. [vite] (client) hmr update /src/App.vue
+7:49:33 p.m. [vite] (client) hmr update /src/App.vue
+7:49:43 p.m. [vite] (client) hmr update /src/App.vue
+7:49:55 p.m. [vite] (client) hmr update /src/App.vue?vue&type=style&index=0&scoped=7a7a37b1&lang.css
+7:50:16 p.m. [vite] (client) hmr update /src/App.vue
+7:50:55 p.m. [vite] (client) hmr update /src/App.vue
+7:51:22 p.m. [vite] (client) hmr update /src/App.vue
+7:51:48 p.m. [vite] (client) hmr update /src/App.vue
+9:37:42 p.m. [vite] changed tsconfig file detected: /Users/sasha/king/demo/video-chat/frontend/tsconfig.json - Clearing cache and forcing full-reload to ensure TypeScript is compiled with updated config values.
+9:52:55 p.m. [vite] ws proxy error:
+Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Socket.ondata (node:internal/streams/readable:1009:22)
+    at Socket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
+9:52:55 p.m. [vite] ws proxy socket error:
+Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Socket.ondata (node:internal/streams/readable:1009:22)
+    at Socket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
