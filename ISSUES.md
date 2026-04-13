@@ -179,7 +179,7 @@ Contract guardrails for this batch:
   done when: valid code redeems once-per-policy, invalid/expired codes fail cleanly, and join context is typed.
 - [x] `#22 Implement websocket gateway channel for authenticated room presence snapshots and join/leave events.`
   done when: room membership snapshots stream to clients and reconnect path resynchronizes active room state.
-- [ ] `#23 Implement websocket chat channel with room-scoped fanout, server timestamps, and bounded message validation.`
+- [x] `#23 Implement websocket chat channel with room-scoped fanout, server timestamps, and bounded message validation.`
   done when: chat messages are broadcast to room peers, payload constraints are enforced server-side, and timestamp format is stable.
 - [ ] `#24 Implement websocket typing indicator channel with debounce/expiry semantics and no self-echo.`
   done when: typing start/stop events are room-scoped, expire automatically, and never render to the sender.

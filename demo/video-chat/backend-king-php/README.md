@@ -280,10 +280,14 @@ Presence channel contract on `WS /ws`:
   - `{"type":"room/join","room_id":"<active-room-id>"}`
   - `{"type":"room/leave"}`
   - `{"type":"room/snapshot/request"}`
+  - `{"type":"chat/send","message":"...","client_message_id":"..."}` (optional `client_message_id`)
   - `{"type":"ping"}`
 - behavior:
   - initial room snapshot is sent immediately after authenticated websocket attach
   - room changes stream join/leave deltas to room peers
+  - chat fanout is room-scoped and server-authoritative (`chat/message` with stable server timestamps)
+  - chat payload validation is bounded (`VIDEOCHAT_WS_CHAT_MAX_CHARS`, `VIDEOCHAT_WS_CHAT_MAX_BYTES`)
+  - accepted chat publishes emit `chat/ack` to the sender with `message_id` and `sent_count`
   - reconnecting clients receive a fresh `room/snapshot` resync on attach
 
 ## Contract checks
@@ -358,4 +362,10 @@ Run the realtime presence contract test (room snapshots + join/leave deltas + re
 
 ```bash
 demo/video-chat/backend-king-php/tests/realtime-presence-contract.sh
+```
+
+Run the realtime chat contract test (room-scoped fanout + payload bounds + stable timestamping):
+
+```bash
+demo/video-chat/backend-king-php/tests/realtime-chat-contract.sh
 ```

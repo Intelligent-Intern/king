@@ -31,6 +31,7 @@ require_once __DIR__ . '/avatar_upload.php';
 require_once __DIR__ . '/call_directory.php';
 require_once __DIR__ . '/call_management.php';
 require_once __DIR__ . '/invite_codes.php';
+require_once __DIR__ . '/realtime_chat.php';
 require_once __DIR__ . '/realtime_presence.php';
 require_once __DIR__ . '/user_directory.php';
 require_once __DIR__ . '/user_management.php';
@@ -1550,6 +1551,11 @@ SQL
                         'joined' => 'room/joined',
                         'left' => 'room/left',
                     ],
+                    'chat' => [
+                        'send' => 'chat/send',
+                        'message' => 'chat/message',
+                        'ack' => 'chat/ack',
+                    ],
                 ],
                 'auth' => [
                     'session' => $websocketAuth['session'] ?? null,
@@ -1577,17 +1583,67 @@ SQL
                     continue;
                 }
 
-                $decodedFrame = videochat_presence_decode_client_frame($frame);
-                if (!(bool) ($decodedFrame['ok'] ?? false)) {
+                $presenceCommand = videochat_presence_decode_client_frame($frame);
+                $commandType = (string) ($presenceCommand['type'] ?? '');
+                $commandError = (string) ($presenceCommand['error'] ?? 'invalid_command');
+
+                $chatCommand = null;
+                if (!(bool) ($presenceCommand['ok'] ?? false) && $commandError === 'unsupported_type') {
+                    $chatCommand = videochat_chat_decode_client_frame($frame);
+                    if ((bool) ($chatCommand['ok'] ?? false)) {
+                        $chatPublish = videochat_chat_publish(
+                            $presenceState,
+                            $presenceConnection,
+                            $chatCommand
+                        );
+                        if (!(bool) ($chatPublish['ok'] ?? false)) {
+                            videochat_presence_send_frame(
+                                $websocket,
+                                [
+                                    'type' => 'system/error',
+                                    'code' => 'chat_publish_failed',
+                                    'message' => 'Could not publish chat message.',
+                                    'details' => [
+                                        'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
+                                    ],
+                                    'time' => gmdate('c'),
+                                ]
+                            );
+                            continue;
+                        }
+
+                        $message = is_array($chatPublish['event']['message'] ?? null)
+                            ? $chatPublish['event']['message']
+                            : [];
+                        videochat_presence_send_frame(
+                            $websocket,
+                            [
+                                'type' => 'chat/ack',
+                                'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
+                                'message_id' => (string) ($message['id'] ?? ''),
+                                'client_message_id' => $message['client_message_id'] ?? null,
+                                'server_time' => (string) ($message['server_time'] ?? gmdate('c')),
+                                'sent_count' => (int) ($chatPublish['sent_count'] ?? 0),
+                                'time' => gmdate('c'),
+                            ]
+                        );
+                        continue;
+                    }
+
+                    $commandType = (string) ($chatCommand['type'] ?? $commandType);
+                    $commandError = (string) ($chatCommand['error'] ?? $commandError);
+                }
+
+                if (!(bool) ($presenceCommand['ok'] ?? false)) {
                     videochat_presence_send_frame(
                         $websocket,
                         [
                             'type' => 'system/error',
-                            'code' => 'invalid_presence_command',
-                            'message' => 'Presence command is invalid.',
+                            'code' => 'invalid_websocket_command',
+                            'message' => 'WebSocket command is invalid.',
                             'details' => [
-                                'error' => (string) ($decodedFrame['error'] ?? 'invalid_command'),
-                                'type' => (string) ($decodedFrame['type'] ?? ''),
+                                'error' => $commandError,
+                                'type' => $commandType,
                             ],
                             'time' => gmdate('c'),
                         ]
@@ -1595,7 +1651,7 @@ SQL
                     continue;
                 }
 
-                $commandType = (string) ($decodedFrame['type'] ?? '');
+                $commandType = (string) ($presenceCommand['type'] ?? '');
                 if ($commandType === 'ping') {
                     videochat_presence_send_frame(
                         $websocket,
@@ -1619,7 +1675,7 @@ SQL
                 }
 
                 if ($commandType === 'room/join') {
-                    $targetRoomId = videochat_presence_normalize_room_id((string) ($decodedFrame['room_id'] ?? ''));
+                    $targetRoomId = videochat_presence_normalize_room_id((string) ($presenceCommand['room_id'] ?? ''));
                     try {
                         $pdo = $openDatabase();
                         $targetRoom = videochat_fetch_active_room_context($pdo, $targetRoomId);
