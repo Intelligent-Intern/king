@@ -51,3 +51,9 @@ __pycache__/
 *.bmp
 *.tiff
 *.svg
+!demo/video-chat/frontend/public/orgas/intelligent-intern/logo.svg
+!demo/video-chat/frontend/public/orgas/intelligent-intern/icon.svg
+!demo/video-chat/frontend/public/orgas/intelligent-intern/icons/*.png
+!mock/assets/orgas/intelligent-intern/logo.svg
+!mock/assets/orgas/intelligent-intern/icon.svg
+!mock/assets/orgas/intelligent-intern/icons/*.png

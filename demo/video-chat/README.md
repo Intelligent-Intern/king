@@ -44,15 +44,6 @@ Active development and runtime path:
 - `demo/video-chat/backend-king-php`
 - `demo/video-chat/frontend-vue`
 
-Historical reference path (not active, not release-gated):
-
-- `demo/video-chat/backend`
-- `demo/video-chat/frontend`
-- `demo/video-chat/backend/dev-backend.mjs`
-
-The older Node-based runtime stays in the repository only as historical
-reference and is not the active development target.
-
 Launch active stack:
 
 ```bash
@@ -65,11 +56,9 @@ cd demo/video-chat/frontend-vue
 npm run dev
 ```
 
-Historical-path caveats (historical reference only):
+Current demo caveats:
 
-- demo-local signaling backend (`backend/dev-backend.mjs`)
 - login/user directory is persisted in SQLite (`KING_DEMO_DB_PATH`)
-- websocket signaling identity is query-param based (`userId`, `name`, `color`, `room`) and not a hardened authn/authz model
 - no durable room/message persistence across backend restart
 - no TURN relay setup (STUN-only by default)
 - no production moderation/audit policy
@@ -142,7 +131,9 @@ bash demo/video-chat/scripts/smoke.sh
 
 - backend and frontend launchers plus syntax checks
 - backend boot and live `/health` probe
+- API/WS catalog drift gate against the canonical versioned contract fixture (`contract-catalog-parity-contract`)
 - login route handshake (`/api/auth/login`), authenticated session read, and logout revoke path
+- dedicated logout revoke contract (`session-logout-contract`) with persisted revocation metadata assertions
 - room join/presence contract (`realtime-presence-contract`)
 - room chat fanout contract (`realtime-chat-contract`)
 - invite redeem contract (`invite-code-redeem-contract`)

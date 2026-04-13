@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Call Management</title>
+    <link rel="stylesheet" href="./app-shell.css" />
+    <style>
+      .workspace.calls {
+        grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+        height: 100%;
+      }
+
+      .toolbar.calls-toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 220px auto;
+        gap: 8px;
+      }
+
+      .calls-table table {
+        table-layout: fixed;
+      }
+
+      .calls-table th:nth-child(1),
+      .calls-table td:nth-child(1) {
+        width: 20%;
+      }
+
+      .calls-table th:nth-child(2),
+      .calls-table td:nth-child(2) {
+        width: 14%;
+      }
+
+      .calls-table th:nth-child(3),
+      .calls-table td:nth-child(3) {
+        width: 28%;
+      }
+
+      .calls-table th:nth-child(4),
+      .calls-table td:nth-child(4) {
+        width: 10%;
+      }
+
+      .calls-table th:nth-child(5),
+      .calls-table td:nth-child(5) {
+        width: 8%;
+      }
+
+      .calls-table th:nth-child(6),
+      .calls-table td:nth-child(6) {
+        width: 20%;
+      }
+
+      .mini-btn {
+        height: 28px;
+        border: 0;
+        background: var(--bg-tab);
+        color: #ffffff;
+        padding: 0 8px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .mini-btn:hover {
+        background: var(--bg-tab-hover);
+      }
+
+      .code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace;
+      }
+
+      @media (max-width: 980px) {
+        .toolbar.calls-toolbar {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <div class="shell no-right-sidebar">
+        <aside class="sidebar sidebar-left">
+          <div class="sidebar-content left">
+            <div class="brand-strip">
+              <img data-brand-logo src="./assets/orgas/intelligent-intern/logo.svg" alt="Intelligent Intern" />
+              <button id="hideLeftSidebarBtn" class="sidebar-toggle-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">
+                <img class="arrow-icon-image" src="./assets/orgas/intelligent-intern/icons/backward.png" alt="" />
+              </button>
+            </div>
+
+            <nav class="nav" aria-label="Main navigation">
+              <a class="nav-link" href="./admin-overview.html">
+                <img src="./assets/orgas/intelligent-intern/icons/users.png" alt="" />
+                <span>Overview</span>
+              </a>
+              <a class="nav-link" href="./admin-users.html">
+                <img src="./assets/orgas/intelligent-intern/icons/user.png" alt="" />
+                <span>User Management</span>
+              </a>
+              <a class="nav-link active" href="./admin-calls-crud.html">
+                <img src="./assets/orgas/intelligent-intern/icons/lobby.png" alt="" />
+                <span>Video Calls</span>
+              </a>
+            </nav>
+
+            <section class="sidebar-profile avatar-only">
+              <img id="sidebarAvatar" data-sidebar-avatar class="sidebar-avatar-image" src="./assets/orgas/intelligent-intern/avatar-placeholder.svg" alt="Profile avatar" />
+            </section>
+
+            <div class="logout-wrap">
+              <button id="logoutBtn" class="btn full" type="button">Log out</button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="main">
+          <div class="workspace calls">
+            <section class="section">
+              <div class="section-head">
+                <div>
+                  <h1 class="title">Video Call Management</h1>
+                  <p class="subtitle">Create, schedule and govern room sessions.</p>
+                </div>
+                <div class="actions">
+                  <button id="showLeftSidebarBtn" class="show-sidebar-overlay show-sidebar-inline show-left-sidebar-overlay" type="button" title="Show sidebar" aria-label="Show sidebar">
+                    <img class="arrow-icon-image" src="./assets/orgas/intelligent-intern/icons/forward.png" alt="" />
+                  </button>
+                  <button id="toggleDrawer" class="btn" type="button">New video call</button>
+                  <button id="scheduleCallBtn" class="btn" type="button">Schedule call</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="toolbar calls-toolbar">
+              <input id="search" class="input" type="text" placeholder="Search call title" />
+              <select id="ownerFilter" class="select" aria-label="Owner filter">
+                <option value="mine">My calls only</option>
+                <option value="all">All calls</option>
+              </select>
+              <button id="searchSubmitBtn" class="btn" type="button">Search</button>
+            </section>
+
+            <section class="table-wrap calls-table">
+              <h2 class="table-title">Call Registry</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Owner</th>
+                    <th>Schedule</th>
+                    <th>Status</th>
+                    <th>Users</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="rows"></tbody>
+              </table>
+            </section>
+
+            <footer class="footer">
+              <div class="pagination">
+                <button id="prev" class="pager-btn pager-icon-btn" type="button" title="Previous page" aria-label="Previous page">
+                  <img class="pager-icon-img" src="./assets/orgas/intelligent-intern/icons/backward.png" alt="" />
+                </button>
+                <div id="pageInfo" class="page-info">-</div>
+                <button id="next" class="pager-btn pager-icon-btn" type="button" title="Next page" aria-label="Next page">
+                  <img class="pager-icon-img" src="./assets/orgas/intelligent-intern/icons/forward.png" alt="" />
+                </button>
+              </div>
+            </footer>
+          </div>
+          <div id="invitePopover" class="invite-popover" hidden>
+            <button id="invitePopoverClose" class="invite-popover-close" type="button">Close</button>
+            <div class="invite-popover-label">Invite code</div>
+            <div class="invite-popover-row">
+              <code id="inviteCodeValue" class="invite-code">-</code>
+              <button id="invitePopoverCopyBtn" class="icon-mini-btn" type="button" title="Copy invite code" aria-label="Copy invite code">
+                <span class="icon-copy" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <script src="./settings-modal.js"></script>
+    <script src="./call-composer.js"></script>
+    <script>
+      (() => {
+        const SESSION_KEY = 'ii_call_session';
+
+        function initShellChrome() {
+          const shell = document.querySelector('.shell');
+          const leftSidebar = document.querySelector('.sidebar-left');
+          const hideLeft = document.getElementById('hideLeftSidebarBtn');
+          const showLeft = document.getElementById('showLeftSidebarBtn');
+
+          function setLeftCollapsed(collapsed) {
+            if (!(shell instanceof HTMLElement)) return;
+            shell.classList.toggle('left-collapsed', collapsed);
+            if (leftSidebar instanceof HTMLElement) {
+              leftSidebar.classList.toggle('collapsed', collapsed);
+            }
+          }
+
+          hideLeft?.addEventListener('click', () => setLeftCollapsed(true));
+          showLeft?.addEventListener('click', () => setLeftCollapsed(false));
+
+          if (window.matchMedia('(max-width: 980px)').matches) {
+            setLeftCollapsed(true);
+          }
+        }
+
+        function readSession() {
+          try {
+            const raw = localStorage.getItem(SESSION_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') return null;
+            if (parsed.role !== 'admin' && parsed.role !== 'user') return null;
+            if (typeof parsed.email !== 'string' || parsed.email.trim() === '') return null;
+            return parsed;
+          } catch {
+            return null;
+          }
+        }
+
+        const session = readSession();
+        if (!session) {
+          window.location.replace('./login.html');
+          return;
+        }
+
+        if (session.role !== 'admin') {
+          window.location.replace('./user-calls.html');
+          return;
+        }
+
+        const logoutBtn = document.getElementById('logoutBtn');
+        logoutBtn?.addEventListener('click', () => {
+          localStorage.removeItem(SESSION_KEY);
+          window.location.href = './login.html';
+        });
+
+        const ownerDefault = session.email.split('@')[0] || 'owner';
+
+        const calls = [
+          {
+            id: 1,
+            title: 'Sales Standup',
+            owner: ownerDefault,
+            code: '550e8400-e29b-41d4-a716-446655440000',
+            start: '2026-04-13 09:00',
+            end: '2026-04-13 09:30',
+            status: 'running',
+            users: 8,
+          },
+          {
+            id: 2,
+            title: 'Backend Sync',
+            owner: 'maria',
+            code: '1d094f16-cafb-4f9f-a5bb-21cd936f2b23',
+            start: '2026-04-13 10:00',
+            end: '2026-04-13 11:00',
+            status: 'scheduled',
+            users: 0,
+          },
+          {
+            id: 3,
+            title: 'Incident Bridge',
+            owner: ownerDefault,
+            code: 'a56ef0b1-7bbf-4bc6-84d4-0b4f2f1de7ee',
+            start: '2026-04-13 11:30',
+            end: '2026-04-13 12:30',
+            status: 'running',
+            users: 22,
+          },
+          {
+            id: 4,
+            title: 'Design Review',
+            owner: 'anna',
+            code: 'e9e77c93-1389-4904-959f-0c5f2bdbe600',
+            start: '2026-04-14 09:00',
+            end: '2026-04-14 10:00',
+            status: 'scheduled',
+            users: 0,
+          },
+          {
+            id: 5,
+            title: 'Ops Weekly',
+            owner: ownerDefault,
+            code: '6fa95adf-7c74-4d1b-aeec-731cb9c28d74',
+            start: '2026-04-14 15:00',
+            end: '2026-04-14 16:00',
+            status: 'scheduled',
+            users: 0,
+          },
+          {
+            id: 6,
+            title: 'Partner Demo',
+            owner: ownerDefault,
+            code: '78b3b810-2e55-4d58-8563-8fc5d90f4d34',
+            start: '2026-04-15 14:00',
+            end: '2026-04-15 15:00',
+            status: 'scheduled',
+            users: 0,
+          },
+        ];
+
+        const rows = document.getElementById('rows');
+        const pageInfo = document.getElementById('pageInfo');
+        const prev = document.getElementById('prev');
+        const next = document.getElementById('next');
+        const searchInput = document.getElementById('search');
+        const ownerFilter = document.getElementById('ownerFilter');
+        const toggleDrawer = document.getElementById('toggleDrawer');
+        const searchSubmitBtn = document.getElementById('searchSubmitBtn');
+        const scheduleCallBtn = document.getElementById('scheduleCallBtn');
+
+        const invitePopover = document.getElementById('invitePopover');
+        const invitePopoverClose = document.getElementById('invitePopoverClose');
+        const inviteCodeValue = document.getElementById('inviteCodeValue');
+        const invitePopoverCopyBtn = document.getElementById('invitePopoverCopyBtn');
+        let activeInviteCode = '';
+
+        const pageSize = 8;
+        let page = 1;
+        let search = '';
+
+        function makeUuid() {
+          if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+            const random = Math.floor(Math.random() * 16);
+            const value = char === 'x' ? random : (random & 0x3) | 0x8;
+            return value.toString(16);
+          });
+        }
+
+        function formatDateTime(value) {
+          if (!value) return '';
+          return value.replace('T', ' ');
+        }
+
+        function formatDateTimeDisplay(value) {
+          if (window.KingSettingsUI && typeof window.KingSettingsUI.formatDateTimeDisplay === 'function') {
+            return window.KingSettingsUI.formatDateTimeDisplay(value);
+          }
+          return formatDateTime(value);
+        }
+
+        function formatScheduleRange(start, end) {
+          return `${formatDateTimeDisplay(start)} -> ${formatDateTimeDisplay(end)}`;
+        }
+
+        const registeredUsers = [
+          { id: '__host__', name: session.displayName || ownerDefault, email: session.email },
+          { id: 'u-anna', name: 'Anna Meyer', email: 'anna@intelligent-intern.com' },
+          { id: 'u-luca', name: 'Luca Klein', email: 'luca@intelligent-intern.com' },
+          { id: 'u-sara', name: 'Sara Hoffmann', email: 'sara@intelligent-intern.com' },
+          { id: 'u-maria', name: 'Maria Stark', email: 'maria@intelligent-intern.com' },
+          { id: 'u-lea', name: 'Lea Bauer', email: 'lea@intelligent-intern.com' },
+          { id: 'u-jonas', name: 'Jonas Brandt', email: 'jonas@intelligent-intern.com' },
+        ];
+
+        function filteredCalls() {
+          const query = search.trim().toLowerCase();
+          return calls.filter((call) => {
+            if (ownerFilter instanceof HTMLSelectElement && ownerFilter.value === 'mine' && call.owner !== ownerDefault) {
+              return false;
+            }
+            if (!query) return true;
+            return call.title.toLowerCase().includes(query);
+          });
+        }
+
+        function closeInvitePopover() {
+          if (!(invitePopover instanceof HTMLElement)) return;
+          invitePopover.hidden = true;
+        }
+
+        function openInvitePopover(anchor, inviteCode) {
+          if (!(invitePopover instanceof HTMLElement)) return;
+          if (!(inviteCodeValue instanceof HTMLElement)) return;
+          if (!(anchor instanceof HTMLElement)) return;
+
+          activeInviteCode = inviteCode;
+          inviteCodeValue.textContent = inviteCode;
+          invitePopover.hidden = false;
+          const rect = anchor.getBoundingClientRect();
+          const top = Math.min(window.innerHeight - 130, rect.bottom + 8);
+          const left = Math.max(10, Math.min(window.innerWidth - 320, rect.right - 300));
+          invitePopover.style.top = `${top}px`;
+          invitePopover.style.left = `${left}px`;
+        }
+
+        function render() {
+          if (!(rows instanceof HTMLElement)) return;
+          if (!(pageInfo instanceof HTMLElement)) return;
+          if (!(prev instanceof HTMLButtonElement)) return;
+          if (!(next instanceof HTMLButtonElement)) return;
+
+          const list = filteredCalls();
+          const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+          if (page > totalPages) page = totalPages;
+
+          const start = (page - 1) * pageSize;
+          const current = list.slice(start, start + pageSize);
+
+          rows.innerHTML = current
+            .map((call) => {
+              return `
+                <tr>
+                  <td>${call.title}</td>
+                  <td>${call.owner}</td>
+                  <td>${formatScheduleRange(call.start, call.end)}</td>
+                  <td><span class="tag ${call.status === 'running' ? 'ok' : 'warn'}">${call.status}</span></td>
+                  <td>${call.users}</td>
+                  <td>
+                    <span class="actions-inline">
+                      <button class="icon-mini-btn" data-action="invite" data-code="${call.code}" title="Invite code" aria-label="Invite code">
+                        <span class="icon-copy" aria-hidden="true"></span>
+                      </button>
+                      <button class="icon-mini-btn" data-action="join" data-id="${call.id}" title="Join call" aria-label="Join call">
+                        <img src="./assets/orgas/intelligent-intern/icons/add_to_call.png" alt="" />
+                      </button>
+                      <button class="mini-btn" data-action="edit" data-id="${call.id}">Edit</button>
+                      <button class="mini-btn" data-action="delete" data-id="${call.id}">Delete</button>
+                    </span>
+                  </td>
+                </tr>
+              `;
+            })
+            .join('');
+
+          const filterText = ownerFilter instanceof HTMLSelectElement && ownerFilter.value === 'mine' ? 'my calls' : 'all calls';
+          pageInfo.textContent = `Page ${page}/${totalPages} • ${list.length} calls • ${filterText}`;
+          prev.disabled = page <= 1;
+          next.disabled = page >= totalPages;
+          prev.classList.toggle('is-hidden', page <= 1);
+          next.classList.toggle('is-hidden', page >= totalPages);
+        }
+
+        rows?.addEventListener('click', async (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          const button = target.closest('button[data-action]');
+          if (!(button instanceof HTMLButtonElement)) return;
+
+          const action = button.dataset.action;
+          if (action === 'invite') {
+            const code = button.dataset.code || '';
+            openInvitePopover(button, code);
+            return;
+          }
+
+          if (action === 'join') {
+            window.location.href = './mock.html';
+            return;
+          }
+
+          const id = Number(button.dataset.id);
+          const index = calls.findIndex((entry) => entry.id === id);
+          if (index < 0) return;
+
+          if (action === 'edit') {
+            closeInvitePopover();
+            await openComposer('edit', calls[index], index);
+            return;
+          }
+
+          if (action === 'delete') {
+            calls.splice(index, 1);
+          }
+
+          render();
+        });
+
+        invitePopoverCopyBtn?.addEventListener('click', async () => {
+          if (!activeInviteCode) return;
+          if (!(invitePopoverCopyBtn instanceof HTMLButtonElement)) return;
+
+          try {
+            await navigator.clipboard.writeText(activeInviteCode);
+            invitePopoverCopyBtn.classList.add('active');
+          } catch {
+            invitePopoverCopyBtn.classList.remove('active');
+          }
+        });
+
+        invitePopoverClose?.addEventListener('click', closeInvitePopover);
+
+        window.addEventListener('click', (event) => {
+          if (!(invitePopover instanceof HTMLElement) || invitePopover.hidden) return;
+          const target = event.target;
+          if (!(target instanceof Node)) return;
+          const clickedInviteTrigger =
+            target instanceof HTMLElement && target.closest('button[data-action="invite"]');
+          if (clickedInviteTrigger) return;
+          if (!invitePopover.contains(target)) {
+            closeInvitePopover();
+          }
+        });
+
+        window.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') {
+            closeInvitePopover();
+          }
+        });
+
+        prev?.addEventListener('click', () => {
+          if (page > 1) {
+            page -= 1;
+            render();
+          }
+        });
+
+        next?.addEventListener('click', () => {
+          const totalPages = Math.max(1, Math.ceil(filteredCalls().length / pageSize));
+          if (page < totalPages) {
+            page += 1;
+            render();
+          }
+        });
+
+        searchInput?.addEventListener('input', () => {
+          if (!(searchInput instanceof HTMLInputElement)) return;
+          search = searchInput.value;
+          page = 1;
+          render();
+        });
+
+        ownerFilter?.addEventListener('change', () => {
+          page = 1;
+          render();
+        });
+
+        async function openComposer(mode, existingCall = null, existingIndex = -1) {
+          if (!window.KingCallComposer || typeof window.KingCallComposer.open !== 'function') return;
+
+          const isEdit = mode === 'edit' && existingCall && typeof existingCall === 'object';
+          const nextId = calls.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+          const draft = await window.KingCallComposer.open({
+            mode: isEdit ? 'edit' : mode,
+            hostId: '__host__',
+            hostName: session.displayName || ownerDefault,
+            hostEmail: session.email,
+            registeredUsers,
+            initialTitle: isEdit
+              ? String(existingCall.title || '')
+              : (mode === 'schedule' ? `Scheduled call ${nextId}` : `New call ${nextId}`),
+            initialStart: isEdit
+              ? new Date(existingCall.start)
+              : new Date(Date.now() + 60 * 60 * 1000),
+            initialEnd: isEdit
+              ? new Date(existingCall.end)
+              : new Date(Date.now() + 2 * 60 * 60 * 1000),
+            initialSelectedUserIds: isEdit && Array.isArray(existingCall.selectedUsers)
+              ? existingCall.selectedUsers.map((user) => user.id)
+              : undefined,
+            initialExternalInvitees: isEdit && Array.isArray(existingCall.externalInvitees)
+              ? existingCall.externalInvitees
+              : undefined,
+            initialInvitation: isEdit && existingCall.invitation && typeof existingCall.invitation === 'object'
+              ? existingCall.invitation
+              : undefined,
+          });
+
+          if (!draft) {
+            return;
+          }
+
+          if (isEdit) {
+            const targetIndex = existingIndex >= 0 ? existingIndex : calls.findIndex((entry) => entry.id === existingCall.id);
+            if (targetIndex < 0) return;
+            const previous = calls[targetIndex];
+            calls[targetIndex] = {
+              ...previous,
+              title: draft.title,
+              start: draft.start,
+              end: draft.end,
+              users: draft.participantsCount,
+              selectedUsers: draft.selectedUsers,
+              externalInvitees: draft.externalInvitees,
+            };
+            render();
+            return;
+          }
+
+          calls.unshift({
+            id: nextId,
+            title: draft.title,
+            owner: ownerDefault,
+            code: makeUuid(),
+            start: draft.start,
+            end: draft.end,
+            status: 'scheduled',
+            users: draft.participantsCount,
+            selectedUsers: draft.selectedUsers,
+            invitation: draft.invitation,
+            externalInvitees: draft.externalInvitees,
+          });
+
+          page = 1;
+          render();
+        }
+
+        toggleDrawer?.addEventListener('click', async () => {
+          await openComposer('create');
+        });
+
+        scheduleCallBtn?.addEventListener('click', async () => {
+          await openComposer('schedule');
+        });
+
+        searchSubmitBtn?.addEventListener('click', () => {
+          page = 1;
+          render();
+        });
+
+        window.addEventListener('king:preferences-updated', () => {
+          render();
+        });
+
+        if (window.KingSettingsUI && typeof window.KingSettingsUI.init === 'function') {
+          window.KingSettingsUI.init({
+            role: session.role,
+            displayName: session.displayName || 'Admin',
+            email: session.email,
+          });
+        }
+
+        initShellChrome();
+        render();
+      })();
+    </script>
+  </body>
+</html>

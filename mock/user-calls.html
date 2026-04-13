@@ -1,0 +1,1298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Video Calls</title>
+    <link rel="stylesheet" href="./app-shell.css" />
+    <style>
+      .workspace.user-calls {
+        grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+      }
+
+      .toolbar.user-toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+      }
+
+      .metrics.user-metrics {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .user-calls-table table {
+        table-layout: fixed;
+      }
+
+      .user-calls-table th:nth-child(1),
+      .user-calls-table td:nth-child(1) {
+        width: 30%;
+      }
+
+      .user-calls-table th:nth-child(2),
+      .user-calls-table td:nth-child(2) {
+        width: 30%;
+      }
+
+      .user-calls-table th:nth-child(3),
+      .user-calls-table td:nth-child(3) {
+        width: 12%;
+      }
+
+      .user-calls-table th:nth-child(4),
+      .user-calls-table td:nth-child(4) {
+        width: 8%;
+      }
+
+      .user-calls-table th:nth-child(5),
+      .user-calls-table td:nth-child(5) {
+        width: 20%;
+      }
+
+      .cancel-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: grid;
+        place-items: center;
+      }
+
+      .cancel-modal[hidden] {
+        display: none;
+      }
+
+      .cancel-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: #09111e;
+      }
+
+      .cancel-modal-dialog {
+        position: relative;
+        width: min(760px, calc(100vw - 32px));
+        background: var(--bg-surface-strong);
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px;
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .cancel-modal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .cancel-modal-head h3 {
+        margin: 0;
+        font-size: 18px;
+        color: var(--text-main);
+      }
+
+      .cancel-meta {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+
+      .cancel-toolbar {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .cancel-tool-btn {
+        min-width: 34px;
+        height: 32px;
+        border: 0;
+        border-radius: 6px;
+        background: var(--bg-action);
+        color: #ffffff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .cancel-tool-btn:hover {
+        background: var(--bg-action-hover);
+      }
+
+      .cancel-editor {
+        min-height: 210px;
+        max-height: 320px;
+        overflow: auto;
+        border-radius: 6px;
+        border: 1px solid var(--border-subtle);
+        background: #d8dadd;
+        color: #0b1323;
+        padding: 10px;
+        line-height: 1.45;
+      }
+
+      .cancel-editor p {
+        margin: 0 0 8px;
+      }
+
+      .cancel-progress-wrap {
+        height: 12px;
+        border-radius: 6px;
+        border: 1px solid var(--border-subtle);
+        background: #12233f;
+        overflow: hidden;
+      }
+
+      .cancel-progress-wrap[hidden] {
+        display: none;
+      }
+
+      .cancel-progress-bar {
+        width: 0%;
+        height: 100%;
+        background: var(--bg-action-hover);
+        transition: width 120ms linear;
+      }
+
+      .cancel-progress-text {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+
+      .cancel-progress-text[hidden] {
+        display: none;
+      }
+
+      .cancel-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .create-call-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 52;
+        display: grid;
+        place-items: center;
+      }
+
+      .create-call-modal[hidden] {
+        display: none;
+      }
+
+      .create-call-backdrop {
+        position: absolute;
+        inset: 0;
+        background: #09111e;
+      }
+
+      .create-call-dialog {
+        position: relative;
+        width: min(920px, calc(100vw - 32px));
+        background: var(--bg-surface-strong);
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px;
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+        max-height: calc(100vh - 32px);
+        overflow: auto;
+      }
+
+      .create-call-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .create-call-head h3 {
+        margin: 0;
+        font-size: 18px;
+        color: var(--text-main);
+      }
+
+      .create-call-fields {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .create-call-field {
+        display: grid;
+        gap: 6px;
+      }
+
+      .create-call-field label {
+        margin: 0;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .create-call-users {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 10px;
+      }
+
+      .create-call-user-panel {
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px;
+        background: #152a49;
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr);
+        min-height: 280px;
+        overflow: hidden;
+      }
+
+      .create-call-user-panel-head {
+        margin: 0;
+        padding: 10px 12px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-main);
+        background: #1b355d;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .create-call-user-search-wrap {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .create-call-user-list {
+        min-height: 0;
+        overflow: auto;
+      }
+
+      .create-call-user-empty {
+        margin: 0;
+        padding: 16px 12px;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .create-call-user-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 12px;
+        border-top: 1px solid var(--border-subtle);
+      }
+
+      .create-call-user-row:first-child {
+        border-top: 0;
+      }
+
+      .create-call-user-row .icon-mini-btn.is-hidden {
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .create-call-user-meta {
+        min-width: 0;
+        display: grid;
+        gap: 2px;
+      }
+
+      .create-call-user-name {
+        font-size: 13px;
+        color: var(--text-main);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .create-call-user-email {
+        font-size: 12px;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .create-call-status {
+        margin: 0;
+        font-size: 12px;
+        color: var(--text-muted);
+        min-height: 16px;
+      }
+
+      .create-call-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      @media (max-width: 980px) {
+        .toolbar.user-toolbar {
+          grid-template-columns: 1fr;
+        }
+
+        .metrics.user-metrics {
+          grid-template-columns: 1fr;
+        }
+
+        .create-call-fields {
+          grid-template-columns: 1fr;
+        }
+
+        .create-call-users {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <div class="shell no-right-sidebar">
+        <aside class="sidebar sidebar-left">
+          <div class="sidebar-content left">
+            <div class="brand-strip">
+              <img data-brand-logo src="./assets/orgas/intelligent-intern/logo.svg" alt="Intelligent Intern" />
+              <button id="hideLeftSidebarBtn" class="sidebar-toggle-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">
+                <img class="arrow-icon-image" src="./assets/orgas/intelligent-intern/icons/backward.png" alt="" />
+              </button>
+            </div>
+
+            <nav class="nav" aria-label="Main navigation">
+              <a class="nav-link active" href="./user-calls.html">
+                <img src="./assets/orgas/intelligent-intern/icons/lobby.png" alt="" />
+                <span>My Calls</span>
+              </a>
+              <a class="nav-link" href="#" id="settingsBtn">
+                <img src="./assets/orgas/intelligent-intern/icons/gear.png" alt="" />
+                <span>Settings</span>
+              </a>
+            </nav>
+
+            <section class="sidebar-profile avatar-only">
+              <img id="sidebarAvatar" data-sidebar-avatar class="sidebar-avatar-image" src="./assets/orgas/intelligent-intern/avatar-placeholder.svg" alt="Profile avatar" />
+            </section>
+
+            <div class="logout-wrap">
+              <button id="logoutBtn" class="btn full" type="button">Log out</button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="main">
+          <div class="workspace user-calls">
+            <section class="section">
+              <div class="section-head">
+                <div>
+                  <h1 class="title">My Video Calls</h1>
+                </div>
+                <div class="actions">
+                  <button id="showLeftSidebarBtn" class="show-sidebar-overlay show-sidebar-inline show-left-sidebar-overlay" type="button" title="Show sidebar" aria-label="Show sidebar">
+                    <img class="arrow-icon-image" src="./assets/orgas/intelligent-intern/icons/forward.png" alt="" />
+                  </button>
+                  <button id="newCallBtn" class="btn" type="button">New call</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="toolbar user-toolbar">
+              <input id="search" class="input" type="text" placeholder="Search call title" />
+              <button id="searchSubmitBtn" class="btn" type="button">Search</button>
+            </section>
+
+            <section class="metrics user-metrics">
+              <article class="metric">
+                <div class="metric-label">My scheduled calls</div>
+                <div id="scheduledCount" class="metric-value">0</div>
+              </article>
+              <article class="metric">
+                <div class="metric-label">My running calls</div>
+                <div id="runningCount" class="metric-value">0</div>
+              </article>
+              <article class="metric">
+                <div class="metric-label">Today participants</div>
+                <div id="participantCount" class="metric-value">0</div>
+              </article>
+            </section>
+
+            <section class="table-wrap user-calls-table">
+              <h2 class="table-title">Call List</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Schedule</th>
+                    <th>Status</th>
+                    <th>Users</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="rows"></tbody>
+              </table>
+            </section>
+
+            <footer class="footer">
+              <div class="pagination">
+                <button id="prev" class="pager-btn pager-icon-btn" type="button" title="Previous page" aria-label="Previous page">
+                  <img class="pager-icon-img" src="./assets/orgas/intelligent-intern/icons/backward.png" alt="" />
+                </button>
+                <div id="pageInfo" class="page-info">-</div>
+                <button id="next" class="pager-btn pager-icon-btn" type="button" title="Next page" aria-label="Next page">
+                  <img class="pager-icon-img" src="./assets/orgas/intelligent-intern/icons/forward.png" alt="" />
+                </button>
+              </div>
+            </footer>
+          </div>
+          <div id="invitePopover" class="invite-popover" hidden>
+            <button id="invitePopoverClose" class="invite-popover-close" type="button">Close</button>
+            <div class="invite-popover-label">Invite code</div>
+            <div class="invite-popover-row">
+              <code id="inviteCodeValue" class="invite-code">-</code>
+              <button id="invitePopoverCopyBtn" class="icon-mini-btn" type="button" title="Copy invite code" aria-label="Copy invite code">
+                <span class="icon-copy" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
+          <div id="cancelModal" class="cancel-modal" hidden>
+            <div class="cancel-modal-backdrop" data-close-cancel-modal></div>
+            <section class="cancel-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="cancelModalTitle">
+              <div class="cancel-modal-head">
+                <h3 id="cancelModalTitle">Cancel Call</h3>
+                <button id="cancelModalCloseBtn" class="icon-mini-btn" type="button" title="Close cancellation dialog" aria-label="Close cancellation dialog">
+                  <img src="./assets/orgas/intelligent-intern/icons/cancel.png" alt="" />
+                </button>
+              </div>
+              <p id="cancelMeta" class="cancel-meta">All call participants will receive this cancellation email.</p>
+              <input id="cancelMailSubject" class="input" type="text" aria-label="Cancellation email subject" />
+              <div class="cancel-toolbar" aria-label="Mail editor tools">
+                <button class="cancel-tool-btn" type="button" data-editor-cmd="bold" title="Bold"><strong>B</strong></button>
+                <button class="cancel-tool-btn" type="button" data-editor-cmd="italic" title="Italic"><em>I</em></button>
+                <button class="cancel-tool-btn" type="button" data-editor-cmd="underline" title="Underline"><u>U</u></button>
+                <button class="cancel-tool-btn" type="button" data-editor-cmd="insertUnorderedList" title="Bullet list">•</button>
+                <button class="cancel-tool-btn" type="button" data-editor-cmd="createLink" title="Link">Link</button>
+                <button class="cancel-tool-btn" type="button" data-editor-cmd="removeFormat" title="Clear format">Clear</button>
+              </div>
+              <div id="cancelMailEditor" class="cancel-editor" contenteditable="true" aria-label="Cancellation email message"></div>
+              <div id="cancelProgressWrap" class="cancel-progress-wrap" hidden>
+                <div id="cancelProgressBar" class="cancel-progress-bar"></div>
+              </div>
+              <p id="cancelProgressText" class="cancel-progress-text" hidden>Sending cancellation email...</p>
+              <div class="cancel-modal-actions">
+                <button id="cancelSendBtn" class="btn" type="button">Send and cancel call</button>
+              </div>
+            </section>
+          </div>
+
+          <div id="createCallModal" class="create-call-modal" hidden>
+            <div class="create-call-backdrop" data-close-create-call-modal></div>
+            <section class="create-call-dialog" role="dialog" aria-modal="true" aria-labelledby="createCallModalTitle">
+              <div class="create-call-head">
+                <h3 id="createCallModalTitle">Create New Call</h3>
+                <button id="createCallModalCloseBtn" class="icon-mini-btn" type="button" title="Close create call dialog" aria-label="Close create call dialog">
+                  <img src="./assets/orgas/intelligent-intern/icons/cancel.png" alt="" />
+                </button>
+              </div>
+
+              <div class="create-call-fields">
+                <div class="create-call-field">
+                  <label for="createCallTitle">Call title</label>
+                  <input id="createCallTitle" class="input" type="text" placeholder="Weekly planning" />
+                </div>
+                <div class="create-call-field">
+                  <label for="createCallStart">Start time</label>
+                  <input id="createCallStart" class="input" type="datetime-local" />
+                </div>
+                <div class="create-call-field">
+                  <label for="createCallEnd">End time</label>
+                  <input id="createCallEnd" class="input" type="datetime-local" />
+                </div>
+              </div>
+
+              <div class="create-call-users">
+                <section class="create-call-user-panel" aria-label="Available users">
+                  <h4 class="create-call-user-panel-head">Available users</h4>
+                  <div class="create-call-user-search-wrap">
+                    <input id="createCallUserSearch" class="input" type="text" placeholder="Search users" />
+                  </div>
+                  <div id="createCallAvailableUsers" class="create-call-user-list"></div>
+                </section>
+
+                <section class="create-call-user-panel" aria-label="Selected users">
+                  <h4 id="createCallSelectedTitle" class="create-call-user-panel-head">Selected users (0)</h4>
+                  <div class="create-call-user-search-wrap">
+                    <p class="create-call-status">Host is included by default.</p>
+                  </div>
+                  <div id="createCallSelectedUsers" class="create-call-user-list"></div>
+                </section>
+              </div>
+
+              <p id="createCallStatus" class="create-call-status"></p>
+              <div class="create-call-actions">
+                <button id="createCallCancelBtn" class="btn" type="button">Cancel</button>
+                <button id="createCallSubmitBtn" class="btn" type="button">Create call</button>
+              </div>
+            </section>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script src="./settings-modal.js"></script>
+    <script src="./call-composer.js"></script>
+    <script>
+      (() => {
+        const SESSION_KEY = 'ii_call_session';
+
+        function initShellChrome() {
+          const shell = document.querySelector('.shell');
+          const leftSidebar = document.querySelector('.sidebar-left');
+          const hideLeft = document.getElementById('hideLeftSidebarBtn');
+          const showLeft = document.getElementById('showLeftSidebarBtn');
+
+          function setLeftCollapsed(collapsed) {
+            if (!(shell instanceof HTMLElement)) return;
+            shell.classList.toggle('left-collapsed', collapsed);
+            if (leftSidebar instanceof HTMLElement) {
+              leftSidebar.classList.toggle('collapsed', collapsed);
+            }
+          }
+
+          hideLeft?.addEventListener('click', () => setLeftCollapsed(true));
+          showLeft?.addEventListener('click', () => setLeftCollapsed(false));
+
+          if (window.matchMedia('(max-width: 980px)').matches) {
+            setLeftCollapsed(true);
+          }
+        }
+
+        function readSession() {
+          try {
+            const raw = localStorage.getItem(SESSION_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') return null;
+            if (parsed.role !== 'admin' && parsed.role !== 'user') return null;
+            if (typeof parsed.email !== 'string' || parsed.email.trim() === '') return null;
+            return parsed;
+          } catch {
+            return null;
+          }
+        }
+
+        const session = readSession();
+        if (!session) {
+          window.location.replace('./login.html');
+          return;
+        }
+
+        if (session.role !== 'user') {
+          window.location.replace('./admin-overview.html');
+          return;
+        }
+
+        const logoutBtn = document.getElementById('logoutBtn');
+        logoutBtn?.addEventListener('click', () => {
+          localStorage.removeItem(SESSION_KEY);
+          window.location.href = './login.html';
+        });
+
+        const ownerDefault = session.email.split('@')[0] || 'user';
+
+        const calls = [
+          {
+            id: 1,
+            title: 'Product Update',
+            owner: ownerDefault,
+            code: '44d89a74-2f43-4971-9e51-84b0e37f8dd4',
+            start: '2026-04-13 09:00',
+            end: '2026-04-13 09:45',
+            status: 'running',
+            users: 6,
+          },
+          {
+            id: 2,
+            title: 'Weekly Team Sync',
+            owner: ownerDefault,
+            code: '54f252d8-9cac-4ef0-80f6-4cb759ef89fd',
+            start: '2026-04-13 14:00',
+            end: '2026-04-13 15:00',
+            status: 'scheduled',
+            users: 0,
+          },
+          {
+            id: 3,
+            title: 'UX Critique',
+            owner: ownerDefault,
+            code: 'bc1532a8-74b8-460d-bd4f-a0333022b73f',
+            start: '2026-04-14 11:00',
+            end: '2026-04-14 12:00',
+            status: 'scheduled',
+            users: 0,
+          },
+          {
+            id: 4,
+            title: 'Bug Triage',
+            owner: ownerDefault,
+            code: '6c5cb9b5-d4d3-4d36-ac5f-fdd19ec80309',
+            start: '2026-04-14 16:00',
+            end: '2026-04-14 16:30',
+            status: 'scheduled',
+            users: 0,
+          },
+          {
+            id: 5,
+            title: 'Architecture Review',
+            owner: ownerDefault,
+            code: '264f2cb1-8ec6-40d0-a5b5-1a8cbfc42fae',
+            start: '2026-04-15 10:30',
+            end: '2026-04-15 11:30',
+            status: 'scheduled',
+            users: 0,
+          },
+        ];
+
+        const rows = document.getElementById('rows');
+        const pageInfo = document.getElementById('pageInfo');
+        const prev = document.getElementById('prev');
+        const next = document.getElementById('next');
+        const searchInput = document.getElementById('search');
+        const newCallBtn = document.getElementById('newCallBtn');
+        const searchSubmitBtn = document.getElementById('searchSubmitBtn');
+
+        const invitePopover = document.getElementById('invitePopover');
+        const invitePopoverClose = document.getElementById('invitePopoverClose');
+        const inviteCodeValue = document.getElementById('inviteCodeValue');
+        const invitePopoverCopyBtn = document.getElementById('invitePopoverCopyBtn');
+        let activeInviteCode = '';
+
+        const cancelModal = document.getElementById('cancelModal');
+        const cancelModalCloseBtn = document.getElementById('cancelModalCloseBtn');
+        const cancelMeta = document.getElementById('cancelMeta');
+        const cancelMailSubject = document.getElementById('cancelMailSubject');
+        const cancelMailEditor = document.getElementById('cancelMailEditor');
+        const cancelSendBtn = document.getElementById('cancelSendBtn');
+        const cancelProgressWrap = document.getElementById('cancelProgressWrap');
+        const cancelProgressBar = document.getElementById('cancelProgressBar');
+        const cancelProgressText = document.getElementById('cancelProgressText');
+        const cancelToolbar = document.querySelector('.cancel-toolbar');
+
+        const createCallModal = document.getElementById('createCallModal');
+        const createCallModalCloseBtn = document.getElementById('createCallModalCloseBtn');
+        const createCallCancelBtn = document.getElementById('createCallCancelBtn');
+        const createCallSubmitBtn = document.getElementById('createCallSubmitBtn');
+        const createCallTitleInput = document.getElementById('createCallTitle');
+        const createCallStartInput = document.getElementById('createCallStart');
+        const createCallEndInput = document.getElementById('createCallEnd');
+        const createCallUserSearchInput = document.getElementById('createCallUserSearch');
+        const createCallAvailableUsers = document.getElementById('createCallAvailableUsers');
+        const createCallSelectedUsers = document.getElementById('createCallSelectedUsers');
+        const createCallSelectedTitle = document.getElementById('createCallSelectedTitle');
+        const createCallStatus = document.getElementById('createCallStatus');
+
+        let cancelTargetCallId = null;
+        let cancelSendTimer = null;
+        let cancelSendInProgress = false;
+
+        const scheduledCount = document.getElementById('scheduledCount');
+        const runningCount = document.getElementById('runningCount');
+        const participantCount = document.getElementById('participantCount');
+
+        const pageSize = 7;
+        let page = 1;
+        let search = '';
+        let createCallUserSearch = '';
+
+        const selfUserId = '__self__';
+        const createCallUserDirectory = [
+          { id: selfUserId, name: session.displayName || ownerDefault, email: session.email },
+          { id: 'u-anna', name: 'Anna Meyer', email: 'anna@intelligent-intern.com' },
+          { id: 'u-luca', name: 'Luca Klein', email: 'luca@intelligent-intern.com' },
+          { id: 'u-sara', name: 'Sara Hoffmann', email: 'sara@intelligent-intern.com' },
+          { id: 'u-timo', name: 'Timo Adler', email: 'timo@intelligent-intern.com' },
+          { id: 'u-zoe', name: 'Zoe Richter', email: 'zoe@intelligent-intern.com' },
+          { id: 'u-emil', name: 'Emil Koch', email: 'emil@intelligent-intern.com' },
+          { id: 'u-lea', name: 'Lea Bauer', email: 'lea@intelligent-intern.com' },
+          { id: 'u-jonas', name: 'Jonas Brandt', email: 'jonas@intelligent-intern.com' },
+          { id: 'u-mira', name: 'Mira Wolff', email: 'mira@intelligent-intern.com' },
+          { id: 'u-paul', name: 'Paul Schmitt', email: 'paul@intelligent-intern.com' },
+        ];
+        const createCallSelectedUserIds = new Set([selfUserId]);
+
+        function makeUuid() {
+          if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+            const random = Math.floor(Math.random() * 16);
+            const value = char === 'x' ? random : (random & 0x3) | 0x8;
+            return value.toString(16);
+          });
+        }
+
+        function formatDateTimeLocal(date) {
+          const y = date.getFullYear();
+          const m = String(date.getMonth() + 1).padStart(2, '0');
+          const d = String(date.getDate()).padStart(2, '0');
+          const h = String(date.getHours()).padStart(2, '0');
+          const min = String(date.getMinutes()).padStart(2, '0');
+          return `${y}-${m}-${d}T${h}:${min}`;
+        }
+
+        function formatDateForTable(dateTimeLocal) {
+          return dateTimeLocal.replace('T', ' ');
+        }
+
+        function formatDateTimeDisplay(value) {
+          if (window.KingSettingsUI && typeof window.KingSettingsUI.formatDateTimeDisplay === 'function') {
+            return window.KingSettingsUI.formatDateTimeDisplay(value);
+          }
+          if (typeof value === 'string') return value.replace('T', ' ');
+          return '';
+        }
+
+        function formatScheduleRange(start, end) {
+          return `${formatDateTimeDisplay(start)} -> ${formatDateTimeDisplay(end)}`;
+        }
+
+        function filteredCalls() {
+          const query = search.trim().toLowerCase();
+          return calls.filter((call) => {
+            if (!query) return true;
+            return call.title.toLowerCase().includes(query);
+          });
+        }
+
+        function refreshStatus() {
+          const scheduled = calls.filter((call) => call.status === 'scheduled').length;
+          const running = calls.filter((call) => call.status === 'running').length;
+          const participants = calls.reduce((sum, call) => sum + call.users, 0);
+
+          if (scheduledCount instanceof HTMLElement) scheduledCount.textContent = String(scheduled);
+          if (runningCount instanceof HTMLElement) runningCount.textContent = String(running);
+          if (participantCount instanceof HTMLElement) participantCount.textContent = String(participants);
+        }
+
+        function statusClassFor(status) {
+          if (status === 'running') return 'ok';
+          if (status === 'cancelled') return 'danger';
+          return 'warn';
+        }
+
+        function findCallById(callId) {
+          return calls.find((entry) => entry.id === callId) || null;
+        }
+
+        function buildCancelMailBody(call) {
+          const schedule = formatScheduleRange(call.start, call.end);
+          return [
+            '<p>Hello everyone,</p>',
+            `<p>We need to cancel the call <strong>${call.title}</strong> that was planned for <strong>${schedule}</strong>.</p>`,
+            '<p>Sorry for the short notice. We will share an updated timeslot as soon as possible.</p>',
+            '<p>Thanks for your understanding.</p>',
+          ].join('');
+        }
+
+        function resetCancelProgress() {
+          if (cancelProgressWrap instanceof HTMLElement) cancelProgressWrap.hidden = true;
+          if (cancelProgressText instanceof HTMLElement) {
+            cancelProgressText.hidden = true;
+            cancelProgressText.textContent = 'Sending cancellation email...';
+          }
+          if (cancelProgressBar instanceof HTMLElement) cancelProgressBar.style.width = '0%';
+          if (cancelSendBtn instanceof HTMLButtonElement) cancelSendBtn.disabled = false;
+          if (cancelModalCloseBtn instanceof HTMLButtonElement) cancelModalCloseBtn.disabled = false;
+          cancelSendInProgress = false;
+        }
+
+        function openCancelModal(call) {
+          if (!(cancelModal instanceof HTMLElement)) return;
+          if (!(cancelMailEditor instanceof HTMLElement)) return;
+          if (!(cancelMailSubject instanceof HTMLInputElement)) return;
+          if (!(cancelMeta instanceof HTMLElement)) return;
+
+          cancelTargetCallId = call.id;
+          cancelMailSubject.value = `Call cancelled: ${call.title}`;
+          cancelMailEditor.innerHTML = buildCancelMailBody(call);
+          cancelMeta.textContent = `${call.users} participant(s) will receive this cancellation email.`;
+          resetCancelProgress();
+          cancelModal.hidden = false;
+          cancelMailEditor.focus();
+        }
+
+        function closeCancelModal() {
+          if (!(cancelModal instanceof HTMLElement)) return;
+          if (cancelSendInProgress) return;
+
+          if (cancelSendTimer !== null) {
+            window.clearInterval(cancelSendTimer);
+            cancelSendTimer = null;
+          }
+
+          cancelTargetCallId = null;
+          cancelModal.hidden = true;
+          resetCancelProgress();
+        }
+
+        function renderCreateCallUserLists() {
+          if (!(createCallAvailableUsers instanceof HTMLElement)) return;
+          if (!(createCallSelectedUsers instanceof HTMLElement)) return;
+          if (!(createCallSelectedTitle instanceof HTMLElement)) return;
+
+          const query = createCallUserSearch.trim().toLowerCase();
+          const selectedUsers = createCallUserDirectory.filter((user) => createCallSelectedUserIds.has(user.id));
+          const availableUsers = createCallUserDirectory.filter((user) => {
+            if (createCallSelectedUserIds.has(user.id)) return false;
+            if (!query) return true;
+            return user.name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query);
+          });
+
+          createCallSelectedTitle.textContent = `Selected users (${selectedUsers.length})`;
+
+          createCallAvailableUsers.innerHTML =
+            availableUsers.length === 0
+              ? '<p class="create-call-user-empty">No users found.</p>'
+              : availableUsers
+                  .map((user) => {
+                    return `
+                      <div class="create-call-user-row">
+                        <div class="create-call-user-meta">
+                          <div class="create-call-user-name">${user.name}</div>
+                          <div class="create-call-user-email">${user.email}</div>
+                        </div>
+                        <button class="icon-mini-btn" type="button" data-add-user-id="${user.id}" title="Add user" aria-label="Add user">+</button>
+                      </div>
+                    `;
+                  })
+                  .join('');
+
+          createCallSelectedUsers.innerHTML =
+            selectedUsers.length === 0
+              ? '<p class="create-call-user-empty">No users selected.</p>'
+              : selectedUsers
+                  .map((user) => {
+                    const removeDisabled = user.id === selfUserId;
+                    return `
+                      <div class="create-call-user-row">
+                        <div class="create-call-user-meta">
+                          <div class="create-call-user-name">${user.name}</div>
+                          <div class="create-call-user-email">${user.email}${user.id === selfUserId ? ' (Host)' : ''}</div>
+                        </div>
+                        <button class="icon-mini-btn${removeDisabled ? ' is-hidden' : ''}" type="button" data-remove-user-id="${user.id}" title="Remove user" aria-label="Remove user">-</button>
+                      </div>
+                    `;
+                  })
+                  .join('');
+        }
+
+        function resetCreateCallModalForm() {
+          if (!(createCallTitleInput instanceof HTMLInputElement)) return;
+          if (!(createCallStartInput instanceof HTMLInputElement)) return;
+          if (!(createCallEndInput instanceof HTMLInputElement)) return;
+          if (!(createCallUserSearchInput instanceof HTMLInputElement)) return;
+          if (!(createCallStatus instanceof HTMLElement)) return;
+
+          const nextId = calls.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+          const now = new Date();
+          const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
+          const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+          createCallTitleInput.value = `New call ${nextId}`;
+          createCallStartInput.value = formatDateTimeLocal(inOneHour);
+          createCallEndInput.value = formatDateTimeLocal(inTwoHours);
+          createCallUserSearch = '';
+          createCallUserSearchInput.value = '';
+          createCallStatus.textContent = '';
+
+          createCallSelectedUserIds.clear();
+          createCallSelectedUserIds.add(selfUserId);
+          renderCreateCallUserLists();
+        }
+
+        function openCreateCallModal() {
+          if (!(createCallModal instanceof HTMLElement)) return;
+          resetCreateCallModalForm();
+          createCallModal.hidden = false;
+          createCallTitleInput?.focus();
+        }
+
+        function closeCreateCallModal() {
+          if (!(createCallModal instanceof HTMLElement)) return;
+          createCallModal.hidden = true;
+        }
+
+        function closeInvitePopover() {
+          if (!(invitePopover instanceof HTMLElement)) return;
+          invitePopover.hidden = true;
+        }
+
+        function openInvitePopover(anchor, inviteCode) {
+          if (!(invitePopover instanceof HTMLElement)) return;
+          if (!(inviteCodeValue instanceof HTMLElement)) return;
+          if (!(anchor instanceof HTMLElement)) return;
+
+          activeInviteCode = inviteCode;
+          inviteCodeValue.textContent = inviteCode;
+          invitePopover.hidden = false;
+          const rect = anchor.getBoundingClientRect();
+          const top = Math.min(window.innerHeight - 130, rect.bottom + 8);
+          const left = Math.max(10, Math.min(window.innerWidth - 320, rect.right - 300));
+          invitePopover.style.top = `${top}px`;
+          invitePopover.style.left = `${left}px`;
+        }
+
+        function render() {
+          if (!(rows instanceof HTMLElement)) return;
+          if (!(pageInfo instanceof HTMLElement)) return;
+          if (!(prev instanceof HTMLButtonElement)) return;
+          if (!(next instanceof HTMLButtonElement)) return;
+
+          const list = filteredCalls();
+          const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+          if (page > totalPages) page = totalPages;
+
+          const start = (page - 1) * pageSize;
+          const current = list.slice(start, start + pageSize);
+
+          rows.innerHTML = current
+            .map((call) => {
+              const statusClass = statusClassFor(call.status);
+              const actions =
+                call.status === 'cancelled'
+                  ? '<span class="code">No actions</span>'
+                  : `
+                      <button class="icon-mini-btn" data-action="join" data-id="${call.id}" title="Join call" aria-label="Join call">
+                        <img src="./assets/orgas/intelligent-intern/icons/add_to_call.png" alt="" />
+                      </button>
+                      <button class="icon-mini-btn" data-action="invite" data-code="${call.code}" title="Invite code" aria-label="Invite code">
+                        <span class="icon-copy" aria-hidden="true"></span>
+                      </button>
+                      <button class="icon-mini-btn danger" data-action="cancel" data-id="${call.id}" title="Cancel call" aria-label="Cancel call">
+                        <img src="./assets/orgas/intelligent-intern/icons/cancel.png" alt="" />
+                      </button>
+                    `;
+              return `
+                <tr>
+                  <td>${call.title}</td>
+                  <td>${formatScheduleRange(call.start, call.end)}</td>
+                  <td><span class="tag ${statusClass}">${call.status}</span></td>
+                  <td>${call.users}</td>
+                  <td>
+                    <span class="actions-inline">
+                      ${actions}
+                    </span>
+                  </td>
+                </tr>
+              `;
+            })
+            .join('');
+
+          pageInfo.textContent = `Page ${page}/${totalPages} • ${list.length} calls`;
+          prev.disabled = page <= 1;
+          next.disabled = page >= totalPages;
+          refreshStatus();
+        }
+
+        rows?.addEventListener('click', (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          const button = target.closest('button[data-action]');
+          if (!(button instanceof HTMLButtonElement)) return;
+
+          const action = button.dataset.action;
+          if (action === 'join') {
+            window.location.href = './mock-user.html';
+            return;
+          }
+
+          if (action === 'invite') {
+            const code = button.dataset.code || '';
+            openInvitePopover(button, code);
+            return;
+          }
+
+          if (action === 'cancel') {
+            const callId = Number(button.dataset.id);
+            const call = findCallById(callId);
+            if (!call || call.status === 'cancelled') return;
+            closeInvitePopover();
+            openCancelModal(call);
+          }
+        });
+
+        invitePopoverCopyBtn?.addEventListener('click', async () => {
+          if (!activeInviteCode) return;
+          if (!(invitePopoverCopyBtn instanceof HTMLButtonElement)) return;
+
+          try {
+            await navigator.clipboard.writeText(activeInviteCode);
+            invitePopoverCopyBtn.classList.add('active');
+          } catch {
+            invitePopoverCopyBtn.classList.remove('active');
+          }
+        });
+
+        invitePopoverClose?.addEventListener('click', closeInvitePopover);
+
+        window.addEventListener('click', (event) => {
+          if (!(invitePopover instanceof HTMLElement) || invitePopover.hidden) return;
+          const target = event.target;
+          if (!(target instanceof Node)) return;
+          const clickedInviteTrigger =
+            target instanceof HTMLElement && target.closest('button[data-action="invite"]');
+          if (clickedInviteTrigger) return;
+          if (!invitePopover.contains(target)) {
+            closeInvitePopover();
+          }
+        });
+
+        cancelToolbar?.addEventListener('click', (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          const button = target.closest('button[data-editor-cmd]');
+          if (!(button instanceof HTMLButtonElement)) return;
+          if (!(cancelMailEditor instanceof HTMLElement)) return;
+
+          const command = button.dataset.editorCmd || '';
+          cancelMailEditor.focus();
+
+          if (command === 'createLink') {
+            const url = window.prompt('Enter link URL', 'https://');
+            if (!url) return;
+            document.execCommand('createLink', false, url);
+            return;
+          }
+
+          document.execCommand(command, false);
+        });
+
+        cancelSendBtn?.addEventListener('click', () => {
+          if (cancelSendInProgress) return;
+          if (cancelTargetCallId === null) return;
+
+          const call = findCallById(cancelTargetCallId);
+          if (!call) return;
+
+          cancelSendInProgress = true;
+          if (cancelSendBtn instanceof HTMLButtonElement) cancelSendBtn.disabled = true;
+          if (cancelModalCloseBtn instanceof HTMLButtonElement) cancelModalCloseBtn.disabled = true;
+          if (cancelProgressWrap instanceof HTMLElement) cancelProgressWrap.hidden = false;
+          if (cancelProgressText instanceof HTMLElement) cancelProgressText.hidden = false;
+          if (cancelProgressBar instanceof HTMLElement) cancelProgressBar.style.width = '0%';
+
+          let progress = 0;
+          cancelSendTimer = window.setInterval(() => {
+            progress = Math.min(100, progress + 8 + Math.floor(Math.random() * 10));
+            if (cancelProgressBar instanceof HTMLElement) {
+              cancelProgressBar.style.width = `${progress}%`;
+            }
+
+            if (progress < 100) {
+              return;
+            }
+
+            if (cancelSendTimer !== null) {
+              window.clearInterval(cancelSendTimer);
+              cancelSendTimer = null;
+            }
+
+            call.status = 'cancelled';
+            call.users = 0;
+            call.cancelledAt = Date.now();
+            call.cancelMailSubject = cancelMailSubject instanceof HTMLInputElement ? cancelMailSubject.value.trim() : '';
+            call.cancelMailBody = cancelMailEditor instanceof HTMLElement ? cancelMailEditor.innerHTML : '';
+
+            if (cancelProgressText instanceof HTMLElement) {
+              cancelProgressText.textContent = 'Cancellation mail sent to all participants.';
+            }
+
+            window.setTimeout(() => {
+              closeCancelModal();
+              render();
+            }, 420);
+          }, 130);
+        });
+
+        cancelModalCloseBtn?.addEventListener('click', closeCancelModal);
+
+        cancelModal?.addEventListener('click', (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          if (target.matches('[data-close-cancel-modal]')) {
+            closeCancelModal();
+          }
+        });
+
+        window.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') {
+            closeInvitePopover();
+            closeCancelModal();
+            closeCreateCallModal();
+          }
+        });
+
+        prev?.addEventListener('click', () => {
+          if (page > 1) {
+            page -= 1;
+            render();
+          }
+        });
+
+        next?.addEventListener('click', () => {
+          const totalPages = Math.max(1, Math.ceil(filteredCalls().length / pageSize));
+          if (page < totalPages) {
+            page += 1;
+            render();
+          }
+        });
+
+        searchInput?.addEventListener('input', () => {
+          if (!(searchInput instanceof HTMLInputElement)) return;
+          search = searchInput.value;
+          page = 1;
+          render();
+        });
+
+        searchSubmitBtn?.addEventListener('click', () => {
+          page = 1;
+          render();
+        });
+
+        newCallBtn?.addEventListener('click', async () => {
+          closeInvitePopover();
+          if (!window.KingCallComposer || typeof window.KingCallComposer.open !== 'function') {
+            openCreateCallModal();
+            return;
+          }
+
+          const draft = await window.KingCallComposer.open({
+            mode: 'create',
+            hostId: selfUserId,
+            hostName: session.displayName || ownerDefault,
+            hostEmail: session.email,
+            registeredUsers: createCallUserDirectory,
+            initialTitle: `New call ${calls.reduce((max, item) => Math.max(max, item.id), 0) + 1}`,
+            initialStart: new Date(Date.now() + 60 * 60 * 1000),
+            initialEnd: new Date(Date.now() + 2 * 60 * 60 * 1000),
+          });
+
+          if (!draft) {
+            return;
+          }
+
+          calls.unshift({
+            id: calls.reduce((max, item) => Math.max(max, item.id), 0) + 1,
+            title: draft.title,
+            owner: ownerDefault,
+            code: makeUuid(),
+            start: draft.start,
+            end: draft.end,
+            status: 'scheduled',
+            users: draft.participantsCount,
+            invitation: draft.invitation,
+            externalInvitees: draft.externalInvitees,
+          });
+
+          page = 1;
+          render();
+        });
+
+        window.addEventListener('king:preferences-updated', () => {
+          render();
+        });
+
+        createCallModalCloseBtn?.addEventListener('click', closeCreateCallModal);
+        createCallCancelBtn?.addEventListener('click', closeCreateCallModal);
+
+        createCallModal?.addEventListener('click', (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          if (target.matches('[data-close-create-call-modal]')) {
+            closeCreateCallModal();
+          }
+        });
+
+        createCallUserSearchInput?.addEventListener('input', () => {
+          if (!(createCallUserSearchInput instanceof HTMLInputElement)) return;
+          createCallUserSearch = createCallUserSearchInput.value;
+          renderCreateCallUserLists();
+        });
+
+        createCallAvailableUsers?.addEventListener('click', (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          const button = target.closest('button[data-add-user-id]');
+          if (!(button instanceof HTMLButtonElement)) return;
+          const userId = button.dataset.addUserId || '';
+          if (userId === '') return;
+          createCallSelectedUserIds.add(userId);
+          renderCreateCallUserLists();
+        });
+
+        createCallSelectedUsers?.addEventListener('click', (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          const button = target.closest('button[data-remove-user-id]');
+          if (!(button instanceof HTMLButtonElement)) return;
+          const userId = button.dataset.removeUserId || '';
+          if (userId === '' || userId === selfUserId) return;
+          createCallSelectedUserIds.delete(userId);
+          renderCreateCallUserLists();
+        });
+
+        createCallSubmitBtn?.addEventListener('click', () => {
+          if (!(createCallTitleInput instanceof HTMLInputElement)) return;
+          if (!(createCallStartInput instanceof HTMLInputElement)) return;
+          if (!(createCallEndInput instanceof HTMLInputElement)) return;
+          if (!(createCallStatus instanceof HTMLElement)) return;
+
+          const title = createCallTitleInput.value.trim();
+          const start = createCallStartInput.value;
+          const end = createCallEndInput.value;
+
+          if (title === '') {
+            createCallStatus.textContent = 'Please enter a call title.';
+            return;
+          }
+          if (start === '' || end === '') {
+            createCallStatus.textContent = 'Please select start and end time.';
+            return;
+          }
+          if (new Date(end).getTime() <= new Date(start).getTime()) {
+            createCallStatus.textContent = 'End time must be later than start time.';
+            return;
+          }
+          if (createCallSelectedUserIds.size === 0) {
+            createCallStatus.textContent = 'Please add at least one participant.';
+            return;
+          }
+
+          const nextId = calls.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+          calls.unshift({
+            id: nextId,
+            title,
+            owner: ownerDefault,
+            code: makeUuid(),
+            start: formatDateForTable(start),
+            end: formatDateForTable(end),
+            status: 'scheduled',
+            users: createCallSelectedUserIds.size,
+          });
+
+          closeCreateCallModal();
+          page = 1;
+          render();
+        });
+
+        if (window.KingSettingsUI && typeof window.KingSettingsUI.init === 'function') {
+          window.KingSettingsUI.init({
+            role: session.role,
+            displayName: session.displayName || 'User',
+            email: session.email,
+            settingsButton: document.getElementById('settingsBtn'),
+          });
+        }
+
+        initShellChrome();
+        render();
+      })();
+    </script>
+  </body>
+</html>

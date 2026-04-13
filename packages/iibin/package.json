@@ -1,6 +1,6 @@
 {
   "name": "@intelligentintern/iibin",
-  "version": "1.0.6-beta",
+  "version": "1.0.5-beta",
   "description": "IIBIN JavaScript/TypeScript protocol library from King",
   "license": "MIT",
   "type": "module",

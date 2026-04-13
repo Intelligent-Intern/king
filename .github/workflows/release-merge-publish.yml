@@ -524,11 +524,11 @@ jobs:
       matrix:
         include:
           - component: frontend
-            dockerfile: ./demo/video-chat/frontend/Dockerfile
+            dockerfile: ./demo/video-chat/frontend-vue/Dockerfile
             image_suffix: -videochat-frontend
             platforms: linux/amd64,linux/arm64
           - component: backend
-            dockerfile: ./demo/video-chat/backend/Dockerfile
+            dockerfile: ./demo/video-chat/backend-king-php/Dockerfile
             image_suffix: -videochat-backend
             platforms: linux/amd64,linux/arm64
     steps:
