@@ -31,6 +31,7 @@ Latest commit-level progress:
 - 2026-04-13: closed `#49` with strict `WS /ws` handshake validation + structured close-descriptor contract coverage (`backend-king-php/tests/realtime-websocket-gateway-contract.sh`)
 - 2026-04-13: closed `#50` with server-authoritative room presence snapshot + join/leave delta coverage (including room-change/reconnect phantom-user guards) in `backend-king-php/tests/realtime-presence-contract.sh`
 - 2026-04-13: closed `#51` with room-scoped chat fanout hardening (sender-in-room enforcement, bounded malformed-payload rejection, stable message ids for dedupe, deterministic `chat/ack` ids) in `backend-king-php/tests/realtime-chat-contract.sh` + `backend-king-php/tests/contract-catalog-parity-contract.sh`
+- 2026-04-13: closed `#52` with typing indicator hardening (room-scoped debounce + expiry, no self-echo, sender-in-room fail-closed validation, explicit `typing/stop` catalog parity) in `backend-king-php/tests/realtime-typing-contract.sh` + `backend-king-php/tests/contract-catalog-parity-contract.sh`
 
 Current new-stack baseline capabilities:
 
@@ -47,7 +48,7 @@ Current new-stack baseline capabilities:
 - participant roster is sourced from live `room/snapshot` events with normalized ordering and live snapshot timestamp
 - chat timeline is server-fanout driven with message normalization and room-local dedupe by message id
 - chat sender acks now carry deterministic `ack_id` + stable `message_id` so client retries can dedupe without local echo drift
-- typing indicators are room-scoped, exclude self display, and auto-expire on idle timeout windows
+- typing indicators are room-scoped, exclude self display, auto-expire on idle timeout windows, and fail closed when sender room membership is invalid
 - chat composer enforces bounded draft length and rejects empty/whitespace payloads before websocket send
 - chat and roster timestamps are rendered in deterministic locale-independent UTC `HH:MM UTC` format
 - pre-call local media preview is an explicit gate; join is enabled only after preview succeeds, with visible permission/device errors

@@ -417,6 +417,14 @@ try {
     $typingPayload = videochat_contract_catalog_last_frame($frames, 'socket-admin');
     videochat_contract_catalog_assert($typingPayload !== [], 'typing frame should be captured');
     videochat_contract_catalog_assert_payload($catalog, 'ws', 'typing_start', $typingPayload);
+    $typingStopCommand = videochat_typing_decode_client_frame(json_encode(['type' => 'typing/stop'], JSON_UNESCAPED_SLASHES));
+    videochat_contract_catalog_assert((bool) ($typingStopCommand['ok'] ?? false), 'typing stop command should decode');
+    $typingStopApply = videochat_typing_apply_command($typingState, $presenceState, $userConnection, $typingStopCommand, $sender, 1_780_200_020_500);
+    videochat_contract_catalog_assert((bool) ($typingStopApply['ok'] ?? false), 'typing stop apply should succeed');
+    videochat_contract_catalog_assert((bool) ($typingStopApply['emitted'] ?? false), 'typing stop apply should emit');
+    $typingStopPayload = videochat_contract_catalog_last_frame($frames, 'socket-admin');
+    videochat_contract_catalog_assert($typingStopPayload !== [], 'typing stop frame should be captured');
+    videochat_contract_catalog_assert_payload($catalog, 'ws', 'typing_stop', $typingStopPayload);
 
     $frames = [];
     $lobbyCommand = videochat_lobby_decode_client_frame(json_encode(['type' => 'lobby/queue/join'], JSON_UNESCAPED_SLASHES));

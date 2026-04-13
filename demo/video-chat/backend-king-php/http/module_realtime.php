@@ -545,6 +545,7 @@ function videochat_handle_realtime_routes(
                                         'code' => 'typing_publish_failed',
                                         'message' => 'Could not publish typing state.',
                                         'details' => [
+                                            'error' => (string) ($typingResult['error'] ?? 'unknown'),
                                             'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
                                         ],
                                         'time' => gmdate('c'),

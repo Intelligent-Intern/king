@@ -346,7 +346,7 @@ Presence channel contract on `WS /ws`:
   - chat fanout is room-scoped and server-authoritative (`chat/message` with stable server timestamps)
   - chat payload validation is bounded (`VIDEOCHAT_WS_CHAT_MAX_CHARS`, `VIDEOCHAT_WS_CHAT_MAX_BYTES`)
   - accepted chat publishes emit `chat/ack` to the sender with deterministic `ack_id`, stable `message_id`, and `sent_count`
-  - typing indicators are room-scoped, debounced, expire automatically, and never self-echo
+  - typing indicators are room-scoped, debounced, expire automatically, never self-echo, and fail closed when sender room membership is invalid
   - lobby queue updates are room-scoped snapshots (`lobby/snapshot`) driven by server-authoritative queue/admitted state
   - moderator actions (`lobby/allow`, `lobby/remove`, `lobby/allow_all`) are fail-closed for non-moderator roles
   - queue/admitted entries are cleaned when a user disconnects or changes rooms
@@ -542,7 +542,7 @@ Run the realtime chat contract test (room-scoped fanout + payload bounds + stabl
 demo/video-chat/backend-king-php/tests/realtime-chat-contract.sh
 ```
 
-Run the realtime typing contract test (debounce + expiry + no-self-echo semantics):
+Run the realtime typing contract test (debounce + expiry + no-self-echo semantics + sender room-membership guard):
 
 ```bash
 demo/video-chat/backend-king-php/tests/realtime-typing-contract.sh

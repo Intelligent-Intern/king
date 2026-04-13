@@ -189,6 +189,25 @@
         "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
       }
     },
+    "typing_stop": {
+      "type": "object",
+      "required": {
+        "type": { "type": "string", "enum": ["typing/stop"] },
+        "room_id": { "type": "string", "min_length": 1 },
+        "participant": {
+          "type": "object",
+          "required": {
+            "user_id": { "type": "int", "min": 1 },
+            "display_name": { "type": "string", "min_length": 1 },
+            "role": { "type": "string", "enum": ["admin", "moderator", "user"] }
+          }
+        },
+        "reason": { "type": "string", "min_length": 1 },
+        "server_unix_ms": { "type": "int", "min": 1 },
+        "server_time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" },
+        "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
+      }
+    },
     "lobby_snapshot": {
       "type": "object",
       "required": {

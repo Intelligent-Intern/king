@@ -161,6 +161,7 @@ The current tree already proves:
 - the active video-chat websocket gateway now enforces one explicit strict handshake contract before upgrade (`GET`, `Upgrade: websocket`, `Connection: upgrade`, valid `Sec-WebSocket-Key`, `Sec-WebSocket-Version: 13`) and exports structured close descriptors for session-invalidated realtime termination (`close_code`, `close_reason`, `close_category`), proven by `backend-king-php/tests/realtime-websocket-gateway-contract.sh`
 - the active video-chat realtime presence surface now keeps room membership server-authoritative with deterministic `room/snapshot` plus `room/joined`/`room/left` delta semantics across join, leave, room-change, and reconnect/resync paths, with explicit phantom-user prevention proof in `backend-king-php/tests/realtime-presence-contract.sh`
 - the active video-chat realtime chat surface now enforces sender-in-room authoritative fanout, bounded malformed-payload rejection, stable per-sender/per-room/per-client-message ids for frontend dedupe, and deterministic `chat/ack` ids, proven by `backend-king-php/tests/realtime-chat-contract.sh` and catalog parity in `backend-king-php/tests/contract-catalog-parity-contract.sh`
+- the active video-chat realtime typing surface now enforces room-scoped debounce + expiry semantics with no self-echo, fail-closed sender-in-room validation, and typed start/stop contract-catalog parity coverage, proven by `backend-king-php/tests/realtime-typing-contract.sh` and `backend-king-php/tests/contract-catalog-parity-contract.sh`
 
 ## What Is Still Not Finished
 

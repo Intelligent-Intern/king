@@ -251,7 +251,7 @@ Execution guardrails for this extension:
   done when: clients receive consistent snapshots plus deltas and reconnect restores current room presence without phantom users.
 - [x] `#51 Implement room-scoped chat fanout with server timestamps, payload bounds, and delivery ack ids.`
   done when: chat broadcast is authoritative, malformed payloads are rejected, and message ids are stable for frontend dedupe.
-- [ ] `#52 Implement typing indicator channel with debounce windows, expiry semantics, and no self-echo.`
+- [x] `#52 Implement typing indicator channel with debounce windows, expiry semantics, and no self-echo.`
   done when: typing state auto-expires and remains scoped to active room participants only.
 - [ ] `#53 Implement signaling routing (`offer`/`answer`/`ice`/`hangup`) with membership + target authorization checks.`
   done when: signaling reaches only valid room peers and invalid targets fail closed without leaking peer state.

@@ -135,7 +135,8 @@ function videochat_typing_broadcast(
  *   ok: bool,
  *   emitted: bool,
  *   event_type: string,
- *   sent_count: int
+ *   sent_count: int,
+ *   error: string
  * }
  */
 function videochat_typing_apply_command(
@@ -152,6 +153,7 @@ function videochat_typing_apply_command(
             'emitted' => false,
             'event_type' => '',
             'sent_count' => 0,
+            'error' => 'invalid_command',
         ];
     }
 
@@ -162,10 +164,27 @@ function videochat_typing_apply_command(
             'emitted' => false,
             'event_type' => '',
             'sent_count' => 0,
+            'error' => 'invalid_sender',
         ];
     }
 
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
+    $connectionId = trim((string) ($connection['connection_id'] ?? ''));
+    $roomConnections = $presenceState['rooms'][$roomId] ?? null;
+    if (
+        $connectionId === ''
+        || !is_array($roomConnections)
+        || !array_key_exists($connectionId, $roomConnections)
+    ) {
+        return [
+            'ok' => false,
+            'emitted' => false,
+            'event_type' => '',
+            'sent_count' => 0,
+            'error' => 'sender_not_in_room',
+        ];
+    }
+
     if (!isset($typingState['rooms'][$roomId]) || !is_array($typingState['rooms'][$roomId])) {
         $typingState['rooms'][$roomId] = [];
     }
@@ -185,6 +204,7 @@ function videochat_typing_apply_command(
                 'emitted' => false,
                 'event_type' => '',
                 'sent_count' => 0,
+                'error' => '',
             ];
         }
 
@@ -214,6 +234,7 @@ function videochat_typing_apply_command(
             'emitted' => true,
             'event_type' => 'typing/stop',
             'sent_count' => $sentCount,
+            'error' => '',
         ];
     }
 
@@ -238,6 +259,7 @@ function videochat_typing_apply_command(
             'emitted' => false,
             'event_type' => '',
             'sent_count' => 0,
+            'error' => '',
         ];
     }
 
@@ -262,6 +284,7 @@ function videochat_typing_apply_command(
         'emitted' => true,
         'event_type' => 'typing/start',
         'sent_count' => $sentCount,
+        'error' => '',
     ];
 }
 
