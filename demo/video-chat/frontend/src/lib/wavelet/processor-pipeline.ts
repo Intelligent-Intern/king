@@ -90,7 +90,8 @@ export class WaveletVideoProcessor {
     sourceVideo.srcObject = inputStream
     sourceVideo.autoplay = true
     sourceVideo.playsInline = true
-    
+    sourceVideo.muted = true  // prevent mic audio loopback through speakers
+
     await sourceVideo.play()
 
     const outputCanvas = document.createElement('canvas')

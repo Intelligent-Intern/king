@@ -69,73 +69,24 @@ export function resetCodec() {
   }
 }
 
+// Wavelet coding happens at the raw-frame level in processor-pipeline.ts.
+// At the encoded-chunk level (post-WebRTC-codec) there is nothing to do —
+// both transforms are pure pass-throughs kept for future use.
+
 export async function senderTransform(
   readable: ReadableStream<EncodedVideoChunk>,
   writable: WritableStream<EncodedVideoChunk>,
-  controller: TransformStreamDefaultController<EncodedVideoChunk>
+  _controller: TransformStreamDefaultController<EncodedVideoChunk>
 ): Promise<void> {
-  const codec = getCodec()
-  
-  const transform = new TransformStream({
-    async transform(encodedFrame, controller) {
-      try {
-        const videoFrame = new VideoFrame(encodedFrame.data, {
-          timestamp: encodedFrame.timestamp,
-          duration: encodedFrame.duration,
-        })
-
-        const encoded = codec.encodeFrame(videoFrame)
-        videoFrame.close()
-
-        if (encoded) {
-          const chunk = new EncodedVideoChunk({
-            type: encodedFrame.type,
-            timestamp: encodedFrame.timestamp,
-            data: encoded,
-          })
-          controller.enqueue(chunk)
-        }
-      } catch (error) {
-        console.error('[SenderTransform] Error:', error)
-        controller.enqueue(encodedFrame)
-      }
-    },
-  })
-
-  await readable.pipeThrough(transform).pipeTo(writable)
+  await readable.pipeTo(writable)
 }
 
 export async function receiverTransform(
   readable: ReadableStream<EncodedVideoChunk>,
   writable: WritableStream<EncodedVideoChunk>,
-  controller: TransformStreamDefaultController<EncodedVideoChunk>
+  _controller: TransformStreamDefaultController<EncodedVideoChunk>
 ): Promise<void> {
-  const codec = getCodec()
-  
-  const transform = new TransformStream({
-    async transform(encodedFrame, controller) {
-      try {
-        const decoded = codec.decodeFrame(encodedFrame.data, encodedFrame.timestamp)
-        
-        if (decoded) {
-          const chunk = new EncodedVideoChunk({
-            type: 'key',
-            timestamp: decoded.timestamp,
-            data: encodedFrame.data,
-          })
-          controller.enqueue(chunk)
-          decoded.close()
-        } else {
-          controller.enqueue(encodedFrame)
-        }
-      } catch (error) {
-        console.error('[ReceiverTransform] Error:', error)
-        controller.enqueue(encodedFrame)
-      }
-    },
-  })
-
-  await readable.pipeThrough(transform).pipeTo(writable)
+  await readable.pipeTo(writable)
 }
 
 export function setupSenderTransform(sender: RTCRtpSender): void {
