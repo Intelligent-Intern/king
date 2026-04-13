@@ -440,6 +440,12 @@ Run the avatar upload contract test (type/size validation + safe storage path ha
 demo/video-chat/backend-king-php/tests/avatar-upload-contract.sh
 ```
 
+Run the avatar upload endpoint contract test (`POST /api/user/avatar` + `GET /api/user/avatar-files/{filename}` + session-check avatar-path parity):
+
+```bash
+demo/video-chat/backend-king-php/tests/avatar-upload-endpoint-contract.sh
+```
+
 Run the calls list contract test (my/all scope + search/status filters + deterministic pagination):
 
 ```bash

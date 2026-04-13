@@ -228,7 +228,7 @@ Execution guardrails for this extension:
   done when: deactivated users lose active session validity and cannot access protected REST/WS flows.
 - [x] `#41 Implement profile/settings endpoint for current user (display name, avatar ref, theme, time format).`
   done when: profile changes persist and session-check payload reflects updated preferences.
-- [ ] `#42 Implement avatar upload endpoint with type/size validation and safe storage semantics.`
+- [x] `#42 Implement avatar upload endpoint with type/size validation and safe storage semantics.`
   done when: valid images persist, unsafe payloads are rejected fail-closed, and stored path references are deterministic.
 - [ ] `#43 Implement calls list endpoint with owner-bound filter rules and deterministic paging contract.`
   done when: admin/user list semantics are role-safe, totals remain stable, and ordering is deterministic.
