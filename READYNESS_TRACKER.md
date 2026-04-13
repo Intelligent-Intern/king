@@ -50,6 +50,7 @@ Status note:
 - Recent security closure: HTTP/2 one-shot cumulative body caps, HTTP/3 one-shot full-body completion, MCP persisted transfer-key truncation fixes plus loopback-default peer targeting, bounded object-store metadata-cache growth, CRLF-safe cloud metadata headers, TOCTOU-safe local/distributed object-store reads, snapshot-manifest line caps, snapshot-cleanup symlink hardening, bounded remote orchestrator error metadata, trusted workflow-run source materialization, and loopback-default Semantic DNS live probe allowlists are now verified on the current mainline; the broader full-surface security review remains open below.
 - Recent batch-`S` closeout: the `ISSUES.md` execution batch on `develop/v1.0.3-beta` is fully exhausted (`#1`, `#3`-`#19`), including distributed WebSocket forwarding/fanout proof, QUIC/HTTP3 stability and listener/runtime verification, Semantic DNS and health/load routing hardening, coordinated readiness/drain/recovery plus autoscaling/provider-state recovery slices, S3/CDN pressure behavior, and a consolidated public-entrypoint hardening sweep across object-store, WebSocket, telemetry endpoint, and credential-input boundaries.
 - Recent video-chat backend dispatch closure: the active King PHP demo backend request path no longer keeps one mixed-responsibility handler block; `server.php` now wires deterministic focused modules (`runtime`, `auth_session`, `users`, `invites`, `calls`, `realtime`) through `demo/video-chat/backend-king-php/http/router.php`, with explicit module-order contract proof in `tests/router-module-order-contract.sh`.
+- Recent video-chat contract-catalog closure: the new stack now has one canonical versioned contract fixture at `demo/video-chat/contracts/v1/api-ws-contract.catalog.json`, parity is asserted by `backend-king-php/tests/contract-catalog-parity-contract.sh`, and CI shard-1 fails fast on catalog drift.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -329,7 +330,7 @@ Scope note:
 
 ### Z1. Contract & Clean Architecture
 
-- [ ] Freeze one authoritative REST + WS/IIBIN contract catalog for the new video stack.
+- [x] Freeze one authoritative REST + WS/IIBIN contract catalog for the new video stack.
 - [ ] Enforce one shared typed error envelope across REST and WS responses.
 - [ ] Split backend runtime code into focused modules (`auth`, `session`, `rbac`, `users`, `calls`, `invites`, `realtime`) with no monolithic mixed-responsibility handler.
 - [ ] Split frontend state into focused stores (`auth`, `calls`, `participants`, `chat`, `presence`, `settings`) with deterministic ownership boundaries.

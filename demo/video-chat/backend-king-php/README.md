@@ -333,6 +333,16 @@ Presence channel contract on `WS /ws`:
 
 ## Contract checks
 
+Canonical versioned API/WS catalog (single source of truth):
+
+- `demo/video-chat/contracts/v1/api-ws-contract.catalog.json`
+
+Run the catalog parity drift test (runtime payloads must match the versioned catalog):
+
+```bash
+demo/video-chat/backend-king-php/tests/contract-catalog-parity-contract.sh
+```
+
 Run the auth contract test (REST + websocket token validation coverage):
 
 ```bash

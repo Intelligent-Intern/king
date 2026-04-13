@@ -157,6 +157,10 @@ jobs:
           ../infra/scripts/check-stub-parity.sh
           ../infra/scripts/check-public-contract-claims.sh
 
+      - name: Verify video-chat API/WS contract catalog drift gate
+        if: matrix.shard-index == 1
+        run: bash demo/video-chat/backend-king-php/tests/contract-catalog-parity-contract.sh
+
       - name: Run canonical PHPT suite
         working-directory: extension
         env:

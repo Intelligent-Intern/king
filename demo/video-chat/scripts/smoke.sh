@@ -103,6 +103,7 @@ run_step "backend scaffold boot + auth/login check" bash -lc "
 "
 
 run_step "backend contract: auth/session" bash -lc "'${BACKEND_DIR}/tests/session-auth-contract.sh'"
+run_step "backend contract: API/WS catalog parity" bash -lc "'${BACKEND_DIR}/tests/contract-catalog-parity-contract.sh'"
 run_step "backend contract: room join/presence" bash -lc "'${BACKEND_DIR}/tests/realtime-presence-contract.sh'"
 run_step "backend contract: chat fanout" bash -lc "'${BACKEND_DIR}/tests/realtime-chat-contract.sh'"
 run_step "backend contract: invite redeem" bash -lc "'${BACKEND_DIR}/tests/invite-code-redeem-contract.sh'"
