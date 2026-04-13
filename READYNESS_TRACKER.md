@@ -53,6 +53,7 @@ Status note:
 - Recent video-chat contract-catalog closure: the new stack now has one canonical versioned contract fixture at `demo/video-chat/contracts/v1/api-ws-contract.catalog.json`, parity is asserted by `backend-king-php/tests/contract-catalog-parity-contract.sh`, and CI shard-1 fails fast on catalog drift.
 - Recent video-chat session-rotation closure: the backend now exposes `POST /api/auth/refresh` with atomic token replacement, stale-token conflict rejection, replaced-token websocket tracking cleanup, and dedicated contract proof in `backend-king-php/tests/session-refresh-contract.sh`.
 - Recent video-chat logout-revoke closure: `POST /api/auth/logout` is now explicitly contract-covered for deterministic success/error envelopes, persisted session `revoked_at` metadata, and session-token invalidation semantics in `backend-king-php/tests/session-logout-contract.sh`.
+- Recent video-chat websocket revocation closure: active websocket receive loops now revalidate session liveness and fail closed with policy-close semantics on revoked/expired tokens, with dedicated contract proof in `backend-king-php/tests/realtime-session-revocation-contract.sh`.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -342,7 +343,7 @@ Scope note:
 ### Z2. Backend Auth, Session, RBAC
 
 - [x] Implement logout/session-revoke endpoint with immediate runtime effect.
-- [ ] Enforce session revocation propagation into active websocket connections.
+- [x] Enforce session revocation propagation into active websocket connections.
 - [x] Implement stable session refresh/rotation policy with replay-safe token handling.
 - [ ] Enforce route-level RBAC middleware for admin/moderator/user actions.
 - [ ] Add forbidden/conflict validation semantics for all protected video APIs.

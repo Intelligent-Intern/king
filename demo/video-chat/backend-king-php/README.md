@@ -336,6 +336,7 @@ Presence channel contract on `WS /ws`:
   - invalid signaling targets (missing/invalid/self/not-in-room) fail closed as `system/error` without cross-room leakage
   - accepted signaling publishes emit `call/ack` to the sender with `signal_id`, `signal_type`, and `sent_count`
   - reconnecting clients receive a fresh `room/snapshot` resync on attach
+  - active websocket loops revalidate session liveness on receive; revoked/expired sessions get `system/error` (`websocket_session_invalidated`) and are closed with policy code `1008`
 
 ## Contract checks
 
@@ -365,6 +366,12 @@ Run the auth logout/revoke contract test (deterministic revoke response + persis
 
 ```bash
 demo/video-chat/backend-king-php/tests/session-logout-contract.sh
+```
+
+Run the realtime session-revocation contract test (revoked/expired token propagation into active websocket liveness checks):
+
+```bash
+demo/video-chat/backend-king-php/tests/realtime-session-revocation-contract.sh
 ```
 
 Run the admin user list contract test (search + pagination + deterministic sorting):

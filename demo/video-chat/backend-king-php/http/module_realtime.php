@@ -2,6 +2,56 @@
 
 declare(strict_types=1);
 
+/**
+ * @return array<string, mixed>
+ */
+function videochat_realtime_session_probe_request(string $sessionId, string $wsPath): array
+{
+    $trimmedSessionId = trim($sessionId);
+    $path = trim($wsPath) !== '' ? trim($wsPath) : '/ws';
+
+    return [
+        'method' => 'GET',
+        'uri' => $path,
+        'headers' => [
+            'Authorization' => 'Bearer ' . $trimmedSessionId,
+        ],
+    ];
+}
+
+/**
+ * @return array{ok: bool, reason: string}
+ */
+function videochat_realtime_validate_session_liveness(
+    callable $authenticateRequest,
+    string $sessionId,
+    string $wsPath
+): array {
+    $trimmedSessionId = trim($sessionId);
+    if ($trimmedSessionId === '') {
+        return [
+            'ok' => false,
+            'reason' => 'missing_session',
+        ];
+    }
+
+    $auth = $authenticateRequest(
+        videochat_realtime_session_probe_request($trimmedSessionId, $wsPath),
+        'websocket'
+    );
+    if (!is_array($auth)) {
+        return [
+            'ok' => false,
+            'reason' => 'auth_backend_error',
+        ];
+    }
+
+    return [
+        'ok' => (bool) ($auth['ok'] ?? false),
+        'reason' => (string) ($auth['reason'] ?? 'invalid_session'),
+    ];
+}
+
 function videochat_handle_realtime_routes(
     string $path,
     array $request,
@@ -172,6 +222,33 @@ function videochat_handle_realtime_routes(
 
         try {
             while (true) {
+                $sessionLiveness = videochat_realtime_validate_session_liveness(
+                    $authenticateRequest,
+                    $authSessionId,
+                    $wsPath
+                );
+                if (!(bool) ($sessionLiveness['ok'] ?? false)) {
+                    videochat_presence_send_frame(
+                        $websocket,
+                        [
+                            'type' => 'system/error',
+                            'code' => 'websocket_session_invalidated',
+                            'message' => 'Session is no longer valid for realtime commands.',
+                            'details' => [
+                                'reason' => (string) ($sessionLiveness['reason'] ?? 'invalid_session'),
+                            ],
+                            'time' => gmdate('c'),
+                        ]
+                    );
+
+                    try {
+                        king_client_websocket_close($websocket, 1008, 'session_invalidated');
+                    } catch (Throwable) {
+                        // Best-effort close; detach/cleanup runs in finally.
+                    }
+                    break;
+                }
+
                 videochat_typing_sweep_expired($typingState, $presenceState);
                 $frame = king_client_websocket_receive($websocket, 250);
                 if ($frame === false) {

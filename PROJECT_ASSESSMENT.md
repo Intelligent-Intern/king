@@ -144,6 +144,7 @@ The current tree already proves:
 - the active video-chat stack now carries one canonical versioned API/WS contract catalog (`demo/video-chat/contracts/v1/api-ws-contract.catalog.json`) with runtime parity proof (`backend-king-php/tests/contract-catalog-parity-contract.sh`) and a fail-fast CI drift gate on canonical shard-1
 - the active video-chat auth surface now includes `POST /api/auth/refresh` with atomic session-token rotation, stale-token conflict rejection, and replaced-token revocation semantics proven by `backend-king-php/tests/session-refresh-contract.sh`
 - the active video-chat auth surface now has dedicated logout contract proof for deterministic `POST /api/auth/logout` envelopes and persisted `sessions.revoked_at` metadata (`backend-king-php/tests/session-logout-contract.sh`)
+- the active video-chat realtime surface now enforces session revocation propagation into live websocket loops by revalidating session liveness per receive cycle and closing revoked/expired sessions fail-closed (`system/error` `websocket_session_invalidated` + policy close), proven by `backend-king-php/tests/realtime-session-revocation-contract.sh`
 
 ## What Is Still Not Finished
 

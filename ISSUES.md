@@ -214,7 +214,7 @@ Execution guardrails for this extension:
   done when: refresh rotates token state safely, invalidates replaced token policy as designed, and response contract stays stable.
 - [x] `#34 Implement `/api/auth/logout` session revoke endpoint and persist revocation metadata.`
   done when: logout revokes current token deterministically and returns stable success/error schema.
-- [ ] `#35 Enforce immediate websocket session revocation behavior for revoked/expired sessions.`
+- [x] `#35 Enforce immediate websocket session revocation behavior for revoked/expired sessions.`
   done when: revoked/expired token sessions are disconnected quickly and cannot continue room/chat/call actions.
 - [ ] `#36 Implement backend RBAC middleware with explicit permission matrix for admin/moderator/user actions.`
   done when: restricted actions fail closed with typed forbidden responses and role-allowed actions remain functional.
