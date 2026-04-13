@@ -215,6 +215,7 @@ $runtimeEnvelope = static function () use (
         'calls' => [
             'list_endpoint' => '/api/calls',
             'invite_code_create_endpoint' => '/api/invite-codes',
+            'invite_code_redeem_endpoint' => '/api/invite-codes/redeem',
             'scope_values' => ['my', 'all'],
             'status_values' => ['all', 'scheduled', 'active', 'ended', 'cancelled'],
         ],
@@ -869,6 +870,90 @@ SQL
         ]);
     }
 
+    if ($path === '/api/invite-codes/redeem') {
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/invite-codes/redeem.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'invite_codes_redeem_invalid_request_body', 'Invite-code redeem payload must be a non-empty JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $redeemResult = videochat_redeem_invite_code(
+                $pdo,
+                $authenticatedUserId,
+                $authenticatedUserRole,
+                $payload
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'invite_codes_redeem_failed', 'Could not redeem invite code.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        $redeemReason = (string) ($redeemResult['reason'] ?? 'internal_error');
+        if (!(bool) ($redeemResult['ok'] ?? false)) {
+            if ($redeemReason === 'validation_failed') {
+                return $errorResponse(422, 'invite_codes_redeem_validation_failed', 'Invite-code redeem payload failed validation.', [
+                    'fields' => is_array($redeemResult['errors'] ?? null) ? $redeemResult['errors'] : [],
+                ]);
+            }
+            if ($redeemReason === 'not_found') {
+                return $errorResponse(404, 'invite_codes_redeem_not_found', 'Invite code does not exist.', [
+                    'fields' => is_array($redeemResult['errors'] ?? null) ? $redeemResult['errors'] : [],
+                ]);
+            }
+            if ($redeemReason === 'expired') {
+                return $errorResponse(410, 'invite_codes_redeem_expired', 'Invite code has expired.', [
+                    'fields' => is_array($redeemResult['errors'] ?? null) ? $redeemResult['errors'] : [],
+                ]);
+            }
+            if ($redeemReason === 'exhausted') {
+                return $errorResponse(409, 'invite_codes_redeem_exhausted', 'Invite code has reached its redemption limit.', [
+                    'fields' => is_array($redeemResult['errors'] ?? null) ? $redeemResult['errors'] : [],
+                ]);
+            }
+            if ($redeemReason === 'conflict') {
+                return $errorResponse(409, 'invite_codes_redeem_conflict', 'Invite code resolved to a non-joinable destination.', [
+                    'fields' => is_array($redeemResult['errors'] ?? null) ? $redeemResult['errors'] : [],
+                ]);
+            }
+            if ($redeemReason === 'forbidden') {
+                return $errorResponse(403, 'invite_codes_redeem_forbidden', 'You are not allowed to redeem this invite code.', [
+                    'fields' => is_array($redeemResult['errors'] ?? null) ? $redeemResult['errors'] : [],
+                ]);
+            }
+
+            return $errorResponse(500, 'invite_codes_redeem_failed', 'Could not redeem invite code.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'redeemed',
+                'redemption' => $redeemResult['redemption'] ?? null,
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if ($path === '/api/calls') {
         $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
         $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
@@ -1341,6 +1426,7 @@ SQL
             'call_update_endpoint_template' => '/api/calls/{id}',
             'call_cancel_endpoint_template' => '/api/calls/{id}/cancel',
             'invite_code_create_endpoint' => '/api/invite-codes',
+            'invite_code_redeem_endpoint' => '/api/invite-codes/redeem',
             'login_endpoint' => '/api/auth/login',
             'session_endpoint' => '/api/auth/session',
             'logout_endpoint' => '/api/auth/logout',

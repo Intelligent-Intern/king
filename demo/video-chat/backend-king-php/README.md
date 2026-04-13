@@ -33,6 +33,7 @@ cd demo/video-chat/backend-king-php
 - `PATCH /api/calls/{id}` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
 - `POST /api/calls/{id}/cancel` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
 - `POST /api/invite-codes` (requires authenticated `admin`/`moderator`/`user` role; call scope requires owner/admin/moderator policy)
+- `POST /api/invite-codes/redeem` (requires authenticated `admin`/`moderator`/`user` role)
 - `GET /api/admin/ping` (requires `admin` role)
 - `GET /api/admin/users` (requires `admin` role)
 - `POST /api/admin/users` (requires `admin` role)
@@ -243,6 +244,26 @@ Response includes:
 - call-scope authorization: owner/admin/moderator only
 - success: `201`, with `result.invite_code` containing context binding (`scope`, `room_id|call_id`), expiry metadata, and policy metadata
 
+`POST /api/invite-codes/redeem` contract:
+
+- required fields:
+  - `code`: UUID-v4 invite code (case-insensitive)
+- redeem policies:
+  - invite must exist
+  - invite must not be expired
+  - invite must not exceed `max_redemptions`
+  - resolved destination must still be joinable (room active / call not cancelled-or-ended)
+- typed failures:
+  - `422 invite_codes_redeem_validation_failed`
+  - `404 invite_codes_redeem_not_found`
+  - `410 invite_codes_redeem_expired`
+  - `409 invite_codes_redeem_exhausted`
+  - `409 invite_codes_redeem_conflict`
+- success: `200`, with `result.redemption` containing:
+  - `invite_code` (normalized persisted state + redemption counters)
+  - `join_context` (`scope`, resolved room/call context, `request_user`)
+  - `redeemed_at`
+
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).
 
@@ -306,4 +327,10 @@ Run the invite-code create contract test (UUID-backed uniqueness + scope binding
 
 ```bash
 demo/video-chat/backend-king-php/tests/invite-code-create-contract.sh
+```
+
+Run the invite-code redeem contract test (expiry + usage-limit enforcement + typed join context):
+
+```bash
+demo/video-chat/backend-king-php/tests/invite-code-redeem-contract.sh
 ```

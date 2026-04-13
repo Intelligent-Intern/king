@@ -175,7 +175,7 @@ Contract guardrails for this batch:
   done when: cancellation state transitions are explicit, cancellation payload is stored, and cancelled calls are excluded from active joins.
 - [x] `#20 Implement invite-code generation endpoint with UUID-backed codes and deterministic expiry policy.`
   done when: generated codes are unique, bound to call/room context, and expiration is enforced server-side.
-- [ ] `#21 Implement invite-code redeem endpoint that resolves destination room/call and returns role-safe join context.`
+- [x] `#21 Implement invite-code redeem endpoint that resolves destination room/call and returns role-safe join context.`
   done when: valid code redeems once-per-policy, invalid/expired codes fail cleanly, and join context is typed.
 - [ ] `#22 Implement websocket gateway channel for authenticated room presence snapshots and join/leave events.`
   done when: room membership snapshots stream to clients and reconnect path resynchronizes active room state.
