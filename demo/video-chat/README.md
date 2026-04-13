@@ -182,6 +182,7 @@ SQLite data is persisted in a mounted Docker volume:
 - backend runtime preflight endpoint: `GET http://127.0.0.1:18080/api/runtime`
 - backend version endpoint: `GET http://127.0.0.1:18080/api/version`
 - backend websocket endpoint: `WS ws://127.0.0.1:18080/ws`
+- backend startup applies ordered sqlite migrations (`schema_migrations`) and exposes migration state in runtime/health responses
 - frontend scaffold endpoint: `http://127.0.0.1:5174`
 - frontend consumes backend preflight metadata on startup (`app/version + runtime health`)
 - the previous Node runtime remains in-repo only as historical reference, not as active dev path

@@ -147,7 +147,7 @@ Contract guardrails for this batch:
   done when: `docker compose up` starts both services for the new stack, data persists in a mounted sqlite volume, and docs list ports.
 - [x] `#6 Implement backend health/version endpoint for the new King PHP video-chat backend.`
   done when: endpoint returns runtime health plus app/version metadata and frontend preflight can consume it.
-- [ ] `#7 Implement sqlite migration/bootstrap layer for users, roles, sessions, rooms, calls, invite codes, and participant membership tables.`
+- [x] `#7 Implement sqlite migration/bootstrap layer for users, roles, sessions, rooms, calls, invite codes, and participant membership tables.`
   done when: clean database init and migration upgrade are deterministic and idempotent across restarts.
 - [ ] `#8 Implement login endpoint with deterministic demo credential mapping and hashed password verification boundary.`
   done when: login validates credentials against persisted users, returns session envelope, and rejects invalid attempts with stable error schema.

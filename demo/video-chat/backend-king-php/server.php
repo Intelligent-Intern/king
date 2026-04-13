@@ -5,6 +5,7 @@ declare(strict_types=1);
 $host = getenv('VIDEOCHAT_KING_HOST') ?: '127.0.0.1';
 $port = (int) (getenv('VIDEOCHAT_KING_PORT') ?: '18080');
 $wsPath = getenv('VIDEOCHAT_KING_WS_PATH') ?: '/ws';
+$dbPath = getenv('VIDEOCHAT_KING_DB_PATH') ?: (__DIR__ . '/.local/video-chat.sqlite');
 $appVersion = getenv('VIDEOCHAT_KING_BACKEND_VERSION') ?: '1.0.6-beta';
 $appEnv = getenv('VIDEOCHAT_KING_ENV') ?: 'development';
 
@@ -21,6 +22,15 @@ if (!extension_loaded('king')) {
 $log = static function (string $message): void {
     fwrite(STDERR, '[video-chat][king-php-backend] ' . $message . "\n");
 };
+
+require_once __DIR__ . '/database.php';
+
+try {
+    $databaseRuntime = videochat_bootstrap_sqlite($dbPath);
+} catch (Throwable $error) {
+    $log('database bootstrap failed: ' . $error->getMessage());
+    exit(1);
+}
 
 register_shutdown_function(static function () use ($log): void {
     $error = error_get_last();
@@ -89,7 +99,7 @@ $runtimeHealthSummary = static function (): array {
     ];
 };
 
-$runtimeEnvelope = static function () use ($appVersion, $appEnv, $wsPath, $runtimeHealthSummary): array {
+$runtimeEnvelope = static function () use ($appVersion, $appEnv, $databaseRuntime, $wsPath, $runtimeHealthSummary): array {
     return [
         'service' => 'video-chat-backend-king-php',
         'app' => [
@@ -103,6 +113,7 @@ $runtimeEnvelope = static function () use ($appVersion, $appEnv, $wsPath, $runti
             'ws_path' => $wsPath,
             'health' => $runtimeHealthSummary(),
         ],
+        'database' => $databaseRuntime,
         'time' => gmdate('c'),
     ];
 };
@@ -122,6 +133,13 @@ $pathFromRequest = static function (array $request): string {
 };
 
 $log("king_version=" . (function_exists('king_version') ? (string) king_version() : 'n/a'));
+$log(sprintf(
+    'sqlite bootstrap: schema v%d (%d/%d migrations) at %s',
+    (int) ($databaseRuntime['schema_version'] ?? 0),
+    (int) ($databaseRuntime['migrations_applied'] ?? 0),
+    (int) ($databaseRuntime['migrations_total'] ?? 0),
+    (string) ($databaseRuntime['path'] ?? $dbPath)
+));
 $log("http endpoint bound: http://{$host}:{$port}/");
 $log("websocket endpoint bound: ws://{$host}:{$port}{$wsPath}");
 $log('starting King HTTP/1 listener...');
