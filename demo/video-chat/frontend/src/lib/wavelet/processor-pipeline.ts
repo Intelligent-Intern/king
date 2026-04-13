@@ -30,6 +30,7 @@ export class WaveletVideoProcessor {
   private canvas: OffscreenCanvas
   private ctx: OffscreenCanvasRenderingContext2D
   private processedStream: MediaStream | null = null
+  private sourceVideo: HTMLVideoElement | null = null
   private animationId: number | null = null
   private lastFrameTime: number = 0
   private localStats: ProcessorStats = {
@@ -86,13 +87,14 @@ export class WaveletVideoProcessor {
     this.canvas.width = this.config.width
     this.canvas.height = this.config.height
     
-    const sourceVideo = document.createElement('video')
-    sourceVideo.srcObject = inputStream
-    sourceVideo.autoplay = true
-    sourceVideo.playsInline = true
-    sourceVideo.muted = true  // prevent mic audio loopback through speakers
+    this.sourceVideo = document.createElement('video')
+    this.sourceVideo.srcObject = inputStream
+    this.sourceVideo.autoplay = true
+    this.sourceVideo.playsInline = true
+    this.sourceVideo.muted = true  // prevent mic audio loopback through speakers
 
-    await sourceVideo.play()
+    await this.sourceVideo.play()
+    const sourceVideo = this.sourceVideo
 
     const outputCanvas = document.createElement('canvas')
     outputCanvas.width = this.config.width
@@ -161,8 +163,14 @@ export class WaveletVideoProcessor {
       cancelAnimationFrame(this.animationId)
       this.animationId = null
     }
+    if (this.sourceVideo) {
+      this.sourceVideo.srcObject = null   // release camera hardware reference
+      this.sourceVideo = null
+    }
     if (this.processedStream) {
-      this.processedStream.getTracks().forEach(t => t.stop())
+      // Only stop the canvas-generated video track — audio tracks were added
+      // externally by the caller and are their responsibility to stop.
+      this.processedStream.getVideoTracks().forEach(t => t.stop())
       this.processedStream = null
     }
     this.codec.reset()
