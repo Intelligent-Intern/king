@@ -428,3 +428,26 @@ const zend_function_entry king_autoscaling_class_methods[] = {
     ZEND_ME_MAPPING(drainNode, king_autoscaling_drain_node, arginfo_king_one_long, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     PHP_FE_END
 };
+
+/* ── RTP / SFU ────────────────────────────────────────────────────────── */
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_rtp_bind, 0, 0, 2)
+    ZEND_ARG_TYPE_INFO(0, host, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, port, IS_LONG,   0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_rtp_socket, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, socket, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_rtp_recv, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, socket, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, timeout_ms, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_rtp_send, 0, 0, 4)
+    ZEND_ARG_TYPE_INFO(0, socket, IS_MIXED,  0)
+    ZEND_ARG_TYPE_INFO(0, host,   IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, port,   IS_LONG,   0)
+    ZEND_ARG_TYPE_INFO(0, data,   IS_STRING, 0)
+ZEND_END_ARG_INFO()

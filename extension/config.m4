@@ -305,4 +305,19 @@ if test "$PHP_KING" != "no"; then
     PHP_ADD_INCLUDE([$ext_srcdir/../quiche/quiche/include])
     PHP_ADD_LIBRARY([dl], [1], [KING_SHARED_LIBADD])
 
+    dnl ── RTP / SRTP ────────────────────────────────────────────────────────
+    dnl Link libsrtp2 when available.  Without it the SFU forwards unencrypted
+    dnl RTP (useful for internal/dev topologies behind a TLS terminator).
+    AC_CHECK_LIB([srtp2], [srtp_init], [
+        PHP_ADD_LIBRARY([srtp2], [1], [KING_SHARED_LIBADD])
+        AC_DEFINE([KING_HAVE_SRTP], [1], [libsrtp2 available])
+        AC_MSG_RESULT([yes — SRTP enabled])
+    ], [
+        AC_MSG_WARN([libsrtp2 not found — RTP forwarding will be unencrypted (install libsrtp2-dev to enable SRTP)])
+    ])
+
+    dnl OpenSSL for HMAC-SHA1 (STUN MESSAGE-INTEGRITY) on non-Apple platforms
+    AC_CHECK_LIB([ssl],    [SSL_CTX_new], [PHP_ADD_LIBRARY([ssl],    [1], [KING_SHARED_LIBADD])])
+    AC_CHECK_LIB([crypto], [HMAC],        [PHP_ADD_LIBRARY([crypto], [1], [KING_SHARED_LIBADD])])
+
 fi

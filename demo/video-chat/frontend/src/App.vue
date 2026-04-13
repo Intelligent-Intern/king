@@ -528,14 +528,23 @@ function persistSession(): void {
   persistSessionIdentity(window.localStorage, currentSession.value)
 }
 
-function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+const _w = window as any
+
+async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  if (Date.now() < (_w.__apiBackoffUntil ?? 0)) {
+    return new Response(null, { status: 429, statusText: 'Too Many Requests (local backoff)' })
+  }
   const session = authenticatedSession()
   const headers = new Headers(options.headers)
   headers.set('Content-Type', 'application/json')
   if (session?.token) {
     headers.set('Authorization', `Bearer ${session.token}`)
   }
-  return fetch(url, { ...options, headers })
+  const res = await fetch(url, { ...options, headers })
+  if (res.status === 429) {
+    _w.__apiBackoffUntil = Date.now() + 60 * 1000
+  }
+  return res
 }
 
 function normalizeRoomId(value: string): string {
@@ -2062,10 +2071,16 @@ onMounted(async () => {
     await refreshRooms()
   }
 
+  let statsBackoffUntil = 0
   if (statsPollingInterval) clearInterval(statsPollingInterval)
   statsPollingInterval = setInterval(async () => {
+    if (Date.now() < statsBackoffUntil) return
     try {
       const res = await fetch('/api/stats')
+      if (res.status === 429) {
+        statsBackoffUntil = Date.now() + 5 * 60 * 1000  // back off 5 min on rate limit
+        return
+      }
       if (res.ok) {
         backendStats.value = await res.json()
       }
