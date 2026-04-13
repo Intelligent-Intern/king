@@ -35,6 +35,8 @@ cd demo/video-chat/backend-king-php
 - `POST /api/admin/users/{id}/deactivate` (requires `admin` role)
 - `GET /api/moderation/ping` (requires `admin` or `moderator` role)
 - `GET /api/user/ping` (requires authenticated `admin`/`moderator`/`user` role)
+- `GET /api/user/settings` (requires authenticated `admin`/`moderator`/`user` role)
+- `PATCH /api/user/settings` (requires authenticated `admin`/`moderator`/`user` role)
 - `WS /ws`
 
 Default bind:
@@ -156,6 +158,13 @@ Response includes:
 - missing target user (update/deactivate): `404 admin_user_not_found`
 - success: `result.user` with normalized role/status/profile fields
 
+`GET /api/user/settings` + `PATCH /api/user/settings` contract:
+
+- managed fields: `display_name`, `avatar_path`, `time_format`, `theme`
+- validation failures: `422 user_settings_validation_failed` with `error.details.fields`
+- missing authenticated user row: `404 user_not_found`
+- success: `settings` plus normalized `user` envelope
+
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).
 
@@ -177,4 +186,10 @@ Run the admin user mutation contract test (create/update/deactivate + validation
 
 ```bash
 demo/video-chat/backend-king-php/tests/admin-user-mutation-contract.sh
+```
+
+Run the user settings contract test (settings persistence + reauth/session reload semantics):
+
+```bash
+demo/video-chat/backend-king-php/tests/user-settings-contract.sh
 ```

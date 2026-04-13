@@ -161,7 +161,7 @@ Contract guardrails for this batch:
   done when: endpoint supports query + page + page_size, returns stable totals, and frontend pagination binds correctly.
 - [x] `#13 Implement admin user create/update/deactivate endpoints with server-side validation and uniqueness guarantees.`
   done when: CRUD operations are persisted safely, invalid payloads fail with typed validation errors, and duplicate email conflicts are explicit.
-- [ ] `#14 Implement profile/settings endpoint for display name, avatar reference, time format, and theme preferences.`
+- [x] `#14 Implement profile/settings endpoint for display name, avatar reference, time format, and theme preferences.`
   done when: settings persist per user and frontend reload restores exact saved preferences.
 - [ ] `#15 Implement avatar upload endpoint for new stack with type/size validation and safe storage path handling.`
   done when: valid image uploads persist and invalid/unsafe uploads are rejected fail-closed.

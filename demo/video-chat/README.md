@@ -191,6 +191,8 @@ SQLite data is persisted in a mounted Docker volume:
 - backend admin user deactivate: `POST http://127.0.0.1:18080/api/admin/users/{id}/deactivate` (admin only)
 - backend RBAC moderation probe: `GET http://127.0.0.1:18080/api/moderation/ping` (admin/moderator)
 - backend RBAC user probe: `GET http://127.0.0.1:18080/api/user/ping` (authenticated admin/moderator/user)
+- backend user settings read: `GET http://127.0.0.1:18080/api/user/settings` (authenticated admin/moderator/user)
+- backend user settings update: `PATCH http://127.0.0.1:18080/api/user/settings` (authenticated admin/moderator/user)
 - backend websocket endpoint: `WS ws://127.0.0.1:18080/ws`
 - backend startup applies ordered sqlite migrations (`schema_migrations`) and exposes migration state in runtime/health responses
 - frontend scaffold endpoint: `http://127.0.0.1:5174`

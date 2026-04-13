@@ -27,6 +27,7 @@ require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/user_directory.php';
 require_once __DIR__ . '/user_management.php';
+require_once __DIR__ . '/user_settings.php';
 
 try {
     $databaseRuntime = videochat_bootstrap_sqlite($dbPath);
@@ -175,6 +176,7 @@ $runtimeEnvelope = static function () use ($appVersion, $appEnv, $databaseRuntim
             'login_endpoint' => '/api/auth/login',
             'session_endpoint' => '/api/auth/session',
             'logout_endpoint' => '/api/auth/logout',
+            'settings_endpoint' => '/api/user/settings',
             'rbac' => [
                 'admin_scope_prefix' => '/api/admin/',
                 'moderation_scope_prefix' => '/api/moderation/',
@@ -765,6 +767,100 @@ SQL
         ]);
     }
 
+    if ($path === '/api/user/settings') {
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        if ($method === 'GET') {
+            try {
+                $pdo = $openDatabase();
+                $userSettings = videochat_fetch_user_settings($pdo, $authenticatedUserId);
+            } catch (Throwable) {
+                return $errorResponse(500, 'user_settings_fetch_failed', 'Could not load user settings.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            if ($userSettings === null) {
+                return $errorResponse(404, 'user_not_found', 'Authenticated user could not be resolved.', [
+                    'user_id' => $authenticatedUserId,
+                ]);
+            }
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'settings' => [
+                    'display_name' => (string) ($userSettings['display_name'] ?? ''),
+                    'time_format' => (string) ($userSettings['time_format'] ?? '24h'),
+                    'theme' => (string) ($userSettings['theme'] ?? 'dark'),
+                    'avatar_path' => $userSettings['avatar_path'] ?? null,
+                ],
+                'user' => $userSettings,
+                'time' => gmdate('c'),
+            ]);
+        }
+
+        if ($method !== 'PATCH') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET or PATCH for /api/user/settings.', [
+                'allowed_methods' => ['GET', 'PATCH'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'user_settings_invalid_request_body', 'User settings payload must be a non-empty JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $updateResult = videochat_update_user_settings($pdo, $authenticatedUserId, $payload);
+        } catch (Throwable) {
+            return $errorResponse(500, 'user_settings_update_failed', 'Could not update user settings.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        $updateReason = (string) ($updateResult['reason'] ?? 'internal_error');
+        if (!(bool) ($updateResult['ok'] ?? false)) {
+            if ($updateReason === 'validation_failed') {
+                return $errorResponse(422, 'user_settings_validation_failed', 'User settings payload failed validation.', [
+                    'fields' => is_array($updateResult['errors'] ?? null) ? $updateResult['errors'] : [],
+                ]);
+            }
+            if ($updateReason === 'not_found') {
+                return $errorResponse(404, 'user_not_found', 'Authenticated user could not be resolved.', [
+                    'user_id' => $authenticatedUserId,
+                ]);
+            }
+
+            return $errorResponse(500, 'user_settings_update_failed', 'Could not update user settings.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        $updatedUser = is_array($updateResult['user'] ?? null) ? $updateResult['user'] : null;
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'updated',
+                'settings' => [
+                    'display_name' => (string) ($updatedUser['display_name'] ?? ''),
+                    'time_format' => (string) ($updatedUser['time_format'] ?? '24h'),
+                    'theme' => (string) ($updatedUser['theme'] ?? 'dark'),
+                    'avatar_path' => $updatedUser['avatar_path'] ?? null,
+                ],
+                'user' => $updatedUser,
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if ($path === '/' || $path === '/api/bootstrap') {
         return $jsonResponse(200, [
             'service' => 'video-chat-backend-king-php',
@@ -782,6 +878,7 @@ SQL
             'admin_user_deactivate_endpoint_template' => '/api/admin/users/{id}/deactivate',
             'moderation_probe_endpoint' => '/api/moderation/ping',
             'user_probe_endpoint' => '/api/user/ping',
+            'user_settings_endpoint' => '/api/user/settings',
             'time' => gmdate('c'),
         ]);
     }
