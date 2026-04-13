@@ -68,8 +68,9 @@ Status note:
 - Recent video-chat invite-create closure: `POST /api/invite-codes` now has explicit endpoint-contract proof for invalid-body and validation failures, owner/admin/moderator call-scope authorization boundaries, deterministic UUID-backed code/id creation, server-managed scope TTL policy (`call`/`room`), and persisted invite row shape guarantees, proven by `backend-king-php/tests/invite-code-create-endpoint-contract.sh`.
 - Recent video-chat invite-redeem closure: `POST /api/invite-codes/redeem` now has explicit endpoint-contract proof for invalid-body/validation failures, typed expiry/exhausted/conflict/not-found mapping, and deterministic join-context resolution (`room`/`call`) with persisted redemption-count updates, proven by `backend-king-php/tests/invite-code-redeem-endpoint-contract.sh`.
 - Recent video-chat websocket-gateway closure: `WS /ws` now enforces strict handshake validation (`GET`, `Upgrade: websocket`, `Connection: upgrade`, valid `Sec-WebSocket-Key`, `Sec-WebSocket-Version: 13`) before auth/upgrade and emits structured close descriptors (`close_code`, `close_reason`, `close_category`) on session-invalidated realtime termination, proven by `backend-king-php/tests/realtime-websocket-gateway-contract.sh`.
-
+- Recent video-chat room-presence closure: websocket room membership is now server-authoritative with deterministic `room/snapshot` plus `room/joined`/`room/left` delta behavior across join, leave, room-change, and reconnect/resync paths, with strengthened phantom-user and reconnect contract proof in `backend-king-php/tests/realtime-presence-contract.sh`.
 - Recent video-chat realtime-chat closure: room chat now enforces sender-in-room authoritative fanout with bounded malformed-payload rejection, stable sender+room+client-message dedupe ids, and deterministic `chat/ack` ids (`ack_id` + `message_id`), proven by `backend-king-php/tests/realtime-chat-contract.sh` and `backend-king-php/tests/contract-catalog-parity-contract.sh`.
+
 ## A. Transport / QUIC / HTTP / WebSocket
 
 - [x] Validate full HTTP/1 client behavior on-wire against real servers

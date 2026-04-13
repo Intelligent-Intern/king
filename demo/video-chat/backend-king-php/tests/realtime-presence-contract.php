@@ -132,6 +132,54 @@ try {
     videochat_realtime_presence_assert((string) ($adminJoinAfterReconnect['type'] ?? '') === 'room/joined', 'admin should receive joined event on reconnect');
     videochat_realtime_presence_assert((string) (($adminJoinAfterReconnect['participant'] ?? [])['connection_id'] ?? '') === 'conn-user-2', 'reconnect joined event participant mismatch');
 
+    $moveReconnectUser = videochat_presence_join_room($state, $joinReconnectUser['connection'] ?? [], 'ops-room', $sender);
+    $movedUserConnection = (array) ($moveReconnectUser['connection'] ?? []);
+    videochat_realtime_presence_assert((bool) ($moveReconnectUser['changed'] ?? false), 'moving a participant to a new room should be marked as changed');
+    videochat_realtime_presence_assert((string) ($moveReconnectUser['previous_room_id'] ?? '') === 'lobby', 'room move previous_room_id mismatch');
+
+    $participantsLobbyAfterMove = videochat_presence_room_participants($state, 'lobby');
+    videochat_realtime_presence_assert(count($participantsLobbyAfterMove) === 1, 'lobby should not keep a phantom participant after room move');
+    videochat_realtime_presence_assert((string) (($participantsLobbyAfterMove[0]['connection_id'] ?? '')) === 'conn-admin', 'lobby should keep only admin after room move');
+
+    $participantsOpsAfterMove = videochat_presence_room_participants($state, 'ops-room');
+    videochat_realtime_presence_assert(count($participantsOpsAfterMove) === 1, 'target room should contain moved participant');
+    videochat_realtime_presence_assert((string) (($participantsOpsAfterMove[0]['connection_id'] ?? '')) === 'conn-user-2', 'target room participant mismatch after move');
+
+    $movedUserSnapshot = videochat_realtime_presence_last_frame($frames, 'socket-user-2');
+    videochat_realtime_presence_assert((string) ($movedUserSnapshot['type'] ?? '') === 'room/snapshot', 'moved participant should receive fresh room snapshot');
+    videochat_realtime_presence_assert((string) ($movedUserSnapshot['room_id'] ?? '') === 'ops-room', 'moved participant snapshot room mismatch');
+    videochat_realtime_presence_assert((string) ($movedUserSnapshot['reason'] ?? '') === 'joined', 'moved participant snapshot reason mismatch');
+
+    $adminLeftAfterMove = videochat_realtime_presence_last_frame($frames, 'socket-admin');
+    videochat_realtime_presence_assert((string) ($adminLeftAfterMove['type'] ?? '') === 'room/left', 'remaining lobby participant should receive room/left event on room move');
+    videochat_realtime_presence_assert((string) (($adminLeftAfterMove['participant'] ?? [])['connection_id'] ?? '') === 'conn-user-2', 'room/left event participant mismatch on room move');
+
+    $reconnectAgainUser = videochat_presence_connection_descriptor(
+        [
+            'id' => 20,
+            'display_name' => 'Standard User',
+            'role' => 'user',
+        ],
+        'sess-user',
+        'conn-user-3',
+        'socket-user-3',
+        'ops-room',
+        1_780_000_360
+    );
+
+    $joinReconnectAgainUser = videochat_presence_join_room($state, $reconnectAgainUser, 'ops-room', $sender);
+    videochat_realtime_presence_assert((bool) ($joinReconnectAgainUser['changed'] ?? false), 'reconnect in same room should register as changed on fresh connection');
+
+    $reconnectAgainSnapshot = videochat_realtime_presence_last_frame($frames, 'socket-user-3');
+    videochat_realtime_presence_assert((string) ($reconnectAgainSnapshot['type'] ?? '') === 'room/snapshot', 'reconnect snapshot should be delivered');
+    videochat_realtime_presence_assert((string) ($reconnectAgainSnapshot['room_id'] ?? '') === 'ops-room', 'reconnect snapshot room mismatch');
+    videochat_realtime_presence_assert((int) ($reconnectAgainSnapshot['participant_count'] ?? 0) === 2, 'reconnect snapshot should include active room participants only');
+
+    videochat_presence_remove_connection($state, 'conn-user-2', $sender);
+    $participantsOpsAfterReconnectCleanup = videochat_presence_room_participants($state, 'ops-room');
+    videochat_realtime_presence_assert(count($participantsOpsAfterReconnectCleanup) === 1, 'cleanup should leave only active reconnect participant in ops-room');
+    videochat_realtime_presence_assert((string) (($participantsOpsAfterReconnectCleanup[0]['connection_id'] ?? '')) === 'conn-user-3', 'ops-room cleanup participant mismatch');
+
     $decodedJoin = videochat_presence_decode_client_frame(json_encode([
         'type' => 'room/join',
         'room_id' => 'lobby',
@@ -150,7 +198,7 @@ try {
     videochat_realtime_presence_assert(!(bool) ($decodedInvalidJson['ok'] ?? true), 'decode invalid JSON frame should fail');
     videochat_realtime_presence_assert((string) ($decodedInvalidJson['error'] ?? '') === 'invalid_json', 'decode invalid JSON error mismatch');
 
-    videochat_presence_remove_connection($state, 'conn-user-2', $sender);
+    videochat_presence_remove_connection($state, 'conn-user-3', $sender);
     videochat_presence_remove_connection($state, 'conn-admin', $sender);
     videochat_realtime_presence_assert($state['connections'] === [], 'state connections should be empty after full detach');
 

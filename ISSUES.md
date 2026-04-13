@@ -247,7 +247,7 @@ Execution guardrails for this extension:
 
 - [x] `#49 Implement authenticated websocket gateway with strict handshake validation and structured close reasons.`
   done when: invalid/expired/missing auth is rejected deterministically and valid sessions enter authenticated channel lifecycle.
-- [ ] `#50 Implement room presence snapshot and join/leave stream from server-authoritative membership state.`
+- [x] `#50 Implement room presence snapshot and join/leave stream from server-authoritative membership state.`
   done when: clients receive consistent snapshots plus deltas and reconnect restores current room presence without phantom users.
 - [x] `#51 Implement room-scoped chat fanout with server timestamps, payload bounds, and delivery ack ids.`
   done when: chat broadcast is authoritative, malformed payloads are rejected, and message ids are stable for frontend dedupe.

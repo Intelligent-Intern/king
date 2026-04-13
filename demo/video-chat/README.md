@@ -29,8 +29,9 @@ Latest commit-level progress:
 - 2026-04-13: closed `#47` with explicit `POST /api/invite-codes` endpoint contract coverage (`backend-king-php/tests/invite-code-create-endpoint-contract.sh`)
 - 2026-04-13: closed `#48` with explicit `POST /api/invite-codes/redeem` endpoint contract coverage (`backend-king-php/tests/invite-code-redeem-endpoint-contract.sh`)
 - 2026-04-13: closed `#49` with strict `WS /ws` handshake validation + structured close-descriptor contract coverage (`backend-king-php/tests/realtime-websocket-gateway-contract.sh`)
-
+- 2026-04-13: closed `#50` with server-authoritative room presence snapshot + join/leave delta coverage (including room-change/reconnect phantom-user guards) in `backend-king-php/tests/realtime-presence-contract.sh`
 - 2026-04-13: closed `#51` with room-scoped chat fanout hardening (sender-in-room enforcement, bounded malformed-payload rejection, stable message ids for dedupe, deterministic `chat/ack` ids) in `backend-king-php/tests/realtime-chat-contract.sh` + `backend-king-php/tests/contract-catalog-parity-contract.sh`
+
 Current new-stack baseline capabilities:
 
 - required login surface (display name) with persisted local session identity across reloads
@@ -45,8 +46,8 @@ Current new-stack baseline capabilities:
 - invite-code copy action uses clipboard API first with a legacy copy fallback for non-secure contexts
 - participant roster is sourced from live `room/snapshot` events with normalized ordering and live snapshot timestamp
 - chat timeline is server-fanout driven with message normalization and room-local dedupe by message id
-- typing indicators are room-scoped, exclude self display, and auto-expire on idle timeout windows
 - chat sender acks now carry deterministic `ack_id` + stable `message_id` so client retries can dedupe without local echo drift
+- typing indicators are room-scoped, exclude self display, and auto-expire on idle timeout windows
 - chat composer enforces bounded draft length and rejects empty/whitespace payloads before websocket send
 - chat and roster timestamps are rendered in deterministic locale-independent UTC `HH:MM UTC` format
 - pre-call local media preview is an explicit gate; join is enabled only after preview succeeds, with visible permission/device errors
