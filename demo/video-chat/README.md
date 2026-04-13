@@ -37,6 +37,28 @@ What is wired today:
 - shared UI token layer in `frontend/src/style.css` for color, spacing, border, radius, and elevation
 - normalized typography and control sizing (inputs/buttons/headlines/body text) from one baseline scale
 
+## Runtime Migration Status
+
+The active development target is the new stack:
+
+- `demo/video-chat/backend-king-php`
+- `demo/video-chat/frontend-vue`
+
+The older Node-based demo runtime stays in the repository only as historical
+reference and is not the active development path.
+
+Launch new scaffold:
+
+```bash
+cd demo/video-chat/backend-king-php
+./run-dev.sh
+```
+
+```bash
+cd demo/video-chat/frontend-vue
+npm run dev
+```
+
 Current boundaries:
 
 - demo-local signaling backend (`backend/dev-backend.mjs`)
@@ -88,78 +110,47 @@ older readers keep shared fields and ignore newly added fields.
 Run backend and frontend in separate terminals:
 
 ```bash
-cd demo/video-chat/backend
-npm install
-npm run start
+cd demo/video-chat/backend-king-php
+./run-dev.sh
 ```
 
 ```bash
-cd demo/video-chat/frontend
-npm install
+cd demo/video-chat/frontend-vue
 npm run dev
 ```
 
 Useful commands:
 
-- `cd demo/video-chat/frontend && npm run build`
-- `cd demo/video-chat/frontend && npm run preview`
-- `cd demo/video-chat/frontend && npm run type-check`
-- `cd demo/video-chat/frontend && npm run test`
-- `cd demo/video-chat/backend && npm run start`
-- `cd demo/video-chat/backend && npm run test`
-- `cd demo/video-chat && ./scripts/smoke.sh`
+- `cd demo/video-chat/backend-king-php && ./run-dev.sh`
+- `cd demo/video-chat/frontend-vue && npm run dev`
+- `curl -s http://127.0.0.1:18080/`
 
 ## Verification Closure
 
-Release-candidate smoke for this demo stack:
+Scaffold sanity checks:
 
 ```bash
-cd demo/video-chat
-./scripts/smoke.sh
+bash -n demo/video-chat/backend-king-php/run-dev.sh
+php -l demo/video-chat/backend-king-php/public/index.php
+node --check demo/video-chat/frontend-vue/scripts/dev-server.mjs
 ```
 
-Smoke runner scope (`scripts/smoke.sh`):
+Current scaffold scope:
 
-- frontend type-check
-- frontend tests
-- frontend production build
-- backend contract test (`backend/contract.test.mjs`) for health/API/ws room/presence/chat/call flows
-- backend syntax check
+- new backend entrypoint boots on PHP built-in server
+- new frontend entrypoint serves the bootstrap shell
+- full API/WS parity is implemented in follow-up V1 issues
 
 ## Docker Compose (Frontend + Backend)
 
-Run from `demo/video-chat`:
-
-```bash
-docker compose up --build
-```
-
-Default host ports:
-
-- frontend: `http://127.0.0.1:5173`
-- backend: `http://127.0.0.1:8080`
-
-The backend persists user login records in a Docker volume:
-
-- volume: `videochat-sqlite`
-- database path in container: `/data/video-chat.sqlite`
-
-Override versions/ports when needed:
-
-```bash
-IIBIN_SOURCE='1.0.5-beta' VIDEOCHAT_FRONTEND_PORT=3000 VIDEOCHAT_BACKEND_PORT=18080 docker compose up --build
-```
+Compose stack for the new runtime is part of V1 follow-up leaves.
+Use direct local commands above until compose wiring lands.
 
 ## Runtime Notes
 
-- the local backend listens on `http://127.0.0.1:8080` by default
-- the docker frontend container serves static assets with a small Node proxy server (no Nginx)
-- the frontend container proxies `/api` and `/ws` to `videochat-backend:8080`
-- local frontend dev (`npm run dev`) still proxies `/api` and `/ws` to `http://localhost:8080` via Vite
-- health endpoint: `GET /health`
-- auth endpoint: `POST /api/auth/login`
-- user directory endpoint: `GET /api/users`
-- signaling endpoint: `WS /ws?userId=<id>&token=<sessionToken>&name=<display>&color=<hex>&room=<roomId>`
+- backend scaffold endpoint: `GET http://127.0.0.1:18080/`
+- frontend scaffold endpoint: `http://127.0.0.1:5174`
+- the previous Node runtime remains in-repo only as historical reference, not as active dev path
 
 ## Scope
 
