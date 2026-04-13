@@ -32,6 +32,7 @@ require_once __DIR__ . '/call_directory.php';
 require_once __DIR__ . '/call_management.php';
 require_once __DIR__ . '/invite_codes.php';
 require_once __DIR__ . '/realtime_chat.php';
+require_once __DIR__ . '/realtime_lobby.php';
 require_once __DIR__ . '/realtime_presence.php';
 require_once __DIR__ . '/realtime_signaling.php';
 require_once __DIR__ . '/realtime_typing.php';
@@ -50,6 +51,7 @@ try {
 
 $activeWebsocketsBySession = [];
 $presenceState = videochat_presence_state_init();
+$lobbyState = videochat_lobby_state_init();
 $typingState = videochat_typing_state_init();
 
 register_shutdown_function(static function () use ($log): void {
@@ -259,6 +261,7 @@ $log('starting King HTTP/1 listener...');
 $handler = static function (array $request) use (
     &$activeWebsocketsBySession,
     &$presenceState,
+    &$lobbyState,
     &$typingState,
     $jsonResponse,
     $errorResponse,
@@ -1520,6 +1523,7 @@ SQL
             &$presenceDetached,
             &$activeWebsocketsBySession,
             &$presenceState,
+            &$lobbyState,
             &$typingState,
             &$presenceConnection,
             $authSessionId,
@@ -1530,6 +1534,12 @@ SQL
             }
             $presenceDetached = true;
 
+            videochat_lobby_clear_for_connection(
+                $lobbyState,
+                $presenceState,
+                (array) $presenceConnection,
+                'disconnect'
+            );
             videochat_typing_clear_for_connection(
                 $typingState,
                 $presenceState,
@@ -1572,6 +1582,14 @@ SQL
                         'start' => 'typing/start',
                         'stop' => 'typing/stop',
                     ],
+                    'lobby' => [
+                        'snapshot' => 'lobby/snapshot',
+                        'request' => 'lobby/queue/request',
+                        'join' => 'lobby/queue/join',
+                        'allow' => 'lobby/allow',
+                        'remove' => 'lobby/remove',
+                        'allow_all' => 'lobby/allow_all',
+                    ],
                     'signaling' => [
                         'offer' => 'call/offer',
                         'answer' => 'call/answer',
@@ -1587,6 +1605,7 @@ SQL
                 'time' => gmdate('c'),
             ]
         );
+        videochat_lobby_send_snapshot_to_connection($lobbyState, $presenceConnection, 'joined_room');
 
         try {
             while (true) {
@@ -1614,6 +1633,7 @@ SQL
                 $chatCommand = null;
                 $typingCommand = null;
                 $signalingCommand = null;
+                $lobbyCommand = null;
                 if (!(bool) ($presenceCommand['ok'] ?? false) && $commandError === 'unsupported_type') {
                     $chatCommand = videochat_chat_decode_client_frame($frame);
                     if ((bool) ($chatCommand['ok'] ?? false)) {
@@ -1728,8 +1748,41 @@ SQL
                                 continue;
                             }
 
-                            $commandType = (string) ($signalingCommand['type'] ?? $commandType);
-                            $commandError = (string) ($signalingCommand['error'] ?? $commandError);
+                            if ((string) ($signalingCommand['error'] ?? '') === 'unsupported_type') {
+                                $lobbyCommand = videochat_lobby_decode_client_frame($frame);
+                                if ((bool) ($lobbyCommand['ok'] ?? false)) {
+                                    $lobbyResult = videochat_lobby_apply_command(
+                                        $lobbyState,
+                                        $presenceState,
+                                        $presenceConnection,
+                                        $lobbyCommand
+                                    );
+                                    if (!(bool) ($lobbyResult['ok'] ?? false)) {
+                                        videochat_presence_send_frame(
+                                            $websocket,
+                                            [
+                                                'type' => 'system/error',
+                                                'code' => 'lobby_command_failed',
+                                                'message' => 'Could not apply lobby command.',
+                                                'details' => [
+                                                    'error' => (string) ($lobbyResult['error'] ?? 'unknown'),
+                                                    'type' => (string) ($lobbyCommand['type'] ?? ''),
+                                                    'target_user_id' => (int) ($lobbyCommand['target_user_id'] ?? 0),
+                                                    'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
+                                                ],
+                                                'time' => gmdate('c'),
+                                            ]
+                                        );
+                                    }
+                                    continue;
+                                }
+
+                                $commandType = (string) ($lobbyCommand['type'] ?? $commandType);
+                                $commandError = (string) ($lobbyCommand['error'] ?? $commandError);
+                            } else {
+                                $commandType = (string) ($signalingCommand['type'] ?? $commandType);
+                                $commandError = (string) ($signalingCommand['error'] ?? $commandError);
+                            }
                         } else {
                             $commandType = (string) ($typingCommand['type'] ?? $commandType);
                             $commandError = (string) ($typingCommand['error'] ?? $commandError);
@@ -1771,10 +1824,17 @@ SQL
 
                 if ($commandType === 'room/snapshot/request') {
                     videochat_presence_send_room_snapshot($presenceState, $presenceConnection, 'requested');
+                    videochat_lobby_send_snapshot_to_connection($lobbyState, $presenceConnection, 'requested');
                     continue;
                 }
 
                 if ($commandType === 'room/leave') {
+                    videochat_lobby_clear_for_connection(
+                        $lobbyState,
+                        $presenceState,
+                        $presenceConnection,
+                        'room_leave'
+                    );
                     videochat_typing_clear_for_connection(
                         $typingState,
                         $presenceState,
@@ -1813,6 +1873,12 @@ SQL
 
                     $currentRoomId = videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? 'lobby'));
                     if ($currentRoomId !== $targetRoomId) {
+                        videochat_lobby_clear_for_connection(
+                            $lobbyState,
+                            $presenceState,
+                            $presenceConnection,
+                            'room_change'
+                        );
                         videochat_typing_clear_for_connection(
                             $typingState,
                             $presenceState,
@@ -1822,6 +1888,7 @@ SQL
                     }
                     $presenceJoin = videochat_presence_join_room($presenceState, $presenceConnection, $targetRoomId);
                     $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
+                    videochat_lobby_send_snapshot_to_connection($lobbyState, $presenceConnection, 'joined_room');
                     continue;
                 }
             }

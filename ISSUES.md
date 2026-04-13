@@ -185,7 +185,7 @@ Contract guardrails for this batch:
   done when: typing start/stop events are room-scoped, expire automatically, and never render to the sender.
 - [x] `#25 Implement websocket signaling channel for call/offer, call/answer, call/ice, and call/hangup routed by target user id and room membership.`
   done when: signaling is delivered only to authorized peers in room context and invalid targets are rejected.
-- [ ] `#26 Implement lobby queue state and moderator actions (allow/remove/allow-all) on the backend with role checks.`
+- [x] `#26 Implement lobby queue state and moderator actions (allow/remove/allow-all) on the backend with role checks.`
   done when: queued users and moderator actions update state atomically and frontend receives corresponding realtime snapshots.
 - [ ] `#27 Bind Vue auth/session store to backend login/logout/session-check and enforce route-level RBAC guards.`
   done when: unauthorized routes are blocked, role mismatch redirects are deterministic, and session recovery works on refresh.

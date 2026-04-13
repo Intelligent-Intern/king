@@ -278,6 +278,7 @@ Presence channel contract on `WS /ws`:
   - `room/snapshot`
   - `room/joined`
   - `room/left`
+  - `lobby/snapshot`
   - `system/error`
   - `system/pong`
 - inbound commands:
@@ -287,6 +288,11 @@ Presence channel contract on `WS /ws`:
   - `{"type":"chat/send","message":"...","client_message_id":"..."}` (optional `client_message_id`)
   - `{"type":"typing/start"}`
   - `{"type":"typing/stop"}`
+  - `{"type":"lobby/queue/request"}`
+  - `{"type":"lobby/queue/join"}`
+  - `{"type":"lobby/allow","target_user_id":123}` (`admin`/`moderator` only)
+  - `{"type":"lobby/remove","target_user_id":123}` (`admin`/`moderator` only)
+  - `{"type":"lobby/allow_all"}` (`admin`/`moderator` only)
   - `{"type":"call/offer","target_user_id":123,"payload":{...}}`
   - `{"type":"call/answer","target_user_id":123,"payload":{...}}`
   - `{"type":"call/ice","target_user_id":123,"payload":{...}}`
@@ -299,6 +305,9 @@ Presence channel contract on `WS /ws`:
   - chat payload validation is bounded (`VIDEOCHAT_WS_CHAT_MAX_CHARS`, `VIDEOCHAT_WS_CHAT_MAX_BYTES`)
   - accepted chat publishes emit `chat/ack` to the sender with `message_id` and `sent_count`
   - typing indicators are room-scoped, debounced, expire automatically, and never self-echo
+  - lobby queue updates are room-scoped snapshots (`lobby/snapshot`) driven by server-authoritative queue/admitted state
+  - moderator actions (`lobby/allow`, `lobby/remove`, `lobby/allow_all`) are fail-closed for non-moderator roles
+  - queue/admitted entries are cleaned when a user disconnects or changes rooms
   - signaling commands are target-routed (`call/offer`, `call/answer`, `call/ice`, `call/hangup`) and only delivered when the target user is connected in the same room
   - invalid signaling targets (missing/invalid/self/not-in-room) fail closed as `system/error` without cross-room leakage
   - accepted signaling publishes emit `call/ack` to the sender with `signal_id`, `signal_type`, and `sent_count`
@@ -388,6 +397,12 @@ Run the realtime typing contract test (debounce + expiry + no-self-echo semantic
 
 ```bash
 demo/video-chat/backend-king-php/tests/realtime-typing-contract.sh
+```
+
+Run the realtime lobby contract test (queue snapshots + moderator actions + disconnect/room-change cleanup):
+
+```bash
+demo/video-chat/backend-king-php/tests/realtime-lobby-contract.sh
 ```
 
 Run the realtime signaling contract test (targeted offer/answer/ICE/hangup routing + membership guards):
