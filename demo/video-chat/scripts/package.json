@@ -2,7 +2,8 @@
   "name": "stress-test",
   "type": "module",
   "dependencies": {
-    "ws": "^8.18.0",
-    "uuid": "^11.0.5"
+    "jsonwebtoken": "^9.0.3",
+    "uuid": "^11.0.5",
+    "ws": "^8.18.0"
   }
 }
