@@ -379,7 +379,7 @@ Scope note:
 - [x] Integrate calendar scheduling view and bind create/edit flows to backend call contracts.
 - [x] Implement invite popover/copy/join UX with backend-bound data only.
 - [ ] Implement user dashboard with own calls list and calendar parity semantics.
-- [ ] Implement workspace sidebars/tabs (`users`, `lobby`, `chat`) as server-driven state projections.
+- [x] Implement workspace sidebars/tabs (`users`, `lobby`, `chat`) as server-driven state projections.
 - [ ] Bind participant list search/pagination/moderation actions to backend-authorized contracts.
 - [ ] Implement control-bar actions (`raise_hand`, reactions, mic/cam/screen, hangup) against realtime/backend state.
 - [ ] Implement avatar settings flow with drag/drop + crop + zoom and persisted backend profile update.

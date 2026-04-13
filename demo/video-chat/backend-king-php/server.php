@@ -70,9 +70,19 @@ register_shutdown_function(static function () use ($log): void {
 });
 
 $jsonResponse = static function (int $status, array $payload): array {
+    $corsHeaders = [
+        'access-control-allow-origin' => '*',
+        'access-control-allow-methods' => 'GET,POST,PATCH,OPTIONS',
+        'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id',
+        'access-control-max-age' => '600',
+    ];
+
     return [
         'status' => $status,
-        'headers' => ['content-type' => 'application/json; charset=utf-8'],
+        'headers' => [
+            'content-type' => 'application/json; charset=utf-8',
+            ...$corsHeaders,
+        ],
         'body' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
     ];
 };
@@ -277,6 +287,20 @@ $handler = static function (array $request) use (
 ): array {
     $path = $pathFromRequest($request);
     $method = $methodFromRequest($request);
+    $corsHeaders = [
+        'access-control-allow-origin' => '*',
+        'access-control-allow-methods' => 'GET,POST,PATCH,OPTIONS',
+        'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id',
+        'access-control-max-age' => '600',
+    ];
+
+    if ($method === 'OPTIONS' && (str_starts_with($path, '/api/') || $path === '/' || $path === '/health')) {
+        return [
+            'status' => 204,
+            'headers' => $corsHeaders,
+            'body' => '',
+        ];
+    }
 
     $isPublicEndpoint = static function (string $requestPath) use ($wsPath): bool {
         return in_array(
@@ -1325,6 +1349,7 @@ SQL
             'headers' => [
                 'content-type' => $mime,
                 'cache-control' => 'private, max-age=60',
+                ...$corsHeaders,
             ],
             'body' => $binary,
         ];

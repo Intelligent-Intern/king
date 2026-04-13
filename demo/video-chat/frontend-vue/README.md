@@ -11,6 +11,16 @@ This directory is the active Vue + Vite frontend for the new video-chat stack.
 - `/user/dashboard`
 - `/workspace/call/:roomId?`
 
+## Call workspace (backend-bound)
+
+`/workspace/call/:roomId?` is now wired to the active King backend contracts:
+
+- authenticated websocket session attach (`/ws`) with reconnect + resync
+- server-driven room presence snapshots (`room/snapshot`, `room/joined`, `room/left`)
+- server-driven lobby queue/admitted snapshots (`lobby/snapshot`) with moderator actions
+- room-scoped chat + typing (`chat/send`, `chat/message`, `typing/start`, `typing/stop`)
+- room invite create/redeem flows (`/api/invite-codes`, `/api/invite-codes/redeem`)
+
 ## Route guard behavior
 
 - unauthenticated users are redirected to `/login`

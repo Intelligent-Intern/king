@@ -1,4 +1,5 @@
 import { reactive } from 'vue';
+import { resolveBackendOrigin } from '../lib/backendOrigin';
 
 const STORAGE_KEY = 'ii_videocall_v1_session';
 const AUTH_ROLES = new Set(['admin', 'moderator', 'user']);
@@ -6,23 +7,6 @@ const AUTH_ROLES = new Set(['admin', 'moderator', 'user']);
 function normalizeRole(value) {
   const role = String(value || '').trim().toLowerCase();
   return AUTH_ROLES.has(role) ? role : null;
-}
-
-function resolveBackendOrigin() {
-  const envOrigin = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || '').trim();
-  if (envOrigin !== '') {
-    return envOrigin.replace(/\/+$/, '');
-  }
-
-  const port = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_PORT || '18080').trim() || '18080';
-
-  if (typeof window !== 'undefined') {
-    const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
-    const host = window.location.hostname || '127.0.0.1';
-    return `${protocol}://${host}:${port}`;
-  }
-
-  return `http://127.0.0.1:${port}`;
 }
 
 function extractErrorMessage(payload, fallback) {

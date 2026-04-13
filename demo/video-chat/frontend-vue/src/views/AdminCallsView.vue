@@ -485,25 +485,9 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { sessionState } from '../stores/session';
+import { resolveBackendOrigin } from '../lib/backendOrigin';
 
 const router = useRouter();
-
-function resolveBackendOrigin() {
-  const envOrigin = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || '').trim();
-  if (envOrigin !== '') {
-    return envOrigin.replace(/\/+$/, '');
-  }
-
-  const port = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_PORT || '18080').trim() || '18080';
-
-  if (typeof window !== 'undefined') {
-    const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
-    const host = window.location.hostname || '127.0.0.1';
-    return `${protocol}://${host}:${port}`;
-  }
-
-  return `http://127.0.0.1:${port}`;
-}
 
 const backendOrigin = resolveBackendOrigin();
 

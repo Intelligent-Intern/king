@@ -191,7 +191,7 @@ Contract guardrails for this batch:
   done when: unauthorized routes are blocked, role mismatch redirects are deterministic, and session recovery works on refresh.
 - [x] `#28 Bind Vue admin calls/calendar views to new backend contracts including create/schedule/edit/cancel and invite popover flows.`
   done when: admin CRUD UI uses backend data only, pagination/search are fully live, and modal flows match mock behavior.
-- [ ] `#29 Bind Vue call workspace (users/lobby/chat tabs, lists, pagination, control bar, invite/join) to new King websocket/REST contracts.`
+- [x] `#29 Bind Vue call workspace (users/lobby/chat tabs, lists, pagination, control bar, invite/join) to new King websocket/REST contracts.`
   done when: workspace state is server-driven, sidebar/tab interactions remain responsive, and key mock interactions are preserved.
 - [ ] `#30 Add end-to-end parity + smoke verification for new stack and document honest runtime boundaries (active new path vs historical reference).`
   done when: automated checks cover login, room join, chat, invite redeem, call signaling bootstrap, and docs clearly state scope/limitations.

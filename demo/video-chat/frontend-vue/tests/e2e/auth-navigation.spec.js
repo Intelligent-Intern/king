@@ -36,9 +36,9 @@ test('admin can click through all implemented admin routes and logout', async ({
 
   await page.getByRole('link', { name: 'Call Workspace' }).click();
   await expect(page).toHaveURL(/\/workspace\/call\/lobby$/);
-  await expect(page.locator('.view-card h3', { hasText: 'Call Workspace' })).toBeVisible();
-  await expect(page.getByText('Scaffold route resolved for room:')).toBeVisible();
-  await expect(page.locator('.view-card strong', { hasText: 'lobby' })).toBeVisible();
+  await expect(page.locator('.workspace-call-head h3', { hasText: 'Call Workspace' })).toBeVisible();
+  await expect(page.locator('.workspace-call-head')).toContainText('Active room');
+  await expect(page.locator('.workspace-call-head')).toContainText('lobby');
 
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(page).toHaveURL(/\/login$/);
@@ -60,11 +60,11 @@ test('user role is constrained by RBAC and can still open call workspace', async
 
   await page.getByRole('link', { name: 'Call Workspace' }).click();
   await expect(page).toHaveURL(/\/workspace\/call\/lobby$/);
-  await expect(page.locator('.view-card h3', { hasText: 'Call Workspace' })).toBeVisible();
+  await expect(page.locator('.workspace-call-head h3', { hasText: 'Call Workspace' })).toBeVisible();
 
   await page.goto('/workspace/call/review-room');
   await expect(page).toHaveURL(/\/workspace\/call\/review-room$/);
-  await expect(page.getByText('review-room')).toBeVisible();
+  await expect(page.locator('.workspace-call-head')).toContainText('review-room');
 });
 
 test('session state survives hard reload and /login redirects for authenticated user', async ({ page }) => {
@@ -76,7 +76,7 @@ test('session state survives hard reload and /login redirects for authenticated 
   await expect(page).toHaveURL(/\/user\/dashboard$/);
   await page.reload();
   await expect(page).toHaveURL(/\/user\/dashboard$/);
-  await expect(page.getByText('Call User')).toBeVisible();
+  await expect(page.getByText('User Dashboard')).toBeVisible();
 
   await page.goto('/login');
   await expect(page).toHaveURL(/\/user\/dashboard$/);
