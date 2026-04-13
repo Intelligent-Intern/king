@@ -1,12 +1,34 @@
-# Video Chat Frontend (Vue) - Scaffold
+# Video Chat Frontend (Vue)
 
-This directory is the new Vue frontend track for the video-chat runtime.
+This directory is the active Vue + Vite frontend for the new video-chat stack.
+
+## Routes scaffolded
+
+- `/login`
+- `/admin/overview`
+- `/admin/users`
+- `/admin/calls`
+- `/user/dashboard`
+- `/workspace/call/:roomId?`
+
+## Route guard behavior
+
+- unauthenticated users are redirected to `/login`
+- authenticated users are redirected away from `/login` to their role default page
+- admin-only and user-only routes are enforced by role-aware guards
 
 ## Run locally
 
 ```bash
 cd demo/video-chat/frontend-vue
+npm install
 npm run dev
+```
+
+Build:
+
+```bash
+npm run build
 ```
 
 Default endpoint:
@@ -17,5 +39,3 @@ Environment overrides:
 
 - `VIDEOCHAT_VUE_HOST` (default `127.0.0.1`)
 - `VIDEOCHAT_VUE_PORT` (default `5174`)
-
-This is a bootstrap entrypoint for the new stack; full Vue route/state migration lands in subsequent V1 issues.
