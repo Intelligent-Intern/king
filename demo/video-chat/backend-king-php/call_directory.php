@@ -92,6 +92,7 @@ function videochat_calls_list_filters(array $queryParams, string $authRole): arr
  *     ends_at: string,
  *     cancelled_at: ?string,
  *     cancel_reason: ?string,
+ *     cancel_message: ?string,
  *     created_at: string,
  *     updated_at: string,
  *     owner: array{
@@ -123,7 +124,9 @@ function videochat_list_calls(PDO $pdo, int $authUserId, array $filters): array
     OR EXISTS (
         SELECT 1
         FROM call_participants cp_me
-        WHERE cp_me.call_id = calls.id AND cp_me.user_id = :auth_user_id
+        WHERE cp_me.call_id = calls.id
+          AND cp_me.user_id = :auth_user_id
+          AND calls.status <> 'cancelled'
     )
 )
 SQL;
@@ -176,6 +179,7 @@ SELECT
     calls.ends_at,
     calls.cancelled_at,
     calls.cancel_reason,
+    calls.cancel_message,
     calls.created_at,
     calls.updated_at,
     calls.owner_user_id,
@@ -185,6 +189,7 @@ SELECT
     COALESCE(participants.internal_count, 0) AS participants_internal,
     COALESCE(participants.external_count, 0) AS participants_external,
     CASE
+        WHEN calls.status = 'cancelled' THEN 0
         WHEN calls.owner_user_id = :auth_user_id OR me.call_id IS NOT NULL THEN 1
         ELSE 0
     END AS my_participation
@@ -241,6 +246,7 @@ SQL;
             'ends_at' => (string) ($row['ends_at'] ?? ''),
             'cancelled_at' => is_string($row['cancelled_at'] ?? null) ? (string) $row['cancelled_at'] : null,
             'cancel_reason' => is_string($row['cancel_reason'] ?? null) ? (string) $row['cancel_reason'] : null,
+            'cancel_message' => is_string($row['cancel_message'] ?? null) ? (string) $row['cancel_message'] : null,
             'created_at' => (string) ($row['created_at'] ?? ''),
             'updated_at' => (string) ($row['updated_at'] ?? ''),
             'owner' => [

@@ -31,6 +31,7 @@ cd demo/video-chat/backend-king-php
 - `GET /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
 - `POST /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
 - `PATCH /api/calls/{id}` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
+- `POST /api/calls/{id}/cancel` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
 - `GET /api/admin/ping` (requires `admin` role)
 - `GET /api/admin/users` (requires `admin` role)
 - `POST /api/admin/users` (requires `admin` role)
@@ -216,6 +217,15 @@ Response includes:
 - explicit invite resend request flags are rejected in update payload
 - success returns `invite_dispatch.global_resend_triggered = false` and `invite_dispatch.explicit_action_required = true`
 
+`POST /api/calls/{id}/cancel` cancel contract:
+
+- required payload fields: `cancel_reason`, `cancel_message`
+- explicit status transition support: `scheduled|active -> cancelled`
+- disallowed transitions return `409 calls_cancel_state_conflict`
+- cancellation payload fields are persisted on the call (`cancel_reason`, `cancel_message`, `cancelled_at`)
+- cancellation updates participant join state to cancelled for downstream notification/reconciliation workflows
+- cancelled calls are excluded from active-join semantics (`my_participation = false`)
+
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).
 
@@ -267,4 +277,10 @@ Run the call update contract test (schedule/participant updates + no implicit in
 
 ```bash
 demo/video-chat/backend-king-php/tests/call-update-contract.sh
+```
+
+Run the call cancel contract test (state transition + cancellation payload persistence + active-join exclusion):
+
+```bash
+demo/video-chat/backend-king-php/tests/call-cancel-contract.sh
 ```

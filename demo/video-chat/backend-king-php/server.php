@@ -903,6 +903,86 @@ SQL
         ]);
     }
 
+    if (preg_match('#^/api/calls/([A-Za-z0-9._-]{1,200})/cancel$#', $path, $callCancelMatch) === 1) {
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/calls/{id}/cancel.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'calls_cancel_invalid_request_body', 'Call cancel payload must be a non-empty JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        $callId = (string) ($callCancelMatch[1] ?? '');
+        try {
+            $pdo = $openDatabase();
+            $cancelResult = videochat_cancel_call(
+                $pdo,
+                $callId,
+                $authenticatedUserId,
+                $authenticatedUserRole,
+                $payload
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'calls_cancel_failed', 'Could not cancel call.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        $cancelReason = (string) ($cancelResult['reason'] ?? 'internal_error');
+        if (!(bool) ($cancelResult['ok'] ?? false)) {
+            if ($cancelReason === 'validation_failed') {
+                $fields = is_array($cancelResult['errors'] ?? null) ? $cancelResult['errors'] : [];
+                $statusError = (string) ($fields['status'] ?? '');
+                if ($statusError !== '') {
+                    return $errorResponse(409, 'calls_cancel_state_conflict', 'Call cannot be cancelled from its current state.', [
+                        'fields' => $fields,
+                        'call_id' => $callId,
+                    ]);
+                }
+
+                return $errorResponse(422, 'calls_cancel_validation_failed', 'Call cancel payload failed validation.', [
+                    'fields' => $fields,
+                ]);
+            }
+            if ($cancelReason === 'not_found') {
+                return $errorResponse(404, 'calls_not_found', 'The requested call does not exist.', [
+                    'call_id' => $callId,
+                ]);
+            }
+            if ($cancelReason === 'forbidden') {
+                return $errorResponse(403, 'calls_forbidden', 'You are not allowed to cancel this call.', [
+                    'call_id' => $callId,
+                ]);
+            }
+
+            return $errorResponse(500, 'calls_cancel_failed', 'Could not cancel call.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'cancelled',
+                'call' => $cancelResult['call'] ?? null,
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if (preg_match('#^/api/calls/([A-Za-z0-9._-]{1,200})$#', $path, $callMatch) === 1) {
         if ($method !== 'PATCH') {
             return $errorResponse(405, 'method_not_allowed', 'Use PATCH for /api/calls/{id}.', [
@@ -1183,6 +1263,7 @@ SQL
             'calls_endpoint' => '/api/calls',
             'call_create_endpoint' => '/api/calls',
             'call_update_endpoint_template' => '/api/calls/{id}',
+            'call_cancel_endpoint_template' => '/api/calls/{id}/cancel',
             'login_endpoint' => '/api/auth/login',
             'session_endpoint' => '/api/auth/session',
             'logout_endpoint' => '/api/auth/logout',

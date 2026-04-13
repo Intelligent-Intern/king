@@ -347,6 +347,12 @@ SQL,
                 "CREATE INDEX IF NOT EXISTS idx_invite_codes_expires_at ON invite_codes(expires_at)",
             ],
         ],
+        4 => [
+            'name' => '0004_calls_cancel_message',
+            'statements' => [
+                "ALTER TABLE calls ADD COLUMN cancel_message TEXT",
+            ],
+        ],
     ];
 }
 

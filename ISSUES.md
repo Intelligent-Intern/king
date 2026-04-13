@@ -171,7 +171,7 @@ Contract guardrails for this batch:
   done when: call creation persists all participant mappings and returns a single normalized call payload.
 - [x] `#18 Implement edit-call endpoint that updates schedule/participants without triggering global invite resend by default.`
   done when: edit updates persisted call fields only and invite-send remains an explicit separate action.
-- [ ] `#19 Implement cancel-call endpoint with persisted cancellation reason/message payload boundary for downstream notification workflows.`
+- [x] `#19 Implement cancel-call endpoint with persisted cancellation reason/message payload boundary for downstream notification workflows.`
   done when: cancellation state transitions are explicit, cancellation payload is stored, and cancelled calls are excluded from active joins.
 - [ ] `#20 Implement invite-code generation endpoint with UUID-backed codes and deterministic expiry policy.`
   done when: generated codes are unique, bound to call/room context, and expiration is enforced server-side.

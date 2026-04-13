@@ -202,6 +202,16 @@ SQL
         ':joined_at' => null,
         ':left_at' => null,
     ]);
+    $insertParticipant->execute([
+        ':call_id' => 'call-004',
+        ':user_id' => $standardUserId,
+        ':email' => 'user@intelligent-intern.com',
+        ':display_name' => 'Call User',
+        ':source' => 'internal',
+        ':invite_state' => 'accepted',
+        ':joined_at' => null,
+        ':left_at' => null,
+    ]);
 
     $adminFilters = videochat_calls_list_filters([
         'scope' => 'all',
@@ -239,6 +249,10 @@ SQL
     videochat_calls_list_assert(count($adminPageTwo['rows']) === 2, 'admin page two size mismatch');
     videochat_calls_list_assert((string) ($adminPageTwo['rows'][0]['id'] ?? '') === 'call-003', 'admin page two first row mismatch');
     videochat_calls_list_assert((string) ($adminPageTwo['rows'][1]['id'] ?? '') === 'call-004', 'admin page two second row mismatch');
+    videochat_calls_list_assert(
+        (($adminPageTwo['rows'][1]['my_participation'] ?? null) === false),
+        'cancelled call must not report active participation'
+    );
 
     $architectureFilters = videochat_calls_list_filters([
         'scope' => 'all',
@@ -262,6 +276,10 @@ SQL
     videochat_calls_list_assert((string) ($userMyListing['rows'][0]['id'] ?? '') === 'call-001', 'user my-scope row 1 mismatch');
     videochat_calls_list_assert((string) ($userMyListing['rows'][1]['id'] ?? '') === 'call-002', 'user my-scope row 2 mismatch');
     videochat_calls_list_assert((string) ($userMyListing['rows'][2]['id'] ?? '') === 'call-003', 'user my-scope row 3 mismatch');
+    videochat_calls_list_assert(
+        !in_array('call-004', array_map(static fn (array $row): string => (string) ($row['id'] ?? ''), $userMyListing['rows']), true),
+        'cancelled call should be excluded from join-based my scope'
+    );
 
     $userActiveFilters = videochat_calls_list_filters([
         'scope' => 'my',
