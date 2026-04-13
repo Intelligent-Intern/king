@@ -1,10 +1,30 @@
-# King IIBIN WebSocket Demo
+# King Video Call Demo (Active Replatform Track)
 
-This demo ships as a responsive multi-user workspace for room chat and browser
-video calls. The frontend and backend transport now bind to
-`@intelligentintern/iibin` from `node_modules`.
+This directory is the active build-out of a production-grade video-call
+workspace on top of King runtime primitives.
 
-Active new-stack baseline capabilities:
+What we are building here:
+
+- a Vue workspace UI that matches the approved mock layout/interaction model
+- a King PHP backend (`backend-king-php`) as the authoritative API + WS layer
+- contract-first REST + realtime behavior with deterministic error envelopes
+- role-aware collaboration surfaces (admin/moderator/user)
+- invite-driven call orchestration, room presence, chat, and signaling
+
+Target architecture:
+
+- frontend: `demo/video-chat/frontend-vue`
+- backend: `demo/video-chat/backend-king-php`
+- protocol catalog: `demo/video-chat/contracts/v1/api-ws-contract.catalog.json`
+- transport payload format: `@intelligentintern/iibin` from `node_modules`
+
+Documentation policy for this README:
+
+- this is a living spec for the active video-call stack
+- update it on every commit that changes behavior, contracts, runtime paths, or UX flow
+- keep it aligned with `ISSUES.md`, `READYNESS_TRACKER.md`, and the active contract tests
+
+Current new-stack baseline capabilities:
 
 - required login surface (display name) with persisted local session identity across reloads
 - explicit sign-out lifecycle that tears down websocket reconnect loops, call peers, and local media tracks
