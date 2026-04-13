@@ -26,6 +26,7 @@ $log = static function (string $message): void {
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/user_directory.php';
+require_once __DIR__ . '/user_management.php';
 
 try {
     $databaseRuntime = videochat_bootstrap_sqlite($dbPath);
@@ -535,57 +536,200 @@ SQL
     }
 
     if ($path === '/api/admin/users') {
-        if ($method !== 'GET') {
-            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/admin/users.', [
-                'allowed_methods' => ['GET'],
+        if ($method === 'GET') {
+            $queryParams = videochat_request_query_params($request);
+            $filters = videochat_admin_user_list_filters($queryParams);
+            if (!(bool) ($filters['ok'] ?? false)) {
+                return $errorResponse(422, 'admin_user_list_validation_failed', 'Invalid admin user list query parameters.', [
+                    'fields' => $filters['errors'] ?? [],
+                ]);
+            }
+
+            try {
+                $pdo = $openDatabase();
+                $listing = videochat_admin_list_users(
+                    $pdo,
+                    (string) ($filters['query'] ?? ''),
+                    (int) ($filters['page'] ?? 1),
+                    (int) ($filters['page_size'] ?? 10)
+                );
+            } catch (Throwable $error) {
+                return $errorResponse(500, 'admin_user_list_failed', 'Could not load admin user list.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            $rows = is_array($listing['rows'] ?? null) ? $listing['rows'] : [];
+            $total = (int) ($listing['total'] ?? 0);
+            $pageCount = (int) ($listing['page_count'] ?? 0);
+            $page = (int) ($filters['page'] ?? 1);
+            $pageSize = (int) ($filters['page_size'] ?? 10);
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'users' => $rows,
+                'pagination' => [
+                    'query' => (string) ($filters['query'] ?? ''),
+                    'page' => $page,
+                    'page_size' => $pageSize,
+                    'total' => $total,
+                    'page_count' => $pageCount,
+                    'returned' => count($rows),
+                    'has_prev' => $page > 1,
+                    'has_next' => $pageCount > 0 && $page < $pageCount,
+                ],
+                'sort' => [
+                    'role_priority' => ['admin', 'moderator', 'user'],
+                    'secondary' => 'display_name_asc',
+                    'tie_breaker' => 'id_asc',
+                ],
+                'time' => gmdate('c'),
             ]);
         }
 
-        $queryParams = videochat_request_query_params($request);
-        $filters = videochat_admin_user_list_filters($queryParams);
-        if (!(bool) ($filters['ok'] ?? false)) {
-            return $errorResponse(422, 'admin_user_list_validation_failed', 'Invalid admin user list query parameters.', [
-                'fields' => $filters['errors'] ?? [],
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET or POST for /api/admin/users.', [
+                'allowed_methods' => ['GET', 'POST'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'admin_user_invalid_request_body', 'User create payload must be a non-empty JSON object.', [
+                'reason' => $decodeError,
             ]);
         }
 
         try {
             $pdo = $openDatabase();
-            $listing = videochat_admin_list_users(
-                $pdo,
-                (string) ($filters['query'] ?? ''),
-                (int) ($filters['page'] ?? 1),
-                (int) ($filters['page_size'] ?? 10)
-            );
-        } catch (Throwable $error) {
-            return $errorResponse(500, 'admin_user_list_failed', 'Could not load admin user list.', [
+            $createResult = videochat_admin_create_user($pdo, $payload);
+        } catch (Throwable) {
+            return $errorResponse(500, 'admin_user_create_failed', 'Could not create user.', [
                 'reason' => 'internal_error',
             ]);
         }
 
-        $rows = is_array($listing['rows'] ?? null) ? $listing['rows'] : [];
-        $total = (int) ($listing['total'] ?? 0);
-        $pageCount = (int) ($listing['page_count'] ?? 0);
-        $page = (int) ($filters['page'] ?? 1);
-        $pageSize = (int) ($filters['page_size'] ?? 10);
+        $createReason = (string) ($createResult['reason'] ?? 'internal_error');
+        if (!(bool) ($createResult['ok'] ?? false)) {
+            if ($createReason === 'validation_failed') {
+                return $errorResponse(422, 'admin_user_validation_failed', 'User create payload failed validation.', [
+                    'fields' => is_array($createResult['errors'] ?? null) ? $createResult['errors'] : [],
+                ]);
+            }
+            if ($createReason === 'email_conflict') {
+                return $errorResponse(409, 'admin_user_conflict', 'A user with that email already exists.', [
+                    'fields' => is_array($createResult['errors'] ?? null) ? $createResult['errors'] : ['email' => 'already_exists'],
+                ]);
+            }
+
+            return $errorResponse(500, 'admin_user_create_failed', 'Could not create user.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(201, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'created',
+                'user' => $createResult['user'] ?? null,
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if (preg_match('#^/api/admin/users/(\d+)$#', $path, $matches) === 1) {
+        $userId = (int) ($matches[1] ?? 0);
+        if ($method !== 'PATCH') {
+            return $errorResponse(405, 'method_not_allowed', 'Use PATCH for /api/admin/users/{id}.', [
+                'allowed_methods' => ['PATCH'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'admin_user_invalid_request_body', 'User update payload must be a non-empty JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $updateResult = videochat_admin_update_user($pdo, $userId, $payload);
+        } catch (Throwable) {
+            return $errorResponse(500, 'admin_user_update_failed', 'Could not update user.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        $updateReason = (string) ($updateResult['reason'] ?? 'internal_error');
+        if (!(bool) ($updateResult['ok'] ?? false)) {
+            if ($updateReason === 'validation_failed') {
+                return $errorResponse(422, 'admin_user_validation_failed', 'User update payload failed validation.', [
+                    'fields' => is_array($updateResult['errors'] ?? null) ? $updateResult['errors'] : [],
+                ]);
+            }
+            if ($updateReason === 'email_conflict') {
+                return $errorResponse(409, 'admin_user_conflict', 'A user with that email already exists.', [
+                    'fields' => is_array($updateResult['errors'] ?? null) ? $updateResult['errors'] : ['email' => 'already_exists'],
+                ]);
+            }
+            if ($updateReason === 'not_found') {
+                return $errorResponse(404, 'admin_user_not_found', 'The requested user does not exist.', [
+                    'user_id' => $userId,
+                ]);
+            }
+
+            return $errorResponse(500, 'admin_user_update_failed', 'Could not update user.', [
+                'reason' => 'internal_error',
+            ]);
+        }
 
         return $jsonResponse(200, [
             'status' => 'ok',
-            'users' => $rows,
-            'pagination' => [
-                'query' => (string) ($filters['query'] ?? ''),
-                'page' => $page,
-                'page_size' => $pageSize,
-                'total' => $total,
-                'page_count' => $pageCount,
-                'returned' => count($rows),
-                'has_prev' => $page > 1,
-                'has_next' => $pageCount > 0 && $page < $pageCount,
+            'result' => [
+                'state' => 'updated',
+                'user' => $updateResult['user'] ?? null,
             ],
-            'sort' => [
-                'role_priority' => ['admin', 'moderator', 'user'],
-                'secondary' => 'display_name_asc',
-                'tie_breaker' => 'id_asc',
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if (preg_match('#^/api/admin/users/(\d+)/deactivate$#', $path, $matches) === 1) {
+        $userId = (int) ($matches[1] ?? 0);
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/admin/users/{id}/deactivate.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $deactivateResult = videochat_admin_deactivate_user($pdo, $userId);
+        } catch (Throwable) {
+            return $errorResponse(500, 'admin_user_deactivate_failed', 'Could not deactivate user.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        $deactivateReason = (string) ($deactivateResult['reason'] ?? 'internal_error');
+        if (!(bool) ($deactivateResult['ok'] ?? false)) {
+            if ($deactivateReason === 'not_found') {
+                return $errorResponse(404, 'admin_user_not_found', 'The requested user does not exist.', [
+                    'user_id' => $userId,
+                ]);
+            }
+
+            return $errorResponse(500, 'admin_user_deactivate_failed', 'Could not deactivate user.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => $deactivateReason,
+                'revoked_sessions' => (int) ($deactivateResult['revoked_sessions'] ?? 0),
+                'user' => $deactivateResult['user'] ?? null,
             ],
             'time' => gmdate('c'),
         ]);
@@ -634,6 +778,8 @@ SQL
             'logout_endpoint' => '/api/auth/logout',
             'admin_probe_endpoint' => '/api/admin/ping',
             'admin_users_endpoint' => '/api/admin/users',
+            'admin_user_update_endpoint_template' => '/api/admin/users/{id}',
+            'admin_user_deactivate_endpoint_template' => '/api/admin/users/{id}/deactivate',
             'moderation_probe_endpoint' => '/api/moderation/ping',
             'user_probe_endpoint' => '/api/user/ping',
             'time' => gmdate('c'),

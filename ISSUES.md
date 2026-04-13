@@ -159,7 +159,7 @@ Contract guardrails for this batch:
   done when: forbidden actions fail closed with typed errors and role-allowed paths are covered by tests.
 - [x] `#12 Implement admin user list endpoint with search, deterministic sort, and pagination contract matching UI needs.`
   done when: endpoint supports query + page + page_size, returns stable totals, and frontend pagination binds correctly.
-- [ ] `#13 Implement admin user create/update/deactivate endpoints with server-side validation and uniqueness guarantees.`
+- [x] `#13 Implement admin user create/update/deactivate endpoints with server-side validation and uniqueness guarantees.`
   done when: CRUD operations are persisted safely, invalid payloads fail with typed validation errors, and duplicate email conflicts are explicit.
 - [ ] `#14 Implement profile/settings endpoint for display name, avatar reference, time format, and theme preferences.`
   done when: settings persist per user and frontend reload restores exact saved preferences.
