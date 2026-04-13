@@ -155,6 +155,7 @@ The current tree already proves:
 - the active video-chat calls-list surface now enforces one explicit `GET /api/calls` endpoint contract for owner-bound scope semantics (`user all -> my`), deterministic paging/sort envelopes, and typed list-filter validation failures, proven by `backend-king-php/tests/calls-list-endpoint-contract.sh`
 - the active video-chat call-create surface now enforces one explicit `POST /api/calls` endpoint contract for typed request-body validation, normalized call-plus-participants create envelopes, and persisted call/participant atomicity expectations under rejected duplicate-participant payloads, proven by `backend-king-php/tests/call-create-endpoint-contract.sh`
 - the active video-chat call-update surface now enforces one explicit `PATCH /api/calls/{id}` endpoint contract for participant-diff updates, typed validation/forbidden/not-found envelopes, immutable-status rejection, and explicit no-global-resend invite dispatch semantics (`global_resend_triggered=false`, `explicit_action_required=true`), proven by `backend-king-php/tests/call-update-endpoint-contract.sh`
+- the active video-chat call-cancel surface now enforces one explicit `POST /api/calls/{id}/cancel` endpoint contract for typed request-body validation, explicit state-conflict behavior, persisted cancellation reason/message/timestamp fields, participant invite-state cancellation propagation, and cancelled-call exclusion from active join scope, proven by `backend-king-php/tests/call-cancel-endpoint-contract.sh`
 
 ## What Is Still Not Finished
 

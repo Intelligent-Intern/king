@@ -488,6 +488,12 @@ Run the call cancel contract test (state transition + cancellation payload persi
 demo/video-chat/backend-king-php/tests/call-cancel-contract.sh
 ```
 
+Run the call cancel endpoint contract test (`POST /api/calls/{id}/cancel` state-transition validation + persisted cancellation payload semantics):
+
+```bash
+demo/video-chat/backend-king-php/tests/call-cancel-endpoint-contract.sh
+```
+
 Run the invite-code create contract test (UUID-backed uniqueness + scope binding + deterministic expiry policy):
 
 ```bash
