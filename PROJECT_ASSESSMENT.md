@@ -145,6 +145,7 @@ The current tree already proves:
 - the active video-chat auth surface now includes `POST /api/auth/refresh` with atomic session-token rotation, stale-token conflict rejection, and replaced-token revocation semantics proven by `backend-king-php/tests/session-refresh-contract.sh`
 - the active video-chat auth surface now has dedicated logout contract proof for deterministic `POST /api/auth/logout` envelopes and persisted `sessions.revoked_at` metadata (`backend-king-php/tests/session-logout-contract.sh`)
 - the active video-chat realtime surface now enforces session revocation propagation into live websocket loops by revalidating session liveness per receive cycle and closing revoked/expired sessions fail-closed (`system/error` `websocket_session_invalidated` + policy close), proven by `backend-king-php/tests/realtime-session-revocation-contract.sh`
+- the active video-chat route middleware now enforces one explicit transport-aware RBAC permission matrix for admin/moderator/user actions with typed forbidden diagnostics (`rule_id`, role, allowed_roles, path), proven by `backend-king-php/tests/rbac-middleware-contract.sh`
 
 ## What Is Still Not Finished
 

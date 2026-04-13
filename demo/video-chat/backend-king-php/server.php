@@ -217,6 +217,7 @@ $runtimeEnvelope = static function () use (
                 'admin_scope_prefix' => '/api/admin/',
                 'moderation_scope_prefix' => '/api/moderation/',
                 'user_scope_prefix' => '/api/user/',
+                'permission_matrix' => videochat_rbac_permission_matrix($wsPath),
             ],
             'demo_users' => $databaseRuntime['demo_users'] ?? [],
             'rest_auth' => [

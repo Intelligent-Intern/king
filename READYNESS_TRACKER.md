@@ -54,6 +54,7 @@ Status note:
 - Recent video-chat session-rotation closure: the backend now exposes `POST /api/auth/refresh` with atomic token replacement, stale-token conflict rejection, replaced-token websocket tracking cleanup, and dedicated contract proof in `backend-king-php/tests/session-refresh-contract.sh`.
 - Recent video-chat logout-revoke closure: `POST /api/auth/logout` is now explicitly contract-covered for deterministic success/error envelopes, persisted session `revoked_at` metadata, and session-token invalidation semantics in `backend-king-php/tests/session-logout-contract.sh`.
 - Recent video-chat websocket revocation closure: active websocket receive loops now revalidate session liveness and fail closed with policy-close semantics on revoked/expired tokens, with dedicated contract proof in `backend-king-php/tests/realtime-session-revocation-contract.sh`.
+- Recent video-chat RBAC middleware closure: the dispatcher now enforces an explicit transport-aware permission matrix (`admin`/`moderator`/`user`) with stable `rule_id` diagnostics on typed forbidden responses, and contract proof in `backend-king-php/tests/rbac-middleware-contract.sh`.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -345,7 +346,7 @@ Scope note:
 - [x] Implement logout/session-revoke endpoint with immediate runtime effect.
 - [x] Enforce session revocation propagation into active websocket connections.
 - [x] Implement stable session refresh/rotation policy with replay-safe token handling.
-- [ ] Enforce route-level RBAC middleware for admin/moderator/user actions.
+- [x] Enforce route-level RBAC middleware for admin/moderator/user actions.
 - [ ] Add forbidden/conflict validation semantics for all protected video APIs.
 - [ ] Implement admin user CRUD (`list`, `create`, `update`, `deactivate`) with deterministic pagination/search/sort.
 - [ ] Implement user profile/settings persistence (`display_name`, `avatar_ref`, `theme`, `time_format`).

@@ -109,6 +109,7 @@ function videochat_dispatch_request(
 
         return $errorResponse($status, $code, $message, [
             'reason' => (string) ($rbacDecision['reason'] ?? 'role_not_allowed'),
+            'rule_id' => (string) ($rbacDecision['rule_id'] ?? 'unknown'),
             'role' => (string) ($rbacDecision['role'] ?? 'unknown'),
             'allowed_roles' => is_array($rbacDecision['allowed_roles'] ?? null) ? array_values($rbacDecision['allowed_roles']) : [],
             'path' => $requestPath,
@@ -122,7 +123,7 @@ function videochat_dispatch_request(
             return $authFailureResponse('rest', (string) ($apiAuthContext['reason'] ?? 'invalid_session'));
         }
 
-        $rbacDecision = videochat_authorize_role_for_path((array) ($apiAuthContext['user'] ?? []), $path);
+        $rbacDecision = videochat_authorize_role_for_path((array) ($apiAuthContext['user'] ?? []), $path, $wsPath);
         if (!(bool) ($rbacDecision['ok'] ?? false)) {
             return $rbacFailureResponse('rest', $rbacDecision, $path);
         }

@@ -177,7 +177,8 @@ RBAC-protected endpoints fail closed with typed `403` errors:
 
 - `code`: `rbac_forbidden` for REST
 - `code`: `websocket_forbidden` for websocket upgrade
-- details include `reason`, `role`, `allowed_roles`, and `path`
+- details include `reason`, `rule_id`, `role`, `allowed_roles`, and `path`
+- the permission matrix is explicit and transport-aware (`rest_auth_session`, `rest_admin_scope`, `rest_moderation_scope`, `rest_calls_collection`, `rest_calls_items`, `rest_invite_codes_collection`, `rest_invite_codes_items`, `rest_user_scope`, `websocket_gateway`)
 
 `GET /api/admin/users` query contract:
 
@@ -366,6 +367,12 @@ Run the auth logout/revoke contract test (deterministic revoke response + persis
 
 ```bash
 demo/video-chat/backend-king-php/tests/session-logout-contract.sh
+```
+
+Run the RBAC middleware contract test (explicit permission matrix + typed forbidden envelopes + allowed-role pass paths):
+
+```bash
+demo/video-chat/backend-king-php/tests/rbac-middleware-contract.sh
 ```
 
 Run the realtime session-revocation contract test (revoked/expired token propagation into active websocket liveness checks):

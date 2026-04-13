@@ -72,7 +72,7 @@ function videochat_handle_realtime_routes(
         if (!(bool) ($websocketAuth['ok'] ?? false)) {
             return $authFailureResponse('websocket', (string) ($websocketAuth['reason'] ?? 'invalid_session'));
         }
-        $websocketRbacDecision = videochat_authorize_role_for_path((array) ($websocketAuth['user'] ?? []), $path);
+        $websocketRbacDecision = videochat_authorize_role_for_path((array) ($websocketAuth['user'] ?? []), $path, $wsPath);
         if (!(bool) ($websocketRbacDecision['ok'] ?? false)) {
             return $rbacFailureResponse('websocket', $websocketRbacDecision, $path);
         }
