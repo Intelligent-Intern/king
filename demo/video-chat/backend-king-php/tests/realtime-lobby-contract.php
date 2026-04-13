@@ -149,6 +149,32 @@ try {
     videochat_realtime_lobby_assert((bool) ($queueJoinAgain['ok'] ?? false), 'repeated queue join should stay successful');
     videochat_realtime_lobby_assert(!(bool) ($queueJoinAgain['changed'] ?? true), 'repeated queue join should not mutate queue');
 
+    $invalidSenderConnection = $userA;
+    $invalidSenderConnection['user_id'] = 0;
+    $invalidSenderResult = videochat_lobby_apply_command(
+        $lobbyState,
+        $presenceState,
+        $invalidSenderConnection,
+        $queueJoinCommand,
+        $sender,
+        1_780_400_101_500
+    );
+    videochat_realtime_lobby_assert(!(bool) ($invalidSenderResult['ok'] ?? true), 'invalid sender lobby command should fail');
+    videochat_realtime_lobby_assert((string) ($invalidSenderResult['error'] ?? '') === 'invalid_sender', 'invalid sender lobby error mismatch');
+
+    $senderNotInRoomConnection = $userA;
+    $senderNotInRoomConnection['room_id'] = 'other-room';
+    $senderNotInRoomResult = videochat_lobby_apply_command(
+        $lobbyState,
+        $presenceState,
+        $senderNotInRoomConnection,
+        $queueJoinCommand,
+        $sender,
+        1_780_400_101_800
+    );
+    videochat_realtime_lobby_assert(!(bool) ($senderNotInRoomResult['ok'] ?? true), 'sender outside room lobby command should fail');
+    videochat_realtime_lobby_assert((string) ($senderNotInRoomResult['error'] ?? '') === 'sender_not_in_room', 'sender outside room lobby error mismatch');
+
     $nonModeratorAllow = videochat_lobby_decode_client_frame(json_encode([
         'type' => 'lobby/allow',
         'target_user_id' => 20,

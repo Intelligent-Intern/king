@@ -72,6 +72,7 @@ Status note:
 - Recent video-chat realtime-chat closure: room chat now enforces sender-in-room authoritative fanout with bounded malformed-payload rejection, stable sender+room+client-message dedupe ids, and deterministic `chat/ack` ids (`ack_id` + `message_id`), proven by `backend-king-php/tests/realtime-chat-contract.sh` and `backend-king-php/tests/contract-catalog-parity-contract.sh`.
 - Recent video-chat realtime-typing closure: room typing now enforces debounce + expiry semantics with no self-echo, fail-closed sender-in-room validation, and explicit `typing/start` + `typing/stop` WS contract parity, proven by `backend-king-php/tests/realtime-typing-contract.sh` and `backend-king-php/tests/contract-catalog-parity-contract.sh`.
 - Recent video-chat realtime-signaling closure: room signaling now enforces target-routed delivery for `call/offer`/`call/answer`/`call/ice`/`call/hangup` with fail-closed sender+target authorization (`invalid_sender`, `sender_not_in_room`, `invalid_target_user_id`, `target_not_in_room`) and no cross-room leakage, proven by `backend-king-php/tests/realtime-signaling-contract.sh`.
+- Recent video-chat realtime-lobby closure: room lobby queue runtime now enforces atomic `queue/join`, moderator-only `allow/remove/allow_all`, fail-closed sender room-membership guards (`invalid_sender`, `sender_not_in_room`), and consistent room-scoped `lobby/snapshot` fanout, proven by `backend-king-php/tests/realtime-lobby-contract.sh`.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 

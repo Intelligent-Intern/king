@@ -348,7 +348,7 @@ Presence channel contract on `WS /ws`:
   - accepted chat publishes emit `chat/ack` to the sender with deterministic `ack_id`, stable `message_id`, and `sent_count`
   - typing indicators are room-scoped, debounced, expire automatically, never self-echo, and fail closed when sender room membership is invalid
   - lobby queue updates are room-scoped snapshots (`lobby/snapshot`) driven by server-authoritative queue/admitted state
-  - moderator actions (`lobby/allow`, `lobby/remove`, `lobby/allow_all`) are fail-closed for non-moderator roles
+  - moderator actions (`lobby/allow`, `lobby/remove`, `lobby/allow_all`) are fail-closed for non-moderator roles and for senders not actively present in the room
   - queue/admitted entries are cleaned when a user disconnects or changes rooms
   - signaling commands are target-routed (`call/offer`, `call/answer`, `call/ice`, `call/hangup`) and only delivered when sender+target room authorization is valid
   - invalid signaling authorization paths (invalid sender, sender-not-in-room, missing/invalid/self/not-in-room target) fail closed as `system/error` without cross-room leakage
@@ -548,7 +548,7 @@ Run the realtime typing contract test (debounce + expiry + no-self-echo semantic
 demo/video-chat/backend-king-php/tests/realtime-typing-contract.sh
 ```
 
-Run the realtime lobby contract test (queue snapshots + moderator actions + disconnect/room-change cleanup):
+Run the realtime lobby contract test (queue snapshots + moderator actions + sender room-membership guards + disconnect/room-change cleanup):
 
 ```bash
 demo/video-chat/backend-king-php/tests/realtime-lobby-contract.sh

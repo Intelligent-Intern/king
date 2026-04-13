@@ -255,7 +255,7 @@ Execution guardrails for this extension:
   done when: typing state auto-expires and remains scoped to active room participants only.
 - [x] `#53 Implement signaling routing (`offer`/`answer`/`ice`/`hangup`) with membership + target authorization checks.`
   done when: signaling reaches only valid room peers and invalid targets fail closed without leaking peer state.
-- [ ] `#54 Implement lobby queue runtime state with moderator actions (`allow`, `remove`, `allow_all`) and role checks.`
+- [x] `#54 Implement lobby queue runtime state with moderator actions (`allow`, `remove`, `allow_all`) and role checks.`
   done when: queue mutations are atomic, unauthorized actions fail closed, and clients receive consistent queue snapshots.
 - [ ] `#55 Implement reaction event stream with server-side throttling and deterministic payload boundaries.`
   done when: reaction bursts are bounded and stream remains responsive under controlled load.

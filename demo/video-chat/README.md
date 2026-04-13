@@ -33,6 +33,7 @@ Latest commit-level progress:
 - 2026-04-13: closed `#51` with room-scoped chat fanout hardening (sender-in-room enforcement, bounded malformed-payload rejection, stable message ids for dedupe, deterministic `chat/ack` ids) in `backend-king-php/tests/realtime-chat-contract.sh` + `backend-king-php/tests/contract-catalog-parity-contract.sh`
 - 2026-04-13: closed `#52` with typing indicator hardening (room-scoped debounce + expiry, no self-echo, sender-in-room fail-closed validation, explicit `typing/stop` catalog parity) in `backend-king-php/tests/realtime-typing-contract.sh` + `backend-king-php/tests/contract-catalog-parity-contract.sh`
 - 2026-04-13: closed `#53` with signaling-routing authorization hardening (sender/target membership fail-closed + no cross-room leakage) in `backend-king-php/tests/realtime-signaling-contract.sh`
+- 2026-04-13: closed `#54` with lobby runtime authorization hardening (atomic queue/mutation flow, moderator-only actions, sender room-membership fail-closed) in `backend-king-php/tests/realtime-lobby-contract.sh`
 
 Current new-stack baseline capabilities:
 
@@ -50,6 +51,7 @@ Current new-stack baseline capabilities:
 - chat timeline is server-fanout driven with message normalization and room-local dedupe by message id
 - chat sender acks now carry deterministic `ack_id` + stable `message_id` so client retries can dedupe without local echo drift
 - typing indicators are room-scoped, exclude self display, auto-expire on idle timeout windows, and fail closed when sender room membership is invalid
+- lobby queue snapshots are room-scoped and mutation paths now fail closed when sender room membership is invalid
 - chat composer enforces bounded draft length and rejects empty/whitespace payloads before websocket send
 - chat and roster timestamps are rendered in deterministic locale-independent UTC `HH:MM UTC` format
 - pre-call local media preview is an explicit gate; join is enabled only after preview succeeds, with visible permission/device errors

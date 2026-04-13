@@ -326,6 +326,23 @@ function videochat_lobby_apply_command(
         ];
     }
 
+    $connectionId = trim((string) ($connection['connection_id'] ?? ''));
+    $roomConnections = $presenceState['rooms'][$roomId] ?? null;
+    if (
+        $connectionId === ''
+        || !is_array($roomConnections)
+        || !array_key_exists($connectionId, $roomConnections)
+    ) {
+        return [
+            'ok' => false,
+            'error' => 'sender_not_in_room',
+            'changed' => false,
+            'sent_count' => 0,
+            'action' => (string) ($command['type'] ?? ''),
+            'target_user_id' => (int) ($command['target_user_id'] ?? 0),
+        ];
+    }
+
     videochat_lobby_ensure_room_state($lobbyState, $roomId);
     $nowMs = videochat_lobby_now_ms($nowUnixMs);
     $nowIso = gmdate('c', (int) floor($nowMs / 1000));
