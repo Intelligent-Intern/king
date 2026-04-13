@@ -4,7 +4,7 @@ This demo ships as a responsive multi-user workspace for room chat and browser
 video calls. The frontend and backend transport now bind to
 `@intelligentintern/iibin` from `node_modules`.
 
-What is wired today:
+Legacy baseline capabilities (historical reference only):
 
 - required login surface (display name) with persisted local session identity across reloads
 - explicit sign-out lifecycle that tears down websocket reconnect loops, call peers, and local media tracks
@@ -59,7 +59,7 @@ cd demo/video-chat/frontend-vue
 npm run dev
 ```
 
-Current boundaries:
+Legacy runtime boundaries (historical reference only):
 
 - demo-local signaling backend (`backend/dev-backend.mjs`)
 - login/user directory is persisted in SQLite (`KING_DEMO_DB_PATH`)

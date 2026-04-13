@@ -137,7 +137,7 @@ Contract guardrails for this batch:
 
 - [x] `#1 Create runtime layout for the new stack under demo/video-chat (frontend-vue + backend-king-php) and mark legacy as read-only reference.`
   done when: both new directories exist with runnable entrypoints and startup docs state the new stack as the active development path.
-- [ ] `#2 Remove active development routing to legacy stack and make the new stack the single documented dev target.`
+- [x] `#2 Remove active development routing to legacy stack and make the new stack the single documented dev target.`
   done when: local/dev docs and run commands point to the new stack only, while legacy is explicitly labeled historical reference.
 - [ ] `#3 Scaffold Vue 3 + Vite frontend shell with route map for login, admin overview, admin user management, admin calls CRUD, user dashboard, and call workspace.`
   done when: routes resolve, shared app shell renders, and route guards are wired for authenticated/role-aware navigation.

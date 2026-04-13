@@ -1,3 +1,5 @@
+# Historical legacy compose for the previous Node-based demo runtime.
+# New-stack compose (backend-king-php + frontend-vue) lands in V1 follow-up leaves.
 services:
   videochat-backend:
     container_name: king-videochat-backend
