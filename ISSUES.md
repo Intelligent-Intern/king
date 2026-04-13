@@ -169,7 +169,7 @@ Contract guardrails for this batch:
   done when: response matches table requirements with stable totals and deterministic ordering.
 - [x] `#17 Implement create-call endpoint supporting title, start/end times, internal participant ids, and external invitee rows.`
   done when: call creation persists all participant mappings and returns a single normalized call payload.
-- [ ] `#18 Implement edit-call endpoint that updates schedule/participants without triggering global invite resend by default.`
+- [x] `#18 Implement edit-call endpoint that updates schedule/participants without triggering global invite resend by default.`
   done when: edit updates persisted call fields only and invite-send remains an explicit separate action.
 - [ ] `#19 Implement cancel-call endpoint with persisted cancellation reason/message payload boundary for downstream notification workflows.`
   done when: cancellation state transitions are explicit, cancellation payload is stored, and cancelled calls are excluded from active joins.

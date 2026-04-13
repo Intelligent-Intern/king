@@ -903,6 +903,81 @@ SQL
         ]);
     }
 
+    if (preg_match('#^/api/calls/([A-Za-z0-9._-]{1,200})$#', $path, $callMatch) === 1) {
+        if ($method !== 'PATCH') {
+            return $errorResponse(405, 'method_not_allowed', 'Use PATCH for /api/calls/{id}.', [
+                'allowed_methods' => ['PATCH'],
+            ]);
+        }
+
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'calls_update_invalid_request_body', 'Call update payload must be a non-empty JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        $callId = (string) ($callMatch[1] ?? '');
+        try {
+            $pdo = $openDatabase();
+            $updateResult = videochat_update_call(
+                $pdo,
+                $callId,
+                $authenticatedUserId,
+                $authenticatedUserRole,
+                $payload
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'calls_update_failed', 'Could not update call.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        $updateReason = (string) ($updateResult['reason'] ?? 'internal_error');
+        if (!(bool) ($updateResult['ok'] ?? false)) {
+            if ($updateReason === 'validation_failed') {
+                return $errorResponse(422, 'calls_update_validation_failed', 'Call update payload failed validation.', [
+                    'fields' => is_array($updateResult['errors'] ?? null) ? $updateResult['errors'] : [],
+                ]);
+            }
+            if ($updateReason === 'not_found') {
+                return $errorResponse(404, 'calls_not_found', 'The requested call does not exist.', [
+                    'call_id' => $callId,
+                ]);
+            }
+            if ($updateReason === 'forbidden') {
+                return $errorResponse(403, 'calls_forbidden', 'You are not allowed to edit this call.', [
+                    'call_id' => $callId,
+                ]);
+            }
+
+            return $errorResponse(500, 'calls_update_failed', 'Could not update call.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'updated',
+                'call' => $updateResult['call'] ?? null,
+                'invite_dispatch' => $updateResult['invite_dispatch'] ?? [
+                    'global_resend_triggered' => false,
+                    'explicit_action_required' => true,
+                ],
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if ($path === '/api/user/avatar') {
         $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
         if ($authenticatedUserId <= 0) {
@@ -1107,6 +1182,7 @@ SQL
             'version_endpoint' => '/api/version',
             'calls_endpoint' => '/api/calls',
             'call_create_endpoint' => '/api/calls',
+            'call_update_endpoint_template' => '/api/calls/{id}',
             'login_endpoint' => '/api/auth/login',
             'session_endpoint' => '/api/auth/session',
             'logout_endpoint' => '/api/auth/logout',

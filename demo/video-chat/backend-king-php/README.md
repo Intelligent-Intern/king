@@ -30,6 +30,7 @@ cd demo/video-chat/backend-king-php
 - `POST /api/auth/logout` (requires session token)
 - `GET /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
 - `POST /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
+- `PATCH /api/calls/{id}` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
 - `GET /api/admin/ping` (requires `admin` role)
 - `GET /api/admin/users` (requires `admin` role)
 - `POST /api/admin/users` (requires `admin` role)
@@ -206,6 +207,15 @@ Response includes:
 - validation failures: `422 calls_create_validation_failed` with `error.details.fields`
 - success: `201`, with `result.call` containing normalized owner + participants + totals
 
+`PATCH /api/calls/{id}` update contract:
+
+- editable fields: `room_id`, `title`, `starts_at`, `ends_at`, `internal_participant_user_ids`, `external_participants`
+- authorization: call owner, admin, or moderator
+- immutable statuses: `cancelled` and `ended` reject edits (`status: immutable_for_edit`)
+- global invite resend is not triggered by edit calls
+- explicit invite resend request flags are rejected in update payload
+- success returns `invite_dispatch.global_resend_triggered = false` and `invite_dispatch.explicit_action_required = true`
+
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).
 
@@ -251,4 +261,10 @@ Run the call create contract test (create payload validation + participant persi
 
 ```bash
 demo/video-chat/backend-king-php/tests/call-create-contract.sh
+```
+
+Run the call update contract test (schedule/participant updates + no implicit invite resend):
+
+```bash
+demo/video-chat/backend-king-php/tests/call-update-contract.sh
 ```

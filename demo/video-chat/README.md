@@ -197,6 +197,7 @@ SQLite data is persisted in a mounted Docker volume:
 - backend avatar file read: `GET http://127.0.0.1:18080/api/user/avatar-files/{filename}` (authenticated admin/moderator/user)
 - backend calls list: `GET http://127.0.0.1:18080/api/calls?scope=my&status=all&query=&page=1&page_size=10` (authenticated admin/moderator/user)
 - backend call create: `POST http://127.0.0.1:18080/api/calls` (authenticated admin/moderator/user)
+- backend call update: `PATCH http://127.0.0.1:18080/api/calls/{id}` (authenticated admin/moderator/user; owner/admin/moderator policy)
 - backend websocket endpoint: `WS ws://127.0.0.1:18080/ws`
 - backend startup applies ordered sqlite migrations (`schema_migrations`) and exposes migration state in runtime/health responses
 - frontend scaffold endpoint: `http://127.0.0.1:5174`
