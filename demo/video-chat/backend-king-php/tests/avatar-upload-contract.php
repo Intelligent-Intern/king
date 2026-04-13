@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../database.php';
-require_once __DIR__ . '/../avatar_upload.php';
+require_once __DIR__ . '/../support/database.php';
+require_once __DIR__ . '/../domain/users/avatar_upload.php';
 
 function videochat_avatar_upload_assert(bool $condition, string $message): void
 {

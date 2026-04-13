@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../http/router.php';
 
 function videochat_router_contract_assert(bool $condition, string $message): void

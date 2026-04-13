@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../http/module_runtime.php';
-require_once __DIR__ . '/../realtime_presence.php';
-require_once __DIR__ . '/../realtime_chat.php';
-require_once __DIR__ . '/../realtime_typing.php';
-require_once __DIR__ . '/../realtime_lobby.php';
-require_once __DIR__ . '/../realtime_signaling.php';
+require_once __DIR__ . '/../domain/realtime/realtime_presence.php';
+require_once __DIR__ . '/../domain/realtime/realtime_chat.php';
+require_once __DIR__ . '/../domain/realtime/realtime_typing.php';
+require_once __DIR__ . '/../domain/realtime/realtime_lobby.php';
+require_once __DIR__ . '/../domain/realtime/realtime_signaling.php';
 
 function videochat_contract_catalog_fail(string $message): never
 {

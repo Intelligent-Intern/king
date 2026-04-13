@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../database.php';
-require_once __DIR__ . '/../auth.php';
-require_once __DIR__ . '/../call_management.php';
-require_once __DIR__ . '/../invite_codes.php';
+require_once __DIR__ . '/../support/database.php';
+require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../domain/calls/call_management.php';
+require_once __DIR__ . '/../domain/calls/invite_codes.php';
 
 function videochat_invite_redeem_assert(bool $condition, string $message): void
 {

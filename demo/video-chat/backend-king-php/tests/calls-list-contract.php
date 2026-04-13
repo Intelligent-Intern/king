@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../database.php';
-require_once __DIR__ . '/../auth.php';
-require_once __DIR__ . '/../call_directory.php';
+require_once __DIR__ . '/../support/database.php';
+require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../domain/calls/call_directory.php';
 
 function videochat_calls_list_assert(bool $condition, string $message): void
 {

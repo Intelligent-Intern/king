@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../database.php';
-require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../support/database.php';
+require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../http/module_realtime.php';
 
 function videochat_realtime_session_revocation_assert(bool $condition, string $message): void

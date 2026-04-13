@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../database.php';
-require_once __DIR__ . '/../user_directory.php';
+require_once __DIR__ . '/../support/database.php';
+require_once __DIR__ . '/../domain/users/user_directory.php';
 
 function videochat_admin_user_list_assert(bool $condition, string $message): void
 {

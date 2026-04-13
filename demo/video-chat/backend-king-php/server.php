@@ -25,20 +25,20 @@ $log = static function (string $message): void {
     fwrite(STDERR, '[video-chat][king-php-backend] ' . $message . "\n");
 };
 
-require_once __DIR__ . '/database.php';
-require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/avatar_upload.php';
-require_once __DIR__ . '/call_directory.php';
-require_once __DIR__ . '/call_management.php';
-require_once __DIR__ . '/invite_codes.php';
-require_once __DIR__ . '/realtime_chat.php';
-require_once __DIR__ . '/realtime_lobby.php';
-require_once __DIR__ . '/realtime_presence.php';
-require_once __DIR__ . '/realtime_signaling.php';
-require_once __DIR__ . '/realtime_typing.php';
-require_once __DIR__ . '/user_directory.php';
-require_once __DIR__ . '/user_management.php';
-require_once __DIR__ . '/user_settings.php';
+require_once __DIR__ . '/support/database.php';
+require_once __DIR__ . '/support/auth.php';
+require_once __DIR__ . '/domain/users/avatar_upload.php';
+require_once __DIR__ . '/domain/calls/call_directory.php';
+require_once __DIR__ . '/domain/calls/call_management.php';
+require_once __DIR__ . '/domain/calls/invite_codes.php';
+require_once __DIR__ . '/domain/realtime/realtime_chat.php';
+require_once __DIR__ . '/domain/realtime/realtime_lobby.php';
+require_once __DIR__ . '/domain/realtime/realtime_presence.php';
+require_once __DIR__ . '/domain/realtime/realtime_signaling.php';
+require_once __DIR__ . '/domain/realtime/realtime_typing.php';
+require_once __DIR__ . '/domain/users/user_directory.php';
+require_once __DIR__ . '/domain/users/user_management.php';
+require_once __DIR__ . '/domain/users/user_settings.php';
 require_once __DIR__ . '/http/router.php';
 
 $avatarMaxBytes = videochat_avatar_max_bytes();

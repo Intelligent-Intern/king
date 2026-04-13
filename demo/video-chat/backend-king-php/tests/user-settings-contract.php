@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../database.php';
-require_once __DIR__ . '/../auth.php';
-require_once __DIR__ . '/../user_settings.php';
+require_once __DIR__ . '/../support/database.php';
+require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../domain/users/user_settings.php';
 
 function videochat_user_settings_assert(bool $condition, string $message): void
 {

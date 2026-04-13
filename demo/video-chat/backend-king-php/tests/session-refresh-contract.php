@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../database.php';
-require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../support/database.php';
+require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../http/module_auth_session.php';
 
 function videochat_session_refresh_assert(bool $condition, string $message): void

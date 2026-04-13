@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../auth.php';
-require_once __DIR__ . '/../realtime_presence.php';
+require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../domain/realtime/realtime_presence.php';
 
 function videochat_realtime_presence_assert(bool $condition, string $message): void
 {
