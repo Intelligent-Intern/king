@@ -352,7 +352,7 @@ Scope note:
 - [ ] Implement create-call endpoint with internal participant references and external invitee rows.
 - [ ] Implement edit-call endpoint with explicit participant diff semantics and no implicit global resend.
 - [ ] Implement cancel-call endpoint with persisted cancellation payload suitable for downstream notification workflows.
-- [ ] Implement invite-code/link generation with deterministic expiry and redemption policy.
+- [x] Implement invite-code/link generation with deterministic expiry and redemption policy.
 - [ ] Implement invite redeem/join endpoint with role-safe join context resolution.
 - [ ] Persist schedule metadata to support calendar view projections without frontend inference hacks.
 - [ ] Add API boundaries for invite-preview/copy flows so invite code is not leaked as table-column default data.

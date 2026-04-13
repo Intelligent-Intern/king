@@ -288,6 +288,9 @@ function videochat_rbac_allowed_roles_for_path(string $path): array
     if (str_starts_with($trimmedPath, '/api/calls')) {
         return ['admin', 'moderator', 'user'];
     }
+    if (str_starts_with($trimmedPath, '/api/invite-codes')) {
+        return ['admin', 'moderator', 'user'];
+    }
     if (str_starts_with($trimmedPath, '/api/user/')) {
         return ['admin', 'moderator', 'user'];
     }

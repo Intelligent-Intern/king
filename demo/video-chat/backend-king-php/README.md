@@ -32,6 +32,7 @@ cd demo/video-chat/backend-king-php
 - `POST /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
 - `PATCH /api/calls/{id}` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
 - `POST /api/calls/{id}/cancel` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
+- `POST /api/invite-codes` (requires authenticated `admin`/`moderator`/`user` role; call scope requires owner/admin/moderator policy)
 - `GET /api/admin/ping` (requires `admin` role)
 - `GET /api/admin/users` (requires `admin` role)
 - `POST /api/admin/users` (requires `admin` role)
@@ -65,6 +66,8 @@ Environment overrides:
 - `VIDEOCHAT_DEMO_USER_PASSWORD` (default `user123`)
 - `VIDEOCHAT_AVATAR_STORAGE_ROOT` (default `dirname(VIDEOCHAT_KING_DB_PATH)/avatars`)
 - `VIDEOCHAT_AVATAR_MAX_BYTES` (default `5242880`, clamped to `64KB..10MB`)
+- `VIDEOCHAT_INVITE_CALL_TTL_SECONDS` (default `21600`, clamped to `300..2592000`)
+- `VIDEOCHAT_INVITE_ROOM_TTL_SECONDS` (default `86400`, clamped to `300..2592000`)
 - `KING_EXTENSION_PATH` (default `extension/modules/king.so` from repo root)
 - `PHP_BIN` (default `php`)
 
@@ -226,6 +229,20 @@ Response includes:
 - cancellation updates participant join state to cancelled for downstream notification/reconciliation workflows
 - cancelled calls are excluded from active-join semantics (`my_participation = false`)
 
+`POST /api/invite-codes` create contract:
+
+- required fields:
+  - `scope`: `room` or `call`
+  - `room` scope: `room_id`
+  - `call` scope: `call_id`
+- expiry policy is server-managed and deterministic by scope:
+  - `call`: `VIDEOCHAT_INVITE_CALL_TTL_SECONDS` (default `21600`)
+  - `room`: `VIDEOCHAT_INVITE_ROOM_TTL_SECONDS` (default `86400`)
+- client-provided expiry overrides are rejected (`expires_at`, `expires_in_seconds`)
+- code/id generation uses UUID-v4 values and retries on uniqueness collisions
+- call-scope authorization: owner/admin/moderator only
+- success: `201`, with `result.invite_code` containing context binding (`scope`, `room_id|call_id`), expiry metadata, and policy metadata
+
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).
 
@@ -283,4 +300,10 @@ Run the call cancel contract test (state transition + cancellation payload persi
 
 ```bash
 demo/video-chat/backend-king-php/tests/call-cancel-contract.sh
+```
+
+Run the invite-code create contract test (UUID-backed uniqueness + scope binding + deterministic expiry policy):
+
+```bash
+demo/video-chat/backend-king-php/tests/invite-code-create-contract.sh
 ```

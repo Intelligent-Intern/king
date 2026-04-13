@@ -30,6 +30,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/avatar_upload.php';
 require_once __DIR__ . '/call_directory.php';
 require_once __DIR__ . '/call_management.php';
+require_once __DIR__ . '/invite_codes.php';
 require_once __DIR__ . '/user_directory.php';
 require_once __DIR__ . '/user_management.php';
 require_once __DIR__ . '/user_settings.php';
@@ -213,6 +214,7 @@ $runtimeEnvelope = static function () use (
         ],
         'calls' => [
             'list_endpoint' => '/api/calls',
+            'invite_code_create_endpoint' => '/api/invite-codes',
             'scope_values' => ['my', 'all'],
             'status_values' => ['all', 'scheduled', 'active', 'ended', 'cancelled'],
         ],
@@ -793,6 +795,80 @@ SQL
         ]);
     }
 
+    if ($path === '/api/invite-codes') {
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/invite-codes.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'invite_codes_invalid_request_body', 'Invite-code payload must be a non-empty JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $createResult = videochat_create_invite_code(
+                $pdo,
+                $authenticatedUserId,
+                $authenticatedUserRole,
+                $payload
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'invite_codes_create_failed', 'Could not create invite code.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        $createReason = (string) ($createResult['reason'] ?? 'internal_error');
+        if (!(bool) ($createResult['ok'] ?? false)) {
+            if ($createReason === 'validation_failed') {
+                return $errorResponse(422, 'invite_codes_validation_failed', 'Invite-code payload failed validation.', [
+                    'fields' => is_array($createResult['errors'] ?? null) ? $createResult['errors'] : [],
+                ]);
+            }
+            if ($createReason === 'not_found') {
+                return $errorResponse(404, 'invite_codes_not_found', 'Invite context does not exist or is not active.', [
+                    'fields' => is_array($createResult['errors'] ?? null) ? $createResult['errors'] : [],
+                ]);
+            }
+            if ($createReason === 'forbidden') {
+                return $errorResponse(403, 'invite_codes_forbidden', 'You are not allowed to issue invite codes for this context.', [
+                    'fields' => is_array($createResult['errors'] ?? null) ? $createResult['errors'] : [],
+                ]);
+            }
+            if ($createReason === 'conflict') {
+                return $errorResponse(409, 'invite_codes_conflict', 'Could not allocate a unique invite code. Please retry.', [
+                    'fields' => is_array($createResult['errors'] ?? null) ? $createResult['errors'] : [],
+                ]);
+            }
+
+            return $errorResponse(500, 'invite_codes_create_failed', 'Could not create invite code.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(201, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'created',
+                'invite_code' => $createResult['invite_code'] ?? null,
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if ($path === '/api/calls') {
         $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
         $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
@@ -1264,6 +1340,7 @@ SQL
             'call_create_endpoint' => '/api/calls',
             'call_update_endpoint_template' => '/api/calls/{id}',
             'call_cancel_endpoint_template' => '/api/calls/{id}/cancel',
+            'invite_code_create_endpoint' => '/api/invite-codes',
             'login_endpoint' => '/api/auth/login',
             'session_endpoint' => '/api/auth/session',
             'logout_endpoint' => '/api/auth/logout',
