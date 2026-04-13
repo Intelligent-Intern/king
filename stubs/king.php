@@ -50,13 +50,13 @@ namespace {
      * Perform DTLS handshake with a remote peer.
      * @return bool|false
      */
-    function king_rtp_dtls_accept($socket, string $ip, int $port, int $timeout_ms) {}
+    function king_rtp_dtls_accept($socket, string $ip, int $port, int $timeout_ms = 5000) {}
 
     /**
      * Receive RTP data from a peer.
      * @return array|false
      */
-    function king_rtp_recv($socket, int $timeout_ms) {}
+    function king_rtp_recv($socket, int $timeout_ms = 0) {}
 
     /**
      * Send RTP data to a peer.
@@ -64,10 +64,7 @@ namespace {
      */
     function king_rtp_send($socket, string $host, int $port, string $data) {}
 
-    /**
-     * Close an RTP socket.
-     */
-    function king_rtp_close($socket): void {}
+    
 
     /**
      * Send a one-shot client request through the active runtime dispatcher.
