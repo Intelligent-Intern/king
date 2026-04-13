@@ -201,6 +201,7 @@ Response includes:
 
 - create payload role is optional; omitted role defaults to `user`
 - validation failures: `422 admin_user_validation_failed` with `error.details.fields`
+- update payload rejects unsupported fields fail-closed (`field_not_updatable`)
 - duplicate email: `409 admin_user_conflict` with `error.details.fields.email = already_exists`
 - missing target user (update/deactivate): `404 admin_user_not_found`
 - success: `result.user` with normalized role/status/profile fields
@@ -397,6 +398,12 @@ Run the admin user create endpoint contract test (validation + role defaults + d
 
 ```bash
 demo/video-chat/backend-king-php/tests/admin-user-create-contract.sh
+```
+
+Run the admin user update endpoint contract test (normalization + fail-closed unsupported fields + not-found/conflict envelopes):
+
+```bash
+demo/video-chat/backend-king-php/tests/admin-user-update-contract.sh
 ```
 
 Run the admin user mutation contract test (create/update/deactivate + validation/conflict semantics):

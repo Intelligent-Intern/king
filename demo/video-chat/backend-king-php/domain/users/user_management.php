@@ -11,6 +11,23 @@ function videochat_admin_allowed_roles(): array
 }
 
 /**
+ * @return array<int, string>
+ */
+function videochat_admin_allowed_update_fields(): array
+{
+    return [
+        'email',
+        'display_name',
+        'role',
+        'password',
+        'status',
+        'time_format',
+        'theme',
+        'avatar_path',
+    ];
+}
+
+/**
  * @return array<string, int>
  */
 function videochat_admin_role_id_map(PDO $pdo): array
@@ -203,6 +220,14 @@ function videochat_admin_validate_update_user_payload(array $payload): array
 {
     $errors = [];
     $data = [];
+    $allowedUpdateFields = videochat_admin_allowed_update_fields();
+
+    foreach ($payload as $field => $_value) {
+        $fieldName = is_string($field) ? trim($field) : (string) $field;
+        if ($fieldName === '' || !in_array($fieldName, $allowedUpdateFields, true)) {
+            $errors[$fieldName === '' ? 'payload' : $fieldName] = 'field_not_updatable';
+        }
+    }
 
     if (array_key_exists('email', $payload)) {
         $email = strtolower(trim((string) $payload['email']));

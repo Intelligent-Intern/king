@@ -222,7 +222,7 @@ Execution guardrails for this extension:
   done when: list endpoint supports query/page/page_size/order consistently and frontend receives stable totals.
 - [x] `#38 Implement admin user create endpoint with validation and duplicate-email conflict handling.`
   done when: valid users are persisted with role defaults, invalid payloads fail typed validation, and duplicate emails return explicit conflict.
-- [ ] `#39 Implement admin user update endpoint for role/status/profile fields with RBAC enforcement.`
+- [x] `#39 Implement admin user update endpoint for role/status/profile fields with RBAC enforcement.`
   done when: updates persist safely, forbidden field mutations fail closed, and audit-relevant fields are normalized.
 - [ ] `#40 Implement admin user deactivate/reactivate endpoint with session invalidation policy for disabled accounts.`
   done when: deactivated users lose active session validity and cannot access protected REST/WS flows.
