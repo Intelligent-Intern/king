@@ -310,6 +310,13 @@ $log('starting King HTTP/1 one-shot listener loop...');
 while (true) {
     $ok = king_http1_server_listen_once($host, $port, null, $handler);
     if ($ok === false) {
+        $lastError = function_exists('king_get_last_error') ? trim((string) king_get_last_error()) : '';
+        if (
+            $lastError !== ''
+            && stripos($lastError, 'timed out while waiting for the HTTP/1 accept phase') === false
+        ) {
+            $log('listen_once failure: ' . $lastError);
+        }
         usleep(50_000);
     }
 }

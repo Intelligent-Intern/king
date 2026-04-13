@@ -168,19 +168,18 @@ function sessionHeaders() {
 }
 
 export async function loginWithPassword(email, password) {
-  const endpoint = `${resolveBackendOrigin()}/api/auth/login`;
+  const params = new URLSearchParams({
+    email: String(email || '').trim(),
+    password: String(password || ''),
+  });
+  const endpoint = `${resolveBackendOrigin()}/api/auth/login?${params.toString()}`;
 
   try {
     const response = await fetch(endpoint, {
-      method: 'POST',
+      method: 'GET',
       headers: {
         accept: 'application/json',
-        'content-type': 'application/json',
       },
-      body: JSON.stringify({
-        email: String(email || '').trim(),
-        password: String(password || ''),
-      }),
     });
 
     let payload = null;

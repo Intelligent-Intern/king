@@ -15,21 +15,54 @@ function videochat_handle_auth_session_routes(
     callable $issueSessionId
 ): ?array {
     if ($path === '/api/auth/login') {
-        if ($method !== 'POST') {
-            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/auth/login.', [
-                'allowed_methods' => ['POST'],
+        if (!in_array($method, ['GET', 'POST'], true)) {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET or POST for /api/auth/login.', [
+                'allowed_methods' => ['GET', 'POST'],
             ]);
         }
 
-        [$payload, $decodeError] = $decodeJsonBody($request);
-        if (!is_array($payload)) {
-            return $errorResponse(400, 'auth_invalid_request_body', 'Login payload must be a non-empty JSON object.', [
-                'reason' => $decodeError,
-            ]);
+        $email = '';
+        $password = '';
+
+        $authorization = videochat_request_header_value($request, 'authorization');
+        if (
+            $authorization !== ''
+            && preg_match('/^\s*Basic\s+(.+)\s*$/i', $authorization, $matches) === 1
+        ) {
+            $decoded = base64_decode(trim((string) ($matches[1] ?? '')), true);
+            if (is_string($decoded) && str_contains($decoded, ':')) {
+                [$basicEmail, $basicPassword] = explode(':', $decoded, 2);
+                $email = strtolower(trim($basicEmail));
+                $password = $basicPassword;
+            }
         }
 
-        $email = strtolower(trim((string) ($payload['email'] ?? '')));
-        $password = (string) ($payload['password'] ?? '');
+        if ($email === '' || trim($password) === '') {
+            $query = videochat_request_query_params($request);
+            $queryEmail = is_scalar($query['email'] ?? null)
+                ? strtolower(trim((string) $query['email']))
+                : '';
+            $queryPassword = is_scalar($query['password'] ?? null)
+                ? (string) $query['password']
+                : '';
+            if ($queryEmail !== '' && trim($queryPassword) !== '') {
+                $email = $queryEmail;
+                $password = $queryPassword;
+            }
+        }
+
+        if ($email === '' || trim($password) === '') {
+            [$payload, $decodeError] = $decodeJsonBody($request);
+            if (!is_array($payload)) {
+                return $errorResponse(400, 'auth_invalid_request_body', 'Login payload must be a non-empty JSON object.', [
+                    'reason' => $decodeError,
+                ]);
+            }
+
+            $email = strtolower(trim((string) ($payload['email'] ?? '')));
+            $password = (string) ($payload['password'] ?? '');
+        }
+
         if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false || trim($password) === '') {
             return $errorResponse(422, 'auth_validation_failed', 'Email and password are required.', [
                 'fields' => [

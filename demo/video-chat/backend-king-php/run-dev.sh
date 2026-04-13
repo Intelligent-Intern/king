@@ -25,6 +25,13 @@ else
   exit 1
 fi
 
+# Fail fast when sqlite driver support is unavailable.
+if ! "${PHP_BIN}" "${php_args[@]}" -m | grep -Eiq '^pdo_sqlite$'; then
+  echo "[video-chat][king-php-backend] Missing required PHP extension: pdo_sqlite." >&2
+  echo "Install/enable pdo_sqlite (or use docker-compose.v1.yml backend image)." >&2
+  exit 1
+fi
+
 echo "[video-chat][king-php-backend] extension source: ${ext_source}"
 echo "[video-chat][king-php-backend] starting http://$HOST:$PORT/"
 echo "[video-chat][king-php-backend] websocket ws://$HOST:$PORT$WS_PATH"

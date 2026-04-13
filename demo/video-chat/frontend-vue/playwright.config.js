@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 const testPort = Number.parseInt(process.env.PLAYWRIGHT_FRONTEND_PORT || '4174', 10);
+const backendOrigin = process.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || 'http://127.0.0.1:18080';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -25,7 +26,7 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     env: {
       ...process.env,
-      VITE_VIDEOCHAT_BACKEND_ORIGIN: process.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || 'http://127.0.0.1:9',
+      VITE_VIDEOCHAT_BACKEND_ORIGIN: backendOrigin,
     },
   },
 });
