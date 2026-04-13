@@ -365,7 +365,7 @@ Scope note:
 - [x] Implement room presence snapshots plus join/leave/reconnect events from server-authoritative state.
 - [x] Implement room-scoped chat fanout with bounded validation and stable timestamping.
 - [x] Implement typing indicator channel with debounce + expiry and no self-echo.
-- [ ] Implement signaling routing (`offer`, `answer`, `ice`, `hangup`) constrained by room membership and target identity.
+- [x] Implement signaling routing (`offer`, `answer`, `ice`, `hangup`) constrained by room membership and target identity.
 - [ ] Implement lobby queue state and moderator actions (`allow`, `remove`, `allow_all`) with RBAC enforcement.
 - [ ] Implement reaction eventstream with server-side throttling and deterministic payload limits.
 - [ ] Prove reconnect/recovery semantics for presence/chat/signaling with runtime-level integration tests.

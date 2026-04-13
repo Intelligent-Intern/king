@@ -33,6 +33,7 @@ require_once __DIR__ . '/call_management.php';
 require_once __DIR__ . '/invite_codes.php';
 require_once __DIR__ . '/realtime_chat.php';
 require_once __DIR__ . '/realtime_presence.php';
+require_once __DIR__ . '/realtime_signaling.php';
 require_once __DIR__ . '/realtime_typing.php';
 require_once __DIR__ . '/user_directory.php';
 require_once __DIR__ . '/user_management.php';
@@ -1571,6 +1572,13 @@ SQL
                         'start' => 'typing/start',
                         'stop' => 'typing/stop',
                     ],
+                    'signaling' => [
+                        'offer' => 'call/offer',
+                        'answer' => 'call/answer',
+                        'ice' => 'call/ice',
+                        'hangup' => 'call/hangup',
+                        'ack' => 'call/ack',
+                    ],
                 ],
                 'auth' => [
                     'session' => $websocketAuth['session'] ?? null,
@@ -1605,6 +1613,7 @@ SQL
 
                 $chatCommand = null;
                 $typingCommand = null;
+                $signalingCommand = null;
                 if (!(bool) ($presenceCommand['ok'] ?? false) && $commandError === 'unsupported_type') {
                     $chatCommand = videochat_chat_decode_client_frame($frame);
                     if ((bool) ($chatCommand['ok'] ?? false)) {
@@ -1673,8 +1682,58 @@ SQL
                             continue;
                         }
 
-                        $commandType = (string) ($typingCommand['type'] ?? $commandType);
-                        $commandError = (string) ($typingCommand['error'] ?? $commandError);
+                        if ((string) ($typingCommand['error'] ?? '') === 'unsupported_type') {
+                            $signalingCommand = videochat_signaling_decode_client_frame($frame);
+                            if ((bool) ($signalingCommand['ok'] ?? false)) {
+                                $signalingPublish = videochat_signaling_publish(
+                                    $presenceState,
+                                    $presenceConnection,
+                                    $signalingCommand
+                                );
+                                if (!(bool) ($signalingPublish['ok'] ?? false)) {
+                                    videochat_presence_send_frame(
+                                        $websocket,
+                                        [
+                                            'type' => 'system/error',
+                                            'code' => 'signaling_publish_failed',
+                                            'message' => 'Could not route signaling message.',
+                                            'details' => [
+                                                'error' => (string) ($signalingPublish['error'] ?? 'unknown'),
+                                                'type' => (string) ($signalingCommand['type'] ?? ''),
+                                                'target_user_id' => (int) ($signalingCommand['target_user_id'] ?? 0),
+                                                'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
+                                            ],
+                                            'time' => gmdate('c'),
+                                        ]
+                                    );
+                                    continue;
+                                }
+
+                                $eventSignal = is_array($signalingPublish['event']['signal'] ?? null)
+                                    ? $signalingPublish['event']['signal']
+                                    : [];
+                                videochat_presence_send_frame(
+                                    $websocket,
+                                    [
+                                        'type' => 'call/ack',
+                                        'signal_type' => (string) ($signalingCommand['type'] ?? ''),
+                                        'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
+                                        'target_user_id' => (int) ($signalingCommand['target_user_id'] ?? 0),
+                                        'signal_id' => (string) ($eventSignal['id'] ?? ''),
+                                        'server_time' => (string) ($eventSignal['server_time'] ?? gmdate('c')),
+                                        'sent_count' => (int) ($signalingPublish['sent_count'] ?? 0),
+                                        'time' => gmdate('c'),
+                                    ]
+                                );
+                                continue;
+                            }
+
+                            $commandType = (string) ($signalingCommand['type'] ?? $commandType);
+                            $commandError = (string) ($signalingCommand['error'] ?? $commandError);
+                        } else {
+                            $commandType = (string) ($typingCommand['type'] ?? $commandType);
+                            $commandError = (string) ($typingCommand['error'] ?? $commandError);
+                        }
                     } else {
                         $commandType = (string) ($chatCommand['type'] ?? $commandType);
                         $commandError = (string) ($chatCommand['error'] ?? $commandError);

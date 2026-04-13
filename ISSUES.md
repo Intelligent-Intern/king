@@ -183,7 +183,7 @@ Contract guardrails for this batch:
   done when: chat messages are broadcast to room peers, payload constraints are enforced server-side, and timestamp format is stable.
 - [x] `#24 Implement websocket typing indicator channel with debounce/expiry semantics and no self-echo.`
   done when: typing start/stop events are room-scoped, expire automatically, and never render to the sender.
-- [ ] `#25 Implement websocket signaling channel for call/offer, call/answer, call/ice, and call/hangup routed by target user id and room membership.`
+- [x] `#25 Implement websocket signaling channel for call/offer, call/answer, call/ice, and call/hangup routed by target user id and room membership.`
   done when: signaling is delivered only to authorized peers in room context and invalid targets are rejected.
 - [ ] `#26 Implement lobby queue state and moderator actions (allow/remove/allow-all) on the backend with role checks.`
   done when: queued users and moderator actions update state atomically and frontend receives corresponding realtime snapshots.
