@@ -181,7 +181,7 @@ Contract guardrails for this batch:
   done when: room membership snapshots stream to clients and reconnect path resynchronizes active room state.
 - [x] `#23 Implement websocket chat channel with room-scoped fanout, server timestamps, and bounded message validation.`
   done when: chat messages are broadcast to room peers, payload constraints are enforced server-side, and timestamp format is stable.
-- [ ] `#24 Implement websocket typing indicator channel with debounce/expiry semantics and no self-echo.`
+- [x] `#24 Implement websocket typing indicator channel with debounce/expiry semantics and no self-echo.`
   done when: typing start/stop events are room-scoped, expire automatically, and never render to the sender.
 - [ ] `#25 Implement websocket signaling channel for call/offer, call/answer, call/ice, and call/hangup routed by target user id and room membership.`
   done when: signaling is delivered only to authorized peers in room context and invalid targets are rejected.

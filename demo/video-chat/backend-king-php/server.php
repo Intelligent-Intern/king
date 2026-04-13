@@ -33,6 +33,7 @@ require_once __DIR__ . '/call_management.php';
 require_once __DIR__ . '/invite_codes.php';
 require_once __DIR__ . '/realtime_chat.php';
 require_once __DIR__ . '/realtime_presence.php';
+require_once __DIR__ . '/realtime_typing.php';
 require_once __DIR__ . '/user_directory.php';
 require_once __DIR__ . '/user_management.php';
 require_once __DIR__ . '/user_settings.php';
@@ -48,6 +49,7 @@ try {
 
 $activeWebsocketsBySession = [];
 $presenceState = videochat_presence_state_init();
+$typingState = videochat_typing_state_init();
 
 register_shutdown_function(static function () use ($log): void {
     $error = error_get_last();
@@ -256,6 +258,7 @@ $log('starting King HTTP/1 listener...');
 $handler = static function (array $request) use (
     &$activeWebsocketsBySession,
     &$presenceState,
+    &$typingState,
     $jsonResponse,
     $errorResponse,
     $methodFromRequest,
@@ -1516,6 +1519,8 @@ SQL
             &$presenceDetached,
             &$activeWebsocketsBySession,
             &$presenceState,
+            &$typingState,
+            &$presenceConnection,
             $authSessionId,
             $connectionId
         ): void {
@@ -1524,6 +1529,12 @@ SQL
             }
             $presenceDetached = true;
 
+            videochat_typing_clear_for_connection(
+                $typingState,
+                $presenceState,
+                (array) $presenceConnection,
+                'disconnect'
+            );
             videochat_unregister_active_websocket($activeWebsocketsBySession, $authSessionId, $connectionId);
             videochat_presence_remove_connection($presenceState, $connectionId);
         };
@@ -1556,6 +1567,10 @@ SQL
                         'message' => 'chat/message',
                         'ack' => 'chat/ack',
                     ],
+                    'typing' => [
+                        'start' => 'typing/start',
+                        'stop' => 'typing/stop',
+                    ],
                 ],
                 'auth' => [
                     'session' => $websocketAuth['session'] ?? null,
@@ -1567,6 +1582,7 @@ SQL
 
         try {
             while (true) {
+                videochat_typing_sweep_expired($typingState, $presenceState);
                 $frame = king_client_websocket_receive($websocket, 250);
                 if ($frame === false) {
                     $status = function_exists('king_client_websocket_get_status')
@@ -1588,6 +1604,7 @@ SQL
                 $commandError = (string) ($presenceCommand['error'] ?? 'invalid_command');
 
                 $chatCommand = null;
+                $typingCommand = null;
                 if (!(bool) ($presenceCommand['ok'] ?? false) && $commandError === 'unsupported_type') {
                     $chatCommand = videochat_chat_decode_client_frame($frame);
                     if ((bool) ($chatCommand['ok'] ?? false)) {
@@ -1630,8 +1647,38 @@ SQL
                         continue;
                     }
 
-                    $commandType = (string) ($chatCommand['type'] ?? $commandType);
-                    $commandError = (string) ($chatCommand['error'] ?? $commandError);
+                    if ((string) ($chatCommand['error'] ?? '') === 'unsupported_type') {
+                        $typingCommand = videochat_typing_decode_client_frame($frame);
+                        if ((bool) ($typingCommand['ok'] ?? false)) {
+                            $typingResult = videochat_typing_apply_command(
+                                $typingState,
+                                $presenceState,
+                                $presenceConnection,
+                                $typingCommand
+                            );
+                            if (!(bool) ($typingResult['ok'] ?? false)) {
+                                videochat_presence_send_frame(
+                                    $websocket,
+                                    [
+                                        'type' => 'system/error',
+                                        'code' => 'typing_publish_failed',
+                                        'message' => 'Could not publish typing state.',
+                                        'details' => [
+                                            'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
+                                        ],
+                                        'time' => gmdate('c'),
+                                    ]
+                                );
+                            }
+                            continue;
+                        }
+
+                        $commandType = (string) ($typingCommand['type'] ?? $commandType);
+                        $commandError = (string) ($typingCommand['error'] ?? $commandError);
+                    } else {
+                        $commandType = (string) ($chatCommand['type'] ?? $commandType);
+                        $commandError = (string) ($chatCommand['error'] ?? $commandError);
+                    }
                 }
 
                 if (!(bool) ($presenceCommand['ok'] ?? false)) {
@@ -1669,6 +1716,12 @@ SQL
                 }
 
                 if ($commandType === 'room/leave') {
+                    videochat_typing_clear_for_connection(
+                        $typingState,
+                        $presenceState,
+                        $presenceConnection,
+                        'room_leave'
+                    );
                     $presenceJoin = videochat_presence_join_room($presenceState, $presenceConnection, 'lobby');
                     $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
                     continue;
@@ -1699,6 +1752,15 @@ SQL
                         continue;
                     }
 
+                    $currentRoomId = videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? 'lobby'));
+                    if ($currentRoomId !== $targetRoomId) {
+                        videochat_typing_clear_for_connection(
+                            $typingState,
+                            $presenceState,
+                            $presenceConnection,
+                            'room_change'
+                        );
+                    }
                     $presenceJoin = videochat_presence_join_room($presenceState, $presenceConnection, $targetRoomId);
                     $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
                     continue;

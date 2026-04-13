@@ -69,6 +69,10 @@ Environment overrides:
 - `VIDEOCHAT_AVATAR_MAX_BYTES` (default `5242880`, clamped to `64KB..10MB`)
 - `VIDEOCHAT_INVITE_CALL_TTL_SECONDS` (default `21600`, clamped to `300..2592000`)
 - `VIDEOCHAT_INVITE_ROOM_TTL_SECONDS` (default `86400`, clamped to `300..2592000`)
+- `VIDEOCHAT_WS_CHAT_MAX_CHARS` (default `2000`, clamped to `1..8000`)
+- `VIDEOCHAT_WS_CHAT_MAX_BYTES` (default `8192`, clamped to `64..65536`)
+- `VIDEOCHAT_WS_TYPING_DEBOUNCE_MS` (default `500`, clamped to `100..5000`)
+- `VIDEOCHAT_WS_TYPING_EXPIRY_MS` (default `3000`, clamped to `500..15000`)
 - `KING_EXTENSION_PATH` (default `extension/modules/king.so` from repo root)
 - `PHP_BIN` (default `php`)
 
@@ -281,6 +285,8 @@ Presence channel contract on `WS /ws`:
   - `{"type":"room/leave"}`
   - `{"type":"room/snapshot/request"}`
   - `{"type":"chat/send","message":"...","client_message_id":"..."}` (optional `client_message_id`)
+  - `{"type":"typing/start"}`
+  - `{"type":"typing/stop"}`
   - `{"type":"ping"}`
 - behavior:
   - initial room snapshot is sent immediately after authenticated websocket attach
@@ -288,6 +294,7 @@ Presence channel contract on `WS /ws`:
   - chat fanout is room-scoped and server-authoritative (`chat/message` with stable server timestamps)
   - chat payload validation is bounded (`VIDEOCHAT_WS_CHAT_MAX_CHARS`, `VIDEOCHAT_WS_CHAT_MAX_BYTES`)
   - accepted chat publishes emit `chat/ack` to the sender with `message_id` and `sent_count`
+  - typing indicators are room-scoped, debounced, expire automatically, and never self-echo
   - reconnecting clients receive a fresh `room/snapshot` resync on attach
 
 ## Contract checks
@@ -368,4 +375,10 @@ Run the realtime chat contract test (room-scoped fanout + payload bounds + stabl
 
 ```bash
 demo/video-chat/backend-king-php/tests/realtime-chat-contract.sh
+```
+
+Run the realtime typing contract test (debounce + expiry + no-self-echo semantics):
+
+```bash
+demo/video-chat/backend-king-php/tests/realtime-typing-contract.sh
 ```
