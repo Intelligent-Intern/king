@@ -264,39 +264,66 @@ Execution guardrails for this extension:
 
 #### Track B3. Frontend Mock-Parity Binding (Vue)
 
+Parallelization policy for this track (only conflict-free lanes run in parallel):
+- each lane owns an explicit write-set; lanes must not edit foreign-owned files
+- if a lane needs shared contract changes (`src/router/index.js`, `src/stores/session.js`, `src/layouts/WorkspaceShell.vue`), that lane has priority ownership and others wait for rebases
+- inside a lane, leaves remain serial (`one checkbox -> one commit`)
+
+Lane `F1 auth+guards` (owner files: `src/stores/session.js`, `src/router/index.js`, `src/views/LoginView.vue`, `src/layouts/WorkspaceShell.vue`, `src/App.vue`):
 - [ ] `#57 Bind auth/session store to backend login/logout/refresh/session-check contracts and remove local identity fallback paths.`
   done when: session source is backend-authoritative and route guards rely on validated session payloads only.
 - [ ] `#58 Enforce route-level RBAC guards and role-aware navigation rendering for admin/user/moderator surfaces.`
   done when: forbidden routes redirect deterministically and hidden actions are not reachable via direct navigation.
+- [ ] `#67 Implement settings modal parity flows for avatar crop/upload, theme persistence, and time-format application.`
+  done when: settings persist backend-side and apply globally across tables/calendar/modals/workspace timestamps.
+
+Lane `F2 admin-overview+users` (owner files: `src/views/AdminOverviewView.vue`, `src/views/AdminUsersView.vue`):
 - [ ] `#59 Bind admin overview metrics/widgets to backend endpoints and remove hardcoded demo counters.`
   done when: displayed values come from live API contracts and loading/error states are explicit.
 - [ ] `#60 Bind admin user CRUD table to backend list/create/update/deactivate contracts with live pagination/search.`
   done when: all user-table actions are server-driven and row state reflects authoritative backend responses.
+- [ ] `#68 Implement admin branding settings parity flow (logo crop/upload) with admin-only policy boundaries.`
+  done when: branding writes are restricted to admin and visual updates are applied predictably across relevant UI surfaces.
+
+Lane `F3 calls+calendar+invites` (owner files: `src/views/AdminCallsView.vue`, `src/views/UserDashboardView.vue`):
 - [ ] `#61 Bind admin calls CRUD list and action bar (`new`, `schedule`, `edit`, `cancel`) to backend contracts with modal workflows.`
   done when: list/actions are fully live and modal flows map 1:1 to contract operations.
 - [ ] `#62 Integrate calendar scheduling flow in admin and user views with backend create/edit semantics.`
   done when: calendar interactions persist calls and reflect updates consistently across list and calendar views.
 - [ ] `#63 Bind invite popover/copy/join flows to backend invite endpoints and remove table-level invite code exposure.`
   done when: invite details are shown only in explicit popover/modal flows and copy/join behavior is contract-driven.
+
+Lane `F4 workspace` (owner files: `src/views/CallWorkspaceView.vue`):
 - [ ] `#64 Bind call workspace sidebars/tabs (`users`, `lobby`, `chat`) to realtime snapshots and server-driven pagination/search.`
   done when: tab content reflects live backend state and no tab relies on local fake data.
 - [ ] `#65 Bind workspace moderation actions (pin/mod/remove/allow) to RBAC-authorized backend operations with row-level feedback.`
   done when: action availability matches role policy and success/error states are explicit per row.
 - [ ] `#66 Bind control bar actions (raise hand, reactions, mic/cam/screen, hangup) to backend/realtime contracts with deterministic state transitions.`
   done when: control state no longer drifts from backend/realtime state and recovery after reconnect is consistent.
-- [ ] `#67 Implement settings modal parity flows for avatar crop/upload, theme persistence, and time-format application.`
-  done when: settings persist backend-side and apply globally across tables/calendar/modals/workspace timestamps.
-- [ ] `#68 Implement admin branding settings parity flow (logo crop/upload) with admin-only policy boundaries.`
-  done when: branding writes are restricted to admin and visual updates are applied predictably across relevant UI surfaces.
+
+Cross-track note:
+- [ ] `#56 Implement reconnect state machine across REST + WS contracts (`online`, `retrying`, `blocked`, `expired`).`
+  execution ownership: `F4 workspace` for frontend state transitions + backend realtime/auth contracts where needed; keep `#56` in one serial lane to avoid cross-lane merge conflicts.
 
 #### Track B4. Test, Hardening, Release Proof
 
+Parallelization policy for this track:
+- these lanes can run parallel only after feature lanes `F1..F4` are functionally stable for the touched surfaces
+- each lane keeps a disjoint write-set to stay conflict-free
+
+Lane `Q1 backend-integration` (owner files: `backend-king-php/tests/*integration*.php|sh` and new dedicated matrix files):
 - [ ] `#69 Add backend integration tests for auth/session/rbac/calls/invites/realtime negative+positive matrices on King runtime paths.`
   done when: test suite covers success and fail-closed boundaries across REST and websocket channels.
+
+Lane `Q2 e2e-journeys` (owner files: `frontend-vue` e2e suite and fixtures):
 - [ ] `#70 Add end-to-end mock-parity suite (admin flow + user flow + two-user call/chat/invite/reconnect journey).`
   done when: automated journey tests pass reproducibly and map directly to mock acceptance matrix.
+
+Lane `Q3 compose-ci-smoke` (owner files: `demo/video-chat/scripts/smoke.sh`, compose/CI workflow entries for video-chat stack):
 - [ ] `#71 Add compose-level smoke gates for new stack (`frontend-vue` + `backend-king-php` + sqlite) including migration and auth sanity checks.`
   done when: CI smoke proves stack boots, migrates, authenticates, and serves runtime/session endpoints deterministically.
+
+Lane `Q4 docs-closeout` (owner files: `demo/video-chat/README.md`, `backend-king-php/README.md`, `frontend-vue/README.md`, related handbook leaves):
 - [ ] `#72 Document final new-stack runtime boundaries and deprecate remaining legacy assumptions in video-chat docs.`
   done when: docs state active path honestly, list remaining gaps explicitly, and remove contradictory legacy-first wording.
 
