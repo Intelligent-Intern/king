@@ -4,7 +4,7 @@ This demo ships as a responsive multi-user workspace for room chat and browser
 video calls. The frontend and backend transport now bind to
 `@intelligentintern/iibin` from `node_modules`.
 
-Legacy baseline capabilities (historical reference only):
+Active new-stack baseline capabilities:
 
 - required login surface (display name) with persisted local session identity across reloads
 - explicit sign-out lifecycle that tears down websocket reconnect loops, call peers, and local media tracks
@@ -37,17 +37,23 @@ Legacy baseline capabilities (historical reference only):
 - shared UI token layer in `frontend/src/style.css` for color, spacing, border, radius, and elevation
 - normalized typography and control sizing (inputs/buttons/headlines/body text) from one baseline scale
 
-## Runtime Migration Status
+## Runtime Boundaries (Active vs Historical)
 
-The active development target is the new stack:
+Active development and runtime path:
 
 - `demo/video-chat/backend-king-php`
 - `demo/video-chat/frontend-vue`
 
-The older Node-based demo runtime stays in the repository only as historical
-reference and is not the active development path.
+Historical reference path (not active, not release-gated):
 
-Launch new scaffold:
+- `demo/video-chat/backend`
+- `demo/video-chat/frontend`
+- `demo/video-chat/backend/dev-backend.mjs`
+
+The older Node-based runtime stays in the repository only as historical
+reference and is not the active development target.
+
+Launch active stack:
 
 ```bash
 cd demo/video-chat/backend-king-php
@@ -59,12 +65,11 @@ cd demo/video-chat/frontend-vue
 npm run dev
 ```
 
-Legacy runtime boundaries (historical reference only):
+Historical-path caveats (historical reference only):
 
 - demo-local signaling backend (`backend/dev-backend.mjs`)
 - login/user directory is persisted in SQLite (`KING_DEMO_DB_PATH`)
 - websocket signaling identity is query-param based (`userId`, `name`, `color`, `room`) and not a hardened authn/authz model
-- websocket identity now requires the login-issued session token; `userId` without a matching token is rejected
 - no durable room/message persistence across backend restart
 - no TURN relay setup (STUN-only by default)
 - no production moderation/audit policy
@@ -127,19 +132,27 @@ Useful commands:
 
 ## Verification Closure
 
-Scaffold sanity checks:
+Automated parity and smoke checks:
 
 ```bash
-bash -n demo/video-chat/backend-king-php/run-dev.sh
-php -l demo/video-chat/backend-king-php/public/index.php
-node --check demo/video-chat/frontend-vue/scripts/dev-server.mjs
+bash demo/video-chat/scripts/smoke.sh
 ```
 
-Current scaffold scope:
+`demo/video-chat/scripts/smoke.sh` now verifies:
 
-- new backend entrypoint boots with King extension loaded and starts an on-wire HTTP/1 + WebSocket scaffold listener
-- new frontend entrypoint serves the bootstrap shell
-- full API/WS parity is implemented in follow-up V1 issues
+- backend and frontend launchers plus syntax checks
+- backend boot and live `/health` probe
+- login route handshake (`/api/auth/login`), authenticated session read, and logout revoke path
+- room join/presence contract (`realtime-presence-contract`)
+- room chat fanout contract (`realtime-chat-contract`)
+- invite redeem contract (`invite-code-redeem-contract`)
+- call signaling bootstrap contract (`realtime-signaling-contract`)
+- frontend dev-server boot probe
+
+Release-bound runtime honesty:
+
+- active path is `backend-king-php` + `frontend-vue`
+- historical Node runtime remains in-repo as reference only and is outside the active parity gate
 
 ## Docker Compose (Frontend + Backend)
 

@@ -193,7 +193,7 @@ Contract guardrails for this batch:
   done when: admin CRUD UI uses backend data only, pagination/search are fully live, and modal flows match mock behavior.
 - [x] `#29 Bind Vue call workspace (users/lobby/chat tabs, lists, pagination, control bar, invite/join) to new King websocket/REST contracts.`
   done when: workspace state is server-driven, sidebar/tab interactions remain responsive, and key mock interactions are preserved.
-- [ ] `#30 Add end-to-end parity + smoke verification for new stack and document honest runtime boundaries (active new path vs historical reference).`
+- [x] `#30 Add end-to-end parity + smoke verification for new stack and document honest runtime boundaries (active new path vs historical reference).`
   done when: automated checks cover login, room join, chat, invite redeem, call signaling bootstrap, and docs clearly state scope/limitations.
 
 ### V1. Mock-Parity Extension (Imported from Video Planning, Backend First)
