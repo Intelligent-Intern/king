@@ -29,6 +29,47 @@ namespace {
     function king_close($session): bool {}
 
     /**
+     * Create an RTP socket bound to a local UDP port for media reception.
+     * @return resource|false
+     */
+    function king_rtp_bind(string $host, int $port) {}
+
+    /**
+     * Get ICE credentials (ufrag and password) for an RTP socket.
+     * @return array{ufrag:string,pwd:string}|false
+     */
+    function king_rtp_ice_credentials($socket) {}
+
+    /**
+     * Get the DTLS fingerprint for an RTP socket.
+     * @return string|false
+     */
+    function king_rtp_dtls_fingerprint($socket) {}
+
+    /**
+     * Perform DTLS handshake with a remote peer.
+     * @return bool|false
+     */
+    function king_rtp_dtls_accept($socket, string $ip, int $port, int $timeout_ms) {}
+
+    /**
+     * Receive RTP data from a peer.
+     * @return array|false
+     */
+    function king_rtp_recv($socket, int $timeout_ms) {}
+
+    /**
+     * Send RTP data to a peer.
+     * @return bool|false
+     */
+    function king_rtp_send($socket, string $host, int $port, string $data) {}
+
+    /**
+     * Close an RTP socket.
+     */
+    function king_rtp_close($socket): void {}
+
+    /**
      * Send a one-shot client request through the active runtime dispatcher.
      * The current build routes real traffic only onto the active HTTP/1
      * runtime for absolute `http://` URLs and returns a normalized response
