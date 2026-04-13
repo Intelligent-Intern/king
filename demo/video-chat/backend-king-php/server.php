@@ -33,6 +33,8 @@ try {
     exit(1);
 }
 
+$activeWebsocketsBySession = [];
+
 register_shutdown_function(static function () use ($log): void {
     $error = error_get_last();
     if (is_array($error)) {
@@ -170,6 +172,7 @@ $runtimeEnvelope = static function () use ($appVersion, $appEnv, $databaseRuntim
         'auth' => [
             'login_endpoint' => '/api/auth/login',
             'session_endpoint' => '/api/auth/session',
+            'logout_endpoint' => '/api/auth/logout',
             'demo_users' => $databaseRuntime['demo_users'] ?? [],
             'rest_auth' => [
                 'authorization_header' => 'Authorization: Bearer <session_token>',
@@ -212,6 +215,7 @@ $log("websocket endpoint bound: ws://{$host}:{$port}{$wsPath}");
 $log('starting King HTTP/1 listener...');
 
 $handler = static function (array $request) use (
+    &$activeWebsocketsBySession,
     $jsonResponse,
     $errorResponse,
     $methodFromRequest,
@@ -437,6 +441,58 @@ SQL
         ]);
     }
 
+    if ($path === '/api/auth/logout') {
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/auth/logout.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        $sessionToken = is_string($apiAuthContext['token'] ?? null)
+            ? trim((string) $apiAuthContext['token'])
+            : '';
+        $sessionId = is_string($apiAuthContext['session']['id'] ?? null)
+            ? trim((string) $apiAuthContext['session']['id'])
+            : '';
+        $effectiveSessionId = $sessionToken !== '' ? $sessionToken : $sessionId;
+        if ($effectiveSessionId === '') {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'missing_session',
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $revocation = videochat_revoke_session($pdo, $effectiveSessionId);
+            if (!(bool) ($revocation['ok'] ?? false)) {
+                $reason = (string) ($revocation['reason'] ?? 'invalid_session');
+                return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                    'reason' => $reason,
+                ]);
+            }
+
+            $closedSockets = videochat_close_tracked_websockets_for_session(
+                $activeWebsocketsBySession,
+                $effectiveSessionId
+            );
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'result' => [
+                    'session_id' => $effectiveSessionId,
+                    'revocation_state' => (string) ($revocation['reason'] ?? 'revoked'),
+                    'revoked_at' => $revocation['revoked_at'] ?? gmdate('c'),
+                    'websocket_disconnects' => $closedSockets,
+                ],
+                'time' => gmdate('c'),
+            ]);
+        } catch (Throwable $error) {
+            return $errorResponse(500, 'auth_logout_failed', 'Logout failed due to a backend error.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+    }
+
     if ($path === '/' || $path === '/api/bootstrap') {
         return $jsonResponse(200, [
             'service' => 'video-chat-backend-king-php',
@@ -447,6 +503,7 @@ SQL
             'version_endpoint' => '/api/version',
             'login_endpoint' => '/api/auth/login',
             'session_endpoint' => '/api/auth/session',
+            'logout_endpoint' => '/api/auth/logout',
             'time' => gmdate('c'),
         ]);
     }
@@ -457,17 +514,36 @@ SQL
             return $authFailureResponse('websocket', (string) ($websocketAuth['reason'] ?? 'invalid_session'));
         }
 
-        $session = $request['session'] ?? null;
-        $streamId = (int) ($request['stream_id'] ?? 0);
-        if ($session !== null && $streamId > 0) {
-            king_server_on_cancel($session, $streamId, static function (): void {
-                // Keep cancel registration explicit for long-lived websocket flows.
-            });
+        $authSessionId = is_string($websocketAuth['token'] ?? null)
+            ? trim((string) $websocketAuth['token'])
+            : '';
+        if ($authSessionId === '') {
+            $authSessionId = is_string($websocketAuth['session']['id'] ?? null)
+                ? trim((string) $websocketAuth['session']['id'])
+                : '';
         }
 
+        $session = $request['session'] ?? null;
+        $streamId = (int) ($request['stream_id'] ?? 0);
         $websocket = king_server_upgrade_to_websocket($session, $streamId);
         if ($websocket === false) {
             return $errorResponse(400, 'websocket_upgrade_failed', 'Could not upgrade request to websocket.');
+        }
+
+        $connectionId = videochat_register_active_websocket(
+            $activeWebsocketsBySession,
+            $authSessionId,
+            $websocket
+        );
+
+        if ($session !== null && $streamId > 0 && $authSessionId !== '' && $connectionId !== '') {
+            king_server_on_cancel(
+                $session,
+                $streamId,
+                static function () use (&$activeWebsocketsBySession, $authSessionId, $connectionId): void {
+                    videochat_unregister_active_websocket($activeWebsocketsBySession, $authSessionId, $connectionId);
+                }
+            );
         }
 
         king_websocket_send(
@@ -475,6 +551,7 @@ SQL
             json_encode([
                 'type' => 'system/welcome',
                 'message' => 'video-chat King websocket scaffold connected',
+                'connection_id' => $connectionId,
                 'auth' => [
                     'session' => $websocketAuth['session'] ?? null,
                     'user' => $websocketAuth['user'] ?? null,

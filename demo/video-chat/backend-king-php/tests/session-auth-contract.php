@@ -66,6 +66,13 @@ SQL
         ':expires_at' => gmdate('c', $now + 3600),
         ':revoked_at' => gmdate('c', $now - 60),
     ]);
+    $insertSession->execute([
+        ':id' => 'sess_disabled_user_contract',
+        ':user_id' => $adminUserId,
+        ':issued_at' => gmdate('c', $now - 30),
+        ':expires_at' => gmdate('c', $now + 3600),
+        ':revoked_at' => null,
+    ]);
 
     $restMissing = videochat_authenticate_request(
         $pdo,
@@ -115,6 +122,61 @@ SQL
     videochat_test_assert($wsExpired['ok'] === false, 'WebSocket auth should reject expired session');
     videochat_test_assert($wsExpired['reason'] === 'expired_session', 'WebSocket expired reason mismatch');
 
+    $revocation = videochat_revoke_session($pdo, 'sess_valid_contract');
+    videochat_test_assert($revocation['ok'] === true, 'session revocation should succeed');
+    videochat_test_assert($revocation['reason'] === 'revoked', 'session revocation reason mismatch');
+    videochat_test_assert(is_string($revocation['revoked_at'] ?? null), 'session revocation timestamp missing');
+
+    $revokeAgain = videochat_revoke_session($pdo, 'sess_valid_contract');
+    videochat_test_assert($revokeAgain['ok'] === true, 'second session revocation should stay idempotent');
+    videochat_test_assert($revokeAgain['reason'] === 'already_revoked', 'second session revocation reason mismatch');
+
+    $restNowRevoked = videochat_authenticate_request(
+        $pdo,
+        [
+            'method' => 'GET',
+            'uri' => '/api/auth/session',
+            'headers' => ['Authorization' => 'Bearer sess_valid_contract'],
+        ],
+        'rest'
+    );
+    videochat_test_assert($restNowRevoked['ok'] === false, 'revoked session must fail auth checks');
+    videochat_test_assert($restNowRevoked['reason'] === 'revoked_session', 'revoked session auth reason mismatch');
+
+    $activeWebsockets = [];
+    $registeredA = videochat_register_active_websocket($activeWebsockets, 'sess_valid_contract', 'ws-a', 'conn-a');
+    $registeredB = videochat_register_active_websocket($activeWebsockets, 'sess_valid_contract', 'ws-b', 'conn-b');
+    $registeredOther = videochat_register_active_websocket($activeWebsockets, 'sess_other_contract', 'ws-c', 'conn-c');
+    videochat_test_assert($registeredA === 'conn-a', 'first websocket registration id mismatch');
+    videochat_test_assert($registeredB === 'conn-b', 'second websocket registration id mismatch');
+    videochat_test_assert($registeredOther === 'conn-c', 'other websocket registration id mismatch');
+
+    videochat_unregister_active_websocket($activeWebsockets, 'sess_valid_contract', 'conn-b');
+    videochat_test_assert(
+        !isset($activeWebsockets['sess_valid_contract']['conn-b']),
+        'unregister should remove the targeted websocket entry'
+    );
+
+    $closed = [];
+    $closedCount = videochat_close_tracked_websockets_for_session(
+        $activeWebsockets,
+        'sess_valid_contract',
+        static function (mixed $websocket) use (&$closed): bool {
+            $closed[] = $websocket;
+            return true;
+        }
+    );
+    videochat_test_assert($closedCount === 1, 'close helper should close remaining tracked websocket');
+    videochat_test_assert($closed === ['ws-a'], 'close helper should close the expected tracked websocket');
+    videochat_test_assert(
+        !isset($activeWebsockets['sess_valid_contract']),
+        'close helper should clear the session bucket after closing'
+    );
+    videochat_test_assert(
+        isset($activeWebsockets['sess_other_contract']['conn-c']),
+        'close helper should not close websockets from different sessions'
+    );
+
     $pdo->prepare('UPDATE users SET status = :status, updated_at = :updated_at WHERE id = :id')->execute([
         ':status' => 'disabled',
         ':updated_at' => gmdate('c'),
@@ -122,7 +184,7 @@ SQL
     ]);
     $wsDisabledUser = videochat_authenticate_request(
         $pdo,
-        ['method' => 'GET', 'uri' => '/ws?session=sess_valid_contract', 'headers' => []],
+        ['method' => 'GET', 'uri' => '/ws?session=sess_disabled_user_contract', 'headers' => []],
         'websocket'
     );
     videochat_test_assert($wsDisabledUser['ok'] === false, 'WebSocket auth should reject disabled users');

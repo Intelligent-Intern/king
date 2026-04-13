@@ -27,6 +27,7 @@ cd demo/video-chat/backend-king-php
 - `GET /api/version`
 - `POST /api/auth/login`
 - `GET /api/auth/session` (requires session token)
+- `POST /api/auth/logout` (requires session token)
 - `WS /ws`
 
 Default bind:
@@ -63,6 +64,7 @@ TOKEN="$(curl -sS -X POST http://127.0.0.1:18080/api/auth/login \
   -H 'content-type: application/json' \
   -d '{"email":"admin@intelligent-intern.com","password":"admin123"}' | jq -r '.session.token')"
 curl -sS http://127.0.0.1:18080/api/auth/session -H "authorization: Bearer ${TOKEN}"
+curl -sS -X POST http://127.0.0.1:18080/api/auth/logout -H "authorization: Bearer ${TOKEN}"
 ```
 
 ## Schema bootstrap
@@ -118,6 +120,9 @@ Failures use the same error envelope shape:
 
 `GET /api/auth/session` and every non-public `/api/*` path require a valid
 session token (`Authorization: Bearer ...` or `X-Session-Id: ...`).
+
+`POST /api/auth/logout` revokes the current session token and closes every
+tracked active websocket connection that belongs to that session.
 
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).

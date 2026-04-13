@@ -153,7 +153,7 @@ Contract guardrails for this batch:
   done when: login validates credentials against persisted users, returns session envelope, and rejects invalid attempts with stable error schema.
 - [x] `#9 Implement session issuance/validation middleware for REST and WebSocket handshake paths.`
   done when: authenticated endpoints require valid session state, websocket connect rejects invalid/expired sessions, and tests cover both transports.
-- [ ] `#10 Implement logout/session-revoke endpoint with immediate effect across active websocket connections.`
+- [x] `#10 Implement logout/session-revoke endpoint with immediate effect across active websocket connections.`
   done when: logout invalidates session server-side and forces connected realtime channels for that session to close.
 - [ ] `#11 Implement backend RBAC policy middleware (admin, moderator, user) across all new video-chat API surfaces.`
   done when: forbidden actions fail closed with typed errors and role-allowed paths are covered by tests.
