@@ -29,6 +29,7 @@ require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/avatar_upload.php';
 require_once __DIR__ . '/call_directory.php';
+require_once __DIR__ . '/call_management.php';
 require_once __DIR__ . '/user_directory.php';
 require_once __DIR__ . '/user_management.php';
 require_once __DIR__ . '/user_settings.php';
@@ -793,12 +794,6 @@ SQL
     }
 
     if ($path === '/api/calls') {
-        if ($method !== 'GET') {
-            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/calls.', [
-                'allowed_methods' => ['GET'],
-            ]);
-        }
-
         $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
         $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
         if ($authenticatedUserId <= 0) {
@@ -807,51 +802,102 @@ SQL
             ]);
         }
 
-        $queryParams = videochat_request_query_params($request);
-        $filters = videochat_calls_list_filters($queryParams, $authenticatedUserRole);
-        if (!(bool) ($filters['ok'] ?? false)) {
-            return $errorResponse(422, 'calls_list_validation_failed', 'Invalid call list query parameters.', [
-                'fields' => $filters['errors'] ?? [],
+        if ($method === 'GET') {
+            $queryParams = videochat_request_query_params($request);
+            $filters = videochat_calls_list_filters($queryParams, $authenticatedUserRole);
+            if (!(bool) ($filters['ok'] ?? false)) {
+                return $errorResponse(422, 'calls_list_validation_failed', 'Invalid call list query parameters.', [
+                    'fields' => $filters['errors'] ?? [],
+                ]);
+            }
+
+            try {
+                $pdo = $openDatabase();
+                $listing = videochat_list_calls($pdo, $authenticatedUserId, $filters);
+            } catch (Throwable) {
+                return $errorResponse(500, 'calls_list_failed', 'Could not load calls list.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            $rows = is_array($listing['rows'] ?? null) ? $listing['rows'] : [];
+            $total = (int) ($listing['total'] ?? 0);
+            $pageCount = (int) ($listing['page_count'] ?? 0);
+            $page = (int) ($filters['page'] ?? 1);
+            $pageSize = (int) ($filters['page_size'] ?? 10);
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'calls' => $rows,
+                'filters' => [
+                    'query' => (string) ($filters['query'] ?? ''),
+                    'status' => (string) ($filters['status'] ?? 'all'),
+                    'requested_scope' => (string) ($filters['requested_scope'] ?? 'my'),
+                    'effective_scope' => (string) ($filters['effective_scope'] ?? 'my'),
+                ],
+                'pagination' => [
+                    'page' => $page,
+                    'page_size' => $pageSize,
+                    'total' => $total,
+                    'page_count' => $pageCount,
+                    'returned' => count($rows),
+                    'has_prev' => $page > 1,
+                    'has_next' => $pageCount > 0 && $page < $pageCount,
+                ],
+                'sort' => [
+                    'primary' => 'starts_at_asc',
+                    'secondary' => 'created_at_asc',
+                    'tie_breaker' => 'id_asc',
+                ],
+                'time' => gmdate('c'),
+            ]);
+        }
+
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET or POST for /api/calls.', [
+                'allowed_methods' => ['GET', 'POST'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'calls_create_invalid_request_body', 'Call create payload must be a non-empty JSON object.', [
+                'reason' => $decodeError,
             ]);
         }
 
         try {
             $pdo = $openDatabase();
-            $listing = videochat_list_calls($pdo, $authenticatedUserId, $filters);
+            $createResult = videochat_create_call($pdo, $authenticatedUserId, $payload);
         } catch (Throwable) {
-            return $errorResponse(500, 'calls_list_failed', 'Could not load calls list.', [
+            return $errorResponse(500, 'calls_create_failed', 'Could not create call.', [
                 'reason' => 'internal_error',
             ]);
         }
 
-        $rows = is_array($listing['rows'] ?? null) ? $listing['rows'] : [];
-        $total = (int) ($listing['total'] ?? 0);
-        $pageCount = (int) ($listing['page_count'] ?? 0);
-        $page = (int) ($filters['page'] ?? 1);
-        $pageSize = (int) ($filters['page_size'] ?? 10);
+        $createReason = (string) ($createResult['reason'] ?? 'internal_error');
+        if (!(bool) ($createResult['ok'] ?? false)) {
+            if ($createReason === 'validation_failed') {
+                return $errorResponse(422, 'calls_create_validation_failed', 'Call create payload failed validation.', [
+                    'fields' => is_array($createResult['errors'] ?? null) ? $createResult['errors'] : [],
+                ]);
+            }
+            if ($createReason === 'not_found') {
+                return $errorResponse(404, 'calls_create_not_found', 'Call owner could not be resolved.', [
+                    'fields' => is_array($createResult['errors'] ?? null) ? $createResult['errors'] : [],
+                ]);
+            }
 
-        return $jsonResponse(200, [
+            return $errorResponse(500, 'calls_create_failed', 'Could not create call.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(201, [
             'status' => 'ok',
-            'calls' => $rows,
-            'filters' => [
-                'query' => (string) ($filters['query'] ?? ''),
-                'status' => (string) ($filters['status'] ?? 'all'),
-                'requested_scope' => (string) ($filters['requested_scope'] ?? 'my'),
-                'effective_scope' => (string) ($filters['effective_scope'] ?? 'my'),
-            ],
-            'pagination' => [
-                'page' => $page,
-                'page_size' => $pageSize,
-                'total' => $total,
-                'page_count' => $pageCount,
-                'returned' => count($rows),
-                'has_prev' => $page > 1,
-                'has_next' => $pageCount > 0 && $page < $pageCount,
-            ],
-            'sort' => [
-                'primary' => 'starts_at_asc',
-                'secondary' => 'created_at_asc',
-                'tie_breaker' => 'id_asc',
+            'result' => [
+                'state' => 'created',
+                'call' => $createResult['call'] ?? null,
             ],
             'time' => gmdate('c'),
         ]);
@@ -1060,6 +1106,7 @@ SQL
             'runtime_endpoint' => '/api/runtime',
             'version_endpoint' => '/api/version',
             'calls_endpoint' => '/api/calls',
+            'call_create_endpoint' => '/api/calls',
             'login_endpoint' => '/api/auth/login',
             'session_endpoint' => '/api/auth/session',
             'logout_endpoint' => '/api/auth/logout',

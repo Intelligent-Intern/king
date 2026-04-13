@@ -167,7 +167,7 @@ Contract guardrails for this batch:
   done when: valid image uploads persist and invalid/unsafe uploads are rejected fail-closed.
 - [x] `#16 Implement calls list endpoint with filters for my-calls/all-calls, search by title, status filtering, and pagination.`
   done when: response matches table requirements with stable totals and deterministic ordering.
-- [ ] `#17 Implement create-call endpoint supporting title, start/end times, internal participant ids, and external invitee rows.`
+- [x] `#17 Implement create-call endpoint supporting title, start/end times, internal participant ids, and external invitee rows.`
   done when: call creation persists all participant mappings and returns a single normalized call payload.
 - [ ] `#18 Implement edit-call endpoint that updates schedule/participants without triggering global invite resend by default.`
   done when: edit updates persisted call fields only and invite-send remains an explicit separate action.

@@ -29,6 +29,7 @@ cd demo/video-chat/backend-king-php
 - `GET /api/auth/session` (requires session token)
 - `POST /api/auth/logout` (requires session token)
 - `GET /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
+- `POST /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
 - `GET /api/admin/ping` (requires `admin` role)
 - `GET /api/admin/users` (requires `admin` role)
 - `POST /api/admin/users` (requires `admin` role)
@@ -194,6 +195,17 @@ Response includes:
 - `pagination` (`page`, `page_size`, `total`, `page_count`, `returned`, `has_prev`, `has_next`)
 - deterministic `sort` metadata
 
+`POST /api/calls` create contract:
+
+- required fields: `title`, `starts_at`, `ends_at`
+- optional fields:
+  - `room_id` (default `lobby`)
+  - `internal_participant_user_ids` (array of active user ids)
+  - `external_participants` (`[{email, display_name}]`)
+- owner is always included as internal participant mapping
+- validation failures: `422 calls_create_validation_failed` with `error.details.fields`
+- success: `201`, with `result.call` containing normalized owner + participants + totals
+
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).
 
@@ -233,4 +245,10 @@ Run the calls list contract test (my/all scope + search/status filters + determi
 
 ```bash
 demo/video-chat/backend-king-php/tests/calls-list-contract.sh
+```
+
+Run the call create contract test (create payload validation + participant persistence + normalized response):
+
+```bash
+demo/video-chat/backend-king-php/tests/call-create-contract.sh
 ```
