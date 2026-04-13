@@ -6,6 +6,7 @@ declare(strict_types=1);
  * @return array{
  *   ok: bool,
  *   query: string,
+ *   order: string,
  *   page: int,
  *   page_size: int,
  *   limit: int,
@@ -20,11 +21,19 @@ function videochat_admin_user_list_filters(array $queryParams): array
     if (strlen($query) > 120) {
         $query = substr($query, 0, 120);
     }
+    $orderRaw = $queryParams['order'] ?? 'role_then_name_asc';
+    $order = is_string($orderRaw) ? strtolower(trim($orderRaw)) : 'role_then_name_asc';
 
     $pageRaw = $queryParams['page'] ?? '1';
     $pageSizeRaw = $queryParams['page_size'] ?? '10';
 
     $errors = [];
+
+    $allowedOrderValues = ['role_then_name_asc', 'role_then_name_desc'];
+    if (!in_array($order, $allowedOrderValues, true)) {
+        $errors['order'] = 'must_be_one_of_role_then_name_asc_or_role_then_name_desc';
+        $order = 'role_then_name_asc';
+    }
 
     $page = filter_var($pageRaw, FILTER_VALIDATE_INT);
     if (!is_int($page) || $page < 1) {
@@ -44,6 +53,7 @@ function videochat_admin_user_list_filters(array $queryParams): array
     return [
         'ok' => $errors === [],
         'query' => $query,
+        'order' => $order,
         'page' => $page,
         'page_size' => $pageSize,
         'limit' => $limit,
@@ -70,11 +80,15 @@ function videochat_admin_user_list_filters(array $queryParams): array
  *   page_count: int
  * }
  */
-function videochat_admin_list_users(PDO $pdo, string $query, int $page, int $pageSize): array
+function videochat_admin_list_users(PDO $pdo, string $query, int $page, int $pageSize, string $order = 'role_then_name_asc'): array
 {
     $effectivePage = max(1, $page);
     $effectivePageSize = max(1, min(100, $pageSize));
     $offset = ($effectivePage - 1) * $effectivePageSize;
+    $effectiveOrder = in_array($order, ['role_then_name_asc', 'role_then_name_desc'], true)
+        ? $order
+        : 'role_then_name_asc';
+    $displayNameDirection = $effectiveOrder === 'role_then_name_desc' ? 'DESC' : 'ASC';
 
     $search = trim($query);
     $where = '';
@@ -122,7 +136,7 @@ ORDER BY
         WHEN 'moderator' THEN 1
         ELSE 2
     END ASC,
-    lower(users.display_name) ASC,
+    lower(users.display_name) {$displayNameDirection},
     users.id ASC
 LIMIT :limit OFFSET :offset
 SQL;

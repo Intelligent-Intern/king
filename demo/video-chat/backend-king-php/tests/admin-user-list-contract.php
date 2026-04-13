@@ -77,12 +77,17 @@ SQL
         'page_size' => '5',
     ]);
     videochat_admin_user_list_assert($filters['ok'] === true, 'valid filters should pass');
+    videochat_admin_user_list_assert(
+        (string) ($filters['order'] ?? '') === 'role_then_name_asc',
+        'default order should be role_then_name_asc'
+    );
 
     $listing = videochat_admin_list_users(
         $pdo,
         (string) $filters['query'],
         (int) $filters['page'],
-        (int) $filters['page_size']
+        (int) $filters['page_size'],
+        (string) $filters['order']
     );
     $rows = $listing['rows'];
     videochat_admin_user_list_assert(is_array($rows), 'listing rows must be an array');
@@ -108,9 +113,33 @@ SQL
         'moderator search result email mismatch'
     );
 
+    $ascSearch = videochat_admin_list_users($pdo, 'contract user', 1, 100, 'role_then_name_asc');
+    $descSearch = videochat_admin_list_users($pdo, 'contract user', 1, 100, 'role_then_name_desc');
+    $ascRows = is_array($ascSearch['rows'] ?? null) ? $ascSearch['rows'] : [];
+    $descRows = is_array($descSearch['rows'] ?? null) ? $descSearch['rows'] : [];
+    videochat_admin_user_list_assert(count($ascRows) === 15, 'asc search should include all inserted contract users');
+    videochat_admin_user_list_assert(count($descRows) === 15, 'desc search should include all inserted contract users');
+    videochat_admin_user_list_assert(
+        (string) ($ascRows[0]['display_name'] ?? '') === 'Contract User 01',
+        'asc order should start with Contract User 01'
+    );
+    videochat_admin_user_list_assert(
+        (string) ($descRows[0]['display_name'] ?? '') === 'Contract User 15',
+        'desc order should start with Contract User 15'
+    );
+    videochat_admin_user_list_assert(
+        (string) ($ascRows[14]['display_name'] ?? '') === 'Contract User 15',
+        'asc order should end with Contract User 15'
+    );
+    videochat_admin_user_list_assert(
+        (string) ($descRows[14]['display_name'] ?? '') === 'Contract User 01',
+        'desc order should end with Contract User 01'
+    );
+
     $invalidFilters = videochat_admin_user_list_filters([
         'page' => '0',
         'page_size' => '500',
+        'order' => 'invalid',
     ]);
     videochat_admin_user_list_assert($invalidFilters['ok'] === false, 'invalid filters should fail');
     videochat_admin_user_list_assert(
@@ -120,6 +149,10 @@ SQL
     videochat_admin_user_list_assert(
         (string) ($invalidFilters['errors']['page_size'] ?? '') === 'must_be_integer_between_1_and_100',
         'invalid page_size error mismatch'
+    );
+    videochat_admin_user_list_assert(
+        (string) ($invalidFilters['errors']['order'] ?? '') === 'must_be_one_of_role_then_name_asc_or_role_then_name_desc',
+        'invalid order error mismatch'
     );
 
     @unlink($databasePath);

@@ -46,7 +46,8 @@ function videochat_handle_user_routes(
                     $pdo,
                     (string) ($filters['query'] ?? ''),
                     (int) ($filters['page'] ?? 1),
-                    (int) ($filters['page_size'] ?? 10)
+                    (int) ($filters['page_size'] ?? 10),
+                    (string) ($filters['order'] ?? 'role_then_name_asc')
                 );
             } catch (Throwable $error) {
                 return $errorResponse(500, 'admin_user_list_failed', 'Could not load admin user list.', [
@@ -59,12 +60,17 @@ function videochat_handle_user_routes(
             $pageCount = (int) ($listing['page_count'] ?? 0);
             $page = (int) ($filters['page'] ?? 1);
             $pageSize = (int) ($filters['page_size'] ?? 10);
+            $order = (string) ($filters['order'] ?? 'role_then_name_asc');
+            $displayNameSecondary = $order === 'role_then_name_desc'
+                ? 'display_name_desc'
+                : 'display_name_asc';
 
             return $jsonResponse(200, [
                 'status' => 'ok',
                 'users' => $rows,
                 'pagination' => [
                     'query' => (string) ($filters['query'] ?? ''),
+                    'order' => $order,
                     'page' => $page,
                     'page_size' => $pageSize,
                     'total' => $total,
@@ -75,7 +81,7 @@ function videochat_handle_user_routes(
                 ],
                 'sort' => [
                     'role_priority' => ['admin', 'moderator', 'user'],
-                    'secondary' => 'display_name_asc',
+                    'secondary' => $displayNameSecondary,
                     'tie_breaker' => 'id_asc',
                 ],
                 'time' => gmdate('c'),

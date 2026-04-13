@@ -187,14 +187,15 @@ RBAC-protected endpoints fail closed with typed `403` errors:
 `GET /api/admin/users` query contract:
 
 - `query` (optional, aliases: `q`)
+- `order` (`role_then_name_asc` or `role_then_name_desc`, default `role_then_name_asc`)
 - `page` (integer, default `1`)
 - `page_size` (integer `1..100`, default `10`)
 
 Response includes:
 
 - `users[]`
-- `pagination` (`query`, `page`, `page_size`, `total`, `page_count`, `returned`, `has_prev`, `has_next`)
-- deterministic `sort` metadata
+- `pagination` (`query`, `order`, `page`, `page_size`, `total`, `page_count`, `returned`, `has_prev`, `has_next`)
+- deterministic `sort` metadata (`role_priority`, `secondary`, `tie_breaker`)
 
 `POST /api/admin/users` + `PATCH /api/admin/users/{id}` mutation contract:
 
