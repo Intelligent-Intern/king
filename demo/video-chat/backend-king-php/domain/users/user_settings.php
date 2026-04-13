@@ -3,6 +3,14 @@
 declare(strict_types=1);
 
 /**
+ * @return array<int, string>
+ */
+function videochat_allowed_user_settings_patch_fields(): array
+{
+    return ['display_name', 'time_format', 'theme', 'avatar_path'];
+}
+
+/**
  * @return array{
  *   id: int,
  *   email: string,
@@ -66,6 +74,14 @@ function videochat_validate_user_settings_patch(array $payload): array
 {
     $errors = [];
     $data = [];
+    $allowedPatchFields = videochat_allowed_user_settings_patch_fields();
+
+    foreach ($payload as $field => $_value) {
+        $fieldName = is_string($field) ? trim($field) : (string) $field;
+        if ($fieldName === '' || !in_array($fieldName, $allowedPatchFields, true)) {
+            $errors[$fieldName === '' ? 'payload' : $fieldName] = 'field_not_updatable';
+        }
+    }
 
     if (array_key_exists('display_name', $payload)) {
         $displayName = trim((string) $payload['display_name']);

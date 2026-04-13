@@ -90,6 +90,16 @@ SQL
         'invalid theme error mismatch'
     );
 
+    $unknownFieldPayload = videochat_update_user_settings($pdo, $userId, [
+        'role' => 'admin',
+    ]);
+    videochat_user_settings_assert($unknownFieldPayload['ok'] === false, 'unknown-field settings update should fail');
+    videochat_user_settings_assert($unknownFieldPayload['reason'] === 'validation_failed', 'unknown-field settings reason mismatch');
+    videochat_user_settings_assert(
+        (string) ($unknownFieldPayload['errors']['role'] ?? '') === 'field_not_updatable',
+        'unknown-field settings error mismatch'
+    );
+
     $validUpdate = videochat_update_user_settings($pdo, $userId, [
         'display_name' => 'Call User Updated',
         'time_format' => '12h',

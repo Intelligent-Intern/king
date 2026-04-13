@@ -226,7 +226,7 @@ Execution guardrails for this extension:
   done when: updates persist safely, forbidden field mutations fail closed, and audit-relevant fields are normalized.
 - [x] `#40 Implement admin user deactivate/reactivate endpoint with session invalidation policy for disabled accounts.`
   done when: deactivated users lose active session validity and cannot access protected REST/WS flows.
-- [ ] `#41 Implement profile/settings endpoint for current user (display name, avatar ref, theme, time format).`
+- [x] `#41 Implement profile/settings endpoint for current user (display name, avatar ref, theme, time format).`
   done when: profile changes persist and session-check payload reflects updated preferences.
 - [ ] `#42 Implement avatar upload endpoint with type/size validation and safe storage semantics.`
   done when: valid images persist, unsafe payloads are rejected fail-closed, and stored path references are deterministic.

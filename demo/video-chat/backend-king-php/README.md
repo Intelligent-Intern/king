@@ -212,6 +212,7 @@ Response includes:
 `GET /api/user/settings` + `PATCH /api/user/settings` contract:
 
 - managed fields: `display_name`, `avatar_path`, `time_format`, `theme`
+- unsupported fields fail closed with `field_not_updatable`
 - validation failures: `422 user_settings_validation_failed` with `error.details.fields`
 - missing authenticated user row: `404 user_not_found`
 - success: `settings` plus normalized `user` envelope
@@ -425,6 +426,12 @@ Run the user settings contract test (settings persistence + reauth/session reloa
 
 ```bash
 demo/video-chat/backend-king-php/tests/user-settings-contract.sh
+```
+
+Run the user settings endpoint contract test (`GET/PATCH /api/user/settings` + session-check parity):
+
+```bash
+demo/video-chat/backend-king-php/tests/user-settings-endpoint-contract.sh
 ```
 
 Run the avatar upload contract test (type/size validation + safe storage path handling):

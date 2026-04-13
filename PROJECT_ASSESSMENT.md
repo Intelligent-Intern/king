@@ -150,6 +150,7 @@ The current tree already proves:
 - the active video-chat admin create surface now enforces one explicit `POST /api/admin/users` endpoint contract with typed validation failures, duplicate-email conflict envelopes, and omitted-role defaulting to `user`, proven by `backend-king-php/tests/admin-user-create-contract.sh`
 - the active video-chat admin update surface now enforces one explicit `PATCH /api/admin/users/{id}` endpoint contract with fail-closed unsupported-field rejection (`field_not_updatable`), normalized role/status/profile mutations, and deterministic not-found plus duplicate-email conflict envelopes, proven by `backend-king-php/tests/admin-user-update-contract.sh`
 - the active video-chat admin status surface now enforces one explicit `POST /api/admin/users/{id}/deactivate|reactivate` contract with idempotent state transitions, deterministic not-found envelopes, disabled-user session invalidation, and explicit preservation of revoked-session invalidity after reactivation, proven by `backend-king-php/tests/admin-user-status-contract.sh`
+- the active video-chat user-settings surface now enforces one explicit `GET/PATCH /api/user/settings` contract over managed profile fields with fail-closed unsupported-field rejection (`field_not_updatable`) and explicit session-check parity so persisted settings are reflected by `GET /api/auth/session` user envelopes, proven by `backend-king-php/tests/user-settings-endpoint-contract.sh`
 
 ## What Is Still Not Finished
 
