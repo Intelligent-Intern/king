@@ -464,6 +464,12 @@ Run the call create contract test (create payload validation + participant persi
 demo/video-chat/backend-king-php/tests/call-create-contract.sh
 ```
 
+Run the call create endpoint contract test (`POST /api/calls` with internal/external participants + atomic persistence expectations):
+
+```bash
+demo/video-chat/backend-king-php/tests/call-create-endpoint-contract.sh
+```
+
 Run the call update contract test (schedule/participant updates + no implicit invite resend):
 
 ```bash

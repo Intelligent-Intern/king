@@ -232,7 +232,7 @@ Execution guardrails for this extension:
   done when: valid images persist, unsafe payloads are rejected fail-closed, and stored path references are deterministic.
 - [x] `#43 Implement calls list endpoint with owner-bound filter rules and deterministic paging contract.`
   done when: admin/user list semantics are role-safe, totals remain stable, and ordering is deterministic.
-- [ ] `#44 Implement create-call endpoint with internal participant ids and external invitee rows under one transaction boundary.`
+- [x] `#44 Implement create-call endpoint with internal participant ids and external invitee rows under one transaction boundary.`
   done when: call and participant rows persist atomically and response returns one normalized call payload.
 - [ ] `#45 Implement edit-call endpoint with participant diff updates and no implicit global invite resend.`
   done when: edits only mutate targeted schedule/participant state and resend remains explicit separate action.
