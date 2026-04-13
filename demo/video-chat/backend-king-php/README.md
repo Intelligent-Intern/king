@@ -29,6 +29,7 @@ cd demo/video-chat/backend-king-php
 - `GET /api/auth/session` (requires session token)
 - `POST /api/auth/logout` (requires session token)
 - `GET /api/admin/ping` (requires `admin` role)
+- `GET /api/admin/users` (requires `admin` role)
 - `GET /api/moderation/ping` (requires `admin` or `moderator` role)
 - `GET /api/user/ping` (requires authenticated `admin`/`moderator`/`user` role)
 - `WS /ws`
@@ -133,6 +134,18 @@ RBAC-protected endpoints fail closed with typed `403` errors:
 - `code`: `websocket_forbidden` for websocket upgrade
 - details include `reason`, `role`, `allowed_roles`, and `path`
 
+`GET /api/admin/users` query contract:
+
+- `query` (optional, aliases: `q`)
+- `page` (integer, default `1`)
+- `page_size` (integer `1..100`, default `10`)
+
+Response includes:
+
+- `users[]`
+- `pagination` (`query`, `page`, `page_size`, `total`, `page_count`, `returned`, `has_prev`, `has_next`)
+- deterministic `sort` metadata
+
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).
 
@@ -142,4 +155,10 @@ Run the auth contract test (REST + websocket token validation coverage):
 
 ```bash
 demo/video-chat/backend-king-php/tests/session-auth-contract.sh
+```
+
+Run the admin user list contract test (search + pagination + deterministic sorting):
+
+```bash
+demo/video-chat/backend-king-php/tests/admin-user-list-contract.sh
 ```

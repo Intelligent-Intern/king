@@ -185,6 +185,7 @@ SQLite data is persisted in a mounted Docker volume:
 - backend session endpoint: `GET http://127.0.0.1:18080/api/auth/session` (requires token)
 - backend logout endpoint: `POST http://127.0.0.1:18080/api/auth/logout` (requires token, revokes session + closes session websocket connections)
 - backend RBAC admin probe: `GET http://127.0.0.1:18080/api/admin/ping` (admin only)
+- backend admin users list: `GET http://127.0.0.1:18080/api/admin/users?query=&page=1&page_size=10` (admin only)
 - backend RBAC moderation probe: `GET http://127.0.0.1:18080/api/moderation/ping` (admin/moderator)
 - backend RBAC user probe: `GET http://127.0.0.1:18080/api/user/ping` (authenticated admin/moderator/user)
 - backend websocket endpoint: `WS ws://127.0.0.1:18080/ws`

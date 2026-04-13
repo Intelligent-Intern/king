@@ -25,6 +25,7 @@ $log = static function (string $message): void {
 
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/user_directory.php';
 
 try {
     $databaseRuntime = videochat_bootstrap_sqlite($dbPath);
@@ -533,6 +534,63 @@ SQL
         ]);
     }
 
+    if ($path === '/api/admin/users') {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/admin/users.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        $queryParams = videochat_request_query_params($request);
+        $filters = videochat_admin_user_list_filters($queryParams);
+        if (!(bool) ($filters['ok'] ?? false)) {
+            return $errorResponse(422, 'admin_user_list_validation_failed', 'Invalid admin user list query parameters.', [
+                'fields' => $filters['errors'] ?? [],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $listing = videochat_admin_list_users(
+                $pdo,
+                (string) ($filters['query'] ?? ''),
+                (int) ($filters['page'] ?? 1),
+                (int) ($filters['page_size'] ?? 10)
+            );
+        } catch (Throwable $error) {
+            return $errorResponse(500, 'admin_user_list_failed', 'Could not load admin user list.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        $rows = is_array($listing['rows'] ?? null) ? $listing['rows'] : [];
+        $total = (int) ($listing['total'] ?? 0);
+        $pageCount = (int) ($listing['page_count'] ?? 0);
+        $page = (int) ($filters['page'] ?? 1);
+        $pageSize = (int) ($filters['page_size'] ?? 10);
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'users' => $rows,
+            'pagination' => [
+                'query' => (string) ($filters['query'] ?? ''),
+                'page' => $page,
+                'page_size' => $pageSize,
+                'total' => $total,
+                'page_count' => $pageCount,
+                'returned' => count($rows),
+                'has_prev' => $page > 1,
+                'has_next' => $pageCount > 0 && $page < $pageCount,
+            ],
+            'sort' => [
+                'role_priority' => ['admin', 'moderator', 'user'],
+                'secondary' => 'display_name_asc',
+                'tie_breaker' => 'id_asc',
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if ($path === '/api/moderation/ping') {
         if ($method !== 'GET') {
             return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/moderation/ping.', [
@@ -575,6 +633,7 @@ SQL
             'session_endpoint' => '/api/auth/session',
             'logout_endpoint' => '/api/auth/logout',
             'admin_probe_endpoint' => '/api/admin/ping',
+            'admin_users_endpoint' => '/api/admin/users',
             'moderation_probe_endpoint' => '/api/moderation/ping',
             'user_probe_endpoint' => '/api/user/ping',
             'time' => gmdate('c'),
