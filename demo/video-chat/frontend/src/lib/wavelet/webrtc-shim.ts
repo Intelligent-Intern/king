@@ -143,7 +143,10 @@ export class WaveletCodec {
         (this.stats.avgEncodeTimeMs * (this.stats.framesProcessed - 1) + encodeTime) / this.stats.framesProcessed
       this.stats.compressionRatio = (width * height * 4) / Math.max(encodedData.byteLength, 1)
 
-      if (frameData.type === 'keyframe') {
+      // Read actual frame type from inner payload byte 5 (0=key, 1=delta).
+      // The WASM encoder wrapper always reports 'keyframe' so we can't trust frameData.type.
+      const innerByte5 = frameData.data.byteLength > 5 ? new Uint8Array(frameData.data)[5] : 0
+      if (innerByte5 === 0) {
         this.stats.keyFrames++
       } else {
         this.stats.deltaFrames++

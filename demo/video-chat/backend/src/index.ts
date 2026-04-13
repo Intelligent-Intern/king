@@ -52,7 +52,7 @@ app.use(express.json({ limit: '1mb' }))
 
 const limiter = rateLimit({
   windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 900000),
-  max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 100),
+  max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 1000),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'too_many_requests', message: 'Too many requests, please try again later.' },

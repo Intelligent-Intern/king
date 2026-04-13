@@ -41,6 +41,8 @@ PHP_MINIT_FUNCTION(king)
     le_king_request_context = zend_register_list_destructors_ex(
         king_http1_request_context_dtor, NULL, "King\\HttpRequestContext", module_number);
 
+    king_rtp_minit(module_number);
+
     king_ce_exception = king_register_exception(
         "King\\Exception", zend_ce_exception);
 
