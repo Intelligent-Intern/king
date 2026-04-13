@@ -199,10 +199,7 @@ static SSL_CTX *king_dtls_ctx_create(char *fp_out, size_t fp_len)
                        NULL);
     /* Accept any client cert (fingerprint verified out-of-band via SDP) */
     SSL_CTX_set_verify_depth(ctx, 0);
-    SSL_CTX_set_cert_verify_callback(ctx,
-        (int (*)(X509_STORE_CTX *, void *))([](X509_STORE_CTX *s, void *a){
-            (void)s; (void)a; return 1;
-        }), NULL);
+    SSL_CTX_set_cert_verify_callback(ctx, NULL, NULL);
 
     X509_free(cert);
     EVP_PKEY_free(pkey);
