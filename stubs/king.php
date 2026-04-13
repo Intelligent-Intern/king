@@ -64,7 +64,10 @@ namespace {
      */
     function king_rtp_send($socket, string $host, int $port, string $data) {}
 
-    
+    /**
+     * Close an RTP socket.
+     */
+    function king_rtp_close($socket) {}
 
     /**
      * Send a one-shot client request through the active runtime dispatcher.
