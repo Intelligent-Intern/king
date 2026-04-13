@@ -34,6 +34,7 @@
 #include "include/king_globals.h"
 #include "include/king_init.h"
 
+#include "media/rtp.h"
 #include "media/rtp.c"
 
 #include "php_king/state.inc"
