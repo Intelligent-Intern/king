@@ -21,6 +21,7 @@ log "Root: ${ROOT_DIR}"
 
 run_step "backend launcher syntax" bash -lc "bash -n '${BACKEND_DIR}/run-dev.sh'"
 run_step "backend php syntax" bash -lc "php -l '${BACKEND_DIR}/public/index.php'"
+run_step "backend server php syntax" bash -lc "php -l '${BACKEND_DIR}/server.php'"
 run_step "frontend launcher syntax" bash -lc "node --check '${FRONTEND_DIR}/scripts/dev-server.mjs'"
 
 BACKEND_PORT="${VIDEOCHAT_KING_PORT:-18080}"
@@ -33,7 +34,7 @@ run_step "backend scaffold boot check" bash -lc "
   pid=\$!
   trap 'kill \"\${pid}\" >/dev/null 2>&1 || true; rm -f \"\${tmp_log}\"' EXIT
   for _ in {1..30}; do
-    if curl -fsS \"http://127.0.0.1:${BACKEND_PORT}/\" >/dev/null; then
+    if curl -fsS \"http://127.0.0.1:${BACKEND_PORT}/health\" >/dev/null; then
       kill \"\${pid}\" >/dev/null 2>&1 || true
       wait \"\${pid}\" 2>/dev/null || true
       rm -f \"\${tmp_log}\"

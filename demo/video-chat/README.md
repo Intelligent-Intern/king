@@ -137,7 +137,7 @@ node --check demo/video-chat/frontend-vue/scripts/dev-server.mjs
 
 Current scaffold scope:
 
-- new backend entrypoint boots on PHP built-in server
+- new backend entrypoint boots with King extension loaded and starts an on-wire HTTP/1 + WebSocket scaffold listener
 - new frontend entrypoint serves the bootstrap shell
 - full API/WS parity is implemented in follow-up V1 issues
 
@@ -149,6 +149,8 @@ Use direct local commands above until compose wiring lands.
 ## Runtime Notes
 
 - backend scaffold endpoint: `GET http://127.0.0.1:18080/`
+- backend health endpoint: `GET http://127.0.0.1:18080/health`
+- backend websocket endpoint: `WS ws://127.0.0.1:18080/ws`
 - frontend scaffold endpoint: `http://127.0.0.1:5174`
 - the previous Node runtime remains in-repo only as historical reference, not as active dev path
 

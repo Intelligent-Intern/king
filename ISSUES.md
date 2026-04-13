@@ -141,7 +141,7 @@ Contract guardrails for this batch:
   done when: local/dev docs and run commands point to the new stack only, while legacy is explicitly labeled historical reference.
 - [x] `#3 Scaffold Vue 3 + Vite frontend shell with route map for login, admin overview, admin user management, admin calls CRUD, user dashboard, and call workspace.`
   done when: routes resolve, shared app shell renders, and route guards are wired for authenticated/role-aware navigation.
-- [ ] `#4 Scaffold King PHP backend bootstrap for HTTP + WebSocket video-chat services with one reproducible local start command.`
+- [x] `#4 Scaffold King PHP backend bootstrap for HTTP + WebSocket video-chat services with one reproducible local start command.`
   done when: backend process starts with King extension loaded, exposes bound addresses in logs, and shutdown is clean.
 - [ ] `#5 Add docker compose for the new stack (frontend-vue + backend-king-php + sqlite volume) without removing existing demo compose paths.`
   done when: `docker compose up` starts both services for the new stack, data persists in a mounted sqlite volume, and docs list ports.
