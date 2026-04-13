@@ -500,6 +500,12 @@ Run the invite-code create contract test (UUID-backed uniqueness + scope binding
 demo/video-chat/backend-king-php/tests/invite-code-create-contract.sh
 ```
 
+Run the invite-code create endpoint contract test (`POST /api/invite-codes` body/validation/authz semantics + UUID/policy-bound create envelope):
+
+```bash
+demo/video-chat/backend-king-php/tests/invite-code-create-endpoint-contract.sh
+```
+
 Run the invite-code redeem contract test (expiry + usage-limit enforcement + typed join context):
 
 ```bash

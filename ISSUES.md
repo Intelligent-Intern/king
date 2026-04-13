@@ -238,7 +238,7 @@ Execution guardrails for this extension:
   done when: edits only mutate targeted schedule/participant state and resend remains explicit separate action.
 - [x] `#46 Implement cancel-call endpoint with persisted cancellation reason/message payload for notification workflows.`
   done when: cancelled call state is explicit, cancellation payload is queryable, and cancelled calls are excluded from active joins.
-- [ ] `#47 Implement invite-code generation endpoint with UUID-based codes, expiry, and redemption policy constraints.`
+- [x] `#47 Implement invite-code generation endpoint with UUID-based codes, expiry, and redemption policy constraints.`
   done when: generated codes are unique, policy-bound, and not exposed outside explicit invite responses.
 - [ ] `#48 Implement invite redeem/join endpoint with expiry, usage-limit, and context resolution enforcement.`
   done when: redeem flow resolves target call/room safely and invalid/expired/reused codes fail with typed errors.
