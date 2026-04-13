@@ -249,7 +249,7 @@ Execution guardrails for this extension:
   done when: invalid/expired/missing auth is rejected deterministically and valid sessions enter authenticated channel lifecycle.
 - [ ] `#50 Implement room presence snapshot and join/leave stream from server-authoritative membership state.`
   done when: clients receive consistent snapshots plus deltas and reconnect restores current room presence without phantom users.
-- [ ] `#51 Implement room-scoped chat fanout with server timestamps, payload bounds, and delivery ack ids.`
+- [x] `#51 Implement room-scoped chat fanout with server timestamps, payload bounds, and delivery ack ids.`
   done when: chat broadcast is authoritative, malformed payloads are rejected, and message ids are stable for frontend dedupe.
 - [ ] `#52 Implement typing indicator channel with debounce windows, expiry semantics, and no self-echo.`
   done when: typing state auto-expires and remains scoped to active room participants only.

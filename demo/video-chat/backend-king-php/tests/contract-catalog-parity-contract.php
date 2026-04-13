@@ -399,6 +399,14 @@ try {
     $chatPayload = videochat_contract_catalog_last_frame($frames, 'socket-admin');
     videochat_contract_catalog_assert($chatPayload !== [], 'chat frame should be captured');
     videochat_contract_catalog_assert_payload($catalog, 'ws', 'chat_message', $chatPayload);
+    $chatMessage = is_array($chatPayload['message'] ?? null) ? $chatPayload['message'] : [];
+    $chatAckPayload = videochat_chat_ack_payload(
+        (string) ($chatPayload['room_id'] ?? 'lobby'),
+        $chatMessage,
+        (int) ($chatPublish['sent_count'] ?? 0),
+        1_780_200_010_500
+    );
+    videochat_contract_catalog_assert_payload($catalog, 'ws', 'chat_ack', $chatAckPayload);
 
     $frames = [];
     $typingCommand = videochat_typing_decode_client_frame(json_encode(['type' => 'typing/start'], JSON_UNESCAPED_SLASHES));

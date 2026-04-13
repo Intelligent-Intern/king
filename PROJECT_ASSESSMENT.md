@@ -160,6 +160,7 @@ The current tree already proves:
 - the active video-chat invite-redeem surface now enforces one explicit `POST /api/invite-codes/redeem` endpoint contract for typed request-body and field validation failures, typed not-found/expired/exhausted/conflict mapping, deterministic room-or-call join-context resolution, and persisted invite redemption-state updates, proven by `backend-king-php/tests/invite-code-redeem-endpoint-contract.sh`
 - the active video-chat websocket gateway now enforces one explicit strict handshake contract before upgrade (`GET`, `Upgrade: websocket`, `Connection: upgrade`, valid `Sec-WebSocket-Key`, `Sec-WebSocket-Version: 13`) and exports structured close descriptors for session-invalidated realtime termination (`close_code`, `close_reason`, `close_category`), proven by `backend-king-php/tests/realtime-websocket-gateway-contract.sh`
 
+- the active video-chat realtime chat surface now enforces sender-in-room authoritative fanout, bounded malformed-payload rejection, stable per-sender/per-room/per-client-message ids for frontend dedupe, and deterministic `chat/ack` ids, proven by `backend-king-php/tests/realtime-chat-contract.sh` and catalog parity in `backend-king-php/tests/contract-catalog-parity-contract.sh`
 ## What Is Still Not Finished
 
 The repo is still short of a "nothing left to caveat" v1 in these areas:

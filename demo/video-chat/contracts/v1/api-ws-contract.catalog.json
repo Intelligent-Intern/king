@@ -157,6 +157,19 @@
         "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
       }
     },
+    "chat_ack": {
+      "type": "object",
+      "required": {
+        "type": { "type": "string", "enum": ["chat/ack"] },
+        "room_id": { "type": "string", "min_length": 1 },
+        "ack_id": { "type": "string", "pattern": "/^chat_ack_/" },
+        "message_id": { "type": "string", "pattern": "/^chat_/" },
+        "client_message_id": { "one_of": [{ "type": "string", "min_length": 1 }, { "type": "null" }] },
+        "server_time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" },
+        "sent_count": { "type": "int", "min": 0 },
+        "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
+      }
+    },
     "typing_start": {
       "type": "object",
       "required": {

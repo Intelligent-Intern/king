@@ -63,6 +63,80 @@ function videochat_chat_message_id(?int $nowUnixMs = null): string
     return 'chat_' . $effectiveNowMs . '_' . $suffix;
 }
 
+function videochat_chat_resolve_message_id(
+    array $connection,
+    array $command,
+    string $roomId,
+    ?int $nowUnixMs = null
+): string {
+    $clientMessageId = is_string($command['client_message_id'] ?? null)
+        ? trim((string) $command['client_message_id'])
+        : '';
+    $senderUserId = (int) ($connection['user_id'] ?? 0);
+    if ($senderUserId > 0 && $clientMessageId !== '') {
+        $identityHash = hash(
+            'sha256',
+            videochat_presence_normalize_room_id($roomId) . "\n"
+                . $senderUserId . "\n"
+                . strtolower($clientMessageId)
+        );
+
+        return 'chat_' . substr($identityHash, 0, 24);
+    }
+
+    return videochat_chat_message_id($nowUnixMs);
+}
+
+function videochat_chat_ack_id(string $messageId): string
+{
+    $normalizedMessageId = trim($messageId);
+    if ($normalizedMessageId === '') {
+        $normalizedMessageId = 'missing';
+    }
+
+    return 'chat_ack_' . substr(hash('sha256', $normalizedMessageId), 0, 24);
+}
+
+/**
+ * @return array{
+ *   type: string,
+ *   room_id: string,
+ *   ack_id: string,
+ *   message_id: string,
+ *   client_message_id: ?string,
+ *   server_time: string,
+ *   sent_count: int,
+ *   time: string
+ * }
+ */
+function videochat_chat_ack_payload(
+    string $roomId,
+    array $message,
+    int $sentCount,
+    ?int $ackUnixMs = null
+): array {
+    $effectiveAckUnixMs = is_int($ackUnixMs) && $ackUnixMs > 0
+        ? $ackUnixMs
+        : (int) floor(microtime(true) * 1000);
+    $effectiveAckIso = gmdate('c', (int) floor($effectiveAckUnixMs / 1000));
+    $messageId = trim((string) ($message['id'] ?? ''));
+
+    return [
+        'type' => 'chat/ack',
+        'room_id' => videochat_presence_normalize_room_id($roomId),
+        'ack_id' => videochat_chat_ack_id($messageId),
+        'message_id' => $messageId,
+        'client_message_id' => is_string($message['client_message_id'] ?? null)
+            ? trim((string) $message['client_message_id'])
+            : null,
+        'server_time' => is_string($message['server_time'] ?? null) && trim((string) $message['server_time']) !== ''
+            ? (string) $message['server_time']
+            : $effectiveAckIso,
+        'sent_count' => max(0, $sentCount),
+        'time' => $effectiveAckIso,
+    ];
+}
+
 /**
  * @return array{
  *   ok: bool,
@@ -167,6 +241,7 @@ function videochat_chat_decode_client_frame(string $frame): array
 /**
  * @return array{
  *   ok: bool,
+ *   error: string,
  *   event: array<string, mixed>|null,
  *   sent_count: int
  * }
@@ -181,12 +256,38 @@ function videochat_chat_publish(
     if (!(bool) ($command['ok'] ?? false)) {
         return [
             'ok' => false,
+            'error' => 'invalid_command',
+            'event' => null,
+            'sent_count' => 0,
+        ];
+    }
+
+    $senderUserId = (int) ($connection['user_id'] ?? 0);
+    if ($senderUserId <= 0) {
+        return [
+            'ok' => false,
+            'error' => 'invalid_sender',
             'event' => null,
             'sent_count' => 0,
         ];
     }
 
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
+    $connectionId = trim((string) ($connection['connection_id'] ?? ''));
+    $roomConnections = $presenceState['rooms'][$roomId] ?? null;
+    if (
+        $connectionId === ''
+        || !is_array($roomConnections)
+        || !array_key_exists($connectionId, $roomConnections)
+    ) {
+        return [
+            'ok' => false,
+            'error' => 'sender_not_in_room',
+            'event' => null,
+            'sent_count' => 0,
+        ];
+    }
+
     $effectiveNowMs = is_int($nowUnixMs) && $nowUnixMs > 0
         ? $nowUnixMs
         : (int) floor(microtime(true) * 1000);
@@ -196,11 +297,11 @@ function videochat_chat_publish(
         'type' => 'chat/message',
         'room_id' => $roomId,
         'message' => [
-            'id' => videochat_chat_message_id($effectiveNowMs),
+            'id' => videochat_chat_resolve_message_id($connection, $command, $roomId, $effectiveNowMs),
             'client_message_id' => $command['client_message_id'] ?? null,
             'text' => (string) ($command['message'] ?? ''),
             'sender' => [
-                'user_id' => (int) ($connection['user_id'] ?? 0),
+                'user_id' => $senderUserId,
                 'display_name' => (string) ($connection['display_name'] ?? ''),
                 'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? 'user')),
             ],
@@ -218,8 +319,18 @@ function videochat_chat_publish(
         $sender
     );
 
+    if ($sentCount <= 0) {
+        return [
+            'ok' => false,
+            'error' => 'delivery_failed',
+            'event' => $event,
+            'sent_count' => 0,
+        ];
+    }
+
     return [
         'ok' => true,
+        'error' => '',
         'event' => $event,
         'sent_count' => $sentCount,
     ];

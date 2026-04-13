@@ -123,6 +123,52 @@ try {
     videochat_realtime_chat_assert((string) ($adminMessage['server_time'] ?? '') === gmdate('c', 1_780_100_123), 'chat server_time mismatch');
     videochat_realtime_chat_assert((int) ($adminMessage['server_unix_ms'] ?? 0) === 1_780_100_123_000, 'chat server_unix_ms mismatch');
 
+    $repeatPublish = videochat_chat_publish(
+        $state,
+        $userConnection,
+        $decodedSend,
+        $sender,
+        1_780_100_124_000
+    );
+    videochat_realtime_chat_assert((bool) ($repeatPublish['ok'] ?? false), 'repeat chat publish with same client id should succeed');
+    $repeatAdminChat = videochat_realtime_chat_last_frame($frames, 'socket-admin');
+    $repeatAdminMessage = is_array($repeatAdminChat['message'] ?? null) ? $repeatAdminChat['message'] : [];
+    videochat_realtime_chat_assert(
+        (string) ($repeatAdminMessage['id'] ?? '') === (string) ($adminMessage['id'] ?? ''),
+        'chat message id must stay stable for repeated sender+room+client_message_id'
+    );
+
+    $ackPayload = videochat_chat_ack_payload('lobby', $adminMessage, (int) ($publish['sent_count'] ?? 0), 1_780_100_124_500);
+    videochat_realtime_chat_assert((string) ($ackPayload['type'] ?? '') === 'chat/ack', 'chat ack type mismatch');
+    videochat_realtime_chat_assert((string) ($ackPayload['room_id'] ?? '') === 'lobby', 'chat ack room_id mismatch');
+    videochat_realtime_chat_assert((string) ($ackPayload['message_id'] ?? '') === (string) ($adminMessage['id'] ?? ''), 'chat ack message_id mismatch');
+    videochat_realtime_chat_assert((string) ($ackPayload['ack_id'] ?? '') !== '', 'chat ack_id must be present');
+    videochat_realtime_chat_assert((int) ($ackPayload['sent_count'] ?? -1) === 2, 'chat ack sent_count mismatch');
+    $ackPayloadRepeat = videochat_chat_ack_payload('lobby', $adminMessage, (int) ($publish['sent_count'] ?? 0), 1_780_100_125_000);
+    videochat_realtime_chat_assert(
+        (string) ($ackPayloadRepeat['ack_id'] ?? '') === (string) ($ackPayload['ack_id'] ?? ''),
+        'chat ack_id must remain stable for the same message id'
+    );
+
+    $invalidSenderConnection = $userConnection;
+    $invalidSenderConnection['user_id'] = 0;
+    $invalidSenderPublish = videochat_chat_publish($state, $invalidSenderConnection, $decodedSend, $sender, 1_780_100_126_000);
+    videochat_realtime_chat_assert(!(bool) ($invalidSenderPublish['ok'] ?? true), 'chat publish with invalid sender should fail');
+    videochat_realtime_chat_assert((string) ($invalidSenderPublish['error'] ?? '') === 'invalid_sender', 'invalid sender chat error mismatch');
+
+    $mismatchedRoomConnection = $userConnection;
+    $mismatchedRoomConnection['room_id'] = 'other-room';
+    $mismatchedRoomPublish = videochat_chat_publish($state, $mismatchedRoomConnection, $decodedSend, $sender, 1_780_100_127_000);
+    videochat_realtime_chat_assert(!(bool) ($mismatchedRoomPublish['ok'] ?? true), 'chat publish from sender outside room should fail');
+    videochat_realtime_chat_assert((string) ($mismatchedRoomPublish['error'] ?? '') === 'sender_not_in_room', 'sender outside room chat error mismatch');
+
+    $dropSender = static function (mixed $socket, array $payload): bool {
+        return false;
+    };
+    $deliveryFailedPublish = videochat_chat_publish($state, $userConnection, $decodedSend, $dropSender, 1_780_100_128_000);
+    videochat_realtime_chat_assert(!(bool) ($deliveryFailedPublish['ok'] ?? true), 'chat publish should fail when delivery fanout fails');
+    videochat_realtime_chat_assert((string) ($deliveryFailedPublish['error'] ?? '') === 'delivery_failed', 'chat delivery failed error mismatch');
+
     $decodedAlias = videochat_chat_decode_client_frame(json_encode([
         'type' => 'chat/message',
         'message' => 'Alias route',

@@ -504,6 +504,7 @@ function videochat_handle_realtime_routes(
                                     'code' => 'chat_publish_failed',
                                     'message' => 'Could not publish chat message.',
                                     'details' => [
+                                        'error' => (string) ($chatPublish['error'] ?? 'unknown'),
                                         'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
                                     ],
                                     'time' => gmdate('c'),
@@ -515,17 +516,14 @@ function videochat_handle_realtime_routes(
                         $message = is_array($chatPublish['event']['message'] ?? null)
                             ? $chatPublish['event']['message']
                             : [];
+                        $chatRoomId = (string) ($chatPublish['event']['room_id'] ?? ($presenceConnection['room_id'] ?? 'lobby'));
                         videochat_presence_send_frame(
                             $websocket,
-                            [
-                                'type' => 'chat/ack',
-                                'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
-                                'message_id' => (string) ($message['id'] ?? ''),
-                                'client_message_id' => $message['client_message_id'] ?? null,
-                                'server_time' => (string) ($message['server_time'] ?? gmdate('c')),
-                                'sent_count' => (int) ($chatPublish['sent_count'] ?? 0),
-                                'time' => gmdate('c'),
-                            ]
+                            videochat_chat_ack_payload(
+                                $chatRoomId,
+                                $message,
+                                (int) ($chatPublish['sent_count'] ?? 0)
+                            )
                         );
                         continue;
                     }
