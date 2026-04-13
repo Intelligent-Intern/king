@@ -59,7 +59,6 @@
                 </button>
                 <div>
                   <h1 class="title">{{ pageTitle }}</h1>
-                  <p class="subtitle">{{ runtimeSummary }}</p>
                 </div>
               </div>
               <div class="actions">
@@ -80,7 +79,6 @@
 import { computed, ref } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import { defaultRouteForRole, logoutSession, sessionState } from '../stores/session';
-import { backendRuntimeState } from '../stores/runtime';
 
 const router = useRouter();
 const route = useRoute();
@@ -92,13 +90,11 @@ const navItems = computed(() => {
       { to: '/admin/overview', label: 'Overview', icon: '/assets/orgas/intelligent-intern/icons/users.png' },
       { to: '/admin/users', label: 'User Management', icon: '/assets/orgas/intelligent-intern/icons/user.png' },
       { to: '/admin/calls', label: 'Video Calls', icon: '/assets/orgas/intelligent-intern/icons/lobby.png' },
-      { to: '/workspace/call/lobby', label: 'Call Workspace', icon: '/assets/orgas/intelligent-intern/icons/chat.png' },
     ];
   }
 
   return [
     { to: '/user/dashboard', label: 'Dashboard', icon: '/assets/orgas/intelligent-intern/icons/users.png' },
-    { to: '/workspace/call/lobby', label: 'Call Workspace', icon: '/assets/orgas/intelligent-intern/icons/lobby.png' },
   ];
 });
 
@@ -112,26 +108,6 @@ const pageTitle = computed(() => {
 
   if (route.path.startsWith('/workspace/call')) return 'Call Workspace';
   return mapping[route.path] || 'Workspace';
-});
-
-const runtimeSummary = computed(() => {
-  if (backendRuntimeState.status === 'probing') {
-    return `Backend runtime preflight (${backendRuntimeState.backendOrigin}) …`;
-  }
-
-  if (backendRuntimeState.status === 'error') {
-    return `Backend runtime preflight failed: ${backendRuntimeState.error}`;
-  }
-
-  if (backendRuntimeState.status === 'ready' && backendRuntimeState.data) {
-    const appVersion = backendRuntimeState.data?.app?.version || 'n/a';
-    const kingVersion = backendRuntimeState.data?.runtime?.king_version || 'n/a';
-    const moduleStatus = backendRuntimeState.data?.runtime?.health?.module_status || 'unknown';
-    const systemStatus = backendRuntimeState.data?.runtime?.health?.system_status || 'unknown';
-    return `Backend ${appVersion} · King ${kingVersion} · module ${moduleStatus} · system ${systemStatus}`;
-  }
-
-  return `Backend runtime preflight pending (${backendRuntimeState.backendOrigin})`;
 });
 
 async function handleSignOut() {
