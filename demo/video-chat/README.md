@@ -164,6 +164,12 @@ Override host ports when needed:
 VIDEOCHAT_V1_FRONTEND_PORT=35174 VIDEOCHAT_V1_BACKEND_PORT=38080 docker compose -f docker-compose.v1.yml up --build
 ```
 
+Optional frontend preflight origin override for non-default routing:
+
+```bash
+VIDEOCHAT_V1_BACKEND_ORIGIN=http://127.0.0.1:38080 docker compose -f docker-compose.v1.yml up --build
+```
+
 SQLite data is persisted in a mounted Docker volume:
 
 - volume: `videochat-v1-sqlite`
@@ -173,8 +179,11 @@ SQLite data is persisted in a mounted Docker volume:
 
 - backend scaffold endpoint: `GET http://127.0.0.1:18080/`
 - backend health endpoint: `GET http://127.0.0.1:18080/health`
+- backend runtime preflight endpoint: `GET http://127.0.0.1:18080/api/runtime`
+- backend version endpoint: `GET http://127.0.0.1:18080/api/version`
 - backend websocket endpoint: `WS ws://127.0.0.1:18080/ws`
 - frontend scaffold endpoint: `http://127.0.0.1:5174`
+- frontend consumes backend preflight metadata on startup (`app/version + runtime health`)
 - the previous Node runtime remains in-repo only as historical reference, not as active dev path
 
 ## Scope

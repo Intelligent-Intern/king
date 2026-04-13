@@ -99,11 +99,27 @@ a {
 .shell-header {
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
 }
 
 .shell-header h2 {
   margin: 0;
   font-size: 18px;
+}
+
+.shell-runtime {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.shell-runtime-error {
+  color: #ffb6b6;
+}
+
+.shell-runtime-ready {
+  color: #b7e3c0;
 }
 
 .shell-content {
@@ -148,6 +164,19 @@ a {
 .login-card p {
   margin: 0 0 12px;
   color: var(--text-muted);
+}
+
+.runtime-preflight {
+  margin: 0 0 12px;
+  font-size: 12px;
+}
+
+.runtime-preflight-error {
+  color: #ffb6b6;
+}
+
+.runtime-preflight-ready {
+  color: #b7e3c0;
 }
 
 .login-form {

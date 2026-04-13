@@ -17,6 +17,9 @@
     <main class="shell-main">
       <header class="shell-header">
         <h2>{{ pageTitle }}</h2>
+        <p class="shell-runtime" :class="`shell-runtime-${backendRuntimeState.status}`">
+          {{ runtimeSummary }}
+        </p>
       </header>
       <section class="shell-content">
         <RouterView />
@@ -29,6 +32,7 @@
 import { computed } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import { defaultRouteForRole, sessionState, signOut } from '../stores/session';
+import { backendRuntimeState } from '../stores/runtime';
 
 const router = useRouter();
 const route = useRoute();
@@ -59,6 +63,26 @@ const pageTitle = computed(() => {
 
   if (route.path.startsWith('/workspace/call')) return 'Call Workspace';
   return mapping[route.path] || 'Workspace';
+});
+
+const runtimeSummary = computed(() => {
+  if (backendRuntimeState.status === 'probing') {
+    return `Backend runtime preflight (${backendRuntimeState.backendOrigin}) …`;
+  }
+
+  if (backendRuntimeState.status === 'error') {
+    return `Backend runtime preflight failed: ${backendRuntimeState.error}`;
+  }
+
+  if (backendRuntimeState.status === 'ready' && backendRuntimeState.data) {
+    const appVersion = backendRuntimeState.data?.app?.version || 'n/a';
+    const kingVersion = backendRuntimeState.data?.runtime?.king_version || 'n/a';
+    const moduleStatus = backendRuntimeState.data?.runtime?.health?.module_status || 'unknown';
+    const systemStatus = backendRuntimeState.data?.runtime?.health?.system_status || 'unknown';
+    return `Backend ${appVersion} · King ${kingVersion} · module ${moduleStatus} · system ${systemStatus}`;
+  }
+
+  return `Backend runtime preflight pending (${backendRuntimeState.backendOrigin})`;
 });
 
 function handleSignOut() {

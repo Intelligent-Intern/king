@@ -22,6 +22,8 @@ cd demo/video-chat/backend-king-php
 
 - `GET /` or `GET /api/bootstrap`
 - `GET /health`
+- `GET /api/runtime`
+- `GET /api/version`
 - `WS /ws`
 
 Default bind:
@@ -35,6 +37,8 @@ Environment overrides:
 - `VIDEOCHAT_KING_PORT` (default `18080`)
 - `VIDEOCHAT_KING_WS_PATH` (default `/ws`)
 - `VIDEOCHAT_KING_DB_PATH` (default `/data/video-chat.sqlite`)
+- `VIDEOCHAT_KING_BACKEND_VERSION` (default `1.0.6-beta`)
+- `VIDEOCHAT_KING_ENV` (default `development`)
 - `KING_EXTENSION_PATH` (default `extension/modules/king.so` from repo root)
 - `PHP_BIN` (default `php`)
 

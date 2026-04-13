@@ -20,10 +20,11 @@ services:
     build:
       context: ../..
       dockerfile: demo/video-chat/frontend-vue/Dockerfile
+      args:
+        VITE_VIDEOCHAT_BACKEND_ORIGIN: "${VIDEOCHAT_V1_BACKEND_ORIGIN:-}"
+        VITE_VIDEOCHAT_BACKEND_PORT: "${VIDEOCHAT_V1_BACKEND_PORT:-18080}"
     depends_on:
       - videochat-backend-v1
-    environment:
-      VIDEOCHAT_BACKEND_ORIGIN: http://videochat-backend-v1:18080
     ports:
       - "${VIDEOCHAT_V1_FRONTEND_PORT:-5174}:5174"
     restart: unless-stopped

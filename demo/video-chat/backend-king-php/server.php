@@ -5,6 +5,8 @@ declare(strict_types=1);
 $host = getenv('VIDEOCHAT_KING_HOST') ?: '127.0.0.1';
 $port = (int) (getenv('VIDEOCHAT_KING_PORT') ?: '18080');
 $wsPath = getenv('VIDEOCHAT_KING_WS_PATH') ?: '/ws';
+$appVersion = getenv('VIDEOCHAT_KING_BACKEND_VERSION') ?: '1.0.6-beta';
+$appEnv = getenv('VIDEOCHAT_KING_ENV') ?: 'development';
 
 if ($port < 1 || $port > 65535) {
     fwrite(STDERR, "[video-chat][king-php-backend] invalid port: {$port}\n");
@@ -38,6 +40,73 @@ $jsonResponse = static function (int $status, array $payload): array {
     ];
 };
 
+$runtimeHealthSummary = static function (): array {
+    $moduleStatus = 'unknown';
+    $moduleBuild = null;
+    $moduleVersion = null;
+    $activeRuntimeCount = 0;
+
+    if (function_exists('king_health')) {
+        try {
+            $moduleHealth = king_health();
+            if (is_array($moduleHealth)) {
+                $moduleStatus = is_string($moduleHealth['status'] ?? null)
+                    ? $moduleHealth['status']
+                    : $moduleStatus;
+                $moduleBuild = is_string($moduleHealth['build'] ?? null)
+                    ? $moduleHealth['build']
+                    : null;
+                $moduleVersion = is_string($moduleHealth['version'] ?? null)
+                    ? $moduleHealth['version']
+                    : null;
+                $activeRuntimeCount = (int) ($moduleHealth['active_runtime_count'] ?? 0);
+            }
+        } catch (Throwable $error) {
+            $moduleStatus = 'error';
+        }
+    }
+
+    $systemStatus = 'not_initialized';
+    if (function_exists('king_system_health_check')) {
+        try {
+            $systemHealth = king_system_health_check();
+            if (is_array($systemHealth)) {
+                $systemStatus = is_string($systemHealth['status'] ?? null)
+                    ? $systemHealth['status']
+                    : $systemStatus;
+            }
+        } catch (Throwable $error) {
+            $systemStatus = 'error';
+        }
+    }
+
+    return [
+        'module_status' => $moduleStatus,
+        'system_status' => $systemStatus,
+        'build' => $moduleBuild,
+        'module_version' => $moduleVersion,
+        'active_runtime_count' => $activeRuntimeCount,
+    ];
+};
+
+$runtimeEnvelope = static function () use ($appVersion, $appEnv, $wsPath, $runtimeHealthSummary): array {
+    return [
+        'service' => 'video-chat-backend-king-php',
+        'app' => [
+            'name' => 'king-video-chat-backend',
+            'version' => $appVersion,
+            'environment' => $appEnv,
+        ],
+        'runtime' => [
+            'king_version' => function_exists('king_version') ? (string) king_version() : 'n/a',
+            'transport' => 'king_http1_server_listen_once',
+            'ws_path' => $wsPath,
+            'health' => $runtimeHealthSummary(),
+        ],
+        'time' => gmdate('c'),
+    ];
+};
+
 $pathFromRequest = static function (array $request): string {
     $path = $request['path'] ?? null;
     if (is_string($path) && $path !== '') {
@@ -57,16 +126,26 @@ $log("http endpoint bound: http://{$host}:{$port}/");
 $log("websocket endpoint bound: ws://{$host}:{$port}{$wsPath}");
 $log('starting King HTTP/1 listener...');
 
-$handler = static function (array $request) use ($jsonResponse, $pathFromRequest, $wsPath): array {
+$handler = static function (array $request) use ($jsonResponse, $pathFromRequest, $runtimeEnvelope, $wsPath): array {
     $path = $pathFromRequest($request);
 
-    if ($path === '/health') {
+    if ($path === '/health' || $path === '/api/runtime') {
+        $payload = $runtimeEnvelope();
+        $payload['status'] = 'ok';
+        return $jsonResponse(200, $payload);
+    }
+
+    if ($path === '/api/version') {
+        $payload = $runtimeEnvelope();
         return $jsonResponse(200, [
-            'service' => 'video-chat-backend-king-php',
-            'status' => 'ok',
-            'transport' => 'king_http1_server_listen_once',
-            'ws_path' => $wsPath,
-            'time' => gmdate('c'),
+            'service' => $payload['service'],
+            'app' => $payload['app'],
+            'runtime' => [
+                'king_version' => $payload['runtime']['king_version'],
+                'build' => $payload['runtime']['health']['build'],
+                'module_version' => $payload['runtime']['health']['module_version'],
+            ],
+            'time' => $payload['time'],
         ]);
     }
 
@@ -76,6 +155,8 @@ $handler = static function (array $request) use ($jsonResponse, $pathFromRequest
             'status' => 'bootstrapped',
             'message' => 'King HTTP and WebSocket scaffold is active.',
             'ws_path' => $wsPath,
+            'runtime_endpoint' => '/api/runtime',
+            'version_endpoint' => '/api/version',
             'time' => gmdate('c'),
         ]);
     }

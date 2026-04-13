@@ -35,7 +35,14 @@ Default endpoint:
 
 - `http://127.0.0.1:5174`
 
+Backend runtime preflight:
+
+- frontend probes `GET /api/runtime` on backend startup path
+- default inferred backend origin: `http://<current-host>:18080`
+
 Environment overrides:
 
 - `VIDEOCHAT_VUE_HOST` (default `127.0.0.1`)
 - `VIDEOCHAT_VUE_PORT` (default `5174`)
+- `VITE_VIDEOCHAT_BACKEND_ORIGIN` (optional full origin override, e.g. `http://127.0.0.1:18080`)
+- `VITE_VIDEOCHAT_BACKEND_PORT` (optional inferred backend port override, default `18080`)

@@ -3,6 +3,9 @@
     <section class="login-card">
       <h1>Video Control Workspace</h1>
       <p>Sign in to continue.</p>
+      <p class="runtime-preflight" :class="`runtime-preflight-${backendRuntimeState.status}`">
+        {{ runtimeLabel }}
+      </p>
 
       <form class="login-form" @submit.prevent="handleSubmit">
         <label>
@@ -24,6 +27,9 @@
         </label>
 
         <p v-if="error" class="form-error">{{ error }}</p>
+        <button v-if="backendRuntimeState.status === 'error'" type="button" @click="handleRuntimeRetry">
+          Retry backend preflight
+        </button>
         <button type="submit">Sign in</button>
       </form>
     </section>
@@ -31,9 +37,10 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { defaultRouteForRole, signInAs } from '../stores/session';
+import { backendRuntimeState, probeBackendRuntime } from '../stores/runtime';
 
 const router = useRouter();
 const route = useRoute();
@@ -42,6 +49,28 @@ const displayName = ref('');
 const email = ref('');
 const role = ref('admin');
 const error = ref('');
+
+const runtimeLabel = computed(() => {
+  if (backendRuntimeState.status === 'probing') {
+    return `Backend runtime preflight in progress (${backendRuntimeState.backendOrigin})…`;
+  }
+
+  if (backendRuntimeState.status === 'error') {
+    return `Backend runtime preflight failed: ${backendRuntimeState.error}`;
+  }
+
+  if (backendRuntimeState.status === 'ready' && backendRuntimeState.data) {
+    const appVersion = backendRuntimeState.data?.app?.version || 'n/a';
+    const kingVersion = backendRuntimeState.data?.runtime?.king_version || 'n/a';
+    return `Backend ${appVersion} · King ${kingVersion}`;
+  }
+
+  return `Backend runtime preflight pending (${backendRuntimeState.backendOrigin})`;
+});
+
+function handleRuntimeRetry() {
+  void probeBackendRuntime();
+}
 
 function handleSubmit() {
   error.value = '';
