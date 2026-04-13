@@ -361,6 +361,12 @@ Run the auth refresh/rotation contract test (token replacement + stale replay co
 demo/video-chat/backend-king-php/tests/session-refresh-contract.sh
 ```
 
+Run the auth logout/revoke contract test (deterministic revoke response + persisted `revoked_at` metadata):
+
+```bash
+demo/video-chat/backend-king-php/tests/session-logout-contract.sh
+```
+
 Run the admin user list contract test (search + pagination + deterministic sorting):
 
 ```bash

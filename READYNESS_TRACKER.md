@@ -52,6 +52,7 @@ Status note:
 - Recent video-chat backend dispatch closure: the active King PHP demo backend request path no longer keeps one mixed-responsibility handler block; `server.php` now wires deterministic focused modules (`runtime`, `auth_session`, `users`, `invites`, `calls`, `realtime`) through `demo/video-chat/backend-king-php/http/router.php`, with explicit module-order contract proof in `tests/router-module-order-contract.sh`.
 - Recent video-chat contract-catalog closure: the new stack now has one canonical versioned contract fixture at `demo/video-chat/contracts/v1/api-ws-contract.catalog.json`, parity is asserted by `backend-king-php/tests/contract-catalog-parity-contract.sh`, and CI shard-1 fails fast on catalog drift.
 - Recent video-chat session-rotation closure: the backend now exposes `POST /api/auth/refresh` with atomic token replacement, stale-token conflict rejection, replaced-token websocket tracking cleanup, and dedicated contract proof in `backend-king-php/tests/session-refresh-contract.sh`.
+- Recent video-chat logout-revoke closure: `POST /api/auth/logout` is now explicitly contract-covered for deterministic success/error envelopes, persisted session `revoked_at` metadata, and session-token invalidation semantics in `backend-king-php/tests/session-logout-contract.sh`.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -340,7 +341,7 @@ Scope note:
 
 ### Z2. Backend Auth, Session, RBAC
 
-- [ ] Implement logout/session-revoke endpoint with immediate runtime effect.
+- [x] Implement logout/session-revoke endpoint with immediate runtime effect.
 - [ ] Enforce session revocation propagation into active websocket connections.
 - [x] Implement stable session refresh/rotation policy with replay-safe token handling.
 - [ ] Enforce route-level RBAC middleware for admin/moderator/user actions.

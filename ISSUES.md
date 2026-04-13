@@ -212,7 +212,7 @@ Execution guardrails for this extension:
   done when: one source-of-truth contract file exists, runtime payloads validate against it, and drift checks fail fast in CI.
 - [x] `#33 Implement session refresh/rotation endpoint with replay-safe token replacement semantics.`
   done when: refresh rotates token state safely, invalidates replaced token policy as designed, and response contract stays stable.
-- [ ] `#34 Implement `/api/auth/logout` session revoke endpoint and persist revocation metadata.`
+- [x] `#34 Implement `/api/auth/logout` session revoke endpoint and persist revocation metadata.`
   done when: logout revokes current token deterministically and returns stable success/error schema.
 - [ ] `#35 Enforce immediate websocket session revocation behavior for revoked/expired sessions.`
   done when: revoked/expired token sessions are disconnected quickly and cannot continue room/chat/call actions.
