@@ -61,6 +61,7 @@ Status note:
 - Recent video-chat admin-user status closure: `POST /api/admin/users/{id}/deactivate` and `POST /api/admin/users/{id}/reactivate` now expose idempotent state transitions with deterministic not-found handling, enforce disabled-user session invalidation, and keep revoked sessions invalid even after reactivation, proven by `backend-king-php/tests/admin-user-status-contract.sh`.
 - Recent video-chat user-settings closure: `GET/PATCH /api/user/settings` now enforces one explicit managed-field contract (`display_name`, `time_format`, `theme`, `avatar_path`) with fail-closed unsupported fields, and persisted settings now remain in parity with `GET /api/auth/session` user payloads after patch, proven by `backend-king-php/tests/user-settings-endpoint-contract.sh`.
 - Recent video-chat avatar-upload closure: `POST /api/user/avatar` and `GET /api/user/avatar-files/{filename}` now have explicit endpoint-contract proof for invalid-body and validation failures, deterministic storage-safe file-name/path mapping, replacement cleanup semantics, and `GET /api/auth/session` avatar-path parity after upload, proven by `backend-king-php/tests/avatar-upload-endpoint-contract.sh`.
+- Recent video-chat calls-list closure: `GET /api/calls` now has explicit endpoint-contract proof for owner-bound scope downgrade (`user all -> my`), deterministic paging totals/order envelopes, and typed validation failures for invalid list filters, proven by `backend-king-php/tests/calls-list-endpoint-contract.sh`.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 

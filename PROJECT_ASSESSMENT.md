@@ -152,6 +152,7 @@ The current tree already proves:
 - the active video-chat admin status surface now enforces one explicit `POST /api/admin/users/{id}/deactivate|reactivate` contract with idempotent state transitions, deterministic not-found envelopes, disabled-user session invalidation, and explicit preservation of revoked-session invalidity after reactivation, proven by `backend-king-php/tests/admin-user-status-contract.sh`
 - the active video-chat user-settings surface now enforces one explicit `GET/PATCH /api/user/settings` contract over managed profile fields with fail-closed unsupported-field rejection (`field_not_updatable`) and explicit session-check parity so persisted settings are reflected by `GET /api/auth/session` user envelopes, proven by `backend-king-php/tests/user-settings-endpoint-contract.sh`
 - the active video-chat avatar surface now enforces one explicit `POST /api/user/avatar` plus `GET /api/user/avatar-files/{filename}` endpoint contract for strict type/size validation, deterministic storage-safe path mapping, replacement cleanup of prior avatar files, and `GET /api/auth/session` avatar-path parity after upload, proven by `backend-king-php/tests/avatar-upload-endpoint-contract.sh`
+- the active video-chat calls-list surface now enforces one explicit `GET /api/calls` endpoint contract for owner-bound scope semantics (`user all -> my`), deterministic paging/sort envelopes, and typed list-filter validation failures, proven by `backend-king-php/tests/calls-list-endpoint-contract.sh`
 
 ## What Is Still Not Finished
 

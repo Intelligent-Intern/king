@@ -452,6 +452,12 @@ Run the calls list contract test (my/all scope + search/status filters + determi
 demo/video-chat/backend-king-php/tests/calls-list-contract.sh
 ```
 
+Run the calls list endpoint contract test (`GET /api/calls` owner-bound scope behavior + deterministic paging envelope):
+
+```bash
+demo/video-chat/backend-king-php/tests/calls-list-endpoint-contract.sh
+```
+
 Run the call create contract test (create payload validation + participant persistence + normalized response):
 
 ```bash
