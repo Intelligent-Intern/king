@@ -319,6 +319,7 @@ try {
             'auth' => [
                 'login_endpoint' => '/api/auth/login',
                 'session_endpoint' => '/api/auth/session',
+                'refresh_endpoint' => '/api/auth/refresh',
                 'logout_endpoint' => '/api/auth/logout',
                 'settings_endpoint' => '/api/user/settings',
                 'avatar_upload_endpoint' => '/api/user/avatar',

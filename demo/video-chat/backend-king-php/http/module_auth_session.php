@@ -196,6 +196,87 @@ SQL
         ]);
     }
 
+    if ($path === '/api/auth/refresh') {
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/auth/refresh.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        $currentSessionToken = is_string($apiAuthContext['token'] ?? null)
+            ? trim((string) $apiAuthContext['token'])
+            : '';
+        $currentSessionId = is_string($apiAuthContext['session']['id'] ?? null)
+            ? trim((string) $apiAuthContext['session']['id'])
+            : '';
+        $effectiveCurrentSessionId = $currentSessionToken !== '' ? $currentSessionToken : $currentSessionId;
+        $currentUserId = (int) ($apiAuthContext['user']['id'] ?? 0);
+        if ($effectiveCurrentSessionId === '' || $currentUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'missing_session',
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $rotation = videochat_rotate_session_token(
+                $pdo,
+                $effectiveCurrentSessionId,
+                $currentUserId,
+                $issueSessionId,
+                null,
+                trim((string) ($request['remote_address'] ?? '')),
+                videochat_request_header_value($request, 'user-agent')
+            );
+            if (!(bool) ($rotation['ok'] ?? false)) {
+                $reason = (string) ($rotation['reason'] ?? 'rotation_failed');
+                if ($reason === 'session_not_rotatable') {
+                    return $errorResponse(409, 'auth_refresh_conflict', 'Session token could not be rotated.', [
+                        'reason' => $reason,
+                    ]);
+                }
+
+                return $errorResponse(500, 'auth_refresh_failed', 'Session refresh failed due to a backend error.', [
+                    'reason' => $reason,
+                ]);
+            }
+
+            $newSession = is_array($rotation['new_session'] ?? null)
+                ? $rotation['new_session']
+                : null;
+            if (!is_array($newSession)) {
+                return $errorResponse(500, 'auth_refresh_failed', 'Session refresh failed due to a backend error.', [
+                    'reason' => 'missing_rotated_session',
+                ]);
+            }
+
+            $closedSockets = videochat_close_tracked_websockets_for_session(
+                $activeWebsocketsBySession,
+                $effectiveCurrentSessionId
+            );
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'session' => [
+                    ...$newSession,
+                    'replaces_session_id' => $effectiveCurrentSessionId,
+                ],
+                'user' => $apiAuthContext['user'] ?? null,
+                'result' => [
+                    'replaced_session_id' => $effectiveCurrentSessionId,
+                    'revocation_state' => 'rotated',
+                    'revoked_at' => $rotation['revoked_at'] ?? gmdate('c'),
+                    'websocket_disconnects' => $closedSockets,
+                ],
+                'time' => gmdate('c'),
+            ]);
+        } catch (Throwable) {
+            return $errorResponse(500, 'auth_refresh_failed', 'Session refresh failed due to a backend error.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+    }
+
     if ($path === '/api/auth/logout') {
         if ($method !== 'POST') {
             return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/auth/logout.', [

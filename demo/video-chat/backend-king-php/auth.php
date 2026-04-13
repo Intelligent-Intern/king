@@ -276,7 +276,12 @@ function videochat_rbac_allowed_roles_for_path(string $path): array
         return [];
     }
 
-    if ($trimmedPath === '/api/auth/session' || $trimmedPath === '/api/auth/logout' || $trimmedPath === '/ws') {
+    if (
+        $trimmedPath === '/api/auth/session'
+        || $trimmedPath === '/api/auth/refresh'
+        || $trimmedPath === '/api/auth/logout'
+        || $trimmedPath === '/ws'
+    ) {
         return ['admin', 'moderator', 'user'];
     }
     if (str_starts_with($trimmedPath, '/api/admin/')) {
@@ -400,6 +405,167 @@ function videochat_revoke_session(PDO $pdo, string $sessionId, ?string $revokedA
         'reason' => 'revoked',
         'revoked_at' => $effectiveRevokedAt,
     ];
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   replaced_session_id: string,
+ *   revoked_at: ?string,
+ *   new_session: array{
+ *     id: string,
+ *     token: string,
+ *     token_type: string,
+ *     issued_at: string,
+ *     expires_at: string,
+ *     expires_in_seconds: int
+ *   }|null
+ * }
+ */
+function videochat_rotate_session_token(
+    PDO $pdo,
+    string $currentSessionId,
+    int $userId,
+    callable $issueSessionId,
+    ?int $ttlSeconds = null,
+    ?string $clientIp = null,
+    ?string $userAgent = null,
+    ?int $nowUnix = null
+): array {
+    $trimmedCurrentSessionId = trim($currentSessionId);
+    if ($trimmedCurrentSessionId === '') {
+        return [
+            'ok' => false,
+            'reason' => 'missing_session',
+            'replaced_session_id' => '',
+            'revoked_at' => null,
+            'new_session' => null,
+        ];
+    }
+    if ($userId <= 0) {
+        return [
+            'ok' => false,
+            'reason' => 'invalid_user',
+            'replaced_session_id' => $trimmedCurrentSessionId,
+            'revoked_at' => null,
+            'new_session' => null,
+        ];
+    }
+
+    $resolvedTtlSeconds = $ttlSeconds;
+    if (!is_int($resolvedTtlSeconds)) {
+        $resolvedTtlSeconds = (int) (getenv('VIDEOCHAT_SESSION_TTL_SECONDS') ?: 43_200);
+    }
+    if ($resolvedTtlSeconds < 60) {
+        $resolvedTtlSeconds = 60;
+    } elseif ($resolvedTtlSeconds > 2_592_000) {
+        $resolvedTtlSeconds = 2_592_000;
+    }
+
+    $effectiveNowUnix = $nowUnix ?? time();
+    $issuedAt = gmdate('c', $effectiveNowUnix);
+    $expiresAt = gmdate('c', $effectiveNowUnix + $resolvedTtlSeconds);
+    $revokedAt = $issuedAt;
+
+    $trimmedClientIp = trim((string) ($clientIp ?? ''));
+    $trimmedUserAgent = substr(trim((string) ($userAgent ?? '')), 0, 500);
+
+    $startedTransaction = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $startedTransaction = true;
+    }
+
+    try {
+        $rotateCurrent = $pdo->prepare(
+            <<<'SQL'
+UPDATE sessions
+SET revoked_at = :revoked_at
+WHERE id = :session_id
+  AND user_id = :user_id
+  AND (revoked_at IS NULL OR revoked_at = '')
+  AND datetime(expires_at) > datetime(:issued_at)
+SQL
+        );
+        $rotateCurrent->execute([
+            ':revoked_at' => $revokedAt,
+            ':session_id' => $trimmedCurrentSessionId,
+            ':user_id' => $userId,
+            ':issued_at' => $issuedAt,
+        ]);
+
+        if ($rotateCurrent->rowCount() !== 1) {
+            if ($startedTransaction && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            return [
+                'ok' => false,
+                'reason' => 'session_not_rotatable',
+                'replaced_session_id' => $trimmedCurrentSessionId,
+                'revoked_at' => null,
+                'new_session' => null,
+            ];
+        }
+
+        $newSessionId = '';
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $candidateId = trim((string) $issueSessionId());
+            if ($candidateId === '' || $candidateId === $trimmedCurrentSessionId) {
+                continue;
+            }
+            $newSessionId = $candidateId;
+            break;
+        }
+        if ($newSessionId === '') {
+            throw new RuntimeException('Could not issue a distinct session token.');
+        }
+
+        $insertNew = $pdo->prepare(
+            <<<'SQL'
+INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent)
+VALUES(:id, :user_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)
+SQL
+        );
+        $insertNew->execute([
+            ':id' => $newSessionId,
+            ':user_id' => $userId,
+            ':issued_at' => $issuedAt,
+            ':expires_at' => $expiresAt,
+            ':client_ip' => $trimmedClientIp === '' ? null : $trimmedClientIp,
+            ':user_agent' => $trimmedUserAgent === '' ? null : $trimmedUserAgent,
+        ]);
+
+        if ($startedTransaction && $pdo->inTransaction()) {
+            $pdo->commit();
+        }
+
+        return [
+            'ok' => true,
+            'reason' => 'rotated',
+            'replaced_session_id' => $trimmedCurrentSessionId,
+            'revoked_at' => $revokedAt,
+            'new_session' => [
+                'id' => $newSessionId,
+                'token' => $newSessionId,
+                'token_type' => 'session_id',
+                'issued_at' => $issuedAt,
+                'expires_at' => $expiresAt,
+                'expires_in_seconds' => $resolvedTtlSeconds,
+            ],
+        ];
+    } catch (Throwable) {
+        if ($startedTransaction && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return [
+            'ok' => false,
+            'reason' => 'rotation_failed',
+            'replaced_session_id' => $trimmedCurrentSessionId,
+            'revoked_at' => null,
+            'new_session' => null,
+        ];
+    }
 }
 
 function videochat_register_active_websocket(

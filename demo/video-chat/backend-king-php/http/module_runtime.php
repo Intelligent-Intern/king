@@ -45,6 +45,7 @@ function videochat_handle_runtime_routes(
             'invite_code_redeem_endpoint' => '/api/invite-codes/redeem',
             'login_endpoint' => '/api/auth/login',
             'session_endpoint' => '/api/auth/session',
+            'refresh_endpoint' => '/api/auth/refresh',
             'logout_endpoint' => '/api/auth/logout',
             'admin_probe_endpoint' => '/api/admin/ping',
             'admin_users_endpoint' => '/api/admin/users',

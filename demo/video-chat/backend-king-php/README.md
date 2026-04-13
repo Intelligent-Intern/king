@@ -45,6 +45,7 @@ cd demo/video-chat/backend-king-php
 - `GET /api/version`
 - `POST /api/auth/login`
 - `GET /api/auth/session` (requires session token)
+- `POST /api/auth/refresh` (requires session token, rotates/replaces token)
 - `POST /api/auth/logout` (requires session token)
 - `GET /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
 - `POST /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
@@ -106,8 +107,9 @@ Session check using login token:
 TOKEN="$(curl -sS -X POST http://127.0.0.1:18080/api/auth/login \
   -H 'content-type: application/json' \
   -d '{"email":"admin@intelligent-intern.com","password":"admin123"}' | jq -r '.session.token')"
-curl -sS http://127.0.0.1:18080/api/auth/session -H "authorization: Bearer ${TOKEN}"
-curl -sS -X POST http://127.0.0.1:18080/api/auth/logout -H "authorization: Bearer ${TOKEN}"
+ROTATED_TOKEN="$(curl -sS -X POST http://127.0.0.1:18080/api/auth/refresh -H "authorization: Bearer ${TOKEN}" | jq -r '.session.token')"
+curl -sS http://127.0.0.1:18080/api/auth/session -H "authorization: Bearer ${ROTATED_TOKEN}"
+curl -sS -X POST http://127.0.0.1:18080/api/auth/logout -H "authorization: Bearer ${ROTATED_TOKEN}"
 ```
 
 ## Schema bootstrap
@@ -163,6 +165,10 @@ Failures use the same error envelope shape:
 
 `GET /api/auth/session` and every non-public `/api/*` path require a valid
 session token (`Authorization: Bearer ...` or `X-Session-Id: ...`).
+
+`POST /api/auth/refresh` rotates the current session token atomically, returns a
+replacement token, and invalidates the replaced token so stale replay attempts
+fail closed with typed conflict semantics.
 
 `POST /api/auth/logout` revokes the current session token and closes every
 tracked active websocket connection that belongs to that session.
@@ -347,6 +353,12 @@ Run the auth contract test (REST + websocket token validation coverage):
 
 ```bash
 demo/video-chat/backend-king-php/tests/session-auth-contract.sh
+```
+
+Run the auth refresh/rotation contract test (token replacement + stale replay conflict):
+
+```bash
+demo/video-chat/backend-king-php/tests/session-refresh-contract.sh
 ```
 
 Run the admin user list contract test (search + pagination + deterministic sorting):

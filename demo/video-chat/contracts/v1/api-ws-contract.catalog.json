@@ -57,6 +57,7 @@
           "required": {
             "login_endpoint": { "type": "string", "enum": ["/api/auth/login"] },
             "session_endpoint": { "type": "string", "enum": ["/api/auth/session"] },
+            "refresh_endpoint": { "type": "string", "enum": ["/api/auth/refresh"] },
             "logout_endpoint": { "type": "string", "enum": ["/api/auth/logout"] },
             "settings_endpoint": { "type": "string", "enum": ["/api/user/settings"] },
             "avatar_upload_endpoint": { "type": "string", "enum": ["/api/user/avatar"] }
@@ -91,6 +92,7 @@
         "invite_code_redeem_endpoint": { "type": "string", "enum": ["/api/invite-codes/redeem"] },
         "login_endpoint": { "type": "string", "enum": ["/api/auth/login"] },
         "session_endpoint": { "type": "string", "enum": ["/api/auth/session"] },
+        "refresh_endpoint": { "type": "string", "enum": ["/api/auth/refresh"] },
         "logout_endpoint": { "type": "string", "enum": ["/api/auth/logout"] },
         "admin_users_endpoint": { "type": "string", "enum": ["/api/admin/users"] },
         "user_settings_endpoint": { "type": "string", "enum": ["/api/user/settings"] },

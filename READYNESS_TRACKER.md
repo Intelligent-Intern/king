@@ -51,6 +51,7 @@ Status note:
 - Recent batch-`S` closeout: the `ISSUES.md` execution batch on `develop/v1.0.3-beta` is fully exhausted (`#1`, `#3`-`#19`), including distributed WebSocket forwarding/fanout proof, QUIC/HTTP3 stability and listener/runtime verification, Semantic DNS and health/load routing hardening, coordinated readiness/drain/recovery plus autoscaling/provider-state recovery slices, S3/CDN pressure behavior, and a consolidated public-entrypoint hardening sweep across object-store, WebSocket, telemetry endpoint, and credential-input boundaries.
 - Recent video-chat backend dispatch closure: the active King PHP demo backend request path no longer keeps one mixed-responsibility handler block; `server.php` now wires deterministic focused modules (`runtime`, `auth_session`, `users`, `invites`, `calls`, `realtime`) through `demo/video-chat/backend-king-php/http/router.php`, with explicit module-order contract proof in `tests/router-module-order-contract.sh`.
 - Recent video-chat contract-catalog closure: the new stack now has one canonical versioned contract fixture at `demo/video-chat/contracts/v1/api-ws-contract.catalog.json`, parity is asserted by `backend-king-php/tests/contract-catalog-parity-contract.sh`, and CI shard-1 fails fast on catalog drift.
+- Recent video-chat session-rotation closure: the backend now exposes `POST /api/auth/refresh` with atomic token replacement, stale-token conflict rejection, replaced-token websocket tracking cleanup, and dedicated contract proof in `backend-king-php/tests/session-refresh-contract.sh`.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -341,7 +342,7 @@ Scope note:
 
 - [ ] Implement logout/session-revoke endpoint with immediate runtime effect.
 - [ ] Enforce session revocation propagation into active websocket connections.
-- [ ] Implement stable session refresh/rotation policy with replay-safe token handling.
+- [x] Implement stable session refresh/rotation policy with replay-safe token handling.
 - [ ] Enforce route-level RBAC middleware for admin/moderator/user actions.
 - [ ] Add forbidden/conflict validation semantics for all protected video APIs.
 - [ ] Implement admin user CRUD (`list`, `create`, `update`, `deactivate`) with deterministic pagination/search/sort.
