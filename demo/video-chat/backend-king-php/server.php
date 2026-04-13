@@ -8,6 +8,8 @@ $wsPath = getenv('VIDEOCHAT_KING_WS_PATH') ?: '/ws';
 $dbPath = getenv('VIDEOCHAT_KING_DB_PATH') ?: (__DIR__ . '/.local/video-chat.sqlite');
 $appVersion = getenv('VIDEOCHAT_KING_BACKEND_VERSION') ?: '1.0.6-beta';
 $appEnv = getenv('VIDEOCHAT_KING_ENV') ?: 'development';
+$avatarStorageRoot = getenv('VIDEOCHAT_AVATAR_STORAGE_ROOT') ?: (dirname($dbPath) . '/avatars');
+$avatarMaxBytes = 0;
 
 if ($port < 1 || $port > 65535) {
     fwrite(STDERR, "[video-chat][king-php-backend] invalid port: {$port}\n");
@@ -25,9 +27,12 @@ $log = static function (string $message): void {
 
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/avatar_upload.php';
 require_once __DIR__ . '/user_directory.php';
 require_once __DIR__ . '/user_management.php';
 require_once __DIR__ . '/user_settings.php';
+
+$avatarMaxBytes = videochat_avatar_max_bytes();
 
 try {
     $databaseRuntime = videochat_bootstrap_sqlite($dbPath);
@@ -157,7 +162,14 @@ $runtimeHealthSummary = static function (): array {
     ];
 };
 
-$runtimeEnvelope = static function () use ($appVersion, $appEnv, $databaseRuntime, $wsPath, $runtimeHealthSummary): array {
+$runtimeEnvelope = static function () use (
+    $appVersion,
+    $appEnv,
+    $databaseRuntime,
+    $wsPath,
+    $runtimeHealthSummary,
+    $avatarMaxBytes
+): array {
     return [
         'service' => 'video-chat-backend-king-php',
         'app' => [
@@ -177,6 +189,7 @@ $runtimeEnvelope = static function () use ($appVersion, $appEnv, $databaseRuntim
             'session_endpoint' => '/api/auth/session',
             'logout_endpoint' => '/api/auth/logout',
             'settings_endpoint' => '/api/user/settings',
+            'avatar_upload_endpoint' => '/api/user/avatar',
             'rbac' => [
                 'admin_scope_prefix' => '/api/admin/',
                 'moderation_scope_prefix' => '/api/moderation/',
@@ -190,6 +203,10 @@ $runtimeEnvelope = static function () use ($appVersion, $appEnv, $databaseRuntim
             'websocket_auth' => [
                 'query' => ['session', 'token'],
                 'headers' => ['Authorization', 'X-Session-Id'],
+            ],
+            'upload_limits' => [
+                'avatar_max_bytes' => $avatarMaxBytes,
+                'avatar_allowed_mime_types' => array_keys(videochat_avatar_allowed_mime_to_extension()),
             ],
         ],
         'time' => gmdate('c'),
@@ -233,7 +250,9 @@ $handler = static function (array $request) use (
     $issueSessionId,
     $pathFromRequest,
     $runtimeEnvelope,
-    $wsPath
+    $wsPath,
+    $avatarStorageRoot,
+    $avatarMaxBytes
 ): array {
     $path = $pathFromRequest($request);
     $method = $methodFromRequest($request);
@@ -767,6 +786,106 @@ SQL
         ]);
     }
 
+    if ($path === '/api/user/avatar') {
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/user/avatar.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'user_avatar_invalid_request_body', 'Avatar upload payload must be a non-empty JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $uploadResult = videochat_store_avatar_for_user(
+                $pdo,
+                $authenticatedUserId,
+                $payload,
+                $avatarStorageRoot,
+                $avatarMaxBytes
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'user_avatar_upload_failed', 'Could not upload avatar.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($uploadResult['ok'] ?? false)) {
+            $reason = (string) ($uploadResult['reason'] ?? 'internal_error');
+            if ($reason === 'validation_failed') {
+                return $errorResponse(422, 'user_avatar_validation_failed', 'Avatar upload payload failed validation.', [
+                    'fields' => is_array($uploadResult['errors'] ?? null) ? $uploadResult['errors'] : [],
+                ]);
+            }
+            if ($reason === 'not_found') {
+                return $errorResponse(404, 'user_not_found', 'Authenticated user could not be resolved.', [
+                    'user_id' => $authenticatedUserId,
+                ]);
+            }
+
+            return $errorResponse(500, 'user_avatar_upload_failed', 'Could not upload avatar.', [
+                'reason' => $reason,
+            ]);
+        }
+
+        return $jsonResponse(201, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'uploaded',
+                'avatar_path' => $uploadResult['avatar_path'] ?? null,
+                'content_type' => $uploadResult['content_type'] ?? null,
+                'bytes' => (int) ($uploadResult['bytes'] ?? 0),
+                'file_name' => $uploadResult['file_name'] ?? null,
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if (preg_match('#^/api/user/avatar-files/([A-Za-z0-9._-]{1,200})$#', $path, $avatarMatch) === 1) {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/user/avatar-files/{filename}.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        $fileName = (string) ($avatarMatch[1] ?? '');
+        $resolvedPath = videochat_avatar_resolve_read_path($avatarStorageRoot, $fileName);
+        if (!is_string($resolvedPath) || !is_file($resolvedPath)) {
+            return $errorResponse(404, 'user_avatar_not_found', 'Avatar file does not exist.', [
+                'file_name' => $fileName,
+            ]);
+        }
+
+        $binary = @file_get_contents($resolvedPath);
+        if (!is_string($binary)) {
+            return $errorResponse(500, 'user_avatar_read_failed', 'Could not read avatar file.', [
+                'reason' => 'read_failed',
+            ]);
+        }
+
+        $mime = videochat_avatar_detect_mime_from_binary($binary) ?? 'application/octet-stream';
+        return [
+            'status' => 200,
+            'headers' => [
+                'content-type' => $mime,
+                'cache-control' => 'private, max-age=60',
+            ],
+            'body' => $binary,
+        ];
+    }
+
     if ($path === '/api/user/settings') {
         $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
         if ($authenticatedUserId <= 0) {
@@ -878,6 +997,8 @@ SQL
             'admin_user_deactivate_endpoint_template' => '/api/admin/users/{id}/deactivate',
             'moderation_probe_endpoint' => '/api/moderation/ping',
             'user_probe_endpoint' => '/api/user/ping',
+            'user_avatar_upload_endpoint' => '/api/user/avatar',
+            'user_avatar_file_endpoint_template' => '/api/user/avatar-files/{filename}',
             'user_settings_endpoint' => '/api/user/settings',
             'time' => gmdate('c'),
         ]);

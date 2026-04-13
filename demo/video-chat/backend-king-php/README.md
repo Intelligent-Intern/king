@@ -37,6 +37,8 @@ cd demo/video-chat/backend-king-php
 - `GET /api/user/ping` (requires authenticated `admin`/`moderator`/`user` role)
 - `GET /api/user/settings` (requires authenticated `admin`/`moderator`/`user` role)
 - `PATCH /api/user/settings` (requires authenticated `admin`/`moderator`/`user` role)
+- `POST /api/user/avatar` (requires authenticated `admin`/`moderator`/`user` role)
+- `GET /api/user/avatar-files/{filename}` (requires authenticated `admin`/`moderator`/`user` role)
 - `WS /ws`
 
 Default bind:
@@ -57,6 +59,8 @@ Environment overrides:
 - `VIDEOCHAT_DEMO_ADMIN_PASSWORD` (default `admin123`)
 - `VIDEOCHAT_DEMO_USER_EMAIL` (default `user@intelligent-intern.com`)
 - `VIDEOCHAT_DEMO_USER_PASSWORD` (default `user123`)
+- `VIDEOCHAT_AVATAR_STORAGE_ROOT` (default `dirname(VIDEOCHAT_KING_DB_PATH)/avatars`)
+- `VIDEOCHAT_AVATAR_MAX_BYTES` (default `5242880`, clamped to `64KB..10MB`)
 - `KING_EXTENSION_PATH` (default `extension/modules/king.so` from repo root)
 - `PHP_BIN` (default `php`)
 
@@ -165,6 +169,16 @@ Response includes:
 - missing authenticated user row: `404 user_not_found`
 - success: `settings` plus normalized `user` envelope
 
+`POST /api/user/avatar` contract:
+
+- accepted payload formats:
+  - `{"content_type":"image/png|image/jpeg|image/webp","content_base64":"..."}`
+  - `{"data_url":"data:image/png;base64,..."}`
+- validation: strict base64 decode, binary signature check, max-size enforcement
+- safe storage: generated file names only, fixed storage root, previous avatar cleanup
+- failure envelope: `422 user_avatar_validation_failed` with `error.details.fields`
+- success: `201`, with `result.avatar_path`, `result.content_type`, `result.bytes`
+
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).
 
@@ -192,4 +206,10 @@ Run the user settings contract test (settings persistence + reauth/session reloa
 
 ```bash
 demo/video-chat/backend-king-php/tests/user-settings-contract.sh
+```
+
+Run the avatar upload contract test (type/size validation + safe storage path handling):
+
+```bash
+demo/video-chat/backend-king-php/tests/avatar-upload-contract.sh
 ```

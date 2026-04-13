@@ -163,7 +163,7 @@ Contract guardrails for this batch:
   done when: CRUD operations are persisted safely, invalid payloads fail with typed validation errors, and duplicate email conflicts are explicit.
 - [x] `#14 Implement profile/settings endpoint for display name, avatar reference, time format, and theme preferences.`
   done when: settings persist per user and frontend reload restores exact saved preferences.
-- [ ] `#15 Implement avatar upload endpoint for new stack with type/size validation and safe storage path handling.`
+- [x] `#15 Implement avatar upload endpoint for new stack with type/size validation and safe storage path handling.`
   done when: valid image uploads persist and invalid/unsafe uploads are rejected fail-closed.
 - [ ] `#16 Implement calls list endpoint with filters for my-calls/all-calls, search by title, status filtering, and pagination.`
   done when: response matches table requirements with stable totals and deterministic ordering.
