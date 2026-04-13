@@ -53,11 +53,9 @@ async function loadWasmModule(): Promise<WLVCModule | null> {
 
   loadPromise = (async () => {
     try {
-      // Dynamic import of the Emscripten-generated factory
       const createModule = (await import('./wlvc.js')).default as (config?: any) => Promise<WLVCModule>
       wasmModule = await createModule({
         locateFile: (path: string) => {
-          // Adjust path resolution if wlvc.wasm is in a different location
           if (path.endsWith('.wasm')) {
             return new URL('./wlvc.wasm', import.meta.url).href
           }

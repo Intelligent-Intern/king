@@ -76,9 +76,11 @@ export class WaveletCodec {
   }
 
   private async initWasm(): Promise<void> {
+    console.log('[WaveletCodec] Starting WASM init...')
     try {
       const w = this.config.width
       const h = this.config.height
+      console.log(`[WaveletCodec] WASM dimensions: ${w}x${h} quality=${this.config.quality}`)
       const wasmEnc = new WasmWaveletVideoEncoder({
         width: w, height: h,
         quality: this.config.quality,
@@ -88,7 +90,9 @@ export class WaveletCodec {
         width: w, height: h,
         quality: this.config.quality,
       })
+      console.log('[WaveletCodec] WASM objects created, calling init()...')
       const [encOk, decOk] = await Promise.all([wasmEnc.init(), wasmDec.init()])
+      console.log(`[WaveletCodec] WASM init results: enc=${encOk} dec=${decOk}`)
       if (encOk && decOk) {
         this.encoder.reset()
         this.decoder.reset()
@@ -96,9 +100,11 @@ export class WaveletCodec {
         this.decoder = wasmDec as unknown as ReturnType<typeof createDecoder>
         this.usingWasm = true
         console.log('[WaveletCodec] Switched to WASM codec')
+      } else {
+        console.warn(`[WaveletCodec] WASM init returned false: enc=${encOk} dec=${decOk}`)
       }
     } catch (e) {
-      console.warn('[WaveletCodec] WASM init failed, staying on TS codec:', e)
+      console.error('[WaveletCodec] WASM init exception:', e)
     }
   }
 
