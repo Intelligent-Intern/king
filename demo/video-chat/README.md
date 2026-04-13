@@ -181,6 +181,7 @@ SQLite data is persisted in a mounted Docker volume:
 - backend health endpoint: `GET http://127.0.0.1:18080/health`
 - backend runtime preflight endpoint: `GET http://127.0.0.1:18080/api/runtime`
 - backend version endpoint: `GET http://127.0.0.1:18080/api/version`
+- backend login endpoint: `POST http://127.0.0.1:18080/api/auth/login`
 - backend websocket endpoint: `WS ws://127.0.0.1:18080/ws`
 - backend startup applies ordered sqlite migrations (`schema_migrations`) and exposes migration state in runtime/health responses
 - frontend scaffold endpoint: `http://127.0.0.1:5174`

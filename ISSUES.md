@@ -149,7 +149,7 @@ Contract guardrails for this batch:
   done when: endpoint returns runtime health plus app/version metadata and frontend preflight can consume it.
 - [x] `#7 Implement sqlite migration/bootstrap layer for users, roles, sessions, rooms, calls, invite codes, and participant membership tables.`
   done when: clean database init and migration upgrade are deterministic and idempotent across restarts.
-- [ ] `#8 Implement login endpoint with deterministic demo credential mapping and hashed password verification boundary.`
+- [x] `#8 Implement login endpoint with deterministic demo credential mapping and hashed password verification boundary.`
   done when: login validates credentials against persisted users, returns session envelope, and rejects invalid attempts with stable error schema.
 - [ ] `#9 Implement session issuance/validation middleware for REST and WebSocket handshake paths.`
   done when: authenticated endpoints require valid session state, websocket connect rejects invalid/expired sessions, and tests cover both transports.

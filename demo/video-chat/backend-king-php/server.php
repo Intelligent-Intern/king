@@ -35,7 +35,12 @@ try {
 register_shutdown_function(static function () use ($log): void {
     $error = error_get_last();
     if (is_array($error)) {
-        $log(sprintf('shutdown with last error: %s (%s:%d)', (string) ($error['message'] ?? 'unknown'), (string) ($error['file'] ?? 'n/a'), (int) ($error['line'] ?? 0)));
+        $log(sprintf(
+            'shutdown with last error: %s (%s:%d)',
+            (string) ($error['message'] ?? 'unknown'),
+            (string) ($error['file'] ?? 'n/a'),
+            (int) ($error['line'] ?? 0)
+        ));
         return;
     }
 
@@ -48,6 +53,86 @@ $jsonResponse = static function (int $status, array $payload): array {
         'headers' => ['content-type' => 'application/json; charset=utf-8'],
         'body' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
     ];
+};
+
+$errorResponse = static function (int $status, string $code, string $message, array $details = []) use ($jsonResponse): array {
+    $error = [
+        'code' => $code,
+        'message' => $message,
+    ];
+    if ($details !== []) {
+        $error['details'] = $details;
+    }
+
+    return $jsonResponse($status, [
+        'status' => 'error',
+        'error' => $error,
+        'time' => gmdate('c'),
+    ]);
+};
+
+$methodFromRequest = static function (array $request): string {
+    $method = strtoupper(trim((string) ($request['method'] ?? 'GET')));
+    return $method === '' ? 'GET' : $method;
+};
+
+$headerValueFromRequest = static function (array $request, string $headerName): string {
+    $headers = $request['headers'] ?? null;
+    if (!is_array($headers) || $headerName === '') {
+        return '';
+    }
+
+    foreach ($headers as $name => $value) {
+        if (strcasecmp((string) $name, $headerName) !== 0) {
+            continue;
+        }
+
+        if (is_string($value)) {
+            return trim($value);
+        }
+        if (is_array($value)) {
+            $flat = [];
+            foreach ($value as $item) {
+                if (is_scalar($item)) {
+                    $flat[] = trim((string) $item);
+                }
+            }
+
+            $flat = array_values(array_filter($flat, static fn (string $item): bool => $item !== ''));
+            return trim(implode(', ', $flat));
+        }
+        if (is_scalar($value)) {
+            return trim((string) $value);
+        }
+    }
+
+    return '';
+};
+
+$decodeJsonBody = static function (array $request): array {
+    $body = $request['body'] ?? '';
+    if (!is_string($body) || trim($body) === '') {
+        return [null, 'empty_body'];
+    }
+
+    $decoded = json_decode($body, true);
+    if (!is_array($decoded)) {
+        return [null, 'invalid_json'];
+    }
+
+    return [$decoded, null];
+};
+
+$openDatabase = static function () use ($dbPath): PDO {
+    return videochat_open_sqlite_pdo($dbPath);
+};
+
+$issueSessionId = static function (): string {
+    try {
+        return 'sess_' . bin2hex(random_bytes(20));
+    } catch (Throwable $error) {
+        return 'sess_' . hash('sha256', uniqid('videochat', true) . microtime(true));
+    }
 };
 
 $runtimeHealthSummary = static function (): array {
@@ -114,6 +199,10 @@ $runtimeEnvelope = static function () use ($appVersion, $appEnv, $databaseRuntim
             'health' => $runtimeHealthSummary(),
         ],
         'database' => $databaseRuntime,
+        'auth' => [
+            'login_endpoint' => '/api/auth/login',
+            'demo_users' => $databaseRuntime['demo_users'] ?? [],
+        ],
         'time' => gmdate('c'),
     ];
 };
@@ -132,7 +221,7 @@ $pathFromRequest = static function (array $request): string {
     return '/';
 };
 
-$log("king_version=" . (function_exists('king_version') ? (string) king_version() : 'n/a'));
+$log('king_version=' . (function_exists('king_version') ? (string) king_version() : 'n/a'));
 $log(sprintf(
     'sqlite bootstrap: schema v%d (%d/%d migrations) at %s',
     (int) ($databaseRuntime['schema_version'] ?? 0),
@@ -140,12 +229,25 @@ $log(sprintf(
     (int) ($databaseRuntime['migrations_total'] ?? 0),
     (string) ($databaseRuntime['path'] ?? $dbPath)
 ));
+$log('auth demo users: ' . json_encode($databaseRuntime['demo_users'] ?? [], JSON_UNESCAPED_SLASHES));
 $log("http endpoint bound: http://{$host}:{$port}/");
 $log("websocket endpoint bound: ws://{$host}:{$port}{$wsPath}");
 $log('starting King HTTP/1 listener...');
 
-$handler = static function (array $request) use ($jsonResponse, $pathFromRequest, $runtimeEnvelope, $wsPath): array {
+$handler = static function (array $request) use (
+    $jsonResponse,
+    $errorResponse,
+    $methodFromRequest,
+    $headerValueFromRequest,
+    $decodeJsonBody,
+    $openDatabase,
+    $issueSessionId,
+    $pathFromRequest,
+    $runtimeEnvelope,
+    $wsPath
+): array {
     $path = $pathFromRequest($request);
+    $method = $methodFromRequest($request);
 
     if ($path === '/health' || $path === '/api/runtime') {
         $payload = $runtimeEnvelope();
@@ -167,6 +269,140 @@ $handler = static function (array $request) use ($jsonResponse, $pathFromRequest
         ]);
     }
 
+    if ($path === '/api/auth/login') {
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/auth/login.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'auth_invalid_request_body', 'Login payload must be a non-empty JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        $email = strtolower(trim((string) ($payload['email'] ?? '')));
+        $password = (string) ($payload['password'] ?? '');
+        if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false || trim($password) === '') {
+            return $errorResponse(422, 'auth_validation_failed', 'Email and password are required.', [
+                'fields' => [
+                    'email' => $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false ? 'ok' : 'required_email',
+                    'password' => trim($password) !== '' ? 'ok' : 'required_password',
+                ],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $userQuery = $pdo->prepare(
+                <<<'SQL'
+SELECT
+    users.id,
+    users.email,
+    users.display_name,
+    users.password_hash,
+    users.status,
+    users.time_format,
+    users.theme,
+    users.avatar_path,
+    roles.slug AS role_slug
+FROM users
+INNER JOIN roles ON roles.id = users.role_id
+WHERE lower(users.email) = lower(:email)
+LIMIT 1
+SQL
+            );
+            $userQuery->execute([':email' => $email]);
+            $user = $userQuery->fetch();
+
+            $storedHash = is_array($user) && is_string($user['password_hash'] ?? null)
+                ? trim((string) $user['password_hash'])
+                : '';
+            $userIsActive = is_array($user) && ((string) ($user['status'] ?? 'disabled')) === 'active';
+            if (
+                !is_array($user)
+                || !$userIsActive
+                || $storedHash === ''
+                || !password_verify($password, $storedHash)
+            ) {
+                return $errorResponse(401, 'auth_invalid_credentials', 'Invalid email or password.');
+            }
+
+            if (password_needs_rehash($storedHash, PASSWORD_DEFAULT)) {
+                $rehash = password_hash($password, PASSWORD_DEFAULT);
+                if (!is_string($rehash) || $rehash === '') {
+                    throw new RuntimeException('Could not refresh password hash.');
+                }
+
+                $rehashQuery = $pdo->prepare(
+                    'UPDATE users SET password_hash = :password_hash, updated_at = :updated_at WHERE id = :id'
+                );
+                $rehashQuery->execute([
+                    ':password_hash' => $rehash,
+                    ':updated_at' => gmdate('c'),
+                    ':id' => (int) $user['id'],
+                ]);
+            }
+
+            $ttlSeconds = (int) (getenv('VIDEOCHAT_SESSION_TTL_SECONDS') ?: 43_200);
+            if ($ttlSeconds < 60) {
+                $ttlSeconds = 60;
+            } elseif ($ttlSeconds > 2_592_000) {
+                $ttlSeconds = 2_592_000;
+            }
+
+            $sessionId = $issueSessionId();
+            $issuedAt = gmdate('c');
+            $expiresAt = gmdate('c', time() + $ttlSeconds);
+            $clientIp = trim((string) ($request['remote_address'] ?? ''));
+            $userAgent = substr($headerValueFromRequest($request, 'user-agent'), 0, 500);
+
+            $sessionInsert = $pdo->prepare(
+                <<<'SQL'
+INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent)
+VALUES(:id, :user_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)
+SQL
+            );
+            $sessionInsert->execute([
+                ':id' => $sessionId,
+                ':user_id' => (int) $user['id'],
+                ':issued_at' => $issuedAt,
+                ':expires_at' => $expiresAt,
+                ':client_ip' => $clientIp === '' ? null : $clientIp,
+                ':user_agent' => $userAgent === '' ? null : $userAgent,
+            ]);
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'session' => [
+                    'id' => $sessionId,
+                    'token' => $sessionId,
+                    'token_type' => 'session_id',
+                    'issued_at' => $issuedAt,
+                    'expires_at' => $expiresAt,
+                    'expires_in_seconds' => $ttlSeconds,
+                ],
+                'user' => [
+                    'id' => (int) $user['id'],
+                    'email' => (string) $user['email'],
+                    'display_name' => (string) $user['display_name'],
+                    'role' => (string) ($user['role_slug'] ?? 'user'),
+                    'status' => (string) $user['status'],
+                    'time_format' => (string) ($user['time_format'] ?? '24h'),
+                    'theme' => (string) ($user['theme'] ?? 'dark'),
+                    'avatar_path' => is_string($user['avatar_path'] ?? null) ? (string) $user['avatar_path'] : null,
+                ],
+                'time' => gmdate('c'),
+            ]);
+        } catch (Throwable $error) {
+            return $errorResponse(500, 'auth_login_failed', 'Login failed due to a backend error.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+    }
+
     if ($path === '/' || $path === '/api/bootstrap') {
         return $jsonResponse(200, [
             'service' => 'video-chat-backend-king-php',
@@ -175,6 +411,7 @@ $handler = static function (array $request) use ($jsonResponse, $pathFromRequest
             'ws_path' => $wsPath,
             'runtime_endpoint' => '/api/runtime',
             'version_endpoint' => '/api/version',
+            'login_endpoint' => '/api/auth/login',
             'time' => gmdate('c'),
         ]);
     }
@@ -190,10 +427,7 @@ $handler = static function (array $request) use ($jsonResponse, $pathFromRequest
 
         $websocket = king_server_upgrade_to_websocket($session, $streamId);
         if ($websocket === false) {
-            return $jsonResponse(400, [
-                'error' => 'websocket_upgrade_failed',
-                'message' => 'Could not upgrade request to websocket.',
-            ]);
+            return $errorResponse(400, 'websocket_upgrade_failed', 'Could not upgrade request to websocket.');
         }
 
         king_websocket_send(
@@ -212,8 +446,7 @@ $handler = static function (array $request) use ($jsonResponse, $pathFromRequest
         ];
     }
 
-    return $jsonResponse(404, [
-        'error' => 'not_found',
+    return $errorResponse(404, 'not_found', 'The requested endpoint does not exist.', [
         'path' => $path,
     ]);
 };

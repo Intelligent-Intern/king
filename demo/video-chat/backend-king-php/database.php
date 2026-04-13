@@ -2,6 +2,202 @@
 
 declare(strict_types=1);
 
+function videochat_open_sqlite_pdo(string $databasePath): PDO
+{
+    $trimmedPath = trim($databasePath);
+    if ($trimmedPath === '') {
+        throw new InvalidArgumentException('VIDEOCHAT_KING_DB_PATH must not be empty.');
+    }
+
+    $directory = dirname($trimmedPath);
+    if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+        throw new RuntimeException(sprintf('Could not create sqlite directory: %s', $directory));
+    }
+
+    $pdo = new PDO('sqlite:' . $trimmedPath);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    $pdo->exec('PRAGMA foreign_keys = ON');
+    $pdo->exec('PRAGMA busy_timeout = 5000');
+    $pdo->exec('PRAGMA synchronous = NORMAL');
+
+    return $pdo;
+}
+
+/**
+ * @return array<int, array{
+ *   email: string,
+ *   display_name: string,
+ *   role: string,
+ *   password: string,
+ *   time_format: string,
+ *   theme: string
+ * }>
+ */
+function videochat_demo_user_blueprint(): array
+{
+    $adminEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_ADMIN_EMAIL') ?: 'admin@intelligent-intern.com')));
+    $userEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_USER_EMAIL') ?: 'user@intelligent-intern.com')));
+    $adminPassword = trim((string) (getenv('VIDEOCHAT_DEMO_ADMIN_PASSWORD') ?: 'admin123'));
+    $userPassword = trim((string) (getenv('VIDEOCHAT_DEMO_USER_PASSWORD') ?: 'user123'));
+
+    if ($adminEmail === '' || filter_var($adminEmail, FILTER_VALIDATE_EMAIL) === false) {
+        throw new InvalidArgumentException('VIDEOCHAT_DEMO_ADMIN_EMAIL must be a valid email address.');
+    }
+    if ($userEmail === '' || filter_var($userEmail, FILTER_VALIDATE_EMAIL) === false) {
+        throw new InvalidArgumentException('VIDEOCHAT_DEMO_USER_EMAIL must be a valid email address.');
+    }
+    if ($adminPassword === '') {
+        throw new InvalidArgumentException('VIDEOCHAT_DEMO_ADMIN_PASSWORD must not be empty.');
+    }
+    if ($userPassword === '') {
+        throw new InvalidArgumentException('VIDEOCHAT_DEMO_USER_PASSWORD must not be empty.');
+    }
+
+    return [
+        [
+            'email' => $adminEmail,
+            'display_name' => 'Platform Admin',
+            'role' => 'admin',
+            'password' => $adminPassword,
+            'time_format' => '24h',
+            'theme' => 'dark',
+        ],
+        [
+            'email' => $userEmail,
+            'display_name' => 'Call User',
+            'role' => 'user',
+            'password' => $userPassword,
+            'time_format' => '24h',
+            'theme' => 'dark',
+        ],
+    ];
+}
+
+/**
+ * @return array<int, array{email: string, display_name: string, role: string}>
+ */
+function videochat_seed_demo_users(PDO $pdo): array
+{
+    $roles = [];
+    $roleRows = $pdo->query('SELECT id, slug FROM roles');
+    foreach ($roleRows as $row) {
+        $slug = is_string($row['slug'] ?? null) ? $row['slug'] : '';
+        if ($slug === '') {
+            continue;
+        }
+        $roles[$slug] = (int) ($row['id'] ?? 0);
+    }
+
+    $selectUser = $pdo->prepare(
+        <<<'SQL'
+SELECT id, role_id, display_name, password_hash, status, time_format, theme
+FROM users
+WHERE lower(email) = lower(:email)
+LIMIT 1
+SQL
+    );
+    $insertUser = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, updated_at)
+VALUES(:email, :display_name, :password_hash, :role_id, 'active', :time_format, :theme, :updated_at)
+SQL
+    );
+    $updateUser = $pdo->prepare(
+        <<<'SQL'
+UPDATE users
+SET display_name = :display_name,
+    password_hash = :password_hash,
+    role_id = :role_id,
+    status = 'active',
+    time_format = :time_format,
+    theme = :theme,
+    updated_at = :updated_at
+WHERE id = :id
+SQL
+    );
+
+    $seeded = [];
+    foreach (videochat_demo_user_blueprint() as $demoUser) {
+        $roleId = (int) ($roles[$demoUser['role']] ?? 0);
+        if ($roleId <= 0) {
+            throw new RuntimeException(sprintf('Missing role slug in roles table: %s', $demoUser['role']));
+        }
+
+        $selectUser->execute([':email' => $demoUser['email']]);
+        $existing = $selectUser->fetch();
+
+        $passwordHash = null;
+        $needsUpdate = false;
+        if (is_array($existing)) {
+            $existingHash = is_string($existing['password_hash'] ?? null) ? trim((string) $existing['password_hash']) : '';
+            $hashValid = $existingHash !== '' && password_verify($demoUser['password'], $existingHash);
+            $hashNeedsRehash = $hashValid && password_needs_rehash($existingHash, PASSWORD_DEFAULT);
+
+            if (!$hashValid || $hashNeedsRehash) {
+                $passwordHash = password_hash($demoUser['password'], PASSWORD_DEFAULT);
+                if (!is_string($passwordHash) || $passwordHash === '') {
+                    throw new RuntimeException('Failed to hash demo user password.');
+                }
+                $needsUpdate = true;
+            } else {
+                $passwordHash = $existingHash;
+            }
+
+            if ((int) ($existing['role_id'] ?? 0) !== $roleId) {
+                $needsUpdate = true;
+            }
+            if ((string) ($existing['display_name'] ?? '') !== $demoUser['display_name']) {
+                $needsUpdate = true;
+            }
+            if ((string) ($existing['status'] ?? '') !== 'active') {
+                $needsUpdate = true;
+            }
+            if ((string) ($existing['time_format'] ?? '') !== $demoUser['time_format']) {
+                $needsUpdate = true;
+            }
+            if ((string) ($existing['theme'] ?? '') !== $demoUser['theme']) {
+                $needsUpdate = true;
+            }
+
+            if ($needsUpdate) {
+                $updateUser->execute([
+                    ':id' => (int) $existing['id'],
+                    ':display_name' => $demoUser['display_name'],
+                    ':password_hash' => $passwordHash,
+                    ':role_id' => $roleId,
+                    ':time_format' => $demoUser['time_format'],
+                    ':theme' => $demoUser['theme'],
+                    ':updated_at' => gmdate('c'),
+                ]);
+            }
+        } else {
+            $passwordHash = password_hash($demoUser['password'], PASSWORD_DEFAULT);
+            if (!is_string($passwordHash) || $passwordHash === '') {
+                throw new RuntimeException('Failed to hash demo user password.');
+            }
+
+            $insertUser->execute([
+                ':email' => $demoUser['email'],
+                ':display_name' => $demoUser['display_name'],
+                ':password_hash' => $passwordHash,
+                ':role_id' => $roleId,
+                ':time_format' => $demoUser['time_format'],
+                ':theme' => $demoUser['theme'],
+                ':updated_at' => gmdate('c'),
+            ]);
+        }
+
+        $seeded[] = [
+            'email' => $demoUser['email'],
+            'display_name' => $demoUser['display_name'],
+            'role' => $demoUser['role'],
+        ];
+    }
+
+    return $seeded;
+}
+
 /**
  * @return array<int, array{name: string, statements: array<int, string>}>
  */
@@ -165,28 +361,15 @@ SQL,
  *   applied_versions: array<int, int>,
  *   table_count: int,
  *   table_names: array<int, string>,
- *   journal_mode: string
+ *   journal_mode: string,
+ *   demo_users: array<int, array{email: string, display_name: string, role: string}>
  * }
  */
 function videochat_bootstrap_sqlite(string $databasePath): array
 {
     $trimmedPath = trim($databasePath);
-    if ($trimmedPath === '') {
-        throw new InvalidArgumentException('VIDEOCHAT_KING_DB_PATH must not be empty.');
-    }
-
-    $directory = dirname($trimmedPath);
-    if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
-        throw new RuntimeException(sprintf('Could not create sqlite directory: %s', $directory));
-    }
-
-    $pdo = new PDO('sqlite:' . $trimmedPath);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-    $pdo->exec('PRAGMA foreign_keys = ON');
-    $pdo->exec('PRAGMA busy_timeout = 5000');
+    $pdo = videochat_open_sqlite_pdo($trimmedPath);
     $journalMode = (string) $pdo->query('PRAGMA journal_mode = WAL')->fetchColumn();
-    $pdo->exec('PRAGMA synchronous = NORMAL');
 
     $pdo->exec(
         <<<'SQL'
@@ -238,6 +421,8 @@ SQL
         $newlyApplied++;
     }
 
+    $seededDemoUsers = videochat_seed_demo_users($pdo);
+
     $tableNames = [];
     $tableRows = $pdo->query(
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name ASC"
@@ -264,5 +449,6 @@ SQL
         'table_count' => count($tableNames),
         'table_names' => $tableNames,
         'journal_mode' => strtoupper($journalMode),
+        'demo_users' => $seededDemoUsers,
     ];
 }
