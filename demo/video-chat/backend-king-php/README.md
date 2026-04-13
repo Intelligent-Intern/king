@@ -26,6 +26,7 @@ cd demo/video-chat/backend-king-php
 - `GET /api/runtime`
 - `GET /api/version`
 - `POST /api/auth/login`
+- `GET /api/auth/session` (requires session token)
 - `WS /ws`
 
 Default bind:
@@ -53,6 +54,15 @@ Environment overrides:
 
 ```bash
 curl -s http://127.0.0.1:18080/health
+```
+
+Session check using login token:
+
+```bash
+TOKEN="$(curl -sS -X POST http://127.0.0.1:18080/api/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"email":"admin@intelligent-intern.com","password":"admin123"}' | jq -r '.session.token')"
+curl -sS http://127.0.0.1:18080/api/auth/session -H "authorization: Bearer ${TOKEN}"
 ```
 
 ## Schema bootstrap
@@ -104,4 +114,18 @@ Failures use the same error envelope shape:
   },
   "time": "..."
 }
+```
+
+`GET /api/auth/session` and every non-public `/api/*` path require a valid
+session token (`Authorization: Bearer ...` or `X-Session-Id: ...`).
+
+`WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
+query `?session=<token>`/`?token=<token>` for browser handshake compatibility).
+
+## Contract checks
+
+Run the auth contract test (REST + websocket token validation coverage):
+
+```bash
+demo/video-chat/backend-king-php/tests/session-auth-contract.sh
 ```

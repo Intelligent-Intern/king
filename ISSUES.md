@@ -151,7 +151,7 @@ Contract guardrails for this batch:
   done when: clean database init and migration upgrade are deterministic and idempotent across restarts.
 - [x] `#8 Implement login endpoint with deterministic demo credential mapping and hashed password verification boundary.`
   done when: login validates credentials against persisted users, returns session envelope, and rejects invalid attempts with stable error schema.
-- [ ] `#9 Implement session issuance/validation middleware for REST and WebSocket handshake paths.`
+- [x] `#9 Implement session issuance/validation middleware for REST and WebSocket handshake paths.`
   done when: authenticated endpoints require valid session state, websocket connect rejects invalid/expired sessions, and tests cover both transports.
 - [ ] `#10 Implement logout/session-revoke endpoint with immediate effect across active websocket connections.`
   done when: logout invalidates session server-side and forces connected realtime channels for that session to close.

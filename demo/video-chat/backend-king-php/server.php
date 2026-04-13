@@ -24,6 +24,7 @@ $log = static function (string $message): void {
 };
 
 require_once __DIR__ . '/database.php';
+require_once __DIR__ . '/auth.php';
 
 try {
     $databaseRuntime = videochat_bootstrap_sqlite($dbPath);
@@ -74,39 +75,6 @@ $errorResponse = static function (int $status, string $code, string $message, ar
 $methodFromRequest = static function (array $request): string {
     $method = strtoupper(trim((string) ($request['method'] ?? 'GET')));
     return $method === '' ? 'GET' : $method;
-};
-
-$headerValueFromRequest = static function (array $request, string $headerName): string {
-    $headers = $request['headers'] ?? null;
-    if (!is_array($headers) || $headerName === '') {
-        return '';
-    }
-
-    foreach ($headers as $name => $value) {
-        if (strcasecmp((string) $name, $headerName) !== 0) {
-            continue;
-        }
-
-        if (is_string($value)) {
-            return trim($value);
-        }
-        if (is_array($value)) {
-            $flat = [];
-            foreach ($value as $item) {
-                if (is_scalar($item)) {
-                    $flat[] = trim((string) $item);
-                }
-            }
-
-            $flat = array_values(array_filter($flat, static fn (string $item): bool => $item !== ''));
-            return trim(implode(', ', $flat));
-        }
-        if (is_scalar($value)) {
-            return trim((string) $value);
-        }
-    }
-
-    return '';
 };
 
 $decodeJsonBody = static function (array $request): array {
@@ -201,7 +169,16 @@ $runtimeEnvelope = static function () use ($appVersion, $appEnv, $databaseRuntim
         'database' => $databaseRuntime,
         'auth' => [
             'login_endpoint' => '/api/auth/login',
+            'session_endpoint' => '/api/auth/session',
             'demo_users' => $databaseRuntime['demo_users'] ?? [],
+            'rest_auth' => [
+                'authorization_header' => 'Authorization: Bearer <session_token>',
+                'fallback_header' => 'X-Session-Id: <session_token>',
+            ],
+            'websocket_auth' => [
+                'query' => ['session', 'token'],
+                'headers' => ['Authorization', 'X-Session-Id'],
+            ],
         ],
         'time' => gmdate('c'),
     ];
@@ -238,7 +215,6 @@ $handler = static function (array $request) use (
     $jsonResponse,
     $errorResponse,
     $methodFromRequest,
-    $headerValueFromRequest,
     $decodeJsonBody,
     $openDatabase,
     $issueSessionId,
@@ -248,6 +224,49 @@ $handler = static function (array $request) use (
 ): array {
     $path = $pathFromRequest($request);
     $method = $methodFromRequest($request);
+
+    $isPublicEndpoint = static function (string $requestPath) use ($wsPath): bool {
+        return in_array(
+            $requestPath,
+            ['/', '/health', '/api/bootstrap', '/api/runtime', '/api/version', '/api/auth/login'],
+            true
+        ) && $requestPath !== $wsPath;
+    };
+
+    $authenticateRequest = static function (array $authRequest, string $transport) use ($openDatabase): array {
+        try {
+            $pdo = $openDatabase();
+            return videochat_authenticate_request($pdo, $authRequest, $transport);
+        } catch (Throwable $error) {
+            return [
+                'ok' => false,
+                'reason' => 'auth_backend_error',
+                'token' => '',
+                'session' => null,
+                'user' => null,
+            ];
+        }
+    };
+
+    $authFailureResponse = static function (string $transport, string $reason) use ($errorResponse): array {
+        $status = $reason === 'auth_backend_error' ? 500 : 401;
+        $code = $transport === 'websocket' ? 'websocket_auth_failed' : 'auth_failed';
+        $message = $status === 500
+            ? 'Authentication check failed due to a backend error.'
+            : 'A valid session token is required.';
+
+        return $errorResponse($status, $code, $message, [
+            'reason' => $reason,
+        ]);
+    };
+
+    $apiAuthContext = null;
+    if (str_starts_with($path, '/api/') && !$isPublicEndpoint($path)) {
+        $apiAuthContext = $authenticateRequest($request, 'rest');
+        if (!(bool) ($apiAuthContext['ok'] ?? false)) {
+            return $authFailureResponse('rest', (string) ($apiAuthContext['reason'] ?? 'invalid_session'));
+        }
+    }
 
     if ($path === '/health' || $path === '/api/runtime') {
         $payload = $runtimeEnvelope();
@@ -357,7 +376,7 @@ SQL
             $issuedAt = gmdate('c');
             $expiresAt = gmdate('c', time() + $ttlSeconds);
             $clientIp = trim((string) ($request['remote_address'] ?? ''));
-            $userAgent = substr($headerValueFromRequest($request, 'user-agent'), 0, 500);
+            $userAgent = substr(videochat_request_header_value($request, 'user-agent'), 0, 500);
 
             $sessionInsert = $pdo->prepare(
                 <<<'SQL'
@@ -403,6 +422,21 @@ SQL
         }
     }
 
+    if ($path === '/api/auth/session') {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/auth/session.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'session' => $apiAuthContext['session'] ?? null,
+            'user' => $apiAuthContext['user'] ?? null,
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if ($path === '/' || $path === '/api/bootstrap') {
         return $jsonResponse(200, [
             'service' => 'video-chat-backend-king-php',
@@ -412,11 +446,17 @@ SQL
             'runtime_endpoint' => '/api/runtime',
             'version_endpoint' => '/api/version',
             'login_endpoint' => '/api/auth/login',
+            'session_endpoint' => '/api/auth/session',
             'time' => gmdate('c'),
         ]);
     }
 
     if ($path === $wsPath) {
+        $websocketAuth = $authenticateRequest($request, 'websocket');
+        if (!(bool) ($websocketAuth['ok'] ?? false)) {
+            return $authFailureResponse('websocket', (string) ($websocketAuth['reason'] ?? 'invalid_session'));
+        }
+
         $session = $request['session'] ?? null;
         $streamId = (int) ($request['stream_id'] ?? 0);
         if ($session !== null && $streamId > 0) {
@@ -435,6 +475,10 @@ SQL
             json_encode([
                 'type' => 'system/welcome',
                 'message' => 'video-chat King websocket scaffold connected',
+                'auth' => [
+                    'session' => $websocketAuth['session'] ?? null,
+                    'user' => $websocketAuth['user'] ?? null,
+                ],
                 'time' => gmdate('c'),
             ], JSON_UNESCAPED_SLASHES)
         );
