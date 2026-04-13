@@ -165,7 +165,7 @@ Contract guardrails for this batch:
   done when: settings persist per user and frontend reload restores exact saved preferences.
 - [x] `#15 Implement avatar upload endpoint for new stack with type/size validation and safe storage path handling.`
   done when: valid image uploads persist and invalid/unsafe uploads are rejected fail-closed.
-- [ ] `#16 Implement calls list endpoint with filters for my-calls/all-calls, search by title, status filtering, and pagination.`
+- [x] `#16 Implement calls list endpoint with filters for my-calls/all-calls, search by title, status filtering, and pagination.`
   done when: response matches table requirements with stable totals and deterministic ordering.
 - [ ] `#17 Implement create-call endpoint supporting title, start/end times, internal participant ids, and external invitee rows.`
   done when: call creation persists all participant mappings and returns a single normalized call payload.

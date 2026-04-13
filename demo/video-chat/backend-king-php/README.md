@@ -28,6 +28,7 @@ cd demo/video-chat/backend-king-php
 - `POST /api/auth/login`
 - `GET /api/auth/session` (requires session token)
 - `POST /api/auth/logout` (requires session token)
+- `GET /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
 - `GET /api/admin/ping` (requires `admin` role)
 - `GET /api/admin/users` (requires `admin` role)
 - `POST /api/admin/users` (requires `admin` role)
@@ -179,6 +180,20 @@ Response includes:
 - failure envelope: `422 user_avatar_validation_failed` with `error.details.fields`
 - success: `201`, with `result.avatar_path`, `result.content_type`, `result.bytes`
 
+`GET /api/calls` query contract:
+
+- `scope`: `my` or `all` (non-admin/moderator callers requesting `all` are safely downgraded to `my`)
+- `status`: `all|scheduled|active|ended|cancelled`
+- `query` (alias: `q`) for title search
+- `page` / `page_size` (`1..100`)
+
+Response includes:
+
+- `calls[]` with owner envelope and participant totals
+- `filters` (requested + effective scope)
+- `pagination` (`page`, `page_size`, `total`, `page_count`, `returned`, `has_prev`, `has_next`)
+- deterministic `sort` metadata
+
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).
 
@@ -212,4 +227,10 @@ Run the avatar upload contract test (type/size validation + safe storage path ha
 
 ```bash
 demo/video-chat/backend-king-php/tests/avatar-upload-contract.sh
+```
+
+Run the calls list contract test (my/all scope + search/status filters + deterministic pagination):
+
+```bash
+demo/video-chat/backend-king-php/tests/calls-list-contract.sh
 ```

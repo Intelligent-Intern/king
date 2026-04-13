@@ -28,6 +28,7 @@ $log = static function (string $message): void {
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/avatar_upload.php';
+require_once __DIR__ . '/call_directory.php';
 require_once __DIR__ . '/user_directory.php';
 require_once __DIR__ . '/user_management.php';
 require_once __DIR__ . '/user_settings.php';
@@ -208,6 +209,11 @@ $runtimeEnvelope = static function () use (
                 'avatar_max_bytes' => $avatarMaxBytes,
                 'avatar_allowed_mime_types' => array_keys(videochat_avatar_allowed_mime_to_extension()),
             ],
+        ],
+        'calls' => [
+            'list_endpoint' => '/api/calls',
+            'scope_values' => ['my', 'all'],
+            'status_values' => ['all', 'scheduled', 'active', 'ended', 'cancelled'],
         ],
         'time' => gmdate('c'),
     ];
@@ -786,6 +792,71 @@ SQL
         ]);
     }
 
+    if ($path === '/api/calls') {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/calls.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        $queryParams = videochat_request_query_params($request);
+        $filters = videochat_calls_list_filters($queryParams, $authenticatedUserRole);
+        if (!(bool) ($filters['ok'] ?? false)) {
+            return $errorResponse(422, 'calls_list_validation_failed', 'Invalid call list query parameters.', [
+                'fields' => $filters['errors'] ?? [],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $listing = videochat_list_calls($pdo, $authenticatedUserId, $filters);
+        } catch (Throwable) {
+            return $errorResponse(500, 'calls_list_failed', 'Could not load calls list.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        $rows = is_array($listing['rows'] ?? null) ? $listing['rows'] : [];
+        $total = (int) ($listing['total'] ?? 0);
+        $pageCount = (int) ($listing['page_count'] ?? 0);
+        $page = (int) ($filters['page'] ?? 1);
+        $pageSize = (int) ($filters['page_size'] ?? 10);
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'calls' => $rows,
+            'filters' => [
+                'query' => (string) ($filters['query'] ?? ''),
+                'status' => (string) ($filters['status'] ?? 'all'),
+                'requested_scope' => (string) ($filters['requested_scope'] ?? 'my'),
+                'effective_scope' => (string) ($filters['effective_scope'] ?? 'my'),
+            ],
+            'pagination' => [
+                'page' => $page,
+                'page_size' => $pageSize,
+                'total' => $total,
+                'page_count' => $pageCount,
+                'returned' => count($rows),
+                'has_prev' => $page > 1,
+                'has_next' => $pageCount > 0 && $page < $pageCount,
+            ],
+            'sort' => [
+                'primary' => 'starts_at_asc',
+                'secondary' => 'created_at_asc',
+                'tie_breaker' => 'id_asc',
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if ($path === '/api/user/avatar') {
         $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
         if ($authenticatedUserId <= 0) {
@@ -988,6 +1059,7 @@ SQL
             'ws_path' => $wsPath,
             'runtime_endpoint' => '/api/runtime',
             'version_endpoint' => '/api/version',
+            'calls_endpoint' => '/api/calls',
             'login_endpoint' => '/api/auth/login',
             'session_endpoint' => '/api/auth/session',
             'logout_endpoint' => '/api/auth/logout',
