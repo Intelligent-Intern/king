@@ -31,6 +31,18 @@ Build:
 npm run build
 ```
 
+Run frontend click-through e2e tests:
+
+```bash
+npm run test:e2e
+```
+
+Run e2e tests headed (visual):
+
+```bash
+npm run test:e2e:headed
+```
+
 Default endpoint:
 
 - `http://127.0.0.1:5174`
