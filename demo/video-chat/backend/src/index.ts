@@ -107,23 +107,27 @@ if (SSL_ENABLED) {
   console.log(`[${new Date().toISOString()}] HTTP server initialized`)
 }
 
-const wss = new WebSocketServer({ noServer: true })
+const wss    = new WebSocketServer({ noServer: true })
+const sfuWss = new WebSocketServer({ noServer: true })
 setupWebSocket(wss)
-setupSFU(wss)
+setupSFU(sfuWss)
 
 server.on('upgrade', (request, socket, head) => {
   const hostHeader = request.headers.host || `localhost:${PORT}`
   const url = new URL(request.url || '/', `http${SSL_ENABLED ? 's' : ''}://${hostHeader}`)
   const pathname = url.pathname.replace(/\/+$/, '') || '/'
 
-  if (pathname !== '/ws') {
+  if (pathname === '/ws') {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request, url)
+    })
+  } else if (pathname === '/sfu') {
+    sfuWss.handleUpgrade(request, socket, head, (ws) => {
+      sfuWss.emit('connection', ws, request, url)
+    })
+  } else {
     socket.destroy()
-    return
   }
-
-  wss.handleUpgrade(request, socket, head, (ws) => {
-    wss.emit('connection', ws, request, url)
-  })
 })
 
 server.listen(PORT, '0.0.0.0', () => {

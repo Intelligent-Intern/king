@@ -334,6 +334,7 @@ import { setWaveletTransformConfig, getCodecStats, resetCodec, isEncodedTransfor
 import { createWaveletProcessor, WaveletVideoProcessor } from './lib/wavelet/processor-pipeline'
 import { createAudioProcessor, AudioProcessor } from './lib/audio/processor'
 import { applyMediaTrackPreferences, setTrackKindEnabled } from './lib/mediaTrackToggle'
+import { SFUClient } from './lib/sfuClient'
 import { pruneRemoteTiles, upsertRemoteTile } from './lib/remoteTiles'
 import {
   canJoinFromPreview,
@@ -450,6 +451,7 @@ let localStream: MediaStream | null = null
 let cameraStream: MediaStream | null = null
 let waveletProcessor: WaveletVideoProcessor | null = null
 let audioProcessor: AudioProcessor | null = null
+let sfuClient: SFUClient | null = null
 
 const peerConnections = createPeerConnectionManager<RTCPeerConnection>()
 const remoteVideoElements = new Map<string, HTMLVideoElement>()
@@ -1466,14 +1468,6 @@ function createPeerConnection(peerUserId: string): RTCPeerConnection {
     const [stream] = event.streams
     if (stream) {
       setRemoteStream(peerUserId, stream)
-      if (isEncodedTransformSupported()) {
-        const receivers = connection.getReceivers()
-        for (const receiver of receivers) {
-          if (receiver.track?.kind === 'video') {
-            setupReceiverTransform(receiver)
-          }
-        }
-      }
     }
   }
 
@@ -1590,6 +1584,11 @@ async function handleCallSignal(message: any): Promise<void> {
       return
     }
     await connection.setRemoteDescription(new RTCSessionDescription(payload))
+    if (isEncodedTransformSupported()) {
+      for (const receiver of connection.getReceivers()) {
+        if (receiver.track?.kind === 'video') setupReceiverTransform(receiver)
+      }
+    }
     const answer = await connection.createAnswer()
     await connection.setLocalDescription(answer)
 
@@ -1606,6 +1605,11 @@ async function handleCallSignal(message: any): Promise<void> {
       return
     }
     await connection.setRemoteDescription(new RTCSessionDescription(payload))
+    if (isEncodedTransformSupported()) {
+      for (const receiver of connection.getReceivers()) {
+        if (receiver.track?.kind === 'video') setupReceiverTransform(receiver)
+      }
+    }
     return
   }
 
@@ -1653,6 +1657,40 @@ async function joinCall(silent = false): Promise<void> {
     })
 
     setLocalCallPresence(true)
+
+    // Connect to SFU for track discovery
+    const session = authenticatedSession()
+    if (session) {
+      sfuClient = new SFUClient({
+        onTracks({ publisherId, tracks }) {
+          // A remote publisher has tracks — open a WebRTC connection if we don't have one
+          if (publisherId !== session.userId && !peerConnections.has(publisherId)) {
+            void ensureOffer(publisherId)
+          }
+        },
+        onPublisherLeft(publisherId) {
+          closePeer(publisherId, false)
+        },
+        onUnpublished(_publisherId, _trackId) {
+          // individual track removed — WebRTC renegotiation handled by signalling if needed
+        },
+        onDisconnect() {
+          console.warn('[SFU] Disconnected')
+        },
+      })
+      sfuClient.connect(session, activeRoomId.value)
+
+      // Publish local tracks once stream is ready
+      if (localStream) {
+        const tracks = localStream.getTracks().map((t) => ({
+          id: t.id,
+          kind: t.kind as 'audio' | 'video',
+          label: t.label,
+        }))
+        sfuClient.publishTracks(tracks)
+      }
+    }
+
     syncPeerTopology()
 
     setTimeout(() => {
@@ -1731,6 +1769,9 @@ function callReset(options: {
     emit('call/leave', { roomId })
   }
 
+  sfuClient?.leave()
+  sfuClient = null
+
   callJoined.value = false
   callStatus.value = 'idle'
   if (wasJoined) {
@@ -1751,7 +1792,7 @@ function leaveCall(): void {
     return
   }
 
-  callReset({ notify: true })
+  callReset({ notify: true, stopLocalMedia: true })
 }
 
 function toggleMic(): void {
@@ -1760,7 +1801,23 @@ function toggleMic(): void {
   }
 
   isMicEnabled.value = !isMicEnabled.value
-  setTrackKindEnabled(localStream, 'audio', isMicEnabled.value)
+  const enabled = isMicEnabled.value
+
+  // replaceTrack(null) is the only reliable cross-browser mute.
+  // track.enabled alone does not always stop the RTP sender.
+  const liveAudioTrack = localStream?.getAudioTracks()[0]
+    ?? cameraStream?.getAudioTracks()[0]
+    ?? null
+
+  for (const peerId of peerConnections.keys()) {
+    const pc = peerConnections.get(peerId)
+    if (!pc) continue
+    for (const sender of pc.getSenders()) {
+      if (sender.track?.kind === 'audio' || (enabled && !sender.track)) {
+        sender.replaceTrack(enabled ? liveAudioTrack : null)
+      }
+    }
+  }
 }
 
 function toggleCamera(): void {
@@ -1830,21 +1887,25 @@ async function toggleWavelet(): Promise<void> {
     localStream = cameraStream
   }
   
-  // Replace tracks in all peer connections
+  // Re-apply mic/camera enabled state to new localStream
+  applyTrackState()
+
+  // Replace both video and audio tracks in all peer connections
   for (const peerId of peerConnections.keys()) {
     const pc = peerConnections.get(peerId)
     if (pc && localStream) {
       const newVideoTrack = localStream.getVideoTracks()[0]
-      if (newVideoTrack) {
-        for (const sender of pc.getSenders()) {
-          if (sender.track?.kind === 'video') {
-            sender.replaceTrack(newVideoTrack)
-          }
+      const newAudioTrack = localStream.getAudioTracks()[0]
+      for (const sender of pc.getSenders()) {
+        if (sender.track?.kind === 'video' && newVideoTrack) {
+          sender.replaceTrack(newVideoTrack)
+        } else if (sender.track?.kind === 'audio' && newAudioTrack) {
+          sender.replaceTrack(newAudioTrack)
         }
       }
     }
   }
-  
+
   attachLocalPreview()
 }
 
