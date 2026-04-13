@@ -196,6 +196,110 @@ Contract guardrails for this batch:
 - [ ] `#30 Add end-to-end parity + smoke verification for new stack and document honest runtime boundaries (active new path vs historical reference).`
   done when: automated checks cover login, room join, chat, invite redeem, call signaling bootstrap, and docs clearly state scope/limitations.
 
+### V1. Mock-Parity Extension (Imported from Video Planning, Backend First)
+
+Execution guardrails for this extension:
+- backend/runtime contracts land before frontend binding work
+- no fallback to legacy/node paths for “temporary green” behavior
+- every leaf closes with strongest relevant test proof for King runtime contracts
+- clean code boundaries are mandatory (no mixed-responsibility modules)
+
+#### Track B1. Backend Core Completion (King-PHP Priority)
+
+- [ ] `#31 Refactor backend into explicit modules (auth/session/rbac/users/calls/invites/realtime) and remove mixed-responsibility handler structure.`
+  done when: backend entrypoint wires focused modules only, each module has one responsibility, and route/realtime registration is deterministic.
+- [ ] `#32 Add canonical API/WS contract catalog for new stack and keep server/client schema alignment under versioned fixtures.`
+  done when: one source-of-truth contract file exists, runtime payloads validate against it, and drift checks fail fast in CI.
+- [ ] `#33 Implement session refresh/rotation endpoint with replay-safe token replacement semantics.`
+  done when: refresh rotates token state safely, invalidates replaced token policy as designed, and response contract stays stable.
+- [ ] `#34 Implement `/api/auth/logout` session revoke endpoint and persist revocation metadata.`
+  done when: logout revokes current token deterministically and returns stable success/error schema.
+- [ ] `#35 Enforce immediate websocket session revocation behavior for revoked/expired sessions.`
+  done when: revoked/expired token sessions are disconnected quickly and cannot continue room/chat/call actions.
+- [ ] `#36 Implement backend RBAC middleware with explicit permission matrix for admin/moderator/user actions.`
+  done when: restricted actions fail closed with typed forbidden responses and role-allowed actions remain functional.
+- [ ] `#37 Implement admin user list contract with deterministic search, sorting, pagination, and total counters.`
+  done when: list endpoint supports query/page/page_size/order consistently and frontend receives stable totals.
+- [ ] `#38 Implement admin user create endpoint with validation and duplicate-email conflict handling.`
+  done when: valid users are persisted with role defaults, invalid payloads fail typed validation, and duplicate emails return explicit conflict.
+- [ ] `#39 Implement admin user update endpoint for role/status/profile fields with RBAC enforcement.`
+  done when: updates persist safely, forbidden field mutations fail closed, and audit-relevant fields are normalized.
+- [ ] `#40 Implement admin user deactivate/reactivate endpoint with session invalidation policy for disabled accounts.`
+  done when: deactivated users lose active session validity and cannot access protected REST/WS flows.
+- [ ] `#41 Implement profile/settings endpoint for current user (display name, avatar ref, theme, time format).`
+  done when: profile changes persist and session-check payload reflects updated preferences.
+- [ ] `#42 Implement avatar upload endpoint with type/size validation and safe storage semantics.`
+  done when: valid images persist, unsafe payloads are rejected fail-closed, and stored path references are deterministic.
+- [ ] `#43 Implement calls list endpoint with owner-bound filter rules and deterministic paging contract.`
+  done when: admin/user list semantics are role-safe, totals remain stable, and ordering is deterministic.
+- [ ] `#44 Implement create-call endpoint with internal participant ids and external invitee rows under one transaction boundary.`
+  done when: call and participant rows persist atomically and response returns one normalized call payload.
+- [ ] `#45 Implement edit-call endpoint with participant diff updates and no implicit global invite resend.`
+  done when: edits only mutate targeted schedule/participant state and resend remains explicit separate action.
+- [ ] `#46 Implement cancel-call endpoint with persisted cancellation reason/message payload for notification workflows.`
+  done when: cancelled call state is explicit, cancellation payload is queryable, and cancelled calls are excluded from active joins.
+- [ ] `#47 Implement invite-code generation endpoint with UUID-based codes, expiry, and redemption policy constraints.`
+  done when: generated codes are unique, policy-bound, and not exposed outside explicit invite responses.
+- [ ] `#48 Implement invite redeem/join endpoint with expiry, usage-limit, and context resolution enforcement.`
+  done when: redeem flow resolves target call/room safely and invalid/expired/reused codes fail with typed errors.
+
+#### Track B2. Realtime Completion (King WebSocket + IIBIN)
+
+- [ ] `#49 Implement authenticated websocket gateway with strict handshake validation and structured close reasons.`
+  done when: invalid/expired/missing auth is rejected deterministically and valid sessions enter authenticated channel lifecycle.
+- [ ] `#50 Implement room presence snapshot and join/leave stream from server-authoritative membership state.`
+  done when: clients receive consistent snapshots plus deltas and reconnect restores current room presence without phantom users.
+- [ ] `#51 Implement room-scoped chat fanout with server timestamps, payload bounds, and delivery ack ids.`
+  done when: chat broadcast is authoritative, malformed payloads are rejected, and message ids are stable for frontend dedupe.
+- [ ] `#52 Implement typing indicator channel with debounce windows, expiry semantics, and no self-echo.`
+  done when: typing state auto-expires and remains scoped to active room participants only.
+- [ ] `#53 Implement signaling routing (`offer`/`answer`/`ice`/`hangup`) with membership + target authorization checks.`
+  done when: signaling reaches only valid room peers and invalid targets fail closed without leaking peer state.
+- [ ] `#54 Implement lobby queue runtime state with moderator actions (`allow`, `remove`, `allow_all`) and role checks.`
+  done when: queue mutations are atomic, unauthorized actions fail closed, and clients receive consistent queue snapshots.
+- [ ] `#55 Implement reaction event stream with server-side throttling and deterministic payload boundaries.`
+  done when: reaction bursts are bounded and stream remains responsive under controlled load.
+- [ ] `#56 Implement reconnect state machine across REST + WS contracts (`online`, `retrying`, `blocked`, `expired`).`
+  done when: reconnect outcomes are explicit, session expiry is surfaced, and clients recover state without silent divergence.
+
+#### Track B3. Frontend Mock-Parity Binding (Vue)
+
+- [ ] `#57 Bind auth/session store to backend login/logout/refresh/session-check contracts and remove local identity fallback paths.`
+  done when: session source is backend-authoritative and route guards rely on validated session payloads only.
+- [ ] `#58 Enforce route-level RBAC guards and role-aware navigation rendering for admin/user/moderator surfaces.`
+  done when: forbidden routes redirect deterministically and hidden actions are not reachable via direct navigation.
+- [ ] `#59 Bind admin overview metrics/widgets to backend endpoints and remove hardcoded demo counters.`
+  done when: displayed values come from live API contracts and loading/error states are explicit.
+- [ ] `#60 Bind admin user CRUD table to backend list/create/update/deactivate contracts with live pagination/search.`
+  done when: all user-table actions are server-driven and row state reflects authoritative backend responses.
+- [ ] `#61 Bind admin calls CRUD list and action bar (`new`, `schedule`, `edit`, `cancel`) to backend contracts with modal workflows.`
+  done when: list/actions are fully live and modal flows map 1:1 to contract operations.
+- [ ] `#62 Integrate calendar scheduling flow in admin and user views with backend create/edit semantics.`
+  done when: calendar interactions persist calls and reflect updates consistently across list and calendar views.
+- [ ] `#63 Bind invite popover/copy/join flows to backend invite endpoints and remove table-level invite code exposure.`
+  done when: invite details are shown only in explicit popover/modal flows and copy/join behavior is contract-driven.
+- [ ] `#64 Bind call workspace sidebars/tabs (`users`, `lobby`, `chat`) to realtime snapshots and server-driven pagination/search.`
+  done when: tab content reflects live backend state and no tab relies on local fake data.
+- [ ] `#65 Bind workspace moderation actions (pin/mod/remove/allow) to RBAC-authorized backend operations with row-level feedback.`
+  done when: action availability matches role policy and success/error states are explicit per row.
+- [ ] `#66 Bind control bar actions (raise hand, reactions, mic/cam/screen, hangup) to backend/realtime contracts with deterministic state transitions.`
+  done when: control state no longer drifts from backend/realtime state and recovery after reconnect is consistent.
+- [ ] `#67 Implement settings modal parity flows for avatar crop/upload, theme persistence, and time-format application.`
+  done when: settings persist backend-side and apply globally across tables/calendar/modals/workspace timestamps.
+- [ ] `#68 Implement admin branding settings parity flow (logo crop/upload) with admin-only policy boundaries.`
+  done when: branding writes are restricted to admin and visual updates are applied predictably across relevant UI surfaces.
+
+#### Track B4. Test, Hardening, Release Proof
+
+- [ ] `#69 Add backend integration tests for auth/session/rbac/calls/invites/realtime negative+positive matrices on King runtime paths.`
+  done when: test suite covers success and fail-closed boundaries across REST and websocket channels.
+- [ ] `#70 Add end-to-end mock-parity suite (admin flow + user flow + two-user call/chat/invite/reconnect journey).`
+  done when: automated journey tests pass reproducibly and map directly to mock acceptance matrix.
+- [ ] `#71 Add compose-level smoke gates for new stack (`frontend-vue` + `backend-king-php` + sqlite) including migration and auth sanity checks.`
+  done when: CI smoke proves stack boots, migrates, authenticates, and serves runtime/session endpoints deterministically.
+- [ ] `#72 Document final new-stack runtime boundaries and deprecate remaining legacy assumptions in video-chat docs.`
+  done when: docs state active path honestly, list remaining gaps explicitly, and remove contradictory legacy-first wording.
+
 ## Notes
 
 - Closed batches (`Q`, `R`, `S`, `T1`, `T2`) stay tracked in `PROJECT_ASSESSMENT.md`.

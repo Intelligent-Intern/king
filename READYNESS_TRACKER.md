@@ -8,7 +8,7 @@ Status note:
 - Unchecked boxes are still open, intentionally fenced out of the current v1 slice, or broader than the proof that exists in this repository today.
 - This file is the long-form closure tracker, not the active execution queue. `ISSUES.md` stays the narrow working backlog.
 - Open boxes are not supposed to be "closed" by redefining the product downward. If a stronger shared, remote, persistent, or otherwise meaningful v1 contract already belongs to King, the default action is to implement it correctly rather than quietly shrinking scope.
-- `ISSUES.md` only carries the next `20` repo-local executable leaves when an explicit batch is active. Everything else stays here until it is split to that size.
+- `ISSUES.md` normally carries the next ~`20` repo-local executable leaves when an explicit batch is active; explicit user-directed mock-parity batches may intentionally exceed this default.
 - Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, real TCP host/port `remote_peer` execution with persisted success/failure snapshots, distributed observability depth, and controller/worker/remote-peer failover harnesses are now verified; the remaining open boxes below are the broader continuation and larger multi-host slices.
 - Recent userland orchestrator contract closure: the public docs and stub surface now explicitly separate durable tool definitions from executable userland handlers, treat closures/object graphs/resources/controller memory as non-durable execution state, pin the public execution contract to per-process handler registration by tool name across local, file-worker, and remote-peer boundaries, and now back the local, file-worker, and remote-peer slices with a real handler API, direct execution plus restart/resume proof, an explicit local/remote handler input-output contract, a durable `handler_boundary`, pre-claim/pre-resume worker readiness validation, and explicit remote fail-closed behavior when a peer lacks the required handler; the remaining open work is the broader failure/control/status slices below.
 - Recent handler-identity closure: the exact durable identity for future userland handler execution is now fixed to the tool-name string, with explicit per-process re-registration duties for local controllers, file workers, restarted replacements, and remote peers instead of vague "the system already knows the handler" folklore.
@@ -26,6 +26,7 @@ Status note:
 - Recent Flow PHP dataset-bridge closure: the repo now also carries a real userland object-store dataset bridge under `userland/flow-php/src/ObjectStoreDataset.php`, with typed dataset descriptors plus topology state, bounded range-window streaming, and preserved cloud resumable multipart upload or local replay semantics through the same stronger object-store runtime path, verified by targeted PHPT proof for hybrid local-plus-distributed descriptors and cloud GCS resumed upload plus streamed readback.
 - Recent Flow PHP serialization-bridge closure: the repo now also carries a real userland serialization and schema bridge under `userland/flow-php/src/SerializationBridge.php`, with line-delimited JSON/CSV/NDJSON handling, payload-oriented JSON document/IIBIN/Proto/raw-binary codecs, and wrapped serialization cursors over the same source/sink contracts, verified by targeted PHPT proof for NDJSON resume, CSV header-aware write/read, JSON document replay, Proto hydration, IIBIN class-map decode, and raw binary-object round-trip.
 - Recent Flow PHP control-plane closure: the repo now also carries a real userland control-plane contract under `userland/flow-php/src/ControlPlane.php`, with object-store-backed logical run records over the same execution-backend and checkpoint surfaces, plus targeted PHPT proof for queued file-worker pause/cancel and checkpoint-aware replacement recovery as well as local immediate-run inspectability and controller-loss resume.
+- Recent Flow PHP MCP-host closure: the repo now also carries a real repo-local MCP server-host contract under `demo/userland/flow-php/src/McpHost.php`, with typed request/response dispatch and explicit start/serve/STOP-shutdown lifecycle semantics, verified by targeted PHPT proof for startup, dispatch, and shutdown/error behavior.
 - Recent Flow PHP end-to-end closure: the repo now also proves one non-trivial ETL/dataflow run end to end in `621-flow-php-etl-e2e-local-remote-contract.phpt`, including object-store-backed NDJSON ingest, resumable checkpointed source progress, deterministic partition-plus-batch execution, manifest-backed dataset writeback, local OTLP metrics-plus-span export, and real `remote_peer` execution captured through the durable tool-boundary server harness instead of only disconnected adapter slices.
 - Recent local handler-shape closure: the local userland execution path now passes structured `input`, `tool`, `run`, and `step` context into handlers and enforces an explicit `['output' => <array payload>]` result contract instead of a folklore bare-array return.
 - Recent userland no-caveat closure: the userland orchestrator surface no longer carries outstanding caveated claims in project status documents; durable tool definitions and configs are now the only persisted contract across boundaries, while executable handlers remain process-local and are re-registered before execution or resume on every local, file-worker, and remote-peer boundary.
@@ -43,6 +44,7 @@ Status note:
 - Recent transport/admin closure: the active tree now verifies the full repo-local HTTP/1, HTTP/2, HTTP/3, QUIC, WebSocket, listener, upgrade, admin-API, CORS/header, fairness, shutdown, and cleanup slices carried in sections `A` and `B`; the remaining transport-adjacent open boxes below are the broader security-review and final-closure gates, not missing runtime proofs in those execution sections.
 - Recent coordinated-system closure: the runtime now exposes one aggregate readiness/drain/recovery surface with ordered startup and shutdown, gates new HTTP/WebSocket/orchestrator/file-worker/remote-peer admission on that shared lifecycle, persists a coordinator state under `state_root_path` so clean rolling restart stays distinct from unclean node-failure takeover, and now closes the repo-local failover matrix with object-store outage/heal, orchestrator remote-peer return, and MCP named-peer partial-topology failover proof instead of leaving those slices as disconnected folklore.
 - Recent QUIC bootstrap closure: the build path now rehydrates a pinned `quiche` commit, pinned BoringSSL submodule commit, tracked workspace lockfile, and pinned `wirefilter` revision without branch-based fallbacks or unlocked cargo retries.
+- Recent deterministic-build closure: profile builds now snapshot and restore tracked phpize-generated files so release/debug/sanitizer artifacts no longer inherit host-generator churn, sanitizer runtime staging now resolves arch-correct Clang runtimes instead of x86_64-only assumptions, release packaging now normalizes platform labels and records lock-backed provenance hashes in the manifest, CI/release package jobs now enforce a dedicated supply-chain gate that verifies checksums plus manifest provenance against repo lock inputs before publish, fuzz harnesses now expose explicit transport/object-store/MCP deterministic suites for CI execution, and seeded semantic-DNS churn tests now allocate dynamic listener ports to reduce top flaky baseline collisions.
 - Recent Smart-DNS closure: the local DNS-shaped query surface now fails closed on undersized response budgets and rehydrates cleanly after restart, the active runtime now proves a bounded real on-wire UDP listener with honest request, timeout, truncation, and recovery behavior, stale peers can now heal partial durable-state loss by merging only missing service and mother-node entries back into the shared topology without overwriting newer overlapping state, and mother-node re-election pressure now carries persisted tombstones so departed leaders are not silently resurrected by stale writers before an explicit rejoin; the broader distributed-topology boxes below remain open.
 - Recent autoscaling closure: real load-shape decision explanations, live request-operation signal capture for CPU/memory/active-connections/RPS/response-latency/queue-depth, partial persisted fleet-state recovery against live Hetzner inventory, and preserved fresh-node rollout bootstrap propagation are now verified; the remaining open boxes below are real drain-before-delete, policy-limit, and broader multi-node fleet-behavior slices.
 - Recent security closure: HTTP/2 one-shot cumulative body caps, HTTP/3 one-shot full-body completion, MCP persisted transfer-key truncation fixes plus loopback-default peer targeting, bounded object-store metadata-cache growth, CRLF-safe cloud metadata headers, TOCTOU-safe local/distributed object-store reads, snapshot-manifest line caps, snapshot-cleanup symlink hardening, bounded remote orchestrator error metadata, trusted workflow-run source materialization, and loopback-default Semantic DNS live probe allowlists are now verified on the current mainline; the broader full-surface security review remains open below.
@@ -157,6 +159,8 @@ Status note:
 - [x] Validate MCP backpressure under parallel transfers
 - [x] Validate MCP recovery after controller / worker restart
 - [x] Validate MCP recovery after partial failures
+- [x] Provide a repo-local OO MCP host lifecycle for server-side service composition
+  done when: `demo/userland/flow-php/src/McpHost.php` exposes `start()`, `serve()`, typed `McpHostRequest` dispatch, `McpHostResponse` wire outcomes, and explicit shutdown/error accounting with PHPT coverage in `669-flow-php-mcp-host-surface-contract.phpt`
 
 ## D. Pipeline Orchestrator
 
@@ -314,6 +318,85 @@ Status note:
 - [x] Validate routing decisions against real load / health data
 - [x] Validate service discovery under parallel updates
 - [x] Validate status updates under concurrent writes
+
+## Z. Video-Call Mock Parity Replatform (Imported from `videoplanning.md`)
+
+Scope note:
+- This section is the long-form tracker for the King-PHP + Vue replatform path.
+- It carries only mock-relevant productization work.
+- 1000+ participant renderer escalation (DOM/Canvas/WebGL), breakout orchestration, and super-admin fleet licensing are intentionally not release blockers for this mock-parity slice.
+
+### Z1. Contract & Clean Architecture
+
+- [ ] Freeze one authoritative REST + WS/IIBIN contract catalog for the new video stack.
+- [ ] Enforce one shared typed error envelope across REST and WS responses.
+- [ ] Split backend runtime code into focused modules (`auth`, `session`, `rbac`, `users`, `calls`, `invites`, `realtime`) with no monolithic mixed-responsibility handler.
+- [ ] Split frontend state into focused stores (`auth`, `calls`, `participants`, `chat`, `presence`, `settings`) with deterministic ownership boundaries.
+- [ ] Add contract-level schema tests for request/response/event DTOs and keep them versioned.
+- [ ] Establish a mock-parity acceptance matrix tied to executable checks instead of prose-only claims.
+
+### Z2. Backend Auth, Session, RBAC
+
+- [ ] Implement logout/session-revoke endpoint with immediate runtime effect.
+- [ ] Enforce session revocation propagation into active websocket connections.
+- [ ] Implement stable session refresh/rotation policy with replay-safe token handling.
+- [ ] Enforce route-level RBAC middleware for admin/moderator/user actions.
+- [ ] Add forbidden/conflict validation semantics for all protected video APIs.
+- [ ] Implement admin user CRUD (`list`, `create`, `update`, `deactivate`) with deterministic pagination/search/sort.
+- [ ] Implement user profile/settings persistence (`display_name`, `avatar_ref`, `theme`, `time_format`).
+- [ ] Prove auth/session/rbac flows with positive + negative integration tests over the King runtime path.
+
+### Z3. Backend Calls, Calendar, Invites
+
+- [ ] Implement calls list endpoint with owner-bound filtering, stable ordering, and pagination.
+- [ ] Implement create-call endpoint with internal participant references and external invitee rows.
+- [ ] Implement edit-call endpoint with explicit participant diff semantics and no implicit global resend.
+- [ ] Implement cancel-call endpoint with persisted cancellation payload suitable for downstream notification workflows.
+- [ ] Implement invite-code/link generation with deterministic expiry and redemption policy.
+- [ ] Implement invite redeem/join endpoint with role-safe join context resolution.
+- [ ] Persist schedule metadata to support calendar view projections without frontend inference hacks.
+- [ ] Add API boundaries for invite-preview/copy flows so invite code is not leaked as table-column default data.
+- [ ] Add call/invite lifecycle contract tests (create/edit/cancel/redeem/expired/duplicate/conflict).
+- [ ] Add owner and permission boundary tests to guarantee cross-user call isolation.
+
+### Z4. King Realtime Workspace Channels
+
+- [ ] Implement authenticated websocket gateway handshake with explicit runtime auth context.
+- [ ] Implement room presence snapshots plus join/leave/reconnect events from server-authoritative state.
+- [ ] Implement room-scoped chat fanout with bounded validation and stable timestamping.
+- [ ] Implement typing indicator channel with debounce + expiry and no self-echo.
+- [ ] Implement signaling routing (`offer`, `answer`, `ice`, `hangup`) constrained by room membership and target identity.
+- [ ] Implement lobby queue state and moderator actions (`allow`, `remove`, `allow_all`) with RBAC enforcement.
+- [ ] Implement reaction eventstream with server-side throttling and deterministic payload limits.
+- [ ] Prove reconnect/recovery semantics for presence/chat/signaling with runtime-level integration tests.
+
+### Z5. Frontend Mock Parity (Vue)
+
+- [ ] Bind frontend auth store to backend login/logout/session-check and remove local-only identity fallback.
+- [ ] Enforce route-level role guards so admin/user flows cannot drift into hybrid unauthorized views.
+- [ ] Implement admin dashboard data binding from backend contracts (no static placeholder metrics).
+- [ ] Implement admin calls CRUD table with server-backed pagination/search/filter and action parity.
+- [ ] Integrate calendar scheduling view and bind create/edit flows to backend call contracts.
+- [ ] Implement invite popover/copy/join UX with backend-bound data only.
+- [ ] Implement user dashboard with own calls list and calendar parity semantics.
+- [ ] Implement workspace sidebars/tabs (`users`, `lobby`, `chat`) as server-driven state projections.
+- [ ] Bind participant list search/pagination/moderation actions to backend-authorized contracts.
+- [ ] Implement control-bar actions (`raise_hand`, reactions, mic/cam/screen, hangup) against realtime/backend state.
+- [ ] Implement avatar settings flow with drag/drop + crop + zoom and persisted backend profile update.
+- [ ] Implement branding/logo settings flow with equivalent crop quality and admin-only write boundary.
+- [ ] Apply theme/time-format settings globally across tables, calendar, modals, and workspace timestamps.
+- [ ] Close UI parity gaps against mock acceptance matrix and reject cosmetic drift as “good enough”.
+
+### Z6. Verification, Hardening, Release Proof
+
+- [ ] Add end-to-end journey tests covering login, role routing, call create/edit/cancel, invite redeem, chat, and signaling bootstrap.
+- [ ] Add websocket contract tests for auth failure, token expiry, revocation, and unauthorized room access.
+- [ ] Add regression tests for admin/user RBAC boundaries across REST and realtime paths.
+- [ ] Add CI smoke checks for the new compose stack (`frontend-vue` + `backend-king-php` + sqlite volume).
+- [ ] Add deterministic seed fixtures for multi-user integration tests (admin, moderator, user, external invitee).
+- [ ] Add failure-path tests for network interruption and reconnect state machine transitions.
+- [ ] Add documentation closure proving active path is the new stack and legacy path is reference-only.
+- [ ] Gate release readiness on passing mock-parity matrix and runtime tests, not on narrowed feature claims.
 - [x] Implement persistence for registration data
 - [x] Implement rehydration of registration data after restart
 - [x] Validate consistency after split-brain / partial-failure scenarios where publicly claimed
@@ -426,14 +509,14 @@ Status note:
 - [ ] Fully pin all external build dependencies
 - [x] Enable clean-host rehydration in a single reproducible step
 - [x] Eliminate branch-based fallbacks from critical bootstrap
-- [ ] Eliminate host-specific special cases from release builds
-- [ ] Eliminate host-specific special cases from debug / ASan / UBSan builds
+- [x] Eliminate host-specific special cases from release builds
+- [x] Eliminate host-specific special cases from debug / ASan / UBSan builds
 - [x] Eliminate unstable Cargo / Git resolution paths from release builds
 - [x] Enforce reproducibility of release artifacts as a hard gate
 - [ ] Enforce reproducibility of container builds as a hard gate
 - [x] Freeze toolchain versions completely
 - [ ] Fully document dependency provenance
-- [ ] Secure supply-chain integrity for release artifacts
+- [x] Secure supply-chain integrity for release artifacts
 - [ ] Enable offline / air-gapped rebuild path where publicly claimed
 - [ ] Complete build documentation so no implicit host knowledge is required
 
@@ -452,9 +535,9 @@ Status note:
 - [x] Establish long-duration UBSan soaks
 - [x] Establish long-duration memory / leak soaks
 - [ ] Expand fuzzing for high-risk surfaces
-- [ ] Expand fuzzing for transport surfaces
-- [ ] Expand fuzzing for object-store surfaces
-- [ ] Expand fuzzing for MCP / transfer surfaces
+- [x] Expand fuzzing for transport surfaces
+- [x] Expand fuzzing for object-store surfaces
+- [x] Expand fuzzing for MCP / transfer surfaces
 - [x] Expand negative test matrices for malformed input
 - [x] Archive failure artifacts for every gate violation
 - [x] Emit automated regression diagnostics
@@ -696,3 +779,207 @@ Flow::extract($king->objectStore()->source('raw/orders/*.ndjson'))
 - [ ] All install / matrix gates stay green permanently
 - [ ] All public claims are exactly aligned with verified runtime behavior
 - [ ] V1 can be treated as fully finished without caveat
+
+## U1. Video-Call Productization Backlog (`v1.0.5-beta`)
+
+Execution note:
+- This is the long-form planning backlog for the demo UX and call-flow rebuild.
+- Pull only the next executable leaves into `ISSUES.md` when you explicitly start the batch.
+
+### U1-A. UX Foundation and Visual System
+
+- [ ] Define the end-state information architecture for chat, rooms, invite, and call surfaces.
+- [ ] Replace the current mixed visual language with one tokenized design system (color, spacing, typography, radius, shadows).
+- [ ] Rebuild the shell as a responsive app layout with a left room rail, center stage, and right contextual panel.
+- [ ] Introduce a motion system for route/view transitions (slide/fade/stagger) with consistent duration/easing tokens.
+- [ ] Add `prefers-reduced-motion` guards so all transitions degrade accessibly.
+- [ ] Implement a pre-join onboarding surface (display name, avatar color, device permissions, quick checks).
+- [ ] Build a pre-call preview card (camera frame, mic meter, selected devices, join readiness state).
+- [ ] Implement unified UI states for loading, empty, degraded-network, and error recovery.
+- [ ] Add mobile-first safe-area behavior and bottom action bars for call controls.
+- [ ] Add desktop and mobile layout snapshots for visual regression baselines.
+
+### U1-B. Room Model and Invite Lifecycle
+
+- [ ] Define a typed room-state contract (room id, title, privacy, participants, capabilities, timestamps).
+- [ ] Implement room create/join/leave flows with explicit success/failure UI transitions.
+- [ ] Implement a room directory/list with active participant counts and last-activity ordering.
+- [ ] Add invite-token creation flow with explicit expiry and single/multi-use semantics.
+- [ ] Add invite-token redeem flow with validation and clear user-facing failure reasons.
+- [ ] Add invite sharing actions (copy link, native share API fallback, manual code entry).
+- [ ] Add participant roster with presence states (online, idle, reconnecting, left).
+- [ ] Add room-level moderation actions (kick, mute-all, lock room) with role checks.
+- [ ] Add room settings panel (topic, access mode, max participants, entry permissions).
+- [ ] Persist and restore last-used room/user preferences across reloads in local state storage.
+
+### U1-C. Realtime Signaling and Call Lifecycle
+
+- [ ] Define the signaling envelope over IIBIN for room join/leave, call offer/answer, ICE, and control events.
+- [ ] Implement a dedicated signaling service layer instead of embedding signaling in UI components.
+- [ ] Implement an explicit peer-connection state machine (new, connecting, stable, reconnecting, failed, closed).
+- [ ] Handle offer-collision/glare deterministically (polite-peer strategy) for multi-user joins.
+- [ ] Replace single-remote placeholder behavior with real multi-peer call-session rendering.
+- [ ] Attach/detach remote tracks dynamically with deterministic cleanup on participant leave.
+- [ ] Implement in-call camera and microphone device switching without full-call teardown.
+- [ ] Implement screen-share publish/unpublish with renegotiation and fallback on failure.
+- [ ] Implement incoming-call lifecycle (ringing, accept, decline, timeout, missed-call state).
+- [ ] Add deterministic call teardown reasons (hangup, disconnect, kicked, room-closed, media-failure).
+- [ ] Implement reconnect + resync flow after websocket drop (rejoin room, rebuild signaling state).
+- [ ] Add optional RTC data-channel path for low-latency call-side control events.
+
+### U1-D. Chat, Collaboration, and Room Event Surface
+
+- [ ] Unify chat timeline and call events in one room event stream with consistent ordering.
+- [ ] Add typing indicators and message delivery/read markers scoped per room.
+- [ ] Add message send queueing with bounded backpressure and user-visible retry state.
+- [ ] Add drag-and-drop attachment intake with client-side size/type guardrails.
+- [ ] Add quick reactions and raise-hand events as transient room-level signals.
+- [ ] Add pinned-message and room-topic surfaces in the contextual side panel.
+- [ ] Add active-speaker highlighting using live audio-level sampling.
+- [ ] Add in-call quality panel (RTT, jitter, packet loss, bitrate, frame rate) with thresholds.
+
+### U1-E. Login, Identity, and Multi-User Chat
+
+- [ ] Define supported login modes for demo and production-like paths (guest, password, SSO-ready/OAuth boundary).
+- [ ] Implement login and logout flows with explicit session lifecycle handling.
+- [ ] Implement guarded routes/views that require authenticated identity before room/call access.
+- [ ] Persist and restore authenticated session context with explicit expiry and revalidation behavior.
+- [ ] Attach stable user identity to all room, chat, and call events instead of local echo-only sender labels.
+- [ ] Implement real multi-user room chat fanout so messages from multiple connected users are rendered consistently across clients.
+- [ ] Add room unread counters and last-read pointers per authenticated user.
+- [ ] Add user profile card surfaces (display name, avatar seed/color, status text) in roster and message headers.
+
+### U1-F. Reliability, Security, Testing, and Release Gates
+
+- [ ] Validate and sanitize room ids, user ids, and invite tokens on every client entry point.
+- [ ] Restrict and validate websocket endpoint configuration against trusted-origin policy.
+- [ ] Add bounded reconnect budgets with exponential backoff and explicit circuit-open behavior.
+- [ ] Add structured telemetry events for join/call/invite lifecycle and failure classification.
+- [ ] Add unit tests for room/call stores, reducers, and signaling state transitions.
+- [ ] Add integration tests for signaling message encode/decode coverage.
+- [ ] Add Playwright end-to-end: create room, invite peer, accept call, exchange chat.
+- [ ] Add Playwright reconnect/recovery scenario with websocket interruption and rejoin.
+- [ ] Update demo README with honest scope: what is production-grade vs. sample-only.
+- [ ] Add a dedicated demo release gate that runs room/invite/call smoke checks before publish.
+
+## U2. MarketView Realtime Trading Demo Backlog (`v1.0.6+`)
+
+Execution note:
+- This is a demo-market UI/backend planning backlog for a realtime market view.
+- Scope target is a technical preview with paper-trading semantics only (no live brokerage execution).
+- Pull only the next executable leaves into `ISSUES.md` when you explicitly start this batch.
+
+### U2-A. Product Boundary and Data Contract
+
+- [ ] Define explicit MarketView scope (market data + paper trading) and non-goals (no real-money execution).
+- [ ] Define symbol universe and normalization contract (exchange, base/quote, display precision).
+- [ ] Define one typed market event envelope (trade, quote, orderbook delta, candle, heartbeat, status).
+- [ ] Define deterministic event ordering policy per symbol and stream.
+- [ ] Define bounded replay window behavior for late-joining clients.
+
+### U2-B. Backend Feed and Aggregation
+
+- [ ] Implement a market-feed adapter boundary with pluggable providers (simulated first, real feed optional).
+- [ ] Implement reconnecting upstream feed client with bounded backoff and health state.
+- [ ] Implement per-symbol 1s and 5s OHLC aggregation from trade ticks.
+- [ ] Implement top-of-book snapshot plus delta propagation contract.
+- [ ] Implement backend websocket fanout for symbol-scoped subscriptions.
+- [ ] Persist minimal demo state (recent candles, paper orders, positions) in SQLite.
+
+### U2-C. Frontend MarketView UX
+
+- [ ] Build MarketView shell layout (symbol rail, chart stage, right detail panel) responsive for desktop/tablet/mobile.
+- [ ] Implement realtime candle chart with live cursor and timeframe toggle.
+- [ ] Implement trades tape with bounded in-memory window and deterministic timestamp formatting.
+- [ ] Implement orderbook ladder view with depth bars and live spread indicator.
+- [ ] Implement symbol switcher with preserved per-symbol UI state (selected timeframe, panel state).
+- [ ] Implement connection-state banner (connected, reconnecting, degraded) and recovery hints.
+
+### U2-D. Paper Trading Flow
+
+- [ ] Define paper-order model (market/limit fields, status lifecycle, fills, cancellation).
+- [ ] Implement order ticket UI with validation and explicit failure reasons.
+- [ ] Implement backend paper matching simulation against live/simulated ticks.
+- [ ] Implement positions, unrealized/realized PnL, and trade history surfaces.
+- [ ] Implement risk guardrails (max position size, notional cap, reject invalid quantity/price).
+
+### U2-E. Runtime Packaging and Ops
+
+- [ ] Add `demo/marketview/frontend` and `demo/marketview/backend` folder split mirroring video-chat demo layout.
+- [ ] Add docker compose stack for MarketView demo (frontend + backend, optional feed-simulator sidecar).
+- [ ] Add CI build smoke for MarketView frontend/backend images.
+- [ ] Add README with explicit tech-preview messaging, startup commands, and known limitations.
+- [ ] Add end-to-end smoke check: start stack, subscribe symbol, receive ticks/candles, place paper order.
+
+
+# PLANNING / FUTURE WORK - do not touch or edit this section without explicit intent to plan future work
+
+## V. AI / SLM Platform
+
+- [ ] Define King as a state-of-the-art SLM platform, not a basic local LLM wrapper
+- [ ] Define hardware-aware automatic model selection
+- [ ] Define capability-aware model selection based on available CPU / RAM / GPU / VRAM
+- [ ] Define network-aware model placement across multiple nodes
+- [ ] Define distributed inference execution across multiple servers
+- [ ] Define future MoE-ready multi-node expert routing
+- [ ] Define object-store-backed model artifact storage
+- [ ] Define object-store-backed dataset storage for AI workflows
+- [ ] Define object-store-backed prompt / cache / checkpoint persistence where applicable
+- [ ] Finalize the public contract for the AI / SLM platform surface
+
+## W. Embeddings / Vectorization / Semantic Discovery
+
+- [ ] Define data vectorization as a first-class capability
+- [ ] Define embedding generation pipelines over object-store data
+- [ ] Define embedding persistence and versioning
+- [ ] Define vector index / vector search as a first-class capability
+- [ ] Define semantic lookup over registered MCP servers
+- [ ] Define semantic discovery surfaces for Semantic DNS
+- [ ] Define similarity matching for service / tool / MCP resolution
+- [ ] Define optional graph-aware metadata and relationship traversal
+- [ ] Define the public contract boundary between core semantic discovery and optional graph integrations
+
+## X. Knowledge / Retrieval
+
+- [ ] Define retrieval pipelines over object-store-backed data
+- [ ] Define chunking / preprocessing contracts for retrieval
+- [ ] Define retriever contracts for semantic search
+- [ ] Define hybrid retrieval surfaces where claimed
+- [ ] Define retrieval-backed service and tool discovery
+- [ ] Define retrieval-backed MCP server selection
+- [ ] Finalize the public contract for retrieval and semantic lookup
+
+## Y. Fine-Tuning / Training Data
+
+- [ ] Define training-data extraction pipelines from stored data
+- [ ] Define dataset-building pipelines for task-specific SLMs
+- [ ] Define dataset versioning and lineage
+- [ ] Define fine-tuning workflows for small models
+- [ ] Define fine-tuning artifact storage and recovery
+- [ ] Define fine-tuned model registration and reuse
+- [ ] Define evaluation / validation surfaces for fine-tuned models
+- [ ] Finalize the public contract for fine-tuning workflows
+
+## Z. Inference Serving
+
+- [ ] Define high-performance inference as a first-class serving role
+- [ ] Define runtime hardware profiling for inference nodes
+- [ ] Define automatic model-fit selection for inference-only servers
+- [ ] Define quantized inference support
+- [ ] Define low-latency token streaming for inference serving
+- [ ] Define multi-node inference routing
+- [ ] Define inference routing by latency / memory / capability
+- [ ] Define failover between inference nodes
+- [ ] Define inference telemetry, budgets, and observability
+- [ ] Finalize the public contract for inference-serving nodes
+
+## AA. Advanced Model Extensions
+
+- [ ] Define advanced model capabilities as extension-based functionality
+- [ ] Define external providers as extension-based functionality
+- [ ] Define larger model families as extension-based functionality
+- [ ] Define advanced routing / fallback / policy layers as extension-based functionality
+- [ ] Define advanced multimodal capabilities as extension-based functionality
+- [ ] Define clear public contract boundaries between the built-in AI platform and later model extensions
+
+# // End of file - do not add anything below this line
