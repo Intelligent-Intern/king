@@ -187,7 +187,7 @@ Contract guardrails for this batch:
   done when: signaling is delivered only to authorized peers in room context and invalid targets are rejected.
 - [x] `#26 Implement lobby queue state and moderator actions (allow/remove/allow-all) on the backend with role checks.`
   done when: queued users and moderator actions update state atomically and frontend receives corresponding realtime snapshots.
-- [ ] `#27 Bind Vue auth/session store to backend login/logout/session-check and enforce route-level RBAC guards.`
+- [x] `#27 Bind Vue auth/session store to backend login/logout/session-check and enforce route-level RBAC guards.`
   done when: unauthorized routes are blocked, role mismatch redirects are deterministic, and session recovery works on refresh.
 - [ ] `#28 Bind Vue admin calls/calendar views to new backend contracts including create/schedule/edit/cancel and invite popover flows.`
   done when: admin CRUD UI uses backend data only, pagination/search are fully live, and modal flows match mock behavior.

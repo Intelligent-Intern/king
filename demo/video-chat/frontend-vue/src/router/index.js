@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import {
   defaultRouteForRole,
+  ensureSessionRecovery,
   isAuthenticated,
   sessionState,
 } from '../stores/session';
@@ -46,13 +47,13 @@ const routes = [
         path: 'user/dashboard',
         name: 'user-dashboard',
         component: () => import('../views/UserDashboardView.vue'),
-        meta: { requiresAuth: true, roles: ['user'] },
+        meta: { requiresAuth: true, roles: ['moderator', 'user'] },
       },
       {
         path: 'workspace/call/:roomId?',
         name: 'call-workspace',
         component: () => import('../views/CallWorkspaceView.vue'),
-        meta: { requiresAuth: true, roles: ['admin', 'user'] },
+        meta: { requiresAuth: true, roles: ['admin', 'moderator', 'user'] },
       },
     ],
   },
@@ -70,7 +71,9 @@ const router = createRouter({
   routes,
 });
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
+  await ensureSessionRecovery();
+
   const loggedIn = isAuthenticated();
   const requiresAuth = to.matched.some((record) => record.meta?.requiresAuth);
 
@@ -89,7 +92,7 @@ router.beforeEach((to) => {
     .flatMap((record) => (Array.isArray(record.meta?.roles) ? record.meta.roles : []));
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(sessionState.role)) {
-    return defaultRouteForRole(sessionState.role);
+    return loggedIn ? defaultRouteForRole(sessionState.role) : '/login';
   }
 
   return true;

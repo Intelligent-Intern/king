@@ -1,57 +1,104 @@
 <template>
-  <div class="shell-root">
-    <aside class="shell-sidebar">
-      <div class="shell-brand-strip">
-        <img src="/assets/orgas/intelligent-intern/logo.svg" alt="Intelligent Intern" />
-      </div>
-      <p class="shell-user">{{ sessionState.displayName }}</p>
-      <p class="shell-email" v-if="sessionState.email">{{ sessionState.email }}</p>
+  <main class="app">
+    <div class="shell no-right-sidebar" :class="{ 'left-collapsed': leftSidebarCollapsed }">
+      <aside class="sidebar sidebar-left" :class="{ collapsed: leftSidebarCollapsed }">
+        <div class="sidebar-content left">
+          <div class="brand-strip">
+            <img src="/assets/orgas/intelligent-intern/logo.svg" alt="Intelligent Intern" />
+            <button
+              class="sidebar-toggle-btn"
+              type="button"
+              title="Hide sidebar"
+              aria-label="Hide sidebar"
+              @click="leftSidebarCollapsed = true"
+            >
+              <img class="arrow-icon-image" src="/assets/orgas/intelligent-intern/icons/backward.png" alt="" />
+            </button>
+          </div>
 
-      <nav class="shell-nav">
-        <RouterLink v-for="item in navItems" :key="item.to" :to="item.to" class="shell-link">
-          {{ item.label }}
-        </RouterLink>
-      </nav>
+          <nav class="nav" aria-label="Main navigation">
+            <RouterLink
+              v-for="item in navItems"
+              :key="item.to"
+              :to="item.to"
+              class="nav-link"
+              :class="{ active: route.path === item.to }"
+            >
+              <img :src="item.icon" alt="" />
+              <span>{{ item.label }}</span>
+            </RouterLink>
+          </nav>
 
-      <button class="shell-logout" type="button" @click="handleSignOut">Log out</button>
-    </aside>
+          <section class="sidebar-profile avatar-only">
+            <img
+              class="sidebar-avatar-image"
+              src="/assets/orgas/intelligent-intern/avatar-placeholder.svg"
+              alt="Profile avatar"
+            />
+          </section>
 
-    <main class="shell-main">
-      <header class="shell-header">
-        <h2>{{ pageTitle }}</h2>
-        <p class="shell-runtime" :class="`shell-runtime-${backendRuntimeState.status}`">
-          {{ runtimeSummary }}
-        </p>
-      </header>
-      <section class="shell-content">
-        <RouterView />
+          <div class="logout-wrap">
+            <button class="btn full" type="button" @click="handleSignOut">Log out</button>
+          </div>
+        </div>
+      </aside>
+
+      <section class="main">
+        <div class="workspace">
+          <section class="section">
+            <div class="section-head">
+              <div class="section-head-left">
+                <button
+                  class="show-sidebar-overlay show-sidebar-inline show-left-sidebar-overlay"
+                  type="button"
+                  title="Show sidebar"
+                  aria-label="Show sidebar"
+                  @click="leftSidebarCollapsed = false"
+                >
+                  <img class="arrow-icon-image" src="/assets/orgas/intelligent-intern/icons/forward.png" alt="" />
+                </button>
+                <div>
+                  <h1 class="title">{{ pageTitle }}</h1>
+                  <p class="subtitle">{{ runtimeSummary }}</p>
+                </div>
+              </div>
+              <div class="actions">
+              </div>
+            </div>
+          </section>
+
+          <section class="panel-grid">
+            <RouterView />
+          </section>
+        </div>
       </section>
-    </main>
-  </div>
+    </div>
+  </main>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
-import { defaultRouteForRole, sessionState, signOut } from '../stores/session';
+import { defaultRouteForRole, logoutSession, sessionState } from '../stores/session';
 import { backendRuntimeState } from '../stores/runtime';
 
 const router = useRouter();
 const route = useRoute();
+const leftSidebarCollapsed = ref(false);
 
 const navItems = computed(() => {
   if (sessionState.role === 'admin') {
     return [
-      { to: '/admin/overview', label: 'Overview' },
-      { to: '/admin/users', label: 'User Management' },
-      { to: '/admin/calls', label: 'Video Calls' },
-      { to: '/workspace/call/lobby', label: 'Call Workspace' },
+      { to: '/admin/overview', label: 'Overview', icon: '/assets/orgas/intelligent-intern/icons/users.png' },
+      { to: '/admin/users', label: 'User Management', icon: '/assets/orgas/intelligent-intern/icons/user.png' },
+      { to: '/admin/calls', label: 'Video Calls', icon: '/assets/orgas/intelligent-intern/icons/lobby.png' },
+      { to: '/workspace/call/lobby', label: 'Call Workspace', icon: '/assets/orgas/intelligent-intern/icons/chat.png' },
     ];
   }
 
   return [
-    { to: '/user/dashboard', label: 'Dashboard' },
-    { to: '/workspace/call/lobby', label: 'Call Workspace' },
+    { to: '/user/dashboard', label: 'Dashboard', icon: '/assets/orgas/intelligent-intern/icons/users.png' },
+    { to: '/workspace/call/lobby', label: 'Call Workspace', icon: '/assets/orgas/intelligent-intern/icons/lobby.png' },
   ];
 });
 
@@ -87,8 +134,8 @@ const runtimeSummary = computed(() => {
   return `Backend runtime preflight pending (${backendRuntimeState.backendOrigin})`;
 });
 
-function handleSignOut() {
-  signOut();
+async function handleSignOut() {
+  await logoutSession();
   router.replace('/login');
 }
 

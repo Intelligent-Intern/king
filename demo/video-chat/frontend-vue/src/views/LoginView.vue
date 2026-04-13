@@ -1,31 +1,32 @@
 <template>
-  <main class="ii-auth">
-    <section class="ii-authCard">
+  <div class="ii-auth">
+    <div class="ii-authCard">
       <div class="ii-authSplit">
         <div class="ii-authSplit__brand">
           <div class="ii-authSplit__brandInner">
             <img
               class="ii-authSplit__logo"
               src="/assets/orgas/intelligent-intern/logo.svg"
-              alt="Intelligent Intern"
+              alt="logo"
             />
           </div>
         </div>
 
         <div class="ii-authSplit__form">
-          <form class="ii-form" @submit.prevent="handleSubmit">
+          <form class="ii-form" novalidate @submit.prevent="handleSubmit">
             <div>
               <label class="ii-fieldLabel" for="email">Email</label>
               <input
                 id="email"
                 v-model.trim="email"
-                class="ii-input"
+                class="ii-input ii-input-email"
                 type="email"
                 inputmode="email"
                 autocomplete="username"
+                aria-label="Email"
                 placeholder="name@company.com"
               />
-              <p v-if="emailError" class="ii-fieldError">{{ emailError }}</p>
+              <div class="ii-fieldError" :hidden="!emailError">{{ emailError }}</div>
             </div>
 
             <div>
@@ -33,40 +34,31 @@
               <input
                 id="password"
                 v-model="password"
-                class="ii-input"
+                class="ii-input ii-input-password"
                 type="password"
                 autocomplete="current-password"
+                aria-label="Password"
                 placeholder="••••••••••"
               />
-              <p v-if="passwordError" class="ii-fieldError">{{ passwordError }}</p>
+              <div class="ii-fieldError" :hidden="!passwordError">{{ passwordError }}</div>
             </div>
 
-            <button
-              v-if="backendRuntimeState.status === 'error'"
-              class="ii-btn ii-btn--secondary"
-              type="button"
-              @click="handleRuntimeRetry"
-            >
-              Retry backend preflight
+            <button class="ii-btn ii-btn--primary ii-authBtn ii-btn--block" type="submit">
+              <span class="ii-btn__label">Sign in</span>
             </button>
 
-            <button class="ii-btn ii-btn--primary ii-authBtn" type="submit">Sign in</button>
-            <p v-if="authError" class="ii-error">{{ authError }}</p>
-            <p class="runtime-preflight" :class="`runtime-preflight-${backendRuntimeState.status}`">
-              {{ runtimeLabel }}
-            </p>
+            <div class="ii-error" :hidden="!authError">{{ authError }}</div>
           </form>
         </div>
       </div>
-    </section>
-  </main>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { defaultRouteForRole, signInAs } from '../stores/session';
-import { backendRuntimeState, probeBackendRuntime } from '../stores/runtime';
+import { defaultRouteForRole, loginWithPassword } from '../stores/session';
 
 const router = useRouter();
 const route = useRoute();
@@ -76,43 +68,10 @@ const password = ref('');
 const emailError = ref('');
 const passwordError = ref('');
 const authError = ref('');
+const submitting = ref(false);
 
-const ACCOUNTS = Object.freeze({
-  'admin@intelligent-intern.com': {
-    password: 'admin123',
-    role: 'admin',
-    displayName: 'Platform Admin',
-  },
-  'user@intelligent-intern.com': {
-    password: 'user123',
-    role: 'user',
-    displayName: 'Call User',
-  },
-});
-
-const runtimeLabel = computed(() => {
-  if (backendRuntimeState.status === 'probing') {
-    return `Backend runtime preflight in progress (${backendRuntimeState.backendOrigin})…`;
-  }
-
-  if (backendRuntimeState.status === 'error') {
-    return `Backend runtime preflight failed: ${backendRuntimeState.error}`;
-  }
-
-  if (backendRuntimeState.status === 'ready' && backendRuntimeState.data) {
-    const appVersion = backendRuntimeState.data?.app?.version || 'n/a';
-    const kingVersion = backendRuntimeState.data?.runtime?.king_version || 'n/a';
-    return `Backend ${appVersion} · King ${kingVersion}`;
-  }
-
-  return `Backend runtime preflight pending (${backendRuntimeState.backendOrigin})`;
-});
-
-function handleRuntimeRetry() {
-  void probeBackendRuntime();
-}
-
-function handleSubmit() {
+async function handleSubmit() {
+  if (submitting.value) return;
   emailError.value = '';
   passwordError.value = '';
   authError.value = '';
@@ -138,15 +97,18 @@ function handleSubmit() {
     return;
   }
 
-  const account = ACCOUNTS[emailValue];
-  if (!account || account.password !== passwordValue) {
-    authError.value = 'Invalid email or password.';
-    return;
+  submitting.value = true;
+  try {
+    const result = await loginWithPassword(emailValue, passwordValue);
+    if (!result.ok) {
+      authError.value = result.message || 'Invalid email or password.';
+      return;
+    }
+
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '';
+    router.replace(redirect || defaultRouteForRole(result.role));
+  } finally {
+    submitting.value = false;
   }
-
-  signInAs(account.role, account.displayName, emailValue);
-
-  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '';
-  router.replace(redirect || defaultRouteForRole(account.role));
 }
 </script>

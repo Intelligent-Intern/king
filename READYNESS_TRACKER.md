@@ -372,7 +372,7 @@ Scope note:
 
 ### Z5. Frontend Mock Parity (Vue)
 
-- [ ] Bind frontend auth store to backend login/logout/session-check and remove local-only identity fallback.
+- [x] Bind frontend auth store to backend login/logout/session-check and remove local-only identity fallback.
 - [ ] Enforce route-level role guards so admin/user flows cannot drift into hybrid unauthorized views.
 - [ ] Implement admin dashboard data binding from backend contracts (no static placeholder metrics).
 - [ ] Implement admin calls CRUD table with server-backed pagination/search/filter and action parity.
