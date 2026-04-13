@@ -1,26 +1,26 @@
 import { test, expect } from '@playwright/test';
 
-async function signIn(page, { displayName, email, role }) {
+async function signIn(page, { email, password }) {
   await page.goto('/login');
-  await expect(page.getByRole('heading', { name: 'Video Control Workspace' })).toBeVisible();
+  await expect(page.getByLabel('Email')).toBeVisible();
+  await expect(page.getByLabel('Password')).toBeVisible();
 
-  await page.getByLabel('Display name').fill(displayName);
   await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Role').selectOption(role);
+  await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
 test('route guard redirects unauthenticated users to /login', async ({ page }) => {
   await page.goto('/admin/overview');
   await expect(page).toHaveURL(/\/login(\?.*)?$/);
-  await expect(page.getByRole('heading', { name: 'Video Control Workspace' })).toBeVisible();
+  await expect(page.getByLabel('Email')).toBeVisible();
+  await expect(page.getByLabel('Password')).toBeVisible();
 });
 
 test('admin can click through all implemented admin routes and logout', async ({ page }) => {
   await signIn(page, {
-    displayName: 'Platform Admin',
     email: 'admin@intelligent-intern.com',
-    role: 'admin',
+    password: 'admin123',
   });
 
   await expect(page).toHaveURL(/\/admin\/overview$/);
@@ -42,14 +42,13 @@ test('admin can click through all implemented admin routes and logout', async ({
 
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole('heading', { name: 'Video Control Workspace' })).toBeVisible();
+  await expect(page.getByLabel('Email')).toBeVisible();
 });
 
 test('user role is constrained by RBAC and can still open call workspace', async ({ page }) => {
   await signIn(page, {
-    displayName: 'Call User',
     email: 'user@intelligent-intern.com',
-    role: 'user',
+    password: 'user123',
   });
 
   await expect(page).toHaveURL(/\/user\/dashboard$/);
@@ -70,15 +69,14 @@ test('user role is constrained by RBAC and can still open call workspace', async
 
 test('session state survives hard reload and /login redirects for authenticated user', async ({ page }) => {
   await signIn(page, {
-    displayName: 'Session User',
-    email: 'session@intelligent-intern.com',
-    role: 'user',
+    email: 'user@intelligent-intern.com',
+    password: 'user123',
   });
 
   await expect(page).toHaveURL(/\/user\/dashboard$/);
   await page.reload();
   await expect(page).toHaveURL(/\/user\/dashboard$/);
-  await expect(page.getByText('Session User')).toBeVisible();
+  await expect(page.getByText('Call User')).toBeVisible();
 
   await page.goto('/login');
   await expect(page).toHaveURL(/\/user\/dashboard$/);

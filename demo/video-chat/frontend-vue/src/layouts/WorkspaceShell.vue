@@ -1,9 +1,11 @@
 <template>
   <div class="shell-root">
     <aside class="shell-sidebar">
-      <h1>King Video</h1>
+      <div class="shell-brand-strip">
+        <img src="/assets/orgas/intelligent-intern/logo.svg" alt="Intelligent Intern" />
+      </div>
       <p class="shell-user">{{ sessionState.displayName }}</p>
-      <p class="shell-role">{{ sessionState.role }}</p>
+      <p class="shell-email" v-if="sessionState.email">{{ sessionState.email }}</p>
 
       <nav class="shell-nav">
         <RouterLink v-for="item in navItems" :key="item.to" :to="item.to" class="shell-link">

@@ -1,37 +1,63 @@
 <template>
-  <main class="login-screen">
-    <section class="login-card">
-      <h1>Video Control Workspace</h1>
-      <p>Sign in to continue.</p>
-      <p class="runtime-preflight" :class="`runtime-preflight-${backendRuntimeState.status}`">
-        {{ runtimeLabel }}
-      </p>
+  <main class="ii-auth">
+    <section class="ii-authCard">
+      <div class="ii-authSplit">
+        <div class="ii-authSplit__brand">
+          <div class="ii-authSplit__brandInner">
+            <img
+              class="ii-authSplit__logo"
+              src="/assets/orgas/intelligent-intern/logo.svg"
+              alt="Intelligent Intern"
+            />
+          </div>
+        </div>
 
-      <form class="login-form" @submit.prevent="handleSubmit">
-        <label>
-          Display name
-          <input v-model.trim="displayName" type="text" required maxlength="80" />
-        </label>
+        <div class="ii-authSplit__form">
+          <form class="ii-form" @submit.prevent="handleSubmit">
+            <div>
+              <label class="ii-fieldLabel" for="email">Email</label>
+              <input
+                id="email"
+                v-model.trim="email"
+                class="ii-input"
+                type="email"
+                inputmode="email"
+                autocomplete="username"
+                placeholder="name@company.com"
+              />
+              <p v-if="emailError" class="ii-fieldError">{{ emailError }}</p>
+            </div>
 
-        <label>
-          Email
-          <input v-model.trim="email" type="email" required maxlength="160" />
-        </label>
+            <div>
+              <label class="ii-fieldLabel" for="password">Password</label>
+              <input
+                id="password"
+                v-model="password"
+                class="ii-input"
+                type="password"
+                autocomplete="current-password"
+                placeholder="••••••••••"
+              />
+              <p v-if="passwordError" class="ii-fieldError">{{ passwordError }}</p>
+            </div>
 
-        <label>
-          Role
-          <select v-model="role">
-            <option value="admin">Admin</option>
-            <option value="user">User</option>
-          </select>
-        </label>
+            <button
+              v-if="backendRuntimeState.status === 'error'"
+              class="ii-btn ii-btn--secondary"
+              type="button"
+              @click="handleRuntimeRetry"
+            >
+              Retry backend preflight
+            </button>
 
-        <p v-if="error" class="form-error">{{ error }}</p>
-        <button v-if="backendRuntimeState.status === 'error'" type="button" @click="handleRuntimeRetry">
-          Retry backend preflight
-        </button>
-        <button type="submit">Sign in</button>
-      </form>
+            <button class="ii-btn ii-btn--primary ii-authBtn" type="submit">Sign in</button>
+            <p v-if="authError" class="ii-error">{{ authError }}</p>
+            <p class="runtime-preflight" :class="`runtime-preflight-${backendRuntimeState.status}`">
+              {{ runtimeLabel }}
+            </p>
+          </form>
+        </div>
+      </div>
     </section>
   </main>
 </template>
@@ -45,10 +71,24 @@ import { backendRuntimeState, probeBackendRuntime } from '../stores/runtime';
 const router = useRouter();
 const route = useRoute();
 
-const displayName = ref('');
 const email = ref('');
-const role = ref('admin');
-const error = ref('');
+const password = ref('');
+const emailError = ref('');
+const passwordError = ref('');
+const authError = ref('');
+
+const ACCOUNTS = Object.freeze({
+  'admin@intelligent-intern.com': {
+    password: 'admin123',
+    role: 'admin',
+    displayName: 'Platform Admin',
+  },
+  'user@intelligent-intern.com': {
+    password: 'user123',
+    role: 'user',
+    displayName: 'Call User',
+  },
+});
 
 const runtimeLabel = computed(() => {
   if (backendRuntimeState.status === 'probing') {
@@ -73,19 +113,40 @@ function handleRuntimeRetry() {
 }
 
 function handleSubmit() {
-  error.value = '';
-  if (displayName.value.trim() === '') {
-    error.value = 'Display name is required.';
-    return;
+  emailError.value = '';
+  passwordError.value = '';
+  authError.value = '';
+
+  const emailValue = email.value.trim().toLowerCase();
+  const passwordValue = password.value;
+  let hasError = false;
+
+  if (emailValue === '') {
+    emailError.value = 'Email is required.';
+    hasError = true;
+  } else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailValue)) {
+    emailError.value = 'Email is invalid.';
+    hasError = true;
   }
-  if (email.value.trim() === '') {
-    error.value = 'Email is required.';
+
+  if (passwordValue === '') {
+    passwordError.value = 'Password is required.';
+    hasError = true;
+  }
+
+  if (hasError) {
     return;
   }
 
-  signInAs(role.value, displayName.value, email.value);
+  const account = ACCOUNTS[emailValue];
+  if (!account || account.password !== passwordValue) {
+    authError.value = 'Invalid email or password.';
+    return;
+  }
+
+  signInAs(account.role, account.displayName, emailValue);
 
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '';
-  router.replace(redirect || defaultRouteForRole(role.value));
+  router.replace(redirect || defaultRouteForRole(account.role));
 }
 </script>

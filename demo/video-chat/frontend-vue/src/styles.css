@@ -4,13 +4,39 @@
   --bg-pane: #182c4d;
   --bg-surface: #2b3e60;
   --bg-surface-strong: #0c1c33;
+  --bg-input: #d8dadd;
+  --bg-action: #162e51;
+  --bg-action-hover: #5696ef;
+  --bg-row: #2a569f;
+  --bg-row-hover: #163260;
   --line: #09111e;
   --text-main: #edf3ff;
-  --text-muted: #94a7c7;
+  --text-muted: #8490a1;
+  --danger: #ff0000;
 }
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #1a3f74 #0b1f42;
+}
+
+*::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #0b1f42;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #1a3f74;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #2f68ba;
 }
 
 html,
@@ -30,38 +56,46 @@ a {
 }
 
 .shell-root {
-  min-height: 100vh;
+  min-height: 100%;
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: 290px minmax(0, 1fr);
   gap: 10px;
   padding: 10px;
+  background: var(--bg-shell);
 }
 
 .shell-sidebar {
-  background: var(--bg-pane);
+  background: var(--bg-shell);
   border: 1px solid var(--line);
-  padding: 16px;
+  padding: 12px;
   display: grid;
   grid-template-rows: auto auto auto 1fr auto;
   gap: 12px;
 }
 
-.shell-sidebar h1 {
-  margin: 0;
-  font-size: 20px;
+.shell-brand-strip {
+  min-height: 56px;
+  border: 1px solid var(--line);
+  background: var(--bg-pane);
+  display: grid;
+  place-items: center;
+}
+
+.shell-brand-strip img {
+  height: 34px;
+  width: auto;
 }
 
 .shell-user {
   margin: 0;
   font-weight: 600;
+  color: var(--text-main);
 }
 
-.shell-role {
+.shell-email {
   margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .shell-nav {
@@ -72,20 +106,27 @@ a {
 
 .shell-link {
   padding: 10px 12px;
-  background: var(--bg-surface-strong);
+  background: var(--bg-action);
   border: 1px solid var(--line);
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.shell-link:hover {
+  background: var(--bg-action-hover);
 }
 
 .shell-link.router-link-active {
-  background: var(--bg-surface);
+  background: var(--bg-row);
 }
 
 .shell-logout {
   height: 36px;
   border: 1px solid var(--line);
-  background: #ff0000;
+  background: var(--danger);
   color: #fff;
   cursor: pointer;
+  font-weight: 600;
 }
 
 .shell-main {
@@ -143,32 +184,125 @@ a {
   color: var(--text-muted);
 }
 
-.login-screen {
-  min-height: 100vh;
+.ii-auth {
+  min-height: 100%;
   display: grid;
   place-items: center;
-  padding: 16px;
+  padding: 22px;
+  background:
+    radial-gradient(900px 600px at 15% 20%, rgba(86, 150, 239, 0.2), transparent 60%),
+    radial-gradient(900px 600px at 85% 70%, rgba(43, 62, 96, 0.45), transparent 60%),
+    var(--bg-shell);
 }
 
-.login-card {
-  width: min(460px, 100%);
+.ii-authCard {
+  width: min(760px, 100%);
   border: 1px solid var(--line);
   background: var(--bg-pane);
-  padding: 18px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
 }
 
-.login-card h1 {
-  margin: 0 0 8px;
+.ii-authSplit {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 420px;
 }
 
-.login-card p {
-  margin: 0 0 12px;
+.ii-authSplit__brand {
+  border-right: 1px solid var(--line);
+  background:
+    radial-gradient(700px 420px at 35% 30%, rgba(86, 150, 239, 0.28), transparent 62%),
+    radial-gradient(700px 420px at 55% 75%, rgba(86, 150, 239, 0.15), transparent 64%),
+    var(--bg-surface-strong);
+  display: grid;
+  place-items: center;
+}
+
+.ii-authSplit__brandInner {
+  width: 100%;
+  padding: 28px 26px;
+  display: grid;
+  place-items: center;
+}
+
+.ii-authSplit__logo {
+  height: 72px;
+  width: auto;
+}
+
+.ii-authSplit__form {
+  display: flex;
+  align-items: center;
+  padding: 28px 26px;
+}
+
+.ii-form {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+.ii-fieldLabel {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
-.runtime-preflight {
-  margin: 0 0 12px;
+.ii-input {
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--line);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  padding: 0 12px;
+}
+
+.ii-input::placeholder {
+  color: var(--text-muted);
+}
+
+.ii-btn {
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--line);
+  color: var(--text-main);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ii-btn--secondary {
+  background: var(--bg-action);
+}
+
+.ii-btn--secondary:hover {
+  background: var(--bg-action-hover);
+}
+
+.ii-btn--primary {
+  background: var(--bg-row);
+}
+
+.ii-btn--primary:hover {
+  background: var(--bg-action-hover);
+}
+
+.ii-error {
+  margin: 0;
   font-size: 12px;
+  color: #ffb6b6;
+}
+
+.ii-fieldError {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #ff9d9d;
+}
+
+.runtime-preflight {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .runtime-preflight-error {
@@ -179,40 +313,26 @@ a {
   color: #b7e3c0;
 }
 
-.login-form {
-  display: grid;
-  gap: 12px;
-}
-
-.login-form label {
-  display: grid;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.login-form input,
-.login-form select,
-.login-form button {
-  height: 36px;
-  border: 1px solid var(--line);
-  background: var(--bg-surface-strong);
-  color: var(--text-main);
-  padding: 0 10px;
-}
-
-.login-form button {
-  background: #2a569f;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.form-error {
-  margin: 0;
-  color: #ffd1d1;
-}
-
 @media (max-width: 980px) {
   .shell-root {
     grid-template-columns: 1fr;
+  }
+
+  .ii-authCard {
+    width: min(520px, 100%);
+  }
+
+  .ii-authSplit {
+    grid-template-columns: 1fr;
+    min-height: unset;
+  }
+
+  .ii-authSplit__brand {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .ii-authSplit__logo {
+    height: 64px;
   }
 }
