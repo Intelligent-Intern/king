@@ -173,6 +173,11 @@ $runtimeEnvelope = static function () use ($appVersion, $appEnv, $databaseRuntim
             'login_endpoint' => '/api/auth/login',
             'session_endpoint' => '/api/auth/session',
             'logout_endpoint' => '/api/auth/logout',
+            'rbac' => [
+                'admin_scope_prefix' => '/api/admin/',
+                'moderation_scope_prefix' => '/api/moderation/',
+                'user_scope_prefix' => '/api/user/',
+            ],
             'demo_users' => $databaseRuntime['demo_users'] ?? [],
             'rest_auth' => [
                 'authorization_header' => 'Authorization: Bearer <session_token>',
@@ -264,11 +269,31 @@ $handler = static function (array $request) use (
         ]);
     };
 
+    $rbacFailureResponse = static function (string $transport, array $rbacDecision, string $requestPath) use ($errorResponse): array {
+        $status = 403;
+        $code = $transport === 'websocket' ? 'websocket_forbidden' : 'rbac_forbidden';
+        $message = $transport === 'websocket'
+            ? 'Session role is not allowed for websocket access.'
+            : 'Session role is not allowed for this endpoint.';
+
+        return $errorResponse($status, $code, $message, [
+            'reason' => (string) ($rbacDecision['reason'] ?? 'role_not_allowed'),
+            'role' => (string) ($rbacDecision['role'] ?? 'unknown'),
+            'allowed_roles' => is_array($rbacDecision['allowed_roles'] ?? null) ? array_values($rbacDecision['allowed_roles']) : [],
+            'path' => $requestPath,
+        ]);
+    };
+
     $apiAuthContext = null;
     if (str_starts_with($path, '/api/') && !$isPublicEndpoint($path)) {
         $apiAuthContext = $authenticateRequest($request, 'rest');
         if (!(bool) ($apiAuthContext['ok'] ?? false)) {
             return $authFailureResponse('rest', (string) ($apiAuthContext['reason'] ?? 'invalid_session'));
+        }
+
+        $rbacDecision = videochat_authorize_role_for_path((array) ($apiAuthContext['user'] ?? []), $path);
+        if (!(bool) ($rbacDecision['ok'] ?? false)) {
+            return $rbacFailureResponse('rest', $rbacDecision, $path);
         }
     }
 
@@ -493,6 +518,51 @@ SQL
         }
     }
 
+    if ($path === '/api/admin/ping') {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/admin/ping.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'scope' => 'admin',
+            'user' => $apiAuthContext['user'] ?? null,
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if ($path === '/api/moderation/ping') {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/moderation/ping.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'scope' => 'moderation',
+            'user' => $apiAuthContext['user'] ?? null,
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if ($path === '/api/user/ping') {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/user/ping.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'scope' => 'user',
+            'user' => $apiAuthContext['user'] ?? null,
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if ($path === '/' || $path === '/api/bootstrap') {
         return $jsonResponse(200, [
             'service' => 'video-chat-backend-king-php',
@@ -504,6 +574,9 @@ SQL
             'login_endpoint' => '/api/auth/login',
             'session_endpoint' => '/api/auth/session',
             'logout_endpoint' => '/api/auth/logout',
+            'admin_probe_endpoint' => '/api/admin/ping',
+            'moderation_probe_endpoint' => '/api/moderation/ping',
+            'user_probe_endpoint' => '/api/user/ping',
             'time' => gmdate('c'),
         ]);
     }
@@ -512,6 +585,10 @@ SQL
         $websocketAuth = $authenticateRequest($request, 'websocket');
         if (!(bool) ($websocketAuth['ok'] ?? false)) {
             return $authFailureResponse('websocket', (string) ($websocketAuth['reason'] ?? 'invalid_session'));
+        }
+        $websocketRbacDecision = videochat_authorize_role_for_path((array) ($websocketAuth['user'] ?? []), $path);
+        if (!(bool) ($websocketRbacDecision['ok'] ?? false)) {
+            return $rbacFailureResponse('websocket', $websocketRbacDecision, $path);
         }
 
         $authSessionId = is_string($websocketAuth['token'] ?? null)

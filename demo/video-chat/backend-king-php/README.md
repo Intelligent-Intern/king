@@ -28,6 +28,9 @@ cd demo/video-chat/backend-king-php
 - `POST /api/auth/login`
 - `GET /api/auth/session` (requires session token)
 - `POST /api/auth/logout` (requires session token)
+- `GET /api/admin/ping` (requires `admin` role)
+- `GET /api/moderation/ping` (requires `admin` or `moderator` role)
+- `GET /api/user/ping` (requires authenticated `admin`/`moderator`/`user` role)
 - `WS /ws`
 
 Default bind:
@@ -123,6 +126,12 @@ session token (`Authorization: Bearer ...` or `X-Session-Id: ...`).
 
 `POST /api/auth/logout` revokes the current session token and closes every
 tracked active websocket connection that belongs to that session.
+
+RBAC-protected endpoints fail closed with typed `403` errors:
+
+- `code`: `rbac_forbidden` for REST
+- `code`: `websocket_forbidden` for websocket upgrade
+- details include `reason`, `role`, `allowed_roles`, and `path`
 
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).

@@ -260,6 +260,84 @@ function videochat_authenticate_request(PDO $pdo, array $request, string $transp
     ];
 }
 
+function videochat_normalize_role_slug(string $role): string
+{
+    $normalized = strtolower(trim($role));
+    return in_array($normalized, ['admin', 'moderator', 'user'], true) ? $normalized : 'unknown';
+}
+
+/**
+ * @return array<int, string>
+ */
+function videochat_rbac_allowed_roles_for_path(string $path): array
+{
+    $trimmedPath = trim($path);
+    if ($trimmedPath === '') {
+        return [];
+    }
+
+    if ($trimmedPath === '/api/auth/session' || $trimmedPath === '/api/auth/logout' || $trimmedPath === '/ws') {
+        return ['admin', 'moderator', 'user'];
+    }
+    if (str_starts_with($trimmedPath, '/api/admin/')) {
+        return ['admin'];
+    }
+    if (str_starts_with($trimmedPath, '/api/moderation/')) {
+        return ['admin', 'moderator'];
+    }
+    if (str_starts_with($trimmedPath, '/api/user/')) {
+        return ['admin', 'moderator', 'user'];
+    }
+
+    return [];
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   role: string,
+ *   allowed_roles: array<int, string>
+ * }
+ */
+function videochat_authorize_role_for_path(array $user, string $path): array
+{
+    $allowedRoles = videochat_rbac_allowed_roles_for_path($path);
+    if ($allowedRoles === []) {
+        return [
+            'ok' => true,
+            'reason' => 'not_applicable',
+            'role' => videochat_normalize_role_slug((string) ($user['role'] ?? '')),
+            'allowed_roles' => [],
+        ];
+    }
+
+    $role = videochat_normalize_role_slug((string) ($user['role'] ?? ''));
+    if ($role === 'unknown') {
+        return [
+            'ok' => false,
+            'reason' => 'invalid_role',
+            'role' => $role,
+            'allowed_roles' => $allowedRoles,
+        ];
+    }
+    if (!in_array($role, $allowedRoles, true)) {
+        return [
+            'ok' => false,
+            'reason' => 'role_not_allowed',
+            'role' => $role,
+            'allowed_roles' => $allowedRoles,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'reason' => 'ok',
+        'role' => $role,
+        'allowed_roles' => $allowedRoles,
+    ];
+}
+
 /**
  * @return array{
  *   ok: bool,

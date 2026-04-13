@@ -155,7 +155,7 @@ Contract guardrails for this batch:
   done when: authenticated endpoints require valid session state, websocket connect rejects invalid/expired sessions, and tests cover both transports.
 - [x] `#10 Implement logout/session-revoke endpoint with immediate effect across active websocket connections.`
   done when: logout invalidates session server-side and forces connected realtime channels for that session to close.
-- [ ] `#11 Implement backend RBAC policy middleware (admin, moderator, user) across all new video-chat API surfaces.`
+- [x] `#11 Implement backend RBAC policy middleware (admin, moderator, user) across all new video-chat API surfaces.`
   done when: forbidden actions fail closed with typed errors and role-allowed paths are covered by tests.
 - [ ] `#12 Implement admin user list endpoint with search, deterministic sort, and pagination contract matching UI needs.`
   done when: endpoint supports query + page + page_size, returns stable totals, and frontend pagination binds correctly.
