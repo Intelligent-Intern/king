@@ -95,6 +95,26 @@ roomsRouter.post('/', authenticate, (req: AuthenticatedRequest, res) => {
   }
 })
 
+roomsRouter.post('/:roomId/invite', authenticate, (req: AuthenticatedRequest, res) => {
+  const { roomId } = req.params
+  const db = getDb()
+
+  const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(roomId) as { id: string } | undefined
+  if (!room) {
+    res.status(404).json({ error: 'room_not_found' })
+    return
+  }
+
+  const code = uuidv4().slice(0, 8).toUpperCase()
+  
+  db.prepare(`
+    INSERT INTO invite_codes (id, code, room_id, created_by, uses_remaining)
+    VALUES (?, ?, ?, ?, 100)
+  `).run(uuidv4(), code, roomId, req.user!.userId)
+
+  res.json({ inviteCode: code })
+})
+
 roomsRouter.post('/:roomId/join', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const { roomId } = req.params

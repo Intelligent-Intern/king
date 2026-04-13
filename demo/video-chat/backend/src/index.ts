@@ -12,12 +12,14 @@ import { initializeDatabase } from './db/client.js'
 import { authRouter } from './api/controllers/auth.js'
 import { roomsRouter } from './api/controllers/rooms.js'
 import { usersRouter } from './api/controllers/users.js'
+import { inviteRouter } from './api/controllers/invite.js'
 import { setupWebSocket, getStats } from './signaling/server.js'
+import { setupSFU, getSFUStats } from './sfu/server.js'
 import { errorHandler, notFoundHandler } from './security/middleware.js'
 import type { Server } from 'http'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const PORT = Number(process.env.PORT || 8080)
+const PORT = Number(process.env.PORT || 3000)
 const SSL_ENABLED = process.env.SSL_ENABLED === 'true'
 const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173'
 
@@ -63,6 +65,7 @@ initializeDatabase()
 app.use('/api/auth', authRouter)
 app.use('/api/rooms', roomsRouter)
 app.use('/api/users', usersRouter)
+app.use('/api/invite', inviteRouter)
 
 app.get('/health', (_req, res) => {
   res.json({
@@ -106,6 +109,7 @@ if (SSL_ENABLED) {
 
 const wss = new WebSocketServer({ noServer: true })
 setupWebSocket(wss)
+setupSFU(wss)
 
 server.on('upgrade', (request, socket, head) => {
   const hostHeader = request.headers.host || `localhost:${PORT}`

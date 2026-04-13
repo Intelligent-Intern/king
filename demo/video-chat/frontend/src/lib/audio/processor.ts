@@ -60,27 +60,9 @@ export class AudioProcessor {
       
       const startTime = performance.now()
       
-      // Copy with optional processing
+      // Pass-through without processing - audio chain handles compression
       for (let i = 0; i < inputData.length; i++) {
-        let sample = inputData[i]
-        
-        // Simple noise gate (very basic noise reduction)
-        if (this.config.enableNoiseReduction) {
-          const threshold = 0.01
-          if (Math.abs(sample) < threshold) {
-            sample = sample * 0.3 // Attenuate quiet signals
-          }
-        }
-        
-        // Simple compression (limit dynamic range)
-        const ratio = 3
-        const threshold = 0.5
-        if (Math.abs(sample) > threshold) {
-          const excess = Math.abs(sample) - threshold
-          sample = Math.sign(sample) * (threshold + excess / ratio)
-        }
-        
-        outputData[i] = sample
+        outputData[i] = inputData[i]
       }
       
       const processTime = performance.now() - startTime
