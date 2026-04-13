@@ -87,6 +87,8 @@ function ensureRoom(roomId: string, name?: string): RoomState {
       createdAt: now(),
       members: new Set(),
       settings: {},
+      callJoinCount: 0,
+      messageCount: 0,
     })
   }
   
