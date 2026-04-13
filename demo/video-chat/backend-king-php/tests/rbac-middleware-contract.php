@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../domain/realtime/realtime_reaction.php';
 require_once __DIR__ . '/../http/router.php';
 
 function videochat_rbac_middleware_assert(bool $condition, string $message): void
@@ -200,12 +201,14 @@ try {
     $presenceState = videochat_presence_state_init();
     $lobbyState = videochat_lobby_state_init();
     $typingState = videochat_typing_state_init();
+    $reactionState = videochat_reaction_state_init();
 
     $dispatch = static function (string $method, string $path, ?string $sessionToken = null) use (
         &$activeWebsocketsBySession,
         &$presenceState,
         &$lobbyState,
         &$typingState,
+        &$reactionState,
         $jsonResponse,
         $errorResponse,
         $methodFromRequest,
@@ -234,6 +237,7 @@ try {
             $presenceState,
             $lobbyState,
             $typingState,
+            $reactionState,
             $jsonResponse,
             $errorResponse,
             $methodFromRequest,

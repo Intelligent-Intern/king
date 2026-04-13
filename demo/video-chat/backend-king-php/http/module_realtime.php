@@ -256,6 +256,7 @@ function videochat_handle_realtime_routes(
     array &$presenceState,
     array &$lobbyState,
     array &$typingState,
+    array &$reactionState,
     callable $authenticateRequest,
     callable $authFailureResponse,
     callable $rbacFailureResponse,
@@ -344,6 +345,7 @@ function videochat_handle_realtime_routes(
             &$presenceState,
             &$lobbyState,
             &$typingState,
+            &$reactionState,
             &$presenceConnection,
             $authSessionId,
             $connectionId
@@ -364,6 +366,10 @@ function videochat_handle_realtime_routes(
                 $presenceState,
                 (array) $presenceConnection,
                 'disconnect'
+            );
+            videochat_reaction_clear_for_connection(
+                $reactionState,
+                (array) $presenceConnection
             );
             videochat_unregister_active_websocket($activeWebsocketsBySession, $authSessionId, $connectionId);
             videochat_presence_remove_connection($presenceState, $connectionId);
@@ -400,6 +406,10 @@ function videochat_handle_realtime_routes(
                     'typing' => [
                         'start' => 'typing/start',
                         'stop' => 'typing/stop',
+                    ],
+                    'reaction' => [
+                        'send' => 'reaction/send',
+                        'event' => 'reaction/event',
                     ],
                     'lobby' => [
                         'snapshot' => 'lobby/snapshot',
@@ -487,6 +497,7 @@ function videochat_handle_realtime_routes(
                 $chatCommand = null;
                 $typingCommand = null;
                 $signalingCommand = null;
+                $reactionCommand = null;
                 $lobbyCommand = null;
                 if (!(bool) ($presenceCommand['ok'] ?? false) && $commandError === 'unsupported_type') {
                     $chatCommand = videochat_chat_decode_client_frame($frame);
@@ -602,27 +613,32 @@ function videochat_handle_realtime_routes(
                             }
 
                             if ((string) ($signalingCommand['error'] ?? '') === 'unsupported_type') {
-                                $lobbyCommand = videochat_lobby_decode_client_frame($frame);
-                                if ((bool) ($lobbyCommand['ok'] ?? false)) {
-                                    $lobbyResult = videochat_lobby_apply_command(
-                                        $lobbyState,
+                                $reactionCommand = videochat_reaction_decode_client_frame($frame);
+                                if ((bool) ($reactionCommand['ok'] ?? false)) {
+                                    $reactionPublish = videochat_reaction_publish(
+                                        $reactionState,
                                         $presenceState,
                                         $presenceConnection,
-                                        $lobbyCommand
+                                        $reactionCommand
                                     );
-                                    if (!(bool) ($lobbyResult['ok'] ?? false)) {
+                                    if (!(bool) ($reactionPublish['ok'] ?? false)) {
+                                        $details = [
+                                            'error' => (string) ($reactionPublish['error'] ?? 'unknown'),
+                                            'type' => (string) ($reactionCommand['type'] ?? ''),
+                                            'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
+                                        ];
+                                        $retryAfterMs = (int) ($reactionPublish['retry_after_ms'] ?? 0);
+                                        if ($retryAfterMs > 0) {
+                                            $details['retry_after_ms'] = $retryAfterMs;
+                                        }
+
                                         videochat_presence_send_frame(
                                             $websocket,
                                             [
                                                 'type' => 'system/error',
-                                                'code' => 'lobby_command_failed',
-                                                'message' => 'Could not apply lobby command.',
-                                                'details' => [
-                                                    'error' => (string) ($lobbyResult['error'] ?? 'unknown'),
-                                                    'type' => (string) ($lobbyCommand['type'] ?? ''),
-                                                    'target_user_id' => (int) ($lobbyCommand['target_user_id'] ?? 0),
-                                                    'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
-                                                ],
+                                                'code' => 'reaction_publish_failed',
+                                                'message' => 'Could not publish reaction event.',
+                                                'details' => $details,
                                                 'time' => gmdate('c'),
                                             ]
                                         );
@@ -630,8 +646,41 @@ function videochat_handle_realtime_routes(
                                     continue;
                                 }
 
-                                $commandType = (string) ($lobbyCommand['type'] ?? $commandType);
-                                $commandError = (string) ($lobbyCommand['error'] ?? $commandError);
+                                if ((string) ($reactionCommand['error'] ?? '') === 'unsupported_type') {
+                                    $lobbyCommand = videochat_lobby_decode_client_frame($frame);
+                                    if ((bool) ($lobbyCommand['ok'] ?? false)) {
+                                        $lobbyResult = videochat_lobby_apply_command(
+                                            $lobbyState,
+                                            $presenceState,
+                                            $presenceConnection,
+                                            $lobbyCommand
+                                        );
+                                        if (!(bool) ($lobbyResult['ok'] ?? false)) {
+                                            videochat_presence_send_frame(
+                                                $websocket,
+                                                [
+                                                    'type' => 'system/error',
+                                                    'code' => 'lobby_command_failed',
+                                                    'message' => 'Could not apply lobby command.',
+                                                    'details' => [
+                                                        'error' => (string) ($lobbyResult['error'] ?? 'unknown'),
+                                                        'type' => (string) ($lobbyCommand['type'] ?? ''),
+                                                        'target_user_id' => (int) ($lobbyCommand['target_user_id'] ?? 0),
+                                                        'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
+                                                    ],
+                                                    'time' => gmdate('c'),
+                                                ]
+                                            );
+                                        }
+                                        continue;
+                                    }
+
+                                    $commandType = (string) ($lobbyCommand['type'] ?? $commandType);
+                                    $commandError = (string) ($lobbyCommand['error'] ?? $commandError);
+                                } else {
+                                    $commandType = (string) ($reactionCommand['type'] ?? $commandType);
+                                    $commandError = (string) ($reactionCommand['error'] ?? $commandError);
+                                }
                             } else {
                                 $commandType = (string) ($signalingCommand['type'] ?? $commandType);
                                 $commandError = (string) ($signalingCommand['error'] ?? $commandError);
@@ -694,6 +743,10 @@ function videochat_handle_realtime_routes(
                         $presenceConnection,
                         'room_leave'
                     );
+                    videochat_reaction_clear_for_connection(
+                        $reactionState,
+                        $presenceConnection
+                    );
                     $presenceJoin = videochat_presence_join_room($presenceState, $presenceConnection, 'lobby');
                     $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
                     continue;
@@ -737,6 +790,10 @@ function videochat_handle_realtime_routes(
                             $presenceState,
                             $presenceConnection,
                             'room_change'
+                        );
+                        videochat_reaction_clear_for_connection(
+                            $reactionState,
+                            $presenceConnection
                         );
                     }
                     $presenceJoin = videochat_presence_join_room($presenceState, $presenceConnection, $targetRoomId);

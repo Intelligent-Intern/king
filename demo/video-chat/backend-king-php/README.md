@@ -96,6 +96,11 @@ Environment overrides:
 - `VIDEOCHAT_WS_CHAT_MAX_BYTES` (default `8192`, clamped to `64..65536`)
 - `VIDEOCHAT_WS_TYPING_DEBOUNCE_MS` (default `500`, clamped to `100..5000`)
 - `VIDEOCHAT_WS_TYPING_EXPIRY_MS` (default `3000`, clamped to `500..15000`)
+- `VIDEOCHAT_WS_REACTION_ALLOWED_EMOJIS` (default fixed tray emoji set; comma-separated override)
+- `VIDEOCHAT_WS_REACTION_MAX_CHARS` (default `8`, clamped to `1..32`)
+- `VIDEOCHAT_WS_REACTION_MAX_BYTES` (default `32`, clamped to `4..256`)
+- `VIDEOCHAT_WS_REACTION_THROTTLE_WINDOW_MS` (default `3000`, clamped to `250..60000`)
+- `VIDEOCHAT_WS_REACTION_THROTTLE_MAX_PER_WINDOW` (default `10`, clamped to `1..200`)
 - `KING_EXTENSION_PATH` (default `extension/modules/king.so` from repo root)
 - `PHP_BIN` (default `php`)
 
@@ -314,6 +319,7 @@ Presence channel contract on `WS /ws`:
   - `room/snapshot`
   - `room/joined`
   - `room/left`
+  - `reaction/event`
   - `lobby/snapshot`
   - `system/error`
   - `system/pong`
@@ -324,6 +330,7 @@ Presence channel contract on `WS /ws`:
   - `{"type":"chat/send","message":"...","client_message_id":"..."}` (optional `client_message_id`)
   - `{"type":"typing/start"}`
   - `{"type":"typing/stop"}`
+  - `{"type":"reaction/send","emoji":"👍","client_reaction_id":"..."}` (optional `client_reaction_id`)
   - `{"type":"lobby/queue/request"}`
   - `{"type":"lobby/queue/join"}`
   - `{"type":"lobby/allow","target_user_id":123}` (`admin`/`moderator` only)
@@ -347,6 +354,7 @@ Presence channel contract on `WS /ws`:
   - chat payload validation is bounded (`VIDEOCHAT_WS_CHAT_MAX_CHARS`, `VIDEOCHAT_WS_CHAT_MAX_BYTES`)
   - accepted chat publishes emit `chat/ack` to the sender with deterministic `ack_id`, stable `message_id`, and `sent_count`
   - typing indicators are room-scoped, debounced, expire automatically, never self-echo, and fail closed when sender room membership is invalid
+  - reaction events are room-scoped, enforce emoji/client-id payload boundaries, and apply per-user throttle windows (`VIDEOCHAT_WS_REACTION_THROTTLE_WINDOW_MS`, `VIDEOCHAT_WS_REACTION_THROTTLE_MAX_PER_WINDOW`) with explicit `retry_after_ms` diagnostics on throttle
   - lobby queue updates are room-scoped snapshots (`lobby/snapshot`) driven by server-authoritative queue/admitted state
   - moderator actions (`lobby/allow`, `lobby/remove`, `lobby/allow_all`) are fail-closed for non-moderator roles and for senders not actively present in the room
   - queue/admitted entries are cleaned when a user disconnects or changes rooms
@@ -546,6 +554,12 @@ Run the realtime typing contract test (debounce + expiry + no-self-echo semantic
 
 ```bash
 demo/video-chat/backend-king-php/tests/realtime-typing-contract.sh
+```
+
+Run the realtime reaction contract test (room-scoped stream + payload boundaries + server-side throttling):
+
+```bash
+demo/video-chat/backend-king-php/tests/realtime-reaction-contract.sh
 ```
 
 Run the realtime lobby contract test (queue snapshots + moderator actions + sender room-membership guards + disconnect/room-change cleanup):

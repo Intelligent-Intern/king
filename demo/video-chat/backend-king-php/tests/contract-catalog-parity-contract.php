@@ -9,6 +9,7 @@ require_once __DIR__ . '/../domain/realtime/realtime_chat.php';
 require_once __DIR__ . '/../domain/realtime/realtime_typing.php';
 require_once __DIR__ . '/../domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/../domain/realtime/realtime_signaling.php';
+require_once __DIR__ . '/../domain/realtime/realtime_reaction.php';
 
 function videochat_contract_catalog_fail(string $message): never
 {
@@ -348,6 +349,7 @@ try {
     $presenceState = videochat_presence_state_init();
     $typingState = videochat_typing_state_init();
     $lobbyState = videochat_lobby_state_init();
+    $reactionState = videochat_reaction_state_init();
     $frames = [];
     $sender = static function (mixed $socket, array $payload) use (&$frames): bool {
         $key = is_scalar($socket) ? (string) $socket : 'unknown';
@@ -447,6 +449,26 @@ try {
     $signalPayload = videochat_contract_catalog_last_frame($frames, 'socket-admin');
     videochat_contract_catalog_assert($signalPayload !== [], 'signaling frame should be captured');
     videochat_contract_catalog_assert_payload($catalog, 'ws', 'signaling_event', $signalPayload);
+
+    $frames = [];
+    $reactionCommand = videochat_reaction_decode_client_frame(json_encode([
+        'type' => 'reaction/send',
+        'emoji' => "\u{1F44D}",
+        'client_reaction_id' => 'catalog-rx-1',
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    videochat_contract_catalog_assert((bool) ($reactionCommand['ok'] ?? false), 'reaction command should decode');
+    $reactionPublish = videochat_reaction_publish(
+        $reactionState,
+        $presenceState,
+        $userConnection,
+        $reactionCommand,
+        $sender,
+        1_780_200_050_000
+    );
+    videochat_contract_catalog_assert((bool) ($reactionPublish['ok'] ?? false), 'reaction publish should succeed');
+    $reactionPayload = videochat_contract_catalog_last_frame($frames, 'socket-admin');
+    videochat_contract_catalog_assert($reactionPayload !== [], 'reaction frame should be captured');
+    videochat_contract_catalog_assert_payload($catalog, 'ws', 'reaction_event', $reactionPayload);
 
     fwrite(STDOUT, "[contract-catalog-parity-contract] PASS\n");
     exit(0);

@@ -34,6 +34,7 @@ require_once __DIR__ . '/domain/calls/invite_codes.php';
 require_once __DIR__ . '/domain/realtime/realtime_chat.php';
 require_once __DIR__ . '/domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/domain/realtime/realtime_presence.php';
+require_once __DIR__ . '/domain/realtime/realtime_reaction.php';
 require_once __DIR__ . '/domain/realtime/realtime_signaling.php';
 require_once __DIR__ . '/domain/realtime/realtime_typing.php';
 require_once __DIR__ . '/domain/users/user_directory.php';
@@ -54,6 +55,7 @@ $activeWebsocketsBySession = [];
 $presenceState = videochat_presence_state_init();
 $lobbyState = videochat_lobby_state_init();
 $typingState = videochat_typing_state_init();
+$reactionState = videochat_reaction_state_init();
 
 register_shutdown_function(static function () use ($log): void {
     $error = error_get_last();
@@ -275,6 +277,7 @@ $handler = static function (array $request) use (
     &$presenceState,
     &$lobbyState,
     &$typingState,
+    &$reactionState,
     $jsonResponse,
     $errorResponse,
     $methodFromRequest,
@@ -293,6 +296,7 @@ $handler = static function (array $request) use (
         $presenceState,
         $lobbyState,
         $typingState,
+        $reactionState,
         $jsonResponse,
         $errorResponse,
         $methodFromRequest,

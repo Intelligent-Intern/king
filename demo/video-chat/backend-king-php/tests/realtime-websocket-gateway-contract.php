@@ -200,6 +200,7 @@ try {
     $presenceState = [];
     $lobbyState = [];
     $typingState = [];
+    $reactionState = [];
 
     $invalidMethodRouteResponse = videochat_handle_realtime_routes(
         '/ws',
@@ -209,6 +210,7 @@ try {
         $presenceState,
         $lobbyState,
         $typingState,
+        $reactionState,
         $authenticateRequest,
         $authFailureResponse,
         $rbacFailureResponse,
@@ -244,6 +246,7 @@ try {
         $presenceState,
         $lobbyState,
         $typingState,
+        $reactionState,
         $authenticateRequest,
         $authFailureResponse,
         $rbacFailureResponse,

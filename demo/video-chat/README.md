@@ -34,6 +34,7 @@ Latest commit-level progress:
 - 2026-04-13: closed `#52` with typing indicator hardening (room-scoped debounce + expiry, no self-echo, sender-in-room fail-closed validation, explicit `typing/stop` catalog parity) in `backend-king-php/tests/realtime-typing-contract.sh` + `backend-king-php/tests/contract-catalog-parity-contract.sh`
 - 2026-04-13: closed `#53` with signaling-routing authorization hardening (sender/target membership fail-closed + no cross-room leakage) in `backend-king-php/tests/realtime-signaling-contract.sh`
 - 2026-04-13: closed `#54` with lobby runtime authorization hardening (atomic queue/mutation flow, moderator-only actions, sender room-membership fail-closed) in `backend-king-php/tests/realtime-lobby-contract.sh`
+- 2026-04-13: closed `#55` with reaction event stream hardening (room-scoped fanout, deterministic payload boundaries, server-side per-user throttling with retry diagnostics) in `backend-king-php/tests/realtime-reaction-contract.sh` + `backend-king-php/tests/contract-catalog-parity-contract.sh`
 
 Current new-stack baseline capabilities:
 
@@ -51,6 +52,7 @@ Current new-stack baseline capabilities:
 - chat timeline is server-fanout driven with message normalization and room-local dedupe by message id
 - chat sender acks now carry deterministic `ack_id` + stable `message_id` so client retries can dedupe without local echo drift
 - typing indicators are room-scoped, exclude self display, auto-expire on idle timeout windows, and fail closed when sender room membership is invalid
+- reaction events are room-scoped, validate emoji/client-id boundaries fail-closed, and apply per-user throttle windows with deterministic retry hints
 - lobby queue snapshots are room-scoped and mutation paths now fail closed when sender room membership is invalid
 - chat composer enforces bounded draft length and rejects empty/whitespace payloads before websocket send
 - chat and roster timestamps are rendered in deterministic locale-independent UTC `HH:MM UTC` format
@@ -170,6 +172,7 @@ bash demo/video-chat/scripts/smoke.sh
 - dedicated logout revoke contract (`session-logout-contract`) with persisted revocation metadata assertions
 - room join/presence contract (`realtime-presence-contract`)
 - room chat fanout contract (`realtime-chat-contract`)
+- room reaction stream contract (`realtime-reaction-contract`)
 - invite redeem contract (`invite-code-redeem-contract`)
 - call signaling bootstrap contract (`realtime-signaling-contract`)
 - frontend dev-server boot probe

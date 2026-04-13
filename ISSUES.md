@@ -257,7 +257,7 @@ Execution guardrails for this extension:
   done when: signaling reaches only valid room peers and invalid targets fail closed without leaking peer state.
 - [x] `#54 Implement lobby queue runtime state with moderator actions (`allow`, `remove`, `allow_all`) and role checks.`
   done when: queue mutations are atomic, unauthorized actions fail closed, and clients receive consistent queue snapshots.
-- [ ] `#55 Implement reaction event stream with server-side throttling and deterministic payload boundaries.`
+- [x] `#55 Implement reaction event stream with server-side throttling and deterministic payload boundaries.`
   done when: reaction bursts are bounded and stream remains responsive under controlled load.
 - [ ] `#56 Implement reconnect state machine across REST + WS contracts (`online`, `retrying`, `blocked`, `expired`).`
   done when: reconnect outcomes are explicit, session expiry is surfaced, and clients recover state without silent divergence.

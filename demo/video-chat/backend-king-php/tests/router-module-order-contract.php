@@ -113,6 +113,7 @@ try {
     $presenceState = [];
     $lobbyState = [];
     $typingState = [];
+    $reactionState = [];
 
     $runtimeResponse = videochat_dispatch_request(
         ['method' => 'GET', 'path' => '/api/runtime', 'uri' => '/api/runtime', 'headers' => []],
@@ -120,6 +121,7 @@ try {
         $presenceState,
         $lobbyState,
         $typingState,
+        $reactionState,
         $jsonResponse,
         $errorResponse,
         $methodFromRequest,
@@ -143,6 +145,7 @@ try {
         $presenceState,
         $lobbyState,
         $typingState,
+        $reactionState,
         $jsonResponse,
         $errorResponse,
         $methodFromRequest,
