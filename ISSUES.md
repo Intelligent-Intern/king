@@ -189,7 +189,7 @@ Contract guardrails for this batch:
   done when: queued users and moderator actions update state atomically and frontend receives corresponding realtime snapshots.
 - [x] `#27 Bind Vue auth/session store to backend login/logout/session-check and enforce route-level RBAC guards.`
   done when: unauthorized routes are blocked, role mismatch redirects are deterministic, and session recovery works on refresh.
-- [ ] `#28 Bind Vue admin calls/calendar views to new backend contracts including create/schedule/edit/cancel and invite popover flows.`
+- [x] `#28 Bind Vue admin calls/calendar views to new backend contracts including create/schedule/edit/cancel and invite popover flows.`
   done when: admin CRUD UI uses backend data only, pagination/search are fully live, and modal flows match mock behavior.
 - [ ] `#29 Bind Vue call workspace (users/lobby/chat tabs, lists, pagination, control bar, invite/join) to new King websocket/REST contracts.`
   done when: workspace state is server-driven, sidebar/tab interactions remain responsive, and key mock interactions are preserved.

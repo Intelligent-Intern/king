@@ -375,9 +375,9 @@ Scope note:
 - [x] Bind frontend auth store to backend login/logout/session-check and remove local-only identity fallback.
 - [ ] Enforce route-level role guards so admin/user flows cannot drift into hybrid unauthorized views.
 - [ ] Implement admin dashboard data binding from backend contracts (no static placeholder metrics).
-- [ ] Implement admin calls CRUD table with server-backed pagination/search/filter and action parity.
-- [ ] Integrate calendar scheduling view and bind create/edit flows to backend call contracts.
-- [ ] Implement invite popover/copy/join UX with backend-bound data only.
+- [x] Implement admin calls CRUD table with server-backed pagination/search/filter and action parity.
+- [x] Integrate calendar scheduling view and bind create/edit flows to backend call contracts.
+- [x] Implement invite popover/copy/join UX with backend-bound data only.
 - [ ] Implement user dashboard with own calls list and calendar parity semantics.
 - [ ] Implement workspace sidebars/tabs (`users`, `lobby`, `chat`) as server-driven state projections.
 - [ ] Bind participant list search/pagination/moderation actions to backend-authorized contracts.
