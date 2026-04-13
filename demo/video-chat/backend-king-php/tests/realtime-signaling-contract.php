@@ -185,6 +185,30 @@ try {
     videochat_realtime_signaling_assert(!(bool) ($selfTargetPublish['ok'] ?? true), 'self-target signaling must fail');
     videochat_realtime_signaling_assert((string) ($selfTargetPublish['error'] ?? '') === 'invalid_target_user_id', 'self-target error mismatch');
 
+    $invalidSenderConnection = $senderConnection;
+    $invalidSenderConnection['user_id'] = 0;
+    $invalidSenderPublish = videochat_signaling_publish(
+        $presenceState,
+        $invalidSenderConnection,
+        $decodedOffer,
+        $sender,
+        1_780_300_125_500
+    );
+    videochat_realtime_signaling_assert(!(bool) ($invalidSenderPublish['ok'] ?? true), 'invalid sender signaling must fail');
+    videochat_realtime_signaling_assert((string) ($invalidSenderPublish['error'] ?? '') === 'invalid_sender', 'invalid sender signaling error mismatch');
+
+    $senderNotInRoomConnection = $senderConnection;
+    $senderNotInRoomConnection['room_id'] = 'other-room';
+    $senderNotInRoomPublish = videochat_signaling_publish(
+        $presenceState,
+        $senderNotInRoomConnection,
+        $decodedOffer,
+        $sender,
+        1_780_300_125_800
+    );
+    videochat_realtime_signaling_assert(!(bool) ($senderNotInRoomPublish['ok'] ?? true), 'sender outside room signaling must fail');
+    videochat_realtime_signaling_assert((string) ($senderNotInRoomPublish['error'] ?? '') === 'sender_not_in_room', 'sender outside room signaling error mismatch');
+
     $decodedMissingTarget = videochat_signaling_decode_client_frame(json_encode([
         'type' => 'call/hangup',
     ], JSON_UNESCAPED_SLASHES));

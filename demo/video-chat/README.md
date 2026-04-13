@@ -32,6 +32,7 @@ Latest commit-level progress:
 - 2026-04-13: closed `#50` with server-authoritative room presence snapshot + join/leave delta coverage (including room-change/reconnect phantom-user guards) in `backend-king-php/tests/realtime-presence-contract.sh`
 - 2026-04-13: closed `#51` with room-scoped chat fanout hardening (sender-in-room enforcement, bounded malformed-payload rejection, stable message ids for dedupe, deterministic `chat/ack` ids) in `backend-king-php/tests/realtime-chat-contract.sh` + `backend-king-php/tests/contract-catalog-parity-contract.sh`
 - 2026-04-13: closed `#52` with typing indicator hardening (room-scoped debounce + expiry, no self-echo, sender-in-room fail-closed validation, explicit `typing/stop` catalog parity) in `backend-king-php/tests/realtime-typing-contract.sh` + `backend-king-php/tests/contract-catalog-parity-contract.sh`
+- 2026-04-13: closed `#53` with signaling-routing authorization hardening (sender/target membership fail-closed + no cross-room leakage) in `backend-king-php/tests/realtime-signaling-contract.sh`
 
 Current new-stack baseline capabilities:
 
@@ -55,6 +56,7 @@ Current new-stack baseline capabilities:
 - call join/leave lifecycle updates participant call presence immediately from room-scoped signaling and snapshot reconciliation
 - peer connection ownership is managed by a dedicated remote-user-id keyed manager with deterministic release cleanup
 - offer/answer negotiation is enforced as targeted peer-to-peer signaling (no broadcast fallback) for multi-peer rooms
+- signaling authorization now fails closed for invalid sender identity, sender-not-in-room state, self-target, and target-not-in-room paths
 - ICE candidate forwarding is targeted per peer and candidate payloads are normalized before safe client-side apply
 - remote track tiles now attach/detach safely via lifecycle watchers and participant-based pruning to avoid stale remnants
 - microphone toggles now mutate only local audio-track enabled state in place (no renegotiation churn)

@@ -253,7 +253,7 @@ Execution guardrails for this extension:
   done when: chat broadcast is authoritative, malformed payloads are rejected, and message ids are stable for frontend dedupe.
 - [x] `#52 Implement typing indicator channel with debounce windows, expiry semantics, and no self-echo.`
   done when: typing state auto-expires and remains scoped to active room participants only.
-- [ ] `#53 Implement signaling routing (`offer`/`answer`/`ice`/`hangup`) with membership + target authorization checks.`
+- [x] `#53 Implement signaling routing (`offer`/`answer`/`ice`/`hangup`) with membership + target authorization checks.`
   done when: signaling reaches only valid room peers and invalid targets fail closed without leaking peer state.
 - [ ] `#54 Implement lobby queue runtime state with moderator actions (`allow`, `remove`, `allow_all`) and role checks.`
   done when: queue mutations are atomic, unauthorized actions fail closed, and clients receive consistent queue snapshots.

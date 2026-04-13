@@ -350,8 +350,8 @@ Presence channel contract on `WS /ws`:
   - lobby queue updates are room-scoped snapshots (`lobby/snapshot`) driven by server-authoritative queue/admitted state
   - moderator actions (`lobby/allow`, `lobby/remove`, `lobby/allow_all`) are fail-closed for non-moderator roles
   - queue/admitted entries are cleaned when a user disconnects or changes rooms
-  - signaling commands are target-routed (`call/offer`, `call/answer`, `call/ice`, `call/hangup`) and only delivered when the target user is connected in the same room
-  - invalid signaling targets (missing/invalid/self/not-in-room) fail closed as `system/error` without cross-room leakage
+  - signaling commands are target-routed (`call/offer`, `call/answer`, `call/ice`, `call/hangup`) and only delivered when sender+target room authorization is valid
+  - invalid signaling authorization paths (invalid sender, sender-not-in-room, missing/invalid/self/not-in-room target) fail closed as `system/error` without cross-room leakage
   - accepted signaling publishes emit `call/ack` to the sender with `signal_id`, `signal_type`, and `sent_count`
   - reconnecting clients receive a fresh `room/snapshot` resync on attach
   - active websocket loops revalidate session liveness on receive; revoked/expired sessions get `system/error` (`websocket_session_invalidated`) with structured close metadata (`close_code`, `close_reason`, `close_category`) and are closed accordingly
@@ -554,7 +554,7 @@ Run the realtime lobby contract test (queue snapshots + moderator actions + disc
 demo/video-chat/backend-king-php/tests/realtime-lobby-contract.sh
 ```
 
-Run the realtime signaling contract test (targeted offer/answer/ICE/hangup routing + membership guards):
+Run the realtime signaling contract test (targeted offer/answer/ICE/hangup routing + sender/target membership guards):
 
 ```bash
 demo/video-chat/backend-king-php/tests/realtime-signaling-contract.sh

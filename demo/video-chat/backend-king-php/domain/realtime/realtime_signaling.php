@@ -201,6 +201,22 @@ function videochat_signaling_publish(
     }
 
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
+    $connectionId = trim((string) ($connection['connection_id'] ?? ''));
+    $roomConnections = $presenceState['rooms'][$roomId] ?? null;
+    if (
+        $connectionId === ''
+        || !is_array($roomConnections)
+        || !array_key_exists($connectionId, $roomConnections)
+    ) {
+        return [
+            'ok' => false,
+            'error' => 'sender_not_in_room',
+            'event' => null,
+            'sent_count' => 0,
+            'target_user_id' => $targetUserId,
+        ];
+    }
+
     $targetConnections = videochat_signaling_target_connections($presenceState, $roomId, $targetUserId);
     if ($targetConnections === []) {
         return [
