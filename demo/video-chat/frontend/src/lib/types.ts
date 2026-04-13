@@ -4,4 +4,5 @@ export interface Room {
   inviteCode: string
   memberCount: number
   createdAt: number
+  createdBy: string
 }

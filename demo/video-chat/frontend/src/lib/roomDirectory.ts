@@ -12,6 +12,7 @@ export function normalizeRoomDirectory(input: unknown): Room[] {
       inviteCode: typeof room?.inviteCode === 'string' ? room.inviteCode : id,
       memberCount: toMemberCount(room?.memberCount),
       createdAt: toCreatedAt(room?.createdAt),
+      createdBy: typeof room?.createdBy === 'string' ? room.createdBy : '',
     }
   })
 

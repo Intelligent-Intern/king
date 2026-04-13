@@ -1,0 +1,4 @@
+[2026-04-12T20:49:25.685Z] Database initialized at ./data/king.db
+[2026-04-12T20:49:25.687Z] HTTP server initialized
+[2026-04-12T20:49:25.690Z] Video chat backend listening on port 8080
+[2026-04-12T20:49:25.691Z] WebSocket endpoint: ws://localhost:8080/ws

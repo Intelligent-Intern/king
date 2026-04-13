@@ -18,6 +18,8 @@
     "types": [
       "node",
       "vite/client"
-    ]
+    ],
+    "allowJs": true,
+    "noImplicitAny": false
   }
 }

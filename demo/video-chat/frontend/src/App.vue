@@ -69,6 +69,15 @@
                 <strong>{{ room.name }}</strong>
                 <p>{{ room.memberCount }} online</p>
               </div>
+              <button
+                v-if="room.createdBy === sessionView.userId"
+                type="button"
+                class="room-delete-btn"
+                title="Delete room"
+                @click.stop="deleteRoom(room.id)"
+              >
+                ✕
+              </button>
             </li>
           </ul>
         </section>
@@ -191,6 +200,51 @@
                   {{ isMicEnabled ? 'Mic on' : 'Mic off' }}
                 </button>
                 <button class="danger" @click="leaveCall">Leave call</button>
+                <button class="quiet-btn" @click="showStats = !showStats">
+                  {{ showStats ? 'Hide Stats' : 'Show Stats' }}
+                </button>
+                <button :class="{ active: waveletEnabled }" @click="toggleWavelet">
+                  {{ waveletEnabled ? 'Wavelet: ON' : 'Wavelet: OFF' }}
+                </button>
+              </div>
+              <div v-if="showStats && callJoined" class="stats-panel">
+                <h4>WebRTC Stats</h4>
+                <dl class="stats-grid">
+                  <div><dt>Bitrate Up</dt><dd>{{ formatBitrate(callStats.bitrate.up) }}</dd></div>
+                  <div><dt>Bitrate Down</dt><dd>{{ formatBitrate(callStats.bitrate.down) }}</dd></div>
+                  <div><dt>FPS</dt><dd>{{ callStats.fps.toFixed(0) }}</dd></div>
+                  <div><dt>RTT</dt><dd>{{ callStats.rtt.toFixed(0) }}ms</dd></div>
+                  <div><dt>Packet Loss</dt><dd>{{ callStats.packetLoss.toFixed(1) }}%</dd></div>
+                  <div><dt>Peers</dt><dd>{{ callStats.peers }}</dd></div>
+                </dl>
+                <div v-if="waveletEnabled && waveletStats" class="wavelet-stats">
+                  <h4>Wavelet Codec</h4>
+                  <dl class="stats-grid">
+                    <div><dt>Frames</dt><dd>{{ waveletStats.framesProcessed || 0 }}</dd></div>
+                    <div><dt>Key Frames</dt><dd>{{ waveletStats.keyFrames || 0 }}</dd></div>
+                    <div><dt>Compression</dt><dd>{{ (waveletStats.compressionRatio || 0).toFixed(2) }}x</dd></div>
+                    <div><dt>Encode</dt><dd>{{ (waveletStats.avgEncodeTimeMs || 0).toFixed(1) }}ms</dd></div>
+                    <div><dt>Decode</dt><dd>{{ (waveletStats.avgDecodeTimeMs || 0).toFixed(1) }}ms</dd></div>
+                  </dl>
+                </div>
+                <div v-if="audioStats" class="audio-stats">
+                  <h4>Audio Processor</h4>
+                  <dl class="stats-grid">
+                    <div><dt>Frames</dt><dd>{{ audioStats.framesProcessed || 0 }}</dd></div>
+                    <div><dt>Process Time</dt><dd>{{ (audioStats.avgProcessTimeMs || 0).toFixed(2) }}ms</dd></div>
+                  </dl>
+                </div>
+                <div v-if="backendStats" class="backend-stats">
+                  <h4>Server Stats</h4>
+                  <dl class="stats-grid">
+                    <div><dt>Uptime</dt><dd>{{ backendStats.server?.uptimeFormatted || '-' }}</dd></div>
+                    <div><dt>Total Connections</dt><dd>{{ backendStats.metrics?.totalConnections || 0 }}</dd></div>
+                    <div><dt>Total Messages</dt><dd>{{ backendStats.metrics?.totalMessages || 0 }}</dd></div>
+                    <div><dt>Total Bytes</dt><dd>{{ backendStats.metrics?.totalBytesFormatted || '-' }}</dd></div>
+                    <div><dt>Active Rooms</dt><dd>{{ backendStats.current?.rooms || 0 }}</dd></div>
+                    <div><dt>Active Clients</dt><dd>{{ backendStats.current?.clients || 0 }}</dd></div>
+                  </dl>
+                </div>
               </div>
             </div>
           </section>
@@ -275,6 +329,10 @@ import { resolveRoomIdFromInviteRedeemPayload } from './lib/inviteRedeem'
 import { normalizeParticipantRosterSnapshot } from './lib/participantRoster'
 import { createPeerConnectionManager } from './lib/peerConnectionManager'
 import { callResetOptionsForBoundary } from './lib/callTeardown'
+import { RTCStatsMonitor, formatBitrate } from './lib/stats'
+import { setWaveletTransformConfig, getCodecStats, resetCodec, isEncodedTransformSupported, setupSenderTransform, setupReceiverTransform } from './lib/wavelet/transform'
+import { createWaveletProcessor, WaveletVideoProcessor } from './lib/wavelet/processor-pipeline'
+import { createAudioProcessor, AudioProcessor } from './lib/audio/processor'
 import { applyMediaTrackPreferences, setTrackKindEnabled } from './lib/mediaTrackToggle'
 import { pruneRemoteTiles, upsertRemoteTile } from './lib/remoteTiles'
 import {
@@ -380,15 +438,30 @@ const mediaPreviewState = reactive<{
 })
 const isMicEnabled = ref(true)
 const isCameraEnabled = ref(true)
+const waveletEnabled = ref(false)
+const waveletStats = ref<any>(null)
+const audioStats = ref<any>(null)
 
 const previewVideoRef = ref<HTMLVideoElement | null>(null)
 const localVideoRef = ref<HTMLVideoElement | null>(null)
 let localStream: MediaStream | null = null
+let cameraStream: MediaStream | null = null
+let waveletProcessor: WaveletVideoProcessor | null = null
+let audioProcessor: AudioProcessor | null = null
 
 const peerConnections = createPeerConnectionManager<RTCPeerConnection>()
 const remoteVideoElements = new Map<string, HTMLVideoElement>()
 const remoteStreamWatchers = new Map<string, () => void>()
 const remoteTiles = ref<Array<{ userId: string; name: string; stream: MediaStream }>>([])
+const statsMonitor = new RTCStatsMonitor()
+const callStats = ref({
+  bitrate: { up: 0, down: 0 },
+  fps: 0,
+  rtt: 0,
+  packetLoss: 0,
+  peers: 0,
+})
+const showStats = ref(false)
 
 const isAuthenticated = computed(() => currentSession.value !== null)
 const canSubmitAuth = computed(() => normalizeDisplayName(authForm.name).length > 0)
@@ -451,6 +524,16 @@ function persistSession(): void {
   }
 
   persistSessionIdentity(window.localStorage, currentSession.value)
+}
+
+function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const session = authenticatedSession()
+  const headers = new Headers(options.headers)
+  headers.set('Content-Type', 'application/json')
+  if (session?.token) {
+    headers.set('Authorization', `Bearer ${session.token}`)
+  }
+  return fetch(url, { ...options, headers })
 }
 
 function normalizeRoomId(value: string): string {
@@ -551,7 +634,7 @@ async function refreshRooms(): Promise<void> {
   }
 
   try {
-    const response = await fetch('/api/rooms')
+    const response = await authFetch('/api/rooms')
     if (!response.ok) {
       return
     }
@@ -869,6 +952,7 @@ async function createRoom(): Promise<void> {
     inviteCode: pendingRoomId,
     memberCount: 0,
     createdAt: Date.now(),
+    createdBy: sessionView.value.userId,
   })
 
   try {
@@ -876,9 +960,8 @@ async function createRoom(): Promise<void> {
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const candidateId = roomIdCandidateForAttempt(baseRoomId, attempt)
-      const response = await fetch('/api/rooms', {
+      const response = await authFetch('/api/rooms', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name, id: candidateId }),
       })
 
@@ -960,7 +1043,7 @@ async function createInvite(): Promise<void> {
   createInviteState.submitting = true
 
   try {
-    const response = await fetch(`/api/rooms/${encodeURIComponent(activeRoom.value.id)}/invite`, {
+    const response = await authFetch(`/api/rooms/${encodeURIComponent(activeRoom.value.id)}/invite`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({}),
@@ -994,7 +1077,7 @@ async function redeemInvite(): Promise<void> {
   redeemInviteState.submitting = true
 
   try {
-    const response = await fetch('/api/invite/redeem', {
+    const response = await authFetch('/api/invite/redeem', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ code }),
@@ -1022,6 +1105,36 @@ async function redeemInvite(): Promise<void> {
     redeemInviteState.error = 'Invite could not be redeemed right now.'
   } finally {
     redeemInviteState.submitting = false
+  }
+}
+
+async function deleteRoom(roomId: string): Promise<void> {
+  if (!authenticatedSession()) {
+    return
+  }
+
+  const confirmed = confirm('Are you sure you want to delete this room? This cannot be undone.')
+  if (!confirmed) {
+    return
+  }
+
+  try {
+    const response = await authFetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      console.error('Failed to delete room')
+      return
+    }
+
+    removeRoomDirectoryEntry(roomId)
+
+    if (activeRoomId.value === roomId) {
+      activeRoomId.value = rooms.value[0]?.id || 'lobby'
+    }
+  } catch {
+    console.error('Failed to delete room')
   }
 }
 
@@ -1138,10 +1251,46 @@ async function prepareLocalStream(): Promise<void> {
     return
   }
 
-  localStream = await navigator.mediaDevices.getUserMedia({
+  cameraStream = await navigator.mediaDevices.getUserMedia({
     audio: true,
     video: true,
   })
+
+  if (waveletEnabled.value) {
+    try {
+      waveletProcessor = createWaveletProcessor({
+        quality: 60,
+        enableKalman: true,
+        keyFrameInterval: 30,
+      })
+      localStream = await waveletProcessor.processStream(cameraStream)
+      
+      // Process audio
+      try {
+        audioProcessor = createAudioProcessor({
+          enabled: true,
+          enableNoiseReduction: true,
+        })
+        const audioStream = await audioProcessor.processStream(cameraStream)
+        const audioTrack = audioStream.getAudioTracks()[0]
+        if (audioTrack) {
+          localStream.addTrack(audioTrack)
+        }
+      } catch (e) {
+        console.warn('[Audio] Failed to process audio:', e)
+        const audioTrack = cameraStream.getAudioTracks()[0]
+        if (audioTrack) {
+          localStream.addTrack(audioTrack)
+        }
+      }
+    } catch (e) {
+      console.error('[Wavelet] Failed to process stream:', e)
+      localStream = cameraStream
+      waveletProcessor = null
+    }
+  } else {
+    localStream = cameraStream
+  }
 
   applyTrackState()
   attachLocalPreview()
@@ -1185,17 +1334,19 @@ function applyTrackState(): void {
 
 function bindRemoteVideo(userId: string, element: HTMLVideoElement | null): void {
   if (!element) {
-    const previous = remoteVideoElements.get(userId)
-    if (previous) {
-      previous.srcObject = null
-    }
+    // Vue calls function refs with null then immediately re-calls with the
+    // element on every component re-render (e.g. stats updates).  Clearing
+    // srcObject on the null call causes a 1-frame black blink.  Just remove
+    // from the map; the element's own lifecycle handles teardown.
     remoteVideoElements.delete(userId)
     return
   }
 
   remoteVideoElements.set(userId, element)
   const tile = remoteTiles.value.find((entry) => entry.userId === userId)
-  if (tile) {
+  // Only assign srcObject when it genuinely changes; re-assigning the same
+  // stream object interrupts ongoing playback on every reactive re-render.
+  if (tile && element.srcObject !== tile.stream) {
     element.srcObject = tile.stream
   }
 }
@@ -1277,6 +1428,15 @@ function createPeerConnection(peerUserId: string): RTCPeerConnection {
     for (const track of localStream.getTracks()) {
       connection.addTrack(track, localStream)
     }
+
+    if (waveletEnabled.value && isEncodedTransformSupported()) {
+      const senders = connection.getSenders()
+      for (const sender of senders) {
+        if (sender.track?.kind === 'video') {
+          setupSenderTransform(sender)
+        }
+      }
+    }
   }
 
   connection.onicecandidate = (event) => {
@@ -1295,6 +1455,14 @@ function createPeerConnection(peerUserId: string): RTCPeerConnection {
     const [stream] = event.streams
     if (stream) {
       setRemoteStream(peerUserId, stream)
+      if (isEncodedTransformSupported()) {
+        const receivers = connection.getReceivers()
+        for (const receiver of receivers) {
+          if (receiver.track?.kind === 'video') {
+            setupReceiverTransform(receiver)
+          }
+        }
+      }
     }
   }
 
@@ -1302,6 +1470,9 @@ function createPeerConnection(peerUserId: string): RTCPeerConnection {
     if (['failed', 'closed', 'disconnected'].includes(connection.connectionState)) {
       closePeer(peerUserId, false)
     }
+  }
+
+  connection.oniceconnectionstatechange = () => {
   }
 
   return connection
@@ -1472,8 +1643,43 @@ async function joinCall(silent = false): Promise<void> {
 
     setLocalCallPresence(true)
     syncPeerTopology()
+
+    setTimeout(() => {
+      startStatsMonitoring()
+    }, 500)
   } catch {
     callStatus.value = 'error'
+  }
+}
+
+function startStatsMonitoring() {
+  const peerIds = peerConnections.keys()
+  
+  if (peerIds.length > 0) {
+    const firstPeerId = peerIds[0]
+    const pc = peerConnections.get(firstPeerId)
+    if (pc) {
+      const rtcPc = pc as RTCPeerConnection
+      statsMonitor.attach(rtcPc)
+      statsMonitor.start(500, (summary) => {
+        if (summary.current) {
+          callStats.value = {
+            bitrate: {
+              up: summary.current.bitrate.upload,
+              down: summary.current.bitrate.download,
+            },
+            fps: summary.current.framerate.sent,
+            rtt: summary.current.latency.rtt,
+            packetLoss: summary.current.packetLoss.upload,
+            peers: peerConnections.size(),
+          }
+        }
+      })
+    } else {
+      setTimeout(startStatsMonitoring, 500)
+    }
+  } else {
+    setTimeout(startStatsMonitoring, 500)
   }
 }
 
@@ -1490,6 +1696,16 @@ function callReset(options: {
   const roomId = normalizeRoomId(options.roomId ?? activeRoomId.value)
   const stopLocalMedia = options.stopLocalMedia ?? false
   const wasJoined = callJoined.value
+
+  statsMonitor.stop()
+  statsMonitor.reset()
+  callStats.value = {
+    bitrate: { up: 0, down: 0 },
+    fps: 0,
+    rtt: 0,
+    packetLoss: 0,
+    peers: 0,
+  }
 
   for (const peerId of peerConnections.keys()) {
     closePeer(peerId, false)
@@ -1545,7 +1761,88 @@ function toggleCamera(): void {
   setTrackKindEnabled(localStream, 'video', isCameraEnabled.value)
 }
 
+async function toggleWavelet(): Promise<void> {
+  const wasEnabled = waveletEnabled.value
+  waveletEnabled.value = !waveletEnabled.value
+  setWaveletTransformConfig({ enableKalman: waveletEnabled.value })
+  
+  if (!waveletEnabled.value) {
+    resetCodec()
+  }
+  
+  if (!cameraStream) {
+    console.warn('[Wavelet] No camera stream available')
+    return
+  }
+  
+  waveletProcessor?.stop()
+  waveletProcessor = null
+  audioProcessor?.stop()
+  audioProcessor = null
+  
+  if (waveletEnabled.value) {
+    try {
+      waveletProcessor = createWaveletProcessor({
+        quality: 60,
+        enableKalman: true,
+        keyFrameInterval: 30,
+      })
+      const processedStream = await waveletProcessor.processStream(cameraStream)
+      
+      // Process audio
+      try {
+        audioProcessor = createAudioProcessor({
+          enabled: true,
+          enableNoiseReduction: true,
+        })
+        const audioStream = await audioProcessor.processStream(cameraStream)
+        const audioTrack = audioStream.getAudioTracks()[0]
+        if (audioTrack) {
+          processedStream.addTrack(audioTrack)
+        }
+      } catch (e) {
+        console.warn('[Audio] Failed to process:', e)
+        const audioTrack = cameraStream.getAudioTracks()[0]
+        if (audioTrack) {
+          processedStream.addTrack(audioTrack)
+        }
+      }
+      
+      localStream = processedStream
+      console.log('[Wavelet] Processor started')
+    } catch (e) {
+      console.error('[Wavelet] Failed to start processor:', e)
+      localStream = cameraStream
+      waveletProcessor = null
+    }
+  } else {
+    localStream = cameraStream
+  }
+  
+  // Replace tracks in all peer connections
+  for (const peerId of peerConnections.keys()) {
+    const pc = peerConnections.get(peerId)
+    if (pc && localStream) {
+      const newVideoTrack = localStream.getVideoTracks()[0]
+      if (newVideoTrack) {
+        for (const sender of pc.getSenders()) {
+          if (sender.track?.kind === 'video') {
+            sender.replaceTrack(newVideoTrack)
+          }
+        }
+      }
+    }
+  }
+  
+  attachLocalPreview()
+}
+
 function stopLocalStream(): void {
+  waveletProcessor?.stop()
+  waveletProcessor = null
+  audioProcessor?.stop()
+  audioProcessor = null
+  
   if (!localStream) {
     mediaPreviewState.status = 'idle'
     mediaPreviewState.error = ''
@@ -1555,6 +1852,13 @@ function stopLocalStream(): void {
     track.stop()
   }
   localStream = null
+  
+  if (cameraStream) {
+    for (const track of cameraStream.getTracks()) {
+      track.stop()
+    }
+    cameraStream = null
+  }
   mediaPreviewState.status = 'idle'
   mediaPreviewState.error = ''
 
@@ -1729,6 +2033,17 @@ watch(activeParticipants, () => {
   syncPeerTopology()
 }, { deep: true })
 
+watch(callJoined, (joined) => {
+  if (joined && localStream) {
+    setTimeout(() => {
+      const videoEl = document.querySelector('.call-live .video-tile.local video') as HTMLVideoElement | null
+      if (videoEl && localStream) {
+        videoEl.srcObject = localStream
+      }
+    }, 50)
+  }
+})
+
 onMounted(async () => {
   if (!typingSweepTimer) {
     typingSweepTimer = setInterval(() => {
@@ -1744,7 +2059,33 @@ onMounted(async () => {
     connectSocket()
     await refreshRooms()
   }
+
+  setInterval(async () => {
+    try {
+      const res = await fetch('/api/stats')
+      if (res.ok) {
+        backendStats.value = await res.json()
+      }
+    } catch {}
+  }, 5000)
+  
+  // Throttled wavelet stats update
+  let lastWaveletUpdate = 0
+  setInterval(() => {
+    if (waveletProcessor && waveletEnabled.value && showStats.value) {
+      const now = Date.now()
+      if (now - lastWaveletUpdate > 1000) {
+        waveletStats.value = waveletProcessor.getStats()
+        if (audioProcessor) {
+          audioStats.value = audioProcessor.getStats()
+        }
+        lastWaveletUpdate = now
+      }
+    }
+  }, 500)
 })
+
+const backendStats = ref<any>(null)
 
 onUnmounted(() => {
   reconnectSuppressed = true
@@ -2008,6 +2349,30 @@ onUnmounted(() => {
   font-size: var(--king-font-size-150);
 }
 
+.room-list li {
+  position: relative;
+}
+
+.room-delete-btn {
+  position: absolute;
+  right: var(--king-space-dense);
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--king-muted);
+  cursor: pointer;
+  padding: var(--king-space-xs);
+  font-size: var(--king-font-size-200);
+  line-height: 1;
+  border-radius: var(--king-radius-0);
+}
+
+.room-delete-btn:hover {
+  color: var(--king-color-danger);
+  background: var(--king-color-bg-subtle);
+}
+
 .stage {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -2129,7 +2494,7 @@ onUnmounted(() => {
 
 .call-live {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: var(--king-space-control-x);
 }
 
@@ -2189,6 +2554,72 @@ onUnmounted(() => {
   border-radius: var(--king-radius-1);
   padding: var(--king-space-tight) var(--king-space-2);
   color: var(--king-text);
+}
+
+.stats-panel {
+  background: var(--king-color-bg-surface-alt);
+  border: var(--king-border-default);
+  border-radius: var(--king-radius-2);
+  padding: var(--king-space-3);
+}
+
+.stats-panel h4 {
+  margin: 0 0 var(--king-space-2);
+  font-size: var(--king-font-size-200);
+  color: var(--king-muted);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: var(--king-space-tight);
+  margin: 0;
+}
+
+.stats-grid div {
+  display: flex;
+  flex-direction: column;
+}
+
+.stats-grid dt {
+  font-size: var(--king-font-size-150);
+  color: var(--king-muted);
+}
+
+.stats-grid dd {
+  font-size: var(--king-font-size-300);
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  margin: 0;
+}
+
+.backend-stats {
+  margin-top: var(--king-space-3);
+  padding-top: var(--king-space-3);
+  border-top: var(--king-border-default);
+}
+
+.backend-stats h4 {
+  margin: 0 0 var(--king-space-2);
+  font-size: var(--king-font-size-200);
+  color: var(--king-muted);
+}
+
+.wavelet-stats {
+  margin-top: var(--king-space-3);
+  padding-top: var(--king-space-3);
+  border-top: var(--king-border-default);
+}
+
+.wavelet-note {
+  font-size: 0.7em;
+  opacity: 0.7;
+  margin-left: 4px;
+}
+
+.wavelet-stats h4 {
+  margin: 0 0 var(--king-space-2);
+  font-size: var(--king-font-size-200);
+  color: var(--king-accent);
 }
 
 .participant-list {

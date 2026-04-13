@@ -30,6 +30,7 @@ describe('roomDirectory', () => {
       inviteCode: 'lobby',
       memberCount: 0,
       createdAt: 0,
+      createdBy: '',
     })
 
     expect(rooms[1]).toEqual({
