@@ -512,6 +512,12 @@ Run the invite-code redeem contract test (expiry + usage-limit enforcement + typ
 demo/video-chat/backend-king-php/tests/invite-code-redeem-contract.sh
 ```
 
+Run the invite-code redeem endpoint contract test (`POST /api/invite-codes/redeem` validation + expiry/exhausted/conflict/not-found mapping + join-context envelope):
+
+```bash
+demo/video-chat/backend-king-php/tests/invite-code-redeem-endpoint-contract.sh
+```
+
 Run the realtime presence contract test (room snapshots + join/leave deltas + reconnect resync):
 
 ```bash

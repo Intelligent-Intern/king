@@ -24,6 +24,11 @@ Documentation policy for this README:
 - update it on every commit that changes behavior, contracts, runtime paths, or UX flow
 - keep it aligned with `ISSUES.md`, `READYNESS_TRACKER.md`, and the active contract tests
 
+Latest commit-level progress:
+
+- 2026-04-13: closed `#47` with explicit `POST /api/invite-codes` endpoint contract coverage (`backend-king-php/tests/invite-code-create-endpoint-contract.sh`)
+- 2026-04-13: closed `#48` with explicit `POST /api/invite-codes/redeem` endpoint contract coverage (`backend-king-php/tests/invite-code-redeem-endpoint-contract.sh`)
+
 Current new-stack baseline capabilities:
 
 - required login surface (display name) with persisted local session identity across reloads
