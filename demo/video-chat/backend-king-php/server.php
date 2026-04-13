@@ -31,6 +31,7 @@ require_once __DIR__ . '/avatar_upload.php';
 require_once __DIR__ . '/call_directory.php';
 require_once __DIR__ . '/call_management.php';
 require_once __DIR__ . '/invite_codes.php';
+require_once __DIR__ . '/realtime_presence.php';
 require_once __DIR__ . '/user_directory.php';
 require_once __DIR__ . '/user_management.php';
 require_once __DIR__ . '/user_settings.php';
@@ -45,6 +46,7 @@ try {
 }
 
 $activeWebsocketsBySession = [];
+$presenceState = videochat_presence_state_init();
 
 register_shutdown_function(static function () use ($log): void {
     $error = error_get_last();
@@ -252,6 +254,7 @@ $log('starting King HTTP/1 listener...');
 
 $handler = static function (array $request) use (
     &$activeWebsocketsBySession,
+    &$presenceState,
     $jsonResponse,
     $errorResponse,
     $methodFromRequest,
@@ -1469,35 +1472,185 @@ SQL
             return $errorResponse(400, 'websocket_upgrade_failed', 'Could not upgrade request to websocket.');
         }
 
+        $requestedRoomId = '';
+        $queryParams = videochat_request_query_params($request);
+        if (is_string($queryParams['room'] ?? null)) {
+            $requestedRoomId = (string) $queryParams['room'];
+        }
+
+        $initialRoomId = videochat_presence_normalize_room_id($requestedRoomId);
+        try {
+            $pdo = $openDatabase();
+            $resolvedRoom = videochat_fetch_active_room_context($pdo, $initialRoomId);
+            if ($resolvedRoom === null) {
+                $resolvedRoom = videochat_fetch_active_room_context($pdo, 'lobby');
+            }
+            if (is_array($resolvedRoom) && is_string($resolvedRoom['id'] ?? null)) {
+                $initialRoomId = videochat_presence_normalize_room_id((string) $resolvedRoom['id']);
+            }
+        } catch (Throwable) {
+            $initialRoomId = 'lobby';
+        }
+
         $connectionId = videochat_register_active_websocket(
             $activeWebsocketsBySession,
             $authSessionId,
             $websocket
         );
+        $presenceConnection = videochat_presence_connection_descriptor(
+            (array) ($websocketAuth['user'] ?? []),
+            $authSessionId,
+            $connectionId,
+            $websocket,
+            $initialRoomId
+        );
+        $presenceJoin = videochat_presence_join_room(
+            $presenceState,
+            $presenceConnection,
+            (string) ($presenceConnection['room_id'] ?? 'lobby')
+        );
+        $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
+        $presenceDetached = false;
+        $detachWebsocket = static function () use (
+            &$presenceDetached,
+            &$activeWebsocketsBySession,
+            &$presenceState,
+            $authSessionId,
+            $connectionId
+        ): void {
+            if ($presenceDetached) {
+                return;
+            }
+            $presenceDetached = true;
+
+            videochat_unregister_active_websocket($activeWebsocketsBySession, $authSessionId, $connectionId);
+            videochat_presence_remove_connection($presenceState, $connectionId);
+        };
 
         if ($session !== null && $streamId > 0 && $authSessionId !== '' && $connectionId !== '') {
             king_server_on_cancel(
                 $session,
                 $streamId,
-                static function () use (&$activeWebsocketsBySession, $authSessionId, $connectionId): void {
-                    videochat_unregister_active_websocket($activeWebsocketsBySession, $authSessionId, $connectionId);
+                static function () use ($detachWebsocket): void {
+                    $detachWebsocket();
                 }
             );
         }
 
-        king_websocket_send(
+        videochat_presence_send_frame(
             $websocket,
-            json_encode([
+            [
                 'type' => 'system/welcome',
-                'message' => 'video-chat King websocket scaffold connected',
+                'message' => 'video-chat King websocket presence gateway connected',
                 'connection_id' => $connectionId,
+                'active_room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
+                'channels' => [
+                    'presence' => [
+                        'snapshot' => 'room/snapshot',
+                        'joined' => 'room/joined',
+                        'left' => 'room/left',
+                    ],
+                ],
                 'auth' => [
                     'session' => $websocketAuth['session'] ?? null,
                     'user' => $websocketAuth['user'] ?? null,
                 ],
                 'time' => gmdate('c'),
-            ], JSON_UNESCAPED_SLASHES)
+            ]
         );
+
+        try {
+            while (true) {
+                $frame = king_client_websocket_receive($websocket, 250);
+                if ($frame === false) {
+                    $status = function_exists('king_client_websocket_get_status')
+                        ? (int) king_client_websocket_get_status($websocket)
+                        : 3;
+                    if ($status === 3) {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                if (!is_string($frame) || trim($frame) === '') {
+                    continue;
+                }
+
+                $decodedFrame = videochat_presence_decode_client_frame($frame);
+                if (!(bool) ($decodedFrame['ok'] ?? false)) {
+                    videochat_presence_send_frame(
+                        $websocket,
+                        [
+                            'type' => 'system/error',
+                            'code' => 'invalid_presence_command',
+                            'message' => 'Presence command is invalid.',
+                            'details' => [
+                                'error' => (string) ($decodedFrame['error'] ?? 'invalid_command'),
+                                'type' => (string) ($decodedFrame['type'] ?? ''),
+                            ],
+                            'time' => gmdate('c'),
+                        ]
+                    );
+                    continue;
+                }
+
+                $commandType = (string) ($decodedFrame['type'] ?? '');
+                if ($commandType === 'ping') {
+                    videochat_presence_send_frame(
+                        $websocket,
+                        [
+                            'type' => 'system/pong',
+                            'time' => gmdate('c'),
+                        ]
+                    );
+                    continue;
+                }
+
+                if ($commandType === 'room/snapshot/request') {
+                    videochat_presence_send_room_snapshot($presenceState, $presenceConnection, 'requested');
+                    continue;
+                }
+
+                if ($commandType === 'room/leave') {
+                    $presenceJoin = videochat_presence_join_room($presenceState, $presenceConnection, 'lobby');
+                    $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
+                    continue;
+                }
+
+                if ($commandType === 'room/join') {
+                    $targetRoomId = videochat_presence_normalize_room_id((string) ($decodedFrame['room_id'] ?? ''));
+                    try {
+                        $pdo = $openDatabase();
+                        $targetRoom = videochat_fetch_active_room_context($pdo, $targetRoomId);
+                    } catch (Throwable) {
+                        $targetRoom = null;
+                    }
+
+                    if (!is_array($targetRoom)) {
+                        videochat_presence_send_frame(
+                            $websocket,
+                            [
+                                'type' => 'system/error',
+                                'code' => 'room_not_found',
+                                'message' => 'Requested room is not active.',
+                                'details' => [
+                                    'room_id' => $targetRoomId,
+                                ],
+                                'time' => gmdate('c'),
+                            ]
+                        );
+                        continue;
+                    }
+
+                    $presenceJoin = videochat_presence_join_room($presenceState, $presenceConnection, $targetRoomId);
+                    $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
+                    continue;
+                }
+            }
+        } finally {
+            $detachWebsocket();
+        }
 
         return [
             'status' => 101,

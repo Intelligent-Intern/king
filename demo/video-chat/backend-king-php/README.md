@@ -267,6 +267,25 @@ Response includes:
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).
 
+Presence channel contract on `WS /ws`:
+
+- outbound events:
+  - `system/welcome`
+  - `room/snapshot`
+  - `room/joined`
+  - `room/left`
+  - `system/error`
+  - `system/pong`
+- inbound commands:
+  - `{"type":"room/join","room_id":"<active-room-id>"}`
+  - `{"type":"room/leave"}`
+  - `{"type":"room/snapshot/request"}`
+  - `{"type":"ping"}`
+- behavior:
+  - initial room snapshot is sent immediately after authenticated websocket attach
+  - room changes stream join/leave deltas to room peers
+  - reconnecting clients receive a fresh `room/snapshot` resync on attach
+
 ## Contract checks
 
 Run the auth contract test (REST + websocket token validation coverage):
@@ -333,4 +352,10 @@ Run the invite-code redeem contract test (expiry + usage-limit enforcement + typ
 
 ```bash
 demo/video-chat/backend-king-php/tests/invite-code-redeem-contract.sh
+```
+
+Run the realtime presence contract test (room snapshots + join/leave deltas + reconnect resync):
+
+```bash
+demo/video-chat/backend-king-php/tests/realtime-presence-contract.sh
 ```

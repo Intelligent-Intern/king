@@ -362,7 +362,7 @@ Scope note:
 ### Z4. King Realtime Workspace Channels
 
 - [ ] Implement authenticated websocket gateway handshake with explicit runtime auth context.
-- [ ] Implement room presence snapshots plus join/leave/reconnect events from server-authoritative state.
+- [x] Implement room presence snapshots plus join/leave/reconnect events from server-authoritative state.
 - [ ] Implement room-scoped chat fanout with bounded validation and stable timestamping.
 - [ ] Implement typing indicator channel with debounce + expiry and no self-echo.
 - [ ] Implement signaling routing (`offer`, `answer`, `ice`, `hangup`) constrained by room membership and target identity.

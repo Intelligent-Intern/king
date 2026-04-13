@@ -177,7 +177,7 @@ Contract guardrails for this batch:
   done when: generated codes are unique, bound to call/room context, and expiration is enforced server-side.
 - [x] `#21 Implement invite-code redeem endpoint that resolves destination room/call and returns role-safe join context.`
   done when: valid code redeems once-per-policy, invalid/expired codes fail cleanly, and join context is typed.
-- [ ] `#22 Implement websocket gateway channel for authenticated room presence snapshots and join/leave events.`
+- [x] `#22 Implement websocket gateway channel for authenticated room presence snapshots and join/leave events.`
   done when: room membership snapshots stream to clients and reconnect path resynchronizes active room state.
 - [ ] `#23 Implement websocket chat channel with room-scoped fanout, server timestamps, and bounded message validation.`
   done when: chat messages are broadcast to room peers, payload constraints are enforced server-side, and timestamp format is stable.
