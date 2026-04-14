@@ -1,4 +1,5 @@
-FROM php:8.4-cli-trixie
+ARG VIDEOCHAT_BACKEND_PHP_IMAGE=php:8.4-cli-trixie
+FROM ${VIDEOCHAT_BACKEND_PHP_IMAGE}
 
 WORKDIR /app
 

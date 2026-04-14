@@ -54,8 +54,19 @@ compose_smoke() {
   local compose_backend_port="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_PORT:-38080}"
   local compose_frontend_port="${VIDEOCHAT_SMOKE_COMPOSE_FRONTEND_PORT:-35174}"
   local compose_project="${VIDEOCHAT_SMOKE_COMPOSE_PROJECT:-king-videochat-smoke}"
+  local compose_backend_php_image="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_PHP_IMAGE:-}"
 
-  log "compose smoke project=${compose_project} backend=${compose_backend_port} frontend=${compose_frontend_port}"
+  if [[ -z "${compose_backend_php_image}" ]]; then
+    local host_php_api=""
+    host_php_api="$(php -i 2>/dev/null | awk -F'=> ' '/^PHP API =>/{gsub(/ /, "", $2); print $2; exit}')"
+    if [[ "${host_php_api}" =~ ^[0-9]+$ ]] && (( host_php_api >= 20250925 )); then
+      compose_backend_php_image="php:8.5-cli-trixie"
+    else
+      compose_backend_php_image="php:8.4-cli-trixie"
+    fi
+  fi
+
+  log "compose smoke project=${compose_project} backend=${compose_backend_port} frontend=${compose_frontend_port} backend_php_image=${compose_backend_php_image}"
 
   local compose_cmd=(
     docker compose
@@ -66,6 +77,7 @@ compose_smoke() {
   VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
   VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
   VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+  VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
   "${compose_cmd[@]}" up -d --build >/dev/null
 
   local cleanup_compose_enabled=0
@@ -74,6 +86,7 @@ compose_smoke() {
       VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
       VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
       VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+      VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
       "${compose_cmd[@]}" down -v >/dev/null 2>&1 || true
     fi
   }
@@ -98,10 +111,12 @@ compose_smoke() {
     VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
     VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
     VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
     "${compose_cmd[@]}" ps || true
     VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
     VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
     VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
     "${compose_cmd[@]}" logs --tail 200 videochat-backend-v1 || true
     return 1
   fi

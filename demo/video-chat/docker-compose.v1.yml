@@ -5,6 +5,8 @@ services:
     build:
       context: ../..
       dockerfile: demo/video-chat/backend-king-php/Dockerfile
+      args:
+        VIDEOCHAT_BACKEND_PHP_IMAGE: "${VIDEOCHAT_V1_BACKEND_PHP_IMAGE:-php:8.4-cli-trixie}"
     environment:
       VIDEOCHAT_KING_HOST: 0.0.0.0
       VIDEOCHAT_KING_PORT: 18080
