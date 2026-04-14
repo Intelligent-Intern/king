@@ -161,6 +161,15 @@ jobs:
         if: matrix.shard-index == 1
         run: bash demo/video-chat/backend-king-php/tests/contract-catalog-parity-contract.sh
 
+      - name: Run video-chat compose smoke gate
+        if: matrix.shard-index == 1
+        run: |
+          VIDEOCHAT_SMOKE_COMPOSE_ONLY=1 \
+          VIDEOCHAT_SMOKE_REQUIRE_COMPOSE=1 \
+          VIDEOCHAT_SMOKE_COMPOSE_BACKEND_PORT=38080 \
+          VIDEOCHAT_SMOKE_COMPOSE_FRONTEND_PORT=35174 \
+          bash demo/video-chat/scripts/smoke.sh
+
       - name: Run canonical PHPT suite
         working-directory: extension
         env:

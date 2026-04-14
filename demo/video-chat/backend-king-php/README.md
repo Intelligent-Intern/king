@@ -121,6 +121,26 @@ curl -sS http://127.0.0.1:18080/api/auth/session -H "authorization: Bearer ${ROT
 curl -sS -X POST http://127.0.0.1:18080/api/auth/logout -H "authorization: Bearer ${ROTATED_TOKEN}"
 ```
 
+## Integration Matrix Tests
+
+Backend integration-matrix coverage for auth/session/rbac/calls/invites/realtime:
+
+```bash
+bash demo/video-chat/backend-king-php/tests/videochat-integration-matrix-http-contract.sh
+bash demo/video-chat/backend-king-php/tests/videochat-integration-matrix-realtime-contract.sh
+```
+
+WLVC wire-envelope contract coverage (codec frame packaging/parsing contract):
+
+```bash
+bash demo/video-chat/backend-king-php/tests/wlvc-wire-contract.sh
+```
+
+Notes:
+
+- the wrappers fail closed when contracts regress
+- when `pdo_sqlite` is unavailable in the current PHP runtime, these wrappers report `SKIP` explicitly
+
 ## Schema bootstrap
 
 Startup applies ordered SQLite migrations via `database.php` and records them in

@@ -6,7 +6,6 @@
       </div>
       <div class="actions">
         <button class="btn" type="button" @click="openCompose('create')">New video call</button>
-        <button class="btn" type="button" @click="openCompose('schedule')">Schedule call</button>
       </div>
     </section>
 

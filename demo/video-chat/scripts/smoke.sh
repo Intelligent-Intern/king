@@ -256,11 +256,18 @@ run_step "backend contract: auth/session logout-revoke" bash -lc "'${BACKEND_DIR
 run_step "backend contract: RBAC middleware matrix" bash -lc "'${BACKEND_DIR}/tests/rbac-middleware-contract.sh'"
 run_step "backend contract: realtime session revocation propagation" bash -lc "'${BACKEND_DIR}/tests/realtime-session-revocation-contract.sh'"
 run_step "backend contract: API/WS catalog parity" bash -lc "'${BACKEND_DIR}/tests/contract-catalog-parity-contract.sh'"
+run_step "backend contract: WLVC wire envelope" bash -lc "'${BACKEND_DIR}/tests/wlvc-wire-contract.sh'"
 run_step "backend contract: room join/presence" bash -lc "'${BACKEND_DIR}/tests/realtime-presence-contract.sh'"
 run_step "backend contract: chat fanout" bash -lc "'${BACKEND_DIR}/tests/realtime-chat-contract.sh'"
 run_step "backend contract: reaction stream throttle" bash -lc "'${BACKEND_DIR}/tests/realtime-reaction-contract.sh'"
 run_step "backend contract: invite redeem" bash -lc "'${BACKEND_DIR}/tests/invite-code-redeem-contract.sh'"
 run_step "backend contract: call signaling bootstrap" bash -lc "'${BACKEND_DIR}/tests/realtime-signaling-contract.sh'"
+
+run_step "frontend contract: WLVC wire envelope" bash -lc "
+  set -euo pipefail
+  cd '${FRONTEND_DIR}'
+  npm run test:contract:wlvc
+"
 
 run_step "frontend scaffold boot check" bash -lc "
   set -euo pipefail

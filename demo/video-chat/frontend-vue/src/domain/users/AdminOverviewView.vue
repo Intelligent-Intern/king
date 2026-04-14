@@ -140,7 +140,7 @@
 
     <section class="view-panel calendar-panel" :class="{ active: activeOverviewView === 'calendar' }" data-panel="calendar">
       <div id="overviewCalendar" ref="overviewCalendarEl"></div>
-      <p class="calendar-help">Double-click any date or time slot to schedule a new call.</p>
+      <p class="calendar-help">Double-click a date/slot to schedule. In day view, drag a time range to prefill the modal.</p>
     </section>
 
     <section class="view-panel my-calls-panel" :class="{ active: activeOverviewView === 'my-calls' }" data-panel="my-calls">
@@ -176,11 +176,136 @@
         </div>
       </article>
     </section>
+
+    <div class="calls-modal" :hidden="!composeState.open" role="dialog" aria-modal="true" aria-label="Call compose modal">
+      <div class="calls-modal-backdrop" @click="closeCompose"></div>
+      <div class="calls-modal-dialog">
+        <header class="calls-modal-header">
+          <h4>{{ composeHeadline }}</h4>
+          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeCompose">
+            <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
+          </button>
+        </header>
+
+        <div class="calls-modal-body">
+          <section class="calls-modal-grid">
+            <label class="field">
+              <span>Title</span>
+              <input v-model="composeState.title" class="input" type="text" placeholder="Weekly Product Sync" />
+            </label>
+            <label class="field">
+              <span>Room ID</span>
+              <input v-model="composeState.roomId" class="input" type="text" placeholder="lobby" />
+            </label>
+            <label class="field">
+              <span>Starts at</span>
+              <input
+                v-model="composeState.startsLocal"
+                class="input"
+                type="datetime-local"
+                aria-label="Call starts at"
+              />
+            </label>
+            <label class="field">
+              <span>Ends at</span>
+              <input
+                v-model="composeState.endsLocal"
+                class="input"
+                type="datetime-local"
+                aria-label="Call ends at"
+              />
+            </label>
+          </section>
+
+          <section class="calls-participants-grid">
+            <article class="calls-participants-panel">
+              <header class="calls-participants-head">
+                <h5>Registered users</h5>
+                <label class="calls-search small" aria-label="Participant search">
+                  <input
+                    v-model="composeParticipants.query"
+                    class="input"
+                    type="search"
+                    placeholder="Search users"
+                    @keydown.enter.prevent
+                  />
+                </label>
+              </header>
+
+              <section class="calls-participants-list">
+                <label
+                  v-for="user in filteredRegisteredUsers"
+                  :key="user.id"
+                  class="calls-participant-row"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="isUserSelected(user.id)"
+                    @change="toggleUserSelection(user.id)"
+                  />
+                  <span class="calls-participant-main">{{ user.display_name || user.email }}</span>
+                  <span class="calls-participant-meta">{{ user.email }} · {{ user.role }}</span>
+                </label>
+                <p v-if="filteredRegisteredUsers.length === 0" class="calls-empty-inline">
+                  No users match the current filter.
+                </p>
+              </section>
+            </article>
+
+            <article class="calls-participants-panel">
+              <header class="calls-participants-head">
+                <h5>External participants</h5>
+                <button class="btn" type="button" @click="addExternalRow">Add row</button>
+              </header>
+
+              <section class="calls-external-list">
+                <div v-for="(row, index) in composeExternalRows" :key="row.id" class="calls-external-row">
+                  <input
+                    v-model="row.display_name"
+                    class="input"
+                    type="text"
+                    placeholder="Display name"
+                    :aria-label="`External participant ${index + 1} display name`"
+                  />
+                  <input
+                    v-model="row.email"
+                    class="input"
+                    type="email"
+                    placeholder="guest@example.com"
+                    :aria-label="`External participant ${index + 1} email`"
+                  />
+                  <button
+                    class="icon-mini-btn danger"
+                    type="button"
+                    title="Remove external participant"
+                    :aria-label="`Remove external participant row ${index + 1}`"
+                    @click="removeExternalRow(index)"
+                  >
+                    <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
+                  </button>
+                </div>
+              </section>
+            </article>
+          </section>
+
+          <section v-if="composeState.error" class="calls-inline-error">
+            {{ composeState.error }}
+          </section>
+        </div>
+
+        <footer class="calls-modal-footer">
+          <button class="btn" type="button" :disabled="composeState.submitting" @click="closeCompose">Close</button>
+          <button class="btn" type="button" :disabled="composeState.submitting" @click="submitCompose">
+            {{ composeState.submitting ? 'Saving…' : composeSubmitLabel }}
+          </button>
+        </footer>
+      </div>
+    </div>
   </section>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
@@ -189,6 +314,7 @@ const overviewCalendarEl = ref(null);
 let calendarInstance = null;
 let lastDateKey = '';
 let lastDateClickAt = 0;
+let nextCalendarEventId = 1000;
 const FULLCALENDAR_SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js';
 let fullCalendarScriptPromise = null;
 
@@ -272,7 +398,7 @@ const routingPolicyRows = ref([
 
 const myCallsRows = ref([
   {
-    id: 'my-sales-standup',
+    id: 'call-sales-standup',
     title: 'Sales Standup',
     scheduleStart: '2026-04-13T09:00',
     scheduleEnd: '2026-04-13T09:30',
@@ -282,7 +408,7 @@ const myCallsRows = ref([
     roomId: 'lobby',
   },
   {
-    id: 'my-backend-sync',
+    id: 'call-backend-sync',
     title: 'Backend Sync',
     scheduleStart: '2026-04-13T10:00',
     scheduleEnd: '2026-04-13T11:00',
@@ -292,6 +418,54 @@ const myCallsRows = ref([
     roomId: 'lobby',
   },
 ]);
+
+const registeredUsers = [
+  { id: 1, display_name: 'Jochen', email: 'jochen@kingrt.com', role: 'admin' },
+  { id: 2, display_name: 'Anna Meyer', email: 'anna@kingrt.com', role: 'moderator' },
+  { id: 3, display_name: 'Luca Klein', email: 'luca@kingrt.com', role: 'moderator' },
+  { id: 4, display_name: 'Sara Hoffmann', email: 'sara@kingrt.com', role: 'user' },
+  { id: 5, display_name: 'Lea Bauer', email: 'lea@kingrt.com', role: 'user' },
+  { id: 6, display_name: 'Jonas Brandt', email: 'jonas@kingrt.com', role: 'user' },
+];
+
+const composeState = reactive({
+  open: false,
+  mode: 'schedule',
+  calendarEventId: '',
+  title: '',
+  roomId: 'lobby',
+  startsLocal: '',
+  endsLocal: '',
+  submitting: false,
+  error: '',
+});
+
+const composeParticipants = reactive({
+  query: '',
+});
+
+const composeSelectedUserIds = ref([]);
+const composeExternalRows = ref([]);
+let composeExternalRowId = 0;
+
+const composeHeadline = computed(() => (
+  composeState.mode === 'edit' ? 'Edit video call' : 'Schedule video call'
+));
+
+const composeSubmitLabel = computed(() => (
+  composeState.mode === 'edit' ? 'Save changes' : 'Schedule call'
+));
+
+const filteredRegisteredUsers = computed(() => {
+  const query = String(composeParticipants.query || '').trim().toLowerCase();
+  if (query === '') return registeredUsers;
+  return registeredUsers.filter((user) => {
+    const name = String(user.display_name || '').toLowerCase();
+    const mail = String(user.email || '').toLowerCase();
+    const role = String(user.role || '').toLowerCase();
+    return name.includes(query) || mail.includes(query) || role.includes(query);
+  });
+});
 
 const liveCallsMetric = computed(() => String(
   runningCallsRows.value.filter((row) => String(row.statusLabel).toLowerCase() === 'running').length,
@@ -328,6 +502,287 @@ function formatScheduleRange(startValue, endValue) {
 function openWorkspace(roomId) {
   const safeRoomId = String(roomId || 'lobby').trim() || 'lobby';
   void router.push(`/workspace/call/${encodeURIComponent(safeRoomId)}`);
+}
+
+function isoToLocalInput(isoValue) {
+  if (typeof isoValue !== 'string' || isoValue.trim() === '') return '';
+  const date = new Date(isoValue);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
+function localInputToIso(localValue) {
+  if (typeof localValue !== 'string' || localValue.trim() === '') return '';
+  const date = new Date(localValue);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString();
+}
+
+function nextExternalRow(initial = {}) {
+  composeExternalRowId += 1;
+  return {
+    id: composeExternalRowId,
+    display_name: String(initial.display_name || ''),
+    email: String(initial.email || ''),
+  };
+}
+
+function resetComposeModal() {
+  composeState.calendarEventId = '';
+  composeState.title = '';
+  composeState.roomId = 'lobby';
+  composeState.startsLocal = '';
+  composeState.endsLocal = '';
+  composeState.submitting = false;
+  composeState.error = '';
+  composeParticipants.query = '';
+  composeSelectedUserIds.value = [];
+  composeExternalRows.value = [nextExternalRow()];
+}
+
+function openComposeFromPreset({
+  mode = 'schedule',
+  eventId = '',
+  title = 'New Video Call',
+  roomId = 'lobby',
+  startsAt,
+  endsAt,
+  internalParticipantUserIds = [],
+  externalParticipants = [],
+} = {}) {
+  resetComposeModal();
+  composeState.mode = mode === 'edit' ? 'edit' : 'schedule';
+  composeState.open = true;
+  composeState.calendarEventId = String(eventId || '');
+  composeState.title = String(title || 'New Video Call').trim() || 'New Video Call';
+  composeState.roomId = String(roomId || 'lobby').trim() || 'lobby';
+  composeState.startsLocal = isoToLocalInput(startsAt instanceof Date ? startsAt.toISOString() : String(startsAt || ''));
+  composeState.endsLocal = isoToLocalInput(endsAt instanceof Date ? endsAt.toISOString() : String(endsAt || ''));
+  composeSelectedUserIds.value = Array.isArray(internalParticipantUserIds)
+    ? internalParticipantUserIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
+    : [];
+
+  const normalizedExternal = Array.isArray(externalParticipants)
+    ? externalParticipants
+      .map((row) => ({
+        display_name: String(row?.display_name || '').trim(),
+        email: String(row?.email || '').trim(),
+      }))
+      .filter((row) => row.display_name !== '' || row.email !== '')
+    : [];
+
+  composeExternalRows.value = normalizedExternal.length > 0
+    ? normalizedExternal.map((row) => nextExternalRow(row))
+    : [nextExternalRow()];
+}
+
+function openComposeForDoubleClick(dateValue) {
+  const start = dateValue instanceof Date ? new Date(dateValue.getTime()) : new Date();
+  const end = new Date(start.getTime() + 45 * 60 * 1000);
+  openComposeFromPreset({
+    mode: 'schedule',
+    startsAt: start,
+    endsAt: end,
+  });
+}
+
+function openComposeForSelection(startValue, endValue) {
+  const start = startValue instanceof Date ? startValue : new Date(startValue);
+  const end = endValue instanceof Date ? endValue : new Date(endValue);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+  openComposeFromPreset({
+    mode: 'schedule',
+    startsAt: start,
+    endsAt: end,
+  });
+}
+
+function openComposeForEvent(eventApi) {
+  if (!eventApi) return;
+  const extended = eventApi.extendedProps || {};
+  openComposeFromPreset({
+    mode: 'edit',
+    eventId: eventApi.id,
+    title: eventApi.title,
+    roomId: String(extended.roomId || 'lobby'),
+    startsAt: eventApi.start,
+    endsAt: eventApi.end || new Date((eventApi.start instanceof Date ? eventApi.start.getTime() : Date.now()) + 45 * 60 * 1000),
+    internalParticipantUserIds: Array.isArray(extended.internalParticipantUserIds) ? extended.internalParticipantUserIds : [],
+    externalParticipants: Array.isArray(extended.externalParticipants) ? extended.externalParticipants : [],
+  });
+}
+
+function closeCompose() {
+  composeState.open = false;
+  composeState.submitting = false;
+  composeState.error = '';
+}
+
+function isUserSelected(userId) {
+  const id = Number(userId);
+  return composeSelectedUserIds.value.includes(id);
+}
+
+function toggleUserSelection(userId) {
+  const id = Number(userId);
+  if (!Number.isInteger(id) || id <= 0) return;
+  const next = composeSelectedUserIds.value.slice();
+  const index = next.indexOf(id);
+  if (index >= 0) {
+    next.splice(index, 1);
+  } else {
+    next.push(id);
+  }
+  composeSelectedUserIds.value = next;
+}
+
+function addExternalRow() {
+  composeExternalRows.value = [...composeExternalRows.value, nextExternalRow()];
+}
+
+function removeExternalRow(index) {
+  if (!Number.isInteger(index) || index < 0 || index >= composeExternalRows.value.length) return;
+  const next = composeExternalRows.value.slice();
+  next.splice(index, 1);
+  composeExternalRows.value = next.length > 0 ? next : [nextExternalRow()];
+}
+
+function normalizeExternalRows() {
+  const rows = [];
+  for (let index = 0; index < composeExternalRows.value.length; index += 1) {
+    const row = composeExternalRows.value[index];
+    const displayName = String(row?.display_name || '').trim();
+    const email = String(row?.email || '').trim().toLowerCase();
+    if (displayName === '' && email === '') continue;
+    if (displayName === '' || email === '') {
+      return { ok: false, error: `External participant row ${index + 1} requires both display name and email.`, rows: [] };
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return { ok: false, error: `External participant row ${index + 1} has an invalid email.`, rows: [] };
+    }
+    rows.push({ display_name: displayName, email });
+  }
+  return { ok: true, error: '', rows };
+}
+
+function deriveStatus(startIso, endIso) {
+  const now = Date.now();
+  const start = Date.parse(String(startIso || ''));
+  const end = Date.parse(String(endIso || ''));
+  if (Number.isFinite(start) && Number.isFinite(end) && start <= now && now < end) {
+    return { label: 'running', tagClass: 'ok' };
+  }
+  if (Number.isFinite(end) && end <= now) {
+    return { label: 'ended', tagClass: 'warn' };
+  }
+  return { label: 'scheduled', tagClass: 'warn' };
+}
+
+function upsertMyCallsRow(eventId, title, roomId, startsAtIso, endsAtIso, usersCount) {
+  const status = deriveStatus(startsAtIso, endsAtIso);
+  const nextRow = {
+    id: String(eventId),
+    title: String(title || 'New Video Call'),
+    scheduleStart: isoToLocalInput(startsAtIso),
+    scheduleEnd: isoToLocalInput(endsAtIso),
+    statusLabel: status.label,
+    statusTagClass: status.tagClass,
+    users: Number(usersCount || 0),
+    roomId: String(roomId || 'lobby'),
+  };
+
+  const rows = myCallsRows.value.slice();
+  const index = rows.findIndex((row) => row.id === nextRow.id);
+  if (index >= 0) {
+    rows[index] = nextRow;
+  } else {
+    rows.unshift(nextRow);
+  }
+  myCallsRows.value = rows;
+}
+
+function nextGeneratedEventId() {
+  nextCalendarEventId += 1;
+  return `call-generated-${nextCalendarEventId}`;
+}
+
+function submitCompose() {
+  composeState.error = '';
+  const title = String(composeState.title || '').trim();
+  if (title === '') {
+    composeState.error = 'Title is required.';
+    return;
+  }
+
+  const startsAt = localInputToIso(composeState.startsLocal);
+  const endsAt = localInputToIso(composeState.endsLocal);
+  if (startsAt === '' || endsAt === '') {
+    composeState.error = 'Start and end timestamps are required.';
+    return;
+  }
+
+  if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
+    composeState.error = 'End timestamp must be after start timestamp.';
+    return;
+  }
+
+  const normalizedExternal = normalizeExternalRows();
+  if (!normalizedExternal.ok) {
+    composeState.error = normalizedExternal.error;
+    return;
+  }
+
+  const roomId = String(composeState.roomId || '').trim() || 'lobby';
+  const internalParticipantUserIds = composeSelectedUserIds.value.slice();
+  const externalParticipants = normalizedExternal.rows;
+  const participantsTotal = internalParticipantUserIds.length + externalParticipants.length;
+  const startDate = new Date(startsAt);
+  const endDate = new Date(endsAt);
+
+  let eventId = composeState.calendarEventId;
+  let eventApi = null;
+  if (calendarInstance && eventId) {
+    eventApi = calendarInstance.getEventById(String(eventId));
+  }
+
+  if (eventApi) {
+    eventApi.setProp('title', title);
+    eventApi.setDates(startDate, endDate, { allDay: false });
+    eventApi.setExtendedProp('roomId', roomId);
+    eventApi.setExtendedProp('internalParticipantUserIds', internalParticipantUserIds);
+    eventApi.setExtendedProp('externalParticipants', externalParticipants);
+  } else if (calendarInstance) {
+    eventId = nextGeneratedEventId();
+    calendarInstance.addEvent({
+      id: eventId,
+      title,
+      start: startDate,
+      end: endDate,
+      allDay: false,
+      extendedProps: {
+        roomId,
+        internalParticipantUserIds,
+        externalParticipants,
+      },
+    });
+  } else {
+    eventId = nextGeneratedEventId();
+  }
+
+  upsertMyCallsRow(eventId, title, roomId, startsAt, endsAt, participantsTotal);
+  closeCompose();
+}
+
+function handleEscape(event) {
+  if (event.key !== 'Escape') return;
+  if (composeState.open) {
+    closeCompose();
+  }
 }
 
 function loadFullCalendarGlobal() {
@@ -377,29 +832,47 @@ async function initOverviewCalendar() {
       right: 'dayGridMonth,timeGridWeek,timeGridDay',
     },
     eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
-    selectable: false,
+    selectable: true,
     editable: false,
     events: [
-      { title: 'Sales Standup', start: '2026-04-13T09:00:00', end: '2026-04-13T09:30:00' },
-      { title: 'Backend Sync', start: '2026-04-13T10:00:00', end: '2026-04-13T11:00:00' },
-      { title: 'Incident Bridge', start: '2026-04-13T11:30:00', end: '2026-04-13T12:30:00' },
+      {
+        id: 'call-sales-standup',
+        title: 'Sales Standup',
+        start: '2026-04-13T09:00:00',
+        end: '2026-04-13T09:30:00',
+        extendedProps: { roomId: 'lobby', internalParticipantUserIds: [1, 2, 3], externalParticipants: [] },
+      },
+      {
+        id: 'call-backend-sync',
+        title: 'Backend Sync',
+        start: '2026-04-13T10:00:00',
+        end: '2026-04-13T11:00:00',
+        extendedProps: { roomId: 'lobby', internalParticipantUserIds: [], externalParticipants: [] },
+      },
+      {
+        id: 'call-incident-bridge',
+        title: 'Incident Bridge',
+        start: '2026-04-13T11:30:00',
+        end: '2026-04-13T12:30:00',
+        extendedProps: { roomId: 'incident', internalParticipantUserIds: [1, 2, 4], externalParticipants: [] },
+      },
     ],
     dateClick(info) {
       const now = Date.now();
-      const dateKey = info.dateStr;
+      const dateKey = `${String(info.view?.type || '')}:${info.dateStr}`;
       const isDoubleClick = dateKey === lastDateKey && now - lastDateClickAt < 360;
       lastDateKey = dateKey;
       lastDateClickAt = now;
-
       if (!isDoubleClick) return;
-      const start = info.date instanceof Date ? info.date : new Date(info.dateStr);
-      const end = new Date(start.getTime() + 45 * 60 * 1000);
-      calendarInstance?.addEvent({
-        title: 'New Video Call',
-        start,
-        end,
-        allDay: false,
-      });
+      openComposeForDoubleClick(info.date instanceof Date ? info.date : new Date(info.dateStr));
+    },
+    eventClick(info) {
+      openComposeForEvent(info.event);
+    },
+    select(info) {
+      if (String(info.view?.type || '') !== 'timeGridDay') return;
+      openComposeForSelection(info.start, info.end);
+      calendarInstance?.unselect();
     },
   });
 
@@ -407,10 +880,12 @@ async function initOverviewCalendar() {
 }
 
 onMounted(() => {
+  window.addEventListener('keydown', handleEscape);
   void initOverviewCalendar();
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleEscape);
   if (calendarInstance) {
     calendarInstance.destroy();
     calendarInstance = null;
@@ -518,6 +993,174 @@ watch(activeOverviewView, async (view) => {
   background: var(--bg-main);
 }
 
+.calls-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+}
+
+.calls-modal[hidden] {
+  display: none;
+}
+
+.calls-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: #09111e;
+}
+
+.calls-modal-dialog {
+  position: relative;
+  width: min(1020px, calc(100vw - 30px));
+  max-height: calc(100vh - 30px);
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-surface-strong);
+  box-shadow: 0 16px 32px #000000;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.calls-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.calls-modal-header h4 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.calls-modal-body {
+  display: grid;
+  gap: 10px;
+}
+
+.calls-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.calls-participants-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.calls-participants-panel {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: #122340;
+  padding: 10px;
+  min-height: 0;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.calls-participants-head {
+  display: grid;
+  gap: 8px;
+}
+
+.calls-participants-head h5 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.calls-search {
+  display: inline-grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.calls-search.small {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.calls-participants-list {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: #0f1f37;
+  max-height: 280px;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+}
+
+.calls-participant-row {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: start;
+}
+
+.calls-participant-row:last-child {
+  border-bottom: 0;
+}
+
+.calls-participant-main {
+  font-size: 12px;
+  color: #ffffff;
+}
+
+.calls-participant-meta {
+  grid-column: 2;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.calls-external-list {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: #0f1f37;
+  max-height: 280px;
+  overflow: auto;
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.calls-external-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.calls-empty-inline {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.calls-inline-error {
+  border: 1px solid #6b1f1f;
+  border-radius: 6px;
+  background: #331616;
+  color: #ffb5b5;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.calls-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 :deep(.fc-theme-standard .fc-scrollgrid),
 :deep(.fc-theme-standard td),
 :deep(.fc-theme-standard th) {
@@ -557,6 +1200,14 @@ watch(activeOverviewView, async (view) => {
   border: 0;
   background: var(--bg-row);
   color: #ffffff;
+  cursor: pointer;
+}
+
+@media (max-width: 1180px) {
+  .calls-modal-grid,
+  .calls-participants-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {

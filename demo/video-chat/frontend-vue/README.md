@@ -76,6 +76,12 @@ Run e2e tests headed (visual):
 npm run test:e2e:headed
 ```
 
+Run WLVC wire-envelope contract test (binary frame packaging/parsing parity):
+
+```bash
+npm run test:contract:wlvc
+```
+
 Default endpoint:
 
 - `http://127.0.0.1:5174`

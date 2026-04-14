@@ -16,6 +16,7 @@ Target architecture:
 - frontend: `demo/video-chat/frontend-vue`
 - backend: `demo/video-chat/backend-king-php`
 - protocol catalog: `demo/video-chat/contracts/v1/api-ws-contract.catalog.json`
+- WLVC frame wire contract: `demo/video-chat/contracts/v1/wlvc-frame.contract.json`
 - transport payload format: `@intelligentintern/iibin` from `node_modules`
 
 Documentation policy for this README:
@@ -35,12 +36,25 @@ Latest commit-level progress:
 - 2026-04-13: closed `#53` with signaling-routing authorization hardening (sender/target membership fail-closed + no cross-room leakage) in `backend-king-php/tests/realtime-signaling-contract.sh`
 - 2026-04-13: closed `#54` with lobby runtime authorization hardening (atomic queue/mutation flow, moderator-only actions, sender room-membership fail-closed) in `backend-king-php/tests/realtime-lobby-contract.sh`
 - 2026-04-13: closed `#55` with reaction event stream hardening (room-scoped fanout, deterministic payload boundaries, server-side per-user throttling with retry diagnostics) in `backend-king-php/tests/realtime-reaction-contract.sh` + `backend-king-php/tests/contract-catalog-parity-contract.sh`
+- 2026-04-13: closed `#56` frontend parity with explicit reconnect/auth states (`online`, `retrying`, `blocked`, `expired`) in `frontend-vue/src/views/CallWorkspaceView.vue`
+- 2026-04-13: closed `#57/#58/#67` with backend-authoritative session recovery + strict RBAC redirecting + backend-backed settings/avatar/theme/time-format in `frontend-vue/src/stores/session.js`, `frontend-vue/src/router/index.js`, and `frontend-vue/src/layouts/WorkspaceShell.vue`
+- 2026-04-13: closed `#59/#60/#68` with backend-bound admin overview metrics + admin user CRUD/pagination/search + admin-only branding parity flow in `frontend-vue/src/views/AdminOverviewView.vue` and `frontend-vue/src/views/AdminUsersView.vue`
+- 2026-04-13: closed `#61/#62/#63` with backend-bound user dashboard calls/calendar/invite parity plus invite redeem -> workspace flow in `frontend-vue/src/views/UserDashboardView.vue`
+- 2026-04-13: closed `#64/#65/#66` with server-driven workspace tab data, moderation feedback states, and control-bar realtime synchronization in `frontend-vue/src/views/CallWorkspaceView.vue`
+- 2026-04-13: closed `#69/#70/#71` with backend integration-matrix tests, Playwright mock-parity journeys, and compose-level smoke gates (`demo/video-chat/scripts/smoke.sh`, `.github/workflows/ci.yml`)
 
 Current new-stack baseline capabilities:
 
 - required login surface (display name) with persisted local session identity across reloads
 - explicit sign-out lifecycle that tears down websocket reconnect loops, call peers, and local media tracks
 - authenticated workspace gating so room/chat/call actions and local media init only run with a valid signed-in session
+- backend-authoritative session recovery/refresh with fail-closed invalid-session handling
+- strict route-level RBAC for admin/moderator/user surfaces with deterministic redirect behavior
+- backend-backed settings modal for profile/avatar/theme/time-format with global theme/time-format application
+- admin overview widgets are live API-driven (auth/session/users/calls snapshots with explicit loading/error states)
+- admin users view is fully server-driven (`GET/POST/PATCH/deactivate/reactivate`) with search + pagination + row-level mutation feedback
+- admin branding parity flow is available as admin-only local persistence for mock parity where no backend branding endpoint exists
+- user dashboard now has backend-bound calls list + calendar + create/edit + invite popover/redeem flows
 - room directory is fetched from backend API and normalized to deterministic ordering with live member counters
 - room directory with create/join/switch behavior
 - room creation submits to backend with optimistic list updates and automatic room-id conflict retries
@@ -67,6 +81,7 @@ Current new-stack baseline capabilities:
 - camera toggles now mutate only local video-track enabled state in place while preserving active peer connections
 - room-switch, sign-out, and component-unmount boundaries now enforce full call teardown (peers + local media tracks)
 - websocket reconnect now uses bounded exponential backoff and re-syncs room/call state on recovery
+- workspace reconnect/auth UI exposes explicit states: `online`, `retrying`, `blocked`, `expired`
 - multi-user room chat over websocket fanout
 - browser video call signaling (`offer`/`answer`/`ice`) with peer tiles
 - responsive shell layout with reduced-motion-safe slide transitions for chat/call stage switching
@@ -166,16 +181,26 @@ bash demo/video-chat/scripts/smoke.sh
 `demo/video-chat/scripts/smoke.sh` now verifies:
 
 - backend and frontend launchers plus syntax checks
+- docker-compose v1 stack boot (`frontend-vue` + `backend-king-php` + sqlite volume) with runtime migration snapshot and auth/session sanity checks
 - backend boot and live `/health` probe
 - API/WS catalog drift gate against the canonical versioned contract fixture (`contract-catalog-parity-contract`)
 - login route handshake (`/api/auth/login`), authenticated session read, and logout revoke path
 - dedicated logout revoke contract (`session-logout-contract`) with persisted revocation metadata assertions
+- WLVC wire envelope contract (`wlvc-wire-contract`) for versioned binary frame packaging/parsing parity
 - room join/presence contract (`realtime-presence-contract`)
 - room chat fanout contract (`realtime-chat-contract`)
 - room reaction stream contract (`realtime-reaction-contract`)
 - invite redeem contract (`invite-code-redeem-contract`)
 - call signaling bootstrap contract (`realtime-signaling-contract`)
 - frontend dev-server boot probe
+
+Additional automated coverage:
+
+- backend integration matrix tests:
+  - `demo/video-chat/backend-king-php/tests/videochat-integration-matrix-http-contract.sh`
+  - `demo/video-chat/backend-king-php/tests/videochat-integration-matrix-realtime-contract.sh`
+- frontend Playwright mock-parity journeys:
+  - `demo/video-chat/frontend-vue/tests/e2e/mock-parity-journeys.spec.js`
 
 Release-bound runtime honesty:
 

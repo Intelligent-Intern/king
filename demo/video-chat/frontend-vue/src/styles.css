@@ -1,6 +1,7 @@
 :root {
   --bg-shell: #09111e;
   --bg-pane: #182c4d;
+  --brand-bg: #0B1324;
   --bg-surface: #2b3e60;
   --bg-surface-strong: #0c1c33;
   --bg-input: #d8dadd;
@@ -151,7 +152,7 @@ select {
 
 .brand-strip {
   height: 70px;
-  background: var(--bg-pane);
+  background: var(--brand-bg);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
@@ -1629,7 +1630,7 @@ tbody tr:hover {
     align-items: center;
     justify-content: center;
     position: relative;
-    background: var(--bg-pane);
+    background: var(--brand-bg);
     border-bottom: 1px solid var(--border-subtle);
     padding: 0 10px;
   }
