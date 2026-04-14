@@ -202,9 +202,9 @@ function videochat_handle_call_routes(
         ]);
     }
 
-    if (preg_match('#^/api/calls/([A-Za-z0-9._-]{1,200})$#', $path, $callMatch) === 1) {
+    if (preg_match('#^/api/calls/([A-Za-z0-9._-]{1,200})/participants/(\d+)/role$#', $path, $participantRoleMatch) === 1) {
         if ($method !== 'PATCH') {
-            return $errorResponse(405, 'method_not_allowed', 'Use PATCH for /api/calls/{id}.', [
+            return $errorResponse(405, 'method_not_allowed', 'Use PATCH for /api/calls/{id}/participants/{userId}/role.', [
                 'allowed_methods' => ['PATCH'],
             ]);
         }
@@ -219,12 +219,127 @@ function videochat_handle_call_routes(
 
         [$payload, $decodeError] = $decodeJsonBody($request);
         if (!is_array($payload)) {
+            return $errorResponse(400, 'calls_role_update_invalid_request_body', 'Participant-role payload must be a non-empty JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        $callId = (string) ($participantRoleMatch[1] ?? '');
+        $targetUserId = (int) ($participantRoleMatch[2] ?? 0);
+        $targetRole = (string) ($payload['role'] ?? ($payload['call_role'] ?? ''));
+
+        try {
+            $pdo = $openDatabase();
+            $roleUpdateResult = videochat_update_call_participant_role(
+                $pdo,
+                $callId,
+                $targetUserId,
+                $targetRole,
+                $authenticatedUserId,
+                $authenticatedUserRole
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'calls_role_update_failed', 'Could not update call participant role.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        $reason = (string) ($roleUpdateResult['reason'] ?? 'internal_error');
+        if (!(bool) ($roleUpdateResult['ok'] ?? false)) {
+            if ($reason === 'validation_failed') {
+                return $errorResponse(422, 'calls_role_update_validation_failed', 'Call participant role payload failed validation.', [
+                    'fields' => is_array($roleUpdateResult['errors'] ?? null) ? $roleUpdateResult['errors'] : [],
+                ]);
+            }
+            if ($reason === 'not_found') {
+                return $errorResponse(404, 'calls_not_found', 'The requested call does not exist.', [
+                    'call_id' => $callId,
+                ]);
+            }
+            if ($reason === 'forbidden') {
+                return $errorResponse(403, 'calls_forbidden', 'You are not allowed to change call participant roles.', [
+                    'call_id' => $callId,
+                ]);
+            }
+
+            return $errorResponse(500, 'calls_role_update_failed', 'Could not update call participant role.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'participant_role_updated',
+                'call' => $roleUpdateResult['call'] ?? null,
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if (preg_match('#^/api/calls/([A-Za-z0-9._-]{1,200})$#', $path, $callMatch) === 1) {
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        $callId = (string) ($callMatch[1] ?? '');
+        if ($method === 'GET') {
+            try {
+                $pdo = $openDatabase();
+                $fetchResult = videochat_get_call_for_user(
+                    $pdo,
+                    $callId,
+                    $authenticatedUserId,
+                    $authenticatedUserRole
+                );
+            } catch (Throwable) {
+                return $errorResponse(500, 'calls_fetch_failed', 'Could not load call.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            if (!(bool) ($fetchResult['ok'] ?? false)) {
+                $reason = (string) ($fetchResult['reason'] ?? 'internal_error');
+                if ($reason === 'not_found') {
+                    return $errorResponse(404, 'calls_not_found', 'The requested call does not exist.', [
+                        'call_id' => $callId,
+                    ]);
+                }
+                if ($reason === 'forbidden') {
+                    return $errorResponse(403, 'calls_forbidden', 'You are not allowed to view this call.', [
+                        'call_id' => $callId,
+                    ]);
+                }
+
+                return $errorResponse(500, 'calls_fetch_failed', 'Could not load call.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'call' => $fetchResult['call'] ?? null,
+                'time' => gmdate('c'),
+            ]);
+        }
+
+        if ($method !== 'PATCH') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET or PATCH for /api/calls/{id}.', [
+                'allowed_methods' => ['GET', 'PATCH'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
             return $errorResponse(400, 'calls_update_invalid_request_body', 'Call update payload must be a non-empty JSON object.', [
                 'reason' => $decodeError,
             ]);
         }
 
-        $callId = (string) ($callMatch[1] ?? '');
         try {
             $pdo = $openDatabase();
             $updateResult = videochat_update_call(

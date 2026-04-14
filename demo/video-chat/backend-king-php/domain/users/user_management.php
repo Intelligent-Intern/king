@@ -7,7 +7,7 @@ declare(strict_types=1);
  */
 function videochat_admin_allowed_roles(): array
 {
-    return ['admin', 'moderator', 'user'];
+    return ['admin', 'user'];
 }
 
 /**
@@ -159,6 +159,13 @@ function videochat_admin_validate_create_user_payload(array $payload): array
         $errors['password'] = 'password_too_short';
     } elseif (strlen($password) > 256) {
         $errors['password'] = 'password_too_long';
+    }
+
+    if (array_key_exists('password_repeat', $payload)) {
+        $passwordRepeat = (string) ($payload['password_repeat'] ?? '');
+        if ($passwordRepeat !== $password) {
+            $errors['password_repeat'] = 'must_match_password';
+        }
     }
 
     $status = strtolower(trim((string) ($payload['status'] ?? 'active')));
@@ -688,5 +695,98 @@ function videochat_admin_reactivate_user(PDO $pdo, int $userId): array
         'reason' => (string) $existing['status'] === 'active' ? 'already_active' : 'reactivated',
         'errors' => [],
         'user' => $updated,
+    ];
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   errors: array<string, string>,
+ *   user: ?array<string, mixed>,
+ *   deleted_calls: int,
+ *   deleted_invite_codes: int
+ * }
+ */
+function videochat_admin_delete_user(PDO $pdo, int $userId): array
+{
+    if ($userId <= 0) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'user' => null,
+            'deleted_calls' => 0,
+            'deleted_invite_codes' => 0,
+        ];
+    }
+
+    $existing = videochat_admin_fetch_user_by_id($pdo, $userId);
+    if ($existing === null) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'user' => null,
+            'deleted_calls' => 0,
+            'deleted_invite_codes' => 0,
+        ];
+    }
+
+    $deletedCalls = 0;
+    $deletedInviteCodes = 0;
+    $startedTransaction = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $startedTransaction = true;
+    }
+
+    try {
+        $deleteCalls = $pdo->prepare('DELETE FROM calls WHERE owner_user_id = :owner_user_id');
+        $deleteCalls->execute([
+            ':owner_user_id' => $userId,
+        ]);
+        $deletedCalls = $deleteCalls->rowCount();
+
+        $deleteInviteCodes = $pdo->prepare('DELETE FROM invite_codes WHERE issued_by_user_id = :issued_by_user_id');
+        $deleteInviteCodes->execute([
+            ':issued_by_user_id' => $userId,
+        ]);
+        $deletedInviteCodes = $deleteInviteCodes->rowCount();
+
+        $deleteUser = $pdo->prepare('DELETE FROM users WHERE id = :id');
+        $deleteUser->execute([
+            ':id' => $userId,
+        ]);
+
+        if ($deleteUser->rowCount() !== 1) {
+            throw new RuntimeException('delete_user_row_count_mismatch');
+        }
+
+        if ($startedTransaction && $pdo->inTransaction()) {
+            $pdo->commit();
+        }
+    } catch (Throwable) {
+        if ($startedTransaction && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'errors' => [],
+            'user' => null,
+            'deleted_calls' => 0,
+            'deleted_invite_codes' => 0,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'reason' => 'deleted',
+        'errors' => [],
+        'user' => $existing,
+        'deleted_calls' => $deletedCalls,
+        'deleted_invite_codes' => $deletedInviteCodes,
     ];
 }

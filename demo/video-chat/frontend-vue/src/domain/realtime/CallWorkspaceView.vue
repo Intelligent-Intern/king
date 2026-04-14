@@ -169,15 +169,6 @@
           >
             <img class="tab-icon" src="/assets/orgas/kingrt/icons/chat.png" alt="" />
           </button>
-          <button
-            class="tab tab-toggle"
-            type="button"
-            title="Refresh room snapshot"
-            :disabled="!isSocketOnline"
-            @click="requestRoomSnapshot"
-          >
-            <img class="tab-icon" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
-          </button>
         </nav>
 
         <section class="tab-panel panel-users" :class="{ active: activeTab === 'users' }">
@@ -207,7 +198,7 @@
             <div class="user-preview">{{ initials(row.displayName) }}</div>
               <div class="user-main">
                 <strong class="user-name">{{ row.displayName }}</strong>
-                <span class="user-role">{{ row.role }}</span>
+                <span class="user-role">{{ row.callRole }}</span>
                 <span v-if="row.controlBadge" class="user-feedback">{{ row.controlBadge }}</span>
                 <span v-if="row.feedback" class="user-feedback">{{ row.feedback }}</span>
               </div>
@@ -240,6 +231,29 @@
                     alt=""
                   />
                 </button>
+              <button
+                class="icon-mini-btn"
+                type="button"
+                :title="row.callRole === 'moderator' ? 'Set participant role' : 'Set moderator role'"
+                :disabled="!canModerate || !activeCallId || row.userId === currentUserId || rowActionPending(row.userId) || !row.isRoomMember || row.callRole === 'owner'"
+                @click="toggleModeratorRole(row)"
+              >
+                  <img
+                    :src="row.callRole === 'moderator'
+                      ? '/assets/orgas/kingrt/icons/adminon.png'
+                      : '/assets/orgas/kingrt/icons/adminoff.png'"
+                    alt=""
+                  />
+                </button>
+              <button
+                class="icon-mini-btn"
+                type="button"
+                title="Transfer owner role"
+                :disabled="viewerCallRole !== 'owner' || !activeCallId || rowActionPending(row.userId) || !row.isRoomMember || row.callRole === 'owner'"
+                @click="transferOwnerRole(row)"
+              >
+                <img src="/assets/orgas/kingrt/icons/forward.png" alt="" />
+              </button>
               <button
                 class="icon-mini-btn danger"
                 type="button"
@@ -446,12 +460,23 @@ function normalizeRoomId(value) {
 
 function normalizeRole(value) {
   const role = String(value || '').trim().toLowerCase();
-  if (role === 'admin' || role === 'moderator') return role;
+  if (role === 'admin') return role;
   return 'user';
 }
 
 function roleRank(role) {
   if (role === 'admin') return 0;
+  return 1;
+}
+
+function normalizeCallRole(value) {
+  const role = String(value || '').trim().toLowerCase();
+  if (role === 'owner' || role === 'moderator') return role;
+  return 'participant';
+}
+
+function callRoleRank(role) {
+  if (role === 'owner') return 0;
   if (role === 'moderator') return 1;
   return 2;
 }
@@ -621,11 +646,19 @@ const inviteJoinBusy = ref(false);
 
 const workspaceError = ref('');
 const workspaceNotice = ref('');
+const viewerCallRole = ref('participant');
+const activeCallId = ref('');
+const loadedCallId = ref('');
+const callParticipantRoles = reactive({});
 
 const desiredRoomId = computed(() => normalizeRoomId(route.params.roomId));
 const activeRoomId = computed(() => normalizeRoomId(serverRoomId.value || desiredRoomId.value));
 const currentUserId = computed(() => (Number.isInteger(sessionState.userId) ? sessionState.userId : 0));
-const canModerate = computed(() => ['admin', 'moderator'].includes(normalizeRole(sessionState.role)));
+const canModerate = computed(() => (
+  normalizeRole(sessionState.role) === 'admin'
+  || viewerCallRole.value === 'owner'
+  || viewerCallRole.value === 'moderator'
+));
 const usersSourceMode = computed(() => (normalizeRole(sessionState.role) === 'admin' ? 'directory' : 'snapshot'));
 const isSocketOnline = computed(() => connectionState.value === 'online');
 
@@ -656,6 +689,7 @@ function normalizeParticipantRow(raw) {
     userId: Number.isInteger(userId) && userId > 0 ? userId : 0,
     displayName: String(user.display_name || '').trim() || `User ${userId || 'unknown'}`,
     role: normalizeRole(user.role),
+    callRole: normalizeCallRole(user.call_role || raw?.call_role || 'participant'),
     connectedAt: String(raw?.connected_at || ''),
   };
 }
@@ -673,6 +707,7 @@ const participantUsers = computed(() => {
         userId: normalized.userId,
         displayName: normalized.displayName,
         role: normalized.role,
+        callRole: normalized.callRole,
         connectedAt: normalized.connectedAt,
         connections: 1,
       });
@@ -685,6 +720,9 @@ const participantUsers = computed(() => {
     }
     if (normalized.displayName.length > existing.displayName.length) {
       existing.displayName = normalized.displayName;
+    }
+    if (callRoleRank(normalized.callRole) < callRoleRank(existing.callRole)) {
+      existing.callRole = normalized.callRole;
     }
   }
 
@@ -812,7 +850,7 @@ function clearRowAction(store, action, userId) {
 function rowActionPending(userId) {
   const normalizedUserId = Number(userId);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
-  for (const action of ['mute', 'pin']) {
+  for (const action of ['mute', 'pin', 'role', 'owner']) {
     const entry = moderationActionState[rowActionKey(action, normalizedUserId)];
     if (entry && entry.pending) return true;
   }
@@ -829,6 +867,8 @@ function rowActionFeedback(userId) {
   const actions = [
     moderationActionState[rowActionKey('mute', normalizedUserId)],
     moderationActionState[rowActionKey('pin', normalizedUserId)],
+    moderationActionState[rowActionKey('role', normalizedUserId)],
+    moderationActionState[rowActionKey('owner', normalizedUserId)],
     lobbyActionState[rowActionKey('allow', normalizedUserId)],
     lobbyActionState[rowActionKey('remove', normalizedUserId)],
   ];
@@ -851,9 +891,15 @@ function userRowSnapshot(row) {
   const lobbyEntry = lobbyEntryByUserId.value.get(row.userId) || null;
   const feedback = rowActionFeedback(row.userId);
   const isRoomMember = Boolean(participant);
+  const mappedCallRole = normalizeCallRole(
+    callParticipantRoles[row.userId]
+      || participant?.callRole
+      || (row.userId === currentUserId.value ? viewerCallRole.value : row.callRole || 'participant')
+  );
   const peerState = peerControlStateByUserId[row.userId] || {};
   return {
     ...row,
+    callRole: mappedCallRole,
     isRoomMember,
     roomConnectionCount: Number(participant?.connections || 0),
     inLobby: Boolean(lobbyEntry),
@@ -1480,6 +1526,115 @@ function normalizeLobbyEntry(entry) {
   };
 }
 
+function resetCallParticipantRoles() {
+  for (const key of Object.keys(callParticipantRoles)) {
+    delete callParticipantRoles[key];
+  }
+}
+
+function applyViewerContext(viewerPayload) {
+  const nextCallId = String(viewerPayload?.call_id || viewerPayload?.callId || '').trim();
+  if (nextCallId !== activeCallId.value) {
+    activeCallId.value = nextCallId;
+    loadedCallId.value = '';
+    resetCallParticipantRoles();
+    if (nextCallId !== '') {
+      void loadActiveCallDetails(true);
+    }
+  }
+
+  viewerCallRole.value = normalizeCallRole(viewerPayload?.call_role || viewerPayload?.callRole || viewerCallRole.value);
+}
+
+function applyCallDetails(callPayload) {
+  const call = callPayload && typeof callPayload === 'object' ? callPayload : {};
+  const callId = String(call.id || '').trim();
+  if (callId !== '') {
+    activeCallId.value = callId;
+    loadedCallId.value = callId;
+  }
+
+  resetCallParticipantRoles();
+  const internal = Array.isArray(call?.participants?.internal) ? call.participants.internal : [];
+  for (const participant of internal) {
+    const userId = Number(participant?.user_id || 0);
+    if (!Number.isInteger(userId) || userId <= 0) continue;
+    callParticipantRoles[userId] = normalizeCallRole(participant?.call_role || participant?.callRole || 'participant');
+  }
+
+  if (callParticipantRoles[currentUserId.value]) {
+    viewerCallRole.value = normalizeCallRole(callParticipantRoles[currentUserId.value]);
+    return;
+  }
+  const ownerUserId = Number(call?.owner?.user_id || 0);
+  if (Number.isInteger(ownerUserId) && ownerUserId > 0 && ownerUserId === currentUserId.value) {
+    viewerCallRole.value = 'owner';
+  }
+}
+
+async function loadActiveCallDetails(force = false) {
+  const callId = String(activeCallId.value || '').trim();
+  if (callId === '') {
+    loadedCallId.value = '';
+    resetCallParticipantRoles();
+    viewerCallRole.value = 'participant';
+    return;
+  }
+  if (!force && loadedCallId.value === callId) return;
+
+  try {
+    const payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}`);
+    applyCallDetails(payload?.call || null);
+  } catch {
+    loadedCallId.value = '';
+  }
+}
+
+async function updateCallRole(userId, targetRole, pendingText, doneText) {
+  const normalizedUserId = Number(userId);
+  const callId = String(activeCallId.value || '').trim();
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || callId === '') return;
+
+  const normalizedRole = normalizeCallRole(targetRole);
+  const actionName = normalizedRole === 'owner' ? 'owner' : 'role';
+  markUserActionText(normalizedUserId, actionName, pendingText, true);
+
+  try {
+    const payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/participants/${normalizedUserId}/role`, {
+      method: 'PATCH',
+      body: {
+        role: normalizedRole,
+      },
+    });
+    applyCallDetails(payload?.result?.call || null);
+    markUserActionText(normalizedUserId, actionName, doneText, false);
+    refreshUsersDirectoryPresentation();
+    requestRoomSnapshot();
+  } catch (error) {
+    clearRowAction(moderationActionState, actionName, normalizedUserId);
+    setNotice(error instanceof Error ? error.message : 'Could not update call role.', 'error');
+  }
+}
+
+function toggleModeratorRole(row) {
+  const userId = Number(row?.userId || 0);
+  if (!Number.isInteger(userId) || userId <= 0 || userId === currentUserId.value) return;
+  const currentRole = normalizeCallRole(row?.callRole || callParticipantRoles[userId] || 'participant');
+  if (currentRole === 'owner') return;
+
+  const targetRole = currentRole === 'moderator' ? 'participant' : 'moderator';
+  const pendingText = targetRole === 'moderator' ? 'Promoting to moderator…' : 'Removing moderator role…';
+  const doneText = targetRole === 'moderator' ? 'Moderator role granted' : 'Moderator role removed';
+  void updateCallRole(userId, targetRole, pendingText, doneText);
+}
+
+function transferOwnerRole(row) {
+  const userId = Number(row?.userId || 0);
+  if (!Number.isInteger(userId) || userId <= 0) return;
+  if (normalizeCallRole(row?.callRole || callParticipantRoles[userId] || 'participant') === 'owner') return;
+  void updateCallRole(userId, 'owner', 'Transferring ownership…', 'Ownership transferred');
+}
+
 function applyLobbySnapshot(payload) {
   const roomId = normalizeRoomId(payload?.room_id || payload?.roomId || activeRoomId.value);
   if (roomId !== activeRoomId.value) return;
@@ -1499,6 +1654,7 @@ function applyRoomSnapshot(payload) {
   const roomId = normalizeRoomId(payload?.room_id || payload?.roomId || desiredRoomId.value);
   serverRoomId.value = roomId;
   ensureRoomBuckets(roomId);
+  applyViewerContext(payload?.viewer || null);
 
   participantsRaw.value = Array.isArray(payload?.participants) ? payload.participants : [];
 
@@ -1557,6 +1713,7 @@ function handleSocketMessage(event) {
     const welcomeRoom = normalizeRoomId(payload.active_room_id || desiredRoomId.value);
     serverRoomId.value = welcomeRoom;
     ensureRoomBuckets(welcomeRoom);
+    applyViewerContext(payload?.call_context || null);
     requestRoomSnapshot();
     if (desiredRoomId.value !== welcomeRoom) {
       void sendRoomJoin(desiredRoomId.value);

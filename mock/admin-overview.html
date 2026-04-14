@@ -507,7 +507,8 @@
           showLeft?.addEventListener('click', () => {
             setLeftCollapsed(false);
           });
-          mobileMenuBtn?.addEventListener('click', () => {
+          mobileMenuBtn?.addEventListener('click', (event) => {
+            event.stopPropagation();
             if (!(shell instanceof HTMLElement)) return;
             if (!mobileMedia.matches) return;
             const isOpen = shell.classList.contains('tablet-left-open');

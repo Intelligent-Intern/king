@@ -53,7 +53,7 @@ function videochat_dispatch_request(
     $method = $methodFromRequest($request);
     $corsHeaders = [
         'access-control-allow-origin' => '*',
-        'access-control-allow-methods' => 'GET,POST,PATCH,OPTIONS',
+        'access-control-allow-methods' => 'GET,POST,PATCH,DELETE,OPTIONS',
         'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id',
         'access-control-max-age' => '600',
     ];

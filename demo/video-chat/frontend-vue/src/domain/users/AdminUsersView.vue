@@ -5,9 +5,6 @@
         <h3>User Management</h3>
       </div>
       <div class="actions">
-        <button class="btn" type="button" :disabled="loading" @click="refreshUsers">
-          {{ loading ? 'Refreshing...' : 'Refresh' }}
-        </button>
         <button class="btn" type="button" @click="openCreateUser">New user</button>
       </div>
     </header>
@@ -82,6 +79,15 @@
                     alt=""
                   />
                 </button>
+                <button
+                  class="icon-mini-btn danger"
+                  type="button"
+                  title="Delete user"
+                  :disabled="mutatingUserId === user.id"
+                  @click="deleteUser(user)"
+                >
+                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
+                </button>
               </div>
             </td>
           </tr>
@@ -116,7 +122,7 @@
           </button>
         </header>
 
-        <div class="users-modal-body">
+        <div v-if="!avatarEditorOpen" class="users-modal-body">
           <label class="users-field">
             <span>Email</span>
             <input v-model.trim="form.email" class="input" type="email" autocomplete="email" />
@@ -132,11 +138,15 @@
             <input v-model="form.password" class="input" type="password" autocomplete="new-password" />
           </label>
 
+          <label v-if="form.mode === 'create'" class="users-field">
+            <span>Repeat password</span>
+            <input v-model="form.password_repeat" class="input" type="password" autocomplete="new-password" />
+          </label>
+
           <label class="users-field">
             <span>Role</span>
             <select v-model="form.role" class="select">
               <option value="user">user</option>
-              <option value="moderator">moderator</option>
               <option value="admin">admin</option>
             </select>
           </label>
@@ -165,18 +175,61 @@
             </select>
           </label>
 
-          <label v-if="form.mode === 'edit'" class="users-field users-field-wide">
-            <span>Avatar path</span>
-            <input v-model.trim="form.avatar_path" class="input" type="text" placeholder="/avatars/example.png" />
+          <section v-if="form.mode === 'edit'" class="users-field users-field-wide users-avatar-edit-row">
+            <div class="users-avatar-preview-wrap">
+              <img class="users-avatar-preview" :src="avatarPreviewSrc" alt="User avatar preview" />
+            </div>
+            <div class="users-avatar-edit-actions">
+              <button class="btn" type="button" :disabled="formSaving" @click="openAvatarEditor">Change avatar</button>
+              <button class="btn" type="button" :disabled="formSaving" @click="deleteAvatar">Delete avatar</button>
+            </div>
+          </section>
+        </div>
+
+        <div v-else class="users-avatar-modal-body">
+          <div class="users-avatar-preview-wrap">
+            <img class="users-avatar-preview users-avatar-preview-large" :src="avatarEditorPreviewSrc" alt="Avatar preview" />
+          </div>
+          <label class="users-avatar-file">
+            <span>Upload avatar</span>
+            <input class="input" type="file" accept="image/png,image/jpeg,image/webp" @change="handleAvatarFileSelect" />
           </label>
+          <section class="users-avatar-defaults">
+            <span>Set default</span>
+            <div class="users-avatar-defaults-actions">
+              <button
+                v-for="option in defaultAvatarOptions"
+                :key="option.path"
+                class="btn"
+                type="button"
+                :disabled="formSaving"
+                @click="setDefaultAvatar(option.path)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+          </section>
+          <p class="users-avatar-hint">Upload a file or pick one default avatar.</p>
         </div>
 
         <p v-if="formError" class="users-form-error">{{ formError }}</p>
 
         <footer class="users-modal-footer">
-          <button class="btn" type="button" :disabled="formSaving" @click="closeDialog">Cancel</button>
-          <button class="btn" type="button" :disabled="formSaving" @click="submitForm">
-            {{ formSaving ? 'Saving...' : dialogSubmitLabel }}
+          <button
+            class="btn"
+            type="button"
+            :disabled="formSaving"
+            @click="avatarEditorOpen ? closeAvatarEditor() : closeDialog()"
+          >
+            {{ avatarEditorOpen ? 'Back' : 'Cancel' }}
+          </button>
+          <button
+            class="btn"
+            type="button"
+            :disabled="formSaving"
+            @click="avatarEditorOpen ? saveAvatarChanges() : submitForm()"
+          >
+            {{ formSaving ? 'Saving...' : (avatarEditorOpen ? 'Save avatar' : dialogSubmitLabel) }}
           </button>
         </footer>
       </div>
@@ -190,6 +243,11 @@ import { resolveBackendOrigin } from '../../support/backendOrigin';
 import { sessionState } from '../auth/session';
 
 const backendOrigin = resolveBackendOrigin();
+const avatarPlaceholder = '/assets/orgas/kingrt/avatar-placeholder.svg';
+const defaultAvatarOptions = [
+  { label: 'KingRT default', path: '/assets/orgas/kingrt/avatar-placeholder.svg' },
+  { label: 'Legacy default', path: '/assets/orgas/intelligent-intern/avatar-placeholder.svg' },
+];
 const queryDraft = ref('');
 const queryApplied = ref('');
 const page = ref(1);
@@ -209,12 +267,16 @@ const dialogOpen = ref(false);
 const formSaving = ref(false);
 const formError = ref('');
 const mutatingUserId = ref(0);
+const avatarEditorOpen = ref(false);
+const avatarUploadDataUrl = ref('');
+const avatarDefaultSelection = ref('');
 const form = reactive({
   mode: 'create',
   id: 0,
   email: '',
   display_name: '',
   password: '',
+  password_repeat: '',
   role: 'user',
   status: 'active',
   time_format: '24h',
@@ -224,6 +286,15 @@ const form = reactive({
 
 let loadToken = 0;
 let searchTimer = 0;
+
+function normalizeAvatarSrc(rawPath) {
+  const value = String(rawPath || '').trim();
+  if (value === '') return avatarPlaceholder;
+  if (value.startsWith('data:')) return value;
+  if (value.startsWith('http://') || value.startsWith('https://')) return value;
+  if (value.startsWith('/api/')) return `${backendOrigin}${value}`;
+  return value;
+}
 
 function buildQueryString(params) {
   const query = new URLSearchParams();
@@ -256,11 +327,20 @@ function extractErrorMessage(payload, fallback) {
 
 async function apiRequest(path, { method = 'GET', query = null, body = null } = {}) {
   const endpoint = `${backendOrigin}${path}${buildQueryString(query || {})}`;
-  const response = await fetch(endpoint, {
-    method,
-    headers: requestHeaders(body !== null),
-    body: body === null ? undefined : JSON.stringify(body),
-  });
+  let response = null;
+  try {
+    response = await fetch(endpoint, {
+      method,
+      headers: requestHeaders(body !== null),
+      body: body === null ? undefined : JSON.stringify(body),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message.trim() : '';
+    if (message === '' || /failed to fetch/i.test(message)) {
+      throw new Error(`Could not reach backend (${backendOrigin}).`);
+    }
+    throw new Error(message);
+  }
 
   let payload = null;
   try {
@@ -297,7 +377,6 @@ function formatDateTime(value) {
 function roleTagClass(role) {
   const normalized = String(role || '').toLowerCase();
   if (normalized === 'admin') return 'ok';
-  if (normalized === 'moderator') return 'warn';
   return 'warn';
 }
 
@@ -384,11 +463,15 @@ function resetForm(mode = 'create') {
   form.email = '';
   form.display_name = '';
   form.password = '';
+  form.password_repeat = '';
   form.role = 'user';
   form.status = 'active';
   form.time_format = '24h';
   form.theme = 'dark';
   form.avatar_path = '';
+  avatarEditorOpen.value = false;
+  avatarUploadDataUrl.value = '';
+  avatarDefaultSelection.value = '';
   formError.value = '';
 }
 
@@ -413,12 +496,69 @@ function openEditUser(user) {
 function closeDialog() {
   dialogOpen.value = false;
   formSaving.value = false;
+  avatarEditorOpen.value = false;
+  avatarUploadDataUrl.value = '';
+  avatarDefaultSelection.value = '';
   formError.value = '';
 }
 
 const dialogTitle = computed(() => (form.mode === 'create' ? 'Create user' : 'Edit user'));
 const dialogSubmitLabel = computed(() => (form.mode === 'create' ? 'Create user' : 'Save changes'));
 const pageCount = computed(() => Math.max(1, pagination.pageCount));
+const avatarPreviewSrc = computed(() => normalizeAvatarSrc(form.avatar_path));
+const avatarEditorPreviewSrc = computed(() => {
+  if (avatarUploadDataUrl.value !== '') return avatarUploadDataUrl.value;
+  if (avatarDefaultSelection.value !== '') return normalizeAvatarSrc(avatarDefaultSelection.value);
+  return avatarPreviewSrc.value;
+});
+
+function openAvatarEditor() {
+  if (form.mode !== 'edit') return;
+  avatarEditorOpen.value = true;
+  avatarUploadDataUrl.value = '';
+  avatarDefaultSelection.value = '';
+  formError.value = '';
+}
+
+function closeAvatarEditor() {
+  avatarEditorOpen.value = false;
+  avatarUploadDataUrl.value = '';
+  avatarDefaultSelection.value = '';
+  formError.value = '';
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(new Error('Could not read avatar file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleAvatarFileSelect(event) {
+  const file = event?.target?.files?.[0] || null;
+  if (!file) return;
+
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(String(file.type || ''))) {
+    formError.value = 'Avatar must be PNG, JPEG, or WEBP.';
+    return;
+  }
+
+  try {
+    avatarUploadDataUrl.value = await readFileAsDataUrl(file);
+    avatarDefaultSelection.value = '';
+    formError.value = '';
+  } catch (err) {
+    formError.value = err instanceof Error ? err.message : 'Could not prepare avatar upload.';
+  }
+}
+
+function setDefaultAvatar(path) {
+  avatarDefaultSelection.value = String(path || '').trim();
+  avatarUploadDataUrl.value = '';
+  formError.value = '';
+}
 
 async function submitForm() {
   if (formSaving.value) return;
@@ -437,6 +577,11 @@ async function submitForm() {
     return;
   }
 
+  if (form.mode === 'create' && String(form.password_repeat || '') !== String(form.password || '')) {
+    formError.value = 'Passwords do not match.';
+    return;
+  }
+
   formSaving.value = true;
   formError.value = '';
 
@@ -448,6 +593,7 @@ async function submitForm() {
           email,
           display_name: displayName,
           password: form.password,
+          password_repeat: form.password_repeat,
           role,
         },
       });
@@ -478,6 +624,117 @@ async function submitForm() {
   }
 }
 
+async function saveAvatarChanges() {
+  if (formSaving.value || form.mode !== 'edit' || form.id <= 0) return;
+
+  const userId = Number(form.id || 0);
+  if (userId <= 0) return;
+
+  if (avatarUploadDataUrl.value === '' && avatarDefaultSelection.value === '') {
+    formError.value = 'Select an avatar file or pick a default avatar.';
+    return;
+  }
+
+  formSaving.value = true;
+  formError.value = '';
+  error.value = '';
+  notice.value = '';
+
+  try {
+    if (avatarUploadDataUrl.value !== '') {
+      const uploadPayload = await apiRequest(`/api/admin/users/${encodeURIComponent(String(userId))}/avatar`, {
+        method: 'POST',
+        body: {
+          data_url: avatarUploadDataUrl.value,
+        },
+      });
+      const avatarPath = String(uploadPayload?.result?.avatar_path || '').trim();
+      form.avatar_path = avatarPath;
+      notice.value = 'Avatar uploaded.';
+    } else {
+      const defaultPath = String(avatarDefaultSelection.value || '').trim();
+      await apiRequest(`/api/admin/users/${encodeURIComponent(String(userId))}`, {
+        method: 'PATCH',
+        body: {
+          avatar_path: defaultPath === '' ? null : defaultPath,
+        },
+      });
+      form.avatar_path = defaultPath;
+      notice.value = 'Default avatar applied.';
+    }
+
+    closeAvatarEditor();
+    await loadUsers();
+  } catch (err) {
+    formError.value = err instanceof Error ? err.message : 'Could not save avatar changes.';
+  } finally {
+    formSaving.value = false;
+  }
+}
+
+async function deleteAvatar() {
+  if (formSaving.value || form.mode !== 'edit' || form.id <= 0) return;
+
+  const userId = Number(form.id || 0);
+  if (userId <= 0) return;
+
+  formSaving.value = true;
+  formError.value = '';
+  error.value = '';
+  notice.value = '';
+
+  try {
+    await apiRequest(`/api/admin/users/${encodeURIComponent(String(userId))}/avatar`, {
+      method: 'DELETE',
+    });
+    form.avatar_path = '';
+    avatarUploadDataUrl.value = '';
+    avatarDefaultSelection.value = '';
+    notice.value = 'Avatar removed.';
+    await loadUsers();
+  } catch (err) {
+    formError.value = err instanceof Error ? err.message : 'Could not delete avatar.';
+  } finally {
+    formSaving.value = false;
+  }
+}
+
+async function deleteUser(user) {
+  const userId = Number(user?.id || 0);
+  if (userId <= 0) return;
+  if (mutatingUserId.value === userId) return;
+
+  const label = String(user?.display_name || user?.email || `#${userId}`);
+  const confirmed = window.confirm(`Delete ${label}? This also deletes all video calls owned by this user.`);
+  if (!confirmed) return;
+
+  mutatingUserId.value = userId;
+  error.value = '';
+  notice.value = '';
+  formError.value = '';
+
+  try {
+    const payload = await apiRequest(`/api/admin/users/${encodeURIComponent(String(userId))}`, {
+      method: 'DELETE',
+    });
+    const deletedCalls = Number(payload?.result?.deleted_calls || 0);
+    notice.value = `Deleted ${label}. Removed ${deletedCalls} owned video calls.`;
+
+    if (dialogOpen.value && form.mode === 'edit' && Number(form.id || 0) === userId) {
+      closeDialog();
+    }
+
+    if (rows.value.length === 1 && page.value > 1) {
+      page.value -= 1;
+    }
+    await loadUsers();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not delete user.';
+  } finally {
+    mutatingUserId.value = 0;
+  }
+}
+
 async function toggleUserStatus(user) {
   const userId = Number(user.id || 0);
   if (userId <= 0) return;
@@ -499,10 +756,6 @@ async function toggleUserStatus(user) {
   }
 }
 
-function refreshUsers() {
-  void loadUsers();
-}
-
 onMounted(() => {
   void loadUsers();
 });
@@ -510,8 +763,16 @@ onMounted(() => {
 
 <style scoped>
 .admin-users-view {
-  display: grid;
-  gap: 14px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border-subtle);
+}
+
+.admin-users-view > :first-child {
+  border-top-left-radius: 0;
+  border-top-right-radius: 5px;
 }
 
 .admin-users-head,
@@ -521,6 +782,12 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
+}
+
+.admin-users-head,
+.admin-users-toolbar,
+.users-footer {
+  background: var(--bg-pane);
 }
 
 .admin-users-head h3 {
@@ -623,6 +890,12 @@ onMounted(() => {
 .users-footer {
   display: flex;
   justify-content: center;
+  margin-top: auto;
+}
+
+.users-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .users-modal {
@@ -690,6 +963,75 @@ onMounted(() => {
 
 .users-field-wide {
   grid-column: 1 / -1;
+}
+
+.users-avatar-edit-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.users-avatar-modal-body {
+  display: grid;
+  gap: 12px;
+}
+
+.users-avatar-preview-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  background: #0b1324;
+}
+
+.users-avatar-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.users-avatar-preview-large {
+  width: 100%;
+  height: 100%;
+}
+
+.users-avatar-edit-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.users-avatar-file {
+  display: grid;
+  gap: 6px;
+}
+
+.users-avatar-file span,
+.users-avatar-defaults > span {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.users-avatar-defaults {
+  display: grid;
+  gap: 8px;
+}
+
+.users-avatar-defaults-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.users-avatar-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .users-form-error {

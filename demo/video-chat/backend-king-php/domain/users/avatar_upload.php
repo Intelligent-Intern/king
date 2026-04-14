@@ -392,3 +392,85 @@ function videochat_store_avatar_for_user(
         'file_name' => $filename,
     ];
 }
+
+function videochat_avatar_delete_file_if_managed(string $storageRoot, ?string $avatarPath): bool
+{
+    $trimmedAvatarPath = trim((string) ($avatarPath ?? ''));
+    if ($trimmedAvatarPath === '') {
+        return false;
+    }
+
+    $fileName = videochat_avatar_extract_filename_from_public_path($trimmedAvatarPath);
+    if (!is_string($fileName) || $fileName === '') {
+        return false;
+    }
+
+    $resolvedPath = videochat_avatar_resolve_read_path($storageRoot, $fileName);
+    if (!is_string($resolvedPath) || $resolvedPath === '') {
+        return false;
+    }
+
+    return @unlink($resolvedPath);
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   errors: array<string, string>,
+ *   avatar_path: ?string,
+ *   removed_file: bool
+ * }
+ */
+function videochat_delete_avatar_for_user(PDO $pdo, int $userId, string $storageRoot): array
+{
+    if ($userId <= 0) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'avatar_path' => null,
+            'removed_file' => false,
+        ];
+    }
+
+    $selectUser = $pdo->prepare('SELECT id, avatar_path FROM users WHERE id = :id LIMIT 1');
+    $selectUser->execute([':id' => $userId]);
+    $userRow = $selectUser->fetch();
+    if (!is_array($userRow)) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'avatar_path' => null,
+            'removed_file' => false,
+        ];
+    }
+
+    $previousAvatarPath = is_string($userRow['avatar_path'] ?? null) ? trim((string) $userRow['avatar_path']) : '';
+    if ($previousAvatarPath === '') {
+        return [
+            'ok' => true,
+            'reason' => 'already_empty',
+            'errors' => [],
+            'avatar_path' => null,
+            'removed_file' => false,
+        ];
+    }
+
+    $update = $pdo->prepare('UPDATE users SET avatar_path = NULL, updated_at = :updated_at WHERE id = :id');
+    $update->execute([
+        ':updated_at' => gmdate('c'),
+        ':id' => $userId,
+    ]);
+
+    $removedFile = videochat_avatar_delete_file_if_managed($storageRoot, $previousAvatarPath);
+
+    return [
+        'ok' => true,
+        'reason' => 'cleared',
+        'errors' => [],
+        'avatar_path' => null,
+        'removed_file' => $removedFile,
+    ];
+}

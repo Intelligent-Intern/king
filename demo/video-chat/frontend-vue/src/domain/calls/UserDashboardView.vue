@@ -427,7 +427,7 @@ function isEditable(call) {
     return false;
   }
 
-  if (sessionState.role === 'moderator') {
+  if (sessionState.role === 'admin') {
     return true;
   }
 
@@ -438,7 +438,7 @@ function isInvitable(call) {
   return isEditable(call);
 }
 
-const canReadAllScope = computed(() => sessionState.role === 'moderator');
+const canReadAllScope = computed(() => sessionState.role === 'admin');
 
 const viewMode = ref('calls');
 const queryDraft = ref('');

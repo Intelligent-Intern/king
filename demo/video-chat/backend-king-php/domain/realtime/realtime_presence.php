@@ -14,8 +14,7 @@ function videochat_presence_role_rank(string $role): int
 {
     return match (videochat_normalize_role_slug($role)) {
         'admin' => 0,
-        'moderator' => 1,
-        default => 2,
+        default => 1,
     };
 }
 
@@ -54,6 +53,9 @@ function videochat_presence_normalize_room_id(?string $roomId, string $fallback 
  *   user_id: int,
  *   display_name: string,
  *   role: string,
+ *   active_call_id: string,
+ *   call_role: string,
+ *   can_moderate_call: bool,
  *   connected_at: string
  * }
  */
@@ -83,6 +85,9 @@ function videochat_presence_connection_descriptor(
         'user_id' => (int) ($authUser['id'] ?? 0),
         'display_name' => trim((string) ($authUser['display_name'] ?? '')),
         'role' => videochat_normalize_role_slug((string) ($authUser['role'] ?? '')),
+        'active_call_id' => '',
+        'call_role' => 'participant',
+        'can_moderate_call' => false,
         'connected_at' => $effectiveConnectedAt,
     ];
 }
@@ -94,7 +99,8 @@ function videochat_presence_connection_descriptor(
  *   user: array{
  *     id: int,
  *     display_name: string,
- *     role: string
+ *     role: string,
+ *     call_role: string
  *   },
  *   connected_at: string
  * }
@@ -108,6 +114,10 @@ function videochat_presence_public_connection(array $connection): array
             'id' => (int) ($connection['user_id'] ?? 0),
             'display_name' => (string) ($connection['display_name'] ?? ''),
             'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? '')),
+            'call_role' => (static function (string $role): string {
+                $normalized = strtolower(trim($role));
+                return in_array($normalized, ['owner', 'moderator', 'participant'], true) ? $normalized : 'participant';
+            })((string) ($connection['call_role'] ?? 'participant')),
         ],
         'connected_at' => (string) ($connection['connected_at'] ?? ''),
     ];
@@ -203,6 +213,16 @@ function videochat_presence_send_room_snapshot(
             'room_id' => $roomId,
             'participants' => $participants,
             'participant_count' => count($participants),
+            'viewer' => [
+                'user_id' => (int) ($connection['user_id'] ?? 0),
+                'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? '')),
+                'call_id' => (string) ($connection['active_call_id'] ?? ''),
+                'call_role' => (static function (string $role): string {
+                    $normalized = strtolower(trim($role));
+                    return in_array($normalized, ['owner', 'moderator', 'participant'], true) ? $normalized : 'participant';
+                })((string) ($connection['call_role'] ?? 'participant')),
+                'can_moderate' => (bool) ($connection['can_moderate_call'] ?? false),
+            ],
             'reason' => trim($reason) === '' ? 'snapshot' : trim($reason),
             'time' => gmdate('c'),
         ],

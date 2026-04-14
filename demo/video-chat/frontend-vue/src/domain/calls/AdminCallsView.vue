@@ -2,10 +2,20 @@
   <section class="view-card calls-view">
     <section class="section calls-header">
       <div class="calls-header-left">
+        <button
+          v-if="showInlineSidebarButton"
+          class="show-sidebar-overlay show-sidebar-inline show-left-sidebar-overlay calls-show-sidebar-btn"
+          type="button"
+          title="Show sidebar"
+          aria-label="Show sidebar"
+          @click="showLeftSidebarFromHeader"
+        >
+          <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
+        </button>
         <h3>Video Call Management</h3>
       </div>
       <div class="actions">
-        <button class="btn" type="button" @click="openCompose('create')">New video call</button>
+        <button class="btn" type="button" @click="openPrimaryCompose">{{ primaryActionLabel }}</button>
       </div>
     </section>
 
@@ -156,55 +166,7 @@
       <section v-else-if="calendarError" class="section calls-empty calls-error">
         {{ calendarError }}
       </section>
-      <section v-else-if="calendarBuckets.length === 0" class="section calls-empty">
-        No calendar entries for the active filters.
-      </section>
-      <section v-else class="calls-calendar-grid">
-        <article v-for="bucket in calendarBuckets" :key="bucket.key" class="calls-calendar-day">
-          <header class="calls-calendar-day-head">
-            <h4>{{ bucket.label }}</h4>
-            <span>{{ bucket.rows.length }} calls</span>
-          </header>
-          <ul class="calls-calendar-list">
-            <li v-for="call in bucket.rows" :key="call.id" class="calls-calendar-item">
-              <div class="calls-calendar-item-meta">
-                <strong>{{ call.title || call.id }}</strong>
-                <span>{{ formatRange(call.starts_at, call.ends_at) }}</span>
-                <span>{{ call.owner?.display_name || 'Unknown owner' }}</span>
-              </div>
-              <div class="actions-inline">
-                <button
-                  class="icon-mini-btn"
-                  type="button"
-                  title="Edit call"
-                  :disabled="!isEditable(call)"
-                  @click="openCompose('edit', call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn"
-                  type="button"
-                  title="Create invite code"
-                  :disabled="!isInvitable(call)"
-                  @click="toggleInvitePopover($event, call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn danger"
-                  type="button"
-                  title="Cancel call"
-                  :disabled="!isCancellable(call)"
-                  @click="openCancel(call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/end_call.png" alt="" />
-                </button>
-              </div>
-            </li>
-          </ul>
-        </article>
-      </section>
+      <section v-else ref="callsCalendarEl" class="calls-calendar-full"></section>
     </section>
 
     <section class="footer calls-pagination-wrap">
@@ -278,11 +240,11 @@
               <span>Title</span>
               <input v-model="composeState.title" class="input" type="text" placeholder="Weekly Product Sync" />
             </label>
-            <label class="field">
+            <label v-if="composeState.mode !== 'create'" class="field">
               <span>Room ID</span>
               <input v-model="composeState.roomId" class="input" type="text" placeholder="lobby" />
             </label>
-            <label class="field">
+            <label v-if="composeState.mode !== 'create'" class="field">
               <span>Starts at</span>
               <input
                 v-model="composeState.startsLocal"
@@ -291,7 +253,7 @@
                 aria-label="Call starts at"
               />
             </label>
-            <label class="field">
+            <label v-if="composeState.mode !== 'create'" class="field">
               <span>Ends at</span>
               <input
                 v-model="composeState.endsLocal"
@@ -480,14 +442,23 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { Calendar } from '@fullcalendar/core';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
 import { sessionState } from '../auth/session';
 import { resolveBackendOrigin } from '../../support/backendOrigin';
 
 const router = useRouter();
+const workspaceSidebarState = inject('workspaceSidebarState', null);
 
 const backendOrigin = resolveBackendOrigin();
+const callsCalendarEl = ref(null);
+let calendarInstance = null;
+let lastCalendarDateClickAt = 0;
+let lastCalendarDateKey = '';
 
 function requestHeaders(withBody = false) {
   const headers = { accept: 'application/json' };
@@ -600,6 +571,19 @@ function statusTagClass(status) {
   return 'warn';
 }
 
+const showInlineSidebarButton = computed(() => {
+  const collapsed = Boolean(workspaceSidebarState?.leftSidebarCollapsed?.value);
+  const isTablet = Boolean(workspaceSidebarState?.isTabletViewport?.value);
+  const isMobile = Boolean(workspaceSidebarState?.isMobileViewport?.value);
+  return collapsed && !isTablet && !isMobile;
+});
+
+function showLeftSidebarFromHeader() {
+  if (typeof workspaceSidebarState?.showLeftSidebar === 'function') {
+    workspaceSidebarState.showLeftSidebar();
+  }
+}
+
 function isEditable(call) {
   const status = String(call?.status || '').toLowerCase();
   return status !== 'cancelled' && status !== 'ended';
@@ -620,6 +604,13 @@ const queryDraft = ref('');
 const queryApplied = ref('');
 const statusFilter = ref('all');
 const scopeFilter = ref('all');
+const primaryActionLabel = computed(() => (viewMode.value === 'calendar'
+  ? 'Schedule video call'
+  : 'New video call'));
+
+function openPrimaryCompose() {
+  openCompose(viewMode.value === 'calendar' ? 'schedule' : 'create');
+}
 
 const calls = ref([]);
 const loadingCalls = ref(false);
@@ -715,46 +706,105 @@ async function loadCalendar() {
   }
 }
 
-const calendarBuckets = computed(() => {
-  const buckets = new Map();
-
+function toCalendarEvents() {
+  const events = [];
   for (const call of calendarCalls.value) {
-    const key = typeof call?.starts_at === 'string' && call.starts_at.length >= 10
-      ? call.starts_at.slice(0, 10)
-      : 'unscheduled';
-
-    if (!buckets.has(key)) {
-      buckets.set(key, []);
+    const startsAt = new Date(String(call?.starts_at || ''));
+    const endsAt = new Date(String(call?.ends_at || ''));
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+      continue;
     }
 
-    buckets.get(key).push(call);
-  }
-
-  const keys = Array.from(buckets.keys()).sort((a, b) => a.localeCompare(b));
-
-  return keys.map((key) => {
-    const rows = buckets.get(key).slice().sort((left, right) => {
-      const leftStart = String(left?.starts_at || '');
-      const rightStart = String(right?.starts_at || '');
-      return leftStart.localeCompare(rightStart);
+    events.push({
+      id: String(call.id || ''),
+      title: String(call.title || call.id || 'Video call'),
+      start: startsAt,
+      end: endsAt,
+      allDay: false,
+      extendedProps: {
+        callPayload: call,
+      },
     });
+  }
+  return events;
+}
 
-    let label = 'Unscheduled';
-    if (key !== 'unscheduled') {
-      const keyDate = new Date(`${key}T00:00:00`);
-      if (!Number.isNaN(keyDate.getTime())) {
-        label = new Intl.DateTimeFormat('en-GB', {
-          weekday: 'short',
-          year: 'numeric',
-          month: 'short',
-          day: '2-digit',
-        }).format(keyDate);
-      }
+function syncCalendarEvents() {
+  if (!calendarInstance) return;
+  calendarInstance.removeAllEvents();
+  for (const event of toCalendarEvents()) {
+    calendarInstance.addEvent(event);
+  }
+}
+
+function openComposeForCalendarDoubleClick(dateValue) {
+  const start = dateValue instanceof Date ? new Date(dateValue.getTime()) : new Date();
+  const end = new Date(start.getTime() + (45 * 60 * 1000));
+  openCompose('schedule');
+  composeState.startsLocal = isoToLocalInput(start.toISOString());
+  composeState.endsLocal = isoToLocalInput(end.toISOString());
+}
+
+function openComposeForCalendarSelection(startValue, endValue) {
+  const start = startValue instanceof Date ? startValue : new Date(startValue);
+  const end = endValue instanceof Date ? endValue : new Date(endValue);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+  openCompose('schedule');
+  composeState.startsLocal = isoToLocalInput(start.toISOString());
+  composeState.endsLocal = isoToLocalInput(end.toISOString());
+}
+
+function openComposeForCalendarEvent(eventApi) {
+  const call = eventApi?.extendedProps?.callPayload;
+  if (call && typeof call === 'object') {
+    openCompose('edit', call);
+  }
+}
+
+async function initCallsCalendar() {
+  if (!(callsCalendarEl.value instanceof HTMLElement) || calendarInstance) return;
+  try {
+    calendarInstance = new Calendar(callsCalendarEl.value, {
+      plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
+      initialView: 'dayGridMonth',
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth,timeGridWeek,timeGridDay',
+      },
+      height: 'auto',
+      contentHeight: 'auto',
+      eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+      selectable: true,
+      editable: false,
+      events: [],
+      dateClick(info) {
+        const now = Date.now();
+        const dateKey = `${String(info.view?.type || '')}:${info.dateStr}`;
+        const isDoubleClick = dateKey === lastCalendarDateKey && now - lastCalendarDateClickAt < 360;
+        lastCalendarDateKey = dateKey;
+        lastCalendarDateClickAt = now;
+        if (!isDoubleClick) return;
+        openComposeForCalendarDoubleClick(info.date instanceof Date ? info.date : new Date(info.dateStr));
+      },
+      select(info) {
+        if (String(info.view?.type || '') !== 'timeGridDay') return;
+        openComposeForCalendarSelection(info.start, info.end);
+        calendarInstance?.unselect();
+      },
+      eventClick(info) {
+        openComposeForCalendarEvent(info.event);
+      },
+    });
+    calendarInstance.render();
+    syncCalendarEvents();
+  } catch {
+    calendarInstance = null;
+    if (!calendarError.value) {
+      calendarError.value = 'Could not load FullCalendar.';
     }
-
-    return { key, label, rows };
-  });
-});
+  }
+}
 
 function setViewMode(nextMode) {
   if (nextMode !== 'calls' && nextMode !== 'calendar') {
@@ -766,6 +816,34 @@ function setViewMode(nextMode) {
     void loadCalendar();
   }
 }
+
+async function ensureCalendarUiReady() {
+  if (viewMode.value !== 'calendar') return;
+  if (loadingCalendar.value || calendarError.value) return;
+  await nextTick();
+  await initCallsCalendar();
+  if (!calendarInstance) return;
+  await nextTick();
+  calendarInstance.updateSize();
+  syncCalendarEvents();
+}
+
+watch(viewMode, () => {
+  void ensureCalendarUiReady();
+});
+
+watch(loadingCalendar, () => {
+  void ensureCalendarUiReady();
+});
+
+watch(calendarError, () => {
+  void ensureCalendarUiReady();
+});
+
+watch(calendarCalls, () => {
+  syncCalendarEvents();
+  void ensureCalendarUiReady();
+});
 
 async function applyFilters() {
   clearNotice();
@@ -961,13 +1039,13 @@ function nextExternalRow() {
 const composeHeadline = computed(() => {
   if (composeState.mode === 'edit') return 'Edit video call';
   if (composeState.mode === 'schedule') return 'Schedule video call';
-  return 'New video call';
+  return 'Start video call';
 });
 
 const composeSubmitLabel = computed(() => {
   if (composeState.mode === 'edit') return 'Save changes';
   if (composeState.mode === 'schedule') return 'Schedule call';
-  return 'Create call';
+  return 'Start now';
 });
 
 const shouldSendParticipants = computed(
@@ -977,11 +1055,7 @@ const shouldSendParticipants = computed(
 function seedComposeWindow(mode) {
   const now = new Date();
   const start = new Date(now.getTime());
-  if (mode === 'create') {
-    start.setMinutes(start.getMinutes() + 5);
-  } else {
-    start.setMinutes(start.getMinutes() + 60);
-  }
+  start.setMinutes(start.getMinutes() + 60);
 
   const end = new Date(start.getTime());
   end.setMinutes(end.getMinutes() + 30);
@@ -1024,7 +1098,12 @@ function openCompose(mode, call = null) {
     composeState.endsLocal = isoToLocalInput(String(call.ends_at || ''));
     composeState.replaceParticipants = false;
   } else {
-    seedComposeWindow(mode);
+    if (mode !== 'create') {
+      seedComposeWindow(mode);
+    } else {
+      composeState.startsLocal = '';
+      composeState.endsLocal = '';
+    }
     composeState.replaceParticipants = true;
     composeExternalRows.value = [nextExternalRow()];
   }
@@ -1174,16 +1253,24 @@ async function submitCompose() {
     return;
   }
 
-  const startsAt = localInputToIso(composeState.startsLocal);
-  const endsAt = localInputToIso(composeState.endsLocal);
-  if (startsAt === '' || endsAt === '') {
-    composeState.error = 'Start and end timestamps are required.';
-    return;
-  }
+  let startsAt = '';
+  let endsAt = '';
+  if (composeState.mode === 'create') {
+    const now = Date.now();
+    startsAt = new Date(now).toISOString();
+    endsAt = new Date(now + (60 * 60 * 1000)).toISOString();
+  } else {
+    startsAt = localInputToIso(composeState.startsLocal);
+    endsAt = localInputToIso(composeState.endsLocal);
+    if (startsAt === '' || endsAt === '') {
+      composeState.error = 'Start and end timestamps are required.';
+      return;
+    }
 
-  if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
-    composeState.error = 'End timestamp must be after start timestamp.';
-    return;
+    if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
+      composeState.error = 'End timestamp must be after start timestamp.';
+      return;
+    }
   }
 
   const payload = {
@@ -1215,10 +1302,16 @@ async function submitCompose() {
       });
       setNotice('ok', 'Call updated.');
     } else {
-      await apiRequest('/api/calls', {
+      const createResult = await apiRequest('/api/calls', {
         method: 'POST',
         body: payload,
       });
+      const createdRoomId = String(createResult?.result?.call?.room_id || payload.room_id || 'lobby').trim() || 'lobby';
+      if (composeState.mode === 'create') {
+        closeCompose();
+        router.push(`/workspace/call/${encodeURIComponent(createdRoomId)}`);
+        return;
+      }
       setNotice('ok', 'Call created.');
     }
 
@@ -1351,6 +1444,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', handleWindowResize);
   window.removeEventListener('scroll', handleWindowResize, true);
   window.removeEventListener('keydown', handleEscape);
+  if (calendarInstance) {
+    calendarInstance.destroy();
+    calendarInstance = null;
+  }
 });
 </script>
 
@@ -1369,6 +1466,20 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  border: 0;
+  border-top-right-radius: 5px;
+}
+
+.calls-header-left {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.calls-show-sidebar-btn {
+  display: grid;
+  margin-top: 2px;
 }
 
 .calls-header h3 {
@@ -1475,73 +1586,11 @@ onBeforeUnmount(() => {
   background: var(--bg-surface);
 }
 
-.calls-calendar-grid {
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 10px;
-  align-content: start;
-}
-
-.calls-calendar-day {
+.calls-calendar-full {
+  min-height: 620px;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: #122340;
-  overflow: hidden;
-}
-
-.calls-calendar-day-head {
+  background: var(--bg-surface-strong);
   padding: 10px;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.calls-calendar-day-head h4 {
-  margin: 0;
-  font-size: 13px;
-}
-
-.calls-calendar-day-head span {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.calls-calendar-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-}
-
-.calls-calendar-item {
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 10px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.calls-calendar-item:last-child {
-  border-bottom: 0;
-}
-
-.calls-calendar-item-meta {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.calls-calendar-item-meta strong {
-  font-size: 13px;
-}
-
-.calls-calendar-item-meta span {
-  color: var(--text-muted);
-  font-size: 12px;
 }
 
 .calls-pagination-wrap {
@@ -1765,8 +1814,8 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  .calls-calendar-grid {
-    grid-template-columns: 1fr;
+  .calls-calendar-full {
+    min-height: 520px;
   }
 }
 </style>

@@ -194,6 +194,77 @@ SQL
     videochat_admin_user_mutation_assert($reactivateMissing['ok'] === false, 'reactivate missing user should fail');
     videochat_admin_user_mutation_assert($reactivateMissing['reason'] === 'not_found', 'reactivate missing user reason mismatch');
 
+    $insertOwnedCall = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO calls(id, room_id, title, owner_user_id, status, starts_at, ends_at, cancelled_at, cancel_reason, cancel_message, created_at, updated_at)
+VALUES(:id, 'lobby', :title, :owner_user_id, 'scheduled', :starts_at, :ends_at, NULL, NULL, NULL, :created_at, :updated_at)
+SQL
+    );
+    $insertOwnedCall->execute([
+        ':id' => 'call_delete_contract',
+        ':title' => 'Delete Cascade Contract Call',
+        ':owner_user_id' => $createdUserId,
+        ':starts_at' => gmdate('c', time() + 1800),
+        ':ends_at' => gmdate('c', time() + 3600),
+        ':created_at' => gmdate('c'),
+        ':updated_at' => gmdate('c'),
+    ]);
+
+    $insertInvite = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO invite_codes(
+    id, code, scope, room_id, call_id, issued_by_user_id, expires_at, redeemed_at, redeemed_by_user_id, max_redemptions, redemption_count, created_at
+) VALUES(
+    :id, :code, :scope, :room_id, :call_id, :issued_by_user_id, :expires_at, NULL, NULL, 1, 0, :created_at
+)
+SQL
+    );
+    $insertInvite->execute([
+        ':id' => 'invite-delete-contract-room',
+        ':code' => 'ROOMDELETE01',
+        ':scope' => 'room',
+        ':room_id' => 'lobby',
+        ':call_id' => null,
+        ':issued_by_user_id' => $createdUserId,
+        ':expires_at' => gmdate('c', time() + 3600),
+        ':created_at' => gmdate('c'),
+    ]);
+    $insertInvite->execute([
+        ':id' => 'invite-delete-contract-call',
+        ':code' => 'CALLDELETE01',
+        ':scope' => 'call',
+        ':room_id' => null,
+        ':call_id' => 'call_delete_contract',
+        ':issued_by_user_id' => $createdUserId,
+        ':expires_at' => gmdate('c', time() + 3600),
+        ':created_at' => gmdate('c'),
+    ]);
+
+    $deleteResult = videochat_admin_delete_user($pdo, $createdUserId);
+    videochat_admin_user_mutation_assert($deleteResult['ok'] === true, 'delete user should succeed');
+    videochat_admin_user_mutation_assert($deleteResult['reason'] === 'deleted', 'delete user reason mismatch');
+    videochat_admin_user_mutation_assert(
+        (int) ($deleteResult['deleted_calls'] ?? 0) >= 1,
+        'delete user should report at least one deleted owned call'
+    );
+    videochat_admin_user_mutation_assert(
+        (int) ($deleteResult['deleted_invite_codes'] ?? 0) >= 1,
+        'delete user should report deleted room invite codes'
+    );
+
+    $deletedUserCheck = videochat_admin_fetch_user_by_id($pdo, $createdUserId);
+    videochat_admin_user_mutation_assert($deletedUserCheck === null, 'deleted user should no longer exist');
+
+    $callCountQuery = $pdo->prepare('SELECT COUNT(*) FROM calls WHERE owner_user_id = :owner_user_id');
+    $callCountQuery->execute([':owner_user_id' => $createdUserId]);
+    $callCount = (int) $callCountQuery->fetchColumn();
+    videochat_admin_user_mutation_assert($callCount === 0, 'owned calls should be deleted with user');
+
+    $inviteCountQuery = $pdo->prepare('SELECT COUNT(*) FROM invite_codes WHERE issued_by_user_id = :issued_by_user_id');
+    $inviteCountQuery->execute([':issued_by_user_id' => $createdUserId]);
+    $inviteCount = (int) $inviteCountQuery->fetchColumn();
+    videochat_admin_user_mutation_assert($inviteCount === 0, 'issued invite codes should be deleted with user');
+
     @unlink($databasePath);
     fwrite(STDOUT, "[admin-user-mutation-contract] PASS\n");
     exit(0);

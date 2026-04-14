@@ -12,7 +12,8 @@
               :aria-label="leftSidebarToggleLabel"
               @click="handleLeftSidebarToggle"
             >
-              <img class="arrow-icon-image" :src="leftSidebarToggleIcon" alt="" />
+              <span v-if="isMobileViewport" class="sidebar-close-mark" aria-hidden="true">x</span>
+              <img v-else class="arrow-icon-image" :src="leftSidebarToggleIcon" alt="" />
             </button>
           </div>
 
@@ -23,6 +24,7 @@
               :to="item.to"
               class="nav-link"
               :class="{ active: isNavItemActive(item) }"
+              @click="handleNavItemClick"
             >
               <img :src="item.icon" alt="" />
               <span>{{ item.label }}</span>
@@ -30,11 +32,13 @@
           </nav>
 
           <section class="sidebar-profile avatar-only">
-            <img
-              class="sidebar-avatar-image"
-              :src="profileAvatarSrc"
-              alt="Profile avatar"
-            />
+            <button class="sidebar-avatar-trigger" type="button" aria-label="Open settings" @click="openSettingsModal('about-me')">
+              <img
+                class="sidebar-avatar-image"
+                :src="profileAvatarSrc"
+                alt="Profile avatar"
+              />
+            </button>
           </section>
 
           <div class="logout-wrap">
@@ -46,12 +50,12 @@
       <section class="main" @click="handleMainClick">
         <div v-if="isMobileViewport" class="mobile-brand-strip">
           <img src="/assets/orgas/kingrt/king_logo-withslogan.svg" alt="KingRT" />
-          <button class="mobile-menu-btn" type="button" aria-label="Toggle menu" @click="handleLeftSidebarToggle">
+          <button class="mobile-menu-btn" type="button" aria-label="Toggle menu" @click.stop="handleLeftSidebarToggle">
             <span class="mobile-menu-btn-bars" aria-hidden="true"></span>
           </button>
         </div>
         <div class="workspace">
-          <section class="section">
+          <section v-if="showWorkspaceHeader" class="section">
             <div class="section-head">
               <div class="section-head-left">
                   <button
@@ -74,7 +78,7 @@
                   <button class="btn" type="button" @click="openCallsRegistry">Open Calls</button>
                   <button class="btn" type="button" @click="openGrafana">Open Grafana</button>
                 </template>
-                <button v-else class="btn" type="button" @click="openSettingsModal">Settings</button>
+                <button v-else class="btn" type="button" @click="openSettingsModal('about-me')">Settings</button>
               </div>
             </div>
           </section>
@@ -92,14 +96,31 @@
     <div class="settings-dialog">
       <header class="settings-header">
         <div class="settings-title-wrap">
-          <img src="/assets/orgas/kingrt/logo.svg" alt="" />
-          <h3>Workspace settings</h3>
+          <img src="/assets/orgas/kingrt/icon.svg" alt="" />
+          <h3>Settings</h3>
         </div>
-        <button class="btn" type="button" @click="closeSettingsModal">Close</button>
+        <button class="icon-mini-btn" type="button" aria-label="Close settings" @click="closeSettingsModal">
+          <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
+        </button>
       </header>
 
-      <section class="settings-panel">
-        <h4>Profile</h4>
+      <div class="settings-grid" role="tablist" aria-label="Settings categories">
+        <button
+          v-for="tile in settingsTiles"
+          :key="tile.id"
+          class="settings-tile"
+          :class="{ active: activeSettingsTile === tile.id }"
+          type="button"
+          :disabled="settingsState.loading"
+          @click="activeSettingsTile = tile.id"
+        >
+          {{ tile.label }}
+        </button>
+      </div>
+
+      <section v-if="activeSettingsTile === 'about-me'" class="settings-panel">
+        <h4>About Me</h4>
+        <p>Configure your profile avatar for the sidebar.</p>
 
         <div class="settings-row">
           <label class="settings-field">
@@ -142,8 +163,14 @@
         </div>
       </section>
 
-      <section class="settings-panel">
-        <h4>Appearance</h4>
+      <section v-else-if="activeSettingsTile === 'credentials'" class="settings-panel">
+        <h4>Credentials</h4>
+        <p>Password and OAuth provider settings are managed in backend auth settings.</p>
+      </section>
+
+      <section v-else-if="activeSettingsTile === 'theme'" class="settings-panel">
+        <h4>Theme</h4>
+        <p>Choose visual mode for your workspace.</p>
 
         <div class="settings-row">
           <label class="settings-field">
@@ -156,6 +183,19 @@
               placeholder="dark"
             />
           </label>
+        </div>
+      </section>
+
+      <section v-else-if="activeSettingsTile === 'general'" class="settings-panel">
+        <h4>{{ sessionState.role === 'admin' ? 'General' : 'Workspace' }}</h4>
+        <p>Branding and icon set management follow the same workflow as in the mock settings.</p>
+      </section>
+
+      <section v-else-if="activeSettingsTile === 'regional-time'" class="settings-panel">
+        <h4>Regional Time</h4>
+        <p>Select how date and time should be displayed across the workspace.</p>
+
+        <div class="settings-row">
           <label class="settings-field">
             <span>Time format</span>
             <select v-model="settingsDraft.timeFormat" class="ii-input">
@@ -164,6 +204,11 @@
             </select>
           </label>
         </div>
+      </section>
+
+      <section v-else-if="activeSettingsTile === 'email-texts'" class="settings-panel">
+        <h4>Email Texts</h4>
+        <p>Email templates and transport profile are configured in backend mail settings.</p>
       </section>
 
       <div class="settings-actions">
@@ -179,10 +224,9 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import {
-  fetchSessionSettings,
   logoutSession,
   saveSessionSettings,
   sessionState,
@@ -209,7 +253,7 @@ const navItems = computed(() => {
     { to: '/admin/overview', label: 'Overview', icon: '/assets/orgas/kingrt/icons/users.png', roles: ['admin'] },
     { to: '/admin/users', label: 'User Management', icon: '/assets/orgas/kingrt/icons/user.png', roles: ['admin'] },
     { to: '/admin/calls', label: 'Video Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['admin'] },
-    { to: '/user/dashboard', label: 'My Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['moderator', 'user'] },
+    { to: '/user/dashboard', label: 'My Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['user'] },
   ];
 
   return items.filter((item) => role && item.roles.includes(role));
@@ -233,6 +277,7 @@ const pageSubtitle = computed(() => {
   }
   return '';
 });
+const showWorkspaceHeader = computed(() => !['/admin/users', '/admin/calls'].includes(route.path));
 
 const isTabletViewport = computed(() => viewportMode.value === 'tablet');
 const isMobileViewport = computed(() => viewportMode.value === 'mobile');
@@ -281,6 +326,15 @@ const settingsState = reactive({
   message: '',
   avatarStatus: '',
 });
+const activeSettingsTile = ref('about-me');
+const settingsTiles = computed(() => ([
+  { id: 'about-me', label: 'About Me' },
+  { id: 'credentials', label: 'Credentials' },
+  { id: 'theme', label: 'Theme' },
+  { id: 'general', label: sessionState.role === 'admin' ? 'General' : 'Workspace' },
+  { id: 'regional-time', label: 'Regional Time' },
+  { id: 'email-texts', label: 'Email Texts' },
+]));
 
 const settingsAvatarPreviewSrc = computed(() => settingsDraft.avatarDataUrl || profileAvatarSrc.value);
 
@@ -321,6 +375,13 @@ function syncViewportState() {
   viewportMode.value = 'desktop';
   isTabletSidebarOpen.value = false;
   isMobileSidebarOpen.value = false;
+}
+
+function syncMobileScrollLock(forceUnlock = false) {
+  if (typeof document === 'undefined') return;
+  const lockScroll = !forceUnlock && isMobileViewport.value && isMobileSidebarOpen.value;
+  document.documentElement.style.overflow = lockScroll ? 'hidden' : '';
+  document.body.style.overflow = lockScroll ? 'hidden' : '';
 }
 
 function handleViewportChange() {
@@ -365,6 +426,33 @@ function handleMainClick() {
   }
 }
 
+function handleNavItemClick() {
+  if (isTabletViewport.value && isTabletSidebarOpen.value) {
+    isTabletSidebarOpen.value = false;
+  }
+
+  if (isMobileViewport.value && isMobileSidebarOpen.value) {
+    isMobileSidebarOpen.value = false;
+  }
+}
+
+provide('workspaceSidebarState', {
+  leftSidebarCollapsed,
+  isTabletViewport,
+  isMobileViewport,
+  showLeftSidebar,
+});
+
+watch([isMobileViewport, isMobileSidebarOpen], () => {
+  syncMobileScrollLock();
+}, { immediate: true });
+
+watch(() => route.fullPath, () => {
+  if (isMobileViewport.value && isMobileSidebarOpen.value) {
+    isMobileSidebarOpen.value = false;
+  }
+});
+
 onMounted(() => {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
   laptopMedia = window.matchMedia(`(max-width: ${LAPTOP_BREAKPOINT}px)`);
@@ -396,6 +484,7 @@ onBeforeUnmount(() => {
   laptopMedia = null;
   tabletMedia = null;
   mobileMedia = null;
+  syncMobileScrollLock(true);
 });
 
 function openCallsRegistry() {
@@ -417,6 +506,13 @@ function setAvatarStatus(message = '') {
   settingsState.avatarStatus = message;
 }
 
+function normalizeSettingsTile(tileId) {
+  const normalized = String(tileId || '').trim();
+  const fallback = 'about-me';
+  if (normalized === '') return fallback;
+  return settingsTiles.value.some((tile) => tile.id === normalized) ? normalized : fallback;
+}
+
 function closeSettingsModal() {
   if (settingsState.saving) return;
   settingsState.open = false;
@@ -424,42 +520,19 @@ function closeSettingsModal() {
   settingsState.loading = false;
   settingsState.message = '';
   settingsState.avatarStatus = '';
+  activeSettingsTile.value = 'about-me';
   resetSettingsDraft();
 }
 
-async function openSettingsModal() {
+function openSettingsModal(tileId = 'about-me') {
+  activeSettingsTile.value = normalizeSettingsTile(tileId);
   if (settingsState.open) return;
   settingsState.open = true;
-  settingsState.loading = true;
+  settingsState.loading = false;
   settingsState.message = '';
   settingsState.avatarStatus = '';
   settingsState.dragging = false;
   resetSettingsDraft();
-
-  try {
-    const result = await fetchSessionSettings();
-    if (!result.ok) {
-      settingsState.message = result.message || 'Could not load backend settings.';
-      if (result.reason === 'invalid_session') {
-        settingsState.open = false;
-        router.replace('/login');
-      }
-      return;
-    }
-
-    const user = result.user || {};
-    settingsDraft.displayName = typeof user.display_name === 'string' && user.display_name.trim() !== ''
-      ? user.display_name.trim()
-      : sessionState.displayName || '';
-    settingsDraft.theme = typeof user.theme === 'string' && user.theme.trim() !== ''
-      ? user.theme.trim()
-      : sessionState.theme || 'dark';
-    settingsDraft.timeFormat = typeof user.time_format === 'string' && user.time_format.trim() !== ''
-      ? user.time_format.trim()
-      : sessionState.timeFormat || '24h';
-  } finally {
-    settingsState.loading = false;
-  }
 }
 
 function readFileAsDataUrl(file) {

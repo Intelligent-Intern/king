@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../domain/users/user_management.php';
+require_once __DIR__ . '/../domain/users/user_settings.php';
+require_once __DIR__ . '/../domain/users/avatar_upload.php';
+
 function videochat_handle_user_routes(
     string $path,
     string $method,
@@ -80,7 +84,7 @@ function videochat_handle_user_routes(
                     'has_next' => $pageCount > 0 && $page < $pageCount,
                 ],
                 'sort' => [
-                    'role_priority' => ['admin', 'moderator', 'user'],
+                    'role_priority' => ['admin', 'user'],
                     'secondary' => $displayNameSecondary,
                     'tie_breaker' => 'id_asc',
                 ],
@@ -140,58 +144,198 @@ function videochat_handle_user_routes(
 
     if (preg_match('#^/api/admin/users/(\d+)$#', $path, $matches) === 1) {
         $userId = (int) ($matches[1] ?? 0);
-        if ($method !== 'PATCH') {
-            return $errorResponse(405, 'method_not_allowed', 'Use PATCH for /api/admin/users/{id}.', [
-                'allowed_methods' => ['PATCH'],
-            ]);
-        }
-
-        [$payload, $decodeError] = $decodeJsonBody($request);
-        if (!is_array($payload)) {
-            return $errorResponse(400, 'admin_user_invalid_request_body', 'User update payload must be a non-empty JSON object.', [
-                'reason' => $decodeError,
-            ]);
-        }
-
-        try {
-            $pdo = $openDatabase();
-            $updateResult = videochat_admin_update_user($pdo, $userId, $payload);
-        } catch (Throwable) {
-            return $errorResponse(500, 'admin_user_update_failed', 'Could not update user.', [
-                'reason' => 'internal_error',
-            ]);
-        }
-
-        $updateReason = (string) ($updateResult['reason'] ?? 'internal_error');
-        if (!(bool) ($updateResult['ok'] ?? false)) {
-            if ($updateReason === 'validation_failed') {
-                return $errorResponse(422, 'admin_user_validation_failed', 'User update payload failed validation.', [
-                    'fields' => is_array($updateResult['errors'] ?? null) ? $updateResult['errors'] : [],
+        if ($method === 'PATCH') {
+            [$payload, $decodeError] = $decodeJsonBody($request);
+            if (!is_array($payload)) {
+                return $errorResponse(400, 'admin_user_invalid_request_body', 'User update payload must be a non-empty JSON object.', [
+                    'reason' => $decodeError,
                 ]);
             }
-            if ($updateReason === 'email_conflict') {
-                return $errorResponse(409, 'admin_user_conflict', 'A user with that email already exists.', [
-                    'fields' => is_array($updateResult['errors'] ?? null) ? $updateResult['errors'] : ['email' => 'already_exists'],
+
+            try {
+                $pdo = $openDatabase();
+                $updateResult = videochat_admin_update_user($pdo, $userId, $payload);
+            } catch (Throwable) {
+                return $errorResponse(500, 'admin_user_update_failed', 'Could not update user.', [
+                    'reason' => 'internal_error',
                 ]);
             }
-            if ($updateReason === 'not_found') {
-                return $errorResponse(404, 'admin_user_not_found', 'The requested user does not exist.', [
+
+            $updateReason = (string) ($updateResult['reason'] ?? 'internal_error');
+            if (!(bool) ($updateResult['ok'] ?? false)) {
+                if ($updateReason === 'validation_failed') {
+                    return $errorResponse(422, 'admin_user_validation_failed', 'User update payload failed validation.', [
+                        'fields' => is_array($updateResult['errors'] ?? null) ? $updateResult['errors'] : [],
+                    ]);
+                }
+                if ($updateReason === 'email_conflict') {
+                    return $errorResponse(409, 'admin_user_conflict', 'A user with that email already exists.', [
+                        'fields' => is_array($updateResult['errors'] ?? null) ? $updateResult['errors'] : ['email' => 'already_exists'],
+                    ]);
+                }
+                if ($updateReason === 'not_found') {
+                    return $errorResponse(404, 'admin_user_not_found', 'The requested user does not exist.', [
+                        'user_id' => $userId,
+                    ]);
+                }
+
+                return $errorResponse(500, 'admin_user_update_failed', 'Could not update user.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'result' => [
+                    'state' => 'updated',
+                    'user' => $updateResult['user'] ?? null,
+                ],
+                'time' => gmdate('c'),
+            ]);
+        }
+
+        if ($method === 'DELETE') {
+            try {
+                $pdo = $openDatabase();
+                $deleteResult = videochat_admin_delete_user($pdo, $userId);
+            } catch (Throwable) {
+                return $errorResponse(500, 'admin_user_delete_failed', 'Could not delete user.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            $deleteReason = (string) ($deleteResult['reason'] ?? 'internal_error');
+            if (!(bool) ($deleteResult['ok'] ?? false)) {
+                if ($deleteReason === 'not_found') {
+                    return $errorResponse(404, 'admin_user_not_found', 'The requested user does not exist.', [
+                        'user_id' => $userId,
+                    ]);
+                }
+
+                return $errorResponse(500, 'admin_user_delete_failed', 'Could not delete user.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            $deletedUser = is_array($deleteResult['user'] ?? null) ? $deleteResult['user'] : [];
+            $avatarFileRemoved = videochat_avatar_delete_file_if_managed(
+                $avatarStorageRoot,
+                is_string($deletedUser['avatar_path'] ?? null) ? (string) $deletedUser['avatar_path'] : null
+            );
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'result' => [
+                    'state' => 'deleted',
                     'user_id' => $userId,
-                ]);
-            }
-
-            return $errorResponse(500, 'admin_user_update_failed', 'Could not update user.', [
-                'reason' => 'internal_error',
+                    'user' => $deletedUser,
+                    'deleted_calls' => (int) ($deleteResult['deleted_calls'] ?? 0),
+                    'deleted_invite_codes' => (int) ($deleteResult['deleted_invite_codes'] ?? 0),
+                    'avatar_file_removed' => $avatarFileRemoved,
+                ],
+                'time' => gmdate('c'),
             ]);
         }
 
-        return $jsonResponse(200, [
-            'status' => 'ok',
-            'result' => [
-                'state' => 'updated',
-                'user' => $updateResult['user'] ?? null,
-            ],
-            'time' => gmdate('c'),
+        return $errorResponse(405, 'method_not_allowed', 'Use PATCH or DELETE for /api/admin/users/{id}.', [
+            'allowed_methods' => ['PATCH', 'DELETE'],
+        ]);
+    }
+
+    if (preg_match('#^/api/admin/users/(\d+)/avatar$#', $path, $matches) === 1) {
+        $userId = (int) ($matches[1] ?? 0);
+        if ($method === 'POST') {
+            [$payload, $decodeError] = $decodeJsonBody($request);
+            if (!is_array($payload)) {
+                return $errorResponse(400, 'admin_user_avatar_invalid_request_body', 'Admin avatar upload payload must be a non-empty JSON object.', [
+                    'reason' => $decodeError,
+                ]);
+            }
+
+            try {
+                $pdo = $openDatabase();
+                $uploadResult = videochat_store_avatar_for_user(
+                    $pdo,
+                    $userId,
+                    $payload,
+                    $avatarStorageRoot,
+                    $avatarMaxBytes
+                );
+            } catch (Throwable) {
+                return $errorResponse(500, 'admin_user_avatar_upload_failed', 'Could not upload user avatar.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            if (!(bool) ($uploadResult['ok'] ?? false)) {
+                $reason = (string) ($uploadResult['reason'] ?? 'internal_error');
+                if ($reason === 'validation_failed') {
+                    return $errorResponse(422, 'admin_user_avatar_validation_failed', 'Admin avatar upload payload failed validation.', [
+                        'fields' => is_array($uploadResult['errors'] ?? null) ? $uploadResult['errors'] : [],
+                    ]);
+                }
+                if ($reason === 'not_found') {
+                    return $errorResponse(404, 'admin_user_not_found', 'The requested user does not exist.', [
+                        'user_id' => $userId,
+                    ]);
+                }
+
+                return $errorResponse(500, 'admin_user_avatar_upload_failed', 'Could not upload user avatar.', [
+                    'reason' => $reason,
+                ]);
+            }
+
+            return $jsonResponse(201, [
+                'status' => 'ok',
+                'result' => [
+                    'state' => 'uploaded',
+                    'user_id' => $userId,
+                    'avatar_path' => $uploadResult['avatar_path'] ?? null,
+                    'content_type' => $uploadResult['content_type'] ?? null,
+                    'bytes' => (int) ($uploadResult['bytes'] ?? 0),
+                    'file_name' => $uploadResult['file_name'] ?? null,
+                ],
+                'time' => gmdate('c'),
+            ]);
+        }
+
+        if ($method === 'DELETE') {
+            try {
+                $pdo = $openDatabase();
+                $deleteAvatarResult = videochat_delete_avatar_for_user($pdo, $userId, $avatarStorageRoot);
+            } catch (Throwable) {
+                return $errorResponse(500, 'admin_user_avatar_delete_failed', 'Could not delete user avatar.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            $deleteReason = (string) ($deleteAvatarResult['reason'] ?? 'internal_error');
+            if (!(bool) ($deleteAvatarResult['ok'] ?? false)) {
+                if ($deleteReason === 'not_found') {
+                    return $errorResponse(404, 'admin_user_not_found', 'The requested user does not exist.', [
+                        'user_id' => $userId,
+                    ]);
+                }
+
+                return $errorResponse(500, 'admin_user_avatar_delete_failed', 'Could not delete user avatar.', [
+                    'reason' => $deleteReason,
+                ]);
+            }
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'result' => [
+                    'state' => $deleteReason,
+                    'user_id' => $userId,
+                    'avatar_path' => $deleteAvatarResult['avatar_path'] ?? null,
+                    'avatar_file_removed' => (bool) ($deleteAvatarResult['removed_file'] ?? false),
+                ],
+                'time' => gmdate('c'),
+            ]);
+        }
+
+        return $errorResponse(405, 'method_not_allowed', 'Use POST or DELETE for /api/admin/users/{id}/avatar.', [
+            'allowed_methods' => ['POST', 'DELETE'],
         ]);
     }
 

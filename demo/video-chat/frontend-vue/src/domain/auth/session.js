@@ -2,7 +2,7 @@ import { reactive } from 'vue';
 import { resolveBackendOrigin } from '../../support/backendOrigin';
 
 const STORAGE_KEY = 'ii_videocall_v1_session';
-const AUTH_ROLES = new Set(['admin', 'moderator', 'user']);
+const AUTH_ROLES = new Set(['admin', 'user']);
 
 function normalizeRole(value) {
   const role = String(value || '').trim().toLowerCase();

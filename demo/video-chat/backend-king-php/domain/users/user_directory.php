@@ -133,8 +133,7 @@ INNER JOIN roles ON roles.id = users.role_id
 ORDER BY
     CASE roles.slug
         WHEN 'admin' THEN 0
-        WHEN 'moderator' THEN 1
-        ELSE 2
+        ELSE 1
     END ASC,
     lower(users.display_name) {$displayNameDirection},
     users.id ASC

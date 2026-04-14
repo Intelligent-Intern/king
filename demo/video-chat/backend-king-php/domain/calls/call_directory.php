@@ -40,7 +40,7 @@ function videochat_calls_list_filters(array $queryParams, string $authRole): arr
     }
 
     $normalizedRole = videochat_normalize_role_slug($authRole);
-    $canReadAll = in_array($normalizedRole, ['admin', 'moderator'], true);
+    $canReadAll = $normalizedRole === 'admin';
     $effectiveScope = $requestedScope === 'all' && !$canReadAll ? 'my' : $requestedScope;
 
     $pageRaw = $queryParams['page'] ?? '1';

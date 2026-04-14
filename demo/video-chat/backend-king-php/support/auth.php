@@ -263,7 +263,7 @@ function videochat_authenticate_request(PDO $pdo, array $request, string $transp
 function videochat_normalize_role_slug(string $role): string
 {
     $normalized = strtolower(trim($role));
-    return in_array($normalized, ['admin', 'moderator', 'user'], true) ? $normalized : 'unknown';
+    return in_array($normalized, ['admin', 'user'], true) ? $normalized : 'unknown';
 }
 
 /**
@@ -287,7 +287,7 @@ function videochat_rbac_permission_matrix(string $wsPath = '/ws'): array
         $normalizedWsPath = '/' . $normalizedWsPath;
     }
 
-    $authenticatedRoles = ['admin', 'moderator', 'user'];
+    $authenticatedRoles = ['admin', 'user'];
 
     return [
         [
@@ -316,7 +316,7 @@ function videochat_rbac_permission_matrix(string $wsPath = '/ws'): array
             'transport' => 'rest',
             'matcher' => 'prefix',
             'prefix' => '/api/moderation/',
-            'allowed_roles' => ['admin', 'moderator'],
+            'allowed_roles' => ['admin'],
         ],
         [
             'id' => 'rest_calls_collection',

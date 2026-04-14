@@ -38,10 +38,8 @@ function videochat_demo_user_blueprint(): array
 {
     $adminEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_ADMIN_EMAIL') ?: 'admin@intelligent-intern.com')));
     $userEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_USER_EMAIL') ?: 'user@intelligent-intern.com')));
-    $moderatorEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_MODERATOR_EMAIL') ?: 'moderator@intelligent-intern.com')));
     $adminPassword = trim((string) (getenv('VIDEOCHAT_DEMO_ADMIN_PASSWORD') ?: 'admin123'));
     $userPassword = trim((string) (getenv('VIDEOCHAT_DEMO_USER_PASSWORD') ?: 'user123'));
-    $moderatorPassword = trim((string) (getenv('VIDEOCHAT_DEMO_MODERATOR_PASSWORD') ?: 'moderator123'));
 
     if ($adminEmail === '' || filter_var($adminEmail, FILTER_VALIDATE_EMAIL) === false) {
         throw new InvalidArgumentException('VIDEOCHAT_DEMO_ADMIN_EMAIL must be a valid email address.');
@@ -49,33 +47,18 @@ function videochat_demo_user_blueprint(): array
     if ($userEmail === '' || filter_var($userEmail, FILTER_VALIDATE_EMAIL) === false) {
         throw new InvalidArgumentException('VIDEOCHAT_DEMO_USER_EMAIL must be a valid email address.');
     }
-    if ($moderatorEmail === '' || filter_var($moderatorEmail, FILTER_VALIDATE_EMAIL) === false) {
-        throw new InvalidArgumentException('VIDEOCHAT_DEMO_MODERATOR_EMAIL must be a valid email address.');
-    }
     if ($adminPassword === '') {
         throw new InvalidArgumentException('VIDEOCHAT_DEMO_ADMIN_PASSWORD must not be empty.');
     }
     if ($userPassword === '') {
         throw new InvalidArgumentException('VIDEOCHAT_DEMO_USER_PASSWORD must not be empty.');
     }
-    if ($moderatorPassword === '') {
-        throw new InvalidArgumentException('VIDEOCHAT_DEMO_MODERATOR_PASSWORD must not be empty.');
-    }
-
     $users = [
         [
             'email' => $adminEmail,
             'display_name' => 'Platform Admin',
             'role' => 'admin',
             'password' => $adminPassword,
-            'time_format' => '24h',
-            'theme' => 'dark',
-        ],
-        [
-            'email' => $moderatorEmail,
-            'display_name' => 'Call Moderator',
-            'role' => 'moderator',
-            'password' => $moderatorPassword,
             'time_format' => '24h',
             'theme' => 'dark',
         ],
@@ -259,6 +242,7 @@ function videochat_demo_seed_calls_enabled(): bool
  *     source: string,
  *     email: string,
  *     display_name: string,
+ *     call_role: string,
  *     invite_state: string,
  *     joined_at: ?string,
  *     left_at: ?string
@@ -273,19 +257,19 @@ function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null
 
     $effectiveNow = $nowUnix ?? time();
     $adminEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_ADMIN_EMAIL') ?: 'admin@intelligent-intern.com')));
-    $moderatorEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_MODERATOR_EMAIL') ?: 'moderator@intelligent-intern.com')));
+    $userEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_USER_EMAIL') ?: 'user@intelligent-intern.com')));
 
     if (!isset($usersByEmail[$adminEmail])) {
         return [];
     }
 
     $internalEmails = [$adminEmail];
-    if (isset($usersByEmail[$moderatorEmail])) {
-        $internalEmails[] = $moderatorEmail;
+    if ($userEmail !== $adminEmail && isset($usersByEmail[$userEmail])) {
+        $internalEmails[] = $userEmail;
     }
 
     $baseInternalParticipants = [];
-    foreach ($internalEmails as $email) {
+    foreach ($internalEmails as $index => $email) {
         $user = $usersByEmail[$email] ?? null;
         if (!is_array($user)) {
             continue;
@@ -295,6 +279,7 @@ function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null
             'source' => 'internal',
             'email' => strtolower(trim((string) ($user['email'] ?? ''))),
             'display_name' => (string) ($user['display_name'] ?? 'User'),
+            'call_role' => $index === 0 ? 'owner' : ($index === 1 ? 'moderator' : 'participant'),
             'invite_state' => 'accepted',
             'joined_at' => null,
             'left_at' => null,
@@ -325,6 +310,7 @@ function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null
                     'source' => 'external',
                     'email' => 'guest.architecture@example.com',
                     'display_name' => 'Guest Architect',
+                    'call_role' => 'participant',
                     'invite_state' => 'pending',
                     'joined_at' => null,
                     'left_at' => null,
@@ -437,8 +423,8 @@ SQL
     $deleteParticipants = $pdo->prepare('DELETE FROM call_participants WHERE call_id = :call_id');
     $insertParticipant = $pdo->prepare(
         <<<'SQL'
-INSERT INTO call_participants(call_id, user_id, email, display_name, source, invite_state, joined_at, left_at)
-VALUES(:call_id, :user_id, :email, :display_name, :source, :invite_state, :joined_at, :left_at)
+INSERT INTO call_participants(call_id, user_id, email, display_name, source, call_role, invite_state, joined_at, left_at)
+VALUES(:call_id, :user_id, :email, :display_name, :source, :call_role, :invite_state, :joined_at, :left_at)
 SQL
     );
 
@@ -465,11 +451,13 @@ SQL
             ':created_at' => gmdate('c'),
             ':updated_at' => gmdate('c'),
         ];
+        $updateCallPayload = $callPayload;
+        unset($updateCallPayload[':created_at']);
 
         $selectCall->execute([':id' => $callId]);
         $existing = $selectCall->fetch();
         if (is_array($existing)) {
-            $updateCall->execute($callPayload);
+            $updateCall->execute($updateCallPayload);
         } else {
             $insertCall->execute($callPayload);
         }
@@ -509,12 +497,23 @@ SQL
                 $inviteState = 'pending';
             }
 
+            $callRole = strtolower(trim((string) ($participant['call_role'] ?? 'participant')));
+            if (!in_array($callRole, ['owner', 'moderator', 'participant'], true)) {
+                $callRole = 'participant';
+            }
+            if ($source !== 'internal') {
+                $callRole = 'participant';
+            } elseif ($email === $ownerEmail) {
+                $callRole = 'owner';
+            }
+
             $insertParticipant->execute([
                 ':call_id' => $callId,
                 ':user_id' => $userId,
                 ':email' => $email,
                 ':display_name' => $displayName,
                 ':source' => $source,
+                ':call_role' => $callRole,
                 ':invite_state' => $inviteState,
                 ':joined_at' => is_string($participant['joined_at'] ?? null) ? (string) $participant['joined_at'] : null,
                 ':left_at' => is_string($participant['left_at'] ?? null) ? (string) $participant['left_at'] : null,
@@ -588,7 +587,6 @@ SQL,
                 <<<'SQL'
 INSERT OR IGNORE INTO roles (slug, name, description, is_system) VALUES
   ('admin', 'Admin', 'Platform administrator', 1),
-  ('moderator', 'Moderator', 'Room/call moderation role', 1),
   ('user', 'User', 'Standard workspace user', 1)
 SQL,
             ],
@@ -688,6 +686,41 @@ SQL,
             'name' => '0004_calls_cancel_message',
             'statements' => [
                 "ALTER TABLE calls ADD COLUMN cancel_message TEXT",
+            ],
+        ],
+        5 => [
+            'name' => '0005_remove_global_moderator_role',
+            'statements' => [
+                <<<'SQL'
+UPDATE users
+SET role_id = (SELECT id FROM roles WHERE slug = 'user' LIMIT 1)
+WHERE role_id = (SELECT id FROM roles WHERE slug = 'moderator' LIMIT 1)
+  AND EXISTS (SELECT 1 FROM roles WHERE slug = 'user')
+SQL,
+                "DELETE FROM roles WHERE slug = 'moderator'",
+            ],
+        ],
+        6 => [
+            'name' => '0006_call_participant_roles',
+            'statements' => [
+                "ALTER TABLE call_participants ADD COLUMN call_role TEXT NOT NULL DEFAULT 'participant' CHECK (call_role IN ('owner', 'moderator', 'participant'))",
+                <<<'SQL'
+UPDATE call_participants
+SET call_role = 'owner'
+WHERE source = 'internal'
+  AND user_id IS NOT NULL
+  AND EXISTS (
+      SELECT 1
+      FROM calls
+      WHERE calls.id = call_participants.call_id
+        AND calls.owner_user_id = call_participants.user_id
+  )
+SQL,
+                <<<'SQL'
+UPDATE call_participants
+SET call_role = 'participant'
+WHERE call_role IS NULL OR trim(call_role) = ''
+SQL,
             ],
         ],
     ];

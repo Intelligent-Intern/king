@@ -189,13 +189,9 @@
 
         <div class="calls-modal-body">
           <section class="calls-modal-grid">
-            <label class="field">
+            <label class="field calls-field-wide">
               <span>Title</span>
               <input v-model="composeState.title" class="input" type="text" placeholder="Weekly Product Sync" />
-            </label>
-            <label class="field">
-              <span>Room ID</span>
-              <input v-model="composeState.roomId" class="input" type="text" placeholder="lobby" />
             </label>
             <label class="field">
               <span>Starts at</span>
@@ -294,6 +290,15 @@
         </div>
 
         <footer class="calls-modal-footer">
+          <button
+            v-if="composeCanDelete"
+            class="btn calls-btn-danger"
+            type="button"
+            :disabled="composeState.submitting"
+            @click="deleteComposeEvent"
+          >
+            Delete
+          </button>
           <button class="btn" type="button" :disabled="composeState.submitting" @click="closeCompose">Close</button>
           <button class="btn" type="button" :disabled="composeState.submitting" @click="submitCompose">
             {{ composeState.submitting ? 'Saving…' : composeSubmitLabel }}
@@ -307,6 +312,10 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { Calendar } from '@fullcalendar/core';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
 
 const router = useRouter();
 const activeOverviewView = ref('dashboard');
@@ -315,8 +324,6 @@ let calendarInstance = null;
 let lastDateKey = '';
 let lastDateClickAt = 0;
 let nextCalendarEventId = 1000;
-const FULLCALENDAR_SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js';
-let fullCalendarScriptPromise = null;
 
 const runningCallsRows = ref([
   {
@@ -405,7 +412,7 @@ const myCallsRows = ref([
     statusLabel: 'running',
     statusTagClass: 'ok',
     users: 8,
-    roomId: 'lobby',
+    roomId: '2fcb4d0f-2616-43f7-bfe5-8e108f9e9e6a',
   },
   {
     id: 'call-backend-sync',
@@ -415,14 +422,14 @@ const myCallsRows = ref([
     statusLabel: 'scheduled',
     statusTagClass: 'warn',
     users: 0,
-    roomId: 'lobby',
+    roomId: '0e5f2d9f-83b4-4f39-94f4-f83347fef04b',
   },
 ]);
 
 const registeredUsers = [
   { id: 1, display_name: 'Jochen', email: 'jochen@kingrt.com', role: 'admin' },
-  { id: 2, display_name: 'Anna Meyer', email: 'anna@kingrt.com', role: 'moderator' },
-  { id: 3, display_name: 'Luca Klein', email: 'luca@kingrt.com', role: 'moderator' },
+  { id: 2, display_name: 'Anna Meyer', email: 'anna@kingrt.com', role: 'user' },
+  { id: 3, display_name: 'Luca Klein', email: 'luca@kingrt.com', role: 'user' },
   { id: 4, display_name: 'Sara Hoffmann', email: 'sara@kingrt.com', role: 'user' },
   { id: 5, display_name: 'Lea Bauer', email: 'lea@kingrt.com', role: 'user' },
   { id: 6, display_name: 'Jonas Brandt', email: 'jonas@kingrt.com', role: 'user' },
@@ -433,7 +440,7 @@ const composeState = reactive({
   mode: 'schedule',
   calendarEventId: '',
   title: '',
-  roomId: 'lobby',
+  roomUuid: '',
   startsLocal: '',
   endsLocal: '',
   submitting: false,
@@ -454,6 +461,10 @@ const composeHeadline = computed(() => (
 
 const composeSubmitLabel = computed(() => (
   composeState.mode === 'edit' ? 'Save changes' : 'Schedule call'
+));
+
+const composeCanDelete = computed(() => (
+  composeState.mode === 'edit' && String(composeState.calendarEventId || '').trim() !== ''
 ));
 
 const filteredRegisteredUsers = computed(() => {
@@ -523,6 +534,18 @@ function localInputToIso(localValue) {
   return date.toISOString();
 }
 
+function generateRoomUuid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const randomNibble = Math.floor(Math.random() * 16);
+    const value = char === 'x' ? randomNibble : ((randomNibble & 0x3) | 0x8);
+    return value.toString(16);
+  });
+}
+
 function nextExternalRow(initial = {}) {
   composeExternalRowId += 1;
   return {
@@ -535,7 +558,7 @@ function nextExternalRow(initial = {}) {
 function resetComposeModal() {
   composeState.calendarEventId = '';
   composeState.title = '';
-  composeState.roomId = 'lobby';
+  composeState.roomUuid = '';
   composeState.startsLocal = '';
   composeState.endsLocal = '';
   composeState.submitting = false;
@@ -549,7 +572,7 @@ function openComposeFromPreset({
   mode = 'schedule',
   eventId = '',
   title = 'New Video Call',
-  roomId = 'lobby',
+  roomUuid = '',
   startsAt,
   endsAt,
   internalParticipantUserIds = [],
@@ -560,7 +583,7 @@ function openComposeFromPreset({
   composeState.open = true;
   composeState.calendarEventId = String(eventId || '');
   composeState.title = String(title || 'New Video Call').trim() || 'New Video Call';
-  composeState.roomId = String(roomId || 'lobby').trim() || 'lobby';
+  composeState.roomUuid = String(roomUuid || '').trim() || generateRoomUuid();
   composeState.startsLocal = isoToLocalInput(startsAt instanceof Date ? startsAt.toISOString() : String(startsAt || ''));
   composeState.endsLocal = isoToLocalInput(endsAt instanceof Date ? endsAt.toISOString() : String(endsAt || ''));
   composeSelectedUserIds.value = Array.isArray(internalParticipantUserIds)
@@ -609,7 +632,7 @@ function openComposeForEvent(eventApi) {
     mode: 'edit',
     eventId: eventApi.id,
     title: eventApi.title,
-    roomId: String(extended.roomId || 'lobby'),
+    roomUuid: String(extended.roomUuid || extended.roomId || ''),
     startsAt: eventApi.start,
     endsAt: eventApi.end || new Date((eventApi.start instanceof Date ? eventApi.start.getTime() : Date.now()) + 45 * 60 * 1000),
     internalParticipantUserIds: Array.isArray(extended.internalParticipantUserIds) ? extended.internalParticipantUserIds : [],
@@ -621,6 +644,22 @@ function closeCompose() {
   composeState.open = false;
   composeState.submitting = false;
   composeState.error = '';
+}
+
+function deleteComposeEvent() {
+  if (!composeCanDelete.value) return;
+
+  const eventId = String(composeState.calendarEventId || '').trim();
+  if (eventId !== '' && calendarInstance) {
+    const eventApi = calendarInstance.getEventById(eventId);
+    eventApi?.remove();
+  }
+
+  if (eventId !== '') {
+    myCallsRows.value = myCallsRows.value.filter((row) => String(row.id) !== eventId);
+  }
+
+  closeCompose();
 }
 
 function isUserSelected(userId) {
@@ -683,7 +722,7 @@ function deriveStatus(startIso, endIso) {
   return { label: 'scheduled', tagClass: 'warn' };
 }
 
-function upsertMyCallsRow(eventId, title, roomId, startsAtIso, endsAtIso, usersCount) {
+function upsertMyCallsRow(eventId, title, roomUuid, startsAtIso, endsAtIso, usersCount) {
   const status = deriveStatus(startsAtIso, endsAtIso);
   const nextRow = {
     id: String(eventId),
@@ -693,7 +732,7 @@ function upsertMyCallsRow(eventId, title, roomId, startsAtIso, endsAtIso, usersC
     statusLabel: status.label,
     statusTagClass: status.tagClass,
     users: Number(usersCount || 0),
-    roomId: String(roomId || 'lobby'),
+    roomId: String(roomUuid || ''),
   };
 
   const rows = myCallsRows.value.slice();
@@ -737,7 +776,8 @@ function submitCompose() {
     return;
   }
 
-  const roomId = String(composeState.roomId || '').trim() || 'lobby';
+  const roomUuid = String(composeState.roomUuid || '').trim() || generateRoomUuid();
+  composeState.roomUuid = roomUuid;
   const internalParticipantUserIds = composeSelectedUserIds.value.slice();
   const externalParticipants = normalizedExternal.rows;
   const participantsTotal = internalParticipantUserIds.length + externalParticipants.length;
@@ -753,7 +793,8 @@ function submitCompose() {
   if (eventApi) {
     eventApi.setProp('title', title);
     eventApi.setDates(startDate, endDate, { allDay: false });
-    eventApi.setExtendedProp('roomId', roomId);
+    eventApi.setExtendedProp('roomUuid', roomUuid);
+    eventApi.setExtendedProp('roomId', roomUuid);
     eventApi.setExtendedProp('internalParticipantUserIds', internalParticipantUserIds);
     eventApi.setExtendedProp('externalParticipants', externalParticipants);
   } else if (calendarInstance) {
@@ -765,7 +806,8 @@ function submitCompose() {
       end: endDate,
       allDay: false,
       extendedProps: {
-        roomId,
+        roomUuid,
+        roomId: roomUuid,
         internalParticipantUserIds,
         externalParticipants,
       },
@@ -774,7 +816,7 @@ function submitCompose() {
     eventId = nextGeneratedEventId();
   }
 
-  upsertMyCallsRow(eventId, title, roomId, startsAt, endsAt, participantsTotal);
+  upsertMyCallsRow(eventId, title, roomUuid, startsAt, endsAt, participantsTotal);
   closeCompose();
 }
 
@@ -785,98 +827,83 @@ function handleEscape(event) {
   }
 }
 
-function loadFullCalendarGlobal() {
-  if (typeof window === 'undefined') return Promise.resolve(null);
-  if (window.FullCalendar && typeof window.FullCalendar.Calendar === 'function') {
-    return Promise.resolve(window.FullCalendar);
-  }
-
-  if (!fullCalendarScriptPromise) {
-    fullCalendarScriptPromise = new Promise((resolve, reject) => {
-      const existing = document.querySelector('script[data-fullcalendar-global="true"]');
-      if (existing instanceof HTMLScriptElement) {
-        existing.addEventListener('load', () => resolve(window.FullCalendar || null), { once: true });
-        existing.addEventListener('error', () => reject(new Error('Could not load FullCalendar.')), { once: true });
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = FULLCALENDAR_SCRIPT_URL;
-      script.async = true;
-      script.dataset.fullcalendarGlobal = 'true';
-      script.addEventListener('load', () => {
-        if (window.FullCalendar && typeof window.FullCalendar.Calendar === 'function') {
-          resolve(window.FullCalendar);
-          return;
-        }
-        reject(new Error('FullCalendar global runtime is unavailable.'));
-      }, { once: true });
-      script.addEventListener('error', () => reject(new Error('Could not load FullCalendar.')), { once: true });
-      document.head.appendChild(script);
-    });
-  }
-
-  return fullCalendarScriptPromise;
-}
-
 async function initOverviewCalendar() {
   if (!(overviewCalendarEl.value instanceof HTMLElement) || calendarInstance) return;
-  const fullCalendar = await loadFullCalendarGlobal().catch(() => null);
-  if (!fullCalendar || !(overviewCalendarEl.value instanceof HTMLElement) || calendarInstance) return;
+  try {
+    calendarInstance = new Calendar(overviewCalendarEl.value, {
+      plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
+      initialView: 'dayGridMonth',
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth,timeGridWeek,timeGridDay',
+      },
+      height: 'auto',
+      contentHeight: 'auto',
+      eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+      selectable: true,
+      editable: false,
+      events: [
+        {
+          id: 'call-sales-standup',
+          title: 'Sales Standup',
+          start: '2026-04-13T09:00:00',
+          end: '2026-04-13T09:30:00',
+          extendedProps: {
+            roomUuid: '2fcb4d0f-2616-43f7-bfe5-8e108f9e9e6a',
+            roomId: '2fcb4d0f-2616-43f7-bfe5-8e108f9e9e6a',
+            internalParticipantUserIds: [1, 2, 3],
+            externalParticipants: [],
+          },
+        },
+        {
+          id: 'call-backend-sync',
+          title: 'Backend Sync',
+          start: '2026-04-13T10:00:00',
+          end: '2026-04-13T11:00:00',
+          extendedProps: {
+            roomUuid: '0e5f2d9f-83b4-4f39-94f4-f83347fef04b',
+            roomId: '0e5f2d9f-83b4-4f39-94f4-f83347fef04b',
+            internalParticipantUserIds: [],
+            externalParticipants: [],
+          },
+        },
+        {
+          id: 'call-incident-bridge',
+          title: 'Incident Bridge',
+          start: '2026-04-13T11:30:00',
+          end: '2026-04-13T12:30:00',
+          extendedProps: {
+            roomUuid: '8ee8fbf5-7f9f-47dd-8ece-5a19f7aa8059',
+            roomId: '8ee8fbf5-7f9f-47dd-8ece-5a19f7aa8059',
+            internalParticipantUserIds: [1, 2, 4],
+            externalParticipants: [],
+          },
+        },
+      ],
+      dateClick(info) {
+        const now = Date.now();
+        const dateKey = `${String(info.view?.type || '')}:${info.dateStr}`;
+        const isDoubleClick = dateKey === lastDateKey && now - lastDateClickAt < 360;
+        lastDateKey = dateKey;
+        lastDateClickAt = now;
+        if (!isDoubleClick) return;
+        openComposeForDoubleClick(info.date instanceof Date ? info.date : new Date(info.dateStr));
+      },
+      eventClick(info) {
+        openComposeForEvent(info.event);
+      },
+      select(info) {
+        if (String(info.view?.type || '') !== 'timeGridDay') return;
+        openComposeForSelection(info.start, info.end);
+        calendarInstance?.unselect();
+      },
+    });
 
-  calendarInstance = new fullCalendar.Calendar(overviewCalendarEl.value, {
-    initialView: 'dayGridMonth',
-    headerToolbar: {
-      left: 'prev,next today',
-      center: 'title',
-      right: 'dayGridMonth,timeGridWeek,timeGridDay',
-    },
-    eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
-    selectable: true,
-    editable: false,
-    events: [
-      {
-        id: 'call-sales-standup',
-        title: 'Sales Standup',
-        start: '2026-04-13T09:00:00',
-        end: '2026-04-13T09:30:00',
-        extendedProps: { roomId: 'lobby', internalParticipantUserIds: [1, 2, 3], externalParticipants: [] },
-      },
-      {
-        id: 'call-backend-sync',
-        title: 'Backend Sync',
-        start: '2026-04-13T10:00:00',
-        end: '2026-04-13T11:00:00',
-        extendedProps: { roomId: 'lobby', internalParticipantUserIds: [], externalParticipants: [] },
-      },
-      {
-        id: 'call-incident-bridge',
-        title: 'Incident Bridge',
-        start: '2026-04-13T11:30:00',
-        end: '2026-04-13T12:30:00',
-        extendedProps: { roomId: 'incident', internalParticipantUserIds: [1, 2, 4], externalParticipants: [] },
-      },
-    ],
-    dateClick(info) {
-      const now = Date.now();
-      const dateKey = `${String(info.view?.type || '')}:${info.dateStr}`;
-      const isDoubleClick = dateKey === lastDateKey && now - lastDateClickAt < 360;
-      lastDateKey = dateKey;
-      lastDateClickAt = now;
-      if (!isDoubleClick) return;
-      openComposeForDoubleClick(info.date instanceof Date ? info.date : new Date(info.dateStr));
-    },
-    eventClick(info) {
-      openComposeForEvent(info.event);
-    },
-    select(info) {
-      if (String(info.view?.type || '') !== 'timeGridDay') return;
-      openComposeForSelection(info.start, info.end);
-      calendarInstance?.unselect();
-    },
-  });
-
-  calendarInstance.render();
+    calendarInstance.render();
+  } catch {
+    calendarInstance = null;
+  }
 }
 
 onMounted(() => {
@@ -1048,6 +1075,10 @@ watch(activeOverviewView, async (view) => {
   gap: 10px;
 }
 
+.calls-field-wide {
+  grid-column: 1 / -1;
+}
+
 .calls-participants-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -1159,6 +1190,14 @@ watch(activeOverviewView, async (view) => {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.calls-btn-danger {
+  background: var(--danger);
+}
+
+.calls-btn-danger:hover {
+  background: #cc0000;
 }
 
 :deep(.fc-theme-standard .fc-scrollgrid),

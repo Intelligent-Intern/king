@@ -248,6 +248,7 @@ function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload): arra
         'email' => $ownerEmail,
         'display_name' => (string) $owner['display_name'],
         'source' => 'internal',
+        'call_role' => 'owner',
         'invite_state' => 'accepted',
         'is_owner' => true,
     ];
@@ -263,6 +264,7 @@ function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload): arra
             'email' => $email,
             'display_name' => (string) $internalUser['display_name'],
             'source' => 'internal',
+            'call_role' => 'participant',
             'invite_state' => 'pending',
             'is_owner' => false,
         ];
@@ -320,8 +322,8 @@ SQL
 
         $insertParticipant = $pdo->prepare(
             <<<'SQL'
-INSERT INTO call_participants(call_id, user_id, email, display_name, source, invite_state, joined_at, left_at)
-VALUES(:call_id, :user_id, :email, :display_name, :source, :invite_state, :joined_at, :left_at)
+INSERT INTO call_participants(call_id, user_id, email, display_name, source, call_role, invite_state, joined_at, left_at)
+VALUES(:call_id, :user_id, :email, :display_name, :source, :call_role, :invite_state, :joined_at, :left_at)
 SQL
         );
 
@@ -332,6 +334,7 @@ SQL
                 ':email' => $participant['email'],
                 ':display_name' => $participant['display_name'],
                 ':source' => $participant['source'],
+                ':call_role' => (string) ($participant['call_role'] ?? 'participant'),
                 ':invite_state' => $participant['invite_state'],
                 ':joined_at' => null,
                 ':left_at' => null,
@@ -344,6 +347,7 @@ SQL
                 ':email' => $participant['email'],
                 ':display_name' => $participant['display_name'],
                 ':source' => $participant['source'],
+                ':call_role' => 'participant',
                 ':invite_state' => $participant['invite_state'],
                 ':joined_at' => null,
                 ':left_at' => null,
@@ -387,12 +391,18 @@ SQL
             'participants' => [
                 'internal' => array_map(
                     static function (array $participant): array {
+                        $callRole = strtolower(trim((string) ($participant['call_role'] ?? 'participant')));
+                        if (!in_array($callRole, ['owner', 'moderator', 'participant'], true)) {
+                            $callRole = 'participant';
+                        }
                         return [
                             'user_id' => (int) $participant['user_id'],
                             'email' => (string) $participant['email'],
                             'display_name' => (string) $participant['display_name'],
+                            'call_role' => $callRole,
                             'invite_state' => (string) $participant['invite_state'],
                             'is_owner' => (bool) ($participant['is_owner'] ?? false),
+                            'is_moderator' => $callRole === 'moderator',
                         ];
                     },
                     $internalParticipants
@@ -493,7 +503,7 @@ SQL
 function videochat_can_edit_call(string $authRole, int $authUserId, int $ownerUserId): bool
 {
     $role = strtolower(trim($authRole));
-    if (in_array($role, ['admin', 'moderator'], true)) {
+    if ($role === 'admin') {
         return true;
     }
 
@@ -506,6 +516,7 @@ function videochat_can_edit_call(string $authRole, int $authUserId, int $ownerUs
  *     user_id: int,
  *     email: string,
  *     display_name: string,
+ *     call_role: string,
  *     invite_state: string
  *   }>,
  *   external: array<int, array{
@@ -519,7 +530,7 @@ function videochat_fetch_call_participants(PDO $pdo, string $callId): array
 {
     $statement = $pdo->prepare(
         <<<'SQL'
-SELECT call_id, user_id, email, display_name, source, invite_state
+SELECT call_id, user_id, email, display_name, source, call_role, invite_state
 FROM call_participants
 WHERE call_id = :call_id
 ORDER BY source ASC, email ASC
@@ -538,10 +549,15 @@ SQL
         $source = strtolower(trim((string) ($row['source'] ?? '')));
         $inviteState = (string) ($row['invite_state'] ?? 'pending');
         if ($source === 'internal') {
+            $callRole = strtolower(trim((string) ($row['call_role'] ?? 'participant')));
+            if (!in_array($callRole, ['owner', 'moderator', 'participant'], true)) {
+                $callRole = 'participant';
+            }
             $internal[] = [
                 'user_id' => (int) ($row['user_id'] ?? 0),
                 'email' => strtolower((string) ($row['email'] ?? '')),
                 'display_name' => (string) ($row['display_name'] ?? ''),
+                'call_role' => $callRole,
                 'invite_state' => $inviteState,
             ];
             continue;
@@ -833,6 +849,18 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
 
     $participantsNeedUpdate = (bool) $data['has_internal_participants'] || (bool) $data['has_external_participants'];
     $currentParticipants = videochat_fetch_call_participants($pdo, (string) $existingCall['id']);
+    $currentInternalRoleByUserId = [];
+    foreach ((array) ($currentParticipants['internal'] ?? []) as $participant) {
+        $participantUserId = (int) ($participant['user_id'] ?? 0);
+        if ($participantUserId <= 0) {
+            continue;
+        }
+        $participantRole = strtolower(trim((string) ($participant['call_role'] ?? 'participant')));
+        if (!in_array($participantRole, ['owner', 'moderator', 'participant'], true)) {
+            $participantRole = 'participant';
+        }
+        $currentInternalRoleByUserId[$participantUserId] = $participantRole;
+    }
 
     if ((bool) $data['has_internal_participants']) {
         $requestedInternalIds = array_values(array_unique(array_filter(
@@ -856,6 +884,7 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
             'user_id' => (int) $existingCall['owner_user_id'],
             'email' => $ownerEmail,
             'display_name' => (string) $existingCall['owner_display_name'],
+            'call_role' => 'owner',
             'invite_state' => 'accepted',
             'is_owner' => true,
         ];
@@ -868,6 +897,9 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
                 'user_id' => (int) $internalUser['id'],
                 'email' => strtolower((string) $internalUser['email']),
                 'display_name' => (string) $internalUser['display_name'],
+                'call_role' => (($currentInternalRoleByUserId[(int) $internalUser['id']] ?? 'participant') === 'moderator')
+                    ? 'moderator'
+                    : 'participant',
                 'invite_state' => 'pending',
                 'is_owner' => false,
             ];
@@ -883,6 +915,7 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
                 'user_id' => $userId,
                 'email' => strtolower((string) ($participant['email'] ?? '')),
                 'display_name' => (string) ($participant['display_name'] ?? ''),
+                'call_role' => (string) ($participant['call_role'] ?? ($userId === (int) $existingCall['owner_user_id'] ? 'owner' : 'participant')),
                 'invite_state' => (string) ($participant['invite_state'] ?? 'pending'),
                 'is_owner' => $userId === (int) $existingCall['owner_user_id'],
             ];
@@ -973,18 +1006,23 @@ SQL
 
             $insertParticipant = $pdo->prepare(
                 <<<'SQL'
-INSERT INTO call_participants(call_id, user_id, email, display_name, source, invite_state, joined_at, left_at)
-VALUES(:call_id, :user_id, :email, :display_name, :source, :invite_state, :joined_at, :left_at)
+INSERT INTO call_participants(call_id, user_id, email, display_name, source, call_role, invite_state, joined_at, left_at)
+VALUES(:call_id, :user_id, :email, :display_name, :source, :call_role, :invite_state, :joined_at, :left_at)
 SQL
             );
 
             foreach ($nextInternalParticipants as $participant) {
+                $participantCallRole = strtolower(trim((string) ($participant['call_role'] ?? 'participant')));
+                if (!in_array($participantCallRole, ['owner', 'moderator', 'participant'], true)) {
+                    $participantCallRole = 'participant';
+                }
                 $insertParticipant->execute([
                     ':call_id' => (string) $existingCall['id'],
                     ':user_id' => (int) $participant['user_id'],
                     ':email' => (string) $participant['email'],
                     ':display_name' => (string) $participant['display_name'],
                     ':source' => 'internal',
+                    ':call_role' => $participantCallRole,
                     ':invite_state' => (string) $participant['invite_state'],
                     ':joined_at' => null,
                     ':left_at' => null,
@@ -997,6 +1035,7 @@ SQL
                     ':email' => (string) $participant['email'],
                     ':display_name' => (string) $participant['display_name'],
                     ':source' => 'external',
+                    ':call_role' => 'participant',
                     ':invite_state' => (string) $participant['invite_state'],
                     ':joined_at' => null,
                     ':left_at' => null,
@@ -1052,12 +1091,18 @@ SQL
             'participants' => [
                 'internal' => array_map(
                     static function (array $participant): array {
+                        $callRole = strtolower(trim((string) ($participant['call_role'] ?? 'participant')));
+                        if (!in_array($callRole, ['owner', 'moderator', 'participant'], true)) {
+                            $callRole = 'participant';
+                        }
                         return [
                             'user_id' => (int) ($participant['user_id'] ?? 0),
                             'email' => (string) ($participant['email'] ?? ''),
                             'display_name' => (string) ($participant['display_name'] ?? ''),
+                            'call_role' => $callRole,
                             'invite_state' => (string) ($participant['invite_state'] ?? 'pending'),
                             'is_owner' => (bool) ($participant['is_owner'] ?? false),
+                            'is_moderator' => $callRole === 'moderator',
                         ];
                     },
                     $nextInternalParticipants
@@ -1250,12 +1295,18 @@ SQL
     $internalParticipants = array_map(
         static function (array $participant) use ($existingCall): array {
             $userId = (int) ($participant['user_id'] ?? 0);
+            $callRole = strtolower(trim((string) ($participant['call_role'] ?? 'participant')));
+            if (!in_array($callRole, ['owner', 'moderator', 'participant'], true)) {
+                $callRole = 'participant';
+            }
             return [
                 'user_id' => $userId,
                 'email' => (string) ($participant['email'] ?? ''),
                 'display_name' => (string) ($participant['display_name'] ?? ''),
+                'call_role' => $callRole,
                 'invite_state' => (string) ($participant['invite_state'] ?? 'cancelled'),
                 'is_owner' => $userId > 0 && $userId === (int) ($existingCall['owner_user_id'] ?? 0),
+                'is_moderator' => $callRole === 'moderator',
             ];
         },
         (array) ($participants['internal'] ?? [])
@@ -1303,5 +1354,463 @@ SQL
             ],
             'my_participation' => false,
         ],
+    ];
+}
+
+function videochat_normalize_call_participant_role(string $role, string $fallback = 'participant'): string
+{
+    $normalized = strtolower(trim($role));
+    if (in_array($normalized, ['owner', 'moderator', 'participant'], true)) {
+        return $normalized;
+    }
+
+    $normalizedFallback = strtolower(trim($fallback));
+    if (in_array($normalizedFallback, ['owner', 'moderator', 'participant'], true)) {
+        return $normalizedFallback;
+    }
+
+    if (trim($fallback) === '') {
+        return '';
+    }
+
+    return 'participant';
+}
+
+/**
+ * @return array{
+ *   id: string,
+ *   room_id: string,
+ *   title: string,
+ *   status: string,
+ *   starts_at: string,
+ *   ends_at: string,
+ *   cancelled_at: ?string,
+ *   cancel_reason: ?string,
+ *   cancel_message: ?string,
+ *   created_at: string,
+ *   updated_at: string,
+ *   owner: array{user_id: int, email: string, display_name: string},
+ *   participants: array{
+ *     internal: array<int, array{
+ *       user_id: int,
+ *       email: string,
+ *       display_name: string,
+ *       call_role: string,
+ *       invite_state: string,
+ *       is_owner: bool,
+ *       is_moderator: bool
+ *     }>,
+ *     external: array<int, array{
+ *       email: string,
+ *       display_name: string,
+ *       invite_state: string
+ *     }>,
+ *     totals: array{total: int, internal: int, external: int}
+ *   },
+ *   my_participation: bool
+ * }
+ */
+function videochat_build_call_payload(PDO $pdo, array $callRecord, int $authUserId): array
+{
+    $participants = videochat_fetch_call_participants($pdo, (string) ($callRecord['id'] ?? ''));
+    $internalParticipants = array_map(
+        static function (array $participant): array {
+            $callRole = videochat_normalize_call_participant_role((string) ($participant['call_role'] ?? 'participant'));
+            return [
+                'user_id' => (int) ($participant['user_id'] ?? 0),
+                'email' => (string) ($participant['email'] ?? ''),
+                'display_name' => (string) ($participant['display_name'] ?? ''),
+                'call_role' => $callRole,
+                'invite_state' => (string) ($participant['invite_state'] ?? 'pending'),
+                'is_owner' => $callRole === 'owner',
+                'is_moderator' => $callRole === 'moderator',
+            ];
+        },
+        (array) ($participants['internal'] ?? [])
+    );
+    $externalParticipants = array_map(
+        static function (array $participant): array {
+            return [
+                'email' => (string) ($participant['email'] ?? ''),
+                'display_name' => (string) ($participant['display_name'] ?? ''),
+                'invite_state' => (string) ($participant['invite_state'] ?? 'pending'),
+            ];
+        },
+        (array) ($participants['external'] ?? [])
+    );
+
+    $myParticipation = $authUserId > 0 && $authUserId === (int) ($callRecord['owner_user_id'] ?? 0);
+    if (!$myParticipation && $authUserId > 0) {
+        foreach ($internalParticipants as $participant) {
+            if ((int) ($participant['user_id'] ?? 0) === $authUserId) {
+                $myParticipation = true;
+                break;
+            }
+        }
+    }
+
+    return [
+        'id' => (string) ($callRecord['id'] ?? ''),
+        'room_id' => (string) ($callRecord['room_id'] ?? ''),
+        'title' => (string) ($callRecord['title'] ?? ''),
+        'status' => (string) ($callRecord['status'] ?? ''),
+        'starts_at' => (string) ($callRecord['starts_at'] ?? ''),
+        'ends_at' => (string) ($callRecord['ends_at'] ?? ''),
+        'cancelled_at' => is_string($callRecord['cancelled_at'] ?? null) ? (string) $callRecord['cancelled_at'] : null,
+        'cancel_reason' => is_string($callRecord['cancel_reason'] ?? null) ? (string) $callRecord['cancel_reason'] : null,
+        'cancel_message' => is_string($callRecord['cancel_message'] ?? null) ? (string) $callRecord['cancel_message'] : null,
+        'created_at' => (string) ($callRecord['created_at'] ?? ''),
+        'updated_at' => (string) ($callRecord['updated_at'] ?? ''),
+        'owner' => [
+            'user_id' => (int) ($callRecord['owner_user_id'] ?? 0),
+            'email' => (string) ($callRecord['owner_email'] ?? ''),
+            'display_name' => (string) ($callRecord['owner_display_name'] ?? ''),
+        ],
+        'participants' => [
+            'internal' => $internalParticipants,
+            'external' => $externalParticipants,
+            'totals' => [
+                'total' => count($internalParticipants) + count($externalParticipants),
+                'internal' => count($internalParticipants),
+                'external' => count($externalParticipants),
+            ],
+        ],
+        'my_participation' => $myParticipation,
+    ];
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   errors: array<string, string>,
+ *   call: ?array<string, mixed>
+ * }
+ */
+function videochat_update_call_participant_role(
+    PDO $pdo,
+    string $callId,
+    int $targetUserId,
+    string $targetRole,
+    int $authUserId,
+    string $authRole
+): array {
+    $existingCall = videochat_fetch_call_for_update($pdo, $callId);
+    if ($existingCall === null) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    $normalizedTargetRole = videochat_normalize_call_participant_role($targetRole, '');
+    if ($normalizedTargetRole === '') {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['role' => 'must_be_owner_or_moderator_or_participant'],
+            'call' => null,
+        ];
+    }
+
+    if ($targetUserId <= 0) {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['target_user_id' => 'must_be_positive_int'],
+            'call' => null,
+        ];
+    }
+
+    $isAdmin = videochat_normalize_role_slug($authRole) === 'admin';
+    $isOwner = $authUserId > 0 && $authUserId === (int) ($existingCall['owner_user_id'] ?? 0);
+    if (!$isAdmin && !$isOwner) {
+        return [
+            'ok' => false,
+            'reason' => 'forbidden',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    $targetParticipantQuery = $pdo->prepare(
+        <<<'SQL'
+SELECT user_id, source, call_role
+FROM call_participants
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+LIMIT 1
+SQL
+    );
+    $targetParticipantQuery->execute([
+        ':call_id' => (string) ($existingCall['id'] ?? ''),
+        ':user_id' => $targetUserId,
+    ]);
+    $targetParticipant = $targetParticipantQuery->fetch();
+    if (!is_array($targetParticipant)) {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['target_user_id' => 'must_reference_internal_participant'],
+            'call' => null,
+        ];
+    }
+
+    $currentOwnerUserId = (int) ($existingCall['owner_user_id'] ?? 0);
+    if ($normalizedTargetRole === 'owner') {
+        if (!$isOwner) {
+            return [
+                'ok' => false,
+                'reason' => 'forbidden',
+                'errors' => ['role' => 'owner_transfer_requires_current_owner'],
+                'call' => null,
+            ];
+        }
+    } elseif ($targetUserId === $currentOwnerUserId) {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['role' => 'cannot_change_current_owner_role'],
+            'call' => null,
+        ];
+    }
+
+    $normalizedCurrentRole = videochat_normalize_call_participant_role((string) ($targetParticipant['call_role'] ?? 'participant'));
+    if ($normalizedTargetRole === $normalizedCurrentRole && !($normalizedTargetRole === 'owner' && $targetUserId !== $currentOwnerUserId)) {
+        return [
+            'ok' => true,
+            'reason' => 'unchanged',
+            'errors' => [],
+            'call' => videochat_build_call_payload($pdo, $existingCall, $authUserId),
+        ];
+    }
+
+    $updatedAt = gmdate('c');
+    $pdo->beginTransaction();
+    try {
+        if ($normalizedTargetRole === 'owner') {
+            $updateCallOwner = $pdo->prepare(
+                'UPDATE calls SET owner_user_id = :owner_user_id, updated_at = :updated_at WHERE id = :id'
+            );
+            $updateCallOwner->execute([
+                ':owner_user_id' => $targetUserId,
+                ':updated_at' => $updatedAt,
+                ':id' => (string) ($existingCall['id'] ?? ''),
+            ]);
+
+            $demotePreviousOwner = $pdo->prepare(
+                <<<'SQL'
+UPDATE call_participants
+SET call_role = 'participant'
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+SQL
+            );
+            $demotePreviousOwner->execute([
+                ':call_id' => (string) ($existingCall['id'] ?? ''),
+                ':user_id' => $currentOwnerUserId,
+            ]);
+
+            $promoteNewOwner = $pdo->prepare(
+                <<<'SQL'
+UPDATE call_participants
+SET call_role = 'owner',
+    invite_state = CASE
+        WHEN invite_state = 'pending' THEN 'accepted'
+        ELSE invite_state
+    END
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+SQL
+            );
+            $promoteNewOwner->execute([
+                ':call_id' => (string) ($existingCall['id'] ?? ''),
+                ':user_id' => $targetUserId,
+            ]);
+        } else {
+            $updateParticipantRole = $pdo->prepare(
+                <<<'SQL'
+UPDATE call_participants
+SET call_role = :call_role
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+SQL
+            );
+            $updateParticipantRole->execute([
+                ':call_role' => $normalizedTargetRole,
+                ':call_id' => (string) ($existingCall['id'] ?? ''),
+                ':user_id' => $targetUserId,
+            ]);
+
+            $touchCall = $pdo->prepare('UPDATE calls SET updated_at = :updated_at WHERE id = :id');
+            $touchCall->execute([
+                ':updated_at' => $updatedAt,
+                ':id' => (string) ($existingCall['id'] ?? ''),
+            ]);
+        }
+
+        $pdo->commit();
+    } catch (Throwable) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    $updatedCall = videochat_fetch_call_for_update($pdo, (string) ($existingCall['id'] ?? ''));
+    if ($updatedCall === null) {
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'reason' => 'updated',
+        'errors' => [],
+        'call' => videochat_build_call_payload($pdo, $updatedCall, $authUserId),
+    ];
+}
+
+/**
+ * @return array{
+ *   call_id: string,
+ *   call_role: string,
+ *   can_moderate: bool
+ * }
+ */
+function videochat_call_role_context_for_room_user(PDO $pdo, string $roomId, int $userId): array
+{
+    $fallback = [
+        'call_id' => '',
+        'call_role' => 'participant',
+        'can_moderate' => false,
+    ];
+    if ($userId <= 0) {
+        return $fallback;
+    }
+
+    $normalizedRoomId = strtolower(trim($roomId));
+    if ($normalizedRoomId === '') {
+        return $fallback;
+    }
+
+    $query = $pdo->prepare(
+        <<<'SQL'
+SELECT
+    calls.id,
+    calls.owner_user_id,
+    cp.call_role
+FROM calls
+LEFT JOIN call_participants cp
+    ON cp.call_id = calls.id
+   AND cp.user_id = :user_id
+   AND cp.source = 'internal'
+WHERE calls.room_id = :room_id
+  AND calls.status IN ('active', 'scheduled')
+  AND (
+      calls.owner_user_id = :user_id
+      OR cp.user_id IS NOT NULL
+  )
+ORDER BY
+    CASE calls.status
+        WHEN 'active' THEN 0
+        ELSE 1
+    END ASC,
+    calls.starts_at ASC,
+    calls.created_at ASC
+LIMIT 1
+SQL
+    );
+    $query->execute([
+        ':room_id' => $normalizedRoomId,
+        ':user_id' => $userId,
+    ]);
+    $row = $query->fetch();
+    if (!is_array($row)) {
+        return $fallback;
+    }
+
+    $callRole = videochat_normalize_call_participant_role((string) ($row['call_role'] ?? 'participant'));
+    if ((int) ($row['owner_user_id'] ?? 0) === $userId) {
+        $callRole = 'owner';
+    }
+
+    return [
+        'call_id' => (string) ($row['id'] ?? ''),
+        'call_role' => $callRole,
+        'can_moderate' => in_array($callRole, ['owner', 'moderator'], true),
+    ];
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   errors: array<string, string>,
+ *   call: ?array<string, mixed>
+ * }
+ */
+function videochat_get_call_for_user(PDO $pdo, string $callId, int $authUserId, string $authRole): array
+{
+    $call = videochat_fetch_call_for_update($pdo, $callId);
+    if ($call === null) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    $isAdmin = videochat_normalize_role_slug($authRole) === 'admin';
+    if (!$isAdmin) {
+        $isOwner = $authUserId > 0 && $authUserId === (int) ($call['owner_user_id'] ?? 0);
+        $participantCheck = $pdo->prepare(
+            <<<'SQL'
+SELECT 1
+FROM call_participants
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+LIMIT 1
+SQL
+        );
+        $participantCheck->execute([
+            ':call_id' => (string) ($call['id'] ?? ''),
+            ':user_id' => $authUserId,
+        ]);
+        $isInternalParticipant = $participantCheck->fetchColumn() !== false;
+
+        if (!$isOwner && !$isInternalParticipant) {
+            return [
+                'ok' => false,
+                'reason' => 'forbidden',
+                'errors' => [],
+                'call' => null,
+            ];
+        }
+    }
+
+    return [
+        'ok' => true,
+        'reason' => 'ok',
+        'errors' => [],
+        'call' => videochat_build_call_payload($pdo, $call, $authUserId),
     ];
 }

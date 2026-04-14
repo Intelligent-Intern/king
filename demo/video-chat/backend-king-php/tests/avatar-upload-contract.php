@@ -117,6 +117,23 @@ SQL
     $secondResolved = videochat_avatar_resolve_read_path($storageRoot, $secondFilename);
     videochat_avatar_upload_assert(is_string($secondResolved), 'second avatar should resolve');
 
+    $deleteAvatar = videochat_delete_avatar_for_user($pdo, $userId, $storageRoot);
+    videochat_avatar_upload_assert($deleteAvatar['ok'] === true, 'avatar delete should succeed');
+    videochat_avatar_upload_assert((string) ($deleteAvatar['reason'] ?? '') === 'cleared', 'avatar delete reason mismatch');
+    videochat_avatar_upload_assert((bool) ($deleteAvatar['removed_file'] ?? false) === true, 'avatar delete should remove managed file');
+
+    $secondAfterDelete = videochat_avatar_resolve_read_path($storageRoot, $secondFilename);
+    videochat_avatar_upload_assert($secondAfterDelete === null, 'avatar file should be removed after delete');
+
+    $dbAvatarAfterDelete = $pdo->prepare('SELECT avatar_path FROM users WHERE id = :id LIMIT 1');
+    $dbAvatarAfterDelete->execute([':id' => $userId]);
+    $avatarAfterDelete = $dbAvatarAfterDelete->fetchColumn();
+    videochat_avatar_upload_assert($avatarAfterDelete === null || $avatarAfterDelete === '', 'avatar_path should be null after delete');
+
+    $deleteAvatarAgain = videochat_delete_avatar_for_user($pdo, $userId, $storageRoot);
+    videochat_avatar_upload_assert($deleteAvatarAgain['ok'] === true, 'second avatar delete should still succeed');
+    videochat_avatar_upload_assert((string) ($deleteAvatarAgain['reason'] ?? '') === 'already_empty', 'second avatar delete reason mismatch');
+
     $traversalAttempt = videochat_avatar_resolve_read_path($storageRoot, '../etc/passwd');
     videochat_avatar_upload_assert($traversalAttempt === null, 'path traversal filename should be rejected');
 

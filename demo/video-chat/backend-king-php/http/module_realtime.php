@@ -24,6 +24,33 @@ function videochat_realtime_connection_has_upgrade_token(string $connectionHeade
     return false;
 }
 
+function videochat_realtime_connection_with_call_context(array $connection, callable $openDatabase): array
+{
+    $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
+    $userId = (int) ($connection['user_id'] ?? 0);
+    $fallbackContext = [
+        'call_id' => '',
+        'call_role' => 'participant',
+        'can_moderate' => false,
+    ];
+
+    try {
+        $pdo = $openDatabase();
+        $resolved = videochat_call_role_context_for_room_user($pdo, $roomId, $userId);
+        if (!is_array($resolved)) {
+            $resolved = $fallbackContext;
+        }
+    } catch (Throwable) {
+        $resolved = $fallbackContext;
+    }
+
+    $connection['active_call_id'] = (string) ($resolved['call_id'] ?? '');
+    $connection['call_role'] = videochat_normalize_call_participant_role((string) ($resolved['call_role'] ?? 'participant'));
+    $connection['can_moderate_call'] = (bool) ($resolved['can_moderate'] ?? false);
+
+    return $connection;
+}
+
 /**
  * @param array<string, mixed> $request
  * @return array{
@@ -332,12 +359,15 @@ function videochat_handle_realtime_routes(
             $websocket,
             $initialRoomId
         );
+        $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
         $presenceJoin = videochat_presence_join_room(
             $presenceState,
             $presenceConnection,
             (string) ($presenceConnection['room_id'] ?? 'lobby')
         );
         $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
+        $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
+        $presenceState['connections'][$connectionId] = $presenceConnection;
         $presenceDetached = false;
         $detachWebsocket = static function () use (
             &$presenceDetached,
@@ -392,6 +422,11 @@ function videochat_handle_realtime_routes(
                 'message' => 'video-chat King websocket presence gateway connected',
                 'connection_id' => $connectionId,
                 'active_room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
+                'call_context' => [
+                    'call_id' => (string) ($presenceConnection['active_call_id'] ?? ''),
+                    'call_role' => (string) ($presenceConnection['call_role'] ?? 'participant'),
+                    'can_moderate' => (bool) ($presenceConnection['can_moderate_call'] ?? false),
+                ],
                 'channels' => [
                     'presence' => [
                         'snapshot' => 'room/snapshot',
@@ -489,6 +524,9 @@ function videochat_handle_realtime_routes(
                 if (!is_string($frame) || trim($frame) === '') {
                     continue;
                 }
+
+                $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
+                $presenceState['connections'][$connectionId] = $presenceConnection;
 
                 $presenceCommand = videochat_presence_decode_client_frame($frame);
                 $commandType = (string) ($presenceCommand['type'] ?? '');
@@ -747,8 +785,12 @@ function videochat_handle_realtime_routes(
                         $reactionState,
                         $presenceConnection
                     );
+                    $presenceConnection['room_id'] = 'lobby';
+                    $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
                     $presenceJoin = videochat_presence_join_room($presenceState, $presenceConnection, 'lobby');
                     $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
+                    $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
+                    $presenceState['connections'][$connectionId] = $presenceConnection;
                     continue;
                 }
 
@@ -796,8 +838,12 @@ function videochat_handle_realtime_routes(
                             $presenceConnection
                         );
                     }
+                    $presenceConnection['room_id'] = $targetRoomId;
+                    $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
                     $presenceJoin = videochat_presence_join_room($presenceState, $presenceConnection, $targetRoomId);
                     $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
+                    $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
+                    $presenceState['connections'][$connectionId] = $presenceConnection;
                     videochat_lobby_send_snapshot_to_connection($lobbyState, $presenceConnection, 'joined_room');
                     continue;
                 }

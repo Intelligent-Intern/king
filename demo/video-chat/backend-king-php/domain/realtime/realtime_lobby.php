@@ -9,10 +9,15 @@ function videochat_lobby_state_init(): array
     ];
 }
 
-function videochat_lobby_is_moderator(array $connection): bool
+function videochat_lobby_can_moderate(array $connection): bool
 {
-    $role = videochat_normalize_role_slug((string) ($connection['role'] ?? ''));
-    return in_array($role, ['admin', 'moderator'], true);
+    $globalRole = videochat_normalize_role_slug((string) ($connection['role'] ?? ''));
+    if ($globalRole === 'admin') {
+        return true;
+    }
+
+    $callRole = strtolower(trim((string) ($connection['call_role'] ?? 'participant')));
+    return in_array($callRole, ['owner', 'moderator'], true);
 }
 
 function videochat_lobby_ensure_room_state(array &$lobbyState, string $roomId): void
@@ -404,7 +409,7 @@ function videochat_lobby_apply_command(
         ];
     }
 
-    if (!videochat_lobby_is_moderator($connection)) {
+    if (!videochat_lobby_can_moderate($connection)) {
         return [
             'ok' => false,
             'error' => 'forbidden',
@@ -438,7 +443,7 @@ function videochat_lobby_apply_command(
             'admitted_by' => [
                 'user_id' => $userId,
                 'display_name' => (string) ($connection['display_name'] ?? ''),
-                'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? 'moderator')),
+                'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? 'user')),
             ],
         ];
 
@@ -530,7 +535,7 @@ function videochat_lobby_apply_command(
                 'admitted_by' => [
                     'user_id' => $userId,
                     'display_name' => (string) ($connection['display_name'] ?? ''),
-                    'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? 'moderator')),
+                    'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? 'user')),
                 ],
             ];
         }
