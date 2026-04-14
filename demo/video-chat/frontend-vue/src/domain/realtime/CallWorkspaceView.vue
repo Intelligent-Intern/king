@@ -990,7 +990,7 @@ function pushReaction(emoji) {
   const entry = {
     id,
     emoji,
-    x: 18 + Math.round(Math.random() * 64),
+    x: 6 + Math.round(Math.random() * 84),
     delay: Math.round(Math.random() * 140),
   };
   activeReactions.value = [...activeReactions.value, entry];
@@ -2666,7 +2666,10 @@ onBeforeUnmount(() => {
 
 .workspace-reaction-flight {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 33.3333%;
   pointer-events: none;
   overflow: hidden;
 }
