@@ -1191,7 +1191,6 @@ function emitReaction(emoji) {
     return;
   }
 
-  reactionTrayOpen.value = false;
 }
 
 function toggleUserMuted(userId) {
