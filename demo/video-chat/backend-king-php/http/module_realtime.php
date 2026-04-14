@@ -264,6 +264,18 @@ function videochat_handle_realtime_routes(
     callable $errorResponse,
     callable $openDatabase
 ): ?array {
+    if ($path === '/sfu') {
+        return videochat_handle_sfu_routes(
+            $path,
+            $request,
+            $authenticateRequest,
+            $authFailureResponse,
+            $rbacFailureResponse,
+            $errorResponse,
+            $openDatabase
+        );
+    }
+
     if ($path === $wsPath) {
         $handshakeValidation = videochat_realtime_validate_websocket_handshake($request, $wsPath);
         if (!(bool) ($handshakeValidation['ok'] ?? false)) {
@@ -815,4 +827,233 @@ function videochat_handle_realtime_routes(
 
 
     return null;
+}
+
+function videochat_handle_sfu_routes(
+    string $path,
+    array $request,
+    callable $authenticateRequest,
+    callable $authFailureResponse,
+    callable $rbacFailureResponse,
+    callable $errorResponse,
+    callable $openDatabase
+): array {
+    $handshakeValidation = videochat_realtime_validate_websocket_handshake($request, '/sfu');
+    if (!(bool) ($handshakeValidation['ok'] ?? false)) {
+        return $errorResponse(
+            (int) ($handshakeValidation['status'] ?? 400),
+            (string) ($handshakeValidation['code'] ?? 'websocket_handshake_invalid'),
+            (string) ($handshakeValidation['message'] ?? 'WebSocket handshake is invalid.'),
+            is_array($handshakeValidation['details'] ?? null) ? $handshakeValidation['details'] : []
+        );
+    }
+
+    $websocketAuth = $authenticateRequest($request, 'websocket');
+    if (!(bool) ($websocketAuth['ok'] ?? false)) {
+        return $authFailureResponse('websocket', (string) ($websocketAuth['reason'] ?? 'invalid_session'));
+    }
+
+    $websocketRbacDecision = videochat_authorize_role_for_path((array) ($websocketAuth['user'] ?? []), $path, '/sfu');
+    if (!(bool) ($websocketRbacDecision['ok'] ?? false)) {
+        return $rbacFailureResponse('websocket', $websocketRbacDecision, $path);
+    }
+
+    $session = $request['session'] ?? null;
+    $streamId = (int) ($request['stream_id'] ?? 0);
+    $websocket = king_server_upgrade_to_websocket($session, $streamId);
+    if ($websocket === false) {
+        return $errorResponse(400, 'websocket_upgrade_failed', 'Could not upgrade request to websocket.');
+    }
+
+    $queryParams = videochat_request_query_params($request);
+    $roomId = is_string($queryParams['room'] ?? null) ? (string) $queryParams['room'] : 'lobby';
+    $userId = (string) ($websocketAuth['user']['id'] ?? '');
+    $userName = is_string($websocketAuth['user']['name'] ?? $websocketAuth['user']['display_name'] ?? null) 
+        ? (string) $websocketAuth['user']['name'] 
+        : 'Anonymous';
+    $role = is_string($queryParams['role'] ?? null) ? (string) $queryParams['role'] : 'publisher';
+
+    static $sfuClients = [];
+    static $sfuRooms = [];
+
+    if (!isset($sfuRooms[$roomId])) {
+        $sfuRooms[$roomId] = [
+            'publishers' => [],
+            'subscribers' => [],
+        ];
+    }
+
+    $clientId = spl_object_id($websocket);
+    $sfuClients[$clientId] = [
+        'websocket' => $websocket,
+        'user_id' => $userId,
+        'user_name' => $userName,
+        'room_id' => $roomId,
+        'role' => $role,
+        'tracks' => [],
+    ];
+
+    if ($role === 'publisher') {
+        $sfuRooms[$roomId]['publishers'][$clientId] = &$sfuClients[$clientId];
+    } else {
+        $sfuRooms[$roomId]['subscribers'][$clientId] = &$sfuClients[$clientId];
+    }
+
+    king_websocket_send($websocket, json_encode([
+        'type' => 'sfu/welcome',
+        'user_id' => $userId,
+        'name' => $userName,
+        'room_id' => $roomId,
+        'server_time' => time(),
+    ]));
+
+    $publishersInRoom = array_keys($sfuRooms[$roomId]['publishers'] ?? []);
+    if (!empty($publishersInRoom)) {
+        king_websocket_send($websocket, json_encode([
+            'type' => 'sfu/joined',
+            'room_id' => $roomId,
+            'publishers' => $publishersInRoom,
+        ]));
+    }
+
+    foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
+        if ($subClientId !== $clientId) {
+            king_websocket_send($subClient['websocket'], json_encode([
+                'type' => 'sfu/joined',
+                'room_id' => $roomId,
+                'publishers' => $publishersInRoom,
+            ]));
+        }
+    }
+
+    $buffer = '';
+    $firstFrame = true;
+
+    while (true) {
+        $frame = @king_client_websocket_receive($websocket, 5000);
+        if ($frame === null || $frame === false) {
+            break;
+        }
+
+        if ($firstFrame) {
+            $firstFrame = false;
+            continue;
+        }
+
+        $buffer .= $frame;
+        $messages = explode("\n", $buffer);
+        $buffer = array_pop($messages);
+
+        foreach ($messages as $msgJson) {
+            if (trim($msgJson) === '') {
+                continue;
+            }
+
+            $msg = json_decode($msgJson, true);
+            if (!is_array($msg)) {
+                continue;
+            }
+
+            $msgType = $msg['type'] ?? '';
+
+            switch ($msgType) {
+                case 'sfu/publish':
+                    $trackId = $msg['track_id'] ?? uniqid('track_');
+                    $kind = $msg['kind'] ?? 'video';
+                    $label = $msg['label'] ?? '';
+
+                    $sfuClients[$clientId]['tracks'][$trackId] = [
+                        'id' => $trackId,
+                        'kind' => $kind,
+                        'label' => $label,
+                    ];
+
+                    king_websocket_send($websocket, json_encode([
+                        'type' => 'sfu/published',
+                        'track_id' => $trackId,
+                        'server_time' => time(),
+                    ]));
+
+                    foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
+                        king_websocket_send($subClient['websocket'], json_encode([
+                            'type' => 'sfu/tracks',
+                            'room_id' => $roomId,
+                            'publisher_id' => $clientId,
+                            'publisher_name' => $userName,
+                            'tracks' => array_values($sfuClients[$clientId]['tracks']),
+                        ]));
+                    }
+                    break;
+
+                case 'sfu/subscribe':
+                    $publisherId = $msg['publisher_id'] ?? null;
+                    if (isset($sfuRooms[$roomId]['publishers'][$publisherId])) {
+                        king_websocket_send($websocket, json_encode([
+                            'type' => 'sfu/tracks',
+                            'room_id' => $roomId,
+                            'publisher_id' => $publisherId,
+                            'publisher_name' => $sfuClients[$publisherId]['user_name'],
+                            'tracks' => array_values($sfuClients[$publisherId]['tracks']),
+                        ]));
+                    }
+                    break;
+
+                case 'sfu/unpublish':
+                    $trackId = $msg['track_id'] ?? null;
+                    unset($sfuClients[$clientId]['tracks'][$trackId]);
+
+                    foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
+                        king_websocket_send($subClient['websocket'], json_encode([
+                            'type' => 'sfu/unpublished',
+                            'publisher_id' => $clientId,
+                            'track_id' => $trackId,
+                        ]));
+                    }
+                    break;
+
+                case 'sfu/frame':
+                    $trackId = $msg['track_id'] ?? '';
+                    $timestamp = $msg['timestamp'] ?? 0;
+                    $frameData = $msg['data'] ?? [];
+                    $frameType = $msg['frameType'] ?? 'delta';
+
+                    foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
+                        if ($subClientId !== $clientId) {
+                            king_websocket_send($subClient['websocket'], json_encode([
+                                'type' => 'sfu/frame',
+                                'publisher_id' => $clientId,
+                                'track_id' => $trackId,
+                                'timestamp' => $timestamp,
+                                'data' => $frameData,
+                                'frameType' => $frameType,
+                            ]));
+                        }
+                    }
+                    break;
+
+                case 'sfu/leave':
+                    break 2;
+            }
+        }
+    }
+
+    unset($sfuClients[$clientId]);
+    if (isset($sfuRooms[$roomId]['publishers'][$clientId])) {
+        unset($sfuRooms[$roomId]['publishers'][$clientId]);
+        foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
+            king_websocket_send($subClient['websocket'], json_encode([
+                'type' => 'sfu/publisher_left',
+                'publisher_id' => $clientId,
+            ]));
+        }
+    }
+    if (isset($sfuRooms[$roomId]['subscribers'][$clientId])) {
+        unset($sfuRooms[$roomId]['subscribers'][$clientId]);
+    }
+
+    return [
+        'status' => 101,
+        'headers' => [],
+        'body' => '',
+    ];
 }

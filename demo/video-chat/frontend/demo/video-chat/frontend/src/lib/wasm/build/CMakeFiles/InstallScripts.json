@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/sasha/king/demo/video-chat/frontend/src/lib/wasm/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

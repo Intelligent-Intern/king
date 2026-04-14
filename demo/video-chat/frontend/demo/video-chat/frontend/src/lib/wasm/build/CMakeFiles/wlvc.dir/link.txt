@@ -1,0 +1,1 @@
+/Users/sasha/emsdk/upstream/emscripten/em++  -O3 -msimd128 -O3 -DNDEBUG -L/usr/local/opt/openblas/lib -s;WASM=1;-s;ALLOW_MEMORY_GROWTH=1;-s;INITIAL_MEMORY=16777216;-s;MAXIMUM_MEMORY=134217728;-s;STACK_SIZE=1048576;-s;EXCEPTION_CATCHING=0;-s;DISABLE_EXCEPTION_CATCHING=1 @CMakeFiles/wlvc.dir/objects1.rsp -o wlvc.js

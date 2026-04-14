@@ -30,6 +30,10 @@
             <span>{{ lobbyAdmitted.length }} admitted</span>
           </div>
 
+          <div id="local-video-container" class="video-container local"></div>
+          <div id="remote-video-container" class="video-container remote"></div>
+          <div id="decoded-video-container" class="video-container decoded"></div>
+
           <div class="workspace-reaction-flight">
             <span
               v-for="burst in activeReactions"
@@ -424,6 +428,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute, useRouter } from 'vue-router';
 import { sessionState } from '../auth/session';
 import { resolveBackendOrigin } from '../../support/backendOrigin';
+import { SFUClient } from '../../lib/sfu/sfuClient';
+import { WasmWaveletVideoEncoder, WasmWaveletVideoDecoder, createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';
 
 const route = useRoute();
 const router = useRouter();
@@ -621,6 +627,12 @@ const inviteJoinBusy = ref(false);
 
 const workspaceError = ref('');
 const workspaceNotice = ref('');
+
+const sfuClientRef = ref(null);
+const wasmCodecRef = ref(null);
+const localTracksRef = ref([]);
+const remotePeersRef = ref(new Map());
+const sfuConnected = ref(false);
 
 const desiredRoomId = computed(() => normalizeRoomId(route.params.roomId));
 const activeRoomId = computed(() => normalizeRoomId(serverRoomId.value || desiredRoomId.value));
@@ -1168,12 +1180,22 @@ function toggleHandRaised() {
 
 function toggleCamera() {
   controlState.cameraEnabled = !controlState.cameraEnabled;
+  for (const track of localTracksRef.value) {
+    if (track.kind === 'video') {
+      track.enabled = controlState.cameraEnabled;
+    }
+  }
   refreshUsersDirectoryPresentation();
   void syncControlStateToPeers();
 }
 
 function toggleMicrophone() {
   controlState.micEnabled = !controlState.micEnabled;
+  for (const track of localTracksRef.value) {
+    if (track.kind === 'audio') {
+      track.enabled = controlState.micEnabled;
+    }
+  }
   refreshUsersDirectoryPresentation();
   void syncControlStateToPeers();
 }
@@ -1952,6 +1974,22 @@ function hangupCall() {
   reactionTrayOpen.value = false;
   refreshUsersDirectoryPresentation();
 
+  for (const track of localTracksRef.value) {
+    track.stop();
+  }
+  localTracksRef.value = [];
+
+  if (sfuClientRef.value) {
+    for (const track of localTracksRef.value) {
+      sfuClientRef.value.unpublishTrack(track.id);
+    }
+  }
+
+  for (const [_, peer] of remotePeersRef.value) {
+    peer.pc.close();
+  }
+  remotePeersRef.value.clear();
+
   const peerIds = participantUsers.value
     .map((participant) => participant.userId)
     .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
@@ -2035,10 +2073,23 @@ watch(
   }
 );
 
-onMounted(() => {
+onMounted(async () => {
   ensureRoomBuckets(desiredRoomId.value);
   serverRoomId.value = desiredRoomId.value;
   void connectSocket();
+
+  try {
+    wasmCodecRef.value = await createHybridEncoder({ width: 640, height: 480, quality: 75 });
+    if (wasmCodecRef.value) {
+      console.log('[WASM] Encoder initialized');
+    }
+  } catch (e) {
+    console.warn('[WASM] Codec failed to load:', e);
+  }
+
+  if (sessionState.sessionToken && sessionState.userId) {
+    initSFU();
+  }
 
   typingSweepTimer = setInterval(() => {
     const nowMs = Date.now();
@@ -2053,6 +2104,208 @@ onMounted(() => {
     }
   }, TYPING_SWEEP_MS);
 });
+
+function initSFU() {
+  if (sfuClientRef.value) return;
+
+  const token = String(sessionState.sessionToken || '').trim();
+  if (!token) return;
+
+  sfuClientRef.value = new SFUClient({
+    onTracks: (e) => handleSFUTracks(e),
+    onUnpublished: (publisherId, trackId) => handleSFUUnpublished(publisherId, trackId),
+    onPublisherLeft: (publisherId) => handleSFUPublisherLeft(publisherId),
+    onDisconnect: () => {
+      sfuConnected.value = false;
+      if (!manualSocketClose) {
+        setTimeout(() => initSFU(), 2000);
+      }
+    },
+    onEncodedFrame: (frame) => handleSFUEncodedFrame(frame),
+  });
+
+  sfuClientRef.value.connect(
+    { userId: String(sessionState.userId), token, name: sessionState.displayName || 'User' },
+    activeRoomId.value
+  );
+  sfuConnected.value = true;
+}
+
+function handleSFUTracks(e) {
+  (async () => {
+    let decoder = null;
+    try {
+      decoder = await createHybridDecoder({ width: 640, height: 480, quality: 75 });
+    } catch (e) {
+      console.warn('[SFU] Decoder init failed for', e.publisherId);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    canvas.className = 'remote-video';
+
+    const container = document.getElementById('remote-video-container');
+    if (container) {
+      container.appendChild(canvas);
+    }
+
+    remotePeersRef.value.set(e.publisherId, { 
+      pc: null, 
+      video: null, 
+      tracks: e.tracks, 
+      stream: null,
+      decoder: decoder,
+      decodedCanvas: canvas,
+    });
+
+    console.log('[SFU] Subscribed to publisher', e.publisherId, 'with', e.tracks.length, 'tracks');
+  })();
+}
+
+function handleSFUUnpublished(publisherId, trackId) {
+  const peer = remotePeersRef.value.get(publisherId);
+  if (peer) {
+    if (peer.pc) peer.pc.close();
+    if (peer.decoder) peer.decoder.destroy();
+    remotePeersRef.value.delete(publisherId);
+  }
+}
+
+function handleSFUPublisherLeft(publisherId) {
+  const peer = remotePeersRef.value.get(publisherId);
+  if (peer) {
+    if (peer.pc) peer.pc.close();
+    if (peer.decoder) peer.decoder.destroy();
+    remotePeersRef.value.delete(publisherId);
+  }
+}
+
+function sendSignalingMessage(msg) {
+  if (socketRef.value && socketRef.value.readyState === WebSocket.OPEN) {
+    socketRef.value.send(JSON.stringify(msg));
+  }
+}
+
+let videoEncoderRef = ref(null);
+let localVideoElement = ref(null);
+let localStreamRef = ref(null);
+let encodeIntervalRef = ref(null);
+
+async function publishLocalTracks() {
+  if (!sfuClientRef.value || localStreamRef.value) return;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { width: 640, height: 480, frameRate: 15 }, 
+      audio: true 
+    });
+    localStreamRef.value = stream;
+    localTracksRef.value = stream.getTracks();
+
+    const tracks = stream.getTracks().map((t) => ({
+      id: t.id,
+      kind: t.kind,
+      label: t.label,
+    }));
+
+    sfuClientRef.value.publishTracks(tracks);
+
+    const videoTrack = stream.getVideoTracks()[0];
+    if (videoTrack) {
+      await startEncodingPipeline(videoTrack);
+    }
+  } catch (e) {
+    console.error('[SFU] Failed to get user media:', e);
+  }
+}
+
+async function startEncodingPipeline(videoTrack) {
+  try {
+    videoEncoderRef.value = await createHybridEncoder({ 
+      width: 640, 
+      height: 480, 
+      quality: 75,
+      keyFrameInterval: 30,
+    });
+    if (!videoEncoderRef.value) {
+      console.warn('[SFU] Encoder init failed, falling back to WebRTC');
+      return;
+    }
+    console.log('[SFU] WASM encoder initialized');
+  } catch (e) {
+    console.error('[SFU] Encoder init error:', e);
+    return;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 640;
+  canvas.height = 480;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  const video = document.createElement('video');
+  video.srcObject = new MediaStream([videoTrack]);
+  video.muted = true;
+  video.playsInline = true;
+  video.autoplay = true;
+  await video.play();
+  localVideoElement.value = video;
+
+  const container = document.getElementById('local-video-container');
+  if (container) {
+    container.appendChild(video);
+  }
+
+  encodeIntervalRef.value = setInterval(async () => {
+    if (!videoEncoderRef.value || !sfuClientRef.value || sfuClientRef.value.ws?.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    if (video.readyState < 2) return;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const timestamp = Date.now();
+
+    try {
+      const encoded = videoEncoderRef.value.encodeFrame(imageData, timestamp);
+      
+      sfuClientRef.value.sendEncodedFrame({
+        publisherId: String(sessionState.userId),
+        trackId: videoTrack.id,
+        timestamp: encoded.timestamp,
+        data: encoded.data,
+        type: encoded.type,
+      });
+    } catch (e) {
+      // silently skip encode errors
+    }
+  }, 66);
+}
+
+function handleSFUEncodedFrame(frame) {
+  const peer = remotePeersRef.value.get(frame.publisherId);
+  if (!peer || !peer.decoder) return;
+
+  try {
+    const decoded = peer.decoder.decodeFrame({
+      data: frame.data,
+      timestamp: frame.timestamp,
+      width: 640,
+      height: 480,
+      type: frame.type,
+    });
+
+    if (decoded && decoded.data) {
+      const canvas = peer.decodedCanvas;
+      const ctx = canvas.getContext('2d');
+      const imageData = new ImageData(decoded.data, decoded.width, decoded.height);
+      ctx.putImageData(imageData, 0, 0);
+    }
+  } catch (e) {
+    console.warn('[SFU] Decode error:', e);
+  }
+}
 
 onBeforeUnmount(() => {
   manualSocketClose = true;
@@ -2070,6 +2323,28 @@ onBeforeUnmount(() => {
     typingSweepTimer = null;
   }
   closeSocket();
+
+  if (encodeIntervalRef.value) {
+    clearInterval(encodeIntervalRef.value);
+    encodeIntervalRef.value = null;
+  }
+  if (videoEncoderRef.value) {
+    videoEncoderRef.value.destroy();
+    videoEncoderRef.value = null;
+  }
+  if (localStreamRef.value) {
+    localStreamRef.value.getTracks().forEach(t => t.stop());
+    localStreamRef.value = null;
+  }
+  if (sfuClientRef.value) {
+    sfuClientRef.value.leave();
+    sfuClientRef.value = null;
+  }
+  for (const [_, peer] of remotePeersRef.value) {
+    if (peer.pc) peer.pc.close();
+    if (peer.decoder) peer.decoder.destroy();
+  }
+  remotePeersRef.value.clear();
 });
 </script>
 
@@ -2185,6 +2460,36 @@ onBeforeUnmount(() => {
   place-items: center;
   border-radius: 4px;
   border: 1px solid var(--border-subtle);
+}
+
+.video-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-container.local video,
+.video-container.remote video,
+.video-container.decoded video,
+.video-container canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.video-container.local {
+  z-index: 10;
+}
+
+.video-container.remote {
+  z-index: 5;
+}
+
+.video-container.decoded {
+  z-index: 1;
+  opacity: 0.5;
 }
 
 .workspace-main-video-room {
