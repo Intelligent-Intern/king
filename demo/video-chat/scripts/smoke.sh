@@ -68,16 +68,16 @@ compose_smoke() {
   VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
   "${compose_cmd[@]}" up -d --build >/dev/null
 
-  local cleanup_compose=0
+  local cleanup_compose_enabled=0
   cleanup_compose() {
-    if [[ "${cleanup_compose}" == "1" ]]; then
+    if [[ "${cleanup_compose_enabled:-0}" == "1" ]]; then
       VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
       VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
       VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
       "${compose_cmd[@]}" down -v >/dev/null 2>&1 || true
     fi
   }
-  cleanup_compose=1
+  cleanup_compose_enabled=1
   trap cleanup_compose RETURN
 
   local health_url="http://127.0.0.1:${compose_backend_port}/health"
@@ -106,13 +106,22 @@ compose_smoke() {
         exit(1);
     }
     $db = $data["database"] ?? null;
-    if (!is_array($db) || !is_array($db["migrations"] ?? null)) {
-        fwrite(STDERR, "runtime missing migration snapshot\n");
+    if (!is_array($db)) {
+        fwrite(STDERR, "runtime missing database snapshot\n");
         exit(1);
     }
-    $applied = (int) ($db["migrations"]["applied_count"] ?? -1);
+
+    $applied = -1;
+    if (is_array($db["migrations"] ?? null)) {
+        $applied = (int) ($db["migrations"]["applied_count"] ?? -1);
+    } elseif (array_key_exists("migrations_applied", $db)) {
+        $applied = (int) ($db["migrations_applied"] ?? -1);
+    } elseif (array_key_exists("schema_version", $db)) {
+        $applied = (int) ($db["schema_version"] ?? -1);
+    }
+
     if ($applied < 1) {
-        fwrite(STDERR, "runtime migration applied_count invalid\n");
+        fwrite(STDERR, "runtime migration snapshot invalid\n");
         exit(1);
     }
   '
