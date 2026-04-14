@@ -1,0 +1,7 @@
+/Users/sasha/king/demo/video-chat/frontend/src/lib/wasm/build/CMakeFiles/wlvc.dir
+/Users/sasha/king/demo/video-chat/frontend/src/lib/wasm/build/CMakeFiles/edit_cache.dir
+/Users/sasha/king/demo/video-chat/frontend/src/lib/wasm/build/CMakeFiles/rebuild_cache.dir
+/Users/sasha/king/demo/video-chat/frontend/src/lib/wasm/build/CMakeFiles/list_install_components.dir
+/Users/sasha/king/demo/video-chat/frontend/src/lib/wasm/build/CMakeFiles/install.dir
+/Users/sasha/king/demo/video-chat/frontend/src/lib/wasm/build/CMakeFiles/install/local.dir
+/Users/sasha/king/demo/video-chat/frontend/src/lib/wasm/build/CMakeFiles/install/strip.dir
