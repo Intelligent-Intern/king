@@ -86,7 +86,7 @@ export class WasmWaveletVideoEncoder {
       width: config.width,
       height: config.height,
       quality: config.quality ?? 75,
-      keyFrameInterval: config.keyFrameInterval ?? 30,
+      keyFrameInterval: config.keyFrameInterval ?? 2,
     }
   }
 

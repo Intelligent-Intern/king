@@ -18,10 +18,10 @@ export interface WebRTCVideoProcessorConfig {
 
 const DEFAULT_PROCESSOR_CONFIG: WebRTCVideoProcessorConfig = {
   enabled: true,
-  quality: 75,
+  quality: 40,
   adaptiveQuality: true,
   targetBitrate: 500000,
-  enableKalman: true,
+  enableKalman: false, // Disabled: stub for future use
   kalmanStrength: 0.5,
   turnServers: [
     { urls: 'stun:stun.l.google.com:19302' },

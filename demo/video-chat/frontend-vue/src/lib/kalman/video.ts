@@ -33,10 +33,10 @@ export interface QualityMetrics {
 }
 
 const DEFAULT_ENHANCER_CONFIG: VideoEnhancerConfig = {
-  waveletQuality: 75,
+  waveletQuality: 40,
   kalmanProcessNoise: 0.001,
   kalmanMeasurementNoise: 0.1,
-  enableEnhancement: true,
+  enableEnhancement: false, // Disabled: adds noise before wavelet, hurts quality
   enhancementStrength: 0.3,
   adaptiveQuality: true,
   targetBitrate: 500000,
@@ -80,32 +80,22 @@ export class VideoEnhancer {
   encodeFrame(imageData: ImageData, timestamp: number): EnhancedFrame {
     const startTime = performance.now()
 
-    this.kalman.setFrameSize(imageData.width, imageData.height)
+    let motionVectors = new Map<string, { dx: number; dy: number; confidence: number }>()
 
-    const pixels = new Float32Array(imageData.width * imageData.height)
-    for (let i = 0; i < imageData.data.length; i += 4) {
-      const gray = 0.299 * imageData.data[i] + 0.587 * imageData.data[i + 1] + 0.114 * imageData.data[i + 2]
-      pixels[Math.floor(i / 4)] = gray
-    }
-
-    const { residuals, motionVectors } = this.kalman.updateWithFrame(pixels)
-
-    if (this.config.enableEnhancement && residuals) {
-      for (let i = 0; i < pixels.length; i++) {
-        pixels[i] = pixels[i] + residuals[i] * this.config.enhancementStrength
+    if (this.config.enableEnhancement) {
+      this.kalman.setFrameSize(imageData.width, imageData.height)
+      const pixels = new Float32Array(imageData.width * imageData.height)
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        const gray = 0.299 * imageData.data[i] + 0.587 * imageData.data[i + 1] + 0.114 * imageData.data[i + 2]
+        pixels[Math.floor(i / 4)] = gray
+      }
+      const result = this.kalman.updateWithFrame(pixels)
+      if (result) {
+        motionVectors = result.motionVectors
       }
     }
 
-    const enhancedImageData = new ImageData(imageData.width, imageData.height)
-    for (let i = 0; i < pixels.length; i++) {
-      const gray = Math.max(0, Math.min(255, pixels[i]))
-      enhancedImageData.data[i * 4] = gray
-      enhancedImageData.data[i * 4 + 1] = gray
-      enhancedImageData.data[i * 4 + 2] = gray
-      enhancedImageData.data[i * 4 + 3] = 255
-    }
-
-    const frameData = this.encoder.encodeFrame(enhancedImageData, timestamp)
+    const frameData = this.encoder.encodeFrame(imageData, timestamp)
 
     const originalSize = imageData.width * imageData.height * 4
     const compressedSize = frameData.data.byteLength

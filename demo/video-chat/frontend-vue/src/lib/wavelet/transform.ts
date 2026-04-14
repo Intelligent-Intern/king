@@ -28,8 +28,8 @@ export interface WaveletTransformConfig {
 }
 
 const DEFAULT_TRANSFORM_CONFIG: WaveletTransformConfig = {
-  quality: 60,
-  enableKalman: true,
+  quality: 40,
+  enableKalman: false, // Disabled: stub for future use
   keyFrameInterval: 30,
 }
 

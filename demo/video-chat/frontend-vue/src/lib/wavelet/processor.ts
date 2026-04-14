@@ -33,8 +33,8 @@ export interface FrameMetrics {
 
 const DEFAULT_CONFIG: VideoProcessorConfig = {
   enabled: true,
-  waveletQuality: 60,
-  enableKalman: true,
+  waveletQuality: 40,
+  enableKalman: false, // Disabled: replaces pixels with residuals, hurts quality
   keyFrameInterval: 30,
   maxBitrate: 1000000,
   targetFps: 30,
@@ -71,21 +71,12 @@ export class VideoFrameProcessor {
     const startTime = performance.now()
     const timestamp = Date.now()
 
-    this.kalman.setFrameSize(imageData.width, imageData.height)
-
-    const grayscale = this.toGrayscale(imageData)
-    
-    let enhanced = grayscale
     if (this.config.enableKalman) {
-      const { residuals } = this.kalman.updateWithFrame(grayscale)
-      if (residuals) {
-        enhanced = residuals
-      }
+      this.kalman.setFrameSize(imageData.width, imageData.height)
+      this.kalman.updateWithFrame(this.toGrayscale(imageData))
     }
 
-    const enhancedImageData = this.grayscaleToImageData(enhanced, imageData.width, imageData.height)
-    
-    const frameData = this.encoder.encodeFrame(enhancedImageData, timestamp)
+    const frameData = this.encoder.encodeFrame(imageData, timestamp)
 
     const originalSize = imageData.width * imageData.height * 4
     const compressedSize = frameData.data.byteLength
@@ -108,7 +99,11 @@ export class VideoFrameProcessor {
     this.lastFrameTime = startTime
 
     return {
-      frame: enhancedImageData,
+      frame: new ImageData(
+        new Uint8ClampedArray(imageData.data),
+        imageData.width,
+        imageData.height
+      ),
       compressed: frameData.data,
       isKeyFrame: frameData.type === 'keyframe',
       timestamp,
