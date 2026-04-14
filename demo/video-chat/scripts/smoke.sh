@@ -86,14 +86,25 @@ compose_smoke() {
   local session_url="http://127.0.0.1:${compose_backend_port}/api/auth/session"
   local frontend_url="http://127.0.0.1:${compose_frontend_port}/"
 
-  for _ in {1..120}; do
+  for _ in {1..180}; do
     if curl -fsS "${health_url}" >/dev/null; then
       break
     fi
     sleep 0.5
   done
 
-  curl -fsS "${health_url}" >/dev/null
+  if ! curl -fsS "${health_url}" >/dev/null; then
+    log "ERROR: backend health did not become ready; dumping compose status/logs"
+    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
+    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    "${compose_cmd[@]}" ps || true
+    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
+    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    "${compose_cmd[@]}" logs --tail 200 videochat-backend-v1 || true
+    return 1
+  fi
   curl -fsS "${frontend_url}" >/dev/null
 
   local runtime_response
