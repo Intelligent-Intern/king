@@ -314,7 +314,6 @@ function requestHeaders(includeBody) {
   if (includeBody) headers['content-type'] = 'application/json';
   if (token !== '') {
     headers.authorization = `Bearer ${token}`;
-    headers['x-session-id'] = token;
   }
   return headers;
 }

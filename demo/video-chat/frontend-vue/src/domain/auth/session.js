@@ -168,7 +168,6 @@ function sessionHeaders() {
   return {
     ...headers,
     authorization: `Bearer ${token}`,
-    'x-session-id': token,
   };
 }
 

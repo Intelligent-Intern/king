@@ -469,7 +469,6 @@ function requestHeaders(withBody = false) {
   const token = String(sessionState.sessionToken || '').trim();
   if (token !== '') {
     headers.authorization = `Bearer ${token}`;
-    headers['x-session-id'] = token;
   }
 
   return headers;
@@ -501,11 +500,20 @@ function buildQueryString(params) {
 
 async function apiRequest(path, { method = 'GET', query = null, body = null } = {}) {
   const endpoint = `${backendOrigin}${path}${buildQueryString(query || {})}`;
-  const response = await fetch(endpoint, {
-    method,
-    headers: requestHeaders(body !== null),
-    body: body === null ? undefined : JSON.stringify(body),
-  });
+  let response = null;
+  try {
+    response = await fetch(endpoint, {
+      method,
+      headers: requestHeaders(body !== null),
+      body: body === null ? undefined : JSON.stringify(body),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message.trim() : '';
+    if (message === '' || /failed to fetch/i.test(message)) {
+      throw new Error(`Could not reach backend (${backendOrigin}).`);
+    }
+    throw new Error(message);
+  }
 
   let payload = null;
   try {
