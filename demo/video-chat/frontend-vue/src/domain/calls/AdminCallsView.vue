@@ -1464,7 +1464,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  background: var(--border-subtle);
+  background: var(--bg-ui-chrome);
   gap: 1px;
 }
 
