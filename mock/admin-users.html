@@ -67,13 +67,13 @@
           contrast(94%);
       }
 
-      @media (max-width: 1280px) {
+      @media (max-width: 1440px) {
         .drawer.users-drawer {
           grid-template-columns: 1fr 1fr;
         }
       }
 
-      @media (max-width: 980px) {
+      @media (max-width: 1180px) {
         .toolbar.users-toolbar {
           grid-template-columns: 1fr;
         }
@@ -90,29 +90,29 @@
         <aside class="sidebar sidebar-left">
           <div class="sidebar-content left">
             <div class="brand-strip">
-              <img data-brand-logo src="./assets/orgas/intelligent-intern/logo.svg" alt="Intelligent Intern" />
+              <img data-brand-logo src="./assets/orgas/kingrt/logo.svg" alt="KingRT" />
               <button id="hideLeftSidebarBtn" class="sidebar-toggle-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">
-                <img class="arrow-icon-image" src="./assets/orgas/intelligent-intern/icons/backward.png" alt="" />
+                <img class="arrow-icon-image" src="./assets/orgas/kingrt/icons/backward.png" alt="" />
               </button>
             </div>
 
             <nav class="nav" aria-label="Main navigation">
               <a class="nav-link" href="./admin-overview.html">
-                <img src="./assets/orgas/intelligent-intern/icons/users.png" alt="" />
+                <img src="./assets/orgas/kingrt/icons/users.png" alt="" />
                 <span>Overview</span>
               </a>
               <a class="nav-link active" href="./admin-users.html">
-                <img src="./assets/orgas/intelligent-intern/icons/user.png" alt="" />
+                <img src="./assets/orgas/kingrt/icons/user.png" alt="" />
                 <span>User Management</span>
               </a>
               <a class="nav-link" href="./admin-calls-crud.html">
-                <img src="./assets/orgas/intelligent-intern/icons/lobby.png" alt="" />
+                <img src="./assets/orgas/kingrt/icons/lobby.png" alt="" />
                 <span>Video Calls</span>
               </a>
             </nav>
 
             <section class="sidebar-profile avatar-only">
-              <img id="sidebarAvatar" data-sidebar-avatar class="sidebar-avatar-image" src="./assets/orgas/intelligent-intern/avatar-placeholder.svg" alt="Profile avatar" />
+              <img id="sidebarAvatar" data-sidebar-avatar class="sidebar-avatar-image" src="./assets/orgas/kingrt/avatar-placeholder.svg" alt="Profile avatar" />
             </section>
 
             <div class="logout-wrap">
@@ -122,6 +122,12 @@
         </aside>
 
         <section class="main">
+          <div class="mobile-brand-strip">
+            <img src="./assets/orgas/kingrt/king_logo-withslogan.svg" alt="KingRT" />
+            <button id="mobileMenuBtn" class="mobile-menu-btn" type="button" aria-label="Toggle menu">
+              <span class="mobile-menu-btn-bars" aria-hidden="true"></span>
+            </button>
+          </div>
           <div class="workspace users">
             <section class="section">
               <div class="section-head">
@@ -131,7 +137,7 @@
                 </div>
                 <div class="actions">
                   <button id="showLeftSidebarBtn" class="show-sidebar-overlay show-sidebar-inline show-left-sidebar-overlay" type="button" title="Show sidebar" aria-label="Show sidebar">
-                    <img class="arrow-icon-image" src="./assets/orgas/intelligent-intern/icons/forward.png" alt="" />
+                    <img class="arrow-icon-image" src="./assets/orgas/kingrt/icons/forward.png" alt="" />
                   </button>
                   <button id="toggleDrawer" class="btn" type="button">New user</button>
                   <button id="searchSubmitBtn" class="btn" type="button">Search</button>
@@ -203,11 +209,11 @@
             <footer class="footer">
               <div class="pagination">
                 <button id="prev" class="pager-btn pager-icon-btn" type="button" title="Previous page" aria-label="Previous page">
-                  <img class="pager-icon-img" src="./assets/orgas/intelligent-intern/icons/backward.png" alt="" />
+                  <img class="pager-icon-img" src="./assets/orgas/kingrt/icons/backward.png" alt="" />
                 </button>
                 <div id="pageInfo" class="page-info">-</div>
                 <button id="next" class="pager-btn pager-icon-btn" type="button" title="Next page" aria-label="Next page">
-                  <img class="pager-icon-img" src="./assets/orgas/intelligent-intern/icons/forward.png" alt="" />
+                  <img class="pager-icon-img" src="./assets/orgas/kingrt/icons/forward.png" alt="" />
                 </button>
               </div>
             </footer>
@@ -226,21 +232,104 @@
           const leftSidebar = document.querySelector('.sidebar-left');
           const hideLeft = document.getElementById('hideLeftSidebarBtn');
           const showLeft = document.getElementById('showLeftSidebarBtn');
+          const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+          const hideLeftIcon = hideLeft?.querySelector('.arrow-icon-image');
+          const tabletMedia = window.matchMedia('(max-width: 1180px)');
+          const mobileMedia = window.matchMedia('(max-width: 760px)');
+          const forwardIcon = './assets/orgas/kingrt/icons/forward.png';
+          const backwardIcon = './assets/orgas/kingrt/icons/backward.png';
+
+          function syncTabletToggleIcon(isOpen) {
+            if (!(hideLeftIcon instanceof HTMLImageElement)) return;
+            hideLeftIcon.src = isOpen ? backwardIcon : forwardIcon;
+            if (hideLeft instanceof HTMLButtonElement) {
+              const label = isOpen ? 'Hide sidebar' : 'Open sidebar';
+              hideLeft.title = label;
+              hideLeft.setAttribute('aria-label', label);
+            }
+          }
 
           function setLeftCollapsed(collapsed) {
             if (!(shell instanceof HTMLElement)) return;
+            const isTablet = tabletMedia.matches;
+
+            if (isTablet) {
+              shell.classList.add('tablet-mode');
+              shell.classList.remove('left-collapsed');
+              if (leftSidebar instanceof HTMLElement) {
+                leftSidebar.classList.remove('collapsed');
+              }
+              const open = !collapsed;
+              shell.classList.toggle('tablet-left-open', open);
+              syncTabletToggleIcon(open);
+              return;
+            }
+
+            shell.classList.remove('tablet-mode', 'tablet-left-open');
             shell.classList.toggle('left-collapsed', collapsed);
             if (leftSidebar instanceof HTMLElement) {
               leftSidebar.classList.toggle('collapsed', collapsed);
             }
+            syncTabletToggleIcon(true);
           }
 
-          hideLeft?.addEventListener('click', () => setLeftCollapsed(true));
-          showLeft?.addEventListener('click', () => setLeftCollapsed(false));
+          function syncViewportState() {
+            if (!(shell instanceof HTMLElement)) return;
+            if (tabletMedia.matches) {
+              shell.classList.add('tablet-mode');
+              shell.classList.remove('left-collapsed', 'tablet-left-open');
+              if (leftSidebar instanceof HTMLElement) {
+                leftSidebar.classList.remove('collapsed');
+              }
+              if (mobileMedia.matches) {
+                syncTabletToggleIcon(shell.classList.contains('tablet-left-open'));
+              } else {
+                shell.classList.remove('tablet-left-open');
+                syncTabletToggleIcon(false);
+              }
+              return;
+            }
 
-          if (window.matchMedia('(max-width: 980px)').matches) {
+            shell.classList.remove('tablet-mode', 'tablet-left-open');
+            syncTabletToggleIcon(true);
+          }
+
+          hideLeft?.addEventListener('click', () => {
+            if (!(shell instanceof HTMLElement)) return;
+            if (tabletMedia.matches) {
+              const isOpen = shell.classList.contains('tablet-left-open');
+              setLeftCollapsed(isOpen);
+              return;
+            }
             setLeftCollapsed(true);
+          });
+          showLeft?.addEventListener('click', () => {
+            setLeftCollapsed(false);
+          });
+          mobileMenuBtn?.addEventListener('click', () => {
+            if (!(shell instanceof HTMLElement)) return;
+            if (!mobileMedia.matches) return;
+            const isOpen = shell.classList.contains('tablet-left-open');
+            setLeftCollapsed(isOpen);
+          });
+
+          const main = document.querySelector('.main');
+          main?.addEventListener('click', () => {
+            if (!(shell instanceof HTMLElement)) return;
+            if (!tabletMedia.matches) return;
+            if (!shell.classList.contains('tablet-left-open')) return;
+            setLeftCollapsed(true);
+          });
+
+          if (typeof tabletMedia.addEventListener === 'function') {
+            tabletMedia.addEventListener('change', syncViewportState);
+            mobileMedia.addEventListener('change', syncViewportState);
+          } else if (typeof tabletMedia.addListener === 'function') {
+            tabletMedia.addListener(syncViewportState);
+            mobileMedia.addListener(syncViewportState);
           }
+
+          syncViewportState();
         }
 
         function readSession() {
@@ -367,10 +456,10 @@
                   <td>
                     <span class="actions-inline">
                       <button class="round-icon${moderatorClass}" data-action="promote" data-id="${user.id}" title="Toggle moderator role">
-                        <img src="./assets/orgas/intelligent-intern/icons/${adminIcon}" alt="" />
+                        <img src="./assets/orgas/kingrt/icons/${adminIcon}" alt="" />
                       </button>
                       <button class="round-icon" data-action="remove" data-id="${user.id}" title="Remove user">
-                        <img src="./assets/orgas/intelligent-intern/icons/remove_user.png" alt="" />
+                        <img src="./assets/orgas/kingrt/icons/remove_user.png" alt="" />
                       </button>
                     </span>
                   </td>

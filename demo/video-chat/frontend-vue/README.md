@@ -2,7 +2,7 @@
 
 This directory is the active Vue + Vite frontend for the new video-chat stack.
 
-## Routes scaffolded
+## Routes
 
 - `/login`
 - `/admin/overview`
@@ -10,6 +10,14 @@ This directory is the active Vue + Vite frontend for the new video-chat stack.
 - `/admin/calls`
 - `/user/dashboard`
 - `/workspace/call/:roomId?`
+
+All listed routes are now backend-bound (no placeholder-only route left):
+
+- `/admin/overview`: live metrics/widgets + admin branding parity panel
+- `/admin/users`: server-driven CRUD table with search/pagination/deactivate/reactivate
+- `/admin/calls`: backend-bound CRUD/calendar/invite actions
+- `/user/dashboard`: backend-bound calls list/calendar + schedule/edit + invite redeem
+- `/workspace/call/:roomId?`: realtime snapshots/moderation/chat/control-bar flows with reconnect/auth state machine
 
 ## Call workspace (backend-bound)
 
@@ -26,7 +34,16 @@ This directory is the active Vue + Vite frontend for the new video-chat stack.
 - unauthenticated users are redirected to `/login`
 - authenticated users are redirected away from `/login` to their role default page
 - admin-only and user-only routes are enforced by role-aware guards
+- forbidden redirect targets are sanitized after login (role-safe redirect only)
+- session recovery is backend-authoritative (`/api/auth/session`) and invalid sessions fail closed
 
+## Settings + Session
+
+- workspace settings modal is backend-backed:
+  - `GET/PATCH /api/user/settings`
+  - `POST /api/user/avatar`
+- saved theme/time-format is applied globally from session state
+- logout remains fail-closed and drops local session snapshot immediately
 ## Run locally
 
 ```bash
@@ -45,6 +62,12 @@ Run frontend click-through e2e tests:
 
 ```bash
 npm run test:e2e
+```
+
+Run the mock-parity journey suite directly:
+
+```bash
+npx playwright test tests/e2e/mock-parity-journeys.spec.js
 ```
 
 Run e2e tests headed (visual):

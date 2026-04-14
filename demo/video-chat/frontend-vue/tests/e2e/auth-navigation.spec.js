@@ -34,7 +34,7 @@ test('admin can click through all implemented admin routes and logout', async ({
   await expect(page).toHaveURL(/\/admin\/calls$/);
   await expect(page.locator('.view-card h3', { hasText: 'Admin Video Calls' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Call Workspace' }).click();
+  await page.goto('/workspace/call/lobby');
   await expect(page).toHaveURL(/\/workspace\/call\/lobby$/);
   await expect(page.locator('.workspace-call-head h3', { hasText: 'Call Workspace' })).toBeVisible();
   await expect(page.locator('.workspace-call-head')).toContainText('Active room');
@@ -58,7 +58,7 @@ test('user role is constrained by RBAC and can still open call workspace', async
   await expect(page).toHaveURL(/\/user\/dashboard$/);
   await expect(page.locator('.view-card h3', { hasText: 'User Dashboard' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Call Workspace' }).click();
+  await page.goto('/workspace/call/lobby');
   await expect(page).toHaveURL(/\/workspace\/call\/lobby$/);
   await expect(page.locator('.workspace-call-head h3', { hasText: 'Call Workspace' })).toBeVisible();
 

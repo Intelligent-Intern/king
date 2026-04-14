@@ -6,7 +6,7 @@
           <div class="ii-authSplit__brandInner">
             <img
               class="ii-authSplit__logo"
-              src="/assets/orgas/intelligent-intern/logo.svg"
+              src="/assets/orgas/kingrt/logo.svg"
               alt="logo"
             />
           </div>
@@ -43,8 +43,8 @@
               <div class="ii-fieldError" :hidden="!passwordError">{{ passwordError }}</div>
             </div>
 
-            <button class="ii-btn ii-btn--primary ii-authBtn ii-btn--block" type="submit">
-              <span class="ii-btn__label">Sign in</span>
+            <button class="ii-btn ii-btn--primary ii-authBtn ii-btn--block" type="submit" :disabled="submitting">
+              <span class="ii-btn__label">{{ submitting ? 'Signing in…' : 'Sign in' }}</span>
             </button>
 
             <div class="ii-error" :hidden="!authError">{{ authError }}</div>
@@ -58,7 +58,8 @@
 <script setup>
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { defaultRouteForRole, loginWithPassword } from '../stores/session';
+import { resolveAuthorizedRedirect } from '../../http/router';
+import { defaultRouteForRole, loginWithPassword } from './session';
 
 const router = useRouter();
 const route = useRoute();
@@ -69,6 +70,11 @@ const emailError = ref('');
 const passwordError = ref('');
 const authError = ref('');
 const submitting = ref(false);
+
+function getRedirectTarget(role) {
+  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '';
+  return resolveAuthorizedRedirect(redirect, role, router) || defaultRouteForRole(role);
+}
 
 async function handleSubmit() {
   if (submitting.value) return;
@@ -105,8 +111,7 @@ async function handleSubmit() {
       return;
     }
 
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '';
-    router.replace(redirect || defaultRouteForRole(result.role));
+    router.replace(getRedirectTarget(result.role));
   } finally {
     submitting.value = false;
   }

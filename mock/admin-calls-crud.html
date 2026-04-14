@@ -70,7 +70,7 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace;
       }
 
-      @media (max-width: 980px) {
+      @media (max-width: 1180px) {
         .toolbar.calls-toolbar {
           grid-template-columns: 1fr;
         }
@@ -83,29 +83,29 @@
         <aside class="sidebar sidebar-left">
           <div class="sidebar-content left">
             <div class="brand-strip">
-              <img data-brand-logo src="./assets/orgas/intelligent-intern/logo.svg" alt="Intelligent Intern" />
+              <img data-brand-logo src="./assets/orgas/kingrt/logo.svg" alt="KingRT" />
               <button id="hideLeftSidebarBtn" class="sidebar-toggle-btn" type="button" title="Hide sidebar" aria-label="Hide sidebar">
-                <img class="arrow-icon-image" src="./assets/orgas/intelligent-intern/icons/backward.png" alt="" />
+                <img class="arrow-icon-image" src="./assets/orgas/kingrt/icons/backward.png" alt="" />
               </button>
             </div>
 
             <nav class="nav" aria-label="Main navigation">
               <a class="nav-link" href="./admin-overview.html">
-                <img src="./assets/orgas/intelligent-intern/icons/users.png" alt="" />
+                <img src="./assets/orgas/kingrt/icons/users.png" alt="" />
                 <span>Overview</span>
               </a>
               <a class="nav-link" href="./admin-users.html">
-                <img src="./assets/orgas/intelligent-intern/icons/user.png" alt="" />
+                <img src="./assets/orgas/kingrt/icons/user.png" alt="" />
                 <span>User Management</span>
               </a>
               <a class="nav-link active" href="./admin-calls-crud.html">
-                <img src="./assets/orgas/intelligent-intern/icons/lobby.png" alt="" />
+                <img src="./assets/orgas/kingrt/icons/lobby.png" alt="" />
                 <span>Video Calls</span>
               </a>
             </nav>
 
             <section class="sidebar-profile avatar-only">
-              <img id="sidebarAvatar" data-sidebar-avatar class="sidebar-avatar-image" src="./assets/orgas/intelligent-intern/avatar-placeholder.svg" alt="Profile avatar" />
+              <img id="sidebarAvatar" data-sidebar-avatar class="sidebar-avatar-image" src="./assets/orgas/kingrt/avatar-placeholder.svg" alt="Profile avatar" />
             </section>
 
             <div class="logout-wrap">
@@ -115,6 +115,12 @@
         </aside>
 
         <section class="main">
+          <div class="mobile-brand-strip">
+            <img src="./assets/orgas/kingrt/king_logo-withslogan.svg" alt="KingRT" />
+            <button id="mobileMenuBtn" class="mobile-menu-btn" type="button" aria-label="Toggle menu">
+              <span class="mobile-menu-btn-bars" aria-hidden="true"></span>
+            </button>
+          </div>
           <div class="workspace calls">
             <section class="section">
               <div class="section-head">
@@ -124,7 +130,7 @@
                 </div>
                 <div class="actions">
                   <button id="showLeftSidebarBtn" class="show-sidebar-overlay show-sidebar-inline show-left-sidebar-overlay" type="button" title="Show sidebar" aria-label="Show sidebar">
-                    <img class="arrow-icon-image" src="./assets/orgas/intelligent-intern/icons/forward.png" alt="" />
+                    <img class="arrow-icon-image" src="./assets/orgas/kingrt/icons/forward.png" alt="" />
                   </button>
                   <button id="toggleDrawer" class="btn" type="button">New video call</button>
                   <button id="scheduleCallBtn" class="btn" type="button">Schedule call</button>
@@ -161,11 +167,11 @@
             <footer class="footer">
               <div class="pagination">
                 <button id="prev" class="pager-btn pager-icon-btn" type="button" title="Previous page" aria-label="Previous page">
-                  <img class="pager-icon-img" src="./assets/orgas/intelligent-intern/icons/backward.png" alt="" />
+                  <img class="pager-icon-img" src="./assets/orgas/kingrt/icons/backward.png" alt="" />
                 </button>
                 <div id="pageInfo" class="page-info">-</div>
                 <button id="next" class="pager-btn pager-icon-btn" type="button" title="Next page" aria-label="Next page">
-                  <img class="pager-icon-img" src="./assets/orgas/intelligent-intern/icons/forward.png" alt="" />
+                  <img class="pager-icon-img" src="./assets/orgas/kingrt/icons/forward.png" alt="" />
                 </button>
               </div>
             </footer>
@@ -196,21 +202,104 @@
           const leftSidebar = document.querySelector('.sidebar-left');
           const hideLeft = document.getElementById('hideLeftSidebarBtn');
           const showLeft = document.getElementById('showLeftSidebarBtn');
+          const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+          const hideLeftIcon = hideLeft?.querySelector('.arrow-icon-image');
+          const tabletMedia = window.matchMedia('(max-width: 1180px)');
+          const mobileMedia = window.matchMedia('(max-width: 760px)');
+          const forwardIcon = './assets/orgas/kingrt/icons/forward.png';
+          const backwardIcon = './assets/orgas/kingrt/icons/backward.png';
+
+          function syncTabletToggleIcon(isOpen) {
+            if (!(hideLeftIcon instanceof HTMLImageElement)) return;
+            hideLeftIcon.src = isOpen ? backwardIcon : forwardIcon;
+            if (hideLeft instanceof HTMLButtonElement) {
+              const label = isOpen ? 'Hide sidebar' : 'Open sidebar';
+              hideLeft.title = label;
+              hideLeft.setAttribute('aria-label', label);
+            }
+          }
 
           function setLeftCollapsed(collapsed) {
             if (!(shell instanceof HTMLElement)) return;
+            const isTablet = tabletMedia.matches;
+
+            if (isTablet) {
+              shell.classList.add('tablet-mode');
+              shell.classList.remove('left-collapsed');
+              if (leftSidebar instanceof HTMLElement) {
+                leftSidebar.classList.remove('collapsed');
+              }
+              const open = !collapsed;
+              shell.classList.toggle('tablet-left-open', open);
+              syncTabletToggleIcon(open);
+              return;
+            }
+
+            shell.classList.remove('tablet-mode', 'tablet-left-open');
             shell.classList.toggle('left-collapsed', collapsed);
             if (leftSidebar instanceof HTMLElement) {
               leftSidebar.classList.toggle('collapsed', collapsed);
             }
+            syncTabletToggleIcon(true);
           }
 
-          hideLeft?.addEventListener('click', () => setLeftCollapsed(true));
-          showLeft?.addEventListener('click', () => setLeftCollapsed(false));
+          function syncViewportState() {
+            if (!(shell instanceof HTMLElement)) return;
+            if (tabletMedia.matches) {
+              shell.classList.add('tablet-mode');
+              shell.classList.remove('left-collapsed', 'tablet-left-open');
+              if (leftSidebar instanceof HTMLElement) {
+                leftSidebar.classList.remove('collapsed');
+              }
+              if (mobileMedia.matches) {
+                syncTabletToggleIcon(shell.classList.contains('tablet-left-open'));
+              } else {
+                shell.classList.remove('tablet-left-open');
+                syncTabletToggleIcon(false);
+              }
+              return;
+            }
 
-          if (window.matchMedia('(max-width: 980px)').matches) {
+            shell.classList.remove('tablet-mode', 'tablet-left-open');
+            syncTabletToggleIcon(true);
+          }
+
+          hideLeft?.addEventListener('click', () => {
+            if (!(shell instanceof HTMLElement)) return;
+            if (tabletMedia.matches) {
+              const isOpen = shell.classList.contains('tablet-left-open');
+              setLeftCollapsed(isOpen);
+              return;
+            }
             setLeftCollapsed(true);
+          });
+          showLeft?.addEventListener('click', () => {
+            setLeftCollapsed(false);
+          });
+          mobileMenuBtn?.addEventListener('click', () => {
+            if (!(shell instanceof HTMLElement)) return;
+            if (!mobileMedia.matches) return;
+            const isOpen = shell.classList.contains('tablet-left-open');
+            setLeftCollapsed(isOpen);
+          });
+
+          const main = document.querySelector('.main');
+          main?.addEventListener('click', () => {
+            if (!(shell instanceof HTMLElement)) return;
+            if (!tabletMedia.matches) return;
+            if (!shell.classList.contains('tablet-left-open')) return;
+            setLeftCollapsed(true);
+          });
+
+          if (typeof tabletMedia.addEventListener === 'function') {
+            tabletMedia.addEventListener('change', syncViewportState);
+            mobileMedia.addEventListener('change', syncViewportState);
+          } else if (typeof tabletMedia.addListener === 'function') {
+            tabletMedia.addListener(syncViewportState);
+            mobileMedia.addListener(syncViewportState);
           }
+
+          syncViewportState();
         }
 
         function readSession() {
@@ -356,12 +445,12 @@
 
         const registeredUsers = [
           { id: '__host__', name: session.displayName || ownerDefault, email: session.email },
-          { id: 'u-anna', name: 'Anna Meyer', email: 'anna@intelligent-intern.com' },
-          { id: 'u-luca', name: 'Luca Klein', email: 'luca@intelligent-intern.com' },
-          { id: 'u-sara', name: 'Sara Hoffmann', email: 'sara@intelligent-intern.com' },
-          { id: 'u-maria', name: 'Maria Stark', email: 'maria@intelligent-intern.com' },
-          { id: 'u-lea', name: 'Lea Bauer', email: 'lea@intelligent-intern.com' },
-          { id: 'u-jonas', name: 'Jonas Brandt', email: 'jonas@intelligent-intern.com' },
+          { id: 'u-anna', name: 'Anna Meyer', email: 'anna@kingrt.com' },
+          { id: 'u-luca', name: 'Luca Klein', email: 'luca@kingrt.com' },
+          { id: 'u-sara', name: 'Sara Hoffmann', email: 'sara@kingrt.com' },
+          { id: 'u-maria', name: 'Maria Stark', email: 'maria@kingrt.com' },
+          { id: 'u-lea', name: 'Lea Bauer', email: 'lea@kingrt.com' },
+          { id: 'u-jonas', name: 'Jonas Brandt', email: 'jonas@kingrt.com' },
         ];
 
         function filteredCalls() {
@@ -423,7 +512,7 @@
                         <span class="icon-copy" aria-hidden="true"></span>
                       </button>
                       <button class="icon-mini-btn" data-action="join" data-id="${call.id}" title="Join call" aria-label="Join call">
-                        <img src="./assets/orgas/intelligent-intern/icons/add_to_call.png" alt="" />
+                        <img src="./assets/orgas/kingrt/icons/add_to_call.png" alt="" />
                       </button>
                       <button class="mini-btn" data-action="edit" data-id="${call.id}">Edit</button>
                       <button class="mini-btn" data-action="delete" data-id="${call.id}">Delete</button>

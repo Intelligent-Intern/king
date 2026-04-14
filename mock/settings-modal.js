@@ -2,6 +2,8 @@
   const STORAGE_KEYS = {
     avatar: 'ii_call_avatar_data_url',
     logo: 'ii_call_brand_logo_data_url',
+    brandBackground: 'ii_call_brand_background',
+    assetOverrides: 'ii_call_asset_overrides',
     themeMode: 'ii_call_theme_mode',
     customTheme: 'ii_call_theme_custom',
     timeFormat: 'ii_call_time_format',
@@ -10,9 +12,45 @@
   };
 
   const DEFAULTS = {
-    avatar: './assets/orgas/intelligent-intern/avatar-placeholder.svg',
-    logo: './assets/orgas/intelligent-intern/logo.svg',
+    avatar: './assets/orgas/kingrt/avatar-placeholder.svg',
+    logo: './assets/orgas/kingrt/logo.svg',
+    brandBackground: '#0b1324',
   };
+
+  const MANAGED_ASSET_PATHS = [
+    './assets/orgas/kingrt/logo.svg',
+    './assets/orgas/kingrt/icon.svg',
+    './assets/orgas/kingrt/king_logo-withslogan.svg',
+    './assets/orgas/kingrt/avatar-placeholder.svg',
+    './assets/orgas/kingrt/icons/add_to_call.png',
+    './assets/orgas/kingrt/icons/adminoff.png',
+    './assets/orgas/kingrt/icons/adminon.png',
+    './assets/orgas/kingrt/icons/backward.png',
+    './assets/orgas/kingrt/icons/cameraoff.png',
+    './assets/orgas/kingrt/icons/camon.png',
+    './assets/orgas/kingrt/icons/cancel.png',
+    './assets/orgas/kingrt/icons/chat.png',
+    './assets/orgas/kingrt/icons/desktop.png',
+    './assets/orgas/kingrt/icons/forward.png',
+    './assets/orgas/kingrt/icons/gear.png',
+    './assets/orgas/kingrt/icons/hand.png',
+    './assets/orgas/kingrt/icons/lobby.png',
+    './assets/orgas/kingrt/icons/micoff.png',
+    './assets/orgas/kingrt/icons/micon.png',
+    './assets/orgas/kingrt/icons/remove_user.png',
+    './assets/orgas/kingrt/icons/send.png',
+    './assets/orgas/kingrt/icons/share_screen.png',
+    './assets/orgas/kingrt/icons/user.png',
+    './assets/orgas/kingrt/icons/users.png',
+  ];
+
+  const MANAGED_ASSET_MAP = Object.freeze(MANAGED_ASSET_PATHS.reduce((acc, path) => {
+    const key = path.split('/').pop();
+    if (key) {
+      acc[key] = path;
+    }
+    return acc;
+  }, {}));
 
   const DARK_THEME = {
     '--bg-shell': '#09111e',
@@ -83,6 +121,193 @@
       return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`.toLowerCase();
     }
     return fallback;
+  }
+
+  function getAssetKeyFromPath(value) {
+    if (typeof value !== 'string' || value.trim() === '') return '';
+    const trimmed = value.trim();
+    if (trimmed.startsWith('data:')) return '';
+
+    const normalized = trimmed.replace(/\\/g, '/');
+    const segments = normalized.split('/').filter(Boolean);
+    if (segments.length === 0) return '';
+    return segments[segments.length - 1] || '';
+  }
+
+  function readAssetOverrides() {
+    const raw = readStoredJSON(STORAGE_KEYS.assetOverrides, {});
+    const normalized = {};
+
+    Object.entries(raw).forEach(([key, value]) => {
+      if (!Object.prototype.hasOwnProperty.call(MANAGED_ASSET_MAP, key)) return;
+      if (typeof value !== 'string' || !value.startsWith('data:')) return;
+      normalized[key] = value;
+    });
+
+    return normalized;
+  }
+
+  function saveAssetOverrides(overrides) {
+    localStorage.setItem(STORAGE_KEYS.assetOverrides, JSON.stringify(overrides));
+  }
+
+  function applySavedBrandBackground() {
+    const color = normalizeHex(localStorage.getItem(STORAGE_KEYS.brandBackground), DEFAULTS.brandBackground);
+    document.documentElement.style.setProperty('--brand-bg', color);
+  }
+
+  function tagManagedImages() {
+    const images = Array.from(document.querySelectorAll('img'));
+    images.forEach((img) => {
+      if (!(img instanceof HTMLImageElement)) return;
+
+      if (img.hasAttribute('data-brand-logo')) {
+        img.dataset.assetManagedKey = 'logo.svg';
+        img.dataset.assetManagedDefaultSrc = MANAGED_ASSET_MAP['logo.svg'];
+        return;
+      }
+
+      const srcAttr = img.getAttribute('src') || '';
+      const assetKey = getAssetKeyFromPath(srcAttr) || getAssetKeyFromPath(img.src);
+      if (!assetKey || !Object.prototype.hasOwnProperty.call(MANAGED_ASSET_MAP, assetKey)) return;
+
+      img.dataset.assetManagedKey = assetKey;
+      if (!img.dataset.assetManagedDefaultSrc) {
+        img.dataset.assetManagedDefaultSrc = MANAGED_ASSET_MAP[assetKey];
+      }
+    });
+  }
+
+  let isApplyingAssetOverrides = false;
+  let assetOverrideObserver = null;
+  let assetOverrideAnimationFrame = 0;
+
+  function applySavedAssetOverrides() {
+    if (isApplyingAssetOverrides) return;
+    isApplyingAssetOverrides = true;
+    try {
+      const overrides = readAssetOverrides();
+      tagManagedImages();
+
+      const managedImages = Array.from(document.querySelectorAll('img[data-asset-managed-key]'));
+      managedImages.forEach((img) => {
+        if (!(img instanceof HTMLImageElement)) return;
+        const assetKey = img.dataset.assetManagedKey || '';
+        if (!assetKey) return;
+
+        const overrideSource = overrides[assetKey];
+        if (typeof overrideSource === 'string' && overrideSource.startsWith('data:')) {
+          img.src = overrideSource;
+          img.dataset.assetOverrideApplied = '1';
+          return;
+        }
+
+        if (img.dataset.assetOverrideApplied !== '1') return;
+
+        if (assetKey === 'logo.svg' && img.hasAttribute('data-brand-logo')) {
+          img.src = localStorage.getItem(STORAGE_KEYS.logo) || DEFAULTS.logo;
+        } else {
+          const defaultSrc = img.dataset.assetManagedDefaultSrc || MANAGED_ASSET_MAP[assetKey];
+          if (typeof defaultSrc === 'string' && defaultSrc.trim() !== '') {
+            img.src = defaultSrc;
+          }
+        }
+
+        delete img.dataset.assetOverrideApplied;
+      });
+
+      const miniIconOverride = overrides['icon.svg'];
+      const iconUrl = (typeof miniIconOverride === 'string' && miniIconOverride.startsWith('data:'))
+        ? miniIconOverride
+        : MANAGED_ASSET_MAP['icon.svg'];
+      document.documentElement.style.setProperty('--ii-mini-brand-icon-url', `url("${iconUrl}")`);
+    } finally {
+      isApplyingAssetOverrides = false;
+    }
+  }
+
+  function ensureAssetOverrideObserver() {
+    if (!(document.body instanceof HTMLElement)) return;
+    if (assetOverrideObserver instanceof MutationObserver) return;
+    if (typeof MutationObserver !== 'function') return;
+
+    const schedule = () => {
+      if (isApplyingAssetOverrides) return;
+      if (assetOverrideAnimationFrame) return;
+      const runner = () => {
+        assetOverrideAnimationFrame = 0;
+        applySavedAssetOverrides();
+      };
+
+      if (typeof window.requestAnimationFrame === 'function') {
+        assetOverrideAnimationFrame = window.requestAnimationFrame(runner);
+      } else {
+        assetOverrideAnimationFrame = window.setTimeout(runner, 16);
+      }
+    };
+
+    assetOverrideObserver = new MutationObserver(() => schedule());
+    assetOverrideObserver.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['src'],
+    });
+  }
+
+  let jsZipLoaderPromise = null;
+
+  function ensureJsZipLoaded() {
+    if (window.JSZip) {
+      return Promise.resolve(window.JSZip);
+    }
+
+    if (jsZipLoaderPromise) {
+      return jsZipLoaderPromise;
+    }
+
+    jsZipLoaderPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+      script.async = true;
+      script.onload = () => {
+        if (window.JSZip) {
+          resolve(window.JSZip);
+          return;
+        }
+        reject(new Error('JSZip could not be loaded.'));
+      };
+      script.onerror = () => reject(new Error('Could not load JSZip from CDN.'));
+      document.head.appendChild(script);
+    });
+
+    return jsZipLoaderPromise;
+  }
+
+  function mimeForAssetFile(fileName) {
+    const lower = String(fileName || '').toLowerCase();
+    if (lower.endsWith('.svg')) return 'image/svg+xml';
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return 'application/octet-stream';
+  }
+
+  async function sourceToBlob(source, fileName) {
+    if (typeof source !== 'string' || source.trim() === '') {
+      throw new Error(`Missing source for ${fileName}.`);
+    }
+
+    if (source.startsWith('data:')) {
+      const response = await fetch(source);
+      return response.blob();
+    }
+
+    const response = await fetch(source);
+    if (!response.ok) {
+      throw new Error(`Could not fetch ${fileName}.`);
+    }
+    return response.blob();
   }
 
   function getCurrentTimeFormat() {
@@ -214,11 +439,11 @@
       <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
         <header class="settings-header">
           <div class="settings-title-wrap">
-            <img src="./assets/orgas/intelligent-intern/icon.svg" alt="Intelligent Intern" />
+            <img src="./assets/orgas/kingrt/icon.svg" alt="KingRT" />
             <h3 id="settingsTitle">Settings</h3>
           </div>
           <button id="settingsCloseBtn" class="icon-mini-btn" type="button" aria-label="Close settings" title="Close settings">
-            <img src="./assets/orgas/intelligent-intern/icons/cancel.png" alt="" />
+            <img src="./assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
 
@@ -374,9 +599,10 @@
 
     if (panelId === 'general' && role === 'admin') {
       const logoSrc = localStorage.getItem(STORAGE_KEYS.logo) || DEFAULTS.logo;
+      const brandBackground = normalizeHex(localStorage.getItem(STORAGE_KEYS.brandBackground), DEFAULTS.brandBackground);
       mount.innerHTML = `
         <h4>General</h4>
-        <p>Manage workspace branding and replace the logo for the shell header.</p>
+        <p>Manage workspace branding, replace logos/icons, and import/export the full icon set.</p>
         <div class="settings-row">
           <div class="settings-field">
             <label>Current branding logo</label>
@@ -404,6 +630,34 @@
             </div>
             <p id="settingsLogoUploadStatus" class="settings-upload-status"></p>
           </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-field">
+            <label for="settingsBrandBackgroundColor">Brand background</label>
+            <input id="settingsBrandBackgroundColor" type="color" value="${brandBackground}" />
+            <p class="settings-upload-status">Default is #0B1324. This background can only be changed in this General section.</p>
+            <div class="actions">
+              <button id="settingsBrandBackgroundApplyBtn" class="btn" type="button">Apply</button>
+              <button id="settingsBrandBackgroundSaveBtn" class="btn" type="button">Save</button>
+              <button id="settingsBrandBackgroundResetBtn" class="btn" type="button">Reset</button>
+            </div>
+            <p id="settingsBrandBackgroundStatus" class="settings-upload-status"></p>
+          </div>
+          <div class="settings-field">
+            <label>Icon set ZIP</label>
+            <p class="settings-upload-status">Download a ZIP with all current logos/icons. Upload a ZIP and every file with the same filename will be replaced automatically.</p>
+            <div class="actions">
+              <button id="settingsAssetZipDownloadBtn" class="btn" type="button">Download icon set</button>
+              <button id="settingsAssetZipUploadBtn" class="btn" type="button">Upload icon set</button>
+              <input id="settingsAssetZipInput" class="settings-hidden-input" type="file" accept=".zip,application/zip" />
+            </div>
+            <p id="settingsAssetZipStatus" class="settings-upload-status"></p>
+          </div>
+        </div>
+        <div class="settings-field">
+          <label>Logo and icon assets</label>
+          <p class="settings-upload-status">Replace single files below. Use original filenames so ZIP import can map them correctly.</p>
+          <ul id="settingsAssetLibrary" class="settings-asset-list"></ul>
         </div>
       `;
       bindGeneralHandlers(modal);
@@ -443,7 +697,7 @@
       const defaults = {
         subject: 'Invitation: [title] on [date] at [time]',
         body:
-          '<p>[sehrgeehrte/r] [anrede] [titel] [nachname] [vorname],</p><p>you are invited to join <strong>[title]</strong>.</p><p>Date and time: <strong>[date] [time]</strong>.</p><p>Best regards,<br/>Intelligent Intern</p>',
+          '<p>[sehrgeehrte/r] [anrede] [titel] [nachname] [vorname],</p><p>you are invited to join <strong>[title]</strong>.</p><p>Date and time: <strong>[date] [time]</strong>.</p><p>Best regards,<br/>KingRT</p>',
       };
       const storedTemplate = readStoredJSON(STORAGE_KEYS.invitationTemplate, defaults);
       const storedTransport = readStoredJSON(STORAGE_KEYS.mailTransportProfile, {
@@ -919,6 +1173,16 @@
     const uploadStatus = modal.querySelector('#settingsLogoUploadStatus');
     const saveBtn = modal.querySelector('#settingsLogoSaveBtn');
     const resetBtn = modal.querySelector('#settingsLogoResetBtn');
+    const brandBackgroundInput = modal.querySelector('#settingsBrandBackgroundColor');
+    const brandBackgroundApplyBtn = modal.querySelector('#settingsBrandBackgroundApplyBtn');
+    const brandBackgroundSaveBtn = modal.querySelector('#settingsBrandBackgroundSaveBtn');
+    const brandBackgroundResetBtn = modal.querySelector('#settingsBrandBackgroundResetBtn');
+    const brandBackgroundStatus = modal.querySelector('#settingsBrandBackgroundStatus');
+    const assetLibrary = modal.querySelector('#settingsAssetLibrary');
+    const assetZipDownloadBtn = modal.querySelector('#settingsAssetZipDownloadBtn');
+    const assetZipUploadBtn = modal.querySelector('#settingsAssetZipUploadBtn');
+    const assetZipInput = modal.querySelector('#settingsAssetZipInput');
+    const assetZipStatus = modal.querySelector('#settingsAssetZipStatus');
 
     const state = {
       stagedLogo: localStorage.getItem(STORAGE_KEYS.logo) || DEFAULTS.logo,
@@ -932,11 +1196,24 @@
       dragStartY: 0,
       dragOffsetX: 0,
       dragOffsetY: 0,
+      assetOverrides: readAssetOverrides(),
     };
 
     function setUploadStatus(message) {
       if (uploadStatus instanceof HTMLElement) {
         uploadStatus.textContent = message;
+      }
+    }
+
+    function setBrandStatus(message) {
+      if (brandBackgroundStatus instanceof HTMLElement) {
+        brandBackgroundStatus.textContent = message;
+      }
+    }
+
+    function setAssetStatus(message) {
+      if (assetZipStatus instanceof HTMLElement) {
+        assetZipStatus.textContent = message;
       }
     }
 
@@ -1046,6 +1323,23 @@
       reader.readAsDataURL(file);
     }
 
+    function readAssetFileAsDataUrl(file, onDone) {
+      if (!(file instanceof File)) return;
+      const fileName = String(file.name || '').toLowerCase();
+      const isSvg = fileName.endsWith('.svg');
+      if (!file.type.startsWith('image/') && !isSvg) {
+        setAssetStatus('Only image files can be uploaded as asset overrides.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result !== 'string') return;
+        onDone(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+
     function exportCroppedLogo() {
       if (!(state.sourceImage instanceof HTMLImageElement)) {
         return state.stagedLogo;
@@ -1086,10 +1380,74 @@
       return canvas.toDataURL('image/png');
     }
 
+    function getEffectiveAssetSource(assetKey) {
+      const overrideSource = state.assetOverrides[assetKey];
+      if (typeof overrideSource === 'string' && overrideSource.startsWith('data:')) {
+        return overrideSource;
+      }
+
+      if (assetKey === 'logo.svg') {
+        return localStorage.getItem(STORAGE_KEYS.logo) || DEFAULTS.logo;
+      }
+
+      return MANAGED_ASSET_MAP[assetKey] || '';
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function renderAssetLibrary() {
+      if (!(assetLibrary instanceof HTMLElement)) return;
+      const rows = MANAGED_ASSET_PATHS.map((path) => {
+        const assetKey = getAssetKeyFromPath(path);
+        if (!assetKey) return '';
+
+        const previewSource = getEffectiveAssetSource(assetKey) || path;
+        const inputId = `settingsAssetInput-${assetKey.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+        return `
+          <li class="settings-asset-item">
+            <div class="settings-asset-meta">
+              <img class="settings-asset-preview" src="${escapeHtml(previewSource)}" alt="${escapeHtml(assetKey)} preview" />
+              <div class="settings-asset-text">
+                <div class="settings-asset-name">${escapeHtml(assetKey)}</div>
+                <div class="settings-asset-path">${escapeHtml(path)}</div>
+              </div>
+            </div>
+            <div class="actions">
+              <button class="btn" type="button" data-asset-action="replace" data-asset-input-id="${inputId}" data-asset-key="${escapeHtml(assetKey)}">Replace</button>
+              <button class="btn" type="button" data-asset-action="reset" data-asset-key="${escapeHtml(assetKey)}">Reset</button>
+              <input id="${inputId}" class="settings-hidden-input" type="file" accept="image/*,.svg" data-asset-key="${escapeHtml(assetKey)}" />
+            </div>
+          </li>
+        `;
+      }).join('');
+
+      assetLibrary.innerHTML = rows;
+    }
+
+    function applyBrandBackgroundColor(color, persist) {
+      const normalized = normalizeHex(color, DEFAULTS.brandBackground);
+      document.documentElement.style.setProperty('--brand-bg', normalized);
+      if (persist) {
+        localStorage.setItem(STORAGE_KEYS.brandBackground, normalized);
+      }
+      return normalized;
+    }
+
     if (preview instanceof HTMLImageElement) {
       preview.src = state.stagedLogo;
     }
     loadImageFromDataUrl(state.stagedLogo);
+    if (brandBackgroundInput instanceof HTMLInputElement) {
+      brandBackgroundInput.value = normalizeHex(localStorage.getItem(STORAGE_KEYS.brandBackground), DEFAULTS.brandBackground);
+    }
+    renderAssetLibrary();
 
     input?.addEventListener('change', () => {
       if (!(input instanceof HTMLInputElement)) return;
@@ -1183,6 +1541,8 @@
       }
       localStorage.setItem(STORAGE_KEYS.logo, state.stagedLogo);
       applySavedLogo();
+      applySavedAssetOverrides();
+      renderAssetLibrary();
       setUploadStatus('Logo updated.');
       emitPreferencesUpdated();
     });
@@ -1195,8 +1555,194 @@
       }
       loadImageFromDataUrl(state.stagedLogo);
       applySavedLogo();
+      applySavedAssetOverrides();
+      renderAssetLibrary();
       setUploadStatus('');
       emitPreferencesUpdated();
+    });
+
+    brandBackgroundApplyBtn?.addEventListener('click', () => {
+      if (!(brandBackgroundInput instanceof HTMLInputElement)) return;
+      const normalized = applyBrandBackgroundColor(brandBackgroundInput.value, false);
+      brandBackgroundInput.value = normalized;
+      setBrandStatus('Brand background applied for this session.');
+      emitPreferencesUpdated();
+    });
+
+    brandBackgroundSaveBtn?.addEventListener('click', () => {
+      if (!(brandBackgroundInput instanceof HTMLInputElement)) return;
+      const normalized = applyBrandBackgroundColor(brandBackgroundInput.value, true);
+      brandBackgroundInput.value = normalized;
+      setBrandStatus('Brand background saved.');
+      emitPreferencesUpdated();
+    });
+
+    brandBackgroundResetBtn?.addEventListener('click', () => {
+      if (!(brandBackgroundInput instanceof HTMLInputElement)) return;
+      localStorage.removeItem(STORAGE_KEYS.brandBackground);
+      const normalized = applyBrandBackgroundColor(DEFAULTS.brandBackground, false);
+      brandBackgroundInput.value = normalized;
+      setBrandStatus('Brand background reset to #0B1324.');
+      emitPreferencesUpdated();
+    });
+
+    assetLibrary?.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const button = target.closest('[data-asset-action]');
+      if (!(button instanceof HTMLElement)) return;
+
+      const action = button.getAttribute('data-asset-action');
+      const assetKey = button.getAttribute('data-asset-key') || '';
+      if (!assetKey || !Object.prototype.hasOwnProperty.call(MANAGED_ASSET_MAP, assetKey)) return;
+
+      if (action === 'replace') {
+        const inputId = button.getAttribute('data-asset-input-id') || '';
+        if (!inputId) return;
+        const inputEl = modal.querySelector(`#${inputId}`);
+        if (inputEl instanceof HTMLInputElement) {
+          inputEl.click();
+        }
+        return;
+      }
+
+      if (action === 'reset') {
+        if (!Object.prototype.hasOwnProperty.call(state.assetOverrides, assetKey)) {
+          setAssetStatus(`${assetKey} already uses the default file.`);
+          return;
+        }
+        delete state.assetOverrides[assetKey];
+        saveAssetOverrides(state.assetOverrides);
+        applySavedAssetOverrides();
+        renderAssetLibrary();
+        setAssetStatus(`${assetKey} reset to default.`);
+        emitPreferencesUpdated();
+      }
+    });
+
+    assetLibrary?.addEventListener('change', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      const assetKey = target.getAttribute('data-asset-key') || '';
+      if (!assetKey || !Object.prototype.hasOwnProperty.call(MANAGED_ASSET_MAP, assetKey)) return;
+
+      const file = target.files && target.files[0] ? target.files[0] : null;
+      if (!file) return;
+
+      readAssetFileAsDataUrl(file, (dataUrl) => {
+        state.assetOverrides[assetKey] = dataUrl;
+        saveAssetOverrides(state.assetOverrides);
+        applySavedAssetOverrides();
+        renderAssetLibrary();
+        setAssetStatus(`${assetKey} replaced.`);
+        emitPreferencesUpdated();
+      });
+
+      target.value = '';
+    });
+
+    assetZipDownloadBtn?.addEventListener('click', async () => {
+      if (!(assetZipDownloadBtn instanceof HTMLButtonElement)) return;
+      assetZipDownloadBtn.disabled = true;
+      setAssetStatus('Preparing icon set ZIP...');
+
+      try {
+        const JSZip = await ensureJsZipLoaded();
+        const zip = new JSZip();
+        const failures = [];
+
+        for (const path of MANAGED_ASSET_PATHS) {
+          const assetKey = getAssetKeyFromPath(path);
+          if (!assetKey) continue;
+          const source = getEffectiveAssetSource(assetKey);
+
+          try {
+            const blob = await sourceToBlob(source, assetKey);
+            zip.file(assetKey, blob);
+          } catch {
+            failures.push(assetKey);
+          }
+        }
+
+        const archive = await zip.generateAsync({ type: 'blob' });
+        const downloadUrl = URL.createObjectURL(archive);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = 'kingrt-icon-set.zip';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(downloadUrl);
+
+        if (failures.length > 0) {
+          setAssetStatus(`ZIP downloaded. Missing files: ${failures.join(', ')}`);
+        } else {
+          setAssetStatus('ZIP downloaded: kingrt-icon-set.zip');
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'ZIP download failed.';
+        setAssetStatus(message);
+      } finally {
+        assetZipDownloadBtn.disabled = false;
+      }
+    });
+
+    assetZipUploadBtn?.addEventListener('click', () => {
+      if (assetZipInput instanceof HTMLInputElement) {
+        assetZipInput.click();
+      }
+    });
+
+    assetZipInput?.addEventListener('change', async () => {
+      if (!(assetZipInput instanceof HTMLInputElement)) return;
+      const file = assetZipInput.files && assetZipInput.files[0] ? assetZipInput.files[0] : null;
+      if (!file) return;
+
+      if (assetZipUploadBtn instanceof HTMLButtonElement) {
+        assetZipUploadBtn.disabled = true;
+      }
+      setAssetStatus('Importing icon set ZIP...');
+
+      try {
+        const JSZip = await ensureJsZipLoaded();
+        const zip = await JSZip.loadAsync(file);
+        let replacedCount = 0;
+        let ignoredCount = 0;
+
+        const entries = Object.values(zip.files);
+        for (const entry of entries) {
+          if (!entry || entry.dir) continue;
+          const assetKey = getAssetKeyFromPath(entry.name);
+          if (!assetKey || !Object.prototype.hasOwnProperty.call(MANAGED_ASSET_MAP, assetKey)) {
+            ignoredCount += 1;
+            continue;
+          }
+
+          const base64 = await entry.async('base64');
+          const mime = mimeForAssetFile(assetKey);
+          state.assetOverrides[assetKey] = `data:${mime};base64,${base64}`;
+          replacedCount += 1;
+        }
+
+        saveAssetOverrides(state.assetOverrides);
+        applySavedAssetOverrides();
+        renderAssetLibrary();
+
+        if (replacedCount === 0) {
+          setAssetStatus('No matching filenames found in ZIP.');
+        } else {
+          setAssetStatus(`ZIP imported. Replaced ${replacedCount} files, ignored ${ignoredCount}.`);
+        }
+        emitPreferencesUpdated();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'ZIP upload failed.';
+        setAssetStatus(message);
+      } finally {
+        if (assetZipUploadBtn instanceof HTMLButtonElement) {
+          assetZipUploadBtn.disabled = false;
+        }
+        assetZipInput.value = '';
+      }
     });
   }
 
@@ -1337,8 +1883,11 @@
     };
 
     applySavedTheme();
+    applySavedBrandBackground();
     applySavedAvatar();
     applySavedLogo();
+    applySavedAssetOverrides();
+    ensureAssetOverrideObserver();
 
     const modal = createSettingsModal(role);
     modal.setAttribute('data-role', role);
@@ -1393,7 +1942,7 @@
     return readStoredJSON(STORAGE_KEYS.invitationTemplate, {
       subject: 'Invitation: [title] on [date] at [time]',
       body:
-        '<p>[sehrgeehrte/r] [anrede] [titel] [nachname] [vorname],</p><p>you are invited to join <strong>[title]</strong>.</p><p>Date and time: <strong>[date] [time]</strong>.</p><p>Best regards,<br/>Intelligent Intern</p>',
+        '<p>[sehrgeehrte/r] [anrede] [titel] [nachname] [vorname],</p><p>you are invited to join <strong>[title]</strong>.</p><p>Date and time: <strong>[date] [time]</strong>.</p><p>Best regards,<br/>KingRT</p>',
     });
   }
 
@@ -1405,8 +1954,11 @@
     getInvitationTemplate,
     applyPersistedAppearance() {
       applySavedTheme();
+      applySavedBrandBackground();
       applySavedAvatar();
       applySavedLogo();
+      applySavedAssetOverrides();
+      ensureAssetOverrideObserver();
     },
   };
 })();

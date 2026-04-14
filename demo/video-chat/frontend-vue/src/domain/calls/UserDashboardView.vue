@@ -2,66 +2,22 @@
   <section class="view-card calls-view">
     <section class="section calls-header">
       <div class="calls-header-left">
-        <h3>Admin Video Calls</h3>
-        <p>Backend-bound CRUD, scheduling, and invite flows.</p>
+        <h3>My Video Calls</h3>
       </div>
       <div class="actions">
-        <button class="btn" type="button" @click="openCompose('create')">New Video Call</button>
-        <button class="btn" type="button" @click="openCompose('schedule')">Schedule Call</button>
+        <button class="btn" type="button" @click="openCompose('create')">New call</button>
       </div>
     </section>
 
     <section class="toolbar calls-toolbar">
-      <div class="calls-toolbar-left">
-        <div class="calls-view-tabs" role="tablist" aria-label="Calls view mode">
-          <button
-            class="tab"
-            :class="{ active: viewMode === 'calls' }"
-            type="button"
-            role="tab"
-            :aria-selected="viewMode === 'calls'"
-            @click="setViewMode('calls')"
-          >
-            Calls
-          </button>
-          <button
-            class="tab"
-            :class="{ active: viewMode === 'calendar' }"
-            type="button"
-            role="tab"
-            :aria-selected="viewMode === 'calendar'"
-            @click="setViewMode('calendar')"
-          >
-            Calendar
-          </button>
-        </div>
-      </div>
-
-      <div class="calls-toolbar-right">
-        <label class="calls-search" aria-label="Call search">
-          <input
-            v-model="queryDraft"
-            class="input"
-            type="search"
-            placeholder="Search calls"
-            @keydown.enter.prevent="applyFilters"
-          />
-          <button class="btn" type="button" @click="applyFilters">Search</button>
-        </label>
-
-        <select v-model="statusFilter" class="select" @change="applyFilters">
-          <option value="all">All status</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="active">Active</option>
-          <option value="ended">Ended</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-
-        <select v-model="scopeFilter" class="select" @change="applyFilters">
-          <option value="all">All scope</option>
-          <option value="my">My scope</option>
-        </select>
-      </div>
+      <input
+        v-model="queryDraft"
+        class="input"
+        type="text"
+        placeholder="Search call title"
+        @keydown.enter.prevent="applyFilters"
+      />
+      <button class="btn" type="button" @click="applyFilters">Search</button>
     </section>
 
     <section v-if="noticeMessage" class="section calls-banner" :class="noticeKindClass">
@@ -112,7 +68,7 @@
                   :disabled="!isEditable(call)"
                   @click="openCompose('edit', call)"
                 >
-                  <img src="/assets/orgas/intelligent-intern/icons/gear.png" alt="" />
+                  <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
                 </button>
                 <button
                   class="icon-mini-btn"
@@ -122,17 +78,7 @@
                   :disabled="!isInvitable(call)"
                   @click="toggleInvitePopover($event, call)"
                 >
-                  <img src="/assets/orgas/intelligent-intern/icons/add_to_call.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn danger"
-                  type="button"
-                  title="Cancel call"
-                  :aria-label="`Cancel call ${call.title || call.id}`"
-                  :disabled="!isCancellable(call)"
-                  @click="openCancel(call)"
-                >
-                  <img src="/assets/orgas/intelligent-intern/icons/end_call.png" alt="" />
+                  <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
                 </button>
               </div>
             </td>
@@ -144,7 +90,7 @@
         No calls match the active filters.
       </section>
       <section v-if="loadingCalls" class="section calls-empty">
-        Loading calls…
+        Loading calls...
       </section>
       <section v-if="callsError" class="section calls-empty calls-error">
         {{ callsError }}
@@ -153,7 +99,7 @@
 
     <section v-else class="table-wrap calls-calendar-wrap">
       <section v-if="loadingCalendar" class="section calls-empty">
-        Loading calendar view…
+        Loading calendar view...
       </section>
       <section v-else-if="calendarError" class="section calls-empty calls-error">
         {{ calendarError }}
@@ -182,7 +128,7 @@
                   :disabled="!isEditable(call)"
                   @click="openCompose('edit', call)"
                 >
-                  <img src="/assets/orgas/intelligent-intern/icons/gear.png" alt="" />
+                  <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
                 </button>
                 <button
                   class="icon-mini-btn"
@@ -191,16 +137,7 @@
                   :disabled="!isInvitable(call)"
                   @click="toggleInvitePopover($event, call)"
                 >
-                  <img src="/assets/orgas/intelligent-intern/icons/add_to_call.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn danger"
-                  type="button"
-                  title="Cancel call"
-                  :disabled="!isCancellable(call)"
-                  @click="openCancel(call)"
-                >
-                  <img src="/assets/orgas/intelligent-intern/icons/end_call.png" alt="" />
+                  <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
                 </button>
               </div>
             </li>
@@ -217,7 +154,7 @@
           :disabled="!pagination.hasPrev || loadingCalls"
           @click="goToPage(pagination.page - 1)"
         >
-          <img class="pager-icon-img" src="/assets/orgas/intelligent-intern/icons/backward.png" alt="Previous" />
+          <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous" />
         </button>
         <div class="page-info">
           Page {{ pagination.page }} / {{ pagination.pageCount }} · {{ pagination.total }} total
@@ -228,7 +165,7 @@
           :disabled="!pagination.hasNext || loadingCalls"
           @click="goToPage(pagination.page + 1)"
         >
-          <img class="pager-icon-img" src="/assets/orgas/intelligent-intern/icons/forward.png" alt="Next" />
+          <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next" />
         </button>
       </div>
     </section>
@@ -244,7 +181,7 @@
       <p class="invite-popover-label">
         Invite for <strong>{{ invitePopover.callId }}</strong>
       </p>
-      <p v-if="invitePopover.loading" class="invite-popover-label">Generating invite code…</p>
+      <p v-if="invitePopover.loading" class="invite-popover-label">Generating invite code...</p>
       <p v-else-if="invitePopover.error" class="invite-popover-label calls-error">{{ invitePopover.error }}</p>
       <template v-else>
         <div class="invite-popover-row">
@@ -264,13 +201,53 @@
       </template>
     </div>
 
+    <div class="calls-modal" :hidden="!joinState.open" role="dialog" aria-modal="true" aria-label="Join invite modal">
+      <div class="calls-modal-backdrop" @click="closeJoinModal"></div>
+      <div class="calls-modal-dialog calls-modal-dialog-small">
+        <header class="calls-modal-header">
+          <h4>Join with invite</h4>
+          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeJoinModal">
+            <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
+          </button>
+        </header>
+
+        <div class="calls-modal-body">
+          <label class="field">
+            <span>Invite code</span>
+            <input
+              v-model="joinState.code"
+              class="input"
+              type="text"
+              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              aria-label="Invite code"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              @keydown.enter.prevent="submitJoinInvite"
+            />
+          </label>
+
+          <section v-if="joinState.error" class="calls-inline-error">
+            {{ joinState.error }}
+          </section>
+        </div>
+
+        <footer class="calls-modal-footer">
+          <button class="btn" type="button" :disabled="joinState.submitting" @click="closeJoinModal">Close</button>
+          <button class="btn" type="button" :disabled="joinState.submitting" @click="submitJoinInvite">
+            {{ joinState.submitting ? 'Joining...' : 'Join' }}
+          </button>
+        </footer>
+      </div>
+    </div>
+
     <div class="calls-modal" :hidden="!composeState.open" role="dialog" aria-modal="true" aria-label="Call compose modal">
       <div class="calls-modal-backdrop" @click="closeCompose"></div>
       <div class="calls-modal-dialog">
         <header class="calls-modal-header">
           <h4>{{ composeHeadline }}</h4>
           <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeCompose">
-            <img src="/assets/orgas/intelligent-intern/icons/cancel.png" alt="" />
+            <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
 
@@ -304,116 +281,6 @@
             </label>
           </section>
 
-          <section v-if="composeState.mode === 'edit'" class="calls-toggle-row">
-            <label class="calls-checkbox-row">
-              <input v-model="composeState.replaceParticipants" type="checkbox" />
-              <span>Replace participant list during edit</span>
-            </label>
-          </section>
-
-          <section v-if="shouldSendParticipants" class="calls-participants-grid">
-            <article class="calls-participants-panel">
-              <header class="calls-participants-head">
-                <h5>Registered users</h5>
-                <label class="calls-search small" aria-label="Participant search">
-                  <input
-                    v-model="composeParticipants.query"
-                    class="input"
-                    type="search"
-                    placeholder="Search users"
-                    @keydown.enter.prevent="applyParticipantSearch"
-                  />
-                  <button class="btn" type="button" @click="applyParticipantSearch">Search</button>
-                </label>
-              </header>
-
-              <section v-if="composeParticipants.error" class="calls-inline-error">
-                {{ composeParticipants.error }}
-              </section>
-
-              <section class="calls-participants-list" :class="{ loading: composeParticipants.loading }">
-                <label
-                  v-for="user in composeParticipants.rows"
-                  :key="user.id"
-                  class="calls-participant-row"
-                >
-                  <input
-                    type="checkbox"
-                    :checked="isUserSelected(user.id)"
-                    @change="toggleUserSelection(user.id)"
-                  />
-                  <span class="calls-participant-main">{{ user.display_name || user.email }}</span>
-                  <span class="calls-participant-meta">{{ user.email }} · {{ user.role }}</span>
-                </label>
-                <p v-if="!composeParticipants.loading && composeParticipants.rows.length === 0" class="calls-empty-inline">
-                  No users in this page.
-                </p>
-              </section>
-
-              <div class="pagination">
-                <button
-                  class="pager-btn pager-icon-btn"
-                  type="button"
-                  :disabled="!composeParticipants.hasPrev || composeParticipants.loading"
-                  @click="goToParticipantPage(composeParticipants.page - 1)"
-                >
-                  <img class="pager-icon-img" src="/assets/orgas/intelligent-intern/icons/backward.png" alt="Previous" />
-                </button>
-                <div class="page-info">
-                  Page {{ composeParticipants.page }} / {{ composeParticipants.pageCount }}
-                </div>
-                <button
-                  class="pager-btn pager-icon-btn"
-                  type="button"
-                  :disabled="!composeParticipants.hasNext || composeParticipants.loading"
-                  @click="goToParticipantPage(composeParticipants.page + 1)"
-                >
-                  <img class="pager-icon-img" src="/assets/orgas/intelligent-intern/icons/forward.png" alt="Next" />
-                </button>
-              </div>
-            </article>
-
-            <article class="calls-participants-panel">
-              <header class="calls-participants-head">
-                <h5>External participants</h5>
-                <button class="btn" type="button" @click="addExternalRow">Add row</button>
-              </header>
-
-              <section class="calls-external-list">
-                <div v-for="(row, index) in composeExternalRows" :key="row.id" class="calls-external-row">
-                  <input
-                    v-model="row.display_name"
-                    class="input"
-                    type="text"
-                    placeholder="Display name"
-                    :aria-label="`External participant ${index + 1} display name`"
-                  />
-                  <input
-                    v-model="row.email"
-                    class="input"
-                    type="email"
-                    placeholder="guest@example.com"
-                    :aria-label="`External participant ${index + 1} email`"
-                  />
-                  <button
-                    class="icon-mini-btn danger"
-                    type="button"
-                    title="Remove external participant"
-                    :aria-label="`Remove external participant row ${index + 1}`"
-                    @click="removeExternalRow(index)"
-                  >
-                    <img src="/assets/orgas/intelligent-intern/icons/remove_user.png" alt="" />
-                  </button>
-                </div>
-                <p v-if="composeExternalRows.length === 0" class="calls-empty-inline">No external participants configured.</p>
-              </section>
-            </article>
-          </section>
-
-          <section v-else class="calls-inline-hint">
-            Existing participants remain unchanged for this edit.
-          </section>
-
           <section v-if="composeState.error" class="calls-inline-error">
             {{ composeState.error }}
           </section>
@@ -422,58 +289,7 @@
         <footer class="calls-modal-footer">
           <button class="btn" type="button" :disabled="composeState.submitting" @click="closeCompose">Close</button>
           <button class="btn" type="button" :disabled="composeState.submitting" @click="submitCompose">
-            {{ composeState.submitting ? 'Saving…' : composeSubmitLabel }}
-          </button>
-        </footer>
-      </div>
-    </div>
-
-    <div class="calls-modal" :hidden="!cancelState.open" role="dialog" aria-modal="true" aria-label="Cancel call modal">
-      <div class="calls-modal-backdrop" @click="closeCancel"></div>
-      <div class="calls-modal-dialog calls-modal-dialog-small">
-        <header class="calls-modal-header">
-          <h4>Cancel call</h4>
-          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeCancel">
-            <img src="/assets/orgas/intelligent-intern/icons/cancel.png" alt="" />
-          </button>
-        </header>
-
-        <div class="calls-modal-body">
-          <p class="calls-inline-hint">
-            Cancelling <strong>{{ cancelState.callTitle }}</strong> marks all participants as cancelled.
-          </p>
-
-          <label class="field">
-            <span>Cancel reason</span>
-            <input
-              v-model="cancelState.reason"
-              class="input"
-              type="text"
-              placeholder="scheduler_conflict"
-              aria-label="Cancel reason"
-            />
-          </label>
-
-          <label class="field">
-            <span>Cancel message</span>
-            <textarea
-              v-model="cancelState.message"
-              class="calls-textarea"
-              rows="4"
-              placeholder="Call cancelled due to scheduling conflict."
-              aria-label="Cancel message"
-            ></textarea>
-          </label>
-
-          <section v-if="cancelState.error" class="calls-inline-error">
-            {{ cancelState.error }}
-          </section>
-        </div>
-
-        <footer class="calls-modal-footer">
-          <button class="btn" type="button" :disabled="cancelState.submitting" @click="closeCancel">Close</button>
-          <button class="btn" type="button" :disabled="cancelState.submitting" @click="submitCancel">
-            {{ cancelState.submitting ? 'Cancelling…' : 'Cancel call' }}
+            {{ composeState.submitting ? 'Saving...' : composeSubmitLabel }}
           </button>
         </footer>
       </div>
@@ -484,11 +300,10 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { sessionState } from '../stores/session';
-import { resolveBackendOrigin } from '../lib/backendOrigin';
+import { sessionState } from '../auth/session';
+import { resolveBackendOrigin } from '../../support/backendOrigin';
 
 const router = useRouter();
-
 const backendOrigin = resolveBackendOrigin();
 
 function requestHeaders(withBody = false) {
@@ -591,7 +406,7 @@ function formatDateTime(isoValue) {
 }
 
 function formatRange(startsAt, endsAt) {
-  return `${formatDateTime(startsAt)} → ${formatDateTime(endsAt)}`;
+  return `${formatDateTime(startsAt)} -> ${formatDateTime(endsAt)}`;
 }
 
 function statusTagClass(status) {
@@ -602,26 +417,34 @@ function statusTagClass(status) {
   return 'warn';
 }
 
-function isEditable(call) {
-  const status = String(call?.status || '').toLowerCase();
-  return status !== 'cancelled' && status !== 'ended';
+function isOwnerCall(call) {
+  return Number(call?.owner?.user_id || 0) === Number(sessionState.userId || 0);
 }
 
-function isCancellable(call) {
+function isEditable(call) {
   const status = String(call?.status || '').toLowerCase();
-  return status !== 'cancelled' && status !== 'ended';
+  if (status === 'cancelled' || status === 'ended') {
+    return false;
+  }
+
+  if (sessionState.role === 'moderator') {
+    return true;
+  }
+
+  return isOwnerCall(call);
 }
 
 function isInvitable(call) {
-  const status = String(call?.status || '').toLowerCase();
-  return status !== 'cancelled' && status !== 'ended';
+  return isEditable(call);
 }
+
+const canReadAllScope = computed(() => sessionState.role === 'moderator');
 
 const viewMode = ref('calls');
 const queryDraft = ref('');
 const queryApplied = ref('');
 const statusFilter = ref('all');
-const scopeFilter = ref('all');
+const scopeFilter = ref('my');
 
 const calls = ref([]);
 const loadingCalls = ref(false);
@@ -772,6 +595,9 @@ function setViewMode(nextMode) {
 async function applyFilters() {
   clearNotice();
   queryApplied.value = queryDraft.value.trim();
+  if (!canReadAllScope.value && scopeFilter.value !== 'my') {
+    scopeFilter.value = 'my';
+  }
   pagination.page = 1;
   await Promise.all([loadCalls(), loadCalendar()]);
 }
@@ -845,6 +671,10 @@ function placeInvitePopover(triggerElement) {
 
 async function toggleInvitePopover(event, call) {
   if (!call || !call.id) return;
+
+  if (!isInvitable(call)) {
+    return;
+  }
 
   const trigger = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null;
   if (invitePopover.open && invitePopover.callId === call.id) {
@@ -921,6 +751,68 @@ function openCallWorkspace(roomId) {
   router.push(`/workspace/call/${encodeURIComponent(safeRoomId)}`);
 }
 
+const joinState = reactive({
+  open: false,
+  submitting: false,
+  error: '',
+  code: '',
+});
+
+function openJoinModal() {
+  clearNotice();
+  closeInvitePopover();
+  joinState.open = true;
+  joinState.submitting = false;
+  joinState.error = '';
+  joinState.code = '';
+}
+
+function closeJoinModal() {
+  joinState.open = false;
+  joinState.submitting = false;
+  joinState.error = '';
+}
+
+function resolveJoinRoomId(joinContext) {
+  const roomId = String(joinContext?.room?.id || joinContext?.call?.room_id || '').trim();
+  return roomId === '' ? 'lobby' : roomId;
+}
+
+async function submitJoinInvite() {
+  clearNotice();
+  joinState.error = '';
+
+  const code = String(joinState.code || '').trim();
+  if (code === '') {
+    joinState.error = 'Invite code is required.';
+    return;
+  }
+
+  joinState.submitting = true;
+
+  try {
+    const payload = await apiRequest('/api/invite-codes/redeem', {
+      method: 'POST',
+      body: {
+        code,
+      },
+    });
+
+    const redemption = payload?.result?.redemption || {};
+    const joinContext = redemption?.join_context || {};
+    const roomId = resolveJoinRoomId(joinContext);
+    const scope = String(joinContext?.scope || '');
+
+    closeJoinModal();
+    setNotice('ok', `Invite redeemed for ${scope || 'invite'} context.`);
+    router.push(`/workspace/call/${encodeURIComponent(roomId)}`);
+  } catch (error) {
+    joinState.error = error instanceof Error ? error.message : 'Could not redeem invite code.';
+  } finally {
+    joinState.submitting = false;
+  }
+}
+
 const composeState = reactive({
   open: false,
   mode: 'create',
@@ -929,36 +821,9 @@ const composeState = reactive({
   roomId: 'lobby',
   startsLocal: '',
   endsLocal: '',
-  replaceParticipants: false,
   submitting: false,
   error: '',
 });
-
-const composeParticipants = reactive({
-  loading: false,
-  error: '',
-  query: '',
-  page: 1,
-  pageSize: 10,
-  total: 0,
-  pageCount: 1,
-  hasPrev: false,
-  hasNext: false,
-  rows: [],
-});
-
-const composeSelectedUserIds = ref([]);
-const composeExternalRows = ref([]);
-let composeExternalRowId = 0;
-
-function nextExternalRow() {
-  composeExternalRowId += 1;
-  return {
-    id: composeExternalRowId,
-    display_name: '',
-    email: '',
-  };
-}
 
 const composeHeadline = computed(() => {
   if (composeState.mode === 'edit') return 'Edit video call';
@@ -971,10 +836,6 @@ const composeSubmitLabel = computed(() => {
   if (composeState.mode === 'schedule') return 'Schedule call';
   return 'Create call';
 });
-
-const shouldSendParticipants = computed(
-  () => composeState.mode !== 'edit' || composeState.replaceParticipants,
-);
 
 function seedComposeWindow(mode) {
   const now = new Date();
@@ -996,19 +857,8 @@ function resetComposeModal() {
   composeState.callId = '';
   composeState.title = '';
   composeState.roomId = 'lobby';
-  composeState.replaceParticipants = false;
   composeState.submitting = false;
   composeState.error = '';
-  composeParticipants.query = '';
-  composeParticipants.page = 1;
-  composeParticipants.error = '';
-  composeParticipants.rows = [];
-  composeParticipants.total = 0;
-  composeParticipants.pageCount = 1;
-  composeParticipants.hasPrev = false;
-  composeParticipants.hasNext = false;
-  composeSelectedUserIds.value = [];
-  composeExternalRows.value = [];
 }
 
 function openCompose(mode, call = null) {
@@ -1024,146 +874,15 @@ function openCompose(mode, call = null) {
     composeState.roomId = String(call.room_id || 'lobby');
     composeState.startsLocal = isoToLocalInput(String(call.starts_at || ''));
     composeState.endsLocal = isoToLocalInput(String(call.ends_at || ''));
-    composeState.replaceParticipants = false;
   } else {
     seedComposeWindow(mode);
-    composeState.replaceParticipants = true;
-    composeExternalRows.value = [nextExternalRow()];
   }
-
-  void loadComposeParticipants();
 }
 
 function closeCompose() {
   composeState.open = false;
   composeState.submitting = false;
   composeState.error = '';
-}
-
-async function loadComposeParticipants() {
-  if (!composeState.open) return;
-
-  composeParticipants.loading = true;
-  composeParticipants.error = '';
-
-  try {
-    const payload = await apiRequest('/api/admin/users', {
-      query: {
-        query: composeParticipants.query,
-        page: composeParticipants.page,
-        page_size: composeParticipants.pageSize,
-      },
-    });
-
-    composeParticipants.rows = Array.isArray(payload.users) ? payload.users : [];
-    const paging = payload.pagination || {};
-    composeParticipants.total = Number.isInteger(paging.total) ? paging.total : composeParticipants.rows.length;
-    composeParticipants.pageCount = Number.isInteger(paging.page_count) && paging.page_count > 0
-      ? paging.page_count
-      : 1;
-    composeParticipants.hasPrev = Boolean(paging.has_prev);
-    composeParticipants.hasNext = Boolean(paging.has_next);
-  } catch (error) {
-    composeParticipants.rows = [];
-    composeParticipants.total = 0;
-    composeParticipants.pageCount = 1;
-    composeParticipants.hasPrev = false;
-    composeParticipants.hasNext = false;
-    composeParticipants.error = error instanceof Error ? error.message : 'Could not load users.';
-  } finally {
-    composeParticipants.loading = false;
-  }
-}
-
-async function applyParticipantSearch() {
-  composeParticipants.page = 1;
-  await loadComposeParticipants();
-}
-
-async function goToParticipantPage(nextPage) {
-  if (!Number.isInteger(nextPage) || nextPage < 1 || nextPage === composeParticipants.page) {
-    return;
-  }
-
-  composeParticipants.page = nextPage;
-  await loadComposeParticipants();
-}
-
-function isUserSelected(userId) {
-  const id = Number(userId);
-  return composeSelectedUserIds.value.includes(id);
-}
-
-function toggleUserSelection(userId) {
-  const id = Number(userId);
-  if (!Number.isInteger(id) || id <= 0) {
-    return;
-  }
-
-  const next = composeSelectedUserIds.value.slice();
-  const index = next.indexOf(id);
-  if (index >= 0) {
-    next.splice(index, 1);
-  } else {
-    next.push(id);
-  }
-
-  composeSelectedUserIds.value = next;
-}
-
-function addExternalRow() {
-  composeExternalRows.value = [...composeExternalRows.value, nextExternalRow()];
-}
-
-function removeExternalRow(index) {
-  if (!Number.isInteger(index) || index < 0 || index >= composeExternalRows.value.length) {
-    return;
-  }
-
-  const next = composeExternalRows.value.slice();
-  next.splice(index, 1);
-  composeExternalRows.value = next;
-}
-
-function normalizeExternalRows() {
-  const rows = [];
-
-  for (let index = 0; index < composeExternalRows.value.length; index += 1) {
-    const row = composeExternalRows.value[index];
-    const displayName = String(row?.display_name || '').trim();
-    const email = String(row?.email || '').trim().toLowerCase();
-
-    if (displayName === '' && email === '') {
-      continue;
-    }
-
-    if (displayName === '' || email === '') {
-      return {
-        ok: false,
-        error: `External participant row ${index + 1} requires both display name and email.`,
-        rows: [],
-      };
-    }
-
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      return {
-        ok: false,
-        error: `External participant row ${index + 1} has an invalid email.`,
-        rows: [],
-      };
-    }
-
-    rows.push({
-      display_name: displayName,
-      email,
-    });
-  }
-
-  return {
-    ok: true,
-    error: '',
-    rows,
-  };
 }
 
 async function submitCompose() {
@@ -1195,17 +914,6 @@ async function submitCompose() {
     ends_at: endsAt,
   };
 
-  if (shouldSendParticipants.value) {
-    const normalizedExternal = normalizeExternalRows();
-    if (!normalizedExternal.ok) {
-      composeState.error = normalizedExternal.error;
-      return;
-    }
-
-    payload.internal_participant_user_ids = composeSelectedUserIds.value.slice();
-    payload.external_participants = normalizedExternal.rows;
-  }
-
   composeState.submitting = true;
 
   try {
@@ -1230,66 +938,6 @@ async function submitCompose() {
     composeState.error = error instanceof Error ? error.message : 'Could not save call.';
   } finally {
     composeState.submitting = false;
-  }
-}
-
-const cancelState = reactive({
-  open: false,
-  submitting: false,
-  error: '',
-  callId: '',
-  callTitle: '',
-  reason: '',
-  message: '',
-});
-
-function openCancel(call) {
-  clearNotice();
-  closeInvitePopover();
-  cancelState.open = true;
-  cancelState.submitting = false;
-  cancelState.error = '';
-  cancelState.callId = String(call?.id || '');
-  cancelState.callTitle = String(call?.title || call?.id || '');
-  cancelState.reason = 'scheduler_conflict';
-  cancelState.message = 'Call cancelled due to scheduling conflict.';
-}
-
-function closeCancel() {
-  cancelState.open = false;
-  cancelState.submitting = false;
-  cancelState.error = '';
-}
-
-async function submitCancel() {
-  cancelState.error = '';
-  clearNotice();
-
-  const reason = cancelState.reason.trim();
-  const message = cancelState.message.trim();
-  if (reason === '' || message === '') {
-    cancelState.error = 'Cancel reason and message are required.';
-    return;
-  }
-
-  cancelState.submitting = true;
-
-  try {
-    await apiRequest(`/api/calls/${encodeURIComponent(cancelState.callId)}/cancel`, {
-      method: 'POST',
-      body: {
-        cancel_reason: reason,
-        cancel_message: message,
-      },
-    });
-
-    closeCancel();
-    setNotice('ok', 'Call cancelled.');
-    await Promise.all([loadCalls(), loadCalendar()]);
-  } catch (error) {
-    cancelState.error = error instanceof Error ? error.message : 'Could not cancel call.';
-  } finally {
-    cancelState.submitting = false;
   }
 }
 
@@ -1324,13 +972,13 @@ function handleWindowResize() {
 function handleEscape(event) {
   if (event.key !== 'Escape') return;
 
-  if (composeState.open) {
-    closeCompose();
+  if (joinState.open) {
+    closeJoinModal();
     return;
   }
 
-  if (cancelState.open) {
-    closeCancel();
+  if (composeState.open) {
+    closeCompose();
     return;
   }
 
@@ -1385,45 +1033,9 @@ onBeforeUnmount(() => {
 }
 
 .calls-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.calls-toolbar-left {
-  min-width: 0;
-}
-
-.calls-view-tabs {
-  display: inline-grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
-  background: var(--border-subtle);
-}
-
-.calls-view-tabs .tab {
-  min-width: 120px;
-  height: 40px;
-}
-
-.calls-toolbar-right {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.calls-search {
-  display: inline-grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-}
-
-.calls-search.small {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
 }
 
 .calls-banner {
@@ -1609,110 +1221,6 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
-.calls-toggle-row {
-  display: flex;
-  align-items: center;
-}
-
-.calls-checkbox-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-main);
-  font-size: 12px;
-}
-
-.calls-participants-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
-}
-
-.calls-participants-panel {
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: #122340;
-  padding: 10px;
-  min-height: 0;
-  display: grid;
-  gap: 10px;
-  align-content: start;
-}
-
-.calls-participants-head {
-  display: grid;
-  gap: 8px;
-}
-
-.calls-participants-head h5 {
-  margin: 0;
-  font-size: 13px;
-}
-
-.calls-participants-list {
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: #0f1f37;
-  max-height: 280px;
-  overflow: auto;
-  display: grid;
-  align-content: start;
-}
-
-.calls-participants-list.loading {
-  opacity: 0.7;
-}
-
-.calls-participant-row {
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border-subtle);
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  column-gap: 8px;
-  align-items: start;
-}
-
-.calls-participant-row:last-child {
-  border-bottom: 0;
-}
-
-.calls-participant-main {
-  font-size: 12px;
-  color: #ffffff;
-}
-
-.calls-participant-meta {
-  grid-column: 2;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.calls-external-list {
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: #0f1f37;
-  max-height: 280px;
-  overflow: auto;
-  padding: 8px;
-  display: grid;
-  gap: 8px;
-  align-content: start;
-}
-
-.calls-external-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-}
-
-.calls-empty-inline {
-  margin: 0;
-  padding: 8px 10px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
 .calls-inline-error {
   border: 1px solid #6b1f1f;
   border-radius: 6px;
@@ -1738,32 +1246,67 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
-.calls-textarea {
+.invite-popover {
+  position: fixed;
+  z-index: 75;
+  width: 320px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: #13213a;
+  box-shadow: 0 16px 32px #000000;
+  display: grid;
+  gap: 8px;
+}
+
+.invite-popover[hidden] {
+  display: none;
+}
+
+.invite-popover-label {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-main);
+}
+
+.invite-popover-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.invite-code {
+  display: block;
   width: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--bg-input);
-  color: #0a1322;
+  background: #08111f;
+  color: #e6f0ff;
   padding: 8px 10px;
-  resize: vertical;
+  font-size: 12px;
+  overflow: auto;
 }
 
-@media (max-width: 980px) {
+.invite-popover-close {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-main);
+  min-width: 74px;
+  height: 32px;
+}
+
+.invite-popover-close:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 1180px) {
   .calls-toolbar {
-    align-items: stretch;
+    grid-template-columns: 1fr;
   }
 
-  .calls-toolbar-right {
-    width: 100%;
-  }
-
-  .calls-search {
-    grid-template-columns: minmax(0, 1fr) auto;
-    width: 100%;
-  }
-
-  .calls-modal-grid,
-  .calls-participants-grid {
+  .calls-modal-grid {
     grid-template-columns: 1fr;
   }
 

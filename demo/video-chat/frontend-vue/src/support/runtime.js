@@ -1,5 +1,5 @@
 import { reactive } from 'vue';
-import { resolveBackendOrigin } from '../lib/backendOrigin';
+import { resolveBackendOrigin } from './backendOrigin';
 
 export const backendRuntimeState = reactive({
   status: 'idle',

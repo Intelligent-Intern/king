@@ -4,7 +4,7 @@
   const DEFAULT_TEMPLATE = {
     subject: 'Invitation: [title] on [date] at [time]',
     body:
-      '<p>[sehrgeehrte/r] [anrede] [titel] [nachname] [vorname],</p><p>you are invited to join <strong>[title]</strong>.</p><p>Date and time: <strong>[date] [time]</strong>.</p><p>Best regards,<br/>Intelligent Intern</p>',
+      '<p>[sehrgeehrte/r] [anrede] [titel] [nachname] [vorname],</p><p>you are invited to join <strong>[title]</strong>.</p><p>Date and time: <strong>[date] [time]</strong>.</p><p>Best regards,<br/>KingRT</p>',
   };
 
   const state = {
@@ -328,7 +328,7 @@
           justify-content: flex-end;
           gap: 8px;
         }
-        @media (max-width: 980px) {
+        @media (max-width: 1180px) {
           .ii-call-composer__fields,
           .ii-call-composer__participants {
             grid-template-columns: 1fr;
@@ -345,7 +345,7 @@
         <div class="ii-call-composer__head">
           <h3 id="iiCallComposerTitle">Create New Call</h3>
           <button id="iiComposerCloseBtn" class="icon-mini-btn" type="button" title="Close" aria-label="Close">
-            <img src="./assets/orgas/intelligent-intern/icons/cancel.png" alt="" />
+            <img src="./assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </div>
 
@@ -379,11 +379,11 @@
               <div id="iiComposerUserList" class="ii-call-composer__list"></div>
               <div id="iiComposerUsersPagination" class="ii-call-composer__pagination" hidden>
                 <button id="iiComposerUsersPrevBtn" class="icon-mini-btn" type="button" aria-label="Previous users page">
-                  <img src="./assets/orgas/intelligent-intern/icons/backward.png" alt="" />
+                  <img src="./assets/orgas/kingrt/icons/backward.png" alt="" />
                 </button>
                 <span id="iiComposerUsersPageLabel" class="ii-call-composer__page-label">Page 1 / 1</span>
                 <button id="iiComposerUsersNextBtn" class="icon-mini-btn" type="button" aria-label="Next users page">
-                  <img src="./assets/orgas/intelligent-intern/icons/forward.png" alt="" />
+                  <img src="./assets/orgas/kingrt/icons/forward.png" alt="" />
                 </button>
               </div>
             </section>
@@ -576,7 +576,7 @@
             <td><input class="input" data-ext-field="email" type="email" value="${escapeHtml(row.email)}" /></td>
             <td>
               <button class="icon-mini-btn danger" type="button" data-remove-external-id="${escapeHtml(row.id)}" aria-label="Remove external invitee">
-                <img src="./assets/orgas/intelligent-intern/icons/cancel.png" alt="" />
+                <img src="./assets/orgas/kingrt/icons/cancel.png" alt="" />
               </button>
             </td>
           </tr>

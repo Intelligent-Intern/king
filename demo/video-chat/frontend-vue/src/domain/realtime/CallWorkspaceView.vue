@@ -2,14 +2,10 @@
   <section class="view-card workspace-call-view">
     <header class="workspace-call-head">
       <div>
-        <h3>Call Workspace</h3>
-        <p>
-          Active room <strong>{{ activeRoomId }}</strong>
-          · Route room <strong>{{ desiredRoomId }}</strong>
-          · {{ connectionLabel }}
-        </p>
+        <h3>Video Call</h3>
       </div>
       <div class="actions-inline workspace-call-head-actions">
+        <span class="workspace-connection-pill" :class="connectionState">{{ connectionLabel }}</span>
         <button class="btn" type="button" :disabled="inviteState.creating || !isSocketOnline" @click="createRoomInvite">
           {{ inviteState.creating ? 'Creating invite…' : 'Create invite' }}
         </button>
@@ -78,9 +74,9 @@
             type="button"
             :class="{ active: controlState.handRaised }"
             title="Raise hand"
-            @click="controlState.handRaised = !controlState.handRaised"
+            @click="toggleHandRaised"
           >
-            <img class="ctrl-icon-image" src="/assets/orgas/intelligent-intern/icons/hand.png" alt="" />
+            <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/hand.png" alt="" />
           </button>
 
           <button
@@ -98,13 +94,13 @@
             type="button"
             :class="{ active: controlState.cameraEnabled }"
             title="Toggle camera"
-            @click="controlState.cameraEnabled = !controlState.cameraEnabled"
+            @click="toggleCamera"
           >
             <img
               class="ctrl-icon-image"
               :src="controlState.cameraEnabled
-                ? '/assets/orgas/intelligent-intern/icons/camon.png'
-                : '/assets/orgas/intelligent-intern/icons/cameraoff.png'"
+                ? '/assets/orgas/kingrt/icons/camon.png'
+                : '/assets/orgas/kingrt/icons/cameraoff.png'"
               alt=""
             />
           </button>
@@ -114,13 +110,13 @@
             type="button"
             :class="{ active: controlState.micEnabled }"
             title="Toggle microphone"
-            @click="controlState.micEnabled = !controlState.micEnabled"
+            @click="toggleMicrophone"
           >
             <img
               class="ctrl-icon-image"
               :src="controlState.micEnabled
-                ? '/assets/orgas/intelligent-intern/icons/micon.png'
-                : '/assets/orgas/intelligent-intern/icons/micoff.png'"
+                ? '/assets/orgas/kingrt/icons/micon.png'
+                : '/assets/orgas/kingrt/icons/micoff.png'"
               alt=""
             />
           </button>
@@ -130,13 +126,13 @@
             type="button"
             :class="{ active: controlState.screenEnabled }"
             title="Share screen"
-            @click="controlState.screenEnabled = !controlState.screenEnabled"
+            @click="toggleScreenShare"
           >
-            <img class="ctrl-icon-image" src="/assets/orgas/intelligent-intern/icons/share_screen.png" alt="" />
+            <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/share_screen.png" alt="" />
           </button>
 
           <button class="call-control-btn hangup" type="button" title="Hang up" @click="hangupCall">
-            <img class="ctrl-icon-image" src="/assets/orgas/intelligent-intern/icons/end_call.png" alt="" />
+            <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/end_call.png" alt="" />
           </button>
         </footer>
       </section>
@@ -149,9 +145,9 @@
             type="button"
             role="tab"
             :aria-selected="activeTab === 'users'"
-            @click="activeTab = 'users'"
+            @click="setActiveTab('users')"
           >
-            <img class="tab-icon" src="/assets/orgas/intelligent-intern/icons/users.png" alt="" />
+            <img class="tab-icon" src="/assets/orgas/kingrt/icons/users.png" alt="" />
           </button>
           <button
             class="tab"
@@ -159,9 +155,9 @@
             type="button"
             role="tab"
             :aria-selected="activeTab === 'lobby'"
-            @click="activeTab = 'lobby'"
+            @click="setActiveTab('lobby')"
           >
-            <img class="tab-icon" src="/assets/orgas/intelligent-intern/icons/lobby.png" alt="" />
+            <img class="tab-icon" src="/assets/orgas/kingrt/icons/lobby.png" alt="" />
           </button>
           <button
             class="tab"
@@ -169,9 +165,9 @@
             type="button"
             role="tab"
             :aria-selected="activeTab === 'chat'"
-            @click="activeTab = 'chat'"
+            @click="setActiveTab('chat')"
           >
-            <img class="tab-icon" src="/assets/orgas/intelligent-intern/icons/chat.png" alt="" />
+            <img class="tab-icon" src="/assets/orgas/kingrt/icons/chat.png" alt="" />
           </button>
           <button
             class="tab tab-toggle"
@@ -180,68 +176,78 @@
             :disabled="!isSocketOnline"
             @click="requestRoomSnapshot"
           >
-            <img class="tab-icon" src="/assets/orgas/intelligent-intern/icons/forward.png" alt="" />
+            <img class="tab-icon" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
           </button>
         </nav>
 
         <section class="tab-panel panel-users" :class="{ active: activeTab === 'users' }">
           <div class="toolbar">
             <input
-              v-model.trim="usersSearch"
+              v-model="usersSearch"
               class="search"
               type="search"
               placeholder="Search users"
-              @input="usersPage = 1"
+              @input="onUsersSearchInput"
             />
           </div>
+          <p v-if="usersSourceMode === 'directory' && usersDirectoryLoading" class="workspace-tab-hint">
+            Loading server-backed user directory…
+          </p>
+          <p v-if="usersSourceMode === 'directory' && usersDirectoryPagination.error" class="workspace-tab-hint error">
+            {{ usersDirectoryPagination.error }}
+          </p>
 
           <ul class="user-list">
             <li
               v-for="row in usersPageRows"
               :key="row.userId"
               class="user-row"
-              :class="{ self: row.userId === currentUserId, pinned: pinnedUsers[row.userId] === true }"
+              :class="{ self: row.userId === currentUserId, pinned: pinnedUsers[row.userId] === true, pending: rowActionPending(row.userId) }"
             >
-              <div class="user-preview">{{ initials(row.displayName) }}</div>
+            <div class="user-preview">{{ initials(row.displayName) }}</div>
               <div class="user-main">
                 <strong class="user-name">{{ row.displayName }}</strong>
                 <span class="user-role">{{ row.role }}</span>
+                <span v-if="row.controlBadge" class="user-feedback">{{ row.controlBadge }}</span>
+                <span v-if="row.feedback" class="user-feedback">{{ row.feedback }}</span>
               </div>
-              <div class="actions-inline">
-                <button
-                  class="icon-mini-btn"
-                  type="button"
-                  :title="mutedUsers[row.userId] ? 'Unmute local' : 'Mute local'"
-                  @click="toggleUserMuted(row.userId)"
-                >
-                  <img
-                    :src="mutedUsers[row.userId]
-                      ? '/assets/orgas/intelligent-intern/icons/micoff.png'
-                      : '/assets/orgas/intelligent-intern/icons/micon.png'"
+            <div class="actions-inline">
+              <button
+                class="icon-mini-btn"
+                type="button"
+                :title="mutedUsers[row.userId] ? 'Unmute peer' : 'Mute peer'"
+                :disabled="!canModerate || row.userId === currentUserId || rowActionPending(row.userId) || !row.isRoomMember"
+                @click="toggleUserMuted(row.userId)"
+              >
+                <img
+                  :src="mutedUsers[row.userId]
+                      ? '/assets/orgas/kingrt/icons/micoff.png'
+                      : '/assets/orgas/kingrt/icons/micon.png'"
                     alt=""
                   />
                 </button>
-                <button
-                  class="icon-mini-btn"
-                  type="button"
-                  :title="pinnedUsers[row.userId] ? 'Unpin user' : 'Pin user'"
-                  @click="togglePinned(row.userId)"
-                >
+              <button
+                class="icon-mini-btn"
+                type="button"
+                :title="pinnedUsers[row.userId] ? 'Unpin user' : 'Pin user'"
+                :disabled="!canModerate || row.userId === currentUserId || rowActionPending(row.userId) || !row.isRoomMember"
+                @click="togglePinned(row.userId)"
+              >
                   <img
                     :src="pinnedUsers[row.userId]
-                      ? '/assets/orgas/intelligent-intern/icons/adminon.png'
-                      : '/assets/orgas/intelligent-intern/icons/adminoff.png'"
+                      ? '/assets/orgas/kingrt/icons/adminon.png'
+                      : '/assets/orgas/kingrt/icons/adminoff.png'"
                     alt=""
                   />
                 </button>
-                <button
-                  class="icon-mini-btn danger"
-                  type="button"
-                  title="Remove from lobby"
-                  :disabled="!canModerate || row.userId === currentUserId"
-                  @click="removeLobbyUser(row.userId)"
-                >
-                  <img src="/assets/orgas/intelligent-intern/icons/remove_user.png" alt="" />
+              <button
+                class="icon-mini-btn danger"
+                type="button"
+                title="Remove from lobby"
+                :disabled="!canModerate || row.userId === currentUserId || rowActionPending(row.userId) || !row.canRemoveFromLobby"
+                @click="removeLobbyUser(row.userId)"
+              >
+                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
                 </button>
               </div>
             </li>
@@ -256,18 +262,21 @@
                 class="pager-btn pager-icon-btn"
                 type="button"
                 :disabled="usersPage <= 1"
-                @click="usersPage = usersPage - 1"
+                @click="goToUsersPage(usersPage - 1)"
               >
-                <img class="pager-icon-img" src="/assets/orgas/intelligent-intern/icons/backward.png" alt="Previous users page" />
+                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous users page" />
               </button>
-              <div class="page-info">Page {{ usersPage }} / {{ usersPageCount }} · {{ filteredUsers.length }} users</div>
+              <div class="page-info">
+                Page {{ usersPage }} / {{ usersPageCount }}
+                · {{ usersSourceMode === 'directory' ? usersDirectoryPagination.total : filteredUsers.length }} users
+              </div>
               <button
                 class="pager-btn pager-icon-btn"
                 type="button"
                 :disabled="usersPage >= usersPageCount"
-                @click="usersPage = usersPage + 1"
+                @click="goToUsersPage(usersPage + 1)"
               >
-                <img class="pager-icon-img" src="/assets/orgas/intelligent-intern/icons/forward.png" alt="Next users page" />
+                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next users page" />
               </button>
             </div>
           </footer>
@@ -296,25 +305,26 @@
               <div class="user-main">
                 <strong class="user-name">{{ row.display_name }}</strong>
                 <span class="user-role">{{ row.status }}</span>
+                <span v-if="row.feedback" class="user-feedback">{{ row.feedback }}</span>
               </div>
               <div class="actions-inline">
                 <button
                   class="icon-mini-btn"
                   type="button"
                   title="Allow user"
-                  :disabled="!canModerate || row.status !== 'queued'"
+                  :disabled="!canModerate || row.status !== 'queued' || lobbyActionPending(row.user_id)"
                   @click="allowLobbyUser(row.user_id)"
                 >
-                  <img src="/assets/orgas/intelligent-intern/icons/add_to_call.png" alt="" />
+                  <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
                 </button>
                 <button
                   class="icon-mini-btn danger"
                   type="button"
                   title="Remove user"
-                  :disabled="!canModerate"
+                  :disabled="!canModerate || lobbyActionPending(row.user_id)"
                   @click="removeLobbyUser(row.user_id)"
                 >
-                  <img src="/assets/orgas/intelligent-intern/icons/remove_user.png" alt="" />
+                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
                 </button>
               </div>
             </li>
@@ -329,18 +339,18 @@
                 class="pager-btn pager-icon-btn"
                 type="button"
                 :disabled="lobbyPage <= 1"
-                @click="lobbyPage = lobbyPage - 1"
+                @click="goToLobbyPage(lobbyPage - 1)"
               >
-                <img class="pager-icon-img" src="/assets/orgas/intelligent-intern/icons/backward.png" alt="Previous lobby page" />
+                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous lobby page" />
               </button>
               <div class="page-info">Page {{ lobbyPage }} / {{ lobbyPageCount }} · {{ lobbyRows.length }} entries</div>
               <button
                 class="pager-btn pager-icon-btn"
                 type="button"
                 :disabled="lobbyPage >= lobbyPageCount"
-                @click="lobbyPage = lobbyPage + 1"
+                @click="goToLobbyPage(lobbyPage + 1)"
               >
-                <img class="pager-icon-img" src="/assets/orgas/intelligent-intern/icons/forward.png" alt="Next lobby page" />
+                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next lobby page" />
               </button>
             </div>
           </footer>
@@ -379,7 +389,7 @@
               @input="handleChatInput"
             />
             <button class="icon-mini-btn" type="submit" :disabled="!isSocketOnline || chatDraft.trim() === ''">
-              <img src="/assets/orgas/intelligent-intern/icons/send.png" alt="Send" />
+              <img src="/assets/orgas/kingrt/icons/send.png" alt="Send" />
             </button>
           </form>
         </section>
@@ -412,8 +422,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { sessionState } from '../stores/session';
-import { resolveBackendOrigin } from '../lib/backendOrigin';
+import { sessionState } from '../auth/session';
+import { resolveBackendOrigin } from '../../support/backendOrigin';
 
 const route = useRoute();
 const router = useRouter();
@@ -555,7 +565,8 @@ const lobbyPage = ref(1);
 const chatDraft = ref('');
 const chatListRef = ref(null);
 
-const connectionState = ref('offline');
+const connectionState = ref('retrying');
+const connectionReason = ref('');
 const reconnectAttempt = ref(0);
 const socketRef = ref(null);
 const serverRoomId = ref('lobby');
@@ -563,12 +574,30 @@ const serverRoomId = ref('lobby');
 const participantsRaw = ref([]);
 const lobbyQueue = ref([]);
 const lobbyAdmitted = ref([]);
+const usersDirectoryRows = ref([]);
+const usersDirectoryLoading = ref(false);
+const usersDirectoryPagination = reactive({
+  query: '',
+  order: 'role_then_name_asc',
+  page: 1,
+  pageSize: USERS_PAGE_SIZE,
+  total: 0,
+  pageCount: 1,
+  returned: 0,
+  hasPrev: false,
+  hasNext: false,
+  error: '',
+});
 
 const chatByRoom = reactive({});
 const typingByRoom = reactive({});
 
 const mutedUsers = reactive({});
 const pinnedUsers = reactive({});
+const moderationActionState = reactive({});
+const peerControlStateByUserId = reactive({});
+const lobbyActionState = reactive({});
+const usersRefreshTimer = ref(null);
 
 const reactionTrayOpen = ref(false);
 const activeReactions = ref([]);
@@ -597,13 +626,15 @@ const desiredRoomId = computed(() => normalizeRoomId(route.params.roomId));
 const activeRoomId = computed(() => normalizeRoomId(serverRoomId.value || desiredRoomId.value));
 const currentUserId = computed(() => (Number.isInteger(sessionState.userId) ? sessionState.userId : 0));
 const canModerate = computed(() => ['admin', 'moderator'].includes(normalizeRole(sessionState.role)));
+const usersSourceMode = computed(() => (normalizeRole(sessionState.role) === 'admin' ? 'directory' : 'snapshot'));
 const isSocketOnline = computed(() => connectionState.value === 'online');
 
 const connectionLabel = computed(() => {
   if (connectionState.value === 'online') return 'Signal online';
-  if (connectionState.value === 'connecting') return 'Signal connecting';
-  if (connectionState.value === 'reconnecting') return `Signal reconnecting (#${Math.max(1, reconnectAttempt.value)})`;
-  return 'Signal offline';
+  if (connectionState.value === 'retrying') return `Signal retrying (#${Math.max(1, reconnectAttempt.value)})`;
+  if (connectionState.value === 'blocked') return 'Signal blocked';
+  if (connectionState.value === 'expired') return 'Signal expired';
+  return 'Signal retrying';
 });
 
 function ensureRoomBuckets(roomId) {
@@ -668,21 +699,38 @@ const participantUsers = computed(() => {
 
 const stripParticipants = computed(() => participantUsers.value.slice(0, 6));
 
-const filteredUsers = computed(() => {
-  const query = usersSearch.value.trim().toLowerCase();
-  if (query === '') return participantUsers.value;
+const snapshotUsersRows = computed(() => participantUsers.value.map((row) => userRowSnapshot(row)));
 
-  return participantUsers.value.filter((row) => (
-    row.displayName.toLowerCase().includes(query)
-    || row.role.toLowerCase().includes(query)
-    || String(row.userId).includes(query)
+const filteredUsers = computed(() => {
+  if (usersSourceMode.value === 'directory') {
+    return usersDirectoryRows.value;
+  }
+
+  const query = usersSearch.value.trim().toLowerCase();
+  if (query === '') return snapshotUsersRows.value;
+
+  return snapshotUsersRows.value.filter((row) => (
+    String(row.displayName || '').toLowerCase().includes(query)
+    || String(row.role || '').toLowerCase().includes(query)
+    || String(row.userId || '').includes(query)
+    || String(row.feedback || '').toLowerCase().includes(query)
   ));
 });
 
-const usersPageCount = computed(() => Math.max(1, Math.ceil(filteredUsers.value.length / USERS_PAGE_SIZE)));
+const usersPageCount = computed(() => {
+  if (usersSourceMode.value === 'directory') {
+    return Math.max(1, usersDirectoryPagination.pageCount || 1);
+  }
+
+  return Math.max(1, Math.ceil(filteredUsers.value.length / USERS_PAGE_SIZE));
+});
 const usersPageRows = computed(() => {
+  if (usersSourceMode.value === 'directory') {
+    return usersDirectoryRows.value.map((row) => userRowSnapshot(row));
+  }
+
   const offset = (usersPage.value - 1) * USERS_PAGE_SIZE;
-  return filteredUsers.value.slice(offset, offset + USERS_PAGE_SIZE);
+  return filteredUsers.value.slice(offset, offset + USERS_PAGE_SIZE).map((row) => userRowSnapshot(row));
 });
 
 const lobbyRows = computed(() => {
@@ -707,7 +755,7 @@ const lobbyRows = computed(() => {
 const lobbyPageCount = computed(() => Math.max(1, Math.ceil(lobbyRows.value.length / LOBBY_PAGE_SIZE)));
 const lobbyPageRows = computed(() => {
   const offset = (lobbyPage.value - 1) * LOBBY_PAGE_SIZE;
-  return lobbyRows.value.slice(offset, offset + LOBBY_PAGE_SIZE);
+  return lobbyRows.value.slice(offset, offset + LOBBY_PAGE_SIZE).map((row) => lobbyRowSnapshot(row));
 });
 
 const activeMessages = computed(() => {
@@ -725,6 +773,148 @@ const typingUsers = computed(() => {
     .map((entry) => String(entry.displayName || '').trim())
     .filter(Boolean);
 });
+
+const participantsByUserId = computed(() => {
+  const rows = new Map();
+  for (const row of participantUsers.value) {
+    rows.set(row.userId, row);
+  }
+  return rows;
+});
+
+const lobbyEntryByUserId = computed(() => {
+  const rows = new Map();
+  for (const row of lobbyQueue.value) {
+    rows.set(row.user_id, { ...row, status: 'queued' });
+  }
+  for (const row of lobbyAdmitted.value) {
+    rows.set(row.user_id, { ...row, status: 'admitted' });
+  }
+  return rows;
+});
+
+function rowActionKey(action, userId) {
+  return `${action}:${Number(userId)}`;
+}
+
+function setRowAction(store, action, userId, text = '', pending = false) {
+  store[rowActionKey(action, userId)] = {
+    text: String(text || '').trim(),
+    pending: Boolean(pending),
+    updatedAt: Date.now(),
+  };
+}
+
+function clearRowAction(store, action, userId) {
+  delete store[rowActionKey(action, userId)];
+}
+
+function rowActionPending(userId) {
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+  for (const action of ['mute', 'pin']) {
+    const entry = moderationActionState[rowActionKey(action, normalizedUserId)];
+    if (entry && entry.pending) return true;
+  }
+  for (const action of ['allow', 'remove']) {
+    const entry = lobbyActionState[rowActionKey(action, normalizedUserId)];
+    if (entry && entry.pending) return true;
+  }
+  return false;
+}
+
+function rowActionFeedback(userId) {
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return '';
+  const actions = [
+    moderationActionState[rowActionKey('mute', normalizedUserId)],
+    moderationActionState[rowActionKey('pin', normalizedUserId)],
+    lobbyActionState[rowActionKey('allow', normalizedUserId)],
+    lobbyActionState[rowActionKey('remove', normalizedUserId)],
+  ];
+  const active = actions.find((entry) => entry && (entry.pending || String(entry.text || '').trim() !== ''));
+  return active ? String(active.text || '').trim() : '';
+}
+
+function lobbyActionPending(userId) {
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+  for (const action of ['allow', 'remove']) {
+    const entry = lobbyActionState[rowActionKey(action, normalizedUserId)];
+    if (entry && entry.pending) return true;
+  }
+  return false;
+}
+
+function userRowSnapshot(row) {
+  const participant = participantsByUserId.value.get(row.userId) || null;
+  const lobbyEntry = lobbyEntryByUserId.value.get(row.userId) || null;
+  const feedback = rowActionFeedback(row.userId);
+  const isRoomMember = Boolean(participant);
+  const peerState = peerControlStateByUserId[row.userId] || {};
+  return {
+    ...row,
+    isRoomMember,
+    roomConnectionCount: Number(participant?.connections || 0),
+    inLobby: Boolean(lobbyEntry),
+    lobbyStatus: lobbyEntry ? String(lobbyEntry.status || 'queued') : '',
+    canRemoveFromLobby: Boolean(lobbyEntry) && canModerate.value,
+    canAllowFromLobby: Boolean(lobbyEntry && lobbyEntry.status === 'queued' && canModerate.value),
+    feedback,
+    controlBadge: describePeerControlState(row.userId),
+    peerState,
+  };
+}
+
+function lobbyRowSnapshot(row) {
+  const feedback = rowActionFeedback(row.user_id);
+  return {
+    ...row,
+    feedback,
+  };
+}
+
+function peerControlSnapshot(userId) {
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
+    return {
+      handRaised: false,
+      cameraEnabled: true,
+      micEnabled: true,
+      screenEnabled: false,
+    };
+  }
+
+  if (normalizedUserId === currentUserId.value) {
+    return {
+      handRaised: controlState.handRaised,
+      cameraEnabled: controlState.cameraEnabled,
+      micEnabled: controlState.micEnabled,
+      screenEnabled: controlState.screenEnabled,
+    };
+  }
+
+  if (!peerControlStateByUserId[normalizedUserId] || typeof peerControlStateByUserId[normalizedUserId] !== 'object') {
+    peerControlStateByUserId[normalizedUserId] = {
+      handRaised: false,
+      cameraEnabled: true,
+      micEnabled: true,
+      screenEnabled: false,
+    };
+  }
+
+  return peerControlStateByUserId[normalizedUserId];
+}
+
+function describePeerControlState(userId) {
+  const state = peerControlSnapshot(userId);
+  const badges = [];
+  if (state.handRaised) badges.push('hand');
+  if (!state.micEnabled) badges.push('mic off');
+  if (!state.cameraEnabled) badges.push('cam off');
+  if (state.screenEnabled) badges.push('screen');
+  return badges.join(' · ');
+}
 
 function setNotice(message, kind = 'ok') {
   workspaceNotice.value = String(message || '').trim();
@@ -755,21 +945,331 @@ function pushReaction(emoji) {
   }, 1800);
 }
 
+function normalizeDirectoryUser(raw) {
+  const userId = Number(raw?.id || 0);
+  return {
+    userId: Number.isInteger(userId) && userId > 0 ? userId : 0,
+    displayName: String(raw?.display_name || '').trim() || `User ${userId || 'unknown'}`,
+    role: normalizeRole(raw?.role),
+    status: String(raw?.status || '').trim() || 'unknown',
+    email: String(raw?.email || '').trim(),
+    timeFormat: String(raw?.time_format || '24h').trim() || '24h',
+    theme: String(raw?.theme || 'dark').trim() || 'dark',
+    avatarPath: typeof raw?.avatar_path === 'string' && raw.avatar_path.trim() !== '' ? raw.avatar_path.trim() : null,
+    createdAt: String(raw?.created_at || ''),
+    updatedAt: String(raw?.updated_at || ''),
+  };
+}
+
+function markUserActionText(userId, action, text, pending = false) {
+  setRowAction(moderationActionState, action, userId, text, pending);
+}
+
+function markLobbyActionText(userId, action, text, pending = false) {
+  setRowAction(lobbyActionState, action, userId, text, pending);
+}
+
+function clearLobbyActionText(userId, action) {
+  clearRowAction(lobbyActionState, action, userId);
+}
+
+function updatePeerControlState(userId, patch) {
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
+  if (normalizedUserId === currentUserId.value) return;
+
+  if (!peerControlStateByUserId[normalizedUserId] || typeof peerControlStateByUserId[normalizedUserId] !== 'object') {
+    peerControlStateByUserId[normalizedUserId] = {
+      handRaised: false,
+      cameraEnabled: true,
+      micEnabled: true,
+      screenEnabled: false,
+    };
+  }
+
+  peerControlStateByUserId[normalizedUserId] = {
+    ...peerControlStateByUserId[normalizedUserId],
+    ...patch,
+  };
+}
+
+function resetPeerControlState(userId) {
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return;
+  peerControlStateByUserId[normalizedUserId] = {
+    handRaised: false,
+    cameraEnabled: true,
+    micEnabled: true,
+    screenEnabled: false,
+  };
+}
+
+function applyReactionEvent(payload) {
+  const roomId = normalizeRoomId(payload?.room_id || payload?.roomId || activeRoomId.value);
+  if (roomId !== activeRoomId.value) return;
+  const reaction = payload && typeof payload.reaction === 'object' ? payload.reaction : {};
+  const emoji = String(reaction.emoji || '').trim();
+  if (emoji === '') return;
+  pushReaction(emoji);
+}
+
+function applyRemoteControlState(payload, sender) {
+  const senderUserId = Number(sender?.user_id || 0);
+  if (!Number.isInteger(senderUserId) || senderUserId <= 0) return false;
+
+  const kind = String(payload?.kind || '').trim().toLowerCase();
+  if (kind === 'workspace-control-state') {
+    const state = payload && typeof payload.state === 'object' ? payload.state : {};
+    updatePeerControlState(senderUserId, {
+      handRaised: Boolean(state.handRaised),
+      cameraEnabled: state.cameraEnabled !== false,
+      micEnabled: state.micEnabled !== false,
+      screenEnabled: Boolean(state.screenEnabled),
+    });
+    refreshUsersDirectoryPresentation();
+    return true;
+  }
+
+  if (kind === 'workspace-moderation-state') {
+    const moderatedUsers = payload && typeof payload.moderated_users === 'object' ? payload.moderated_users : {};
+    for (const [key, value] of Object.entries(moderatedUsers)) {
+      const match = /^([a-z]+):([0-9]+)$/.exec(key);
+      if (!match) continue;
+      const action = String(match[1] || '');
+      const subjectUserId = Number(match[2] || 0);
+      if (!Number.isInteger(subjectUserId) || subjectUserId <= 0) continue;
+
+      if (action === 'pin') {
+        pinnedUsers[subjectUserId] = Boolean(value?.pinned);
+        markUserActionText(subjectUserId, 'pin', pinnedUsers[subjectUserId] ? 'Pinned' : 'Unpinned', false);
+      }
+      if (action === 'mute') {
+        mutedUsers[subjectUserId] = Boolean(value?.muted);
+        markUserActionText(subjectUserId, 'mute', mutedUsers[subjectUserId] ? 'Muted' : 'Unmuted', false);
+      }
+    }
+    refreshUsersDirectoryPresentation();
+    return true;
+  }
+
+  return false;
+}
+
+function syncControlStateToPeers() {
+  const peerIds = participantUsers.value
+    .map((row) => row.userId)
+    .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
+
+  let sentCount = 0;
+  for (const targetUserId of peerIds) {
+    const sent = sendSocketFrame({
+      type: 'call/ice',
+      target_user_id: targetUserId,
+      payload: {
+        kind: 'workspace-control-state',
+        actor_user_id: currentUserId.value,
+        room_id: activeRoomId.value,
+        state: {
+          handRaised: controlState.handRaised,
+          cameraEnabled: controlState.cameraEnabled,
+          micEnabled: controlState.micEnabled,
+          screenEnabled: controlState.screenEnabled,
+        },
+      },
+    });
+    if (sent) sentCount += 1;
+  }
+
+  return sentCount;
+}
+
+function syncModerationStateToPeers() {
+  const peerIds = participantUsers.value
+    .map((row) => row.userId)
+    .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
+
+  const moderationState = {};
+  for (const [key, entry] of Object.entries(moderationActionState)) {
+    if (!key.startsWith('mute:') && !key.startsWith('pin:')) continue;
+    moderationState[key] = {
+      text: String(entry?.text || ''),
+      pending: Boolean(entry?.pending),
+      updatedAt: Number(entry?.updatedAt || Date.now()),
+      pinned: key.startsWith('pin:') ? Boolean(pinnedUsers[Number(key.split(':')[1] || 0)]) : undefined,
+      muted: key.startsWith('mute:') ? Boolean(mutedUsers[Number(key.split(':')[1] || 0)]) : undefined,
+    };
+  }
+
+  let sentCount = 0;
+  for (const targetUserId of peerIds) {
+    const sent = sendSocketFrame({
+      type: 'call/ice',
+      target_user_id: targetUserId,
+      payload: {
+        kind: 'workspace-moderation-state',
+        actor_user_id: currentUserId.value,
+        room_id: activeRoomId.value,
+        moderated_users: moderationState,
+      },
+    });
+    if (sent) sentCount += 1;
+  }
+
+  return sentCount;
+}
+
 function emitReaction(emoji) {
   if (typeof emoji !== 'string' || emoji.trim() === '') return;
-  pushReaction(emoji);
+  if (!isSocketOnline.value) {
+    setNotice('Could not send reaction while websocket is offline.', 'error');
+    return;
+  }
+
+  const clientReactionId = `rx_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+  const sent = sendSocketFrame({
+    type: 'reaction/send',
+    emoji: emoji.trim(),
+    client_reaction_id: clientReactionId,
+  });
+
+  if (!sent) {
+    setNotice('Could not send reaction while websocket is offline.', 'error');
+    return;
+  }
+
+  reactionTrayOpen.value = false;
 }
 
 function toggleUserMuted(userId) {
   const normalizedUserId = Number(userId);
-  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
-  mutedUsers[normalizedUserId] = mutedUsers[normalizedUserId] !== true;
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return;
+  const nextMuted = mutedUsers[normalizedUserId] !== true;
+  mutedUsers[normalizedUserId] = nextMuted;
+  markUserActionText(normalizedUserId, 'mute', nextMuted ? 'Muted' : 'Unmuted', false);
+  refreshUsersDirectoryPresentation();
+  void syncModerationStateToPeers();
 }
 
 function togglePinned(userId) {
   const normalizedUserId = Number(userId);
-  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
-  pinnedUsers[normalizedUserId] = pinnedUsers[normalizedUserId] !== true;
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return;
+  const nextPinned = pinnedUsers[normalizedUserId] !== true;
+  pinnedUsers[normalizedUserId] = nextPinned;
+  markUserActionText(normalizedUserId, 'pin', nextPinned ? 'Pinned' : 'Unpinned', false);
+  refreshUsersDirectoryPresentation();
+  void syncModerationStateToPeers();
+}
+
+function toggleHandRaised() {
+  controlState.handRaised = !controlState.handRaised;
+  refreshUsersDirectoryPresentation();
+  void syncControlStateToPeers();
+}
+
+function toggleCamera() {
+  controlState.cameraEnabled = !controlState.cameraEnabled;
+  refreshUsersDirectoryPresentation();
+  void syncControlStateToPeers();
+}
+
+function toggleMicrophone() {
+  controlState.micEnabled = !controlState.micEnabled;
+  refreshUsersDirectoryPresentation();
+  void syncControlStateToPeers();
+}
+
+function toggleScreenShare() {
+  controlState.screenEnabled = !controlState.screenEnabled;
+  refreshUsersDirectoryPresentation();
+  void syncControlStateToPeers();
+}
+
+async function refreshUsersDirectory() {
+  if (usersSourceMode.value !== 'directory') return;
+  if (usersDirectoryLoading.value) return;
+
+  usersDirectoryLoading.value = true;
+  try {
+    const payload = await apiRequest('/api/admin/users', {
+      query: {
+        query: usersSearch.value.trim(),
+        page: usersPage.value,
+        page_size: USERS_PAGE_SIZE,
+        order: 'role_then_name_asc',
+      },
+    });
+
+    const rows = Array.isArray(payload?.users) ? payload.users : [];
+    usersDirectoryRows.value = rows.map(normalizeDirectoryUser).map(userRowSnapshot);
+
+    const paging = payload?.pagination || {};
+    usersPage.value = Number.isInteger(paging.page) ? paging.page : usersPage.value;
+    usersDirectoryPagination.page = usersPage.value;
+    usersDirectoryPagination.pageSize = Number.isInteger(paging.page_size) ? paging.page_size : USERS_PAGE_SIZE;
+    usersDirectoryPagination.total = Number.isInteger(paging.total) ? paging.total : rows.length;
+    usersDirectoryPagination.pageCount = Number.isInteger(paging.page_count) && paging.page_count > 0 ? paging.page_count : 1;
+    usersDirectoryPagination.hasPrev = Boolean(paging.has_prev);
+    usersDirectoryPagination.hasNext = Boolean(paging.has_next);
+    usersDirectoryPagination.returned = Number.isInteger(paging.returned) ? paging.returned : rows.length;
+    usersDirectoryPagination.query = String(paging.query || usersSearch.value || '').trim();
+    usersDirectoryPagination.error = '';
+  } catch (error) {
+    usersDirectoryPagination.error = error instanceof Error ? error.message : 'Could not load user directory.';
+    usersDirectoryRows.value = [];
+  } finally {
+    usersDirectoryLoading.value = false;
+  }
+}
+
+function refreshUsersDirectoryPresentation() {
+  if (usersSourceMode.value !== 'directory' || usersDirectoryRows.value.length === 0) return;
+  usersDirectoryRows.value = usersDirectoryRows.value.map((row) => userRowSnapshot(row));
+}
+
+function scheduleUsersRefresh() {
+  if (usersRefreshTimer.value !== null) {
+    clearTimeout(usersRefreshTimer.value);
+    usersRefreshTimer.value = null;
+  }
+  usersRefreshTimer.value = window.setTimeout(() => {
+    usersRefreshTimer.value = null;
+    void refreshUsersDirectory();
+  }, 220);
+}
+
+function onUsersSearchInput() {
+  usersPage.value = 1;
+  if (usersSourceMode.value === 'directory') {
+    scheduleUsersRefresh();
+  }
+}
+
+function goToUsersPage(nextPage) {
+  const normalizedPage = Number(nextPage);
+  if (!Number.isInteger(normalizedPage) || normalizedPage < 1) return;
+  if (normalizedPage === usersPage.value) return;
+  usersPage.value = normalizedPage;
+  if (usersSourceMode.value === 'directory') {
+    void refreshUsersDirectory();
+  }
+}
+
+function goToLobbyPage(nextPage) {
+  const normalizedPage = Number(nextPage);
+  if (!Number.isInteger(normalizedPage) || normalizedPage < 1) return;
+  if (normalizedPage === lobbyPage.value) return;
+  lobbyPage.value = normalizedPage;
+}
+
+function setActiveTab(tab) {
+  const nextTab = ['users', 'lobby', 'chat'].includes(tab) ? tab : 'users';
+  activeTab.value = nextTab;
+  if (isSocketOnline.value && (nextTab === 'users' || nextTab === 'lobby')) {
+    requestRoomSnapshot();
+  }
+  if (nextTab === 'users' && usersSourceMode.value === 'directory') {
+    void refreshUsersDirectory();
+  }
 }
 
 let reconnectTimer = null;
@@ -778,6 +1278,7 @@ let typingStopTimer = null;
 let typingSweepTimer = null;
 let localTypingStarted = false;
 let manualSocketClose = false;
+let connectGeneration = 0;
 
 function clearReconnectTimer() {
   if (reconnectTimer !== null) {
@@ -837,16 +1338,22 @@ function requestLobbyJoin() {
 function allowLobbyUser(userId) {
   const normalizedUserId = Number(userId);
   if (!canModerate.value || !Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
+  markLobbyActionText(normalizedUserId, 'allow', 'Allowing user…', true);
   if (!sendSocketFrame({ type: 'lobby/allow', target_user_id: normalizedUserId })) {
+    clearLobbyActionText(normalizedUserId, 'allow');
     setNotice('Could not allow user while websocket is offline.', 'error');
+    return;
   }
 }
 
 function removeLobbyUser(userId) {
   const normalizedUserId = Number(userId);
   if (!canModerate.value || !Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
+  markLobbyActionText(normalizedUserId, 'remove', 'Removing user…', true);
   if (!sendSocketFrame({ type: 'lobby/remove', target_user_id: normalizedUserId })) {
+    clearLobbyActionText(normalizedUserId, 'remove');
     setNotice('Could not remove user while websocket is offline.', 'error');
+    return;
   }
 }
 
@@ -979,6 +1486,13 @@ function applyLobbySnapshot(payload) {
 
   lobbyQueue.value = Array.isArray(payload?.queue) ? payload.queue.map(normalizeLobbyEntry) : [];
   lobbyAdmitted.value = Array.isArray(payload?.admitted) ? payload.admitted.map(normalizeLobbyEntry) : [];
+
+  for (const key of Object.keys(lobbyActionState)) {
+    if (key.startsWith('allow:') || key.startsWith('remove:')) {
+      delete lobbyActionState[key];
+    }
+  }
+  refreshUsersDirectoryPresentation();
 }
 
 function applyRoomSnapshot(payload) {
@@ -987,6 +1501,21 @@ function applyRoomSnapshot(payload) {
   ensureRoomBuckets(roomId);
 
   participantsRaw.value = Array.isArray(payload?.participants) ? payload.participants : [];
+
+  const presentUserIds = new Set();
+  for (const row of participantUsers.value) {
+    presentUserIds.add(row.userId);
+  }
+  for (const userId of Object.keys(peerControlStateByUserId)) {
+    if (!presentUserIds.has(Number(userId))) {
+      delete peerControlStateByUserId[userId];
+    }
+  }
+  refreshUsersDirectoryPresentation();
+  if (isSocketOnline.value) {
+    void syncControlStateToPeers();
+    void syncModerationStateToPeers();
+  }
 }
 
 function handleSignalingEvent(payload) {
@@ -994,7 +1523,21 @@ function handleSignalingEvent(payload) {
   if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup'].includes(type)) return;
 
   const sender = payload && typeof payload.sender === 'object' ? payload.sender : {};
-  const senderName = String(sender.display_name || `User ${sender.user_id || 'unknown'}`).trim();
+  const senderUserId = Number(sender.user_id || 0);
+
+  if (type === 'call/hangup') {
+    resetPeerControlState(senderUserId);
+    refreshUsersDirectoryPresentation();
+    const senderName = String(sender.display_name || `User ${senderUserId || 'unknown'}`).trim();
+    setNotice(`Received hangup from ${senderName}.`);
+    return;
+  }
+
+  if (applyRemoteControlState(payload?.payload, sender)) {
+    return;
+  }
+
+  const senderName = String(sender.display_name || `User ${senderUserId || 'unknown'}`).trim();
   setNotice(`Received ${type.replace('call/', '')} from ${senderName}.`);
 }
 
@@ -1036,6 +1579,11 @@ function handleSocketMessage(event) {
     return;
   }
 
+  if (type === 'reaction/event') {
+    applyReactionEvent(payload);
+    return;
+  }
+
   if (type === 'chat/message') {
     appendChatMessage(payload);
     return;
@@ -1048,7 +1596,9 @@ function handleSocketMessage(event) {
 
   if (type === 'call/ack') {
     const signalType = String(payload?.signal_type || '').replace('call/', '').trim() || 'signal';
-    setNotice(`Sent ${signalType} to ${payload?.sent_count ?? 0} peer(s).`);
+    if (signalType !== 'ice' && signalType !== 'hangup') {
+      setNotice(`Sent ${signalType} to ${payload?.sent_count ?? 0} peer(s).`);
+    }
     return;
   }
 
@@ -1058,6 +1608,29 @@ function handleSocketMessage(event) {
 
   if (type === 'system/error') {
     const message = String(payload?.message || 'Realtime command failed.').trim();
+    const code = String(payload?.code || '').trim().toLowerCase();
+    const closeReason = String(payload?.details?.close?.close_reason || payload?.details?.reason || '').trim().toLowerCase();
+    const failedCommandType = String(payload?.details?.type || '').trim().toLowerCase();
+    const failedTargetUserId = Number(payload?.details?.target_user_id || 0);
+    if (code === 'lobby_command_failed' && Number.isInteger(failedTargetUserId) && failedTargetUserId > 0) {
+      if (failedCommandType === 'lobby/allow') {
+        clearLobbyActionText(failedTargetUserId, 'allow');
+      }
+      if (failedCommandType === 'lobby/remove') {
+        clearLobbyActionText(failedTargetUserId, 'remove');
+      }
+    }
+    if (code === 'websocket_session_invalidated' || closeReason === 'session_invalidated') {
+      manualSocketClose = true;
+      connectionReason.value = closeReason || 'session_invalidated';
+      connectionState.value = 'expired';
+      closeSocket();
+    } else if (code === 'websocket_auth_failed' || code === 'websocket_forbidden' || closeReason === 'auth_backend_error' || closeReason === 'role_not_allowed') {
+      manualSocketClose = true;
+      connectionReason.value = closeReason || code || 'blocked';
+      connectionState.value = 'blocked';
+      closeSocket();
+    }
     setNotice(message, 'error');
     return;
   }
@@ -1090,57 +1663,197 @@ function closeSocket() {
   }
 }
 
+async function probeWorkspaceSession() {
+  const token = String(sessionState.sessionToken || '').trim();
+  if (token === '') {
+    return {
+      ok: false,
+      state: 'expired',
+      reason: 'missing_session',
+      message: 'Session is missing.',
+    };
+  }
+
+  try {
+    const response = await fetch(`${backendOrigin}/api/auth/session`, {
+      method: 'GET',
+      headers: requestHeaders(false),
+    });
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+
+    if (response.ok && payload && payload.status === 'ok') {
+      return {
+        ok: true,
+        state: 'online',
+        reason: 'ready',
+        message: '',
+      };
+    }
+
+    const code = String(payload?.error?.code || '').trim().toLowerCase();
+    const detailReason = String(payload?.error?.details?.reason || '').trim().toLowerCase();
+    const failureReason = detailReason || code || 'invalid_session';
+    if (response.status === 403 || failureReason === 'role_not_allowed') {
+      return {
+        ok: false,
+        state: 'blocked',
+        reason: failureReason,
+        message: extractErrorMessage(payload, 'Session is blocked by policy.'),
+      };
+    }
+
+    if (
+      response.status === 401
+      || response.status === 404
+      || response.status === 410
+      || ['missing_session', 'invalid_session', 'revoked_session', 'expired_session'].includes(failureReason)
+    ) {
+      return {
+        ok: false,
+        state: 'expired',
+        reason: failureReason,
+        message: extractErrorMessage(payload, 'Session is no longer valid.'),
+      };
+    }
+
+    if (response.status >= 500) {
+      return {
+        ok: false,
+        state: 'retrying',
+        reason: failureReason,
+        message: extractErrorMessage(payload, 'Session validation is temporarily unavailable.'),
+      };
+    }
+
+    return {
+      ok: false,
+      state: 'blocked',
+      reason: failureReason,
+      message: extractErrorMessage(payload, 'Session is blocked.'),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      state: 'retrying',
+      reason: 'network_error',
+      message: error instanceof Error ? error.message : 'Session validation failed.',
+    };
+  }
+}
+
 function scheduleReconnect() {
   clearReconnectTimer();
+  if (manualSocketClose || connectionState.value === 'blocked' || connectionState.value === 'expired') {
+    return;
+  }
   reconnectAttempt.value += 1;
-  connectionState.value = 'reconnecting';
+  connectionState.value = 'retrying';
+  connectionReason.value = 'network_retry';
 
   const delay = RECONNECT_DELAYS_MS[Math.min(reconnectAttempt.value - 1, RECONNECT_DELAYS_MS.length - 1)];
   reconnectTimer = setTimeout(() => {
-    connectSocket();
+    void connectSocket();
   }, delay);
 }
 
-function connectSocket() {
+async function connectSocket() {
+  const generation = ++connectGeneration;
   const token = String(sessionState.sessionToken || '').trim();
   if (token === '') {
-    connectionState.value = 'offline';
+    connectionReason.value = 'missing_session';
+    connectionState.value = 'expired';
     return;
   }
 
   clearReconnectTimer();
   clearPingTimer();
   manualSocketClose = false;
-  connectionState.value = reconnectAttempt.value > 0 ? 'reconnecting' : 'connecting';
+  connectionState.value = 'retrying';
+  connectionReason.value = reconnectAttempt.value > 0 ? 'network_retry' : 'probing_session';
+
+  const sessionProbe = await probeWorkspaceSession();
+  if (generation !== connectGeneration || manualSocketClose) {
+    return;
+  }
+  if (!sessionProbe.ok) {
+    connectionReason.value = sessionProbe.reason;
+    connectionState.value = sessionProbe.state;
+    if (sessionProbe.state === 'retrying') {
+      workspaceNotice.value = '';
+      workspaceError.value = '';
+    } else {
+      setNotice(sessionProbe.message, 'error');
+    }
+    if (sessionProbe.state === 'retrying' && !manualSocketClose) {
+      scheduleReconnect();
+    }
+    return;
+  }
 
   const socket = new WebSocket(socketUrlForRoom(desiredRoomId.value));
+  if (generation !== connectGeneration || manualSocketClose) {
+    try {
+      socket.close(1000, 'stale_connect');
+    } catch {
+      // ignore
+    }
+    return;
+  }
   socketRef.value = socket;
 
   socket.addEventListener('open', () => {
     reconnectAttempt.value = 0;
     connectionState.value = 'online';
+    connectionReason.value = 'ready';
     clearErrors();
     startPingLoop();
     requestRoomSnapshot();
+    if (usersSourceMode.value === 'directory' && activeTab.value === 'users') {
+      void refreshUsersDirectory();
+    }
+    void syncControlStateToPeers();
+    void syncModerationStateToPeers();
   });
 
   socket.addEventListener('message', handleSocketMessage);
   socket.addEventListener('error', () => {
     if (!manualSocketClose) {
-      connectionState.value = 'reconnecting';
+      connectionState.value = 'retrying';
+      connectionReason.value = 'socket_error';
     }
   });
-  socket.addEventListener('close', () => {
+  socket.addEventListener('close', (event) => {
     clearPingTimer();
     if (socketRef.value === socket) {
       socketRef.value = null;
     }
 
     if (manualSocketClose) {
-      connectionState.value = 'offline';
       return;
     }
 
+    const closeReason = String(event?.reason || '').trim().toLowerCase();
+    if (closeReason === 'session_invalidated') {
+      connectionState.value = 'expired';
+      connectionReason.value = closeReason;
+      manualSocketClose = true;
+      return;
+    }
+    if (closeReason === 'auth_backend_error' || (event?.code === 1008 && closeReason !== '')) {
+      connectionState.value = 'blocked';
+      connectionReason.value = closeReason || 'blocked';
+      manualSocketClose = true;
+      return;
+    }
+
+    connectionState.value = 'retrying';
+    connectionReason.value = closeReason || 'socket_closed';
     scheduleReconnect();
   });
 }
@@ -1233,17 +1946,25 @@ async function joinByInviteCode() {
 
 function hangupCall() {
   controlState.handRaised = false;
+  controlState.cameraEnabled = true;
+  controlState.micEnabled = true;
   controlState.screenEnabled = false;
   reactionTrayOpen.value = false;
+  refreshUsersDirectoryPresentation();
+
+  const peerIds = participantUsers.value
+    .map((participant) => participant.userId)
+    .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
 
   let sentCount = 0;
-  for (const participant of participantUsers.value) {
-    if (participant.userId === currentUserId.value) continue;
+  for (const targetUserId of peerIds) {
     const sent = sendSocketFrame({
       type: 'call/hangup',
-      target_user_id: participant.userId,
+      target_user_id: targetUserId,
       payload: {
         reason: 'local_hangup',
+        room_id: activeRoomId.value,
+        actor_user_id: currentUserId.value,
       },
     });
     if (sent) sentCount += 1;
@@ -1266,6 +1987,7 @@ watch(desiredRoomId, (nextRoomId, previousRoomId) => {
       setNotice(`Could not join room ${nextRoomId} while websocket is offline.`, 'error');
     } else {
       requestRoomSnapshot();
+      refreshUsersDirectoryPresentation();
     }
   }
 });
@@ -1300,13 +2022,15 @@ watch(
   (token) => {
     if (String(token || '').trim() === '') {
       manualSocketClose = true;
+      connectionState.value = 'expired';
+      connectionReason.value = 'missing_session';
       closeSocket();
       return;
     }
 
-    if (!isSocketOnline.value && connectionState.value !== 'connecting') {
+    if (!isSocketOnline.value) {
       reconnectAttempt.value = 0;
-      connectSocket();
+      void connectSocket();
     }
   }
 );
@@ -1314,7 +2038,7 @@ watch(
 onMounted(() => {
   ensureRoomBuckets(desiredRoomId.value);
   serverRoomId.value = desiredRoomId.value;
-  connectSocket();
+  void connectSocket();
 
   typingSweepTimer = setInterval(() => {
     const nowMs = Date.now();
@@ -1332,10 +2056,15 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   manualSocketClose = true;
+  connectGeneration += 1;
   stopLocalTyping();
   clearTypingStopTimer();
   clearReconnectTimer();
   clearPingTimer();
+  if (usersRefreshTimer.value !== null) {
+    clearTimeout(usersRefreshTimer.value);
+    usersRefreshTimer.value = null;
+  }
   if (typingSweepTimer !== null) {
     clearInterval(typingSweepTimer);
     typingSweepTimer = null;
@@ -1378,6 +2107,40 @@ onBeforeUnmount(() => {
 
 .workspace-call-head p strong {
   color: var(--text-main);
+}
+
+.workspace-connection-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #1b427a;
+  color: #dbe9ff;
+}
+
+.workspace-connection-pill.online {
+  background: #14452b;
+  color: #bdf6cf;
+}
+
+.workspace-connection-pill.retrying {
+  background: #5d4a16;
+  color: #ffe7a8;
+}
+
+.workspace-connection-pill.blocked {
+  background: #4f1e2e;
+  color: #ffd1dc;
+}
+
+.workspace-connection-pill.expired {
+  background: #5a274d;
+  color: #ffd9f0;
 }
 
 .workspace-call-banner {
@@ -1633,6 +2396,17 @@ onBeforeUnmount(() => {
   color: var(--text-dim);
 }
 
+.workspace-tab-hint {
+  margin: 0;
+  padding: 8px 10px 0;
+  font-size: 11px;
+  color: #c2d4f2;
+}
+
+.workspace-tab-hint.error {
+  color: #ffc6d4;
+}
+
 .user-list,
 .lobby-list,
 .workspace-chat-list {
@@ -1657,6 +2431,10 @@ onBeforeUnmount(() => {
 
 .user-row.pinned {
   background: #2d63b3;
+}
+
+.user-row.pending {
+  outline: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .user-preview {
@@ -1690,6 +2468,11 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: #9db2d8;
+}
+
+.user-feedback {
+  font-size: 11px;
+  color: #d5e3ff;
 }
 
 .user-list-empty {
@@ -1797,7 +2580,7 @@ onBeforeUnmount(() => {
   height: 38px;
 }
 
-@media (max-width: 1400px) {
+@media (max-width: 1440px) {
   .workspace-call-body {
     grid-template-columns: minmax(0, 1fr) 330px;
   }
@@ -1807,7 +2590,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1180px) {
   .workspace-call-body {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(0, 1fr) minmax(360px, 44vh);
