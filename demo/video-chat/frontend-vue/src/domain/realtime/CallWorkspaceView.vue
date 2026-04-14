@@ -1,11 +1,7 @@
 <template>
   <section class="view-card workspace-call-view">
     <header class="workspace-call-head">
-      <div>
-        <h3>Video Call</h3>
-      </div>
       <div class="actions-inline workspace-call-head-actions">
-        <span class="workspace-connection-pill" :class="connectionState">{{ connectionLabel }}</span>
         <button class="btn" type="button" :disabled="inviteState.creating || !isSocketOnline" @click="createRoomInvite">
           {{ inviteState.creating ? 'Creating invite…' : 'Create invite' }}
         </button>
@@ -673,14 +669,6 @@ const canModerate = computed(() => (
 ));
 const usersSourceMode = computed(() => (normalizeRole(sessionState.role) === 'admin' ? 'directory' : 'snapshot'));
 const isSocketOnline = computed(() => connectionState.value === 'online');
-
-const connectionLabel = computed(() => {
-  if (connectionState.value === 'online') return 'Signal online';
-  if (connectionState.value === 'retrying') return `Signal retrying (#${Math.max(1, reconnectAttempt.value)})`;
-  if (connectionState.value === 'blocked') return 'Signal blocked';
-  if (connectionState.value === 'expired') return 'Signal expired';
-  return 'Signal retrying';
-});
 
 function ensureRoomBuckets(roomId) {
   const normalizedRoomId = normalizeRoomId(roomId);

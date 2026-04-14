@@ -277,7 +277,10 @@ const pageSubtitle = computed(() => {
   }
   return '';
 });
-const showWorkspaceHeader = computed(() => !['/admin/users', '/admin/calls'].includes(route.path));
+const showWorkspaceHeader = computed(() => (
+  !['/admin/users', '/admin/calls'].includes(route.path)
+  && !route.path.startsWith('/workspace/call')
+));
 
 const isTabletViewport = computed(() => viewportMode.value === 'tablet');
 const isMobileViewport = computed(() => viewportMode.value === 'mobile');
