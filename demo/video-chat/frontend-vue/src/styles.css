@@ -139,6 +139,7 @@ select {
 .sidebar-content {
   background: var(--bg-sidebar);
   margin: 10px;
+  height: calc(100% - 20px);
   min-height: 0;
   overflow: auto;
   border: 0;
@@ -328,7 +329,7 @@ select {
 
 .logout-wrap {
   border-top: 1px solid var(--border-subtle);
-  padding: 10px;
+  padding: 10px 10px 0;
 }
 
 .sidebar-content.left .logout-wrap {
@@ -1469,6 +1470,7 @@ tbody tr:hover {
 
   .shell.tablet-mode .sidebar-content {
     margin: 0;
+    height: 100%;
     border-radius: 0;
   }
 
