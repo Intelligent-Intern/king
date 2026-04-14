@@ -279,13 +279,13 @@ namespace {
      * Perform DTLS handshake with a remote peer.
      * @return bool|false
      */
-    function king_rtp_dtls_accept($socket, string $ip, int $port, int $timeout_ms = 5000) {}
+    function king_rtp_dtls_accept($socket, string $ip, int $port, int $timeout_ms) {}
 
     /**
      * Receive RTP data from a peer.
      * @return array|false
      */
-    function king_rtp_recv($socket, int $timeout_ms = 0) {}
+    function king_rtp_recv($socket, int $timeout_ms) {}
 
     /**
      * Send RTP data to a peer.
