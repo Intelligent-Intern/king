@@ -21,7 +21,7 @@
   --bg-tab: var(--bg-action);
   --bg-tab-hover: var(--bg-action-hover);
   --bg-tab-active: var(--bg-row);
-  --bg-ui-chrome: var(--bg-surface);
+  --bg-ui-chrome: #182c4d;
   --bg-ui-chrome-active: var(--bg-row);
   --bg-icon: var(--bg-action);
   --bg-icon-active: var(--bg-action-hover);
