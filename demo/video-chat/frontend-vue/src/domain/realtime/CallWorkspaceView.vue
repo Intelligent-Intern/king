@@ -2505,10 +2505,10 @@ onBeforeUnmount(() => {
 .workspace-call-view {
   --bg-strip: #091a35;
   --bg-mini-video: #25569a;
+  height: 100%;
   min-height: 0;
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
-  gap: 1px;
+  display: flex;
+  flex-direction: column;
   background: var(--border-subtle);
 }
 
@@ -2588,6 +2588,7 @@ onBeforeUnmount(() => {
 }
 
 .workspace-call-body {
+  flex: 1 1 auto;
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
