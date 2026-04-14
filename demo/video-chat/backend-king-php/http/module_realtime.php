@@ -1011,6 +1011,26 @@ function videochat_handle_sfu_routes(
                     }
                     break;
 
+                case 'sfu/frame':
+                    $trackId = $msg['track_id'] ?? '';
+                    $timestamp = $msg['timestamp'] ?? 0;
+                    $frameData = $msg['data'] ?? [];
+                    $frameType = $msg['frameType'] ?? 'delta';
+
+                    foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
+                        if ($subClientId !== $clientId) {
+                            king_websocket_send($subClient['websocket'], json_encode([
+                                'type' => 'sfu/frame',
+                                'publisher_id' => $clientId,
+                                'track_id' => $trackId,
+                                'timestamp' => $timestamp,
+                                'data' => $frameData,
+                                'frameType' => $frameType,
+                            ]));
+                        }
+                    }
+                    break;
+
                 case 'sfu/leave':
                     break 2;
             }

@@ -20,11 +20,20 @@ export interface SFUTracksEvent {
   tracks: SFUTrack[]
 }
 
+export interface SFUEncodedFrame {
+  publisherId: string
+  trackId: string
+  timestamp: number
+  data: ArrayBuffer
+  type: 'keyframe' | 'delta'
+}
+
 export interface SFUClientCallbacks {
   onTracks:        (e: SFUTracksEvent) => void
   onUnpublished:   (publisherId: string, trackId: string) => void
   onPublisherLeft: (publisherId: string) => void
   onDisconnect:    () => void
+  onEncodedFrame?: (frame: SFUEncodedFrame) => void
 }
 
 export class SFUClient {
@@ -74,6 +83,18 @@ export class SFUClient {
     this.send({ type: 'sfu/unpublish', trackId })
   }
 
+  sendEncodedFrame(frame: SFUEncodedFrame): void {
+    const payload = {
+      type: 'sfu/frame',
+      publisherId: frame.publisherId,
+      trackId: frame.trackId,
+      timestamp: frame.timestamp,
+      data: Array.from(new Uint8Array(frame.data)),
+      frameType: frame.type,
+    }
+    this.send(payload)
+  }
+
   leave(): void {
     this.send({ type: 'sfu/leave' })
     this.ws?.close()
@@ -89,7 +110,6 @@ export class SFUClient {
   private handleMessage(msg: any): void {
     switch (msg.type) {
       case 'sfu/joined':
-        // Subscribe to all publishers already in the room
         for (const publisherId of (msg.publishers ?? [])) {
           this.subscribe(publisherId)
         }
@@ -110,6 +130,18 @@ export class SFUClient {
 
       case 'sfu/publisher_left':
         this.cb.onPublisherLeft(msg.publisherId)
+        break
+
+      case 'sfu/frame':
+        if (this.cb.onEncodedFrame) {
+          this.cb.onEncodedFrame({
+            publisherId: msg.publisherId,
+            trackId: msg.trackId,
+            timestamp: msg.timestamp,
+            data: new Uint8Array(msg.data).buffer,
+            type: msg.frameType,
+          })
+        }
         break
     }
   }

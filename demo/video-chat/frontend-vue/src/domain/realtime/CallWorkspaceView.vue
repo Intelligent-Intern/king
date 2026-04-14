@@ -2121,6 +2121,7 @@ function initSFU() {
         setTimeout(() => initSFU(), 2000);
       }
     },
+    onEncodedFrame: (frame) => handleSFUEncodedFrame(frame),
   });
 
   sfuClientRef.value.connect(
@@ -2131,101 +2132,42 @@ function initSFU() {
 }
 
 function handleSFUTracks(e) {
-  const pc = new RTCPeerConnection({
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-  });
+  (async () => {
+    let decoder = null;
+    try {
+      decoder = await createHybridDecoder({ width: 640, height: 480, quality: 75 });
+    } catch (e) {
+      console.warn('[SFU] Decoder init failed for', e.publisherId);
+    }
 
-  const stream = new MediaStream();
-  for (const track of e.tracks) {
-    stream.addTrack(track);
-  }
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    canvas.className = 'remote-video';
 
-  const video = document.createElement('video');
-  video.srcObject = stream;
-  video.autoplay = true;
-  video.playsInline = true;
-  
-  const videoContainer = document.getElementById('local-video-container');
-  if (videoContainer) {
-    videoContainer.appendChild(video);
-  }
-
-  remotePeersRef.value.set(e.publisherId, { pc, video, tracks: e.tracks, stream });
-
-  pc.ontrack = (event) => {
-    const [remoteStream] = event.streams;
-    const remoteVideo = document.createElement('video');
-    remoteVideo.srcObject = remoteStream;
-    remoteVideo.autoplay = true;
-    remoteVideo.playsInline = true;
-    
     const container = document.getElementById('remote-video-container');
     if (container) {
-      container.appendChild(remoteVideo);
+      container.appendChild(canvas);
     }
-    
-    processVideoWithCodec(remoteVideo, e.publisherId);
-  };
 
-  pc.onicecandidate = (event) => {
-    if (event.candidate) {
-      sendSignalingMessage({
-        type: 'call/ice',
-        target_user_id: e.publisherId,
-        ice: event.candidate,
-      });
-    }
-  };
-}
+    remotePeersRef.value.set(e.publisherId, { 
+      pc: null, 
+      video: null, 
+      tracks: e.tracks, 
+      stream: null,
+      decoder: decoder,
+      decodedCanvas: canvas,
+    });
 
-async function processVideoWithCodec(videoElement, publisherId) {
-  const decoder = await createHybridDecoder({ width: 640, height: 480, quality: 75 });
-  if (!decoder) {
-    console.warn('[Codec] Decoder init failed');
-    return;
-  }
-
-  const canvas = document.createElement('canvas');
-  canvas.width = 640;
-  canvas.height = 480;
-  const ctx = canvas.getContext('2d');
-  
-  const outputContainer = document.getElementById('decoded-video-container');
-  if (outputContainer) {
-    outputContainer.appendChild(canvas);
-  }
-
-  const processFrame = async () => {
-    if (videoElement.readyState >= 2) {
-      ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      
-      try {
-        const encoder = await createHybridEncoder({ width: canvas.width, height: canvas.height, quality: 75 });
-        if (encoder) {
-          const encoded = encoder.encodeFrame(imageData, Date.now());
-          const decoded = decoder.decodeFrame(encoded);
-          
-          const outCtx = canvas.getContext('2d');
-          if (outCtx && decoded.data) {
-            const outputImage = new ImageData(decoded.data, decoded.width, decoded.height);
-            outCtx.putImageData(outputImage, 0, 0);
-          }
-        }
-      } catch (e) {
-        // silently skip frame encode/decode errors
-      }
-    }
-    requestAnimationFrame(processFrame);
-  };
-  
-  requestAnimationFrame(processFrame);
+    console.log('[SFU] Subscribed to publisher', e.publisherId, 'with', e.tracks.length, 'tracks');
+  })();
 }
 
 function handleSFUUnpublished(publisherId, trackId) {
   const peer = remotePeersRef.value.get(publisherId);
   if (peer) {
-    peer.pc.close();
+    if (peer.pc) peer.pc.close();
+    if (peer.decoder) peer.decoder.destroy();
     remotePeersRef.value.delete(publisherId);
   }
 }
@@ -2233,7 +2175,8 @@ function handleSFUUnpublished(publisherId, trackId) {
 function handleSFUPublisherLeft(publisherId) {
   const peer = remotePeersRef.value.get(publisherId);
   if (peer) {
-    peer.pc.close();
+    if (peer.pc) peer.pc.close();
+    if (peer.decoder) peer.decoder.destroy();
     remotePeersRef.value.delete(publisherId);
   }
 }
@@ -2244,11 +2187,20 @@ function sendSignalingMessage(msg) {
   }
 }
 
+let videoEncoderRef = ref(null);
+let localVideoElement = ref(null);
+let localStreamRef = ref(null);
+let encodeIntervalRef = ref(null);
+
 async function publishLocalTracks() {
-  if (!sfuClientRef.value || localTracksRef.value.length > 0) return;
+  if (!sfuClientRef.value || localStreamRef.value) return;
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { width: 640, height: 480, frameRate: 15 }, 
+      audio: true 
+    });
+    localStreamRef.value = stream;
     localTracksRef.value = stream.getTracks();
 
     const tracks = stream.getTracks().map((t) => ({
@@ -2258,8 +2210,100 @@ async function publishLocalTracks() {
     }));
 
     sfuClientRef.value.publishTracks(tracks);
+
+    const videoTrack = stream.getVideoTracks()[0];
+    if (videoTrack) {
+      await startEncodingPipeline(videoTrack);
+    }
   } catch (e) {
     console.error('[SFU] Failed to get user media:', e);
+  }
+}
+
+async function startEncodingPipeline(videoTrack) {
+  try {
+    videoEncoderRef.value = await createHybridEncoder({ 
+      width: 640, 
+      height: 480, 
+      quality: 75,
+      keyFrameInterval: 30,
+    });
+    if (!videoEncoderRef.value) {
+      console.warn('[SFU] Encoder init failed, falling back to WebRTC');
+      return;
+    }
+    console.log('[SFU] WASM encoder initialized');
+  } catch (e) {
+    console.error('[SFU] Encoder init error:', e);
+    return;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 640;
+  canvas.height = 480;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  const video = document.createElement('video');
+  video.srcObject = new MediaStream([videoTrack]);
+  video.muted = true;
+  video.playsInline = true;
+  video.autoplay = true;
+  await video.play();
+  localVideoElement.value = video;
+
+  const container = document.getElementById('local-video-container');
+  if (container) {
+    container.appendChild(video);
+  }
+
+  encodeIntervalRef.value = setInterval(async () => {
+    if (!videoEncoderRef.value || !sfuClientRef.value || sfuClientRef.value.ws?.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    if (video.readyState < 2) return;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const timestamp = Date.now();
+
+    try {
+      const encoded = videoEncoderRef.value.encodeFrame(imageData, timestamp);
+      
+      sfuClientRef.value.sendEncodedFrame({
+        publisherId: String(sessionState.userId),
+        trackId: videoTrack.id,
+        timestamp: encoded.timestamp,
+        data: encoded.data,
+        type: encoded.type,
+      });
+    } catch (e) {
+      // silently skip encode errors
+    }
+  }, 66);
+}
+
+function handleSFUEncodedFrame(frame) {
+  const peer = remotePeersRef.value.get(frame.publisherId);
+  if (!peer || !peer.decoder) return;
+
+  try {
+    const decoded = peer.decoder.decodeFrame({
+      data: frame.data,
+      timestamp: frame.timestamp,
+      width: 640,
+      height: 480,
+      type: frame.type,
+    });
+
+    if (decoded && decoded.data) {
+      const canvas = peer.decodedCanvas;
+      const ctx = canvas.getContext('2d');
+      const imageData = new ImageData(decoded.data, decoded.width, decoded.height);
+      ctx.putImageData(imageData, 0, 0);
+    }
+  } catch (e) {
+    console.warn('[SFU] Decode error:', e);
   }
 }
 
@@ -2280,12 +2324,25 @@ onBeforeUnmount(() => {
   }
   closeSocket();
 
+  if (encodeIntervalRef.value) {
+    clearInterval(encodeIntervalRef.value);
+    encodeIntervalRef.value = null;
+  }
+  if (videoEncoderRef.value) {
+    videoEncoderRef.value.destroy();
+    videoEncoderRef.value = null;
+  }
+  if (localStreamRef.value) {
+    localStreamRef.value.getTracks().forEach(t => t.stop());
+    localStreamRef.value = null;
+  }
   if (sfuClientRef.value) {
     sfuClientRef.value.leave();
     sfuClientRef.value = null;
   }
   for (const [_, peer] of remotePeersRef.value) {
-    peer.pc.close();
+    if (peer.pc) peer.pc.close();
+    if (peer.decoder) peer.decoder.destroy();
   }
   remotePeersRef.value.clear();
 });
