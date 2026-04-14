@@ -424,6 +424,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute, useRouter } from 'vue-router';
 import { sessionState } from '../auth/session';
 import { resolveBackendOrigin } from '../../support/backendOrigin';
+import { SFUClient } from '../../../frontend/src/lib/sfuClient';
+import { WasmCodec } from '../../../frontend/src/lib/wasm/wasm-codec';
 
 const route = useRoute();
 const router = useRouter();
@@ -621,6 +623,12 @@ const inviteJoinBusy = ref(false);
 
 const workspaceError = ref('');
 const workspaceNotice = ref('');
+
+const sfuClientRef = ref(null);
+const wasmCodecRef = ref(null);
+const localTracksRef = ref([]);
+const remotePeersRef = ref(new Map());
+const sfuConnected = ref(false);
 
 const desiredRoomId = computed(() => normalizeRoomId(route.params.roomId));
 const activeRoomId = computed(() => normalizeRoomId(serverRoomId.value || desiredRoomId.value));
@@ -1168,12 +1176,22 @@ function toggleHandRaised() {
 
 function toggleCamera() {
   controlState.cameraEnabled = !controlState.cameraEnabled;
+  for (const track of localTracksRef.value) {
+    if (track.kind === 'video') {
+      track.enabled = controlState.cameraEnabled;
+    }
+  }
   refreshUsersDirectoryPresentation();
   void syncControlStateToPeers();
 }
 
 function toggleMicrophone() {
   controlState.micEnabled = !controlState.micEnabled;
+  for (const track of localTracksRef.value) {
+    if (track.kind === 'audio') {
+      track.enabled = controlState.micEnabled;
+    }
+  }
   refreshUsersDirectoryPresentation();
   void syncControlStateToPeers();
 }
@@ -1952,6 +1970,22 @@ function hangupCall() {
   reactionTrayOpen.value = false;
   refreshUsersDirectoryPresentation();
 
+  for (const track of localTracksRef.value) {
+    track.stop();
+  }
+  localTracksRef.value = [];
+
+  if (sfuClientRef.value) {
+    for (const track of localTracksRef.value) {
+      sfuClientRef.value.unpublishTrack(track.id);
+    }
+  }
+
+  for (const [_, peer] of remotePeersRef.value) {
+    peer.pc.close();
+  }
+  remotePeersRef.value.clear();
+
   const peerIds = participantUsers.value
     .map((participant) => participant.userId)
     .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
@@ -2035,10 +2069,21 @@ watch(
   }
 );
 
-onMounted(() => {
+onMounted(async () => {
   ensureRoomBuckets(desiredRoomId.value);
   serverRoomId.value = desiredRoomId.value;
   void connectSocket();
+
+  try {
+    wasmCodecRef.value = new WasmCodec();
+    await wasmCodecRef.value.load();
+  } catch (e) {
+    console.warn('[SFU] WASM codec failed to load:', e);
+  }
+
+  if (sessionState.sessionToken && sessionState.userId) {
+    initSFU();
+  }
 
   typingSweepTimer = setInterval(() => {
     const nowMs = Date.now();
@@ -2053,6 +2098,98 @@ onMounted(() => {
     }
   }, TYPING_SWEEP_MS);
 });
+
+function initSFU() {
+  if (sfuClientRef.value) return;
+
+  const token = String(sessionState.sessionToken || '').trim();
+  if (!token) return;
+
+  sfuClientRef.value = new SFUClient({
+    onTracks: (e) => handleSFUTracks(e),
+    onUnpublished: (publisherId, trackId) => handleSFUUnpublished(publisherId, trackId),
+    onPublisherLeft: (publisherId) => handleSFUPublisherLeft(publisherId),
+    onDisconnect: () => {
+      sfuConnected.value = false;
+      if (!manualSocketClose) {
+        setTimeout(() => initSFU(), 2000);
+      }
+    },
+  });
+
+  sfuClientRef.value.connect(
+    { userId: String(sessionState.userId), token, name: sessionState.displayName || 'User' },
+    activeRoomId.value
+  );
+  sfuConnected.value = true;
+}
+
+function handleSFUTracks(e) {
+  const pc = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+  });
+
+  for (const track of e.tracks) {
+    const stream = new MediaStream();
+    stream.addTrack(track as MediaStreamTrack);
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.autoplay = true;
+    video.playsInline = true;
+    remotePeersRef.value.set(e.publisherId, { pc, video, tracks: e.tracks });
+  }
+
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      sendSignalingMessage({
+        type: 'call/ice',
+        target_user_id: e.publisherId,
+        ice: event.candidate,
+      });
+    }
+  };
+}
+
+function handleSFUUnpublished(publisherId, trackId) {
+  const peer = remotePeersRef.value.get(publisherId);
+  if (peer) {
+    peer.pc.close();
+    remotePeersRef.value.delete(publisherId);
+  }
+}
+
+function handleSFUPublisherLeft(publisherId) {
+  const peer = remotePeersRef.value.get(publisherId);
+  if (peer) {
+    peer.pc.close();
+    remotePeersRef.value.delete(publisherId);
+  }
+}
+
+function sendSignalingMessage(msg) {
+  if (socketRef.value && socketRef.value.readyState === WebSocket.OPEN) {
+    socketRef.value.send(JSON.stringify(msg));
+  }
+}
+
+async function publishLocalTracks() {
+  if (!sfuClientRef.value || localTracksRef.value.length > 0) return;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localTracksRef.value = stream.getTracks();
+
+    const tracks = stream.getTracks().map((t) => ({
+      id: t.id,
+      kind: t.kind,
+      label: t.label,
+    }));
+
+    sfuClientRef.value.publishTracks(tracks);
+  } catch (e) {
+    console.error('[SFU] Failed to get user media:', e);
+  }
+}
 
 onBeforeUnmount(() => {
   manualSocketClose = true;
@@ -2070,6 +2207,15 @@ onBeforeUnmount(() => {
     typingSweepTimer = null;
   }
   closeSocket();
+
+  if (sfuClientRef.value) {
+    sfuClientRef.value.leave();
+    sfuClientRef.value = null;
+  }
+  for (const [_, peer] of remotePeersRef.value) {
+    peer.pc.close();
+  }
+  remotePeersRef.value.clear();
 });
 </script>
 
