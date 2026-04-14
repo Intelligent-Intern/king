@@ -428,8 +428,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute, useRouter } from 'vue-router';
 import { sessionState } from '../auth/session';
 import { resolveBackendOrigin } from '../../support/backendOrigin';
-import { SFUClient } from '../../../../frontend/src/lib/sfuClient';
-import { WasmWaveletVideoEncoder, WasmWaveletVideoDecoder, createHybridEncoder, createHybridDecoder } from '../../../../frontend/src/lib/wasm/wasm-codec';
+import { SFUClient } from '../../lib/sfu/sfuClient';
+import { WasmWaveletVideoEncoder, WasmWaveletVideoDecoder, createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';
 
 const route = useRoute();
 const router = useRouter();
