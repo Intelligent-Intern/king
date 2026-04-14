@@ -239,9 +239,11 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { resolveBackendOrigin } from '../../support/backendOrigin';
-import { sessionState } from '../auth/session';
+import { logoutSession, refreshSession, sessionState } from '../auth/session';
 
+const router = useRouter();
 const backendOrigin = resolveBackendOrigin();
 const avatarPlaceholder = '/assets/orgas/kingrt/avatar-placeholder.svg';
 const defaultAvatarOptions = [
@@ -324,7 +326,7 @@ function extractErrorMessage(payload, fallback) {
   return fallback;
 }
 
-async function apiRequest(path, { method = 'GET', query = null, body = null } = {}) {
+async function apiRequest(path, { method = 'GET', query = null, body = null } = {}, allowRefreshRetry = true) {
   const endpoint = `${backendOrigin}${path}${buildQueryString(query || {})}`;
   let response = null;
   try {
@@ -349,6 +351,15 @@ async function apiRequest(path, { method = 'GET', query = null, body = null } = 
   }
 
   if (!response.ok) {
+    if ((response.status === 401 || response.status === 403) && allowRefreshRetry) {
+      const refreshResult = await refreshSession();
+      if (refreshResult?.ok) {
+        return apiRequest(path, { method, query, body }, false);
+      }
+      await logoutSession();
+      await router.push('/login');
+      throw new Error('Session expired. Please sign in again.');
+    }
     throw new Error(extractErrorMessage(payload, `Request failed (${response.status}).`));
   }
 
@@ -747,6 +758,11 @@ async function toggleUserStatus(user) {
       method: 'POST',
     });
     notice.value = `${status === 'disabled' ? 'Reactivated' : 'Deactivated'} ${String(user.display_name || user.email || userId)}.`;
+    if (status !== 'disabled' && userId === Number(sessionState.userId || 0)) {
+      await logoutSession();
+      await router.push('/login');
+      return;
+    }
     await loadUsers();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not update user status.';
