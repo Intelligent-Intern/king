@@ -1,55 +1,65 @@
 # King Issues
 
 > Status: 2026-04-14
-> Focus: King PHP Backend + specialized video codec (WLVC/Wavelet)
+> Focus: SFU-first media path + WLVC (Wavelet + Kalman) implemented in PHP backend
 
-This file is intentionally cleaned up and replaces the old aggregate backlog.
-It now contains only the current open items and the already completed/prototype state for the codec path.
+This tracker is now aligned to the requested direction:
+- SFU (server-forwarded media), not mesh P2P as the primary architecture
+- codec pipeline (wavelet + Kalman) implemented in PHP backend logic, not only frontend prototype logic
 
-## Guardrails
+## Non-negotiable direction
 
 - active backend path stays `King/PHP` (no Node fallback as target architecture)
-- no artificial contract shrink just to speed up CI; implement the stronger v1 path
-- prove everything with protocol/runtime tests, not only local mock flows
+- primary call topology is **SFU**, not browser mesh P2P
+- WLVC codec path (wavelet + Kalman stages) must be implemented in backend PHP code and exposed through stable APIs
+- no contract shrink to speed up CI; build the stronger path
+- prove behavior with wire/runtime tests, not only mock UI flows
 
-## Done / Already present
+## Done in current branch
 
-- [x] RTP API added to the extension surface (`king_rtp_bind`, `king_rtp_ice_credentials`, `king_rtp_dtls_fingerprint`, `king_rtp_dtls_accept`, `king_rtp_recv`, `king_rtp_send`, `king_rtp_close`).
-- [x] RTP/ICE-lite/DTLS-SRTP C implementation exists as a runtime building block (`extension/include/rtp.h`, `extension/src/media/rtp.c`).
-- [x] Build/linking base for OpenSSL and optional libsrtp2 added (`extension/config.m4`).
-- [x] Frontend codec prototype exists: Wavelet TypeScript, WASM wrapper, C++ WASM codec sources.
-- [x] SFU prototype exists (signaling/track metadata), including frontend client binding.
-- [x] Demo verification exists for the Node prototype (contract test + smoke script).
+- [x] Canonical WLVC wire contract is versioned in-repo (`demo/video-chat/contracts/v1/wlvc-frame.contract.json`).
+- [x] WLVC encode/decode contract tests exist for backend/frontend wire-envelope parity.
 
-## Open / To implement (in order)
+## Known prototype work (feature branch, not yet integrated here)
 
-- [x] `#1` Finalize canonical WLVC wire contract (versioning, header, key/delta, fallback flags, error codes).
-  Done when: a versioned spec is in the repo and encoder/decoder plus tests enforce exactly the same structure.
+- [ ] RTP/DTLS/SRTP C slice from `feature/sfu-and-wasm-codec-for-video-demo` is not yet merged into this branch.
+- [ ] SFU prototype from that branch is metadata/signaling oriented and still not the final server-side media-forwarding implementation required for v1.
 
-- [ ] `#2` Lock down media path for King/PHP (signaling, session, room membership, authorization) and remove Node special paths from target operation.
-  Done when: all active realtime video-call flows run through the King/PHP backend path.
+## Open / To implement (priority order)
 
-- [ ] `#3` Bind end-to-end WLVC over the real media path (no local encode->decode loopback as primary path).
-  Done when: sent payload is decoded remotely as WLVC and the call works without local fake loop.
+- [ ] `#1` Import and integrate the RTP C runtime slice into this branch (`extension/include/rtp.h`, `extension/src/media/rtp.c`, `extension/src/php_king.c`, `extension/config.m4`, stubs).
+  Done when: extension builds cleanly with the RTP surface enabled and PHP stub parity reflects the exported API.
 
-- [ ] `#4` Implement codec negotiation + fallback (WLVC <-> standard WebRTC codec).
-  Done when: mixed clients connect stably and cleanly fall back to a compatible codec.
+- [ ] `#2` Implement server-side SFU media forwarding in King runtime as the primary call topology.
+  Done when: media forwarding is server-authoritative via SFU path and multi-party calls do not depend on mesh P2P as primary transport.
 
-- [ ] `#5` Complete PHP runtime hardening for RTP/DTLS/SRTP (lifecycle, failure paths, cleanup, rekey/reconnect handling).
-  Done when: PHPT and runtime tests show no resource leaks, no zombie peers, and deterministic recovery.
+- [ ] `#3` Implement wavelet stage in PHP backend codec pipeline.
+  Done when: wavelet transform runs in PHP backend path and is used in live media packets, not only local frontend loopback.
 
-- [ ] `#6` Add security and abuse protection for media and signaling channels.
-  Done when: rate limits, membership checks, replay/invalid-frame defense, and clear close reasons are testably enforced.
+- [ ] `#4` Implement Kalman prediction/filter stage in PHP backend codec pipeline.
+  Done when: Kalman stage is active in PHP encode/decode flow with deterministic behavior and test coverage.
 
-- [ ] `#7` Hard-wire performance budget and measurement (CPU, RTT, join time, bitrate, frame drop, packet loss).
-  Done when: reproducible benchmarks plus target values are documented in-repo and run regularly in CI/smoke.
+- [ ] `#5` Bind end-to-end WLVC media path over King/PHP SFU pipeline.
+  Done when: sender payload is encoded as WLVC, routed through SFU, and decoded remotely without local fake encode->decode loopback.
 
-- [ ] `#8` Close test matrix (unit, PHPT, E2E multi-user, negative tests, decoder/parser fuzz).
-  Done when: the WLVC path stays green under load, failures, and mixed client capability.
+- [ ] `#6` Add codec negotiation + fallback policy (WLVC <-> standard WebRTC codec).
+  Done when: mixed-capability clients connect reliably and fallback occurs deterministically with explicit telemetry.
 
-- [ ] `#9` Clean repo hygiene for codec track (no build/DB/log artifacts in branch as product code).
-  Done when: `.gitignore`, CI, and branch content are clean and only required runtime/source artifacts stay committed.
+- [ ] `#7` Complete PHP runtime hardening for RTP/DTLS/SRTP/SFU lifecycle.
+  Done when: no resource leaks, no zombie peers, deterministic cleanup/reconnect/rekey behavior, and fail-closed error mapping.
+
+- [ ] `#8` Add security and abuse protection for media/signaling channels.
+  Done when: rate limits, room-membership authorization, replay/invalid-frame rejection, and clear close reasons are testably enforced.
+
+- [ ] `#9` Lock performance budget and telemetry (CPU, RTT, join time, bitrate, frame drop, packet loss, SFU fanout cost).
+  Done when: reproducible benchmarks and SLO targets are documented and exercised in CI/smoke.
+
+- [ ] `#10` Close test matrix for SFU+WLVC runtime path.
+  Done when: unit + PHPT + E2E multi-user + negative + fuzz coverage stay green under load and mixed client capabilities.
+
+- [ ] `#11` Repo hygiene for codec track.
+  Done when: no build/db/log artifacts are committed as product code and `.gitignore`/CI enforce clean artifact boundaries.
 
 ## Next step
 
-- [ ] Start with `#2` (King/PHP-only media path), then `#3` (real end-to-end WLVC path), before further UI/UX work.
+- [ ] Start with `#1` (import RTP C slice), then `#2` (true SFU forwarding), then `#3/#4` (wavelet+Kalman in runtime).
