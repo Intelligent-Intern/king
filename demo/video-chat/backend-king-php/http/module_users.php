@@ -341,9 +341,18 @@ function videochat_handle_user_routes(
 
     if (preg_match('#^/api/admin/users/(\d+)/deactivate$#', $path, $matches) === 1) {
         $userId = (int) ($matches[1] ?? 0);
+        $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
         if ($method !== 'POST') {
             return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/admin/users/{id}/deactivate.', [
                 'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        if ($actorUserId > 0 && $actorUserId === $userId) {
+            return $errorResponse(409, 'admin_user_conflict', 'You cannot deactivate your own account.', [
+                'fields' => [
+                    'user_id' => 'cannot_deactivate_self',
+                ],
             ]);
         }
 

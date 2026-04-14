@@ -754,15 +754,14 @@ async function toggleUserStatus(user) {
 
   try {
     const status = String(user.status || '').toLowerCase();
+    if (status !== 'disabled' && userId === Number(sessionState.userId || 0)) {
+      error.value = 'You cannot deactivate your own account.';
+      return;
+    }
     await apiRequest(`/api/admin/users/${encodeURIComponent(String(userId))}/${status === 'disabled' ? 'reactivate' : 'deactivate'}`, {
       method: 'POST',
     });
     notice.value = `${status === 'disabled' ? 'Reactivated' : 'Deactivated'} ${String(user.display_name || user.email || userId)}.`;
-    if (status !== 'disabled' && userId === Number(sessionState.userId || 0)) {
-      await logoutSession();
-      await router.push('/login');
-      return;
-    }
     await loadUsers();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not update user status.';
