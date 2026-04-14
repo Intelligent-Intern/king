@@ -37,6 +37,9 @@ dist/
 !packages/iibin/dist/
 !packages/iibin/dist/**
 .cache/
+demo/video-chat/frontend/.vite/
+demo/video-chat/**/src/lib/wasm/build/
+demo/video-chat/frontend/demo/video-chat/frontend/
 __pycache__/
 .pytest_cache/
 .mypy_cache/
