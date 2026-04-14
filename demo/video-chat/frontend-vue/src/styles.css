@@ -21,6 +21,8 @@
   --bg-tab: var(--bg-action);
   --bg-tab-hover: var(--bg-action-hover);
   --bg-tab-active: var(--bg-row);
+  --bg-ui-chrome: var(--bg-surface);
+  --bg-ui-chrome-active: var(--bg-row);
   --bg-icon: var(--bg-action);
   --bg-icon-active: var(--bg-action-hover);
   --border-subtle: var(--line);
@@ -612,7 +614,7 @@ select {
 .drawer,
 .table-wrap,
 .metrics {
-  background: var(--bg-surface);
+  background: var(--bg-ui-chrome);
 }
 
 .section {
@@ -1069,7 +1071,7 @@ tbody tr:hover {
 .settings-backdrop {
   position: absolute;
   inset: 0;
-  background: #09111e;
+  background: rgba(9, 17, 30, 0.56);
 }
 
 .settings-dialog {
@@ -1080,7 +1082,7 @@ tbody tr:hover {
   border-radius: 8px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface-strong);
-  box-shadow: 0 12px 28px #000000;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -1123,7 +1125,7 @@ tbody tr:hover {
   height: 150px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--bg-action);
+  background: var(--bg-ui-chrome);
   color: #ffffff;
   font-weight: 700;
   font-size: 14px;
@@ -1135,11 +1137,11 @@ tbody tr:hover {
 }
 
 .settings-tile:hover {
-  background: var(--bg-action-hover);
+  background: var(--bg-ui-chrome);
 }
 
 .settings-tile.active {
-  background: var(--bg-row);
+  background: var(--bg-ui-chrome-active);
 }
 
 .settings-panel {

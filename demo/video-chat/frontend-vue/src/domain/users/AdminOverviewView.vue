@@ -941,7 +941,7 @@ watch(activeOverviewView, async (view) => {
 
 .overview-toolbar {
   padding: 10px;
-  background: var(--bg-surface);
+  background: var(--bg-ui-chrome);
 }
 
 .view-tabs {

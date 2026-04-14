@@ -786,7 +786,7 @@ onMounted(() => {
 .admin-users-head,
 .admin-users-toolbar,
 .users-footer {
-  background: var(--bg-pane);
+  background: var(--bg-ui-chrome);
 }
 
 .admin-users-head h3 {
