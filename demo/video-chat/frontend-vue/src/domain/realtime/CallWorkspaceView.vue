@@ -30,6 +30,10 @@
             <span>{{ lobbyAdmitted.length }} admitted</span>
           </div>
 
+          <div id="local-video-container" class="video-container local"></div>
+          <div id="remote-video-container" class="video-container remote"></div>
+          <div id="decoded-video-container" class="video-container decoded"></div>
+
           <div class="workspace-reaction-flight">
             <span
               v-for="burst in activeReactions"
@@ -424,8 +428,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute, useRouter } from 'vue-router';
 import { sessionState } from '../auth/session';
 import { resolveBackendOrigin } from '../../support/backendOrigin';
-import { SFUClient } from '../../../frontend/src/lib/sfuClient';
-import { WasmCodec } from '../../../frontend/src/lib/wasm/wasm-codec';
+import { SFUClient } from '../../../../frontend/src/lib/sfuClient';
+import { WasmWaveletVideoEncoder, WasmWaveletVideoDecoder, createHybridEncoder, createHybridDecoder } from '../../../../frontend/src/lib/wasm/wasm-codec';
 
 const route = useRoute();
 const router = useRouter();
@@ -2075,10 +2079,12 @@ onMounted(async () => {
   void connectSocket();
 
   try {
-    wasmCodecRef.value = new WasmCodec();
-    await wasmCodecRef.value.load();
+    wasmCodecRef.value = await createHybridEncoder({ width: 640, height: 480, quality: 75 });
+    if (wasmCodecRef.value) {
+      console.log('[WASM] Encoder initialized');
+    }
   } catch (e) {
-    console.warn('[SFU] WASM codec failed to load:', e);
+    console.warn('[WASM] Codec failed to load:', e);
   }
 
   if (sessionState.sessionToken && sessionState.userId) {
@@ -2129,15 +2135,37 @@ function handleSFUTracks(e) {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
   });
 
+  const stream = new MediaStream();
   for (const track of e.tracks) {
-    const stream = new MediaStream();
-    stream.addTrack(track as MediaStreamTrack);
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    video.autoplay = true;
-    video.playsInline = true;
-    remotePeersRef.value.set(e.publisherId, { pc, video, tracks: e.tracks });
+    stream.addTrack(track);
   }
+
+  const video = document.createElement('video');
+  video.srcObject = stream;
+  video.autoplay = true;
+  video.playsInline = true;
+  
+  const videoContainer = document.getElementById('local-video-container');
+  if (videoContainer) {
+    videoContainer.appendChild(video);
+  }
+
+  remotePeersRef.value.set(e.publisherId, { pc, video, tracks: e.tracks, stream });
+
+  pc.ontrack = (event) => {
+    const [remoteStream] = event.streams;
+    const remoteVideo = document.createElement('video');
+    remoteVideo.srcObject = remoteStream;
+    remoteVideo.autoplay = true;
+    remoteVideo.playsInline = true;
+    
+    const container = document.getElementById('remote-video-container');
+    if (container) {
+      container.appendChild(remoteVideo);
+    }
+    
+    processVideoWithCodec(remoteVideo, e.publisherId);
+  };
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
@@ -2148,6 +2176,50 @@ function handleSFUTracks(e) {
       });
     }
   };
+}
+
+async function processVideoWithCodec(videoElement, publisherId) {
+  const decoder = await createHybridDecoder({ width: 640, height: 480, quality: 75 });
+  if (!decoder) {
+    console.warn('[Codec] Decoder init failed');
+    return;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 640;
+  canvas.height = 480;
+  const ctx = canvas.getContext('2d');
+  
+  const outputContainer = document.getElementById('decoded-video-container');
+  if (outputContainer) {
+    outputContainer.appendChild(canvas);
+  }
+
+  const processFrame = async () => {
+    if (videoElement.readyState >= 2) {
+      ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      
+      try {
+        const encoder = await createHybridEncoder({ width: canvas.width, height: canvas.height, quality: 75 });
+        if (encoder) {
+          const encoded = encoder.encodeFrame(imageData, Date.now());
+          const decoded = decoder.decodeFrame(encoded);
+          
+          const outCtx = canvas.getContext('2d');
+          if (outCtx && decoded.data) {
+            const outputImage = new ImageData(decoded.data, decoded.width, decoded.height);
+            outCtx.putImageData(outputImage, 0, 0);
+          }
+        }
+      } catch (e) {
+        // silently skip frame encode/decode errors
+      }
+    }
+    requestAnimationFrame(processFrame);
+  };
+  
+  requestAnimationFrame(processFrame);
 }
 
 function handleSFUUnpublished(publisherId, trackId) {
@@ -2331,6 +2403,36 @@ onBeforeUnmount(() => {
   place-items: center;
   border-radius: 4px;
   border: 1px solid var(--border-subtle);
+}
+
+.video-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-container.local video,
+.video-container.remote video,
+.video-container.decoded video,
+.video-container canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.video-container.local {
+  z-index: 10;
+}
+
+.video-container.remote {
+  z-index: 5;
+}
+
+.video-container.decoded {
+  z-index: 1;
+  opacity: 0.5;
 }
 
 .workspace-main-video-room {
