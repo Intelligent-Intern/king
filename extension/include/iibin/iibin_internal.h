@@ -180,6 +180,64 @@ static inline void king_proto_encode_varint(smart_str *buf, uint64_t value) {
     smart_str_appendl(buf, (char*)temp, len);
 }
 
+/* --- Varint decode: optimized for ARM64 --- */
+#if defined(__aarch64__)
+static inline zend_bool king_proto_decode_varint(const unsigned char **buf_ptr, const unsigned char *buf_end, uint64_t *value_out) {
+    const unsigned char *p = *buf_ptr;
+    if (p >= buf_end) return 0;
+    
+    uint64_t b0 = *p++;
+    *value_out = b0 & 0x7F;
+    if (!(b0 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b1 = *p++;
+    *value_out |= (b1 & 0x7F) << 7;
+    if (!(b1 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b2 = *p++;
+    *value_out |= (b2 & 0x7F) << 14;
+    if (!(b2 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b3 = *p++;
+    *value_out |= (b3 & 0x7F) << 21;
+    if (!(b3 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b4 = *p++;
+    *value_out |= (b4 & 0x7F) << 28;
+    if (!(b4 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b5 = *p++;
+    *value_out |= (b5 & 0x7F) << 35;
+    if (!(b5 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b6 = *p++;
+    *value_out |= (b6 & 0x7F) << 42;
+    if (!(b6 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b7 = *p++;
+    *value_out |= (b7 & 0x7F) << 49;
+    if (!(b7 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b8 = *p++;
+    *value_out |= (b8 & 0x7F) << 56;
+    if (!(b8 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b9 = *p++;
+    *value_out |= b9 << 63;
+    *buf_ptr = p;
+    return 1;
+}
+#else
+/* Generic fallback */
 static inline zend_bool king_proto_decode_varint(const unsigned char **buf_ptr, const unsigned char *buf_end, uint64_t *value_out) {
     uint64_t result = 0;
     int shift = 0;
@@ -197,14 +255,15 @@ static inline zend_bool king_proto_decode_varint(const unsigned char **buf_ptr, 
     }
     return 0;
 }
+#endif
 
 static inline void king_proto_encode_fixed32(smart_str *buf, uint32_t value) {
-    unsigned char temp_buf[4];
-    temp_buf[0] = (unsigned char)(value);
-    temp_buf[1] = (unsigned char)(value >> 8);
-    temp_buf[2] = (unsigned char)(value >> 16);
-    temp_buf[3] = (unsigned char)(value >> 24);
-    smart_str_appendl(buf, (char*)temp_buf, 4);
+    unsigned char temp[4];
+    temp[0] = (unsigned char)(value);
+    temp[1] = (unsigned char)(value >> 8);
+    temp[2] = (unsigned char)(value >> 16);
+    temp[3] = (unsigned char)(value >> 24);
+    smart_str_appendl(buf, (char*)temp, 4);
 }
 
 static inline zend_bool king_proto_decode_fixed32(const unsigned char **buf_ptr, const unsigned char *buf_end, uint32_t *value_out) {
