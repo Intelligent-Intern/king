@@ -4496,6 +4496,7 @@ onBeforeUnmount(() => {
   bottom: 0;
   left: 0;
   right: 0;
+  z-index: 30;
   pointer-events: none;
   overflow: hidden;
 }
@@ -4619,7 +4620,7 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 16px;
   right: 16px;
-  z-index: 40;
+  z-index: 60;
   visibility: visible;
   pointer-events: auto;
   transform: translateX(0);
@@ -4629,7 +4630,7 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 16px;
   left: 16px;
-  z-index: 40;
+  z-index: 60;
   visibility: visible;
   pointer-events: auto;
   transform: translateX(0);
