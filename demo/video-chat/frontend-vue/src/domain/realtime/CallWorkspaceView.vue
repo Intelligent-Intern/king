@@ -472,8 +472,9 @@ import {
 import { BackgroundFilterController } from './backgroundFilterController';
 import { BackgroundFilterBaselineCollector } from './backgroundFilterBaseline';
 import { evaluateBackgroundFilterGates } from './backgroundFilterGates';
+import { detectMediaRuntimeCapabilities } from './mediaRuntimeCapabilities';
 import { SFUClient } from '../../lib/sfu/sfuClient';
-import { WasmWaveletVideoEncoder, WasmWaveletVideoDecoder, createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';
+import { createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';
 
 const route = useRoute();
 const router = useRouter();
@@ -697,7 +698,20 @@ const routeCallResolve = reactive({
 let routeCallResolveSeq = 0;
 
 const sfuClientRef = ref(null);
-const wasmCodecRef = ref(null);
+const mediaRuntimeCapabilities = ref({
+  checkedAt: '',
+  wlvcWasm: {
+    webAssembly: false,
+    encoder: false,
+    decoder: false,
+    reason: 'not_checked',
+  },
+  webRtcNative: false,
+  stageA: false,
+  stageB: false,
+  preferredPath: 'unsupported',
+  reasons: ['not_checked'],
+});
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
 const sfuConnected = ref(false);
@@ -2633,12 +2647,30 @@ onMounted(async () => {
   void connectSocket();
 
   try {
-    wasmCodecRef.value = await createHybridEncoder({ width: 640, height: 480, quality: 75 });
-    if (wasmCodecRef.value) {
-      console.log('[WASM] Encoder initialized');
+    mediaRuntimeCapabilities.value = await detectMediaRuntimeCapabilities();
+    if (mediaRuntimeCapabilities.value.stageA) {
+      console.log('[Codec] Runtime capability: WLVC WASM available');
+    } else if (mediaRuntimeCapabilities.value.stageB) {
+      console.warn('[Codec] Runtime capability: WLVC WASM unavailable, native WebRTC available');
+    } else {
+      console.error('[Codec] Runtime capability: neither WLVC WASM nor native WebRTC available');
     }
   } catch (e) {
-    console.warn('[WASM] Codec failed to load:', e);
+    console.warn('[Codec] Runtime capability probe failed:', e);
+    mediaRuntimeCapabilities.value = {
+      checkedAt: new Date().toISOString(),
+      wlvcWasm: {
+        webAssembly: typeof WebAssembly === 'object',
+        encoder: false,
+        decoder: false,
+        reason: 'probe_error',
+      },
+      webRtcNative: false,
+      stageA: false,
+      stageB: false,
+      preferredPath: 'unsupported',
+      reasons: ['probe_error'],
+    };
   }
 
   if (sessionState.sessionToken && sessionState.userId) {
