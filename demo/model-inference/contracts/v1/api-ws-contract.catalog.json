@@ -117,6 +117,13 @@
         "time": "rfc3339"
       }
     },
+    "chat_ui": {
+      "method": "GET",
+      "paths": ["/ui", "/ui/"],
+      "introduced_by": "M-11b",
+      "content_type": "text/html; charset=utf-8",
+      "scope": "Browser-visible single-file chat client. Static HTML+CSS+JS; decodes TokenFrame binaries client-side and streams deltas into the live assistant bubble. See backend-king-php/public/chat.html."
+    },
     "telemetry_recent": {
       "method": "GET",
       "paths": ["/api/telemetry/inference/recent"],

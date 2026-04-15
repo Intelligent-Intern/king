@@ -57,6 +57,7 @@ try {
         'models_create'    => ['method' => 'POST',   'paths' => ['/api/models']],
         'model_get'        => ['method' => 'GET',    'paths' => ['/api/models/{model_id}']],
         'model_delete'     => ['method' => 'DELETE', 'paths' => ['/api/models/{model_id}']],
+        'chat_ui'          => ['method' => 'GET',    'paths' => ['/ui', '/ui/']],
         'telemetry_recent' => ['method' => 'GET',    'paths' => ['/api/telemetry/inference/recent']],
         'infer_http'       => ['method' => 'POST',   'paths' => ['/api/infer']],
     ];
@@ -147,6 +148,7 @@ try {
         'models_create'  => [['method' => 'POST',   'path' => '/api/models',                                 'expect_not_status' => 404]],
         'model_get'      => [['method' => 'GET',    'path' => '/api/models/mdl-00000000deadbeef',             'expect_not_status' => 404]],
         'model_delete'     => [['method' => 'DELETE', 'path' => '/api/models/mdl-00000000deadbeef',           'expect_not_status' => 404]],
+        'chat_ui'          => [['method' => 'GET',    'path' => '/ui',                                       'expect_status' => 200]],
         'telemetry_recent' => [['method' => 'GET',    'path' => '/api/telemetry/inference/recent',           'expect_status' => 200]],
         'infer_http'       => [['method' => 'POST',   'path' => '/api/infer',                                'expect_not_status' => 404]],
     ];
@@ -279,7 +281,7 @@ try {
         );
     }
     // A surface MUST NOT appear in both live and target-shape sections.
-    foreach (['node_profile', 'models_list', 'models_create', 'model_get', 'model_delete', 'infer_http', 'telemetry_recent'] as $shipped) {
+    foreach (['node_profile', 'models_list', 'models_create', 'model_get', 'model_delete', 'infer_http', 'telemetry_recent', 'chat_ui'] as $shipped) {
         model_inference_catalog_contract_assert(
             !isset($targetShapeApi[$shipped]),
             "{$shipped} has shipped and must not remain in planned_surfaces_target_shape"

@@ -18,7 +18,7 @@ try {
     // Current deployed module list. Grows as later leaves land their modules.
     // Intended end-of-sprint order (see demo/model-inference/README.md):
     //   runtime, profile, registry, worker, inference, telemetry, routing, realtime
-    $expectedOrder = ['runtime', 'profile', 'registry', 'inference', 'realtime', 'telemetry'];
+    $expectedOrder = ['runtime', 'profile', 'registry', 'inference', 'realtime', 'telemetry', 'ui'];
     $actualOrder = model_inference_dispatch_route_module_order();
 
     model_inference_router_contract_assert(
@@ -100,6 +100,30 @@ try {
     model_inference_router_contract_assert(
         (int) ($runtimeResponse['status'] ?? 0) === 200,
         'runtime module should serve /api/runtime via the dispatcher'
+    );
+
+    // UI module owns GET /ui.
+    $uiResponse = model_inference_dispatch_request(
+        ['method' => 'GET', 'path' => '/ui', 'uri' => '/ui', 'headers' => []],
+        $jsonResponse,
+        $errorResponse,
+        $methodFromRequest,
+        $pathFromRequest,
+        $runtimeEnvelope,
+        $openDatabase,
+        $getInferenceSession,
+        $getInferenceMetrics,
+        '/ws',
+        '127.0.0.1',
+        18090
+    );
+    model_inference_router_contract_assert(
+        (int) ($uiResponse['status'] ?? 0) === 200,
+        'ui module should serve /ui with 200 (got ' . $uiResponse['status'] . ')'
+    );
+    model_inference_router_contract_assert(
+        str_contains((string) ($uiResponse['headers']['content-type'] ?? ''), 'text/html'),
+        'ui module must return text/html content-type'
     );
 
     // Telemetry module owns /api/telemetry/inference/recent.

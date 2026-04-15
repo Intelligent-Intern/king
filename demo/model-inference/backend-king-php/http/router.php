@@ -8,6 +8,7 @@ require_once __DIR__ . '/module_registry.php';
 require_once __DIR__ . '/module_inference.php';
 require_once __DIR__ . '/module_realtime.php';
 require_once __DIR__ . '/module_telemetry.php';
+require_once __DIR__ . '/module_ui.php';
 
 /**
  * Deterministic module-registration order for the inference backend.
@@ -31,6 +32,7 @@ function model_inference_dispatch_route_module_order(): array
         'inference',
         'realtime',
         'telemetry',
+        'ui',
     ];
 }
 
@@ -147,6 +149,16 @@ function model_inference_dispatch_request(
     );
     if ($telemetryResponse !== null) {
         return $telemetryResponse;
+    }
+
+    $uiResponse = model_inference_handle_ui_routes(
+        $path,
+        $method,
+        $jsonResponse,
+        $errorResponse
+    );
+    if ($uiResponse !== null) {
+        return $uiResponse;
     }
 
     return $errorResponse(404, 'not_implemented', 'Route has no handler on this backend build.', [

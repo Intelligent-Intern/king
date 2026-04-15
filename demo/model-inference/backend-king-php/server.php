@@ -109,6 +109,48 @@ $getInferenceMetrics = static function () use ($inferenceMetrics): InferenceMetr
     return $inferenceMetrics;
 };
 
+// Optional: auto-seed the SmolLM2 GGUF fixture when registry is empty.
+// Gated on MODEL_INFERENCE_AUTOSEED=1 so CI / contract tests that start
+// from a clean slate are never surprised by an implicit registry row.
+if (in_array(strtolower((string) (getenv('MODEL_INFERENCE_AUTOSEED') ?: '0')), ['1', 'true', 'yes', 'on'], true)) {
+    $seedGguf = getenv('MODEL_INFERENCE_AUTOSEED_GGUF_PATH')
+        ?: (__DIR__ . '/.local/fixtures/SmolLM2-135M-Instruct-Q4_K_S.gguf');
+    if (is_file($seedGguf)) {
+        try {
+            $seedPdo = model_inference_open_sqlite_pdo($dbPath);
+            $seedStmt = $seedPdo->query('SELECT COUNT(1) AS c FROM models');
+            $seedCount = (int) (($seedStmt->fetch()['c'] ?? 0));
+            if ($seedCount === 0) {
+                $seedStream = fopen($seedGguf, 'rb');
+                if (is_resource($seedStream)) {
+                    try {
+                        model_inference_registry_create_from_stream($seedPdo, [
+                            'model_name' => 'SmolLM2-135M-Instruct',
+                            'family' => 'smollm2',
+                            'quantization' => 'Q4_K',
+                            'parameter_count' => 135000000,
+                            'context_length' => 2048,
+                            'license' => 'apache-2.0',
+                            'min_ram_bytes' => 268435456,
+                            'min_vram_bytes' => 0,
+                            'prefers_gpu' => false,
+                            'source_url' => 'https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF',
+                        ], $seedStream);
+                        $log('auto-seeded SmolLM2-135M-Instruct/Q4_K from ' . $seedGguf);
+                    } finally {
+                        if (is_resource($seedStream)) {
+                            fclose($seedStream);
+                        }
+                    }
+                }
+            }
+            unset($seedPdo);
+        } catch (Throwable $seedError) {
+            $log('auto-seed failed (non-fatal): ' . $seedError->getMessage());
+        }
+    }
+}
+
 register_shutdown_function(static function () use ($log): void {
     $error = error_get_last();
     if (is_array($error)) {

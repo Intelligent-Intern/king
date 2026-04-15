@@ -51,6 +51,37 @@ the backend tree, and copies `extension/modules/king.so` to `/opt/king/king.so`.
 At `#M-7` it also copies a pinned `llama.cpp` server binary. Until then the
 image still boots the HTTP + WS surfaces on ports `18090` and `18091`.
 
+## Chat UI (M-11b)
+
+Once the backend is running with at least one model registered, a minimal
+browser chat is available at:
+
+```
+http://<host>:18090/ui
+```
+
+The page is a single static HTML file
+(`backend-king-php/public/chat.html`) served by `module_ui.php`. It opens a
+WebSocket to `/ws`, sends an `infer.start` text frame, decodes incoming
+TokenFrame binaries client-side (via `DataView` against the pinned big-endian
+24-byte header), and paints token deltas into the live assistant bubble.
+The footer shows real-time `tokens_in / tokens_out / ttft_ms / duration_ms /
+tokens_per_second`.
+
+Easiest way to see it running with the SmolLM2 fixture:
+
+```bash
+# Inside the dev container or any host with the extension loaded:
+MODEL_INFERENCE_AUTOSEED=1 \
+MODEL_INFERENCE_KING_HOST=0.0.0.0 \
+./run-dev.sh
+```
+
+The `MODEL_INFERENCE_AUTOSEED=1` flag boots with the SmolLM2 GGUF
+auto-registered if the registry is empty and the fixture is at its default
+path. Bind to `0.0.0.0` only when you intend the backend to be reachable
+beyond loopback.
+
 ## Target-Shape Fences
 
 The backend README inherits every fence listed in the parent
