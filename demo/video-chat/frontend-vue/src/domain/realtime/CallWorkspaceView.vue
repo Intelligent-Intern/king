@@ -3283,9 +3283,14 @@ function initSFU() {
       scheduleLocalTrackPublish();
     },
     onDisconnect: () => {
+      const hadActiveConnection = sfuConnected.value;
       sfuConnected.value = false;
       localTracksPublishedToSfu = false;
       sfuClientRef.value = null;
+      if (!hadActiveConnection) {
+        void maybeFallbackToNativeRuntime('sfu_connect_failed');
+        return;
+      }
       if (!manualSocketClose) {
         setTimeout(() => initSFU(), 2000);
       }
@@ -4398,6 +4403,7 @@ onBeforeUnmount(() => {
 
 .workspace-stage {
   position: relative;
+  height: 100%;
   min-height: 0;
   background: var(--bg-shell);
   padding: 0;
@@ -4448,12 +4454,13 @@ onBeforeUnmount(() => {
 
 .workspace-main-video {
   position: relative;
+  width: 100%;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
   background: var(--bg-video);
   color: #ffffff;
-  display: grid;
-  place-items: center;
+  display: block;
   border-radius: 0;
   border: 0;
   margin: 0 1px 1px;
@@ -4462,20 +4469,20 @@ onBeforeUnmount(() => {
 .video-container {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 .video-container.local video,
 .video-container.remote video,
 .video-container.decoded video,
 .video-container canvas {
-  width: 100%;
-  height: 100%;
+  width: 100% !important;
+  height: 100% !important;
   max-width: none;
   max-height: none;
-  object-fit: cover;
+  object-fit: cover !important;
 }
 
 .video-container.local {

@@ -181,107 +181,125 @@
         </header>
 
         <div class="calls-modal-body calls-enter-body">
-          <section class="calls-enter-preview">
-            <div class="calls-enter-preview-head">
-              <span>Camera Preview</span>
-              <span class="calls-enter-preview-meta">{{ enterCallState.callId }}</span>
-            </div>
-            <div class="calls-enter-preview-frame">
-              <video ref="enterCallPreviewVideoRef" autoplay playsinline muted></video>
-              <p v-if="enterCallState.previewError" class="calls-inline-error">{{ enterCallState.previewError }}</p>
-              <p v-else-if="!enterCallState.previewReady" class="calls-inline-hint">Preparing preview...</p>
-            </div>
-          </section>
-
-          <section class="calls-enter-config-grid">
-            <label class="field">
-              <span>Camera</span>
-              <select
-                class="input"
-                :value="callMediaPrefs.selectedCameraId"
-                @change="setCallCameraDevice($event.target.value)"
-              >
-                <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
-                <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
-                  {{ camera.label }}
-                </option>
-              </select>
-            </label>
-
-            <label class="field">
-              <span>Mic</span>
-              <select
-                class="input"
-                :value="callMediaPrefs.selectedMicrophoneId"
-                @change="setCallMicrophoneDevice($event.target.value)"
-              >
-                <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
-                <option v-for="microphone in callMediaPrefs.microphones" :key="microphone.id" :value="microphone.id">
-                  {{ microphone.label }}
-                </option>
-              </select>
-            </label>
-
-            <label class="field">
-              <span>Mic volume</span>
-              <input
-                class="input"
-                type="range"
-                min="0"
-                max="100"
-                step="1"
-                :value="callMediaPrefs.microphoneVolume"
-                @input="setCallMicrophoneVolume($event.target.value)"
-              />
-            </label>
-
-            <label class="field">
-              <span>Speaker</span>
-              <select
-                class="input"
-                :value="callMediaPrefs.selectedSpeakerId"
-                @change="setCallSpeakerDevice($event.target.value)"
-              >
-                <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
-                <option v-for="speaker in callMediaPrefs.speakers" :key="speaker.id" :value="speaker.id">
-                  {{ speaker.label }}
-                </option>
-              </select>
-            </label>
-
-            <label class="field">
-              <span>Speaker volume</span>
-              <input
-                class="input"
-                type="range"
-                min="0"
-                max="100"
-                step="1"
-                :value="callMediaPrefs.speakerVolume"
-                @input="setCallSpeakerVolume($event.target.value)"
-              />
-            </label>
-          </section>
-
-          <section class="calls-enter-invite">
-            <p class="invite-popover-label">
-              Invite for <strong>{{ enterCallState.callId }}</strong>
-            </p>
-            <p v-if="enterCallState.loading" class="invite-popover-label">Generating invite code...</p>
-            <p v-else-if="enterCallState.error" class="invite-popover-label calls-error">{{ enterCallState.error }}</p>
-            <template v-else>
-              <div class="invite-popover-row">
-                <code class="invite-code">{{ enterCallState.code }}</code>
-                <button class="icon-mini-btn" type="button" title="Copy invite" @click="copyInviteCode">
-                  <span class="icon-copy" aria-hidden="true"></span>
-                </button>
+          <div class="calls-enter-layout" :class="{ 'panel-open': enterCallState.panelOpen }">
+            <section class="calls-enter-preview">
+              <div class="calls-enter-preview-head">
+                <span>Camera Preview</span>
+                <span class="calls-enter-preview-meta">{{ enterCallState.callId }}</span>
               </div>
-              <p class="invite-popover-label">
-                Expires: {{ formatDateTime(enterCallState.expiresAt) }}
-              </p>
-              <p v-if="enterCallState.copyNotice" class="invite-popover-label">{{ enterCallState.copyNotice }}</p>
-            </template>
-          </section>
+              <div class="calls-enter-preview-frame">
+                <video ref="enterCallPreviewVideoRef" autoplay playsinline muted></video>
+                <p v-if="enterCallState.previewError" class="calls-inline-error">{{ enterCallState.previewError }}</p>
+                <p v-else-if="!enterCallState.previewReady" class="calls-inline-hint">Preparing preview...</p>
+              </div>
+            </section>
+
+            <button
+              class="calls-enter-panel-toggle"
+              type="button"
+              :aria-label="enterCallState.panelOpen ? 'Close settings panel' : 'Open settings panel'"
+              @click="toggleEnterCallPanel"
+            >
+              <img
+                :src="enterCallState.panelOpen
+                  ? '/assets/orgas/kingrt/icons/forward.png'
+                  : '/assets/orgas/kingrt/icons/backward.png'"
+                alt=""
+              />
+            </button>
+
+            <section class="calls-enter-right">
+              <section class="calls-enter-config-grid">
+                <label class="field">
+                  <span>Camera</span>
+                  <select
+                    class="input"
+                    :value="callMediaPrefs.selectedCameraId"
+                    @change="setCallCameraDevice($event.target.value)"
+                  >
+                    <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
+                    <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
+                      {{ camera.label }}
+                    </option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <span>Mic</span>
+                  <select
+                    class="input"
+                    :value="callMediaPrefs.selectedMicrophoneId"
+                    @change="setCallMicrophoneDevice($event.target.value)"
+                  >
+                    <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
+                    <option v-for="microphone in callMediaPrefs.microphones" :key="microphone.id" :value="microphone.id">
+                      {{ microphone.label }}
+                    </option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <span>Mic volume</span>
+                  <input
+                    class="input"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    :value="callMediaPrefs.microphoneVolume"
+                    @input="setCallMicrophoneVolume($event.target.value)"
+                  />
+                </label>
+
+                <label class="field">
+                  <span>Speaker</span>
+                  <select
+                    class="input"
+                    :value="callMediaPrefs.selectedSpeakerId"
+                    @change="setCallSpeakerDevice($event.target.value)"
+                  >
+                    <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
+                    <option v-for="speaker in callMediaPrefs.speakers" :key="speaker.id" :value="speaker.id">
+                      {{ speaker.label }}
+                    </option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <span>Speaker volume</span>
+                  <input
+                    class="input"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    :value="callMediaPrefs.speakerVolume"
+                    @input="setCallSpeakerVolume($event.target.value)"
+                  />
+                </label>
+              </section>
+
+              <section class="calls-enter-invite">
+                <p class="invite-popover-label">
+                  Invite for <strong>{{ enterCallState.callId }}</strong>
+                </p>
+                <p v-if="enterCallState.loading" class="invite-popover-label">Generating invite code...</p>
+                <p v-else-if="enterCallState.error" class="invite-popover-label calls-error">{{ enterCallState.error }}</p>
+                <template v-else>
+                  <div class="invite-popover-row">
+                    <code class="invite-code">{{ enterCallState.code }}</code>
+                    <button class="icon-mini-btn" type="button" title="Copy invite" @click="copyInviteCode">
+                      <span class="icon-copy" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                  <p class="invite-popover-label">
+                    Expires: {{ formatDateTime(enterCallState.expiresAt) }}
+                  </p>
+                  <p v-if="enterCallState.copyNotice" class="invite-popover-label">{{ enterCallState.copyNotice }}</p>
+                </template>
+              </section>
+            </section>
+          </div>
         </div>
 
         <footer class="calls-modal-footer">
@@ -728,6 +746,7 @@ const enterCallState = reactive({
   copyNotice: '',
   previewReady: false,
   previewError: '',
+  panelOpen: false,
 });
 
 function resetEnterCallState() {
@@ -740,6 +759,11 @@ function resetEnterCallState() {
   enterCallState.copyNotice = '';
   enterCallState.previewReady = false;
   enterCallState.previewError = '';
+  enterCallState.panelOpen = false;
+}
+
+function toggleEnterCallPanel() {
+  enterCallState.panelOpen = !enterCallState.panelOpen;
 }
 
 function stopEnterCallPreview() {
@@ -815,6 +839,7 @@ async function startEnterCallPreview() {
 
 function closeEnterCallModal() {
   enterCallState.open = false;
+  enterCallState.panelOpen = false;
   resetEnterCallState();
   stopEnterCallPreview();
 }
@@ -833,6 +858,7 @@ async function openEnterCallModal(call) {
   enterCallState.callId = String(call.id);
   enterCallState.roomId = String(call.room_id || 'lobby');
   enterCallState.copyNotice = '';
+  enterCallState.panelOpen = false;
 
   await refreshCallMediaDevices({ requestPermissions: true });
   await startEnterCallPreview();
@@ -1154,6 +1180,10 @@ function handleEscape(event) {
   }
 
   if (enterCallState.open) {
+    if (enterCallState.panelOpen) {
+      enterCallState.panelOpen = false;
+      return;
+    }
     closeEnterCallModal();
   }
 }
@@ -1370,9 +1400,9 @@ onBeforeUnmount(() => {
 }
 
 .calls-modal-dialog-enter {
-  width: min(1040px, calc(100vw - 32px));
-  height: min(760px, calc(100vh - 32px));
-  max-height: calc(100vh - 32px);
+  width: min(1220px, calc(100vw - 24px));
+  height: min(840px, calc(100vh - 24px));
+  max-height: calc(100vh - 24px);
   overflow: hidden;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
@@ -1395,9 +1425,18 @@ onBeforeUnmount(() => {
 }
 
 .calls-enter-body {
-  grid-template-rows: minmax(0, 1fr) auto auto;
-  align-content: stretch;
-  overflow: auto;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.calls-enter-layout {
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 44%);
+  gap: 12px;
 }
 
 .calls-enter-preview {
@@ -1421,9 +1460,27 @@ onBeforeUnmount(() => {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
+.calls-enter-panel-toggle {
+  display: none;
+  border: 0;
+  border-radius: 50%;
+  background: #133262;
+  color: #f7f7f7;
+  cursor: pointer;
+}
+
+.calls-enter-panel-toggle img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+
 .calls-enter-preview-frame {
   position: relative;
-  min-height: 280px;
+  width: min(100%, 560px);
+  aspect-ratio: 1 / 1;
+  min-height: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: #0b1324;
@@ -1445,6 +1502,16 @@ onBeforeUnmount(() => {
   right: 10px;
   bottom: 10px;
   margin: 0;
+}
+
+.calls-enter-right {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
+  gap: 10px;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .calls-enter-config-grid {
@@ -1527,18 +1594,84 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  .calls-enter-config-grid {
-    grid-template-columns: 1fr;
-  }
-
   .calls-calendar-grid {
     grid-template-columns: 1fr;
   }
 
   .calls-modal-dialog-enter {
-    width: min(1040px, calc(100vw - 20px));
-    height: min(760px, calc(100vh - 20px));
+    width: min(1120px, calc(100vw - 20px));
+    height: min(820px, calc(100vh - 20px));
     max-height: calc(100vh - 20px);
+  }
+
+  .calls-enter-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .calls-enter-preview-frame {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    max-height: 52vh;
+  }
+
+  .calls-enter-panel-toggle {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    z-index: 4;
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+  }
+
+  .calls-enter-right {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(430px, 88vw);
+    transform: translateX(104%);
+    transition: transform 220ms ease;
+    z-index: 3;
+    border-left: 1px solid var(--border-subtle);
+    background: var(--bg-surface-strong);
+    box-shadow: -10px 0 24px rgba(0, 0, 0, 0.3);
+    padding: 10px;
+  }
+
+  .calls-enter-layout.panel-open .calls-enter-right {
+    transform: translateX(0);
+  }
+
+  .calls-enter-config-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .calls-modal-dialog-enter {
+    width: calc(100vw - 10px);
+    height: calc(100vh - 10px);
+    max-height: calc(100vh - 10px);
+  }
+
+  .calls-enter-preview-frame {
+    aspect-ratio: 1 / 1;
+    max-height: 44vh;
+  }
+
+  .calls-enter-right {
+    width: 100%;
+    border-left: 0;
+  }
+
+  .calls-enter-panel-toggle {
+    top: 12px;
+    right: 12px;
+    transform: none;
   }
 }
 </style>
