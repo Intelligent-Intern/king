@@ -51,13 +51,17 @@ try {
     $openDatabase = static function () use ($pdo): PDO {
         return $pdo;
     };
+    $getInferenceSession = static function () {
+        throw new RuntimeException('inference session must not be reached from registry routes.');
+    };
     $dispatch = static function (string $method, string $path, array $headers = [], string $body = '') use (
         $jsonResponse,
         $errorResponse,
         $methodFromRequest,
         $pathFromRequest,
         $runtimeEnvelope,
-        $openDatabase
+        $openDatabase,
+        $getInferenceSession
     ): array {
         return model_inference_dispatch_request(
             ['method' => $method, 'path' => $path, 'uri' => $path, 'headers' => $headers, 'body' => $body],
@@ -67,6 +71,7 @@ try {
             $pathFromRequest,
             $runtimeEnvelope,
             $openDatabase,
+            $getInferenceSession,
             '/ws',
             '127.0.0.1',
             18090

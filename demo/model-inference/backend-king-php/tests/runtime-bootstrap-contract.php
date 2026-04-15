@@ -96,13 +96,17 @@ try {
     $openDatabase = static function (): PDO {
         throw new RuntimeException('openDatabase should not be called by runtime-bootstrap paths.');
     };
+    $getInferenceSession = static function () {
+        throw new RuntimeException('inference session should not be reached by runtime-bootstrap paths.');
+    };
     $dispatch = static function (string $method, string $path) use (
         $jsonResponse,
         $errorResponse,
         $methodFromRequest,
         $pathFromRequest,
         $runtimeEnvelope,
-        $openDatabase
+        $openDatabase,
+        $getInferenceSession
     ): array {
         return model_inference_dispatch_request(
             ['method' => $method, 'path' => $path, 'uri' => $path, 'headers' => []],
@@ -112,6 +116,7 @@ try {
             $pathFromRequest,
             $runtimeEnvelope,
             $openDatabase,
+            $getInferenceSession,
             '/ws',
             '127.0.0.1',
             18090

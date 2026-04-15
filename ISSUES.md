@@ -108,6 +108,46 @@ Non-negotiable direction for this batch:
   asserts 1:1 between the live `api.*` / `ws.*` catalog entries and the
   actually-served routes of the dispatcher, refuses target-shape paths leaking
   into the live section, and locks the currently emitted error-code set.
+- [x] `#M-10` `POST /api/infer` non-streaming landed at
+  `backend-king-php/domain/inference/inference_session.php` +
+  `backend-king-php/http/module_inference.php`. First leaf that
+  produces real tokens end-to-end: request envelope validated via
+  `#M-8`, model looked up by `(model_name, quantization)` in the
+  registry, profile+registry scored through `#M-6`, GGUF streamed
+  out of the King object store into a local cache on first hit,
+  `LlamaCppWorker` spawned + cached per process keyed by
+  `model_id` (one-active policy: a different model drains the old
+  worker first), prompt POSTed to llama-server's `/completion`
+  through `king_http1_request_send` (dogfoods King's native HTTP/1
+  client), response normalized to
+  `{text, tokens_in, tokens_out, ttft_ms, duration_ms, request_wall_ms, stop{type,word,truncated}, worker{pid,port,gguf_path}}`.
+  Canonical rejection codes: `invalid_request_envelope` (400; empty
+  body / invalid JSON / any `#M-8` rule), `method_not_allowed`
+  (405), `model_not_found` (404), `model_fit_unavailable` (422),
+  `worker_unavailable` (502/503). The dispatcher now requires
+  `module_inference.php` and grows the order list to
+  `['runtime','profile','registry','inference']`; server.php
+  constructs the `InferenceSession` once at boot, registers a
+  shutdown drain hook, and threads a `$getInferenceSession`
+  callable through the dispatcher alongside `$openDatabase`.
+  Catalog `api.infer_http` graduates from
+  `planned_surfaces_target_shape` into the live section; error-code
+  list gains `model_fit_unavailable` + `worker_unavailable`.
+  `tests/infer-http-nonstreaming-contract.{sh,php}` seeds the
+  SmolLM2 GGUF through the same registry domain used by the HTTP
+  route, dispatches `POST /api/infer` with a real prompt, and
+  asserts: 200 response, `request_id` shape
+  (`req_<16hex>`), `session_id` passthrough, `model.model_id` ==
+  seeded row, non-empty `completion.text`, `tokens_out >= 1`,
+  `tokens_in >= 1`, `ttft_ms / duration_ms / request_wall_ms` all
+  non-negative integers, `worker.port` live; back-to-back calls
+  reuse the cached worker (same pid, same port); `stream=true`
+  rejected with `invalid_request_envelope.details.field=stream`
+  (#M-8 transport cross-check); unknown model name returns 404
+  `model_not_found`; empty body / malformed JSON / GET all
+  fail-closed with the right codes; draining the session spawns a
+  fresh worker (new pid) on the next request. Maps to tracker V.1,
+  Z.1, Z.4 (still unticked pending post-merge sweep).
 - [x] `#M-9` IIBIN-style token-frame wire contract landed at
   `contracts/v1/token-frame.contract.json` +
   `backend-king-php/support/token_frame.php`. Fixed big-endian
@@ -301,9 +341,6 @@ Non-negotiable direction for this batch:
 
 ### Open / To implement (priority order)
 
-- [ ] `#M-10` `POST /api/infer` non-streaming surface — real prompt → real
-  completion + telemetry; parallel surface to WS. Maps to `Z.1`, `Z.4`, `V.1`.
-
 - [ ] `#M-11` WS streaming via `king_server_upgrade_to_websocket` +
   `king_websocket_send` emitting `#M-9` token frames; concatenation equals
   `POST /api/infer` result for same seed. Maps to `Z.4`, `Z.5`, `V.1`.
@@ -342,19 +379,15 @@ Non-negotiable direction for this batch:
 
 ### Next step (M-batch)
 
-- [ ] Continue with `#M-10` (`POST /api/infer` non-streaming): lazy-spawn
-  a `LlamaCppWorker` on first infer call, cache it across the request
-  loop keyed by `{model_id}`, pass the validated envelope from `#M-8`
-  to llama.cpp's `/completion` endpoint (dogfood `king_http1_request_send`
-  as the internal client), collect the full completion, return JSON
-  `{status, request_id, text, tokens_in, tokens_out, ttft_ms,
-  duration_ms}`. Add `backend-king-php/domain/inference/inference_session.php`
-  managing the worker cache + per-request telemetry collection; add
-  `backend-king-php/http/module_inference.php` serving
-  `POST /api/infer`; wire the dispatcher to require the inference module
-  and extend `model_inference_dispatch_route_module_order()` to
-  `['runtime','profile','registry','inference']`; move `infer_http`
-  from `planned_surfaces_target_shape` into live `catalog.api`; add
-  `tests/infer-http-nonstreaming-contract.{sh,php}` that drives a real
-  prompt through the full pipeline and asserts a non-empty completion.
-  Maps to Z.1, Z.4, V.1.
+- [ ] Continue with `#M-11` (WS streaming via IIBIN token frames):
+  wire `GET /ws` upgrade through `king_server_upgrade_to_websocket`,
+  consume one `infer.start` text frame carrying the `#M-8` envelope
+  (`stream=true`), bridge llama.cpp's `/completion?stream=true` SSE
+  output into the `#M-9` binary frame codec + `king_websocket_send`,
+  finish with a `frame_type=end` summary, finish on error with a
+  `frame_type=error` frame. Add
+  `backend-king-php/http/module_realtime.php` + the matching
+  `realtime` module-order entry; add
+  `tests/infer-ws-streaming-contract.{sh,php}` proving end-to-end
+  WS round-trip (accumulated deltas equal the non-streaming
+  equivalent for the same seed). Maps to Z.4, Z.5, V.1.

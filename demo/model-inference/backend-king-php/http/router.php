@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/module_runtime.php';
 require_once __DIR__ . '/module_profile.php';
 require_once __DIR__ . '/module_registry.php';
+require_once __DIR__ . '/module_inference.php';
 
 /**
  * Deterministic module-registration order for the inference backend.
@@ -25,6 +26,7 @@ function model_inference_dispatch_route_module_order(): array
         'runtime',
         'profile',
         'registry',
+        'inference',
     ];
 }
 
@@ -42,6 +44,7 @@ function model_inference_dispatch_request(
     callable $pathFromRequest,
     callable $runtimeEnvelope,
     callable $openDatabase,
+    callable $getInferenceSession,
     string $wsPath,
     string $host,
     int $port
@@ -97,6 +100,20 @@ function model_inference_dispatch_request(
     );
     if ($registryResponse !== null) {
         return $registryResponse;
+    }
+
+    $inferenceResponse = model_inference_handle_inference_routes(
+        $path,
+        $method,
+        $request,
+        $jsonResponse,
+        $errorResponse,
+        $openDatabase,
+        $getInferenceSession,
+        $runtimeEnvelope
+    );
+    if ($inferenceResponse !== null) {
+        return $inferenceResponse;
     }
 
     return $errorResponse(404, 'not_implemented', 'Route has no handler on this backend build.', [

@@ -17,7 +17,7 @@ try {
     // Current deployed module list. Grows as later leaves land their modules.
     // Intended end-of-sprint order (see demo/model-inference/README.md):
     //   runtime, profile, registry, worker, inference, telemetry, routing, realtime
-    $expectedOrder = ['runtime', 'profile', 'registry'];
+    $expectedOrder = ['runtime', 'profile', 'registry', 'inference'];
     $actualOrder = model_inference_dispatch_route_module_order();
 
     model_inference_router_contract_assert(
@@ -75,6 +75,9 @@ try {
     $openDatabase = static function (): PDO {
         throw new RuntimeException('openDatabase should not be reached for router module-order assertions.');
     };
+    $getInferenceSession = static function () {
+        throw new RuntimeException('inference session should not be reached for router module-order assertions.');
+    };
 
     $runtimeResponse = model_inference_dispatch_request(
         ['method' => 'GET', 'path' => '/api/runtime', 'uri' => '/api/runtime', 'headers' => []],
@@ -84,6 +87,7 @@ try {
         $pathFromRequest,
         $runtimeEnvelope,
         $openDatabase,
+        $getInferenceSession,
         '/ws',
         '127.0.0.1',
         18090
@@ -102,6 +106,7 @@ try {
         $pathFromRequest,
         $runtimeEnvelope,
         $openDatabase,
+        $getInferenceSession,
         '/ws',
         '127.0.0.1',
         18090
@@ -116,7 +121,6 @@ try {
     // module has not landed yet.
     $targetShapePaths = [
         '/api/worker',                      // M-7
-        '/api/infer',                       // M-10
         '/api/telemetry/inference/recent',  // M-12
         '/api/route',                       // M-14
         '/api/transcripts/req_x',           // M-16
@@ -130,6 +134,7 @@ try {
             $pathFromRequest,
             $runtimeEnvelope,
             $openDatabase,
+            $getInferenceSession,
             '/ws',
             '127.0.0.1',
             18090

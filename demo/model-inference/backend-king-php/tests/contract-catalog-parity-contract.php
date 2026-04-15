@@ -56,6 +56,7 @@ try {
         'models_create'  => ['method' => 'POST',   'paths' => ['/api/models']],
         'model_get'      => ['method' => 'GET',    'paths' => ['/api/models/{model_id}']],
         'model_delete'   => ['method' => 'DELETE', 'paths' => ['/api/models/{model_id}']],
+        'infer_http'     => ['method' => 'POST',   'paths' => ['/api/infer']],
     ];
 
     $liveApi = $catalog['api'] ?? null;
@@ -121,6 +122,9 @@ try {
     $openDatabase = static function (): PDO {
         throw new RuntimeException('openDatabase must not be reached by parity probes (registry catalog entries are not exercised with a body here).');
     };
+    $getInferenceSession = static function () {
+        throw new RuntimeException('inference session must not be reached by parity probes (infer_http catalog entry is not exercised with a body here).');
+    };
 
     // Live-catalog resolution: every path must either resolve to 200 (list /
     // runtime / profile) OR produce a registry-owned 4xx that proves the
@@ -138,6 +142,7 @@ try {
         'models_create'  => [['method' => 'POST',   'path' => '/api/models',                                 'expect_not_status' => 404]],
         'model_get'      => [['method' => 'GET',    'path' => '/api/models/mdl-00000000deadbeef',             'expect_not_status' => 404]],
         'model_delete'   => [['method' => 'DELETE', 'path' => '/api/models/mdl-00000000deadbeef',             'expect_not_status' => 404]],
+        'infer_http'     => [['method' => 'POST',   'path' => '/api/infer',                                  'expect_not_status' => 404]],
     ];
     foreach ($parityProbes as $key => $probes) {
         foreach ($probes as $probe) {
@@ -152,15 +157,21 @@ try {
                     $pathFromRequest,
                     $runtimeEnvelope,
                     $openDatabase,
+                    $getInferenceSession,
                     '/ws',
                     '127.0.0.1',
                     18090
                 );
             } catch (RuntimeException $error) {
-                // Registry paths trip openDatabase deliberately; that proves
-                // the router DID dispatch to the registry module (not a
-                // not_implemented fallthrough).
-                if (str_contains($error->getMessage(), 'openDatabase must not be reached')) {
+                // Registry paths trip openDatabase deliberately; infer_http
+                // trips it too (it calls $openDatabase before looking up
+                // the model). Either tripping proves the router DID
+                // dispatch to the right module (not a not_implemented
+                // fallthrough).
+                if (
+                    str_contains($error->getMessage(), 'openDatabase must not be reached')
+                    || str_contains($error->getMessage(), 'inference session must not be reached')
+                ) {
                     continue;
                 }
                 throw $error;
@@ -207,6 +218,8 @@ try {
         'model_artifact_write_failed',
         'model_artifact_too_large',
         'model_registry_conflict',
+        'model_fit_unavailable',
+        'worker_unavailable',
     ] as $required) {
         model_inference_catalog_contract_assert(
             in_array($required, $liveErrorCodes, true),
@@ -223,14 +236,14 @@ try {
         'catalog.planned_surfaces_target_shape must exist so future surfaces are declared without faking parity'
     );
     $targetShapeApi = (array) ($targetShape['api'] ?? []);
-    foreach (['worker_status', 'infer_http', 'transcripts_get', 'telemetry_recent', 'route_diagnostic'] as $requiredKey) {
+    foreach (['worker_status', 'transcripts_get', 'telemetry_recent', 'route_diagnostic'] as $requiredKey) {
         model_inference_catalog_contract_assert(
             isset($targetShapeApi[$requiredKey]),
             "catalog.planned_surfaces_target_shape.api must list '{$requiredKey}' until its live leaf lands"
         );
     }
     // A surface MUST NOT appear in both live and target-shape sections.
-    foreach (['node_profile', 'models_list', 'models_create', 'model_get', 'model_delete'] as $shipped) {
+    foreach (['node_profile', 'models_list', 'models_create', 'model_get', 'model_delete', 'infer_http'] as $shipped) {
         model_inference_catalog_contract_assert(
             !isset($targetShapeApi[$shipped]),
             "{$shipped} has shipped and must not remain in planned_surfaces_target_shape"
