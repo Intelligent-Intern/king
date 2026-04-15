@@ -34,26 +34,30 @@ function model_inference_stream_completion(
     int $completionTimeoutMs = 60_000
 ): array {
     $sampling = (array) $validatedEnvelope['sampling'];
-    $prompt = (string) $validatedEnvelope['prompt'];
+
+    // OpenAI-compatible chat endpoint — llama-server applies the chat
+    // template baked into the GGUF so the model sees ChatML / Llama-2
+    // chat / whatever-the-model-expects framing.
+    $messages = [];
     if (isset($validatedEnvelope['system']) && is_string($validatedEnvelope['system']) && $validatedEnvelope['system'] !== '') {
-        $prompt = $validatedEnvelope['system'] . "\n\n" . $prompt;
+        $messages[] = ['role' => 'system', 'content' => $validatedEnvelope['system']];
     }
+    $messages[] = ['role' => 'user', 'content' => (string) ($validatedEnvelope['prompt'] ?? '')];
 
     $body = [
-        'prompt' => $prompt,
-        'n_predict' => $effectiveMaxTokens,
+        'messages' => $messages,
+        'max_tokens' => $effectiveMaxTokens,
         'temperature' => (float) $sampling['temperature'],
         'top_p' => (float) $sampling['top_p'],
         'top_k' => (int) $sampling['top_k'],
         'stream' => true,
-        'cache_prompt' => false,
     ];
     if (isset($sampling['seed']) && is_int($sampling['seed'])) {
         $body['seed'] = (int) $sampling['seed'];
     }
     $jsonBody = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     if (!is_string($jsonBody)) {
-        throw new RuntimeException('failed to encode streaming completion body');
+        throw new RuntimeException('failed to encode streaming chat completion body');
     }
 
     $sock = @stream_socket_client(
@@ -68,7 +72,7 @@ function model_inference_stream_completion(
     }
     stream_set_timeout($sock, max(1, (int) ceil($completionTimeoutMs / 1000)));
 
-    $request = "POST /completion HTTP/1.1\r\n"
+    $request = "POST /v1/chat/completions HTTP/1.1\r\n"
         . "Host: 127.0.0.1\r\n"
         . "Content-Type: application/json\r\n"
         . "Content-Length: " . strlen($jsonBody) . "\r\n"
@@ -143,12 +147,15 @@ function model_inference_stream_completion(
             fread($sock, 2);
 
             // Each SSE event is one or more "data: ..." lines separated by \n.
+            // OpenAI-compat shape from llama-server:
+            //   data: {"choices":[{"delta":{"content":"..."},"finish_reason":null}], "usage":…, "timings":…}
+            //   data: [DONE]
             foreach (preg_split('/\r?\n/', $chunkBody) ?: [] as $line) {
                 if (!str_starts_with($line, 'data:')) {
                     continue;
                 }
                 $json = ltrim(substr($line, 5));
-                if ($json === '') {
+                if ($json === '' || $json === '[DONE]') {
                     continue;
                 }
                 $decoded = json_decode($json, true);
@@ -156,10 +163,14 @@ function model_inference_stream_completion(
                     continue;
                 }
 
-                $content = (string) ($decoded['content'] ?? '');
-                $stopFlag = (bool) ($decoded['stop'] ?? false);
-                $tokenArray = $decoded['tokens'] ?? [];
-                $chunkTokenCount = is_array($tokenArray) ? count($tokenArray) : 0;
+                $choice = (is_array($decoded['choices'] ?? null) && isset($decoded['choices'][0]) && is_array($decoded['choices'][0]))
+                    ? $decoded['choices'][0]
+                    : [];
+                $delta = is_array($choice['delta'] ?? null) ? $choice['delta'] : [];
+                $content = isset($delta['content']) && is_string($delta['content']) ? $delta['content'] : '';
+                $finishReason = array_key_exists('finish_reason', $choice) && is_string($choice['finish_reason'])
+                    ? $choice['finish_reason']
+                    : '';
 
                 if ($content !== '') {
                     $sequence++;
@@ -167,23 +178,24 @@ function model_inference_stream_completion(
                     $frame = TokenFrame::encodeDelta(
                         $sequence,
                         $requestIdCrc,
-                        max(1, $chunkTokenCount),
+                        1,
                         $content
                     );
                     $sendBinaryFrame($frame);
                 }
 
-                if ($stopFlag) {
+                if ($finishReason !== '') {
+                    $usage = is_array($decoded['usage'] ?? null) ? $decoded['usage'] : [];
                     $timings = is_array($decoded['timings'] ?? null) ? $decoded['timings'] : [];
-                    $tokensIn = (int) ($decoded['tokens_evaluated'] ?? ($timings['prompt_n'] ?? 0));
-                    $tokensOut = (int) ($decoded['tokens_predicted'] ?? ($timings['predicted_n'] ?? 0));
+                    $tokensIn = (int) ($usage['prompt_tokens'] ?? ($timings['prompt_n'] ?? 0));
+                    $tokensOut = (int) ($usage['completion_tokens'] ?? ($timings['predicted_n'] ?? 0));
                     $promptMs = (float) ($timings['prompt_ms'] ?? 0.0);
                     $predictedMs = (float) ($timings['predicted_ms'] ?? 0.0);
                     $ttftMs = (int) round($promptMs);
                     $durationMs = (int) round($promptMs + $predictedMs);
-                    $stopType = (string) ($decoded['stop_type'] ?? '');
-                    $stopWord = (string) ($decoded['stopping_word'] ?? '');
-                    $truncated = (bool) ($decoded['truncated'] ?? false);
+                    $stopType = $finishReason;
+                    $stopWord = '';
+                    $truncated = $finishReason === 'length';
                 }
             }
         }

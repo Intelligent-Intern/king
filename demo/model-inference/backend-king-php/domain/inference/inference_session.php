@@ -94,9 +94,13 @@ final class InferenceSession
 
     /**
      * Run a non-streaming completion against the worker.
-     * Accepts the normalized infer-request envelope from
-     * model_inference_validate_infer_request() and returns the normalized
-     * response shape {content, tokens_in, tokens_out, ttft_ms, duration_ms}.
+     *
+     * Uses llama.cpp server's OpenAI-compatible /v1/chat/completions
+     * endpoint so the chat template baked into the GGUF (ChatML for
+     * SmolLM2, Llama-2 chat format for Llama-2, etc.) is applied
+     * automatically. Raw /completion against a chat-tuned model would
+     * emit EOS immediately because the model sees the prompt as
+     * already-finished context.
      *
      * @param array<string, mixed> $validatedEnvelope
      * @return array<string, mixed>
@@ -106,29 +110,23 @@ final class InferenceSession
         $sampling = (array) $validatedEnvelope['sampling'];
         $maxTokens = $effectiveMaxTokens ?? (int) $sampling['max_tokens'];
 
-        $prompt = (string) $validatedEnvelope['prompt'];
-        if (isset($validatedEnvelope['system']) && is_string($validatedEnvelope['system']) && $validatedEnvelope['system'] !== '') {
-            $prompt = $validatedEnvelope['system'] . "\n\n" . $prompt;
-        }
-
         $body = [
-            'prompt' => $prompt,
-            'n_predict' => $maxTokens,
+            'messages' => $this->buildMessages($validatedEnvelope),
+            'max_tokens' => $maxTokens,
             'temperature' => (float) $sampling['temperature'],
             'top_p' => (float) $sampling['top_p'],
             'top_k' => (int) $sampling['top_k'],
             'stream' => false,
-            'cache_prompt' => false,
         ];
         if (isset($sampling['seed']) && is_int($sampling['seed'])) {
             $body['seed'] = (int) $sampling['seed'];
         }
         $jsonBody = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         if (!is_string($jsonBody)) {
-            throw new RuntimeException('failed to encode completion request body');
+            throw new RuntimeException('failed to encode chat completion request body');
         }
 
-        $url = sprintf('http://127.0.0.1:%d/completion', $worker->port());
+        $url = sprintf('http://127.0.0.1:%d/v1/chat/completions', $worker->port());
         $t0 = microtime(true);
 
         $rawResponse = $this->postCompletion($url, $jsonBody, $this->completionTimeoutMs);
@@ -137,28 +135,35 @@ final class InferenceSession
 
         $decoded = json_decode($rawResponse, true);
         if (!is_array($decoded)) {
-            throw new RuntimeException('llama.cpp /completion returned non-JSON: ' . substr($rawResponse, 0, 200));
+            throw new RuntimeException('llama.cpp /v1/chat/completions returned non-JSON: ' . substr($rawResponse, 0, 200));
         }
 
+        $choice = (is_array($decoded['choices'] ?? null) && isset($decoded['choices'][0]) && is_array($decoded['choices'][0]))
+            ? $decoded['choices'][0]
+            : [];
+        $content = (string) (($choice['message'] ?? [])['content'] ?? '');
+        $finishReason = (string) ($choice['finish_reason'] ?? '');
+
+        $usage = is_array($decoded['usage'] ?? null) ? $decoded['usage'] : [];
         $timings = is_array($decoded['timings'] ?? null) ? $decoded['timings'] : [];
-        $tokensIn = (int) ($decoded['tokens_evaluated'] ?? ($timings['prompt_n'] ?? 0));
-        $tokensOut = (int) ($decoded['tokens_predicted'] ?? ($timings['predicted_n'] ?? 0));
+        $tokensIn = (int) ($usage['prompt_tokens'] ?? ($timings['prompt_n'] ?? 0));
+        $tokensOut = (int) ($usage['completion_tokens'] ?? ($timings['predicted_n'] ?? 0));
         $promptMs = (float) ($timings['prompt_ms'] ?? 0.0);
         $predictedMs = (float) ($timings['predicted_ms'] ?? 0.0);
         $serverDurationMs = (int) round($promptMs + $predictedMs);
         $ttftMs = (int) round($promptMs);
 
         return [
-            'content' => (string) ($decoded['content'] ?? ''),
+            'content' => $content,
             'tokens_in' => $tokensIn,
             'tokens_out' => $tokensOut,
             'ttft_ms' => $ttftMs,
             'duration_ms' => $serverDurationMs,
             'request_wall_ms' => $elapsedMs,
             'stop' => [
-                'type' => (string) ($decoded['stop_type'] ?? ''),
-                'word' => (string) ($decoded['stopping_word'] ?? ''),
-                'truncated' => (bool) ($decoded['truncated'] ?? false),
+                'type' => $finishReason,
+                'word' => '',
+                'truncated' => $finishReason === 'length',
             ],
             'worker' => [
                 'pid' => $worker->pid(),
@@ -166,6 +171,24 @@ final class InferenceSession
                 'gguf_path' => $worker->ggufPath(),
             ],
         ];
+    }
+
+    /**
+     * Build the OpenAI-style messages array from the validated envelope.
+     * Always shapes as {system?, user}. Future roles (assistant, tool)
+     * belong to a multi-turn leaf.
+     *
+     * @param array<string, mixed> $validatedEnvelope
+     * @return array<int, array{role: string, content: string}>
+     */
+    public function buildMessages(array $validatedEnvelope): array
+    {
+        $messages = [];
+        if (isset($validatedEnvelope['system']) && is_string($validatedEnvelope['system']) && $validatedEnvelope['system'] !== '') {
+            $messages[] = ['role' => 'system', 'content' => $validatedEnvelope['system']];
+        }
+        $messages[] = ['role' => 'user', 'content' => (string) ($validatedEnvelope['prompt'] ?? '')];
+        return $messages;
     }
 
     /**
