@@ -1,11 +1,19 @@
-function normalizeExplicitOrigin(rawOrigin) {
+function normalizeExplicitOrigin(rawOrigin, fallbackPort = '') {
   const sanitized = String(rawOrigin || '').trim();
   if (sanitized === '') return '';
+  const normalizedFallbackPort = String(fallbackPort || '').trim();
 
   const candidate = /^[a-z]+:\/\//i.test(sanitized) ? sanitized : `http://${sanitized}`;
 
   try {
     const parsed = new URL(candidate);
+    if (
+      normalizedFallbackPort !== ''
+      && parsed.port === ''
+      && ['http:', 'https:', 'ws:', 'wss:'].includes(parsed.protocol)
+    ) {
+      parsed.port = normalizedFallbackPort;
+    }
     if (
       typeof window !== 'undefined'
       && parsed.hostname.toLowerCase() === 'host.docker.internal'
@@ -33,11 +41,10 @@ function hasExplicitBackendOriginConfig() {
 
 function detectDefaultBackendOrigin() {
   const envOrigin = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || '').trim();
-  if (envOrigin !== '') {
-    return normalizeExplicitOrigin(envOrigin);
-  }
-
   const port = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_PORT || '18080').trim() || '18080';
+  if (envOrigin !== '') {
+    return normalizeExplicitOrigin(envOrigin, port);
+  }
 
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
@@ -50,11 +57,13 @@ function detectDefaultBackendOrigin() {
 
 function detectDefaultBackendWebSocketOrigin() {
   const envOrigin = String(import.meta.env.VITE_VIDEOCHAT_WS_ORIGIN || '').trim();
+  const wsPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
+  const backendPort = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_PORT || '18080').trim() || '18080';
+  const inferredWsPort = wsPort || backendPort;
   if (envOrigin !== '') {
-    return normalizeExplicitOrigin(envOrigin);
+    return normalizeExplicitOrigin(envOrigin, inferredWsPort);
   }
 
-  const wsPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
   if (wsPort !== '') {
     if (typeof window !== 'undefined') {
       const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
@@ -62,17 +71,6 @@ function detectDefaultBackendWebSocketOrigin() {
       return `${protocol}://${host}:${wsPort}`;
     }
     return `http://localhost:${wsPort}`;
-  }
-
-  try {
-    const parsedBackendOrigin = new URL(resolveBackendOrigin());
-    const backendPort = Number.parseInt(parsedBackendOrigin.port, 10);
-    if (Number.isInteger(backendPort) && backendPort > 0 && backendPort < 65535) {
-      parsedBackendOrigin.port = String(backendPort + 1);
-      return normalizeExplicitOrigin(parsedBackendOrigin.toString());
-    }
-  } catch {
-    // Ignore parse failures and fall back to backend origin.
   }
 
   return resolveBackendOrigin();
