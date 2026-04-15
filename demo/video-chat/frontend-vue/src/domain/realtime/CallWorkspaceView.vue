@@ -523,6 +523,8 @@ const REACTION_CLIENT_BATCH_SIZE = 5;
 const REACTION_CLIENT_FLUSH_INTERVAL_MS = 40;
 const REACTION_CLIENT_MAX_QUEUE = 500;
 const MODERATION_SYNC_FLUSH_INTERVAL_MS = 90;
+const SFU_PUBLISH_RETRY_DELAY_MS = 500;
+const SFU_PUBLISH_MAX_RETRIES = 24;
 const LOCAL_REACTION_ECHO_TTL_MS = 6000;
 const WLVC_ENCODE_FAILURE_THRESHOLD = 6;
 const VISIBLE_PARTICIPANTS_LIMIT = 5;
@@ -3257,13 +3259,13 @@ onMounted(async () => {
 });
 
 function scheduleLocalTrackPublish(attempt = 0) {
-  if (!sfuClientRef.value) return;
+  if (!sfuClientRef.value || !sfuConnected.value) return;
   void publishLocalTracks();
   if (localStreamRef.value instanceof MediaStream && localTracksPublishedToSfu) return;
-  if (attempt >= 120) return;
+  if (attempt >= SFU_PUBLISH_MAX_RETRIES) return;
   setTimeout(() => {
     scheduleLocalTrackPublish(attempt + 1);
-  }, 500);
+  }, SFU_PUBLISH_RETRY_DELAY_MS);
 }
 
 function initSFU() {
@@ -3276,6 +3278,10 @@ function initSFU() {
     onTracks: (e) => handleSFUTracks(e),
     onUnpublished: (publisherId, trackId) => handleSFUUnpublished(publisherId, trackId),
     onPublisherLeft: (publisherId) => handleSFUPublisherLeft(publisherId),
+    onConnected: () => {
+      sfuConnected.value = true;
+      scheduleLocalTrackPublish();
+    },
     onDisconnect: () => {
       sfuConnected.value = false;
       localTracksPublishedToSfu = false;
@@ -3291,8 +3297,7 @@ function initSFU() {
     { userId: String(sessionState.userId), token, name: sessionState.displayName || 'User' },
     activeRoomId.value
   );
-  sfuConnected.value = true;
-  scheduleLocalTrackPublish();
+  sfuConnected.value = false;
 }
 
 function teardownRemotePeer(peer) {
