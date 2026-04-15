@@ -494,6 +494,8 @@ const REACTION_CLIENT_FLUSH_INTERVAL_MS = 40;
 const REACTION_CLIENT_MAX_QUEUE = 500;
 const LOCAL_REACTION_ECHO_TTL_MS = 6000;
 const WLVC_ENCODE_FAILURE_THRESHOLD = 6;
+const VISIBLE_PARTICIPANTS_LIMIT = 5;
+const PARTICIPANT_ACTIVITY_WINDOW_MS = 15_000;
 const DEFAULT_NATIVE_ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
@@ -664,6 +666,7 @@ const typingByRoom = reactive({});
 
 const mutedUsers = reactive({});
 const pinnedUsers = reactive({});
+const participantActivityByUserId = reactive({});
 const moderationActionState = reactive({});
 const peerControlStateByUserId = reactive({});
 const lobbyActionState = reactive({});
@@ -989,7 +992,94 @@ const participantUsers = computed(() => {
   });
 });
 
-const stripParticipants = computed(() => participantUsers.value.slice(0, 6));
+function participantActivityWeight(source) {
+  const normalized = String(source || '').trim().toLowerCase();
+  if (normalized === 'media_frame') return 1;
+  if (normalized === 'media_track') return 0.85;
+  if (normalized === 'reaction') return 0.72;
+  if (normalized === 'chat') return 0.68;
+  if (normalized === 'typing') return 0.6;
+  if (normalized === 'control') return 0.45;
+  return 0.5;
+}
+
+function markParticipantActivity(userId, source = 'control', atMs = Date.now()) {
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
+  const nowMs = Number.isFinite(Number(atMs)) ? Math.max(0, Number(atMs)) : Date.now();
+  participantActivityByUserId[normalizedUserId] = {
+    lastActiveMs: nowMs,
+    source: String(source || '').trim().toLowerCase(),
+    weight: participantActivityWeight(source),
+  };
+}
+
+function pruneParticipantActivity(allowedUserIds = null) {
+  const allowed = allowedUserIds instanceof Set ? allowedUserIds : null;
+  const nowMs = Date.now();
+  const staleAfterMs = PARTICIPANT_ACTIVITY_WINDOW_MS * 2;
+  for (const key of Object.keys(participantActivityByUserId)) {
+    const userId = Number(key);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      delete participantActivityByUserId[key];
+      continue;
+    }
+    if (allowed && !allowed.has(userId)) {
+      delete participantActivityByUserId[key];
+      continue;
+    }
+    const entry = participantActivityByUserId[key];
+    const lastActiveMs = Number(entry?.lastActiveMs || 0);
+    if (!Number.isFinite(lastActiveMs) || (nowMs - lastActiveMs) > staleAfterMs) {
+      delete participantActivityByUserId[key];
+    }
+  }
+}
+
+function participantActivityScore(userId, nowMs = Date.now()) {
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return 0;
+  const entry = participantActivityByUserId[normalizedUserId];
+  if (!entry || typeof entry !== 'object') return 0;
+  const lastActiveMs = Number(entry.lastActiveMs || 0);
+  if (!Number.isFinite(lastActiveMs) || lastActiveMs <= 0) return 0;
+  const ageMs = Math.max(0, nowMs - lastActiveMs);
+  if (ageMs >= PARTICIPANT_ACTIVITY_WINDOW_MS) return 0;
+  const freshness = 1 - (ageMs / PARTICIPANT_ACTIVITY_WINDOW_MS);
+  const weight = Number.isFinite(Number(entry.weight)) ? Number(entry.weight) : 0.5;
+  return freshness * Math.max(0.25, Math.min(1, weight)) * 100;
+}
+
+function participantVisibilityScore(row, nowMs = Date.now()) {
+  const userId = Number(row?.userId || 0);
+  if (!Number.isInteger(userId) || userId <= 0) return 0;
+  const pinnedBoost = pinnedUsers[userId] === true ? 1000 : 0;
+  const localBoost = userId === currentUserId.value ? 30 : 0;
+  const callRole = normalizeCallRole(row?.callRole || 'participant');
+  const roleBoost = callRole === 'owner' ? 14 : (callRole === 'moderator' ? 8 : 0);
+  const peerState = userId === currentUserId.value
+    ? controlState
+    : (peerControlStateByUserId[userId] && typeof peerControlStateByUserId[userId] === 'object'
+      ? peerControlStateByUserId[userId]
+      : null);
+  const raisedHandBoost = Boolean(peerState?.handRaised) ? 10 : 0;
+  return pinnedBoost + localBoost + roleBoost + raisedHandBoost + participantActivityScore(userId, nowMs);
+}
+
+const stripParticipants = computed(() => {
+  const nowMs = Date.now();
+  const rows = [...participantUsers.value];
+  rows.sort((left, right) => {
+    const scoreCmp = participantVisibilityScore(right, nowMs) - participantVisibilityScore(left, nowMs);
+    if (scoreCmp !== 0) return scoreCmp;
+    const roleCmp = roleRank(left.role) - roleRank(right.role);
+    if (roleCmp !== 0) return roleCmp;
+    const nameCmp = left.displayName.localeCompare(right.displayName, 'en', { sensitivity: 'base' });
+    if (nameCmp !== 0) return nameCmp;
+    return left.userId - right.userId;
+  });
+  return rows.slice(0, VISIBLE_PARTICIPANTS_LIMIT);
+});
 
 const snapshotUsersRows = computed(() => participantUsers.value.map((row) => userRowSnapshot(row)));
 
@@ -1521,6 +1611,9 @@ function applyReactionEvent(payload) {
   const roomId = normalizeRoomId(payload?.room_id || payload?.roomId || activeRoomId.value);
   if (roomId !== activeRoomId.value) return;
   const senderUserId = Number(payload?.sender?.user_id || 0);
+  if (Number.isInteger(senderUserId) && senderUserId > 0) {
+    markParticipantActivity(senderUserId, 'reaction');
+  }
 
   const reaction = payload && typeof payload.reaction === 'object' ? payload.reaction : null;
   if (reaction && typeof reaction === 'object') {
@@ -1545,6 +1638,7 @@ function applyReactionEvent(payload) {
 function applyRemoteControlState(payload, sender) {
   const senderUserId = Number(sender?.user_id || 0);
   if (!Number.isInteger(senderUserId) || senderUserId <= 0) return false;
+  markParticipantActivity(senderUserId, 'control');
 
   const kind = String(payload?.kind || '').trim().toLowerCase();
   if (kind === 'workspace-control-state') {
@@ -1651,6 +1745,7 @@ function emitReaction(emoji) {
   if (typeof emoji !== 'string') return;
   const normalizedEmoji = emoji.trim();
   if (normalizedEmoji === '') return;
+  markParticipantActivity(currentUserId.value, 'reaction');
   pushReaction(normalizedEmoji);
   trackLocalReactionEcho(normalizedEmoji);
   enqueueReactionEmoji(normalizedEmoji);
@@ -1941,6 +2036,7 @@ function handleChatInput() {
 function sendChatMessage() {
   const text = chatDraft.value.trim();
   if (text === '' || !isSocketOnline.value) return;
+  markParticipantActivity(currentUserId.value, 'chat');
 
   const clientMessageId = `client_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
   const sent = sendSocketFrame({
@@ -1983,6 +2079,9 @@ function normalizeChatMessage(payload) {
 function appendChatMessage(payload) {
   const message = normalizeChatMessage(payload);
   if (message.text === '') return;
+  if (Number.isInteger(message.sender.user_id) && message.sender.user_id > 0) {
+    markParticipantActivity(message.sender.user_id, 'chat');
+  }
 
   ensureRoomBuckets(message.room_id);
   const bucket = chatByRoom[message.room_id];
@@ -2010,6 +2109,7 @@ function applyTypingEvent(payload) {
     delete roomMap[userId];
     return;
   }
+  markParticipantActivity(userId, 'typing');
 
   const expiresInMs = Number(payload?.expires_in_ms || 3000);
   roomMap[userId] = {
@@ -2166,6 +2266,7 @@ function applyRoomSnapshot(payload) {
   for (const row of participantUsers.value) {
     presentUserIds.add(row.userId);
   }
+  pruneParticipantActivity(presentUserIds);
   for (const userId of Object.keys(peerControlStateByUserId)) {
     if (!presentUserIds.has(Number(userId))) {
       delete peerControlStateByUserId[userId];
@@ -3176,6 +3277,7 @@ function ensureNativePeerConnection(targetUserId) {
   });
 
   pc.addEventListener('track', (event) => {
+    markParticipantActivity(normalizedTargetUserId, 'media_track');
     const incoming = event?.streams?.[0];
     if (incoming instanceof MediaStream) {
       for (const track of incoming.getTracks()) {
@@ -3767,6 +3869,10 @@ async function reconfigureLocalTracksFromSelectedDevices() {
 
 function handleSFUEncodedFrame(frame) {
   if (!isWlvcRuntimePath()) return;
+  const publisherUserId = Number(frame?.publisherId || 0);
+  if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
+    markParticipantActivity(publisherUserId, 'media_frame');
+  }
   const peer = remotePeersRef.value.get(frame.publisherId);
   if (!peer || !peer.decoder) return;
 
