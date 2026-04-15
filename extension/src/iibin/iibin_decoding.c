@@ -528,3 +528,67 @@ zend_result king_iibin_decode(
     king_iibin_decode_mode_destroy(&decode_mode);
     return SUCCESS;
 }
+
+/* Batch decode: decode multiple binary records */
+zend_result king_iibin_decode_batch(
+    zend_string *schema_name,
+    zval *binary_records,
+    zval *decode_mode_input,
+    zval *decoded_out
+) {
+    king_proto_runtime_schema *runtime_schema;
+    king_proto_decode_mode decode_mode;
+    zval *binary_data;
+    zval decoded;
+    HashTable *ht;
+
+    if (!king_proto_registry_has_schema(schema_name)) {
+        king_throw_proto_schema_not_defined(schema_name, "batch decode");
+        return FAILURE;
+    }
+
+    runtime_schema = king_proto_registry_get_runtime_schema(schema_name);
+    if (!runtime_schema) {
+        king_throw_proto_schema_registered_but_unavailable(schema_name, "batch decode");
+        return FAILURE;
+    }
+
+    if (!king_iibin_decode_mode_init(schema_name, decode_mode_input, &decode_mode)) {
+        return FAILURE;
+    }
+
+    array_init(decoded_out);
+    ht = Z_ARRVAL_P(decoded_out);
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(binary_records), binary_data) {
+        if (Z_TYPE_P(binary_data) != IS_STRING) continue;
+
+        ZVAL_UNDEF(&decoded);
+        if (!king_proto_runtime_decode_schema_payload(
+                schema_name,
+                runtime_schema,
+                (unsigned char*)ZSTR_VAL(Z_STR_P(binary_data)),
+                ZSTR_LEN(Z_STR_P(binary_data)),
+                false,
+                &decoded)) {
+            king_iibin_decode_mode_destroy(&decode_mode);
+            zend_hash_destroy(ht);
+            return FAILURE;
+        }
+
+        if (!decode_mode.materialize_objects) {
+            zend_hash_next_index_insert(ht, &decoded);
+        } else {
+            zval hydrated;
+            if (!king_iibin_hydrate_schema_result(schema_name, runtime_schema, &decoded, &decode_mode, &hydrated)) {
+                king_iibin_decode_mode_destroy(&decode_mode);
+                zend_hash_destroy(ht);
+                return FAILURE;
+            }
+            zend_hash_next_index_insert(ht, &hydrated);
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    king_iibin_decode_mode_destroy(&decode_mode);
+    return SUCCESS;
+}
