@@ -492,6 +492,11 @@ const REACTION_CLIENT_BATCH_SIZE = 5;
 const REACTION_CLIENT_FLUSH_INTERVAL_MS = 40;
 const REACTION_CLIENT_MAX_QUEUE = 500;
 const LOCAL_REACTION_ECHO_TTL_MS = 6000;
+const WLVC_ENCODE_FAILURE_THRESHOLD = 6;
+const DEFAULT_NATIVE_ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
 
 const reactionOptions = ['👍', '❤️', '🐘', '🥳', '😂', '😮', '😢', '🤔', '👏', '👎'];
 
@@ -712,6 +717,11 @@ const mediaRuntimeCapabilities = ref({
   preferredPath: 'unsupported',
   reasons: ['not_checked'],
 });
+const mediaRuntimePath = ref('pending');
+const mediaRuntimeReason = ref('boot');
+const nativePeerConnectionsRef = ref(new Map());
+let runtimeSwitchInFlight = false;
+let wlvcEncodeFailureCount = 0;
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
 const sfuConnected = ref(false);
@@ -758,6 +768,19 @@ const showLeftSidebarRestoreButton = computed(() => (
   && !isShellTabletViewport.value
   && !isShellMobileViewport.value
 ));
+
+function isWlvcRuntimePath() {
+  return mediaRuntimePath.value === 'wlvc_wasm';
+}
+
+function isNativeWebRtcRuntimePath() {
+  return mediaRuntimePath.value === 'webrtc_native';
+}
+
+function setMediaRuntimePath(nextPath, reason) {
+  mediaRuntimePath.value = String(nextPath || '').trim() || 'unsupported';
+  mediaRuntimeReason.value = String(reason || '').trim() || 'unspecified';
+}
 
 function isUuidLike(value) {
   const normalized = String(value || '').trim().toLowerCase();
@@ -2105,13 +2128,43 @@ function handleSignalingEvent(payload) {
 
   const sender = payload && typeof payload.sender === 'object' ? payload.sender : {};
   const senderUserId = Number(sender.user_id || 0);
+  const payloadBody = payload && typeof payload.payload === 'object' ? payload.payload : null;
+  const payloadKind = String(payloadBody?.kind || '').trim().toLowerCase();
+  const hasSdpPayload = Boolean(payloadBody && typeof payloadBody.sdp === 'object');
+  const hasCandidatePayload = Boolean(payloadBody && typeof payloadBody.candidate === 'object');
+  const isNativeSignal = payloadKind.startsWith('webrtc_')
+    || (type === 'call/offer' && hasSdpPayload)
+    || (type === 'call/answer' && hasSdpPayload)
+    || (type === 'call/ice' && hasCandidatePayload);
 
   if (type === 'call/hangup') {
     resetPeerControlState(senderUserId);
+    closeNativePeerConnection(senderUserId);
     refreshUsersDirectoryPresentation();
     const senderName = String(sender.display_name || `User ${senderUserId || 'unknown'}`).trim();
     setNotice(`Received hangup from ${senderName}.`);
     return;
+  }
+
+  if (isNativeSignal && Number.isInteger(senderUserId) && senderUserId > 0) {
+    if (!isNativeWebRtcRuntimePath() && !mediaRuntimeCapabilities.value.stageB) {
+      return;
+    }
+    if (!isNativeWebRtcRuntimePath() && mediaRuntimeCapabilities.value.stageB) {
+      void switchMediaRuntimePath('webrtc_native', 'inbound_native_signaling');
+    }
+    if (type === 'call/offer') {
+      void handleNativeOfferSignal(senderUserId, payloadBody || {});
+      return;
+    }
+    if (type === 'call/answer') {
+      void handleNativeAnswerSignal(senderUserId, payloadBody || {});
+      return;
+    }
+    if (type === 'call/ice') {
+      void handleNativeIceSignal(senderUserId, payloadBody || {});
+      return;
+    }
   }
 
   if (applyRemoteControlState(payload?.payload, sender)) {
@@ -2453,11 +2506,8 @@ function hangupCall() {
   reactionTrayOpen.value = false;
   refreshUsersDirectoryPresentation();
   teardownLocalPublisher();
-
-  for (const [_, peer] of remotePeersRef.value) {
-    teardownRemotePeer(peer);
-  }
-  remotePeersRef.value.clear();
+  teardownNativePeerConnections();
+  teardownSfuRemotePeers();
 
   const peerIds = participantUsers.value
     .map((participant) => participant.userId)
@@ -2494,6 +2544,8 @@ watch(desiredRoomId, (nextRoomId, previousRoomId) => {
   usersPage.value = 1;
   lobbyPage.value = 1;
   if (nextRoomId === previousRoomId) return;
+  teardownNativePeerConnections();
+  teardownSfuRemotePeers();
   if (isSocketOnline.value) {
     if (!sendRoomJoin(nextRoomId)) {
       setNotice(`Could not join room ${nextRoomId} while websocket is offline.`, 'error');
@@ -2517,6 +2569,18 @@ watch(lobbyRows, () => {
   }
   if (lobbyPage.value < 1) lobbyPage.value = 1;
 });
+
+watch(
+  () => participantUsers.value
+    .map((row) => Number(row?.userId || 0))
+    .filter((userId) => Number.isInteger(userId) && userId > 0)
+    .sort((left, right) => left - right)
+    .join(','),
+  () => {
+    if (!isNativeWebRtcRuntimePath()) return;
+    syncNativePeerConnectionsWithRoster();
+  }
+);
 
 watch(
   () => activeMessages.value.length,
@@ -2650,10 +2714,13 @@ onMounted(async () => {
     mediaRuntimeCapabilities.value = await detectMediaRuntimeCapabilities();
     if (mediaRuntimeCapabilities.value.stageA) {
       console.log('[Codec] Runtime capability: WLVC WASM available');
+      await switchMediaRuntimePath('wlvc_wasm', 'capability_probe_stage_a');
     } else if (mediaRuntimeCapabilities.value.stageB) {
       console.warn('[Codec] Runtime capability: WLVC WASM unavailable, native WebRTC available');
+      await switchMediaRuntimePath('webrtc_native', 'capability_probe_stage_b');
     } else {
       console.error('[Codec] Runtime capability: neither WLVC WASM nor native WebRTC available');
+      setMediaRuntimePath('unsupported', 'capability_probe_unsupported');
     }
   } catch (e) {
     console.warn('[Codec] Runtime capability probe failed:', e);
@@ -2671,6 +2738,7 @@ onMounted(async () => {
       preferredPath: 'unsupported',
       reasons: ['probe_error'],
     };
+    setMediaRuntimePath('unsupported', 'capability_probe_error');
   }
 
   if (sessionState.sessionToken && sessionState.userId) {
@@ -2755,14 +2823,22 @@ function teardownRemotePeer(peer) {
 }
 
 function handleSFUTracks(e) {
+  if (!isWlvcRuntimePath()) {
+    return;
+  }
   (async () => {
     let decoder = null;
-    if (mediaRuntimeCapabilities.value.stageA) {
+    if (isWlvcRuntimePath() && mediaRuntimeCapabilities.value.stageA) {
       try {
         decoder = await createWasmDecoder({ width: 640, height: 480, quality: 75 });
       } catch (error) {
         console.warn('[SFU] WASM decoder init failed for publisher', e.publisherId, error);
       }
+    }
+
+    if (!decoder) {
+      void maybeFallbackToNativeRuntime('wlvc_decoder_unavailable');
+      return;
     }
 
     const canvas = document.createElement('canvas');
@@ -2809,12 +2885,6 @@ function handleSFUPublisherLeft(publisherId) {
   }
 }
 
-function sendSignalingMessage(msg) {
-  if (socketRef.value && socketRef.value.readyState === WebSocket.OPEN) {
-    socketRef.value.send(JSON.stringify(msg));
-  }
-}
-
 let videoEncoderRef = ref(null);
 let localVideoElement = ref(null);
 let localRawStreamRef = ref(null);
@@ -2825,6 +2895,401 @@ const backgroundFilterController = new BackgroundFilterController();
 const backgroundBaselineCollector = new BackgroundFilterBaselineCollector(10);
 let backgroundBaselineCaptured = false;
 let backgroundRuntimeToken = 0;
+
+function clearRemoteVideoContainer() {
+  if (typeof document === 'undefined') return;
+  const container = document.getElementById('remote-video-container');
+  if (container) {
+    container.replaceChildren();
+  }
+}
+
+function teardownSfuRemotePeers() {
+  for (const [_, peer] of remotePeersRef.value) {
+    teardownRemotePeer(peer);
+  }
+  remotePeersRef.value.clear();
+  clearRemoteVideoContainer();
+}
+
+function createNativePeerVideoElement(userId) {
+  const video = document.createElement('video');
+  video.className = 'remote-video';
+  video.autoplay = true;
+  video.playsInline = true;
+  video.dataset.userId = String(userId);
+  return video;
+}
+
+function renderNativeRemoteVideos() {
+  if (typeof document === 'undefined') return;
+  if (!isNativeWebRtcRuntimePath()) return;
+  const container = document.getElementById('remote-video-container');
+  if (!container) return;
+
+  const nodes = [];
+  for (const peer of nativePeerConnectionsRef.value.values()) {
+    if (!(peer?.video instanceof HTMLVideoElement)) continue;
+    nodes.push(peer.video);
+  }
+  container.replaceChildren(...nodes.slice(0, 1));
+  applyCallOutputPreferences();
+}
+
+function nativeWebRtcConfig() {
+  return {
+    iceServers: DEFAULT_NATIVE_ICE_SERVERS,
+    iceCandidatePoolSize: 4,
+  };
+}
+
+function localTracksByKind(stream) {
+  const out = {};
+  if (!(stream instanceof MediaStream)) return out;
+  for (const track of stream.getTracks()) {
+    if (track.kind === 'audio' || track.kind === 'video') {
+      out[track.kind] = track;
+    }
+  }
+  return out;
+}
+
+async function syncNativePeerLocalTracks(peer) {
+  if (!peer?.pc || peer.pc.signalingState === 'closed') return;
+  const stream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
+  const byKind = localTracksByKind(stream);
+  const senders = peer.pc.getSenders();
+
+  for (const sender of senders) {
+    const senderKind = String(sender?.track?.kind || '').toLowerCase();
+    if (senderKind !== 'audio' && senderKind !== 'video') continue;
+    const nextTrack = byKind[senderKind] || null;
+    if (nextTrack && sender.track?.id === nextTrack.id) {
+      delete byKind[senderKind];
+      continue;
+    }
+    try {
+      await sender.replaceTrack(nextTrack);
+    } catch {
+      // ignore replace failures for unstable peers
+    }
+    if (nextTrack) {
+      delete byKind[senderKind];
+    }
+  }
+
+  if (!(stream instanceof MediaStream)) return;
+  for (const kind of ['audio', 'video']) {
+    const track = byKind[kind] || null;
+    if (!track) continue;
+    try {
+      peer.pc.addTrack(track, stream);
+    } catch {
+      // ignore duplicate addTrack attempts
+    }
+  }
+}
+
+async function flushNativePendingIce(peer) {
+  if (!peer?.pc) return;
+  if (!peer.pc.remoteDescription || !peer.pc.remoteDescription.type) return;
+  const pending = Array.isArray(peer.pendingIce) ? [...peer.pendingIce] : [];
+  peer.pendingIce = [];
+  for (const candidate of pending) {
+    try {
+      await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch {
+      // ignore stale candidates
+    }
+  }
+}
+
+function closeNativePeerConnection(targetUserId) {
+  const normalizedTargetUserId = Number(targetUserId);
+  if (!Number.isInteger(normalizedTargetUserId) || normalizedTargetUserId <= 0) return;
+  const peer = nativePeerConnectionsRef.value.get(normalizedTargetUserId);
+  if (!peer) return;
+
+  nativePeerConnectionsRef.value.delete(normalizedTargetUserId);
+  if (peer.pc) {
+    try {
+      peer.pc.close();
+    } catch {
+      // ignore close errors
+    }
+  }
+  if (peer.video instanceof HTMLVideoElement) {
+    peer.video.srcObject = null;
+    peer.video.remove();
+  }
+  renderNativeRemoteVideos();
+}
+
+function teardownNativePeerConnections() {
+  for (const [targetUserId] of nativePeerConnectionsRef.value) {
+    closeNativePeerConnection(targetUserId);
+  }
+  nativePeerConnectionsRef.value.clear();
+  if (isNativeWebRtcRuntimePath()) {
+    clearRemoteVideoContainer();
+  }
+}
+
+async function sendNativeOffer(peer) {
+  if (!peer?.pc) return;
+  if (!isNativeWebRtcRuntimePath()) return;
+  if (peer.negotiating) {
+    peer.needsRenegotiate = true;
+    return;
+  }
+  if (peer.pc.signalingState === 'closed') return;
+
+  peer.negotiating = true;
+  try {
+    await syncNativePeerLocalTracks(peer);
+    const offer = await peer.pc.createOffer();
+    await peer.pc.setLocalDescription(offer);
+    const local = peer.pc.localDescription;
+    if (!local || !local.sdp) return;
+
+    sendSocketFrame({
+      type: 'call/offer',
+      target_user_id: peer.userId,
+      payload: {
+        kind: 'webrtc_offer',
+        runtime_path: 'webrtc_native',
+        room_id: activeRoomId.value,
+        sdp: {
+          type: local.type,
+          sdp: local.sdp,
+        },
+      },
+    });
+  } catch (error) {
+    console.warn('[WebRTC] Could not create/send offer for peer', peer.userId, error);
+  } finally {
+    peer.negotiating = false;
+    if (peer.needsRenegotiate) {
+      peer.needsRenegotiate = false;
+      void sendNativeOffer(peer);
+    }
+  }
+}
+
+function ensureNativePeerConnection(targetUserId) {
+  const normalizedTargetUserId = Number(targetUserId);
+  if (!Number.isInteger(normalizedTargetUserId) || normalizedTargetUserId <= 0) return null;
+  if (normalizedTargetUserId === currentUserId.value) return null;
+  if (typeof RTCPeerConnection !== 'function') return null;
+
+  const existing = nativePeerConnectionsRef.value.get(normalizedTargetUserId);
+  if (existing) return existing;
+
+  const pc = new RTCPeerConnection(nativeWebRtcConfig());
+  const remoteStream = new MediaStream();
+  const video = createNativePeerVideoElement(normalizedTargetUserId);
+  video.srcObject = remoteStream;
+
+  const peer = {
+    userId: normalizedTargetUserId,
+    initiator: currentUserId.value > 0 && currentUserId.value < normalizedTargetUserId,
+    negotiating: false,
+    needsRenegotiate: false,
+    pendingIce: [],
+    pc,
+    video,
+    remoteStream,
+  };
+
+  pc.addEventListener('icecandidate', (event) => {
+    if (!isNativeWebRtcRuntimePath()) return;
+    if (!event?.candidate) return;
+    sendSocketFrame({
+      type: 'call/ice',
+      target_user_id: normalizedTargetUserId,
+      payload: {
+        kind: 'webrtc_ice',
+        runtime_path: 'webrtc_native',
+        room_id: activeRoomId.value,
+        candidate: event.candidate.toJSON(),
+      },
+    });
+  });
+
+  pc.addEventListener('track', (event) => {
+    const incoming = event?.streams?.[0];
+    if (incoming instanceof MediaStream) {
+      for (const track of incoming.getTracks()) {
+        if (!remoteStream.getTracks().some((row) => row.id === track.id)) {
+          remoteStream.addTrack(track);
+        }
+      }
+    } else if (event?.track) {
+      if (!remoteStream.getTracks().some((row) => row.id === event.track.id)) {
+        remoteStream.addTrack(event.track);
+      }
+    }
+    renderNativeRemoteVideos();
+  });
+
+  pc.addEventListener('connectionstatechange', () => {
+    const state = String(pc.connectionState || '').toLowerCase();
+    if (state === 'closed' || state === 'failed') {
+      closeNativePeerConnection(normalizedTargetUserId);
+    }
+  });
+
+  pc.addEventListener('negotiationneeded', () => {
+    if (!peer.initiator) return;
+    void sendNativeOffer(peer);
+  });
+
+  nativePeerConnectionsRef.value.set(normalizedTargetUserId, peer);
+  void syncNativePeerLocalTracks(peer);
+  renderNativeRemoteVideos();
+  if (peer.initiator) {
+    void sendNativeOffer(peer);
+  }
+  return peer;
+}
+
+function syncNativePeerConnectionsWithRoster() {
+  if (!isNativeWebRtcRuntimePath()) return;
+
+  const activePeerIds = new Set();
+  for (const row of participantUsers.value) {
+    const userId = Number(row?.userId || 0);
+    if (!Number.isInteger(userId) || userId <= 0 || userId === currentUserId.value) continue;
+    activePeerIds.add(userId);
+    ensureNativePeerConnection(userId);
+  }
+
+  for (const [userId] of nativePeerConnectionsRef.value) {
+    if (!activePeerIds.has(userId)) {
+      closeNativePeerConnection(userId);
+    }
+  }
+}
+
+async function handleNativeOfferSignal(senderUserId, payloadBody) {
+  const peer = ensureNativePeerConnection(senderUserId);
+  if (!peer?.pc) return;
+
+  const sdpPayload = payloadBody && typeof payloadBody.sdp === 'object' ? payloadBody.sdp : null;
+  const type = String(sdpPayload?.type || '').trim().toLowerCase();
+  const sdp = String(sdpPayload?.sdp || '').trim();
+  if (type !== 'offer' || sdp === '') return;
+
+  try {
+    await syncNativePeerLocalTracks(peer);
+    await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
+    await flushNativePendingIce(peer);
+    const answer = await peer.pc.createAnswer();
+    await peer.pc.setLocalDescription(answer);
+    const local = peer.pc.localDescription;
+    if (!local || !local.sdp) return;
+    sendSocketFrame({
+      type: 'call/answer',
+      target_user_id: senderUserId,
+      payload: {
+        kind: 'webrtc_answer',
+        runtime_path: 'webrtc_native',
+        room_id: activeRoomId.value,
+        sdp: {
+          type: local.type,
+          sdp: local.sdp,
+        },
+      },
+    });
+  } catch (error) {
+    console.warn('[WebRTC] Failed to handle offer from peer', senderUserId, error);
+  }
+}
+
+async function handleNativeAnswerSignal(senderUserId, payloadBody) {
+  const peer = nativePeerConnectionsRef.value.get(senderUserId);
+  if (!peer?.pc) return;
+  const sdpPayload = payloadBody && typeof payloadBody.sdp === 'object' ? payloadBody.sdp : null;
+  const type = String(sdpPayload?.type || '').trim().toLowerCase();
+  const sdp = String(sdpPayload?.sdp || '').trim();
+  if (type !== 'answer' || sdp === '') return;
+
+  try {
+    await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }));
+    await flushNativePendingIce(peer);
+  } catch (error) {
+    console.warn('[WebRTC] Failed to handle answer from peer', senderUserId, error);
+  }
+}
+
+async function handleNativeIceSignal(senderUserId, payloadBody) {
+  const peer = ensureNativePeerConnection(senderUserId);
+  if (!peer?.pc) return;
+  const candidatePayload = payloadBody ? payloadBody.candidate : null;
+  if (!candidatePayload || typeof candidatePayload !== 'object') return;
+
+  if (peer.pc.remoteDescription && peer.pc.remoteDescription.type) {
+    try {
+      await peer.pc.addIceCandidate(new RTCIceCandidate(candidatePayload));
+    } catch {
+      // ignore stale candidate failures
+    }
+    return;
+  }
+  peer.pendingIce.push(candidatePayload);
+}
+
+async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {
+  const normalizedNextPath = String(nextPath || '').trim();
+  if (!['wlvc_wasm', 'webrtc_native', 'unsupported'].includes(normalizedNextPath)) {
+    return false;
+  }
+  if (runtimeSwitchInFlight) return false;
+  if (normalizedNextPath === mediaRuntimePath.value) return true;
+
+  if (normalizedNextPath === 'wlvc_wasm' && !mediaRuntimeCapabilities.value.stageA) {
+    return false;
+  }
+  if (normalizedNextPath === 'webrtc_native' && !mediaRuntimeCapabilities.value.stageB) {
+    return false;
+  }
+
+  runtimeSwitchInFlight = true;
+  try {
+    if (normalizedNextPath === 'webrtc_native') {
+      stopLocalEncodingPipeline();
+      teardownSfuRemotePeers();
+      syncNativePeerConnectionsWithRoster();
+      for (const peer of nativePeerConnectionsRef.value.values()) {
+        void syncNativePeerLocalTracks(peer);
+      }
+      wlvcEncodeFailureCount = 0;
+    } else if (normalizedNextPath === 'wlvc_wasm') {
+      teardownNativePeerConnections();
+      wlvcEncodeFailureCount = 0;
+      const localStream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
+      const videoTrack = localStream?.getVideoTracks?.()[0] || null;
+      if (videoTrack) {
+        await startEncodingPipeline(videoTrack);
+      }
+    } else {
+      stopLocalEncodingPipeline();
+      teardownNativePeerConnections();
+      teardownSfuRemotePeers();
+    }
+
+    setMediaRuntimePath(normalizedNextPath, reason);
+    console.info('[MediaRuntime] switched to', normalizedNextPath, 'reason=', reason);
+    return true;
+  } finally {
+    runtimeSwitchInFlight = false;
+  }
+}
+
+async function maybeFallbackToNativeRuntime(reason) {
+  if (!mediaRuntimeCapabilities.value.stageB) return false;
+  return switchMediaRuntimePath('webrtc_native', reason);
+}
 
 function buildLocalMediaConstraints() {
   const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
@@ -3116,6 +3581,12 @@ async function publishLocalTracks() {
     sfuClientRef.value.publishTracks(tracks);
     applyCallInputPreferences();
     applyCallOutputPreferences();
+    if (isNativeWebRtcRuntimePath()) {
+      syncNativePeerConnectionsWithRoster();
+      for (const peer of nativePeerConnectionsRef.value.values()) {
+        void syncNativePeerLocalTracks(peer);
+      }
+    }
 
     const videoTrack = stream.getVideoTracks()[0];
     if (videoTrack) {
@@ -3127,6 +3598,8 @@ async function publishLocalTracks() {
 }
 
 async function startEncodingPipeline(videoTrack) {
+  stopLocalEncodingPipeline();
+
   const video = document.createElement('video');
   video.srcObject = new MediaStream([videoTrack]);
   video.muted = true;
@@ -3145,8 +3618,13 @@ async function startEncodingPipeline(videoTrack) {
   }
   applyCallOutputPreferences();
 
+  if (!isWlvcRuntimePath()) {
+    return;
+  }
+
   if (!mediaRuntimeCapabilities.value.stageA) {
-    console.warn('[SFU] WLVC WASM unavailable; skipping WLVC encoder in product path');
+    console.warn('[SFU] WLVC WASM unavailable; falling back to native WebRTC path');
+    void maybeFallbackToNativeRuntime('wlvc_runtime_unavailable');
     return;
   }
 
@@ -3158,12 +3636,15 @@ async function startEncodingPipeline(videoTrack) {
       keyFrameInterval: 30,
     });
     if (!videoEncoderRef.value) {
-      console.warn('[SFU] WASM encoder unavailable; keeping native preview path');
+      console.warn('[SFU] WASM encoder unavailable; falling back to native WebRTC path');
+      void maybeFallbackToNativeRuntime('wlvc_encoder_unavailable');
       return;
     }
     console.log('[SFU] WASM encoder initialized');
+    wlvcEncodeFailureCount = 0;
   } catch (error) {
-    console.error('[SFU] WASM encoder init error, keeping native preview path:', error);
+    console.error('[SFU] WASM encoder init error; falling back to native WebRTC path:', error);
+    void maybeFallbackToNativeRuntime('wlvc_encoder_init_error');
     return;
   }
 
@@ -3173,6 +3654,7 @@ async function startEncodingPipeline(videoTrack) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
   encodeIntervalRef.value = setInterval(async () => {
+    if (!isWlvcRuntimePath()) return;
     if (!videoEncoderRef.value || !sfuClientRef.value || sfuClientRef.value.ws?.readyState !== WebSocket.OPEN) {
       return;
     }
@@ -3193,8 +3675,13 @@ async function startEncodingPipeline(videoTrack) {
         data: encoded.data,
         type: encoded.type,
       });
+      wlvcEncodeFailureCount = 0;
     } catch (e) {
-      // silently skip encode errors
+      wlvcEncodeFailureCount += 1;
+      if (wlvcEncodeFailureCount >= WLVC_ENCODE_FAILURE_THRESHOLD) {
+        wlvcEncodeFailureCount = 0;
+        void maybeFallbackToNativeRuntime('wlvc_encode_runtime_error');
+      }
     }
   }, 66);
 }
@@ -3220,6 +3707,7 @@ async function reconfigureLocalTracksFromSelectedDevices() {
 }
 
 function handleSFUEncodedFrame(frame) {
+  if (!isWlvcRuntimePath()) return;
   const peer = remotePeersRef.value.get(frame.publisherId);
   if (!peer || !peer.decoder) return;
 
@@ -3274,15 +3762,13 @@ onBeforeUnmount(() => {
   }
   closeSocket();
   teardownLocalPublisher();
+  teardownNativePeerConnections();
+  teardownSfuRemotePeers();
   if (sfuClientRef.value) {
     sfuClientRef.value.leave();
     sfuClientRef.value = null;
   }
   backgroundFilterController.dispose();
-  for (const [_, peer] of remotePeersRef.value) {
-    teardownRemotePeer(peer);
-  }
-  remotePeersRef.value.clear();
 });
 </script>
 
