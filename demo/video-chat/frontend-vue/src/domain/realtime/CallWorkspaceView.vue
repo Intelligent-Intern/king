@@ -4347,9 +4347,11 @@ onBeforeUnmount(() => {
 .video-container.remote video,
 .video-container.decoded video,
 .video-container canvas {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
 }
 
 .video-container.local {
