@@ -467,6 +467,7 @@ import {
   callMediaPrefs,
   refreshCallMediaDevices,
 } from './callMediaPreferences';
+import { BackgroundFilterController } from './backgroundFilterController';
 import { SFUClient } from '../../lib/sfu/sfuClient';
 import { WasmWaveletVideoEncoder, WasmWaveletVideoDecoder, createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';
 
@@ -2748,8 +2749,11 @@ function sendSignalingMessage(msg) {
 
 let videoEncoderRef = ref(null);
 let localVideoElement = ref(null);
+let localRawStreamRef = ref(null);
+let localFilteredStreamRef = ref(null);
 let localStreamRef = ref(null);
 let encodeIntervalRef = ref(null);
+const backgroundFilterController = new BackgroundFilterController();
 
 function buildLocalMediaConstraints() {
   const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
@@ -2784,13 +2788,43 @@ function applyCallOutputPreferences() {
 }
 
 function applyCallInputPreferences() {
-  const stream = localStreamRef.value;
+  const stream = localRawStreamRef.value instanceof MediaStream
+    ? localRawStreamRef.value
+    : localStreamRef.value;
   if (!(stream instanceof MediaStream)) return;
   const volume = Math.max(0, Math.min(100, Number(callMediaPrefs.microphoneVolume || 100))) / 100;
   for (const track of stream.getAudioTracks()) {
     if (typeof track.applyConstraints !== 'function') continue;
     track.applyConstraints({ volume }).catch(() => {});
   }
+}
+
+function resolveBackgroundFilterOptions() {
+  return {
+    mode: 'off',
+  };
+}
+
+async function applyLocalBackgroundFilter(rawStream) {
+  const options = resolveBackgroundFilterOptions();
+  const result = await backgroundFilterController.apply(rawStream, options);
+  if (result?.stale) return rawStream;
+  if (result?.stream instanceof MediaStream) {
+    return result.stream;
+  }
+  return rawStream;
+}
+
+function uniqueLocalStreams(values) {
+  const out = [];
+  const seen = new Set();
+  for (const value of values) {
+    if (!(value instanceof MediaStream)) continue;
+    if (seen.has(value)) continue;
+    seen.add(value);
+    out.push(value);
+  }
+  return out;
 }
 
 function stopLocalEncodingPipeline() {
@@ -2824,6 +2858,8 @@ function clearLocalPreviewElement() {
 }
 
 function unpublishAndStopLocalTracks() {
+  backgroundFilterController.dispose();
+
   const tracks = Array.isArray(localTracksRef.value) ? [...localTracksRef.value] : [];
   if (sfuClientRef.value) {
     for (const track of tracks) {
@@ -2840,8 +2876,14 @@ function unpublishAndStopLocalTracks() {
     }
   }
   localTracksRef.value = [];
-  if (localStreamRef.value instanceof MediaStream) {
-    for (const track of localStreamRef.value.getTracks()) {
+
+  const streamsToStop = uniqueLocalStreams([
+    localStreamRef.value,
+    localRawStreamRef.value,
+    localFilteredStreamRef.value,
+  ]);
+  for (const stream of streamsToStop) {
+    for (const track of stream.getTracks()) {
       try {
         track.stop();
       } catch {
@@ -2849,6 +2891,9 @@ function unpublishAndStopLocalTracks() {
       }
     }
   }
+
+  localRawStreamRef.value = null;
+  localFilteredStreamRef.value = null;
   localStreamRef.value = null;
 }
 
@@ -2865,7 +2910,11 @@ async function publishLocalTracks() {
   }
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia(buildLocalMediaConstraints());
+    const rawStream = await navigator.mediaDevices.getUserMedia(buildLocalMediaConstraints());
+    localRawStreamRef.value = rawStream;
+
+    const stream = await applyLocalBackgroundFilter(rawStream);
+    localFilteredStreamRef.value = stream;
     localStreamRef.value = stream;
     localTracksRef.value = stream.getTracks();
 
@@ -3035,6 +3084,7 @@ onBeforeUnmount(() => {
     sfuClientRef.value.leave();
     sfuClientRef.value = null;
   }
+  backgroundFilterController.dispose();
   for (const [_, peer] of remotePeersRef.value) {
     teardownRemotePeer(peer);
   }
