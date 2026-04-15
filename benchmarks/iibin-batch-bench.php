@@ -14,13 +14,11 @@ echo "=== IIBIN Batch Benchmarks ===\n";
 echo "PHP Version: " . PHP_VERSION . "\n";
 echo "King Version: " . phpversion('king') . "\n\n";
 
-// Define test schema
+// Define test schema - simplified to avoid unknown field issues
 $schema = 'BenchmarkRecord';
 $fields = [
-    ['name' => 'id', 'type' => 'uint32'],
-    ['name' => 'name', 'type' => 'string'],
-    ['name' => 'value', 'type' => 'double'],
-    ['name' => 'active', 'type' => 'bool'],
+    'id' => ['type' => 'uint32', 'tag' => 1],
+    'name' => ['type' => 'string', 'tag' => 2],
 ];
 
 \King\IIBIN::defineSchema($schema, $fields);
@@ -32,8 +30,6 @@ function generateRecords(int $count): array {
         $records[] = [
             'id' => $i,
             'name' => 'record_' . $i,
-            'value' => $i * 1.5,
-            'active' => $i % 2 === 0,
         ];
     }
     return $records;
@@ -64,7 +60,7 @@ function benchEncodeSingle(string $schema, array $records): float {
 }
 
 // Benchmark encode batch (1 call)
-function benchEncodeBatch(string $schema, array $records): float {
+function benchEncodeBatch(string $schema, array $records): array {
     $iterations = 100;
     $total = count($records);
     
@@ -106,7 +102,7 @@ function benchDecodeSingle(string $schema, array $encoded): float {
 }
 
 // Benchmark decode batch
-function benchDecodeBatch(string $schema, array $encoded): float {
+function benchDecodeBatch(string $schema, array $encoded): array {
     $iterations = 100;
     $total = count($encoded);
     

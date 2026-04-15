@@ -49,18 +49,18 @@ PHP_FUNCTION(king_proto_encode_batch)
 PHP_FUNCTION(king_proto_decode_batch)
 {
     zend_string *schema_name;
-    zval *binary_records;
+    zval *binary_data;
     zval *decode_as_object = NULL;
     zval result;
 
     ZEND_PARSE_PARAMETERS_START(2, 3)
         Z_PARAM_STR(schema_name)
-        Z_PARAM_ARRAY(binary_records)
+        Z_PARAM_ZVAL(binary_data)
         Z_PARAM_OPTIONAL
         Z_PARAM_ZVAL(decode_as_object)
     ZEND_PARSE_PARAMETERS_END();
 
-    if (king_iibin_decode_batch(schema_name, binary_records, decode_as_object, &result) != SUCCESS) {
+    if (king_iibin_decode_batch(schema_name, binary_data, decode_as_object, &result) != SUCCESS) {
         RETURN_THROWS();
     }
 

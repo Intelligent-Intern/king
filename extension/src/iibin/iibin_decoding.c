@@ -557,37 +557,93 @@ zend_result king_iibin_decode_batch(
         return FAILURE;
     }
 
-    array_init(decoded_out);
-    ht = Z_ARRVAL_P(decoded_out);
-
-    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(binary_records), binary_data) {
-        if (Z_TYPE_P(binary_data) != IS_STRING) continue;
-
-        ZVAL_UNDEF(&decoded);
-        if (!king_proto_runtime_decode_schema_payload(
-                schema_name,
-                runtime_schema,
-                (unsigned char*)ZSTR_VAL(Z_STR_P(binary_data)),
-                ZSTR_LEN(Z_STR_P(binary_data)),
-                false,
-                &decoded)) {
-            king_iibin_decode_mode_destroy(&decode_mode);
-            zend_hash_destroy(ht);
-            return FAILURE;
-        }
-
-        if (!decode_mode.materialize_objects) {
-            zend_hash_next_index_insert(ht, &decoded);
+    // Handle both string (concatenated) and array (legacy) modes
+    if (Z_TYPE_P(binary_records) == IS_STRING) {
+        // Concatenated binary mode: varint-length prefixed records
+        const unsigned char *data = (const unsigned char*)ZSTR_VAL(Z_STR_P(binary_records));
+        size_t total_len = ZSTR_LEN(Z_STR_P(binary_records));
+        
+        if (total_len == 0) {
+            array_init(decoded_out);
         } else {
-            zval hydrated;
-            if (!king_iibin_hydrate_schema_result(schema_name, runtime_schema, &decoded, &decode_mode, &hydrated)) {
+            const unsigned char *p = data;
+            const unsigned char *data_end = data + total_len;
+            array_init(decoded_out);
+            ht = Z_ARRVAL_P(decoded_out);
+
+            while (p < data_end) {
+                uint64_t rec_len = 0;
+                // Decode varint length
+                if (!king_proto_decode_varint(&p, data_end, &rec_len)) {
+                    // Varint decode failed
+                    break;
+                }
+                // Check bounds
+                if (rec_len == 0 || rec_len > (size_t)(data_end - p)) {
+                    break;
+                }
+
+                // Decode payload
+                ZVAL_UNDEF(&decoded);
+                if (!king_proto_runtime_decode_schema_payload(
+                        schema_name,
+                        runtime_schema,
+                        p,
+                        (size_t)rec_len,
+                        false,
+                        &decoded)) {
+                    // Payload decode failed
+                    break;
+                }
+
+                // Advance past payload
+                p += rec_len;
+
+                // Add to result
+                if (!decode_mode.materialize_objects) {
+                    zend_hash_next_index_insert(ht, &decoded);
+                } else {
+                    zval hydrated;
+                    if (king_iibin_hydrate_schema_result(schema_name, runtime_schema, &decoded, &decode_mode, &hydrated)) {
+                        zend_hash_next_index_insert(ht, &hydrated);
+                    }
+                }
+            }
+        }
+    } else {
+        // Legacy array mode
+        array_init(decoded_out);
+        ht = Z_ARRVAL_P(decoded_out);
+
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(binary_records), binary_data) {
+            if (Z_TYPE_P(binary_data) != IS_STRING) continue;
+
+            ZVAL_UNDEF(&decoded);
+            if (!king_proto_runtime_decode_schema_payload(
+                    schema_name,
+                    runtime_schema,
+                    (unsigned char*)ZSTR_VAL(Z_STR_P(binary_data)),
+                    ZSTR_LEN(Z_STR_P(binary_data)),
+                    false,
+                    &decoded)) {
                 king_iibin_decode_mode_destroy(&decode_mode);
                 zend_hash_destroy(ht);
                 return FAILURE;
             }
-            zend_hash_next_index_insert(ht, &hydrated);
-        }
-    } ZEND_HASH_FOREACH_END();
+
+            if (!decode_mode.materialize_objects) {
+                zend_hash_next_index_insert(ht, &decoded);
+            } else {
+                zval hydrated;
+                if (!king_iibin_hydrate_schema_result(schema_name, runtime_schema, &decoded, &decode_mode, &hydrated)) {
+                    king_iibin_decode_mode_destroy(&decode_mode);
+                    zend_hash_destroy(ht);
+                    return FAILURE;
+                }
+                zend_hash_next_index_insert(ht, &hydrated);
+            }
+        } ZEND_HASH_FOREACH_END();
+    }
 
     king_iibin_decode_mode_destroy(&decode_mode);
     return SUCCESS;

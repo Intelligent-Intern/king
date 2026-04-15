@@ -144,50 +144,17 @@ extern const zend_function_entry king_iibin_class_methods[];
 
 /* --- Wire Helpers: Varint encode --- */
 
-/* Fast branchless varint encoding */
 static inline void king_proto_encode_varint(smart_str *buf, uint64_t value) {
     unsigned char temp[10];
     int len = 0;
-    
-    /* Fast path: single byte */
-    if (value < 0x80) {
-        temp[0] = (unsigned char)value;
-        smart_str_appendl(buf, (char*)temp, 1);
-        return;
-    }
-    
-    /* Multi-byte: unrolled bit operations */
-    temp[len++] = (unsigned char)((value) | 0x80);
-    temp[len++] = (unsigned char)((value >> 7) | 0x80);
-    temp[len++] = (unsigned char)((value >> 14) | 0x80);
-    temp[len++] = (unsigned char)((value >> 21) | 0x80);
-    
-    if (value < 0x200000) {
-        temp[0] &= 0x7F;
-        temp[1] &= 0x7F;
-        temp[2] &= 0x7F;
-    } else {
-        temp[len++] = (unsigned char)((value >> 28) | 0x80);
-        temp[len++] = (unsigned char)((value >> 35) | 0x80);
-        temp[len++] = (unsigned char)((value >> 42) | 0x80);
-        temp[len++] = (unsigned char)((value >> 49) | 0x80);
-        
-        if (value < 0x1000000000000ULL) {
-            temp[3] &= 0x7F;
-            temp[4] &= 0x7F;
-            temp[5] &= 0x7F;
-            temp[6] &= 0x7F;
-        } else {
-            temp[7] = (unsigned char)((value >> 56) | 0x80);
-            temp[8] = (unsigned char)((value >> 63));
-            temp[3] &= 0x7F;
-            temp[4] &= 0x7F;
-            temp[5] &= 0x7F;
-            temp[6] &= 0x7F;
-            temp[7] &= 0x7F;
-            len = 9;
+    do {
+        temp[len] = (unsigned char)(value & 0x7FU);
+        value >>= 7;
+        if (value > 0) {
+            temp[len] |= 0x80U;
         }
-    }
+        len++;
+    } while (value > 0 && len < 10);
     smart_str_appendl(buf, (char*)temp, len);
 }
 

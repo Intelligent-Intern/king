@@ -1,4 +1,4 @@
---TEST
+--TEST--
 Check batch encode/decode exists and works
 --INI
 extension=king.so
@@ -8,8 +8,8 @@ echo "Test batch functions:\n";
 
 // Define schema
 \King\IIBIN::defineSchema("TestRec", [
-    ["name" => "id", "type" => "uint32"],
-    ["name" => "name", "type" => "string"],
+    "id" => ["type" => "uint32", "tag" => 1],
+    "name" => ["type" => "string", "tag" => 2],
 ]);
 
 $records = [
