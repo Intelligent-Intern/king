@@ -209,6 +209,11 @@
   <div id="conn" class="status">loading…</div>
 </header>
 
+<div id="fwd-banner" hidden style="background:#fff3cd;color:#5a4a00;border-bottom:1px solid #e6d68a;padding:10px 20px;font-size:13px;line-height:1.5;">
+  <strong>Heads up:</strong> this page is loaded on <code id="fwd-host"></code>, which on VS Code dev containers routes through a port forwarder that silently drops streaming WebSocket frames mid-burst. Use the direct TCP proxy instead:
+  <a id="fwd-link" href="#" style="color:#5a4a00;text-decoration:underline;font-weight:600;">switch to the working URL</a>.
+</div>
+
 <main id="messages" aria-live="polite">
   <div class="msg assistant">
     <div class="role">system</div>
@@ -501,6 +506,25 @@
       if (!state.inFlight) els.form.requestSubmit();
     }
   });
+
+  // --------------------- known-bad forwarder banner ---------------------
+  // VS Code dev-container port forwarding silently truncates our
+  // streaming WebSocket. If this page is loaded on port 18090 we show
+  // a visible banner pointing the user at the socat bridge on 18091.
+  (function maybeShowForwardBanner() {
+    if (location.port === '18090') {
+      const banner = document.getElementById('fwd-banner');
+      const host = document.getElementById('fwd-host');
+      const link = document.getElementById('fwd-link');
+      if (banner && host && link) {
+        host.textContent = location.host;
+        const proxyUrl = location.protocol + '//' + location.hostname + ':18091' + location.pathname + location.search;
+        link.href = proxyUrl;
+        link.textContent = proxyUrl;
+        banner.hidden = false;
+      }
+    }
+  })();
 
   // --------------------- boot ---------------------
   // The current king HTTP/1 one-shot listener serves ONE request at
