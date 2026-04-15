@@ -108,6 +108,38 @@ Non-negotiable direction for this batch:
   asserts 1:1 between the live `api.*` / `ws.*` catalog entries and the
   actually-served routes of the dispatcher, refuses target-shape paths leaking
   into the live section, and locks the currently emitted error-code set.
+- [x] `#M-8` Typed inference-request envelope landed at
+  `contracts/v1/inference-request.contract.json` +
+  `backend-king-php/domain/inference/inference_request.php`. Pins the
+  envelope consumed by `POST /api/infer` (#M-10) and WS `infer.start`
+  (#M-11) so both transports share one validator and one canonical
+  rejection-code set. Validator is pure (no I/O, no DB, no kernel
+  calls): `model_inference_validate_infer_request($payload,
+  ['transport' => 'http'|'ws'])` returns the normalized envelope or
+  throws `InferenceRequestValidationError` whose machine-readable
+  payload (`errorCode` / `field` / `reason` / `observed`) projects
+  cleanly into the typed error envelope via `toDetails()`. Enforced
+  rules: `session_id` required 1..128 chars matching
+  `[A-Za-z0-9_.:-]+`; `model_selector` required with `model_name`,
+  `quantization` ∈ `{Q2_K..F16}`, optional `prefer_local` default
+  `true`; `prompt` required 1..131072 chars; optional `system`
+  string ≤32768 chars (empty normalizes to `null`); `sampling`
+  required with `temperature` ∈ `[0.0, 2.0]`, `top_p` ∈ `[0.0, 1.0]`,
+  `top_k` ∈ `[0, 1024]`, `max_tokens` ∈ `[1, 8192]`, optional `seed`
+  ∈ `[0, 4294967295]`; `stream` required bool, with transport
+  cross-check (HTTP refuses `stream=true`, WS refuses `stream=false`).
+  Unknown top-level keys, unknown keys inside `model_selector` /
+  `sampling`, and wrong types at every slot are all fail-closed.
+  Number normalization is explicit: integers promoted to floats in
+  float slots, integral floats accepted in int slots, non-integral
+  floats rejected.
+  `tests/inference-request-envelope-contract.{sh,php}` asserts 33
+  rules: happy-path HTTP + WS normalization, every missing-required
+  field, every out-of-range numeric, every wrong-type rejection,
+  transport cross-checks, unknown-key rejection at every level, and
+  catalog error-code parity. Maps to tracker V.10 and Z.10 (still
+  unticked pending post-merge sweep). No dispatcher surface yet; the
+  envelope feeds `#M-10` HTTP and `#M-11` WS.
 - [x] `#M-7` `LlamaCppWorker` lifecycle landed at
   `backend-king-php/support/llama_cpp_worker.php`. Real subordinate process:
   `start()` validates a real GGUF path, `proc_open`s the pinned
@@ -234,10 +266,6 @@ Non-negotiable direction for this batch:
 
 ### Open / To implement (priority order)
 
-- [ ] `#M-8` `contracts/v1/inference-request.contract.json` + typed validation
-  on `POST /api/infer` and WS `infer.start`; canonical error codes. Maps to
-  `V.10`, `Z.10`.
-
 - [ ] `#M-9` `contracts/v1/token-frame.contract.json` — IIBIN binary frame
   (magic `KITF`, 24-byte header + payload); encode/decode via `king_proto_*`;
   committed hex sample vectors. Maps to `V.10`, `Z.4`, `Z.10`.
@@ -283,16 +311,17 @@ Non-negotiable direction for this batch:
 
 ### Next step (M-batch)
 
-- [ ] Continue with `#M-8` (typed inference-request envelope): publish
-  `demo/model-inference/contracts/v1/inference-request.contract.json`
-  pinning `{session_id, model_selector:{model_name, quantization,
-  prefer_local}, prompt, system?, sampling:{temperature, top_p, top_k,
-  max_tokens, seed?}, stream}`; add
-  `backend-king-php/domain/inference/inference_request.php` with a pure
-  `model_inference_validate_infer_request()` that returns the same
-  `field:reason` shape as the M-5 metadata validator and maps every
-  failure to a canonical error code in the catalog; add
-  `tests/inference-request-envelope-contract.{sh,php}` enumerating every
-  required field, out-of-range sampling values, and the rejection path
-  names. No dispatcher surface yet (the envelope is consumed by M-10
-  HTTP + M-11 WS streaming).
+- [ ] Continue with `#M-9` (IIBIN token-frame wire contract): publish
+  `demo/model-inference/contracts/v1/token-frame.contract.json` with the
+  24-byte big-endian header (magic `KITF` u32, version u8, frame_type
+  u8 enum `delta=0|end=1|error=2`, flags u8, reserved u8, sequence u32,
+  `request_id_crc32` u32, `token_count` u16, `payload_length` u32,
+  reserved u16) plus payload shapes per frame_type and committed hex
+  sample vectors. Add
+  `backend-king-php/support/token_frame.php` with encode/decode helpers
+  built on `king_proto_define_schema` / `king_proto_encode` /
+  `king_proto_decode`; add
+  `tests/token-frame-wire-contract.{sh,php}` proving bit-identical
+  round-trip of the sample vectors and rejecting unknown `frame_type`
+  / version / oversized payloads. No dispatcher surface yet; the codec
+  is consumed by `#M-11` WS streaming.

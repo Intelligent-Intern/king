@@ -1,0 +1,71 @@
+{
+  "contract_name": "king-model-inference-request",
+  "contract_version": "1.0.0",
+  "contract_scope": "Client-to-server envelope for inference generation. Consumed by POST /api/infer (#M-10, non-streaming HTTP) and the WS 'infer.start' event (#M-11, IIBIN binary token stream). The envelope is pinned here so both transports share one validator (domain/inference/inference_request.php) and the same canonical rejection codes from api-ws-contract.catalog.json.",
+  "honesty_rules": [
+    "session_id is client-supplied; the backend does NOT trust it for authentication. It is a client-side trace identifier that the server echoes back in token-frame headers and transcript persistence (#M-16). A future leaf adds server-managed session binding.",
+    "model_selector.prefer_local is a hint, not a guarantee. If a locally registered model does not fit the node profile at selection time (#M-6), the selector may return a different winner or reject the request with 'model_fit_unavailable'.",
+    "sampling.seed is optional; when present the backend MUST plumb it to llama.cpp as '-s <seed>' so two calls with the same seed + same prompt + same model produce the same completion. Omitting it yields a fresh random seed per call — never a silent default to 0.",
+    "sampling.max_tokens is hard-capped by the backend at 8192 to refuse unbounded generation. A lower cap may apply if the loaded model's context_length is smaller (enforced at #M-10).",
+    "prompt is a single string. Chat templating (system/user/assistant roles) is NOT performed server-side in this leaf; clients that need templated prompts render the template client-side and submit the resulting string. A future leaf adds a 'messages' array and server-side chat templating.",
+    "stream is authoritative: 'false' forces POST /api/infer to return one full JSON envelope (#M-10); 'true' is only valid on WS 'infer.start' (#M-11). The HTTP route rejects stream=true with 'invalid_request_envelope' so callers can't silently request a streaming response they cannot consume."
+  ],
+  "envelope": {
+    "session_id": {
+      "type": "string",
+      "min_length": 1,
+      "max_length": 128,
+      "pattern": "/^[A-Za-z0-9_.:\\-]+$/",
+      "required": true
+    },
+    "model_selector": {
+      "type": "object",
+      "required": true,
+      "fields": {
+        "model_name": {"type": "string", "min_length": 1, "max_length": 128, "required": true},
+        "quantization": {"type": "string", "enum": ["Q2_K","Q3_K","Q4_0","Q4_K","Q5_K","Q6_K","Q8_0","F16"], "required": true},
+        "prefer_local": {"type": "bool", "required": false, "default": true}
+      }
+    },
+    "prompt": {
+      "type": "string",
+      "min_length": 1,
+      "max_length": 131072,
+      "required": true
+    },
+    "system": {
+      "type": "string",
+      "min_length": 1,
+      "max_length": 32768,
+      "required": false
+    },
+    "sampling": {
+      "type": "object",
+      "required": true,
+      "fields": {
+        "temperature": {"type": "float", "min": 0.0, "max": 2.0, "required": true},
+        "top_p": {"type": "float", "min": 0.0, "max": 1.0, "required": true},
+        "top_k": {"type": "int", "min": 0, "max": 1024, "required": true, "note": "0 disables top-k filtering"},
+        "max_tokens": {"type": "int", "min": 1, "max": 8192, "required": true},
+        "seed": {"type": "int", "min": 0, "max": 4294967295, "required": false, "note": "missing means fresh random seed per call"}
+      }
+    },
+    "stream": {
+      "type": "bool",
+      "required": true
+    }
+  },
+  "rejection_codes": {
+    "invalid_request_envelope": "any required field missing; any field out-of-range; stream=true on the HTTP route; unknown top-level keys; wrong type for a required field",
+    "model_not_found": "model_selector did not match any registry row (model_name + quantization)",
+    "model_fit_unavailable": "registry row exists but no node in scope can host it (RAM/VRAM/quantization filter per #M-6)"
+  },
+  "rejection_details_shape": {
+    "code": "one of rejection_codes",
+    "details": {
+      "field": "dotted path of the failing leaf, e.g. sampling.temperature",
+      "reason": "human-readable cause with the clamping rule",
+      "observed": "the value the client sent (primitive types only; arrays/objects summarised)"
+    }
+  }
+}
