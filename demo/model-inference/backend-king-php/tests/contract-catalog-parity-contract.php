@@ -193,18 +193,47 @@ try {
         }
     }
 
-    // ws section: initially carries path + introduced_by but no live events
-    // until M-11 lands; the events map must be present and empty.
+    // ws section: #M-11 onward must list the streaming events (infer.start
+    // inbound, infer.token/infer.end/infer.error outbound). The handshake
+    // block is also pinned so clients can depend on version + required
+    // headers.
     $liveWs = $catalog['ws'] ?? null;
     model_inference_catalog_contract_assert(is_array($liveWs), 'catalog.ws must be an object');
     model_inference_catalog_contract_assert(
         (string) ($liveWs['path'] ?? '') === '/ws',
         'catalog.ws.path must be /ws'
     );
+    $handshake = $liveWs['handshake'] ?? null;
+    model_inference_catalog_contract_assert(is_array($handshake), 'catalog.ws.handshake must be pinned from #M-11 onward');
+    $hsHeaders = (array) ($handshake['required_headers'] ?? []);
+    foreach (['Upgrade', 'Connection', 'Sec-WebSocket-Key', 'Sec-WebSocket-Version'] as $required) {
+        model_inference_catalog_contract_assert(
+            isset($hsHeaders[$required]),
+            "catalog.ws.handshake.required_headers must list '{$required}'"
+        );
+    }
+    $clientEvents = (array) ($liveWs['client_events'] ?? []);
     model_inference_catalog_contract_assert(
-        is_array($liveWs['events'] ?? null) && $liveWs['events'] === [],
-        'catalog.ws.events must be empty until #M-11 lands WS upgrade support'
+        isset($clientEvents['infer.start']) && ($clientEvents['infer.start']['frame_type'] ?? null) === 'text',
+        'catalog.ws.client_events.infer.start must be pinned as a text frame'
     );
+    $serverEvents = (array) ($liveWs['server_events'] ?? []);
+    foreach (['infer.token' => 'delta', 'infer.end' => 'end', 'infer.error' => 'error'] as $eventName => $expectedFrameType) {
+        $entry = $serverEvents[$eventName] ?? null;
+        model_inference_catalog_contract_assert(is_array($entry), "catalog.ws.server_events.{$eventName} must be pinned");
+        model_inference_catalog_contract_assert(
+            (string) ($entry['frame_type'] ?? '') === 'binary',
+            "catalog.ws.server_events.{$eventName}.frame_type must be 'binary'"
+        );
+        model_inference_catalog_contract_assert(
+            (string) ($entry['frame_type_value'] ?? '') === $expectedFrameType,
+            "catalog.ws.server_events.{$eventName}.frame_type_value must be '{$expectedFrameType}'"
+        );
+        model_inference_catalog_contract_assert(
+            (string) ($entry['body_contract'] ?? '') === 'demo/model-inference/contracts/v1/token-frame.contract.json',
+            "catalog.ws.server_events.{$eventName}.body_contract must point at token-frame.contract.json"
+        );
+    }
 
     // Error codes currently emitted by the dispatcher must be listed.
     $liveErrorCodes = (array) (($catalog['errors'] ?? [])['codes'] ?? []);

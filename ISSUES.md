@@ -108,6 +108,54 @@ Non-negotiable direction for this batch:
   asserts 1:1 between the live `api.*` / `ws.*` catalog entries and the
   actually-served routes of the dispatcher, refuses target-shape paths leaking
   into the live section, and locks the currently emitted error-code set.
+- [x] `#M-11` WS streaming via IIBIN token frames landed at
+  `backend-king-php/domain/inference/inference_stream.php` +
+  `backend-king-php/http/module_realtime.php`. First leaf that
+  streams real tokens: opens a raw TCP socket to the cached
+  `LlamaCppWorker`, POSTs `/completion?stream=true`, parses
+  HTTP/1.1 chunked transfer + SSE framing (llama.cpp emits each
+  event as one chunk carrying `data: {json}\n\n`), and for each
+  non-empty `content` encodes a `#M-9` TokenFrame delta
+  (`frame_type=0`, monotonic sequence, `request_id_crc32` de-mux
+  key, `token_count` reflecting the real token-array length from
+  the chunk — never claiming 1-frame-per-token), then a terminal
+  `frame_type=end` frame carrying the real timing summary
+  (`tokens_in`, `tokens_out`, `ttft_ms`, `duration_ms`). Frames are
+  handed to a caller-supplied `$sendBinaryFrame` callable — in
+  production it wraps `king_websocket_send($ws, $bytes, true)`; in
+  the test harness it captures bytes for decode-and-assert.
+  `http/module_realtime.php` owns the `GET /ws` upgrade: validates
+  `Upgrade: websocket`, `Connection: Upgrade`, `Sec-WebSocket-Key`,
+  `Sec-WebSocket-Version: 13` fail-closed; calls
+  `king_server_upgrade_to_websocket($request['session'],
+  $request['stream_id'])`; reads one `{"event":"infer.start",
+  "payload":<envelope>}` text frame; validates envelope with
+  `transport='ws'` (which forces `stream=true`); resolves the
+  registry row; runs `#M-6` fit-check; spawns/reuses the cached
+  worker; delegates to `model_inference_stream_completion()`; and
+  closes with a 1000 normal-close. Transport-level failures emit a
+  best-effort `frame_type=error` frame before the close.
+  Dispatcher module order grows to
+  `['runtime','profile','registry','inference','realtime']`.
+  Catalog `ws.handshake` now pins the required headers; `ws.client_events.infer.start` is text; `ws.server_events.{infer.token, infer.end, infer.error}` are binary frames pointing at
+  `token-frame.contract.json` with `frame_type_value` = `delta`,
+  `end`, `error` respectively. `infer.cancel` stays in
+  `planned_surfaces_target_shape` as a future WS leaf.
+  `tests/infer-ws-streaming-contract.{sh,php}` seeds the SmolLM2
+  fixture, runs the streaming function against a real worker, and
+  asserts: ≥2 frames captured; every frame decodes cleanly through
+  TokenFrame; magic/version/request_id_crc32 correct; delta payloads
+  non-empty UTF-8; exactly one terminal end frame; end-body JSON has
+  `tokens_in/tokens_out/ttft_ms/duration_ms` as ints ≥0 with
+  `tokens_out ≥ 1`; strict monotonic sequence across the stream;
+  `total_frames` summary equals captured count; and — the leaf's
+  headline claim — **streamed deltas concatenated equal the
+  non-streaming completion for the same seed+temp=0** (streaming
+  does not drift from batching). Scope fence: the WS upgrade
+  handler runs the session synchronously; concurrent WS sessions
+  are a future hardening leaf (called out in the README when it
+  lands). Maps to tracker V.1, Z.4, Z.5 (still unticked pending
+  post-merge sweep).
 - [x] `#M-10` `POST /api/infer` non-streaming landed at
   `backend-king-php/domain/inference/inference_session.php` +
   `backend-king-php/http/module_inference.php`. First leaf that
@@ -341,10 +389,6 @@ Non-negotiable direction for this batch:
 
 ### Open / To implement (priority order)
 
-- [ ] `#M-11` WS streaming via `king_server_upgrade_to_websocket` +
-  `king_websocket_send` emitting `#M-9` token frames; concatenation equals
-  `POST /api/infer` result for same seed. Maps to `Z.4`, `Z.5`, `V.1`.
-
 - [ ] `#M-12` Inference telemetry — TTFT, tokens/s, VRAM budget/observed,
   prompt/completion counts; `GET /api/telemetry/inference/recent`. Maps to
   `Z.9`.
@@ -379,15 +423,17 @@ Non-negotiable direction for this batch:
 
 ### Next step (M-batch)
 
-- [ ] Continue with `#M-11` (WS streaming via IIBIN token frames):
-  wire `GET /ws` upgrade through `king_server_upgrade_to_websocket`,
-  consume one `infer.start` text frame carrying the `#M-8` envelope
-  (`stream=true`), bridge llama.cpp's `/completion?stream=true` SSE
-  output into the `#M-9` binary frame codec + `king_websocket_send`,
-  finish with a `frame_type=end` summary, finish on error with a
-  `frame_type=error` frame. Add
-  `backend-king-php/http/module_realtime.php` + the matching
-  `realtime` module-order entry; add
-  `tests/infer-ws-streaming-contract.{sh,php}` proving end-to-end
-  WS round-trip (accumulated deltas equal the non-streaming
-  equivalent for the same seed). Maps to Z.4, Z.5, V.1.
+- [ ] Continue with `#M-12` (inference telemetry): per-request
+  capture of TTFT, tokens/s, VRAM budget/observed,
+  prompt/completion counts, model_id, node_id. Expose
+  `GET /api/telemetry/inference/recent` returning the last N
+  records (in-memory ring, no persistence yet — transcript
+  persistence is `#M-16`). Add
+  `backend-king-php/domain/telemetry/inference_metrics.php` +
+  `backend-king-php/http/module_telemetry.php`; wire into the
+  dispatcher after the inference + realtime modules so both the
+  HTTP and WS paths record through the same ring. Move
+  `telemetry_recent` from `planned_surfaces_target_shape` into live
+  `catalog.api`. Add `tests/inference-telemetry-contract.{sh,php}`
+  that runs one inference through each transport and asserts the
+  ring picked up the right per-field values. Maps to Z.9.

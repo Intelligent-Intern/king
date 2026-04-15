@@ -17,7 +17,7 @@ try {
     // Current deployed module list. Grows as later leaves land their modules.
     // Intended end-of-sprint order (see demo/model-inference/README.md):
     //   runtime, profile, registry, worker, inference, telemetry, routing, realtime
-    $expectedOrder = ['runtime', 'profile', 'registry', 'inference'];
+    $expectedOrder = ['runtime', 'profile', 'registry', 'inference', 'realtime'];
     $actualOrder = model_inference_dispatch_route_module_order();
 
     model_inference_router_contract_assert(

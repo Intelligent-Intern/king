@@ -145,7 +145,43 @@
   "ws": {
     "path": "/ws",
     "introduced_by": "M-11",
-    "events": {}
+    "handshake": {
+      "method": "GET",
+      "required_headers": {
+        "Upgrade": "websocket",
+        "Connection": "Upgrade",
+        "Sec-WebSocket-Key": "base64 nonce",
+        "Sec-WebSocket-Version": "13"
+      }
+    },
+    "client_events": {
+      "infer.start": {
+        "direction": "client->server",
+        "frame_type": "text",
+        "body_shape": {"event": "infer.start", "payload": "inference-request envelope with stream=true"},
+        "request_contract": "demo/model-inference/contracts/v1/inference-request.contract.json"
+      }
+    },
+    "server_events": {
+      "infer.token": {
+        "direction": "server->client",
+        "frame_type": "binary",
+        "body_contract": "demo/model-inference/contracts/v1/token-frame.contract.json",
+        "frame_type_value": "delta"
+      },
+      "infer.end": {
+        "direction": "server->client",
+        "frame_type": "binary",
+        "body_contract": "demo/model-inference/contracts/v1/token-frame.contract.json",
+        "frame_type_value": "end"
+      },
+      "infer.error": {
+        "direction": "server->client",
+        "frame_type": "binary",
+        "body_contract": "demo/model-inference/contracts/v1/token-frame.contract.json",
+        "frame_type_value": "error"
+      }
+    }
   },
   "errors": {
     "envelope": {
@@ -176,11 +212,7 @@
       "route_diagnostic": {"method": "GET",  "paths": ["/api/route"],                        "introduced_by": "M-14"}
     },
     "ws": {
-      "infer.start":  {"direction": "client->server", "body": "inference-request",       "introduced_by": "M-11"},
-      "infer.token":  {"direction": "server->client", "body": "token-frame(delta)",      "introduced_by": "M-11"},
-      "infer.end":    {"direction": "server->client", "body": "token-frame(end)",        "introduced_by": "M-11"},
-      "infer.error":  {"direction": "server->client", "body": "token-frame(error)",      "introduced_by": "M-11"},
-      "infer.cancel": {"direction": "client->server", "body": "json",                    "introduced_by": "M-11"}
+      "infer.cancel": {"direction": "client->server", "body": "json",                    "introduced_by": "future"}
     },
     "error_codes": [
       "invalid_request_envelope",
