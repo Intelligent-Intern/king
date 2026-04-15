@@ -22,8 +22,13 @@ ENV MODEL_INFERENCE_KING_PORT=18090
 ENV MODEL_INFERENCE_KING_WS_PORT=18091
 ENV MODEL_INFERENCE_KING_WS_PATH=/ws
 ENV MODEL_INFERENCE_KING_DB_PATH=/data/model-inference.sqlite
+ENV MODEL_INFERENCE_KING_OBJECT_STORE_ROOT=/data/object-store
 
-RUN mkdir -p /data
+# Enable userland object-store initialisation (M-5 onward). Without this,
+# king_object_store_init() is refused by the security policy.
+RUN echo "king.security_allow_config_override=1" > /usr/local/etc/php/conf.d/king-demo.ini
+
+RUN mkdir -p /data /data/object-store
 
 VOLUME ["/data"]
 EXPOSE 18090

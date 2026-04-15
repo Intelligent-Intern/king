@@ -70,6 +70,52 @@
         "service": {"service_type": "king.inference.v1", "health_url": "string", "status": "ready|draining|starting|error"},
         "published_at": "rfc3339"
       }
+    },
+    "models_list": {
+      "method": "GET",
+      "paths": ["/api/models"],
+      "introduced_by": "M-5",
+      "envelope_contract": "demo/model-inference/contracts/v1/model-registry-entry.contract.json",
+      "envelope": {
+        "status": "ok",
+        "items": "array<model-registry-entry>",
+        "count": "int",
+        "time": "rfc3339"
+      }
+    },
+    "models_create": {
+      "method": "POST",
+      "paths": ["/api/models"],
+      "introduced_by": "M-5",
+      "content_type": "application/octet-stream",
+      "body": "raw GGUF bytes; metadata in X-Model-* request headers",
+      "envelope_contract": "demo/model-inference/contracts/v1/model-registry-entry.contract.json",
+      "envelope": {
+        "status": "created",
+        "model": "model-registry-entry",
+        "time": "rfc3339"
+      }
+    },
+    "model_get": {
+      "method": "GET",
+      "paths": ["/api/models/{model_id}"],
+      "introduced_by": "M-5",
+      "envelope_contract": "demo/model-inference/contracts/v1/model-registry-entry.contract.json",
+      "envelope": {
+        "status": "ok",
+        "model": "model-registry-entry",
+        "time": "rfc3339"
+      }
+    },
+    "model_delete": {
+      "method": "DELETE",
+      "paths": ["/api/models/{model_id}"],
+      "introduced_by": "M-5",
+      "envelope": {
+        "status": "deleted",
+        "model_id": "string",
+        "time": "rfc3339"
+      }
     }
   },
   "ws": {
@@ -86,15 +132,18 @@
     "codes": [
       "extension_not_loaded",
       "internal_server_error",
-      "not_implemented"
+      "not_implemented",
+      "method_not_allowed",
+      "invalid_request_envelope",
+      "model_not_found",
+      "model_artifact_write_failed",
+      "model_artifact_too_large",
+      "model_registry_conflict"
     ]
   },
   "planned_surfaces_target_shape": {
     "note": "Entries below are target-shape only, added to the live api/ws/errors sections as their leaves land. Listed here so readers see the full intended v1 surface without a parity-test false negative.",
     "api": {
-      "models_list":      {"method": "GET",  "paths": ["/api/models"],                       "introduced_by": "M-5"},
-      "models_create":    {"method": "POST", "paths": ["/api/models"],                       "introduced_by": "M-5"},
-      "model_get":        {"method": "GET",  "paths": ["/api/models/{model_id}"],            "introduced_by": "M-5"},
       "worker_status":    {"method": "GET",  "paths": ["/api/worker"],                       "introduced_by": "M-7"},
       "infer_http":       {"method": "POST", "paths": ["/api/infer"],                        "introduced_by": "M-10"},
       "transcripts_get":  {"method": "GET",  "paths": ["/api/transcripts/{request_id}"],     "introduced_by": "M-16"},

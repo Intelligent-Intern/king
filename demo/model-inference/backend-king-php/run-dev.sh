@@ -26,6 +26,11 @@ else
   exit 1
 fi
 
+# M-5 onward: the backend initialises the King object store from its own
+# config block (object-store root under the sqlite directory). That requires
+# the system policy to permit userland object-store configuration.
+php_args+=("-d" "king.security_allow_config_override=1")
+
 if ! "${PHP_BIN}" "${php_args[@]}" -m | grep -Eiq '^pdo_sqlite$'; then
   echo "[model-inference][king-php-backend] Missing required PHP extension: pdo_sqlite." >&2
   echo "Install/enable pdo_sqlite (or use docker-compose.v1.yml backend image)." >&2

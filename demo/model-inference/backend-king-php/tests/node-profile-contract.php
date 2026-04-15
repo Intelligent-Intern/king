@@ -211,6 +211,9 @@ try {
         ];
     };
 
+    $openDatabase = static function (): PDO {
+        throw new RuntimeException('openDatabase should not be reached by /api/node/profile.');
+    };
     $dispatchResponse = model_inference_dispatch_request(
         ['method' => 'GET', 'path' => '/api/node/profile', 'uri' => '/api/node/profile', 'headers' => []],
         $jsonResponse,
@@ -218,6 +221,7 @@ try {
         $methodFromRequest,
         $pathFromRequest,
         $runtimeEnvelope,
+        $openDatabase,
         '/ws',
         '127.0.0.1',
         18090
@@ -244,6 +248,7 @@ try {
         $methodFromRequest,
         $pathFromRequest,
         $runtimeEnvelope,
+        $openDatabase,
         '/ws',
         '127.0.0.1',
         18090

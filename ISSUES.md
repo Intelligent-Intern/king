@@ -108,6 +108,41 @@ Non-negotiable direction for this batch:
   asserts 1:1 between the live `api.*` / `ws.*` catalog entries and the
   actually-served routes of the dispatcher, refuses target-shape paths leaking
   into the live section, and locks the currently emitted error-code set.
+- [x] `#M-5` Object-store-backed model registry landed at
+  `backend-king-php/domain/registry/model_registry.php` +
+  `backend-king-php/http/module_registry.php` +
+  `backend-king-php/support/object_store.php`. Schema migration #2 adds a
+  flat-key `models` table with a `UNIQUE(model_name, quantization)` index and
+  a matching `object_store_key` unique constraint; server bootstrap calls
+  `model_inference_object_store_init()` against a `local_fs` primary rooted
+  under `$MODEL_INFERENCE_KING_OBJECT_STORE_ROOT` (default `${DB}/object-store`).
+  GGUF artifacts stream through `king_object_store_put_from_stream` under
+  flat `mdl-<16hex>` object ids (King rejects slash-bearing ids; resumable
+  sessions require a cloud primary, so this demo uses one-shot streamed
+  writes — explicitly fenced in the contract). Registry rows trust King's
+  `integrity_sha256` as the authoritative checksum; registry code never
+  accepts a client-supplied checksum.
+  HTTP surface: `GET /api/models` lists deterministic-order rows,
+  `POST /api/models` (raw body + `X-Model-*` headers) validates metadata,
+  rejects duplicates with `409 model_registry_conflict`, rejects empty body
+  with `400 invalid_request_envelope`, and returns the full envelope with
+  `byte_length` + `sha256_hex` observed from King itself; `GET /api/models/{id}`
+  returns the single envelope or `404 model_not_found`;
+  `DELETE /api/models/{id}` removes the artifact from King first (fails
+  closed if King delete errors) and then the row. Model id, object-store
+  key, and registry row are atomic — a failed artifact write leaves no
+  orphan row.
+  Catalog `api.models_list / models_create / model_get / model_delete` move
+  from `planned_surfaces_target_shape` into the live section; the parity
+  test rejects any future drift. `model_inference_dispatch_route_module_order()`
+  grows to `['runtime', 'profile', 'registry']`. The
+  `king.security_allow_config_override=1` ini is wired into `run-dev.sh` and
+  `Dockerfile` so the userland `king_object_store_init()` call is permitted.
+  `tests/model-registry-contract.{sh,php}` boots king inside the dev
+  container, round-trips a 131 072 byte payload through the registry +
+  dispatcher, asserts bit-identical SHA-256 parity on direct `king_object_store_get()`
+  readback, lists/gets/deletes the row, and verifies catalog error-code
+  parity. Maps to tracker V.7, V.9 (still unticked pending post-merge sweep).
 - [x] `#M-4` Runtime hardware profile kernel landed at
   `backend-king-php/domain/profile/hardware_profile.php` +
   `backend-king-php/http/module_profile.php`. Real platform-aware probes:
@@ -129,11 +164,6 @@ Non-negotiable direction for this batch:
   updated accordingly).
 
 ### Open / To implement (priority order)
-
-- [ ] `#M-5` Object-store-backed model registry — SQLite index + GGUF blobs
-  via `king_object_store_put_from_stream` (resumable); publishes
-  `contracts/v1/model-registry-entry.contract.json`. Bit-identical SHA-256
-  round-trip required. Maps to `V.7`, `V.9`.
 
 - [ ] `#M-6` Pure model-fit selector — given profile + registry, picks largest
   fitting GGUF preferring higher quantization. Maps to `V.2`, `V.3`, `Z.3`.
@@ -192,16 +222,14 @@ Non-negotiable direction for this batch:
 
 ### Next step (M-batch)
 
-- [ ] Continue with `#M-5` (object-store-backed model registry): SQLite
-  index migration for model entries, GGUF artifact upload via
-  `king_object_store_put_from_stream` (resumable), publish
-  `demo/model-inference/contracts/v1/model-registry-entry.contract.json`,
-  add `backend-king-php/domain/registry/model_registry.php` +
-  `backend-king-php/http/module_registry.php`, extend
-  `model_inference_dispatch_route_module_order()` to
-  `['runtime', 'profile', 'registry']`, move `models_list` and
-  `models_create` from `planned_surfaces_target_shape` into live
-  `catalog.api`, update the router-module-order + catalog-parity tests,
-  and add a dedicated
-  `tests/model-registry-contract.{sh,php}` proving a bit-identical SHA-256
-  round-trip through the object store.
+- [ ] Continue with `#M-6` (pure model-fit selector): given a profile
+  envelope (`#M-4`) and a registry list (`#M-5`), deterministically pick
+  the largest GGUF whose `requirements.min_ram_bytes` and
+  `requirements.min_vram_bytes` fit within the node's observed budget,
+  breaking ties by higher quantization. Add
+  `backend-king-php/domain/registry/model_fit_selector.php` as a pure
+  function (no I/O, no DB); add
+  `tests/model-fit-selector-contract.{sh,php}` with fixture profiles
+  (CPU-only darwin, CUDA linux, low-RAM edge) and fixture registry
+  fixtures proving deterministic pick + reverse flips. No dispatcher
+  surface yet (M-6 feeds M-7 worker lifecycle).

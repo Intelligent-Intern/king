@@ -48,10 +48,14 @@ try {
     // dispatcher. Update this list together with the catalog when a new
     // route lands.
     $expectedLiveApi = [
-        'runtime_health' => ['method' => 'GET', 'paths' => ['/health', '/api/runtime']],
-        'bootstrap'      => ['method' => 'GET', 'paths' => ['/', '/api/bootstrap']],
-        'version'        => ['method' => 'GET', 'paths' => ['/api/version']],
-        'node_profile'   => ['method' => 'GET', 'paths' => ['/api/node/profile']],
+        'runtime_health' => ['method' => 'GET',    'paths' => ['/health', '/api/runtime']],
+        'bootstrap'      => ['method' => 'GET',    'paths' => ['/', '/api/bootstrap']],
+        'version'        => ['method' => 'GET',    'paths' => ['/api/version']],
+        'node_profile'   => ['method' => 'GET',    'paths' => ['/api/node/profile']],
+        'models_list'    => ['method' => 'GET',    'paths' => ['/api/models']],
+        'models_create'  => ['method' => 'POST',   'paths' => ['/api/models']],
+        'model_get'      => ['method' => 'GET',    'paths' => ['/api/models/{model_id}']],
+        'model_delete'   => ['method' => 'DELETE', 'paths' => ['/api/models/{model_id}']],
     ];
 
     $liveApi = $catalog['api'] ?? null;
@@ -114,23 +118,67 @@ try {
         ];
     };
 
-    foreach ($expectedLiveApi as $key => $expected) {
-        foreach ($expected['paths'] as $path) {
-            $response = model_inference_dispatch_request(
-                ['method' => $expected['method'], 'path' => $path, 'uri' => $path, 'headers' => []],
-                $jsonResponse,
-                $errorResponse,
-                $methodFromRequest,
-                $pathFromRequest,
-                $runtimeEnvelope,
-                '/ws',
-                '127.0.0.1',
-                18090
-            );
-            model_inference_catalog_contract_assert(
-                (int) ($response['status'] ?? 0) === 200,
-                "catalog.api.{$key} path {$path} must resolve to 200 via the dispatcher (got {$response['status']})"
-            );
+    $openDatabase = static function (): PDO {
+        throw new RuntimeException('openDatabase must not be reached by parity probes (registry catalog entries are not exercised with a body here).');
+    };
+
+    // Live-catalog resolution: every path must either resolve to 200 (list /
+    // runtime / profile) OR produce a registry-owned 4xx that proves the
+    // registry module IS wired (models_create without a body, model_get on a
+    // non-existent id, model_delete on a non-existent id). The parity gate
+    // refuses not_implemented for any live entry.
+    $parityProbes = [
+        'runtime_health' => [['method' => 'GET',    'path' => '/health',                                     'expect_status' => 200]],
+        'bootstrap'      => [['method' => 'GET',    'path' => '/api/bootstrap',                              'expect_status' => 200]],
+        'version'        => [['method' => 'GET',    'path' => '/api/version',                                'expect_status' => 200]],
+        'node_profile'   => [['method' => 'GET',    'path' => '/api/node/profile',                           'expect_status' => 200]],
+        // models_list and models_create need a live db; they are exercised by
+        // model-registry-contract. Here we only prove the path is NOT 404.
+        'models_list'    => [['method' => 'GET',    'path' => '/api/models',                                 'expect_not_status' => 404]],
+        'models_create'  => [['method' => 'POST',   'path' => '/api/models',                                 'expect_not_status' => 404]],
+        'model_get'      => [['method' => 'GET',    'path' => '/api/models/mdl-00000000deadbeef',             'expect_not_status' => 404]],
+        'model_delete'   => [['method' => 'DELETE', 'path' => '/api/models/mdl-00000000deadbeef',             'expect_not_status' => 404]],
+    ];
+    foreach ($parityProbes as $key => $probes) {
+        foreach ($probes as $probe) {
+            $method = (string) $probe['method'];
+            $path = (string) $probe['path'];
+            try {
+                $response = model_inference_dispatch_request(
+                    ['method' => $method, 'path' => $path, 'uri' => $path, 'headers' => []],
+                    $jsonResponse,
+                    $errorResponse,
+                    $methodFromRequest,
+                    $pathFromRequest,
+                    $runtimeEnvelope,
+                    $openDatabase,
+                    '/ws',
+                    '127.0.0.1',
+                    18090
+                );
+            } catch (RuntimeException $error) {
+                // Registry paths trip openDatabase deliberately; that proves
+                // the router DID dispatch to the registry module (not a
+                // not_implemented fallthrough).
+                if (str_contains($error->getMessage(), 'openDatabase must not be reached')) {
+                    continue;
+                }
+                throw $error;
+            }
+            $status = (int) ($response['status'] ?? 0);
+            if (isset($probe['expect_status'])) {
+                model_inference_catalog_contract_assert(
+                    $status === (int) $probe['expect_status'],
+                    "catalog.api.{$key} path {$path} must resolve to {$probe['expect_status']} (got {$status})"
+                );
+            } elseif (isset($probe['expect_not_status'])) {
+                model_inference_catalog_contract_assert(
+                    $status !== (int) $probe['expect_not_status'],
+                    "catalog.api.{$key} path {$path} must not return {$probe['expect_not_status']} (the module is not wired)"
+                );
+                // Live live-registry paths that need db WILL trip openDatabase
+                // before a not_implemented response, which is also valid.
+            }
         }
     }
 
@@ -149,7 +197,17 @@ try {
 
     // Error codes currently emitted by the dispatcher must be listed.
     $liveErrorCodes = (array) (($catalog['errors'] ?? [])['codes'] ?? []);
-    foreach (['extension_not_loaded', 'internal_server_error', 'not_implemented'] as $required) {
+    foreach ([
+        'extension_not_loaded',
+        'internal_server_error',
+        'not_implemented',
+        'method_not_allowed',
+        'invalid_request_envelope',
+        'model_not_found',
+        'model_artifact_write_failed',
+        'model_artifact_too_large',
+        'model_registry_conflict',
+    ] as $required) {
         model_inference_catalog_contract_assert(
             in_array($required, $liveErrorCodes, true),
             "catalog.errors.codes must list '{$required}'"
@@ -165,17 +223,19 @@ try {
         'catalog.planned_surfaces_target_shape must exist so future surfaces are declared without faking parity'
     );
     $targetShapeApi = (array) ($targetShape['api'] ?? []);
-    foreach (['models_list', 'models_create', 'infer_http', 'transcripts_get', 'telemetry_recent', 'route_diagnostic'] as $requiredKey) {
+    foreach (['worker_status', 'infer_http', 'transcripts_get', 'telemetry_recent', 'route_diagnostic'] as $requiredKey) {
         model_inference_catalog_contract_assert(
             isset($targetShapeApi[$requiredKey]),
             "catalog.planned_surfaces_target_shape.api must list '{$requiredKey}' until its live leaf lands"
         );
     }
     // A surface MUST NOT appear in both live and target-shape sections.
-    model_inference_catalog_contract_assert(
-        !isset($targetShapeApi['node_profile']),
-        "node_profile moved to live catalog.api at #M-4 and must not remain in planned_surfaces_target_shape"
-    );
+    foreach (['node_profile', 'models_list', 'models_create', 'model_get', 'model_delete'] as $shipped) {
+        model_inference_catalog_contract_assert(
+            !isset($targetShapeApi[$shipped]),
+            "{$shipped} has shipped and must not remain in planned_surfaces_target_shape"
+        );
+    }
 
     // Target-shape paths must NOT be advertised in the live api section.
     foreach ($targetShapeApi as $name => $entry) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/module_runtime.php';
 require_once __DIR__ . '/module_profile.php';
+require_once __DIR__ . '/module_registry.php';
 
 /**
  * Deterministic module-registration order for the inference backend.
@@ -23,6 +24,7 @@ function model_inference_dispatch_route_module_order(): array
     return [
         'runtime',
         'profile',
+        'registry',
     ];
 }
 
@@ -39,6 +41,7 @@ function model_inference_dispatch_request(
     callable $methodFromRequest,
     callable $pathFromRequest,
     callable $runtimeEnvelope,
+    callable $openDatabase,
     string $wsPath,
     string $host,
     int $port
@@ -48,7 +51,7 @@ function model_inference_dispatch_request(
     $corsHeaders = [
         'access-control-allow-origin' => '*',
         'access-control-allow-methods' => 'GET,POST,PATCH,DELETE,OPTIONS',
-        'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id',
+        'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id, X-Model-Name, X-Model-Family, X-Model-Quantization, X-Model-Parameter-Count, X-Model-Context-Length, X-Model-License, X-Model-Min-Ram-Bytes, X-Model-Min-Vram-Bytes, X-Model-Prefers-Gpu, X-Model-Source-Url',
         'access-control-max-age' => '600',
     ];
 
@@ -82,6 +85,18 @@ function model_inference_dispatch_request(
     );
     if ($profileResponse !== null) {
         return $profileResponse;
+    }
+
+    $registryResponse = model_inference_handle_registry_routes(
+        $path,
+        $method,
+        $request,
+        $jsonResponse,
+        $errorResponse,
+        $openDatabase
+    );
+    if ($registryResponse !== null) {
+        return $registryResponse;
     }
 
     return $errorResponse(404, 'not_implemented', 'Route has no handler on this backend build.', [

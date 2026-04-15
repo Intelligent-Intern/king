@@ -32,7 +32,12 @@ $log = static function (string $message): void {
 };
 
 require_once __DIR__ . '/support/database.php';
+require_once __DIR__ . '/support/object_store.php';
+require_once __DIR__ . '/domain/registry/model_registry.php';
 require_once __DIR__ . '/http/router.php';
+
+$objectStoreRoot = getenv('MODEL_INFERENCE_KING_OBJECT_STORE_ROOT') ?: (dirname($dbPath) . '/object-store');
+$maxObjectStoreBytes = (int) (getenv('MODEL_INFERENCE_KING_OBJECT_STORE_MAX_BYTES') ?: (string) (4 * 1024 * 1024 * 1024));
 
 $nodeId = $nodeIdEnv !== ''
     ? $nodeIdEnv
@@ -60,6 +65,27 @@ if (!is_array($databaseRuntime)) {
     $log('database bootstrap failed: no runtime snapshot returned.');
     exit(1);
 }
+
+try {
+    $databasePdo = model_inference_open_sqlite_pdo($dbPath);
+    model_inference_registry_schema_migrate($databasePdo);
+    unset($databasePdo);
+} catch (Throwable $error) {
+    $log('registry schema migration failed: ' . $error->getMessage());
+    exit(1);
+}
+
+try {
+    model_inference_object_store_init($objectStoreRoot, $maxObjectStoreBytes);
+} catch (Throwable $error) {
+    $log('object-store init failed: ' . $error->getMessage());
+    $log('hint: enable king.security_allow_config_override=1 in the PHP ini');
+    exit(1);
+}
+
+$openDatabase = static function () use ($dbPath): PDO {
+    return model_inference_open_sqlite_pdo($dbPath);
+};
 
 register_shutdown_function(static function () use ($log): void {
     $error = error_get_last();
@@ -215,6 +241,7 @@ $handler = static function (array $request) use (
     $methodFromRequest,
     $pathFromRequest,
     $runtimeEnvelope,
+    $openDatabase,
     $wsPath,
     $host,
     $port,
@@ -252,6 +279,7 @@ $handler = static function (array $request) use (
             $methodFromRequest,
             $pathFromRequest,
             $runtimeEnvelope,
+            $openDatabase,
             $wsPath,
             $host,
             $port
