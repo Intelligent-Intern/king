@@ -1,11 +1,116 @@
 import { reactive } from 'vue';
 
+const CALL_MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
+
 function clampVolume(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 100;
   if (numeric < 0) return 0;
   if (numeric > 100) return 100;
   return Math.round(numeric);
+}
+
+function clampInteger(value, fallback, min, max) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(numeric)));
+}
+
+function toStringValue(value) {
+  return typeof value === 'string' ? value : '';
+}
+
+function toFacingMode(value) {
+  return value === 'environment' ? 'environment' : 'user';
+}
+
+function toBackgroundFilterMode(value) {
+  return value === 'blur' ? 'blur' : 'off';
+}
+
+function toBackgroundBackdropMode(value) {
+  if (value === 'green') return 'green';
+  if (value === 'blur9') return 'blur9';
+  return 'blur7';
+}
+
+function toBackgroundQualityProfile(value) {
+  if (value === 'quality') return 'quality';
+  if (value === 'realtime') return 'realtime';
+  return 'balanced';
+}
+
+function toAvatarQualityProfile(value) {
+  if (value === 'quality') return 'quality';
+  if (value === 'realtime') return 'realtime';
+  return 'balanced';
+}
+
+function toApplyOutgoing(value) {
+  return typeof value === 'boolean' ? value : true;
+}
+
+function readPersistedCallMediaPrefs() {
+  if (typeof localStorage === 'undefined') return null;
+
+  const raw = localStorage.getItem(CALL_MEDIA_PREFS_KEY);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    return {
+      selectedCameraId: toStringValue(parsed.video_id),
+      selectedMicrophoneId: toStringValue(parsed.audio_id),
+      selectedSpeakerId: toStringValue(parsed.output_id),
+      microphoneVolume: clampVolume(parsed.microphone_volume),
+      speakerVolume: clampVolume(parsed.speaker_volume),
+      facingMode: toFacingMode(parsed.facing_mode),
+      backgroundFilterMode: toBackgroundFilterMode(parsed.background_filter_mode),
+      backgroundBackdropMode: toBackgroundBackdropMode(parsed.background_backdrop_mode),
+      backgroundQualityProfile: toBackgroundQualityProfile(parsed.background_quality_profile),
+      avatarQualityProfile: toAvatarQualityProfile(parsed.avatar_quality_profile),
+      backgroundBlurStrength: clampInteger(parsed.background_blur_strength, 12, 4, 28),
+      backgroundMaskVariant: clampInteger(parsed.background_mask_variant, 4, 1, 10),
+      backgroundBlurTransition: clampInteger(parsed.background_blur_transition, 10, 1, 10),
+      backgroundApplyOutgoing: toApplyOutgoing(parsed.background_apply_outgoing),
+      backgroundMaxProcessWidth: clampInteger(parsed.background_max_process_width, 960, 320, 1920),
+      backgroundMaxProcessFps: clampInteger(parsed.background_max_process_fps, 24, 8, 30),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function serializeCallMediaPrefs() {
+  return JSON.stringify({
+    video_id: String(callMediaPrefs.selectedCameraId || '').trim(),
+    audio_id: String(callMediaPrefs.selectedMicrophoneId || '').trim(),
+    output_id: String(callMediaPrefs.selectedSpeakerId || '').trim(),
+    microphone_volume: clampVolume(callMediaPrefs.microphoneVolume),
+    speaker_volume: clampVolume(callMediaPrefs.speakerVolume),
+    facing_mode: toFacingMode(callMediaPrefs.facingMode),
+    background_filter_mode: toBackgroundFilterMode(callMediaPrefs.backgroundFilterMode),
+    background_backdrop_mode: toBackgroundBackdropMode(callMediaPrefs.backgroundBackdropMode),
+    background_quality_profile: toBackgroundQualityProfile(callMediaPrefs.backgroundQualityProfile),
+    avatar_quality_profile: toAvatarQualityProfile(callMediaPrefs.avatarQualityProfile),
+    background_blur_strength: clampInteger(callMediaPrefs.backgroundBlurStrength, 12, 4, 28),
+    background_mask_variant: clampInteger(callMediaPrefs.backgroundMaskVariant, 4, 1, 10),
+    background_blur_transition: clampInteger(callMediaPrefs.backgroundBlurTransition, 10, 1, 10),
+    background_apply_outgoing: toApplyOutgoing(callMediaPrefs.backgroundApplyOutgoing),
+    background_max_process_width: clampInteger(callMediaPrefs.backgroundMaxProcessWidth, 960, 320, 1920),
+    background_max_process_fps: clampInteger(callMediaPrefs.backgroundMaxProcessFps, 24, 8, 30),
+  });
+}
+
+function persistCallMediaPrefs() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(CALL_MEDIA_PREFS_KEY, serializeCallMediaPrefs());
+  } catch {
+    // ignore persistence errors
+  }
 }
 
 function normalizeDeviceLabel(device, fallbackLabel, index) {
@@ -32,15 +137,28 @@ function resolveSelectedDevice(previousId, rows) {
   return rows[0]?.id || '';
 }
 
+const persistedPrefs = readPersistedCallMediaPrefs();
+
 export const callMediaPrefs = reactive({
   cameras: [],
   microphones: [],
   speakers: [],
-  selectedCameraId: '',
-  selectedMicrophoneId: '',
-  selectedSpeakerId: '',
-  microphoneVolume: 100,
-  speakerVolume: 100,
+  selectedCameraId: persistedPrefs?.selectedCameraId || '',
+  selectedMicrophoneId: persistedPrefs?.selectedMicrophoneId || '',
+  selectedSpeakerId: persistedPrefs?.selectedSpeakerId || '',
+  microphoneVolume: persistedPrefs?.microphoneVolume ?? 100,
+  speakerVolume: persistedPrefs?.speakerVolume ?? 100,
+  facingMode: persistedPrefs?.facingMode || 'user',
+  backgroundFilterMode: persistedPrefs?.backgroundFilterMode || 'off',
+  backgroundBackdropMode: persistedPrefs?.backgroundBackdropMode || 'blur7',
+  backgroundQualityProfile: persistedPrefs?.backgroundQualityProfile || 'balanced',
+  avatarQualityProfile: persistedPrefs?.avatarQualityProfile || 'balanced',
+  backgroundBlurStrength: persistedPrefs?.backgroundBlurStrength ?? 12,
+  backgroundMaskVariant: persistedPrefs?.backgroundMaskVariant ?? 4,
+  backgroundBlurTransition: persistedPrefs?.backgroundBlurTransition ?? 10,
+  backgroundApplyOutgoing: persistedPrefs?.backgroundApplyOutgoing ?? true,
+  backgroundMaxProcessWidth: persistedPrefs?.backgroundMaxProcessWidth ?? 960,
+  backgroundMaxProcessFps: persistedPrefs?.backgroundMaxProcessFps ?? 24,
   ready: false,
   error: '',
 });
@@ -84,6 +202,7 @@ function applyEnumeratedDevices(devices) {
   callMediaPrefs.selectedSpeakerId = resolveSelectedDevice(callMediaPrefs.selectedSpeakerId, nextSpeakers);
   callMediaPrefs.ready = true;
   callMediaPrefs.error = '';
+  persistCallMediaPrefs();
 }
 
 export async function refreshCallMediaDevices({ requestPermissions = false } = {}) {
@@ -126,22 +245,62 @@ export async function refreshCallMediaDevices({ requestPermissions = false } = {
 
 export function setCallCameraDevice(deviceId) {
   callMediaPrefs.selectedCameraId = resolveSelectedDevice(deviceId, callMediaPrefs.cameras);
+  persistCallMediaPrefs();
 }
 
 export function setCallMicrophoneDevice(deviceId) {
   callMediaPrefs.selectedMicrophoneId = resolveSelectedDevice(deviceId, callMediaPrefs.microphones);
+  persistCallMediaPrefs();
 }
 
 export function setCallSpeakerDevice(deviceId) {
   callMediaPrefs.selectedSpeakerId = resolveSelectedDevice(deviceId, callMediaPrefs.speakers);
+  persistCallMediaPrefs();
 }
 
 export function setCallSpeakerVolume(value) {
   callMediaPrefs.speakerVolume = clampVolume(value);
+  persistCallMediaPrefs();
 }
 
 export function setCallMicrophoneVolume(value) {
   callMediaPrefs.microphoneVolume = clampVolume(value);
+  persistCallMediaPrefs();
+}
+
+export function setCallBackgroundFilterMode(mode) {
+  callMediaPrefs.backgroundFilterMode = toBackgroundFilterMode(mode);
+  persistCallMediaPrefs();
+}
+
+export function setCallBackgroundBackdropMode(mode) {
+  callMediaPrefs.backgroundBackdropMode = toBackgroundBackdropMode(mode);
+  persistCallMediaPrefs();
+}
+
+export function setCallBackgroundQualityProfile(profile) {
+  callMediaPrefs.backgroundQualityProfile = toBackgroundQualityProfile(profile);
+  persistCallMediaPrefs();
+}
+
+export function setCallBackgroundBlurStrength(value) {
+  callMediaPrefs.backgroundBlurStrength = clampInteger(value, 12, 4, 28);
+  persistCallMediaPrefs();
+}
+
+export function setCallBackgroundApplyOutgoing(value) {
+  callMediaPrefs.backgroundApplyOutgoing = Boolean(value);
+  persistCallMediaPrefs();
+}
+
+export function setCallBackgroundMaxProcessWidth(value) {
+  callMediaPrefs.backgroundMaxProcessWidth = clampInteger(value, 960, 320, 1920);
+  persistCallMediaPrefs();
+}
+
+export function setCallBackgroundMaxProcessFps(value) {
+  callMediaPrefs.backgroundMaxProcessFps = clampInteger(value, 24, 8, 30);
+  persistCallMediaPrefs();
 }
 
 function handleDeviceChange() {

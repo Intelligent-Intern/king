@@ -2559,6 +2559,36 @@ watch(
   }
 );
 
+watch(
+  () => [
+    callMediaPrefs.backgroundFilterMode,
+    callMediaPrefs.backgroundBackdropMode,
+    callMediaPrefs.backgroundQualityProfile,
+    callMediaPrefs.backgroundBlurStrength,
+    callMediaPrefs.backgroundMaskVariant,
+    callMediaPrefs.backgroundBlurTransition,
+    callMediaPrefs.backgroundApplyOutgoing,
+    callMediaPrefs.backgroundMaxProcessWidth,
+    callMediaPrefs.backgroundMaxProcessFps,
+  ],
+  (nextValue, previousValue = []) => {
+    if (
+      nextValue[0] === previousValue[0]
+      && nextValue[1] === previousValue[1]
+      && nextValue[2] === previousValue[2]
+      && nextValue[3] === previousValue[3]
+      && nextValue[4] === previousValue[4]
+      && nextValue[5] === previousValue[5]
+      && nextValue[6] === previousValue[6]
+      && nextValue[7] === previousValue[7]
+      && nextValue[8] === previousValue[8]
+    ) {
+      return;
+    }
+    void reconfigureLocalTracksFromSelectedDevices();
+  }
+);
+
 watch(isCompactViewport, (nextValue) => {
   if (nextValue) {
     rightSidebarCollapsed.value = true;
@@ -2800,8 +2830,51 @@ function applyCallInputPreferences() {
 }
 
 function resolveBackgroundFilterOptions() {
+  const toFiniteNumber = (value, fallback) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : fallback;
+  };
+  const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase() === 'blur'
+    ? 'blur'
+    : 'off';
+  const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
+  if (!applyOutgoing || mode !== 'blur') {
+    return {
+      mode: 'off',
+    };
+  }
+
+  const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
+  const qualityProfile = String(callMediaPrefs.backgroundQualityProfile || 'balanced').trim().toLowerCase();
+  const baseBlur = Math.max(4, Math.min(28, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurStrength, 12))));
+
+  let blurPx = baseBlur;
+  if (backdrop === 'blur7') {
+    blurPx = Math.max(blurPx, 12);
+  } else if (backdrop === 'blur9') {
+    blurPx = Math.max(blurPx, 16);
+  }
+
+  let detectIntervalMs = 220;
+  if (qualityProfile === 'quality') {
+    detectIntervalMs = 160;
+  } else if (qualityProfile === 'realtime') {
+    detectIntervalMs = 320;
+  }
+
+  const maskVariant = Math.max(1, Math.min(10, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaskVariant, 4))));
+  const transitionGain = Math.max(1, Math.min(10, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurTransition, 10))));
+  const maxProcessWidth = Math.max(320, Math.min(1920, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessWidth, 960))));
+  const maxProcessFps = Math.max(8, Math.min(30, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessFps, 24))));
+
   return {
-    mode: 'off',
+    mode,
+    blurPx,
+    detectIntervalMs,
+    maskVariant,
+    transitionGain,
+    maxProcessWidth,
+    maxProcessFps,
   };
 }
 
