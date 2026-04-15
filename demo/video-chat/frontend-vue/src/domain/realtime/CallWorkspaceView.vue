@@ -1043,6 +1043,7 @@ async function resolveRouteCallRef(callRef) {
   const normalized = String(callRef || '').trim();
   const seq = routeCallResolveSeq + 1;
   routeCallResolveSeq = seq;
+  const looksLikeUuid = isUuidLike(normalized);
 
   if (normalized === '') {
     if (seq !== routeCallResolveSeq) return;
@@ -1066,8 +1067,8 @@ async function resolveRouteCallRef(callRef) {
     });
   }
 
-  try {
-    if (isUuidLike(normalized)) {
+  if (looksLikeUuid) {
+    try {
       const accessResolution = await tryResolveRouteAsAccessId(normalized);
       if (seq !== routeCallResolveSeq) return;
       applyRouteCallResolution({
@@ -1076,9 +1077,17 @@ async function resolveRouteCallRef(callRef) {
         pending: false,
       });
       return;
+    } catch {
+      if (seq !== routeCallResolveSeq) return;
+      applyRouteCallResolution({
+        accessId: '',
+        callId: '',
+        roomId: 'lobby',
+        error: '',
+        pending: false,
+      });
+      return;
     }
-  } catch {
-    // Fall through to call-id and room-id fallback.
   }
 
   try {
