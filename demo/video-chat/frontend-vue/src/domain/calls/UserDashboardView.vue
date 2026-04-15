@@ -1435,6 +1435,7 @@ onBeforeUnmount(() => {
   height: 100%;
   object-fit: cover;
   display: block;
+  transform: scaleX(-1);
 }
 
 .calls-enter-preview-frame .calls-inline-hint,

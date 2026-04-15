@@ -4136,6 +4136,10 @@ onBeforeUnmount(() => {
   z-index: 10;
 }
 
+.video-container.local video {
+  transform: scaleX(-1);
+}
+
 .video-container.remote {
   z-index: 5;
 }
