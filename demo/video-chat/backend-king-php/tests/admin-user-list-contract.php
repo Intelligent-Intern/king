@@ -81,13 +81,18 @@ SQL
         (string) ($filters['order'] ?? '') === 'role_then_name_asc',
         'default order should be role_then_name_asc'
     );
+    videochat_admin_user_list_assert(
+        (string) ($filters['status'] ?? '') === 'all',
+        'default status should be all'
+    );
 
     $listing = videochat_admin_list_users(
         $pdo,
         (string) $filters['query'],
         (int) $filters['page'],
         (int) $filters['page_size'],
-        (string) $filters['order']
+        (string) $filters['order'],
+        (string) $filters['status']
     );
     $rows = $listing['rows'];
     videochat_admin_user_list_assert(is_array($rows), 'listing rows must be an array');
@@ -100,21 +105,21 @@ SQL
     videochat_admin_user_list_assert($firstRole === 'admin', 'first listed role should be admin by priority sort');
     videochat_admin_user_list_assert($secondRole === 'moderator', 'second listed role should be moderator by priority sort');
 
-    $pageTwo = videochat_admin_list_users($pdo, '', 2, 5);
+    $pageTwo = videochat_admin_list_users($pdo, '', 2, 5, 'role_then_name_asc', 'all');
     $pageOneIds = array_map(static fn (array $row): int => (int) ($row['id'] ?? 0), $rows);
     $pageTwoIds = array_map(static fn (array $row): int => (int) ($row['id'] ?? 0), $pageTwo['rows']);
     $overlap = array_intersect($pageOneIds, $pageTwoIds);
     videochat_admin_user_list_assert($overlap === [], 'page 1 and page 2 ids must not overlap');
 
-    $moderatorSearch = videochat_admin_list_users($pdo, 'moderator alpha', 1, 10);
+    $moderatorSearch = videochat_admin_list_users($pdo, 'moderator alpha', 1, 10, 'role_then_name_asc', 'all');
     videochat_admin_user_list_assert((int) $moderatorSearch['total'] === 1, 'moderator search should find one record');
     videochat_admin_user_list_assert(
         (string) ($moderatorSearch['rows'][0]['email'] ?? '') === 'moderator-alpha@intelligent-intern.com',
         'moderator search result email mismatch'
     );
 
-    $ascSearch = videochat_admin_list_users($pdo, 'contract user', 1, 100, 'role_then_name_asc');
-    $descSearch = videochat_admin_list_users($pdo, 'contract user', 1, 100, 'role_then_name_desc');
+    $ascSearch = videochat_admin_list_users($pdo, 'contract user', 1, 100, 'role_then_name_asc', 'all');
+    $descSearch = videochat_admin_list_users($pdo, 'contract user', 1, 100, 'role_then_name_desc', 'all');
     $ascRows = is_array($ascSearch['rows'] ?? null) ? $ascSearch['rows'] : [];
     $descRows = is_array($descSearch['rows'] ?? null) ? $descSearch['rows'] : [];
     videochat_admin_user_list_assert(count($ascRows) === 15, 'asc search should include all inserted contract users');
@@ -136,7 +141,19 @@ SQL
         'desc order should end with Contract User 01'
     );
 
+    $activeOnly = videochat_admin_list_users($pdo, 'contract user', 1, 100, 'role_then_name_asc', 'active');
+    $disabledOnly = videochat_admin_list_users($pdo, 'contract user', 1, 100, 'role_then_name_asc', 'disabled');
+    videochat_admin_user_list_assert(
+        (int) ($activeOnly['total'] ?? 0) === 7,
+        'active status filter should return 7 contract users'
+    );
+    videochat_admin_user_list_assert(
+        (int) ($disabledOnly['total'] ?? 0) === 8,
+        'disabled status filter should return 8 contract users'
+    );
+
     $invalidFilters = videochat_admin_user_list_filters([
+        'status' => 'paused',
         'page' => '0',
         'page_size' => '500',
         'order' => 'invalid',
@@ -149,6 +166,10 @@ SQL
     videochat_admin_user_list_assert(
         (string) ($invalidFilters['errors']['page_size'] ?? '') === 'must_be_integer_between_1_and_100',
         'invalid page_size error mismatch'
+    );
+    videochat_admin_user_list_assert(
+        (string) ($invalidFilters['errors']['status'] ?? '') === 'must_be_all_active_or_disabled',
+        'invalid status error mismatch'
     );
     videochat_admin_user_list_assert(
         (string) ($invalidFilters['errors']['order'] ?? '') === 'must_be_one_of_role_then_name_asc_or_role_then_name_desc',

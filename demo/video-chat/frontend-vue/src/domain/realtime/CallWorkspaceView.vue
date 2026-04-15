@@ -526,6 +526,8 @@ const LOCAL_REACTION_ECHO_TTL_MS = 6000;
 const WLVC_ENCODE_FAILURE_THRESHOLD = 6;
 const VISIBLE_PARTICIPANTS_LIMIT = 5;
 const PARTICIPANT_ACTIVITY_WINDOW_MS = 15_000;
+const DIRECTORY_USERS_ORDER_VALUES = ['role_then_name_asc', 'role_then_name_desc'];
+const DIRECTORY_USERS_STATUS_VALUES = ['all', 'active', 'disabled'];
 const DEFAULT_NATIVE_ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
@@ -543,6 +545,70 @@ function normalizeRole(value) {
   const role = String(value || '').trim().toLowerCase();
   if (role === 'admin') return role;
   return 'user';
+}
+
+function normalizeUsersDirectoryOrder(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (DIRECTORY_USERS_ORDER_VALUES.includes(normalized)) return normalized;
+  return 'role_then_name_asc';
+}
+
+function normalizeUsersDirectoryStatus(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (DIRECTORY_USERS_STATUS_VALUES.includes(normalized)) return normalized;
+  return 'all';
+}
+
+function parseUsersDirectoryQuery(rawValue) {
+  const input = String(rawValue || '').trim();
+  if (input === '') {
+    return {
+      query: '',
+      status: 'all',
+      order: 'role_then_name_asc',
+    };
+  }
+
+  const queryTerms = [];
+  let status = 'all';
+  let order = 'role_then_name_asc';
+  for (const token of input.split(/\s+/).filter(Boolean)) {
+    const normalized = token.trim().toLowerCase();
+    if (normalized === 'status:active' || normalized === 'is:active') {
+      status = 'active';
+      continue;
+    }
+    if (normalized === 'status:disabled' || normalized === 'is:disabled' || normalized === 'is:inactive') {
+      status = 'disabled';
+      continue;
+    }
+    if (
+      normalized === 'sort:desc'
+      || normalized === 'sort:za'
+      || normalized === 'order:desc'
+      || normalized === 'order:za'
+    ) {
+      order = 'role_then_name_desc';
+      continue;
+    }
+    if (
+      normalized === 'sort:asc'
+      || normalized === 'sort:az'
+      || normalized === 'order:asc'
+      || normalized === 'order:az'
+    ) {
+      order = 'role_then_name_asc';
+      continue;
+    }
+
+    queryTerms.push(token);
+  }
+
+  return {
+    query: queryTerms.join(' ').trim(),
+    status: normalizeUsersDirectoryStatus(status),
+    order: normalizeUsersDirectoryOrder(order),
+  };
 }
 
 function roleRank(role) {
@@ -682,6 +748,7 @@ const usersDirectoryRows = ref([]);
 const usersDirectoryLoading = ref(false);
 const usersDirectoryPagination = reactive({
   query: '',
+  status: 'all',
   order: 'role_then_name_asc',
   page: 1,
   pageSize: USERS_PAGE_SIZE,
@@ -1896,14 +1963,16 @@ async function refreshUsersDirectory() {
   if (usersSourceMode.value !== 'directory') return;
   if (usersDirectoryLoading.value) return;
 
+  const directoryQuery = parseUsersDirectoryQuery(usersSearch.value);
   usersDirectoryLoading.value = true;
   try {
     const payload = await apiRequest('/api/admin/users', {
       query: {
-        query: usersSearch.value.trim(),
+        query: directoryQuery.query,
+        status: directoryQuery.status,
         page: usersPage.value,
         page_size: USERS_PAGE_SIZE,
-        order: 'role_then_name_asc',
+        order: directoryQuery.order,
       },
     });
 
@@ -1919,7 +1988,9 @@ async function refreshUsersDirectory() {
     usersDirectoryPagination.hasPrev = Boolean(paging.has_prev);
     usersDirectoryPagination.hasNext = Boolean(paging.has_next);
     usersDirectoryPagination.returned = Number.isInteger(paging.returned) ? paging.returned : rows.length;
-    usersDirectoryPagination.query = String(paging.query || usersSearch.value || '').trim();
+    usersDirectoryPagination.query = String(paging.query || directoryQuery.query || '').trim();
+    usersDirectoryPagination.status = normalizeUsersDirectoryStatus(paging.status || directoryQuery.status);
+    usersDirectoryPagination.order = normalizeUsersDirectoryOrder(paging.order || directoryQuery.order);
     usersDirectoryPagination.error = '';
   } catch (error) {
     usersDirectoryPagination.error = error instanceof Error ? error.message : 'Could not load user directory.';

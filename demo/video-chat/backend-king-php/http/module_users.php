@@ -51,7 +51,8 @@ function videochat_handle_user_routes(
                     (string) ($filters['query'] ?? ''),
                     (int) ($filters['page'] ?? 1),
                     (int) ($filters['page_size'] ?? 10),
-                    (string) ($filters['order'] ?? 'role_then_name_asc')
+                    (string) ($filters['order'] ?? 'role_then_name_asc'),
+                    (string) ($filters['status'] ?? 'all')
                 );
             } catch (Throwable $error) {
                 return $errorResponse(500, 'admin_user_list_failed', 'Could not load admin user list.', [
@@ -74,6 +75,7 @@ function videochat_handle_user_routes(
                 'users' => $rows,
                 'pagination' => [
                     'query' => (string) ($filters['query'] ?? ''),
+                    'status' => (string) ($filters['status'] ?? 'all'),
                     'order' => $order,
                     'page' => $page,
                     'page_size' => $pageSize,
