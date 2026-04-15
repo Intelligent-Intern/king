@@ -1022,8 +1022,9 @@ async function tryResolveRouteAsAccessId(callRef) {
   const accessLink = result?.access_link || {};
   const call = result?.call || {};
   const resolution = callPayloadToRouteResolution(call);
+  const normalizedAccessId = String(accessLink?.id || '').trim().toLowerCase();
   return {
-    accessId: String(accessLink?.id || callRef).trim(),
+    accessId: normalizedAccessId,
     callId: resolution.callId,
     roomId: resolution.roomId,
   };
@@ -1083,9 +1084,14 @@ async function resolveRouteCallRef(callRef) {
         accessId: '',
         callId: '',
         roomId: 'lobby',
-        error: '',
+        error: 'route_call_ref_not_found',
         pending: false,
       });
+
+      const fallbackRouteName = normalizeRole(sessionState.role) === 'admin' ? 'admin-calls' : 'user-dashboard';
+      if (String(route.name || '') === 'call-workspace' && String(routeCallRef.value || '').trim() !== '') {
+        void router.replace({ name: fallbackRouteName });
+      }
       return;
     }
   }

@@ -218,6 +218,26 @@ function videochat_handle_call_routes(
                 ]);
             }
             if ($reason === 'not_found') {
+                $callResolution = videochat_get_call_for_user(
+                    $pdo,
+                    strtolower(trim($accessId)),
+                    $authenticatedUserId,
+                    $authenticatedUserRole
+                );
+
+                if ((bool) ($callResolution['ok'] ?? false)) {
+                    return $jsonResponse(200, [
+                        'status' => 'ok',
+                        'result' => [
+                            'state' => 'resolved',
+                            'access_link' => null,
+                            'call' => $callResolution['call'] ?? null,
+                            'resolved_as' => 'call_id',
+                        ],
+                        'time' => gmdate('c'),
+                    ]);
+                }
+
                 return $errorResponse(404, 'call_access_not_found', 'Call access link does not exist.', [
                     'access_id' => strtolower(trim($accessId)),
                 ]);
