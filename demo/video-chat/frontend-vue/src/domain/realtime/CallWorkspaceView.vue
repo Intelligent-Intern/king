@@ -1226,6 +1226,40 @@ function setNotice(message, kind = 'ok') {
   }
 }
 
+function normalizeSignalCommandType(type) {
+  return String(type || '').trim().toLowerCase();
+}
+
+function isCallSignalType(type) {
+  const normalized = normalizeSignalCommandType(type);
+  return normalized === 'call/offer'
+    || normalized === 'call/answer'
+    || normalized === 'call/ice'
+    || normalized === 'call/hangup';
+}
+
+function shouldSuppressCallAckNotice(signalType) {
+  const normalized = normalizeSignalCommandType(signalType).replace('call/', '');
+  return normalized === 'offer'
+    || normalized === 'answer'
+    || normalized === 'ice'
+    || normalized === 'hangup';
+}
+
+function shouldSuppressExpectedSignalingError(payload) {
+  const code = String(payload?.code || '').trim().toLowerCase();
+  if (code !== 'signaling_publish_failed') return false;
+
+  const details = payload && typeof payload.details === 'object' ? payload.details : {};
+  const commandType = normalizeSignalCommandType(details?.type);
+  if (!isCallSignalType(commandType)) return false;
+
+  const signalingError = String(details?.error || '').trim().toLowerCase();
+  return signalingError === 'target_not_in_room'
+    || signalingError === 'target_delivery_failed'
+    || signalingError === 'sender_not_in_room';
+}
+
 function clearErrors() {
   workspaceError.value = '';
 }
@@ -2253,7 +2287,7 @@ function handleSocketMessage(event) {
 
   if (type === 'call/ack') {
     const signalType = String(payload?.signal_type || '').replace('call/', '').trim() || 'signal';
-    if (signalType !== 'ice' && signalType !== 'hangup') {
+    if (!shouldSuppressCallAckNotice(signalType)) {
       setNotice(`Sent ${signalType} to ${payload?.sent_count ?? 0} peer(s).`);
     }
     return;
@@ -2289,6 +2323,9 @@ function handleSocketMessage(event) {
       closeSocket();
     }
     if (code === 'reaction_publish_failed') {
+      return;
+    }
+    if (shouldSuppressExpectedSignalingError(payload)) {
       return;
     }
     setNotice(message, 'error');
