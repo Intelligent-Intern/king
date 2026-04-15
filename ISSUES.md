@@ -108,6 +108,41 @@ Non-negotiable direction for this batch:
   asserts 1:1 between the live `api.*` / `ws.*` catalog entries and the
   actually-served routes of the dispatcher, refuses target-shape paths leaking
   into the live section, and locks the currently emitted error-code set.
+- [x] `#M-9` IIBIN-style token-frame wire contract landed at
+  `contracts/v1/token-frame.contract.json` +
+  `backend-king-php/support/token_frame.php`. Fixed big-endian
+  24-byte header + payload framing for WS token streaming introduced
+  by `#M-11`. Header layout (offset : field (bytes, type)):
+  `0:magic(u32="KITF"=0x4B495446), 4:version(u8=1),
+  5:frame_type(u8 delta=0|end=1|error=2), 6:flags(u8 bit0=final_in_burst,
+  bit1=utf8_boundary_safe), 7:reserved1(u8=0),
+  8:sequence(u32 monotonic), 12:request_id_crc32(u32 fast-demux),
+  16:token_count(u16), 18:payload_length(u32),
+  22:reserved2(u16=0)`. Payload layouts: `delta` = raw UTF-8 token
+  bytes, `end` = JSON `{tokens_in, tokens_out, ttft_ms, duration_ms}`,
+  `error` = JSON `{code, message}`. `max_payload_bytes=1048576` matches
+  the `king_http1` one-shot body cap. Codec built on PHP `pack/unpack`
+  (fixed layout, versioned, never evolves silently) and exposes
+  `TokenFrame::{encode, decode, encodeDelta, encodeEnd, encodeError,
+  requestIdCrc32, assertMonotonicSequence}` plus a strict
+  `TokenFrameDecodeError` with machine-readable reasons matching the
+  contract's `validation.reject_on` list (`bad_magic`,
+  `unsupported_version`, `unknown_frame_type`, `reserved1_nonzero`,
+  `reserved2_nonzero`, `payload_length_out_of_range`,
+  `truncated_or_overlong`, `sequence_not_monotonic`). Three sample
+  vectors pin the on-wire bytes (`delta-hello`=29B,
+  `end-summary`=88B, `error-abort`=78B) against
+  `crc32("sess-demo-01")=0x248B58D1`. `tests/token-frame-wire-contract.{sh,php}`
+  re-encodes each sample vector and asserts `bin2hex()` equals the
+  committed hex, round-trips decode on every field, exercises every
+  reject path (bad magic, bad version, bad frame_type, reserved
+  nonzero, truncated, overlong, short header, oversized encode,
+  invalid frame_type, sequence/token_count u-range overflow), and
+  asserts the contract's `reject_on` list stays in sync with
+  `TokenFrameDecodeError` reasons. 3 sample vectors + 18 rules
+  asserted. Maps to tracker V.10, Z.4, Z.10 (still unticked pending
+  post-merge sweep). No dispatcher surface yet; the codec is consumed
+  by `#M-11` WS streaming.
 - [x] `#M-8` Typed inference-request envelope landed at
   `contracts/v1/inference-request.contract.json` +
   `backend-king-php/domain/inference/inference_request.php`. Pins the
@@ -266,10 +301,6 @@ Non-negotiable direction for this batch:
 
 ### Open / To implement (priority order)
 
-- [ ] `#M-9` `contracts/v1/token-frame.contract.json` — IIBIN binary frame
-  (magic `KITF`, 24-byte header + payload); encode/decode via `king_proto_*`;
-  committed hex sample vectors. Maps to `V.10`, `Z.4`, `Z.10`.
-
 - [ ] `#M-10` `POST /api/infer` non-streaming surface — real prompt → real
   completion + telemetry; parallel surface to WS. Maps to `Z.1`, `Z.4`, `V.1`.
 
@@ -311,17 +342,19 @@ Non-negotiable direction for this batch:
 
 ### Next step (M-batch)
 
-- [ ] Continue with `#M-9` (IIBIN token-frame wire contract): publish
-  `demo/model-inference/contracts/v1/token-frame.contract.json` with the
-  24-byte big-endian header (magic `KITF` u32, version u8, frame_type
-  u8 enum `delta=0|end=1|error=2`, flags u8, reserved u8, sequence u32,
-  `request_id_crc32` u32, `token_count` u16, `payload_length` u32,
-  reserved u16) plus payload shapes per frame_type and committed hex
-  sample vectors. Add
-  `backend-king-php/support/token_frame.php` with encode/decode helpers
-  built on `king_proto_define_schema` / `king_proto_encode` /
-  `king_proto_decode`; add
-  `tests/token-frame-wire-contract.{sh,php}` proving bit-identical
-  round-trip of the sample vectors and rejecting unknown `frame_type`
-  / version / oversized payloads. No dispatcher surface yet; the codec
-  is consumed by `#M-11` WS streaming.
+- [ ] Continue with `#M-10` (`POST /api/infer` non-streaming): lazy-spawn
+  a `LlamaCppWorker` on first infer call, cache it across the request
+  loop keyed by `{model_id}`, pass the validated envelope from `#M-8`
+  to llama.cpp's `/completion` endpoint (dogfood `king_http1_request_send`
+  as the internal client), collect the full completion, return JSON
+  `{status, request_id, text, tokens_in, tokens_out, ttft_ms,
+  duration_ms}`. Add `backend-king-php/domain/inference/inference_session.php`
+  managing the worker cache + per-request telemetry collection; add
+  `backend-king-php/http/module_inference.php` serving
+  `POST /api/infer`; wire the dispatcher to require the inference module
+  and extend `model_inference_dispatch_route_module_order()` to
+  `['runtime','profile','registry','inference']`; move `infer_http`
+  from `planned_surfaces_target_shape` into live `catalog.api`; add
+  `tests/infer-http-nonstreaming-contract.{sh,php}` that drives a real
+  prompt through the full pipeline and asserts a non-empty completion.
+  Maps to Z.1, Z.4, V.1.
