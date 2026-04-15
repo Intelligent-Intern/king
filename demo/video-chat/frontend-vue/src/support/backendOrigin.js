@@ -26,14 +26,6 @@ function normalizeExplicitOrigin(rawOrigin) {
 let preferredBackendOrigin = '';
 let preferredBackendWebSocketOrigin = '';
 
-function hasExplicitWebSocketConfig() {
-  const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_WS_ORIGIN || '').trim();
-  if (explicitOrigin !== '') return true;
-
-  const explicitPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
-  return explicitPort !== '';
-}
-
 function detectDefaultBackendOrigin() {
   const envOrigin = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || '').trim();
   if (envOrigin !== '') {
@@ -163,9 +155,6 @@ function pushLoopbackAlias(candidates, origin) {
 export function resolveBackendWebSocketOriginCandidates() {
   const candidates = [];
   pushUniqueCandidate(candidates, resolveBackendWebSocketOrigin());
-  if (!hasExplicitWebSocketConfig()) {
-    pushUniqueCandidate(candidates, resolveBackendOrigin());
-  }
 
   const snapshot = [...candidates];
   for (const origin of snapshot) {
