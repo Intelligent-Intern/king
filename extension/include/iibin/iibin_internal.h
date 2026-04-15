@@ -305,6 +305,41 @@ static inline zend_bool king_proto_decode_fixed64(const unsigned char **buf_ptr,
     return 1;
 }
 
+/* --- Float/Double Bit Conversions --- */
+/* Use memcpy which modern compilers optimize to single instruction */
+
+#ifndef KING_PROTO_FLOAT_TO_BITS
+static inline uint32_t king_proto_float_to_bits(float f) {
+    uint32_t u;
+    memcpy(&u, &f, sizeof(u));
+    return u;
+}
+#endif
+
+#ifndef KING_PROTO_BITS_TO_FLOAT
+static inline float king_proto_bits_to_float(uint32_t u) {
+    float f;
+    memcpy(&f, &u, sizeof(f));
+    return f;
+}
+#endif
+
+#ifndef KING_PROTO_DOUBLE_TO_BITS
+static inline uint64_t king_proto_double_to_bits(double d) {
+    uint64_t u;
+    memcpy(&u, &d, sizeof(u));
+    return u;
+}
+#endif
+
+#ifndef KING_PROTO_BITS_TO_DOUBLE
+static inline double king_proto_bits_to_double(uint64_t u) {
+    double d;
+    memcpy(&d, &u, sizeof(d));
+    return d;
+}
+#endif
+
 static inline uint32_t king_proto_zigzag_encode32(int32_t n) {
     return (uint32_t)((n << 1) ^ (n >> 31));
 }
