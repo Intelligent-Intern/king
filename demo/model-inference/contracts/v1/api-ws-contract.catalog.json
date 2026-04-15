@@ -53,6 +53,23 @@
         "runtime": {"king_version": "string", "build": "string|null", "module_version": "string|null"},
         "time": "rfc3339"
       }
+    },
+    "node_profile": {
+      "method": "GET",
+      "paths": ["/api/node/profile"],
+      "introduced_by": "M-4",
+      "envelope_contract": "demo/model-inference/contracts/v1/node-profile.contract.json",
+      "envelope": {
+        "node_id": "string",
+        "king_version": "string",
+        "platform": {"os": "darwin|linux|other", "arch": "string", "kernel": "string"},
+        "cpu": {"logical_count": "int", "physical_count": "int", "brand": "string"},
+        "memory": {"total_bytes": "int", "available_bytes": "int", "page_size": "int"},
+        "gpu": {"present": "bool", "kind": "none|metal|cuda|rocm|other", "device_count": "int", "vram_total_bytes": "int", "vram_free_bytes": "int"},
+        "capabilities": {"loadable_models": "array<string>", "max_context_tokens": "int", "supports_streaming": "bool", "supports_quantizations": "array<string>"},
+        "service": {"service_type": "king.inference.v1", "health_url": "string", "status": "ready|draining|starting|error"},
+        "published_at": "rfc3339"
+      }
     }
   },
   "ws": {
@@ -75,7 +92,6 @@
   "planned_surfaces_target_shape": {
     "note": "Entries below are target-shape only, added to the live api/ws/errors sections as their leaves land. Listed here so readers see the full intended v1 surface without a parity-test false negative.",
     "api": {
-      "node_profile":     {"method": "GET",  "paths": ["/api/node/profile"],                 "introduced_by": "M-4"},
       "models_list":      {"method": "GET",  "paths": ["/api/models"],                       "introduced_by": "M-5"},
       "models_create":    {"method": "POST", "paths": ["/api/models"],                       "introduced_by": "M-5"},
       "model_get":        {"method": "GET",  "paths": ["/api/models/{model_id}"],            "introduced_by": "M-5"},

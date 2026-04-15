@@ -216,6 +216,8 @@ $handler = static function (array $request) use (
     $pathFromRequest,
     $runtimeEnvelope,
     $wsPath,
+    $host,
+    $port,
     $log,
     $serverMode,
     $debugRequests
@@ -250,7 +252,9 @@ $handler = static function (array $request) use (
             $methodFromRequest,
             $pathFromRequest,
             $runtimeEnvelope,
-            $wsPath
+            $wsPath,
+            $host,
+            $port
         );
     } catch (Throwable $error) {
         $log(sprintf(

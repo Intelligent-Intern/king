@@ -51,6 +51,7 @@ try {
         'runtime_health' => ['method' => 'GET', 'paths' => ['/health', '/api/runtime']],
         'bootstrap'      => ['method' => 'GET', 'paths' => ['/', '/api/bootstrap']],
         'version'        => ['method' => 'GET', 'paths' => ['/api/version']],
+        'node_profile'   => ['method' => 'GET', 'paths' => ['/api/node/profile']],
     ];
 
     $liveApi = $catalog['api'] ?? null;
@@ -122,7 +123,9 @@ try {
                 $methodFromRequest,
                 $pathFromRequest,
                 $runtimeEnvelope,
-                '/ws'
+                '/ws',
+                '127.0.0.1',
+                18090
             );
             model_inference_catalog_contract_assert(
                 (int) ($response['status'] ?? 0) === 200,
@@ -162,12 +165,17 @@ try {
         'catalog.planned_surfaces_target_shape must exist so future surfaces are declared without faking parity'
     );
     $targetShapeApi = (array) ($targetShape['api'] ?? []);
-    foreach (['node_profile', 'models_list', 'models_create', 'infer_http', 'transcripts_get', 'telemetry_recent', 'route_diagnostic'] as $requiredKey) {
+    foreach (['models_list', 'models_create', 'infer_http', 'transcripts_get', 'telemetry_recent', 'route_diagnostic'] as $requiredKey) {
         model_inference_catalog_contract_assert(
             isset($targetShapeApi[$requiredKey]),
             "catalog.planned_surfaces_target_shape.api must list '{$requiredKey}' until its live leaf lands"
         );
     }
+    // A surface MUST NOT appear in both live and target-shape sections.
+    model_inference_catalog_contract_assert(
+        !isset($targetShapeApi['node_profile']),
+        "node_profile moved to live catalog.api at #M-4 and must not remain in planned_surfaces_target_shape"
+    );
 
     // Target-shape paths must NOT be advertised in the live api section.
     foreach ($targetShapeApi as $name => $entry) {

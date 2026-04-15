@@ -108,14 +108,27 @@ Non-negotiable direction for this batch:
   asserts 1:1 between the live `api.*` / `ws.*` catalog entries and the
   actually-served routes of the dispatcher, refuses target-shape paths leaking
   into the live section, and locks the currently emitted error-code set.
+- [x] `#M-4` Runtime hardware profile kernel landed at
+  `backend-king-php/domain/profile/hardware_profile.php` +
+  `backend-king-php/http/module_profile.php`. Real platform-aware probes:
+  darwin uses `/usr/sbin/sysctl` for `hw.logicalcpu` / `hw.physicalcpu` /
+  `hw.memsize` / `hw.pagesize` / `machdep.cpu.brand_string`, `/usr/bin/vm_stat`
+  for free-page accounting, and `/usr/sbin/system_profiler SPDisplaysDataType`
+  for Metal + VRAM detection with arm64 fallback; linux parses
+  `/proc/cpuinfo` + `/proc/meminfo`, `getconf PAGESIZE`, and probes GPUs
+  through `nvidia-smi --query-gpu=memory.total,memory.free` with MiB→bytes
+  conversion and `rocminfo` HSA-agent parsing. `vram_total_bytes` /
+  `vram_free_bytes` stay 0 when the probe cannot read a value (no fabrication).
+  The contract in `contracts/v1/node-profile.contract.json` is pinned and
+  `tests/node-profile-contract.{sh,php}` asserts envelope shape, honesty
+  invariants (`present=false ⇒ kind=none ∧ vram=0`; free ≤ total; physical ≤
+  logical), dispatcher parity for `GET /api/node/profile`, and
+  method_not_allowed for non-GET. `model_inference_dispatch_route_module_order()`
+  grows to `['runtime', 'profile']` and catalog `api.node_profile` moves from
+  `planned_surfaces_target_shape` into the live section (parity test
+  updated accordingly).
 
 ### Open / To implement (priority order)
-
-- [ ] `#M-4` Runtime hardware profile kernel — real CPU/RAM/GPU probes
-  (darwin: Metal via `sysctl`; linux: `nvidia-smi` / `rocminfo` exit-code
-  probes; no faked VRAM). Publishes
-  `contracts/v1/node-profile.contract.json` and
-  `GET /api/node/profile`. Maps to `V.2`, `V.3`, `Z.2`.
 
 - [ ] `#M-5` Object-store-backed model registry — SQLite index + GGUF blobs
   via `king_object_store_put_from_stream` (resumable); publishes
@@ -179,12 +192,16 @@ Non-negotiable direction for this batch:
 
 ### Next step (M-batch)
 
-- [ ] Continue with `#M-4` (runtime hardware profile kernel): darwin `sysctl`
-  + Metal availability probes, linux `nvidia-smi` / `rocminfo` exit-code
-  probes, no faked VRAM; publish
-  `demo/model-inference/contracts/v1/node-profile.contract.json` and
-  `GET /api/node/profile`; add `backend-king-php/domain/profile/hardware_profile.php`
-  + `backend-king-php/http/module_profile.php`; extend
-  `model_inference_dispatch_route_module_order()` to `['runtime', 'profile']`
-  and update the router-module-order + catalog-parity tests in the same
-  commit.
+- [ ] Continue with `#M-5` (object-store-backed model registry): SQLite
+  index migration for model entries, GGUF artifact upload via
+  `king_object_store_put_from_stream` (resumable), publish
+  `demo/model-inference/contracts/v1/model-registry-entry.contract.json`,
+  add `backend-king-php/domain/registry/model_registry.php` +
+  `backend-king-php/http/module_registry.php`, extend
+  `model_inference_dispatch_route_module_order()` to
+  `['runtime', 'profile', 'registry']`, move `models_list` and
+  `models_create` from `planned_surfaces_target_shape` into live
+  `catalog.api`, update the router-module-order + catalog-parity tests,
+  and add a dedicated
+  `tests/model-registry-contract.{sh,php}` proving a bit-identical SHA-256
+  round-trip through the object store.

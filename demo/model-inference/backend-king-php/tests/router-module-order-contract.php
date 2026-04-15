@@ -17,7 +17,7 @@ try {
     // Current deployed module list. Grows as later leaves land their modules.
     // Intended end-of-sprint order (see demo/model-inference/README.md):
     //   runtime, profile, registry, worker, inference, telemetry, routing, realtime
-    $expectedOrder = ['runtime'];
+    $expectedOrder = ['runtime', 'profile'];
     $actualOrder = model_inference_dispatch_route_module_order();
 
     model_inference_router_contract_assert(
@@ -79,23 +79,41 @@ try {
         $methodFromRequest,
         $pathFromRequest,
         $runtimeEnvelope,
-        '/ws'
+        '/ws',
+        '127.0.0.1',
+        18090
     );
     model_inference_router_contract_assert(
         (int) ($runtimeResponse['status'] ?? 0) === 200,
         'runtime module should serve /api/runtime via the dispatcher'
     );
 
+    // Profile module owns /api/node/profile.
+    $profileResponse = model_inference_dispatch_request(
+        ['method' => 'GET', 'path' => '/api/node/profile', 'uri' => '/api/node/profile', 'headers' => []],
+        $jsonResponse,
+        $errorResponse,
+        $methodFromRequest,
+        $pathFromRequest,
+        $runtimeEnvelope,
+        '/ws',
+        '127.0.0.1',
+        18090
+    );
+    model_inference_router_contract_assert(
+        (int) ($profileResponse['status'] ?? 0) === 200,
+        'profile module should serve /api/node/profile via the dispatcher'
+    );
+
     // Paths owned by not-yet-shipped modules must return 404 not_implemented.
     // This proves the dispatcher does not pretend to serve routes whose
     // module has not landed yet.
     $targetShapePaths = [
-        '/api/node/profile',     // M-4
-        '/api/models',           // M-5
-        '/api/infer',            // M-10
-        '/api/telemetry/inference/recent', // M-12
-        '/api/route',            // M-14
-        '/api/transcripts/req_x', // M-16
+        '/api/models',                      // M-5
+        '/api/infer',                       // M-10
+        '/api/telemetry/inference/recent',  // M-12
+        '/api/route',                       // M-14
+        '/api/transcripts/req_x',           // M-16
     ];
     foreach ($targetShapePaths as $targetPath) {
         $response = model_inference_dispatch_request(
@@ -105,7 +123,9 @@ try {
             $methodFromRequest,
             $pathFromRequest,
             $runtimeEnvelope,
-            '/ws'
+            '/ws',
+            '127.0.0.1',
+            18090
         );
         model_inference_router_contract_assert(
             (int) ($response['status'] ?? 0) === 404,
