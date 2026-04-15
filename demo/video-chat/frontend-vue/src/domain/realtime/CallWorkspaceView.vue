@@ -474,7 +474,7 @@ import { BackgroundFilterBaselineCollector } from './backgroundFilterBaseline';
 import { evaluateBackgroundFilterGates } from './backgroundFilterGates';
 import { detectMediaRuntimeCapabilities } from './mediaRuntimeCapabilities';
 import { SFUClient } from '../../lib/sfu/sfuClient';
-import { createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';
+import { createWasmEncoder, createWasmDecoder } from '../../lib/wasm/wasm-codec';
 
 const route = useRoute();
 const router = useRouter();
@@ -2757,10 +2757,12 @@ function teardownRemotePeer(peer) {
 function handleSFUTracks(e) {
   (async () => {
     let decoder = null;
-    try {
-      decoder = await createHybridDecoder({ width: 640, height: 480, quality: 75 });
-    } catch (e) {
-      console.warn('[SFU] Decoder init failed for', e.publisherId);
+    if (mediaRuntimeCapabilities.value.stageA) {
+      try {
+        decoder = await createWasmDecoder({ width: 640, height: 480, quality: 75 });
+      } catch (error) {
+        console.warn('[SFU] WASM decoder init failed for publisher', e.publisherId, error);
+      }
     }
 
     const canvas = document.createElement('canvas');
@@ -3143,20 +3145,25 @@ async function startEncodingPipeline(videoTrack) {
   }
   applyCallOutputPreferences();
 
+  if (!mediaRuntimeCapabilities.value.stageA) {
+    console.warn('[SFU] WLVC WASM unavailable; skipping WLVC encoder in product path');
+    return;
+  }
+
   try {
-    videoEncoderRef.value = await createHybridEncoder({ 
+    videoEncoderRef.value = await createWasmEncoder({
       width: 640, 
       height: 480, 
       quality: 75,
       keyFrameInterval: 30,
     });
     if (!videoEncoderRef.value) {
-      console.warn('[SFU] Encoder init failed, falling back to WebRTC preview only');
+      console.warn('[SFU] WASM encoder unavailable; keeping native preview path');
       return;
     }
     console.log('[SFU] WASM encoder initialized');
-  } catch (e) {
-    console.error('[SFU] Encoder init error, keeping local preview:', e);
+  } catch (error) {
+    console.error('[SFU] WASM encoder init error, keeping native preview path:', error);
     return;
   }
 
