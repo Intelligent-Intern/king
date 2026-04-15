@@ -10,13 +10,33 @@ services:
     environment:
       VIDEOCHAT_KING_HOST: 0.0.0.0
       VIDEOCHAT_KING_PORT: 18080
-      VIDEOCHAT_KING_WS_PORT: "${VIDEOCHAT_V1_BACKEND_INTERNAL_WS_PORT:-18081}"
+      VIDEOCHAT_KING_WS_PORT: 18080
+      VIDEOCHAT_KING_SERVER_MODE: http
       VIDEOCHAT_KING_WS_PATH: /ws
       VIDEOCHAT_KING_DB_PATH: /data/video-chat.sqlite
       VIDEOCHAT_DEMO_SEED_CALLS: "${VIDEOCHAT_DEMO_SEED_CALLS:-1}"
     ports:
       - "${VIDEOCHAT_V1_BACKEND_PORT:-18080}:18080"
-      - "${VIDEOCHAT_V1_BACKEND_WS_PORT:-18081}:${VIDEOCHAT_V1_BACKEND_INTERNAL_WS_PORT:-18081}"
+    volumes:
+      - videochat-v1-sqlite:/data
+    restart: unless-stopped
+
+  videochat-backend-ws-v1:
+    build:
+      context: ../..
+      dockerfile: demo/video-chat/backend-king-php/Dockerfile
+      args:
+        VIDEOCHAT_BACKEND_PHP_IMAGE: "${VIDEOCHAT_V1_BACKEND_PHP_IMAGE:-php:8.4-cli-trixie}"
+    environment:
+      VIDEOCHAT_KING_HOST: 0.0.0.0
+      VIDEOCHAT_KING_PORT: 18080
+      VIDEOCHAT_KING_WS_PORT: 18080
+      VIDEOCHAT_KING_SERVER_MODE: ws
+      VIDEOCHAT_KING_WS_PATH: /ws
+      VIDEOCHAT_KING_DB_PATH: /data/video-chat.sqlite
+      VIDEOCHAT_DEMO_SEED_CALLS: "${VIDEOCHAT_DEMO_SEED_CALLS:-1}"
+    ports:
+      - "${VIDEOCHAT_V1_BACKEND_WS_PORT:-18081}:18080"
     volumes:
       - videochat-v1-sqlite:/data
     restart: unless-stopped
@@ -32,6 +52,7 @@ services:
         VITE_VIDEOCHAT_ICE_SERVERS: "${VITE_VIDEOCHAT_ICE_SERVERS:-}"
     depends_on:
       - videochat-backend-v1
+      - videochat-backend-ws-v1
     ports:
       - "${VIDEOCHAT_V1_FRONTEND_PORT:-5174}:5174"
     restart: unless-stopped

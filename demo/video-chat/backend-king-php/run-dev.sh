@@ -5,12 +5,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 HOST="${VIDEOCHAT_KING_HOST:-127.0.0.1}"
 PORT="${VIDEOCHAT_KING_PORT:-18080}"
-WS_PORT="${VIDEOCHAT_KING_WS_PORT:-18081}"
+WS_PORT="${VIDEOCHAT_KING_WS_PORT:-${PORT}}"
 WS_PATH="${VIDEOCHAT_KING_WS_PATH:-/ws}"
 DB_PATH="${VIDEOCHAT_KING_DB_PATH:-${REPO_ROOT}/demo/video-chat/backend-king-php/.local/video-chat.sqlite}"
 PHP_BIN="${PHP_BIN:-php}"
 DEFAULT_EXT="${REPO_ROOT}/extension/modules/king.so"
 KING_EXTENSION_PATH="${KING_EXTENSION_PATH:-${DEFAULT_EXT}}"
+SERVER_MODE_OVERRIDE="${VIDEOCHAT_KING_SERVER_MODE:-}"
 
 php_args=()
 ext_source=""
@@ -57,7 +58,11 @@ start_backend() {
   backend_pids+=("$!")
 }
 
-if [[ "$WS_PORT" == "$PORT" ]]; then
+normalized_mode_override="$(echo "${SERVER_MODE_OVERRIDE}" | tr '[:upper:]' '[:lower:]' | xargs || true)"
+if [[ "${normalized_mode_override}" == "all" || "${normalized_mode_override}" == "http" || "${normalized_mode_override}" == "ws" ]]; then
+  echo "[video-chat][king-php-backend] server mode override: ${normalized_mode_override}"
+  start_backend "${normalized_mode_override}" "${PORT}"
+elif [[ "$WS_PORT" == "$PORT" ]]; then
   start_backend "all" "${PORT}"
 else
   start_backend "http" "${PORT}"
