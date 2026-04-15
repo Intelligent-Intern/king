@@ -14,11 +14,14 @@ int king_init_modules(int type, int module_number)
 
     king_ini_module_number = module_number;
 
-    /*
-     * Security comes first because it establishes global policy flags such as
-     * whether userland config overrides are permitted.
-     */
     kg_config_security_and_traffic_init();
+    kg_config_tls_and_crypto_init();
+    kg_config_tcp_transport_init();
+    kg_config_quic_transport_init();
+    kg_config_http2_init();
+    kg_config_app_http3_websockets_webtransport_init();
+    kg_config_cluster_and_process_init();
+    kg_config_bare_metal_tuning_init();
     kg_config_tls_and_crypto_init();
     kg_config_tcp_transport_init();
     kg_config_quic_transport_init();

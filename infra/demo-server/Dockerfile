@@ -74,8 +74,8 @@ COPY --from=frontend-build /app/dist /opt/king/demo/dist
 COPY infra/demo-server/server.php /opt/king/demo/server.php
 COPY infra/demo-server/probe.php /opt/king/demo/probe.php
 
-ENV KING_QUICHE_LIBRARY=/opt/king/package/runtime/libquiche.so \
-    KING_QUICHE_SERVER=/opt/king/package/runtime/quiche-server \
+ENV KING_LSQUIC_LIBRARY=/opt/king/package/runtime/liblsquic.so \
+    KING_LSQUIC_SERVER=/opt/king/package/runtime/quiche-server \
     LD_LIBRARY_PATH=/opt/king/package/runtime
 
 RUN printf '%s\n' \

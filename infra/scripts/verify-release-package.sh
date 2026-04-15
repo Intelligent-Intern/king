@@ -222,8 +222,8 @@ for required_path in \
     "docs/INSTALL.md" \
     "manifest.json" \
     "modules/king.so" \
-    "runtime/libquiche.so" \
-    "runtime/quiche-server"
+    "runtime/liblsquic-shim.so" \
+    "runtime/lsquic"
 do
     assert_package_regular_file "${required_path}"
 done
@@ -233,8 +233,8 @@ if [[ ! -x "${PACKAGE_DIR}/bin/smoke.sh" ]]; then
     exit 1
 fi
 
-if [[ ! -x "${PACKAGE_DIR}/runtime/quiche-server" ]]; then
-    echo "Packaged quiche-server is not executable." >&2
+if [[ ! -x "${PACKAGE_DIR}/runtime/lsquic" ]]; then
+    echo "Packaged lsquic is not executable." >&2
     exit 1
 fi
 
@@ -300,9 +300,9 @@ if (!is_array($provenance)) {
 
 if (is_array($provenance)) {
     foreach ([
-        'quiche_bootstrap_lock_sha256',
+        'lsquic_bootstrap_lock_sha256',
         'toolchain_lock_sha256',
-        'quiche_workspace_lock_sha256',
+        'lsquic_workspace_lock_sha256',
     ] as $provenanceKey) {
         $value = $provenance[$provenanceKey] ?? null;
         if (!is_string($value) || preg_match('/^[a-f0-9]{64}$/', $value) !== 1) {

@@ -65,7 +65,7 @@ easier to remember.
 | `./infra/scripts/audit-runtime-surface.sh` | Does the runtime or documentation surface drift from the expected contract? |
 | `./infra/scripts/check-include-layout.sh` | Are project-owned headers still under `extension/include/` where they belong? |
 | `./infra/scripts/check-php-support-matrix.sh` | Do CI and matrix scripts still claim the supported PHP versions honestly? |
-| `./infra/scripts/check-quiche-bootstrap.sh` | Is the QUIC dependency bootstrap still pinned and deterministic? |
+| `./infra/scripts/check-lsquic-bootstrap.sh` | Is the QUIC dependency bootstrap still pinned and deterministic? |
 | `./infra/scripts/build-extension.sh` | Can the extension compile in the ordinary development path? |
 | `./infra/scripts/build-profile.sh release` | Can the full release profile build from the pinned dependency set? |
 | `./infra/scripts/test-extension.sh` | Does the PHPT runtime contract still pass? |
@@ -103,7 +103,7 @@ following commands are the usual manual path:
 ./infra/scripts/audit-runtime-surface.sh
 ./infra/scripts/check-include-layout.sh
 ./infra/scripts/check-php-support-matrix.sh
-./infra/scripts/check-quiche-bootstrap.sh
+./infra/scripts/check-lsquic-bootstrap.sh
 ```
 
 Each one answers a slightly different question. Stub parity checks that the
@@ -147,7 +147,7 @@ of the shipping pipeline.
 
 ```mermaid
 flowchart TD
-    A[build-profile.sh release] --> B[Check pinned quiche bootstrap]
+    A[build-profile.sh release] --> B[Check pinned lsquic bootstrap]
     B --> C[Normalize QUIC workspace]
     C --> D[Build king.so]
     D --> E[Assemble runtime payload]

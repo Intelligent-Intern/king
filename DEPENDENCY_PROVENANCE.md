@@ -17,15 +17,15 @@ the values in this file match the lock files under `infra/scripts/`.
 
 | Component | Pinned value | Lock source |
 | --- | --- | --- |
-| Quiche repository | `https://github.com/cloudflare/quiche.git` | `infra/scripts/quiche-bootstrap.lock` |
-| Quiche commit | `b30f9e76c32332aa35377dcb00f556626d47a841` | `infra/scripts/quiche-bootstrap.lock` |
-| BoringSSL commit | `f1c75347daa2ea81a941e953f2263e0a4d970c8d` | `infra/scripts/quiche-bootstrap.lock` |
-| Wirefilter commit | `6621924baf36f8ba7f603433dbe6f857ad3d5589` | `infra/scripts/quiche-bootstrap.lock` |
+| Lsquic repository | `https://github.com/cloudflare/lsquic.git` | `infra/scripts/lsquic-bootstrap.lock` |
+| Lsquic commit | `b30f9e76c32332aa35377dcb00f556626d47a841` | `infra/scripts/lsquic-bootstrap.lock` |
+| BoringSSL commit | `f1c75347daa2ea81a941e953f2263e0a4d970c8d` | `infra/scripts/lsquic-bootstrap.lock` |
+| Wirefilter commit | `6621924baf36f8ba7f603433dbe6f857ad3d5589` | `infra/scripts/lsquic-bootstrap.lock` |
 
 ## Enforcement Surface
 
 - `infra/scripts/toolchain-lock.sh` exposes and verifies canonical PHP/Rust pins.
-- `infra/scripts/check-quiche-bootstrap.sh` verifies quiche/boringssl/wirefilter
+- `infra/scripts/check-lsquic-bootstrap.sh` verifies lsquic/boringssl/wirefilter
   lock provenance before build work.
 - `infra/scripts/check-dependency-provenance-doc.sh` hard-fails when this
   document diverges from the lock sources.

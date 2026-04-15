@@ -12,7 +12,7 @@ static zend_result king_http3_execute_request(
     king_http3_request_target_t target;
     king_http3_request_runtime_t runtime;
     king_http3_response_t response;
-    quiche_h3_header *request_headers = NULL;
+    lsquic_h3_header *request_headers = NULL;
     zend_string **owned_strings = NULL;
     size_t request_header_count = 0;
     size_t owned_string_count = 0;
@@ -86,7 +86,7 @@ static zend_result king_http3_execute_request(
         zend_long remaining_connect_ms;
         zend_long poll_timeout_ms;
         int poll_result;
-        uint64_t quiche_timeout_ms;
+        uint64_t lsquic_timeout_ms;
 
         king_process_pending_interrupts();
         if (EG(exception) != NULL) {
@@ -112,7 +112,7 @@ static zend_result king_http3_execute_request(
             goto failure;
         }
 
-        if (!king_http3_quiche.quiche_conn_is_established_fn(runtime.conn)
+        if (!king_http3_lsquic.lsquic_conn_is_established_fn(runtime.conn)
             && now_ms >= connect_deadline_ms) {
             king_http3_throw(
                 king_ce_timeout_exception,
@@ -123,7 +123,7 @@ static zend_result king_http3_execute_request(
         }
 
         if (king_http3_runtime_can_open_h3(&runtime) && runtime.h3_conn == NULL) {
-            runtime.h3_config = king_http3_quiche.quiche_h3_config_new_fn();
+            runtime.h3_config = king_http3_lsquic.lsquic_h3_config_new_fn();
             if (runtime.h3_config == NULL) {
                 king_http3_throw(
                     king_ce_system_exception,
@@ -133,7 +133,7 @@ static zend_result king_http3_execute_request(
                 goto failure;
             }
 
-            runtime.h3_conn = king_http3_quiche.quiche_h3_conn_new_with_transport_fn(runtime.conn, runtime.h3_config);
+            runtime.h3_conn = king_http3_lsquic.lsquic_h3_conn_new_with_transport_fn(runtime.conn, runtime.h3_config);
             if (runtime.h3_conn == NULL) {
                 king_http3_throw(
                     king_ce_protocol_exception,
@@ -145,7 +145,7 @@ static zend_result king_http3_execute_request(
         }
 
         if (runtime.h3_conn != NULL && !request_headers_sent) {
-            int64_t stream_id = king_http3_quiche.quiche_h3_send_request_fn(
+            int64_t stream_id = king_http3_lsquic.lsquic_h3_send_request_fn(
                 runtime.h3_conn,
                 runtime.conn,
                 request_headers,
@@ -165,7 +165,7 @@ static zend_result king_http3_execute_request(
             request_stream_id = (uint64_t) stream_id;
             request_headers_sent = true;
             if (king_http3_runtime_is_in_early_data(&runtime)
-                && !king_http3_quiche.quiche_conn_is_established_fn(runtime.conn)) {
+                && !king_http3_lsquic.lsquic_conn_is_established_fn(runtime.conn)) {
                 runtime.tls_request_sent_in_early_data = true;
             }
 
@@ -178,7 +178,7 @@ static zend_result king_http3_execute_request(
             && request_headers_sent
             && body_string != NULL
             && body_offset < ZSTR_LEN(body_string)) {
-            ssize_t wrote = king_http3_quiche.quiche_h3_send_body_fn(
+            ssize_t wrote = king_http3_lsquic.lsquic_h3_send_body_fn(
                 runtime.h3_conn,
                 runtime.conn,
                 request_stream_id,
@@ -192,7 +192,7 @@ static zend_result king_http3_execute_request(
                 if (king_http3_flush_egress(&runtime, function_name) != SUCCESS) {
                     goto failure;
                 }
-            } else if (wrote != QUICHE_H3_ERR_DONE && wrote != QUICHE_H3_ERR_STREAM_BLOCKED) {
+            } else if (wrote != LSQUIC_H3_ERR_DONE && wrote != LSQUIC_H3_ERR_STREAM_BLOCKED) {
                 king_http3_throw_request_body_send_error(function_name, wrote);
                 goto failure;
             }
@@ -200,14 +200,14 @@ static zend_result king_http3_execute_request(
 
         if (runtime.h3_conn != NULL) {
             for (;;) {
-                quiche_h3_event *event = NULL;
-                int64_t stream_id = king_http3_quiche.quiche_h3_conn_poll_fn(
+                lsquic_h3_event *event = NULL;
+                int64_t stream_id = king_http3_lsquic.lsquic_h3_conn_poll_fn(
                     runtime.h3_conn,
                     runtime.conn,
                     &event
                 );
 
-                if (stream_id == QUICHE_H3_ERR_DONE) {
+                if (stream_id == LSQUIC_H3_ERR_DONE) {
                     break;
                 }
 
@@ -219,31 +219,31 @@ static zend_result king_http3_execute_request(
                         stream_id
                     );
                     if (event != NULL) {
-                        king_http3_quiche.quiche_h3_event_free_fn(event);
+                        king_http3_lsquic.lsquic_h3_event_free_fn(event);
                     }
                     goto failure;
                 }
 
                 if ((uint64_t) stream_id != request_stream_id) {
                     if (event != NULL) {
-                        king_http3_quiche.quiche_h3_event_free_fn(event);
+                        king_http3_lsquic.lsquic_h3_event_free_fn(event);
                     }
                     continue;
                 }
 
-                switch (king_http3_quiche.quiche_h3_event_type_fn(event)) {
-                    case QUICHE_H3_EVENT_HEADERS: {
+                switch (king_http3_lsquic.lsquic_h3_event_type_fn(event)) {
+                    case LSQUIC_H3_EVENT_HEADERS: {
                         king_http3_response_header_context_t context;
                         int rc;
 
                         context.response = &response;
-                        rc = king_http3_quiche.quiche_h3_event_for_each_header_fn(
+                        rc = king_http3_lsquic.lsquic_h3_event_for_each_header_fn(
                             event,
                             king_http3_collect_response_header,
                             &context
                         );
                         if (rc != 0) {
-                            king_http3_quiche.quiche_h3_event_free_fn(event);
+                            king_http3_lsquic.lsquic_h3_event_free_fn(event);
                             if (response.header_overflowed) {
                                 king_http3_throw(
                                     king_ce_protocol_exception,
@@ -262,11 +262,11 @@ static zend_result king_http3_execute_request(
                         break;
                     }
 
-                    case QUICHE_H3_EVENT_DATA: {
+                    case LSQUIC_H3_EVENT_DATA: {
                         uint8_t buffer[4096];
 
                         for (;;) {
-                            ssize_t read = king_http3_quiche.quiche_h3_recv_body_fn(
+                            ssize_t read = king_http3_lsquic.lsquic_h3_recv_body_fn(
                                 runtime.h3_conn,
                                 runtime.conn,
                                 request_stream_id,
@@ -274,12 +274,12 @@ static zend_result king_http3_execute_request(
                                 sizeof(buffer)
                             );
 
-                            if (read == QUICHE_H3_ERR_DONE || read == 0) {
+                            if (read == LSQUIC_H3_ERR_DONE || read == 0) {
                                 break;
                             }
 
                             if (read < 0) {
-                                king_http3_quiche.quiche_h3_event_free_fn(event);
+                                king_http3_lsquic.lsquic_h3_event_free_fn(event);
                                 king_http3_throw(
                                     king_ce_protocol_exception,
                                     "%s() failed while decoding the active HTTP/3 response body (%zd).",
@@ -292,7 +292,7 @@ static zend_result king_http3_execute_request(
                             response.body_bytes += (size_t) read;
                             if (response.body_bytes > KING_HTTP3_MAX_RESPONSE_BYTES) {
                                 response.body_overflowed = true;
-                                king_http3_quiche.quiche_h3_event_free_fn(event);
+                                king_http3_lsquic.lsquic_h3_event_free_fn(event);
                                 king_http3_throw(
                                     king_ce_protocol_exception,
                                     "%s() exceeded the active HTTP/3 response-body size limit.",
@@ -306,23 +306,23 @@ static zend_result king_http3_execute_request(
                         break;
                     }
 
-                    case QUICHE_H3_EVENT_FINISHED:
+                    case LSQUIC_H3_EVENT_FINISHED:
                         response.response_complete = true;
                         break;
 
-                    case QUICHE_H3_EVENT_RESET:
+                    case LSQUIC_H3_EVENT_RESET:
                         king_http3_throw_active_request_stream_reset(function_name, event);
-                        king_http3_quiche.quiche_h3_event_free_fn(event);
+                        king_http3_lsquic.lsquic_h3_event_free_fn(event);
                         goto failure;
 
-                    case QUICHE_H3_EVENT_GOAWAY:
-                    case QUICHE_H3_EVENT_PRIORITY_UPDATE:
+                    case LSQUIC_H3_EVENT_GOAWAY:
+                    case LSQUIC_H3_EVENT_PRIORITY_UPDATE:
                     default:
                         break;
                 }
 
                 if (event != NULL) {
-                    king_http3_quiche.quiche_h3_event_free_fn(event);
+                    king_http3_lsquic.lsquic_h3_event_free_fn(event);
                 }
             }
         }
@@ -333,7 +333,7 @@ static zend_result king_http3_execute_request(
             break;
         }
 
-        if (king_http3_quiche.quiche_conn_is_closed_fn(runtime.conn)) {
+        if (king_http3_lsquic.lsquic_conn_is_closed_fn(runtime.conn)) {
             king_http3_throw_closed_connection(runtime.conn, function_name);
             goto failure;
         }
@@ -344,12 +344,12 @@ static zend_result king_http3_execute_request(
 
         remaining_overall_ms = overall_deadline_ms - now_ms;
         remaining_connect_ms = connect_deadline_ms - now_ms;
-        quiche_timeout_ms = king_http3_quiche.quiche_conn_timeout_as_millis_fn(runtime.conn);
-        poll_timeout_ms = (zend_long) quiche_timeout_ms;
+        lsquic_timeout_ms = king_http3_lsquic.lsquic_conn_timeout_as_millis_fn(runtime.conn);
+        poll_timeout_ms = (zend_long) lsquic_timeout_ms;
         if (poll_timeout_ms <= 0 || poll_timeout_ms > remaining_overall_ms) {
             poll_timeout_ms = remaining_overall_ms;
         }
-        if (!king_http3_quiche.quiche_conn_is_established_fn(runtime.conn)
+        if (!king_http3_lsquic.lsquic_conn_is_established_fn(runtime.conn)
             && remaining_connect_ms > 0
             && poll_timeout_ms > remaining_connect_ms) {
             poll_timeout_ms = remaining_connect_ms;
@@ -376,7 +376,7 @@ static zend_result king_http3_execute_request(
         }
 
         if (poll_result == 0) {
-            king_http3_quiche.quiche_conn_on_timeout_fn(runtime.conn);
+            king_http3_lsquic.lsquic_conn_on_timeout_fn(runtime.conn);
             if (king_http3_flush_egress(&runtime, function_name) != SUCCESS) {
                 goto failure;
             }
@@ -413,7 +413,7 @@ static zend_result king_http3_execute_request(
                 }
 
                 {
-                    quiche_recv_info recv_info;
+                    lsquic_recv_info recv_info;
                     ssize_t done;
 
                     recv_info.from = (struct sockaddr *) &from;
@@ -421,13 +421,13 @@ static zend_result king_http3_execute_request(
                     recv_info.to = (struct sockaddr *) &runtime.local_addr;
                     recv_info.to_len = runtime.local_addr_len;
 
-                    done = king_http3_quiche.quiche_conn_recv_fn(
+                    done = king_http3_lsquic.lsquic_conn_recv_fn(
                         runtime.conn,
                         buffer,
                         (size_t) received,
                         &recv_info
                     );
-                    if (done < 0 && done != QUICHE_ERR_DONE) {
+                    if (done < 0 && done != LSQUIC_ERR_DONE) {
                         king_http3_throw_recv_error(runtime.conn, function_name, done);
                         goto failure;
                     }
@@ -450,9 +450,9 @@ static zend_result king_http3_execute_request(
         goto failure;
     }
 
-    if (king_http3_quiche.quiche_conn_close_fn != NULL) {
+    if (king_http3_lsquic.lsquic_conn_close_fn != NULL) {
         king_http3_capture_post_response_tls_state(&runtime);
-        king_http3_quiche.quiche_conn_close_fn(runtime.conn, true, 0, NULL, 0);
+        king_http3_lsquic.lsquic_conn_close_fn(runtime.conn, true, 0, NULL, 0);
         king_http3_flush_egress_best_effort(&runtime);
     }
 
@@ -509,12 +509,12 @@ zend_result king_http3_request_dispatch(
         return FAILURE;
     }
 
-    if (king_http3_ensure_quiche_ready() != SUCCESS) {
+    if (king_http3_ensure_lsquic_ready() != SUCCESS) {
         king_http3_throw(
             king_ce_protocol_exception,
             "%s() HTTP/3 runtime is unavailable: %s",
             function_name,
-            king_http3_quiche.load_error
+            king_http3_lsquic.load_error
         );
         return FAILURE;
     }
@@ -553,12 +553,12 @@ static zend_result king_http3_multi_request_dispatch(
         return FAILURE;
     }
 
-    if (king_http3_ensure_quiche_ready() != SUCCESS) {
+    if (king_http3_ensure_lsquic_ready() != SUCCESS) {
         king_http3_throw(
             king_ce_protocol_exception,
             "%s() HTTP/3 runtime is unavailable: %s",
             function_name,
-            king_http3_quiche.load_error
+            king_http3_lsquic.load_error
         );
         return FAILURE;
     }

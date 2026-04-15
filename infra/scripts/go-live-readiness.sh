@@ -124,11 +124,11 @@ fi
 ensure_release_artifacts() {
     local required_paths=(
         "${EXT_DIR}/modules/king.so"
-        "${ROOT_DIR}/quiche/target/release/libquiche.so"
-        "${ROOT_DIR}/quiche/target/release/quiche-server"
+        "${ROOT_DIR}/lsquic/release/liblsquic-shim.so"
+        "${ROOT_DIR}/lsquic/release/lsquic"
         "${EXT_DIR}/build/profiles/release/king.so"
-        "${EXT_DIR}/build/profiles/release/libquiche.so"
-        "${EXT_DIR}/build/profiles/release/quiche-server"
+        "${EXT_DIR}/build/profiles/release/liblsquic-shim.so"
+        "${EXT_DIR}/build/profiles/release/lsquic"
     )
     local path=""
 

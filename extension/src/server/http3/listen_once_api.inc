@@ -69,10 +69,10 @@ PHP_FUNCTION(king_http3_server_listen_once)
         goto cleanup;
     }
 
-    if (king_server_http3_ensure_quiche_ready() != SUCCESS) {
+    if (king_server_http3_ensure_lsquic_ready() != SUCCESS) {
         king_server_local_set_errorf(
             "king_http3_server_listen_once() HTTP/3 runtime is unavailable: %s",
-            king_server_http3_quiche.load_error
+            king_server_http3_lsquic.load_error
         );
         goto cleanup;
     }
@@ -106,8 +106,8 @@ PHP_FUNCTION(king_http3_server_listen_once)
 
         if (runtime.conn != NULL
             && runtime.h3_conn == NULL
-            && king_server_http3_quiche.quiche_conn_is_established_fn(runtime.conn)) {
-            runtime.h3_config = king_server_http3_quiche.quiche_h3_config_new_fn();
+            && king_server_http3_lsquic.lsquic_conn_is_established_fn(runtime.conn)) {
+            runtime.h3_config = king_server_http3_lsquic.lsquic_h3_config_new_fn();
             if (runtime.h3_config == NULL) {
                 king_server_local_set_errorf(
                     "king_http3_server_listen_once() failed to allocate the active HTTP/3 config.",
@@ -116,7 +116,7 @@ PHP_FUNCTION(king_http3_server_listen_once)
                 goto cleanup;
             }
 
-            runtime.h3_conn = king_server_http3_quiche.quiche_h3_conn_new_with_transport_fn(
+            runtime.h3_conn = king_server_http3_lsquic.lsquic_h3_conn_new_with_transport_fn(
                 runtime.conn,
                 runtime.h3_config
             );
@@ -202,7 +202,7 @@ PHP_FUNCTION(king_http3_server_listen_once)
 
             if (send_rc < 0) {
                 if (runtime.conn != NULL
-                    && king_server_http3_quiche.quiche_conn_is_closed_fn(runtime.conn)) {
+                    && king_server_http3_lsquic.lsquic_conn_is_closed_fn(runtime.conn)) {
                     king_server_local_mark_stream_cancelled_if_registered(
                         session,
                         request_state.stream_id,
@@ -223,7 +223,7 @@ PHP_FUNCTION(king_http3_server_listen_once)
             }
 
             if (response_state.close_sent) {
-                if (king_server_http3_quiche.quiche_conn_is_closed_fn(runtime.conn)
+                if (king_server_http3_lsquic.lsquic_conn_is_closed_fn(runtime.conn)
                     || king_server_http3_now_ms() >= response_state.close_grace_deadline_ms) {
                     rc = 1;
                     break;
@@ -232,7 +232,7 @@ PHP_FUNCTION(king_http3_server_listen_once)
         }
 
         if (runtime.conn != NULL
-            && king_server_http3_quiche.quiche_conn_is_closed_fn(runtime.conn)
+            && king_server_http3_lsquic.lsquic_conn_is_closed_fn(runtime.conn)
             && !response_state.close_sent) {
             king_server_local_mark_stream_cancelled_if_registered(
                 session,
@@ -250,10 +250,10 @@ PHP_FUNCTION(king_http3_server_listen_once)
             poll_timeout_ms = 50;
         }
         if (runtime.conn != NULL) {
-            uint64_t quiche_timeout_ms = king_server_http3_quiche.quiche_conn_timeout_as_millis_fn(runtime.conn);
+            uint64_t lsquic_timeout_ms = king_server_http3_lsquic.lsquic_conn_timeout_as_millis_fn(runtime.conn);
 
-            if (quiche_timeout_ms < (uint64_t) poll_timeout_ms) {
-                poll_timeout_ms = (zend_long) quiche_timeout_ms;
+            if (lsquic_timeout_ms < (uint64_t) poll_timeout_ms) {
+                poll_timeout_ms = (zend_long) lsquic_timeout_ms;
             }
         }
         if (poll_timeout_ms < 0) {
@@ -283,7 +283,7 @@ PHP_FUNCTION(king_http3_server_listen_once)
 
             if (poll_rc == 0) {
                 if (runtime.conn != NULL) {
-                    king_server_http3_quiche.quiche_conn_on_timeout_fn(runtime.conn);
+                    king_server_http3_lsquic.lsquic_conn_on_timeout_fn(runtime.conn);
                     if (king_server_http3_flush_egress(&runtime, "king_http3_server_listen_once") != SUCCESS) {
                         king_server_http3_mark_cancelled_on_transport_failure(
                             session,
@@ -342,7 +342,7 @@ PHP_FUNCTION(king_http3_server_listen_once)
                             continue;
                         }
                     } else {
-                        quiche_recv_info recv_info;
+                        lsquic_recv_info recv_info;
                         ssize_t processed;
 
                         recv_info.from = (struct sockaddr *) &from;
@@ -350,13 +350,13 @@ PHP_FUNCTION(king_http3_server_listen_once)
                         recv_info.to = (struct sockaddr *) &runtime.local_addr;
                         recv_info.to_len = runtime.local_addr_len;
 
-                        processed = king_server_http3_quiche.quiche_conn_recv_fn(
+                        processed = king_server_http3_lsquic.lsquic_conn_recv_fn(
                             runtime.conn,
                             buffer,
                             (size_t) received,
                             &recv_info
                         );
-                        if (processed < 0 && processed != QUICHE_ERR_DONE) {
+                        if (processed < 0 && processed != LSQUIC_ERR_DONE) {
                             king_server_local_set_errorf(
                                 "king_http3_server_listen_once() failed while processing an incoming QUIC packet (%zd).",
                                 processed

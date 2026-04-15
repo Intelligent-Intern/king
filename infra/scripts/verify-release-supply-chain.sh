@@ -174,9 +174,9 @@ for archive in "${ARCHIVES[@]}"; do
     MANIFEST_ARCHIVE_PATH="${archive}" \
     EXPECTED_GIT_COMMIT="${EXPECTED_GIT_COMMIT}" \
     ALLOW_SOURCE_DIRTY="${ALLOW_SOURCE_DIRTY}" \
-    PROVENANCE_QUICHE_BOOTSTRAP_LOCK="${SCRIPT_DIR}/quiche-bootstrap.lock" \
+    PROVENANCE_LSQUIC_BOOTSTRAP_LOCK="${SCRIPT_DIR}/lsquic-bootstrap.lock" \
     PROVENANCE_TOOLCHAIN_LOCK="${SCRIPT_DIR}/toolchain.lock" \
-    PROVENANCE_QUICHE_WORKSPACE_LOCK="${SCRIPT_DIR}/quiche-workspace.Cargo.lock" \
+    PROVENANCE_LSQUIC_WORKSPACE_LOCK="${SCRIPT_DIR}/lsquic-workspace.Cargo.lock" \
     "${PHP_BIN}" <<'PHP'
 <?php
 
@@ -232,9 +232,9 @@ if (!is_array($provenance)) {
 }
 
 $required = [
-    'quiche_bootstrap_lock_sha256' => getenv('PROVENANCE_QUICHE_BOOTSTRAP_LOCK'),
+    'lsquic_bootstrap_lock_sha256' => getenv('PROVENANCE_LSQUIC_BOOTSTRAP_LOCK'),
     'toolchain_lock_sha256' => getenv('PROVENANCE_TOOLCHAIN_LOCK'),
-    'quiche_workspace_lock_sha256' => getenv('PROVENANCE_QUICHE_WORKSPACE_LOCK'),
+    'lsquic_workspace_lock_sha256' => getenv('PROVENANCE_LSQUIC_WORKSPACE_LOCK'),
 ];
 
 foreach ($required as $key => $path) {

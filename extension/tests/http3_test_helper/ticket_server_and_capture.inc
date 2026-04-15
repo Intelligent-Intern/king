@@ -6,7 +6,7 @@ function king_http3_ticket_server_binary(): string
     $manifest = KING_HTTP3_TESTS_DIR . '/http3_ticket_server/Cargo.toml';
     $source = KING_HTTP3_TESTS_DIR . '/http3_ticket_server/src/main.rs';
     $lock = KING_HTTP3_TESTS_DIR . '/http3_ticket_server/Cargo.lock';
-    $targetDir = $root . '/quiche/target';
+    $targetDir = $root . '/lsquic/target';
     $binary = $targetDir . '/release/king-http3-ticket-server';
 
     if (trim((string) shell_exec('command -v cargo')) === '') {

@@ -388,7 +388,7 @@ Configuration and Lifecycle Layer
   -> defaults, ini, config snapshot, runtime policy, shutdown semantics
 
 External Backends
-  -> quiche, OpenSSL, libcurl, kernel networking facilities
+  -> lsquic, OpenSSL, libcurl, kernel networking facilities
 ```
 
 The important boundary is this:
@@ -409,8 +409,8 @@ cd king
 ./infra/scripts/build-extension.sh
 ```
 
-For a fully runnable local release profile, including `libquiche.so` and
-`quiche-server`, use:
+For a fully runnable local release profile, including `liblsquic.so` and
+`lsquic-server`, use:
 
 ```bash
 cd king
@@ -418,9 +418,9 @@ cd king
 ```
 
 The build path above bootstraps the pinned QUIC dependency checkout recorded in
-[`infra/scripts/quiche-bootstrap.lock`](infra/scripts/quiche-bootstrap.lock)
+[`infra/scripts/lsquic-bootstrap.lock`](infra/scripts/lsquic-bootstrap.lock)
 and normalizes the matching workspace lockfile before cargo is invoked. Do not
-replace it with ad hoc local `quiche` clones or unlocked cargo retries.
+replace it with ad hoc local `lsquic` clones or unlocked cargo retries.
 
 The build entrypoint above is the repository build path.
 Canonical release-install verification then runs through
@@ -441,7 +441,7 @@ The intended package shape is:
   [`./infra/scripts/package-pie-source.sh`](infra/scripts/package-pie-source.sh)
 
 That source asset is the important part. King cannot rely on the default
-repository ZIP for PIE because the bundled `quiche/` tree is part of the active
+repository ZIP for PIE because the bundled `lsquic/` tree is part of the active
 build. The maintainer workflow is documented in
 [`documentation/pie-install.md`](documentation/pie-install.md).
 

@@ -9,7 +9,7 @@ Usage: ./infra/scripts/package-pie-source.sh [--output-dir DIR] [--release-tag T
 Creates the PIE pre-packaged source asset:
   dist/php_king-<version>-src.tgz
 
-The archive contains the King source tree plus the bundled quiche checkout so
+The archive contains the King source tree plus the bundled lsquic checkout so
 PIE can build the extension from source with `build-path = extension`.
 EOF
 }
@@ -67,29 +67,29 @@ if [[ -z "${VERSION}" ]]; then
     exit 1
 fi
 
-if [[ ! -f "${ROOT_DIR}/infra/scripts/quiche-bootstrap.lock" ]]; then
-    echo "Missing pinned quiche lock file: ${ROOT_DIR}/infra/scripts/quiche-bootstrap.lock" >&2
+if [[ ! -f "${ROOT_DIR}/infra/scripts/lsquic-bootstrap.lock" ]]; then
+    echo "Missing pinned lsquic lock file: ${ROOT_DIR}/infra/scripts/lsquic-bootstrap.lock" >&2
     exit 1
 fi
 
-if [[ ! -x "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" ]]; then
-    echo "Missing executable quiche bootstrap script: ${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" >&2
+if [[ ! -x "${ROOT_DIR}/infra/scripts/bootstrap-lsquic.sh" ]]; then
+    echo "Missing executable lsquic bootstrap script: ${ROOT_DIR}/infra/scripts/bootstrap-lsquic.sh" >&2
     exit 1
 fi
 
-if [[ -d "${ROOT_DIR}/quiche/.git" ]]; then
-    "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" --verify-lock
-    "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" --verify-current
+if [[ -d "${ROOT_DIR}/lsquic废弃/.git" ]]; then
+    "${ROOT_DIR}/infra/scripts/bootstrap-lsquic.sh" --verify-lock
+    "${ROOT_DIR}/infra/scripts/bootstrap-lsquic.sh" --verify-current
 else
-    "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh"
+    "${ROOT_DIR}/infra/scripts/bootstrap-lsquic.sh"
 fi
 
-if [[ -f "${ROOT_DIR}/quiche/quiche/Cargo.toml" ]]; then
-    QUICHE_CORE_CARGO="${ROOT_DIR}/quiche/quiche/Cargo.toml"
-elif [[ -f "${ROOT_DIR}/quiche/Cargo.toml" ]]; then
-    QUICHE_CORE_CARGO="${ROOT_DIR}/quiche/Cargo.toml"
+if [[ -f "${ROOT_DIR}/lsquic废弃/lsquic/Cargo.toml" ]]; then
+    LSQUIC_CORE_CARGO="${ROOT_DIR}/lsquic废弃/lsquic/Cargo.toml"
+elif [[ -f "${ROOT_DIR}/lsquic废弃/Cargo.toml" ]]; then
+    LSQUIC_CORE_CARGO="${ROOT_DIR}/lsquic废弃/Cargo.toml"
 else
-    echo "Missing required PIE source-package input: ${ROOT_DIR}/quiche/Cargo.toml (and ${ROOT_DIR}/quiche/quiche/Cargo.toml)." >&2
+    echo "Missing required PIE source-package input: ${ROOT_DIR}/lsquic废弃/Cargo.toml (and ${ROOT_DIR}/lsquic废弃/lsquic/Cargo.toml)." >&2
     exit 1
 fi
 
@@ -97,8 +97,8 @@ for required in \
     "${ROOT_DIR}/composer.json" \
     "${ROOT_DIR}/extension/config.m4" \
     "${ROOT_DIR}/extension/Makefile.frag" \
-    "${QUICHE_CORE_CARGO}" \
-    "${ROOT_DIR}/quiche/apps/Cargo.toml"; do
+    "${LSQUIC_CORE_CARGO}" \
+    "${ROOT_DIR}/lsquic废弃/apps/Cargo.toml"; do
     if [[ ! -e "${required}" ]]; then
         echo "Missing required PIE source-package input: ${required}" >&2
         exit 1
@@ -122,14 +122,14 @@ tar \
     --exclude='./compat-artifacts' \
     --exclude='./.cargo' \
     --exclude='./extension/build' \
-    --exclude='./extension/quiche/target' \
+    --exclude='./extension/lsquic' \
     --exclude='./extension/tests/http3_ticket_server/target' \
     --exclude='./extension/modules' \
     --exclude='./extension/Makefile' \
     --exclude='./extension/config.cache' \
     --exclude='./extension/config.log' \
     --exclude='./extension/config.status' \
-    --exclude='./quiche/target' \
+    --exclude='./lsquic' \
     --exclude='./demo/video-chat/node_modules' \
     -C "${ROOT_DIR}" \
     -cf - . | tar -C "${STAGE_ROOT}" -xf -

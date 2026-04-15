@@ -9,7 +9,7 @@ Use it through the wrapper:
 ./benchmarks/run-canonical.sh
 ```
 
-The wrapper loads the built extension, configures the same quiche runtime
+The wrapper loads the built extension, configures the same lsquic runtime
 environment as the canonical PHPT flow, and enables the local config override
 policy needed by the measured runtime slices.
 

@@ -5,7 +5,7 @@ typedef struct _king_server_http2_hpack_huffman_code {
 
 /*
  * RFC 7541 Appendix B static HPACK Huffman table. The codes are stored in the
- * same least-significant-bit-aligned form used by quiche/octets so the decoder
+ * same least-significant-bit-aligned form used by lsquic/octets so the decoder
  * can match incrementally accumulated request bits without rewriting them.
  */
 static const king_server_http2_hpack_huffman_code king_server_http2_hpack_huffman_codes[257] = {

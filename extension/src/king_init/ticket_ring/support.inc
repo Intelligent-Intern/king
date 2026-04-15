@@ -4,23 +4,11 @@
  * zeroization before a slot is reused.
  */
 
+#include <stdlib.h>
+
 static void king_best_effort_random_fill(void *buffer, size_t len)
 {
-    unsigned char *cursor = (unsigned char *) buffer;
-    size_t offset = 0;
-
-    while (offset < len) {
-        ssize_t written = getrandom(cursor + offset, len - offset, 0);
-
-        if (written < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            break;
-        }
-
-        offset += (size_t) written;
-    }
+    arc4random_buf(buffer, len);
 }
 
 static void king_ticket_ring_shred_slot(king_ticket_ring_slot_t *slot)

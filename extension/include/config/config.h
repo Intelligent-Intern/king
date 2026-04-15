@@ -40,10 +40,34 @@
 
 #include <php.h>
 
-#if defined(KING_RUNTIME_BUILD) && !defined(QUICHE_H)
-typedef void quiche_config;
+#if defined(KING_RUNTIME_BUILD) && !defined(LSQUIC_H)
+typedef void lsquic_config;
+typedef void lsquic_conn;
+typedef void lsquic_h3_config;
+typedef void lsquic_h3_conn;
+typedef void lsquic_h3_event;
+typedef struct { int type; const uint8_t *name; size_t name_len; const uint8_t *value; size_t value_len; } lsquic_h3_header;
+typedef struct { const struct sockaddr *from; socklen_t from_len; struct sockaddr *to; socklen_t to_len; } lsquic_recv_info;
+typedef struct { struct sockaddr *to; socklen_t to_len; } lsquic_send_info;
+#define LSQUIC_ERR_DONE 1
+#define LSQUIC_ERR_BUFFER_TOO_SHORT 2
+#define LSQUIC_ERR_TLS_FAIL 100
+#define LSQUIC_ERR_CRYPTO_FAIL 101
+#define LSQUIC_MAX_CONN_ID_LEN 20
+#define LSQUIC_PROTOCOL_VERSION 0
+#define LSQUIC_H3_APPLICATION_PROTOCOL "h3"
+#define LSQUIC_H3_ERR_DONE 1
+#define LSQUIC_H3_ERR_STREAM_BLOCKED 2
+#define LSQUIC_H3_TRANSPORT_ERR_STREAM_STOPPED 0x1
+#define LSQUIC_H3_TRANSPORT_ERR_STREAM_RESET 0x2
+enum lsquic_h3_event_type {
+  LSQUIC_H3_EVENT_HEADERS, LSQUIC_H3_EVENT_DATA, LSQUIC_H3_EVENT_FINISHED, 
+  LSQUIC_H3_EVENT_RESET, LSQUIC_H3_EVENT_GOAWAY, LSQUIC_H3_EVENT_SETTINGS,
+  LSQUIC_H3_EVENT_cancel_PUSH, LSQUIC_H3_EVENT_PRIORITY_UPDATE 
+};
+typedef struct lsquic_conn lsquic_conn_t;
 #else
-#  include <quiche.h>
+typedef void lsquic_config;
 #endif
 
 /*
@@ -106,8 +130,8 @@ typedef void quiche_config;
  * defined in the various sub-module headers.
  */
 typedef struct king_cfg_s {
-    /* The underlying raw config handle from the quiche library. */
-    quiche_config *quiche_cfg;
+    /* The underlying raw config handle from the lsquic library. */
+    lsquic_config *lsquic_cfg;
 
     /* Set once the config is consumed by a live session. */
     zend_bool frozen;

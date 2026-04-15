@@ -3,7 +3,7 @@ static zend_result king_http3_prepare_request_headers(
     const char *method_str,
     size_t method_len,
     zval *headers_array,
-    quiche_h3_header **headers_out,
+    lsquic_h3_header **headers_out,
     size_t *header_count_out,
     zend_string ***owned_strings_out,
     size_t *owned_string_count_out,
@@ -11,7 +11,7 @@ static zend_result king_http3_prepare_request_headers(
 {
     size_t header_count = 4;
     size_t owned_count = 0;
-    quiche_h3_header *headers;
+    lsquic_h3_header *headers;
     zend_string **owned_strings;
     size_t index = 0;
     zend_string *value_string;
@@ -136,7 +136,7 @@ failure:
 }
 
 static void king_http3_free_request_headers(
-    quiche_h3_header *headers,
+    lsquic_h3_header *headers,
     zend_string **owned_strings,
     size_t owned_string_count)
 {
@@ -188,7 +188,7 @@ static zend_result king_http3_materialize_response(
         response->body.s != NULL ? ZSTR_LEN(response->body.s) : 0
     );
     add_assoc_string(return_value, "protocol", "http/3");
-    add_assoc_string(return_value, "transport_backend", "quiche_h3");
+    add_assoc_string(return_value, "transport_backend", "lsquic_h3");
     add_assoc_string(return_value, "effective_url", (char *) url_str);
     add_assoc_long(
         return_value,

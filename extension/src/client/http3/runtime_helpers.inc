@@ -56,17 +56,17 @@ static void king_http3_multi_requests_destroy(
 
 static void king_http3_runtime_destroy(king_http3_request_runtime_t *runtime)
 {
-    if (runtime->h3_conn != NULL && king_http3_quiche.quiche_h3_conn_free_fn != NULL) {
-        king_http3_quiche.quiche_h3_conn_free_fn(runtime->h3_conn);
+    if (runtime->h3_conn != NULL && king_http3_lsquic.lsquic_h3_conn_free_fn != NULL) {
+        king_http3_lsquic.lsquic_h3_conn_free_fn(runtime->h3_conn);
     }
-    if (runtime->h3_config != NULL && king_http3_quiche.quiche_h3_config_free_fn != NULL) {
-        king_http3_quiche.quiche_h3_config_free_fn(runtime->h3_config);
+    if (runtime->h3_config != NULL && king_http3_lsquic.lsquic_h3_config_free_fn != NULL) {
+        king_http3_lsquic.lsquic_h3_config_free_fn(runtime->h3_config);
     }
-    if (runtime->conn != NULL && king_http3_quiche.quiche_conn_free_fn != NULL) {
-        king_http3_quiche.quiche_conn_free_fn(runtime->conn);
+    if (runtime->conn != NULL && king_http3_lsquic.lsquic_conn_free_fn != NULL) {
+        king_http3_lsquic.lsquic_conn_free_fn(runtime->conn);
     }
-    if (runtime->config != NULL && king_http3_quiche.quiche_config_free_fn != NULL) {
-        king_http3_quiche.quiche_config_free_fn(runtime->config);
+    if (runtime->config != NULL && king_http3_lsquic.lsquic_config_free_fn != NULL) {
+        king_http3_lsquic.lsquic_config_free_fn(runtime->config);
     }
     if (runtime->socket_fd >= 0) {
         close(runtime->socket_fd);
@@ -117,12 +117,12 @@ static void king_http3_seed_ticket_from_ring(king_http3_request_runtime_t *runti
 
     if (runtime == NULL
         || runtime->conn == NULL
-        || king_http3_quiche.quiche_conn_set_session_fn == NULL) {
+        || king_http3_lsquic.lsquic_conn_set_session_fn == NULL) {
         return;
     }
 
     if (king_ticket_ring_get(ticket_buffer, &ticket_len) == 1
-        && king_http3_quiche.quiche_conn_set_session_fn(
+        && king_http3_lsquic.lsquic_conn_set_session_fn(
             runtime->conn,
             ticket_buffer,
             ticket_len
@@ -144,16 +144,16 @@ static void king_http3_refresh_tls_state(king_http3_request_runtime_t *runtime)
 
     king_http3_refresh_transport_stats(runtime);
 
-    if (king_http3_quiche.quiche_conn_is_resumed_fn != NULL) {
+    if (king_http3_lsquic.lsquic_conn_is_resumed_fn != NULL) {
         runtime->tls_session_resumed =
-            king_http3_quiche.quiche_conn_is_resumed_fn(runtime->conn);
+            king_http3_lsquic.lsquic_conn_is_resumed_fn(runtime->conn);
     }
 
-    if (king_http3_quiche.quiche_conn_session_fn == NULL) {
+    if (king_http3_lsquic.lsquic_conn_session_fn == NULL) {
         return;
     }
 
-    king_http3_quiche.quiche_conn_session_fn(
+    king_http3_lsquic.lsquic_conn_session_fn(
         runtime->conn,
         &session_bytes,
         &session_len
@@ -175,19 +175,19 @@ static void king_http3_refresh_tls_state(king_http3_request_runtime_t *runtime)
 static void king_http3_flush_egress_best_effort(king_http3_request_runtime_t *runtime)
 {
     uint8_t out[KING_HTTP3_MAX_DATAGRAM_SIZE];
-    quiche_send_info send_info;
+    lsquic_send_info send_info;
     ssize_t written;
 
     if (runtime == NULL || runtime->conn == NULL || runtime->socket_fd < 0) {
         return;
     }
 
-    while ((written = king_http3_quiche.quiche_conn_send_fn(
+    while ((written = king_http3_lsquic.lsquic_conn_send_fn(
                 runtime->conn,
                 out,
                 sizeof(out),
                 &send_info
-            )) != QUICHE_ERR_DONE) {
+            )) != LSQUIC_ERR_DONE) {
         ssize_t sent;
 
         if (written <= 0) {
@@ -221,20 +221,20 @@ static void king_http3_propagate_cancel_close(king_http3_request_runtime_t *runt
 
     if (runtime == NULL
         || runtime->conn == NULL
-        || king_http3_quiche.quiche_conn_close_fn == NULL) {
+        || king_http3_lsquic.lsquic_conn_close_fn == NULL) {
         return;
     }
 
-    if (king_http3_quiche.quiche_conn_is_closed_fn != NULL
-        && king_http3_quiche.quiche_conn_is_closed_fn(runtime->conn)) {
+    if (king_http3_lsquic.lsquic_conn_is_closed_fn != NULL
+        && king_http3_lsquic.lsquic_conn_is_closed_fn(runtime->conn)) {
         return;
     }
 
     use_application_close =
-        king_http3_quiche.quiche_conn_is_established_fn != NULL
-        && king_http3_quiche.quiche_conn_is_established_fn(runtime->conn);
+        king_http3_lsquic.lsquic_conn_is_established_fn != NULL
+        && king_http3_lsquic.lsquic_conn_is_established_fn(runtime->conn);
 
-    if (king_http3_quiche.quiche_conn_close_fn(
+    if (king_http3_lsquic.lsquic_conn_close_fn(
             runtime->conn,
             use_application_close,
             KING_HTTP3_CANCEL_CLOSE_CODE,
@@ -265,7 +265,7 @@ static void king_http3_capture_post_response_tls_state(king_http3_request_runtim
         struct pollfd pfd;
         zend_long timeout_ms = deadline_ms - king_http3_now_ms();
 
-        if (king_http3_quiche.quiche_conn_is_closed_fn(runtime->conn)) {
+        if (king_http3_lsquic.lsquic_conn_is_closed_fn(runtime->conn)) {
             king_http3_refresh_tls_state(runtime);
             break;
         }
@@ -289,7 +289,7 @@ static void king_http3_capture_post_response_tls_state(king_http3_request_runtim
                 return;
 
             case 0:
-                king_http3_quiche.quiche_conn_on_timeout_fn(runtime->conn);
+                king_http3_lsquic.lsquic_conn_on_timeout_fn(runtime->conn);
                 king_http3_flush_egress_best_effort(runtime);
                 king_http3_refresh_tls_state(runtime);
                 continue;
@@ -323,7 +323,7 @@ static void king_http3_capture_post_response_tls_state(king_http3_request_runtim
             }
 
             {
-                quiche_recv_info recv_info;
+                lsquic_recv_info recv_info;
                 ssize_t done;
 
                 recv_info.from = (struct sockaddr *) &from;
@@ -331,13 +331,13 @@ static void king_http3_capture_post_response_tls_state(king_http3_request_runtim
                 recv_info.to = (struct sockaddr *) &runtime->local_addr;
                 recv_info.to_len = runtime->local_addr_len;
 
-                done = king_http3_quiche.quiche_conn_recv_fn(
+                done = king_http3_lsquic.lsquic_conn_recv_fn(
                     runtime->conn,
                     buffer,
                     (size_t) received,
                     &recv_info
                 );
-                if (done < 0 && done != QUICHE_ERR_DONE) {
+                if (done < 0 && done != LSQUIC_ERR_DONE) {
                     break;
                 }
             }
