@@ -111,7 +111,7 @@ export function resolveAuthorizedRedirect(target, role, routerInstance = router)
 
 router.beforeEach(async (to) => {
   if (sessionState.sessionToken) {
-    await ensureSessionRecovery(true);
+    await ensureSessionRecovery();
   } else if (!sessionState.recovered) {
     await ensureSessionRecovery();
   }

@@ -26,6 +26,11 @@ function normalizeExplicitOrigin(rawOrigin) {
 let preferredBackendOrigin = '';
 let preferredBackendWebSocketOrigin = '';
 
+function hasExplicitBackendOriginConfig() {
+  const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || '').trim();
+  return explicitOrigin !== '';
+}
+
 function detectDefaultBackendOrigin() {
   const envOrigin = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || '').trim();
   if (envOrigin !== '') {
@@ -107,6 +112,10 @@ function isLoopbackHost(hostname) {
 export function resolveBackendOriginCandidates() {
   const primary = resolveBackendOrigin();
   const candidates = [primary];
+
+  if (hasExplicitBackendOriginConfig()) {
+    return candidates;
+  }
 
   try {
     const parsed = new URL(primary);

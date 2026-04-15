@@ -531,10 +531,75 @@ const VISIBLE_PARTICIPANTS_LIMIT = 5;
 const PARTICIPANT_ACTIVITY_WINDOW_MS = 15_000;
 const DIRECTORY_USERS_ORDER_VALUES = ['role_then_name_asc', 'role_then_name_desc'];
 const DIRECTORY_USERS_STATUS_VALUES = ['all', 'active', 'disabled'];
-const DEFAULT_NATIVE_ICE_SERVERS = [
+
+function normalizeIceServerEntry(value) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  let urls = value.urls;
+  if (Array.isArray(urls)) {
+    urls = urls
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean);
+    if (urls.length === 0) {
+      return null;
+    }
+  } else {
+    urls = String(urls || '').trim();
+    if (urls === '') {
+      return null;
+    }
+  }
+
+  const normalized = { urls };
+  const username = String(value.username || '').trim();
+  const credential = String(value.credential || '').trim();
+
+  if (username !== '') normalized.username = username;
+  if (credential !== '') normalized.credential = credential;
+
+  return normalized;
+}
+
+function parseIceServersFromEnv(rawValue) {
+  const raw = String(rawValue || '').trim();
+  if (raw === '') {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+
+    const normalized = parsed
+      .map((entry) => normalizeIceServerEntry(entry))
+      .filter(Boolean);
+    return normalized.length > 0 ? normalized : null;
+  } catch {
+    const normalized = raw
+      .split(',')
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean)
+      .map((entry) => normalizeIceServerEntry({ urls: entry }))
+      .filter(Boolean);
+    return normalized.length > 0 ? normalized : null;
+  }
+}
+
+function parseEnvFlag(value, fallback = false) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === '') return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+}
+
+const DEFAULT_NATIVE_ICE_SERVERS = parseIceServersFromEnv(import.meta.env.VITE_VIDEOCHAT_ICE_SERVERS) || [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
+const SFU_RUNTIME_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_SFU, false);
 
 const reactionOptions = ['👍', '❤️', '🐘', '🥳', '😂', '😮', '😢', '🤔', '👏', '👎'];
 
@@ -3207,11 +3272,16 @@ onMounted(async () => {
 
   try {
     mediaRuntimeCapabilities.value = await detectMediaRuntimeCapabilities();
-    if (mediaRuntimeCapabilities.value.stageA) {
+    const shouldUseSfuRuntime = SFU_RUNTIME_ENABLED || !mediaRuntimeCapabilities.value.stageB;
+    if (mediaRuntimeCapabilities.value.stageA && shouldUseSfuRuntime) {
       console.log('[Codec] Runtime capability: WLVC WASM available');
       await switchMediaRuntimePath('wlvc_wasm', 'capability_probe_stage_a');
     } else if (mediaRuntimeCapabilities.value.stageB) {
-      console.warn('[Codec] Runtime capability: WLVC WASM unavailable, native WebRTC available');
+      if (mediaRuntimeCapabilities.value.stageA && !SFU_RUNTIME_ENABLED) {
+        console.info('[Codec] Runtime capability: WLVC WASM available, but SFU runtime is disabled; using native WebRTC');
+      } else {
+        console.warn('[Codec] Runtime capability: WLVC WASM unavailable, native WebRTC available');
+      }
       await switchMediaRuntimePath('webrtc_native', 'capability_probe_stage_b');
     } else {
       console.error('[Codec] Runtime capability: neither WLVC WASM nor native WebRTC available');
@@ -3236,7 +3306,7 @@ onMounted(async () => {
     setMediaRuntimePath('unsupported', 'capability_probe_error');
   }
 
-  if (sessionState.sessionToken && sessionState.userId) {
+  if (isWlvcRuntimePath() && sessionState.sessionToken && sessionState.userId) {
     initSFU();
   }
 
@@ -4475,14 +4545,17 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.video-container.local video,
-.video-container.remote video,
-.video-container.decoded video,
-.video-container canvas {
+.video-container :deep(video),
+.video-container :deep(canvas) {
+  position: absolute;
+  inset: 0;
   width: 100% !important;
   height: 100% !important;
-  max-width: none;
-  max-height: none;
+  min-width: 100% !important;
+  min-height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  display: block !important;
   object-fit: cover !important;
 }
 
@@ -4490,7 +4563,7 @@ onBeforeUnmount(() => {
   z-index: 10;
 }
 
-.video-container.local video {
+.video-container.local :deep(video) {
   transform: scaleX(-1);
 }
 
