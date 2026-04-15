@@ -96,24 +96,20 @@ Non-negotiable direction for this batch:
   (`model_inference_dispatch_route_module_order()`) returns the currently
   deployed module list; grows per leaf.
 - [x] `#M-3` `demo/model-inference/contracts/v1/api-ws-contract.catalog.json`
-  fixture published listing current endpoints + target-shape planned surfaces;
-  parity contract test lands at `#M-3` closure leaf below.
+  fixture published listing current endpoints + target-shape planned surfaces.
+- [x] `#M-1/#M-2 tests` Dispatcher-level contract tests landed at
+  `backend-king-php/tests/runtime-bootstrap-contract.{sh,php}` and
+  `backend-king-php/tests/router-module-order-contract.{sh,php}`: assert
+  `/health`, `/api/runtime`, `/api/bootstrap`, `/`, `/api/version`, and
+  preflight envelopes; assert the exact `model_inference_dispatch_route_module_order()`
+  list (currently `['runtime']`) and fail-closed `not_implemented` on every
+  target-shape path that has not yet landed its module.
+- [x] `#M-3 closure` `backend-king-php/tests/contract-catalog-parity-contract.{sh,php}`
+  asserts 1:1 between the live `api.*` / `ws.*` catalog entries and the
+  actually-served routes of the dispatcher, refuses target-shape paths leaking
+  into the live section, and locks the currently emitted error-code set.
 
 ### Open / To implement (priority order)
-
-- [ ] `#M-3` **Catalog parity contract test.** Add
-  `demo/model-inference/backend-king-php/tests/contract-catalog-parity-contract.sh`
-  (+ sibling `.php`) that walks `router.php` and asserts 1:1 with the
-  currently listed `api` + `ws` entries in
-  `demo/model-inference/contracts/v1/api-ws-contract.catalog.json`.
-  Done when: adding a route without a catalog entry (or vice versa) fails the
-  test; CI shard-1 gate wired up.
-
-- [ ] `#M-1/#M-2 tests` Add
-  `tests/runtime-bootstrap-contract.{sh,php}` and
-  `tests/router-module-order-contract.{sh,php}` mirroring the video-chat
-  pattern, asserting `/health`, `/api/runtime`, `/api/bootstrap`,
-  `/api/version` envelopes and the exact module-order list.
 
 - [ ] `#M-4` Runtime hardware profile kernel — real CPU/RAM/GPU probes
   (darwin: Metal via `sysctl`; linux: `nvidia-smi` / `rocminfo` exit-code
@@ -183,5 +179,12 @@ Non-negotiable direction for this batch:
 
 ### Next step (M-batch)
 
-- [ ] Start with `#M-1/#M-2 tests` (contract scripts for what just shipped),
-  then `#M-3` (catalog parity gate), then `#M-4` (hardware profile).
+- [ ] Continue with `#M-4` (runtime hardware profile kernel): darwin `sysctl`
+  + Metal availability probes, linux `nvidia-smi` / `rocminfo` exit-code
+  probes, no faked VRAM; publish
+  `demo/model-inference/contracts/v1/node-profile.contract.json` and
+  `GET /api/node/profile`; add `backend-king-php/domain/profile/hardware_profile.php`
+  + `backend-king-php/http/module_profile.php`; extend
+  `model_inference_dispatch_route_module_order()` to `['runtime', 'profile']`
+  and update the router-module-order + catalog-parity tests in the same
+  commit.
