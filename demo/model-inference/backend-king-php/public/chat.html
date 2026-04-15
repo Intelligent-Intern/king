@@ -548,6 +548,39 @@
     }
     return null;
   }
+  // The registry (models response) is the source of truth for the
+  // quant dropdown. The old dropdown listed every enum value, which
+  // caused `model_not_found` when the user picked a quant that hadn't
+  // been registered.
+  let registeredModels = [];
+  function refreshQuantOptionsForModelName(modelName) {
+    const matches = registeredModels.filter(m => m.model_name === modelName);
+    const current = els.quantization.value;
+    els.quantization.innerHTML = '';
+    if (matches.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '(none registered)';
+      els.quantization.appendChild(opt);
+      els.quantization.disabled = true;
+      return;
+    }
+    els.quantization.disabled = false;
+    // Quality order: F16 > Q8_0 > Q6_K > Q5_K > Q4_K > Q4_0 > Q3_K > Q2_K.
+    const rank = { 'F16': 100, 'Q8_0': 80, 'Q6_K': 60, 'Q5_K': 50, 'Q4_K': 40, 'Q4_0': 35, 'Q3_K': 30, 'Q2_K': 20 };
+    const seenQuants = [...new Set(matches.map(m => m.quantization))]
+      .sort((a, b) => (rank[b] || 0) - (rank[a] || 0));
+    for (const q of seenQuants) {
+      const opt = document.createElement('option');
+      opt.value = q;
+      opt.textContent = q;
+      els.quantization.appendChild(opt);
+    }
+    els.quantization.value = seenQuants.includes(current) ? current : seenQuants[0];
+  }
+  els.modelName.addEventListener('change', () => refreshQuantOptionsForModelName(els.modelName.value.trim()));
+  els.modelName.addEventListener('input', () => refreshQuantOptionsForModelName(els.modelName.value.trim()));
+
   (async function fetchMeta() {
     const runtime = await fetchJsonWithRetry('/api/runtime');
     const models = await fetchJsonWithRetry('/api/models');
@@ -557,12 +590,16 @@
       els.nodeMeta.textContent = `node=${n} king=${ver} models=${models && models.count != null ? models.count : '?'}`;
     }
     if (models && Array.isArray(models.items) && models.items.length > 0) {
+      registeredModels = models.items.map(m => ({ model_name: m.model_name, quantization: m.quantization }));
       const first = models.items[0];
       els.modelName.value = first.model_name;
-      const opt = [...els.quantization.options].find(o => o.value === first.quantization);
-      if (opt) els.quantization.value = first.quantization;
-      els.modelLabel.textContent = 'model=' + first.model_name + '/' + first.quantization;
+      refreshQuantOptionsForModelName(first.model_name);
+      if (els.quantization.value) {
+        els.modelLabel.textContent = 'model=' + first.model_name + '/' + els.quantization.value;
+      }
     } else if (models && Array.isArray(models.items)) {
+      registeredModels = [];
+      refreshQuantOptionsForModelName('');
       els.modelLabel.textContent = 'model=(none registered)';
       showErrorMessage('no_model_registered', 'No models in the registry. Run scripts/seed-model.php or boot the server with MODEL_INFERENCE_AUTOSEED=1.');
     }

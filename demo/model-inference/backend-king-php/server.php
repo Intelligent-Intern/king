@@ -109,46 +109,78 @@ $getInferenceMetrics = static function () use ($inferenceMetrics): InferenceMetr
     return $inferenceMetrics;
 };
 
-// Optional: auto-seed the SmolLM2 GGUF fixture when registry is empty.
-// Gated on MODEL_INFERENCE_AUTOSEED=1 so CI / contract tests that start
-// from a clean slate are never surprised by an implicit registry row.
+// Optional: auto-seed SmolLM2 GGUF fixtures when they are missing from
+// the registry. Gated on MODEL_INFERENCE_AUTOSEED=1 so CI / contract
+// tests that start from a clean slate are never surprised by an implicit
+// registry row. Every matching file in the fixtures dir is considered;
+// already-registered (model_name, quantization) pairs are skipped
+// silently so re-boots are idempotent.
 if (in_array(strtolower((string) (getenv('MODEL_INFERENCE_AUTOSEED') ?: '0')), ['1', 'true', 'yes', 'on'], true)) {
-    $seedGguf = getenv('MODEL_INFERENCE_AUTOSEED_GGUF_PATH')
-        ?: (__DIR__ . '/.local/fixtures/SmolLM2-135M-Instruct-Q4_K_S.gguf');
-    if (is_file($seedGguf)) {
-        try {
-            $seedPdo = model_inference_open_sqlite_pdo($dbPath);
-            $seedStmt = $seedPdo->query('SELECT COUNT(1) AS c FROM models');
-            $seedCount = (int) (($seedStmt->fetch()['c'] ?? 0));
-            if ($seedCount === 0) {
-                $seedStream = fopen($seedGguf, 'rb');
-                if (is_resource($seedStream)) {
-                    try {
-                        model_inference_registry_create_from_stream($seedPdo, [
-                            'model_name' => 'SmolLM2-135M-Instruct',
-                            'family' => 'smollm2',
-                            'quantization' => 'Q4_K',
-                            'parameter_count' => 135000000,
-                            'context_length' => 2048,
-                            'license' => 'apache-2.0',
-                            'min_ram_bytes' => 268435456,
-                            'min_vram_bytes' => 0,
-                            'prefers_gpu' => false,
-                            'source_url' => 'https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF',
-                        ], $seedStream);
-                        $log('auto-seeded SmolLM2-135M-Instruct/Q4_K from ' . $seedGguf);
-                    } finally {
-                        if (is_resource($seedStream)) {
-                            fclose($seedStream);
-                        }
-                    }
+    $fixtureDir = getenv('MODEL_INFERENCE_AUTOSEED_FIXTURE_DIR')
+        ?: (__DIR__ . '/.local/fixtures');
+
+    // Filename (as published by bartowski/SmolLM2-135M-Instruct-GGUF) → canonical
+    // quantization tag pinned by the inference-request / model-registry contracts.
+    $knownFixtures = [
+        'SmolLM2-135M-Instruct-Q2_K.gguf'   => 'Q2_K',
+        'SmolLM2-135M-Instruct-Q3_K_M.gguf' => 'Q3_K',
+        'SmolLM2-135M-Instruct-Q4_0.gguf'   => 'Q4_0',
+        'SmolLM2-135M-Instruct-Q4_K_S.gguf' => 'Q4_K',
+        'SmolLM2-135M-Instruct-Q5_K_M.gguf' => 'Q5_K',
+        'SmolLM2-135M-Instruct-Q6_K.gguf'   => 'Q6_K',
+        'SmolLM2-135M-Instruct-Q8_0.gguf'   => 'Q8_0',
+        'SmolLM2-135M-Instruct-f16.gguf'    => 'F16',
+    ];
+
+    $seededCount = 0;
+    $skippedCount = 0;
+    try {
+        $seedPdo = model_inference_open_sqlite_pdo($dbPath);
+        $conflictStmt = $seedPdo->prepare('SELECT COUNT(1) AS c FROM models WHERE model_name = :n AND quantization = :q');
+        foreach ($knownFixtures as $fileName => $quantization) {
+            $path = $fixtureDir . '/' . $fileName;
+            if (!is_file($path)) {
+                continue;
+            }
+            $conflictStmt->execute([':n' => 'SmolLM2-135M-Instruct', ':q' => $quantization]);
+            if ((int) ($conflictStmt->fetch()['c'] ?? 0) > 0) {
+                $skippedCount++;
+                continue;
+            }
+            $stream = @fopen($path, 'rb');
+            if (!is_resource($stream)) {
+                $log('auto-seed skipped (cannot open): ' . $path);
+                continue;
+            }
+            try {
+                model_inference_registry_create_from_stream($seedPdo, [
+                    'model_name' => 'SmolLM2-135M-Instruct',
+                    'family' => 'smollm2',
+                    'quantization' => $quantization,
+                    'parameter_count' => 135000000,
+                    'context_length' => 2048,
+                    'license' => 'apache-2.0',
+                    'min_ram_bytes' => 268435456,
+                    'min_vram_bytes' => 0,
+                    'prefers_gpu' => false,
+                    'source_url' => 'https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF',
+                ], $stream);
+                $seededCount++;
+                $log(sprintf('auto-seeded SmolLM2-135M-Instruct/%s from %s', $quantization, $fileName));
+            } catch (Throwable $seedEntryError) {
+                $log('auto-seed entry failed (non-fatal): ' . $seedEntryError->getMessage());
+            } finally {
+                if (is_resource($stream)) {
+                    fclose($stream);
                 }
             }
-            unset($seedPdo);
-        } catch (Throwable $seedError) {
-            $log('auto-seed failed (non-fatal): ' . $seedError->getMessage());
         }
+        unset($seedPdo);
+    } catch (Throwable $seedError) {
+        $log('auto-seed bootstrap failed (non-fatal): ' . $seedError->getMessage());
     }
+
+    $log(sprintf('auto-seed summary: seeded=%d skipped_existing=%d fixture_dir=%s', $seededCount, $skippedCount, $fixtureDir));
 }
 
 register_shutdown_function(static function () use ($log): void {
