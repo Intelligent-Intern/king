@@ -473,6 +473,7 @@ import { BackgroundFilterController } from './backgroundFilterController';
 import { BackgroundFilterBaselineCollector } from './backgroundFilterBaseline';
 import { evaluateBackgroundFilterGates } from './backgroundFilterGates';
 import { detectMediaRuntimeCapabilities } from './mediaRuntimeCapabilities';
+import { appendMediaRuntimeTransitionEvent } from './mediaRuntimeTelemetry';
 import { SFUClient } from '../../lib/sfu/sfuClient';
 import { createWasmEncoder, createWasmDecoder } from '../../lib/wasm/wasm-codec';
 
@@ -778,8 +779,29 @@ function isNativeWebRtcRuntimePath() {
 }
 
 function setMediaRuntimePath(nextPath, reason) {
-  mediaRuntimePath.value = String(nextPath || '').trim() || 'unsupported';
-  mediaRuntimeReason.value = String(reason || '').trim() || 'unspecified';
+  const previousPath = mediaRuntimePath.value;
+  const normalizedPath = String(nextPath || '').trim() || 'unsupported';
+  const normalizedReason = String(reason || '').trim() || 'unspecified';
+
+  mediaRuntimePath.value = normalizedPath;
+  mediaRuntimeReason.value = normalizedReason;
+
+  if (previousPath !== normalizedPath) {
+    appendMediaRuntimeTransitionEvent({
+      from_path: previousPath,
+      to_path: normalizedPath,
+      reason: normalizedReason,
+      user_id: currentUserId.value,
+      call_id: activeCallId.value,
+      room_id: activeRoomId.value,
+      capabilities: {
+        stage_a: mediaRuntimeCapabilities.value.stageA,
+        stage_b: mediaRuntimeCapabilities.value.stageB,
+        preferred_path: mediaRuntimeCapabilities.value.preferredPath,
+        reasons: mediaRuntimeCapabilities.value.reasons,
+      },
+    });
+  }
 }
 
 function isUuidLike(value) {
