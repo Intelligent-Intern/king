@@ -108,6 +108,32 @@ Non-negotiable direction for this batch:
   asserts 1:1 between the live `api.*` / `ws.*` catalog entries and the
   actually-served routes of the dispatcher, refuses target-shape paths leaking
   into the live section, and locks the currently emitted error-code set.
+- [x] `#M-6` Pure model-fit selector landed at
+  `backend-king-php/domain/registry/model_fit_selector.php` as a pure
+  function (no I/O, no DB, no kernel calls). Signature:
+  `model_inference_select_model_fit(array $profile, array $registry, array $options = []): array` →
+  `{winner, candidates, rejected, rules_applied}`. Filter sequence (all
+  fail-closed and traced in `rejected[].reason`): `model_name_filter`,
+  `quantization_filter`, `context_length_below_minimum`,
+  `ram_budget_exceeded`, `quantization_not_supported`,
+  `gpu_required_but_none_present`, `vram_unreadable_cpu_fallback_requires_zero_vram`
+  (honours the `#M-4` rule that unreadable VRAM MUST NOT be treated as an
+  arbitrary budget), `vram_budget_exceeded`. Deterministic ordering:
+  parameter_count DESC → quantization precision DESC
+  (`F16>Q8_0>Q6_K>Q5_K>Q4_K>Q4_0>Q3_K>Q2_K`, unknown tags rank 0) →
+  `model_id` ASC; the third tiebreak guarantees reproducibility on
+  identical inputs. Supports `options.model_name`, `options.quantization`,
+  and `options.min_context_tokens`. `tests/model-fit-selector-contract.{sh,php}`
+  covers the CPU-only darwin (Metal present, VRAM unreadable → CPU
+  fallback) tiebreak, CUDA 24 GiB picks the largest 13B, CUDA 4 GiB forces
+  7B Q4_K over VRAM-hungry 7B Q8_0 and 13B, 2 GiB edge gets only
+  TinyLlama Q4_0, Q8_0-stripped quantization support filters out the
+  Q8_0 TinyLlama with `quantization_not_supported`, a 1 GiB host has
+  zero candidates and five rejections, `model_name` + `min_context_tokens`
+  filters work, and input-order independence + quantization-rank sanity
+  are asserted explicitly. No dispatcher surface yet — the selector feeds
+  `#M-7` worker lifecycle. Maps to tracker V.2, V.3, Z.3 (still unticked
+  pending post-merge sweep).
 - [x] `#M-5` Object-store-backed model registry landed at
   `backend-king-php/domain/registry/model_registry.php` +
   `backend-king-php/http/module_registry.php` +
@@ -165,9 +191,6 @@ Non-negotiable direction for this batch:
 
 ### Open / To implement (priority order)
 
-- [ ] `#M-6` Pure model-fit selector — given profile + registry, picks largest
-  fitting GGUF preferring higher quantization. Maps to `V.2`, `V.3`, `Z.3`.
-
 - [ ] `#M-7` `LlamaCppWorker` lifecycle — spawn / health / drain / stop
   `llama.cpp server` as a King-owned subordinate with ephemeral loopback port.
   Real tiny GGUF fixture (≤150 MB Q4_0 via LFS or CI-fetch with checksum;
@@ -222,14 +245,14 @@ Non-negotiable direction for this batch:
 
 ### Next step (M-batch)
 
-- [ ] Continue with `#M-6` (pure model-fit selector): given a profile
-  envelope (`#M-4`) and a registry list (`#M-5`), deterministically pick
-  the largest GGUF whose `requirements.min_ram_bytes` and
-  `requirements.min_vram_bytes` fit within the node's observed budget,
-  breaking ties by higher quantization. Add
-  `backend-king-php/domain/registry/model_fit_selector.php` as a pure
-  function (no I/O, no DB); add
-  `tests/model-fit-selector-contract.{sh,php}` with fixture profiles
-  (CPU-only darwin, CUDA linux, low-RAM edge) and fixture registry
-  fixtures proving deterministic pick + reverse flips. No dispatcher
-  surface yet (M-6 feeds M-7 worker lifecycle).
+- [ ] Continue with `#M-7` (`LlamaCppWorker` lifecycle): spawn the
+  pinned `llama.cpp server` binary as a King-owned subordinate process
+  bound to an ephemeral loopback port; GGUF path resolved via
+  `model_inference_select_model_fit()` + `king_object_store_get_to_stream`
+  into a local cache; wait for the worker's `/health` to report ok;
+  expose `start / health / drain / stop` through a PHP-side
+  `LlamaCppWorker` class under `support/llama_cpp_worker.php`; wire
+  `/api/worker` diagnostics endpoint; commit a ≤150 MiB Q4_0 tinyllama
+  fixture (LFS or CI-fetch with checksum gate, **no mock mode**); add
+  `tests/llama-cpp-worker-contract.{sh,php}` that boots the worker,
+  drains, and asserts clean exit. Maps to Z.1, Z.4, V.1.
