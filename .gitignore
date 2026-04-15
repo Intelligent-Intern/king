@@ -40,6 +40,12 @@ dist/
 demo/video-chat/frontend/.vite/
 demo/video-chat/**/src/lib/wasm/build/
 demo/video-chat/frontend/demo/video-chat/frontend/
+
+# model-inference backend: ephemeral sqlite + object-store + GGUF fixture
+# installed on demand via
+# demo/model-inference/backend-king-php/scripts/install-llama-runtime.sh.
+demo/model-inference/backend-king-php/.local/
+
 __pycache__/
 .pytest_cache/
 .mypy_cache/

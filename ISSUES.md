@@ -108,6 +108,49 @@ Non-negotiable direction for this batch:
   asserts 1:1 between the live `api.*` / `ws.*` catalog entries and the
   actually-served routes of the dispatcher, refuses target-shape paths leaking
   into the live section, and locks the currently emitted error-code set.
+- [x] `#M-7` `LlamaCppWorker` lifecycle landed at
+  `backend-king-php/support/llama_cpp_worker.php`. Real subordinate process:
+  `start()` validates a real GGUF path, `proc_open`s the pinned
+  `llama.cpp server` binary with `-m … --host 127.0.0.1 --port … -c …
+  -n … --no-webui`, pins `LD_LIBRARY_PATH` to the bundle directory, sends
+  stdout+stderr to a configurable log path, and transitions state
+  `stopped → starting` on success. `health()` probes
+  `http://127.0.0.1:port/health` through `king_http1_request_send`
+  (dogfoods the King HTTP/1 client; falls back to a bounded PHP stream
+  probe only when the extension is absent) and promotes the worker to
+  `ready` on the first 200 response. `waitForReady()` is bounded, fails
+  closed on unexpected exit, and never caches a stale snapshot.
+  `drain()` sends SIGTERM, then SIGKILL after the deadline, and always
+  ends with `proc_close()` + `state=stopped`; `stop()` is an alias with
+  a 2 s budget; `__destruct()` drains any still-running child.
+  `state()` reconciles `proc_get_status` on every call so an unplanned
+  exit flips to `error` without silent drift. `diagnostics()` emits the
+  full snapshot consumed later by `/api/worker` in `#M-10`.
+  No mock mode — if the binary or GGUF is missing, the class throws.
+  `tests/llama-cpp-worker-contract.{sh,php}` spawns a real `llama.cpp
+  server` against the pinned SmolLM2-135M-Instruct-Q4_K_S fixture,
+  asserts `/health` returns `{"status":"ok"}`, exercises diagnostics,
+  drains + reaps (confirmed via `posix_kill(pid, 0) === false`),
+  re-starts on a fresh ephemeral port, rejects double-start with a
+  `RuntimeException`, rejects missing GGUF, and refuses construction
+  with a missing binary. The `.sh` wrapper SKIPs cleanly when the
+  llama.cpp runtime or fixture is not installed; CI and the dev
+  container run it as a hard gate.
+  `scripts/install-llama-runtime.sh` is the repeatable installer:
+  downloads the pinned llama.cpp `b8802` Ubuntu (arm64 or x64) release
+  archive, verifies committed SHA-256
+  (`64ab9e2b…0eda` / `6be3f247…c3f`) before extraction, and fetches the
+  SmolLM2-135M-Instruct-Q4_K_S GGUF (102 039 904 bytes, SHA-256
+  `a8654d8e…22a0`) into `backend-king-php/.local/fixtures/`. The
+  `Dockerfile` runs the installer at image build time unless
+  `MODEL_INFERENCE_SKIP_LLAMA_INSTALL=1`. `.gitignore` excludes the
+  `.local/` staging directory so the 100+ MiB runtime + fixture never
+  enter the repo. Maps to tracker Z.1, Z.4, V.1 (still unticked pending
+  post-merge sweep). `/api/worker` diagnostics endpoint is deferred to
+  `#M-10` where a persistent worker handle exists to report on — the
+  dispatcher still returns 404 `not_implemented` for `/api/worker`
+  today, and `planned_surfaces_target_shape.api.worker_status` remains
+  its catalog home until then.
 - [x] `#M-6` Pure model-fit selector landed at
   `backend-king-php/domain/registry/model_fit_selector.php` as a pure
   function (no I/O, no DB, no kernel calls). Signature:
@@ -191,11 +234,6 @@ Non-negotiable direction for this batch:
 
 ### Open / To implement (priority order)
 
-- [ ] `#M-7` `LlamaCppWorker` lifecycle — spawn / health / drain / stop
-  `llama.cpp server` as a King-owned subordinate with ephemeral loopback port.
-  Real tiny GGUF fixture (≤150 MB Q4_0 via LFS or CI-fetch with checksum;
-  **no mock mode**). Maps to `Z.1`, `Z.4`, `V.1`.
-
 - [ ] `#M-8` `contracts/v1/inference-request.contract.json` + typed validation
   on `POST /api/infer` and WS `infer.start`; canonical error codes. Maps to
   `V.10`, `Z.10`.
@@ -245,14 +283,16 @@ Non-negotiable direction for this batch:
 
 ### Next step (M-batch)
 
-- [ ] Continue with `#M-7` (`LlamaCppWorker` lifecycle): spawn the
-  pinned `llama.cpp server` binary as a King-owned subordinate process
-  bound to an ephemeral loopback port; GGUF path resolved via
-  `model_inference_select_model_fit()` + `king_object_store_get_to_stream`
-  into a local cache; wait for the worker's `/health` to report ok;
-  expose `start / health / drain / stop` through a PHP-side
-  `LlamaCppWorker` class under `support/llama_cpp_worker.php`; wire
-  `/api/worker` diagnostics endpoint; commit a ≤150 MiB Q4_0 tinyllama
-  fixture (LFS or CI-fetch with checksum gate, **no mock mode**); add
-  `tests/llama-cpp-worker-contract.{sh,php}` that boots the worker,
-  drains, and asserts clean exit. Maps to Z.1, Z.4, V.1.
+- [ ] Continue with `#M-8` (typed inference-request envelope): publish
+  `demo/model-inference/contracts/v1/inference-request.contract.json`
+  pinning `{session_id, model_selector:{model_name, quantization,
+  prefer_local}, prompt, system?, sampling:{temperature, top_p, top_k,
+  max_tokens, seed?}, stream}`; add
+  `backend-king-php/domain/inference/inference_request.php` with a pure
+  `model_inference_validate_infer_request()` that returns the same
+  `field:reason` shape as the M-5 metadata validator and maps every
+  failure to a canonical error code in the catalog; add
+  `tests/inference-request-envelope-contract.{sh,php}` enumerating every
+  required field, out-of-range sampling values, and the rejection path
+  names. No dispatcher surface yet (the envelope is consumed by M-10
+  HTTP + M-11 WS streaming).
