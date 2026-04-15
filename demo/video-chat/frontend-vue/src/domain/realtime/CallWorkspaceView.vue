@@ -2987,68 +2987,126 @@ async function connectSocket() {
     return;
   }
 
-  const socketOrigins = resolveBackendWebSocketOriginCandidates();
-  const socketOrigin = socketOrigins[Math.min(reconnectAttempt.value, socketOrigins.length - 1)] || currentBackendOrigin();
-  const socket = new WebSocket(socketUrlForRoom(desiredRoomId.value, socketOrigin));
-  if (generation !== connectGeneration || manualSocketClose) {
-    try {
-      socket.close(1000, 'stale_connect');
-    } catch {
-      // ignore
-    }
-    return;
-  }
-  socketRef.value = socket;
+  const discoveredOrigins = resolveBackendWebSocketOriginCandidates();
+  const socketOrigins = discoveredOrigins.length > 0 ? discoveredOrigins : [currentBackendOrigin()];
+  const startIndex = socketOrigins.length > 0 ? reconnectAttempt.value % socketOrigins.length : 0;
+  const orderedSocketOrigins = [
+    ...socketOrigins.slice(startIndex),
+    ...socketOrigins.slice(0, startIndex),
+  ];
 
-  socket.addEventListener('open', () => {
-    reconnectAttempt.value = 0;
-    connectionState.value = 'online';
-    connectionReason.value = 'ready';
-    clearErrors();
-    startPingLoop();
-    requestRoomSnapshot();
-    if (usersSourceMode.value === 'directory' && activeTab.value === 'users') {
-      void refreshUsersDirectory();
+  const connectWithOriginAt = (originIndex) => {
+    if (generation !== connectGeneration || manualSocketClose) return;
+    if (originIndex >= orderedSocketOrigins.length) {
+      connectionState.value = 'retrying';
+      connectionReason.value = 'socket_unreachable';
+      scheduleReconnect();
+      return;
     }
-    void syncControlStateToPeers();
-    void syncModerationStateToPeers();
-  });
 
-  socket.addEventListener('message', handleSocketMessage);
-  socket.addEventListener('error', () => {
-    if (!manualSocketClose) {
+    const socketOrigin = orderedSocketOrigins[originIndex] || currentBackendOrigin();
+    const socket = new WebSocket(socketUrlForRoom(desiredRoomId.value, socketOrigin));
+    if (generation !== connectGeneration || manualSocketClose) {
+      try {
+        socket.close(1000, 'stale_connect');
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
+    socketRef.value = socket;
+    let opened = false;
+    let failedOver = false;
+
+    const failOverToNextOrigin = () => {
+      if (failedOver) return;
+      failedOver = true;
+      if (socketRef.value === socket) {
+        socketRef.value = null;
+      }
+      try {
+        socket.close(1000, 'failover');
+      } catch {
+        // ignore
+      }
+      connectWithOriginAt(originIndex + 1);
+    };
+
+    socket.addEventListener('open', () => {
+      if (generation !== connectGeneration || manualSocketClose) {
+        try {
+          socket.close(1000, 'stale_connect');
+        } catch {
+          // ignore
+        }
+        return;
+      }
+
+      opened = true;
+      reconnectAttempt.value = 0;
+      connectionState.value = 'online';
+      connectionReason.value = 'ready';
+      clearErrors();
+      startPingLoop();
+      requestRoomSnapshot();
+      if (usersSourceMode.value === 'directory' && activeTab.value === 'users') {
+        void refreshUsersDirectory();
+      }
+      void syncControlStateToPeers();
+      void syncModerationStateToPeers();
+    });
+
+    socket.addEventListener('message', handleSocketMessage);
+
+    socket.addEventListener('error', () => {
+      if (generation !== connectGeneration || manualSocketClose) return;
+      if (!opened) {
+        failOverToNextOrigin();
+        return;
+      }
       connectionState.value = 'retrying';
       connectionReason.value = 'socket_error';
-    }
-  });
-  socket.addEventListener('close', (event) => {
-    clearPingTimer();
-    if (socketRef.value === socket) {
-      socketRef.value = null;
-    }
+    });
 
-    if (manualSocketClose) {
-      return;
-    }
+    socket.addEventListener('close', (event) => {
+      if (generation !== connectGeneration) return;
 
-    const closeReason = String(event?.reason || '').trim().toLowerCase();
-    if (closeReason === 'session_invalidated') {
-      connectionState.value = 'expired';
-      connectionReason.value = closeReason;
-      manualSocketClose = true;
-      return;
-    }
-    if (closeReason === 'auth_backend_error' || (event?.code === 1008 && closeReason !== '')) {
-      connectionState.value = 'blocked';
-      connectionReason.value = closeReason || 'blocked';
-      manualSocketClose = true;
-      return;
-    }
+      clearPingTimer();
+      if (socketRef.value === socket) {
+        socketRef.value = null;
+      }
 
-    connectionState.value = 'retrying';
-    connectionReason.value = closeReason || 'socket_closed';
-    scheduleReconnect();
-  });
+      if (manualSocketClose) {
+        return;
+      }
+
+      const closeReason = String(event?.reason || '').trim().toLowerCase();
+      if (closeReason === 'session_invalidated') {
+        connectionState.value = 'expired';
+        connectionReason.value = closeReason;
+        manualSocketClose = true;
+        return;
+      }
+      if (closeReason === 'auth_backend_error' || (event?.code === 1008 && closeReason !== '')) {
+        connectionState.value = 'blocked';
+        connectionReason.value = closeReason || 'blocked';
+        manualSocketClose = true;
+        return;
+      }
+
+      if (!opened) {
+        failOverToNextOrigin();
+        return;
+      }
+
+      connectionState.value = 'retrying';
+      connectionReason.value = closeReason || 'socket_closed';
+      scheduleReconnect();
+    });
+  };
+
+  connectWithOriginAt(0);
 }
 
 function hangupCall() {

@@ -101,6 +101,30 @@ function deriveBackendSiblingWebSocketOriginCandidate() {
   }
 }
 
+function derivePortSiblingOrigin(rawOrigin, delta = 1) {
+  try {
+    const parsed = new URL(rawOrigin);
+    if (parsed.port === '') {
+      return '';
+    }
+
+    const port = Number.parseInt(parsed.port, 10);
+    if (!Number.isInteger(port) || port <= 0 || port >= 65535) {
+      return '';
+    }
+
+    const siblingPort = port + Number(delta || 0);
+    if (!Number.isInteger(siblingPort) || siblingPort <= 0 || siblingPort > 65535) {
+      return '';
+    }
+
+    parsed.port = String(siblingPort);
+    return normalizeExplicitOrigin(parsed.toString());
+  } catch {
+    return '';
+  }
+}
+
 export function resolveBackendOrigin() {
   if (preferredBackendOrigin !== '') {
     return preferredBackendOrigin;
@@ -187,11 +211,18 @@ function pushLoopbackAlias(candidates, origin) {
 export function resolveBackendWebSocketOriginCandidates() {
   const candidates = [];
   pushUniqueCandidate(candidates, resolveBackendWebSocketOrigin());
+  pushUniqueCandidate(candidates, resolveBackendOrigin());
   pushUniqueCandidate(candidates, deriveBackendSiblingWebSocketOriginCandidate());
 
-  const snapshot = [...candidates];
-  for (const origin of snapshot) {
+  const firstPassSnapshot = [...candidates];
+  for (const origin of firstPassSnapshot) {
+    pushUniqueCandidate(candidates, derivePortSiblingOrigin(origin, 1));
     pushLoopbackAlias(candidates, origin);
+  }
+
+  const secondPassSnapshot = [...candidates];
+  for (const origin of secondPassSnapshot) {
+    pushUniqueCandidate(candidates, derivePortSiblingOrigin(origin, 1));
   }
 
   return candidates;
