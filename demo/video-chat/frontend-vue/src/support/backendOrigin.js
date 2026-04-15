@@ -76,6 +76,31 @@ function detectDefaultBackendWebSocketOrigin() {
   return resolveBackendOrigin();
 }
 
+function deriveBackendSiblingWebSocketOriginCandidate() {
+  const explicitWsOrigin = String(import.meta.env.VITE_VIDEOCHAT_WS_ORIGIN || '').trim();
+  const explicitWsPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
+  if (explicitWsOrigin !== '' || explicitWsPort !== '') {
+    return '';
+  }
+
+  try {
+    const parsedBackendOrigin = new URL(resolveBackendOrigin());
+    if (parsedBackendOrigin.port === '') {
+      return '';
+    }
+
+    const backendPort = Number.parseInt(parsedBackendOrigin.port, 10);
+    if (!Number.isInteger(backendPort) || backendPort <= 0 || backendPort >= 65535) {
+      return '';
+    }
+
+    parsedBackendOrigin.port = String(backendPort + 1);
+    return normalizeExplicitOrigin(parsedBackendOrigin.toString());
+  } catch {
+    return '';
+  }
+}
+
 export function resolveBackendOrigin() {
   if (preferredBackendOrigin !== '') {
     return preferredBackendOrigin;
@@ -162,6 +187,7 @@ function pushLoopbackAlias(candidates, origin) {
 export function resolveBackendWebSocketOriginCandidates() {
   const candidates = [];
   pushUniqueCandidate(candidates, resolveBackendWebSocketOrigin());
+  pushUniqueCandidate(candidates, deriveBackendSiblingWebSocketOriginCandidate());
 
   const snapshot = [...candidates];
   for (const origin of snapshot) {
