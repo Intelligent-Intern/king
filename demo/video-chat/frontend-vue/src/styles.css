@@ -689,6 +689,24 @@ select {
   align-content: start;
 }
 
+.call-left-background-block {
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg-surface-strong);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.call-left-bg-btn {
+  height: 34px;
+}
+
+.call-left-bg-btn.active {
+  background: var(--bg-tab-active);
+  color: #f7f7f7;
+}
+
 @keyframes panelFade {
   from {
     transform: translateY(2px);

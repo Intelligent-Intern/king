@@ -164,9 +164,86 @@
 
           <section class="tab-panel panel-background" :class="{ active: callLeftTab === 'background' }">
             <div class="call-left-backgrounds">
-              <button class="btn full" type="button">No blur</button>
-              <button class="btn full" type="button">Slight blur</button>
-              <button class="btn full" type="button">Strong blur</button>
+              <section class="call-left-background-block">
+                <div class="call-left-settings-title">Background</div>
+                <button
+                  class="btn full call-left-bg-btn"
+                  :class="{ active: isBackgroundPresetActive('off') }"
+                  type="button"
+                  @click="applyBackgroundPreset('off')"
+                >
+                  No blur
+                </button>
+                <button
+                  class="btn full call-left-bg-btn"
+                  :class="{ active: isBackgroundPresetActive('light') }"
+                  type="button"
+                  @click="applyBackgroundPreset('light')"
+                >
+                  Slight blur
+                </button>
+                <button
+                  class="btn full call-left-bg-btn"
+                  :class="{ active: isBackgroundPresetActive('strong') }"
+                  type="button"
+                  @click="applyBackgroundPreset('strong')"
+                >
+                  Strong blur
+                </button>
+              </section>
+
+              <section class="call-left-background-block">
+                <div class="call-left-settings-title">Backdrop</div>
+                <label class="call-left-settings-field">
+                  <select
+                    id="call-left-backdrop-select"
+                    class="input call-left-select"
+                    aria-label="Background backdrop mode"
+                    :value="callMediaPrefs.backgroundBackdropMode"
+                    @change="setCallBackgroundBackdropMode($event.target.value)"
+                  >
+                    <option value="blur7">Blur light</option>
+                    <option value="blur9">Blur strong</option>
+                    <option value="green">Background image</option>
+                  </select>
+                </label>
+              </section>
+
+              <section class="call-left-background-block">
+                <div class="call-left-settings-title">Quality</div>
+                <label class="call-left-settings-field">
+                  <select
+                    id="call-left-background-quality-select"
+                    class="input call-left-select"
+                    aria-label="Background quality profile"
+                    :value="callMediaPrefs.backgroundQualityProfile"
+                    @change="setCallBackgroundQualityProfile($event.target.value)"
+                  >
+                    <option value="quality">Quality</option>
+                    <option value="balanced">Balanced</option>
+                    <option value="realtime">Realtime</option>
+                  </select>
+                </label>
+              </section>
+
+              <section class="call-left-background-block">
+                <div class="call-left-settings-title">Blur Strength</div>
+                <label class="call-left-settings-field" for="call-left-background-blur-strength">
+                  <div class="call-left-volume-row">
+                    <input
+                      id="call-left-background-blur-strength"
+                      class="call-left-range"
+                      type="range"
+                      min="4"
+                      max="28"
+                      step="1"
+                      :value="callMediaPrefs.backgroundBlurStrength"
+                      @input="setCallBackgroundBlurStrength($event.target.value)"
+                    />
+                    <span class="call-left-volume-value">{{ callMediaPrefs.backgroundBlurStrength }}</span>
+                  </div>
+                </label>
+              </section>
             </div>
           </section>
         </div>
@@ -404,9 +481,14 @@ import {
 import {
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
+  setCallBackgroundBackdropMode,
+  setCallBackgroundBlurStrength,
+  setCallBackgroundFilterMode,
+  setCallBackgroundQualityProfile,
   setCallCameraDevice,
   setCallMicrophoneDevice,
   setCallMicrophoneVolume,
+  setCallBackgroundApplyOutgoing,
   setCallSpeakerDevice,
   setCallSpeakerVolume,
 } from '../domain/realtime/callMediaPreferences';
@@ -647,6 +729,45 @@ function handleNavItemClick() {
 
 function setCallLeftTab(tabId) {
   callLeftTab.value = tabId === 'background' ? 'background' : 'settings';
+}
+
+function isBackgroundPresetActive(preset) {
+  const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
+  const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
+  const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
+
+  if (preset === 'off') {
+    return mode !== 'blur' || !applyOutgoing;
+  }
+  if (preset === 'light') {
+    return mode === 'blur' && applyOutgoing && backdrop === 'blur7';
+  }
+  if (preset === 'strong') {
+    return mode === 'blur' && applyOutgoing && backdrop === 'blur9';
+  }
+  return false;
+}
+
+function applyBackgroundPreset(preset) {
+  if (preset === 'off') {
+    setCallBackgroundFilterMode('off');
+    setCallBackgroundApplyOutgoing(false);
+    return;
+  }
+
+  setCallBackgroundFilterMode('blur');
+  setCallBackgroundApplyOutgoing(true);
+
+  if (preset === 'strong') {
+    setCallBackgroundBackdropMode('blur9');
+    setCallBackgroundQualityProfile('quality');
+    setCallBackgroundBlurStrength(18);
+    return;
+  }
+
+  setCallBackgroundBackdropMode('blur7');
+  setCallBackgroundQualityProfile('balanced');
+  setCallBackgroundBlurStrength(12);
 }
 
 function stopMicLevelMonitor() {
