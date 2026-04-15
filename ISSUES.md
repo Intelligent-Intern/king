@@ -63,3 +63,125 @@ This tracker is now aligned to the requested direction:
 ## Next step
 
 - [ ] Start with `#1` (import RTP C slice), then `#2` (true SFU forwarding), then `#3/#4` (wavelet+Kalman in runtime).
+
+## M-batch: Model Inference (branch `feature/model-inference`)
+
+> Parallel track, does not block or replace the SFU/WLVC batch above. Maps to
+> tracker sections `V` (AI/SLM Platform) and `Z` (Inference Serving). Tracker
+> boxes in `READYNESS_TRACKER.md` and `PROJECT_ASSESSMENT.md` are **not** ticked
+> from this branch; a post-merge verification sweep ticks V/Z bullets only for
+> leaves whose contract test is green on `main`. See
+> `demo/model-inference/README.md` for the sprint-day cadence.
+
+Non-negotiable direction for this batch:
+
+- backend engine is **llama.cpp server** (GGUF, CPU + Metal). King owns
+  hardware profile, model-fit selection, artifact storage, streaming
+  transport, routing, and failover; llama.cpp is the execution engine behind
+  King's native contract, not a proxy identity.
+- client transport is **WebSocket + IIBIN typed binary token frames**, with a
+  parallel HTTP `POST /api/infer` non-streaming surface over the same native
+  kernel (parallel surfaces, not wrappers).
+- out of scope: RAG (`W`, `X`), fine-tune (`Y`), external providers (`AA`),
+  MoE routing (`V.5`), sharded inference, GPU CI matrix, mid-stream handoff.
+  These are explicitly fenced in `demo/model-inference/README.md`.
+
+### Done in current branch
+
+- [x] `#M-1` Demo skeleton + `server.php` + `http/router.php` + `run-dev.sh` +
+  `Dockerfile`; extension-load gate; `GET /health` and `GET /api/runtime`
+  return deterministic runtime envelopes; `GET /api/bootstrap` and
+  `GET /api/version` return stable envelopes.
+- [x] `#M-2` Router module-order function
+  (`model_inference_dispatch_route_module_order()`) returns the currently
+  deployed module list; grows per leaf.
+- [x] `#M-3` `demo/model-inference/contracts/v1/api-ws-contract.catalog.json`
+  fixture published listing current endpoints + target-shape planned surfaces;
+  parity contract test lands at `#M-3` closure leaf below.
+
+### Open / To implement (priority order)
+
+- [ ] `#M-3` **Catalog parity contract test.** Add
+  `demo/model-inference/backend-king-php/tests/contract-catalog-parity-contract.sh`
+  (+ sibling `.php`) that walks `router.php` and asserts 1:1 with the
+  currently listed `api` + `ws` entries in
+  `demo/model-inference/contracts/v1/api-ws-contract.catalog.json`.
+  Done when: adding a route without a catalog entry (or vice versa) fails the
+  test; CI shard-1 gate wired up.
+
+- [ ] `#M-1/#M-2 tests` Add
+  `tests/runtime-bootstrap-contract.{sh,php}` and
+  `tests/router-module-order-contract.{sh,php}` mirroring the video-chat
+  pattern, asserting `/health`, `/api/runtime`, `/api/bootstrap`,
+  `/api/version` envelopes and the exact module-order list.
+
+- [ ] `#M-4` Runtime hardware profile kernel — real CPU/RAM/GPU probes
+  (darwin: Metal via `sysctl`; linux: `nvidia-smi` / `rocminfo` exit-code
+  probes; no faked VRAM). Publishes
+  `contracts/v1/node-profile.contract.json` and
+  `GET /api/node/profile`. Maps to `V.2`, `V.3`, `Z.2`.
+
+- [ ] `#M-5` Object-store-backed model registry — SQLite index + GGUF blobs
+  via `king_object_store_put_from_stream` (resumable); publishes
+  `contracts/v1/model-registry-entry.contract.json`. Bit-identical SHA-256
+  round-trip required. Maps to `V.7`, `V.9`.
+
+- [ ] `#M-6` Pure model-fit selector — given profile + registry, picks largest
+  fitting GGUF preferring higher quantization. Maps to `V.2`, `V.3`, `Z.3`.
+
+- [ ] `#M-7` `LlamaCppWorker` lifecycle — spawn / health / drain / stop
+  `llama.cpp server` as a King-owned subordinate with ephemeral loopback port.
+  Real tiny GGUF fixture (≤150 MB Q4_0 via LFS or CI-fetch with checksum;
+  **no mock mode**). Maps to `Z.1`, `Z.4`, `V.1`.
+
+- [ ] `#M-8` `contracts/v1/inference-request.contract.json` + typed validation
+  on `POST /api/infer` and WS `infer.start`; canonical error codes. Maps to
+  `V.10`, `Z.10`.
+
+- [ ] `#M-9` `contracts/v1/token-frame.contract.json` — IIBIN binary frame
+  (magic `KITF`, 24-byte header + payload); encode/decode via `king_proto_*`;
+  committed hex sample vectors. Maps to `V.10`, `Z.4`, `Z.10`.
+
+- [ ] `#M-10` `POST /api/infer` non-streaming surface — real prompt → real
+  completion + telemetry; parallel surface to WS. Maps to `Z.1`, `Z.4`, `V.1`.
+
+- [ ] `#M-11` WS streaming via `king_server_upgrade_to_websocket` +
+  `king_websocket_send` emitting `#M-9` token frames; concatenation equals
+  `POST /api/infer` result for same seed. Maps to `Z.4`, `Z.5`, `V.1`.
+
+- [ ] `#M-12` Inference telemetry — TTFT, tokens/s, VRAM budget/observed,
+  prompt/completion counts; `GET /api/telemetry/inference/recent`. Maps to
+  `Z.9`.
+
+- [ ] `#M-13` Semantic-DNS self-registration as `king.inference.v1` on ready;
+  deregister on drain; bounded `heartbeat_after_ready` retry (never `sleep`).
+  Maps to `V.4`, `Z.6`, `V.10`.
+
+- [ ] `#M-14` `InferenceRouting` helper —
+  `king_semantic_dns_get_optimal_route` with criteria
+  `{model_name, quantization, min_free_vram_bytes}` → ordered primary +
+  failover list (reuses `McpServiceResolution` shape from
+  `demo/userland/flow-php/src/McpServiceDiscovery.php`). Maps to `V.4`, `Z.6`,
+  `Z.7`.
+
+- [ ] `#M-15` Deterministic two-node failover — compose spawns A + B,
+  prompt-1 hits primary, primary drains, prompt-2 routes to secondary
+  without reconfig. Explicit fence: **no mid-stream handoff claim**. Maps to
+  `Z.8`.
+
+- [ ] `#M-16` Transcript persistence to object-store keyed
+  `inference/transcripts/{yyyy}/{mm}/{dd}/{request_id}.json`; survives
+  restart. Maps to `V.9`.
+
+- [ ] `#M-17` `scripts/smoke.sh` — two-node compose end-to-end; real
+  streaming chat turn + transcript + failover; gated on
+  `MODEL_INFERENCE_SMOKE_REQUIRE_COMPOSE=1`. Maps to `Z.10`, `V.10`.
+
+- [ ] `#M-18` Honest README pass + target-shape fences + this ISSUES section
+  review. Tracker boxes remain unticked; post-merge sweep ticks V/Z bullets
+  against `main`.
+
+### Next step (M-batch)
+
+- [ ] Start with `#M-1/#M-2 tests` (contract scripts for what just shipped),
+  then `#M-3` (catalog parity gate), then `#M-4` (hardware profile).

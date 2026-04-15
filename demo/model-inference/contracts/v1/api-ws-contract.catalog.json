@@ -1,0 +1,107 @@
+{
+  "catalog_version": "v1.0.0",
+  "catalog_name": "king-model-inference-api-ws",
+  "catalog_scope": "king-model-inference demo, M-batch",
+  "catalog_discipline": "every HTTP endpoint and every WS event exposed by the backend must be listed here; a parity contract test fails when code and catalog drift. Entries grow per sprint leaf as their module lands.",
+  "api": {
+    "runtime_health": {
+      "method": "GET",
+      "paths": ["/health", "/api/runtime"],
+      "introduced_by": "M-1",
+      "envelope": {
+        "service": "model-inference-backend-king-php",
+        "app": {"name": "string", "version": "string", "environment": "string"},
+        "runtime": {
+          "king_version": "string",
+          "transport": "king_http1_server_listen_once",
+          "ws_path": "string",
+          "health": {
+            "module_status": "string",
+            "system_status": "string",
+            "build": "string|null",
+            "module_version": "string|null",
+            "active_runtime_count": "int"
+          }
+        },
+        "database": {"status": "string", "schema_version": "int", "path": "string"},
+        "node": {"node_id": "string", "role": "inference-serving"},
+        "status": "ok",
+        "time": "rfc3339"
+      }
+    },
+    "bootstrap": {
+      "method": "GET",
+      "paths": ["/", "/api/bootstrap"],
+      "introduced_by": "M-1",
+      "envelope": {
+        "service": "model-inference-backend-king-php",
+        "status": "bootstrapped",
+        "message": "string",
+        "ws_path": "string",
+        "runtime_endpoint": "/api/runtime",
+        "version_endpoint": "/api/version",
+        "time": "rfc3339"
+      }
+    },
+    "version": {
+      "method": "GET",
+      "paths": ["/api/version"],
+      "introduced_by": "M-1",
+      "envelope": {
+        "service": "string",
+        "app": {"name": "string", "version": "string", "environment": "string"},
+        "runtime": {"king_version": "string", "build": "string|null", "module_version": "string|null"},
+        "time": "rfc3339"
+      }
+    }
+  },
+  "ws": {
+    "path": "/ws",
+    "introduced_by": "M-11",
+    "events": {}
+  },
+  "errors": {
+    "envelope": {
+      "status": "error",
+      "error": {"code": "string", "message": "string", "details": "object?"},
+      "time": "rfc3339"
+    },
+    "codes": [
+      "extension_not_loaded",
+      "internal_server_error",
+      "not_implemented"
+    ]
+  },
+  "planned_surfaces_target_shape": {
+    "note": "Entries below are target-shape only, added to the live api/ws/errors sections as their leaves land. Listed here so readers see the full intended v1 surface without a parity-test false negative.",
+    "api": {
+      "node_profile":     {"method": "GET",  "paths": ["/api/node/profile"],                 "introduced_by": "M-4"},
+      "models_list":      {"method": "GET",  "paths": ["/api/models"],                       "introduced_by": "M-5"},
+      "models_create":    {"method": "POST", "paths": ["/api/models"],                       "introduced_by": "M-5"},
+      "model_get":        {"method": "GET",  "paths": ["/api/models/{model_id}"],            "introduced_by": "M-5"},
+      "worker_status":    {"method": "GET",  "paths": ["/api/worker"],                       "introduced_by": "M-7"},
+      "infer_http":       {"method": "POST", "paths": ["/api/infer"],                        "introduced_by": "M-10"},
+      "transcripts_get":  {"method": "GET",  "paths": ["/api/transcripts/{request_id}"],     "introduced_by": "M-16"},
+      "telemetry_recent": {"method": "GET",  "paths": ["/api/telemetry/inference/recent"],   "introduced_by": "M-12"},
+      "route_diagnostic": {"method": "GET",  "paths": ["/api/route"],                        "introduced_by": "M-14"}
+    },
+    "ws": {
+      "infer.start":  {"direction": "client->server", "body": "inference-request",       "introduced_by": "M-11"},
+      "infer.token":  {"direction": "server->client", "body": "token-frame(delta)",      "introduced_by": "M-11"},
+      "infer.end":    {"direction": "server->client", "body": "token-frame(end)",        "introduced_by": "M-11"},
+      "infer.error":  {"direction": "server->client", "body": "token-frame(error)",      "introduced_by": "M-11"},
+      "infer.cancel": {"direction": "client->server", "body": "json",                    "introduced_by": "M-11"}
+    },
+    "error_codes": [
+      "invalid_request_envelope",
+      "model_not_found",
+      "model_fit_unavailable",
+      "worker_unavailable",
+      "worker_draining",
+      "routing_no_candidate",
+      "transcript_not_found",
+      "auth_failed",
+      "rbac_forbidden"
+    ]
+  }
+}
