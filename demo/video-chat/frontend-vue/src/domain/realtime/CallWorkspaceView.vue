@@ -234,9 +234,18 @@
             {{ usersDirectoryPagination.error }}
           </p>
 
-          <ul class="user-list">
+          <ul
+            ref="usersListRef"
+            class="user-list"
+            @scroll.passive="onUsersListScroll"
+          >
             <li
-              v-for="row in usersPageRows"
+              v-if="usersPageRows.length > 0 && usersVirtualWindow.paddingTop > 0"
+              class="user-list-spacer"
+              :style="{ height: `${usersVirtualWindow.paddingTop}px` }"
+            ></li>
+            <li
+              v-for="row in usersVisibleRows"
               :key="row.userId"
               class="user-row"
               :class="{ self: row.userId === currentUserId, pinned: pinnedUsers[row.userId] === true, pending: rowActionPending(row.userId) }"
@@ -311,6 +320,11 @@
                 </button>
               </div>
             </li>
+            <li
+              v-if="usersPageRows.length > 0 && usersVirtualWindow.paddingBottom > 0"
+              class="user-list-spacer"
+              :style="{ height: `${usersVirtualWindow.paddingBottom}px` }"
+            ></li>
             <li v-if="usersPageRows.length === 0" class="user-list-empty">
               No users match the current filter.
             </li>
@@ -357,8 +371,17 @@
             </div>
           </div>
 
-          <ul class="lobby-list">
-            <li v-for="row in lobbyPageRows" :key="`${row.status}-${row.user_id}`" class="user-row">
+          <ul
+            ref="lobbyListRef"
+            class="lobby-list"
+            @scroll.passive="onLobbyListScroll"
+          >
+            <li
+              v-if="lobbyPageRows.length > 0 && lobbyVirtualWindow.paddingTop > 0"
+              class="user-list-spacer"
+              :style="{ height: `${lobbyVirtualWindow.paddingTop}px` }"
+            ></li>
+            <li v-for="row in lobbyVisibleRows" :key="`${row.status}-${row.user_id}`" class="user-row">
               <div class="user-preview">{{ initials(row.display_name) }}</div>
               <div class="user-main">
                 <strong class="user-name">{{ row.display_name }}</strong>
@@ -386,6 +409,11 @@
                 </button>
               </div>
             </li>
+            <li
+              v-if="lobbyPageRows.length > 0 && lobbyVirtualWindow.paddingBottom > 0"
+              class="user-list-spacer"
+              :style="{ height: `${lobbyVirtualWindow.paddingBottom}px` }"
+            ></li>
             <li v-if="lobbyPageRows.length === 0" class="user-list-empty">
               Lobby queue is currently empty.
             </li>
@@ -483,6 +511,8 @@ const workspaceSidebarState = inject('workspaceSidebarState', null);
 
 const USERS_PAGE_SIZE = 10;
 const LOBBY_PAGE_SIZE = 10;
+const ROSTER_VIRTUAL_ROW_HEIGHT = 72;
+const ROSTER_VIRTUAL_OVERSCAN = 6;
 const TYPING_LOCAL_STOP_MS = 1200;
 const TYPING_SWEEP_MS = 600;
 const RECONNECT_DELAYS_MS = [750, 1250, 2000, 3200, 5000, 8000];
@@ -636,6 +666,8 @@ const usersPage = ref(1);
 const lobbyPage = ref(1);
 const chatDraft = ref('');
 const chatListRef = ref(null);
+const usersListRef = ref(null);
+const lobbyListRef = ref(null);
 
 const connectionState = ref('retrying');
 const connectionReason = ref('');
@@ -671,6 +703,14 @@ const moderationActionState = reactive({});
 const peerControlStateByUserId = reactive({});
 const lobbyActionState = reactive({});
 const usersRefreshTimer = ref(null);
+const usersListViewport = reactive({
+  scrollTop: 0,
+  viewportHeight: 0,
+});
+const lobbyListViewport = reactive({
+  scrollTop: 0,
+  viewportHeight: 0,
+});
 
 const reactionTrayOpen = ref(false);
 const activeReactions = ref([]);
@@ -1115,6 +1155,49 @@ const usersPageRows = computed(() => {
   return filteredUsers.value.slice(offset, offset + USERS_PAGE_SIZE).map((row) => userRowSnapshot(row));
 });
 
+function updateListViewportMetrics(node, viewport) {
+  if (!(node instanceof HTMLElement)) return;
+  viewport.scrollTop = Math.max(0, Number(node.scrollTop || 0));
+  viewport.viewportHeight = Math.max(0, Number(node.clientHeight || 0));
+}
+
+function computeVirtualWindow(rows, viewport) {
+  const total = Array.isArray(rows) ? rows.length : 0;
+  if (total <= 0) {
+    return {
+      start: 0,
+      end: 0,
+      paddingTop: 0,
+      paddingBottom: 0,
+      rows: [],
+    };
+  }
+
+  const viewportHeight = Math.max(
+    ROSTER_VIRTUAL_ROW_HEIGHT * 3,
+    Number(viewport?.viewportHeight || 0)
+  );
+  const contentHeight = total * ROSTER_VIRTUAL_ROW_HEIGHT;
+  const maxScrollTop = Math.max(0, contentHeight - viewportHeight);
+  const scrollTop = Math.max(0, Math.min(Number(viewport?.scrollTop || 0), maxScrollTop));
+  const start = Math.max(0, Math.floor(scrollTop / ROSTER_VIRTUAL_ROW_HEIGHT) - ROSTER_VIRTUAL_OVERSCAN);
+  const visibleCount = Math.ceil(viewportHeight / ROSTER_VIRTUAL_ROW_HEIGHT) + (ROSTER_VIRTUAL_OVERSCAN * 2);
+  const end = Math.min(total, start + visibleCount);
+  const paddingTop = start * ROSTER_VIRTUAL_ROW_HEIGHT;
+  const paddingBottom = Math.max(0, (total - end) * ROSTER_VIRTUAL_ROW_HEIGHT);
+
+  return {
+    start,
+    end,
+    paddingTop,
+    paddingBottom,
+    rows: rows.slice(start, end),
+  };
+}
+
+const usersVirtualWindow = computed(() => computeVirtualWindow(usersPageRows.value, usersListViewport));
+const usersVisibleRows = computed(() => usersVirtualWindow.value.rows);
+
 const lobbyRows = computed(() => {
   const queued = lobbyQueue.value.map((row) => ({
     ...row,
@@ -1139,6 +1222,9 @@ const lobbyPageRows = computed(() => {
   const offset = (lobbyPage.value - 1) * LOBBY_PAGE_SIZE;
   return lobbyRows.value.slice(offset, offset + LOBBY_PAGE_SIZE).map((row) => lobbyRowSnapshot(row));
 });
+
+const lobbyVirtualWindow = computed(() => computeVirtualWindow(lobbyPageRows.value, lobbyListViewport));
+const lobbyVisibleRows = computed(() => lobbyVirtualWindow.value.rows);
 
 const activeMessages = computed(() => {
   const bucket = chatByRoom[activeRoomId.value];
@@ -1883,9 +1969,46 @@ function goToLobbyPage(nextPage) {
   lobbyPage.value = normalizedPage;
 }
 
+function syncUsersListViewport() {
+  updateListViewportMetrics(usersListRef.value, usersListViewport);
+}
+
+function syncLobbyListViewport() {
+  updateListViewportMetrics(lobbyListRef.value, lobbyListViewport);
+}
+
+function resetUsersListScroll() {
+  if (usersListRef.value instanceof HTMLElement) {
+    usersListRef.value.scrollTop = 0;
+  }
+  usersListViewport.scrollTop = 0;
+  syncUsersListViewport();
+}
+
+function resetLobbyListScroll() {
+  if (lobbyListRef.value instanceof HTMLElement) {
+    lobbyListRef.value.scrollTop = 0;
+  }
+  lobbyListViewport.scrollTop = 0;
+  syncLobbyListViewport();
+}
+
+function onUsersListScroll(event) {
+  updateListViewportMetrics(event?.target, usersListViewport);
+}
+
+function onLobbyListScroll(event) {
+  updateListViewportMetrics(event?.target, lobbyListViewport);
+}
+
 function setActiveTab(tab) {
   const nextTab = ['users', 'lobby', 'chat'].includes(tab) ? tab : 'users';
   activeTab.value = nextTab;
+  if (nextTab === 'users') {
+    nextTick(() => syncUsersListViewport());
+  } else if (nextTab === 'lobby') {
+    nextTick(() => syncLobbyListViewport());
+  }
   if (isSocketOnline.value && (nextTab === 'users' || nextTab === 'lobby')) {
     requestRoomSnapshot();
   }
@@ -2730,6 +2853,28 @@ watch(lobbyRows, () => {
   if (lobbyPage.value < 1) lobbyPage.value = 1;
 });
 
+watch(usersPage, () => {
+  nextTick(() => resetUsersListScroll());
+});
+
+watch(lobbyPage, () => {
+  nextTick(() => resetLobbyListScroll());
+});
+
+watch(
+  () => usersPageRows.value.length,
+  () => {
+    nextTick(() => syncUsersListViewport());
+  }
+);
+
+watch(
+  () => lobbyPageRows.value.length,
+  () => {
+    nextTick(() => syncLobbyListViewport());
+  }
+);
+
 watch(
   () => participantUsers.value
     .map((row) => Number(row?.userId || 0))
@@ -2904,6 +3049,10 @@ onMounted(async () => {
   if (sessionState.sessionToken && sessionState.userId) {
     initSFU();
   }
+
+  await nextTick();
+  syncUsersListViewport();
+  syncLobbyListViewport();
 
   typingSweepTimer = setInterval(() => {
     const nowMs = Date.now();
@@ -4474,8 +4623,18 @@ onBeforeUnmount(() => {
   gap: 8px;
   align-items: center;
   padding: 10px;
+  min-height: 72px;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-row-hover);
+}
+
+.user-list-spacer {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .user-row.self {
