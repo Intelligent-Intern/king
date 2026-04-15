@@ -522,6 +522,7 @@ const REACTION_CLIENT_DIRECT_PER_WINDOW = 5;
 const REACTION_CLIENT_BATCH_SIZE = 5;
 const REACTION_CLIENT_FLUSH_INTERVAL_MS = 40;
 const REACTION_CLIENT_MAX_QUEUE = 500;
+const MODERATION_SYNC_FLUSH_INTERVAL_MS = 90;
 const LOCAL_REACTION_ECHO_TTL_MS = 6000;
 const WLVC_ENCODE_FAILURE_THRESHOLD = 6;
 const VISIBLE_PARTICIPANTS_LIMIT = 5;
@@ -788,6 +789,8 @@ let reactionQueueTimer = null;
 let reactionWindowStartedMs = 0;
 let reactionSentInWindow = 0;
 let reactionBatchCounter = 0;
+let moderationSyncTimer = null;
+const moderationSyncQueue = reactive({});
 
 const controlState = reactive({
   handRaised: false,
@@ -1717,6 +1720,93 @@ function normalizeDirectoryUser(raw) {
   };
 }
 
+function clearModerationSyncTimer() {
+  if (moderationSyncTimer === null) return;
+  clearTimeout(moderationSyncTimer);
+  moderationSyncTimer = null;
+}
+
+function queueModerationSync(action, userId) {
+  const normalizedAction = String(action || '').trim().toLowerCase();
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
+  if (normalizedAction !== 'mute' && normalizedAction !== 'pin') return;
+
+  const nextState = normalizedAction === 'mute'
+    ? (mutedUsers[normalizedUserId] === true)
+    : (pinnedUsers[normalizedUserId] === true);
+
+  const key = rowActionKey(normalizedAction, normalizedUserId);
+  moderationSyncQueue[key] = {
+    action: normalizedAction,
+    userId: normalizedUserId,
+    state: nextState,
+    updatedAt: Date.now(),
+  };
+
+  if (moderationSyncTimer !== null) return;
+  moderationSyncTimer = setTimeout(() => {
+    moderationSyncTimer = null;
+    flushQueuedModerationSync();
+  }, MODERATION_SYNC_FLUSH_INTERVAL_MS);
+}
+
+function consumeQueuedModerationSyncEntries() {
+  const queuedEntries = Object.values(moderationSyncQueue);
+  for (const key of Object.keys(moderationSyncQueue)) {
+    delete moderationSyncQueue[key];
+  }
+  return queuedEntries;
+}
+
+function buildModerationStatePayloadFromQueue() {
+  const moderatedState = {};
+  const queuedEntries = consumeQueuedModerationSyncEntries();
+  for (const entry of queuedEntries) {
+    const action = String(entry?.action || '').trim().toLowerCase();
+    const userId = Number(entry?.userId || 0);
+    if (!Number.isInteger(userId) || userId <= 0) continue;
+    if (action !== 'mute' && action !== 'pin') continue;
+
+    const key = rowActionKey(action, userId);
+    moderatedState[key] = {
+      updatedAt: Number(entry?.updatedAt || Date.now()),
+      pending: false,
+      muted: action === 'mute' ? Boolean(entry?.state) : undefined,
+      pinned: action === 'pin' ? Boolean(entry?.state) : undefined,
+    };
+  }
+  return moderatedState;
+}
+
+function buildFullModerationStatePayload() {
+  const moderatedState = {};
+
+  for (const [rawUserId, muted] of Object.entries(mutedUsers)) {
+    const userId = Number(rawUserId);
+    if (!Number.isInteger(userId) || userId <= 0) continue;
+    if (muted !== true) continue;
+    moderatedState[rowActionKey('mute', userId)] = {
+      updatedAt: Date.now(),
+      pending: false,
+      muted: true,
+    };
+  }
+
+  for (const [rawUserId, pinned] of Object.entries(pinnedUsers)) {
+    const userId = Number(rawUserId);
+    if (!Number.isInteger(userId) || userId <= 0) continue;
+    if (pinned !== true) continue;
+    moderatedState[rowActionKey('pin', userId)] = {
+      updatedAt: Date.now(),
+      pending: false,
+      pinned: true,
+    };
+  }
+
+  return moderatedState;
+}
+
 function markUserActionText(userId, action, text, pending = false) {
   setRowAction(moderationActionState, action, userId, text, pending);
 }
@@ -1816,11 +1906,21 @@ function applyRemoteControlState(payload, sender) {
       if (!Number.isInteger(subjectUserId) || subjectUserId <= 0) continue;
 
       if (action === 'pin') {
-        pinnedUsers[subjectUserId] = Boolean(value?.pinned);
+        const nextPinned = Boolean(value?.pinned);
+        if (nextPinned) {
+          pinnedUsers[subjectUserId] = true;
+        } else {
+          delete pinnedUsers[subjectUserId];
+        }
         markUserActionText(subjectUserId, 'pin', pinnedUsers[subjectUserId] ? 'Pinned' : 'Unpinned', false);
       }
       if (action === 'mute') {
-        mutedUsers[subjectUserId] = Boolean(value?.muted);
+        const nextMuted = Boolean(value?.muted);
+        if (nextMuted) {
+          mutedUsers[subjectUserId] = true;
+        } else {
+          delete mutedUsers[subjectUserId];
+        }
         markUserActionText(subjectUserId, 'mute', mutedUsers[subjectUserId] ? 'Muted' : 'Unmuted', false);
       }
     }
@@ -1860,21 +1960,18 @@ function syncControlStateToPeers() {
 }
 
 function syncModerationStateToPeers() {
+  return syncModerationStateToPeersWithPayload(buildFullModerationStatePayload());
+}
+
+function syncModerationStateToPeersWithPayload(moderatedUsers) {
+  const normalizedPayload = moderatedUsers && typeof moderatedUsers === 'object' ? moderatedUsers : {};
+  const payloadKeys = Object.keys(normalizedPayload);
+  if (payloadKeys.length === 0) return 0;
+
   const peerIds = participantUsers.value
     .map((row) => row.userId)
     .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
-
-  const moderationState = {};
-  for (const [key, entry] of Object.entries(moderationActionState)) {
-    if (!key.startsWith('mute:') && !key.startsWith('pin:')) continue;
-    moderationState[key] = {
-      text: String(entry?.text || ''),
-      pending: Boolean(entry?.pending),
-      updatedAt: Number(entry?.updatedAt || Date.now()),
-      pinned: key.startsWith('pin:') ? Boolean(pinnedUsers[Number(key.split(':')[1] || 0)]) : undefined,
-      muted: key.startsWith('mute:') ? Boolean(mutedUsers[Number(key.split(':')[1] || 0)]) : undefined,
-    };
-  }
+  if (peerIds.length <= 0) return 0;
 
   let sentCount = 0;
   for (const targetUserId of peerIds) {
@@ -1885,13 +1982,25 @@ function syncModerationStateToPeers() {
         kind: 'workspace-moderation-state',
         actor_user_id: currentUserId.value,
         room_id: activeRoomId.value,
-        moderated_users: moderationState,
+        moderated_users: normalizedPayload,
       },
     });
     if (sent) sentCount += 1;
   }
 
   return sentCount;
+}
+
+function flushQueuedModerationSync() {
+  clearModerationSyncTimer();
+  if (!isSocketOnline.value) {
+    consumeQueuedModerationSyncEntries();
+    return 0;
+  }
+
+  const moderatedUsers = buildModerationStatePayloadFromQueue();
+  if (Object.keys(moderatedUsers).length === 0) return 0;
+  return syncModerationStateToPeersWithPayload(moderatedUsers);
 }
 
 function emitReaction(emoji) {
@@ -1909,20 +2018,28 @@ function toggleUserMuted(userId) {
   const normalizedUserId = Number(userId);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return;
   const nextMuted = mutedUsers[normalizedUserId] !== true;
-  mutedUsers[normalizedUserId] = nextMuted;
+  if (nextMuted) {
+    mutedUsers[normalizedUserId] = true;
+  } else {
+    delete mutedUsers[normalizedUserId];
+  }
   markUserActionText(normalizedUserId, 'mute', nextMuted ? 'Muted' : 'Unmuted', false);
   refreshUsersDirectoryPresentation();
-  void syncModerationStateToPeers();
+  queueModerationSync('mute', normalizedUserId);
 }
 
 function togglePinned(userId) {
   const normalizedUserId = Number(userId);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return;
   const nextPinned = pinnedUsers[normalizedUserId] !== true;
-  pinnedUsers[normalizedUserId] = nextPinned;
+  if (nextPinned) {
+    pinnedUsers[normalizedUserId] = true;
+  } else {
+    delete pinnedUsers[normalizedUserId];
+  }
   markUserActionText(normalizedUserId, 'pin', nextPinned ? 'Pinned' : 'Unpinned', false);
   refreshUsersDirectoryPresentation();
-  void syncModerationStateToPeers();
+  queueModerationSync('pin', normalizedUserId);
 }
 
 function toggleHandRaised() {
@@ -4170,6 +4287,8 @@ function handleSFUEncodedFrame(frame) {
 
 onBeforeUnmount(() => {
   clearReactionQueueTimer();
+  clearModerationSyncTimer();
+  consumeQueuedModerationSyncEntries();
   if (compactMediaQuery) {
     if (typeof compactMediaQuery.removeEventListener === 'function') {
       compactMediaQuery.removeEventListener('change', handleCompactViewportChange);
