@@ -45,8 +45,8 @@ export class WaveletVideoProcessor {
 
   constructor(config: Partial<WaveletProcessorConfig> = {}) {
     this.config = {
-      quality: config.quality ?? 60,
-      enableKalman: config.enableKalman ?? true,
+      quality: config.quality ?? 40,
+      enableKalman: config.enableKalman ?? false, // Disabled: stub for future use
       keyFrameInterval: config.keyFrameInterval ?? 30,
       width: config.width ?? 640,
       height: config.height ?? 480,
