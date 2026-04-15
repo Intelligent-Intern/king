@@ -189,7 +189,7 @@ SQL
                 throw new RuntimeException('Failed to hash demo user password.');
             }
 
-            $insertUser->execute([
+            $insertParams = [
                 ':email' => $demoUser['email'],
                 ':display_name' => $demoUser['display_name'],
                 ':password_hash' => $passwordHash,
@@ -197,7 +197,20 @@ SQL
                 ':time_format' => $demoUser['time_format'],
                 ':theme' => $demoUser['theme'],
                 ':updated_at' => gmdate('c'),
-            ]);
+            ];
+
+            try {
+                $insertUser->execute($insertParams);
+            } catch (Throwable $error) {
+                $message = strtolower($error->getMessage());
+                $isEmailRace = str_contains($message, 'unique constraint failed')
+                    && str_contains($message, 'users.email');
+                if (!$isEmailRace) {
+                    throw $error;
+                }
+                // Another bootstrap process inserted the same demo user between SELECT and INSERT.
+                // Treat as successful seed and continue.
+            }
         }
 
         $seeded[] = [
