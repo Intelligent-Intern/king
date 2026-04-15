@@ -206,7 +206,7 @@
 <header>
   <div class="title">king · model-inference · chat</div>
   <div id="model-label" class="status" title="Active model selector">model=…</div>
-  <div id="conn" class="status">ws: connecting…</div>
+  <div id="conn" class="status">loading…</div>
 </header>
 
 <main id="messages" aria-live="polite">
@@ -275,43 +275,26 @@
   };
 
   const state = {
-    ws: null,
-    active: null,          // {bubble, body, footer, decoder}
+    ws: null,                // current in-flight WS (null when idle)
+    active: null,            // {bubble, body, footer, decoder}
     sessionId: 'sess-ui-' + Math.random().toString(36).slice(2, 10),
     inFlight: false,
   };
 
   // --------------------- WS lifecycle ---------------------
+  // We open a NEW WebSocket per prompt submit. The current king
+  // runtime runs the WS upgrade handler synchronously (#M-11 scope
+  // fence), so a persistent idle WS would block the HTTP listen loop
+  // on the server. Per-request WS keeps sessions short-lived and
+  // sidesteps that constraint until concurrent WS handling lands.
   function wsUrl() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     return proto + '//' + location.host + '/ws';
   }
 
   function setConn(text, kind) {
-    els.conn.textContent = 'ws: ' + text;
+    els.conn.textContent = text;
     els.conn.className = 'status ' + (kind || '');
-  }
-
-  function connect() {
-    const ws = new WebSocket(wsUrl());
-    ws.binaryType = 'arraybuffer';
-    setConn('connecting…');
-
-    ws.addEventListener('open', () => {
-      setConn('open', 'ok');
-      els.send.disabled = false;
-    });
-    ws.addEventListener('close', (ev) => {
-      setConn('closed (' + ev.code + ')');
-      els.send.disabled = true;
-      finalizeActive('[connection closed]', true);
-      // Only auto-reconnect once per minute to avoid storms.
-      setTimeout(connect, 2000);
-    });
-    ws.addEventListener('error', () => { setConn('error', 'err'); });
-    ws.addEventListener('message', onMessage);
-
-    state.ws = ws;
   }
 
   // --------------------- TokenFrame decode ---------------------
@@ -339,7 +322,6 @@
 
   function onMessage(ev) {
     if (!(ev.data instanceof ArrayBuffer)) {
-      // Text frames are not part of the current server contract.
       console.warn('unexpected non-binary ws frame', ev.data);
       return;
     }
@@ -358,9 +340,18 @@
     } else if (frame.frameType === FT_END) {
       const summary = tryParseJson(frame.payload) || {};
       finalizeActive(null, false, summary);
+      closeWs(1000, 'done');
     } else if (frame.frameType === FT_ERROR) {
       const err = tryParseJson(frame.payload) || {};
       finalizeActive('[' + (err.code || 'error') + '] ' + (err.message || 'inference failed'), true);
+      closeWs(1000, 'error');
+    }
+  }
+
+  function closeWs(code, reason) {
+    if (state.ws) {
+      try { state.ws.close(code, reason); } catch { /* ignore */ }
+      state.ws = null;
     }
   }
 
@@ -425,7 +416,9 @@
     }
     state.active = null;
     state.inFlight = false;
-    els.send.disabled = state.ws === null || state.ws.readyState !== WebSocket.OPEN;
+    // Per-request WS model: Send is enabled whenever no inference is in
+    // flight. A new request opens a fresh WS.
+    els.send.disabled = false;
     els.prompt.disabled = false;
     els.prompt.focus();
   }
@@ -451,10 +444,6 @@
 
   function sendPrompt(text) {
     if (state.inFlight) return;
-    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-      showErrorMessage('ws_not_open', 'WebSocket is not open; wait for the connection indicator to go green.');
-      return;
-    }
     const sampling = currentSamplingFromUI();
     const payload = {
       session_id: state.sessionId,
@@ -472,7 +461,29 @@
     state.inFlight = true;
     els.send.disabled = true;
     els.prompt.disabled = true;
-    state.ws.send(JSON.stringify({ event: 'infer.start', payload }));
+    setConn('connecting…');
+
+    const ws = new WebSocket(wsUrl());
+    ws.binaryType = 'arraybuffer';
+    state.ws = ws;
+
+    ws.addEventListener('open', () => {
+      setConn('streaming…', 'ok');
+      ws.send(JSON.stringify({ event: 'infer.start', payload }));
+    });
+    ws.addEventListener('message', onMessage);
+    ws.addEventListener('error', () => {
+      setConn('ws error', 'err');
+      if (state.inFlight) finalizeActive('[ws_error] WebSocket transport error before the stream completed.', true);
+      state.ws = null;
+    });
+    ws.addEventListener('close', (ev) => {
+      if (state.inFlight) {
+        finalizeActive('[ws_closed ' + ev.code + '] WebSocket closed before the end frame arrived.', true);
+      }
+      setConn('ready');
+      state.ws = null;
+    });
   }
 
   els.form.addEventListener('submit', (ev) => {
@@ -492,31 +503,45 @@
   });
 
   // --------------------- boot ---------------------
-  (async function boot() {
-    try {
-      const [runtime, models] = await Promise.all([
-        fetch('/api/runtime').then(r => r.json()),
-        fetch('/api/models').then(r => r.json()),
-      ]);
-      if (runtime && runtime.node) {
-        const n = runtime.node.node_id || '?';
-        const ver = (runtime.runtime && runtime.runtime.king_version) || '?';
-        els.nodeMeta.textContent = `node=${n} king=${ver} models=${models.count ?? '?'}`;
-      }
-      if (models && Array.isArray(models.items) && models.items.length > 0) {
-        const first = models.items[0];
-        els.modelName.value = first.model_name;
-        const opt = [...els.quantization.options].find(o => o.value === first.quantization);
-        if (opt) els.quantization.value = first.quantization;
-        els.modelLabel.textContent = 'model=' + first.model_name + '/' + first.quantization;
-      } else {
-        els.modelLabel.textContent = 'model=(none registered)';
-        showErrorMessage('no_model_registered', 'No models in the registry. Run scripts/seed-model.php or boot the server with MODEL_INFERENCE_AUTOSEED=1.');
-      }
-    } catch (e) {
-      console.warn('boot metadata fetch failed', e);
+  // The current king HTTP/1 one-shot listener serves ONE request at
+  // a time. A browser page typically fires multiple requests in
+  // parallel (/api/runtime, /api/models, /favicon.ico, …) and the
+  // ones that arrive while another is being handled get dropped.
+  // We work around this by:
+  //   (a) answering /favicon.ico on the server (module_runtime),
+  //   (b) serializing every boot fetch here, one at a time,
+  //   (c) falling back silently if a fetch fails — the UI works
+  //       without the metadata, with the defaults already in the form.
+  // Persistent WS is avoided entirely (see wsUrl header comment).
+  setConn('ready');
+  async function fetchJsonWithRetry(path, attempts = 3) {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const res = await fetch(path, { cache: 'no-store' });
+        if (res.ok) return await res.json();
+      } catch { /* retry */ }
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, 200));
     }
-    connect();
+    return null;
+  }
+  (async function fetchMeta() {
+    const runtime = await fetchJsonWithRetry('/api/runtime');
+    const models = await fetchJsonWithRetry('/api/models');
+    if (runtime && runtime.node) {
+      const n = runtime.node.node_id || '?';
+      const ver = (runtime.runtime && runtime.runtime.king_version) || '?';
+      els.nodeMeta.textContent = `node=${n} king=${ver} models=${models && models.count != null ? models.count : '?'}`;
+    }
+    if (models && Array.isArray(models.items) && models.items.length > 0) {
+      const first = models.items[0];
+      els.modelName.value = first.model_name;
+      const opt = [...els.quantization.options].find(o => o.value === first.quantization);
+      if (opt) els.quantization.value = first.quantization;
+      els.modelLabel.textContent = 'model=' + first.model_name + '/' + first.quantization;
+    } else if (models && Array.isArray(models.items)) {
+      els.modelLabel.textContent = 'model=(none registered)';
+      showErrorMessage('no_model_registered', 'No models in the registry. Run scripts/seed-model.php or boot the server with MODEL_INFERENCE_AUTOSEED=1.');
+    }
   })();
 })();
 </script>

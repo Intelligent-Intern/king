@@ -9,6 +9,20 @@ function model_inference_handle_runtime_routes(
     callable $runtimeEnvelope,
     string $wsPath
 ): ?array {
+    // Browsers auto-request /favicon.ico. Answer quickly with a
+    // 1×1 transparent GIF so the request doesn't compete with /ui or
+    // /api/* for a listen_once slot.
+    if ($path === '/favicon.ico') {
+        return [
+            'status' => 200,
+            'headers' => [
+                'content-type' => 'image/gif',
+                'cache-control' => 'public, max-age=86400',
+            ],
+            'body' => base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'),
+        ];
+    }
+
     if ($path === '/health' || $path === '/api/runtime') {
         $payload = $runtimeEnvelope();
         $payload['status'] = 'ok';
