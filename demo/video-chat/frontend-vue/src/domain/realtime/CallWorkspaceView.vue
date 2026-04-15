@@ -4408,11 +4408,12 @@ onBeforeUnmount(() => {
   background: var(--bg-shell);
   padding: 0;
   display: grid;
+  gap: 0;
   grid-template-rows: minmax(0, 1fr) 170px auto;
 }
 
 .workspace-stage.compact {
-  grid-template-rows: 50px minmax(0, 1fr) auto;
+  grid-template-rows: 50px minmax(0, 1fr) 60px;
 }
 
 .workspace-compact-header {
@@ -4463,7 +4464,7 @@ onBeforeUnmount(() => {
   display: block;
   border-radius: 0;
   border: 0;
-  margin: 0 1px 1px;
+  margin: 0;
 }
 
 .video-container {
@@ -4656,8 +4657,9 @@ onBeforeUnmount(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 10px;
-  padding: 0 14px 10px;
+  margin-top: 0;
+  min-height: 56px;
+  padding: 0 14px 8px;
   background: var(--bg-shell);
 }
 
@@ -4998,11 +5000,11 @@ onBeforeUnmount(() => {
   }
 
   .workspace-stage {
-    grid-template-rows: minmax(0, 1fr) 120px auto;
+    grid-template-rows: minmax(0, 1fr) 120px 60px;
   }
 
   .workspace-stage.compact {
-    grid-template-rows: 50px minmax(0, 1fr) auto;
+    grid-template-rows: 50px minmax(0, 1fr) 58px;
   }
 
   .workspace-mini-strip {
@@ -5050,7 +5052,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 760px) and (orientation: landscape) {
   .workspace-stage.compact {
-    grid-template-rows: 44px minmax(0, 1fr) auto;
+    grid-template-rows: 44px minmax(0, 1fr) 50px;
   }
 
   .workspace-compact-header {
@@ -5064,7 +5066,8 @@ onBeforeUnmount(() => {
 
   .workspace-controls {
     gap: 8px;
-    padding: 0 8px 8px;
+    min-height: 50px;
+    padding: 0 8px 6px;
   }
 
   .call-control-btn {

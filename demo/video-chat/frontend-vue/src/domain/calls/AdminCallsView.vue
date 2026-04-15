@@ -1002,6 +1002,7 @@ const enterCallPreviewVideoRef = ref(null);
 const enterCallPreviewStreamRef = ref(null);
 let detachCallMediaWatcher = null;
 let enterCallPreviewResizeHandler = null;
+const callAccessLinkEndpointAvailable = ref(true);
 
 const enterCallState = reactive({
   open: false,
@@ -1047,6 +1048,18 @@ function updateEnterCallPreviewAspectRatio() {
   const width = Math.max(1, Number(window.innerWidth || 0));
   const height = Math.max(1, Number(window.innerHeight || 0));
   enterCallState.previewAspectRatio = `${width} / ${height}`;
+}
+
+function looksLikeNotFoundError(error) {
+  const message = (error instanceof Error ? error.message : String(error || '')).toLowerCase();
+  return message.includes('404') || message.includes('not found');
+}
+
+function fallbackWorkspaceLink(callId) {
+  const normalizedCallId = String(callId || '').trim();
+  const joinPath = `/workspace/call/${encodeURIComponent(normalizedCallId)}`;
+  const origin = typeof window !== 'undefined' ? String(window.location.origin || '').trim() : '';
+  return origin !== '' ? `${origin}${joinPath}` : joinPath;
 }
 
 function normalizeTargetOptionsFromCall(call) {
@@ -1207,6 +1220,12 @@ async function generateEnterCallLink() {
   enterCallState.linkUrl = '';
   enterCallState.expiresAt = '';
 
+  if (!callAccessLinkEndpointAvailable.value) {
+    enterCallState.linkUrl = fallbackWorkspaceLink(callId);
+    enterCallState.loading = false;
+    return;
+  }
+
   const requestBody = {};
   if (enterCallState.linkKind === 'open') {
     requestBody.link_kind = 'open';
@@ -1243,6 +1262,13 @@ async function generateEnterCallLink() {
     enterCallState.linkUrl = origin !== '' ? `${origin}${joinPath}` : joinPath;
     enterCallState.expiresAt = typeof result?.access_link?.expires_at === 'string' ? result.access_link.expires_at : '';
   } catch (error) {
+    if (looksLikeNotFoundError(error)) {
+      callAccessLinkEndpointAvailable.value = false;
+      enterCallState.linkUrl = fallbackWorkspaceLink(callId);
+      enterCallState.error = '';
+      enterCallState.expiresAt = '';
+      return;
+    }
     enterCallState.error = error instanceof Error ? error.message : 'Could not create invite link.';
   } finally {
     enterCallState.loading = false;
@@ -1290,6 +1316,9 @@ async function resolveWorkspaceRouteSegment(target = null) {
 
   const callId = String(normalizedTarget.callId || '').trim();
   if (callId !== '') {
+    if (!callAccessLinkEndpointAvailable.value) {
+      return callId;
+    }
     try {
       const payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/access-link`, {
         method: 'POST',
@@ -1298,7 +1327,10 @@ async function resolveWorkspaceRouteSegment(target = null) {
       if (accessId !== '') {
         return accessId;
       }
-    } catch {
+    } catch (error) {
+      if (looksLikeNotFoundError(error)) {
+        callAccessLinkEndpointAvailable.value = false;
+      }
       // Fallback to direct call id route if access-link endpoint is unavailable.
     }
 
