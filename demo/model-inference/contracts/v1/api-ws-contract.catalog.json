@@ -117,6 +117,36 @@
         "time": "rfc3339"
       }
     },
+    "telemetry_recent": {
+      "method": "GET",
+      "paths": ["/api/telemetry/inference/recent"],
+      "introduced_by": "M-12",
+      "envelope": {
+        "status": "ok",
+        "items": "array<InferenceMetricsEntry>",
+        "count": "int",
+        "capacity": "int",
+        "time": "rfc3339"
+      },
+      "item_shape": {
+        "request_id": "string",
+        "session_id": "string",
+        "transport": "http|ws",
+        "model_id": "string",
+        "model_name": "string",
+        "quantization": "string",
+        "node_id": "string",
+        "tokens_in": "int",
+        "tokens_out": "int",
+        "ttft_ms": "int",
+        "duration_ms": "int",
+        "tokens_per_second": "float",
+        "vram_total_bytes": "int",
+        "vram_free_bytes": "int",
+        "gpu_kind": "none|metal|cuda|rocm|other",
+        "recorded_at": "rfc3339"
+      }
+    },
     "infer_http": {
       "method": "POST",
       "paths": ["/api/infer"],
@@ -208,7 +238,6 @@
     "api": {
       "worker_status":    {"method": "GET",  "paths": ["/api/worker"],                       "introduced_by": "M-7"},
       "transcripts_get":  {"method": "GET",  "paths": ["/api/transcripts/{request_id}"],     "introduced_by": "M-16"},
-      "telemetry_recent": {"method": "GET",  "paths": ["/api/telemetry/inference/recent"],   "introduced_by": "M-12"},
       "route_diagnostic": {"method": "GET",  "paths": ["/api/route"],                        "introduced_by": "M-14"}
     },
     "ws": {

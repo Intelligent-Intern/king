@@ -8,6 +8,7 @@ require_once __DIR__ . '/../domain/inference/inference_stream.php';
 require_once __DIR__ . '/../domain/registry/model_registry.php';
 require_once __DIR__ . '/../domain/registry/model_fit_selector.php';
 require_once __DIR__ . '/../domain/profile/hardware_profile.php';
+require_once __DIR__ . '/../domain/telemetry/inference_metrics.php';
 require_once __DIR__ . '/../support/token_frame.php';
 
 /**
@@ -45,6 +46,7 @@ function model_inference_handle_realtime_routes(
     callable $errorResponse,
     callable $openDatabase,
     callable $getInferenceSession,
+    callable $getInferenceMetrics,
     callable $runtimeEnvelope,
     string $wsPath
 ): ?array {
@@ -101,6 +103,7 @@ function model_inference_handle_realtime_routes(
             $request,
             $openDatabase,
             $getInferenceSession,
+            $getInferenceMetrics,
             $runtimeEnvelope
         );
     } catch (Throwable $error) {
@@ -126,6 +129,7 @@ function model_inference_realtime_run_session(
     array $request,
     callable $openDatabase,
     callable $getInferenceSession,
+    callable $getInferenceMetrics,
     callable $runtimeEnvelope
 ): void {
     $rawFrame = king_client_websocket_receive($ws, 30_000);
@@ -193,13 +197,17 @@ function model_inference_realtime_run_session(
         king_websocket_send($ws, $frameBytes, true);
     };
 
-    model_inference_stream_completion(
+    $streamSummary = model_inference_stream_completion(
         $worker,
         $validated,
         $requestId,
         $sendBinaryFrame,
         min((int) $validated['sampling']['max_tokens'], max(1, (int) $entry['context_length']))
     );
+
+    /** @var InferenceMetricsRing $metrics */
+    $metrics = $getInferenceMetrics();
+    $metrics->record(model_inference_metrics_entry_from_ws($streamSummary, $validated, $entry, $profile));
 }
 
 /**

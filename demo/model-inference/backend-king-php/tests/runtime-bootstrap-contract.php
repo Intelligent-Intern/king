@@ -99,6 +99,9 @@ try {
     $getInferenceSession = static function () {
         throw new RuntimeException('inference session should not be reached by runtime-bootstrap paths.');
     };
+    $getInferenceMetrics = static function () {
+        throw new RuntimeException('inference metrics should not be reached by runtime-bootstrap paths.');
+    };
     $dispatch = static function (string $method, string $path) use (
         $jsonResponse,
         $errorResponse,
@@ -106,7 +109,8 @@ try {
         $pathFromRequest,
         $runtimeEnvelope,
         $openDatabase,
-        $getInferenceSession
+        $getInferenceSession,
+        $getInferenceMetrics
     ): array {
         return model_inference_dispatch_request(
             ['method' => $method, 'path' => $path, 'uri' => $path, 'headers' => []],
@@ -117,6 +121,7 @@ try {
             $runtimeEnvelope,
             $openDatabase,
             $getInferenceSession,
+            $getInferenceMetrics,
             '/ws',
             '127.0.0.1',
             18090

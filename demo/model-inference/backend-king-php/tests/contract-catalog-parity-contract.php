@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../http/router.php';
+require_once __DIR__ . '/../domain/telemetry/inference_metrics.php';
 
 function model_inference_catalog_contract_assert(bool $condition, string $message): void
 {
@@ -48,15 +49,16 @@ try {
     // dispatcher. Update this list together with the catalog when a new
     // route lands.
     $expectedLiveApi = [
-        'runtime_health' => ['method' => 'GET',    'paths' => ['/health', '/api/runtime']],
-        'bootstrap'      => ['method' => 'GET',    'paths' => ['/', '/api/bootstrap']],
-        'version'        => ['method' => 'GET',    'paths' => ['/api/version']],
-        'node_profile'   => ['method' => 'GET',    'paths' => ['/api/node/profile']],
-        'models_list'    => ['method' => 'GET',    'paths' => ['/api/models']],
-        'models_create'  => ['method' => 'POST',   'paths' => ['/api/models']],
-        'model_get'      => ['method' => 'GET',    'paths' => ['/api/models/{model_id}']],
-        'model_delete'   => ['method' => 'DELETE', 'paths' => ['/api/models/{model_id}']],
-        'infer_http'     => ['method' => 'POST',   'paths' => ['/api/infer']],
+        'runtime_health'   => ['method' => 'GET',    'paths' => ['/health', '/api/runtime']],
+        'bootstrap'        => ['method' => 'GET',    'paths' => ['/', '/api/bootstrap']],
+        'version'          => ['method' => 'GET',    'paths' => ['/api/version']],
+        'node_profile'     => ['method' => 'GET',    'paths' => ['/api/node/profile']],
+        'models_list'      => ['method' => 'GET',    'paths' => ['/api/models']],
+        'models_create'    => ['method' => 'POST',   'paths' => ['/api/models']],
+        'model_get'        => ['method' => 'GET',    'paths' => ['/api/models/{model_id}']],
+        'model_delete'     => ['method' => 'DELETE', 'paths' => ['/api/models/{model_id}']],
+        'telemetry_recent' => ['method' => 'GET',    'paths' => ['/api/telemetry/inference/recent']],
+        'infer_http'       => ['method' => 'POST',   'paths' => ['/api/infer']],
     ];
 
     $liveApi = $catalog['api'] ?? null;
@@ -125,6 +127,9 @@ try {
     $getInferenceSession = static function () {
         throw new RuntimeException('inference session must not be reached by parity probes (infer_http catalog entry is not exercised with a body here).');
     };
+    $getInferenceMetrics = static function () {
+        return new InferenceMetricsRing();
+    };
 
     // Live-catalog resolution: every path must either resolve to 200 (list /
     // runtime / profile) OR produce a registry-owned 4xx that proves the
@@ -141,8 +146,9 @@ try {
         'models_list'    => [['method' => 'GET',    'path' => '/api/models',                                 'expect_not_status' => 404]],
         'models_create'  => [['method' => 'POST',   'path' => '/api/models',                                 'expect_not_status' => 404]],
         'model_get'      => [['method' => 'GET',    'path' => '/api/models/mdl-00000000deadbeef',             'expect_not_status' => 404]],
-        'model_delete'   => [['method' => 'DELETE', 'path' => '/api/models/mdl-00000000deadbeef',             'expect_not_status' => 404]],
-        'infer_http'     => [['method' => 'POST',   'path' => '/api/infer',                                  'expect_not_status' => 404]],
+        'model_delete'     => [['method' => 'DELETE', 'path' => '/api/models/mdl-00000000deadbeef',           'expect_not_status' => 404]],
+        'telemetry_recent' => [['method' => 'GET',    'path' => '/api/telemetry/inference/recent',           'expect_status' => 200]],
+        'infer_http'       => [['method' => 'POST',   'path' => '/api/infer',                                'expect_not_status' => 404]],
     ];
     foreach ($parityProbes as $key => $probes) {
         foreach ($probes as $probe) {
@@ -158,6 +164,7 @@ try {
                     $runtimeEnvelope,
                     $openDatabase,
                     $getInferenceSession,
+                    $getInferenceMetrics,
                     '/ws',
                     '127.0.0.1',
                     18090
@@ -265,14 +272,14 @@ try {
         'catalog.planned_surfaces_target_shape must exist so future surfaces are declared without faking parity'
     );
     $targetShapeApi = (array) ($targetShape['api'] ?? []);
-    foreach (['worker_status', 'transcripts_get', 'telemetry_recent', 'route_diagnostic'] as $requiredKey) {
+    foreach (['worker_status', 'transcripts_get', 'route_diagnostic'] as $requiredKey) {
         model_inference_catalog_contract_assert(
             isset($targetShapeApi[$requiredKey]),
             "catalog.planned_surfaces_target_shape.api must list '{$requiredKey}' until its live leaf lands"
         );
     }
     // A surface MUST NOT appear in both live and target-shape sections.
-    foreach (['node_profile', 'models_list', 'models_create', 'model_get', 'model_delete', 'infer_http'] as $shipped) {
+    foreach (['node_profile', 'models_list', 'models_create', 'model_get', 'model_delete', 'infer_http', 'telemetry_recent'] as $shipped) {
         model_inference_catalog_contract_assert(
             !isset($targetShapeApi[$shipped]),
             "{$shipped} has shipped and must not remain in planned_surfaces_target_shape"

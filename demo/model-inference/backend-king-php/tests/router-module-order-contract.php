@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../http/router.php';
+require_once __DIR__ . '/../domain/telemetry/inference_metrics.php';
 
 function model_inference_router_contract_assert(bool $condition, string $message): void
 {
@@ -17,7 +18,7 @@ try {
     // Current deployed module list. Grows as later leaves land their modules.
     // Intended end-of-sprint order (see demo/model-inference/README.md):
     //   runtime, profile, registry, worker, inference, telemetry, routing, realtime
-    $expectedOrder = ['runtime', 'profile', 'registry', 'inference', 'realtime'];
+    $expectedOrder = ['runtime', 'profile', 'registry', 'inference', 'realtime', 'telemetry'];
     $actualOrder = model_inference_dispatch_route_module_order();
 
     model_inference_router_contract_assert(
@@ -78,6 +79,9 @@ try {
     $getInferenceSession = static function () {
         throw new RuntimeException('inference session should not be reached for router module-order assertions.');
     };
+    $getInferenceMetrics = static function () {
+        throw new RuntimeException('inference metrics should not be reached for router module-order assertions.');
+    };
 
     $runtimeResponse = model_inference_dispatch_request(
         ['method' => 'GET', 'path' => '/api/runtime', 'uri' => '/api/runtime', 'headers' => []],
@@ -88,6 +92,7 @@ try {
         $runtimeEnvelope,
         $openDatabase,
         $getInferenceSession,
+        $getInferenceMetrics,
         '/ws',
         '127.0.0.1',
         18090
@@ -95,6 +100,30 @@ try {
     model_inference_router_contract_assert(
         (int) ($runtimeResponse['status'] ?? 0) === 200,
         'runtime module should serve /api/runtime via the dispatcher'
+    );
+
+    // Telemetry module owns /api/telemetry/inference/recent.
+    $telemetryRing = new InferenceMetricsRing();
+    $telemetryGetMetrics = static function () use ($telemetryRing) {
+        return $telemetryRing;
+    };
+    $telemetryResponse = model_inference_dispatch_request(
+        ['method' => 'GET', 'path' => '/api/telemetry/inference/recent', 'uri' => '/api/telemetry/inference/recent', 'headers' => []],
+        $jsonResponse,
+        $errorResponse,
+        $methodFromRequest,
+        $pathFromRequest,
+        $runtimeEnvelope,
+        $openDatabase,
+        $getInferenceSession,
+        $telemetryGetMetrics,
+        '/ws',
+        '127.0.0.1',
+        18090
+    );
+    model_inference_router_contract_assert(
+        (int) ($telemetryResponse['status'] ?? 0) === 200,
+        'telemetry module should serve /api/telemetry/inference/recent via the dispatcher'
     );
 
     // Profile module owns /api/node/profile.
@@ -107,6 +136,7 @@ try {
         $runtimeEnvelope,
         $openDatabase,
         $getInferenceSession,
+        $getInferenceMetrics,
         '/ws',
         '127.0.0.1',
         18090
@@ -120,10 +150,9 @@ try {
     // This proves the dispatcher does not pretend to serve routes whose
     // module has not landed yet.
     $targetShapePaths = [
-        '/api/worker',                      // M-7
-        '/api/telemetry/inference/recent',  // M-12
-        '/api/route',                       // M-14
-        '/api/transcripts/req_x',           // M-16
+        '/api/worker',            // M-7 (still target-shape in this demo)
+        '/api/route',             // M-14
+        '/api/transcripts/req_x', // M-16
     ];
     foreach ($targetShapePaths as $targetPath) {
         $response = model_inference_dispatch_request(
@@ -135,6 +164,7 @@ try {
             $runtimeEnvelope,
             $openDatabase,
             $getInferenceSession,
+            $getInferenceMetrics,
             '/ws',
             '127.0.0.1',
             18090

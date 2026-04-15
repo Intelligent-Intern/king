@@ -217,6 +217,9 @@ try {
     $getInferenceSession = static function () {
         throw new RuntimeException('inference session should not be reached by /api/node/profile.');
     };
+    $getInferenceMetrics = static function () {
+        throw new RuntimeException('inference metrics should not be reached by /api/node/profile.');
+    };
     $dispatchResponse = model_inference_dispatch_request(
         ['method' => 'GET', 'path' => '/api/node/profile', 'uri' => '/api/node/profile', 'headers' => []],
         $jsonResponse,
@@ -226,6 +229,7 @@ try {
         $runtimeEnvelope,
         $openDatabase,
         $getInferenceSession,
+        $getInferenceMetrics,
         '/ws',
         '127.0.0.1',
         18090
@@ -254,6 +258,7 @@ try {
         $runtimeEnvelope,
         $openDatabase,
         $getInferenceSession,
+        $getInferenceMetrics,
         '/ws',
         '127.0.0.1',
         18090

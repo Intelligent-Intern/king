@@ -108,6 +108,48 @@ Non-negotiable direction for this batch:
   asserts 1:1 between the live `api.*` / `ws.*` catalog entries and the
   actually-served routes of the dispatcher, refuses target-shape paths leaking
   into the live section, and locks the currently emitted error-code set.
+- [x] `#M-12` Inference telemetry landed at
+  `backend-king-php/domain/telemetry/inference_metrics.php` +
+  `backend-king-php/http/module_telemetry.php`. Process-local
+  bounded-FIFO `InferenceMetricsRing` with server-owned
+  `recorded_at` stamps, FIFO eviction on overflow, newest-first
+  `recent()`, and client-supplied `transport` clamped to
+  `http|ws` (garbage values default to `http` rather than leaking).
+  Per-entry fields: `request_id`, `session_id`, `transport`,
+  `model_id`, `model_name`, `quantization`, `node_id`,
+  `tokens_in`, `tokens_out`, `ttft_ms`, `duration_ms`,
+  `tokens_per_second` (derived server-side from `tokens_out /
+  (duration_ms/1000)`), `vram_total_bytes`, `vram_free_bytes`,
+  `gpu_kind`, `recorded_at`. Failed inferences intentionally do
+  NOT record (partial state would corrupt averages); transcript
+  persistence is a separate contract landing at `#M-16`.
+  Both `module_inference.php` (HTTP) and `module_realtime.php`
+  (WS) record through the same surface via
+  `model_inference_metrics_entry_from_http()` /
+  `…_from_ws()` helpers so transport parity is mechanical, not
+  copy-pasted. Dispatcher module order grows to
+  `['runtime','profile','registry','inference','realtime','telemetry']`;
+  signature gains `$getInferenceMetrics` callable between
+  `$getInferenceSession` and `$wsPath`. Catalog
+  `api.telemetry_recent` graduates from
+  `planned_surfaces_target_shape` into the live section with a
+  pinned `item_shape`. `tests/inference-telemetry-contract.{sh,php}`
+  asserts (section A): capacity passthrough, empty start,
+  capacity-bounded eviction (5 records into a 3-slot ring leaves
+  the three newest), newest-first ordering of `recent()`,
+  `tokens_per_second` derivation parity, rfc3339 `recorded_at`,
+  unknown-transport → `http` normalization, `recent(n)` limit,
+  `clear()`, `capacity<1` rejection. Section B with real
+  SmolLM2: one HTTP `POST /api/infer` populates exactly one entry
+  with `transport=http`; `GET /api/telemetry/inference/recent`
+  returns `{status:ok, items, count, capacity, time}` with every
+  pinned item field; one WS streamed completion through the same
+  `model_inference_stream_completion()` + `…_from_ws()` helper
+  the realtime module uses populates a second entry with
+  `transport=ws` and the same `tokens_per_second` derivation
+  rule; non-GET on the endpoint returns
+  `405 method_not_allowed`. Maps to tracker Z.9 (still unticked
+  pending post-merge sweep).
 - [x] `#M-11` WS streaming via IIBIN token frames landed at
   `backend-king-php/domain/inference/inference_stream.php` +
   `backend-king-php/http/module_realtime.php`. First leaf that
@@ -389,10 +431,6 @@ Non-negotiable direction for this batch:
 
 ### Open / To implement (priority order)
 
-- [ ] `#M-12` Inference telemetry — TTFT, tokens/s, VRAM budget/observed,
-  prompt/completion counts; `GET /api/telemetry/inference/recent`. Maps to
-  `Z.9`.
-
 - [ ] `#M-13` Semantic-DNS self-registration as `king.inference.v1` on ready;
   deregister on drain; bounded `heartbeat_after_ready` retry (never `sleep`).
   Maps to `V.4`, `Z.6`, `V.10`.
@@ -423,17 +461,18 @@ Non-negotiable direction for this batch:
 
 ### Next step (M-batch)
 
-- [ ] Continue with `#M-12` (inference telemetry): per-request
-  capture of TTFT, tokens/s, VRAM budget/observed,
-  prompt/completion counts, model_id, node_id. Expose
-  `GET /api/telemetry/inference/recent` returning the last N
-  records (in-memory ring, no persistence yet — transcript
-  persistence is `#M-16`). Add
-  `backend-king-php/domain/telemetry/inference_metrics.php` +
-  `backend-king-php/http/module_telemetry.php`; wire into the
-  dispatcher after the inference + realtime modules so both the
-  HTTP and WS paths record through the same ring. Move
-  `telemetry_recent` from `planned_surfaces_target_shape` into live
-  `catalog.api`. Add `tests/inference-telemetry-contract.{sh,php}`
-  that runs one inference through each transport and asserts the
-  ring picked up the right per-field values. Maps to Z.9.
+- [ ] Continue with `#M-13` (Semantic-DNS self-registration): on
+  ready, call `king_semantic_dns_register_service` with
+  `service_type=king.inference.v1` carrying a slimmed node-profile
+  subset (node_id, health_url, free_ram_bytes, free_vram_bytes,
+  loadable model_name+quantization pairs, supports_streaming).
+  Deregister on drain / shutdown. Heartbeat-after-ready is a
+  bounded retry loop with no `sleep` between attempts — use
+  king's own poll timing. Add
+  `backend-king-php/support/semantic_dns.php` +
+  `backend-king-php/domain/discovery/service_registration.php`
+  + `tests/semantic-dns-inference-register-contract.{sh,php}`
+  that boots a semantic-DNS runtime via `king_semantic_dns_init`,
+  registers + discovers + deregisters, asserts a second process
+  sees the record within 2 seconds and the record is gone on
+  drain. Maps to V.4, Z.6, V.10.

@@ -6,6 +6,7 @@ require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/object_store.php';
 require_once __DIR__ . '/../domain/registry/model_registry.php';
 require_once __DIR__ . '/../domain/inference/inference_session.php';
+require_once __DIR__ . '/../domain/telemetry/inference_metrics.php';
 require_once __DIR__ . '/../http/router.php';
 
 function model_inference_infer_contract_assert(bool $condition, string $message): void
@@ -79,6 +80,10 @@ try {
     $getInferenceSession = static function () use ($session): InferenceSession {
         return $session;
     };
+    $metrics = new InferenceMetricsRing(8);
+    $getInferenceMetrics = static function () use ($metrics): InferenceMetricsRing {
+        return $metrics;
+    };
 
     $dispatch = static function (string $method, string $path, array $body) use (
         $jsonResponse,
@@ -87,7 +92,8 @@ try {
         $pathFromRequest,
         $runtimeEnvelope,
         $openDatabase,
-        $getInferenceSession
+        $getInferenceSession,
+        $getInferenceMetrics
     ): array {
         $encoded = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         return model_inference_dispatch_request(
@@ -105,6 +111,7 @@ try {
             $runtimeEnvelope,
             $openDatabase,
             $getInferenceSession,
+            $getInferenceMetrics,
             '/ws',
             '127.0.0.1',
             18090
@@ -181,6 +188,7 @@ try {
         $runtimeEnvelope,
         $openDatabase,
         $getInferenceSession,
+        $getInferenceMetrics,
         '/ws',
         '127.0.0.1',
         18090
@@ -199,6 +207,7 @@ try {
         $runtimeEnvelope,
         $openDatabase,
         $getInferenceSession,
+        $getInferenceMetrics,
         '/ws',
         '127.0.0.1',
         18090

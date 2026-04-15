@@ -7,6 +7,7 @@ require_once __DIR__ . '/../domain/inference/inference_session.php';
 require_once __DIR__ . '/../domain/registry/model_registry.php';
 require_once __DIR__ . '/../domain/registry/model_fit_selector.php';
 require_once __DIR__ . '/../domain/profile/hardware_profile.php';
+require_once __DIR__ . '/../domain/telemetry/inference_metrics.php';
 
 /**
  * @param array<string, mixed> $request
@@ -19,6 +20,7 @@ function model_inference_handle_inference_routes(
     callable $errorResponse,
     callable $openDatabase,
     callable $getInferenceSession,
+    callable $getInferenceMetrics,
     callable $runtimeEnvelope
 ): ?array {
     if ($path !== '/api/infer') {
@@ -120,7 +122,7 @@ function model_inference_handle_inference_routes(
 
     $requestId = model_inference_generate_request_id();
 
-    return $jsonResponse(200, [
+    $responseEnvelope = [
         'status' => 'ok',
         'request_id' => $requestId,
         'session_id' => $validated['session_id'],
@@ -140,7 +142,13 @@ function model_inference_handle_inference_routes(
         ],
         'worker' => $result['worker'],
         'time' => gmdate('c'),
-    ]);
+    ];
+
+    /** @var InferenceMetricsRing $metrics */
+    $metrics = $getInferenceMetrics();
+    $metrics->record(model_inference_metrics_entry_from_http($responseEnvelope, $profile));
+
+    return $jsonResponse(200, $responseEnvelope);
 }
 
 function model_inference_generate_request_id(): string

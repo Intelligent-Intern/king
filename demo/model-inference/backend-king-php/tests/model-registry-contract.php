@@ -54,6 +54,9 @@ try {
     $getInferenceSession = static function () {
         throw new RuntimeException('inference session must not be reached from registry routes.');
     };
+    $getInferenceMetrics = static function () {
+        throw new RuntimeException('inference metrics must not be reached from registry routes.');
+    };
     $dispatch = static function (string $method, string $path, array $headers = [], string $body = '') use (
         $jsonResponse,
         $errorResponse,
@@ -61,7 +64,8 @@ try {
         $pathFromRequest,
         $runtimeEnvelope,
         $openDatabase,
-        $getInferenceSession
+        $getInferenceSession,
+        $getInferenceMetrics
     ): array {
         return model_inference_dispatch_request(
             ['method' => $method, 'path' => $path, 'uri' => $path, 'headers' => $headers, 'body' => $body],
@@ -72,6 +76,7 @@ try {
             $runtimeEnvelope,
             $openDatabase,
             $getInferenceSession,
+            $getInferenceMetrics,
             '/ws',
             '127.0.0.1',
             18090

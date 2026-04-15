@@ -35,6 +35,7 @@ require_once __DIR__ . '/support/database.php';
 require_once __DIR__ . '/support/object_store.php';
 require_once __DIR__ . '/domain/registry/model_registry.php';
 require_once __DIR__ . '/domain/inference/inference_session.php';
+require_once __DIR__ . '/domain/telemetry/inference_metrics.php';
 require_once __DIR__ . '/http/router.php';
 
 $objectStoreRoot = getenv('MODEL_INFERENCE_KING_OBJECT_STORE_ROOT') ?: (dirname($dbPath) . '/object-store');
@@ -101,6 +102,12 @@ $getInferenceSession = static function () use ($inferenceSession): InferenceSess
 register_shutdown_function(static function () use ($inferenceSession): void {
     $inferenceSession->drainAll();
 });
+
+$metricsCapacity = (int) (getenv('MODEL_INFERENCE_METRICS_CAPACITY') ?: '100');
+$inferenceMetrics = new InferenceMetricsRing($metricsCapacity);
+$getInferenceMetrics = static function () use ($inferenceMetrics): InferenceMetricsRing {
+    return $inferenceMetrics;
+};
 
 register_shutdown_function(static function () use ($log): void {
     $error = error_get_last();
@@ -258,6 +265,7 @@ $handler = static function (array $request) use (
     $runtimeEnvelope,
     $openDatabase,
     $getInferenceSession,
+    $getInferenceMetrics,
     $wsPath,
     $host,
     $port,
@@ -297,6 +305,7 @@ $handler = static function (array $request) use (
             $runtimeEnvelope,
             $openDatabase,
             $getInferenceSession,
+            $getInferenceMetrics,
             $wsPath,
             $host,
             $port

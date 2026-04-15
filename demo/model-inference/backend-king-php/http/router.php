@@ -7,6 +7,7 @@ require_once __DIR__ . '/module_profile.php';
 require_once __DIR__ . '/module_registry.php';
 require_once __DIR__ . '/module_inference.php';
 require_once __DIR__ . '/module_realtime.php';
+require_once __DIR__ . '/module_telemetry.php';
 
 /**
  * Deterministic module-registration order for the inference backend.
@@ -29,6 +30,7 @@ function model_inference_dispatch_route_module_order(): array
         'registry',
         'inference',
         'realtime',
+        'telemetry',
     ];
 }
 
@@ -47,6 +49,7 @@ function model_inference_dispatch_request(
     callable $runtimeEnvelope,
     callable $openDatabase,
     callable $getInferenceSession,
+    callable $getInferenceMetrics,
     string $wsPath,
     string $host,
     int $port
@@ -112,6 +115,7 @@ function model_inference_dispatch_request(
         $errorResponse,
         $openDatabase,
         $getInferenceSession,
+        $getInferenceMetrics,
         $runtimeEnvelope
     );
     if ($inferenceResponse !== null) {
@@ -126,11 +130,23 @@ function model_inference_dispatch_request(
         $errorResponse,
         $openDatabase,
         $getInferenceSession,
+        $getInferenceMetrics,
         $runtimeEnvelope,
         $wsPath
     );
     if ($realtimeResponse !== null) {
         return $realtimeResponse;
+    }
+
+    $telemetryResponse = model_inference_handle_telemetry_routes(
+        $path,
+        $method,
+        $jsonResponse,
+        $errorResponse,
+        $getInferenceMetrics
+    );
+    if ($telemetryResponse !== null) {
+        return $telemetryResponse;
     }
 
     return $errorResponse(404, 'not_implemented', 'Route has no handler on this backend build.', [
