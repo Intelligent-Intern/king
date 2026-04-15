@@ -1,5 +1,5 @@
 import { reactive } from 'vue';
-import { resolveBackendOrigin } from '../../support/backendOrigin';
+import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 
 const STORAGE_KEY = 'ii_videocall_v1_session';
 const AUTH_ROLES = new Set(['admin', 'user']);
@@ -190,16 +190,22 @@ function normalizeAuthErrorState(reason, message, clearState = false) {
   sessionState.recovered = !sessionState.sessionToken;
 }
 
-export async function loginWithPassword(email, password) {
-  const params = new URLSearchParams({
-    email: normalizeString(email).toLowerCase(),
-    password: String(password || ''),
-  });
-  const endpoint = `${resolveBackendOrigin()}/api/auth/login?${params.toString()}`;
+function normalizeNetworkErrorMessage(error, fallback) {
+  const message = error instanceof Error ? error.message.trim() : '';
+  if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
+    return `Could not reach backend (${currentBackendOrigin()}).`;
+  }
+  return message || fallback;
+}
 
+export async function loginWithPassword(email, password) {
   try {
-    const response = await fetch(endpoint, {
+    const { response } = await fetchBackend('/api/auth/login', {
       method: 'GET',
+      query: {
+        email: normalizeString(email).toLowerCase(),
+        password: String(password || ''),
+      },
       headers: {
         accept: 'application/json',
       },
@@ -232,7 +238,63 @@ export async function loginWithPassword(email, password) {
     return {
       ok: false,
       status: 0,
-      message: error instanceof Error ? error.message : 'Login request failed.',
+      message: normalizeNetworkErrorMessage(error, 'Login request failed.'),
+    };
+  }
+}
+
+export async function loginWithCallAccess(accessId, options = {}) {
+  const normalizedAccessId = String(accessId || '').trim().toLowerCase();
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(normalizedAccessId)) {
+    return {
+      ok: false,
+      status: 422,
+      message: 'Call access id is invalid.',
+    };
+  }
+
+  try {
+    const guestName = typeof options?.guestName === 'string' ? options.guestName.trim() : '';
+    const requestBody = guestName !== '' ? JSON.stringify({ guest_name: guestName }) : undefined;
+    const { response } = await fetchBackend(`/api/call-access/${encodeURIComponent(normalizedAccessId)}/session`, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        ...(requestBody ? { 'content-type': 'application/json' } : {}),
+      },
+      body: requestBody,
+    });
+
+    const payload = await readJsonResponse(response);
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        message: extractErrorMessage(payload, 'Could not start call access session.'),
+      };
+    }
+
+    if (!payload || payload.status !== 'ok') {
+      return {
+        ok: false,
+        status: response.status,
+        message: 'Call access response is invalid.',
+      };
+    }
+
+    const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+    applySessionEnvelope(result.session, result.user);
+    return {
+      ok: true,
+      role: sessionState.role,
+      accessLink: result.access_link || null,
+      call: result.call || null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      message: normalizeNetworkErrorMessage(error, 'Call access session request failed.'),
     };
   }
 }
@@ -257,9 +319,8 @@ export async function ensureSessionRecovery(force = false) {
     }
 
     setRecoveryState('probing');
-    const endpoint = `${resolveBackendOrigin()}/api/auth/session`;
     try {
-      const response = await fetch(endpoint, {
+      const { response } = await fetchBackend('/api/auth/session', {
         method: 'GET',
         headers: sessionHeaders(),
       });
@@ -290,7 +351,7 @@ export async function ensureSessionRecovery(force = false) {
         ok: false,
         reason: 'network_error',
         status: 0,
-        message: error instanceof Error ? error.message : 'Session recovery failed.',
+        message: normalizeNetworkErrorMessage(error, 'Session recovery failed.'),
       };
     } finally {
       recoveryInFlight = null;
@@ -311,10 +372,9 @@ export async function refreshSession() {
 
   refreshInFlight = (async () => {
     setRecoveryState('refreshing');
-    const endpoint = `${resolveBackendOrigin()}/api/auth/refresh`;
 
     try {
-      const response = await fetch(endpoint, {
+      const { response } = await fetchBackend('/api/auth/refresh', {
         method: 'POST',
         headers: sessionHeaders(),
       });
@@ -355,7 +415,7 @@ export async function refreshSession() {
         ok: false,
         reason: 'network_error',
         status: 0,
-        message: error instanceof Error ? error.message : 'Session refresh failed.',
+        message: normalizeNetworkErrorMessage(error, 'Session refresh failed.'),
       };
     } finally {
       refreshInFlight = null;
@@ -374,10 +434,8 @@ export async function fetchSessionSettings() {
     };
   }
 
-  const endpoint = `${resolveBackendOrigin()}/api/user/settings`;
-
   try {
-    const response = await fetch(endpoint, {
+    const { response } = await fetchBackend('/api/user/settings', {
       method: 'GET',
       headers: sessionHeaders(),
     });
@@ -423,7 +481,7 @@ export async function fetchSessionSettings() {
       ok: false,
       reason: 'network_error',
       status: 0,
-      message: error instanceof Error ? error.message : 'Could not load user settings.',
+      message: normalizeNetworkErrorMessage(error, 'Could not load user settings.'),
     };
   }
 }
@@ -445,10 +503,8 @@ export async function saveSessionSettings(settingsPatch) {
     }
   }
 
-  const endpoint = `${resolveBackendOrigin()}/api/user/settings`;
-
   try {
-    const response = await fetch(endpoint, {
+    const { response } = await fetchBackend('/api/user/settings', {
       method: 'PATCH',
       headers: sessionHeaders(),
       body: JSON.stringify(patch),
@@ -496,7 +552,7 @@ export async function saveSessionSettings(settingsPatch) {
       ok: false,
       reason: 'network_error',
       status: 0,
-      message: error instanceof Error ? error.message : 'Could not update user settings.',
+      message: normalizeNetworkErrorMessage(error, 'Could not update user settings.'),
     };
   }
 }
@@ -510,10 +566,8 @@ export async function uploadSessionAvatar(dataUrl) {
     };
   }
 
-  const endpoint = `${resolveBackendOrigin()}/api/user/avatar`;
-
   try {
-    const response = await fetch(endpoint, {
+    const { response } = await fetchBackend('/api/user/avatar', {
       method: 'POST',
       headers: sessionHeaders(),
       body: JSON.stringify({
@@ -562,17 +616,15 @@ export async function uploadSessionAvatar(dataUrl) {
       ok: false,
       reason: 'network_error',
       status: 0,
-      message: error instanceof Error ? error.message : 'Could not upload avatar.',
+      message: normalizeNetworkErrorMessage(error, 'Could not upload avatar.'),
     };
   }
 }
 
 export async function logoutSession() {
-  const endpoint = `${resolveBackendOrigin()}/api/auth/logout`;
-
   try {
     if (sessionState.sessionToken) {
-      await fetch(endpoint, {
+      await fetchBackend('/api/auth/logout', {
         method: 'POST',
         headers: sessionHeaders(),
       });

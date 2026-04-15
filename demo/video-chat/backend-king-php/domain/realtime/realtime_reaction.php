@@ -83,11 +83,14 @@ function videochat_reaction_max_bytes(): int
     return $configured;
 }
 
-function videochat_reaction_throttle_window_ms(): int
+function videochat_reaction_flood_window_ms(): int
 {
-    $configured = filter_var(getenv('VIDEOCHAT_WS_REACTION_THROTTLE_WINDOW_MS'), FILTER_VALIDATE_INT);
+    $configured = filter_var(getenv('VIDEOCHAT_WS_REACTION_FLOOD_WINDOW_MS'), FILTER_VALIDATE_INT);
     if (!is_int($configured)) {
-        $configured = 3000;
+        $configured = filter_var(getenv('VIDEOCHAT_WS_REACTION_THROTTLE_WINDOW_MS'), FILTER_VALIDATE_INT);
+    }
+    if (!is_int($configured)) {
+        $configured = 1000;
     }
 
     if ($configured < 250) {
@@ -100,11 +103,48 @@ function videochat_reaction_throttle_window_ms(): int
     return $configured;
 }
 
-function videochat_reaction_throttle_max_per_window(): int
+function videochat_reaction_flood_threshold_per_window(): int
 {
-    $configured = filter_var(getenv('VIDEOCHAT_WS_REACTION_THROTTLE_MAX_PER_WINDOW'), FILTER_VALIDATE_INT);
+    $configured = filter_var(getenv('VIDEOCHAT_WS_REACTION_FLOOD_THRESHOLD_PER_WINDOW'), FILTER_VALIDATE_INT);
     if (!is_int($configured)) {
-        $configured = 10;
+        $configured = filter_var(getenv('VIDEOCHAT_WS_REACTION_THROTTLE_MAX_PER_WINDOW'), FILTER_VALIDATE_INT);
+    }
+    if (!is_int($configured)) {
+        $configured = 20;
+    }
+
+    if ($configured < 1) {
+        return 1;
+    }
+    if ($configured > 1000) {
+        return 1000;
+    }
+
+    return $configured;
+}
+
+function videochat_reaction_flood_batch_size(): int
+{
+    $configured = filter_var(getenv('VIDEOCHAT_WS_REACTION_FLOOD_BATCH_SIZE'), FILTER_VALIDATE_INT);
+    if (!is_int($configured)) {
+        $configured = 25;
+    }
+
+    if ($configured < 1) {
+        return 1;
+    }
+    if ($configured > 200) {
+        return 200;
+    }
+
+    return $configured;
+}
+
+function videochat_reaction_client_batch_max_count(): int
+{
+    $configured = filter_var(getenv('VIDEOCHAT_WS_REACTION_CLIENT_BATCH_MAX_COUNT'), FILTER_VALIDATE_INT);
+    if (!is_int($configured)) {
+        $configured = 25;
     }
 
     if ($configured < 1) {
@@ -173,10 +213,88 @@ function videochat_reaction_resolve_id(
  *   ok: bool,
  *   type: string,
  *   emoji: string,
+ *   emojis: array<int, string>,
  *   client_reaction_id: ?string,
  *   error: string
  * }
  */
+function videochat_reaction_decode_client_reaction_id(mixed $value): array
+{
+    if (!is_string($value)) {
+        return [
+            'ok' => true,
+            'client_reaction_id' => null,
+            'error' => '',
+        ];
+    }
+
+    $candidate = trim($value);
+    if ($candidate === '') {
+        return [
+            'ok' => true,
+            'client_reaction_id' => null,
+            'error' => '',
+        ];
+    }
+
+    if (strlen($candidate) > 128 || preg_match('/^[A-Za-z0-9._:-]+$/', $candidate) !== 1) {
+        return [
+            'ok' => false,
+            'client_reaction_id' => null,
+            'error' => 'invalid_client_reaction_id',
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'client_reaction_id' => $candidate,
+        'error' => '',
+    ];
+}
+
+function videochat_reaction_validate_emoji(string $rawEmoji): array
+{
+    $emoji = trim($rawEmoji);
+    if ($emoji === '') {
+        return [
+            'ok' => false,
+            'emoji' => '',
+            'error' => 'empty_emoji',
+        ];
+    }
+
+    if (strlen($emoji) > videochat_reaction_max_bytes()) {
+        return [
+            'ok' => false,
+            'emoji' => '',
+            'error' => 'emoji_too_large',
+        ];
+    }
+
+    if (videochat_reaction_payload_length($emoji) > videochat_reaction_max_chars()) {
+        return [
+            'ok' => false,
+            'emoji' => '',
+            'error' => 'emoji_too_long',
+        ];
+    }
+
+    $allowed = videochat_reaction_allowed_emoji_set();
+    if (($allowed[$emoji] ?? false) !== true) {
+        return [
+            'ok' => false,
+            'emoji' => '',
+            'error' => 'unsupported_emoji',
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'emoji' => $emoji,
+        'error' => '',
+    ];
+}
+
 function videochat_reaction_decode_client_frame(string $frame): array
 {
     $decoded = json_decode($frame, true);
@@ -185,6 +303,7 @@ function videochat_reaction_decode_client_frame(string $frame): array
             'ok' => false,
             'type' => '',
             'emoji' => '',
+            'emojis' => [],
             'client_reaction_id' => null,
             'error' => 'invalid_json',
         ];
@@ -196,85 +315,114 @@ function videochat_reaction_decode_client_frame(string $frame): array
             'ok' => false,
             'type' => '',
             'emoji' => '',
+            'emojis' => [],
             'client_reaction_id' => null,
             'error' => 'missing_type',
         ];
     }
 
-    if (!in_array($type, ['reaction/send'], true)) {
+    if (!in_array($type, ['reaction/send', 'reaction/send_batch'], true)) {
         return [
             'ok' => false,
             'type' => $type,
             'emoji' => '',
+            'emojis' => [],
             'client_reaction_id' => null,
             'error' => 'unsupported_type',
         ];
     }
 
-    $rawEmoji = is_string($decoded['emoji'] ?? null) ? (string) $decoded['emoji'] : '';
-    $emoji = trim($rawEmoji);
-    if ($emoji === '') {
+    $clientReactionIdResult = videochat_reaction_decode_client_reaction_id($decoded['client_reaction_id'] ?? null);
+    if (!(bool) ($clientReactionIdResult['ok'] ?? false)) {
         return [
             'ok' => false,
             'type' => $type,
             'emoji' => '',
+            'emojis' => [],
             'client_reaction_id' => null,
-            'error' => 'empty_emoji',
+            'error' => (string) ($clientReactionIdResult['error'] ?? 'invalid_client_reaction_id'),
         ];
     }
+    $clientReactionId = $clientReactionIdResult['client_reaction_id'] ?? null;
 
-    if (strlen($emoji) > videochat_reaction_max_bytes()) {
-        return [
-            'ok' => false,
-            'type' => $type,
-            'emoji' => '',
-            'client_reaction_id' => null,
-            'error' => 'emoji_too_large',
-        ];
-    }
+    if ($type === 'reaction/send_batch') {
+        $rawBatch = $decoded['emojis'] ?? null;
+        if (!is_array($rawBatch) || $rawBatch === []) {
+            return [
+                'ok' => false,
+                'type' => $type,
+                'emoji' => '',
+                'emojis' => [],
+                'client_reaction_id' => null,
+                'error' => 'empty_batch',
+            ];
+        }
+        if (count($rawBatch) > videochat_reaction_client_batch_max_count()) {
+            return [
+                'ok' => false,
+                'type' => $type,
+                'emoji' => '',
+                'emojis' => [],
+                'client_reaction_id' => null,
+                'error' => 'batch_too_large',
+            ];
+        }
 
-    if (videochat_reaction_payload_length($emoji) > videochat_reaction_max_chars()) {
-        return [
-            'ok' => false,
-            'type' => $type,
-            'emoji' => '',
-            'client_reaction_id' => null,
-            'error' => 'emoji_too_long',
-        ];
-    }
-
-    $allowed = videochat_reaction_allowed_emoji_set();
-    if (($allowed[$emoji] ?? false) !== true) {
-        return [
-            'ok' => false,
-            'type' => $type,
-            'emoji' => '',
-            'client_reaction_id' => null,
-            'error' => 'unsupported_emoji',
-        ];
-    }
-
-    $clientReactionId = null;
-    if (is_string($decoded['client_reaction_id'] ?? null)) {
-        $candidate = trim((string) $decoded['client_reaction_id']);
-        if ($candidate !== '') {
-            if (strlen($candidate) > 128 || preg_match('/^[A-Za-z0-9._:-]+$/', $candidate) !== 1) {
+        $emojis = [];
+        foreach ($rawBatch as $rawEmoji) {
+            if (!is_string($rawEmoji)) {
                 return [
                     'ok' => false,
                     'type' => $type,
                     'emoji' => '',
+                    'emojis' => [],
                     'client_reaction_id' => null,
-                    'error' => 'invalid_client_reaction_id',
+                    'error' => 'invalid_batch_emoji',
                 ];
             }
-            $clientReactionId = $candidate;
+            $validation = videochat_reaction_validate_emoji($rawEmoji);
+            if (!(bool) ($validation['ok'] ?? false)) {
+                return [
+                    'ok' => false,
+                    'type' => $type,
+                    'emoji' => '',
+                    'emojis' => [],
+                    'client_reaction_id' => null,
+                    'error' => (string) ($validation['error'] ?? 'invalid_emoji'),
+                ];
+            }
+            $emojis[] = (string) ($validation['emoji'] ?? '');
         }
+
+        return [
+            'ok' => true,
+            'type' => 'reaction/send_batch',
+            'emoji' => '',
+            'emojis' => $emojis,
+            'client_reaction_id' => is_string($clientReactionId) ? $clientReactionId : null,
+            'error' => '',
+        ];
     }
+
+    $rawEmoji = is_string($decoded['emoji'] ?? null) ? (string) $decoded['emoji'] : '';
+    $emojiValidation = videochat_reaction_validate_emoji($rawEmoji);
+    if (!(bool) ($emojiValidation['ok'] ?? false)) {
+        return [
+            'ok' => false,
+            'type' => $type,
+            'emoji' => '',
+            'emojis' => [],
+            'client_reaction_id' => null,
+            'error' => (string) ($emojiValidation['error'] ?? 'invalid_emoji'),
+        ];
+    }
+    $emoji = (string) ($emojiValidation['emoji'] ?? '');
 
     return [
         'ok' => true,
         'type' => 'reaction/send',
         'emoji' => $emoji,
+        'emojis' => [$emoji],
         'client_reaction_id' => $clientReactionId,
         'error' => '',
     ];
@@ -286,6 +434,160 @@ function videochat_reaction_sender_payload(array $connection): array
         'user_id' => (int) ($connection['user_id'] ?? 0),
         'display_name' => (string) ($connection['display_name'] ?? ''),
         'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? 'user')),
+    ];
+}
+
+function videochat_reaction_normalize_command_items(
+    array $connection,
+    array $command,
+    string $roomId,
+    int $baseNowUnixMs
+): array {
+    $type = strtolower(trim((string) ($command['type'] ?? 'reaction/send')));
+    $clientReactionId = is_string($command['client_reaction_id'] ?? null)
+        ? trim((string) $command['client_reaction_id'])
+        : '';
+    $baseClientReactionId = $clientReactionId !== '' ? $clientReactionId : null;
+    $rawEmojis = $type === 'reaction/send_batch'
+        ? (is_array($command['emojis'] ?? null) ? $command['emojis'] : [])
+        : [(string) ($command['emoji'] ?? '')];
+
+    $items = [];
+    foreach ($rawEmojis as $index => $rawEmoji) {
+        $emoji = is_string($rawEmoji) ? trim($rawEmoji) : '';
+        if ($emoji === '') {
+            continue;
+        }
+
+        $itemNowUnixMs = $baseNowUnixMs + max(0, (int) $index);
+        $itemClientReactionId = $baseClientReactionId;
+        if ($itemClientReactionId !== null && $type === 'reaction/send_batch') {
+            $itemClientReactionId = $itemClientReactionId . ':' . ((int) $index + 1);
+        }
+
+        $idSeedCommand = [
+            'client_reaction_id' => $itemClientReactionId,
+        ];
+        $items[] = [
+            'id' => videochat_reaction_resolve_id($connection, $idSeedCommand, $roomId, $itemNowUnixMs),
+            'emoji' => $emoji,
+            'client_reaction_id' => $itemClientReactionId,
+            'server_unix_ms' => $itemNowUnixMs,
+            'server_time' => gmdate('c', (int) floor($itemNowUnixMs / 1000)),
+        ];
+    }
+
+    return $items;
+}
+
+function videochat_reaction_single_event_payload(
+    string $roomId,
+    array $senderPayload,
+    array $reaction
+): array {
+    return [
+        'type' => 'reaction/event',
+        'room_id' => $roomId,
+        'sender' => $senderPayload,
+        'reaction' => $reaction,
+        'time' => (string) ($reaction['server_time'] ?? gmdate('c')),
+    ];
+}
+
+function videochat_reaction_batch_event_payload(
+    string $roomId,
+    array $senderPayload,
+    array $reactions,
+    string $mode,
+    int $serverUnixMs
+): array {
+    $serverTime = gmdate('c', (int) floor($serverUnixMs / 1000));
+    $batchId = 'reaction_batch_' . $serverUnixMs;
+    try {
+        $batchId .= '_' . bin2hex(random_bytes(4));
+    } catch (Throwable) {
+        $batchId .= '_' . substr(hash('sha256', uniqid((string) mt_rand(), true)), 0, 8);
+    }
+
+    return [
+        'type' => 'reaction/batch',
+        'room_id' => $roomId,
+        'sender' => $senderPayload,
+        'batch' => [
+            'id' => $batchId,
+            'mode' => $mode,
+            'size' => count($reactions),
+            'server_unix_ms' => $serverUnixMs,
+            'server_time' => $serverTime,
+        ],
+        'reactions' => array_values($reactions),
+        'time' => $serverTime,
+    ];
+}
+
+function videochat_reaction_broadcast_payload(
+    array $presenceState,
+    string $roomId,
+    array $event,
+    ?callable $sender = null
+): int {
+    return videochat_presence_broadcast_room_event(
+        $presenceState,
+        $roomId,
+        $event,
+        null,
+        $sender
+    );
+}
+
+function videochat_reaction_flush_flood_buffer(
+    array &$buffer,
+    array $presenceState,
+    string $roomId,
+    array $senderPayload,
+    int $batchSize,
+    bool $flushPartial,
+    ?callable $sender = null,
+    ?int $nowUnixMs = null
+): array {
+    $sentCount = 0;
+    $lastEvent = null;
+    $effectiveNowUnixMs = is_int($nowUnixMs) && $nowUnixMs > 0
+        ? $nowUnixMs
+        : (int) floor(microtime(true) * 1000);
+
+    while (count($buffer) >= $batchSize || ($flushPartial && count($buffer) > 0)) {
+        $chunkSize = count($buffer) >= $batchSize ? $batchSize : count($buffer);
+        if ($chunkSize <= 0) {
+            break;
+        }
+
+        $chunk = array_splice($buffer, 0, $chunkSize);
+        $chunkTail = $chunk[count($chunk) - 1] ?? [];
+        $chunkUnixMs = (int) ($chunkTail['server_unix_ms'] ?? $effectiveNowUnixMs);
+        if ($chunkUnixMs <= 0) {
+            $chunkUnixMs = $effectiveNowUnixMs;
+        }
+        $event = videochat_reaction_batch_event_payload($roomId, $senderPayload, $chunk, 'flood', $chunkUnixMs);
+        $delivered = videochat_reaction_broadcast_payload($presenceState, $roomId, $event, $sender);
+        if ($delivered <= 0) {
+            return [
+                'ok' => false,
+                'error' => 'delivery_failed',
+                'sent_count' => $sentCount,
+                'event' => $event,
+            ];
+        }
+
+        $sentCount += $delivered;
+        $lastEvent = $event;
+    }
+
+    return [
+        'ok' => true,
+        'error' => '',
+        'sent_count' => $sentCount,
+        'event' => $lastEvent,
     ];
 }
 
@@ -376,10 +678,9 @@ function videochat_reaction_publish(
     $effectiveNowMs = is_int($nowUnixMs) && $nowUnixMs > 0
         ? $nowUnixMs
         : (int) floor(microtime(true) * 1000);
-    $effectiveNowIso = gmdate('c', (int) floor($effectiveNowMs / 1000));
-
-    $windowMs = videochat_reaction_throttle_window_ms();
-    $maxPerWindow = videochat_reaction_throttle_max_per_window();
+    $windowMs = videochat_reaction_flood_window_ms();
+    $floodThreshold = videochat_reaction_flood_threshold_per_window();
+    $floodBatchSize = videochat_reaction_flood_batch_size();
 
     if (!isset($reactionState['rooms'][$roomId]) || !is_array($reactionState['rooms'][$roomId])) {
         $reactionState['rooms'][$roomId] = [];
@@ -387,81 +688,132 @@ function videochat_reaction_publish(
 
     $userKey = (string) $senderUserId;
     $entry = $reactionState['rooms'][$roomId][$userKey] ?? null;
-    $windowStartedMs = is_array($entry) ? (int) ($entry['window_started_ms'] ?? 0) : 0;
-    $countInWindow = is_array($entry) ? (int) ($entry['count'] ?? 0) : 0;
+    if (!is_array($entry)) {
+        $entry = [
+            'window_started_ms' => $effectiveNowMs,
+            'count' => 0,
+            'flood_buffer' => [],
+        ];
+    }
+
+    $windowStartedMs = (int) ($entry['window_started_ms'] ?? 0);
     if ($windowStartedMs <= 0) {
         $windowStartedMs = $effectiveNowMs;
     }
+    $countInWindow = max(0, (int) ($entry['count'] ?? 0));
+    $floodBuffer = is_array($entry['flood_buffer'] ?? null) ? array_values($entry['flood_buffer']) : [];
+    $senderPayload = videochat_reaction_sender_payload($connection);
+    $sentCount = 0;
+    $lastEvent = null;
 
     $elapsedMs = max(0, $effectiveNowMs - $windowStartedMs);
     if ($elapsedMs >= $windowMs) {
+        $flushRollover = videochat_reaction_flush_flood_buffer(
+            $floodBuffer,
+            $presenceState,
+            $roomId,
+            $senderPayload,
+            $floodBatchSize,
+            true,
+            $sender,
+            $effectiveNowMs
+        );
+        if (!(bool) ($flushRollover['ok'] ?? false)) {
+            return [
+                'ok' => false,
+                'error' => (string) ($flushRollover['error'] ?? 'delivery_failed'),
+                'event' => is_array($flushRollover['event'] ?? null) ? $flushRollover['event'] : null,
+                'sent_count' => (int) ($flushRollover['sent_count'] ?? 0),
+                'retry_after_ms' => 0,
+                'remaining_in_window' => 0,
+            ];
+        }
+        $sentCount += (int) ($flushRollover['sent_count'] ?? 0);
+        if (is_array($flushRollover['event'] ?? null)) {
+            $lastEvent = $flushRollover['event'];
+        }
         $windowStartedMs = $effectiveNowMs;
         $countInWindow = 0;
-        $elapsedMs = 0;
     }
 
-    if ($countInWindow >= $maxPerWindow) {
+    $reactionItems = videochat_reaction_normalize_command_items($connection, $command, $roomId, $effectiveNowMs);
+    if ($reactionItems === []) {
+        $reactionState['rooms'][$roomId][$userKey] = [
+            'window_started_ms' => $windowStartedMs,
+            'count' => $countInWindow,
+            'flood_buffer' => $floodBuffer,
+        ];
         return [
-            'ok' => false,
-            'error' => 'throttled',
-            'event' => null,
-            'sent_count' => 0,
-            'retry_after_ms' => max(1, $windowMs - $elapsedMs),
-            'remaining_in_window' => 0,
+            'ok' => true,
+            'error' => '',
+            'event' => $lastEvent,
+            'sent_count' => $sentCount,
+            'retry_after_ms' => 0,
+            'remaining_in_window' => max(0, $floodThreshold - $countInWindow),
         ];
     }
 
-    $countInWindow++;
+    foreach ($reactionItems as $reactionItem) {
+        $countInWindow++;
+        $reactionUnixMs = (int) ($reactionItem['server_unix_ms'] ?? $effectiveNowMs);
+        if ($countInWindow > $floodThreshold) {
+            $floodBuffer[] = $reactionItem;
+            $flushFullBatches = videochat_reaction_flush_flood_buffer(
+                $floodBuffer,
+                $presenceState,
+                $roomId,
+                $senderPayload,
+                $floodBatchSize,
+                false,
+                $sender,
+                $reactionUnixMs
+            );
+            if (!(bool) ($flushFullBatches['ok'] ?? false)) {
+                return [
+                    'ok' => false,
+                    'error' => (string) ($flushFullBatches['error'] ?? 'delivery_failed'),
+                    'event' => is_array($flushFullBatches['event'] ?? null) ? $flushFullBatches['event'] : null,
+                    'sent_count' => $sentCount + (int) ($flushFullBatches['sent_count'] ?? 0),
+                    'retry_after_ms' => 0,
+                    'remaining_in_window' => 0,
+                ];
+            }
+            $sentCount += (int) ($flushFullBatches['sent_count'] ?? 0);
+            if (is_array($flushFullBatches['event'] ?? null)) {
+                $lastEvent = $flushFullBatches['event'];
+            }
+            continue;
+        }
+
+        $event = videochat_reaction_single_event_payload($roomId, $senderPayload, $reactionItem);
+        $delivered = videochat_reaction_broadcast_payload($presenceState, $roomId, $event, $sender);
+        if ($delivered <= 0) {
+            return [
+                'ok' => false,
+                'error' => 'delivery_failed',
+                'event' => $event,
+                'sent_count' => $sentCount,
+                'retry_after_ms' => 0,
+                'remaining_in_window' => 0,
+            ];
+        }
+
+        $sentCount += $delivered;
+        $lastEvent = $event;
+    }
+
     $reactionState['rooms'][$roomId][$userKey] = [
         'window_started_ms' => $windowStartedMs,
         'count' => $countInWindow,
+        'flood_buffer' => $floodBuffer,
     ];
 
-    $remainingInWindow = max(0, $maxPerWindow - $countInWindow);
-    $clientReactionId = is_string($command['client_reaction_id'] ?? null)
-        ? trim((string) $command['client_reaction_id'])
-        : null;
-    if ($clientReactionId === '') {
-        $clientReactionId = null;
-    }
-
-    $event = [
-        'type' => 'reaction/event',
-        'room_id' => $roomId,
-        'sender' => videochat_reaction_sender_payload($connection),
-        'reaction' => [
-            'id' => videochat_reaction_resolve_id($connection, $command, $roomId, $effectiveNowMs),
-            'emoji' => (string) ($command['emoji'] ?? ''),
-            'client_reaction_id' => $clientReactionId,
-            'server_unix_ms' => $effectiveNowMs,
-            'server_time' => $effectiveNowIso,
-        ],
-        'time' => $effectiveNowIso,
-    ];
-
-    $sentCount = videochat_presence_broadcast_room_event(
-        $presenceState,
-        $roomId,
-        $event,
-        null,
-        $sender
-    );
-
-    if ($sentCount <= 0) {
-        return [
-            'ok' => false,
-            'error' => 'delivery_failed',
-            'event' => $event,
-            'sent_count' => 0,
-            'retry_after_ms' => 0,
-            'remaining_in_window' => $remainingInWindow,
-        ];
-    }
+    $remainingInWindow = max(0, $floodThreshold - $countInWindow);
 
     return [
         'ok' => true,
         'error' => '',
-        'event' => $event,
+        'event' => $lastEvent,
         'sent_count' => $sentCount,
         'retry_after_ms' => 0,
         'remaining_in_window' => $remainingInWindow,

@@ -1,14 +1,5 @@
 <template>
   <section class="view-card workspace-call-view">
-    <header class="workspace-call-head">
-      <div class="actions-inline workspace-call-head-actions">
-        <button class="btn" type="button" :disabled="inviteState.creating || !isSocketOnline" @click="createRoomInvite">
-          {{ inviteState.creating ? 'Creating invite…' : 'Create invite' }}
-        </button>
-        <button class="btn" type="button" :disabled="!inviteState.code" @click="copyInviteCode">Copy invite</button>
-      </div>
-    </header>
-
     <section v-if="workspaceError" class="workspace-call-banner error">
       {{ workspaceError }}
     </section>
@@ -16,16 +7,31 @@
       {{ workspaceNotice }}
     </section>
 
-    <section class="workspace-call-body">
-      <section class="workspace-stage">
-        <article class="workspace-main-video">
-          <span class="workspace-main-video-room">{{ activeRoomId }}</span>
-          <div class="workspace-main-video-status">
-            <span>{{ participantUsers.length }} users</span>
-            <span>{{ lobbyQueue.length }} waiting</span>
-            <span>{{ lobbyAdmitted.length }} admitted</span>
-          </div>
+    <section class="workspace-call-body" :class="{ 'right-collapsed': rightSidebarCollapsed }">
+      <section class="workspace-stage" :class="{ compact: isCompactViewport }">
+        <header v-if="isCompactViewport" class="workspace-compact-header">
+          <button
+            class="workspace-compact-toggle"
+            type="button"
+            title="Open left sidebar"
+            aria-label="Open left sidebar"
+            @click.stop="openLeftSidebarOverlay"
+          >
+            <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
+          </button>
+          <img class="workspace-compact-logo" src="/assets/orgas/kingrt/king_logo-withslogan.svg" alt="KingRT" />
+          <button
+            class="workspace-compact-toggle"
+            type="button"
+            title="Open right sidebar"
+            aria-label="Open right sidebar"
+            @click="showRightSidebar"
+          >
+            <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/backward.png" alt="" />
+          </button>
+        </header>
 
+        <article class="workspace-main-video">
           <div id="local-video-container" class="video-container local"></div>
           <div id="remote-video-container" class="video-container remote"></div>
           <div id="decoded-video-container" class="video-container decoded"></div>
@@ -35,14 +41,45 @@
               v-for="burst in activeReactions"
               :key="burst.id"
               class="workspace-reaction-particle"
-              :style="{ '--rx': `${burst.x}%`, '--delay': `${burst.delay}ms` }"
+              :style="{
+                '--start-x': `${burst.startXPx}px`,
+                '--delay': `${burst.delay}ms`,
+                '--duration': `${burst.duration}ms`,
+                '--travel-y': `${burst.travelY}px`,
+                '--wave': `${burst.wave}px`,
+                '--phase': `${burst.phase}deg`,
+                '--base-bottom': `${burst.baseBottom}px`,
+                '--scale': burst.scale,
+              }"
             >
               {{ burst.emoji }}
             </span>
           </div>
         </article>
 
-        <section class="workspace-mini-strip">
+        <button
+          v-if="showLeftSidebarRestoreButton"
+          class="show-sidebar-overlay show-left-sidebar-overlay workspace-show-left-btn"
+          type="button"
+          title="Show sidebar"
+          aria-label="Show sidebar"
+          @click.stop="openLeftSidebarOverlay"
+        >
+          <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
+        </button>
+
+        <button
+          v-if="rightSidebarCollapsed && !isCompactViewport"
+          class="show-sidebar-overlay show-right-sidebar-overlay workspace-show-right-btn"
+          type="button"
+          title="Show sidebar"
+          aria-label="Show sidebar"
+          @click="showRightSidebar"
+        >
+          <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/backward.png" alt="" />
+        </button>
+
+        <section v-if="!isCompactViewport" class="workspace-mini-strip">
           <article
             v-for="participant in stripParticipants"
             :key="participant.userId"
@@ -137,7 +174,7 @@
         </footer>
       </section>
 
-      <aside class="workspace-context">
+      <aside class="workspace-context" :class="{ collapsed: rightSidebarCollapsed }">
         <nav class="tabs tabs-right" role="tablist" aria-label="Call workspace context tabs">
           <button
             class="tab"
@@ -168,6 +205,15 @@
             @click="setActiveTab('chat')"
           >
             <img class="tab-icon" src="/assets/orgas/kingrt/icons/chat.png" alt="" />
+          </button>
+          <button
+            class="tab tab-toggle"
+            type="button"
+            title="Hide sidebar"
+            aria-label="Hide sidebar"
+            @click="hideRightSidebar"
+          >
+            <img class="tab-icon" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
           </button>
         </nav>
 
@@ -298,17 +344,15 @@
 
         <section class="tab-panel panel-lobby" :class="{ active: activeTab === 'lobby' }">
           <div class="lobby-toolbar">
-            <div class="actions-inline">
-              <button class="btn" type="button" :disabled="!isSocketOnline" @click="requestLobbyJoin">
-                Join queue
-              </button>
+            <div class="actions-inline lobby-toolbar-actions">
               <button
-                class="btn"
+                class="icon-mini-btn"
                 type="button"
+                title="Allow all queued users"
                 :disabled="!isSocketOnline || !canModerate || lobbyQueue.length === 0"
                 @click="allowAllLobbyUsers"
               >
-                Allow all
+                <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="Allow all queued users" />
               </button>
             </div>
           </div>
@@ -407,52 +451,43 @@
             </button>
           </form>
         </section>
-
-        <section class="workspace-invite-join">
-          <label class="workspace-invite-label" for="workspace-invite-code">Join with invite</label>
-          <div class="workspace-invite-row">
-            <input
-              id="workspace-invite-code"
-              v-model.trim="inviteJoinCode"
-              class="search"
-              type="text"
-              maxlength="64"
-              placeholder="Invite code"
-            />
-            <button class="btn" type="button" :disabled="inviteJoinBusy || inviteJoinCode === ''" @click="joinByInviteCode">
-              {{ inviteJoinBusy ? 'Joining…' : 'Join' }}
-            </button>
-          </div>
-          <p v-if="inviteState.code" class="workspace-invite-hint">
-            Current invite: <code class="code">{{ inviteState.code }}</code>
-          </p>
-          <p v-if="inviteState.copyNotice" class="workspace-invite-hint">{{ inviteState.copyNotice }}</p>
-        </section>
       </aside>
     </section>
   </section>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { sessionState } from '../auth/session';
-import { resolveBackendOrigin } from '../../support/backendOrigin';
+import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import { resolveBackendWebSocketOriginCandidates } from '../../support/backendOrigin';
+import {
+  attachCallMediaDeviceWatcher,
+  callMediaPrefs,
+  refreshCallMediaDevices,
+} from './callMediaPreferences';
 import { SFUClient } from '../../lib/sfu/sfuClient';
 import { WasmWaveletVideoEncoder, WasmWaveletVideoDecoder, createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';
 
 const route = useRoute();
 const router = useRouter();
+const workspaceSidebarState = inject('workspaceSidebarState', null);
 
 const USERS_PAGE_SIZE = 10;
 const LOBBY_PAGE_SIZE = 10;
 const TYPING_LOCAL_STOP_MS = 1200;
 const TYPING_SWEEP_MS = 600;
 const RECONNECT_DELAYS_MS = [750, 1250, 2000, 3200, 5000, 8000];
+const COMPACT_BREAKPOINT = 1180;
+const REACTION_CLIENT_WINDOW_MS = 1000;
+const REACTION_CLIENT_DIRECT_PER_WINDOW = 5;
+const REACTION_CLIENT_BATCH_SIZE = 5;
+const REACTION_CLIENT_FLUSH_INTERVAL_MS = 40;
+const REACTION_CLIENT_MAX_QUEUE = 500;
+const LOCAL_REACTION_ECHO_TTL_MS = 6000;
 
 const reactionOptions = ['👍', '❤️', '🐘', '🥳', '😂', '😮', '😢', '🤔', '👏', '👎'];
-
-const backendOrigin = resolveBackendOrigin();
 
 function normalizeRoomId(value) {
   const candidate = String(value || '').trim().toLowerCase();
@@ -483,19 +518,6 @@ function callRoleRank(role) {
   return 2;
 }
 
-function buildQueryString(params) {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params || {})) {
-    if (value === undefined || value === null) continue;
-    const text = String(value).trim();
-    if (text === '') continue;
-    query.set(key, text);
-  }
-
-  const encoded = query.toString();
-  return encoded === '' ? '' : `?${encoded}`;
-}
-
 function requestHeaders(withBody = false) {
   const headers = { accept: 'application/json' };
   if (withBody) headers['content-type'] = 'application/json';
@@ -519,18 +541,19 @@ function extractErrorMessage(payload, fallback) {
 }
 
 async function apiRequest(path, { method = 'GET', query = null, body = null } = {}) {
-  const endpoint = `${backendOrigin}${path}${buildQueryString(query || {})}`;
   let response = null;
   try {
-    response = await fetch(endpoint, {
+    const result = await fetchBackend(path, {
       method,
+      query,
       headers: requestHeaders(body !== null),
       body: body === null ? undefined : JSON.stringify(body),
     });
+    response = result.response;
   } catch (error) {
     const message = error instanceof Error ? error.message.trim() : '';
-    if (message === '' || /failed to fetch/i.test(message)) {
-      throw new Error(`Could not reach backend (${backendOrigin}).`);
+    if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
+      throw new Error(`Could not reach backend (${currentBackendOrigin()}).`);
     }
     throw new Error(message);
   }
@@ -553,8 +576,8 @@ async function apiRequest(path, { method = 'GET', query = null, body = null } = 
   return payload;
 }
 
-function socketUrlForRoom(roomId) {
-  const httpUrl = new URL(backendOrigin);
+function socketUrlForRoom(roomId, socketOrigin) {
+  const httpUrl = new URL(socketOrigin);
   httpUrl.protocol = httpUrl.protocol === 'https:' ? 'wss:' : 'ws:';
   httpUrl.pathname = '/ws';
   httpUrl.search = '';
@@ -636,7 +659,13 @@ const usersRefreshTimer = ref(null);
 
 const reactionTrayOpen = ref(false);
 const activeReactions = ref([]);
+const localReactionEchoes = ref([]);
 let reactionId = 0;
+const queuedReactionEmojis = ref([]);
+let reactionQueueTimer = null;
+let reactionWindowStartedMs = 0;
+let reactionSentInWindow = 0;
+let reactionBatchCounter = 0;
 
 const controlState = reactive({
   handRaised: false,
@@ -644,15 +673,8 @@ const controlState = reactive({
   micEnabled: true,
   screenEnabled: false,
 });
-
-const inviteState = reactive({
-  creating: false,
-  code: '',
-  expiresAt: '',
-  copyNotice: '',
-});
-const inviteJoinCode = ref('');
-const inviteJoinBusy = ref(false);
+const rightSidebarCollapsed = ref(false);
+const isCompactViewport = ref(false);
 
 const workspaceError = ref('');
 const workspaceNotice = ref('');
@@ -660,14 +682,27 @@ const viewerCallRole = ref('participant');
 const activeCallId = ref('');
 const loadedCallId = ref('');
 const callParticipantRoles = reactive({});
+const routeCallResolve = reactive({
+  accessId: '',
+  callId: '',
+  roomId: 'lobby',
+  pending: false,
+  error: '',
+});
+let routeCallResolveSeq = 0;
 
 const sfuClientRef = ref(null);
 const wasmCodecRef = ref(null);
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
 const sfuConnected = ref(false);
+let detachMediaDeviceWatcher = null;
+let localTrackReconfigureInFlight = false;
+let localTrackReconfigureQueued = false;
+let compactMediaQuery = null;
 
-const desiredRoomId = computed(() => normalizeRoomId(route.params.roomId));
+const routeCallRef = computed(() => String(route.params.callRef || '').trim());
+const desiredRoomId = computed(() => normalizeRoomId(routeCallResolve.roomId || routeCallRef.value || 'lobby'));
 const activeRoomId = computed(() => normalizeRoomId(serverRoomId.value || desiredRoomId.value));
 const currentUserId = computed(() => (Number.isInteger(sessionState.userId) ? sessionState.userId : 0));
 const canModerate = computed(() => (
@@ -677,6 +712,153 @@ const canModerate = computed(() => (
 ));
 const usersSourceMode = computed(() => (normalizeRole(sessionState.role) === 'admin' ? 'directory' : 'snapshot'));
 const isSocketOnline = computed(() => connectionState.value === 'online');
+const isShellLeftSidebarCollapsed = computed(() => {
+  const candidate = workspaceSidebarState?.leftSidebarCollapsed;
+  if (candidate && typeof candidate === 'object' && 'value' in candidate) {
+    return Boolean(candidate.value);
+  }
+  return Boolean(candidate);
+});
+const isShellTabletViewport = computed(() => {
+  const candidate = workspaceSidebarState?.isTabletViewport;
+  if (candidate && typeof candidate === 'object' && 'value' in candidate) {
+    return Boolean(candidate.value);
+  }
+  return Boolean(candidate);
+});
+const isShellMobileViewport = computed(() => {
+  const candidate = workspaceSidebarState?.isMobileViewport;
+  if (candidate && typeof candidate === 'object' && 'value' in candidate) {
+    return Boolean(candidate.value);
+  }
+  return Boolean(candidate);
+});
+const showLeftSidebarRestoreButton = computed(() => (
+  !isCompactViewport.value
+  && isShellLeftSidebarCollapsed.value
+  && !isShellTabletViewport.value
+  && !isShellMobileViewport.value
+));
+
+function isUuidLike(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(normalized);
+}
+
+function applyRouteCallResolution({
+  accessId = '',
+  callId = '',
+  roomId = 'lobby',
+  error = '',
+  pending = false,
+} = {}) {
+  routeCallResolve.accessId = String(accessId || '').trim().toLowerCase();
+  routeCallResolve.callId = String(callId || '').trim();
+  routeCallResolve.roomId = normalizeRoomId(String(roomId || '').trim() || 'lobby');
+  routeCallResolve.error = String(error || '').trim();
+  routeCallResolve.pending = Boolean(pending);
+
+  if (routeCallResolve.callId !== '') {
+    activeCallId.value = routeCallResolve.callId;
+    loadedCallId.value = '';
+  }
+}
+
+function callPayloadToRouteResolution(callPayload) {
+  const call = callPayload && typeof callPayload === 'object' ? callPayload : {};
+  return {
+    callId: String(call.id || '').trim(),
+    roomId: String(call.room_id || '').trim() || 'lobby',
+  };
+}
+
+async function tryResolveRouteAsAccessId(callRef) {
+  const payload = await apiRequest(`/api/call-access/${encodeURIComponent(callRef)}`);
+  const result = payload?.result || {};
+  const accessLink = result?.access_link || {};
+  const call = result?.call || {};
+  const resolution = callPayloadToRouteResolution(call);
+  return {
+    accessId: String(accessLink?.id || callRef).trim(),
+    callId: resolution.callId,
+    roomId: resolution.roomId,
+  };
+}
+
+async function tryResolveRouteAsCallId(callRef) {
+  const payload = await apiRequest(`/api/calls/${encodeURIComponent(callRef)}`);
+  const resolution = callPayloadToRouteResolution(payload?.call || {});
+  return {
+    accessId: '',
+    callId: resolution.callId || String(callRef || '').trim(),
+    roomId: resolution.roomId,
+  };
+}
+
+async function resolveRouteCallRef(callRef) {
+  const normalized = String(callRef || '').trim();
+  const seq = routeCallResolveSeq + 1;
+  routeCallResolveSeq = seq;
+
+  if (normalized === '') {
+    if (seq !== routeCallResolveSeq) return;
+    applyRouteCallResolution({
+      accessId: '',
+      callId: '',
+      roomId: 'lobby',
+      error: '',
+      pending: false,
+    });
+    return;
+  }
+
+  if (seq === routeCallResolveSeq) {
+    applyRouteCallResolution({
+      accessId: '',
+      callId: '',
+      roomId: normalized,
+      error: '',
+      pending: true,
+    });
+  }
+
+  try {
+    if (isUuidLike(normalized)) {
+      const accessResolution = await tryResolveRouteAsAccessId(normalized);
+      if (seq !== routeCallResolveSeq) return;
+      applyRouteCallResolution({
+        ...accessResolution,
+        error: '',
+        pending: false,
+      });
+      return;
+    }
+  } catch {
+    // Fall through to call-id and room-id fallback.
+  }
+
+  try {
+    const callResolution = await tryResolveRouteAsCallId(normalized);
+    if (seq !== routeCallResolveSeq) return;
+    applyRouteCallResolution({
+      ...callResolution,
+      error: '',
+      pending: false,
+    });
+    return;
+  } catch {
+    // Fall back to treating param as room id.
+  }
+
+  if (seq !== routeCallResolveSeq) return;
+  applyRouteCallResolution({
+    accessId: '',
+    callId: '',
+    roomId: normalized,
+    error: '',
+    pending: false,
+  });
+}
 
 function ensureRoomBuckets(roomId) {
   const normalizedRoomId = normalizeRoomId(roomId);
@@ -984,19 +1166,198 @@ function clearErrors() {
   workspaceError.value = '';
 }
 
+function pruneLocalReactionEchoes(nowMs = Date.now()) {
+  localReactionEchoes.value = localReactionEchoes.value.filter(
+    (entry) => Number(entry?.expiresAtMs || 0) > nowMs
+  );
+}
+
+function trackLocalReactionEcho(emoji) {
+  const normalizedEmoji = String(emoji || '').trim();
+  if (normalizedEmoji === '') return;
+  const nowMs = Date.now();
+  pruneLocalReactionEchoes(nowMs);
+  localReactionEchoes.value = [
+    ...localReactionEchoes.value,
+    {
+      emoji: normalizedEmoji,
+      expiresAtMs: nowMs + LOCAL_REACTION_ECHO_TTL_MS,
+    },
+  ];
+}
+
+function consumeLocalReactionEcho(emoji, senderUserId) {
+  if (senderUserId !== currentUserId.value) return false;
+  const normalizedEmoji = String(emoji || '').trim();
+  if (normalizedEmoji === '') return false;
+
+  const nowMs = Date.now();
+  pruneLocalReactionEchoes(nowMs);
+  const index = localReactionEchoes.value.findIndex(
+    (entry) => String(entry?.emoji || '') === normalizedEmoji
+  );
+  if (index < 0) return false;
+
+  localReactionEchoes.value = localReactionEchoes.value.filter((_, rowIndex) => rowIndex !== index);
+  return true;
+}
+
 function pushReaction(emoji) {
+  const random = (min, max) => min + Math.random() * (max - min);
+  const edgePaddingPx = 20;
+  const reactionFontPx = 24;
+  const reactionScaleMin = 0.85;
+  const reactionScaleMax = 1.15;
+  const reactionMaxWidthPx = Math.ceil(reactionFontPx * reactionScaleMax) + 8;
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 720;
+  const mainVideoHeight = typeof document !== 'undefined'
+    ? Number(document.querySelector('.workspace-main-video')?.clientHeight || 0)
+    : 0;
+  const reactionLayer = typeof document !== 'undefined'
+    ? document.querySelector('.workspace-reaction-flight')
+    : null;
+  const reactionLayerWidth = Number(reactionLayer?.clientWidth || 0);
+  const reactionLayerHeight = Number(reactionLayer?.clientHeight || 0);
+  const layerWidth = Math.max(reactionLayerWidth, 320);
+  const layerHeight = Math.max(reactionLayerHeight, 220);
+  const travelBase = Math.max(viewportHeight * 0.75, mainVideoHeight * 0.75, 280);
+  const baseBottom = Math.round(random(24, 40));
+  const maxTravelByTopPadding = Math.max(80, layerHeight - edgePaddingPx - baseBottom);
+  const maxWaveWanted = random(14, 30);
+  const leftThirdMax = Math.max(edgePaddingPx, (layerWidth / 3) - edgePaddingPx - reactionMaxWidthPx);
+  let startMin = edgePaddingPx + maxWaveWanted;
+  let startMax = leftThirdMax - maxWaveWanted;
+  if (startMax < startMin) {
+    startMin = edgePaddingPx;
+    startMax = Math.max(startMin, leftThirdMax);
+  }
+
+  const startXPx = random(startMin, startMax);
+  const maxWaveByBounds = Math.max(0, Math.min(
+    maxWaveWanted,
+    startXPx - edgePaddingPx,
+    leftThirdMax - startXPx
+  ));
+
   reactionId += 1;
   const id = `rx_${reactionId}`;
   const entry = {
     id,
     emoji,
-    x: 6 + Math.round(Math.random() * 84),
+    startXPx: Math.round(startXPx),
     delay: Math.round(Math.random() * 140),
+    duration: Math.round(random(2300, 2850)),
+    travelY: Math.round(Math.min(random(travelBase * 0.94, travelBase * 1.06), maxTravelByTopPadding)),
+    wave: Number(maxWaveByBounds.toFixed(3)),
+    phase: Math.round(random(0, 360)),
+    baseBottom,
+    scale: random(reactionScaleMin, reactionScaleMax).toFixed(3),
   };
   activeReactions.value = [...activeReactions.value, entry];
   window.setTimeout(() => {
     activeReactions.value = activeReactions.value.filter((row) => row.id !== id);
-  }, 1800);
+  }, entry.duration + entry.delay + 120);
+}
+
+function clearReactionQueueTimer() {
+  if (reactionQueueTimer === null) return;
+  clearTimeout(reactionQueueTimer);
+  reactionQueueTimer = null;
+}
+
+function scheduleReactionQueueFlush() {
+  if (reactionQueueTimer !== null) return;
+  reactionQueueTimer = setTimeout(() => {
+    reactionQueueTimer = null;
+    flushQueuedReactions();
+  }, REACTION_CLIENT_FLUSH_INTERVAL_MS);
+}
+
+function resetReactionSendWindow(nowMs) {
+  reactionWindowStartedMs = nowMs;
+  reactionSentInWindow = 0;
+}
+
+function refreshReactionSendWindow(nowMs) {
+  if (reactionWindowStartedMs <= 0) {
+    resetReactionSendWindow(nowMs);
+    return;
+  }
+  if ((nowMs - reactionWindowStartedMs) >= REACTION_CLIENT_WINDOW_MS) {
+    resetReactionSendWindow(nowMs);
+  }
+}
+
+function enqueueReactionEmoji(emoji) {
+  const nextQueue = [...queuedReactionEmojis.value, emoji];
+  if (nextQueue.length > REACTION_CLIENT_MAX_QUEUE) {
+    nextQueue.splice(0, nextQueue.length - REACTION_CLIENT_MAX_QUEUE);
+  }
+  queuedReactionEmojis.value = nextQueue;
+}
+
+function sendQueuedReactionFrame(emoji) {
+  const clientReactionId = `rx_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+  return sendSocketFrame({
+    type: 'reaction/send',
+    emoji,
+    client_reaction_id: clientReactionId,
+  });
+}
+
+function sendQueuedReactionBatchFrame(emojis) {
+  reactionBatchCounter += 1;
+  const clientBatchId = `rxb_${Date.now()}_${reactionBatchCounter}`;
+  return sendSocketFrame({
+    type: 'reaction/send_batch',
+    emojis,
+    client_reaction_id: clientBatchId,
+  });
+}
+
+function flushQueuedReactions() {
+  clearReactionQueueTimer();
+  if (!isSocketOnline.value) return;
+
+  let safety = 0;
+  while (queuedReactionEmojis.value.length > 0 && safety < 512) {
+    safety += 1;
+    const nowMs = Date.now();
+    refreshReactionSendWindow(nowMs);
+
+    if (reactionSentInWindow < REACTION_CLIENT_DIRECT_PER_WINDOW) {
+      const emoji = String(queuedReactionEmojis.value[0] || '').trim();
+      if (emoji === '') {
+        queuedReactionEmojis.value = queuedReactionEmojis.value.slice(1);
+        continue;
+      }
+
+      const sent = sendQueuedReactionFrame(emoji);
+      if (!sent) {
+        scheduleReactionQueueFlush();
+        return;
+      }
+
+      queuedReactionEmojis.value = queuedReactionEmojis.value.slice(1);
+      reactionSentInWindow += 1;
+      continue;
+    }
+
+    const batchCount = Math.min(REACTION_CLIENT_BATCH_SIZE, queuedReactionEmojis.value.length);
+    if (batchCount <= 0) break;
+    const batch = queuedReactionEmojis.value.slice(0, batchCount);
+    const sentBatch = sendQueuedReactionBatchFrame(batch);
+    if (!sentBatch) {
+      scheduleReactionQueueFlush();
+      return;
+    }
+
+    queuedReactionEmojis.value = queuedReactionEmojis.value.slice(batchCount);
+  }
+
+  if (queuedReactionEmojis.value.length > 0) {
+    scheduleReactionQueueFlush();
+  }
 }
 
 function normalizeDirectoryUser(raw) {
@@ -1061,10 +1422,26 @@ function resetPeerControlState(userId) {
 function applyReactionEvent(payload) {
   const roomId = normalizeRoomId(payload?.room_id || payload?.roomId || activeRoomId.value);
   if (roomId !== activeRoomId.value) return;
-  const reaction = payload && typeof payload.reaction === 'object' ? payload.reaction : {};
-  const emoji = String(reaction.emoji || '').trim();
-  if (emoji === '') return;
-  pushReaction(emoji);
+  const senderUserId = Number(payload?.sender?.user_id || 0);
+
+  const reaction = payload && typeof payload.reaction === 'object' ? payload.reaction : null;
+  if (reaction && typeof reaction === 'object') {
+    const emoji = String(reaction.emoji || '').trim();
+    if (emoji !== '') {
+      if (consumeLocalReactionEcho(emoji, senderUserId)) {
+        return;
+      }
+      pushReaction(emoji);
+    }
+  }
+
+  const reactions = Array.isArray(payload?.reactions) ? payload.reactions : [];
+  for (const row of reactions) {
+    const emoji = String(row?.emoji || '').trim();
+    if (emoji === '') continue;
+    if (consumeLocalReactionEcho(emoji, senderUserId)) continue;
+    pushReaction(emoji);
+  }
 }
 
 function applyRemoteControlState(payload, sender) {
@@ -1173,24 +1550,13 @@ function syncModerationStateToPeers() {
 }
 
 function emitReaction(emoji) {
-  if (typeof emoji !== 'string' || emoji.trim() === '') return;
-  if (!isSocketOnline.value) {
-    setNotice('Could not send reaction while websocket is offline.', 'error');
-    return;
-  }
-
-  const clientReactionId = `rx_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
-  const sent = sendSocketFrame({
-    type: 'reaction/send',
-    emoji: emoji.trim(),
-    client_reaction_id: clientReactionId,
-  });
-
-  if (!sent) {
-    setNotice('Could not send reaction while websocket is offline.', 'error');
-    return;
-  }
-
+  if (typeof emoji !== 'string') return;
+  const normalizedEmoji = emoji.trim();
+  if (normalizedEmoji === '') return;
+  pushReaction(normalizedEmoji);
+  trackLocalReactionEcho(normalizedEmoji);
+  enqueueReactionEmoji(normalizedEmoji);
+  flushQueuedReactions();
 }
 
 function toggleUserMuted(userId) {
@@ -1333,6 +1699,29 @@ function setActiveTab(tab) {
   if (nextTab === 'users' && usersSourceMode.value === 'directory') {
     void refreshUsersDirectory();
   }
+}
+
+function hideRightSidebar() {
+  rightSidebarCollapsed.value = true;
+}
+
+function showRightSidebar() {
+  rightSidebarCollapsed.value = false;
+}
+
+function openLeftSidebarOverlay(event) {
+  if (event && typeof event.stopPropagation === 'function') {
+    event.stopPropagation();
+  }
+  const openFn = workspaceSidebarState && typeof workspaceSidebarState.showLeftSidebar === 'function'
+    ? workspaceSidebarState.showLeftSidebar
+    : null;
+  if (!openFn) return;
+  openFn();
+}
+
+function handleCompactViewportChange(event) {
+  isCompactViewport.value = Boolean(event?.matches);
 }
 
 let reconnectTimer = null;
@@ -1753,7 +2142,7 @@ function handleSocketMessage(event) {
     return;
   }
 
-  if (type === 'reaction/event') {
+  if (type === 'reaction/event' || type === 'reaction/batch') {
     applyReactionEvent(payload);
     return;
   }
@@ -1805,6 +2194,9 @@ function handleSocketMessage(event) {
       connectionState.value = 'blocked';
       closeSocket();
     }
+    if (code === 'reaction_publish_failed') {
+      return;
+    }
     setNotice(message, 'error');
     return;
   }
@@ -1849,7 +2241,7 @@ async function probeWorkspaceSession() {
   }
 
   try {
-    const response = await fetch(`${backendOrigin}/api/auth/session`, {
+    const { response } = await fetchBackend('/api/auth/session', {
       method: 'GET',
       headers: requestHeaders(false),
     });
@@ -1970,7 +2362,9 @@ async function connectSocket() {
     return;
   }
 
-  const socket = new WebSocket(socketUrlForRoom(desiredRoomId.value));
+  const socketOrigins = resolveBackendWebSocketOriginCandidates();
+  const socketOrigin = socketOrigins[Math.min(reconnectAttempt.value, socketOrigins.length - 1)] || currentBackendOrigin();
+  const socket = new WebSocket(socketUrlForRoom(desiredRoomId.value, socketOrigin));
   if (generation !== connectGeneration || manualSocketClose) {
     try {
       socket.close(1000, 'stale_connect');
@@ -2032,92 +2426,6 @@ async function connectSocket() {
   });
 }
 
-async function createRoomInvite() {
-  clearErrors();
-  inviteState.creating = true;
-  inviteState.copyNotice = '';
-
-  try {
-    const payload = await apiRequest('/api/invite-codes', {
-      method: 'POST',
-      body: {
-        scope: 'room',
-        room_id: activeRoomId.value,
-      },
-    });
-
-    const inviteCode = payload?.result?.invite_code || null;
-    if (!inviteCode || typeof inviteCode.code !== 'string' || inviteCode.code.trim() === '') {
-      throw new Error('Invite-code response is missing code.');
-    }
-
-    inviteState.code = inviteCode.code.trim();
-    inviteState.expiresAt = typeof inviteCode.expires_at === 'string' ? inviteCode.expires_at : '';
-    setNotice(`Invite code ready for room ${activeRoomId.value}.`);
-  } catch (error) {
-    setNotice(error instanceof Error ? error.message : 'Could not create invite code.', 'error');
-  } finally {
-    inviteState.creating = false;
-  }
-}
-
-async function copyInviteCode() {
-  const code = String(inviteState.code || '').trim();
-  if (code === '') return;
-
-  try {
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-      await navigator.clipboard.writeText(code);
-    } else {
-      const textarea = document.createElement('textarea');
-      textarea.value = code;
-      textarea.setAttribute('readonly', 'readonly');
-      textarea.style.position = 'fixed';
-      textarea.style.top = '-1000px';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-    }
-
-    inviteState.copyNotice = 'Invite copied.';
-  } catch {
-    inviteState.copyNotice = 'Copy failed.';
-  }
-}
-
-async function joinByInviteCode() {
-  const code = inviteJoinCode.value.trim();
-  if (code === '') return;
-
-  clearErrors();
-  inviteJoinBusy.value = true;
-
-  try {
-    const payload = await apiRequest('/api/invite-codes/redeem', {
-      method: 'POST',
-      body: { code },
-    });
-
-    const roomId = normalizeRoomId(payload?.result?.redemption?.join_context?.room?.id || 'lobby');
-    inviteJoinCode.value = '';
-    setNotice(`Joined invite context for room ${roomId}.`);
-
-    if (route.path !== `/workspace/call/${roomId}`) {
-      await router.push(`/workspace/call/${encodeURIComponent(roomId)}`);
-    }
-
-    if (isSocketOnline.value) {
-      void sendRoomJoin(roomId);
-      requestRoomSnapshot();
-    }
-  } catch (error) {
-    setNotice(error instanceof Error ? error.message : 'Could not redeem invite code.', 'error');
-  } finally {
-    inviteJoinBusy.value = false;
-  }
-}
-
 function hangupCall() {
   controlState.handRaised = false;
   controlState.cameraEnabled = true;
@@ -2125,20 +2433,10 @@ function hangupCall() {
   controlState.screenEnabled = false;
   reactionTrayOpen.value = false;
   refreshUsersDirectoryPresentation();
-
-  for (const track of localTracksRef.value) {
-    track.stop();
-  }
-  localTracksRef.value = [];
-
-  if (sfuClientRef.value) {
-    for (const track of localTracksRef.value) {
-      sfuClientRef.value.unpublishTrack(track.id);
-    }
-  }
+  teardownLocalPublisher();
 
   for (const [_, peer] of remotePeersRef.value) {
-    peer.pc.close();
+    teardownRemotePeer(peer);
   }
   remotePeersRef.value.clear();
 
@@ -2146,9 +2444,8 @@ function hangupCall() {
     .map((participant) => participant.userId)
     .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
 
-  let sentCount = 0;
   for (const targetUserId of peerIds) {
-    const sent = sendSocketFrame({
+    sendSocketFrame({
       type: 'call/hangup',
       target_user_id: targetUserId,
       payload: {
@@ -2157,13 +2454,19 @@ function hangupCall() {
         actor_user_id: currentUserId.value,
       },
     });
-    if (sent) sentCount += 1;
   }
 
-  if (sentCount > 0) {
-    setNotice(`Hangup sent to ${sentCount} peer(s).`);
-  } else {
-    setNotice('Call controls reset.');
+  const callEntryMode = String(route.query.entry || '').trim().toLowerCase();
+  if (callEntryMode === 'invite') {
+    if (String(route.name || '') !== 'call-goodbye') {
+      void router.push({ name: 'call-goodbye' });
+    }
+    return;
+  }
+
+  const overviewRouteName = normalizeRole(sessionState.role) === 'admin' ? 'admin-calls' : 'user-dashboard';
+  if (String(route.name || '') !== overviewRouteName) {
+    void router.push({ name: overviewRouteName });
   }
 }
 
@@ -2225,9 +2528,73 @@ watch(
   }
 );
 
+watch(
+  () => callMediaPrefs.speakerVolume,
+  () => {
+    applyCallOutputPreferences();
+  },
+  { immediate: true }
+);
+
+watch(
+  () => callMediaPrefs.selectedSpeakerId,
+  () => {
+    applyCallOutputPreferences();
+  }
+);
+
+watch(
+  () => callMediaPrefs.microphoneVolume,
+  () => {
+    applyCallInputPreferences();
+  }
+);
+
+watch(
+  () => [callMediaPrefs.selectedCameraId, callMediaPrefs.selectedMicrophoneId],
+  ([nextCameraId, nextMicId], [prevCameraId, prevMicId]) => {
+    if (nextCameraId === prevCameraId && nextMicId === prevMicId) return;
+    void reconfigureLocalTracksFromSelectedDevices();
+  }
+);
+
+watch(isCompactViewport, (nextValue) => {
+  if (nextValue) {
+    rightSidebarCollapsed.value = true;
+  }
+});
+
+watch(isSocketOnline, (online) => {
+  if (!online) return;
+  flushQueuedReactions();
+});
+
+watch(routeCallRef, (nextValue, previousValue) => {
+  if (nextValue === previousValue) return;
+  void resolveRouteCallRef(nextValue);
+});
+
 onMounted(async () => {
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    compactMediaQuery = window.matchMedia(`(max-width: ${COMPACT_BREAKPOINT}px)`);
+    isCompactViewport.value = compactMediaQuery.matches;
+    if (typeof compactMediaQuery.addEventListener === 'function') {
+      compactMediaQuery.addEventListener('change', handleCompactViewportChange);
+    } else if (typeof compactMediaQuery.addListener === 'function') {
+      compactMediaQuery.addListener(handleCompactViewportChange);
+    }
+  } else if (typeof window !== 'undefined') {
+    isCompactViewport.value = window.innerWidth <= COMPACT_BREAKPOINT;
+  }
+  if (isCompactViewport.value) {
+    rightSidebarCollapsed.value = true;
+  }
+
+  detachMediaDeviceWatcher = attachCallMediaDeviceWatcher({ requestPermissions: true });
+  await resolveRouteCallRef(routeCallRef.value);
   ensureRoomBuckets(desiredRoomId.value);
   serverRoomId.value = desiredRoomId.value;
+  await refreshCallMediaDevices({ requestPermissions: true });
   void connectSocket();
 
   try {
@@ -2257,6 +2624,18 @@ onMounted(async () => {
   }, TYPING_SWEEP_MS);
 });
 
+function scheduleLocalTrackPublish(attempt = 0) {
+  if (!sfuClientRef.value) return;
+  if (sfuClientRef.value.ws?.readyState === WebSocket.OPEN) {
+    void publishLocalTracks();
+    return;
+  }
+  if (attempt >= 24) return;
+  setTimeout(() => {
+    scheduleLocalTrackPublish(attempt + 1);
+  }, 150);
+}
+
 function initSFU() {
   if (sfuClientRef.value) return;
 
@@ -2281,6 +2660,31 @@ function initSFU() {
     activeRoomId.value
   );
   sfuConnected.value = true;
+  scheduleLocalTrackPublish();
+}
+
+function teardownRemotePeer(peer) {
+  if (!peer || typeof peer !== 'object') return;
+  if (peer.pc) {
+    try {
+      peer.pc.close();
+    } catch {
+      // ignore
+    }
+  }
+  if (peer.decoder) {
+    try {
+      peer.decoder.destroy();
+    } catch {
+      // ignore
+    }
+  }
+  if (peer.video instanceof HTMLElement) {
+    peer.video.remove();
+  }
+  if (peer.decodedCanvas instanceof HTMLElement) {
+    peer.decodedCanvas.remove();
+  }
 }
 
 function handleSFUTracks(e) {
@@ -2297,15 +2701,20 @@ function handleSFUTracks(e) {
     canvas.height = 480;
     canvas.className = 'remote-video';
 
+    for (const [_, peer] of remotePeersRef.value) {
+      teardownRemotePeer(peer);
+    }
+    remotePeersRef.value.clear();
+
     const container = document.getElementById('remote-video-container');
     if (container) {
-      container.appendChild(canvas);
+      container.replaceChildren(canvas);
     }
 
-    remotePeersRef.value.set(e.publisherId, { 
-      pc: null, 
-      video: null, 
-      tracks: e.tracks, 
+    remotePeersRef.value.set(e.publisherId, {
+      pc: null,
+      video: null,
+      tracks: e.tracks,
       stream: null,
       decoder: decoder,
       decodedCanvas: canvas,
@@ -2318,8 +2727,7 @@ function handleSFUTracks(e) {
 function handleSFUUnpublished(publisherId, trackId) {
   const peer = remotePeersRef.value.get(publisherId);
   if (peer) {
-    if (peer.pc) peer.pc.close();
-    if (peer.decoder) peer.decoder.destroy();
+    teardownRemotePeer(peer);
     remotePeersRef.value.delete(publisherId);
   }
 }
@@ -2327,8 +2735,7 @@ function handleSFUUnpublished(publisherId, trackId) {
 function handleSFUPublisherLeft(publisherId) {
   const peer = remotePeersRef.value.get(publisherId);
   if (peer) {
-    if (peer.pc) peer.pc.close();
-    if (peer.decoder) peer.decoder.destroy();
+    teardownRemotePeer(peer);
     remotePeersRef.value.delete(publisherId);
   }
 }
@@ -2344,14 +2751,121 @@ let localVideoElement = ref(null);
 let localStreamRef = ref(null);
 let encodeIntervalRef = ref(null);
 
+function buildLocalMediaConstraints() {
+  const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
+  const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
+
+  const video = cameraDeviceId !== ''
+    ? { width: 640, height: 480, frameRate: 15, deviceId: { exact: cameraDeviceId } }
+    : { width: 640, height: 480, frameRate: 15 };
+  const audio = microphoneDeviceId !== ''
+    ? { deviceId: { exact: microphoneDeviceId } }
+    : true;
+
+  return { video, audio };
+}
+
+function applyCallOutputPreferences() {
+  if (typeof document === 'undefined') return;
+  const volume = Math.max(0, Math.min(100, Number(callMediaPrefs.speakerVolume || 100))) / 100;
+  const speakerDeviceId = String(callMediaPrefs.selectedSpeakerId || '').trim();
+  const mediaElements = document.querySelectorAll('.workspace-call-view video, .workspace-call-view audio');
+
+  for (const node of mediaElements) {
+    if (!(node instanceof HTMLMediaElement)) continue;
+    if (node.closest('#local-video-container')) continue;
+    if (!node.muted) {
+      node.volume = volume;
+    }
+    if (speakerDeviceId !== '' && typeof node.setSinkId === 'function') {
+      node.setSinkId(speakerDeviceId).catch(() => {});
+    }
+  }
+}
+
+function applyCallInputPreferences() {
+  const stream = localStreamRef.value;
+  if (!(stream instanceof MediaStream)) return;
+  const volume = Math.max(0, Math.min(100, Number(callMediaPrefs.microphoneVolume || 100))) / 100;
+  for (const track of stream.getAudioTracks()) {
+    if (typeof track.applyConstraints !== 'function') continue;
+    track.applyConstraints({ volume }).catch(() => {});
+  }
+}
+
+function stopLocalEncodingPipeline() {
+  if (encodeIntervalRef.value) {
+    clearInterval(encodeIntervalRef.value);
+    encodeIntervalRef.value = null;
+  }
+  if (videoEncoderRef.value) {
+    videoEncoderRef.value.destroy();
+    videoEncoderRef.value = null;
+  }
+}
+
+function clearLocalPreviewElement() {
+  const node = localVideoElement.value;
+  if (node instanceof HTMLVideoElement) {
+    try {
+      node.pause();
+    } catch {
+      // ignore
+    }
+    node.srcObject = null;
+    node.remove();
+  }
+  localVideoElement.value = null;
+
+  const container = document.getElementById('local-video-container');
+  if (container) {
+    container.innerHTML = '';
+  }
+}
+
+function unpublishAndStopLocalTracks() {
+  const tracks = Array.isArray(localTracksRef.value) ? [...localTracksRef.value] : [];
+  if (sfuClientRef.value) {
+    for (const track of tracks) {
+      if (track?.id) {
+        sfuClientRef.value.unpublishTrack(track.id);
+      }
+    }
+  }
+  for (const track of tracks) {
+    try {
+      track.stop();
+    } catch {
+      // ignore
+    }
+  }
+  localTracksRef.value = [];
+  if (localStreamRef.value instanceof MediaStream) {
+    for (const track of localStreamRef.value.getTracks()) {
+      try {
+        track.stop();
+      } catch {
+        // ignore
+      }
+    }
+  }
+  localStreamRef.value = null;
+}
+
+function teardownLocalPublisher() {
+  stopLocalEncodingPipeline();
+  unpublishAndStopLocalTracks();
+  clearLocalPreviewElement();
+}
+
 async function publishLocalTracks() {
   if (!sfuClientRef.value || localStreamRef.value) return;
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+    return;
+  }
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ 
-      video: { width: 640, height: 480, frameRate: 15 }, 
-      audio: true 
-    });
+    const stream = await navigator.mediaDevices.getUserMedia(buildLocalMediaConstraints());
     localStreamRef.value = stream;
     localTracksRef.value = stream.getTracks();
 
@@ -2362,6 +2876,8 @@ async function publishLocalTracks() {
     }));
 
     sfuClientRef.value.publishTracks(tracks);
+    applyCallInputPreferences();
+    applyCallOutputPreferences();
 
     const videoTrack = stream.getVideoTracks()[0];
     if (videoTrack) {
@@ -2373,6 +2889,24 @@ async function publishLocalTracks() {
 }
 
 async function startEncodingPipeline(videoTrack) {
+  const video = document.createElement('video');
+  video.srcObject = new MediaStream([videoTrack]);
+  video.muted = true;
+  video.playsInline = true;
+  video.autoplay = true;
+  localVideoElement.value = video;
+
+  const container = document.getElementById('local-video-container');
+  if (container) {
+    container.replaceChildren(video);
+  }
+  try {
+    await video.play();
+  } catch {
+    // keep preview node mounted even when autoplay policy blocks playback.
+  }
+  applyCallOutputPreferences();
+
   try {
     videoEncoderRef.value = await createHybridEncoder({ 
       width: 640, 
@@ -2381,12 +2915,12 @@ async function startEncodingPipeline(videoTrack) {
       keyFrameInterval: 30,
     });
     if (!videoEncoderRef.value) {
-      console.warn('[SFU] Encoder init failed, falling back to WebRTC');
+      console.warn('[SFU] Encoder init failed, falling back to WebRTC preview only');
       return;
     }
     console.log('[SFU] WASM encoder initialized');
   } catch (e) {
-    console.error('[SFU] Encoder init error:', e);
+    console.error('[SFU] Encoder init error, keeping local preview:', e);
     return;
   }
 
@@ -2394,19 +2928,6 @@ async function startEncodingPipeline(videoTrack) {
   canvas.width = 640;
   canvas.height = 480;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-  const video = document.createElement('video');
-  video.srcObject = new MediaStream([videoTrack]);
-  video.muted = true;
-  video.playsInline = true;
-  video.autoplay = true;
-  await video.play();
-  localVideoElement.value = video;
-
-  const container = document.getElementById('local-video-container');
-  if (container) {
-    container.appendChild(video);
-  }
 
   encodeIntervalRef.value = setInterval(async () => {
     if (!videoEncoderRef.value || !sfuClientRef.value || sfuClientRef.value.ws?.readyState !== WebSocket.OPEN) {
@@ -2435,6 +2956,26 @@ async function startEncodingPipeline(videoTrack) {
   }, 66);
 }
 
+async function reconfigureLocalTracksFromSelectedDevices() {
+  if (!localStreamRef.value) return;
+  if (localTrackReconfigureInFlight) {
+    localTrackReconfigureQueued = true;
+    return;
+  }
+  localTrackReconfigureInFlight = true;
+  try {
+    teardownLocalPublisher();
+    await publishLocalTracks();
+    await refreshCallMediaDevices();
+  } finally {
+    localTrackReconfigureInFlight = false;
+    if (localTrackReconfigureQueued) {
+      localTrackReconfigureQueued = false;
+      void reconfigureLocalTracksFromSelectedDevices();
+    }
+  }
+}
+
 function handleSFUEncodedFrame(frame) {
   const peer = remotePeersRef.value.get(frame.publisherId);
   if (!peer || !peer.decoder) return;
@@ -2460,6 +3001,20 @@ function handleSFUEncodedFrame(frame) {
 }
 
 onBeforeUnmount(() => {
+  clearReactionQueueTimer();
+  if (compactMediaQuery) {
+    if (typeof compactMediaQuery.removeEventListener === 'function') {
+      compactMediaQuery.removeEventListener('change', handleCompactViewportChange);
+    } else if (typeof compactMediaQuery.removeListener === 'function') {
+      compactMediaQuery.removeListener(handleCompactViewportChange);
+    }
+    compactMediaQuery = null;
+  }
+
+  if (detachMediaDeviceWatcher) {
+    detachMediaDeviceWatcher();
+    detachMediaDeviceWatcher = null;
+  }
   manualSocketClose = true;
   connectGeneration += 1;
   stopLocalTyping();
@@ -2475,26 +3030,13 @@ onBeforeUnmount(() => {
     typingSweepTimer = null;
   }
   closeSocket();
-
-  if (encodeIntervalRef.value) {
-    clearInterval(encodeIntervalRef.value);
-    encodeIntervalRef.value = null;
-  }
-  if (videoEncoderRef.value) {
-    videoEncoderRef.value.destroy();
-    videoEncoderRef.value = null;
-  }
-  if (localStreamRef.value) {
-    localStreamRef.value.getTracks().forEach(t => t.stop());
-    localStreamRef.value = null;
-  }
+  teardownLocalPublisher();
   if (sfuClientRef.value) {
     sfuClientRef.value.leave();
     sfuClientRef.value = null;
   }
   for (const [_, peer] of remotePeersRef.value) {
-    if (peer.pc) peer.pc.close();
-    if (peer.decoder) peer.decoder.destroy();
+    teardownRemotePeer(peer);
   }
   remotePeersRef.value.clear();
 });
@@ -2502,72 +3044,36 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .workspace-call-view {
+  --bg-shell: #0B1324;
+  --bg-sidebar: #0B1324;
+  --bg-main: #0B1324;
+  --bg-video: #133262;
   --bg-strip: #091a35;
   --bg-mini-video: #25569a;
+  --bg-surface: #112b55;
+  --bg-surface-strong: #153665;
+  --bg-tab: #1c437a;
+  --bg-tab-hover: #2a5aa0;
+  --bg-tab-active: #3f79d6;
+  --bg-control: #1b427a;
+  --bg-control-active: #3f79d6;
+  --bg-reaction-tray: #122d59;
+  --bg-reaction-btn: #21508f;
+  --bg-reaction-btn-hover: #2e65b3;
+  --bg-input: #0c1f41;
+  --bg-row-hover: #15305a;
+  --bg-row-pinned: #2d63b3;
+  --bg-preview: #2b63ac;
+  --border-subtle: #24497f;
+  --text-main: #edf3ff;
+  --text-secondary: #c0d1ef;
+  --text-muted: #94add3;
+  --text-dim: #7f9cc8;
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--border-subtle);
-}
-
-.workspace-call-head {
-  background: var(--bg-surface);
-  padding: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.workspace-call-head h3 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.workspace-call-head p {
-  margin: 4px 0 0;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.workspace-call-head p strong {
-  color: var(--text-main);
-}
-
-.workspace-connection-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: #1b427a;
-  color: #dbe9ff;
-}
-
-.workspace-connection-pill.online {
-  background: #14452b;
-  color: #bdf6cf;
-}
-
-.workspace-connection-pill.retrying {
-  background: #5d4a16;
-  color: #ffe7a8;
-}
-
-.workspace-connection-pill.blocked {
-  background: #4f1e2e;
-  color: #ffd1dc;
-}
-
-.workspace-connection-pill.expired {
-  background: #5a274d;
-  color: #ffd9f0;
+  background: var(--bg-shell);
 }
 
 .workspace-call-banner {
@@ -2590,29 +3096,76 @@ onBeforeUnmount(() => {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 390px;
   gap: 1px;
-  background: var(--border-subtle);
+  background: var(--bg-shell);
+}
+
+.workspace-call-body.right-collapsed {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .workspace-stage {
+  position: relative;
   min-height: 0;
-  background: var(--bg-main);
-  padding: 10px;
+  background: var(--bg-shell);
+  padding: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) 92px auto;
-  gap: 1px;
+  grid-template-rows: minmax(0, 1fr) 170px auto;
+}
+
+.workspace-stage.compact {
+  grid-template-rows: 50px minmax(0, 1fr) auto;
+}
+
+.workspace-compact-header {
+  height: 50px;
+  min-height: 50px;
+  margin: 0 1px 1px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: #0B1324;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.workspace-compact-toggle {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: #133262;
+  color: #f7f7f7;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.workspace-compact-toggle:hover {
+  background: #3f79d6;
+}
+
+.workspace-compact-logo {
+  width: auto;
+  max-width: 100%;
+  height: 34px;
+  object-fit: contain;
+  justify-self: center;
 }
 
 .workspace-main-video {
   position: relative;
+  min-height: 0;
   overflow: hidden;
-  background: #133262;
+  background: var(--bg-video);
   color: #ffffff;
   display: grid;
   place-items: center;
-  border-radius: 4px;
-  border: 1px solid var(--border-subtle);
+  border-radius: 0;
+  border: 0;
+  margin: 0 1px 1px;
 }
 
 .video-container {
@@ -2645,64 +3198,98 @@ onBeforeUnmount(() => {
   opacity: 0.5;
 }
 
-.workspace-main-video-room {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.workspace-main-video-status {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 11px;
-  color: #d4e3ff;
-}
-
 .workspace-reaction-flight {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
-  width: 33.3333%;
+  right: 0;
   pointer-events: none;
   overflow: hidden;
 }
 
 .workspace-reaction-particle {
   position: absolute;
-  left: var(--rx);
-  bottom: 12px;
+  left: var(--start-x);
+  bottom: var(--base-bottom);
   font-size: 24px;
   line-height: 1;
   opacity: 0;
-  animation: reactionRise 1.7s ease forwards;
+  will-change: transform, opacity;
+  animation: reactionRiseSine var(--duration) linear forwards;
   animation-delay: var(--delay);
 }
 
-@keyframes reactionRise {
+@keyframes reactionRiseSine {
   0% {
-    transform: translate(0, 0) scale(0.92);
+    transform: translate3d(calc(var(--wave) * sin(calc(var(--phase) + 0deg))), 0, 0) scale(var(--scale));
     opacity: 0;
   }
 
-  16% {
+  10% {
     opacity: 1;
+    transform: translate3d(
+      calc(var(--wave) * sin(calc(var(--phase) + 54deg))),
+      calc(var(--travel-y) * -0.1),
+      0
+    ) scale(var(--scale));
+  }
+
+  22% {
+    transform: translate3d(
+      calc(var(--wave) * sin(calc(var(--phase) + 108deg))),
+      calc(var(--travel-y) * -0.22),
+      0
+    ) scale(var(--scale));
+  }
+
+  36% {
+    transform: translate3d(
+      calc(var(--wave) * sin(calc(var(--phase) + 162deg))),
+      calc(var(--travel-y) * -0.36),
+      0
+    ) scale(var(--scale));
+  }
+
+  52% {
+    transform: translate3d(
+      calc(var(--wave) * sin(calc(var(--phase) + 216deg))),
+      calc(var(--travel-y) * -0.52),
+      0
+    ) scale(var(--scale));
+  }
+
+  68% {
+    transform: translate3d(
+      calc(var(--wave) * sin(calc(var(--phase) + 270deg))),
+      calc(var(--travel-y) * -0.68),
+      0
+    ) scale(var(--scale));
+  }
+
+  84% {
+    transform: translate3d(
+      calc(var(--wave) * sin(calc(var(--phase) + 324deg))),
+      calc(var(--travel-y) * -0.84),
+      0
+    ) scale(var(--scale));
+    opacity: 0.92;
   }
 
   100% {
-    transform: translate(-18px, -210px) scale(1.12);
-    opacity: 0;
+    transform: translate3d(
+      calc(var(--wave) * sin(calc(var(--phase) + 360deg))),
+      calc(var(--travel-y) * -1),
+      0
+    ) scale(var(--scale));
+    opacity: 0.04;
   }
 }
 
 .workspace-mini-strip {
   min-height: 0;
   background: var(--bg-strip);
+  margin: 1px;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 1px;
@@ -2711,7 +3298,7 @@ onBeforeUnmount(() => {
 .workspace-mini-tile,
 .workspace-mini-empty {
   background: var(--bg-mini-video);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 8px;
   display: grid;
   align-content: center;
@@ -2736,14 +3323,37 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
+.workspace-show-right-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 40;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.workspace-show-left-btn {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 40;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
 .workspace-controls {
   position: relative;
+  z-index: 20;
   display: inline-flex;
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 8px 0 2px;
+  margin-top: 10px;
+  padding: 0 14px 10px;
+  background: var(--bg-shell);
 }
 
 .workspace-reactions-tray {
@@ -2751,8 +3361,7 @@ onBeforeUnmount(() => {
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translate(-50%, 10px);
-  background: #112b55;
-  border: 1px solid var(--border-subtle);
+  background: var(--bg-reaction-tray);
   border-radius: 10px;
   padding: 6px;
   display: inline-flex;
@@ -2769,17 +3378,19 @@ onBeforeUnmount(() => {
 }
 
 .workspace-reaction-btn {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border: 0;
-  border-radius: 8px;
-  background: #21508f;
+  border-radius: 9px;
+  background: var(--bg-reaction-btn);
   color: #ffffff;
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
 }
 
 .workspace-reaction-btn:hover {
-  background: #2f68ba;
+  background: var(--bg-reaction-btn-hover);
 }
 
 .call-control-btn {
@@ -2787,7 +3398,7 @@ onBeforeUnmount(() => {
   height: 44px;
   border: 0;
   border-radius: 12px;
-  background: #1b427a;
+  background: var(--bg-control);
   color: #ffffff;
   display: grid;
   place-items: center;
@@ -2795,7 +3406,7 @@ onBeforeUnmount(() => {
 }
 
 .call-control-btn.active {
-  background: #3f79d6;
+  background: var(--bg-control-active);
 }
 
 .call-control-btn.hangup {
@@ -2812,23 +3423,49 @@ onBeforeUnmount(() => {
 
 .workspace-context {
   min-height: 0;
-  background: var(--bg-sidebar);
+  background: var(--bg-video);
+  margin: 0 10px var(--call-workspace-sidebar-bottom, 64px) 10px;
+  border-radius: 0 5px 5px 0;
+  overflow: auto;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  transform: translateX(0);
+  visibility: visible;
+  transition: transform 240ms ease, visibility 0s linear 0s;
+}
+
+.workspace-context.collapsed {
+  visibility: hidden;
+  transform: translateX(24px);
+  pointer-events: none;
+  transition: transform 240ms ease, visibility 0s linear 240ms;
+}
+
+.workspace-call-body.right-collapsed .workspace-context {
+  display: none;
+}
+
+.workspace-context .tabs.tabs-right {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  background: var(--bg-video);
 }
 
 .tab-panel {
   display: none;
   min-height: 0;
+  background: var(--bg-video);
 }
 
 .tab-panel.active {
   display: grid;
+  height: 100%;
+  min-height: 0;
 }
 
 .panel-users.active,
 .panel-lobby.active {
   grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
 }
 
 .panel-chat.active {
@@ -2838,9 +3475,13 @@ onBeforeUnmount(() => {
 .toolbar,
 .lobby-toolbar {
   padding: 10px;
-  border-top: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
-  background: #112b55;
+  border-top: 0;
+  border-bottom: 0;
+  background: var(--bg-video);
+}
+
+.lobby-toolbar-actions {
+  justify-content: flex-end;
 }
 
 .search {
@@ -2848,7 +3489,7 @@ onBeforeUnmount(() => {
   height: 38px;
   border: 0;
   border-radius: 6px;
-  background: #0c1f41;
+  background: var(--bg-input);
   color: var(--text-main);
   padding: 0 10px;
 }
@@ -2883,15 +3524,15 @@ onBeforeUnmount(() => {
   align-items: center;
   padding: 10px;
   border-bottom: 1px solid var(--border-subtle);
-  background: #163260;
+  background: var(--bg-row-hover);
 }
 
 .user-row.self {
-  background: #1e3e74;
+  background: #1a3f74;
 }
 
 .user-row.pinned {
-  background: #2d63b3;
+  background: var(--bg-row-pinned);
 }
 
 .user-row.pending {
@@ -2902,7 +3543,7 @@ onBeforeUnmount(() => {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #2b63ac;
+  background: var(--bg-preview);
   display: grid;
   place-items: center;
   font-size: 12px;
@@ -2942,11 +3583,11 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: var(--text-muted);
   border-bottom: 1px solid var(--border-subtle);
-  background: #112b55;
+  background: var(--bg-video);
 }
 
 .workspace-tab-footer {
-  background: #112b55;
+  background: var(--bg-video);
   padding: 8px;
 }
 
@@ -2955,18 +3596,18 @@ onBeforeUnmount(() => {
   display: grid;
   align-content: start;
   gap: 8px;
-  background: #112b55;
+  background: var(--bg-video);
 }
 
 .workspace-chat-message {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   padding: 8px;
-  background: #163260;
+  background: var(--bg-row-hover);
 }
 
 .workspace-chat-message.mine {
-  background: #2a569f;
+  background: var(--bg-row-pinned);
 }
 
 .workspace-chat-message header {
@@ -2997,13 +3638,13 @@ onBeforeUnmount(() => {
 .workspace-typing {
   margin: 0;
   padding: 0 10px 8px;
-  background: #112b55;
+  background: var(--bg-video);
   font-size: 12px;
   color: var(--text-muted);
 }
 
 .workspace-chat-compose {
-  background: #112b55;
+  background: var(--bg-video);
   padding: 8px 10px 10px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -3012,38 +3653,9 @@ onBeforeUnmount(() => {
   border-top: 1px solid var(--border-subtle);
 }
 
-.workspace-invite-join {
-  background: #112b55;
-  border-top: 1px solid var(--border-subtle);
-  padding: 10px;
-  display: grid;
-  gap: 8px;
-}
-
-.workspace-invite-label {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.workspace-invite-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-}
-
-.workspace-invite-hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.workspace-call-head-actions .btn {
-  height: 38px;
-}
-
 @media (max-width: 1440px) {
   .workspace-call-body {
-    grid-template-columns: minmax(0, 1fr) 330px;
+    grid-template-columns: minmax(0, 1fr) 360px;
   }
 
   .workspace-mini-strip {
@@ -3051,18 +3663,102 @@ onBeforeUnmount(() => {
   }
 }
 
+@media (min-width: 1181px) {
+  .workspace-call-body {
+    gap: 0;
+  }
+
+  .workspace-context {
+    margin-left: 10px;
+    margin-right: 10px;
+  }
+}
+
 @media (max-width: 1180px) {
   .workspace-call-body {
+    position: relative;
+    overflow: hidden;
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 1fr) minmax(360px, 44vh);
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .workspace-stage {
-    grid-template-rows: minmax(0, 1fr) 82px auto;
+    grid-template-rows: minmax(0, 1fr) 120px auto;
+  }
+
+  .workspace-stage.compact {
+    grid-template-rows: 50px minmax(0, 1fr) auto;
   }
 
   .workspace-mini-strip {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .workspace-context {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(360px, 92vw);
+    margin: 0;
+    border-radius: 0;
+    z-index: 50;
+    box-shadow: -6px 0 18px rgba(0, 0, 0, 0.28);
+  }
+
+  .workspace-context.collapsed {
+    transform: translateX(100%);
+  }
+
+  .workspace-call-body.right-collapsed .workspace-context {
+    display: grid;
+  }
+
+  .workspace-show-right-btn {
+    top: 62px;
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-compact-header {
+    padding: 0 10px;
+  }
+
+  .workspace-compact-logo {
+    height: 32px;
+  }
+
+  .workspace-context {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) and (orientation: landscape) {
+  .workspace-stage.compact {
+    grid-template-rows: 44px minmax(0, 1fr) auto;
+  }
+
+  .workspace-compact-header {
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .workspace-compact-logo {
+    height: 28px;
+  }
+
+  .workspace-controls {
+    gap: 8px;
+    padding: 0 8px 8px;
+  }
+
+  .call-control-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .call-control-btn.hangup {
+    width: 76px;
   }
 }
 </style>

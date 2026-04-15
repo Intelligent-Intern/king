@@ -67,11 +67,23 @@ function videochat_dispatch_request(
     }
 
     $isPublicEndpoint = static function (string $requestPath) use ($wsPath): bool {
-        return in_array(
+        if ($requestPath === $wsPath) {
+            return false;
+        }
+
+        if (in_array(
             $requestPath,
             ['/', '/health', '/api/bootstrap', '/api/runtime', '/api/version', '/api/auth/login'],
             true
-        ) && $requestPath !== $wsPath;
+        )) {
+            return true;
+        }
+
+        if (preg_match('#^/api/call-access/[A-Fa-f0-9-]{36}/(join|session)$#', $requestPath) === 1) {
+            return true;
+        }
+
+        return false;
     };
 
     $authenticateRequest = static function (array $authRequest, string $transport) use ($openDatabase): array {
@@ -187,7 +199,8 @@ function videochat_dispatch_request(
                 $jsonResponse,
                 $errorResponse,
                 $decodeJsonBody,
-                $openDatabase
+                $openDatabase,
+                $issueSessionId
             );
         } elseif ($moduleName === 'realtime') {
             $response = videochat_handle_realtime_routes(

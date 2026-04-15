@@ -52,6 +52,7 @@ compose_smoke() {
   fi
 
   local compose_backend_port="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_PORT:-38080}"
+  local compose_backend_ws_port="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_WS_PORT:-$((compose_backend_port + 1))}"
   local compose_frontend_port="${VIDEOCHAT_SMOKE_COMPOSE_FRONTEND_PORT:-35174}"
   local compose_project="${VIDEOCHAT_SMOKE_COMPOSE_PROJECT:-king-videochat-smoke}"
   local compose_backend_php_image="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_PHP_IMAGE:-}"
@@ -78,7 +79,7 @@ compose_smoke() {
     fi
   fi
 
-  log "compose smoke project=${compose_project} backend=${compose_backend_port} frontend=${compose_frontend_port} backend_php_image=${compose_backend_php_image} king_extension_api=${king_extension_api:-unknown}"
+  log "compose smoke project=${compose_project} backend=${compose_backend_port} backend_ws=${compose_backend_ws_port} frontend=${compose_frontend_port} backend_php_image=${compose_backend_php_image} king_extension_api=${king_extension_api:-unknown}"
 
   local compose_cmd=(
     docker compose
@@ -89,6 +90,7 @@ compose_smoke() {
   local compose_up_log
   compose_up_log="$(mktemp)"
   if VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
     VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
     VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
@@ -106,6 +108,7 @@ compose_smoke() {
   cleanup_compose() {
     if [[ "${cleanup_compose_enabled:-0}" == "1" ]]; then
       VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+      VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
       VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
       VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
       VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
@@ -131,11 +134,13 @@ compose_smoke() {
   if ! curl -fsS "${health_url}" >/dev/null; then
     log "ERROR: backend health did not become ready; dumping compose status/logs"
     VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
     VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
     VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
     "${compose_cmd[@]}" ps || true
     VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
     VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
     VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \

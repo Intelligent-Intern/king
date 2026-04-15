@@ -456,7 +456,9 @@ function videochat_handle_realtime_routes(
                     ],
                     'reaction' => [
                         'send' => 'reaction/send',
+                        'send_batch' => 'reaction/send_batch',
                         'event' => 'reaction/event',
+                        'batch' => 'reaction/batch',
                     ],
                     'lobby' => [
                         'snapshot' => 'lobby/snapshot',
@@ -687,7 +689,7 @@ function videochat_handle_realtime_routes(
                                             [
                                                 'type' => 'system/error',
                                                 'code' => 'reaction_publish_failed',
-                                                'message' => 'Could not publish reaction event.',
+                                                'message' => 'Reaction could not be sent.',
                                                 'details' => $details,
                                                 'time' => gmdate('c'),
                                             ]

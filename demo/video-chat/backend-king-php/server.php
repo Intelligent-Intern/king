@@ -9,6 +9,13 @@ $dbPath = getenv('VIDEOCHAT_KING_DB_PATH') ?: (__DIR__ . '/.local/video-chat.sql
 $appVersion = getenv('VIDEOCHAT_KING_BACKEND_VERSION') ?: '1.0.6-beta';
 $appEnv = getenv('VIDEOCHAT_KING_ENV') ?: 'development';
 $avatarStorageRoot = getenv('VIDEOCHAT_AVATAR_STORAGE_ROOT') ?: (dirname($dbPath) . '/avatars');
+$rawServerMode = strtolower(trim((string) (getenv('VIDEOCHAT_KING_SERVER_MODE') ?: 'all')));
+$serverMode = in_array($rawServerMode, ['all', 'http', 'ws'], true) ? $rawServerMode : 'all';
+$debugRequests = in_array(
+    strtolower(trim((string) (getenv('VIDEOCHAT_DEBUG_REQUESTS') ?: '0'))),
+    ['1', 'true', 'yes', 'on'],
+    true
+);
 $avatarMaxBytes = 0;
 
 if ($port < 1 || $port > 65535) {
@@ -30,6 +37,7 @@ require_once __DIR__ . '/support/auth.php';
 require_once __DIR__ . '/domain/users/avatar_upload.php';
 require_once __DIR__ . '/domain/calls/call_directory.php';
 require_once __DIR__ . '/domain/calls/call_management.php';
+require_once __DIR__ . '/domain/calls/call_access.php';
 require_once __DIR__ . '/domain/calls/invite_codes.php';
 require_once __DIR__ . '/domain/realtime/realtime_chat.php';
 require_once __DIR__ . '/domain/realtime/realtime_lobby.php';
@@ -44,10 +52,26 @@ require_once __DIR__ . '/http/router.php';
 
 $avatarMaxBytes = videochat_avatar_max_bytes();
 
-try {
-    $databaseRuntime = videochat_bootstrap_sqlite($dbPath);
-} catch (Throwable $error) {
-    $log('database bootstrap failed: ' . $error->getMessage());
+$databaseRuntime = null;
+$maxBootstrapAttempts = 40;
+for ($attempt = 1; $attempt <= $maxBootstrapAttempts; $attempt += 1) {
+    try {
+        $databaseRuntime = videochat_bootstrap_sqlite($dbPath);
+        break;
+    } catch (Throwable $error) {
+        $message = $error->getMessage();
+        $isSqliteLock = stripos($message, 'database is locked') !== false;
+        if ($isSqliteLock && $attempt < $maxBootstrapAttempts) {
+            usleep(100_000);
+            continue;
+        }
+        $log('database bootstrap failed: ' . $message);
+        exit(1);
+    }
+}
+
+if (!is_array($databaseRuntime)) {
+    $log('database bootstrap failed: no runtime snapshot returned.');
     exit(1);
 }
 
@@ -237,6 +261,10 @@ $runtimeEnvelope = static function () use (
         ],
         'calls' => [
             'list_endpoint' => '/api/calls',
+            'call_access_link_endpoint' => '/api/calls/{call_id}/access-link',
+            'call_access_resolve_endpoint' => '/api/call-access/{access_id}',
+            'call_access_join_endpoint' => '/api/call-access/{access_id}/join',
+            'call_access_session_endpoint' => '/api/call-access/{access_id}/session',
             'invite_code_create_endpoint' => '/api/invite-codes',
             'invite_code_redeem_endpoint' => '/api/invite-codes/redeem',
             'scope_values' => ['my', 'all'],
@@ -271,6 +299,7 @@ $log(sprintf(
 $log('auth demo users: ' . json_encode($databaseRuntime['demo_users'] ?? [], JSON_UNESCAPED_SLASHES));
 $log("http endpoint bound: http://{$host}:{$port}/");
 $log("websocket endpoint bound: ws://{$host}:{$port}{$wsPath}");
+$log("server mode: {$serverMode}");
 $log('starting King HTTP/1 listener...');
 $handler = static function (array $request) use (
     &$activeWebsocketsBySession,
@@ -288,27 +317,68 @@ $handler = static function (array $request) use (
     $runtimeEnvelope,
     $wsPath,
     $avatarStorageRoot,
-    $avatarMaxBytes
+    $avatarMaxBytes,
+    $log,
+    $serverMode,
+    $debugRequests
 ): array {
-    return videochat_dispatch_request(
-        $request,
-        $activeWebsocketsBySession,
-        $presenceState,
-        $lobbyState,
-        $typingState,
-        $reactionState,
-        $jsonResponse,
-        $errorResponse,
-        $methodFromRequest,
-        $decodeJsonBody,
-        $openDatabase,
-        $issueSessionId,
-        $pathFromRequest,
-        $runtimeEnvelope,
-        $wsPath,
-        $avatarStorageRoot,
-        $avatarMaxBytes
-    );
+    $path = $pathFromRequest($request);
+    $method = $methodFromRequest($request);
+    if ($debugRequests) {
+        $log(sprintf('request: %s %s', $method, $path));
+    }
+
+    if ($serverMode === 'http' && ($path === $wsPath || $path === '/sfu')) {
+        return $errorResponse(404, 'websocket_endpoint_disabled', 'WebSocket endpoint is disabled on this listener.', [
+            'path' => $path,
+            'listener_mode' => $serverMode,
+            'ws_path' => $wsPath,
+        ]);
+    }
+
+    if ($serverMode === 'ws' && !in_array($path, [$wsPath, '/sfu', '/health'], true)) {
+        return $errorResponse(404, 'rest_endpoint_disabled', 'REST endpoint is disabled on this listener.', [
+            'path' => $path,
+            'listener_mode' => $serverMode,
+            'ws_path' => $wsPath,
+        ]);
+    }
+
+    try {
+        return videochat_dispatch_request(
+            $request,
+            $activeWebsocketsBySession,
+            $presenceState,
+            $lobbyState,
+            $typingState,
+            $reactionState,
+            $jsonResponse,
+            $errorResponse,
+            $methodFromRequest,
+            $decodeJsonBody,
+            $openDatabase,
+            $issueSessionId,
+            $pathFromRequest,
+            $runtimeEnvelope,
+            $wsPath,
+            $avatarStorageRoot,
+            $avatarMaxBytes
+        );
+    } catch (Throwable $error) {
+        $log(sprintf(
+            'unhandled request error on %s %s: %s (%s:%d)',
+            $method,
+            $path,
+            $error->getMessage(),
+            $error->getFile(),
+            $error->getLine()
+        ));
+
+        return $errorResponse(500, 'internal_server_error', 'Request handling failed unexpectedly.', [
+            'path' => $path,
+            'method' => $method,
+        ]);
+    }
 };
 
 

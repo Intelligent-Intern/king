@@ -2,7 +2,176 @@
   <main class="app">
     <div class="shell no-right-sidebar" :class="shellClasses">
       <aside class="sidebar sidebar-left" :class="leftSidebarClasses">
-        <div class="sidebar-content left">
+        <div v-if="isCallWorkspace" class="sidebar-content left left-call-content">
+          <div class="brand-strip">
+            <img data-brand-logo src="/assets/orgas/kingrt/logo.svg" alt="KingRT" />
+            <button
+              class="sidebar-toggle-btn"
+              type="button"
+              :title="leftSidebarToggleLabel"
+              :aria-label="leftSidebarToggleLabel"
+              @click="handleLeftSidebarToggle"
+            >
+              <span v-if="isMobileViewport" class="sidebar-close-mark" aria-hidden="true">x</span>
+              <img v-else class="arrow-icon-image" :src="leftSidebarToggleIcon" alt="" />
+            </button>
+          </div>
+
+          <div class="tabs tabs-left" role="tablist" aria-label="Call left sidebar tabs">
+            <button
+              class="tab"
+              :class="{ active: callLeftTab === 'settings' }"
+              type="button"
+              role="tab"
+              :aria-selected="callLeftTab === 'settings'"
+              @click="setCallLeftTab('settings')"
+            >
+              <img class="tab-icon" src="/assets/orgas/kingrt/icons/gear.png" alt="" />
+            </button>
+            <button
+              class="tab"
+              :class="{ active: callLeftTab === 'background' }"
+              type="button"
+              role="tab"
+              :aria-selected="callLeftTab === 'background'"
+              @click="setCallLeftTab('background')"
+            >
+              <img class="tab-icon" src="/assets/orgas/kingrt/icons/desktop.png" alt="" />
+            </button>
+          </div>
+
+          <section class="tab-panel panel-settings" :class="{ active: callLeftTab === 'settings' }">
+            <div class="call-left-settings">
+              <section class="call-left-settings-block" aria-label="Camera">
+                <div class="call-left-settings-title">Camera</div>
+                <div class="call-left-settings-field">
+                  <select
+                    id="call-left-camera-select"
+                    class="input call-left-select"
+                    aria-label="Camera"
+                    :value="callMediaPrefs.selectedCameraId"
+                    @change="setCallCameraDevice($event.target.value)"
+                  >
+                    <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
+                    <option
+                      v-for="camera in callMediaPrefs.cameras"
+                      :key="camera.id"
+                      :value="camera.id"
+                    >
+                      {{ camera.label }}
+                    </option>
+                  </select>
+                  <div class="call-left-settings-value">Active: {{ activeCameraLabel }}</div>
+                </div>
+              </section>
+
+              <section class="call-left-settings-block" aria-label="Mic">
+                <div class="call-left-settings-title">Mic</div>
+                <div class="call-left-settings-field">
+                  <select
+                    id="call-left-mic-select"
+                    class="input call-left-select"
+                    aria-label="Mic"
+                    :value="callMediaPrefs.selectedMicrophoneId"
+                    @change="setCallMicrophoneDevice($event.target.value)"
+                  >
+                    <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
+                    <option
+                      v-for="microphone in callMediaPrefs.microphones"
+                      :key="microphone.id"
+                      :value="microphone.id"
+                    >
+                      {{ microphone.label }}
+                    </option>
+                  </select>
+                  <div class="call-left-settings-value">Active: {{ activeMicrophoneLabel }}</div>
+                </div>
+                <div class="call-left-settings-field">
+                  <label for="call-left-mic-volume">Volume</label>
+                  <div class="call-left-volume-row">
+                    <input
+                      id="call-left-mic-volume"
+                      class="call-left-range"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      :value="callMediaPrefs.microphoneVolume"
+                      @input="setCallMicrophoneVolume($event.target.value)"
+                    />
+                    <span class="call-left-volume-value">{{ callMediaPrefs.microphoneVolume }}%</span>
+                  </div>
+                  <div
+                    class="call-left-meter"
+                    role="meter"
+                    aria-label="Microphone level"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    :aria-valuenow="micLevelPercent"
+                  >
+                    <span class="call-left-meter-bar" :style="{ width: `${micLevelPercent}%` }"></span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="call-left-settings-block" aria-label="Speaker">
+                <div class="call-left-settings-title">Speaker</div>
+                <div class="call-left-settings-field">
+                  <select
+                    id="call-left-speaker-select"
+                    class="input call-left-select"
+                    aria-label="Speaker"
+                    :value="callMediaPrefs.selectedSpeakerId"
+                    @change="setCallSpeakerDevice($event.target.value)"
+                  >
+                    <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
+                    <option
+                      v-for="speaker in callMediaPrefs.speakers"
+                      :key="speaker.id"
+                      :value="speaker.id"
+                    >
+                      {{ speaker.label }}
+                    </option>
+                  </select>
+                  <div class="call-left-settings-value">Active: {{ activeSpeakerLabel }}</div>
+                </div>
+                <div class="call-left-settings-field">
+                  <label for="call-left-speaker-volume">Volume</label>
+                  <div class="call-left-volume-row">
+                    <input
+                      id="call-left-speaker-volume"
+                      class="call-left-range"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      :value="callMediaPrefs.speakerVolume"
+                      @input="setCallSpeakerVolume($event.target.value)"
+                    />
+                    <span class="call-left-volume-value">{{ callMediaPrefs.speakerVolume }}%</span>
+                  </div>
+                </div>
+                <div class="call-left-settings-field">
+                  <button class="btn full call-left-test-btn" type="button" @click="playSpeakerTestSound">
+                    Play test sound
+                  </button>
+                </div>
+              </section>
+
+              <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
+            </div>
+          </section>
+
+          <section class="tab-panel panel-background" :class="{ active: callLeftTab === 'background' }">
+            <div class="call-left-backgrounds">
+              <button class="btn full" type="button">No blur</button>
+              <button class="btn full" type="button">Slight blur</button>
+              <button class="btn full" type="button">Strong blur</button>
+            </div>
+          </section>
+        </div>
+
+        <div v-else class="sidebar-content left">
           <div class="brand-strip">
             <img data-brand-logo src="/assets/orgas/kingrt/logo.svg" alt="KingRT" />
             <button
@@ -232,6 +401,15 @@ import {
   sessionState,
   uploadSessionAvatar,
 } from '../domain/auth/session';
+import {
+  attachCallMediaDeviceWatcher,
+  callMediaPrefs,
+  setCallCameraDevice,
+  setCallMicrophoneDevice,
+  setCallMicrophoneVolume,
+  setCallSpeakerDevice,
+  setCallSpeakerVolume,
+} from '../domain/realtime/callMediaPreferences';
 
 const router = useRouter();
 const route = useRoute();
@@ -242,6 +420,7 @@ const viewportMode = ref('desktop');
 let laptopMedia = null;
 let tabletMedia = null;
 let mobileMedia = null;
+let detachCallMediaWatcher = null;
 const placeholderAvatar = '/assets/orgas/kingrt/avatar-placeholder.svg';
 const LAPTOP_BREAKPOINT = 1440;
 const TABLET_BREAKPOINT = 1180;
@@ -270,6 +449,7 @@ const pageTitle = computed(() => {
   if (route.path.startsWith('/workspace/call')) return 'Video Call';
   return mapping[route.path] || 'Workspace';
 });
+const isCallWorkspace = computed(() => route.path.startsWith('/workspace/call'));
 
 const pageSubtitle = computed(() => {
   if (route.path === '/admin/overview') {
@@ -279,7 +459,7 @@ const pageSubtitle = computed(() => {
 });
 const showWorkspaceHeader = computed(() => (
   !['/admin/users', '/admin/calls'].includes(route.path)
-  && !route.path.startsWith('/workspace/call')
+  && !isCallWorkspace.value
 ));
 
 const isTabletViewport = computed(() => viewportMode.value === 'tablet');
@@ -309,10 +489,35 @@ const shellClasses = computed(() => ({
   'tablet-left-open': isTabletViewport.value && isTabletSidebarOpen.value,
   'mobile-mode': isMobileViewport.value,
   'mobile-left-open': isMobileViewport.value && isMobileSidebarOpen.value,
+  'call-workspace-mode': isCallWorkspace.value,
 }));
 const leftSidebarClasses = computed(() => ({
   collapsed: (isDesktopLikeViewport.value && leftSidebarCollapsed.value) || (isMobileViewport.value && !isMobileSidebarOpen.value),
 }));
+const callLeftTab = ref('settings');
+const micLevelPercent = ref(0);
+const activeCameraLabel = computed(() => resolveSelectedDeviceLabel(
+  callMediaPrefs.cameras,
+  callMediaPrefs.selectedCameraId,
+  'No camera detected'
+));
+const activeMicrophoneLabel = computed(() => resolveSelectedDeviceLabel(
+  callMediaPrefs.microphones,
+  callMediaPrefs.selectedMicrophoneId,
+  'No microphone detected'
+));
+const activeSpeakerLabel = computed(() => resolveSelectedDeviceLabel(
+  callMediaPrefs.speakers,
+  callMediaPrefs.selectedSpeakerId,
+  'No speaker detected'
+));
+let micLevelStream = null;
+let micLevelAudioContext = null;
+let micLevelSource = null;
+let micLevelAnalyser = null;
+let micLevelData = null;
+let micLevelFrame = 0;
+let micLevelMonitorToken = 0;
 
 const settingsDraft = reactive({
   displayName: '',
@@ -407,6 +612,7 @@ function handleLeftSidebarToggle() {
 
 function showLeftSidebar() {
   if (isTabletViewport.value) {
+    isTabletSidebarOpen.value = true;
     return;
   }
 
@@ -439,6 +645,193 @@ function handleNavItemClick() {
   }
 }
 
+function setCallLeftTab(tabId) {
+  callLeftTab.value = tabId === 'background' ? 'background' : 'settings';
+}
+
+function stopMicLevelMonitor() {
+  micLevelMonitorToken += 1;
+  if (micLevelFrame !== 0 && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(micLevelFrame);
+  }
+  micLevelFrame = 0;
+
+  if (micLevelSource && typeof micLevelSource.disconnect === 'function') {
+    try {
+      micLevelSource.disconnect();
+    } catch {
+      // ignore
+    }
+  }
+  micLevelSource = null;
+
+  if (micLevelAnalyser && typeof micLevelAnalyser.disconnect === 'function') {
+    try {
+      micLevelAnalyser.disconnect();
+    } catch {
+      // ignore
+    }
+  }
+  micLevelAnalyser = null;
+  micLevelData = null;
+
+  if (micLevelStream instanceof MediaStream) {
+    for (const track of micLevelStream.getTracks()) {
+      try {
+        track.stop();
+      } catch {
+        // ignore
+      }
+    }
+  }
+  micLevelStream = null;
+
+  if (micLevelAudioContext && typeof micLevelAudioContext.close === 'function') {
+    micLevelAudioContext.close().catch(() => {});
+  }
+  micLevelAudioContext = null;
+  micLevelPercent.value = 0;
+}
+
+function sampleMicLevel(token) {
+  if (token !== micLevelMonitorToken) return;
+  if (!micLevelAnalyser || !micLevelData) {
+    micLevelPercent.value = 0;
+    return;
+  }
+
+  micLevelAnalyser.getByteTimeDomainData(micLevelData);
+  let energy = 0;
+  let peak = 0;
+  for (let index = 0; index < micLevelData.length; index += 1) {
+    const centered = (micLevelData[index] - 128) / 128;
+    energy += centered * centered;
+    const amplitude = Math.abs(centered);
+    if (amplitude > peak) peak = amplitude;
+  }
+
+  const rms = Math.sqrt(energy / micLevelData.length);
+  const micScale = Math.max(0, Math.min(100, Number(callMediaPrefs.microphoneVolume || 100))) / 100;
+  const gated = Math.max(0, Math.max(rms * 8.6, peak * 1.28) - 0.02);
+  const normalized = Math.min(1, gated / 0.98);
+  const boostedPercent = normalized * 100 * micScale * 3;
+  micLevelPercent.value = Math.max(0, Math.min(100, Math.round(boostedPercent)));
+
+  if (typeof requestAnimationFrame === 'function') {
+    micLevelFrame = requestAnimationFrame(() => sampleMicLevel(token));
+  }
+}
+
+async function startMicLevelMonitor() {
+  stopMicLevelMonitor();
+  if (!isCallWorkspace.value || callLeftTab.value !== 'settings') return;
+  if (
+    typeof window === 'undefined'
+    || typeof navigator === 'undefined'
+    || !navigator.mediaDevices
+    || typeof navigator.mediaDevices.getUserMedia !== 'function'
+  ) {
+    return;
+  }
+
+  const token = micLevelMonitorToken + 1;
+  micLevelMonitorToken = token;
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextCtor) return;
+
+  const selectedMicId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
+  const audioConstraints = selectedMicId !== ''
+    ? { deviceId: { exact: selectedMicId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    : { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
+    if (token !== micLevelMonitorToken) {
+      for (const track of stream.getTracks()) {
+        track.stop();
+      }
+      return;
+    }
+
+    const context = new AudioContextCtor({ latencyHint: 'interactive' });
+    const source = context.createMediaStreamSource(stream);
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.08;
+    source.connect(analyser);
+
+    micLevelStream = stream;
+    micLevelAudioContext = context;
+    micLevelSource = source;
+    micLevelAnalyser = analyser;
+    micLevelData = new Uint8Array(analyser.fftSize);
+    sampleMicLevel(token);
+  } catch {
+    if (token === micLevelMonitorToken) {
+      micLevelPercent.value = 0;
+    }
+  }
+}
+
+async function playSpeakerTestSound() {
+  if (typeof window === 'undefined') return;
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextCtor) return;
+
+  let context = null;
+  const audio = new Audio();
+  try {
+    context = new AudioContextCtor();
+    const destination = context.createMediaStreamDestination();
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    const normalizedVolume = Math.max(0, Math.min(100, Number(callMediaPrefs.speakerVolume || 100))) / 100;
+
+    oscillator.type = 'sine';
+    oscillator.frequency.value = 880;
+    gainNode.gain.value = Math.max(0.01, normalizedVolume * 0.45);
+    oscillator.connect(gainNode);
+    gainNode.connect(destination);
+
+    audio.srcObject = destination.stream;
+    audio.playsInline = true;
+    audio.muted = false;
+    audio.volume = 1;
+
+    const speakerDeviceId = String(callMediaPrefs.selectedSpeakerId || '').trim();
+    if (speakerDeviceId !== '' && typeof audio.setSinkId === 'function') {
+      await audio.setSinkId(speakerDeviceId).catch(() => {});
+    }
+
+    await audio.play();
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.22);
+    await new Promise((resolve) => setTimeout(resolve, 260));
+  } catch {
+    // ignore
+  } finally {
+    try {
+      audio.pause();
+    } catch {
+      // ignore
+    }
+    audio.srcObject = null;
+    if (context && typeof context.close === 'function') {
+      await context.close().catch(() => {});
+    }
+  }
+}
+
+function resolveSelectedDeviceLabel(devices, selectedId, emptyLabel) {
+  if (!Array.isArray(devices) || devices.length === 0) return emptyLabel;
+  const normalizedId = String(selectedId || '').trim();
+  const selected = devices.find((device) => String(device?.id || '') === normalizedId);
+  const fallback = devices[0];
+  const candidate = selected || fallback;
+  const label = String(candidate?.label || '').trim();
+  return label === '' ? 'Unknown' : label;
+}
+
 provide('workspaceSidebarState', {
   leftSidebarCollapsed,
   isTabletViewport,
@@ -455,6 +848,31 @@ watch(() => route.fullPath, () => {
     isMobileSidebarOpen.value = false;
   }
 });
+
+watch(isCallWorkspace, (nextValue) => {
+  if (nextValue) {
+    if (!detachCallMediaWatcher) {
+      detachCallMediaWatcher = attachCallMediaDeviceWatcher({ requestPermissions: false });
+    }
+    return;
+  }
+  if (detachCallMediaWatcher) {
+    detachCallMediaWatcher();
+    detachCallMediaWatcher = null;
+  }
+}, { immediate: true });
+
+watch(
+  () => [isCallWorkspace.value, callLeftTab.value, callMediaPrefs.selectedMicrophoneId],
+  ([inCallWorkspace, activeTab]) => {
+    if (inCallWorkspace && activeTab === 'settings') {
+      void startMicLevelMonitor();
+      return;
+    }
+    stopMicLevelMonitor();
+  },
+  { immediate: true }
+);
 
 onMounted(() => {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -474,6 +892,11 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  stopMicLevelMonitor();
+  if (detachCallMediaWatcher) {
+    detachCallMediaWatcher();
+    detachCallMediaWatcher = null;
+  }
   if (!laptopMedia || !tabletMedia || !mobileMedia) return;
   if (typeof laptopMedia.removeEventListener === 'function') {
     laptopMedia.removeEventListener('change', handleViewportChange);

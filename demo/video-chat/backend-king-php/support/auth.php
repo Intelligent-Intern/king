@@ -347,6 +347,13 @@ function videochat_rbac_permission_matrix(string $wsPath = '/ws'): array
             'allowed_roles' => $authenticatedRoles,
         ],
         [
+            'id' => 'rest_call_access_scope',
+            'transport' => 'rest',
+            'matcher' => 'prefix',
+            'prefix' => '/api/call-access/',
+            'allowed_roles' => $authenticatedRoles,
+        ],
+        [
             'id' => 'rest_user_scope',
             'transport' => 'rest',
             'matcher' => 'prefix',

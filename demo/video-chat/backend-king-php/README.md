@@ -99,8 +99,10 @@ Environment overrides:
 - `VIDEOCHAT_WS_REACTION_ALLOWED_EMOJIS` (default fixed tray emoji set; comma-separated override)
 - `VIDEOCHAT_WS_REACTION_MAX_CHARS` (default `8`, clamped to `1..32`)
 - `VIDEOCHAT_WS_REACTION_MAX_BYTES` (default `32`, clamped to `4..256`)
-- `VIDEOCHAT_WS_REACTION_THROTTLE_WINDOW_MS` (default `3000`, clamped to `250..60000`)
-- `VIDEOCHAT_WS_REACTION_THROTTLE_MAX_PER_WINDOW` (default `10`, clamped to `1..200`)
+- `VIDEOCHAT_WS_REACTION_FLOOD_WINDOW_MS` (default `1000`, clamped to `250..60000`; fallback: `VIDEOCHAT_WS_REACTION_THROTTLE_WINDOW_MS`)
+- `VIDEOCHAT_WS_REACTION_FLOOD_THRESHOLD_PER_WINDOW` (default `20`, clamped to `1..1000`; fallback: `VIDEOCHAT_WS_REACTION_THROTTLE_MAX_PER_WINDOW`)
+- `VIDEOCHAT_WS_REACTION_FLOOD_BATCH_SIZE` (default `25`, clamped to `1..200`)
+- `VIDEOCHAT_WS_REACTION_CLIENT_BATCH_MAX_COUNT` (default `25`, clamped to `1..200`)
 - `KING_EXTENSION_PATH` (default `extension/modules/king.so` from repo root)
 - `PHP_BIN` (default `php`)
 
@@ -340,6 +342,7 @@ Presence channel contract on `WS /ws`:
   - `room/joined`
   - `room/left`
   - `reaction/event`
+  - `reaction/batch`
   - `lobby/snapshot`
   - `system/error`
   - `system/pong`
@@ -351,6 +354,7 @@ Presence channel contract on `WS /ws`:
   - `{"type":"typing/start"}`
   - `{"type":"typing/stop"}`
   - `{"type":"reaction/send","emoji":"👍","client_reaction_id":"..."}` (optional `client_reaction_id`)
+  - `{"type":"reaction/send_batch","emojis":["👍","😂"],"client_reaction_id":"..."}` (optional `client_reaction_id`)
   - `{"type":"lobby/queue/request"}`
   - `{"type":"lobby/queue/join"}`
   - `{"type":"lobby/allow","target_user_id":123}` (`admin`/`moderator` only)
@@ -374,7 +378,7 @@ Presence channel contract on `WS /ws`:
   - chat payload validation is bounded (`VIDEOCHAT_WS_CHAT_MAX_CHARS`, `VIDEOCHAT_WS_CHAT_MAX_BYTES`)
   - accepted chat publishes emit `chat/ack` to the sender with deterministic `ack_id`, stable `message_id`, and `sent_count`
   - typing indicators are room-scoped, debounced, expire automatically, never self-echo, and fail closed when sender room membership is invalid
-  - reaction events are room-scoped, enforce emoji/client-id payload boundaries, and apply per-user throttle windows (`VIDEOCHAT_WS_REACTION_THROTTLE_WINDOW_MS`, `VIDEOCHAT_WS_REACTION_THROTTLE_MAX_PER_WINDOW`) with explicit `retry_after_ms` diagnostics on throttle
+  - reaction events are room-scoped, enforce emoji/client-id payload boundaries, accept both single and client-batched sends, and switch to server-side `reaction/batch` fanout once per-user reaction volume exceeds the configured flood threshold (`VIDEOCHAT_WS_REACTION_FLOOD_WINDOW_MS`, `VIDEOCHAT_WS_REACTION_FLOOD_THRESHOLD_PER_WINDOW`, `VIDEOCHAT_WS_REACTION_FLOOD_BATCH_SIZE`)
   - lobby queue updates are room-scoped snapshots (`lobby/snapshot`) driven by server-authoritative queue/admitted state
   - moderator actions (`lobby/allow`, `lobby/remove`, `lobby/allow_all`) are fail-closed for non-moderator roles and for senders not actively present in the room
   - queue/admitted entries are cleaned when a user disconnects or changes rooms

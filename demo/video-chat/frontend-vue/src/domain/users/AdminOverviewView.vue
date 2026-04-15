@@ -165,7 +165,7 @@
                 <td>{{ row.users }}</td>
                 <td>
                   <span class="actions-inline">
-                    <button class="icon-mini-btn" type="button" title="Join call" aria-label="Join call" @click="openWorkspace(row.roomId)">
+                    <button class="icon-mini-btn" type="button" title="Join call" aria-label="Join call" @click="openWorkspace(row)">
                       <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
                     </button>
                   </span>
@@ -510,9 +510,9 @@ function formatScheduleRange(startValue, endValue) {
   return `${start} -> ${end}`;
 }
 
-function openWorkspace(roomId) {
-  const safeRoomId = String(roomId || 'lobby').trim() || 'lobby';
-  void router.push(`/workspace/call/${encodeURIComponent(safeRoomId)}`);
+function openWorkspace(row) {
+  const routeSegment = String(row?.id || row?.roomId || 'lobby').trim() || 'lobby';
+  void router.push(`/workspace/call/${encodeURIComponent(routeSegment)}`);
 }
 
 function isoToLocalInput(isoValue) {

@@ -240,11 +240,10 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { resolveBackendOrigin } from '../../support/backendOrigin';
+import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import { logoutSession, refreshSession, sessionState } from '../auth/session';
 
 const router = useRouter();
-const backendOrigin = resolveBackendOrigin();
 const avatarPlaceholder = '/assets/orgas/kingrt/avatar-placeholder.svg';
 const defaultAvatarOptions = [
   { label: 'KingRT default', path: '/assets/orgas/kingrt/avatar-placeholder.svg' },
@@ -294,20 +293,8 @@ function normalizeAvatarSrc(rawPath) {
   if (value === '') return avatarPlaceholder;
   if (value.startsWith('data:')) return value;
   if (value.startsWith('http://') || value.startsWith('https://')) return value;
-  if (value.startsWith('/api/')) return `${backendOrigin}${value}`;
+  if (value.startsWith('/api/')) return `${currentBackendOrigin()}${value}`;
   return value;
-}
-
-function buildQueryString(params) {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params || {})) {
-    if (value === undefined || value === null) continue;
-    const text = String(value).trim();
-    if (text === '') continue;
-    query.set(key, text);
-  }
-  const encoded = query.toString();
-  return encoded === '' ? '' : `?${encoded}`;
 }
 
 function requestHeaders(includeBody) {
@@ -327,18 +314,19 @@ function extractErrorMessage(payload, fallback) {
 }
 
 async function apiRequest(path, { method = 'GET', query = null, body = null } = {}, allowRefreshRetry = true) {
-  const endpoint = `${backendOrigin}${path}${buildQueryString(query || {})}`;
   let response = null;
   try {
-    response = await fetch(endpoint, {
+    const result = await fetchBackend(path, {
       method,
+      query,
       headers: requestHeaders(body !== null),
       body: body === null ? undefined : JSON.stringify(body),
     });
+    response = result.response;
   } catch (error) {
     const message = error instanceof Error ? error.message.trim() : '';
-    if (message === '' || /failed to fetch/i.test(message)) {
-      throw new Error(`Could not reach backend (${backendOrigin}).`);
+    if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
+      throw new Error(`Could not reach backend (${currentBackendOrigin()}).`);
     }
     throw new Error(message);
   }
@@ -905,11 +893,15 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   margin-top: auto;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .users-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .users-modal {
