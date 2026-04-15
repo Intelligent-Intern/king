@@ -2921,14 +2921,12 @@ onMounted(async () => {
 
 function scheduleLocalTrackPublish(attempt = 0) {
   if (!sfuClientRef.value) return;
-  if (sfuClientRef.value.ws?.readyState === WebSocket.OPEN) {
-    void publishLocalTracks();
-    return;
-  }
-  if (attempt >= 24) return;
+  void publishLocalTracks();
+  if (localStreamRef.value instanceof MediaStream && localTracksPublishedToSfu) return;
+  if (attempt >= 120) return;
   setTimeout(() => {
     scheduleLocalTrackPublish(attempt + 1);
-  }, 150);
+  }, 500);
 }
 
 function initSFU() {
@@ -2943,6 +2941,8 @@ function initSFU() {
     onPublisherLeft: (publisherId) => handleSFUPublisherLeft(publisherId),
     onDisconnect: () => {
       sfuConnected.value = false;
+      localTracksPublishedToSfu = false;
+      sfuClientRef.value = null;
       if (!manualSocketClose) {
         setTimeout(() => initSFU(), 2000);
       }
@@ -3051,6 +3051,7 @@ let localRawStreamRef = ref(null);
 let localFilteredStreamRef = ref(null);
 let localStreamRef = ref(null);
 let encodeIntervalRef = ref(null);
+let localTracksPublishedToSfu = false;
 const backgroundFilterController = new BackgroundFilterController();
 const backgroundBaselineCollector = new BackgroundFilterBaselineCollector(10);
 let backgroundBaselineCaptured = false;
@@ -3466,6 +3467,59 @@ function buildLocalMediaConstraints() {
   return { video, audio };
 }
 
+function buildLooseLocalMediaConstraints() {
+  return {
+    video: { width: 640, height: 480, frameRate: 15 },
+    audio: true,
+  };
+}
+
+function shouldRetryWithLooseConstraints(error) {
+  const name = String(error?.name || '').trim();
+  return name === 'NotFoundError'
+    || name === 'OverconstrainedError'
+    || name === 'NotReadableError'
+    || name === 'AbortError';
+}
+
+async function acquireLocalMediaStreamWithFallback() {
+  const strictConstraints = buildLocalMediaConstraints();
+  const looseConstraints = buildLooseLocalMediaConstraints();
+
+  try {
+    return await navigator.mediaDevices.getUserMedia(strictConstraints);
+  } catch (error) {
+    if (!shouldRetryWithLooseConstraints(error)) {
+      throw error;
+    }
+  }
+
+  try {
+    return await navigator.mediaDevices.getUserMedia(looseConstraints);
+  } catch {
+    return navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  }
+}
+
+function publishLocalTracksToSfuIfReady() {
+  if (!sfuClientRef.value) return false;
+  if (localTracksPublishedToSfu) return true;
+  if (sfuClientRef.value.ws?.readyState !== WebSocket.OPEN) return false;
+  const stream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
+  if (!(stream instanceof MediaStream)) return false;
+
+  const tracks = stream.getTracks().map((track) => ({
+    id: track.id,
+    kind: track.kind,
+    label: track.label,
+  }));
+
+  if (tracks.length === 0) return false;
+  sfuClientRef.value.publishTracks(tracks);
+  localTracksPublishedToSfu = true;
+  return true;
+}
+
 function applyCallOutputPreferences() {
   if (typeof document === 'undefined') return;
   const volume = Math.max(0, Math.min(100, Number(callMediaPrefs.speakerVolume || 100))) / 100;
@@ -3691,6 +3745,7 @@ function unpublishAndStopLocalTracks() {
     }
   }
   localTracksRef.value = [];
+  localTracksPublishedToSfu = false;
 
   const streamsToStop = uniqueLocalStreams([
     localStreamRef.value,
@@ -3719,27 +3774,24 @@ function teardownLocalPublisher() {
 }
 
 async function publishLocalTracks() {
-  if (!sfuClientRef.value || localStreamRef.value) return;
+  if (localStreamRef.value instanceof MediaStream) {
+    publishLocalTracksToSfuIfReady();
+    return;
+  }
   if (typeof navigator === 'undefined' || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
     return;
   }
 
   try {
-    const rawStream = await navigator.mediaDevices.getUserMedia(buildLocalMediaConstraints());
+    const rawStream = await acquireLocalMediaStreamWithFallback();
     localRawStreamRef.value = rawStream;
 
     const stream = await applyLocalBackgroundFilter(rawStream);
     localFilteredStreamRef.value = stream;
     localStreamRef.value = stream;
     localTracksRef.value = stream.getTracks();
-
-    const tracks = stream.getTracks().map((t) => ({
-      id: t.id,
-      kind: t.kind,
-      label: t.label,
-    }));
-
-    sfuClientRef.value.publishTracks(tracks);
+    localTracksPublishedToSfu = false;
+    publishLocalTracksToSfuIfReady();
     applyCallInputPreferences();
     applyCallOutputPreferences();
     if (isNativeWebRtcRuntimePath()) {
