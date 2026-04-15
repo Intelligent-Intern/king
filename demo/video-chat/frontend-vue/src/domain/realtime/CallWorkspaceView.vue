@@ -466,8 +466,12 @@ import {
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
   refreshCallMediaDevices,
+  resetCallBackgroundRuntimeState,
+  setCallBackgroundFilterMode,
 } from './callMediaPreferences';
 import { BackgroundFilterController } from './backgroundFilterController';
+import { BackgroundFilterBaselineCollector } from './backgroundFilterBaseline';
+import { evaluateBackgroundFilterGates } from './backgroundFilterGates';
 import { SFUClient } from '../../lib/sfu/sfuClient';
 import { WasmWaveletVideoEncoder, WasmWaveletVideoDecoder, createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';
 
@@ -2784,6 +2788,9 @@ let localFilteredStreamRef = ref(null);
 let localStreamRef = ref(null);
 let encodeIntervalRef = ref(null);
 const backgroundFilterController = new BackgroundFilterController();
+const backgroundBaselineCollector = new BackgroundFilterBaselineCollector(10);
+let backgroundBaselineCaptured = false;
+let backgroundRuntimeToken = 0;
 
 function buildLocalMediaConstraints() {
   const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
@@ -2829,7 +2836,12 @@ function applyCallInputPreferences() {
   }
 }
 
-function resolveBackgroundFilterOptions() {
+function resetBackgroundRuntimeMetrics(reason = 'idle') {
+  resetCallBackgroundRuntimeState();
+  callMediaPrefs.backgroundFilterReason = reason;
+}
+
+function resolveBackgroundFilterOptions(runtimeToken) {
   const toFiniteNumber = (value, fallback) => {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : fallback;
@@ -2875,13 +2887,79 @@ function resolveBackgroundFilterOptions() {
     transitionGain,
     maxProcessWidth,
     maxProcessFps,
+    autoDisableOnOverload: true,
+    overloadFrameMs: 90,
+    overloadConsecutiveFrames: 12,
+    statsIntervalMs: 1000,
+    onOverload: () => {
+      if (runtimeToken !== backgroundRuntimeToken) return;
+      resetBackgroundRuntimeMetrics('overload');
+      setCallBackgroundFilterMode('off');
+    },
+    onStats: (stats) => {
+      if (runtimeToken !== backgroundRuntimeToken) return;
+      callMediaPrefs.backgroundFilterActive = true;
+      callMediaPrefs.backgroundFilterFps = Number(stats?.fps || 0);
+      callMediaPrefs.backgroundFilterDetectMs = Number(stats?.avgDetectMs || 0);
+      callMediaPrefs.backgroundFilterDetectFps = Number(stats?.detectFps || 0);
+      callMediaPrefs.backgroundFilterProcessMs = Number(stats?.avgProcessMs || 0);
+      callMediaPrefs.backgroundFilterProcessLoad = Number(stats?.processLoad || 0);
+
+      callMediaPrefs.backgroundBaselineSampleCount = backgroundBaselineCollector.sampleCount();
+      const baseline = backgroundBaselineCollector.push(stats);
+      callMediaPrefs.backgroundBaselineSampleCount = backgroundBaselineCollector.sampleCount();
+      if (!baseline || backgroundBaselineCaptured) return;
+
+      backgroundBaselineCaptured = true;
+      callMediaPrefs.backgroundBaselineMedianFps = baseline.medianFps;
+      callMediaPrefs.backgroundBaselineP95Fps = baseline.p95Fps;
+      callMediaPrefs.backgroundBaselineMedianDetectMs = baseline.medianDetectMs;
+      callMediaPrefs.backgroundBaselineP95DetectMs = baseline.p95DetectMs;
+      callMediaPrefs.backgroundBaselineMedianDetectFps = baseline.medianDetectFps;
+      callMediaPrefs.backgroundBaselineP95DetectFps = baseline.p95DetectFps;
+      callMediaPrefs.backgroundBaselineMedianProcessMs = baseline.medianProcessMs;
+      callMediaPrefs.backgroundBaselineP95ProcessMs = baseline.p95ProcessMs;
+      callMediaPrefs.backgroundBaselineMedianProcessLoad = baseline.medianProcessLoad;
+      callMediaPrefs.backgroundBaselineP95ProcessLoad = baseline.p95ProcessLoad;
+
+      const gateResult = evaluateBackgroundFilterGates({
+        medianFps: baseline.medianFps,
+        medianDetectMs: baseline.medianDetectMs,
+        medianProcessLoad: baseline.medianProcessLoad,
+      });
+      callMediaPrefs.backgroundBaselineGatePass = gateResult.pass;
+      callMediaPrefs.backgroundBaselineGateFpsPass = gateResult.fpsPass;
+      callMediaPrefs.backgroundBaselineGateDetectPass = gateResult.detectPass;
+      callMediaPrefs.backgroundBaselineGateLoadPass = gateResult.loadPass;
+    },
   };
 }
 
 async function applyLocalBackgroundFilter(rawStream) {
-  const options = resolveBackgroundFilterOptions();
+  const runtimeToken = ++backgroundRuntimeToken;
+  backgroundBaselineCollector.reset();
+  backgroundBaselineCaptured = false;
+
+  const options = resolveBackgroundFilterOptions(runtimeToken);
+  if (options.mode !== 'blur') {
+    resetBackgroundRuntimeMetrics('off');
+    return rawStream;
+  }
+
+  resetBackgroundRuntimeMetrics('starting');
   const result = await backgroundFilterController.apply(rawStream, options);
-  if (result?.stale) return rawStream;
+  if (runtimeToken !== backgroundRuntimeToken || result?.stale) return rawStream;
+
+  if (result?.active) {
+    callMediaPrefs.backgroundFilterActive = true;
+    callMediaPrefs.backgroundFilterReason = result.reason === 'ok_fallback' ? 'ok_fallback' : 'ok';
+    callMediaPrefs.backgroundFilterBackend = String(result.backend || 'none');
+  } else {
+    callMediaPrefs.backgroundFilterActive = false;
+    callMediaPrefs.backgroundFilterReason = String(result?.reason || 'setup_failed');
+    callMediaPrefs.backgroundFilterBackend = 'none';
+  }
+
   if (result?.stream instanceof MediaStream) {
     return result.stream;
   }
@@ -2931,6 +3009,10 @@ function clearLocalPreviewElement() {
 }
 
 function unpublishAndStopLocalTracks() {
+  backgroundRuntimeToken += 1;
+  backgroundBaselineCollector.reset();
+  backgroundBaselineCaptured = false;
+  resetBackgroundRuntimeMetrics('idle');
   backgroundFilterController.dispose();
 
   const tracks = Array.isArray(localTracksRef.value) ? [...localTracksRef.value] : [];

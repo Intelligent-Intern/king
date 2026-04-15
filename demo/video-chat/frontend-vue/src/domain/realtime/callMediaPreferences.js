@@ -159,6 +159,29 @@ export const callMediaPrefs = reactive({
   backgroundApplyOutgoing: persistedPrefs?.backgroundApplyOutgoing ?? true,
   backgroundMaxProcessWidth: persistedPrefs?.backgroundMaxProcessWidth ?? 960,
   backgroundMaxProcessFps: persistedPrefs?.backgroundMaxProcessFps ?? 24,
+  backgroundFilterActive: false,
+  backgroundFilterReason: 'idle',
+  backgroundFilterBackend: 'none',
+  backgroundFilterFps: 0,
+  backgroundFilterDetectMs: 0,
+  backgroundFilterDetectFps: 0,
+  backgroundFilterProcessMs: 0,
+  backgroundFilterProcessLoad: 0,
+  backgroundBaselineSampleCount: 0,
+  backgroundBaselineMedianFps: 0,
+  backgroundBaselineP95Fps: 0,
+  backgroundBaselineMedianDetectMs: 0,
+  backgroundBaselineP95DetectMs: 0,
+  backgroundBaselineMedianDetectFps: 0,
+  backgroundBaselineP95DetectFps: 0,
+  backgroundBaselineMedianProcessMs: 0,
+  backgroundBaselineP95ProcessMs: 0,
+  backgroundBaselineMedianProcessLoad: 0,
+  backgroundBaselineP95ProcessLoad: 0,
+  backgroundBaselineGatePass: false,
+  backgroundBaselineGateFpsPass: false,
+  backgroundBaselineGateDetectPass: false,
+  backgroundBaselineGateLoadPass: false,
   ready: false,
   error: '',
 });
@@ -301,6 +324,32 @@ export function setCallBackgroundMaxProcessWidth(value) {
 export function setCallBackgroundMaxProcessFps(value) {
   callMediaPrefs.backgroundMaxProcessFps = clampInteger(value, 24, 8, 30);
   persistCallMediaPrefs();
+}
+
+export function resetCallBackgroundRuntimeState() {
+  callMediaPrefs.backgroundFilterActive = false;
+  callMediaPrefs.backgroundFilterReason = 'idle';
+  callMediaPrefs.backgroundFilterBackend = 'none';
+  callMediaPrefs.backgroundFilterFps = 0;
+  callMediaPrefs.backgroundFilterDetectMs = 0;
+  callMediaPrefs.backgroundFilterDetectFps = 0;
+  callMediaPrefs.backgroundFilterProcessMs = 0;
+  callMediaPrefs.backgroundFilterProcessLoad = 0;
+  callMediaPrefs.backgroundBaselineSampleCount = 0;
+  callMediaPrefs.backgroundBaselineMedianFps = 0;
+  callMediaPrefs.backgroundBaselineP95Fps = 0;
+  callMediaPrefs.backgroundBaselineMedianDetectMs = 0;
+  callMediaPrefs.backgroundBaselineP95DetectMs = 0;
+  callMediaPrefs.backgroundBaselineMedianDetectFps = 0;
+  callMediaPrefs.backgroundBaselineP95DetectFps = 0;
+  callMediaPrefs.backgroundBaselineMedianProcessMs = 0;
+  callMediaPrefs.backgroundBaselineP95ProcessMs = 0;
+  callMediaPrefs.backgroundBaselineMedianProcessLoad = 0;
+  callMediaPrefs.backgroundBaselineP95ProcessLoad = 0;
+  callMediaPrefs.backgroundBaselineGatePass = false;
+  callMediaPrefs.backgroundBaselineGateFpsPass = false;
+  callMediaPrefs.backgroundBaselineGateDetectPass = false;
+  callMediaPrefs.backgroundBaselineGateLoadPass = false;
 }
 
 function handleDeviceChange() {
