@@ -26,6 +26,25 @@ PHP_FUNCTION(king_proto_encode)
     RETURN_STR(encoded.s);
 }
 
+/* Batch encode: encode multiple records to amortize PHP↔C overhead */
+PHP_FUNCTION(king_proto_encode_batch)
+{
+    zend_string *schema_name;
+    zval *records;
+    zval result;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_STR(schema_name)
+        Z_PARAM_ARRAY(records)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (king_iibin_encode_batch(schema_name, records, &result) != SUCCESS) {
+        RETURN_THROWS();
+    }
+
+    RETURN_ZVAL(&result, 0, 0);
+}
+
 PHP_FUNCTION(king_proto_decode)
 {
     zend_string *schema_name;

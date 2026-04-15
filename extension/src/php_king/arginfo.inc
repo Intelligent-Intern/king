@@ -165,6 +165,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_proto_encode, 0, 0, 2)
     ZEND_ARG_TYPE_INFO(0, data, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_proto_encode_batch, 0, 0, 2)
+    ZEND_ARG_TYPE_INFO(0, schema_name, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, records, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_proto_decode, 0, 0, 2)
     ZEND_ARG_TYPE_INFO(0, schema_name, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO(0, binary_data, IS_STRING, 0)

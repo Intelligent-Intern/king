@@ -111,6 +111,11 @@ zend_result king_iibin_encode(
     zval *data,
     smart_str *encoded_out
 );
+zend_result king_iibin_encode_batch(
+    zend_string *schema_name,
+    zval *records,
+    zval *encoded_out
+);
 zend_result king_iibin_decode(
     zend_string *schema_name,
     zend_string *binary_data,
