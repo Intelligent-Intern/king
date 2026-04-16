@@ -927,11 +927,13 @@ watch(activeOverviewView, async (view) => {
 
 <style scoped>
 .admin-overview-view {
+  height: 100%;
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 1px;
   background: var(--bg-main);
+  overflow: hidden;
 }
 
 .overview-toolbar {
@@ -961,6 +963,7 @@ watch(activeOverviewView, async (view) => {
   display: grid;
   align-content: start;
   gap: 10px;
+  min-height: 0;
 }
 
 .dashboard-panel {
