@@ -446,18 +446,24 @@ function drawFacePatches(
     if (box.width <= 0 || box.height <= 0) continue;
 
     const cx = box.x + (box.width / 2);
-    const headCy = box.y + (box.height * 0.46);
-    const headRx = Math.max(14, (box.width * 0.62) * faceScale);
-    const headRy = Math.max(16, (box.height * 0.9) * faceScale);
+    const headCy = box.y + (box.height * 0.48);
+    const headRx = Math.max(12, (box.width * 0.5) * faceScale);
+    const headRy = Math.max(14, (box.height * 0.75) * faceScale);
 
-    const crownCy = headCy - (headRy * 0.58);
-    const crownRx = headRx * 1.28;
-    const crownRy = headRy * 0.58;
+    const crownCy = headCy - (headRy * 0.5);
+    const crownRx = headRx * 1.12;
+    const crownRy = headRy * 0.46;
 
-    const bodyWidth = Math.max(headRx * 3.15, (box.width * 2.45) * faceScale);
-    const bodyHeight = Math.max(headRy * 2.2, (box.height * 2.85) * faceScale);
+    const bodyWidth = Math.min(
+      width * 0.82,
+      Math.max(headRx * 2.2, (box.width * 1.35) * faceScale),
+    );
+    const bodyHeight = Math.min(
+      height * 0.88,
+      Math.max(headRy * 1.55, (box.height * 1.45) * faceScale),
+    );
     const bodyX = cx - (bodyWidth / 2);
-    const bodyY = headCy + (headRy * 0.12);
+    const bodyY = headCy + (headRy * 0.32);
     const bodyRadius = Math.max(12, Math.min(bodyWidth, bodyHeight) * 0.34);
 
     maskCtx.globalAlpha = 0.82;
@@ -476,7 +482,7 @@ function drawFacePatches(
 
     maskCtx.globalAlpha = 0.9;
     maskCtx.beginPath();
-    maskCtx.ellipse(cx, bodyY + (bodyHeight * 0.04), bodyWidth * 0.5, headRy * 0.9, 0, 0, Math.PI * 2);
+    maskCtx.ellipse(cx, bodyY + (bodyHeight * 0.03), bodyWidth * 0.44, headRy * 0.72, 0, 0, Math.PI * 2);
     maskCtx.fill();
     rendered = true;
   }
