@@ -394,10 +394,6 @@
               </select>
             </label>
             <label v-if="composeState.mode !== 'create'" class="field">
-              <span>Room ID</span>
-              <input v-model="composeState.roomId" class="input" type="text" placeholder="lobby" />
-            </label>
-            <label v-if="composeState.mode !== 'create'" class="field">
               <span>Starts at</span>
               <input
                 v-model="composeState.startsLocal"
@@ -436,7 +432,7 @@
                     placeholder="Search users"
                     @keydown.enter.prevent="applyParticipantSearch"
                   />
-                  <button class="btn" type="button" @click="applyParticipantSearch">Search</button>
+                  <button class="btn btn-cyan" type="button" @click="applyParticipantSearch">Search</button>
                 </label>
               </header>
 
@@ -489,7 +485,7 @@
             <article class="calls-participants-panel">
               <header class="calls-participants-head">
                 <h5>External participants</h5>
-                <button class="btn" type="button" @click="addExternalRow">Add row</button>
+                <button class="btn btn-cyan" type="button" @click="addExternalRow">Add row</button>
               </header>
 
               <section class="calls-external-list">

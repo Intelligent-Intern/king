@@ -390,10 +390,6 @@
               </select>
             </label>
             <label class="field">
-              <span>Room ID</span>
-              <input v-model="composeState.roomId" class="input" type="text" placeholder="lobby" />
-            </label>
-            <label class="field">
               <span>Starts at</span>
               <input
                 v-model="composeState.startsLocal"
@@ -419,7 +415,6 @@
         </div>
 
         <footer class="calls-modal-footer">
-          <button class="btn" type="button" :disabled="composeState.submitting" @click="closeCompose">Close</button>
           <button class="btn btn-cyan" type="button" :disabled="composeState.submitting" @click="submitCompose">
             {{ composeState.submitting ? 'Saving...' : composeSubmitLabel }}
           </button>

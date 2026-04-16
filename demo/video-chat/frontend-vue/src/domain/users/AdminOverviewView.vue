@@ -206,7 +206,7 @@
             <article class="calls-participants-panel">
               <header class="calls-participants-head">
                 <h5>External participants</h5>
-                <button class="btn" type="button" @click="addExternalRow">Add row</button>
+                <button class="btn btn-cyan" type="button" @click="addExternalRow">Add row</button>
               </header>
 
               <section class="calls-external-list">
@@ -254,7 +254,6 @@
           >
             Delete
           </button>
-          <button class="btn" type="button" :disabled="composeState.submitting" @click="closeCompose">Close</button>
           <button class="btn btn-cyan" type="button" :disabled="composeState.submitting" @click="submitCompose">
             {{ composeState.submitting ? 'Saving…' : composeSubmitLabel }}
           </button>
