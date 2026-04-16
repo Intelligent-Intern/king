@@ -37,9 +37,9 @@ dist/
 !packages/iibin/dist/
 !packages/iibin/dist/**
 .cache/
-demo/video-chat/frontend/.vite/
+demo/video-chat/frontend-vue/.vite/
+demo/video-chat/frontend-vue/dist/
 demo/video-chat/**/src/lib/wasm/build/
-demo/video-chat/frontend/demo/video-chat/frontend/
 
 # model-inference backend: ephemeral sqlite + object-store + GGUF fixture
 # installed on demand via
@@ -64,6 +64,11 @@ demo/model-inference/backend-king-php/.local/
 # scoped by earlier ignore rules (target/, .cargo/) and are not
 # shipped as part of any commit anyway.
 
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake-build-*/
+**/cmake_install.cmake
+**/compile_commands.json
 __pycache__/
 .pytest_cache/
 .mypy_cache/
@@ -78,9 +83,6 @@ __pycache__/
 *.bmp
 *.tiff
 *.svg
-!demo/video-chat/frontend/public/orgas/intelligent-intern/logo.svg
-!demo/video-chat/frontend/public/orgas/intelligent-intern/icon.svg
-!demo/video-chat/frontend/public/orgas/intelligent-intern/icons/*.png
 !demo/video-chat/frontend-vue/public/assets/orgas/kingrt/logo.svg
 !demo/video-chat/frontend-vue/public/assets/orgas/kingrt/icon.svg
 !demo/video-chat/frontend-vue/public/assets/orgas/kingrt/king_logo-withslogan.svg
