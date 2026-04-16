@@ -226,6 +226,10 @@ export function resolveBackendWebSocketOriginCandidates() {
   pushUniqueCandidate(candidates, primaryWsOrigin);
   appendLoopbackHostVariant(candidates, primaryWsOrigin);
 
+  const backendOrigin = resolveBackendOrigin();
+  pushUniqueCandidate(candidates, backendOrigin);
+  appendLoopbackHostVariant(candidates, backendOrigin);
+
   return candidates;
 }
 
@@ -236,13 +240,17 @@ export function resolveBackendSfuOriginCandidates() {
   pushUniqueCandidate(candidates, primarySfuOrigin);
   appendLoopbackHostVariant(candidates, primarySfuOrigin);
 
-  if (hasExplicitBackendSfuConfig()) {
-    return candidates;
-  }
-
   const websocketOrigin = resolveBackendWebSocketOrigin();
   pushUniqueCandidate(candidates, websocketOrigin);
   appendLoopbackHostVariant(candidates, websocketOrigin);
+
+  const backendOrigin = resolveBackendOrigin();
+  pushUniqueCandidate(candidates, backendOrigin);
+  appendLoopbackHostVariant(candidates, backendOrigin);
+
+  if (hasExplicitBackendSfuConfig()) {
+    return candidates;
+  }
 
   return candidates;
 }

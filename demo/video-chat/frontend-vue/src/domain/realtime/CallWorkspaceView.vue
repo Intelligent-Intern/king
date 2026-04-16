@@ -2688,6 +2688,14 @@ function requestLobbyJoin(roomId = '', options = {}) {
   }
 }
 
+function tryDirectJoinWithModeratorBypass(roomId = '') {
+  const targetRoomId = normalizeRoomId(roomId || desiredRoomId.value || activeRoomId.value || 'lobby');
+  if (!canModerate.value || targetRoomId === '') {
+    return false;
+  }
+  return sendRoomJoin(targetRoomId);
+}
+
 function allowLobbyUser(userId) {
   const normalizedUserId = Number(userId);
   if (!canModerate.value || !Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
@@ -3103,7 +3111,9 @@ function handleSocketMessage(event) {
     const requiresAdmission = Boolean(admission?.requires_admission);
     const pendingRoomId = normalizeRoomId(admission?.pending_room_id || '');
     if (requiresAdmission && pendingRoomId !== '') {
-      requestLobbyJoin(pendingRoomId);
+      if (!tryDirectJoinWithModeratorBypass(pendingRoomId)) {
+        requestLobbyJoin(pendingRoomId);
+      }
     }
     requestRoomSnapshot();
     if (desiredRoomId.value !== welcomeRoom) {
@@ -3184,7 +3194,9 @@ function handleSocketMessage(event) {
     }
     if (code === 'room_join_requires_admission' || code === 'room_join_not_allowed') {
       const pendingRoomId = normalizeRoomId(payload?.details?.pending_room_id || desiredRoomId.value);
-      requestLobbyJoin(pendingRoomId);
+      if (!tryDirectJoinWithModeratorBypass(pendingRoomId)) {
+        requestLobbyJoin(pendingRoomId);
+      }
       return;
     }
     if (shouldSuppressExpectedSignalingError(payload)) {

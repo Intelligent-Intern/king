@@ -276,6 +276,44 @@ function videochat_realtime_is_user_moderator_for_room(
     return (bool) ($context['can_moderate'] ?? false);
 }
 
+function videochat_realtime_connection_can_bypass_admission_for_room(
+    array $connection,
+    string $roomId,
+    callable $openDatabase
+): bool {
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    if ($normalizedRoomId === '' || $normalizedRoomId === videochat_realtime_waiting_room_id()) {
+        return false;
+    }
+
+    $connectionRole = videochat_normalize_role_slug((string) ($connection['role'] ?? ''));
+    if ($connectionRole === 'admin') {
+        return true;
+    }
+
+    $connectionCallRole = videochat_normalize_call_participant_role((string) ($connection['call_role'] ?? 'participant'));
+    $requestedRoomId = videochat_presence_normalize_room_id((string) ($connection['requested_room_id'] ?? ''), '');
+    $pendingRoomId = videochat_presence_normalize_room_id((string) ($connection['pending_room_id'] ?? ''), '');
+    if (
+        in_array($connectionCallRole, ['owner', 'moderator'], true)
+        && ($requestedRoomId === $normalizedRoomId || $pendingRoomId === $normalizedRoomId)
+    ) {
+        return true;
+    }
+
+    $connectionUserId = (int) ($connection['user_id'] ?? 0);
+    if ($connectionUserId <= 0) {
+        return false;
+    }
+
+    return videochat_realtime_is_user_moderator_for_room(
+        $openDatabase,
+        $connectionUserId,
+        $connectionRole,
+        $normalizedRoomId
+    );
+}
+
 /**
  * @return array{initial_room_id: string, requested_room_id: string, pending_room_id: string}
  */
@@ -1243,6 +1281,16 @@ function videochat_handle_realtime_routes(
                         ''
                     );
                     $pendingGateActive = $pendingRoomId !== '';
+                    $canBypassAdmissionForTargetRoom = videochat_realtime_connection_can_bypass_admission_for_room(
+                        $presenceConnection,
+                        $targetRoomId,
+                        $openDatabase
+                    );
+                    if ($pendingGateActive && $canBypassAdmissionForTargetRoom) {
+                        $presenceConnection['pending_room_id'] = '';
+                        $pendingRoomId = '';
+                        $pendingGateActive = false;
+                    }
                     if ($pendingGateActive && $targetRoomId === $pendingRoomId) {
                         $isAdmitted = videochat_lobby_is_user_admitted_for_room(
                             $lobbyState,
