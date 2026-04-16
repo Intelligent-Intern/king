@@ -167,7 +167,7 @@
             >
               <div class="call-left-settings-title">Call settings</div>
               <button
-                class="btn full call-left-owner-edit-btn"
+                class="btn btn-cyan full call-left-owner-edit-btn"
                 type="button"
                 :disabled="callOwnerEditState.loadingContext || callOwnerEditState.submitting"
                 @click="openInCallEditModal"
