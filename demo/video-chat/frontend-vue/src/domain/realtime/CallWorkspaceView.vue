@@ -1102,7 +1102,25 @@ async function resolveRouteCallRef(callRef) {
         pending: false,
       });
       return;
-    } catch {
+    } catch (accessError) {
+      const accessResponseStatus = Number(accessError?.responseStatus || 0);
+      if (accessResponseStatus === 410) {
+        if (seq !== routeCallResolveSeq) return;
+        applyRouteCallResolution({
+          accessId: normalized.toLowerCase(),
+          callId: '',
+          roomId: 'lobby',
+          error: 'route_call_access_expired',
+          pending: false,
+        });
+
+        const fallbackRouteName = normalizeRole(sessionState.role) === 'admin' ? 'admin-calls' : 'user-dashboard';
+        if (String(route.name || '') === 'call-workspace' && String(routeCallRef.value || '').trim() !== '') {
+          void router.replace({ name: fallbackRouteName });
+        }
+        return;
+      }
+
       // UUID-like route refs can be either access-link ids or call ids.
       // If access-link resolution fails (e.g. expired/consumed 410), retry as call id.
       try {

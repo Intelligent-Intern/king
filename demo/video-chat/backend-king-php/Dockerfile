@@ -23,5 +23,6 @@ RUN mkdir -p /data
 VOLUME ["/data"]
 EXPOSE 18080
 EXPOSE 18081
+EXPOSE 18082
 
 CMD ["./run-dev.sh"]
