@@ -50,18 +50,18 @@
         </thead>
         <tbody>
           <tr v-for="user in rows" :key="user.id">
-            <td>
+            <td data-label="Name">
               <div class="users-name">{{ user.display_name }}</div>
               <div class="users-subline code">#{{ user.id }}</div>
             </td>
-            <td>
+            <td data-label="Email">
               <div>{{ user.email }}</div>
               <div class="users-subline">{{ user.time_format }} · {{ user.theme }}</div>
             </td>
-            <td><span class="tag" :class="roleTagClass(user.role)">{{ user.role }}</span></td>
-            <td><span class="tag" :class="statusTagClass(user.status)">{{ user.status }}</span></td>
-            <td>{{ formatDateTime(user.updated_at) }}</td>
-            <td>
+            <td data-label="Role"><span class="tag" :class="roleTagClass(user.role)">{{ user.role }}</span></td>
+            <td data-label="Status"><span class="tag" :class="statusTagClass(user.status)">{{ user.status }}</span></td>
+            <td data-label="Updated">{{ formatDateTime(user.updated_at) }}</td>
+            <td data-label="Actions">
               <div class="actions-inline">
                 <button class="icon-mini-btn" type="button" title="Edit user" @click="openEditUser(user)">
                   <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
@@ -1068,6 +1068,97 @@ onMounted(() => {
   .users-table th:nth-child(5),
   .users-table td:nth-child(5) {
     width: 18%;
+  }
+}
+
+@media (max-width: 760px) {
+  .users-table {
+    width: 100%;
+    table-layout: auto;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+  }
+
+  .users-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .users-table th:nth-child(1),
+  .users-table td:nth-child(1),
+  .users-table th:nth-child(2),
+  .users-table td:nth-child(2),
+  .users-table th:nth-child(3),
+  .users-table td:nth-child(3),
+  .users-table th:nth-child(4),
+  .users-table td:nth-child(4),
+  .users-table th:nth-child(5),
+  .users-table td:nth-child(5),
+  .users-table th:nth-child(6),
+  .users-table td:nth-child(6) {
+    width: auto;
+  }
+
+  .users-table tbody,
+  .users-table tr,
+  .users-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .users-table tbody tr {
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-row);
+  }
+
+  .users-table td {
+    display: grid;
+    grid-template-columns: minmax(90px, 34%) minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .users-table td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .users-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .users-table td:last-child .actions-inline {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .users-table .users-subline.code {
+    word-break: break-all;
+    overflow-wrap: anywhere;
+  }
+
+  .users-table .users-empty-cell {
+    display: block;
+    padding: 12px 10px;
+    border-bottom: 0;
+  }
+
+  .users-table .users-empty-cell::before {
+    content: none;
   }
 }
 </style>
