@@ -454,6 +454,14 @@ function drawFacePatches(
 }
 
 async function resolveSegmentationBackend(selection, opts) {
+  if (selection.backend === 'face_detector') {
+    try {
+      return createBackgroundSegmentationBackend('face_detector', opts);
+    } catch {
+      // fall through to async backends.
+    }
+  }
+
   if (MEDIAPIPE_SEGMENTATION_ENABLED) {
     try {
       const mediapipe = await createMediaPipeSegmentationBackend(opts);
@@ -469,14 +477,6 @@ async function resolveSegmentationBackend(selection, opts) {
       if (tfjs) return tfjs;
     } catch {
       // ignore and continue fallback chain.
-    }
-  }
-
-  if (selection.backend === 'face_detector') {
-    try {
-      return createBackgroundSegmentationBackend('face_detector', opts);
-    } catch {
-      // fall through to static fallback backend.
     }
   }
 
