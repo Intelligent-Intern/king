@@ -787,6 +787,7 @@ onMounted(() => {
 
 .admin-users-head h3 {
   margin: 0;
+  font-size: 18px;
 }
 
 .admin-users-head p {

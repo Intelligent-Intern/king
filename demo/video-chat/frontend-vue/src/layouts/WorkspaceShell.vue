@@ -253,7 +253,7 @@
                     <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
                   </button>
                 <div class="section-head-title">
-                  <h1 class="title">{{ pageTitle }}</h1>
+                  <h1 class="title" :class="{ 'title-admin-compact': route.path === '/admin/overview' }">{{ pageTitle }}</h1>
                   <p v-if="pageSubtitle" class="subtitle">{{ pageSubtitle }}</p>
                 </div>
               </div>
