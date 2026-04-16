@@ -7,7 +7,10 @@
  * track discovery and subscription bookkeeping.
  */
 
-import { resolveBackendWebSocketOriginCandidates } from '../../support/backendOrigin'
+import {
+  resolveBackendWebSocketOriginCandidates,
+  setBackendWebSocketOrigin,
+} from '../../support/backendOrigin'
 
 export interface SFUTrack {
   id: string
@@ -107,6 +110,7 @@ export class SFUClient {
       }
       opened = true
       this.disconnectNotified = false
+      setBackendWebSocketOrigin(candidates[index] || '')
       this.send({ type: 'sfu/join', roomId, role: 'publisher' })
       if (this.cb.onConnected) {
         this.cb.onConnected()

@@ -489,7 +489,10 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, 
 import { useRoute, useRouter } from 'vue-router';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
-import { resolveBackendWebSocketOriginCandidates } from '../../support/backendOrigin';
+import {
+  resolveBackendWebSocketOriginCandidates,
+  setBackendWebSocketOrigin,
+} from '../../support/backendOrigin';
 import {
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
@@ -2988,12 +2991,7 @@ async function connectSocket() {
   }
 
   const discoveredOrigins = resolveBackendWebSocketOriginCandidates();
-  const socketOrigins = discoveredOrigins.length > 0 ? discoveredOrigins : [currentBackendOrigin()];
-  const startIndex = socketOrigins.length > 0 ? reconnectAttempt.value % socketOrigins.length : 0;
-  const orderedSocketOrigins = [
-    ...socketOrigins.slice(startIndex),
-    ...socketOrigins.slice(0, startIndex),
-  ];
+  const orderedSocketOrigins = discoveredOrigins.length > 0 ? discoveredOrigins : [currentBackendOrigin()];
 
   const connectWithOriginAt = (originIndex) => {
     if (generation !== connectGeneration || manualSocketClose) return;
@@ -3047,6 +3045,7 @@ async function connectSocket() {
       reconnectAttempt.value = 0;
       connectionState.value = 'online';
       connectionReason.value = 'ready';
+      setBackendWebSocketOrigin(socketOrigin);
       clearErrors();
       startPingLoop();
       requestRoomSnapshot();
