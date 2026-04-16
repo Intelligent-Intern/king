@@ -19,6 +19,10 @@ function toNumber(value, fallback) {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
 function resolveProcessingSpec(sourceWidth, sourceHeight, sourceFps, maxProcessWidth, maxProcessFps) {
   const safeSourceWidth = Math.max(1, Math.round(toNumber(sourceWidth, 640)));
   const safeSourceHeight = Math.max(1, Math.round(toNumber(sourceHeight, 480)));
@@ -440,56 +444,82 @@ function drawFacePatches(
   maskCtx.globalCompositeOperation = 'source-over';
   maskCtx.fillStyle = '#fff';
 
-  let rendered = false;
-  for (const face of faces) {
-    const box = scaleFaceBox(face, sourceW, sourceH, width, height);
-    if (box.width <= 0 || box.height <= 0) continue;
+  const candidates = faces
+    .map((face) => scaleFaceBox(face, sourceW, sourceH, width, height))
+    .filter((box) => box.width > 0 && box.height > 0)
+    .map((box) => {
+      const area = box.width * box.height;
+      const areaRatio = area / Math.max(1, width * height);
+      const aspect = box.width / Math.max(1, box.height);
+      const centerX = box.x + (box.width / 2);
+      const centerDistanceRatio = Math.abs(centerX - (width / 2)) / Math.max(1, width / 2);
+      return { box, areaRatio, aspect, centerDistanceRatio };
+    });
+  if (candidates.length === 0) return false;
 
-    const cx = box.x + (box.width / 2);
-    const headCy = box.y + (box.height * 0.48);
-    const headRx = Math.max(12, (box.width * 0.5) * faceScale);
-    const headRy = Math.max(14, (box.height * 0.75) * faceScale);
+  const plausible = candidates.filter((candidate) => (
+    candidate.areaRatio >= 0.0015
+    && candidate.areaRatio <= 0.22
+    && candidate.aspect >= 0.45
+    && candidate.aspect <= 1.9
+  ));
+  const pool = plausible.length > 0 ? plausible : candidates;
+  pool.sort((a, b) => {
+    if (a.centerDistanceRatio !== b.centerDistanceRatio) {
+      return a.centerDistanceRatio - b.centerDistanceRatio;
+    }
+    return a.areaRatio - b.areaRatio;
+  });
 
-    const crownCy = headCy - (headRy * 0.5);
-    const crownRx = headRx * 1.12;
-    const crownRy = headRy * 0.46;
+  const selected = pool[0];
+  const box = selected?.box;
+  if (!box) return false;
 
-    const bodyWidth = Math.min(
-      width * 0.82,
-      Math.max(headRx * 2.2, (box.width * 1.35) * faceScale),
-    );
-    const bodyHeight = Math.min(
-      height * 0.88,
-      Math.max(headRy * 1.55, (box.height * 1.45) * faceScale),
-    );
-    const bodyX = cx - (bodyWidth / 2);
-    const bodyY = headCy + (headRy * 0.32);
-    const bodyRadius = Math.max(12, Math.min(bodyWidth, bodyHeight) * 0.34);
+  const cx = box.x + (box.width / 2);
+  const headCy = box.y + (box.height * 0.48);
+  const headRx = clampNumber((box.width * 0.44) * faceScale, 12, width * 0.17);
+  const headRy = clampNumber((box.height * 0.66) * faceScale, 14, height * 0.24);
 
-    maskCtx.globalAlpha = 0.82;
-    beginRoundedRectPath(maskCtx, bodyX, bodyY, bodyWidth, bodyHeight, bodyRadius);
-    maskCtx.fill();
+  const crownCy = headCy - (headRy * 0.52);
+  const crownRx = headRx * 1.08;
+  const crownRy = headRy * 0.42;
 
-    maskCtx.globalAlpha = 0.94;
-    maskCtx.beginPath();
-    maskCtx.ellipse(cx, crownCy, crownRx, crownRy, 0, 0, Math.PI * 2);
-    maskCtx.fill();
+  const bodyWidth = clampNumber(
+    Math.max(headRx * 1.9, (box.width * 1.12) * faceScale),
+    headRx * 1.5,
+    width * 0.44,
+  );
+  const bodyHeight = clampNumber(
+    Math.max(headRy * 1.42, (box.height * 1.08) * faceScale),
+    headRy * 1.25,
+    height * 0.58,
+  );
+  const bodyX = clampNumber(cx - (bodyWidth / 2), 0, Math.max(0, width - bodyWidth));
+  const bodyY = clampNumber(headCy + (headRy * 0.36), 0, Math.max(0, height - bodyHeight));
+  const bodyRadius = Math.max(10, Math.min(bodyWidth, bodyHeight) * 0.32);
 
-    maskCtx.globalAlpha = 1;
-    maskCtx.beginPath();
-    maskCtx.ellipse(cx, headCy, headRx, headRy, 0, 0, Math.PI * 2);
-    maskCtx.fill();
+  maskCtx.globalAlpha = 0.78;
+  beginRoundedRectPath(maskCtx, bodyX, bodyY, bodyWidth, bodyHeight, bodyRadius);
+  maskCtx.fill();
 
-    maskCtx.globalAlpha = 0.9;
-    maskCtx.beginPath();
-    maskCtx.ellipse(cx, bodyY + (bodyHeight * 0.03), bodyWidth * 0.44, headRy * 0.72, 0, 0, Math.PI * 2);
-    maskCtx.fill();
-    rendered = true;
-  }
+  maskCtx.globalAlpha = 0.9;
+  maskCtx.beginPath();
+  maskCtx.ellipse(cx, crownCy, crownRx, crownRy, 0, 0, Math.PI * 2);
+  maskCtx.fill();
 
   maskCtx.globalAlpha = 1;
+  maskCtx.beginPath();
+  maskCtx.ellipse(cx, headCy, headRx, headRy, 0, 0, Math.PI * 2);
+  maskCtx.fill();
+
+  maskCtx.globalAlpha = 0.88;
+  maskCtx.beginPath();
+  maskCtx.ellipse(cx, bodyY + (bodyHeight * 0.03), bodyWidth * 0.4, headRy * 0.66, 0, 0, Math.PI * 2);
+  maskCtx.fill();
+  const rendered = true;
   if (!rendered) return false;
 
+  maskCtx.globalAlpha = 1;
   blurMaskIfNeeded(
     maskCanvas,
     maskCtx,
