@@ -209,7 +209,7 @@
         <header class="calls-modal-header calls-modal-header-enter">
           <div class="calls-modal-header-enter-left">
             <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
-            <h4>Enter Video Call</h4>
+            <h4 class="calls-enter-title">Enter Video Call</h4>
           </div>
           <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeEnterCallModal">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
@@ -356,7 +356,7 @@
 
         <footer class="calls-modal-footer">
           <button
-            class="btn"
+            class="btn btn-green"
             type="button"
             :disabled="enterCallState.loading"
             @click="openCallWorkspace({ callId: enterCallState.callId, roomId: enterCallState.roomId })"
@@ -2360,6 +2360,12 @@ onBeforeUnmount(() => {
 .calls-modal-header h4 {
   margin: 0;
   font-size: 17px;
+}
+
+.calls-modal-header .calls-enter-title {
+  margin: 3px 0 0;
+  font-size: 14px;
+  line-height: 1;
 }
 
 .calls-modal-header-enter {

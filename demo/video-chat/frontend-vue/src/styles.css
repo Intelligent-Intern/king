@@ -460,6 +460,18 @@ select {
   background: var(--brand-cyan-active);
 }
 
+.btn.btn-green {
+  background: var(--ok);
+}
+
+.btn.btn-green:hover {
+  background: #1f9d2c;
+}
+
+.btn.btn-green:active {
+  background: #11661a;
+}
+
 .btn.full {
   width: 100%;
 }
@@ -1574,6 +1586,7 @@ tbody tr:hover {
 }
 
 .settings-dialog {
+  --settings-dialog-padding: 14px;
   position: relative;
   width: min(1040px, calc(100vw - 32px));
   height: min(760px, calc(100vh - 32px));
@@ -1587,18 +1600,19 @@ tbody tr:hover {
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   align-content: stretch;
   gap: 12px;
-  padding: 14px;
+  padding: var(--settings-dialog-padding);
 }
 
 .settings-header {
+  margin: calc(var(--settings-dialog-padding) * -1) calc(var(--settings-dialog-padding) * -1) 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-height: 52px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  min-height: 0;
+  padding: 10px;
+  border: 0;
+  border-radius: 0;
   background: var(--brand-bg);
 }
 
@@ -1609,14 +1623,15 @@ tbody tr:hover {
 }
 
 .settings-title-wrap img {
-  width: 20px;
-  height: 20px;
+  width: auto;
+  height: 24px;
   object-fit: contain;
 }
 
 .settings-title-wrap h3 {
-  margin: 0;
-  font-size: 18px;
+  margin: 3px 0 0;
+  font-size: 14px;
+  line-height: 1;
   color: var(--text-main);
 }
 
@@ -2168,10 +2183,11 @@ tbody tr:hover {
   }
 
   .settings-dialog {
+    --settings-dialog-padding: 10px;
     width: calc(100vw - 16px);
     height: calc(100vh - 16px);
     max-height: calc(100vh - 16px);
-    padding: 10px;
+    padding: var(--settings-dialog-padding);
   }
 
   .settings-grid {

@@ -280,7 +280,7 @@
     <div class="settings-dialog">
       <header class="settings-header">
         <div class="settings-title-wrap">
-          <img src="/assets/orgas/kingrt/icon.svg" alt="" />
+          <img src="/assets/orgas/kingrt/logo.svg" alt="" />
           <h3>Settings</h3>
         </div>
         <button class="icon-mini-btn" type="button" aria-label="Close settings" @click="closeSettingsModal">
