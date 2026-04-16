@@ -111,11 +111,128 @@ function resolveMaskTuning(options, blurPx) {
     1,
     Math.min(8, Math.round((transitionGain / 10) * Math.max(1, (blurPx * 0.35) + 1.2))),
   );
+  const alphaThreshold = Math.max(0.18, Math.min(0.78, 0.52 - ((maskVariant - 5) * 0.03)));
+  const alphaSoftness = Math.max(0.03, Math.min(0.22, 0.05 + ((transitionGain - 1) * 0.015)));
   return {
     faceScale,
     matteExpandPx,
     edgeFeatherPx,
+    alphaThreshold,
+    alphaSoftness,
   };
+}
+
+function smoothStep01(edge0, edge1, value) {
+  if (edge1 <= edge0) return value >= edge1 ? 1 : 0;
+  const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+  return t * t * (3 - (2 * t));
+}
+
+function normalizeMatteMaskCanvasAlpha(maskCanvas, maskCtx, width, height, maskTuning) {
+  if (!(maskCanvas instanceof HTMLCanvasElement) || !maskCtx) return false;
+
+  let imageData;
+  try {
+    imageData = maskCtx.getImageData(0, 0, width, height);
+  } catch {
+    return false;
+  }
+  const data = imageData.data;
+  if (!data || data.length <= 0) return false;
+
+  const pixelCount = Math.max(1, width * height);
+  const sampleStride = Math.max(1, Math.round(pixelCount / 4096));
+  let minAlpha = 255;
+  let maxAlpha = 0;
+  let minLuma = 255;
+  let maxLuma = 0;
+
+  for (let pixel = 0; pixel < pixelCount; pixel += sampleStride) {
+    const i = pixel * 4;
+    const r = data[i] || 0;
+    const g = data[i + 1] || 0;
+    const b = data[i + 2] || 0;
+    const a = data[i + 3] || 0;
+    const luma = Math.round((r * 0.299) + (g * 0.587) + (b * 0.114));
+    if (a < minAlpha) minAlpha = a;
+    if (a > maxAlpha) maxAlpha = a;
+    if (luma < minLuma) minLuma = luma;
+    if (luma > maxLuma) maxLuma = luma;
+  }
+
+  const alphaRange = maxAlpha - minAlpha;
+  const lumaRange = maxLuma - minLuma;
+  const useLumaSignal = alphaRange <= 8 && lumaRange > 8;
+  if (!useLumaSignal && alphaRange <= 2) {
+    return false;
+  }
+
+  const threshold = Math.max(0.1, Math.min(0.9, Number(maskTuning?.alphaThreshold ?? 0.45)));
+  const softness = Math.max(0.02, Math.min(0.3, Number(maskTuning?.alphaSoftness ?? 0.1)));
+  const edge0 = Math.max(0, threshold - (softness * 0.5));
+  const edge1 = Math.min(1, threshold + (softness * 0.5));
+
+  let opaqueCount = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i] || 0;
+    const g = data[i + 1] || 0;
+    const b = data[i + 2] || 0;
+    const alphaSignal = (data[i + 3] || 0) / 255;
+    const lumaSignal = ((r * 0.299) + (g * 0.587) + (b * 0.114)) / 255;
+    const signal = useLumaSignal ? lumaSignal : alphaSignal;
+    const normalized = smoothStep01(edge0, edge1, signal);
+    const outAlpha = Math.max(0, Math.min(255, Math.round(normalized * 255)));
+    data[i] = 255;
+    data[i + 1] = 255;
+    data[i + 2] = 255;
+    data[i + 3] = outAlpha;
+    if (outAlpha > 10) opaqueCount += 1;
+  }
+
+  const coverage = opaqueCount / pixelCount;
+  if (coverage <= 0.002 || coverage >= 0.985) {
+    return false;
+  }
+
+  try {
+    maskCtx.putImageData(imageData, 0, 0);
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+function ensureNormalizedMatteMask(cache, matteMask, width, height, maskTuning) {
+  if (!cache || !matteMask) return false;
+  const {
+    canvas,
+    ctx,
+  } = cache;
+  if (!(canvas instanceof HTMLCanvasElement) || !ctx) return false;
+
+  const signature = `${width}x${height}:${Number(maskTuning?.alphaThreshold ?? 0).toFixed(3)}:${Number(maskTuning?.alphaSoftness ?? 0).toFixed(3)}`;
+  if (cache.source === matteMask && cache.signature === signature) {
+    return cache.valid === true;
+  }
+
+  cache.source = matteMask;
+  cache.signature = signature;
+  cache.valid = false;
+
+  canvas.width = width;
+  canvas.height = height;
+  ctx.clearRect(0, 0, width, height);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+
+  try {
+    ctx.drawImage(matteMask, 0, 0, width, height);
+  } catch {
+    return false;
+  }
+
+  cache.valid = normalizeMatteMaskCanvasAlpha(canvas, ctx, width, height, maskTuning);
+  return cache.valid;
 }
 
 function blurMaskIfNeeded(maskCanvas, maskCtx, softMaskCanvas, softMaskCtx, width, height, featherPx) {
@@ -170,17 +287,20 @@ function drawMatteMaskedPerson(
   maskCtx,
   softMaskCanvas,
   softMaskCtx,
+  matteMaskCache,
   maskTuning,
 ) {
   if (
     !matteMask
     || !(maskCanvas instanceof HTMLCanvasElement)
     || !maskCtx
+    || !ensureNormalizedMatteMask(matteMaskCache, matteMask, width, height, maskTuning)
   ) {
     return false;
   }
 
   const expandPx = Math.max(0, Math.round(maskTuning?.matteExpandPx || 0));
+  const normalizedMask = matteMaskCache.canvas;
   maskCanvas.width = width;
   maskCanvas.height = height;
   maskCtx.clearRect(0, 0, width, height);
@@ -188,19 +308,19 @@ function drawMatteMaskedPerson(
   maskCtx.globalAlpha = 1;
 
   try {
-    maskCtx.drawImage(matteMask, 0, 0, width, height);
+    maskCtx.drawImage(normalizedMask, 0, 0, width, height);
     if (expandPx > 0) {
       const diagonal = Math.max(1, Math.round(expandPx * 0.75));
       maskCtx.globalAlpha = 0.9;
-      maskCtx.drawImage(matteMask, -expandPx, 0, width, height);
-      maskCtx.drawImage(matteMask, expandPx, 0, width, height);
-      maskCtx.drawImage(matteMask, 0, -expandPx, width, height);
-      maskCtx.drawImage(matteMask, 0, expandPx, width, height);
+      maskCtx.drawImage(normalizedMask, -expandPx, 0, width, height);
+      maskCtx.drawImage(normalizedMask, expandPx, 0, width, height);
+      maskCtx.drawImage(normalizedMask, 0, -expandPx, width, height);
+      maskCtx.drawImage(normalizedMask, 0, expandPx, width, height);
       maskCtx.globalAlpha = 0.65;
-      maskCtx.drawImage(matteMask, -diagonal, -diagonal, width, height);
-      maskCtx.drawImage(matteMask, diagonal, -diagonal, width, height);
-      maskCtx.drawImage(matteMask, -diagonal, diagonal, width, height);
-      maskCtx.drawImage(matteMask, diagonal, diagonal, width, height);
+      maskCtx.drawImage(normalizedMask, -diagonal, -diagonal, width, height);
+      maskCtx.drawImage(normalizedMask, diagonal, -diagonal, width, height);
+      maskCtx.drawImage(normalizedMask, -diagonal, diagonal, width, height);
+      maskCtx.drawImage(normalizedMask, diagonal, diagonal, width, height);
       maskCtx.globalAlpha = 1;
     }
   } catch {
@@ -468,7 +588,22 @@ export async function createBackgroundFilterStream(sourceStream, options = {}) {
   softMaskCanvas.width = width;
   softMaskCanvas.height = height;
   const softMaskCtx = softMaskCanvas.getContext('2d', { alpha: true, desynchronized: true });
-  if (!rawCtx || !personCtx || !maskCtx || !softMaskCtx) {
+  const matteSourceCanvas = document.createElement('canvas');
+  matteSourceCanvas.width = width;
+  matteSourceCanvas.height = height;
+  const matteSourceCtx = matteSourceCanvas.getContext('2d', {
+    alpha: true,
+    desynchronized: true,
+    willReadFrequently: true,
+  });
+  const matteMaskCache = {
+    canvas: matteSourceCanvas,
+    ctx: matteSourceCtx,
+    source: null,
+    signature: '',
+    valid: false,
+  };
+  if (!rawCtx || !personCtx || !maskCtx || !softMaskCtx || !matteSourceCtx) {
     try {
       video.pause();
     } catch {
@@ -571,6 +706,7 @@ export async function createBackgroundFilterStream(sourceStream, options = {}) {
             maskCtx,
             softMaskCanvas,
             softMaskCtx,
+            matteMaskCache,
             maskTuning,
           )) {
             drawFacePatches(
@@ -675,6 +811,9 @@ export async function createBackgroundFilterStream(sourceStream, options = {}) {
     } catch {
       // ignore
     }
+    matteMaskCache.source = null;
+    matteMaskCache.valid = false;
+    matteMaskCache.signature = '';
     for (const stream of uniqueMediaStreams([captured])) {
       stopStreamTracks(stream);
     }
