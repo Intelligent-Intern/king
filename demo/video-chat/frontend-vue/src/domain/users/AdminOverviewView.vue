@@ -793,8 +793,9 @@ async function initOverviewCalendar() {
         center: 'title',
         right: 'dayGridMonth,timeGridWeek,timeGridDay',
       },
-      height: 'auto',
-      contentHeight: 'auto',
+      height: '100%',
+      contentHeight: '100%',
+      expandRows: true,
       eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
       selectable: true,
       editable: false,
@@ -954,6 +955,9 @@ watch(activeOverviewView, async (view) => {
 .calendar-panel {
   padding: 10px;
   background: var(--bg-main);
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
 }
 
 #overviewCalendar {
@@ -961,10 +965,12 @@ watch(activeOverviewView, async (view) => {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   padding: 10px;
+  min-height: 0;
+  height: 100%;
 }
 
 .calendar-help {
-  margin: 0;
+  margin: 0 0 10px;
   padding: 0 2px;
   font-size: 12px;
   color: var(--text-muted);
