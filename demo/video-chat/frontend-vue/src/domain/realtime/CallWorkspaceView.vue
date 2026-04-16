@@ -507,6 +507,7 @@ import { detectMediaRuntimeCapabilities } from './mediaRuntimeCapabilities';
 import { appendMediaRuntimeTransitionEvent } from './mediaRuntimeTelemetry';
 import { SFUClient } from '../../lib/sfu/sfuClient';
 import { createWasmEncoder, createWasmDecoder } from '../../lib/wasm/wasm-codec';
+import { debugLog } from '../../support/debugLogs';
 
 const route = useRoute();
 const router = useRouter();
@@ -528,8 +529,13 @@ const REACTION_CLIENT_MAX_QUEUE = 500;
 const MODERATION_SYNC_FLUSH_INTERVAL_MS = 90;
 const SFU_PUBLISH_RETRY_DELAY_MS = 500;
 const SFU_PUBLISH_MAX_RETRIES = 24;
+const SFU_CONNECT_RETRY_DELAY_MS = 1200;
+const SFU_CONNECT_MAX_RETRIES = 8;
 const LOCAL_REACTION_ECHO_TTL_MS = 6000;
-const WLVC_ENCODE_FAILURE_THRESHOLD = 6;
+const WLVC_ENCODE_FAILURE_THRESHOLD = 18;
+const WLVC_ENCODE_FAILURE_WINDOW_MS = 4000;
+const WLVC_ENCODE_WARMUP_MS = 2500;
+const WLVC_ENCODE_ERROR_LOG_COOLDOWN_MS = 3000;
 const VISIBLE_PARTICIPANTS_LIMIT = 5;
 const PARTICIPANT_ACTIVITY_WINDOW_MS = 15_000;
 const DIRECTORY_USERS_ORDER_VALUES = ['role_then_name_asc', 'role_then_name_desc'];
@@ -603,6 +609,10 @@ const DEFAULT_NATIVE_ICE_SERVERS = parseIceServersFromEnv(import.meta.env.VITE_V
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
 const SFU_RUNTIME_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_SFU, true);
+
+function mediaDebugLog(...args) {
+  debugLog(...args);
+}
 
 const reactionOptions = ['👍', '❤️', '🐘', '🥳', '😂', '😮', '😢', '🤔', '👏', '👎'];
 
@@ -721,6 +731,13 @@ function extractErrorMessage(payload, fallback) {
   return fallback;
 }
 
+function buildApiRequestError(payload, fallbackMessage, responseStatus = 0) {
+  const error = new Error(extractErrorMessage(payload, fallbackMessage));
+  error.responseStatus = Number(responseStatus) || 0;
+  error.responseCode = String(payload?.error?.code || '').trim().toLowerCase();
+  return error;
+}
+
 async function apiRequest(path, { method = 'GET', query = null, body = null } = {}) {
   let response = null;
   try {
@@ -747,7 +764,7 @@ async function apiRequest(path, { method = 'GET', query = null, body = null } = 
   }
 
   if (!response.ok) {
-    throw new Error(extractErrorMessage(payload, `Request failed (${response.status}).`));
+    throw buildApiRequestError(payload, `Request failed (${response.status}).`, response.status);
   }
 
   if (!payload || payload.status !== 'ok') {
@@ -906,9 +923,13 @@ const mediaRuntimeReason = ref('boot');
 const nativePeerConnectionsRef = ref(new Map());
 let runtimeSwitchInFlight = false;
 let wlvcEncodeFailureCount = 0;
+let wlvcEncodeWarmupUntilMs = 0;
+let wlvcEncodeFirstFailureAtMs = 0;
+let wlvcEncodeLastErrorLogAtMs = 0;
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
 const sfuConnected = ref(false);
+let sfuConnectRetryCount = 0;
 let detachMediaDeviceWatcher = null;
 let localTrackReconfigureInFlight = false;
 let localTrackReconfigureQueued = false;
@@ -1082,20 +1103,33 @@ async function resolveRouteCallRef(callRef) {
       });
       return;
     } catch {
-      if (seq !== routeCallResolveSeq) return;
-      applyRouteCallResolution({
-        accessId: '',
-        callId: '',
-        roomId: 'lobby',
-        error: 'route_call_ref_not_found',
-        pending: false,
-      });
+      // UUID-like route refs can be either access-link ids or call ids.
+      // If access-link resolution fails (e.g. expired/consumed 410), retry as call id.
+      try {
+        const callResolution = await tryResolveRouteAsCallId(normalized);
+        if (seq !== routeCallResolveSeq) return;
+        applyRouteCallResolution({
+          ...callResolution,
+          error: '',
+          pending: false,
+        });
+        return;
+      } catch {
+        if (seq !== routeCallResolveSeq) return;
+        applyRouteCallResolution({
+          accessId: '',
+          callId: '',
+          roomId: 'lobby',
+          error: 'route_call_ref_not_found',
+          pending: false,
+        });
 
-      const fallbackRouteName = normalizeRole(sessionState.role) === 'admin' ? 'admin-calls' : 'user-dashboard';
-      if (String(route.name || '') === 'call-workspace' && String(routeCallRef.value || '').trim() !== '') {
-        void router.replace({ name: fallbackRouteName });
+        const fallbackRouteName = normalizeRole(sessionState.role) === 'admin' ? 'admin-calls' : 'user-dashboard';
+        if (String(route.name || '') === 'call-workspace' && String(routeCallRef.value || '').trim() !== '') {
+          void router.replace({ name: fallbackRouteName });
+        }
+        return;
       }
-      return;
     }
   }
 
@@ -2965,6 +2999,18 @@ async function connectSocket() {
     return;
   }
 
+  const previousSocket = socketRef.value;
+  if (previousSocket) {
+    try {
+      previousSocket.close(1000, 'reconnect');
+    } catch {
+      // ignore
+    }
+    if (socketRef.value === previousSocket) {
+      socketRef.value = null;
+    }
+  }
+
   clearReconnectTimer();
   clearPingTimer();
   manualSocketClose = false;
@@ -3346,21 +3392,21 @@ onMounted(async () => {
     mediaRuntimeCapabilities.value = await detectMediaRuntimeCapabilities();
     const shouldUseSfuRuntime = SFU_RUNTIME_ENABLED || !mediaRuntimeCapabilities.value.stageB;
     if (mediaRuntimeCapabilities.value.stageA && shouldUseSfuRuntime) {
-      console.log('[Codec] Runtime capability: WLVC WASM available');
+      mediaDebugLog('[Codec] Runtime capability: WLVC WASM available');
       await switchMediaRuntimePath('wlvc_wasm', 'capability_probe_stage_a');
     } else if (mediaRuntimeCapabilities.value.stageB) {
       if (mediaRuntimeCapabilities.value.stageA && !SFU_RUNTIME_ENABLED) {
-        console.info('[Codec] Runtime capability: WLVC WASM available, but SFU runtime is disabled; using native WebRTC');
+        mediaDebugLog('[Codec] Runtime capability: WLVC WASM available, but SFU runtime is disabled; using native WebRTC');
       } else {
-        console.warn('[Codec] Runtime capability: WLVC WASM unavailable, native WebRTC available');
+        mediaDebugLog('[Codec] Runtime capability: WLVC WASM unavailable, native WebRTC available');
       }
       await switchMediaRuntimePath('webrtc_native', 'capability_probe_stage_b');
     } else {
-      console.error('[Codec] Runtime capability: neither WLVC WASM nor native WebRTC available');
+      mediaDebugLog('[Codec] Runtime capability: neither WLVC WASM nor native WebRTC available');
       setMediaRuntimePath('unsupported', 'capability_probe_unsupported');
     }
   } catch (e) {
-    console.warn('[Codec] Runtime capability probe failed:', e);
+    mediaDebugLog('[Codec] Runtime capability probe failed:', e);
     mediaRuntimeCapabilities.value = {
       checkedAt: new Date().toISOString(),
       wlvcWasm: {
@@ -3422,6 +3468,7 @@ function initSFU() {
     onPublisherLeft: (publisherId) => handleSFUPublisherLeft(publisherId),
     onConnected: () => {
       sfuConnected.value = true;
+      sfuConnectRetryCount = 0;
       scheduleLocalTrackPublish();
     },
     onDisconnect: () => {
@@ -3429,13 +3476,22 @@ function initSFU() {
       sfuConnected.value = false;
       localTracksPublishedToSfu = false;
       sfuClientRef.value = null;
+      if (manualSocketClose) {
+        sfuConnectRetryCount = 0;
+        return;
+      }
       if (!hadActiveConnection) {
+        if (sfuConnectRetryCount < SFU_CONNECT_MAX_RETRIES) {
+          sfuConnectRetryCount += 1;
+          setTimeout(() => initSFU(), SFU_CONNECT_RETRY_DELAY_MS);
+          return;
+        }
+        sfuConnectRetryCount = 0;
         void maybeFallbackToNativeRuntime('sfu_connect_failed');
         return;
       }
-      if (!manualSocketClose) {
-        setTimeout(() => initSFU(), 2000);
-      }
+      sfuConnectRetryCount = 0;
+      setTimeout(() => initSFU(), 2000);
     },
     onEncodedFrame: (frame) => handleSFUEncodedFrame(frame),
   });
@@ -3481,7 +3537,7 @@ function handleSFUTracks(e) {
       try {
         decoder = await createWasmDecoder({ width: 640, height: 480, quality: 75 });
       } catch (error) {
-        console.warn('[SFU] WASM decoder init failed for publisher', e.publisherId, error);
+        mediaDebugLog('[SFU] WASM decoder init failed for publisher', e.publisherId, error);
       }
     }
 
@@ -3514,7 +3570,7 @@ function handleSFUTracks(e) {
       decodedCanvas: canvas,
     });
 
-    console.log('[SFU] Subscribed to publisher', e.publisherId, 'with', e.tracks.length, 'tracks');
+    mediaDebugLog('[SFU] Subscribed to publisher', e.publisherId, 'with', e.tracks.length, 'tracks');
   })();
 }
 
@@ -3716,7 +3772,7 @@ async function sendNativeOffer(peer) {
       },
     });
   } catch (error) {
-    console.warn('[WebRTC] Could not create/send offer for peer', peer.userId, error);
+    mediaDebugLog('[WebRTC] Could not create/send offer for peer', peer.userId, error);
   } finally {
     peer.negotiating = false;
     if (peer.needsRenegotiate) {
@@ -3853,7 +3909,7 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
       },
     });
   } catch (error) {
-    console.warn('[WebRTC] Failed to handle offer from peer', senderUserId, error);
+    mediaDebugLog('[WebRTC] Failed to handle offer from peer', senderUserId, error);
   }
 }
 
@@ -3869,7 +3925,7 @@ async function handleNativeAnswerSignal(senderUserId, payloadBody) {
     await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }));
     await flushNativePendingIce(peer);
   } catch (error) {
-    console.warn('[WebRTC] Failed to handle answer from peer', senderUserId, error);
+    mediaDebugLog('[WebRTC] Failed to handle answer from peer', senderUserId, error);
   }
 }
 
@@ -3915,9 +3971,15 @@ async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {
         void syncNativePeerLocalTracks(peer);
       }
       wlvcEncodeFailureCount = 0;
+      wlvcEncodeWarmupUntilMs = 0;
+      wlvcEncodeFirstFailureAtMs = 0;
+      wlvcEncodeLastErrorLogAtMs = 0;
     } else if (normalizedNextPath === 'wlvc_wasm') {
       teardownNativePeerConnections();
       wlvcEncodeFailureCount = 0;
+      wlvcEncodeWarmupUntilMs = 0;
+      wlvcEncodeFirstFailureAtMs = 0;
+      wlvcEncodeLastErrorLogAtMs = 0;
       const localStream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
       const videoTrack = localStream?.getVideoTracks?.()[0] || null;
       if (videoTrack) {
@@ -3930,7 +3992,7 @@ async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {
     }
 
     setMediaRuntimePath(normalizedNextPath, reason);
-    console.info('[MediaRuntime] switched to', normalizedNextPath, 'reason=', reason);
+    mediaDebugLog('[MediaRuntime] switched to', normalizedNextPath, 'reason=', reason);
     return true;
   } finally {
     runtimeSwitchInFlight = false;
@@ -4061,14 +4123,14 @@ function resolveBackgroundFilterOptions(runtimeToken) {
 
   const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
   const qualityProfile = String(callMediaPrefs.backgroundQualityProfile || 'balanced').trim().toLowerCase();
-  const baseBlur = Math.max(4, Math.min(28, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurStrength, 12))));
-
-  let blurPx = baseBlur;
+  const baseBlurLevel = Math.max(0, Math.min(4, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurStrength, 2))));
+  let blurPx = baseBlurLevel * 3;
   if (backdrop === 'blur7') {
-    blurPx = Math.max(blurPx, 12);
+    blurPx = Math.round(blurPx * 0.9);
   } else if (backdrop === 'blur9') {
-    blurPx = Math.max(blurPx, 16);
+    blurPx = Math.round(blurPx * 1.25);
   }
+  blurPx = Math.max(0, Math.min(20, blurPx));
 
   let detectIntervalMs = 220;
   if (qualityProfile === 'quality') {
@@ -4190,6 +4252,10 @@ function stopLocalEncodingPipeline() {
     videoEncoderRef.value.destroy();
     videoEncoderRef.value = null;
   }
+  wlvcEncodeFailureCount = 0;
+  wlvcEncodeWarmupUntilMs = 0;
+  wlvcEncodeFirstFailureAtMs = 0;
+  wlvcEncodeLastErrorLogAtMs = 0;
 }
 
 function clearLocalPreviewElement() {
@@ -4295,7 +4361,7 @@ async function publishLocalTracks() {
       await startEncodingPipeline(videoTrack);
     }
   } catch (e) {
-    console.error('[SFU] Failed to get user media:', e);
+    mediaDebugLog('[SFU] Failed to get user media:', e);
   }
 }
 
@@ -4325,7 +4391,7 @@ async function startEncodingPipeline(videoTrack) {
   }
 
   if (!mediaRuntimeCapabilities.value.stageA) {
-    console.warn('[SFU] WLVC WASM unavailable; falling back to native WebRTC path');
+    mediaDebugLog('[SFU] WLVC WASM unavailable; falling back to native WebRTC path');
     void maybeFallbackToNativeRuntime('wlvc_runtime_unavailable');
     return;
   }
@@ -4338,14 +4404,17 @@ async function startEncodingPipeline(videoTrack) {
       keyFrameInterval: 30,
     });
     if (!videoEncoderRef.value) {
-      console.warn('[SFU] WASM encoder unavailable; falling back to native WebRTC path');
+      mediaDebugLog('[SFU] WASM encoder unavailable; falling back to native WebRTC path');
       void maybeFallbackToNativeRuntime('wlvc_encoder_unavailable');
       return;
     }
-    console.log('[SFU] WASM encoder initialized');
+    mediaDebugLog('[SFU] WASM encoder initialized');
     wlvcEncodeFailureCount = 0;
+    wlvcEncodeWarmupUntilMs = Date.now() + WLVC_ENCODE_WARMUP_MS;
+    wlvcEncodeFirstFailureAtMs = 0;
+    wlvcEncodeLastErrorLogAtMs = 0;
   } catch (error) {
-    console.error('[SFU] WASM encoder init error; falling back to native WebRTC path:', error);
+    mediaDebugLog('[SFU] WASM encoder init error; falling back to native WebRTC path:', error);
     void maybeFallbackToNativeRuntime('wlvc_encoder_init_error');
     return;
   }
@@ -4360,6 +4429,7 @@ async function startEncodingPipeline(videoTrack) {
     if (!videoEncoderRef.value || !sfuClientRef.value || sfuClientRef.value.ws?.readyState !== WebSocket.OPEN) {
       return;
     }
+    if (typeof document !== 'undefined' && document.hidden) return;
 
     if (video.readyState < 2) return;
 
@@ -4378,10 +4448,31 @@ async function startEncodingPipeline(videoTrack) {
         type: encoded.type,
       });
       wlvcEncodeFailureCount = 0;
+      wlvcEncodeFirstFailureAtMs = 0;
     } catch (e) {
+      const nowMs = Date.now();
+      if (nowMs - wlvcEncodeLastErrorLogAtMs >= WLVC_ENCODE_ERROR_LOG_COOLDOWN_MS) {
+        wlvcEncodeLastErrorLogAtMs = nowMs;
+        mediaDebugLog('[SFU] WASM encode frame failed', e);
+      }
+
+      if (nowMs < wlvcEncodeWarmupUntilMs) {
+        return;
+      }
+
+      if (
+        wlvcEncodeFirstFailureAtMs === 0
+        || nowMs - wlvcEncodeFirstFailureAtMs > WLVC_ENCODE_FAILURE_WINDOW_MS
+      ) {
+        wlvcEncodeFirstFailureAtMs = nowMs;
+        wlvcEncodeFailureCount = 1;
+        return;
+      }
+
       wlvcEncodeFailureCount += 1;
       if (wlvcEncodeFailureCount >= WLVC_ENCODE_FAILURE_THRESHOLD) {
         wlvcEncodeFailureCount = 0;
+        wlvcEncodeFirstFailureAtMs = 0;
         void maybeFallbackToNativeRuntime('wlvc_encode_runtime_error');
       }
     }
@@ -4433,7 +4524,7 @@ function handleSFUEncodedFrame(frame) {
       ctx.putImageData(imageData, 0, 0);
     }
   } catch (e) {
-    console.warn('[SFU] Decode error:', e);
+    mediaDebugLog('[SFU] Decode error:', e);
   }
 }
 

@@ -5,6 +5,48 @@ const MEDIAPIPE_SELFIE_SEGMENTATION_BASE_URL =
 
 let runtimeLoadPromise = null;
 
+function silenceMediaPipeWasmLogs() {
+  if (typeof window === 'undefined') return;
+  const existing = window.createMediapipeSolutionsWasm;
+  const target = existing && typeof existing === 'object' ? existing : {};
+  target.print = () => {};
+  target.printErr = () => {};
+  window.createMediapipeSolutionsWasm = target;
+}
+
+function installMediaPipeConsoleNoiseFilter() {
+  if (typeof window === 'undefined' || typeof console === 'undefined') return;
+  if (window.__vcMediaPipeConsoleFilterInstalled === true) return;
+
+  const shouldDrop = (args) => {
+    const first = typeof args?.[0] === 'string' ? args[0] : '';
+    if (first === '') return false;
+    return (
+      /selfie_segmentation_solution/i.test(first)
+      || /gl_context(?:_webgl)?\.cc/i.test(first)
+      || /OpenGL error checking is disabled/i.test(first)
+      || /Found unchecked GL error/i.test(first)
+      || /Ignoring unchecked GL error/i.test(first)
+      || /WebGL:\s*INVALID_VALUE:\s*texImage2D:\s*no video/i.test(first)
+      || /GL_INVALID_FRAMEBUFFER_OPERATION/i.test(first)
+    );
+  };
+
+  const wrap = (fn) => {
+    if (typeof fn !== 'function') return fn;
+    return (...args) => {
+      if (shouldDrop(args)) return;
+      fn(...args);
+    };
+  };
+
+  console.log = wrap(console.log.bind(console));
+  console.info = wrap(console.info.bind(console));
+  console.warn = wrap(console.warn.bind(console));
+  console.error = wrap(console.error.bind(console));
+  window.__vcMediaPipeConsoleFilterInstalled = true;
+}
+
 function clampBox(box, maxW, maxH) {
   const x = Math.max(0, Math.min(maxW, box.x));
   const y = Math.max(0, Math.min(maxH, box.y));
@@ -26,6 +68,8 @@ async function loadRuntime(timeoutMs = 5000) {
   if (typeof window === 'undefined' || typeof document === 'undefined') return false;
   if (hasRuntime()) return true;
   if (runtimeLoadPromise) return runtimeLoadPromise;
+  silenceMediaPipeWasmLogs();
+  installMediaPipeConsoleNoiseFilter();
 
   runtimeLoadPromise = new Promise((resolve) => {
     const existing = document.querySelector('script[data-vc-mediapipe-selfie-segmentation="1"]');
@@ -115,13 +159,15 @@ export async function createMediaPipeSegmentationBackend(opts = {}) {
     segmenter = new Ctor({
       locateFile: (file) => `${MEDIAPIPE_SELFIE_SEGMENTATION_BASE_URL}${file}`,
     });
-    segmenter.setOptions({ modelSelection: 1 });
+    segmenter.setOptions({ modelSelection: 0 });
   } catch {
     return null;
   }
 
   const detectIntervalMs = Math.max(100, Math.min(1200, Math.round(Number(opts.detectIntervalMs || 220))));
   const scratchCanvas = document.createElement('canvas');
+  const frameCanvas = document.createElement('canvas');
+  const frameCtx = frameCanvas.getContext('2d', { alpha: false, desynchronized: true });
 
   let faces = [];
   let matteMask = null;
@@ -146,12 +192,32 @@ export async function createMediaPipeSegmentationBackend(opts = {}) {
     kind: 'mediapipe',
     nextFaces(video, vw, vh, nowMs) {
       if (disposed) return { faces: [], detectSampleMs: null, matteMask: null };
+      const hasFrame = video instanceof HTMLVideoElement
+        && video.readyState >= 2
+        && Number(video.videoWidth || vw) > 1
+        && Number(video.videoHeight || vh) > 1
+        && !video.ended;
+      if (!hasFrame) {
+        detectPending = false;
+        return { faces, detectSampleMs: null, matteMask };
+      }
 
       if (!detectPending && nowMs - lastDetectAt >= detectIntervalMs) {
+        if (!frameCtx) {
+          return { faces, detectSampleMs: null, matteMask };
+        }
         detectPending = true;
         lastDetectAt = nowMs;
         detectStartedAt = performance.now();
-        void segmenter.send({ image: video }).catch(() => {
+        frameCanvas.width = Math.max(1, Math.round(vw));
+        frameCanvas.height = Math.max(1, Math.round(vh));
+        try {
+          frameCtx.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
+        } catch {
+          detectPending = false;
+          return { faces, detectSampleMs: null, matteMask };
+        }
+        void segmenter.send({ image: frameCanvas }).catch(() => {
           detectPending = false;
         });
       }

@@ -112,6 +112,7 @@ $jsonResponse = static function (int $status, array $payload): array {
         'status' => $status,
         'headers' => [
             'content-type' => 'application/json; charset=utf-8',
+            'connection' => 'close',
             ...$corsHeaders,
         ],
         'body' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -349,7 +350,7 @@ $handler = static function (array $request) use (
     }
 
     try {
-        return videochat_dispatch_request(
+        $response = videochat_dispatch_request(
             $request,
             $activeWebsocketsBySession,
             $presenceState,
@@ -368,6 +369,16 @@ $handler = static function (array $request) use (
             $avatarStorageRoot,
             $avatarMaxBytes
         );
+
+        if (is_array($response) && (int) ($response['status'] ?? 0) !== 101) {
+            $headers = $response['headers'] ?? [];
+            if (is_array($headers)) {
+                $headers['connection'] = 'close';
+                $response['headers'] = $headers;
+            }
+        }
+
+        return $response;
     } catch (Throwable $error) {
         $log(sprintf(
             'unhandled request error on %s %s: %s (%s:%d)',
