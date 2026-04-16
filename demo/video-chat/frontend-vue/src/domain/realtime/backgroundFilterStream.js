@@ -102,6 +102,34 @@ function scaleFaceBox(face, srcW, srcH, dstW, dstH) {
   return { x, y, width, height };
 }
 
+function beginRoundedRectPath(ctx, x, y, width, height, radius) {
+  const w = Math.max(0, width);
+  const h = Math.max(0, height);
+  if (w <= 0 || h <= 0) {
+    ctx.beginPath();
+    return;
+  }
+  const r = Math.max(0, Math.min(radius, w / 2, h / 2));
+  ctx.beginPath();
+  if (r <= 0) {
+    ctx.rect(x, y, w, h);
+    return;
+  }
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, w, h, r);
+    return;
+  }
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+}
+
 function resolveMaskTuning(options, blurPx) {
   const maskVariant = Math.max(1, Math.min(10, Math.round(toNumber(options.maskVariant, 4))));
   const transitionGain = Math.max(1, Math.min(10, Math.round(toNumber(options.transitionGain, 6))));
@@ -418,12 +446,28 @@ function drawFacePatches(
     if (box.width <= 0 || box.height <= 0) continue;
 
     const cx = box.x + (box.width / 2);
-    const headCy = box.y + (box.height * 0.5);
-    const headRx = Math.max(10, (box.width * 0.48) * faceScale);
-    const headRy = Math.max(12, (box.height * 0.7) * faceScale);
-    const shoulderCy = box.y + (box.height * 1.24);
-    const shoulderRx = Math.max(headRx * 1.65, box.width * 0.65);
-    const shoulderRy = Math.max(headRy * 1.35, box.height * 0.75);
+    const headCy = box.y + (box.height * 0.46);
+    const headRx = Math.max(14, (box.width * 0.62) * faceScale);
+    const headRy = Math.max(16, (box.height * 0.9) * faceScale);
+
+    const crownCy = headCy - (headRy * 0.58);
+    const crownRx = headRx * 1.28;
+    const crownRy = headRy * 0.58;
+
+    const bodyWidth = Math.max(headRx * 3.15, (box.width * 2.45) * faceScale);
+    const bodyHeight = Math.max(headRy * 2.2, (box.height * 2.85) * faceScale);
+    const bodyX = cx - (bodyWidth / 2);
+    const bodyY = headCy + (headRy * 0.12);
+    const bodyRadius = Math.max(12, Math.min(bodyWidth, bodyHeight) * 0.34);
+
+    maskCtx.globalAlpha = 0.82;
+    beginRoundedRectPath(maskCtx, bodyX, bodyY, bodyWidth, bodyHeight, bodyRadius);
+    maskCtx.fill();
+
+    maskCtx.globalAlpha = 0.94;
+    maskCtx.beginPath();
+    maskCtx.ellipse(cx, crownCy, crownRx, crownRy, 0, 0, Math.PI * 2);
+    maskCtx.fill();
 
     maskCtx.globalAlpha = 1;
     maskCtx.beginPath();
@@ -432,7 +476,7 @@ function drawFacePatches(
 
     maskCtx.globalAlpha = 0.9;
     maskCtx.beginPath();
-    maskCtx.ellipse(cx, shoulderCy, shoulderRx, shoulderRy, 0, 0, Math.PI * 2);
+    maskCtx.ellipse(cx, bodyY + (bodyHeight * 0.04), bodyWidth * 0.5, headRy * 0.9, 0, 0, Math.PI * 2);
     maskCtx.fill();
     rendered = true;
   }
