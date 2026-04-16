@@ -18,6 +18,74 @@ run_step() {
   log "OK: ${step}"
 }
 
+validate_tcp_port() {
+  local candidate="${1:-}"
+  if [[ ! "${candidate}" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+  (( candidate >= 1 && candidate <= 65535 ))
+}
+
+port_is_bindable() {
+  local candidate="$1"
+
+  if command -v python3 >/dev/null 2>&1; then
+    if python3 - "${candidate}" >/dev/null 2>&1 <<'PY'
+import socket
+import sys
+
+port = int(sys.argv[1])
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+try:
+    sock.bind(("0.0.0.0", port))
+except OSError:
+    sys.exit(1)
+finally:
+    sock.close()
+PY
+    then
+      return 0
+    fi
+    return 1
+  fi
+
+  # Fallback: if a TCP connect succeeds, port is already occupied.
+  if (exec 3<>"/dev/tcp/127.0.0.1/${candidate}") >/dev/null 2>&1; then
+    exec 3>&- 3<&- || true
+    return 1
+  fi
+  return 0
+}
+
+port_is_reserved() {
+  local candidate="$1"
+  shift || true
+  local existing=""
+  for existing in "$@"; do
+    if [[ "${existing}" == "${candidate}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+resolve_available_port() {
+  local preferred="$1"
+  shift || true
+  local candidate="${preferred}"
+  local -a reserved=("$@")
+
+  while (( candidate <= 65535 )); do
+    if ! port_is_reserved "${candidate}" "${reserved[@]}" && port_is_bindable "${candidate}"; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+    candidate=$((candidate + 1))
+  done
+  return 1
+}
+
 compose_smoke() {
   if [[ "${VIDEOCHAT_SMOKE_SKIP_COMPOSE:-0}" == "1" ]]; then
     log "SKIP: compose smoke gate disabled via VIDEOCHAT_SMOKE_SKIP_COMPOSE=1"
@@ -51,26 +119,63 @@ compose_smoke() {
     return 0
   fi
 
-  local compose_backend_port="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_PORT:-38080}"
-  local compose_backend_ws_port="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_WS_PORT:-$((compose_backend_port + 1))}"
-  local compose_frontend_port="${VIDEOCHAT_SMOKE_COMPOSE_FRONTEND_PORT:-35174}"
+  local compose_backend_port_default=38080
+  local compose_frontend_port_default=35174
+  local compose_backend_port_requested="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_PORT:-}"
+  local compose_backend_ws_port_requested="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_WS_PORT:-}"
+  local compose_frontend_port_requested="${VIDEOCHAT_SMOKE_COMPOSE_FRONTEND_PORT:-}"
+  local compose_backend_port=""
+  local compose_backend_ws_port=""
+  local compose_frontend_port=""
   local compose_project="${VIDEOCHAT_SMOKE_COMPOSE_PROJECT:-king-videochat-smoke}"
   local compose_backend_php_image="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_PHP_IMAGE:-}"
   local king_extension_path="${VIDEOCHAT_SMOKE_KING_EXTENSION_PATH:-${ROOT_DIR}/../../extension/modules/king.so}"
   local king_extension_api=""
+  local king_extension_api_candidates=""
+  local host_php_api=""
+  local -a detected_extension_apis=()
+
+  host_php_api="$(php -i 2>/dev/null | awk -F'=> ' '/^PHP API =>/{gsub(/ /, "", $2); print $2; exit}' || true)"
+
+  if [[ -f "${king_extension_path}" ]] && command -v strings >/dev/null 2>&1; then
+    mapfile -t detected_extension_apis < <(
+      strings "${king_extension_path}" 2>/dev/null \
+        | sed -n 's/.*API\([0-9]\{8\}\).*/\1/p' \
+        | LC_ALL=C sort -u
+    )
+    if [[ "${#detected_extension_apis[@]}" -gt 0 ]]; then
+      king_extension_api_candidates="$(IFS=,; echo "${detected_extension_apis[*]}")"
+    fi
+  fi
+
+  if [[ -z "${king_extension_api}" ]] && [[ "${host_php_api}" =~ ^[0-9]{8}$ ]] && [[ "${#detected_extension_apis[@]}" -gt 0 ]]; then
+    for detected_api in "${detected_extension_apis[@]}"; do
+      if [[ "${detected_api}" == "${host_php_api}" ]]; then
+        king_extension_api="${detected_api}"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "${king_extension_api}" ]] && [[ "${#detected_extension_apis[@]}" -gt 0 ]]; then
+    for detected_api in "${detected_extension_apis[@]}"; do
+      if [[ "${detected_api}" == "20240924" || "${detected_api}" == "20250925" ]]; then
+        king_extension_api="${detected_api}"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "${king_extension_api}" ]] && [[ "${host_php_api}" =~ ^[0-9]{8}$ ]]; then
+    king_extension_api="${host_php_api}"
+  fi
 
   if [[ -z "${compose_backend_php_image}" ]]; then
-    if [[ -f "${king_extension_path}" ]] && command -v strings >/dev/null 2>&1; then
-      king_extension_api="$(strings "${king_extension_path}" 2>/dev/null | sed -n 's/.*API\([0-9]\{8\}\).*/\1/p' | head -n1 || true)"
-    fi
-
     if [[ "${king_extension_api}" == "20250925" ]]; then
       compose_backend_php_image="php:8.5-cli-trixie"
     elif [[ "${king_extension_api}" == "20240924" ]]; then
       compose_backend_php_image="php:8.4-cli-trixie"
     else
-      local host_php_api=""
-      host_php_api="$(php -i 2>/dev/null | awk -F'=> ' '/^PHP API =>/{gsub(/ /, "", $2); print $2; exit}' || true)"
       if [[ "${host_php_api}" =~ ^[0-9]+$ ]] && (( host_php_api >= 20250925 )); then
         compose_backend_php_image="php:8.5-cli-trixie"
       else
@@ -79,13 +184,101 @@ compose_smoke() {
     fi
   fi
 
-  log "compose smoke project=${compose_project} backend=${compose_backend_port} backend_ws=${compose_backend_ws_port} frontend=${compose_frontend_port} backend_php_image=${compose_backend_php_image} king_extension_api=${king_extension_api:-unknown}"
+  if [[ -n "${compose_backend_port_requested}" ]]; then
+    if ! validate_tcp_port "${compose_backend_port_requested}"; then
+      log "ERROR: VIDEOCHAT_SMOKE_COMPOSE_BACKEND_PORT must be a TCP port between 1 and 65535 (got '${compose_backend_port_requested}')"
+      return 1
+    fi
+    compose_backend_port="${compose_backend_port_requested}"
+    if ! port_is_bindable "${compose_backend_port}"; then
+      log "ERROR: requested compose backend port ${compose_backend_port} is already in use"
+      return 1
+    fi
+  else
+    if ! compose_backend_port="$(resolve_available_port "${compose_backend_port_default}")"; then
+      log "ERROR: could not find free backend port starting at ${compose_backend_port_default}"
+      return 1
+    fi
+  fi
+
+  if [[ -n "${compose_backend_ws_port_requested}" ]]; then
+    if ! validate_tcp_port "${compose_backend_ws_port_requested}"; then
+      log "ERROR: VIDEOCHAT_SMOKE_COMPOSE_BACKEND_WS_PORT must be a TCP port between 1 and 65535 (got '${compose_backend_ws_port_requested}')"
+      return 1
+    fi
+    compose_backend_ws_port="${compose_backend_ws_port_requested}"
+    if [[ "${compose_backend_ws_port}" == "${compose_backend_port}" ]]; then
+      log "ERROR: backend ws port must differ from backend port (both set to ${compose_backend_port})"
+      return 1
+    fi
+    if ! port_is_bindable "${compose_backend_ws_port}"; then
+      log "ERROR: requested compose backend ws port ${compose_backend_ws_port} is already in use"
+      return 1
+    fi
+  else
+    local ws_preferred_port=$((compose_backend_port + 1))
+    if (( ws_preferred_port > 65535 )); then
+      ws_preferred_port=1024
+    fi
+    if ! compose_backend_ws_port="$(resolve_available_port "${ws_preferred_port}" "${compose_backend_port}")"; then
+      log "ERROR: could not find free backend ws port starting at ${ws_preferred_port}"
+      return 1
+    fi
+  fi
+
+  if [[ -n "${compose_frontend_port_requested}" ]]; then
+    if ! validate_tcp_port "${compose_frontend_port_requested}"; then
+      log "ERROR: VIDEOCHAT_SMOKE_COMPOSE_FRONTEND_PORT must be a TCP port between 1 and 65535 (got '${compose_frontend_port_requested}')"
+      return 1
+    fi
+    compose_frontend_port="${compose_frontend_port_requested}"
+    if [[ "${compose_frontend_port}" == "${compose_backend_port}" || "${compose_frontend_port}" == "${compose_backend_ws_port}" ]]; then
+      log "ERROR: frontend port ${compose_frontend_port} collides with backend/backend-ws port"
+      return 1
+    fi
+    if ! port_is_bindable "${compose_frontend_port}"; then
+      log "ERROR: requested compose frontend port ${compose_frontend_port} is already in use"
+      return 1
+    fi
+  else
+    if ! compose_frontend_port="$(resolve_available_port "${compose_frontend_port_default}" "${compose_backend_port}" "${compose_backend_ws_port}")"; then
+      log "ERROR: could not find free frontend port starting at ${compose_frontend_port_default}"
+      return 1
+    fi
+  fi
+
+  if [[ -z "${compose_backend_port_requested}" && "${compose_backend_port}" != "${compose_backend_port_default}" ]]; then
+    log "INFO: backend default port ${compose_backend_port_default} busy; selected ${compose_backend_port}"
+  fi
+  if [[ -z "${compose_backend_ws_port_requested}" && "${compose_backend_ws_port}" != "$((compose_backend_port + 1))" ]]; then
+    log "INFO: backend ws default sibling port busy; selected ${compose_backend_ws_port}"
+  fi
+  if [[ -z "${compose_frontend_port_requested}" && "${compose_frontend_port}" != "${compose_frontend_port_default}" ]]; then
+    log "INFO: frontend default port ${compose_frontend_port_default} busy; selected ${compose_frontend_port}"
+  fi
+
+  log "compose smoke project=${compose_project} backend=${compose_backend_port} backend_ws=${compose_backend_ws_port} frontend=${compose_frontend_port} backend_php_image=${compose_backend_php_image} king_extension_api=${king_extension_api:-unknown} king_extension_api_candidates=${king_extension_api_candidates:-none} host_php_api=${host_php_api:-unknown}"
 
   local compose_cmd=(
     docker compose
     -p "${compose_project}"
     -f "${COMPOSE_FILE}"
   )
+
+  compose_debug_dump() {
+    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
+    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
+    "${compose_cmd[@]}" ps || true
+    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
+    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
+    "${compose_cmd[@]}" logs --tail 200 videochat-backend-v1 || true
+  }
 
   local compose_up_log
   compose_up_log="$(mktemp)"
@@ -100,6 +293,12 @@ compose_smoke() {
     local compose_up_exit=$?
     log "ERROR: docker compose up failed (exit=${compose_up_exit}); dumping output"
     cat "${compose_up_log}" >&2 || true
+    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
+    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
+    "${compose_cmd[@]}" down -v >/dev/null 2>&1 || true
     rm -f "${compose_up_log}"
     return 1
   fi
@@ -123,34 +322,50 @@ compose_smoke() {
   local login_url="http://127.0.0.1:${compose_backend_port}/api/auth/login"
   local session_url="http://127.0.0.1:${compose_backend_port}/api/auth/session"
   local frontend_url="http://127.0.0.1:${compose_frontend_port}/"
+  local health_ready=0
 
   for _ in {1..180}; do
     if curl -fsS "${health_url}" >/dev/null; then
+      health_ready=1
       break
     fi
     sleep 0.5
   done
 
-  if ! curl -fsS "${health_url}" >/dev/null; then
+  if [[ "${health_ready}" != "1" ]]; then
     log "ERROR: backend health did not become ready; dumping compose status/logs"
-    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
-    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
-    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
-    "${compose_cmd[@]}" ps || true
-    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
-    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
-    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
-    "${compose_cmd[@]}" logs --tail 200 videochat-backend-v1 || true
+    compose_debug_dump
     return 1
   fi
-  curl -fsS "${frontend_url}" >/dev/null
+
+  local frontend_ready=0
+  for _ in {1..120}; do
+    if curl -fsS "${frontend_url}" >/dev/null; then
+      frontend_ready=1
+      break
+    fi
+    sleep 0.5
+  done
+  if [[ "${frontend_ready}" != "1" ]]; then
+    log "ERROR: frontend did not become ready; dumping compose status/logs"
+    compose_debug_dump
+    return 1
+  fi
 
   local runtime_response
-  runtime_response="$(curl -fsS "${runtime_url}")"
+  local runtime_ready=0
+  for _ in {1..120}; do
+    if runtime_response="$(curl -fsS "${runtime_url}")"; then
+      runtime_ready=1
+      break
+    fi
+    sleep 0.5
+  done
+  if [[ "${runtime_ready}" != "1" ]]; then
+    log "ERROR: runtime endpoint did not become ready; dumping compose status/logs"
+    compose_debug_dump
+    return 1
+  fi
   printf '%s' "${runtime_response}" | php -r '
     $raw = stream_get_contents(STDIN);
     $data = json_decode($raw, true);
@@ -180,10 +395,22 @@ compose_smoke() {
   '
 
   local login_response
-  login_response="$(curl -fsS -X POST \
-    -H 'content-type: application/json' \
-    --data '{"email":"admin@intelligent-intern.com","password":"admin123"}' \
-    "${login_url}")"
+  local login_ready=0
+  for _ in {1..120}; do
+    if login_response="$(curl -fsS -X POST \
+      -H 'content-type: application/json' \
+      --data '{"email":"admin@intelligent-intern.com","password":"admin123"}' \
+      "${login_url}")"; then
+      login_ready=1
+      break
+    fi
+    sleep 0.5
+  done
+  if [[ "${login_ready}" != "1" ]]; then
+    log "ERROR: login endpoint did not become ready; dumping compose status/logs"
+    compose_debug_dump
+    return 1
+  fi
 
   local session_token
   session_token="$(printf '%s' "${login_response}" | php -r '
@@ -202,9 +429,21 @@ compose_smoke() {
   ')"
 
   local session_response
-  session_response="$(curl -fsS \
-    -H "authorization: Bearer ${session_token}" \
-    "${session_url}")"
+  local session_ready=0
+  for _ in {1..120}; do
+    if session_response="$(curl -fsS \
+      -H "authorization: Bearer ${session_token}" \
+      "${session_url}")"; then
+      session_ready=1
+      break
+    fi
+    sleep 0.5
+  done
+  if [[ "${session_ready}" != "1" ]]; then
+    log "ERROR: session endpoint did not become ready; dumping compose status/logs"
+    compose_debug_dump
+    return 1
+  fi
 
   printf '%s' "${session_response}" | php -r '
     $raw = stream_get_contents(STDIN);
