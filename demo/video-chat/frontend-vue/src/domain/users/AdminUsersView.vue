@@ -893,6 +893,7 @@ onMounted(() => {
 .users-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
+  margin-top: 10px;
   padding-left: 10px;
   padding-right: 10px;
 }
