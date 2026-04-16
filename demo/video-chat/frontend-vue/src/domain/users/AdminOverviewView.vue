@@ -255,7 +255,7 @@
             Delete
           </button>
           <button class="btn" type="button" :disabled="composeState.submitting" @click="closeCompose">Close</button>
-          <button class="btn" type="button" :disabled="composeState.submitting" @click="submitCompose">
+          <button class="btn btn-cyan" type="button" :disabled="composeState.submitting" @click="submitCompose">
             {{ composeState.submitting ? 'Saving…' : composeSubmitLabel }}
           </button>
         </footer>

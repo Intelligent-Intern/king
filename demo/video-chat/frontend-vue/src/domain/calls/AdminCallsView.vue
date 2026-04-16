@@ -533,7 +533,7 @@
         </div>
 
         <footer class="calls-modal-footer">
-          <button class="btn" type="button" :disabled="composeState.submitting" @click="submitCompose">
+          <button class="btn btn-cyan" type="button" :disabled="composeState.submitting" @click="submitCompose">
             {{ composeState.submitting ? 'Saving…' : composeSubmitLabel }}
           </button>
         </footer>
@@ -617,7 +617,7 @@
           </label>
           <button
             v-if="cancelState.overrideTemplate && cancelState.templateDirty"
-            class="btn"
+            class="btn btn-cyan"
             type="button"
             :disabled="cancelState.submitting || cancelState.templateSaving"
             @click="saveCancelTemplate"

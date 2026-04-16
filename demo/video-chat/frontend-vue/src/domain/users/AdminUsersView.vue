@@ -267,7 +267,7 @@
 
         <footer class="users-modal-footer">
           <button
-            class="btn"
+            class="btn btn-cyan"
             type="button"
             :disabled="formSaving"
             @click="avatarEditorOpen ? saveAvatarChanges() : submitForm()"

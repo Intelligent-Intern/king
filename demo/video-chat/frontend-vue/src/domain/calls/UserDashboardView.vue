@@ -359,7 +359,7 @@
 
         <footer class="calls-modal-footer">
           <button class="btn" type="button" :disabled="joinState.submitting" @click="closeJoinModal">Close</button>
-          <button class="btn" type="button" :disabled="joinState.submitting" @click="submitJoinInvite">
+          <button class="btn btn-cyan" type="button" :disabled="joinState.submitting" @click="submitJoinInvite">
             {{ joinState.submitting ? 'Joining...' : 'Join' }}
           </button>
         </footer>
@@ -420,7 +420,7 @@
 
         <footer class="calls-modal-footer">
           <button class="btn" type="button" :disabled="composeState.submitting" @click="closeCompose">Close</button>
-          <button class="btn" type="button" :disabled="composeState.submitting" @click="submitCompose">
+          <button class="btn btn-cyan" type="button" :disabled="composeState.submitting" @click="submitCompose">
             {{ composeState.submitting ? 'Saving...' : composeSubmitLabel }}
           </button>
         </footer>
