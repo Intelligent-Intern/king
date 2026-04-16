@@ -173,7 +173,14 @@ function normalizeMatteMaskCanvasAlpha(maskCanvas, maskCtx, width, height, maskT
   const edge1 = Math.min(1, threshold + (softness * 0.5));
 
   let opaqueCount = 0;
+  let minOpaqueX = width;
+  let minOpaqueY = height;
+  let maxOpaqueX = -1;
+  let maxOpaqueY = -1;
   for (let i = 0; i < data.length; i += 4) {
+    const pixelIndex = i / 4;
+    const x = pixelIndex % width;
+    const y = Math.floor(pixelIndex / width);
     const r = data[i] || 0;
     const g = data[i + 1] || 0;
     const b = data[i + 2] || 0;
@@ -186,11 +193,34 @@ function normalizeMatteMaskCanvasAlpha(maskCanvas, maskCtx, width, height, maskT
     data[i + 1] = 255;
     data[i + 2] = 255;
     data[i + 3] = outAlpha;
-    if (outAlpha > 10) opaqueCount += 1;
+    if (outAlpha > 10) {
+      opaqueCount += 1;
+      if (x < minOpaqueX) minOpaqueX = x;
+      if (y < minOpaqueY) minOpaqueY = y;
+      if (x > maxOpaqueX) maxOpaqueX = x;
+      if (y > maxOpaqueY) maxOpaqueY = y;
+    }
   }
 
   const coverage = opaqueCount / pixelCount;
   if (coverage <= 0.002 || coverage >= 0.985) {
+    return false;
+  }
+  if (maxOpaqueX < minOpaqueX || maxOpaqueY < minOpaqueY) {
+    return false;
+  }
+
+  const bboxWidth = Math.max(1, (maxOpaqueX - minOpaqueX) + 1);
+  const bboxHeight = Math.max(1, (maxOpaqueY - minOpaqueY) + 1);
+  const bboxArea = Math.max(1, bboxWidth * bboxHeight);
+  const bboxCoverage = bboxArea / pixelCount;
+  const fillRatio = opaqueCount / bboxArea;
+  const aspectRatio = bboxWidth / bboxHeight;
+  const nearSquare = Math.abs(aspectRatio - 1) <= 0.24;
+  if (
+    (bboxCoverage >= 0.08 && fillRatio >= 0.9)
+    || (nearSquare && bboxCoverage >= 0.16 && fillRatio >= 0.8)
+  ) {
     return false;
   }
 
@@ -202,7 +232,7 @@ function normalizeMatteMaskCanvasAlpha(maskCanvas, maskCtx, width, height, maskT
   return true;
 }
 
-function ensureNormalizedMatteMask(cache, matteMask, width, height, maskTuning) {
+function ensureNormalizedMatteMask(cache, matteMask, width, height, maskTuning, nowMs) {
   if (!cache || !matteMask) return false;
   const {
     canvas,
@@ -211,13 +241,21 @@ function ensureNormalizedMatteMask(cache, matteMask, width, height, maskTuning) 
   if (!(canvas instanceof HTMLCanvasElement) || !ctx) return false;
 
   const signature = `${width}x${height}:${Number(maskTuning?.alphaThreshold ?? 0).toFixed(3)}:${Number(maskTuning?.alphaSoftness ?? 0).toFixed(3)}`;
-  if (cache.source === matteMask && cache.signature === signature) {
+  const refreshIntervalMs = Math.max(16, Number(cache.refreshIntervalMs || 64));
+  const canReuse =
+    cache.source === matteMask
+    && cache.signature === signature
+    && Number.isFinite(cache.lastNormalizedAtMs)
+    && Number.isFinite(nowMs)
+    && (nowMs - cache.lastNormalizedAtMs) < refreshIntervalMs;
+  if (canReuse) {
     return cache.valid === true;
   }
 
   cache.source = matteMask;
   cache.signature = signature;
   cache.valid = false;
+  cache.lastNormalizedAtMs = Number.isFinite(nowMs) ? nowMs : cache.lastNormalizedAtMs;
 
   canvas.width = width;
   canvas.height = height;
@@ -288,13 +326,14 @@ function drawMatteMaskedPerson(
   softMaskCanvas,
   softMaskCtx,
   matteMaskCache,
+  nowMs,
   maskTuning,
 ) {
   if (
     !matteMask
     || !(maskCanvas instanceof HTMLCanvasElement)
     || !maskCtx
-    || !ensureNormalizedMatteMask(matteMaskCache, matteMask, width, height, maskTuning)
+    || !ensureNormalizedMatteMask(matteMaskCache, matteMask, width, height, maskTuning, nowMs)
   ) {
     return false;
   }
@@ -602,6 +641,8 @@ export async function createBackgroundFilterStream(sourceStream, options = {}) {
     source: null,
     signature: '',
     valid: false,
+    lastNormalizedAtMs: -1,
+    refreshIntervalMs: 64,
   };
   if (!rawCtx || !personCtx || !maskCtx || !softMaskCtx || !matteSourceCtx) {
     try {
@@ -707,6 +748,7 @@ export async function createBackgroundFilterStream(sourceStream, options = {}) {
             softMaskCanvas,
             softMaskCtx,
             matteMaskCache,
+            now,
             maskTuning,
           )) {
             drawFacePatches(
