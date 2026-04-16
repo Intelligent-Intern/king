@@ -50,6 +50,7 @@ cd demo/video-chat/backend-king-php
 - `GET /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
 - `POST /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
 - `PATCH /api/calls/{id}` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
+- `DELETE /api/calls/{id}` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
 - `POST /api/calls/{id}/cancel` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
 - `POST /api/invite-codes` (requires authenticated `admin`/`moderator`/`user` role; call scope requires owner/admin/moderator policy)
 - `POST /api/invite-codes/redeem` (requires authenticated `admin`/`moderator`/`user` role)
@@ -287,6 +288,12 @@ Response includes:
 - global invite resend is not triggered by edit calls
 - explicit invite resend request flags are rejected in update payload
 - success returns `invite_dispatch.global_resend_triggered = false` and `invite_dispatch.explicit_action_required = true`
+
+`DELETE /api/calls/{id}` delete contract:
+
+- authorization: call owner or admin
+- hard-delete semantics: removes the call record and cascades participant/access-link/invite-code bindings
+- success: `200` with `result.state = deleted`
 
 `POST /api/calls/{id}/cancel` cancel contract:
 

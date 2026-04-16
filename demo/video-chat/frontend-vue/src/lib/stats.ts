@@ -3,6 +3,8 @@
  * Tracks bitrate, framerate, latency, packet loss, and quality metrics
  */
 
+import { debugWarn } from '../support/debugLogs.js'
+
 export interface RTCStats {
   timestamp: number
   bitrate: {
@@ -259,7 +261,7 @@ export class RTCStatsMonitor {
         this.onStatsCallback(summary)
       }
     } catch (error) {
-      console.error('[RTCStats] Error collecting stats:', error)
+      debugWarn('[RTCStats] Error collecting stats:', error)
     }
   }
 

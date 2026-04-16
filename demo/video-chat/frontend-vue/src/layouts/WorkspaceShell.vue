@@ -234,8 +234,8 @@
                       id="call-left-background-blur-strength"
                       class="call-left-range"
                       type="range"
-                      min="4"
-                      max="28"
+                      min="0"
+                      max="4"
                       step="1"
                       :value="callMediaPrefs.backgroundBlurStrength"
                       @input="setCallBackgroundBlurStrength($event.target.value)"
@@ -761,13 +761,13 @@ function applyBackgroundPreset(preset) {
   if (preset === 'strong') {
     setCallBackgroundBackdropMode('blur9');
     setCallBackgroundQualityProfile('quality');
-    setCallBackgroundBlurStrength(18);
+    setCallBackgroundBlurStrength(4);
     return;
   }
 
   setCallBackgroundBackdropMode('blur7');
   setCallBackgroundQualityProfile('balanced');
-  setCallBackgroundBlurStrength(12);
+  setCallBackgroundBlurStrength(2);
 }
 
 function stopMicLevelMonitor() {

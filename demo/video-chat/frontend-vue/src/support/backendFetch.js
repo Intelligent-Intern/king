@@ -30,17 +30,16 @@ function isNetworkError(error) {
   return error.name === 'TypeError';
 }
 
-export function currentBackendOrigin() {
-  return resolveBackendOrigin();
-}
+let backendRequestQueue = Promise.resolve();
 
-export async function fetchBackend(path, options = {}) {
+async function performBackendFetch(path, options = {}) {
   const {
     method = 'GET',
     headers = {},
     body = undefined,
     query = null,
     retryOnNetworkError = true,
+    timeoutMs = 10_000,
     ...rest
   } = options || {};
 
@@ -51,11 +50,17 @@ export async function fetchBackend(path, options = {}) {
 
   for (const origin of origins) {
     const endpoint = isAbsolute ? `${String(path || '').trim()}${querySuffix}` : `${origin}${path}${querySuffix}`;
+    const controller = new AbortController();
+    const timeout = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
+      ? setTimeout(() => controller.abort(), Number(timeoutMs))
+      : null;
+
     try {
       const response = await fetch(endpoint, {
         method,
         headers,
         body,
+        signal: controller.signal,
         ...rest,
       });
       if (!isAbsolute && origin !== '' && origin !== resolveBackendOrigin()) {
@@ -71,6 +76,10 @@ export async function fetchBackend(path, options = {}) {
       if (!retryOnNetworkError || !isNetworkError(error)) {
         throw error;
       }
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
     }
   }
 
@@ -81,3 +90,21 @@ export async function fetchBackend(path, options = {}) {
   throw new Error('Backend request failed.');
 }
 
+export function currentBackendOrigin() {
+  return resolveBackendOrigin();
+}
+
+export async function fetchBackend(path, options = {}) {
+  const serialize = options?.serialize !== false;
+  if (!serialize) {
+    return performBackendFetch(path, options);
+  }
+
+  const run = () => performBackendFetch(path, options);
+  const queued = backendRequestQueue.then(run, run);
+  backendRequestQueue = queued.then(
+    () => undefined,
+    () => undefined,
+  );
+  return queued;
+}

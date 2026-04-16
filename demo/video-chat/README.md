@@ -113,6 +113,8 @@ Current demo caveats:
 - no durable room/message persistence across backend restart
 - no TURN relay setup (STUN-only by default)
 - no production moderation/audit policy
+- background blur uses browser `FaceDetector` / center-mask fallback by default; optional MediaPipe/TFJS segmentation backends are opt-in via `VITE_VIDEOCHAT_ENABLE_MEDIAPIPE=true` / `VITE_VIDEOCHAT_ENABLE_TFJS=true`
+- frontend debug console output is quiet by default; enable verbose runtime logs with `VITE_VIDEOCHAT_DEBUG_LOGS=true`
 - frontend runtime proxy may emit Node deprecation warnings from transitive proxy dependencies; behavior remains functional
 
 ## Quick Video-Call Test (Simple)
@@ -128,8 +130,9 @@ docker compose -f docker-compose.v1.yml up --build
 
 2. Open the app:
 
-- frontend: `http://127.0.0.1:5174`
+- frontend: `http://127.0.0.1:5176`
 - backend health: `http://127.0.0.1:18080/health`
+- websocket endpoints (`/ws`, `/sfu`) are served by backend listener `:18080`
 
 3. Login with demo admin:
 
@@ -140,7 +143,7 @@ docker compose -f docker-compose.v1.yml up --build
 
 5. Optional: generate a join link and open it in a second browser profile/incognito:
    - route shape: `/join/<access-link-uuid>`
-   - example full URL: `http://127.0.0.1:5174/join/<uuid>`
+   - example full URL: `http://127.0.0.1:5176/join/<uuid>`
 
 6. Stop stack:
 
@@ -250,6 +253,7 @@ Useful commands:
 - `cd demo/video-chat/backend-king-php && ./run-dev.sh`
 - `cd demo/video-chat/frontend-vue && npm run dev`
 - `curl -s http://127.0.0.1:18080/`
+- `bash demo/video-chat/scripts/backup-sqlite.sh`
 
 ## Verification Closure
 
@@ -302,7 +306,7 @@ docker compose -f docker-compose.v1.yml up --build
 
 Default host ports:
 
-- frontend: `http://127.0.0.1:5174`
+- frontend: `http://127.0.0.1:5176`
 - backend: `http://127.0.0.1:18080`
 
 Override host ports when needed:
@@ -347,8 +351,9 @@ SQLite data is persisted in a mounted Docker volume:
 - backend call update: `PATCH http://127.0.0.1:18080/api/calls/{id}` (authenticated admin/moderator/user; owner/admin/moderator policy)
 - backend call cancel: `POST http://127.0.0.1:18080/api/calls/{id}/cancel` (authenticated admin/moderator/user; owner/admin/moderator policy)
 - backend websocket endpoint: `WS ws://127.0.0.1:18080/ws`
+- backend SFU endpoint: `WS ws://127.0.0.1:18080/sfu`
 - backend startup applies ordered sqlite migrations (`schema_migrations`) and exposes migration state in runtime/health responses
-- frontend scaffold endpoint: `http://127.0.0.1:5174`
+- frontend scaffold endpoint: `http://127.0.0.1:5176`
 - frontend consumes backend preflight metadata on startup (`app/version + runtime health`)
 - the previous Node runtime remains in-repo only as historical reference, not as active dev path
 

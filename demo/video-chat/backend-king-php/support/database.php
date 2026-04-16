@@ -837,6 +837,16 @@ SQL
             $pdo->commit();
         } catch (Throwable $error) {
             $pdo->rollBack();
+            $message = strtolower($error->getMessage());
+            $isMigrationRace = str_contains($message, 'unique constraint failed')
+                && str_contains($message, 'schema_migrations.version');
+            if ($isMigrationRace) {
+                if (!in_array($version, $appliedVersions, true)) {
+                    $appliedVersions[] = $version;
+                    sort($appliedVersions);
+                }
+                continue;
+            }
             throw $error;
         }
 

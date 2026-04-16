@@ -84,7 +84,7 @@ npm run test:contract:wlvc
 
 Default endpoint:
 
-- `http://127.0.0.1:5174`
+- `http://127.0.0.1:5176`
 
 Backend runtime preflight:
 
@@ -94,6 +94,11 @@ Backend runtime preflight:
 Environment overrides:
 
 - `VIDEOCHAT_VUE_HOST` (default `127.0.0.1`)
-- `VIDEOCHAT_VUE_PORT` (default `5174`)
+- `VIDEOCHAT_VUE_PORT` (default `5176`)
 - `VITE_VIDEOCHAT_BACKEND_ORIGIN` (optional full origin override, e.g. `http://127.0.0.1:18080`)
 - `VITE_VIDEOCHAT_BACKEND_PORT` (optional inferred backend port override, default `18080`)
+- `VITE_VIDEOCHAT_WS_PORT` (optional WS gateway port override, default `18080`)
+- `VITE_VIDEOCHAT_SFU_PORT` (optional SFU gateway port override, default `18080`)
+- `VITE_VIDEOCHAT_ENABLE_MEDIAPIPE` (optional, default `false`; set `true` to allow MediaPipe segmentation backend)
+- `VITE_VIDEOCHAT_ENABLE_TFJS` (optional, default `false`; set `true` to allow TFJS segmentation backend)
+- `VITE_VIDEOCHAT_DEBUG_LOGS` (optional, default `false`; set `true` to re-enable verbose codec/SFU/debug console output)

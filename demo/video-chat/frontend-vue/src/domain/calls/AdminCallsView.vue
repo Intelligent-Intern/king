@@ -142,6 +142,16 @@
                 >
                   <img src="/assets/orgas/kingrt/icons/end_call.png" alt="" />
                 </button>
+                <button
+                  class="icon-mini-btn danger"
+                  type="button"
+                  title="Delete call"
+                  :aria-label="`Delete call ${call.title || call.id}`"
+                  :disabled="!isDeletable(call)"
+                  @click="openDelete(call)"
+                >
+                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
+                </button>
               </div>
             </td>
           </tr>
@@ -570,6 +580,35 @@
         </footer>
       </div>
     </div>
+
+    <div class="calls-modal" :hidden="!deleteState.open" role="dialog" aria-modal="true" aria-label="Delete call modal">
+      <div class="calls-modal-backdrop" @click="closeDelete"></div>
+      <div class="calls-modal-dialog calls-modal-dialog-small">
+        <header class="calls-modal-header">
+          <h4>Delete call</h4>
+          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeDelete">
+            <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
+          </button>
+        </header>
+
+        <div class="calls-modal-body">
+          <p class="calls-inline-error">
+            Delete <strong>{{ deleteState.callTitle }}</strong> permanently? This removes participants, access links and invite codes for this call.
+          </p>
+
+          <section v-if="deleteState.error" class="calls-inline-error">
+            {{ deleteState.error }}
+          </section>
+        </div>
+
+        <footer class="calls-modal-footer">
+          <button class="btn" type="button" :disabled="deleteState.submitting" @click="closeDelete">Close</button>
+          <button class="btn" type="button" :disabled="deleteState.submitting" @click="submitDelete">
+            {{ deleteState.submitting ? 'Deleting…' : 'Delete call' }}
+          </button>
+        </footer>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -729,6 +768,10 @@ function isEditable(call) {
 function isCancellable(call) {
   const status = String(call?.status || '').toLowerCase();
   return status !== 'cancelled' && status !== 'ended';
+}
+
+function isDeletable(call) {
+  return Boolean(call?.id);
 }
 
 function isInvitable(call) {
@@ -1707,6 +1750,14 @@ const cancelState = reactive({
   message: '',
 });
 
+const deleteState = reactive({
+  open: false,
+  submitting: false,
+  error: '',
+  callId: '',
+  callTitle: '',
+});
+
 function openCancel(call) {
   clearNotice();
   closeEnterCallModal();
@@ -1723,6 +1774,26 @@ function closeCancel() {
   cancelState.open = false;
   cancelState.submitting = false;
   cancelState.error = '';
+}
+
+function openDelete(call) {
+  if (!call || !call.id || !isDeletable(call)) {
+    return;
+  }
+
+  clearNotice();
+  closeEnterCallModal();
+  deleteState.open = true;
+  deleteState.submitting = false;
+  deleteState.error = '';
+  deleteState.callId = String(call.id || '');
+  deleteState.callTitle = String(call.title || call.id || '');
+}
+
+function closeDelete() {
+  deleteState.open = false;
+  deleteState.submitting = false;
+  deleteState.error = '';
 }
 
 async function submitCancel() {
@@ -1757,6 +1828,32 @@ async function submitCancel() {
   }
 }
 
+async function submitDelete() {
+  deleteState.error = '';
+  clearNotice();
+
+  const callId = String(deleteState.callId || '').trim();
+  if (callId === '') {
+    deleteState.error = 'Missing call id.';
+    return;
+  }
+
+  deleteState.submitting = true;
+  try {
+    await apiRequest(`/api/calls/${encodeURIComponent(callId)}`, {
+      method: 'DELETE',
+    });
+
+    closeDelete();
+    setNotice('ok', 'Call deleted.');
+    await Promise.all([loadCalls(), loadCalendar()]);
+  } catch (error) {
+    deleteState.error = error instanceof Error ? error.message : 'Could not delete call.';
+  } finally {
+    deleteState.submitting = false;
+  }
+}
+
 function handleEscape(event) {
   if (event.key !== 'Escape') return;
 
@@ -1767,6 +1864,11 @@ function handleEscape(event) {
 
   if (cancelState.open) {
     closeCancel();
+    return;
+  }
+
+  if (deleteState.open) {
+    closeDelete();
     return;
   }
 
@@ -1918,7 +2020,7 @@ onBeforeUnmount(() => {
 }
 
 .col-actions {
-  width: 150px;
+  width: 190px;
 }
 
 .call-title {

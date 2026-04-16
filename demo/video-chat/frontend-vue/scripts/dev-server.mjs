@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = dirname(__dirname);
 const host = process.env.VIDEOCHAT_VUE_HOST || '127.0.0.1';
-const port = Number.parseInt(process.env.VIDEOCHAT_VUE_PORT || '5174', 10);
+const port = Number.parseInt(process.env.VIDEOCHAT_VUE_PORT || '5176', 10);
 
 const server = createServer(async (_req, res) => {
   try {

@@ -1374,6 +1374,81 @@ SQL
     ];
 }
 
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   errors: array<string, string>,
+ *   call: ?array{
+ *     id: string,
+ *     room_id: string,
+ *     title: string,
+ *     owner_user_id: int,
+ *     status: string
+ *   }
+ * }
+ */
+function videochat_delete_call(PDO $pdo, string $callId, int $authUserId, string $authRole): array
+{
+    $existingCall = videochat_fetch_call_for_update($pdo, $callId);
+    if ($existingCall === null) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    if (!videochat_can_edit_call($authRole, $authUserId, (int) $existingCall['owner_user_id'])) {
+        return [
+            'ok' => false,
+            'reason' => 'forbidden',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $deleteCall = $pdo->prepare(
+            <<<'SQL'
+DELETE FROM calls
+WHERE id = :id
+SQL
+        );
+        $deleteCall->execute([
+            ':id' => (string) $existingCall['id'],
+        ]);
+
+        $pdo->commit();
+    } catch (Throwable) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'reason' => 'deleted',
+        'errors' => [],
+        'call' => [
+            'id' => (string) $existingCall['id'],
+            'room_id' => (string) $existingCall['room_id'],
+            'title' => (string) $existingCall['title'],
+            'owner_user_id' => (int) $existingCall['owner_user_id'],
+            'status' => (string) $existingCall['status'],
+        ],
+    ];
+}
+
 function videochat_normalize_call_participant_role(string $role, string $fallback = 'participant'): string
 {
     $normalized = strtolower(trim($role));

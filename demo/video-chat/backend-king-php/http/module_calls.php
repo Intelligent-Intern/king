@@ -673,9 +673,52 @@ function videochat_handle_call_routes(
             ]);
         }
 
+        if ($method === 'DELETE') {
+            try {
+                $pdo = $openDatabase();
+                $deleteResult = videochat_delete_call(
+                    $pdo,
+                    $callId,
+                    $authenticatedUserId,
+                    $authenticatedUserRole
+                );
+            } catch (Throwable) {
+                return $errorResponse(500, 'calls_delete_failed', 'Could not delete call.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            $deleteReason = (string) ($deleteResult['reason'] ?? 'internal_error');
+            if (!(bool) ($deleteResult['ok'] ?? false)) {
+                if ($deleteReason === 'not_found') {
+                    return $errorResponse(404, 'calls_not_found', 'The requested call does not exist.', [
+                        'call_id' => $callId,
+                    ]);
+                }
+                if ($deleteReason === 'forbidden') {
+                    return $errorResponse(403, 'calls_forbidden', 'You are not allowed to delete this call.', [
+                        'call_id' => $callId,
+                    ]);
+                }
+
+                return $errorResponse(500, 'calls_delete_failed', 'Could not delete call.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'result' => [
+                    'state' => 'deleted',
+                    'call' => $deleteResult['call'] ?? null,
+                ],
+                'time' => gmdate('c'),
+            ]);
+        }
+
         if ($method !== 'PATCH') {
-            return $errorResponse(405, 'method_not_allowed', 'Use GET or PATCH for /api/calls/{id}.', [
-                'allowed_methods' => ['GET', 'PATCH'],
+            return $errorResponse(405, 'method_not_allowed', 'Use GET, PATCH, or DELETE for /api/calls/{id}.', [
+                'allowed_methods' => ['GET', 'PATCH', 'DELETE'],
             ]);
         }
 

@@ -33,6 +33,7 @@ function normalizeExplicitOrigin(rawOrigin, fallbackPort = '') {
 
 let preferredBackendOrigin = '';
 let preferredBackendWebSocketOrigin = '';
+let preferredBackendSfuOrigin = '';
 
 function hasExplicitBackendOriginConfig() {
   const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || '').trim();
@@ -43,6 +44,20 @@ function hasExplicitBackendWebSocketConfig() {
   const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_WS_ORIGIN || '').trim();
   const explicitPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
   return explicitOrigin !== '' || explicitPort !== '';
+}
+
+function hasExplicitBackendSfuConfig() {
+  const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_SFU_ORIGIN || '').trim();
+  const explicitPort = String(import.meta.env.VITE_VIDEOCHAT_SFU_PORT || '').trim();
+  return explicitOrigin !== '' || explicitPort !== '';
+}
+
+function deriveOffsetPort(basePort, offset, fallback) {
+  const parsed = Number.parseInt(String(basePort || '').trim(), 10);
+  if (Number.isInteger(parsed) && parsed > 0 && parsed + offset < 65536) {
+    return String(parsed + offset);
+  }
+  return String(fallback || '').trim();
 }
 
 function detectDefaultBackendOrigin() {
@@ -70,41 +85,37 @@ function detectDefaultBackendWebSocketOrigin() {
     return normalizeExplicitOrigin(envOrigin, inferredWsPort);
   }
 
-  if (wsPort !== '') {
-    if (typeof window !== 'undefined') {
-      const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
-      const host = String(window.location.hostname || 'localhost').trim() || 'localhost';
-      return `${protocol}://${host}:${wsPort}`;
-    }
-    return `http://localhost:${wsPort}`;
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
+    const host = String(window.location.hostname || 'localhost').trim() || 'localhost';
+    return `${protocol}://${host}:${inferredWsPort}`;
   }
 
-  return resolveBackendOrigin();
+  return `http://localhost:${inferredWsPort}`;
 }
 
-function deriveBackendSiblingWebSocketOriginCandidate() {
-  const explicitWsOrigin = String(import.meta.env.VITE_VIDEOCHAT_WS_ORIGIN || '').trim();
-  const explicitWsPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
-  if (explicitWsOrigin !== '' || explicitWsPort !== '') {
-    return '';
+function detectDefaultBackendSfuOrigin() {
+  const envOrigin = String(import.meta.env.VITE_VIDEOCHAT_SFU_ORIGIN || '').trim();
+  const sfuPort = String(import.meta.env.VITE_VIDEOCHAT_SFU_PORT || '').trim();
+  const wsPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
+  const backendPort = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_PORT || '18080').trim() || '18080';
+
+  const inferredSfuPort = sfuPort
+    || (wsPort !== ''
+      ? wsPort
+      : backendPort);
+
+  if (envOrigin !== '') {
+    return normalizeExplicitOrigin(envOrigin, inferredSfuPort);
   }
 
-  try {
-    const parsedBackendOrigin = new URL(resolveBackendOrigin());
-    if (parsedBackendOrigin.port === '') {
-      return '';
-    }
-
-    const backendPort = Number.parseInt(parsedBackendOrigin.port, 10);
-    if (!Number.isInteger(backendPort) || backendPort <= 0 || backendPort >= 65535) {
-      return '';
-    }
-
-    parsedBackendOrigin.port = String(backendPort + 1);
-    return normalizeExplicitOrigin(parsedBackendOrigin.toString());
-  } catch {
-    return '';
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
+    const host = String(window.location.hostname || 'localhost').trim() || 'localhost';
+    return `${protocol}://${host}:${inferredSfuPort}`;
   }
+
+  return `http://localhost:${inferredSfuPort}`;
 }
 
 export function resolveBackendOrigin() {
@@ -127,6 +138,12 @@ export function setBackendWebSocketOrigin(nextOrigin) {
   preferredBackendWebSocketOrigin = normalized;
 }
 
+export function setBackendSfuOrigin(nextOrigin) {
+  const normalized = normalizeExplicitOrigin(nextOrigin);
+  if (normalized === '') return;
+  preferredBackendSfuOrigin = normalized;
+}
+
 export function resolveBackendWebSocketOrigin() {
   if (preferredBackendWebSocketOrigin !== '') {
     return preferredBackendWebSocketOrigin;
@@ -134,6 +151,15 @@ export function resolveBackendWebSocketOrigin() {
 
   preferredBackendWebSocketOrigin = normalizeExplicitOrigin(detectDefaultBackendWebSocketOrigin());
   return preferredBackendWebSocketOrigin;
+}
+
+export function resolveBackendSfuOrigin() {
+  if (preferredBackendSfuOrigin !== '') {
+    return preferredBackendSfuOrigin;
+  }
+
+  preferredBackendSfuOrigin = normalizeExplicitOrigin(detectDefaultBackendSfuOrigin());
+  return preferredBackendSfuOrigin;
 }
 
 function isLoopbackHost(hostname) {
@@ -185,14 +211,42 @@ export function resolveBackendWebSocketOriginCandidates() {
   const candidates = [];
 
   const primaryWsOrigin = resolveBackendWebSocketOrigin();
-  const primaryBackendOrigin = resolveBackendOrigin();
   pushUniqueCandidate(candidates, primaryWsOrigin);
+
+  if (hasExplicitBackendWebSocketConfig()) {
+    return candidates;
+  }
+
+  const primaryBackendOrigin = resolveBackendOrigin();
   pushUniqueCandidate(candidates, primaryBackendOrigin);
 
-  // Only add one sibling fallback candidate (+1) when WS is not explicitly configured.
-  // This avoids drifting retries like :18082 and host alias oscillation.
-  if (!hasExplicitBackendWebSocketConfig()) {
-    pushUniqueCandidate(candidates, deriveBackendSiblingWebSocketOriginCandidate());
+  return candidates;
+}
+
+export function resolveBackendSfuOriginCandidates() {
+  const candidates = [];
+
+  const primarySfuOrigin = resolveBackendSfuOrigin();
+  pushUniqueCandidate(candidates, primarySfuOrigin);
+
+  if (hasExplicitBackendSfuConfig()) {
+    return candidates;
+  }
+
+  const websocketOrigin = resolveBackendWebSocketOrigin();
+  const backendOrigin = resolveBackendOrigin();
+  pushUniqueCandidate(candidates, websocketOrigin);
+  pushUniqueCandidate(candidates, backendOrigin);
+
+  try {
+    const parsed = new URL(primarySfuOrigin);
+    if (isLoopbackHost(parsed.hostname)) {
+      const alternate = new URL(primarySfuOrigin);
+      alternate.hostname = parsed.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+      pushUniqueCandidate(candidates, alternate.toString());
+    }
+  } catch {
+    // Ignore parse failures and keep current candidates.
   }
 
   return candidates;
