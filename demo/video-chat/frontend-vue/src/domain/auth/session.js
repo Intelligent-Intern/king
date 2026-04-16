@@ -243,6 +243,61 @@ export async function loginWithPassword(email, password) {
   }
 }
 
+export async function loginWithEmailChangeToken(token) {
+  const normalizedToken = normalizeString(token);
+  if (normalizedToken === '') {
+    return {
+      ok: false,
+      status: 422,
+      message: 'Email confirmation token is required.',
+    };
+  }
+
+  try {
+    const { response } = await fetchBackend('/api/auth/email-change/confirm', {
+      method: 'GET',
+      query: {
+        token: normalizedToken,
+      },
+      headers: {
+        accept: 'application/json',
+      },
+    });
+
+    const payload = await readJsonResponse(response);
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        message: extractErrorMessage(payload, 'Could not confirm email change.'),
+      };
+    }
+
+    if (!payload || payload.status !== 'ok') {
+      return {
+        ok: false,
+        status: response.status,
+        message: 'Email confirmation response is invalid.',
+      };
+    }
+
+    applySessionEnvelope(payload.session, payload.user);
+    const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+    return {
+      ok: true,
+      role: sessionState.role,
+      redirectPath: typeof result.redirect_path === 'string' ? result.redirect_path : '',
+      editUserId: Number.isInteger(result.edit_user_id) ? result.edit_user_id : 0,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      message: normalizeNetworkErrorMessage(error, 'Email confirmation request failed.'),
+    };
+  }
+}
+
 export async function loginWithCallAccess(accessId, options = {}) {
   const normalizedAccessId = String(accessId || '').trim().toLowerCase();
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(normalizedAccessId)) {

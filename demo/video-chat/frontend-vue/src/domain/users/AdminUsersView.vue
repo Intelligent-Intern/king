@@ -67,6 +67,7 @@
                   <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
                 </button>
                 <button
+                  v-if="canToggleStatus(user)"
                   class="icon-mini-btn"
                   type="button"
                   :disabled="mutatingUserId === user.id"
@@ -80,6 +81,7 @@
                   />
                 </button>
                 <button
+                  v-if="canDeleteUser(user)"
                   class="icon-mini-btn danger"
                   type="button"
                   title="Delete user"
@@ -124,10 +126,59 @@
         </header>
 
         <div v-if="!avatarEditorOpen" class="users-modal-body">
-          <label class="users-field">
+          <label v-if="form.mode === 'create'" class="users-field">
             <span>Email</span>
             <input v-model.trim="form.email" class="input" type="email" autocomplete="email" />
           </label>
+
+          <section v-else class="users-field users-field-wide">
+            <span>Emails</span>
+            <div class="users-email-list">
+              <article
+                v-for="emailRow in userEmailRows"
+                :key="emailRow.id"
+                class="users-email-row"
+              >
+                <div class="users-email-main">
+                  <div class="users-email-value">{{ emailRow.email }}</div>
+                  <div class="users-email-meta">
+                    <span class="tag" :class="emailRow.is_verified ? 'ok' : 'warn'">
+                      {{ emailRow.is_verified ? 'confirmed' : 'unconfirmed' }}
+                    </span>
+                    <span v-if="emailRow.is_primary" class="tag ok">primary</span>
+                  </div>
+                </div>
+                <button
+                  v-if="!emailRow.is_verified"
+                  class="icon-mini-btn danger"
+                  type="button"
+                  :disabled="formSaving || userEmailMutatingId === emailRow.id"
+                  @click="deletePendingEmail(emailRow)"
+                >
+                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
+                </button>
+              </article>
+              <p v-if="userEmailRows.length === 0" class="users-email-empty">No emails configured.</p>
+            </div>
+            <div class="users-email-create">
+              <input
+                v-model.trim="userEmailDraft"
+                class="input"
+                type="email"
+                autocomplete="email"
+                placeholder="Add new email"
+                :disabled="formSaving || userEmailSubmitting || userEmailLoading"
+              />
+              <button
+                class="btn"
+                type="button"
+                :disabled="formSaving || userEmailSubmitting || userEmailLoading"
+                @click="createPendingEmail"
+              >
+                {{ userEmailSubmitting ? 'Sending…' : 'Send confirmation' }}
+              </button>
+            </div>
+          </section>
 
           <label class="users-field">
             <span>Display name</span>
@@ -146,7 +197,7 @@
 
           <label class="users-field">
             <span>Role</span>
-            <select v-model="form.role" class="select">
+            <select v-model="form.role" class="select" :disabled="!canEditRole">
               <option value="user">user</option>
               <option value="admin">admin</option>
             </select>
@@ -154,7 +205,7 @@
 
           <label v-if="form.mode === 'edit'" class="users-field">
             <span>Status</span>
-            <select v-model="form.status" class="select">
+            <select v-model="form.status" class="select" :disabled="!canEditStatus">
               <option value="active">active</option>
               <option value="disabled">disabled</option>
             </select>
@@ -232,11 +283,12 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import { logoutSession, refreshSession, sessionState } from '../auth/session';
 
 const router = useRouter();
+const route = useRoute();
 const avatarPlaceholder = '/assets/orgas/kingrt/avatar-placeholder.svg';
 const defaultAvatarOptions = [
   { label: 'KingRT default', path: '/assets/orgas/kingrt/avatar-placeholder.svg' },
@@ -277,9 +329,23 @@ const form = reactive({
   theme: 'dark',
   avatar_path: '',
 });
+const userEmailRows = ref([]);
+const userEmailDraft = ref('');
+const userEmailLoading = ref(false);
+const userEmailSubmitting = ref(false);
+const userEmailMutatingId = ref(0);
+const selectedUserPermissions = reactive({
+  isSelf: false,
+  isPrimaryAdmin: false,
+  canChangeRole: true,
+  canChangeStatus: true,
+  canToggleStatus: true,
+  canDelete: true,
+});
 
 let loadToken = 0;
 let searchTimer = 0;
+let routeEditRequestToken = 0;
 
 function normalizeAvatarSrc(rawPath) {
   const value = String(rawPath || '').trim();
@@ -378,6 +444,69 @@ function statusTagClass(status) {
   return 'warn';
 }
 
+function normalizeBoolean(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  return fallback;
+}
+
+function deriveUserPermissions(user) {
+  if (!user || typeof user !== 'object') {
+    return {
+      isSelf: false,
+      isPrimaryAdmin: false,
+      canChangeRole: true,
+      canChangeStatus: true,
+      canToggleStatus: true,
+      canDelete: true,
+    };
+  }
+
+  const userPermissions = user.permissions && typeof user.permissions === 'object'
+    ? user.permissions
+    : {};
+  const userId = Number(user.id || 0);
+  const fallbackIsSelf = userId > 0 && userId === Number(sessionState.userId || 0);
+  const isSelf = normalizeBoolean(user.is_self, fallbackIsSelf);
+  const isPrimaryAdmin = normalizeBoolean(user.is_primary_admin, false);
+  const fallbackAllowed = !isSelf && !isPrimaryAdmin;
+
+  return {
+    isSelf,
+    isPrimaryAdmin,
+    canChangeRole: normalizeBoolean(userPermissions.can_change_role, fallbackAllowed),
+    canChangeStatus: normalizeBoolean(userPermissions.can_change_status, fallbackAllowed),
+    canToggleStatus: normalizeBoolean(userPermissions.can_toggle_status, fallbackAllowed),
+    canDelete: normalizeBoolean(userPermissions.can_delete, fallbackAllowed),
+  };
+}
+
+function applySelectedUserPermissions(user) {
+  const permissions = deriveUserPermissions(user);
+  selectedUserPermissions.isSelf = permissions.isSelf;
+  selectedUserPermissions.isPrimaryAdmin = permissions.isPrimaryAdmin;
+  selectedUserPermissions.canChangeRole = permissions.canChangeRole;
+  selectedUserPermissions.canChangeStatus = permissions.canChangeStatus;
+  selectedUserPermissions.canToggleStatus = permissions.canToggleStatus;
+  selectedUserPermissions.canDelete = permissions.canDelete;
+}
+
+function resetSelectedUserPermissions() {
+  selectedUserPermissions.isSelf = false;
+  selectedUserPermissions.isPrimaryAdmin = false;
+  selectedUserPermissions.canChangeRole = true;
+  selectedUserPermissions.canChangeStatus = true;
+  selectedUserPermissions.canToggleStatus = true;
+  selectedUserPermissions.canDelete = true;
+}
+
+function canToggleStatus(user) {
+  return deriveUserPermissions(user).canToggleStatus;
+}
+
+function canDeleteUser(user) {
+  return deriveUserPermissions(user).canDelete;
+}
+
 async function loadUsers() {
   const token = ++loadToken;
   loading.value = true;
@@ -463,6 +592,12 @@ function resetForm(mode = 'create') {
   avatarEditorOpen.value = false;
   avatarUploadDataUrl.value = '';
   avatarDefaultSelection.value = '';
+  userEmailRows.value = [];
+  userEmailDraft.value = '';
+  userEmailLoading.value = false;
+  userEmailSubmitting.value = false;
+  userEmailMutatingId.value = 0;
+  resetSelectedUserPermissions();
   formError.value = '';
 }
 
@@ -471,7 +606,51 @@ function openCreateUser() {
   dialogOpen.value = true;
 }
 
-function openEditUser(user) {
+function clearEditUserQueryFromRoute() {
+  const query = { ...route.query };
+  let changed = false;
+  if (Object.prototype.hasOwnProperty.call(query, 'edit_user_id')) {
+    delete query.edit_user_id;
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(query, 'email_verified')) {
+    delete query.email_verified;
+    changed = true;
+  }
+  if (!changed) return;
+  void router.replace({ query }).catch(() => {});
+}
+
+function routeEditUserId() {
+  const raw = typeof route.query.edit_user_id === 'string'
+    ? route.query.edit_user_id.trim()
+    : '';
+  const userId = Number(raw);
+  return Number.isInteger(userId) && userId > 0 ? userId : 0;
+}
+
+async function loadUserEmails(userId) {
+  const normalizedUserId = Number(userId || 0);
+  if (normalizedUserId <= 0) {
+    userEmailRows.value = [];
+    return;
+  }
+
+  userEmailLoading.value = true;
+  try {
+    const payload = await apiRequest(`/api/admin/users/${encodeURIComponent(String(normalizedUserId))}/emails`);
+    const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+    const emails = Array.isArray(result.emails) ? result.emails : [];
+    userEmailRows.value = emails;
+  } catch (err) {
+    userEmailRows.value = [];
+    formError.value = err instanceof Error ? err.message : 'Could not load user emails.';
+  } finally {
+    userEmailLoading.value = false;
+  }
+}
+
+async function openEditUser(user) {
   resetForm('edit');
   form.id = Number(user.id || 0);
   form.email = String(user.email || '');
@@ -481,21 +660,34 @@ function openEditUser(user) {
   form.time_format = String(user.time_format || '24h');
   form.theme = String(user.theme || 'dark');
   form.avatar_path = String(user.avatar_path || '');
+  applySelectedUserPermissions(user);
   dialogOpen.value = true;
+  await loadUserEmails(form.id);
 }
 
 function closeDialog() {
+  if (form.mode === 'edit') {
+    clearEditUserQueryFromRoute();
+  }
   dialogOpen.value = false;
   formSaving.value = false;
   avatarEditorOpen.value = false;
   avatarUploadDataUrl.value = '';
   avatarDefaultSelection.value = '';
+  userEmailRows.value = [];
+  userEmailDraft.value = '';
+  userEmailLoading.value = false;
+  userEmailSubmitting.value = false;
+  userEmailMutatingId.value = 0;
+  resetSelectedUserPermissions();
   formError.value = '';
 }
 
 const dialogTitle = computed(() => (form.mode === 'create' ? 'Create user' : 'Edit user'));
 const dialogSubmitLabel = computed(() => (form.mode === 'create' ? 'Create user' : 'Save changes'));
 const pageCount = computed(() => Math.max(1, pagination.pageCount));
+const canEditRole = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeRole));
+const canEditStatus = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeStatus));
 const avatarPreviewSrc = computed(() => normalizeAvatarSrc(form.avatar_path));
 const avatarEditorPreviewSrc = computed(() => {
   if (avatarUploadDataUrl.value !== '') return avatarUploadDataUrl.value;
@@ -551,6 +743,77 @@ function setDefaultAvatar(path) {
   formError.value = '';
 }
 
+async function createPendingEmail() {
+  if (form.mode !== 'edit' || form.id <= 0 || userEmailSubmitting.value) return;
+
+  const nextEmail = String(userEmailDraft.value || '').trim().toLowerCase();
+  if (nextEmail === '') {
+    formError.value = 'Email is required.';
+    return;
+  }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(nextEmail)) {
+    formError.value = 'Email is invalid.';
+    return;
+  }
+
+  userEmailSubmitting.value = true;
+  formError.value = '';
+  try {
+    const payload = await apiRequest(`/api/admin/users/${encodeURIComponent(String(form.id))}/emails`, {
+      method: 'POST',
+      body: {
+        email: nextEmail,
+      },
+    });
+    const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+    const delivery = result.delivery && typeof result.delivery === 'object' ? result.delivery : {};
+    const sent = Boolean(delivery.sent);
+    const channel = String(delivery.channel || '').trim();
+    if (sent) {
+      notice.value = `Confirmation email sent to ${nextEmail}.`;
+    } else if (channel !== '') {
+      notice.value = `Confirmation for ${nextEmail} queued via ${channel}.`;
+    } else {
+      notice.value = `Confirmation for ${nextEmail} has been queued.`;
+    }
+    userEmailDraft.value = '';
+    await loadUserEmails(form.id);
+  } catch (err) {
+    formError.value = err instanceof Error ? err.message : 'Could not create email confirmation.';
+  } finally {
+    userEmailSubmitting.value = false;
+  }
+}
+
+async function deletePendingEmail(emailRow) {
+  if (form.mode !== 'edit' || form.id <= 0) return;
+
+  const emailId = Number(emailRow?.id || 0);
+  const emailValue = String(emailRow?.email || '').trim();
+  if (emailId <= 0) return;
+  if (normalizeBoolean(emailRow?.is_verified, false)) {
+    formError.value = 'Confirmed emails cannot be deleted.';
+    return;
+  }
+
+  const confirmed = window.confirm(`Delete unconfirmed email ${emailValue || `#${emailId}`}?`);
+  if (!confirmed) return;
+
+  userEmailMutatingId.value = emailId;
+  formError.value = '';
+  try {
+    await apiRequest(`/api/admin/users/${encodeURIComponent(String(form.id))}/emails/${encodeURIComponent(String(emailId))}`, {
+      method: 'DELETE',
+    });
+    notice.value = `Removed unconfirmed email ${emailValue || `#${emailId}`}.`;
+    await loadUserEmails(form.id);
+  } catch (err) {
+    formError.value = err instanceof Error ? err.message : 'Could not delete email.';
+  } finally {
+    userEmailMutatingId.value = 0;
+  }
+}
+
 async function submitForm() {
   if (formSaving.value) return;
 
@@ -558,8 +821,13 @@ async function submitForm() {
   const displayName = String(form.display_name || '').trim();
   const role = String(form.role || 'user').trim();
 
-  if (email === '' || displayName === '') {
-    formError.value = 'Email and display name are required.';
+  if (displayName === '') {
+    formError.value = 'Display name is required.';
+    return;
+  }
+
+  if (form.mode === 'create' && email === '') {
+    formError.value = 'Email is required.';
     return;
   }
 
@@ -591,17 +859,22 @@ async function submitForm() {
       notice.value = `Created ${displayName}.`;
       page.value = 1;
     } else {
+      const patchBody = {
+        display_name: displayName,
+        time_format: String(form.time_format || '24h'),
+        theme: String(form.theme || 'dark'),
+        avatar_path: String(form.avatar_path || '').trim() === '' ? null : String(form.avatar_path || '').trim(),
+      };
+      if (canEditRole.value) {
+        patchBody.role = role;
+      }
+      if (canEditStatus.value) {
+        patchBody.status = String(form.status || 'active');
+      }
+
       await apiRequest(`/api/admin/users/${encodeURIComponent(String(form.id))}`, {
         method: 'PATCH',
-        body: {
-          email,
-          display_name: displayName,
-          role,
-          status: String(form.status || 'active'),
-          time_format: String(form.time_format || '24h'),
-          theme: String(form.theme || 'dark'),
-          avatar_path: String(form.avatar_path || '').trim() === '' ? null : String(form.avatar_path || '').trim(),
-        },
+        body: patchBody,
       });
       notice.value = `Updated ${displayName}.`;
     }
@@ -693,6 +966,7 @@ async function deleteAvatar() {
 async function deleteUser(user) {
   const userId = Number(user?.id || 0);
   if (userId <= 0) return;
+  if (!canDeleteUser(user)) return;
   if (mutatingUserId.value === userId) return;
 
   const label = String(user?.display_name || user?.email || `#${userId}`);
@@ -729,6 +1003,7 @@ async function deleteUser(user) {
 async function toggleUserStatus(user) {
   const userId = Number(user.id || 0);
   if (userId <= 0) return;
+  if (!canToggleStatus(user)) return;
   mutatingUserId.value = userId;
   error.value = '';
   notice.value = '';
@@ -751,8 +1026,53 @@ async function toggleUserStatus(user) {
   }
 }
 
+async function fetchUserById(userId) {
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
+    return null;
+  }
+  const payload = await apiRequest(`/api/admin/users/${encodeURIComponent(String(normalizedUserId))}`);
+  const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+  const user = result.user && typeof result.user === 'object' ? result.user : null;
+  return user;
+}
+
+async function openEditUserFromRouteQuery() {
+  const userId = routeEditUserId();
+  if (userId <= 0) return;
+
+  const alreadyOpen = dialogOpen.value
+    && form.mode === 'edit'
+    && Number(form.id || 0) === userId;
+  if (alreadyOpen) return;
+
+  const requestToken = ++routeEditRequestToken;
+  try {
+    const user = await fetchUserById(userId);
+    if (requestToken !== routeEditRequestToken) return;
+    if (!user) return;
+    await openEditUser(user);
+    if (String(route.query.email_verified || '').trim() === '1') {
+      notice.value = 'Email change confirmed.';
+    }
+  } catch (err) {
+    if (requestToken !== routeEditRequestToken) return;
+    error.value = err instanceof Error ? err.message : 'Could not open user editor.';
+  }
+}
+
+watch(
+  () => [route.query.edit_user_id, route.query.email_verified],
+  () => {
+    void openEditUserFromRouteQuery();
+  }
+);
+
 onMounted(() => {
-  void loadUsers();
+  void (async () => {
+    await loadUsers();
+    await openEditUserFromRouteQuery();
+  })();
 });
 </script>
 
@@ -917,8 +1237,8 @@ onMounted(() => {
   --users-modal-padding: 16px;
   position: relative;
   z-index: 1;
-  width: min(860px, calc(100vw - 24px));
-  max-height: min(90vh, 900px);
+  width: min(980px, calc(100vw - 24px));
+  max-height: min(94vh, 980px);
   overflow: auto;
   border-radius: 10px;
   border: 1px solid var(--border-subtle);
@@ -978,6 +1298,62 @@ onMounted(() => {
 
 .users-field-wide {
   grid-column: 1 / -1;
+}
+
+.users-email-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: #0f1d34;
+}
+
+.users-email-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: rgba(5, 12, 23, 0.35);
+}
+
+.users-email-main {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.users-email-value {
+  font-size: 13px;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.users-email-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.users-email-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.users-email-create {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
 }
 
 .users-avatar-edit-row {
@@ -1072,6 +1448,10 @@ onMounted(() => {
 }
 
 @media (max-width: 760px) {
+  .users-email-create {
+    grid-template-columns: 1fr;
+  }
+
   .users-table {
     width: 100%;
     table-layout: auto;

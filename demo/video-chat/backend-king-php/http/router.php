@@ -73,7 +73,7 @@ function videochat_dispatch_request(
 
         if (in_array(
             $requestPath,
-            ['/', '/health', '/api/bootstrap', '/api/runtime', '/api/version', '/api/auth/login'],
+            ['/', '/health', '/api/bootstrap', '/api/runtime', '/api/version', '/api/auth/login', '/api/auth/email-change/confirm'],
             true
         )) {
             return true;

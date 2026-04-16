@@ -56,11 +56,16 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { resolveAuthorizedRedirect } from '../../http/router';
 import { fetchBackend } from '../../support/backendFetch';
-import { defaultRouteForRole, loginWithPassword, sessionState } from './session';
+import {
+  defaultRouteForRole,
+  loginWithEmailChangeToken,
+  loginWithPassword,
+  sessionState,
+} from './session';
 
 const router = useRouter();
 const route = useRoute();
@@ -174,4 +179,36 @@ async function handleSubmit() {
     submitting.value = false;
   }
 }
+
+async function handleEmailChangeTokenLogin(token) {
+  if (submitting.value) return;
+  submitting.value = true;
+  emailError.value = '';
+  passwordError.value = '';
+  authError.value = '';
+
+  try {
+    const result = await loginWithEmailChangeToken(token);
+    if (!result.ok) {
+      authError.value = result.message || 'Email confirmation failed.';
+      return;
+    }
+
+    const fallbackTarget = getRedirectTarget(result.role);
+    const tokenTarget = typeof result.redirectPath === 'string' ? result.redirectPath.trim() : '';
+    const nextTarget = tokenTarget !== '' ? tokenTarget : fallbackTarget;
+    router.replace(nextTarget || defaultRouteForRole(result.role));
+  } finally {
+    submitting.value = false;
+  }
+}
+
+onMounted(() => {
+  const tokenFromQuery = typeof route.query.email_change_token === 'string'
+    ? route.query.email_change_token.trim()
+    : '';
+  if (tokenFromQuery !== '') {
+    void handleEmailChangeTokenLogin(tokenFromQuery);
+  }
+});
 </script>

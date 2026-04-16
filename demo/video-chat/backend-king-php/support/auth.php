@@ -695,6 +695,106 @@ SQL
     }
 }
 
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   session: array{
+ *     id: string,
+ *     token: string,
+ *     token_type: string,
+ *     issued_at: string,
+ *     expires_at: string,
+ *     expires_in_seconds: int
+ *   }|null
+ * }
+ */
+function videochat_issue_session_for_user(
+    PDO $pdo,
+    int $userId,
+    callable $issueSessionId,
+    ?int $ttlSeconds = null,
+    ?string $clientIp = null,
+    ?string $userAgent = null,
+    ?int $nowUnix = null
+): array {
+    if ($userId <= 0) {
+        return [
+            'ok' => false,
+            'reason' => 'invalid_user',
+            'session' => null,
+        ];
+    }
+
+    $resolvedTtlSeconds = $ttlSeconds;
+    if (!is_int($resolvedTtlSeconds)) {
+        $resolvedTtlSeconds = (int) (getenv('VIDEOCHAT_SESSION_TTL_SECONDS') ?: 43_200);
+    }
+    if ($resolvedTtlSeconds < 60) {
+        $resolvedTtlSeconds = 60;
+    } elseif ($resolvedTtlSeconds > 2_592_000) {
+        $resolvedTtlSeconds = 2_592_000;
+    }
+
+    $effectiveNow = $nowUnix ?? time();
+    $issuedAt = gmdate('c', $effectiveNow);
+    $expiresAt = gmdate('c', $effectiveNow + $resolvedTtlSeconds);
+    $trimmedClientIp = trim((string) ($clientIp ?? ''));
+    $trimmedUserAgent = substr(trim((string) ($userAgent ?? '')), 0, 500);
+
+    $sessionId = '';
+    for ($attempt = 0; $attempt < 5; $attempt++) {
+        $candidate = trim((string) $issueSessionId());
+        if ($candidate !== '') {
+            $sessionId = $candidate;
+            break;
+        }
+    }
+    if ($sessionId === '') {
+        return [
+            'ok' => false,
+            'reason' => 'session_issue_failed',
+            'session' => null,
+        ];
+    }
+
+    try {
+        $insert = $pdo->prepare(
+            <<<'SQL'
+INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent)
+VALUES(:id, :user_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)
+SQL
+        );
+        $insert->execute([
+            ':id' => $sessionId,
+            ':user_id' => $userId,
+            ':issued_at' => $issuedAt,
+            ':expires_at' => $expiresAt,
+            ':client_ip' => $trimmedClientIp === '' ? null : $trimmedClientIp,
+            ':user_agent' => $trimmedUserAgent === '' ? null : $trimmedUserAgent,
+        ]);
+    } catch (Throwable) {
+        return [
+            'ok' => false,
+            'reason' => 'insert_failed',
+            'session' => null,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'reason' => 'issued',
+        'session' => [
+            'id' => $sessionId,
+            'token' => $sessionId,
+            'token_type' => 'session_id',
+            'issued_at' => $issuedAt,
+            'expires_at' => $expiresAt,
+            'expires_in_seconds' => $resolvedTtlSeconds,
+        ],
+    ];
+}
+
 function videochat_register_active_websocket(
     array &$activeWebsocketsBySession,
     string $sessionId,

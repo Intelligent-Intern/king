@@ -827,6 +827,61 @@ WHERE lower(trim(coalesce(room_id, ''))) = 'lobby'
 SQL,
             ],
         ],
+        10 => [
+            'name' => '0010_user_email_identities',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS user_emails (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    is_verified INTEGER NOT NULL DEFAULT 0 CHECK (is_verified IN (0, 1)),
+    is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1)),
+    verified_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS user_email_change_tokens (
+    id TEXT PRIMARY KEY,
+    user_email_id INTEGER NOT NULL REFERENCES user_emails(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    created_by_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    expires_at TEXT NOT NULL,
+    consumed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_emails_email_nocase ON user_emails(lower(email))",
+                <<<'SQL'
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_emails_primary_per_user
+ON user_emails(user_id)
+WHERE is_primary = 1
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_user_emails_user_id ON user_emails(user_id)",
+                "CREATE INDEX IF NOT EXISTS idx_user_email_change_tokens_user_id ON user_email_change_tokens(user_id)",
+                "CREATE INDEX IF NOT EXISTS idx_user_email_change_tokens_expires_at ON user_email_change_tokens(expires_at)",
+                <<<'SQL'
+INSERT INTO user_emails(user_id, email, is_verified, is_primary, verified_at, created_at, updated_at)
+SELECT
+    users.id,
+    lower(trim(users.email)),
+    1,
+    1,
+    coalesce(nullif(users.updated_at, ''), nullif(users.created_at, ''), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    coalesce(nullif(users.created_at, ''), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    coalesce(nullif(users.updated_at, ''), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+FROM users
+WHERE trim(coalesce(users.email, '')) <> ''
+  AND NOT EXISTS (
+      SELECT 1
+      FROM user_emails
+      WHERE user_emails.user_id = users.id
+  )
+SQL,
+            ],
+        ],
     ];
 }
 
