@@ -232,8 +232,7 @@
               <img class="users-avatar-preview" :src="avatarPreviewSrc" alt="User avatar preview" />
             </div>
             <div class="users-avatar-edit-actions">
-              <button class="btn" type="button" :disabled="formSaving" @click="openAvatarEditor">Change avatar</button>
-              <button class="btn" type="button" :disabled="formSaving" @click="deleteAvatar">Delete avatar</button>
+              <button class="btn btn-cyan" type="button" :disabled="formSaving" @click="openAvatarEditor">Change avatar</button>
             </div>
           </section>
         </div>
@@ -931,33 +930,6 @@ async function saveAvatarChanges() {
     await loadUsers();
   } catch (err) {
     formError.value = err instanceof Error ? err.message : 'Could not save avatar changes.';
-  } finally {
-    formSaving.value = false;
-  }
-}
-
-async function deleteAvatar() {
-  if (formSaving.value || form.mode !== 'edit' || form.id <= 0) return;
-
-  const userId = Number(form.id || 0);
-  if (userId <= 0) return;
-
-  formSaving.value = true;
-  formError.value = '';
-  error.value = '';
-  notice.value = '';
-
-  try {
-    await apiRequest(`/api/admin/users/${encodeURIComponent(String(userId))}/avatar`, {
-      method: 'DELETE',
-    });
-    form.avatar_path = '';
-    avatarUploadDataUrl.value = '';
-    avatarDefaultSelection.value = '';
-    notice.value = 'Avatar removed.';
-    await loadUsers();
-  } catch (err) {
-    formError.value = err instanceof Error ? err.message : 'Could not delete avatar.';
   } finally {
     formSaving.value = false;
   }
