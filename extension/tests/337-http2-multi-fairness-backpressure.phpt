@@ -2,8 +2,11 @@
 King HTTP/2 multi request runtime keeps fast streams progressing while a slow sibling stream is still active
 --SKIPIF--
 <?php
+if (PHP_OS === 'Darwin') {
+    die("skip HTTP/2 runtime requires libcurl.so (Linux) - not available on macOS");
+}
 if (trim((string) shell_exec('command -v node')) === '') {
-    echo "skip node is required for the local HTTP/2 fairness fixture";
+    die("skip node is required for the local HTTP/2 fairness fixture");
 }
 ?>
 --INI--

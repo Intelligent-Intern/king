@@ -34,8 +34,7 @@ EXT_DIR="${ROOT_DIR}/extension"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
 PHP_BIN="${PHP_BIN:-php}"
 EXT_SO="${PROFILE_DIR}/king.so"
-QUICHE_LIB="${PROFILE_DIR}/libquiche.so"
-QUICHE_SERVER="${PROFILE_DIR}/quiche-server"
+LSQUIC_SHIM="${PROFILE_DIR}/liblsquic-shim.so"
 
 resolve_clang_arch_suffix() {
     local machine=""
@@ -114,30 +113,18 @@ if [[ ! -f "${EXT_SO}" ]]; then
     exit 1
 fi
 
-if [[ ! -f "${QUICHE_LIB}" ]]; then
-    echo "Missing staged libquiche for profile '${PROFILE}': ${QUICHE_LIB}" >&2
-    exit 1
-fi
-
-if [[ ! -x "${QUICHE_SERVER}" ]]; then
-    echo "Missing staged quiche-server for profile '${PROFILE}': ${QUICHE_SERVER}" >&2
-    exit 1
-fi
-
-export KING_QUICHE_LIBRARY="${QUICHE_LIB}"
-export KING_QUICHE_SERVER="${QUICHE_SERVER}"
-export LD_LIBRARY_PATH="${PROFILE_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+echo "QUIC builds with HTTP/2 fallback"
 
 case "${PROFILE}" in
     asan)
         asan_runtime="$(resolve_sanitizer_runtime asan)"
-        export USE_ZEND_ALLOC=0
+        export USE_ZENDALLOC=0
         export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0:abort_on_error=1:symbolize=1}"
         export LD_PRELOAD="${asan_runtime}${LD_PRELOAD:+ ${LD_PRELOAD}}"
         ;;
     ubsan)
         ubsan_runtime="$(resolve_sanitizer_runtime ubsan)"
-        export USE_ZEND_ALLOC=0
+        export USE_ZENDALLOC=0
         export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
         export LD_PRELOAD="${ubsan_runtime}${LD_PRELOAD:+ ${LD_PRELOAD}}"
         ;;

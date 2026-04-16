@@ -65,8 +65,8 @@ in one install:
 - build the extension from `extension/`
 - compile the bundled QUIC runtime with Cargo and Rust (mandatory)
 - install `king.so`
-- install `libquiche.so`
-- install `quiche-server`
+- install `liblsquic.so`
+- install `lsquic-server`
 
 This is why King uses a pre-packaged source asset instead of pretending that
 the default repository ZIP is enough.
@@ -96,14 +96,14 @@ If a build runs in CI/non-interactive mode and your Rust toolchain is missing or
 outdated (including lockfile-v4 readers), set:
 
 ```bash
-KING_QUICHE_TOOLCHAIN_CONFIRM=yes pie install intelligent-intern/king-ext
+KING_LSQUIC_TOOLCHAIN_CONFIRM=yes pie install intelligent-intern/king-ext
 ```
 
 for automatic in-script upgrade attempts (which also installs `nightly` when needed
 for lockfile-v4 compatibility), or:
 
 ```bash
-KING_QUICHE_TOOLCHAIN_CONFIRM=no pie install intelligent-intern/king-ext
+KING_LSQUIC_TOOLCHAIN_CONFIRM=no pie install intelligent-intern/king-ext
 ```
 
 to fail fast with clear instructions.
@@ -130,8 +130,8 @@ the host has:
 - `autoconf`
 - `make`
 - a C compiler
-- `cargo` and `rustc` (always, because Quiche is a mandatory runtime component)
-- `KING_QUICHE_TOOLCHAIN_CONFIRM` (`prompt`, `yes`, or `no`) for installer automation
+- `cargo` and `rustc` (always, because Lsquic is a mandatory runtime component)
+- `KING_LSQUIC_TOOLCHAIN_CONFIRM` (`prompt`, `yes`, or `no`) for installer automation
 - libcurl development headers and libraries
 
 King currently excludes Windows from this first PIE path. The current v1 target

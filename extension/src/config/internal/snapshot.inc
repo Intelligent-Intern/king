@@ -13,7 +13,7 @@
 
 static void king_config_snapshot_globals(king_cfg_t *cfg)
 {
-    cfg->quiche_cfg = NULL;
+    cfg->lsquic_cfg = NULL;
     cfg->frozen = 0;
     cfg->userland_overrides_applied = 0;
     cfg->override_count = 0;

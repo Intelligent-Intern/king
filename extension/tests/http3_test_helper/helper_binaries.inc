@@ -4,9 +4,9 @@ function king_http3_failure_peer_binary(): string
 {
     $root = dirname(dirname(KING_HTTP3_TESTS_DIR));
     $template = KING_HTTP3_TESTS_DIR . '/http3_failure_peer.rs';
-    $manifest = $root . '/quiche/apps/Cargo.toml';
-    $source = $root . '/quiche/apps/src/bin/king-http3-failure-peer.rs';
-    $binary = $root . '/quiche/target/release/king-http3-failure-peer';
+    $manifest = $root . '/lsquic/apps/Cargo.toml';
+    $source = $root . '/lsquic/apps/src/bin/king-http3-failure-peer.rs';
+    $binary = $root . '/lsquic/target/release/king-http3-failure-peer';
 
     if (trim((string) shell_exec('command -v cargo')) === '') {
         throw new RuntimeException('cargo is required to build the HTTP/3 failure peer helper');
@@ -33,7 +33,7 @@ function king_http3_failure_peer_binary(): string
     }
 
     $command = sprintf(
-        'cargo build --manifest-path %s -p quiche_apps --release --locked --no-default-features --bin king-http3-failure-peer 2>&1',
+        'cargo build --manifest-path %s -p lsquic_apps --release --locked --no-default-features --bin king-http3-failure-peer 2>&1',
         escapeshellarg($manifest)
     );
 
@@ -51,9 +51,9 @@ function king_http3_delayed_body_client_binary(): string
 {
     $root = dirname(dirname(KING_HTTP3_TESTS_DIR));
     $template = KING_HTTP3_TESTS_DIR . '/http3_delayed_body_client.rs';
-    $manifest = $root . '/quiche/apps/Cargo.toml';
-    $source = $root . '/quiche/apps/src/bin/king-http3-delayed-body-client.rs';
-    $binary = $root . '/quiche/target/release/king-http3-delayed-body-client';
+    $manifest = $root . '/lsquic/apps/Cargo.toml';
+    $source = $root . '/lsquic/apps/src/bin/king-http3-delayed-body-client.rs';
+    $binary = $root . '/lsquic/target/release/king-http3-delayed-body-client';
 
     if (trim((string) shell_exec('command -v cargo')) === '') {
         throw new RuntimeException('cargo is required to build the HTTP/3 delayed body client helper');
@@ -80,7 +80,7 @@ function king_http3_delayed_body_client_binary(): string
     }
 
     $command = sprintf(
-        'cargo build --manifest-path %s -p quiche_apps --release --locked --no-default-features --bin king-http3-delayed-body-client 2>&1',
+        'cargo build --manifest-path %s -p lsquic_apps --release --locked --no-default-features --bin king-http3-delayed-body-client 2>&1',
         escapeshellarg($manifest)
     );
 
@@ -98,9 +98,9 @@ function king_http3_abort_client_binary(): string
 {
     $root = dirname(dirname(KING_HTTP3_TESTS_DIR));
     $template = KING_HTTP3_TESTS_DIR . '/http3_abort_client.rs';
-    $manifest = $root . '/quiche/apps/Cargo.toml';
-    $source = $root . '/quiche/apps/src/bin/king-http3-abort-client.rs';
-    $binary = $root . '/quiche/target/release/king-http3-abort-client';
+    $manifest = $root . '/lsquic/apps/Cargo.toml';
+    $source = $root . '/lsquic/apps/src/bin/king-http3-abort-client.rs';
+    $binary = $root . '/lsquic/target/release/king-http3-abort-client';
 
     if (trim((string) shell_exec('command -v cargo')) === '') {
         throw new RuntimeException('cargo is required to build the HTTP/3 abort client helper');
@@ -127,7 +127,7 @@ function king_http3_abort_client_binary(): string
     }
 
     $command = sprintf(
-        'cargo build --manifest-path %s -p quiche_apps --release --locked --no-default-features --bin king-http3-abort-client 2>&1',
+        'cargo build --manifest-path %s -p lsquic_apps --release --locked --no-default-features --bin king-http3-abort-client 2>&1',
         escapeshellarg($manifest)
     );
 
@@ -145,9 +145,9 @@ function king_http3_multi_peer_binary(): string
 {
     $root = dirname(dirname(KING_HTTP3_TESTS_DIR));
     $template = KING_HTTP3_TESTS_DIR . '/http3_multi_peer.rs';
-    $manifest = $root . '/quiche/apps/Cargo.toml';
-    $source = $root . '/quiche/apps/src/bin/king-http3-multi-peer.rs';
-    $binary = $root . '/quiche/target/release/king-http3-multi-peer';
+    $manifest = $root . '/lsquic/apps/Cargo.toml';
+    $source = $root . '/lsquic/apps/src/bin/king-http3-multi-peer.rs';
+    $binary = $root . '/lsquic/target/release/king-http3-multi-peer';
 
     if (trim((string) shell_exec('command -v cargo')) === '') {
         throw new RuntimeException('cargo is required to build the HTTP/3 multi peer helper');
@@ -174,7 +174,7 @@ function king_http3_multi_peer_binary(): string
     }
 
     $command = sprintf(
-        'cargo build --manifest-path %s -p quiche_apps --release --locked --no-default-features --bin king-http3-multi-peer 2>&1',
+        'cargo build --manifest-path %s -p lsquic_apps --release --locked --no-default-features --bin king-http3-multi-peer 2>&1',
         escapeshellarg($manifest)
     );
 

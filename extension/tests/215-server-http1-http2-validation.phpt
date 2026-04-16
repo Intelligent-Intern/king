@@ -1,5 +1,11 @@
 --TEST--
 King HTTP/1 and HTTP/2 server leaves validate host port and handler response contracts
+--SKIPIF--
+<?php
+if (PHP_OS === 'Darwin') {
+    die("skip HTTP/2 runtime requires libcurl.so (Linux) - not available on macOS");
+}
+?>
 --FILE--
 <?php
 $ok = static function (array $request): array {

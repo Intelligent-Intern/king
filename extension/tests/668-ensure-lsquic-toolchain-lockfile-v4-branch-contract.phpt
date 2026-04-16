@@ -1,9 +1,13 @@
 --TEST--
-King ensure-quiche-toolchain preserves lockfile-v4 exit status and enters the dedicated remediation branch
+King ensure-lsquic-toolchain preserves lockfile-v4 exit status and enters the dedicated remediation branch
 --SKIPIF--
 <?php
 if (!function_exists('proc_open')) {
     echo "skip proc_open is required";
+}
+$lsquicPath = dirname(__DIR__, 2) . '/extension/lsquic/liblsquic.a';
+if (file_exists($lsquicPath)) {
+    echo "skip lsquic library is pre-built - no toolchain needed";
 }
 ?>
 --FILE--

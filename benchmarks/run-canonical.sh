@@ -7,9 +7,9 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
 PHP_BIN="${PHP_BIN:-php}"
 EXT_SO="${EXT_DIR}/modules/king.so"
-QUICHE_DIR="${ROOT_DIR}/quiche/target/release"
-QUICHE_LIB="${QUICHE_DIR}/libquiche.so"
-QUICHE_SERVER="${QUICHE_DIR}/quiche-server"
+LSQUIC_DIR="${ROOT_DIR}/lsquic/target/release"
+LSQUIC_LIB="${LSQUIC_DIR}/liblsquic.so"
+LSQUIC_SERVER="${LSQUIC_DIR}/lsquic-server"
 
 if [[ ! -f "${EXT_SO}" ]]; then
     echo "Missing extension binary: ${EXT_SO}" >&2
@@ -17,23 +17,23 @@ if [[ ! -f "${EXT_SO}" ]]; then
     exit 1
 fi
 
-if [[ ! -f "${QUICHE_LIB}" ]]; then
-    echo "Missing libquiche runtime: ${QUICHE_LIB}" >&2
+if [[ ! -f "${LSQUIC_LIB}" ]]; then
+    echo "Missing liblsquic runtime: ${LSQUIC_LIB}" >&2
     echo "Run ./infra/scripts/build-extension.sh first." >&2
     exit 1
 fi
 
-if [[ ! -x "${QUICHE_SERVER}" ]]; then
-    echo "Missing quiche-server binary: ${QUICHE_SERVER}" >&2
+if [[ ! -x "${LSQUIC_SERVER}" ]]; then
+    echo "Missing lsquic-server binary: ${LSQUIC_SERVER}" >&2
     echo "Run ./infra/scripts/build-extension.sh first." >&2
     exit 1
 fi
 
 cd "${ROOT_DIR}"
 
-export KING_QUICHE_LIBRARY="${QUICHE_LIB}"
-export KING_QUICHE_SERVER="${QUICHE_SERVER}"
-export LD_LIBRARY_PATH="${QUICHE_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+export KING_LSQUIC_LIBRARY="${LSQUIC_LIB}"
+export KING_LSQUIC_SERVER="${LSQUIC_SERVER}"
+export LD_LIBRARY_PATH="${LSQUIC_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
 exec "${PHP_BIN}" \
     -d "extension=${EXT_SO}" \

@@ -2,11 +2,14 @@
 King OO Http2Client wrapper uses the active HTTPS HTTP/2 runtime and preserves ALPN-backed reuse
 --SKIPIF--
 <?php
+if (PHP_OS === 'Darwin') {
+    die("skip HTTP/2 runtime requires libcurl.so (Linux) - not available on macOS");
+}
 if (trim((string) shell_exec('command -v node')) === '') {
-    echo "skip node is required for the local HTTP/2 fixture";
+    die("skip node is required for the local HTTP/2 fixture");
 }
 if (trim((string) shell_exec('command -v openssl')) === '') {
-    echo "skip openssl is required for the local HTTPS HTTP/2 fixture";
+    die("skip openssl is required for the local HTTPS HTTP/2 fixture");
 }
 ?>
 --INI--

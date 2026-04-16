@@ -1,4 +1,7 @@
 #include "include/king_init.h"
+#include "king_base64.h"
+#include "king_json.h"
+#include "king_url.h"
 #include "include/config/security_and_traffic/index.h"
 #include "include/config/tls_and_crypto/index.h"
 #include "include/config/tcp_transport/index.h"

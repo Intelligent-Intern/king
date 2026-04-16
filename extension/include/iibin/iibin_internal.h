@@ -111,6 +111,17 @@ zend_result king_iibin_encode(
     zval *data,
     smart_str *encoded_out
 );
+zend_result king_iibin_encode_batch(
+    zend_string *schema_name,
+    zval *records,
+    zval *encoded_out
+);
+zend_result king_iibin_decode_batch(
+    zend_string *schema_name,
+    zval *records,
+    zval *decode_mode_input,
+    zval *decoded_out
+);
 zend_result king_iibin_decode(
     zend_string *schema_name,
     zend_string *binary_data,
@@ -131,22 +142,80 @@ void king_proto_runtime_enum_zval_dtor(zval *zv);
 int king_iibin_minit(void);
 extern const zend_function_entry king_iibin_class_methods[];
 
-/* --- Wire Helpers --- */
+/* --- Wire Helpers: Varint encode --- */
 
 static inline void king_proto_encode_varint(smart_str *buf, uint64_t value) {
-    unsigned char temp_buf[10];
-    int i = 0;
+    unsigned char temp[10];
+    int len = 0;
     do {
-        temp_buf[i] = (unsigned char)(value & 0x7FU);
+        temp[len] = (unsigned char)(value & 0x7FU);
         value >>= 7;
         if (value > 0) {
-            temp_buf[i] |= 0x80U;
+            temp[len] |= 0x80U;
         }
-        i++;
-    } while (value > 0 && i < 10);
-    smart_str_appendl(buf, (char*)temp_buf, i);
+        len++;
+    } while (value > 0 && len < 10);
+    smart_str_appendl(buf, (char*)temp, len);
 }
 
+/* --- Varint decode: optimized for ARM64 --- */
+#if defined(__aarch64__)
+static inline zend_bool king_proto_decode_varint(const unsigned char **buf_ptr, const unsigned char *buf_end, uint64_t *value_out) {
+    const unsigned char *p = *buf_ptr;
+    if (p >= buf_end) return 0;
+    
+    uint64_t b0 = *p++;
+    *value_out = b0 & 0x7F;
+    if (!(b0 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b1 = *p++;
+    *value_out |= (b1 & 0x7F) << 7;
+    if (!(b1 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b2 = *p++;
+    *value_out |= (b2 & 0x7F) << 14;
+    if (!(b2 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b3 = *p++;
+    *value_out |= (b3 & 0x7F) << 21;
+    if (!(b3 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b4 = *p++;
+    *value_out |= (b4 & 0x7F) << 28;
+    if (!(b4 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b5 = *p++;
+    *value_out |= (b5 & 0x7F) << 35;
+    if (!(b5 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b6 = *p++;
+    *value_out |= (b6 & 0x7F) << 42;
+    if (!(b6 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b7 = *p++;
+    *value_out |= (b7 & 0x7F) << 49;
+    if (!(b7 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b8 = *p++;
+    *value_out |= (b8 & 0x7F) << 56;
+    if (!(b8 & 0x80)) { *buf_ptr = p; return 1; }
+    
+    if (p >= buf_end) return 0;
+    uint64_t b9 = *p++;
+    *value_out |= b9 << 63;
+    *buf_ptr = p;
+    return 1;
+}
+#else
+/* Generic fallback */
 static inline zend_bool king_proto_decode_varint(const unsigned char **buf_ptr, const unsigned char *buf_end, uint64_t *value_out) {
     uint64_t result = 0;
     int shift = 0;
@@ -164,14 +233,15 @@ static inline zend_bool king_proto_decode_varint(const unsigned char **buf_ptr, 
     }
     return 0;
 }
+#endif
 
 static inline void king_proto_encode_fixed32(smart_str *buf, uint32_t value) {
-    unsigned char temp_buf[4];
-    temp_buf[0] = (unsigned char)(value);
-    temp_buf[1] = (unsigned char)(value >> 8);
-    temp_buf[2] = (unsigned char)(value >> 16);
-    temp_buf[3] = (unsigned char)(value >> 24);
-    smart_str_appendl(buf, (char*)temp_buf, 4);
+    unsigned char temp[4];
+    temp[0] = (unsigned char)(value);
+    temp[1] = (unsigned char)(value >> 8);
+    temp[2] = (unsigned char)(value >> 16);
+    temp[3] = (unsigned char)(value >> 24);
+    smart_str_appendl(buf, (char*)temp, 4);
 }
 
 static inline zend_bool king_proto_decode_fixed32(const unsigned char **buf_ptr, const unsigned char *buf_end, uint32_t *value_out) {
@@ -212,6 +282,41 @@ static inline zend_bool king_proto_decode_fixed64(const unsigned char **buf_ptr,
     *buf_ptr += 8;
     return 1;
 }
+
+/* --- Float/Double Bit Conversions --- */
+/* Use memcpy which modern compilers optimize to single instruction */
+
+#ifndef KING_PROTO_FLOAT_TO_BITS
+static inline uint32_t king_proto_float_to_bits(float f) {
+    uint32_t u;
+    memcpy(&u, &f, sizeof(u));
+    return u;
+}
+#endif
+
+#ifndef KING_PROTO_BITS_TO_FLOAT
+static inline float king_proto_bits_to_float(uint32_t u) {
+    float f;
+    memcpy(&f, &u, sizeof(f));
+    return f;
+}
+#endif
+
+#ifndef KING_PROTO_DOUBLE_TO_BITS
+static inline uint64_t king_proto_double_to_bits(double d) {
+    uint64_t u;
+    memcpy(&u, &d, sizeof(u));
+    return u;
+}
+#endif
+
+#ifndef KING_PROTO_BITS_TO_DOUBLE
+static inline double king_proto_bits_to_double(uint64_t u) {
+    double d;
+    memcpy(&d, &u, sizeof(d));
+    return d;
+}
+#endif
 
 static inline uint32_t king_proto_zigzag_encode32(int32_t n) {
     return (uint32_t)((n << 1) ^ (n >> 31));

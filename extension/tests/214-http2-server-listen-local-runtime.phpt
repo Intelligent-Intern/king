@@ -1,5 +1,11 @@
 --TEST--
 King HTTP/2 server leaf materializes a local request contract and auto-closes the captured session snapshot
+--SKIPIF--
+<?php
+if (PHP_OS === 'Darwin') {
+    die("skip HTTP/2 runtime requires libcurl.so (Linux) - not available on macOS");
+}
+?>
 --FILE--
 <?php
 $captured = [];

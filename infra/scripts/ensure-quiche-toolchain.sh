@@ -4,12 +4,12 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ensure-quiche-toolchain.sh <manifest-path>
+Usage: ensure-lsquic.sh <manifest-path>
 
-Checks whether the current environment can execute the pinned quiche build.
+Checks whether the current environment can execute the pinned lsquic build.
 If cargo/rustc are missing or lockfile-v4 support is missing, the user is
-prompted for upgrade confirmation unless KING_QUICHE_TOOLCHAIN_CONFIRM is set.
-If unset, KING_QUICHE_TOOLCHAIN_CONFIRM defaults to `prompt`.
+prompted for upgrade confirmation unless KING_LSQUIC_TOOLCHAIN_CONFIRM is set.
+If unset, KING_LSQUIC_TOOLCHAIN_CONFIRM defaults to `prompt`.
 
 Accepted values:
   prompt: Ask the user (TTY only, non-interactive aborts)
@@ -50,11 +50,11 @@ EOF
 }
 
 prompt_or_default() {
-    local action="${KING_QUICHE_TOOLCHAIN_CONFIRM:-prompt}"
+    local action="${KING_LSQUIC_TOOLCHAIN_CONFIRM:-prompt}"
     local response=""
 
     if [[ "${action}" != "yes" && "${action}" != "no" && "${action}" != "prompt" ]]; then
-        echo "Invalid KING_QUICHE_TOOLCHAIN_CONFIRM='${action}'. Use 'prompt', 'yes' or 'no'." >&2
+        echo "Invalid KING_LSQUIC_TOOLCHAIN_CONFIRM='${action}'. Use 'prompt', 'yes' or 'no'." >&2
         return 1
     fi
 
@@ -166,7 +166,7 @@ if ! command -v cargo >/dev/null 2>&1 || ! command -v rustc >/dev/null 2>&1; the
     echo "cargo/rustc are missing in PATH. King requires a compatible Rust toolchain to build QUIC artifacts." >&2
     print_install_solution >&2
     if ! prompt_or_default; then
-        echo "Aborted per confirmation (KING_QUICHE_TOOLCHAIN_CONFIRM=${KING_QUICHE_TOOLCHAIN_CONFIRM:-prompt})." >&2
+        echo "Aborted per confirmation (KING_LSQUIC_TOOLCHAIN_CONFIRM=${KING_LSQUIC_TOOLCHAIN_CONFIRM:-prompt})." >&2
         exit 1
     fi
     if ! run_rust_upgrade; then
@@ -184,7 +184,7 @@ else
             echo "Cargo toolchain does not support lockfile-v4 cleanly." >&2
             print_install_solution >&2
             if ! prompt_or_default; then
-                echo "Aborted per confirmation (KING_QUICHE_TOOLCHAIN_CONFIRM=${KING_QUICHE_TOOLCHAIN_CONFIRM:-prompt})." >&2
+                echo "Aborted per confirmation (KING_LSQUIC_TOOLCHAIN_CONFIRM=${KING_LSQUIC_TOOLCHAIN_CONFIRM:-prompt})." >&2
                 exit 1
             fi
             if ! run_rust_upgrade; then
@@ -198,7 +198,7 @@ else
             fi
             ;;
         *)
-            echo "Toolchain check for quiche manifest failed before build." >&2
+            echo "Toolchain check for lsquic manifest failed before build." >&2
             exit 1
             ;;
     esac

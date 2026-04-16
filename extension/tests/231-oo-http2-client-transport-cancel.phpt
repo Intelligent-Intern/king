@@ -2,11 +2,14 @@
 King OO Http2Client can cancel an active HTTP/2 transport via CancelToken
 --SKIPIF--
 <?php
+if (PHP_OS === 'Darwin') {
+    die("skip HTTP/2 runtime requires libcurl.so (Linux) - not available on macOS");
+}
 if (trim((string) shell_exec('command -v node')) === '') {
-    echo "skip node is required for the local HTTP/2 cancel fixture";
+    die("skip node is required for the local HTTP/2 cancel fixture");
 }
 if (!extension_loaded('pcntl') || !extension_loaded('posix')) {
-    echo "skip pcntl and posix are required for the active cancel fixture";
+    die("skip pcntl and posix are required for the active cancel fixture");
 }
 ?>
 --FILE--

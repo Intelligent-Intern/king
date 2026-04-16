@@ -25,40 +25,63 @@ static const char * const king_proto_primitive_types[] = {
     "bytes"
 };
 
-static uint32_t king_proto_float_to_bits(float value)
-{
-    uint32_t bits;
-
-    memcpy(&bits, &value, sizeof(bits));
-    return bits;
-}
-
-static float king_proto_bits_to_float(uint32_t bits)
-{
-    float value;
-
-    memcpy(&value, &bits, sizeof(value));
-    return value;
-}
-
-static uint64_t king_proto_double_to_bits(double value)
-{
-    uint64_t bits;
-
-    memcpy(&bits, &value, sizeof(bits));
-    return bits;
-}
-
-static double king_proto_bits_to_double(uint64_t bits)
-{
-    double value;
-
-    memcpy(&value, &bits, sizeof(value));
-    return value;
-}
+/* Float/double functions now in shared header */
 
 #include "../core/introspection/proto_registry.inc"
 #include "../core/introspection/proto_codec.inc"
+
+/* Batch encode: encode multiple records to amortize PHP↔C overhead */
+zend_result king_iibin_encode_batch(
+    zend_string *schema_name,
+    zval *records,
+    zval *encoded_out
+)
+{
+    king_proto_runtime_schema *runtime_schema;
+    zval *record;
+    smart_str encoded = {0};
+
+    if (!king_proto_registry_has_schema(schema_name)) {
+        king_throw_proto_schema_not_defined(schema_name, "batch encoding");
+        return FAILURE;
+    }
+
+    runtime_schema = king_proto_registry_get_runtime_schema(schema_name);
+    if (runtime_schema == NULL) {
+        king_throw_proto_schema_registered_but_unavailable(schema_name, "batch encoding");
+        return FAILURE;
+    }
+
+    // Option 2: single concatenated binary string with varint lengths
+    smart_str all_buf = {0};
+    int count = 0;
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(records), record) {
+        smart_str rec_buf = {0};
+        if (!king_proto_runtime_encode_schema_payload(&rec_buf, schema_name, runtime_schema, record)) {
+            if (rec_buf.s) smart_str_free(&rec_buf);
+            smart_str_free(&all_buf);
+            return FAILURE;
+        }
+        if (rec_buf.s) {
+            uint32_t rec_len = (uint32_t)ZSTR_LEN(rec_buf.s);
+            // Encode length as varint
+            king_proto_encode_varint(&all_buf, rec_len);
+            // Append record data
+            smart_str_append(&all_buf, rec_buf.s);
+            smart_str_free(&rec_buf);
+        }
+        count++;
+    } ZEND_HASH_FOREACH_END();
+
+    if (all_buf.s) {
+        smart_str_0(&all_buf);
+        ZVAL_STRINGL(encoded_out, ZSTR_VAL(all_buf.s), ZSTR_LEN(all_buf.s));
+        smart_str_free(&all_buf);
+    }
+
+    return SUCCESS;
+}
 
 zend_result king_iibin_encode(
     zend_string *schema_name,

@@ -4,19 +4,19 @@ static zend_result king_server_http3_flush_egress(
 )
 {
     uint8_t out[KING_SERVER_HTTP3_MAX_DATAGRAM_SIZE];
-    quiche_send_info send_info;
+    lsquic_send_info send_info;
     ssize_t written;
 
     if (runtime->conn == NULL || runtime->socket_fd < 0) {
         return SUCCESS;
     }
 
-    while ((written = king_server_http3_quiche.quiche_conn_send_fn(
+    while ((written = king_server_http3_lsquic.lsquic_conn_send_fn(
                 runtime->conn,
                 out,
                 sizeof(out),
                 &send_info
-            )) != QUICHE_ERR_DONE) {
+            )) != LSQUIC_ERR_DONE) {
         ssize_t sent;
 
         if (written < 0) {
@@ -100,7 +100,7 @@ static int king_server_http3_try_send_response(
     }
 
     if (!response->headers_sent) {
-        rc = king_server_http3_quiche.quiche_h3_send_response_fn(
+        rc = king_server_http3_lsquic.lsquic_h3_send_response_fn(
             runtime->h3_conn,
             runtime->conn,
             response->stream_id,
@@ -110,7 +110,7 @@ static int king_server_http3_try_send_response(
         );
         if (rc == 0) {
             response->headers_sent = true;
-        } else if (rc == QUICHE_H3_ERR_DONE || rc == QUICHE_H3_ERR_STREAM_BLOCKED) {
+        } else if (rc == LSQUIC_H3_ERR_DONE || rc == LSQUIC_H3_ERR_STREAM_BLOCKED) {
             return 0;
         } else {
             king_server_local_set_errorf(
@@ -123,7 +123,7 @@ static int king_server_http3_try_send_response(
     }
 
     if (response->headers_sent && response->body_offset < ZSTR_LEN(response->body)) {
-        ssize_t wrote = king_server_http3_quiche.quiche_h3_send_body_fn(
+        ssize_t wrote = king_server_http3_lsquic.lsquic_h3_send_body_fn(
             runtime->h3_conn,
             runtime->conn,
             response->stream_id,
@@ -136,7 +136,7 @@ static int king_server_http3_try_send_response(
             return 0;
         }
 
-        if (wrote == QUICHE_H3_ERR_DONE || wrote == QUICHE_H3_ERR_STREAM_BLOCKED) {
+        if (wrote == LSQUIC_H3_ERR_DONE || wrote == LSQUIC_H3_ERR_STREAM_BLOCKED) {
             return 0;
         }
 
@@ -149,14 +149,14 @@ static int king_server_http3_try_send_response(
     }
 
     if (response->headers_sent && response->body_offset == ZSTR_LEN(response->body) && !response->goaway_sent) {
-        rc = king_server_http3_quiche.quiche_h3_send_goaway_fn(
+        rc = king_server_http3_lsquic.lsquic_h3_send_goaway_fn(
             runtime->h3_conn,
             runtime->conn,
             response->stream_id
         );
         if (rc == 0) {
             response->goaway_sent = true;
-        } else if (rc == QUICHE_H3_ERR_DONE || rc == QUICHE_H3_ERR_STREAM_BLOCKED) {
+        } else if (rc == LSQUIC_H3_ERR_DONE || rc == LSQUIC_H3_ERR_STREAM_BLOCKED) {
             return 0;
         } else {
             king_server_local_set_errorf(
@@ -172,7 +172,7 @@ static int king_server_http3_try_send_response(
         /* Once the full response and GOAWAY are on wire, closing the QUIC
          * connection is best-effort: the peer may already be closing or the
          * local transport may already be in the closed/draining state. */
-        (void) king_server_http3_quiche.quiche_conn_close_fn(runtime->conn, false, 0, NULL, 0);
+        (void) king_server_http3_lsquic.lsquic_conn_close_fn(runtime->conn, false, 0, NULL, 0);
         response->close_sent = true;
         response->close_grace_deadline_ms = king_server_http3_now_ms() + KING_SERVER_HTTP3_CLOSE_GRACE_MS;
     }
@@ -192,20 +192,20 @@ static int king_server_http3_handle_first_packet(
 {
     uint32_t version = 0;
     uint8_t packet_type = 0;
-    uint8_t scid[QUICHE_MAX_CONN_ID_LEN];
+    uint8_t scid[LSQUIC_MAX_CONN_ID_LEN];
     size_t scid_len = sizeof(scid);
-    uint8_t dcid[QUICHE_MAX_CONN_ID_LEN];
+    uint8_t dcid[LSQUIC_MAX_CONN_ID_LEN];
     size_t dcid_len = sizeof(dcid);
     uint8_t token[KING_MAX_TICKET_SIZE];
     size_t token_len = sizeof(token);
-    uint8_t server_scid[QUICHE_MAX_CONN_ID_LEN];
-    quiche_recv_info recv_info;
+    uint8_t server_scid[LSQUIC_MAX_CONN_ID_LEN];
+    lsquic_recv_info recv_info;
     ssize_t processed;
 
-    if (king_server_http3_quiche.quiche_header_info_fn(
+    if (king_server_http3_lsquic.lsquic_header_info_fn(
             packet,
             packet_len,
-            QUICHE_MAX_CONN_ID_LEN,
+            LSQUIC_MAX_CONN_ID_LEN,
             &version,
             &packet_type,
             scid,
@@ -222,9 +222,9 @@ static int king_server_http3_handle_first_packet(
         return -1;
     }
 
-    if (!king_server_http3_quiche.quiche_version_is_supported_fn(version)) {
+    if (!king_server_http3_lsquic.lsquic_version_is_supported_fn(version)) {
         uint8_t out[KING_SERVER_HTTP3_MAX_DATAGRAM_SIZE];
-        ssize_t written = king_server_http3_quiche.quiche_negotiate_version_fn(
+        ssize_t written = king_server_http3_lsquic.lsquic_negotiate_version_fn(
             scid,
             scid_len,
             dcid,
@@ -248,7 +248,7 @@ static int king_server_http3_handle_first_packet(
         return -1;
     }
 
-    runtime->conn = king_server_http3_quiche.quiche_accept_fn(
+    runtime->conn = king_server_http3_lsquic.lsquic_accept_fn(
         server_scid,
         sizeof(server_scid),
         NULL,
@@ -294,13 +294,13 @@ static int king_server_http3_handle_first_packet(
     recv_info.to = (struct sockaddr *) &runtime->local_addr;
     recv_info.to_len = runtime->local_addr_len;
 
-    processed = king_server_http3_quiche.quiche_conn_recv_fn(
+    processed = king_server_http3_lsquic.lsquic_conn_recv_fn(
         runtime->conn,
         (uint8_t *) packet,
         packet_len,
         &recv_info
     );
-    if (processed < 0 && processed != QUICHE_ERR_DONE) {
+    if (processed < 0 && processed != LSQUIC_ERR_DONE) {
         king_server_local_set_errorf(
             "%s() failed while processing the first incoming QUIC packet (%zd).",
             function_name,
@@ -324,14 +324,14 @@ static zend_result king_server_http3_process_events(
 )
 {
     for (;;) {
-        quiche_h3_event *event = NULL;
-        int64_t stream_id = king_server_http3_quiche.quiche_h3_conn_poll_fn(
+        lsquic_h3_event *event = NULL;
+        int64_t stream_id = king_server_http3_lsquic.lsquic_h3_conn_poll_fn(
             runtime->h3_conn,
             runtime->conn,
             &event
         );
 
-        if (stream_id == QUICHE_H3_ERR_DONE) {
+        if (stream_id == LSQUIC_H3_ERR_DONE) {
             break;
         }
 
@@ -344,8 +344,8 @@ static zend_result king_server_http3_process_events(
             return FAILURE;
         }
 
-        switch (king_server_http3_quiche.quiche_h3_event_type_fn(event)) {
-            case QUICHE_H3_EVENT_HEADERS: {
+        switch (king_server_http3_lsquic.lsquic_h3_event_type_fn(event)) {
+            case LSQUIC_H3_EVENT_HEADERS: {
                 king_server_http3_request_header_context_t context;
                 int rc;
 
@@ -353,7 +353,7 @@ static zend_result king_server_http3_process_events(
                     request_state->request_stream_seen = true;
                     request_state->stream_id = (uint64_t) stream_id;
                 } else if (request_state->stream_id != (uint64_t) stream_id) {
-                    king_server_http3_quiche.quiche_h3_event_free_fn(event);
+                    king_server_http3_lsquic.lsquic_h3_event_free_fn(event);
                     king_server_local_set_errorf(
                         "%s() received multiple request streams on the one-shot HTTP/3 listener.",
                         function_name
@@ -363,24 +363,24 @@ static zend_result king_server_http3_process_events(
 
                 context.state = request_state;
                 context.function_name = function_name;
-                rc = king_server_http3_quiche.quiche_h3_event_for_each_header_fn(
+                rc = king_server_http3_lsquic.lsquic_h3_event_for_each_header_fn(
                     event,
                     king_server_http3_collect_request_header,
                     &context
                 );
                 if (rc != 0) {
-                    king_server_http3_quiche.quiche_h3_event_free_fn(event);
+                    king_server_http3_lsquic.lsquic_h3_event_free_fn(event);
                     return FAILURE;
                 }
 
                 break;
             }
 
-            case QUICHE_H3_EVENT_DATA: {
+            case LSQUIC_H3_EVENT_DATA: {
                 if (request_state->request_stream_seen && request_state->stream_id == (uint64_t) stream_id) {
                     for (;;) {
                         uint8_t buffer[4096];
-                        ssize_t read = king_server_http3_quiche.quiche_h3_recv_body_fn(
+                        ssize_t read = king_server_http3_lsquic.lsquic_h3_recv_body_fn(
                             runtime->h3_conn,
                             runtime->conn,
                             (uint64_t) stream_id,
@@ -388,12 +388,12 @@ static zend_result king_server_http3_process_events(
                             sizeof(buffer)
                         );
 
-                        if (read == QUICHE_H3_ERR_DONE || read == 0) {
+                        if (read == LSQUIC_H3_ERR_DONE || read == 0) {
                             break;
                         }
 
                         if (read < 0) {
-                            king_server_http3_quiche.quiche_h3_event_free_fn(event);
+                            king_server_http3_lsquic.lsquic_h3_event_free_fn(event);
                             king_server_local_set_errorf(
                                 "%s() failed while reading the active HTTP/3 request body (%zd).",
                                 function_name,
@@ -404,7 +404,7 @@ static zend_result king_server_http3_process_events(
 
                         request_state->body_bytes += (size_t) read;
                         if (request_state->body_bytes > KING_SERVER_HTTP3_MAX_REQUEST_BODY_BYTES) {
-                            king_server_http3_quiche.quiche_h3_event_free_fn(event);
+                            king_server_http3_lsquic.lsquic_h3_event_free_fn(event);
                             king_server_local_set_errorf(
                                 "%s() received an HTTP/3 request body that exceeds the active one-shot limit.",
                                 function_name
@@ -419,26 +419,26 @@ static zend_result king_server_http3_process_events(
                 break;
             }
 
-            case QUICHE_H3_EVENT_FINISHED:
+            case LSQUIC_H3_EVENT_FINISHED:
                 if (request_state->request_stream_seen && request_state->stream_id == (uint64_t) stream_id) {
                     *request_complete = true;
                 }
                 break;
 
-            case QUICHE_H3_EVENT_RESET:
-                king_server_http3_quiche.quiche_h3_event_free_fn(event);
+            case LSQUIC_H3_EVENT_RESET:
+                king_server_http3_lsquic.lsquic_h3_event_free_fn(event);
                 king_server_local_set_errorf(
                     "%s() observed an HTTP/3 stream reset before the one-shot request completed.",
                     function_name
                 );
                 return FAILURE;
 
-            case QUICHE_H3_EVENT_GOAWAY:
-            case QUICHE_H3_EVENT_PRIORITY_UPDATE:
+            case LSQUIC_H3_EVENT_GOAWAY:
+            case LSQUIC_H3_EVENT_PRIORITY_UPDATE:
                 break;
         }
 
-        king_server_http3_quiche.quiche_h3_event_free_fn(event);
+        king_server_http3_lsquic.lsquic_h3_event_free_fn(event);
     }
 
     return SUCCESS;

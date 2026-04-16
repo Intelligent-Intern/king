@@ -89,7 +89,7 @@ function king_http3_start_test_server(string $certFile, string $keyFile, string 
     fclose($probe);
     [, $port] = king_http3_parse_socket_name($serverName);
 
-    $binary = getenv('KING_QUICHE_SERVER');
+    $binary = getenv('KING_LSQUIC_SERVER');
     $command = 'RUST_LOG=info '
         . escapeshellarg($binary)
         . ' --listen ' . escapeshellarg($serverName)

@@ -1,0 +1,12 @@
+tests/665-flow-php-control-plane-predictive-run-id-race-hardening-contract.phpt
+tests/666-system-health-check-shutdown-hash-guard-contract.phpt
+tests/667-flow-php-checkpoint-store-object-id-collision-hardening-contract.phpt
+tests/668-ensure-lsquic-toolchain-lockfile-v4-branch-contract.phpt
+tests/669-flow-php-mcp-host-surface-contract.phpt
+tests/670-iibin-repeated-nested-websocket-compatibility-contract.phpt
+tests/671-flow-php-sql-pgvector-bridge-contract.phpt
+tests/672-flow-php-mcp-service-discovery-failover-contract.phpt
+tests/673-flow-php-oo-object-store-ingest-contract.phpt
+tests/674-flow-php-rag-orchestration-reference-contract.phpt
+tests/675-flow-php-mcp-host-stop-loopback-guard-contract.phpt
+tests/999-batch-encode-decode.phpt

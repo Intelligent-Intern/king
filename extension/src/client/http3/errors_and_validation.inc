@@ -93,10 +93,10 @@ static void king_http3_throw_handshake_close(
 }
 
 static void king_http3_throw_closed_connection(
-    quiche_conn *conn,
+    lsquic_conn *conn,
     const char *function_name)
 {
-    bool established = king_http3_quiche.quiche_conn_is_established_fn(conn);
+    bool established = king_http3_lsquic.lsquic_conn_is_established_fn(conn);
     bool is_app = false;
     uint64_t error_code = 0;
     const uint8_t *reason_bytes = NULL;
@@ -105,8 +105,8 @@ static void king_http3_throw_closed_connection(
 
     memset(reason, 0, sizeof(reason));
 
-    if (king_http3_quiche.quiche_conn_peer_error_fn != NULL
-        && king_http3_quiche.quiche_conn_peer_error_fn(
+    if (king_http3_lsquic.lsquic_conn_peer_error_fn != NULL
+        && king_http3_lsquic.lsquic_conn_peer_error_fn(
             conn,
             &is_app,
             &error_code,
@@ -148,8 +148,8 @@ static void king_http3_throw_closed_connection(
         return;
     }
 
-    if (king_http3_quiche.quiche_conn_local_error_fn != NULL
-        && king_http3_quiche.quiche_conn_local_error_fn(
+    if (king_http3_lsquic.lsquic_conn_local_error_fn != NULL
+        && king_http3_lsquic.lsquic_conn_local_error_fn(
             conn,
             &is_app,
             &error_code,
@@ -191,8 +191,8 @@ static void king_http3_throw_closed_connection(
         return;
     }
 
-    if (king_http3_quiche.quiche_conn_is_timed_out_fn != NULL
-        && king_http3_quiche.quiche_conn_is_timed_out_fn(conn)) {
+    if (king_http3_lsquic.lsquic_conn_is_timed_out_fn != NULL
+        && king_http3_lsquic.lsquic_conn_is_timed_out_fn(conn)) {
         if (!established) {
             king_http3_throw(
                 king_ce_quic_exception,
@@ -227,14 +227,14 @@ static void king_http3_throw_closed_connection(
 }
 
 static void king_http3_throw_recv_error(
-    quiche_conn *conn,
+    lsquic_conn *conn,
     const char *function_name,
     ssize_t error_code)
 {
-    bool established = king_http3_quiche.quiche_conn_is_established_fn(conn);
+    bool established = king_http3_lsquic.lsquic_conn_is_established_fn(conn);
 
     if (!established
-        && (error_code == QUICHE_ERR_TLS_FAIL || error_code == QUICHE_ERR_CRYPTO_FAIL)) {
+        && (error_code == LSQUIC_ERR_TLS_FAIL || error_code == LSQUIC_ERR_CRYPTO_FAIL)) {
         king_http3_throw(
             king_ce_tls_exception,
             "%s() failed during the QUIC/TLS handshake (%zd).",
@@ -267,7 +267,7 @@ static void king_http3_throw_request_body_send_error(
     ssize_t error_code)
 {
     switch (error_code) {
-        case QUICHE_H3_TRANSPORT_ERR_STREAM_STOPPED:
+        case LSQUIC_H3_TRANSPORT_ERR_STREAM_STOPPED:
             king_http3_throw(
                 king_ce_protocol_exception,
                 "%s() received QUIC STOP_SENDING while sending the active HTTP/3 request body.",
@@ -275,7 +275,7 @@ static void king_http3_throw_request_body_send_error(
             );
             return;
 
-        case QUICHE_H3_TRANSPORT_ERR_STREAM_RESET:
+        case LSQUIC_H3_TRANSPORT_ERR_STREAM_RESET:
             king_http3_throw(
                 king_ce_protocol_exception,
                 "%s() received QUIC RESET_STREAM while sending the active HTTP/3 request body.",
@@ -300,7 +300,7 @@ static void king_http3_throw_multi_request_body_send_error(
     ssize_t error_code)
 {
     switch (error_code) {
-        case QUICHE_H3_TRANSPORT_ERR_STREAM_STOPPED:
+        case LSQUIC_H3_TRANSPORT_ERR_STREAM_STOPPED:
             king_http3_throw(
                 king_ce_protocol_exception,
                 "%s() received QUIC STOP_SENDING while sending the HTTP/3 request body for request '%s'.",
@@ -309,7 +309,7 @@ static void king_http3_throw_multi_request_body_send_error(
             );
             return;
 
-        case QUICHE_H3_TRANSPORT_ERR_STREAM_RESET:
+        case LSQUIC_H3_TRANSPORT_ERR_STREAM_RESET:
             king_http3_throw(
                 king_ce_protocol_exception,
                 "%s() received QUIC RESET_STREAM while sending the HTTP/3 request body for request '%s'.",
@@ -332,14 +332,14 @@ static void king_http3_throw_multi_request_body_send_error(
 
 static void king_http3_throw_active_request_stream_reset(
     const char *function_name,
-    quiche_h3_event *event)
+    lsquic_h3_event *event)
 {
-    if (king_http3_quiche.quiche_h3_event_reset_error_fn != NULL) {
+    if (king_http3_lsquic.lsquic_h3_event_reset_error_fn != NULL) {
         king_http3_throw(
             king_ce_protocol_exception,
             "%s() received an HTTP/3 stream reset for the active request (code %" PRIu64 ").",
             function_name,
-            king_http3_quiche.quiche_h3_event_reset_error_fn(event)
+            king_http3_lsquic.lsquic_h3_event_reset_error_fn(event)
         );
         return;
     }
@@ -354,15 +354,15 @@ static void king_http3_throw_active_request_stream_reset(
 static void king_http3_throw_multi_request_stream_reset(
     const char *function_name,
     zend_string *url,
-    quiche_h3_event *event)
+    lsquic_h3_event *event)
 {
-    if (king_http3_quiche.quiche_h3_event_reset_error_fn != NULL) {
+    if (king_http3_lsquic.lsquic_h3_event_reset_error_fn != NULL) {
         king_http3_throw(
             king_ce_protocol_exception,
             "%s() received an HTTP/3 stream reset for request '%s' (code %" PRIu64 ").",
             function_name,
             ZSTR_VAL(url),
-            king_http3_quiche.quiche_h3_event_reset_error_fn(event)
+            king_http3_lsquic.lsquic_h3_event_reset_error_fn(event)
         );
         return;
     }
@@ -413,8 +413,8 @@ static bool king_http3_runtime_is_in_early_data(
 {
     return runtime != NULL
         && runtime->conn != NULL
-        && king_http3_quiche.quiche_conn_is_in_early_data_fn != NULL
-        && king_http3_quiche.quiche_conn_is_in_early_data_fn(runtime->conn);
+        && king_http3_lsquic.lsquic_conn_is_in_early_data_fn != NULL
+        && king_http3_lsquic.lsquic_conn_is_in_early_data_fn(runtime->conn);
 }
 
 static bool king_http3_runtime_can_open_h3(
@@ -423,7 +423,7 @@ static bool king_http3_runtime_can_open_h3(
     return runtime != NULL
         && runtime->conn != NULL
         && (
-            king_http3_quiche.quiche_conn_is_established_fn(runtime->conn)
+            king_http3_lsquic.lsquic_conn_is_established_fn(runtime->conn)
             || king_http3_runtime_is_in_early_data(runtime)
         );
 }
@@ -431,16 +431,16 @@ static bool king_http3_runtime_can_open_h3(
 static void king_http3_refresh_transport_stats(
     king_http3_request_runtime_t *runtime)
 {
-    king_http3_quiche_stats_t stats;
+    king_http3_lsquic_stats_t stats;
 
     if (runtime == NULL
         || runtime->conn == NULL
-        || king_http3_quiche.quiche_conn_stats_fn == NULL) {
+        || king_http3_lsquic.lsquic_conn_stats_fn == NULL) {
         return;
     }
 
     memset(&stats, 0, sizeof(stats));
-    king_http3_quiche.quiche_conn_stats_fn(runtime->conn, &stats);
+    king_http3_lsquic.lsquic_conn_stats_fn(runtime->conn, &stats);
 
     runtime->quic_packets_sent = (zend_long) stats.sent;
     runtime->quic_packets_received = (zend_long) stats.recv;

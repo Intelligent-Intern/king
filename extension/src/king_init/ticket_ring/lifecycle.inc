@@ -4,6 +4,11 @@
  * tears the ring back down with slot shredding on shutdown.
  */
 
+#include <sys/mman.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <fcntl.h>
+
 static int king_ticket_ring_init(void)
 {
     king_ticket_ring_shared_t *ring;
@@ -39,6 +44,17 @@ static int king_ticket_ring_init(void)
         return FAILURE;
     }
 
+#if defined(__APPLE__)
+    /* macOS: set size only if created fresh; ignore EALREADY for existing */
+    if (created && ftruncate(fd, sizeof(king_ticket_ring_shared_t)) != 0) {
+        if (errno != EALREADY) {
+            close(fd);
+            if (created) shm_unlink(king_globals.ticket_ring_name);
+            king_globals.ticket_ring_name[0] = '\0';
+            return FAILURE;
+        }
+    }
+#else
     if (flock(fd, LOCK_EX) != 0) {
         close(fd);
         king_globals.ticket_ring_name[0] = '\0';
@@ -52,6 +68,7 @@ static int king_ticket_ring_init(void)
         king_globals.ticket_ring_name[0] = '\0';
         return FAILURE;
     }
+#endif
 
     ring = mmap(
         NULL,
@@ -62,11 +79,11 @@ static int king_ticket_ring_init(void)
         0
     );
     if (ring == MAP_FAILED) {
+#if !defined(__APPLE__)
         (void) flock(fd, LOCK_UN);
-        if (created) {
-            shm_unlink(king_globals.ticket_ring_name);
-        }
+#endif
         close(fd);
+        if (created) shm_unlink(king_globals.ticket_ring_name);
         king_globals.ticket_ring_name[0] = '\0';
         return FAILURE;
     }
@@ -74,20 +91,24 @@ static int king_ticket_ring_init(void)
     if (created || ring->initialized != 1) {
         memset(ring, 0, sizeof(*ring));
         if (pthread_mutexattr_init(&attr) != 0) {
+#if !defined(__APPLE__)
             (void) flock(fd, LOCK_UN);
+#endif
             munmap(ring, sizeof(*ring));
-            shm_unlink(king_globals.ticket_ring_name);
             close(fd);
+            if (created) shm_unlink(king_globals.ticket_ring_name);
             king_globals.ticket_ring_name[0] = '\0';
             return FAILURE;
         }
 
         if (pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED) != 0) {
             pthread_mutexattr_destroy(&attr);
-            munmap(ring, sizeof(*ring));
+#if !defined(__APPLE__)
             (void) flock(fd, LOCK_UN);
-            shm_unlink(king_globals.ticket_ring_name);
+#endif
+            munmap(ring, sizeof(*ring));
             close(fd);
+            if (created) shm_unlink(king_globals.ticket_ring_name);
             king_globals.ticket_ring_name[0] = '\0';
             return FAILURE;
         }
@@ -95,10 +116,12 @@ static int king_ticket_ring_init(void)
 #ifdef PTHREAD_MUTEX_ROBUST
         if (pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST) != 0) {
             pthread_mutexattr_destroy(&attr);
-            munmap(ring, sizeof(*ring));
+#if !defined(__APPLE__)
             (void) flock(fd, LOCK_UN);
-            shm_unlink(king_globals.ticket_ring_name);
+#endif
+            munmap(ring, sizeof(*ring));
             close(fd);
+            if (created) shm_unlink(king_globals.ticket_ring_name);
             king_globals.ticket_ring_name[0] = '\0';
             return FAILURE;
         }
@@ -106,10 +129,12 @@ static int king_ticket_ring_init(void)
 
         if (pthread_mutex_init(&ring->lock, &attr) != 0) {
             pthread_mutexattr_destroy(&attr);
-            munmap(ring, sizeof(*ring));
+#if !defined(__APPLE__)
             (void) flock(fd, LOCK_UN);
-            shm_unlink(king_globals.ticket_ring_name);
+#endif
+            munmap(ring, sizeof(*ring));
             close(fd);
+            if (created) shm_unlink(king_globals.ticket_ring_name);
             king_globals.ticket_ring_name[0] = '\0';
             return FAILURE;
         }
@@ -118,19 +143,11 @@ static int king_ticket_ring_init(void)
         ring->capacity = KING_TICKET_RING_SLOT_COUNT;
         ring->ttl_seconds = king_tls_and_crypto_config.tls_session_ticket_lifetime_sec;
         ring->initialized = 1;
-    } else {
-        if (king_ticket_ring_lock(ring) != SUCCESS) {
-            munmap(ring, sizeof(*ring));
-            (void) flock(fd, LOCK_UN);
-            close(fd);
-            king_globals.ticket_ring_name[0] = '\0';
-            return FAILURE;
-        }
-        ring->ttl_seconds = king_tls_and_crypto_config.tls_session_ticket_lifetime_sec;
-        king_ticket_ring_unlock(ring);
     }
 
+#if !defined(__APPLE__)
     (void) flock(fd, LOCK_UN);
+#endif
 
     king_globals.ticket_ring_fd = fd;
     king_globals.ticket_ring_size = sizeof(*ring);

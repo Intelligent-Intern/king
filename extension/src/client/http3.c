@@ -5,8 +5,8 @@
  *
  * PURPOSE:
  * Minimal live HTTP/3 client runtime for the active runtime. The
- * implementation keeps the extension free of a hard libquiche dependency by
- * loading the bundled/system libquiche at runtime, then driving the direct
+ * implementation keeps the extension free of a hard liblsquic dependency by
+ * loading the bundled/system liblsquic at runtime, then driving the direct
  * one-shot and multi-request HTTPS-over-QUIC leaves with the existing King
  * config snapshot and normalized response contract.
  * =========================================================================
@@ -15,7 +15,9 @@
 #include "php.h"
 #include "php_king.h"
 #include "include/client/http3.h"
-#include <quiche.h>
+/* lsquic loaded at runtime via dlopen
+#include <lsquic.h>
+*/
 #include "include/config/config.h"
 #include "include/config/quic_transport/base_layer.h"
 #include "include/config/tcp_transport/base_layer.h"
@@ -102,10 +104,10 @@ typedef struct _king_http3_request_runtime {
     socklen_t peer_addr_len;
     struct sockaddr_storage local_addr;
     socklen_t local_addr_len;
-    quiche_config *config;
-    quiche_conn *conn;
-    quiche_h3_config *h3_config;
-    quiche_h3_conn *h3_conn;
+    lsquic_config *config;
+    lsquic_conn *conn;
+    lsquic_h3_config *h3_config;
+    lsquic_h3_conn *h3_conn;
     const char *tls_ticket_source;
     zend_long tls_session_ticket_length;
     bool tls_has_session_ticket;
@@ -140,7 +142,7 @@ typedef struct _king_http3_multi_request {
     zend_string *method;
     zend_string *body_string;
     zval effective_headers;
-    quiche_h3_header *request_headers;
+    lsquic_h3_header *request_headers;
     size_t request_header_count;
     zend_string **owned_strings;
     size_t owned_string_count;
@@ -151,7 +153,7 @@ typedef struct _king_http3_multi_request {
     bool request_headers_sent;
 } king_http3_multi_request_t;
 
-typedef struct _king_http3_quiche_stats {
+typedef struct _king_http3_lsquic_stats {
     size_t recv;
     size_t sent;
     size_t lost;
@@ -178,41 +180,41 @@ typedef struct _king_http3_quiche_stats {
     uint64_t path_challenge_rx_count;
     uint64_t bytes_in_flight_duration_msec;
     bool tx_buffered_inconsistent;
-} king_http3_quiche_stats_t;
+} king_http3_lsquic_stats_t;
 
-typedef struct _king_http3_quiche_api {
+typedef struct _king_http3_lsquic_api {
     void *handle;
     bool load_attempted;
     bool ready;
     char load_error[KING_ERR_LEN];
-    quiche_config *(*quiche_config_new_fn)(uint32_t);
-    int (*quiche_config_load_cert_chain_from_pem_file_fn)(quiche_config *, const char *);
-    int (*quiche_config_load_priv_key_from_pem_file_fn)(quiche_config *, const char *);
-    int (*quiche_config_load_verify_locations_from_file_fn)(quiche_config *, const char *);
-    void (*quiche_config_verify_peer_fn)(quiche_config *, bool);
-    void (*quiche_config_grease_fn)(quiche_config *, bool);
-    void (*quiche_config_enable_early_data_fn)(quiche_config *);
-    void (*quiche_config_enable_hystart_fn)(quiche_config *, bool);
-    void (*quiche_config_enable_pacing_fn)(quiche_config *, bool);
-    int (*quiche_config_set_application_protos_fn)(quiche_config *, const uint8_t *, size_t);
-    void (*quiche_config_set_max_idle_timeout_fn)(quiche_config *, uint64_t);
-    void (*quiche_config_set_max_recv_udp_payload_size_fn)(quiche_config *, size_t);
-    void (*quiche_config_set_max_send_udp_payload_size_fn)(quiche_config *, size_t);
-    void (*quiche_config_set_initial_max_data_fn)(quiche_config *, uint64_t);
-    void (*quiche_config_set_initial_max_stream_data_bidi_local_fn)(quiche_config *, uint64_t);
-    void (*quiche_config_set_initial_max_stream_data_bidi_remote_fn)(quiche_config *, uint64_t);
-    void (*quiche_config_set_initial_max_stream_data_uni_fn)(quiche_config *, uint64_t);
-    void (*quiche_config_set_initial_max_streams_bidi_fn)(quiche_config *, uint64_t);
-    void (*quiche_config_set_initial_max_streams_uni_fn)(quiche_config *, uint64_t);
-    void (*quiche_config_set_ack_delay_exponent_fn)(quiche_config *, uint64_t);
-    void (*quiche_config_set_max_ack_delay_fn)(quiche_config *, uint64_t);
-    void (*quiche_config_set_disable_active_migration_fn)(quiche_config *, bool);
-    int (*quiche_config_set_cc_algorithm_name_fn)(quiche_config *, const char *);
-    void (*quiche_config_set_initial_congestion_window_packets_fn)(quiche_config *, size_t);
-    void (*quiche_config_set_active_connection_id_limit_fn)(quiche_config *, uint64_t);
-    void (*quiche_config_enable_dgram_fn)(quiche_config *, bool, size_t, size_t);
-    void (*quiche_config_free_fn)(quiche_config *);
-    quiche_conn *(*quiche_connect_fn)(
+    lsquic_config *(*lsquic_config_new_fn)(uint32_t);
+    int (*lsquic_config_load_cert_chain_from_pem_file_fn)(lsquic_config *, const char *);
+    int (*lsquic_config_load_priv_key_from_pem_file_fn)(lsquic_config *, const char *);
+    int (*lsquic_config_load_verify_locations_from_file_fn)(lsquic_config *, const char *);
+    void (*lsquic_config_verify_peer_fn)(lsquic_config *, bool);
+    void (*lsquic_config_grease_fn)(lsquic_config *, bool);
+    void (*lsquic_config_enable_early_data_fn)(lsquic_config *);
+    void (*lsquic_config_enable_hystart_fn)(lsquic_config *, bool);
+    void (*lsquic_config_enable_pacing_fn)(lsquic_config *, bool);
+    int (*lsquic_config_set_application_protos_fn)(lsquic_config *, const uint8_t *, size_t);
+    void (*lsquic_config_set_max_idle_timeout_fn)(lsquic_config *, uint64_t);
+    void (*lsquic_config_set_max_recv_udp_payload_size_fn)(lsquic_config *, size_t);
+    void (*lsquic_config_set_max_send_udp_payload_size_fn)(lsquic_config *, size_t);
+    void (*lsquic_config_set_initial_max_data_fn)(lsquic_config *, uint64_t);
+    void (*lsquic_config_set_initial_max_stream_data_bidi_local_fn)(lsquic_config *, uint64_t);
+    void (*lsquic_config_set_initial_max_stream_data_bidi_remote_fn)(lsquic_config *, uint64_t);
+    void (*lsquic_config_set_initial_max_stream_data_uni_fn)(lsquic_config *, uint64_t);
+    void (*lsquic_config_set_initial_max_streams_bidi_fn)(lsquic_config *, uint64_t);
+    void (*lsquic_config_set_initial_max_streams_uni_fn)(lsquic_config *, uint64_t);
+    void (*lsquic_config_set_ack_delay_exponent_fn)(lsquic_config *, uint64_t);
+    void (*lsquic_config_set_max_ack_delay_fn)(lsquic_config *, uint64_t);
+    void (*lsquic_config_set_disable_active_migration_fn)(lsquic_config *, bool);
+    int (*lsquic_config_set_cc_algorithm_name_fn)(lsquic_config *, const char *);
+    void (*lsquic_config_set_initial_congestion_window_packets_fn)(lsquic_config *, size_t);
+    void (*lsquic_config_set_active_connection_id_limit_fn)(lsquic_config *, uint64_t);
+    void (*lsquic_config_enable_dgram_fn)(lsquic_config *, bool, size_t, size_t);
+    void (*lsquic_config_free_fn)(lsquic_config *);
+    lsquic_conn *(*lsquic_connect_fn)(
         const char *,
         const uint8_t *,
         size_t,
@@ -220,46 +222,46 @@ typedef struct _king_http3_quiche_api {
         socklen_t,
         const struct sockaddr *,
         socklen_t,
-        quiche_config *
+        lsquic_config *
     );
-    ssize_t (*quiche_conn_recv_fn)(quiche_conn *, uint8_t *, size_t, const quiche_recv_info *);
-    ssize_t (*quiche_conn_send_fn)(quiche_conn *, uint8_t *, size_t, quiche_send_info *);
-    uint64_t (*quiche_conn_timeout_as_millis_fn)(const quiche_conn *);
-    void (*quiche_conn_on_timeout_fn)(quiche_conn *);
-    bool (*quiche_conn_is_established_fn)(const quiche_conn *);
-    bool (*quiche_conn_is_resumed_fn)(const quiche_conn *);
-    bool (*quiche_conn_is_in_early_data_fn)(const quiche_conn *);
-    void (*quiche_conn_stats_fn)(const quiche_conn *, king_http3_quiche_stats_t *);
-    bool (*quiche_conn_is_closed_fn)(const quiche_conn *);
-    bool (*quiche_conn_is_timed_out_fn)(const quiche_conn *);
-    int (*quiche_conn_close_fn)(quiche_conn *, bool, uint64_t, const uint8_t *, size_t);
-    int (*quiche_conn_set_session_fn)(quiche_conn *, const uint8_t *, size_t);
-    void (*quiche_conn_session_fn)(const quiche_conn *, const uint8_t **, size_t *);
-    bool (*quiche_conn_peer_error_fn)(const quiche_conn *, bool *, uint64_t *, const uint8_t **, size_t *);
-    bool (*quiche_conn_local_error_fn)(const quiche_conn *, bool *, uint64_t *, const uint8_t **, size_t *);
-    void (*quiche_conn_free_fn)(quiche_conn *);
-    quiche_h3_config *(*quiche_h3_config_new_fn)(void);
-    void (*quiche_h3_config_free_fn)(quiche_h3_config *);
-    quiche_h3_conn *(*quiche_h3_conn_new_with_transport_fn)(quiche_conn *, quiche_h3_config *);
-    int64_t (*quiche_h3_conn_poll_fn)(quiche_h3_conn *, quiche_conn *, quiche_h3_event **);
-    enum quiche_h3_event_type (*quiche_h3_event_type_fn)(quiche_h3_event *);
-    uint64_t (*quiche_h3_event_reset_error_fn)(quiche_h3_event *);
-    int (*quiche_h3_event_for_each_header_fn)(
-        quiche_h3_event *,
+    ssize_t (*lsquic_conn_recv_fn)(lsquic_conn *, uint8_t *, size_t, const lsquic_recv_info *);
+    ssize_t (*lsquic_conn_send_fn)(lsquic_conn *, uint8_t *, size_t, lsquic_send_info *);
+    uint64_t (*lsquic_conn_timeout_as_millis_fn)(const lsquic_conn *);
+    void (*lsquic_conn_on_timeout_fn)(lsquic_conn *);
+    bool (*lsquic_conn_is_established_fn)(const lsquic_conn *);
+    bool (*lsquic_conn_is_resumed_fn)(const lsquic_conn *);
+    bool (*lsquic_conn_is_in_early_data_fn)(const lsquic_conn *);
+    void (*lsquic_conn_stats_fn)(const lsquic_conn *, king_http3_lsquic_stats_t *);
+    bool (*lsquic_conn_is_closed_fn)(const lsquic_conn *);
+    bool (*lsquic_conn_is_timed_out_fn)(const lsquic_conn *);
+    int (*lsquic_conn_close_fn)(lsquic_conn *, bool, uint64_t, const uint8_t *, size_t);
+    int (*lsquic_conn_set_session_fn)(lsquic_conn *, const uint8_t *, size_t);
+    void (*lsquic_conn_session_fn)(const lsquic_conn *, const uint8_t **, size_t *);
+    bool (*lsquic_conn_peer_error_fn)(const lsquic_conn *, bool *, uint64_t *, const uint8_t **, size_t *);
+    bool (*lsquic_conn_local_error_fn)(const lsquic_conn *, bool *, uint64_t *, const uint8_t **, size_t *);
+    void (*lsquic_conn_free_fn)(lsquic_conn *);
+    lsquic_h3_config *(*lsquic_h3_config_new_fn)(void);
+    void (*lsquic_h3_config_free_fn)(lsquic_h3_config *);
+    lsquic_h3_conn *(*lsquic_h3_conn_new_with_transport_fn)(lsquic_conn *, lsquic_h3_config *);
+    int64_t (*lsquic_h3_conn_poll_fn)(lsquic_h3_conn *, lsquic_conn *, lsquic_h3_event **);
+    enum lsquic_h3_event_type (*lsquic_h3_event_type_fn)(lsquic_h3_event *);
+    uint64_t (*lsquic_h3_event_reset_error_fn)(lsquic_h3_event *);
+    int (*lsquic_h3_event_for_each_header_fn)(
+        lsquic_h3_event *,
         int (*)(uint8_t *, size_t, uint8_t *, size_t, void *),
         void *
     );
-    void (*quiche_h3_event_free_fn)(quiche_h3_event *);
-    int64_t (*quiche_h3_send_request_fn)(quiche_h3_conn *, quiche_conn *, const quiche_h3_header *, size_t, bool);
-    ssize_t (*quiche_h3_send_body_fn)(quiche_h3_conn *, quiche_conn *, uint64_t, const uint8_t *, size_t, bool);
-    ssize_t (*quiche_h3_recv_body_fn)(quiche_h3_conn *, quiche_conn *, uint64_t, uint8_t *, size_t);
-    void (*quiche_h3_conn_free_fn)(quiche_h3_conn *);
-} king_http3_quiche_api_t;
+    void (*lsquic_h3_event_free_fn)(lsquic_h3_event *);
+    int64_t (*lsquic_h3_send_request_fn)(lsquic_h3_conn *, lsquic_conn *, const lsquic_h3_header *, size_t, bool);
+    ssize_t (*lsquic_h3_send_body_fn)(lsquic_h3_conn *, lsquic_conn *, uint64_t, const uint8_t *, size_t, bool);
+    ssize_t (*lsquic_h3_recv_body_fn)(lsquic_h3_conn *, lsquic_conn *, uint64_t, uint8_t *, size_t);
+    void (*lsquic_h3_conn_free_fn)(lsquic_h3_conn *);
+} king_http3_lsquic_api_t;
 
-static king_http3_quiche_api_t king_http3_quiche = {0};
+static king_http3_lsquic_api_t king_http3_lsquic = {0};
 
 static void king_http3_free_request_headers(
-    quiche_h3_header *headers,
+    lsquic_h3_header *headers,
     zend_string **owned_strings,
     size_t owned_string_count);
 static void king_http3_request_target_destroy(
@@ -268,7 +270,7 @@ static void king_http3_request_target_destroy(
 
 
 #include "http3/errors_and_validation.inc"
-#include "http3/quiche_loader.inc"
+#include "http3/lsquic_loader.inc"
 #include "http3/runtime_helpers.inc"
 #include "http3/runtime_init.inc"
 #include "http3/request_response.inc"

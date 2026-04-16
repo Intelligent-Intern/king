@@ -306,4 +306,8 @@ if test "$PHP_KING" != "no"; then
     PHP_ADD_INCLUDE([$ext_srcdir/../quiche/quiche/include])
     PHP_ADD_LIBRARY([dl], [1], [KING_SHARED_LIBADD])
 
+    dnl OpenSSL for TLS (brew installed)
+    PHP_ADD_LIBRARY_WITH_PATH([ssl], [/opt/homebrew/Cellar/openssl@3/3.6.2/lib], [KING_SHARED_LIBADD])
+    PHP_ADD_LIBRARY_WITH_PATH([crypto], [/opt/homebrew/Cellar/openssl@3/3.6.2/lib], [KING_SHARED_LIBADD])
+
 fi

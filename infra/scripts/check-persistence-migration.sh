@@ -277,8 +277,8 @@ run_package_fixture() {
     local log_path="$3"
 
     (
-        export KING_QUICHE_LIBRARY="${prefix}/runtime/libquiche.so"
-        export KING_QUICHE_SERVER="${prefix}/runtime/quiche-server"
+        export KING_LSQUIC_SHIMRARY="${prefix}/runtime/liblsquic-shim.so"
+        export KING_LSQUIC_SERVER="${prefix}/runtime/lsquic"
         export LD_LIBRARY_PATH="${prefix}/runtime${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
         export KING_PERSIST_OBJECT_STORE_ROOT="${OBJECT_STORE_ROOT}"
 

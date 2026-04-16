@@ -88,8 +88,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
 EXT_SO="${EXT_DIR}/modules/king.so"
-QUICHE_LIB="${ROOT_DIR}/quiche/target/release/libquiche.so"
-QUICHE_SERVER="${ROOT_DIR}/quiche/target/release/quiche-server"
+LSQUIC_SHIM="${ROOT_DIR}/lsquic/release/liblsquic-shim.so"
+LSQUIC_SERVER="${ROOT_DIR}/lsquic/release/lsquic"
 
 FAILED_TESTS_FILE="$(resolve_abs_path "${FAILED_TESTS_FILE}")"
 OUTPUT_DIR="$(resolve_abs_path "${OUTPUT_DIR}")"
@@ -143,7 +143,7 @@ EOF
     exit 0
 fi
 
-if [[ ! -f "${EXT_SO}" || ! -f "${QUICHE_LIB}" || ! -x "${QUICHE_SERVER}" ]]; then
+if [[ ! -f "${EXT_SO}" || ! -f "${LSQUIC_SHIM}" || ! -x "${LSQUIC_SERVER}" ]]; then
     printf '%s\n' "${INPUT_FAILED_TESTS[@]}" > "${SKIPPED_FILE}"
     cat > "${SUMMARY_FILE}" <<EOF
 format=king_phpt_flake_classification_v1
@@ -199,9 +199,9 @@ fi
 
 printf '%s\n' "${RERUN_TESTS[@]}" > "${RERUN_INPUT_FILE}"
 
-export KING_QUICHE_LIBRARY="${QUICHE_LIB}"
-export KING_QUICHE_SERVER="${QUICHE_SERVER}"
-export LD_LIBRARY_PATH="${ROOT_DIR}/quiche/target/release${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+export KING_LSQUIC_SHIMRARY="${LSQUIC_SHIM}"
+export KING_LSQUIC_SERVER="${LSQUIC_SERVER}"
+export LD_LIBRARY_PATH="${ROOT_DIR}/lsquic/release${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
 (
     cd "${EXT_DIR}"

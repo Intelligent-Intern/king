@@ -1418,14 +1418,14 @@ dependencies = [
  "multimap",
  "octets",
  "qlog",
- "quiche",
+ "lsquic",
  "ring",
  "serde",
  "serde_json",
  "serde_with",
  "smallvec",
  "tokio",
- "tokio-quiche",
+ "tokio-lsquic",
  "url",
 ]
 
@@ -2690,7 +2690,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "quiche"
+name = "lsquic"
 version = "0.26.1"
 dependencies = [
  "boring",
@@ -2720,7 +2720,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "quiche_apps"
+name = "lsquic_apps"
 version = "0.1.0"
 dependencies = [
  "docopt",
@@ -2730,7 +2730,7 @@ dependencies = [
  "mio",
  "nix",
  "octets",
- "quiche",
+ "lsquic",
  "ring",
  "url",
 ]
@@ -3645,7 +3645,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-quiche"
+name = "tokio-lsquic"
 version = "0.16.1"
 dependencies = [
  "anyhow",
@@ -3669,7 +3669,7 @@ dependencies = [
  "nix",
  "octets",
  "pin-project",
- "quiche",
+ "lsquic",
  "regex",
  "serde",
  "serde_json",

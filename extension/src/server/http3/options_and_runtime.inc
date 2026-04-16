@@ -128,17 +128,17 @@ static zend_result king_server_http3_parse_options(
 
 static void king_server_http3_runtime_destroy(king_server_http3_runtime_t *runtime)
 {
-    if (runtime->h3_conn != NULL && king_server_http3_quiche.quiche_h3_conn_free_fn != NULL) {
-        king_server_http3_quiche.quiche_h3_conn_free_fn(runtime->h3_conn);
+    if (runtime->h3_conn != NULL && king_server_http3_lsquic.lsquic_h3_conn_free_fn != NULL) {
+        king_server_http3_lsquic.lsquic_h3_conn_free_fn(runtime->h3_conn);
     }
-    if (runtime->h3_config != NULL && king_server_http3_quiche.quiche_h3_config_free_fn != NULL) {
-        king_server_http3_quiche.quiche_h3_config_free_fn(runtime->h3_config);
+    if (runtime->h3_config != NULL && king_server_http3_lsquic.lsquic_h3_config_free_fn != NULL) {
+        king_server_http3_lsquic.lsquic_h3_config_free_fn(runtime->h3_config);
     }
-    if (runtime->conn != NULL && king_server_http3_quiche.quiche_conn_free_fn != NULL) {
-        king_server_http3_quiche.quiche_conn_free_fn(runtime->conn);
+    if (runtime->conn != NULL && king_server_http3_lsquic.lsquic_conn_free_fn != NULL) {
+        king_server_http3_lsquic.lsquic_conn_free_fn(runtime->conn);
     }
-    if (runtime->config != NULL && king_server_http3_quiche.quiche_config_free_fn != NULL) {
-        king_server_http3_quiche.quiche_config_free_fn(runtime->config);
+    if (runtime->config != NULL && king_server_http3_lsquic.lsquic_config_free_fn != NULL) {
+        king_server_http3_lsquic.lsquic_config_free_fn(runtime->config);
     }
     if (runtime->socket_fd >= 0) {
         close(runtime->socket_fd);
@@ -369,16 +369,16 @@ static zend_result king_server_http3_prepare_runtime_config(
     const char *function_name
 )
 {
-    runtime->config = king_server_http3_quiche.quiche_config_new_fn(QUICHE_PROTOCOL_VERSION);
+    runtime->config = king_server_http3_lsquic.lsquic_config_new_fn(LSQUIC_PROTOCOL_VERSION);
     if (runtime->config == NULL) {
         king_server_local_set_errorf(
-            "%s() failed to allocate the libquiche server config.",
+            "%s() failed to allocate the liblsquic server config.",
             function_name
         );
         return FAILURE;
     }
 
-    if (king_server_http3_quiche.quiche_config_load_cert_chain_from_pem_file_fn(
+    if (king_server_http3_lsquic.lsquic_config_load_cert_chain_from_pem_file_fn(
             runtime->config,
             options->tls_default_cert_file
         ) != 0) {
@@ -390,7 +390,7 @@ static zend_result king_server_http3_prepare_runtime_config(
         return FAILURE;
     }
 
-    if (king_server_http3_quiche.quiche_config_load_priv_key_from_pem_file_fn(
+    if (king_server_http3_lsquic.lsquic_config_load_priv_key_from_pem_file_fn(
             runtime->config,
             options->tls_default_key_file
         ) != 0) {
@@ -402,14 +402,14 @@ static zend_result king_server_http3_prepare_runtime_config(
         return FAILURE;
     }
 
-    king_server_http3_quiche.quiche_config_grease_fn(runtime->config, options->quic_grease_enable);
-    king_server_http3_quiche.quiche_config_enable_hystart_fn(runtime->config, options->quic_cc_enable_hystart_plus_plus);
-    king_server_http3_quiche.quiche_config_enable_pacing_fn(runtime->config, options->quic_pacing_enable);
+    king_server_http3_lsquic.lsquic_config_grease_fn(runtime->config, options->quic_grease_enable);
+    king_server_http3_lsquic.lsquic_config_enable_hystart_fn(runtime->config, options->quic_cc_enable_hystart_plus_plus);
+    king_server_http3_lsquic.lsquic_config_enable_pacing_fn(runtime->config, options->quic_pacing_enable);
 
-    if (king_server_http3_quiche.quiche_config_set_application_protos_fn(
+    if (king_server_http3_lsquic.lsquic_config_set_application_protos_fn(
             runtime->config,
-            (const uint8_t *) QUICHE_H3_APPLICATION_PROTOCOL,
-            sizeof(QUICHE_H3_APPLICATION_PROTOCOL) - 1
+            (const uint8_t *) LSQUIC_H3_APPLICATION_PROTOCOL,
+            sizeof(LSQUIC_H3_APPLICATION_PROTOCOL) - 1
         ) != 0) {
         king_server_local_set_errorf(
             "%s() failed to configure the HTTP/3 ALPN list.",
@@ -418,21 +418,21 @@ static zend_result king_server_http3_prepare_runtime_config(
         return FAILURE;
     }
 
-    king_server_http3_quiche.quiche_config_set_max_idle_timeout_fn(runtime->config, (uint64_t) options->timeout_ms);
-    king_server_http3_quiche.quiche_config_set_max_recv_udp_payload_size_fn(runtime->config, KING_SERVER_HTTP3_MAX_DATAGRAM_SIZE);
-    king_server_http3_quiche.quiche_config_set_max_send_udp_payload_size_fn(runtime->config, KING_SERVER_HTTP3_MAX_DATAGRAM_SIZE);
-    king_server_http3_quiche.quiche_config_set_initial_max_data_fn(runtime->config, (uint64_t) options->quic_initial_max_data);
-    king_server_http3_quiche.quiche_config_set_initial_max_stream_data_bidi_local_fn(runtime->config, (uint64_t) options->quic_initial_max_stream_data_bidi_local);
-    king_server_http3_quiche.quiche_config_set_initial_max_stream_data_bidi_remote_fn(runtime->config, (uint64_t) options->quic_initial_max_stream_data_bidi_remote);
-    king_server_http3_quiche.quiche_config_set_initial_max_stream_data_uni_fn(runtime->config, (uint64_t) options->quic_initial_max_stream_data_uni);
-    king_server_http3_quiche.quiche_config_set_initial_max_streams_bidi_fn(runtime->config, (uint64_t) options->quic_initial_max_streams_bidi);
-    king_server_http3_quiche.quiche_config_set_initial_max_streams_uni_fn(runtime->config, (uint64_t) options->quic_initial_max_streams_uni);
-    king_server_http3_quiche.quiche_config_set_ack_delay_exponent_fn(runtime->config, (uint64_t) options->quic_ack_delay_exponent);
-    king_server_http3_quiche.quiche_config_set_max_ack_delay_fn(runtime->config, (uint64_t) options->quic_max_ack_delay_ms);
-    king_server_http3_quiche.quiche_config_set_disable_active_migration_fn(runtime->config, true);
-    king_server_http3_quiche.quiche_config_set_initial_congestion_window_packets_fn(runtime->config, (size_t) options->quic_cc_initial_cwnd_packets);
-    king_server_http3_quiche.quiche_config_set_active_connection_id_limit_fn(runtime->config, (uint64_t) options->quic_active_connection_id_limit);
-    king_server_http3_quiche.quiche_config_enable_dgram_fn(
+    king_server_http3_lsquic.lsquic_config_set_max_idle_timeout_fn(runtime->config, (uint64_t) options->timeout_ms);
+    king_server_http3_lsquic.lsquic_config_set_max_recv_udp_payload_size_fn(runtime->config, KING_SERVER_HTTP3_MAX_DATAGRAM_SIZE);
+    king_server_http3_lsquic.lsquic_config_set_max_send_udp_payload_size_fn(runtime->config, KING_SERVER_HTTP3_MAX_DATAGRAM_SIZE);
+    king_server_http3_lsquic.lsquic_config_set_initial_max_data_fn(runtime->config, (uint64_t) options->quic_initial_max_data);
+    king_server_http3_lsquic.lsquic_config_set_initial_max_stream_data_bidi_local_fn(runtime->config, (uint64_t) options->quic_initial_max_stream_data_bidi_local);
+    king_server_http3_lsquic.lsquic_config_set_initial_max_stream_data_bidi_remote_fn(runtime->config, (uint64_t) options->quic_initial_max_stream_data_bidi_remote);
+    king_server_http3_lsquic.lsquic_config_set_initial_max_stream_data_uni_fn(runtime->config, (uint64_t) options->quic_initial_max_stream_data_uni);
+    king_server_http3_lsquic.lsquic_config_set_initial_max_streams_bidi_fn(runtime->config, (uint64_t) options->quic_initial_max_streams_bidi);
+    king_server_http3_lsquic.lsquic_config_set_initial_max_streams_uni_fn(runtime->config, (uint64_t) options->quic_initial_max_streams_uni);
+    king_server_http3_lsquic.lsquic_config_set_ack_delay_exponent_fn(runtime->config, (uint64_t) options->quic_ack_delay_exponent);
+    king_server_http3_lsquic.lsquic_config_set_max_ack_delay_fn(runtime->config, (uint64_t) options->quic_max_ack_delay_ms);
+    king_server_http3_lsquic.lsquic_config_set_disable_active_migration_fn(runtime->config, true);
+    king_server_http3_lsquic.lsquic_config_set_initial_congestion_window_packets_fn(runtime->config, (size_t) options->quic_cc_initial_cwnd_packets);
+    king_server_http3_lsquic.lsquic_config_set_active_connection_id_limit_fn(runtime->config, (uint64_t) options->quic_active_connection_id_limit);
+    king_server_http3_lsquic.lsquic_config_enable_dgram_fn(
         runtime->config,
         options->quic_datagrams_enable,
         (size_t) options->quic_dgram_recv_queue_len,
@@ -440,7 +440,7 @@ static zend_result king_server_http3_prepare_runtime_config(
     );
 
     if (options->quic_cc_algorithm != NULL && options->quic_cc_algorithm[0] != '\0') {
-        if (king_server_http3_quiche.quiche_config_set_cc_algorithm_name_fn(runtime->config, options->quic_cc_algorithm) != 0) {
+        if (king_server_http3_lsquic.lsquic_config_set_cc_algorithm_name_fn(runtime->config, options->quic_cc_algorithm) != 0) {
             king_server_local_set_errorf(
                 "%s() received an unsupported QUIC congestion-control algorithm '%s'.",
                 function_name,

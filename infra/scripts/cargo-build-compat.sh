@@ -13,7 +13,7 @@ last_status=0
 status=0
 retry_status=0
 retry_output=""
-confirm="${KING_QUICHE_TOOLCHAIN_CONFIRM:-prompt}"
+confirm="${KING_LSQUIC_TOOLCHAIN_CONFIRM:-prompt}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANIFEST_PATH=""
 
@@ -21,7 +21,7 @@ ensure_confirmation() {
     local response=""
 
     if [[ "${confirm}" != "yes" && "${confirm}" != "no" && "${confirm}" != "prompt" ]]; then
-        echo "Invalid KING_QUICHE_TOOLCHAIN_CONFIRM='${confirm}'. Use 'prompt', 'yes' or 'no'." >&2
+        echo "Invalid KING_LSQUIC_TOOLCHAIN_CONFIRM='${confirm}'. Use 'prompt', 'yes' or 'no'." >&2
         return 1
     fi
 
@@ -132,19 +132,19 @@ attempt_toolchain_fixup() {
         return 1
     fi
 
-    if [[ ! -x "${SCRIPT_DIR}/ensure-quiche-toolchain.sh" ]]; then
+    if [[ ! -x "${SCRIPT_DIR}/ensure-lsquic.sh" ]]; then
         if ! command -v cargo >/dev/null 2>&1 || ! command -v rustc >/dev/null 2>&1; then
             echo "cargo/rustc are missing in PATH. King requires a compatible Rust toolchain." >&2
             print_install_solution >&2
             if ! ensure_confirmation; then
-                echo "Aborted per confirmation (KING_QUICHE_TOOLCHAIN_CONFIRM=${confirm})." >&2
+                echo "Aborted per confirmation (KING_LSQUIC_TOOLCHAIN_CONFIRM=${confirm})." >&2
                 return 1
             fi
             if ! run_rust_upgrade; then
                 return 1
             fi
         elif ! ensure_confirmation; then
-            echo "Aborted per confirmation (KING_QUICHE_TOOLCHAIN_CONFIRM=${confirm})." >&2
+            echo "Aborted per confirmation (KING_LSQUIC_TOOLCHAIN_CONFIRM=${confirm})." >&2
             return 1
         else
             if ! run_rust_upgrade; then
@@ -155,8 +155,8 @@ attempt_toolchain_fixup() {
         return 0
     fi
 
-    KING_QUICHE_TOOLCHAIN_CONFIRM="${confirm}" \
-        "${SCRIPT_DIR}/ensure-quiche-toolchain.sh" "${MANIFEST_PATH}"
+    KING_LSQUIC_TOOLCHAIN_CONFIRM="${confirm}" \
+        "${SCRIPT_DIR}/ensure-lsquic.sh" "${MANIFEST_PATH}"
 }
 
 is_lockfile_version4_error() {

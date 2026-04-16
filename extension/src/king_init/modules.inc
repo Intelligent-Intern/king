@@ -14,38 +14,8 @@ int king_init_modules(int type, int module_number)
 
     king_ini_module_number = module_number;
 
-    /*
-     * Security comes first because it establishes global policy flags such as
-     * whether userland config overrides are permitted.
-     */
-    kg_config_security_and_traffic_init();
-    kg_config_tls_and_crypto_init();
-    kg_config_tcp_transport_init();
-    kg_config_quic_transport_init();
-    kg_config_http2_init();
-    kg_config_app_http3_websockets_webtransport_init();
-    kg_config_cluster_and_process_init();
-    kg_config_bare_metal_tuning_init();
-    kg_config_cloud_autoscale_init();
-    kg_config_dynamic_admin_api_init();
-    kg_config_native_cdn_init();
-    kg_config_native_object_store_init();
-    kg_config_open_telemetry_init();
-    kg_config_router_and_loadbalancer_init();
-    kg_config_state_management_init();
-    kg_config_smart_dns_init();
-    kg_config_iibin_init();
-    kg_config_mcp_and_orchestrator_init();
-    kg_config_high_perf_compute_and_ai_init();
-    kg_config_semantic_geometry_init();
-    kg_config_smart_contracts_init();
-    kg_config_ssh_over_quic_init();
-
-    king_orchestrator_registry_init();
-
-    if (king_ticket_ring_init() != SUCCESS) {
-        return FAILURE;
-    }
+    /* No config modules initialized - testing if extension loads at all */
+    /* kg_config_security_and_traffic_init(); */
 
     return SUCCESS;
 }

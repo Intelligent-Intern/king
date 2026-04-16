@@ -87,8 +87,8 @@ fi
 
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
 EXT_SO="${PROFILE_DIR}/king.so"
-QUICHE_LIB="${PROFILE_DIR}/libquiche.so"
-QUICHE_SERVER="${PROFILE_DIR}/quiche-server"
+LSQUIC_SHIM="${PROFILE_DIR}/liblsquic-shim.so"
+LSQUIC_SERVER="${PROFILE_DIR}/lsquic"
 
 if [[ -z "${ARTIFACTS_DIR}" ]]; then
     ARTIFACTS_DIR="${EXT_DIR}/build/soak/${MODE}"
@@ -194,8 +194,8 @@ copy_failure_artifacts() {
     fi
 
     cp "${EXT_SO}" "${destination_dir}/king.so"
-    cp "${QUICHE_LIB}" "${destination_dir}/libquiche.so"
-    cp "${QUICHE_SERVER}" "${destination_dir}/quiche-server"
+    cp "${LSQUIC_SHIM}" "${destination_dir}/liblsquic-shim.so"
+    cp "${LSQUIC_SERVER}" "${destination_dir}/lsquic"
     if [[ -n "${SANITIZER_RUNTIME_PATH}" ]]; then
         cp "${SANITIZER_RUNTIME_PATH}" "${destination_dir}/$(basename "${SANITIZER_RUNTIME_PATH}")"
     fi
@@ -225,9 +225,9 @@ TEST_FILES=(
 )
 
 require_profile_artifact "${EXT_SO}" "Missing staged extension for profile '${PROFILE}'"
-require_profile_artifact "${QUICHE_LIB}" "Missing staged libquiche for profile '${PROFILE}'"
-if [[ ! -x "${QUICHE_SERVER}" ]]; then
-    echo "Missing staged quiche-server for profile '${PROFILE}': ${QUICHE_SERVER}" >&2
+require_profile_artifact "${LSQUIC_SHIM}" "Missing staged liblsquic-shim for profile '${PROFILE}'"
+if [[ ! -x "${LSQUIC_SERVER}" ]]; then
+    echo "Missing staged lsquic for profile '${PROFILE}': ${LSQUIC_SERVER}" >&2
     exit 1
 fi
 
@@ -247,8 +247,8 @@ printf 'mode=%s\nprofile=%s\niterations=%s\nstarted_at=%s\n' \
 printf '%s\n' "${TEST_FILES[@]}" > "${TEST_LIST_FILE}"
 printf '; intentionally empty sanitizer soak php.ini\n' > "${EMPTY_PHP_INI_FILE}"
 
-export KING_QUICHE_LIBRARY="${QUICHE_LIB}"
-export KING_QUICHE_SERVER="${QUICHE_SERVER}"
+export KING_LSQUIC_SHIMRARY="${LSQUIC_SHIM}"
+export KING_LSQUIC_SERVER="${LSQUIC_SERVER}"
 export LD_LIBRARY_PATH="${PROFILE_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 export USE_ZEND_ALLOC=0
 # Keep sanitizer gates isolated from host-runner PHP extensions even when a

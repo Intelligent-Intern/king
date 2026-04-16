@@ -1,5 +1,11 @@
 --TEST--
 King HTTP/2 server-side websocket upgrade keeps an honest in-process local frame runtime in v1
+--SKIPIF--
+<?php
+if (PHP_OS === 'Darwin') {
+    die("skip HTTP/2 runtime requires libcurl.so (Linux) - not available on macOS");
+}
+?>
 --FILE--
 <?php
 $captured = [];
