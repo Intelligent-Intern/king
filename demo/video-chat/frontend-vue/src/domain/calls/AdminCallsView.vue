@@ -15,7 +15,7 @@
         <h3>Video Call Management</h3>
       </div>
       <div class="actions">
-        <button class="btn" type="button" @click="openPrimaryCompose">{{ primaryActionLabel }}</button>
+        <button class="btn btn-cyan" type="button" @click="openPrimaryCompose">{{ primaryActionLabel }}</button>
       </div>
     </section>
 

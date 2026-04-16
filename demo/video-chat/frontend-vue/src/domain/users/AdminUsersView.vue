@@ -5,7 +5,7 @@
         <h3>User Management</h3>
       </div>
       <div class="actions">
-        <button class="btn" type="button" @click="openCreateUser">New user</button>
+        <button class="btn btn-cyan" type="button" @click="openCreateUser">New user</button>
       </div>
     </header>
 

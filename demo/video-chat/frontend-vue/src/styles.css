@@ -30,6 +30,9 @@
   --text-secondary: #c6d4eb;
   --text-dim: #5e6d86;
   --warn: var(--wait);
+  --brand-cyan: #1482BE;
+  --brand-cyan-hover: #1a96d8;
+  --brand-cyan-active: #0f6ea8;
 }
 
 * {
@@ -443,6 +446,18 @@ select {
 
 .btn:hover {
   background: var(--bg-tab-hover);
+}
+
+.btn.btn-cyan {
+  background: var(--brand-cyan);
+}
+
+.btn.btn-cyan:hover {
+  background: var(--brand-cyan-hover);
+}
+
+.btn.btn-cyan:active {
+  background: var(--brand-cyan-active);
 }
 
 .btn.full {

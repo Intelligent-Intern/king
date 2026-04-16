@@ -259,8 +259,8 @@
               </div>
               <div class="actions">
                 <template v-if="route.path === '/admin/overview'">
-                  <button class="btn" type="button" @click="openCallsRegistry">Open Calls</button>
-                  <button class="btn" type="button" @click="openGrafana">Open Grafana</button>
+                  <button class="btn btn-cyan" type="button" @click="openCallsRegistry">Open Calls</button>
+                  <button class="btn btn-cyan" type="button" @click="openGrafana">Open Grafana</button>
                 </template>
                 <button v-else class="btn" type="button" @click="openSettingsModal('about-me')">Settings</button>
               </div>

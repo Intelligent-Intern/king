@@ -1,9 +1,9 @@
 <template>
   <section class="view-card admin-overview-view">
     <section class="overview-toolbar">
-      <div class="view-tabs" role="tablist" aria-label="Overview views">
+      <div class="overview-view-tabs" role="tablist" aria-label="Overview views">
         <button
-          class="view-tab"
+          class="tab"
           :class="{ active: activeOverviewView === 'dashboard' }"
           type="button"
           role="tab"
@@ -14,7 +14,7 @@
           Dashboard
         </button>
         <button
-          class="view-tab"
+          class="tab"
           :class="{ active: activeOverviewView === 'calendar' }"
           type="button"
           role="tab"
@@ -22,7 +22,7 @@
           :aria-selected="activeOverviewView === 'calendar'"
           @click="setActiveOverviewView('calendar')"
         >
-          Calendar
+          Calender
         </button>
       </div>
     </section>
@@ -900,29 +900,16 @@ watch(activeOverviewView, async (view) => {
   background: var(--bg-ui-chrome);
 }
 
-.view-tabs {
-  display: inline-flex;
-  gap: 6px;
-  flex-wrap: nowrap;
+.overview-view-tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border-subtle);
 }
 
-.view-tab {
-  height: 36px;
-  min-width: 138px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--bg-action);
-  color: var(--text-main);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.view-tab:hover {
-  background: var(--bg-action-hover);
-}
-
-.view-tab.active {
-  background: var(--bg-row);
+.overview-view-tabs .tab {
+  min-width: 120px;
+  height: 40px;
 }
 
 .view-panel {
@@ -1205,15 +1192,4 @@ watch(activeOverviewView, async (view) => {
   }
 }
 
-@media (max-width: 760px) {
-  .view-tabs {
-    width: 100%;
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .view-tab {
-    width: 100%;
-  }
-}
 </style>
