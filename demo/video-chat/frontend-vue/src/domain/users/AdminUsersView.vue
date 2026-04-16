@@ -1053,8 +1053,8 @@ onMounted(() => {
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  background: var(--border-subtle);
+  gap: 0;
+  background: transparent;
 }
 
 .admin-users-view > :first-child {
@@ -1120,6 +1120,7 @@ onMounted(() => {
 
 .users-table {
   table-layout: fixed;
+  margin-top: 10px;
 }
 
 .users-table th:nth-child(1),
@@ -1186,7 +1187,7 @@ onMounted(() => {
 .users-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
-  margin-top: 10px;
+  margin-top: 0;
   padding-left: 10px;
   padding-right: 10px;
 }
