@@ -5133,7 +5133,7 @@ onBeforeUnmount(() => {
   --bg-tab-hover: #2a5aa0;
   --bg-tab-active: #3f79d6;
   --bg-control: #1b427a;
-  --bg-control-active: #3f79d6;
+  --bg-control-active: var(--brand-cyan);
   --bg-reaction-tray: #122d59;
   --bg-reaction-btn: #21508f;
   --bg-reaction-btn-hover: #2e65b3;
