@@ -24,14 +24,36 @@ async function probeWlvcWasm() {
 
   let encoder = null;
   let decoder = null;
+  let encoderOk = false;
+  let decoderOk = false;
   try {
-    encoder = await createWasmEncoder({ width: 64, height: 64, quality: 60, keyFrameInterval: 2 });
-    decoder = await createWasmDecoder({ width: 64, height: 64, quality: 60 });
+    try {
+      encoder = await createWasmEncoder({ width: 64, height: 64, quality: 60, keyFrameInterval: 2 });
+      encoderOk = Boolean(encoder);
+    } catch {
+      encoderOk = false;
+    }
+    try {
+      decoder = await createWasmDecoder({ width: 64, height: 64, quality: 60 });
+      decoderOk = Boolean(decoder);
+    } catch {
+      decoderOk = false;
+    }
+
+    let reason = 'wlvc_wasm_probe_failed';
+    if (encoderOk && decoderOk) {
+      reason = 'ok';
+    } else if (encoderOk && !decoderOk) {
+      reason = 'wlvc_decoder_probe_failed';
+    } else if (!encoderOk && decoderOk) {
+      reason = 'wlvc_encoder_probe_failed';
+    }
+
     return {
       webAssembly: true,
-      encoder: Boolean(encoder),
-      decoder: Boolean(decoder),
-      reason: encoder && decoder ? 'ok' : 'wlvc_wasm_probe_failed',
+      encoder: encoderOk,
+      decoder: decoderOk,
+      reason,
     };
   } catch {
     return {
@@ -57,7 +79,9 @@ async function probeWlvcWasm() {
 export async function detectMediaRuntimeCapabilities() {
   const webRtcNative = hasWebRtcBaseSupport();
   const wlvcWasm = await probeWlvcWasm();
-  const stageA = Boolean(wlvcWasm.encoder && wlvcWasm.decoder);
+  // Stage A requires a working WASM encoder; decoder readiness is handled
+  // lazily when remote SFU tracks are subscribed.
+  const stageA = Boolean(wlvcWasm.encoder);
   const stageB = Boolean(webRtcNative);
 
   let preferredPath = 'unsupported';
