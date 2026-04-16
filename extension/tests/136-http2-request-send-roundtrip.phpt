@@ -2,8 +2,25 @@
 King HTTP/2 runtime can perform a real local h2c roundtrip with per-origin reuse
 --SKIPIF--
 <?php
+if (PHP_OS === 'Darwin') {
+    die("skip HTTP/2 runtime requires libcurl.so (Linux) - not available on macOS");
+}
 if (trim((string) shell_exec('command -v node')) === '') {
-    echo "skip node is required for the local HTTP/2 fixture";
+    die("skip node is required for the local HTTP/2 fixture");
+}
+if (!extension_loaded('curl')) {
+    die("skip curl extension required for HTTP/2");
+}
+try {
+    $r = new ReflectionExtension('curl');
+    $version = $r->getVersion();
+    // Check if libcurl has HTTP/2 support
+    $info = curl_version();
+    if (!($info['features'] & CURL_VERSION_HTTP2)) {
+        die("skip libcurl without HTTP/2 support");
+    }
+} catch (Exception $e) {
+    die("skip curl extension error: " . $e->getMessage());
 }
 ?>
 --FILE--

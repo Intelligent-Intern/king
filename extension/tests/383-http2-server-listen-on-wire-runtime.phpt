@@ -1,5 +1,11 @@
 --TEST--
 King HTTP/2 one-shot listener accepts a real h2c client, invokes the handler, writes the response, and closes cleanly
+--SKIPIF--
+<?php
+if (PHP_OS === 'Darwin') {
+    die("skip HTTP/2 runtime requires libcurl.so (Linux) - not available on macOS");
+}
+?>
 --FILE--
 <?php
 require __DIR__ . '/http2_server_wire_helper.inc';

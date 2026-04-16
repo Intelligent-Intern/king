@@ -14,7 +14,9 @@
 #include "php.h"
 #include "php_king.h"
 #include "include/client/session.h"
+/* lsquic loaded at runtime via dlopen
 #include <lsquic.h>
+*/
 #include "include/config/config.h"
 #include "include/config/quic_transport/base_layer.h"
 #include "include/config/tcp_transport/base_layer.h"

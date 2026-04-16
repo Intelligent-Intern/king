@@ -1,5 +1,11 @@
 --TEST--
 King HTTP/2 multi request leaf exposes stable validation contracts
+--SKIPIF--
+<?php
+if (PHP_OS === 'Darwin') {
+    die("skip HTTP/2 runtime requires libcurl.so (Linux) - not available on macOS");
+}
+?>
 --INI--
 king.security_allow_config_override=1
 --FILE--

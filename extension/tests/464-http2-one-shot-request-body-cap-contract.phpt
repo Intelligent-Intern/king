@@ -1,5 +1,11 @@
 --TEST--
 King HTTP/2 one-shot listener rejects cumulative request bodies above the active one-shot limit
+--SKIPIF--
+<?php
+if (PHP_OS === 'Darwin') {
+    die("skip HTTP/2 runtime requires libcurl.so (Linux) - not available on macOS");
+}
+?>
 --FILE--
 <?php
 require __DIR__ . '/http2_server_wire_helper.inc';

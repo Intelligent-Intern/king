@@ -2,8 +2,11 @@
 King HTTP/2 multi request leaf captures pushed responses and keeps them attached to the originating request
 --SKIPIF--
 <?php
+if (PHP_OS === 'Darwin') {
+    die("skip HTTP/2 runtime requires libcurl.so (Linux) - not available on macOS");
+}
 if (trim((string) shell_exec('command -v node')) === '') {
-    echo "skip node is required for the local HTTP/2 push fixture";
+    die("skip node is required for the local HTTP/2 push fixture");
 }
 ?>
 --FILE--

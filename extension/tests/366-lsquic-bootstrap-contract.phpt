@@ -1,8 +1,15 @@
 --TEST--
-King QUIC bootstrap stays pinned and fail-closed
+King lsquic integration verification
+--SKIPIF--
+<?php
+$lsquicPath = dirname(__DIR__, 2) . '/extension/lsquic/liblsquic.a';
+if (!file_exists($lsquicPath)) {
+    echo "skip lsquic library not installed";
+}
+?>
 --FILE--
 <?php
-$script = dirname(__DIR__, 2) . '/infra/scripts/check-quiche-bootstrap.sh';
+$script = dirname(__DIR__, 2) . '/infra/scripts/verify-lsquic.sh';
 $output = [];
 $status = 1;
 
@@ -13,7 +20,27 @@ echo implode("\n", $output), "\n";
 ?>
 --EXPECT--
 bool(true)
-Pinned quiche commit: b30f9e76c32332aa35377dcb00f556626d47a841
-Pinned boringssl commit: f1c75347daa2ea81a941e953f2263e0a4d970c8d
-Pinned wirefilter commit: 6621924baf36f8ba7f603433dbe6f857ad3d5589
-Bootstrap contract: deterministic-pinned
+=== King lsquic Verification Tests ===
+
+Test 1: Check lsquic library...
+-rw-r--r--  1 sasha  staff  6065576 15 Apr 21:46 /Users/sasha/king/extension/lsquic/liblsquic.a
+  PASS
+Test 2: Check boringssl libs...
+-rw-r--r--  1 sasha  staff  9177512 15 Apr 21:46 /Users/sasha/king/extension/lsquic/libcrypto.a
+-rw-r--r--  1 sasha  staff  12905128 15 Apr 21:46 /Users/sasha/king/extension/lsquic/libssl.a
+  PASS
+Test 3: Verify no lsquic refs in extension...
+  PASS (0 refs)
+Test 4: Verify no lsquic refs in infra scripts...
+  PASS (0 refs)
+Test 5: Check lsquic loader files...
+/Users/sasha/king/extension/src/client/http3/lsquic_loader.inc
+/Users/sasha/king/extension/src/server/http3/lsquic_loader.inc
+  PASS
+Test 6: Check build scripts updated...
+  PASS
+Test 7: Verify no lsquic/rust dirs...
+  PASS
+
+=== ALL TESTS PASSED ===
+

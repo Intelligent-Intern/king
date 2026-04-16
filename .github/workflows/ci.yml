@@ -89,25 +89,11 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
 
       - name: Verify dependency provenance documentation
         if: matrix.shard-index == 1
         run: bash ./infra/scripts/check-dependency-provenance-doc.sh
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -130,7 +116,6 @@ jobs:
         run: |
           php -v
           phpize -v
-          cargo --version
 
       - name: Lint public PHP stub surface
         if: matrix.shard-index == 1
@@ -258,21 +243,7 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
 
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -373,21 +344,7 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
 
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-${{ matrix.arch-label }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -475,21 +432,7 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
 
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -572,21 +515,7 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
 
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -669,21 +598,7 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
 
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -765,21 +680,7 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
 
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -858,21 +759,7 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
 
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
