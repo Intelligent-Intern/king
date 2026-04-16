@@ -4,18 +4,21 @@ This directory is the active build-out of a first-class **inference-serving**
 role on top of the King native runtime. It maps to tracker sections **V**
 (AI/SLM Platform) and **Z** (Inference Serving) in `READYNESS_TRACKER.md`.
 
-> The demo lives on branch `feature/model-inference`. The sprint backlog is
-> in the root `ISSUES.md` under **"M-batch: Model Inference"**
-> (`#M-1` → `#M-18`). Tracker boxes in `READYNESS_TRACKER.md` and
-> `PROJECT_ASSESSMENT.md` are **not** ticked from this branch; a post-merge
-> sweep ticks V/Z bullets whose contract test is green on `main`.
+> The demo lives on branch `feature/rag-pipeline` (R-batch), extending
+> `feature/model-inference` (M-batch). The sprint backlog is in the root
+> `ISSUES.md` under **"M-batch: Model Inference"** (`#M-1` → `#M-18`) and
+> **"R-batch: RAG Pipeline"** (`#R-1` → `#R-16`). Tracker boxes in
+> `READYNESS_TRACKER.md` and `PROJECT_ASSESSMENT.md` are **not** ticked from
+> this branch; a post-merge sweep ticks W/X bullets whose contract test is
+> green on `main`.
 
 ---
 
 ## What works today
 
-All eighteen leaves are closed. Seventeen contract tests green (the
-model-registry test additionally requires the King extension). You can:
+All thirty-four leaves are closed (18 M-batch + 16 R-batch). Thirty contract
+tests green (the model-registry test additionally requires the King extension;
+four M-batch tests require the llama.cpp runtime). You can:
 
 **Runtime + Profile**
 - `GET /health`, `/api/runtime`, `/api/bootstrap`, `/api/version`
@@ -62,9 +65,28 @@ model-registry test additionally requires the King extension). You can:
 - `GET /ui` — minimal chat (single-file HTML + CSS + JS, no build,
   decodes TokenFrame client-side, streams deltas live, shows telemetry)
 
+**RAG Pipeline (R-batch)**
+- `POST /api/embed` — real embedding generation via llama.cpp `--embedding`
+  mode with L2 normalization; nomic-embed-text-v1.5 Q8_0 (768 dimensions)
+- `POST /api/documents` — plain text document ingest with auto-chunking
+  (fixed-size 512-byte chunks, 64-byte overlap)
+- `GET /api/documents/{id}/chunks` — chunk listing per document
+- `POST /api/retrieve` — semantic retrieval: embed query → brute-force
+  cosine similarity → top-K ranked chunks with scores
+- `POST /api/rag` — end-to-end RAG: retrieve context → augment prompt →
+  inference completion (dual model selector: chat + embedding)
+- `GET /api/telemetry/rag/recent` — per-request RAG telemetry ring
+  (embedding_ms, retrieval_ms, inference_ms, chunks_used, vectors_scanned)
+- Embedding model registry: `model_type` column (`chat`/`embedding`),
+  separate autoseed for embedding GGUFs
+- Semantic-DNS extended with `supports_embedding`, `supports_retrieval`,
+  `supports_rag`, `embedding_dimensions` attributes
+
 **Tooling**
 - `scripts/install-llama-runtime.sh` — pinned `llama.cpp b8802` + SmolLM2
   fixture with committed SHA-256 checksums
+- `scripts/install-embedding-model.sh` — pinned nomic-embed-text-v1.5 Q8_0
+  GGUF with SHA-256 verification
 - `scripts/seed-model.php` — admin CLI to register GGUFs (bypasses
   the 1 MiB king HTTP/1 body cap)
 - `scripts/demo-walkthrough.sh` — drives every live endpoint end-to-end
@@ -96,6 +118,27 @@ model-registry test additionally requires the King extension). You can:
 | #M-17 | done | 9-phase compose end-to-end `smoke.sh` |
 | #M-18 | done | this README + scope fences + ISSUES update |
 
+**R-batch: RAG Pipeline (branch `feature/rag-pipeline`)**
+
+| Leaf | Status | Proof |
+|------|--------|-------|
+| #R-1 | done | `model_type` column + embedding model registry + install script |
+| #R-2 | done | `EmbeddingSession` with `--embedding` flag + L2 normalization |
+| #R-3 | done | `embedding-request.contract.json` + 33-rule validator |
+| #R-4 | done | `POST /api/embed` endpoint wired through dispatcher |
+| #R-5 | done | `POST /api/documents` + document ingest via object store |
+| #R-6 | done | `text_chunker.php` + `chunk-envelope.contract.json` (60 rules) |
+| #R-7 | done | auto-chunk on ingest + `GET /api/documents/{id}/chunks` |
+| #R-8 | done | vector store: object store + SQLite metadata |
+| #R-9 | done | brute-force cosine similarity (16 rules) |
+| #R-10 | done | `POST /api/retrieve` + `retrieval-request.contract.json` |
+| #R-11 | done | `POST /api/rag` end-to-end pipeline |
+| #R-12 | done | `RagMetricsRing` + `GET /api/telemetry/rag/recent` (24 rules) |
+| #R-13 | done | Semantic-DNS embedding/retrieval/rag attributes |
+| #R-14 | done | catalog parity: 18 live API surfaces + probes |
+| #R-15 | done | `scripts/rag-smoke.sh` 10-phase end-to-end |
+| #R-16 | done | this README update + scope fences |
+
 ---
 
 ## Quickstart
@@ -104,13 +147,15 @@ All commands below assume you're running inside the King dev container (the
 one that has `king.so` built). From the Mac host, `docker exec` into the
 container first.
 
-### 1. Install llama.cpp + the GGUF fixture
+### 1. Install llama.cpp + the GGUF fixtures
 
 Idempotent; safe to re-run. Pins `llama.cpp b8802` +
-`SmolLM2-135M-Instruct-Q4_K_S.gguf` with committed SHA-256 checksums.
+`SmolLM2-135M-Instruct-Q4_K_S.gguf` + `nomic-embed-text-v1.5.Q8_0.gguf`
+with committed SHA-256 checksums.
 
 ```bash
 demo/model-inference/backend-king-php/scripts/install-llama-runtime.sh
+demo/model-inference/backend-king-php/scripts/install-embedding-model.sh
 ```
 
 ### 2. Start the backend
@@ -173,7 +218,7 @@ Then open **`http://localhost:18091/ui`** in your browser.
 
 ## Running the contract tests
 
-All seventeen in the dev container:
+All thirty in the dev container:
 
 ```bash
 for t in demo/model-inference/backend-king-php/tests/*-contract.sh; do
@@ -186,11 +231,18 @@ The tests that need the King extension auto-load it or SKIP cleanly. The
 tests that need `llama.cpp` + a GGUF SKIP cleanly if
 `scripts/install-llama-runtime.sh` hasn't been run.
 
-### Two-node smoke
+### Two-node smoke (M-batch)
 
 ```bash
 MODEL_INFERENCE_SMOKE_REQUIRE_COMPOSE=1 \
 demo/model-inference/scripts/smoke.sh
+```
+
+### RAG pipeline smoke (R-batch)
+
+```bash
+MODEL_INFERENCE_SMOKE_REQUIRE_COMPOSE=1 \
+demo/model-inference/scripts/rag-smoke.sh
 ```
 
 ---
@@ -207,7 +259,17 @@ end. None of them tick any tracker V/Z box from this branch.
   does **not** prove sharded execution across nodes. Tracker V.4's
   "distributed execution" bullet stays fenced.
 - **Fine-tuning pipelines** (entire tracker section Y).
-- **RAG / embeddings / retrieval** (tracker sections W and X).
+- **Hybrid retrieval** (BM25/TF-IDF + vector fusion). R-batch proves semantic
+  retrieval only; keyword search is fenced.
+- **External vector databases** (pgvector, Pinecone, Weaviate). Brute-force
+  over King object store only.
+- **HNSW / IVF / ANN indexes.** Honest brute-force; approximate methods fenced.
+- **PDF / HTML / Markdown parsing.** Plain text ingestion only.
+- **Multimodal embedding** (images, audio). Text only.
+- **Large-scale indexing** (>10K vectors). Demo corpus sizes only.
+- **WS streaming of RAG results.** HTTP only for RAG pipeline.
+- **Concurrent RAG execution.** Single pipeline at a time (same serial
+  listener constraint as M-batch).
 - **External provider wrappers** (tracker section AA). OpenAI, Anthropic,
   Bedrock, larger model families live under `packages/` as explicit
   extensions, not inside this demo.
@@ -236,13 +298,17 @@ demo/model-inference/
   README.md                                     # this file
   docker-compose.v1.yml                         # two-node compose (#M-15)
   contracts/v1/
-    api-ws-contract.catalog.json                # canonical API + WS catalog (#M-3)
-    inference-request.contract.json             # client->server envelope (#M-8)
+    api-ws-contract.catalog.json                # canonical API + WS catalog (#M-3, R-14)
+    inference-request.contract.json             # client->server inference envelope (#M-8)
+    embedding-request.contract.json             # client->server embedding envelope (#R-3)
+    retrieval-request.contract.json             # client->server retrieval envelope (#R-10)
+    chunk-envelope.contract.json                # chunk shape contract (#R-6)
     token-frame.contract.json                   # IIBIN binary frame + sample vectors (#M-9)
     node-profile.contract.json                  # GET /api/node/profile envelope (#M-4)
     model-registry-entry.contract.json          # registry row + http_surface (#M-5)
   scripts/
     smoke.sh                                    # 9-phase compose end-to-end (#M-17)
+    rag-smoke.sh                                # 10-phase RAG pipeline smoke (#R-15)
     failover-smoke.sh                           # two-node failover proof (#M-15)
   backend-king-php/
     Dockerfile                                  # PHP 8.4 + king.so + llama.cpp + pdo_sqlite
@@ -255,34 +321,47 @@ demo/model-inference/
       module_runtime.php                        # /health /api/runtime /api/bootstrap /api/version
       module_profile.php                        # /api/node/profile
       module_registry.php                       # /api/models{,/:id}
+      module_embed.php                          # POST /api/embed (#R-4)
+      module_ingest.php                         # /api/documents + /api/documents/:id/chunks (#R-5, R-7)
+      module_retrieve.php                       # POST /api/retrieve + POST /api/rag (#R-10, R-11)
       module_inference.php                      # POST /api/infer + GET /api/transcripts/:id
       module_realtime.php                       # GET /ws + WS streaming
-      module_telemetry.php                      # /api/telemetry/inference/recent
+      module_telemetry.php                      # /api/telemetry/{inference,rag}/recent
       module_routing.php                        # GET /api/route
       module_ui.php                             # GET /ui
     domain/
       profile/hardware_profile.php              # real CPU/RAM/GPU probes (#M-4)
-      registry/model_registry.php               # SQLite index + object-store glue (#M-5)
+      registry/model_registry.php               # SQLite index + model_type (#M-5, R-1)
       registry/model_fit_selector.php           # pure fit/selector (#M-6)
-      inference/inference_request.php           # envelope validation (#M-8)
+      embedding/embedding_request.php           # embedding envelope validation (#R-3)
+      embedding/embedding_session.php           # embedding worker cache + /v1/embeddings (#R-2)
+      inference/inference_request.php           # inference envelope validation (#M-8)
       inference/inference_session.php           # worker cache + per-request complete (#M-10)
       inference/inference_stream.php            # llama.cpp SSE -> TokenFrame bridge (#M-11)
       inference/transcript_store.php            # object-store persistence (#M-16)
+      retrieval/document_store.php              # document ingest + object store (#R-5)
+      retrieval/text_chunker.php                # fixed-size chunking (#R-6)
+      retrieval/vector_store.php                # vector persistence (#R-8)
+      retrieval/cosine_similarity.php           # brute-force scorer (#R-9)
+      retrieval/retrieval_pipeline.php          # embed query → scan → rank (#R-10)
+      retrieval/rag_orchestrator.php            # retrieve → augment → infer (#R-11)
       routing/inference_routing.php             # Semantic-DNS routing helper (#M-14)
-      telemetry/inference_metrics.php           # bounded-FIFO metrics ring (#M-12)
+      telemetry/inference_metrics.php           # inference metrics ring (#M-12)
+      telemetry/rag_metrics.php                 # RAG metrics ring (#R-12)
     support/
       database.php                              # SQLite schema bootstrap
       object_store.php                          # king_object_store_init wrapper
-      semantic_dns.php                          # Semantic-DNS register/deregister (#M-13)
+      semantic_dns.php                          # Semantic-DNS register/deregister (#M-13, R-13)
       llama_cpp_worker.php                      # LlamaCppWorker lifecycle (#M-7)
       token_frame.php                           # TokenFrame encode/decode codec (#M-9)
     scripts/
       install-llama-runtime.sh                  # pinned llama.cpp b8802 + SmolLM2 GGUF
+      install-embedding-model.sh                # pinned nomic-embed-text-v1.5 Q8_0 GGUF (#R-1)
       seed-model.php                            # admin CLI: register a GGUF
       demo-walkthrough.sh                       # drive every live endpoint end-to-end
       run-proxy.sh                              # socat :18091 -> container bridge IP
     tests/
-      *-contract.{sh,php}                       # 17 test pairs, one per leaf
+      *-contract.{sh,php}                       # 30 test pairs
 ```
 
 ---

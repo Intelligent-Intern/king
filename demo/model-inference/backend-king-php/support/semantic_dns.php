@@ -40,6 +40,10 @@ function model_inference_semantic_dns_register(
             'vram_free_bytes' => (int) ($gpu['vram_free_bytes'] ?? 0),
             'supports_streaming' => (bool) ($capabilities['supports_streaming'] ?? true),
             'supports_quantizations' => (array) ($capabilities['supports_quantizations'] ?? []),
+            'supports_embedding' => (bool) ($capabilities['supports_embedding'] ?? false),
+            'supports_retrieval' => (bool) ($capabilities['supports_retrieval'] ?? false),
+            'supports_rag' => (bool) ($capabilities['supports_rag'] ?? false),
+            'embedding_dimensions' => (int) ($capabilities['embedding_dimensions'] ?? 0),
         ],
     ]);
 }

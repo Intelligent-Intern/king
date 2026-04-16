@@ -1,0 +1,66 @@
+{
+  "contract_name": "king-model-inference-embedding-request",
+  "contract_version": "1.0.0",
+  "contract_scope": "Client-to-server envelope for embedding generation. Consumed by POST /api/embed (#R-4). The envelope is pinned here so the validator (domain/embedding/embedding_request.php) and catalog parity tests share one authoritative shape.",
+  "honesty_rules": [
+    "texts is an array of plain strings. Each string is embedded independently by the llama.cpp /v1/embeddings endpoint; the backend does NOT concatenate or re-chunk them. Clients that need chunking must chunk before calling this endpoint (see #R-6 text_chunker).",
+    "model_selector resolves against the registry filtered by model_type=embedding. A model_selector that matches a chat model is rejected with 'model_not_found' — the embedding worker cannot serve chat models.",
+    "options.normalize controls L2 normalization of returned vectors. Default true. When false, raw vectors are returned as emitted by llama.cpp.",
+    "options.truncate controls whether input texts exceeding the model's context length are silently truncated. Default true. When false, over-length texts are rejected with 'invalid_request_envelope'.",
+    "Returned embeddings are float arrays. Dimensions depend on the model (nomic-embed-text-v1.5 produces 768-dim vectors). The dimensions field is authoritative for the response — do not hardcode it client-side."
+  ],
+  "envelope": {
+    "texts": {
+      "type": "array<string>",
+      "min_items": 1,
+      "max_items": 64,
+      "item_min_length": 1,
+      "item_max_length": 32768,
+      "required": true
+    },
+    "model_selector": {
+      "type": "object",
+      "required": true,
+      "fields": {
+        "model_name": {"type": "string", "min_length": 1, "max_length": 128, "required": true},
+        "quantization": {"type": "string", "enum": ["Q2_K","Q3_K","Q4_0","Q4_K","Q5_K","Q6_K","Q8_0","F16"], "required": true}
+      }
+    },
+    "options": {
+      "type": "object",
+      "required": false,
+      "default": {"normalize": true, "truncate": true},
+      "fields": {
+        "normalize": {"type": "bool", "required": false, "default": true},
+        "truncate": {"type": "bool", "required": false, "default": true}
+      }
+    }
+  },
+  "response_envelope": {
+    "status": "ok",
+    "request_id": "string",
+    "embeddings": "array<array<float>>",
+    "dimensions": "int",
+    "model": {
+      "model_id": "string",
+      "model_name": "string",
+      "quantization": "string"
+    },
+    "tokens_used": "int",
+    "duration_ms": "int",
+    "time": "rfc3339"
+  },
+  "rejection_codes": {
+    "invalid_request_envelope": "any required field missing; any field out-of-range; unknown top-level keys; wrong type for a required field; text over context length when truncate=false",
+    "model_not_found": "model_selector did not match any embedding-type registry row (model_name + quantization + model_type=embedding)",
+    "worker_unavailable": "the embedding worker failed to start or failed during generation"
+  },
+  "rejection_details_shape": {
+    "code": "one of rejection_codes",
+    "details": {
+      "field": "dotted path of the failing leaf",
+      "reason": "human-readable cause",
+      "observed": "the value the client sent"
+    }
+  }
+}

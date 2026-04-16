@@ -8,6 +8,9 @@ require_once __DIR__ . '/module_registry.php';
 require_once __DIR__ . '/module_inference.php';
 require_once __DIR__ . '/module_realtime.php';
 require_once __DIR__ . '/module_telemetry.php';
+require_once __DIR__ . '/module_embed.php';
+require_once __DIR__ . '/module_ingest.php';
+require_once __DIR__ . '/module_retrieve.php';
 require_once __DIR__ . '/module_routing.php';
 require_once __DIR__ . '/module_ui.php';
 
@@ -30,6 +33,9 @@ function model_inference_dispatch_route_module_order(): array
         'runtime',
         'profile',
         'registry',
+        'embed',
+        'ingest',
+        'retrieve',
         'inference',
         'realtime',
         'telemetry',
@@ -56,7 +62,9 @@ function model_inference_dispatch_request(
     callable $getInferenceMetrics,
     string $wsPath,
     string $host,
-    int $port
+    int $port,
+    ?callable $getEmbeddingSession = null,
+    ?callable $getRagMetrics = null
 ): array {
     $path = $pathFromRequest($request);
     $method = $methodFromRequest($request);
@@ -111,6 +119,48 @@ function model_inference_dispatch_request(
         return $registryResponse;
     }
 
+    if ($getEmbeddingSession !== null) {
+        $embedResponse = model_inference_handle_embed_routes(
+            $path,
+            $method,
+            $request,
+            $jsonResponse,
+            $errorResponse,
+            $openDatabase,
+            $getEmbeddingSession
+        );
+        if ($embedResponse !== null) {
+            return $embedResponse;
+        }
+    }
+
+    $ingestResponse = model_inference_handle_ingest_routes(
+        $path,
+        $method,
+        $request,
+        $jsonResponse,
+        $errorResponse,
+        $openDatabase
+    );
+    if ($ingestResponse !== null) {
+        return $ingestResponse;
+    }
+
+    $retrieveResponse = model_inference_handle_retrieve_routes(
+        $path,
+        $method,
+        $request,
+        $jsonResponse,
+        $errorResponse,
+        $openDatabase,
+        $getEmbeddingSession,
+        $getInferenceSession,
+        $getRagMetrics
+    );
+    if ($retrieveResponse !== null) {
+        return $retrieveResponse;
+    }
+
     $inferenceResponse = model_inference_handle_inference_routes(
         $path,
         $method,
@@ -147,7 +197,8 @@ function model_inference_dispatch_request(
         $method,
         $jsonResponse,
         $errorResponse,
-        $getInferenceMetrics
+        $getInferenceMetrics,
+        $getRagMetrics
     );
     if ($telemetryResponse !== null) {
         return $telemetryResponse;

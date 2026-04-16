@@ -468,3 +468,179 @@ Non-negotiable direction for this batch:
 All 18 leaves (`#M-1` through `#M-18`) are closed. 17 contract tests
 green. The `feature/model-inference` branch is merge-ready. Post-merge
 sweep ticks V/Z tracker bullets against `main`.
+
+## R-batch: RAG Pipeline (branch `feature/rag-pipeline`)
+
+> Parallel track, extends `demo/model-inference/` with embedding + retrieval
+> surfaces. Maps to tracker sections **W** (Embeddings / Vectorization /
+> Semantic Discovery, partial: W.1–W.4, W.6) and **X** (Knowledge / Retrieval,
+> partial: X.1–X.3, X.7). Branched off `feature/model-inference` tip `e4aeeb7`.
+> Tracker boxes NOT ticked from this branch; post-merge sweep only.
+
+Non-negotiable direction for this batch:
+
+- embedding engine is **llama.cpp server in `--embedding` mode** (same pinned
+  binary, different GGUF, different flags). King owns the embedding contract;
+  llama.cpp is the execution engine behind it.
+- vector storage is **object-store brute-force cosine similarity**. Honest — no
+  HNSW/IVF/ANN claim. Demo corpus sizes only.
+- document format is **plain text only**. PDF/HTML/Markdown parsing fenced.
+- the RAG pipeline composes embedding + retrieval + inference in-process (same
+  server, no cross-service HTTP). Multi-service composition fenced.
+- out of scope: hybrid retrieval (X.4), retrieval-backed MCP selection
+  (X.5–X.6), graph traversal (W.8–W.9), similarity-based service resolution
+  (W.5, W.7), external vector databases, large-scale indexing (>10K vectors),
+  WS streaming of RAG results, multimodal embedding, concurrent RAG execution.
+
+### Done in current branch
+
+- [x] `#R-1` Embedding model registry — extend SQLite schema with `model_type`
+  column (`chat`/`embedding`); `scripts/install-embedding-model.sh` pins a GGUF
+  embedding model with committed SHA-256; autoseed on boot. Maps to `W.1`,
+  `W.2`.
+  - Added `model_type` column via idempotent ALTER in `registry_schema_migrate()`
+  - Extended validation, create, list, and envelope functions
+  - Added `model_inference_registry_list_by_type()` and `model_inference_registry_find_embedding_model()`
+  - Created `scripts/install-embedding-model.sh` pinning nomic-embed-text-v1.5 Q8_0
+  - Extended server autoseed for embedding model fixtures
+  - Contract test: `tests/embedding-model-registry-contract.{sh,php}`
+
+- [x] `#R-2` Embedding worker lifecycle — spawn second `LlamaCppWorker` with
+  `extra_argv: ['--embedding']`; health probe on `/health`; `EmbeddingSession`
+  cache (one active embedding worker, separate from inference worker). Maps to
+  `W.2`.
+  - Created `domain/embedding/embedding_session.php` — mirrors InferenceSession
+  - Spawns worker with `extra_argv: ['--embedding']`; calls `/v1/embeddings`
+  - L2 normalization on returned vectors; one-active-worker policy
+  - Bootstrapped in `server.php` with shutdown drain handler
+  - Contract test: `tests/embedding-worker-contract.{sh,php}`
+
+- [x] `#R-3` `contracts/v1/embedding-request.contract.json` — typed envelope
+  `{texts[], model_selector, options:{normalize, truncate}}`; validation with
+  rejection codes. Maps to `W.2`, `W.4`.
+  - Created `contracts/v1/embedding-request.contract.json` with full shape
+  - Created `domain/embedding/embedding_request.php` — `EmbeddingRequestValidationError` + `model_inference_validate_embedding_request()`
+  - 33-rule contract test: `tests/embedding-request-envelope-contract.{sh,php}`
+
+- [x] `#R-4` `POST /api/embed` — real embedding generation via llama.cpp
+  `/v1/embeddings`; returns `{embeddings[], dimensions, model, tokens_used,
+  duration_ms}`. Maps to `W.1`, `W.2`.
+  - Created `http/module_embed.php` — POST /api/embed endpoint
+  - Router module order grew to include `embed` between registry and inference
+  - Wired `$getEmbeddingSession` through router + server handler (optional param, backward-compatible)
+  - Updated catalog: added `embed` surface to live API
+  - Updated parity test: embed probe, shipped list, exception catch
+  - Contract test: `tests/embedding-generation-contract.{sh,php}`
+
+- [x] `#R-5` Document ingest — `POST /api/documents` accepts plain text body,
+  stores in object store under flat key `doc-{16hex}`, returns `{document_id,
+  byte_length, sha256_hex}`. Maps to `X.1`.
+  - Created `domain/retrieval/document_store.php` — ingest, get, list, schema migration
+  - Created `http/module_ingest.php` — POST /api/documents, GET /api/documents, GET /api/documents/{id}
+  - Router module order grew to include `ingest` between embed and inference
+  - Catalog: added `documents_list`, `documents_create`, `document_get` + error codes
+  - Contract test: `tests/document-ingest-contract.{sh,php}`
+
+- [x] `#R-6` Text chunking engine — `domain/retrieval/text_chunker.php` with
+  configurable strategy (fixed-size with overlap);
+  `contracts/v1/chunk-envelope.contract.json`. Maps to `X.2`.
+  - Created `domain/retrieval/text_chunker.php` — `model_inference_chunk_text()` with configurable chunk_size + overlap
+  - Chunk ID format: `chk-{doc_prefix_8hex}-{sequence_4digit}` (deterministic)
+  - SQLite persistence: chunks table with schema migration, persist, list_by_document
+  - Created `contracts/v1/chunk-envelope.contract.json`
+  - 60-rule contract test: `tests/text-chunker-contract.{sh,php}`
+
+- [x] `#R-7` Chunk persistence — embed + store chunks to object store keyed
+  `chk-{doc_prefix}-{seq}`; chunk metadata in SQLite;
+  `GET /api/documents/{document_id}/chunks`. Maps to `X.2`, `W.3`.
+  - Auto-chunks on document ingest: `POST /api/documents` now chunks + persists
+  - Chunk text stored to object store via `model_inference_chunk_store_texts()`
+  - Added `GET /api/documents/{document_id}/chunks` endpoint
+  - Catalog: added `document_chunks` surface
+  - Contract test: `tests/chunk-persistence-contract.{sh,php}`
+
+- [x] `#R-8` Vector store — persist embedding vectors to object store keyed
+  `vec-{16hex}`; vector metadata in SQLite linking chunk_id → vector_id →
+  embedding model. Maps to `W.3`.
+  - Created `domain/retrieval/vector_store.php` — schema migration, store, load, list
+  - Vectors stored as JSON float arrays in object store under `vec-{16hex}` keys
+  - SQLite metadata: vectors table linking chunk_id → vector_id → embedding_model_id
+  - `model_inference_vector_load_all()` and `_load_all_for_document()` for retrieval
+  - Contract test: `tests/vector-store-contract.{sh,php}`
+
+- [x] `#R-9` Brute-force cosine similarity — pure function
+  `cosine_similarity(array $a, array $b): float`; vector search over stored
+  vectors returning top-K ranked results. Maps to `W.4`.
+  - Created `domain/retrieval/cosine_similarity.php` — `model_inference_cosine_similarity()` + `model_inference_vector_search()`
+  - Pure functions: no database, no object store, no I/O
+  - top-K ranking with min_score filtering, sorted descending by score
+  - 16-rule contract test: `tests/cosine-similarity-contract.{sh,php}`
+
+- [x] `#R-10` `POST /api/retrieve` — retrieval endpoint: embed query → scan
+  vectors → return ranked chunks with scores;
+  `contracts/v1/retrieval-request.contract.json`. Maps to `X.1`, `X.3`.
+  - Created `domain/retrieval/retrieval_pipeline.php` — `model_inference_retrieval_search()`
+  - Created `http/module_retrieve.php` — POST /api/retrieve endpoint
+  - Created `contracts/v1/retrieval-request.contract.json`
+  - Request validation: query, model_selector, optional document_ids/top_k/min_score
+  - Router module order grew to include `retrieve` between ingest and inference
+  - Catalog + parity test updated
+  - Contract test: `tests/retrieval-pipeline-contract.{sh,php}`
+
+- [x] `#R-11` `POST /api/rag` — end-to-end RAG pipeline: accept query +
+  document_id → retrieve top-K context → augment prompt with context → forward
+  to inference engine → return grounded completion. Maps to `X.1`.
+  - Created `domain/retrieval/rag_orchestrator.php` — `model_inference_rag_execute()`, `_rag_build_prompt()`, `_validate_rag_request()`
+  - Dual model_selector: separate chat + embedding model selectors
+  - Prompt augmentation: context block with numbered chunks + system instruction
+  - Wired as `POST /api/rag` in module_retrieve.php
+  - Contract test: `tests/rag-orchestrator-contract.{sh,php}`
+
+- [x] `#R-12` RAG telemetry — extend `InferenceMetricsRing` pattern for
+  embedding + retrieval metrics (embedding_latency_ms, retrieval_latency_ms,
+  chunks_scanned, vectors_scanned, context_tokens). Maps to `X.7`.
+  - Created `domain/telemetry/rag_metrics.php` — `RagMetricsRing` (same bounded-FIFO pattern)
+  - Tracks: embedding_ms, retrieval_ms, inference_ms, total_ms, chunks_used, vectors_scanned, tokens_in/out
+  - `GET /api/telemetry/rag/recent` endpoint added to module_telemetry
+  - 24-rule contract test: `tests/rag-telemetry-contract.{sh,php}`
+
+- [x] `#R-13` Semantic-DNS: register embedding + retrieval capabilities as
+  attributes on existing `king.inference.v1` service; update routing
+  diagnostic. Maps to `W.6`.
+  - Extended `model_inference_semantic_dns_register()` with `supports_embedding`, `supports_retrieval`, `supports_rag`, `embedding_dimensions` attributes
+  - Same service type `king.inference.v1` (not a separate type)
+  - Boot profile in server.php sets embedding capabilities
+  - Contract test: `tests/semantic-dns-embedding-contract.{sh,php}`
+
+- [x] `#R-14` Catalog parity update — grow `api-ws-contract.catalog.json` with
+  all R-batch surfaces; update parity gate; promote relevant target-shape
+  entries. Maps to `W`, `X`.
+  - Catalog maintained incrementally through R-1–R-13 (no drift)
+  - All R-batch surfaces in live catalog: embed, documents_list, documents_create, document_get, document_chunks, retrieve, rag, telemetry_rag_recent
+  - Parity test covers all 18 live API surfaces + probes
+  - Error codes: document_not_found, document_too_large added
+  - Shipped list prevents R-batch surfaces from leaking into target-shape
+
+- [x] `#R-15` `scripts/rag-smoke.sh` — end-to-end: ingest doc → verify chunks
+  → embed → retrieve → RAG completion; runs in compose. Maps to `X.7`.
+  - Created `scripts/rag-smoke.sh` — 10-phase end-to-end RAG smoke test
+  - Phases: syntax → contract tests (R-batch + M-batch) → compose boot →
+    embedding model probe → document ingest → chunk verification → embedding →
+    retrieval → RAG completion → RAG telemetry
+  - Graceful skip for phases 6-8 when embedding model fixture not installed
+  - Runs all 23 R-batch + M-batch offline contract tests as regression gate
+
+- [x] `#R-16` README update + target-shape fences + ISSUES section review.
+  Tracker boxes remain unticked.
+  - README: added R-batch "What works today" section, R-batch leaf table,
+    embedding model install step, RAG smoke section, R-batch scope fences
+  - Layout tree updated with all R-batch files (30 test pairs total)
+  - Scope fences: 8 explicit R-batch fences (hybrid retrieval, external vector
+    DBs, HNSW/IVF, PDF/HTML parsing, multimodal, large-scale, WS streaming,
+    concurrent RAG)
+
+### Next step (R-batch)
+
+- R-batch sprint complete. All 16 leaves (#R-1 → #R-16) are closed. 30
+  contract tests green. Branch `feature/rag-pipeline` is merge-ready.
+  Tracker boxes remain unticked pending post-merge sweep on `main`.
