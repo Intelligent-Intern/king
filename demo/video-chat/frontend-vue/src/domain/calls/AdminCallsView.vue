@@ -542,39 +542,63 @@
 
     <div class="calls-modal" :hidden="!cancelState.open" role="dialog" aria-modal="true" aria-label="Cancel call modal">
       <div class="calls-modal-backdrop" @click="closeCancel"></div>
-      <div class="calls-modal-dialog calls-modal-dialog-small">
-        <header class="calls-modal-header">
-          <h4>Cancel call</h4>
+      <div class="calls-modal-dialog calls-modal-dialog-cancel">
+        <header class="calls-modal-header calls-modal-header-enter">
+          <div class="calls-modal-header-enter-left">
+            <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
+            <h4 class="calls-enter-title">Cancel call</h4>
+          </div>
           <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeCancel">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
 
-        <div class="calls-modal-body">
+        <div class="calls-modal-body calls-cancel-body">
           <p class="calls-inline-hint">
             Cancelling <strong>{{ cancelState.callTitle }}</strong> marks all participants as cancelled.
           </p>
 
           <label class="field">
             <span>Cancel reason</span>
+            <select
+              v-if="cancelState.overrideTemplate"
+              v-model="cancelState.selectedTemplateId"
+              class="input"
+              aria-label="Cancel reason template"
+              @change="applyCancelTemplate(cancelState.selectedTemplateId)"
+            >
+              <option v-for="template in cancelTemplates" :key="template.reason" :value="template.reason">
+                {{ template.label }}
+              </option>
+            </select>
             <input
-              v-model="cancelState.reason"
+              v-else
+              v-model.trim="cancelState.customReason"
               class="input"
               type="text"
-              placeholder="scheduler_conflict"
+              placeholder="Type custom reason"
               aria-label="Cancel reason"
             />
           </label>
 
           <label class="field">
             <span>Cancel message</span>
-            <textarea
-              v-model="cancelState.message"
-              class="calls-textarea"
-              rows="4"
-              placeholder="Call cancelled due to scheduling conflict."
-              aria-label="Cancel message"
-            ></textarea>
+            <div class="calls-cancel-template-toolbar" role="toolbar" aria-label="Cancel message formatting">
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('bold')">Bold</button>
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('italic')">Italic</button>
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('underline')">Underline</button>
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('insertUnorderedList')">List</button>
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('removeFormat')">Clear</button>
+            </div>
+            <div
+              ref="cancelEditorRef"
+              class="calls-rich-editor"
+              contenteditable="true"
+              role="textbox"
+              aria-multiline="true"
+              aria-label="Cancel message editor"
+              @input="handleCancelEditorInput"
+            ></div>
           </label>
 
           <section v-if="cancelState.error" class="calls-inline-error">
@@ -582,9 +606,25 @@
           </section>
         </div>
 
-        <footer class="calls-modal-footer">
-          <button class="btn" type="button" :disabled="cancelState.submitting" @click="closeCancel">Close</button>
-          <button class="btn" type="button" :disabled="cancelState.submitting" @click="submitCancel">
+        <footer class="calls-modal-footer calls-cancel-footer">
+          <label class="calls-checkbox-row calls-cancel-override-row">
+            <input
+              :checked="cancelState.overrideTemplate"
+              type="checkbox"
+              @change="toggleCancelOverride($event.target.checked)"
+            />
+            <span>Override</span>
+          </label>
+          <button
+            v-if="cancelState.overrideTemplate && cancelState.templateDirty"
+            class="btn"
+            type="button"
+            :disabled="cancelState.submitting || cancelState.templateSaving"
+            @click="saveCancelTemplate"
+          >
+            {{ cancelState.templateSaving ? 'Saving…' : 'Save template' }}
+          </button>
+          <button class="btn btn-danger" type="button" :disabled="cancelState.submitting" @click="submitCancel">
             {{ cancelState.submitting ? 'Cancelling…' : 'Cancel call' }}
           </button>
         </footer>
@@ -1977,14 +2017,156 @@ async function submitCompose() {
   }
 }
 
+function sanitizeCancelMessageHtml(value) {
+  const html = String(value || '');
+  if (typeof window === 'undefined') {
+    return html.trim();
+  }
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  for (const node of container.querySelectorAll('script,style')) {
+    node.remove();
+  }
+  for (const element of container.querySelectorAll('*')) {
+    for (const attribute of Array.from(element.attributes)) {
+      const attributeName = String(attribute.name || '').toLowerCase();
+      if (attributeName.startsWith('on')) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+  }
+
+  return container.innerHTML.trim();
+}
+
+function normalizeCancelMessageHtml(value) {
+  return sanitizeCancelMessageHtml(value).replace(/>\s+</g, '><').trim();
+}
+
+function cancelMessageHtmlToPlainText(value) {
+  const html = String(value || '');
+  if (typeof window === 'undefined') {
+    return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  return String(container.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function prettifyCancelReason(reason) {
+  const normalized = String(reason || '').trim().replace(/[_-]+/g, ' ');
+  if (normalized === '') return 'Custom template';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+const CANCEL_TEMPLATE_STORAGE_KEY = 'king.video.calls.cancel.templates.v1';
+const DEFAULT_CANCEL_TEMPLATES = Object.freeze([
+  {
+    reason: 'scheduler_conflict',
+    label: 'Scheduler conflict',
+    messageHtml: '<p>Call cancelled due to scheduling conflict.</p>',
+  },
+  {
+    reason: 'host_unavailable',
+    label: 'Host unavailable',
+    messageHtml: '<p>Call cancelled because the host is currently unavailable.</p>',
+  },
+  {
+    reason: 'technical_issue',
+    label: 'Technical issue',
+    messageHtml: '<p>Call cancelled due to a technical issue. We will reschedule shortly.</p>',
+  },
+  {
+    reason: 'emergency_stop',
+    label: 'Emergency stop',
+    messageHtml: '<p>Call cancelled due to an urgent operational reason.</p>',
+  },
+]);
+
+function normalizeCancelTemplateItem(rawTemplate, index) {
+  const rawReason = String(rawTemplate?.reason || '').trim().toLowerCase();
+  const reason = rawReason.replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+  if (reason === '') {
+    return null;
+  }
+
+  const fallbackLabel = prettifyCancelReason(reason);
+  const label = String(rawTemplate?.label || '').trim() || fallbackLabel;
+  const rawMessage = String(rawTemplate?.messageHtml || rawTemplate?.message || '').trim();
+  const messageHtml = normalizeCancelMessageHtml(rawMessage || `<p>${fallbackLabel}.</p>`);
+
+  return {
+    id: `${reason}-${index}`,
+    reason,
+    label,
+    messageHtml,
+  };
+}
+
+function cloneCancelTemplateList(list) {
+  return list
+    .map((entry, index) => normalizeCancelTemplateItem(entry, index))
+    .filter((entry) => entry !== null);
+}
+
+function loadCancelTemplates() {
+  const fallback = cloneCancelTemplateList(DEFAULT_CANCEL_TEMPLATES);
+  if (typeof window === 'undefined') {
+    return fallback;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(CANCEL_TEMPLATE_STORAGE_KEY);
+    if (typeof raw !== 'string' || raw.trim() === '') {
+      return fallback;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return fallback;
+    }
+    const templates = cloneCancelTemplateList(parsed);
+    return templates.length > 0 ? templates : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function persistCancelTemplates(templates) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      CANCEL_TEMPLATE_STORAGE_KEY,
+      JSON.stringify(
+        templates.map((template) => ({
+          reason: template.reason,
+          label: template.label,
+          messageHtml: template.messageHtml,
+        })),
+      ),
+    );
+  } catch {
+    // ignore storage failures
+  }
+}
+
+const cancelTemplates = ref(loadCancelTemplates());
+const cancelEditorRef = ref(null);
+
 const cancelState = reactive({
   open: false,
   submitting: false,
+  templateSaving: false,
   error: '',
   callId: '',
   callTitle: '',
+  overrideTemplate: true,
+  selectedTemplateId: '',
+  customReason: '',
   reason: '',
-  message: '',
+  messageHtml: '',
+  templateDirty: false,
 });
 
 const deleteState = reactive({
@@ -2000,17 +2182,145 @@ function openCancel(call) {
   closeEnterCallModal();
   cancelState.open = true;
   cancelState.submitting = false;
+  cancelState.templateSaving = false;
   cancelState.error = '';
   cancelState.callId = String(call?.id || '');
   cancelState.callTitle = String(call?.title || call?.id || '');
-  cancelState.reason = 'scheduler_conflict';
-  cancelState.message = 'Call cancelled due to scheduling conflict.';
+  cancelState.overrideTemplate = true;
+  cancelState.customReason = '';
+  const preferredTemplate = findCancelTemplate('scheduler_conflict');
+  const defaultTemplate = preferredTemplate || cancelTemplates.value[0] || null;
+  cancelState.selectedTemplateId = defaultTemplate ? defaultTemplate.reason : '';
+  applyCancelTemplate(cancelState.selectedTemplateId);
 }
 
 function closeCancel() {
   cancelState.open = false;
   cancelState.submitting = false;
+  cancelState.templateSaving = false;
   cancelState.error = '';
+}
+
+function findCancelTemplate(reason) {
+  const normalizedReason = String(reason || '').trim().toLowerCase();
+  if (normalizedReason === '') return null;
+  return cancelTemplates.value.find((template) => template.reason === normalizedReason) || null;
+}
+
+function syncCancelEditorFromState() {
+  const normalizedHtml = normalizeCancelMessageHtml(cancelState.messageHtml);
+  cancelState.messageHtml = normalizedHtml;
+  nextTick(() => {
+    const editor = cancelEditorRef.value;
+    if (!(editor instanceof HTMLElement)) return;
+    if (editor.innerHTML !== normalizedHtml) {
+      editor.innerHTML = normalizedHtml;
+    }
+  });
+}
+
+function refreshCancelTemplateDirty() {
+  if (!cancelState.overrideTemplate) {
+    cancelState.templateDirty = false;
+    return;
+  }
+
+  const template = findCancelTemplate(cancelState.selectedTemplateId);
+  if (!template) {
+    cancelState.templateDirty = false;
+    return;
+  }
+
+  const currentHtml = normalizeCancelMessageHtml(cancelState.messageHtml);
+  const templateHtml = normalizeCancelMessageHtml(template.messageHtml);
+  cancelState.templateDirty = currentHtml !== templateHtml;
+}
+
+function applyCancelTemplate(reason) {
+  const template = findCancelTemplate(reason);
+  if (!template) {
+    cancelState.reason = String(reason || '').trim();
+    cancelState.messageHtml = '';
+    cancelState.templateDirty = false;
+    syncCancelEditorFromState();
+    return;
+  }
+
+  cancelState.selectedTemplateId = template.reason;
+  cancelState.reason = template.reason;
+  cancelState.messageHtml = template.messageHtml;
+  cancelState.templateDirty = false;
+  syncCancelEditorFromState();
+}
+
+function handleCancelEditorInput() {
+  const editor = cancelEditorRef.value;
+  if (!(editor instanceof HTMLElement)) return;
+  cancelState.messageHtml = normalizeCancelMessageHtml(editor.innerHTML);
+  refreshCancelTemplateDirty();
+}
+
+function execCancelEditorCommand(commandName, commandValue = null) {
+  if (typeof document === 'undefined') return;
+  const editor = cancelEditorRef.value;
+  if (!(editor instanceof HTMLElement)) return;
+  editor.focus();
+  document.execCommand(commandName, false, commandValue);
+  handleCancelEditorInput();
+}
+
+function toggleCancelOverride(nextValue) {
+  cancelState.overrideTemplate = Boolean(nextValue);
+  cancelState.error = '';
+
+  if (!cancelState.overrideTemplate) {
+    cancelState.customReason = cancelState.reason || cancelState.selectedTemplateId || '';
+    cancelState.templateDirty = false;
+    return;
+  }
+
+  const defaultReason = String(cancelState.selectedTemplateId || cancelTemplates.value[0]?.reason || '').trim();
+  if (defaultReason !== '') {
+    applyCancelTemplate(defaultReason);
+  }
+}
+
+async function saveCancelTemplate() {
+  cancelState.error = '';
+  if (!cancelState.overrideTemplate) return;
+
+  const template = findCancelTemplate(cancelState.selectedTemplateId);
+  if (!template) {
+    cancelState.error = 'Select a template first.';
+    return;
+  }
+
+  const messageHtml = normalizeCancelMessageHtml(cancelState.messageHtml);
+  const plainText = cancelMessageHtmlToPlainText(messageHtml);
+  if (plainText === '') {
+    cancelState.error = 'Cancel message is required.';
+    return;
+  }
+
+  cancelState.templateSaving = true;
+  try {
+    const nextTemplates = cancelTemplates.value
+      .map((entry, index) => {
+        if (entry.reason !== template.reason) return entry;
+        return normalizeCancelTemplateItem({
+          reason: entry.reason,
+          label: entry.label,
+          messageHtml,
+        }, index);
+      })
+      .filter((entry) => entry !== null);
+
+    cancelTemplates.value = nextTemplates;
+    persistCancelTemplates(nextTemplates);
+    cancelState.templateDirty = false;
+  } finally {
+    cancelState.templateSaving = false;
+  }
 }
 
 function openDelete(call) {
@@ -2037,8 +2347,10 @@ async function submitCancel() {
   cancelState.error = '';
   clearNotice();
 
-  const reason = cancelState.reason.trim();
-  const message = cancelState.message.trim();
+  const reason = cancelState.overrideTemplate
+    ? cancelState.reason.trim()
+    : cancelState.customReason.trim();
+  const message = cancelMessageHtmlToPlainText(cancelState.messageHtml).trim();
   if (reason === '' || message === '') {
     cancelState.error = 'Cancel reason and message are required.';
     return;
@@ -2340,6 +2652,16 @@ onBeforeUnmount(() => {
   width: min(620px, calc(100vw - 30px));
 }
 
+.calls-modal-dialog-cancel {
+  --calls-enter-dialog-padding: 12px;
+  width: min(980px, calc(100vw - 24px));
+  height: min(760px, calc(100dvh - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: var(--calls-enter-dialog-padding);
+}
+
 .calls-modal-dialog-enter {
   --calls-enter-dialog-padding: 12px;
   width: min(1220px, calc(100vw - 24px));
@@ -2601,6 +2923,62 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
+.calls-cancel-footer {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.calls-cancel-override-row {
+  margin-right: auto;
+}
+
+.calls-cancel-body {
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
+}
+
+.calls-cancel-template-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.calls-cancel-template-toolbar .btn {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.calls-rich-editor {
+  min-height: 200px;
+  max-height: 360px;
+  overflow: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: #d8dadd;
+  color: #0b1323;
+  padding: 10px;
+  line-height: 1.45;
+}
+
+.calls-rich-editor:empty::before {
+  content: 'Write cancellation message...';
+  color: #617082;
+}
+
+.btn.btn-danger {
+  background: #a81a1a;
+}
+
+.btn.btn-danger:hover {
+  background: #c91f1f;
+}
+
+.btn.btn-danger:active {
+  background: #7c1010;
+}
+
 .calls-textarea {
   width: 100%;
   border: 1px solid var(--border-subtle);
@@ -2631,6 +3009,15 @@ onBeforeUnmount(() => {
   }
 
   .calls-modal-dialog-enter {
+    --calls-enter-dialog-padding: 10px;
+    width: min(980px, calc(100vw - 14px));
+    height: min(920px, calc(100dvh - 14px));
+    max-height: calc(100dvh - 14px);
+    padding: var(--calls-enter-dialog-padding);
+    gap: 8px;
+  }
+
+  .calls-modal-dialog-cancel {
     --calls-enter-dialog-padding: 10px;
     width: min(980px, calc(100vw - 14px));
     height: min(920px, calc(100dvh - 14px));
@@ -2783,6 +3170,15 @@ onBeforeUnmount(() => {
     gap: 6px;
   }
 
+  .calls-modal-dialog-cancel {
+    --calls-enter-dialog-padding: 8px;
+    width: calc(100vw - 6px);
+    height: calc(100dvh - 6px);
+    max-height: calc(100dvh - 6px);
+    padding: var(--calls-enter-dialog-padding);
+    gap: 6px;
+  }
+
   .calls-modal-header {
     gap: 6px;
   }
@@ -2801,6 +3197,11 @@ onBeforeUnmount(() => {
 
   .calls-enter-layout {
     grid-template-rows: minmax(0, 38%) minmax(0, 62%);
+  }
+
+  .calls-rich-editor {
+    min-height: 150px;
+    max-height: 260px;
   }
 
   .calls-enter-preview-frame {
