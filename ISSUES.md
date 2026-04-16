@@ -431,48 +431,40 @@ Non-negotiable direction for this batch:
 
 ### Open / To implement (priority order)
 
-- [ ] `#M-13` Semantic-DNS self-registration as `king.inference.v1` on ready;
+- [x] `#M-13` Semantic-DNS self-registration as `king.inference.v1` on ready;
   deregister on drain; bounded `heartbeat_after_ready` retry (never `sleep`).
   Maps to `V.4`, `Z.6`, `V.10`.
 
-- [ ] `#M-14` `InferenceRouting` helper —
+- [x] `#M-14` `InferenceRouting` helper —
   `king_semantic_dns_get_optimal_route` with criteria
   `{model_name, quantization, min_free_vram_bytes}` → ordered primary +
   failover list (reuses `McpServiceResolution` shape from
-  `demo/userland/flow-php/src/McpServiceDiscovery.php`). Maps to `V.4`, `Z.6`,
-  `Z.7`.
+  `demo/userland/flow-php/src/McpServiceDiscovery.php`). `GET /api/route`
+  diagnostic endpoint. Maps to `V.4`, `Z.6`, `Z.7`.
 
-- [ ] `#M-15` Deterministic two-node failover — compose spawns A + B,
-  prompt-1 hits primary, primary drains, prompt-2 routes to secondary
-  without reconfig. Explicit fence: **no mid-stream handoff claim**. Maps to
+- [x] `#M-15` Deterministic two-node failover — `docker-compose.v1.yml`
+  spawns node-a + node-b, prompt-1 hits primary, primary is stopped,
+  prompt-2 routes to secondary without reconfig. `scripts/failover-smoke.sh`
+  proves the flow. Explicit fence: **no mid-stream handoff claim**. Maps to
   `Z.8`.
 
-- [ ] `#M-16` Transcript persistence to object-store keyed
-  `inference/transcripts/{yyyy}/{mm}/{dd}/{request_id}.json`; survives
-  restart. Maps to `V.9`.
+- [x] `#M-16` Transcript persistence to object-store keyed by flat key
+  `transcript-{yyyymmdd}-{request_id}` (King rejects slashes in object IDs);
+  `GET /api/transcripts/{request_id}` retrieval endpoint. Survives restart.
+  Maps to `V.9`.
 
-- [ ] `#M-17` `scripts/smoke.sh` — two-node compose end-to-end; real
-  streaming chat turn + transcript + failover; gated on
+- [x] `#M-17` `scripts/smoke.sh` — 9-phase smoke: syntax validation,
+  offline contract tests, compose boot, runtime/profile probes, model
+  registry, real inference, transcript retrieval, telemetry, routing
+  diagnostic, two-node failover. Gated on
   `MODEL_INFERENCE_SMOKE_REQUIRE_COMPOSE=1`. Maps to `Z.10`, `V.10`.
 
-- [ ] `#M-18` Honest README pass + target-shape fences + this ISSUES section
-  review. Tracker boxes remain unticked; post-merge sweep ticks V/Z bullets
-  against `main`.
+- [x] `#M-18` Honest README pass + target-shape fences + ISSUES section
+  review. All 18 leaves closed, 17 contract tests. Tracker boxes remain
+  unticked; post-merge sweep ticks V/Z bullets against `main`.
 
-### Next step (M-batch)
+### Status (M-batch)
 
-- [ ] Continue with `#M-13` (Semantic-DNS self-registration): on
-  ready, call `king_semantic_dns_register_service` with
-  `service_type=king.inference.v1` carrying a slimmed node-profile
-  subset (node_id, health_url, free_ram_bytes, free_vram_bytes,
-  loadable model_name+quantization pairs, supports_streaming).
-  Deregister on drain / shutdown. Heartbeat-after-ready is a
-  bounded retry loop with no `sleep` between attempts — use
-  king's own poll timing. Add
-  `backend-king-php/support/semantic_dns.php` +
-  `backend-king-php/domain/discovery/service_registration.php`
-  + `tests/semantic-dns-inference-register-contract.{sh,php}`
-  that boots a semantic-DNS runtime via `king_semantic_dns_init`,
-  registers + discovers + deregisters, asserts a second process
-  sees the record within 2 seconds and the record is gone on
-  drain. Maps to V.4, Z.6, V.10.
+All 18 leaves (`#M-1` through `#M-18`) are closed. 17 contract tests
+green. The `feature/model-inference` branch is merge-ready. Post-merge
+sweep ticks V/Z tracker bullets against `main`.

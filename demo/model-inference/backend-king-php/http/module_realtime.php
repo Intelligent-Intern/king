@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../domain/inference/inference_request.php';
 require_once __DIR__ . '/../domain/inference/inference_session.php';
 require_once __DIR__ . '/../domain/inference/inference_stream.php';
+require_once __DIR__ . '/../domain/inference/transcript_store.php';
 require_once __DIR__ . '/../domain/registry/model_registry.php';
 require_once __DIR__ . '/../domain/registry/model_fit_selector.php';
 require_once __DIR__ . '/../domain/profile/hardware_profile.php';
@@ -208,6 +209,11 @@ function model_inference_realtime_run_session(
     /** @var InferenceMetricsRing $metrics */
     $metrics = $getInferenceMetrics();
     $metrics->record(model_inference_metrics_entry_from_ws($streamSummary, $validated, $entry, $profile));
+
+    model_inference_transcript_save(
+        $requestId,
+        model_inference_transcript_from_ws($streamSummary, $validated, $entry)
+    );
 }
 
 /**

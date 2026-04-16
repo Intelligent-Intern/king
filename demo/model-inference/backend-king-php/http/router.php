@@ -8,6 +8,7 @@ require_once __DIR__ . '/module_registry.php';
 require_once __DIR__ . '/module_inference.php';
 require_once __DIR__ . '/module_realtime.php';
 require_once __DIR__ . '/module_telemetry.php';
+require_once __DIR__ . '/module_routing.php';
 require_once __DIR__ . '/module_ui.php';
 
 /**
@@ -32,6 +33,7 @@ function model_inference_dispatch_route_module_order(): array
         'inference',
         'realtime',
         'telemetry',
+        'routing',
         'ui',
     ];
 }
@@ -149,6 +151,17 @@ function model_inference_dispatch_request(
     );
     if ($telemetryResponse !== null) {
         return $telemetryResponse;
+    }
+
+    $routingResponse = model_inference_handle_routing_routes(
+        $path,
+        $method,
+        $request,
+        $jsonResponse,
+        $errorResponse
+    );
+    if ($routingResponse !== null) {
+        return $routingResponse;
     }
 
     $uiResponse = model_inference_handle_ui_routes(

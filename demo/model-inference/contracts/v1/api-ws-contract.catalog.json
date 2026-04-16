@@ -177,6 +177,45 @@
         "worker": {"pid": "int", "port": "int", "gguf_path": "string"},
         "time": "rfc3339"
       }
+    },
+    "transcripts_get": {
+      "method": "GET",
+      "paths": ["/api/transcripts/{request_id}"],
+      "introduced_by": "M-16",
+      "envelope": {
+        "status": "ok",
+        "transcript": {
+          "request_id": "string",
+          "session_id": "string",
+          "transport": "http|ws",
+          "model": {"model_id": "string", "model_name": "string", "quantization": "string"},
+          "prompt": "string",
+          "system": "string|null",
+          "sampling": "object",
+          "completion": "object",
+          "recorded_at": "rfc3339"
+        },
+        "time": "rfc3339"
+      }
+    },
+    "route_diagnostic": {
+      "method": "GET",
+      "paths": ["/api/route"],
+      "introduced_by": "M-14",
+      "scope": "Diagnostic endpoint exposing the current Semantic-DNS routing resolution for a given model selector. Accepts optional query params: model_name, quantization, min_free_vram_bytes.",
+      "envelope": {
+        "status": "ok",
+        "routing": {
+          "role": "inference",
+          "primary": "node|null",
+          "failover": "list<node>",
+          "candidates": "list<node>",
+          "resolved_at": "rfc3339",
+          "source": "semantic_dns|unavailable"
+        },
+        "criteria": "object|null",
+        "time": "rfc3339"
+      }
     }
   },
   "ws": {
@@ -237,15 +276,15 @@
       "model_artifact_too_large",
       "model_registry_conflict",
       "model_fit_unavailable",
-      "worker_unavailable"
+      "worker_unavailable",
+      "transcript_not_found",
+      "routing_no_candidate"
     ]
   },
   "planned_surfaces_target_shape": {
     "note": "Entries below are target-shape only, added to the live api/ws/errors sections as their leaves land. Listed here so readers see the full intended v1 surface without a parity-test false negative.",
     "api": {
-      "worker_status":    {"method": "GET",  "paths": ["/api/worker"],                       "introduced_by": "M-7"},
-      "transcripts_get":  {"method": "GET",  "paths": ["/api/transcripts/{request_id}"],     "introduced_by": "M-16"},
-      "route_diagnostic": {"method": "GET",  "paths": ["/api/route"],                        "introduced_by": "M-14"}
+      "worker_status":    {"method": "GET",  "paths": ["/api/worker"],                       "introduced_by": "M-7"}
     },
     "ws": {
       "infer.cancel": {"direction": "client->server", "body": "json",                    "introduced_by": "future"}

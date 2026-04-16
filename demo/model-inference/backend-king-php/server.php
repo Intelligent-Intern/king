@@ -33,8 +33,10 @@ $log = static function (string $message): void {
 
 require_once __DIR__ . '/support/database.php';
 require_once __DIR__ . '/support/object_store.php';
+require_once __DIR__ . '/support/semantic_dns.php';
 require_once __DIR__ . '/domain/registry/model_registry.php';
 require_once __DIR__ . '/domain/inference/inference_session.php';
+require_once __DIR__ . '/domain/inference/transcript_store.php';
 require_once __DIR__ . '/domain/telemetry/inference_metrics.php';
 require_once __DIR__ . '/http/router.php';
 
@@ -87,6 +89,16 @@ try {
     exit(1);
 }
 
+require_once __DIR__ . '/domain/profile/hardware_profile.php';
+$bootProfile = model_inference_hardware_profile($nodeId, "http://{$host}:{$port}/health", 'ready');
+$dnsRegistered = model_inference_semantic_dns_register($nodeId, $host, $port, $bootProfile);
+if ($dnsRegistered) {
+    $dnsVisible = model_inference_semantic_dns_heartbeat_after_ready($nodeId);
+    $log('semantic-dns: registered as king.inference.v1, visible=' . ($dnsVisible ? 'true' : 'false'));
+} else {
+    $log('semantic-dns: registration skipped (kernel unavailable or failed)');
+}
+
 $openDatabase = static function () use ($dbPath): PDO {
     return model_inference_open_sqlite_pdo($dbPath);
 };
@@ -99,7 +111,9 @@ $inferenceSession = new InferenceSession(
 $getInferenceSession = static function () use ($inferenceSession): InferenceSession {
     return $inferenceSession;
 };
-register_shutdown_function(static function () use ($inferenceSession): void {
+register_shutdown_function(static function () use ($inferenceSession, $nodeId, $log): void {
+    model_inference_semantic_dns_deregister($nodeId);
+    $log('semantic-dns: deregistered (drain)');
     $inferenceSession->drainAll();
 });
 

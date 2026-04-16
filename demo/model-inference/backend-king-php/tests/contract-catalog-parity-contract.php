@@ -60,6 +60,8 @@ try {
         'chat_ui'          => ['method' => 'GET',    'paths' => ['/ui', '/ui/']],
         'telemetry_recent' => ['method' => 'GET',    'paths' => ['/api/telemetry/inference/recent']],
         'infer_http'       => ['method' => 'POST',   'paths' => ['/api/infer']],
+        'transcripts_get'  => ['method' => 'GET',    'paths' => ['/api/transcripts/{request_id}']],
+        'route_diagnostic' => ['method' => 'GET',    'paths' => ['/api/route']],
     ];
 
     $liveApi = $catalog['api'] ?? null;
@@ -151,6 +153,8 @@ try {
         'chat_ui'          => [['method' => 'GET',    'path' => '/ui',                                       'expect_status' => 200]],
         'telemetry_recent' => [['method' => 'GET',    'path' => '/api/telemetry/inference/recent',           'expect_status' => 200]],
         'infer_http'       => [['method' => 'POST',   'path' => '/api/infer',                                'expect_not_status' => 404]],
+        'transcripts_get'  => [['method' => 'GET',    'path' => '/api/transcripts/req_00000000deadbeef',      'expect_not_status' => 405]],
+        'route_diagnostic' => [['method' => 'GET',    'path' => '/api/route',                                'expect_status' => 200]],
     ];
     foreach ($parityProbes as $key => $probes) {
         foreach ($probes as $probe) {
@@ -258,6 +262,8 @@ try {
         'model_registry_conflict',
         'model_fit_unavailable',
         'worker_unavailable',
+        'transcript_not_found',
+        'routing_no_candidate',
     ] as $required) {
         model_inference_catalog_contract_assert(
             in_array($required, $liveErrorCodes, true),
@@ -274,14 +280,14 @@ try {
         'catalog.planned_surfaces_target_shape must exist so future surfaces are declared without faking parity'
     );
     $targetShapeApi = (array) ($targetShape['api'] ?? []);
-    foreach (['worker_status', 'transcripts_get', 'route_diagnostic'] as $requiredKey) {
+    foreach (['worker_status'] as $requiredKey) {
         model_inference_catalog_contract_assert(
             isset($targetShapeApi[$requiredKey]),
             "catalog.planned_surfaces_target_shape.api must list '{$requiredKey}' until its live leaf lands"
         );
     }
     // A surface MUST NOT appear in both live and target-shape sections.
-    foreach (['node_profile', 'models_list', 'models_create', 'model_get', 'model_delete', 'infer_http', 'telemetry_recent', 'chat_ui'] as $shipped) {
+    foreach (['node_profile', 'models_list', 'models_create', 'model_get', 'model_delete', 'infer_http', 'telemetry_recent', 'chat_ui', 'transcripts_get', 'route_diagnostic'] as $shipped) {
         model_inference_catalog_contract_assert(
             !isset($targetShapeApi[$shipped]),
             "{$shipped} has shipped and must not remain in planned_surfaces_target_shape"
