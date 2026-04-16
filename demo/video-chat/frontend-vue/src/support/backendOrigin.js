@@ -207,18 +207,24 @@ function pushUniqueCandidate(candidates, origin) {
   }
 }
 
+function appendLoopbackHostVariant(candidates, origin) {
+  try {
+    const parsed = new URL(origin);
+    if (!isLoopbackHost(parsed.hostname)) return;
+    const variant = new URL(parsed.toString());
+    variant.hostname = parsed.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+    pushUniqueCandidate(candidates, variant.toString());
+  } catch {
+    // Ignore parse failures and keep current candidates.
+  }
+}
+
 export function resolveBackendWebSocketOriginCandidates() {
   const candidates = [];
 
   const primaryWsOrigin = resolveBackendWebSocketOrigin();
   pushUniqueCandidate(candidates, primaryWsOrigin);
-
-  if (hasExplicitBackendWebSocketConfig()) {
-    return candidates;
-  }
-
-  const primaryBackendOrigin = resolveBackendOrigin();
-  pushUniqueCandidate(candidates, primaryBackendOrigin);
+  appendLoopbackHostVariant(candidates, primaryWsOrigin);
 
   return candidates;
 }
@@ -228,26 +234,15 @@ export function resolveBackendSfuOriginCandidates() {
 
   const primarySfuOrigin = resolveBackendSfuOrigin();
   pushUniqueCandidate(candidates, primarySfuOrigin);
+  appendLoopbackHostVariant(candidates, primarySfuOrigin);
 
   if (hasExplicitBackendSfuConfig()) {
     return candidates;
   }
 
   const websocketOrigin = resolveBackendWebSocketOrigin();
-  const backendOrigin = resolveBackendOrigin();
   pushUniqueCandidate(candidates, websocketOrigin);
-  pushUniqueCandidate(candidates, backendOrigin);
-
-  try {
-    const parsed = new URL(primarySfuOrigin);
-    if (isLoopbackHost(parsed.hostname)) {
-      const alternate = new URL(primarySfuOrigin);
-      alternate.hostname = parsed.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
-      pushUniqueCandidate(candidates, alternate.toString());
-    }
-  } catch {
-    // Ignore parse failures and keep current candidates.
-  }
+  appendLoopbackHostVariant(candidates, websocketOrigin);
 
   return candidates;
 }

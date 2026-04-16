@@ -11,8 +11,9 @@ function videochat_lobby_state_init(): array
 
 function videochat_lobby_can_moderate(array $connection): bool
 {
+    $rawRole = strtolower(trim((string) ($connection['raw_role'] ?? $connection['role'] ?? '')));
     $globalRole = videochat_normalize_role_slug((string) ($connection['role'] ?? ''));
-    if ($globalRole === 'admin') {
+    if ($globalRole === 'admin' || $rawRole === 'moderator') {
         return true;
     }
 
@@ -204,12 +205,153 @@ function videochat_lobby_user_present_in_room(
     return false;
 }
 
+function videochat_lobby_is_user_admitted_for_room(array $lobbyState, string $roomId, int $userId): bool
+{
+    if ($userId <= 0) {
+        return false;
+    }
+
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId);
+    $roomState = $lobbyState['rooms'][$normalizedRoomId] ?? null;
+    if (!is_array($roomState)) {
+        return false;
+    }
+
+    return isset($roomState['admitted_by_user'][$userId]) && is_array($roomState['admitted_by_user'][$userId]);
+}
+
+function videochat_lobby_remove_user_from_room(
+    array &$lobbyState,
+    string $roomId,
+    int $userId
+): bool {
+    if ($userId <= 0) {
+        return false;
+    }
+
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId);
+    $roomState = $lobbyState['rooms'][$normalizedRoomId] ?? null;
+    if (!is_array($roomState)) {
+        return false;
+    }
+
+    videochat_lobby_ensure_room_state($lobbyState, $normalizedRoomId);
+    $queuedByUser = &$lobbyState['rooms'][$normalizedRoomId]['queued_by_user'];
+    $admittedByUser = &$lobbyState['rooms'][$normalizedRoomId]['admitted_by_user'];
+
+    $changed = false;
+    if (isset($queuedByUser[$userId])) {
+        unset($queuedByUser[$userId]);
+        $changed = true;
+    }
+    if (isset($admittedByUser[$userId])) {
+        unset($admittedByUser[$userId]);
+        $changed = true;
+    }
+
+    videochat_lobby_prune_empty_room_state($lobbyState, $normalizedRoomId);
+    return $changed;
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   error: string,
+ *   changed: bool,
+ *   sent_count: int,
+ *   room_id: string,
+ *   target_user_id: int
+ * }
+ */
+function videochat_lobby_queue_connection_for_room(
+    array &$lobbyState,
+    array $presenceState,
+    array $connection,
+    string $roomId,
+    ?callable $sender = null,
+    ?int $nowUnixMs = null
+): array {
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId);
+    $userId = (int) ($connection['user_id'] ?? 0);
+    if ($userId <= 0) {
+        return [
+            'ok' => false,
+            'error' => 'invalid_sender',
+            'changed' => false,
+            'sent_count' => 0,
+            'room_id' => $normalizedRoomId,
+            'target_user_id' => 0,
+        ];
+    }
+
+    $connectionId = trim((string) ($connection['connection_id'] ?? ''));
+    if (
+        $connectionId === ''
+        || !isset($presenceState['connections'][$connectionId])
+        || !is_array($presenceState['connections'][$connectionId])
+    ) {
+        return [
+            'ok' => false,
+            'error' => 'sender_not_connected',
+            'changed' => false,
+            'sent_count' => 0,
+            'room_id' => $normalizedRoomId,
+            'target_user_id' => $userId,
+        ];
+    }
+
+    videochat_lobby_ensure_room_state($lobbyState, $normalizedRoomId);
+    $nowMs = videochat_lobby_now_ms($nowUnixMs);
+    $nowIso = gmdate('c', (int) floor($nowMs / 1000));
+    $queuedByUser = &$lobbyState['rooms'][$normalizedRoomId]['queued_by_user'];
+    $admittedByUser = &$lobbyState['rooms'][$normalizedRoomId]['admitted_by_user'];
+
+    if (isset($queuedByUser[$userId]) && is_array($queuedByUser[$userId])) {
+        return [
+            'ok' => true,
+            'error' => '',
+            'changed' => false,
+            'sent_count' => 0,
+            'room_id' => $normalizedRoomId,
+            'target_user_id' => $userId,
+        ];
+    }
+
+    $queuedByUser[$userId] = [
+        'user_id' => $userId,
+        'display_name' => (string) ($connection['display_name'] ?? ''),
+        'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? 'user')),
+        'requested_unix_ms' => $nowMs,
+        'requested_at' => $nowIso,
+    ];
+    unset($admittedByUser[$userId]);
+
+    $sentCount = videochat_lobby_broadcast_room_snapshot(
+        $lobbyState,
+        $presenceState,
+        $normalizedRoomId,
+        'queued',
+        $sender,
+        $nowMs
+    );
+
+    return [
+        'ok' => true,
+        'error' => '',
+        'changed' => true,
+        'sent_count' => $sentCount,
+        'room_id' => $normalizedRoomId,
+        'target_user_id' => $userId,
+    ];
+}
+
 /**
  * @return array{
  *   ok: bool,
  *   type: string,
  *   target_user_id: int,
- *   error: string
+ *   error: string,
+ *   room_id: string
  * }
  */
 function videochat_lobby_decode_client_frame(string $frame): array
@@ -221,6 +363,7 @@ function videochat_lobby_decode_client_frame(string $frame): array
             'type' => '',
             'target_user_id' => 0,
             'error' => 'invalid_json',
+            'room_id' => '',
         ];
     }
 
@@ -231,6 +374,7 @@ function videochat_lobby_decode_client_frame(string $frame): array
             'type' => '',
             'target_user_id' => 0,
             'error' => 'missing_type',
+            'room_id' => '',
         ];
     }
 
@@ -240,7 +384,23 @@ function videochat_lobby_decode_client_frame(string $frame): array
             'type' => $type,
             'target_user_id' => 0,
             'error' => 'unsupported_type',
+            'room_id' => '',
         ];
+    }
+
+    $roomId = '';
+    if (array_key_exists('room_id', $decoded) || array_key_exists('roomId', $decoded)) {
+        $roomIdRaw = (string) ($decoded['room_id'] ?? $decoded['roomId'] ?? '');
+        $roomId = videochat_presence_normalize_room_id($roomIdRaw, '');
+        if ($roomId === '') {
+            return [
+                'ok' => false,
+                'type' => $type,
+                'target_user_id' => 0,
+                'error' => 'invalid_room_id',
+                'room_id' => '',
+            ];
+        }
     }
 
     if (!in_array($type, ['lobby/allow', 'lobby/remove'], true)) {
@@ -249,6 +409,7 @@ function videochat_lobby_decode_client_frame(string $frame): array
             'type' => $type,
             'target_user_id' => 0,
             'error' => '',
+            'room_id' => $roomId,
         ];
     }
 
@@ -259,6 +420,7 @@ function videochat_lobby_decode_client_frame(string $frame): array
             'type' => $type,
             'target_user_id' => 0,
             'error' => 'missing_target_user_id',
+            'room_id' => $roomId,
         ];
     }
 
@@ -278,6 +440,7 @@ function videochat_lobby_decode_client_frame(string $frame): array
             'type' => $type,
             'target_user_id' => 0,
             'error' => 'invalid_target_user_id',
+            'room_id' => $roomId,
         ];
     }
 
@@ -286,6 +449,7 @@ function videochat_lobby_decode_client_frame(string $frame): array
         'type' => $type,
         'target_user_id' => $targetUserId,
         'error' => '',
+        'room_id' => $roomId,
     ];
 }
 
@@ -296,7 +460,9 @@ function videochat_lobby_decode_client_frame(string $frame): array
  *   changed: bool,
  *   sent_count: int,
  *   action: string,
- *   target_user_id: int
+ *   target_user_id: int,
+ *   room_id: string,
+ *   affected_user_ids: array<int, int>
  * }
  */
 function videochat_lobby_apply_command(
@@ -315,10 +481,15 @@ function videochat_lobby_apply_command(
             'sent_count' => 0,
             'action' => '',
             'target_user_id' => 0,
+            'room_id' => '',
+            'affected_user_ids' => [],
         ];
     }
 
-    $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
+    $commandRoomId = videochat_presence_normalize_room_id((string) ($command['room_id'] ?? ''), '');
+    $roomId = $commandRoomId !== ''
+        ? $commandRoomId
+        : videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
     $userId = (int) ($connection['user_id'] ?? 0);
     if ($userId <= 0) {
         return [
@@ -328,15 +499,25 @@ function videochat_lobby_apply_command(
             'sent_count' => 0,
             'action' => '',
             'target_user_id' => 0,
+            'room_id' => $roomId,
+            'affected_user_ids' => [],
         ];
     }
 
     $connectionId = trim((string) ($connection['connection_id'] ?? ''));
+    $activeConnection = $presenceState['connections'][$connectionId] ?? null;
     $roomConnections = $presenceState['rooms'][$roomId] ?? null;
+    $senderCurrentRoomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
     if (
         $connectionId === ''
-        || !is_array($roomConnections)
-        || !array_key_exists($connectionId, $roomConnections)
+        || !is_array($activeConnection)
+        || (
+            !is_array($roomConnections)
+            || !array_key_exists($connectionId, $roomConnections)
+        ) && (
+            !in_array((string) ($command['type'] ?? ''), ['lobby/queue/join', 'lobby/queue/request'], true)
+            || $senderCurrentRoomId !== 'lobby'
+        )
     ) {
         return [
             'ok' => false,
@@ -345,6 +526,8 @@ function videochat_lobby_apply_command(
             'sent_count' => 0,
             'action' => (string) ($command['type'] ?? ''),
             'target_user_id' => (int) ($command['target_user_id'] ?? 0),
+            'room_id' => $roomId,
+            'affected_user_ids' => [],
         ];
     }
 
@@ -365,6 +548,8 @@ function videochat_lobby_apply_command(
             'sent_count' => $sent ? 1 : 0,
             'action' => $action,
             'target_user_id' => 0,
+            'room_id' => $roomId,
+            'affected_user_ids' => [],
         ];
     }
 
@@ -378,6 +563,8 @@ function videochat_lobby_apply_command(
                 'sent_count' => $sent ? 1 : 0,
                 'action' => $action,
                 'target_user_id' => $userId,
+                'room_id' => $roomId,
+                'affected_user_ids' => [],
             ];
         }
 
@@ -406,6 +593,8 @@ function videochat_lobby_apply_command(
             'sent_count' => $sentCount,
             'action' => $action,
             'target_user_id' => $userId,
+            'room_id' => $roomId,
+            'affected_user_ids' => [$userId],
         ];
     }
 
@@ -417,6 +606,8 @@ function videochat_lobby_apply_command(
             'sent_count' => 0,
             'action' => $action,
             'target_user_id' => $targetUserId,
+            'room_id' => $roomId,
+            'affected_user_ids' => [],
         ];
     }
 
@@ -430,6 +621,8 @@ function videochat_lobby_apply_command(
                 'sent_count' => 0,
                 'action' => $action,
                 'target_user_id' => $targetUserId,
+                'room_id' => $roomId,
+                'affected_user_ids' => [],
             ];
         }
 
@@ -463,6 +656,8 @@ function videochat_lobby_apply_command(
             'sent_count' => $sentCount,
             'action' => $action,
             'target_user_id' => $targetUserId,
+            'room_id' => $roomId,
+            'affected_user_ids' => [$targetUserId],
         ];
     }
 
@@ -485,6 +680,8 @@ function videochat_lobby_apply_command(
                 'sent_count' => 0,
                 'action' => $action,
                 'target_user_id' => $targetUserId,
+                'room_id' => $roomId,
+                'affected_user_ids' => [],
             ];
         }
 
@@ -506,6 +703,8 @@ function videochat_lobby_apply_command(
             'sent_count' => $sentCount,
             'action' => $action,
             'target_user_id' => $targetUserId,
+            'room_id' => $roomId,
+            'affected_user_ids' => [$targetUserId],
         ];
     }
 
@@ -518,14 +717,18 @@ function videochat_lobby_apply_command(
                 'sent_count' => 0,
                 'action' => $action,
                 'target_user_id' => 0,
+                'room_id' => $roomId,
+                'affected_user_ids' => [],
             ];
         }
 
+        $affectedUserIds = [];
         foreach ($queuedByUser as $queuedUserId => $queuedEntry) {
             $normalizedUserId = (int) $queuedUserId;
             if ($normalizedUserId <= 0 || !is_array($queuedEntry)) {
                 continue;
             }
+            $affectedUserIds[] = $normalizedUserId;
             $admittedByUser[$normalizedUserId] = [
                 'user_id' => (int) ($queuedEntry['user_id'] ?? $normalizedUserId),
                 'display_name' => (string) ($queuedEntry['display_name'] ?? ''),
@@ -557,6 +760,8 @@ function videochat_lobby_apply_command(
             'sent_count' => $sentCount,
             'action' => $action,
             'target_user_id' => 0,
+            'room_id' => $roomId,
+            'affected_user_ids' => $affectedUserIds,
         ];
     }
 
@@ -567,6 +772,8 @@ function videochat_lobby_apply_command(
         'sent_count' => 0,
         'action' => $action,
         'target_user_id' => $targetUserId,
+        'room_id' => $roomId,
+        'affected_user_ids' => [],
     ];
 }
 

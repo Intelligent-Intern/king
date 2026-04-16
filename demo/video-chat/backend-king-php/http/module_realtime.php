@@ -24,9 +24,18 @@ function videochat_realtime_connection_has_upgrade_token(string $connectionHeade
     return false;
 }
 
+function videochat_realtime_waiting_room_id(): string
+{
+    return 'waiting-room';
+}
+
 function videochat_realtime_connection_with_call_context(array $connection, callable $openDatabase): array
 {
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
+    $pendingRoomId = videochat_presence_normalize_room_id((string) ($connection['pending_room_id'] ?? ''), '');
+    if ($roomId === videochat_realtime_waiting_room_id() && $pendingRoomId !== '') {
+        $roomId = $pendingRoomId;
+    }
     $userId = (int) ($connection['user_id'] ?? 0);
     $fallbackContext = [
         'call_id' => '',
@@ -49,6 +58,153 @@ function videochat_realtime_connection_with_call_context(array $connection, call
     $connection['can_moderate_call'] = (bool) ($resolved['can_moderate'] ?? false);
 
     return $connection;
+}
+
+function videochat_realtime_is_user_moderator_for_room(
+    callable $openDatabase,
+    int $userId,
+    string $role,
+    string $roomId
+): bool {
+    if ($userId <= 0) {
+        return false;
+    }
+
+    if (videochat_normalize_role_slug($role) === 'admin') {
+        return true;
+    }
+
+    try {
+        $pdo = $openDatabase();
+        $context = videochat_call_role_context_for_room_user($pdo, $roomId, $userId);
+    } catch (Throwable) {
+        return false;
+    }
+
+    return (bool) ($context['can_moderate'] ?? false);
+}
+
+/**
+ * @return array{initial_room_id: string, requested_room_id: string, pending_room_id: string}
+ */
+function videochat_realtime_resolve_connection_rooms(
+    array $websocketAuth,
+    string $requestedRoomId,
+    callable $openDatabase
+): array {
+    $resolvedRequestedRoomId = videochat_presence_normalize_room_id($requestedRoomId);
+    try {
+        $pdo = $openDatabase();
+        $resolvedRoom = videochat_fetch_active_room_context($pdo, $resolvedRequestedRoomId);
+        if ($resolvedRoom === null) {
+            $resolvedRoom = videochat_fetch_active_room_context($pdo, 'lobby');
+        }
+        if (is_array($resolvedRoom) && is_string($resolvedRoom['id'] ?? null)) {
+            $resolvedRequestedRoomId = videochat_presence_normalize_room_id((string) $resolvedRoom['id']);
+        }
+    } catch (Throwable) {
+        $resolvedRequestedRoomId = 'lobby';
+    }
+
+    $user = is_array($websocketAuth['user'] ?? null) ? $websocketAuth['user'] : [];
+    $userId = (int) ($user['id'] ?? 0);
+    $userRole = (string) ($user['role'] ?? 'user');
+    $canBypassLobby = videochat_realtime_is_user_moderator_for_room(
+        $openDatabase,
+        $userId,
+        $userRole,
+        $resolvedRequestedRoomId
+    );
+
+    if ($canBypassLobby) {
+        return [
+            'initial_room_id' => $resolvedRequestedRoomId,
+            'requested_room_id' => $resolvedRequestedRoomId,
+            'pending_room_id' => '',
+        ];
+    }
+
+    return [
+        'initial_room_id' => videochat_realtime_waiting_room_id(),
+        'requested_room_id' => $resolvedRequestedRoomId,
+        'pending_room_id' => $resolvedRequestedRoomId,
+    ];
+}
+
+function videochat_realtime_presence_has_room_membership(
+    array $presenceState,
+    string $roomId,
+    int $userId,
+    string $sessionId = ''
+): bool {
+    if ($userId <= 0) {
+        return false;
+    }
+
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    if ($normalizedRoomId === '') {
+        return false;
+    }
+
+    $trimmedSessionId = trim($sessionId);
+    foreach (($presenceState['connections'] ?? []) as $connection) {
+        if (!is_array($connection)) {
+            continue;
+        }
+        if ((int) ($connection['user_id'] ?? 0) !== $userId) {
+            continue;
+        }
+        if (videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '') !== $normalizedRoomId) {
+            continue;
+        }
+        if ($trimmedSessionId !== '' && trim((string) ($connection['session_id'] ?? '')) !== $trimmedSessionId) {
+            continue;
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+function videochat_realtime_send_lobby_snapshot_to_users(
+    array $presenceState,
+    array $lobbyState,
+    string $roomId,
+    array $userIds,
+    string $reason = 'admitted',
+    ?callable $sender = null
+): int {
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId);
+    $normalizedUserIds = [];
+    foreach ($userIds as $userId) {
+        $normalizedUserId = (int) $userId;
+        if ($normalizedUserId > 0) {
+            $normalizedUserIds[$normalizedUserId] = true;
+        }
+    }
+    if ($normalizedUserIds === []) {
+        return 0;
+    }
+
+    $payload = videochat_lobby_snapshot_payload($lobbyState, $normalizedRoomId, $reason);
+    $sentCount = 0;
+    foreach (($presenceState['connections'] ?? []) as $connection) {
+        if (!is_array($connection)) {
+            continue;
+        }
+
+        $connectionUserId = (int) ($connection['user_id'] ?? 0);
+        if ($connectionUserId <= 0 || !isset($normalizedUserIds[$connectionUserId])) {
+            continue;
+        }
+
+        if (videochat_presence_send_frame($connection['socket'] ?? null, $payload, $sender)) {
+            $sentCount++;
+        }
+    }
+
+    return $sentCount;
 }
 
 /**
@@ -295,6 +451,7 @@ function videochat_handle_realtime_routes(
         return videochat_handle_sfu_routes(
             $path,
             $request,
+            $presenceState,
             $authenticateRequest,
             $authFailureResponse,
             $rbacFailureResponse,
@@ -345,19 +502,19 @@ function videochat_handle_realtime_routes(
             $requestedRoomId = (string) $queryParams['room'];
         }
 
-        $initialRoomId = videochat_presence_normalize_room_id($requestedRoomId);
-        try {
-            $pdo = $openDatabase();
-            $resolvedRoom = videochat_fetch_active_room_context($pdo, $initialRoomId);
-            if ($resolvedRoom === null) {
-                $resolvedRoom = videochat_fetch_active_room_context($pdo, 'lobby');
-            }
-            if (is_array($resolvedRoom) && is_string($resolvedRoom['id'] ?? null)) {
-                $initialRoomId = videochat_presence_normalize_room_id((string) $resolvedRoom['id']);
-            }
-        } catch (Throwable) {
-            $initialRoomId = 'lobby';
-        }
+        $roomResolution = videochat_realtime_resolve_connection_rooms(
+            $websocketAuth,
+            $requestedRoomId,
+            $openDatabase
+        );
+        $initialRoomId = videochat_presence_normalize_room_id((string) ($roomResolution['initial_room_id'] ?? 'lobby'));
+        $resolvedRequestedRoomId = videochat_presence_normalize_room_id(
+            (string) ($roomResolution['requested_room_id'] ?? $initialRoomId)
+        );
+        $pendingRoomId = videochat_presence_normalize_room_id(
+            (string) ($roomResolution['pending_room_id'] ?? ''),
+            ''
+        );
 
         $connectionId = videochat_register_active_websocket(
             $activeWebsocketsBySession,
@@ -371,6 +528,8 @@ function videochat_handle_realtime_routes(
             $websocket,
             $initialRoomId
         );
+        $presenceConnection['requested_room_id'] = $resolvedRequestedRoomId;
+        $presenceConnection['pending_room_id'] = $pendingRoomId;
         $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
         $presenceJoin = videochat_presence_join_room(
             $presenceState,
@@ -439,6 +598,12 @@ function videochat_handle_realtime_routes(
                     'call_role' => (string) ($presenceConnection['call_role'] ?? 'participant'),
                     'can_moderate' => (bool) ($presenceConnection['can_moderate_call'] ?? false),
                 ],
+                'admission' => [
+                    'requested_room_id' => (string) ($presenceConnection['requested_room_id'] ?? ''),
+                    'pending_room_id' => (string) ($presenceConnection['pending_room_id'] ?? ''),
+                    'waiting_room_id' => videochat_realtime_waiting_room_id(),
+                    'requires_admission' => trim((string) ($presenceConnection['pending_room_id'] ?? '')) !== '',
+                ],
                 'channels' => [
                     'presence' => [
                         'snapshot' => 'room/snapshot',
@@ -483,6 +648,19 @@ function videochat_handle_realtime_routes(
                 'time' => gmdate('c'),
             ]
         );
+
+        $pendingRoomId = videochat_presence_normalize_room_id(
+            (string) ($presenceConnection['pending_room_id'] ?? ''),
+            ''
+        );
+        if ($pendingRoomId !== '') {
+            videochat_lobby_queue_connection_for_room(
+                $lobbyState,
+                $presenceState,
+                $presenceConnection,
+                $pendingRoomId
+            );
+        }
         videochat_lobby_send_snapshot_to_connection($lobbyState, $presenceConnection, 'joined_room');
 
         try {
@@ -723,6 +901,29 @@ function videochat_handle_realtime_routes(
                                                     'time' => gmdate('c'),
                                                 ]
                                             );
+                                        } else {
+                                            $lobbyAction = (string) ($lobbyResult['action'] ?? '');
+                                            if (in_array($lobbyAction, ['lobby/allow', 'lobby/allow_all'], true)) {
+                                                $admittedRoomId = videochat_presence_normalize_room_id(
+                                                    (string) ($lobbyResult['room_id'] ?? ($presenceConnection['room_id'] ?? 'lobby'))
+                                                );
+                                                $admittedUserIds = is_array($lobbyResult['affected_user_ids'] ?? null)
+                                                    ? array_values(array_filter(
+                                                        array_map('intval', (array) $lobbyResult['affected_user_ids']),
+                                                        static fn (int $id): bool => $id > 0
+                                                    ))
+                                                    : [];
+                                                if ($admittedRoomId !== '' && $admittedUserIds !== []) {
+                                                    videochat_realtime_send_lobby_snapshot_to_users(
+                                                        $presenceState,
+                                                        $lobbyState,
+                                                        $admittedRoomId,
+                                                        $admittedUserIds,
+                                                        'admitted',
+                                                        null
+                                                    );
+                                                }
+                                            }
                                         }
                                         continue;
                                     }
@@ -796,12 +997,18 @@ function videochat_handle_realtime_routes(
                         'room_leave'
                     );
                     videochat_reaction_clear_for_connection(
-                        $reactionState,
-                        $presenceConnection
-                    );
-                    $presenceConnection['room_id'] = 'lobby';
+                            $reactionState,
+                            $presenceConnection
+                        );
+                    $presenceConnection['room_id'] = videochat_realtime_waiting_room_id();
+                    $presenceConnection['requested_room_id'] = videochat_realtime_waiting_room_id();
+                    $presenceConnection['pending_room_id'] = '';
                     $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
-                    $presenceJoin = videochat_presence_join_room($presenceState, $presenceConnection, 'lobby');
+                    $presenceJoin = videochat_presence_join_room(
+                        $presenceState,
+                        $presenceConnection,
+                        videochat_realtime_waiting_room_id()
+                    );
                     $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
                     $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
                     $presenceState['connections'][$connectionId] = $presenceConnection;
@@ -833,6 +1040,54 @@ function videochat_handle_realtime_routes(
                         continue;
                     }
 
+                    $pendingRoomId = videochat_presence_normalize_room_id(
+                        (string) ($presenceConnection['pending_room_id'] ?? ''),
+                        ''
+                    );
+                    $pendingGateActive = $pendingRoomId !== '';
+                    if ($pendingGateActive && $targetRoomId === $pendingRoomId) {
+                        $isAdmitted = videochat_lobby_is_user_admitted_for_room(
+                            $lobbyState,
+                            $targetRoomId,
+                            (int) ($presenceConnection['user_id'] ?? 0)
+                        );
+                        if (!$isAdmitted) {
+                            videochat_presence_send_frame(
+                                $websocket,
+                                [
+                                    'type' => 'system/error',
+                                    'code' => 'room_join_requires_admission',
+                                    'message' => 'Call admission is still pending approval.',
+                                    'details' => [
+                                        'room_id' => $targetRoomId,
+                                        'pending_room_id' => $pendingRoomId,
+                                    ],
+                                    'time' => gmdate('c'),
+                                ]
+                            );
+                            continue;
+                        }
+                    } elseif (
+                        $pendingGateActive
+                        && $targetRoomId !== $pendingRoomId
+                        && $targetRoomId !== videochat_realtime_waiting_room_id()
+                    ) {
+                        videochat_presence_send_frame(
+                            $websocket,
+                            [
+                                'type' => 'system/error',
+                                'code' => 'room_join_not_allowed',
+                                'message' => 'You cannot join this room while admission is pending.',
+                                'details' => [
+                                    'room_id' => $targetRoomId,
+                                    'pending_room_id' => $pendingRoomId,
+                                ],
+                                'time' => gmdate('c'),
+                            ]
+                        );
+                        continue;
+                    }
+
                     $currentRoomId = videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? 'lobby'));
                     if ($currentRoomId !== $targetRoomId) {
                         videochat_lobby_clear_for_connection(
@@ -853,11 +1108,30 @@ function videochat_handle_realtime_routes(
                         );
                     }
                     $presenceConnection['room_id'] = $targetRoomId;
+                    $presenceConnection['requested_room_id'] = $targetRoomId;
+                    if ($pendingGateActive && $targetRoomId === $pendingRoomId) {
+                        $presenceConnection['pending_room_id'] = '';
+                    }
                     $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
                     $presenceJoin = videochat_presence_join_room($presenceState, $presenceConnection, $targetRoomId);
                     $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
                     $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
                     $presenceState['connections'][$connectionId] = $presenceConnection;
+                    if ($pendingGateActive && $targetRoomId === $pendingRoomId) {
+                        $removedFromLobby = videochat_lobby_remove_user_from_room(
+                            $lobbyState,
+                            $targetRoomId,
+                            (int) ($presenceConnection['user_id'] ?? 0)
+                        );
+                        if ($removedFromLobby) {
+                            videochat_lobby_broadcast_room_snapshot(
+                                $lobbyState,
+                                $presenceState,
+                                $targetRoomId,
+                                'admission_consumed'
+                            );
+                        }
+                    }
                     videochat_lobby_send_snapshot_to_connection($lobbyState, $presenceConnection, 'joined_room');
                     continue;
                 }
@@ -880,6 +1154,7 @@ function videochat_handle_realtime_routes(
 function videochat_handle_sfu_routes(
     string $path,
     array $request,
+    array $presenceState,
     callable $authenticateRequest,
     callable $authFailureResponse,
     callable $rbacFailureResponse,
@@ -906,6 +1181,37 @@ function videochat_handle_sfu_routes(
         return $rbacFailureResponse('websocket', $websocketRbacDecision, $path);
     }
 
+    $queryParams = videochat_request_query_params($request);
+    $roomId = videochat_presence_normalize_room_id(
+        is_string($queryParams['room'] ?? null) ? (string) $queryParams['room'] : 'lobby'
+    );
+    $userId = (int) ($websocketAuth['user']['id'] ?? 0);
+    $userRole = (string) ($websocketAuth['user']['role'] ?? 'user');
+    $sessionId = trim((string) ($websocketAuth['token'] ?? ($websocketAuth['session']['id'] ?? '')));
+    $isAdmittedInRoom = videochat_realtime_presence_has_room_membership(
+        $presenceState,
+        $roomId,
+        $userId,
+        $sessionId
+    );
+    $canBypassAdmission = videochat_realtime_is_user_moderator_for_room(
+        $openDatabase,
+        $userId,
+        $userRole,
+        $roomId
+    );
+    if (!$isAdmittedInRoom && !$canBypassAdmission) {
+        return $errorResponse(
+            403,
+            'sfu_room_admission_required',
+            'Join the call room over /ws before connecting to SFU.',
+            [
+                'room_id' => $roomId,
+                'reason' => 'room_admission_required',
+            ]
+        );
+    }
+
     $session = $request['session'] ?? null;
     $streamId = (int) ($request['stream_id'] ?? 0);
     $websocket = king_server_upgrade_to_websocket($session, $streamId);
@@ -913,9 +1219,7 @@ function videochat_handle_sfu_routes(
         return $errorResponse(400, 'websocket_upgrade_failed', 'Could not upgrade request to websocket.');
     }
 
-    $queryParams = videochat_request_query_params($request);
-    $roomId = is_string($queryParams['room'] ?? null) ? (string) $queryParams['room'] : 'lobby';
-    $userId = (string) ($websocketAuth['user']['id'] ?? '');
+    $userIdString = (string) ($websocketAuth['user']['id'] ?? '');
     $userNameCandidate = $websocketAuth['user']['name'] ?? $websocketAuth['user']['display_name'] ?? null;
     $userName = is_string($userNameCandidate) && trim($userNameCandidate) !== ''
         ? trim($userNameCandidate)
@@ -941,7 +1245,7 @@ function videochat_handle_sfu_routes(
     }
     $sfuClients[$clientId] = [
         'websocket' => $websocket,
-        'user_id' => $userId,
+        'user_id' => $userIdString,
         'user_name' => $userName,
         'room_id' => $roomId,
         'role' => $role,
@@ -956,7 +1260,7 @@ function videochat_handle_sfu_routes(
 
     king_websocket_send($websocket, json_encode([
         'type' => 'sfu/welcome',
-        'user_id' => $userId,
+        'user_id' => $userIdString,
         'name' => $userName,
         'room_id' => $roomId,
         'server_time' => time(),

@@ -160,6 +160,7 @@ export class SFUClient {
     }
 
     const query    = new URLSearchParams({
+      room: roomId,
       userId: session.userId,
       token:  session.token,
       name:   session.name,

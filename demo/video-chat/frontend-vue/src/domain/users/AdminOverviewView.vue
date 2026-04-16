@@ -24,17 +24,6 @@
         >
           Calendar
         </button>
-        <button
-          class="view-tab"
-          :class="{ active: activeOverviewView === 'my-calls' }"
-          type="button"
-          role="tab"
-          data-view="my-calls"
-          :aria-selected="activeOverviewView === 'my-calls'"
-          @click="setActiveOverviewView('my-calls')"
-        >
-          My Video Calls
-        </button>
       </div>
     </section>
 
@@ -141,40 +130,6 @@
     <section class="view-panel calendar-panel" :class="{ active: activeOverviewView === 'calendar' }" data-panel="calendar">
       <div id="overviewCalendar" ref="overviewCalendarEl"></div>
       <p class="calendar-help">Double-click a date/slot to schedule. In day view, drag a time range to prefill the modal.</p>
-    </section>
-
-    <section class="view-panel my-calls-panel" :class="{ active: activeOverviewView === 'my-calls' }" data-panel="my-calls">
-      <article class="card">
-        <h2 class="table-title">My Video Calls</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Schedule</th>
-                <th>Status</th>
-                <th>Users</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in myCallsRows" :key="row.id">
-                <td>{{ row.title }}</td>
-                <td>{{ formatScheduleRange(row.scheduleStart, row.scheduleEnd) }}</td>
-                <td><span class="tag" :class="row.statusTagClass">{{ row.statusLabel }}</span></td>
-                <td>{{ row.users }}</td>
-                <td>
-                  <span class="actions-inline">
-                    <button class="icon-mini-btn" type="button" title="Join call" aria-label="Join call" @click="openWorkspace(row)">
-                      <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
-                    </button>
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </article>
     </section>
 
     <div class="calls-modal" :hidden="!composeState.open" role="dialog" aria-modal="true" aria-label="Call compose modal">
@@ -499,7 +454,7 @@ const nodesUnderLoadMetric = computed(() => String(
 ));
 
 function setActiveOverviewView(view) {
-  if (view === 'dashboard' || view === 'calendar' || view === 'my-calls') {
+  if (view === 'dashboard' || view === 'calendar') {
     activeOverviewView.value = view;
   }
 }
@@ -1013,11 +968,6 @@ watch(activeOverviewView, async (view) => {
   padding: 0 2px;
   font-size: 12px;
   color: var(--text-muted);
-}
-
-.my-calls-panel {
-  padding: 10px;
-  background: var(--bg-main);
 }
 
 .calls-modal {

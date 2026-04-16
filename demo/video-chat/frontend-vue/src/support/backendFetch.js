@@ -30,6 +30,12 @@ function isNetworkError(error) {
   return error.name === 'TypeError';
 }
 
+function wait(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, Math.max(0, Number(ms) || 0));
+  });
+}
+
 let backendRequestQueue = Promise.resolve();
 
 async function performBackendFetch(path, options = {}) {
@@ -39,6 +45,8 @@ async function performBackendFetch(path, options = {}) {
     body = undefined,
     query = null,
     retryOnNetworkError = true,
+    networkRetryCount = 4,
+    networkRetryBaseDelayMs = 120,
     timeoutMs = 10_000,
     ...rest
   } = options || {};
@@ -49,36 +57,51 @@ async function performBackendFetch(path, options = {}) {
   let firstError = null;
 
   for (const origin of origins) {
-    const endpoint = isAbsolute ? `${String(path || '').trim()}${querySuffix}` : `${origin}${path}${querySuffix}`;
-    const controller = new AbortController();
-    const timeout = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
-      ? setTimeout(() => controller.abort(), Number(timeoutMs))
-      : null;
+    const maxAttempts = Math.max(1, Number.parseInt(String(networkRetryCount), 10) || 1);
 
-    try {
-      const response = await fetch(endpoint, {
-        method,
-        headers,
-        body,
-        signal: controller.signal,
-        ...rest,
-      });
-      if (!isAbsolute && origin !== '' && origin !== resolveBackendOrigin()) {
-        setBackendOrigin(origin);
-      }
-      return {
-        response,
-        origin: isAbsolute ? resolveBackendOrigin() : origin,
-        endpoint,
-      };
-    } catch (error) {
-      if (!firstError) firstError = error;
-      if (!retryOnNetworkError || !isNetworkError(error)) {
-        throw error;
-      }
-    } finally {
-      if (timeout) {
-        clearTimeout(timeout);
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const endpoint = isAbsolute ? `${String(path || '').trim()}${querySuffix}` : `${origin}${path}${querySuffix}`;
+      const controller = new AbortController();
+      const timeout = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
+        ? setTimeout(() => controller.abort(), Number(timeoutMs))
+        : null;
+
+      try {
+        const response = await fetch(endpoint, {
+          method,
+          headers,
+          body,
+          signal: controller.signal,
+          ...rest,
+        });
+        if (!isAbsolute && origin !== '' && origin !== resolveBackendOrigin()) {
+          setBackendOrigin(origin);
+        }
+        return {
+          response,
+          origin: isAbsolute ? resolveBackendOrigin() : origin,
+          endpoint,
+        };
+      } catch (error) {
+        if (!firstError) firstError = error;
+        if (!retryOnNetworkError || !isNetworkError(error)) {
+          throw error;
+        }
+
+        const isLastAttempt = attempt + 1 >= maxAttempts;
+        if (isLastAttempt) {
+          break;
+        }
+
+        const baseDelay = Math.max(0, Number(networkRetryBaseDelayMs) || 0);
+        const backoffMs = Math.min(1_000, baseDelay * Math.pow(2, attempt));
+        if (backoffMs > 0) {
+          await wait(backoffMs);
+        }
+      } finally {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
       }
     }
   }

@@ -133,6 +133,8 @@ docker compose -f docker-compose.v1.yml up --build
 - frontend: `http://127.0.0.1:5176`
 - backend health: `http://127.0.0.1:18080/health`
 - websocket endpoints (`/ws`, `/sfu`) are served by backend listener `:18080`
+- frontend container runs Vite dev-server with HMR on compose; source edits under
+  `demo/video-chat/frontend-vue` hot-reload automatically in browser
 
 3. Login with demo admin:
 
@@ -321,6 +323,12 @@ Optional frontend preflight origin override for non-default routing:
 VIDEOCHAT_V1_BACKEND_ORIGIN=http://127.0.0.1:38080 docker compose -f docker-compose.v1.yml up --build
 ```
 
+Optional for Docker Desktop/remote FS watcher stability:
+
+```bash
+VIDEOCHAT_VUE_POLLING=1 docker compose -f docker-compose.v1.yml up --build
+```
+
 SQLite data is persisted in a mounted Docker volume:
 
 - volume: `videochat-v1-sqlite`
@@ -350,8 +358,8 @@ SQLite data is persisted in a mounted Docker volume:
 - backend call create: `POST http://127.0.0.1:18080/api/calls` (authenticated admin/moderator/user)
 - backend call update: `PATCH http://127.0.0.1:18080/api/calls/{id}` (authenticated admin/moderator/user; owner/admin/moderator policy)
 - backend call cancel: `POST http://127.0.0.1:18080/api/calls/{id}/cancel` (authenticated admin/moderator/user; owner/admin/moderator policy)
-- backend websocket endpoint: `WS ws://127.0.0.1:18080/ws`
-- backend SFU endpoint: `WS ws://127.0.0.1:18080/sfu`
+- backend websocket endpoint (compose default): `WS ws://127.0.0.1:18081/ws`
+- backend SFU endpoint (compose default): `WS ws://127.0.0.1:18082/sfu`
 - backend startup applies ordered sqlite migrations (`schema_migrations`) and exposes migration state in runtime/health responses
 - frontend scaffold endpoint: `http://127.0.0.1:5176`
 - frontend consumes backend preflight metadata on startup (`app/version + runtime health`)

@@ -164,7 +164,7 @@ export async function createMediaPipeSegmentationBackend(opts = {}) {
     return null;
   }
 
-  const detectIntervalMs = Math.max(100, Math.min(1200, Math.round(Number(opts.detectIntervalMs || 220))));
+  const detectIntervalMs = Math.max(66, Math.min(1200, Math.round(Number(opts.detectIntervalMs || 140))));
   const scratchCanvas = document.createElement('canvas');
   const frameCanvas = document.createElement('canvas');
   const frameCtx = frameCanvas.getContext('2d', { alpha: false, desynchronized: true });

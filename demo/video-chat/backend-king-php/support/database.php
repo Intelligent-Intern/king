@@ -305,10 +305,14 @@ function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null
         $activeParticipants[] = $participant;
     }
 
+    $architectureCallId = 'demo-call-architecture-sync';
+    $platformCallId = 'demo-call-platform-standup';
+    $retroCallId = 'demo-call-retro-weekly';
+
     return [
         [
-            'id' => 'demo-call-architecture-sync',
-            'room_id' => 'lobby',
+            'id' => $architectureCallId,
+            'room_id' => $architectureCallId,
             'title' => 'Architecture Sync',
             'status' => 'scheduled',
             'owner_email' => $adminEmail,
@@ -331,8 +335,8 @@ function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null
             ],
         ],
         [
-            'id' => 'demo-call-platform-standup',
-            'room_id' => 'lobby',
+            'id' => $platformCallId,
+            'room_id' => $platformCallId,
             'title' => 'Platform Standup',
             'status' => 'active',
             'owner_email' => $adminEmail,
@@ -344,8 +348,8 @@ function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null
             'participants' => $activeParticipants,
         ],
         [
-            'id' => 'demo-call-retro-weekly',
-            'room_id' => 'lobby',
+            'id' => $retroCallId,
+            'room_id' => $retroCallId,
             'title' => 'Weekly Retrospective',
             'status' => 'ended',
             'owner_email' => $adminEmail,
@@ -433,6 +437,12 @@ SET room_id = :room_id,
 WHERE id = :id
 SQL
     );
+    $insertRoom = $pdo->prepare(
+        <<<'SQL'
+INSERT OR IGNORE INTO rooms(id, name, visibility, status, created_by_user_id, created_at, updated_at)
+VALUES(:id, :name, 'private', 'active', :created_by_user_id, :created_at, :updated_at)
+SQL
+    );
     $deleteParticipants = $pdo->prepare('DELETE FROM call_participants WHERE call_id = :call_id');
     $insertParticipant = $pdo->prepare(
         <<<'SQL'
@@ -452,7 +462,7 @@ SQL
 
         $callPayload = [
             ':id' => $callId,
-            ':room_id' => (string) ($call['room_id'] ?? 'lobby'),
+            ':room_id' => (string) ($call['room_id'] ?? $callId),
             ':title' => (string) ($call['title'] ?? 'Demo Call'),
             ':owner_user_id' => (int) ($owner['id'] ?? 0),
             ':status' => (string) ($call['status'] ?? 'scheduled'),
@@ -466,6 +476,14 @@ SQL
         ];
         $updateCallPayload = $callPayload;
         unset($updateCallPayload[':created_at']);
+
+        $insertRoom->execute([
+            ':id' => (string) $callPayload[':room_id'],
+            ':name' => (string) $callPayload[':title'],
+            ':created_by_user_id' => (int) ($owner['id'] ?? 0),
+            ':created_at' => (string) $callPayload[':created_at'],
+            ':updated_at' => (string) $callPayload[':updated_at'],
+        ]);
 
         $selectCall->execute([':id' => $callId]);
         $existing = $selectCall->fetch();
@@ -535,7 +553,7 @@ SQL
 
         $seeded[] = [
             'id' => $callId,
-            'room_id' => (string) ($call['room_id'] ?? 'lobby'),
+            'room_id' => (string) ($call['room_id'] ?? $callId),
             'title' => (string) ($call['title'] ?? 'Demo Call'),
             'status' => (string) ($call['status'] ?? 'scheduled'),
             'owner_email' => $ownerEmail,
@@ -780,6 +798,32 @@ SET access_mode = 'invite_only'
 WHERE access_mode IS NULL
    OR trim(access_mode) = ''
    OR lower(access_mode) NOT IN ('invite_only', 'free_for_all')
+SQL,
+            ],
+        ],
+        9 => [
+            'name' => '0009_calls_dedicated_room_ids',
+            'statements' => [
+                <<<'SQL'
+INSERT OR IGNORE INTO rooms(id, name, visibility, status, created_by_user_id, created_at, updated_at)
+SELECT
+    calls.id,
+    CASE
+        WHEN trim(coalesce(calls.title, '')) = '' THEN 'Call Room'
+        ELSE calls.title
+    END,
+    'private',
+    'active',
+    calls.owner_user_id,
+    coalesce(nullif(calls.created_at, ''), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    coalesce(nullif(calls.updated_at, ''), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+FROM calls
+WHERE lower(trim(coalesce(calls.room_id, ''))) = 'lobby'
+SQL,
+                <<<'SQL'
+UPDATE calls
+SET room_id = id
+WHERE lower(trim(coalesce(room_id, ''))) = 'lobby'
 SQL,
             ],
         ],

@@ -336,6 +336,13 @@ function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload): arra
     $createdAt = gmdate('c');
     $startsAt = (string) $data['starts_at'];
     $endsAt = (string) $data['ends_at'];
+    $initialStatus = 'scheduled';
+    $startsAtUnix = strtotime($startsAt);
+    $endsAtUnix = strtotime($endsAt);
+    $nowUnix = time();
+    if (is_int($startsAtUnix) && is_int($endsAtUnix) && $startsAtUnix <= $nowUnix && $nowUnix < $endsAtUnix) {
+        $initialStatus = 'active';
+    }
 
     $pdo->beginTransaction();
     try {
@@ -354,7 +361,7 @@ SQL
             ':title' => (string) $data['title'],
             ':access_mode' => (string) $data['access_mode'],
             ':owner_user_id' => (int) $owner['id'],
-            ':status' => 'scheduled',
+            ':status' => $initialStatus,
             ':starts_at' => $startsAt,
             ':ends_at' => $endsAt,
             ':created_at' => $createdAt,
@@ -417,7 +424,7 @@ SQL
             'room_id' => (string) $data['room_id'],
             'title' => (string) $data['title'],
             'access_mode' => (string) $data['access_mode'],
-            'status' => 'scheduled',
+            'status' => $initialStatus,
             'starts_at' => $startsAt,
             'ends_at' => $endsAt,
             'cancelled_at' => null,

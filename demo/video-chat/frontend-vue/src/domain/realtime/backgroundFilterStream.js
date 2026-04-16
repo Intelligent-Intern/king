@@ -144,7 +144,7 @@ function buildInnerFeatherMask(outputCtx, maskSource, videoCtx, video, width, he
       base[i] = Math.max(0, Math.min(255, Math.round(prob)));
     }
     refineAlphaInPlace(base, width, height, 1);
-    applyTemporalMaskHysteresis(base, previousAlpha, 0.68, 0.82);
+    applyTemporalMaskHysteresis(base, previousAlpha, 0.86, 0.74);
     if (previousAlpha && previousAlpha.length === base.length) previousAlpha.set(base);
     const outFast = outputCtx.createImageData(width, height);
     for (let i = 0; i < n; i += 1) {
@@ -218,7 +218,8 @@ function buildInnerFeatherMask(outputCtx, maskSource, videoCtx, video, width, he
     }
   }
   const innerContractPx = 2;
-  const innerFeatherPx = 20;
+  const innerFeatherPx = 34;
+  const innerFeatherCurve = 0.92;
   const outAlpha = new Uint8ClampedArray(n);
   for (let i = 0; i < n; i += 1) {
     if (!fg[i]) {
@@ -226,11 +227,11 @@ function buildInnerFeatherMask(outputCtx, maskSource, videoCtx, video, width, he
       continue;
     }
     const t = clamp01(((dist[i] ?? 0) - innerContractPx) / innerFeatherPx);
-    const inside = smoothstep(0, 1, t);
+    const inside = Math.pow(smoothstep(0, 1, t), innerFeatherCurve);
     outAlpha[i] = Math.round(inside * (base[i] / 255) * 255);
   }
   refineAlphaInPlace(outAlpha, width, height, 2);
-  applyTemporalMaskHysteresis(outAlpha, previousAlpha, 0.6, 0.8);
+  applyTemporalMaskHysteresis(outAlpha, previousAlpha, 0.84, 0.72);
   if (previousAlpha && previousAlpha.length === outAlpha.length) {
     previousAlpha.set(outAlpha);
   }
@@ -521,8 +522,8 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   const backgroundImageUrl = String(options.backgroundImageUrl ?? "").trim();
   const facePaddingPx = Math.max(4, Math.min(64, Math.round(toNumber(options.facePaddingPx, 14))));
   const edgeFeatherPx = Math.max(0, Math.min(48, Math.round(toNumber(options.edgeFeatherPx, 16))));
-  const temporalSmoothingAlpha = Math.max(0, Math.min(0.95, toNumber(options.temporalSmoothingAlpha, 0.55)));
-  const detectIntervalMs = Math.max(120, Math.min(1600, Math.round(toNumber(options.detectIntervalMs, 320))));
+  const temporalSmoothingAlpha = Math.max(0, Math.min(0.95, toNumber(options.temporalSmoothingAlpha, 0.3)));
+  const detectIntervalMs = Math.max(66, Math.min(1200, Math.round(toNumber(options.detectIntervalMs, 140))));
   const preferFastMatte = options.preferFastMatte === true;
   const autoDisableOnOverload = options.autoDisableOnOverload !== false;
   const overloadFrameMs = Math.max(40, Math.min(400, toNumber(options.overloadFrameMs, 90)));
@@ -645,27 +646,13 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   let lastFrameProcessMs = 0;
   let lastBackgroundRefreshAt = 0;
   let stableFrameStreak = 0;
-  let maskBuildTimer = 0;
-  let maskBuildPending = false;
-  let pendingMaskPayload = null;
   const backgroundRefreshIntervalMs = 180;
-  const runMaskBuild = () => {
-    maskBuildTimer = 0;
-    if (disposed) {
-      maskBuildPending = false;
-      pendingMaskPayload = null;
-      return;
-    }
-    const job = pendingMaskPayload;
-    pendingMaskPayload = null;
-    if (!job || !job.matteMask) {
-      maskBuildPending = false;
-      return;
-    }
+  const buildMaskFromPayload = (job) => {
+    if (!job || !job.matteMask) return false;
     if (!previousMaskAlpha || previousMaskAlpha.length !== canvas.width * canvas.height) {
       previousMaskAlpha = new Uint8ClampedArray(canvas.width * canvas.height);
     }
-    hasMatteMask = buildInnerFeatherMask(
+    return buildInnerFeatherMask(
       maskLayer,
       job.matteMask,
       videoSampleLayer,
@@ -678,11 +665,6 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
       previousMaskAlpha,
       job.useFastMatte
     );
-    if (pendingMaskPayload) {
-      maskBuildTimer = setTimeout(runMaskBuild, 0);
-      return;
-    }
-    maskBuildPending = false;
   };
   const draw = () => {
     if (disposed) return;
@@ -725,7 +707,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
       && (!underLoad || !hasMatteMask);
     if (shouldRefreshMask && segmentation.matteMask) {
       const useFastMatte = preferFastMatte || underLoad;
-      pendingMaskPayload = {
+      const updatedMask = buildMaskFromPayload({
         matteMask: segmentation.matteMask,
         faces: smoothedFaces.map((face) => ({
           x: Number(face?.x || 0),
@@ -736,10 +718,9 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
         vw,
         vh,
         useFastMatte
-      };
-      if (!maskBuildPending) {
-        maskBuildPending = true;
-        maskBuildTimer = setTimeout(runMaskBuild, 0);
+      });
+      if (updatedMask) {
+        hasMatteMask = true;
       }
     }
     if (backgroundImage) {
@@ -855,10 +836,6 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     if (disposed) return;
     disposed = true;
     if (rafId) cancelAnimationFrame(rafId);
-    if (maskBuildTimer) clearTimeout(maskBuildTimer);
-    maskBuildTimer = 0;
-    maskBuildPending = false;
-    pendingMaskPayload = null;
     try {
       video.pause();
       video.srcObject = null;

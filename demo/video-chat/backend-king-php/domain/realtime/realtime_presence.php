@@ -34,6 +34,9 @@ function videochat_presence_normalize_room_id(?string $roomId, string $fallback 
     $candidate = strtolower(trim((string) $roomId));
     if (!videochat_presence_is_valid_room_id($candidate)) {
         $fallbackCandidate = strtolower(trim($fallback));
+        if ($fallbackCandidate === '') {
+            return '';
+        }
         if (videochat_presence_is_valid_room_id($fallbackCandidate)) {
             return $fallbackCandidate;
         }
@@ -53,6 +56,7 @@ function videochat_presence_normalize_room_id(?string $roomId, string $fallback 
  *   user_id: int,
  *   display_name: string,
  *   role: string,
+ *   raw_role: string,
  *   active_call_id: string,
  *   call_role: string,
  *   can_moderate_call: bool,
@@ -85,6 +89,7 @@ function videochat_presence_connection_descriptor(
         'user_id' => (int) ($authUser['id'] ?? 0),
         'display_name' => trim((string) ($authUser['display_name'] ?? '')),
         'role' => videochat_normalize_role_slug((string) ($authUser['role'] ?? '')),
+        'raw_role' => strtolower(trim((string) ($authUser['role'] ?? ''))),
         'active_call_id' => '',
         'call_role' => 'participant',
         'can_moderate_call' => false,

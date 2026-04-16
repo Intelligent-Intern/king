@@ -113,12 +113,13 @@
     <div v-if="dialogOpen" class="users-modal" role="dialog" aria-modal="true" :aria-label="dialogTitle">
       <div class="users-modal-backdrop" @click="closeDialog"></div>
       <div class="users-modal-dialog">
-        <header class="users-modal-head">
-          <div>
+        <header class="users-modal-head users-modal-head-brand">
+          <div class="users-modal-head-left">
+            <img class="users-modal-head-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
             <h4>{{ dialogTitle }}</h4>
           </div>
           <button class="icon-mini-btn" type="button" @click="closeDialog">
-            <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
+            <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
 
@@ -215,14 +216,6 @@
         <p v-if="formError" class="users-form-error">{{ formError }}</p>
 
         <footer class="users-modal-footer">
-          <button
-            class="btn"
-            type="button"
-            :disabled="formSaving"
-            @click="avatarEditorOpen ? closeAvatarEditor() : closeDialog()"
-          >
-            {{ avatarEditorOpen ? 'Back' : 'Cancel' }}
-          </button>
           <button
             class="btn"
             type="button"
@@ -919,6 +912,7 @@ onMounted(() => {
 }
 
 .users-modal-dialog {
+  --users-modal-padding: 16px;
   position: relative;
   z-index: 1;
   width: min(860px, calc(100vw - 24px));
@@ -927,26 +921,39 @@ onMounted(() => {
   border-radius: 10px;
   border: 1px solid var(--border-subtle);
   background: #10203b;
-  padding: 16px;
+  padding: var(--users-modal-padding);
   display: grid;
   gap: 14px;
 }
 
 .users-modal-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.users-modal-head h4,
-.users-modal-head p {
+.users-modal-head h4 {
   margin: 0;
 }
 
-.users-modal-head p {
-  margin-top: 4px;
-  color: var(--text-muted);
+.users-modal-head-brand {
+  margin: calc(var(--users-modal-padding) * -1) calc(var(--users-modal-padding) * -1) 0;
+  padding: 10px;
+  background: var(--brand-bg);
+}
+
+.users-modal-head-left {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.users-modal-head-logo {
+  width: auto;
+  height: 24px;
+  display: block;
 }
 
 .users-modal-body {
