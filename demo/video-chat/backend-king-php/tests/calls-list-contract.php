@@ -212,6 +212,16 @@ SQL
         ':joined_at' => null,
         ':left_at' => null,
     ]);
+    $insertParticipant->execute([
+        ':call_id' => 'call-005',
+        ':user_id' => $moderatorUserId,
+        ':email' => 'moderator-calls@intelligent-intern.com',
+        ':display_name' => 'Moderator Calls',
+        ':source' => 'internal',
+        ':invite_state' => 'accepted',
+        ':joined_at' => '2026-05-05T09:10:00Z',
+        ':left_at' => null,
+    ]);
 
     $adminFilters = videochat_calls_list_filters([
         'scope' => 'all',
@@ -264,6 +274,22 @@ SQL
     videochat_calls_list_assert((int) $architectureListing['total'] === 2, 'architecture query total mismatch');
     videochat_calls_list_assert((string) ($architectureListing['rows'][0]['id'] ?? '') === 'call-001', 'architecture first row mismatch');
     videochat_calls_list_assert((string) ($architectureListing['rows'][1]['id'] ?? '') === 'call-005', 'architecture second row mismatch');
+    videochat_calls_list_assert(
+        (string) ($architectureListing['rows'][1]['status'] ?? '') === 'active',
+        'scheduled call with owner present should be surfaced as active'
+    );
+
+    $adminActiveFilters = videochat_calls_list_filters([
+        'scope' => 'all',
+        'status' => 'active',
+        'page' => '1',
+        'page_size' => '10',
+    ], 'admin');
+    $adminActiveListing = videochat_list_calls($pdo, $adminUserId, $adminActiveFilters);
+    videochat_calls_list_assert((int) $adminActiveListing['total'] === 2, 'admin active filter total mismatch');
+    $adminActiveIds = array_map(static fn (array $row): string => (string) ($row['id'] ?? ''), (array) ($adminActiveListing['rows'] ?? []));
+    videochat_calls_list_assert(in_array('call-002', $adminActiveIds, true), 'admin active filter missing explicit active call');
+    videochat_calls_list_assert(in_array('call-005', $adminActiveIds, true), 'admin active filter missing scheduled-owner-active call');
 
     $userScopeAllFilters = videochat_calls_list_filters([
         'scope' => 'all',

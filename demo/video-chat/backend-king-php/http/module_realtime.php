@@ -29,6 +29,198 @@ function videochat_realtime_waiting_room_id(): string
     return 'waiting-room';
 }
 
+/**
+ * @return array{
+ *   call_id: string,
+ *   room_id: string,
+ *   user_id: int,
+ *   call_role: string
+ * }
+ */
+function videochat_realtime_call_presence_target(array $connection): array
+{
+    $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
+    $callId = strtolower(trim((string) ($connection['active_call_id'] ?? '')));
+    $userId = (int) ($connection['user_id'] ?? 0);
+    $callRole = videochat_normalize_call_participant_role((string) ($connection['call_role'] ?? 'participant'));
+
+    if ($roomId === '' || $roomId === videochat_realtime_waiting_room_id() || $callId === '' || $userId <= 0) {
+        return [
+            'call_id' => '',
+            'room_id' => '',
+            'user_id' => 0,
+            'call_role' => 'participant',
+        ];
+    }
+
+    return [
+        'call_id' => $callId,
+        'room_id' => $roomId,
+        'user_id' => $userId,
+        'call_role' => $callRole,
+    ];
+}
+
+function videochat_realtime_mark_call_participant_joined(callable $openDatabase, array $connection): void
+{
+    $target = videochat_realtime_call_presence_target($connection);
+    $callId = (string) ($target['call_id'] ?? '');
+    $userId = (int) ($target['user_id'] ?? 0);
+    if ($callId === '' || $userId <= 0) {
+        return;
+    }
+
+    $joinedAt = gmdate('c');
+    $callRole = videochat_normalize_call_participant_role((string) ($target['call_role'] ?? 'participant'));
+
+    try {
+        $pdo = $openDatabase();
+        $updateParticipant = $pdo->prepare(
+            <<<'SQL'
+UPDATE call_participants
+SET joined_at = :joined_at,
+    left_at = NULL,
+    invite_state = CASE
+        WHEN invite_state IN ('pending', 'declined', 'cancelled') THEN 'accepted'
+        ELSE invite_state
+    END,
+    call_role = CASE
+        WHEN call_role = 'owner' THEN 'owner'
+        WHEN :call_role = 'owner' THEN 'owner'
+        ELSE :call_role
+    END
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+SQL
+        );
+        $updateParticipant->execute([
+            ':joined_at' => $joinedAt,
+            ':call_id' => $callId,
+            ':user_id' => $userId,
+            ':call_role' => $callRole,
+        ]);
+
+        if ($updateParticipant->rowCount() > 0) {
+            return;
+        }
+
+        $identityQuery = $pdo->prepare(
+            <<<'SQL'
+SELECT email, display_name
+FROM users
+WHERE id = :user_id
+LIMIT 1
+SQL
+        );
+        $identityQuery->execute([
+            ':user_id' => $userId,
+        ]);
+        $identity = $identityQuery->fetch();
+        if (!is_array($identity)) {
+            return;
+        }
+
+        $email = strtolower(trim((string) ($identity['email'] ?? '')));
+        if ($email === '') {
+            return;
+        }
+        $displayName = trim((string) ($identity['display_name'] ?? ''));
+        if ($displayName === '') {
+            $displayName = $email;
+        }
+
+        $upsertParticipant = $pdo->prepare(
+            <<<'SQL'
+INSERT INTO call_participants(
+    call_id,
+    user_id,
+    email,
+    display_name,
+    source,
+    call_role,
+    invite_state,
+    joined_at,
+    left_at
+) VALUES (
+    :call_id,
+    :user_id,
+    :email,
+    :display_name,
+    'internal',
+    :call_role,
+    'accepted',
+    :joined_at,
+    NULL
+)
+ON CONFLICT(call_id, email) DO UPDATE SET
+    user_id = excluded.user_id,
+    display_name = excluded.display_name,
+    source = 'internal',
+    call_role = CASE
+        WHEN call_participants.call_role = 'owner' THEN 'owner'
+        WHEN excluded.call_role = 'owner' THEN 'owner'
+        ELSE excluded.call_role
+    END,
+    invite_state = 'accepted',
+    joined_at = excluded.joined_at,
+    left_at = NULL
+SQL
+        );
+        $upsertParticipant->execute([
+            ':call_id' => $callId,
+            ':user_id' => $userId,
+            ':email' => $email,
+            ':display_name' => $displayName,
+            ':call_role' => $callRole,
+            ':joined_at' => $joinedAt,
+        ]);
+    } catch (Throwable) {
+        return;
+    }
+}
+
+function videochat_realtime_mark_call_participant_left(
+    callable $openDatabase,
+    array $connection,
+    array $presenceState
+): void {
+    $target = videochat_realtime_call_presence_target($connection);
+    $callId = (string) ($target['call_id'] ?? '');
+    $roomId = (string) ($target['room_id'] ?? '');
+    $userId = (int) ($target['user_id'] ?? 0);
+    if ($callId === '' || $roomId === '' || $userId <= 0) {
+        return;
+    }
+
+    if (videochat_realtime_presence_has_room_membership($presenceState, $roomId, $userId)) {
+        return;
+    }
+
+    try {
+        $pdo = $openDatabase();
+        $leftAt = gmdate('c');
+        $markLeft = $pdo->prepare(
+            <<<'SQL'
+UPDATE call_participants
+SET left_at = :left_at
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+  AND joined_at IS NOT NULL
+  AND left_at IS NULL
+SQL
+        );
+        $markLeft->execute([
+            ':left_at' => $leftAt,
+            ':call_id' => $callId,
+            ':user_id' => $userId,
+        ]);
+    } catch (Throwable) {
+        return;
+    }
+}
+
 function videochat_realtime_connection_with_call_context(array $connection, callable $openDatabase): array
 {
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
@@ -539,6 +731,7 @@ function videochat_handle_realtime_routes(
         $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
         $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
         $presenceState['connections'][$connectionId] = $presenceConnection;
+        videochat_realtime_mark_call_participant_joined($openDatabase, $presenceConnection);
         $presenceDetached = false;
         $detachWebsocket = static function () use (
             &$presenceDetached,
@@ -549,12 +742,14 @@ function videochat_handle_realtime_routes(
             &$reactionState,
             &$presenceConnection,
             $authSessionId,
-            $connectionId
+            $connectionId,
+            $openDatabase
         ): void {
             if ($presenceDetached) {
                 return;
             }
             $presenceDetached = true;
+            $disconnectedConnection = (array) $presenceConnection;
 
             videochat_lobby_clear_for_connection(
                 $lobbyState,
@@ -574,6 +769,7 @@ function videochat_handle_realtime_routes(
             );
             videochat_unregister_active_websocket($activeWebsocketsBySession, $authSessionId, $connectionId);
             videochat_presence_remove_connection($presenceState, $connectionId);
+            videochat_realtime_mark_call_participant_left($openDatabase, $disconnectedConnection, $presenceState);
         };
 
         if ($session !== null && $streamId > 0 && $authSessionId !== '' && $connectionId !== '') {
@@ -984,6 +1180,7 @@ function videochat_handle_realtime_routes(
                 }
 
                 if ($commandType === 'room/leave') {
+                    $leavingConnection = (array) $presenceConnection;
                     videochat_lobby_clear_for_connection(
                         $lobbyState,
                         $presenceState,
@@ -1012,6 +1209,7 @@ function videochat_handle_realtime_routes(
                     $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
                     $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
                     $presenceState['connections'][$connectionId] = $presenceConnection;
+                    videochat_realtime_mark_call_participant_left($openDatabase, $leavingConnection, $presenceState);
                     continue;
                 }
 
@@ -1089,6 +1287,7 @@ function videochat_handle_realtime_routes(
                     }
 
                     $currentRoomId = videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? 'lobby'));
+                    $previousConnection = (array) $presenceConnection;
                     if ($currentRoomId !== $targetRoomId) {
                         videochat_lobby_clear_for_connection(
                             $lobbyState,
@@ -1117,6 +1316,10 @@ function videochat_handle_realtime_routes(
                     $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
                     $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
                     $presenceState['connections'][$connectionId] = $presenceConnection;
+                    videochat_realtime_mark_call_participant_joined($openDatabase, $presenceConnection);
+                    if ($currentRoomId !== $targetRoomId) {
+                        videochat_realtime_mark_call_participant_left($openDatabase, $previousConnection, $presenceState);
+                    }
                     if ($pendingGateActive && $targetRoomId === $pendingRoomId) {
                         $removedFromLobby = videochat_lobby_remove_user_from_room(
                             $lobbyState,
