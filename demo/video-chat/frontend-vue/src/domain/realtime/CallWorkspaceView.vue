@@ -5770,6 +5770,18 @@ onBeforeUnmount(() => {
   outline: 1px solid rgba(255, 255, 255, 0.15);
 }
 
+.user-row .actions-inline .icon-mini-btn:not(.danger) {
+  background: var(--brand-bg);
+}
+
+.user-row .actions-inline .icon-mini-btn:not(.danger):hover:not(:disabled) {
+  background: #133262;
+}
+
+.user-row .actions-inline .icon-mini-btn:not(.danger):disabled {
+  background: #101d34;
+}
+
 .user-preview {
   width: 40px;
   height: 40px;
