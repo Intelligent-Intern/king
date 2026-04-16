@@ -962,6 +962,7 @@ function toCalendarEvents() {
       start: startsAt,
       end: endsAt,
       allDay: false,
+      editable: isEditable(call),
       extendedProps: {
         callPayload: call,
       },
@@ -1002,6 +1003,93 @@ function openComposeForCalendarEvent(eventApi) {
   }
 }
 
+function resolveCalendarEventCall(eventApi) {
+  const payloadCall = eventApi?.extendedProps?.callPayload;
+  if (payloadCall && typeof payloadCall === 'object') {
+    return payloadCall;
+  }
+
+  const callId = String(eventApi?.id || '').trim();
+  if (callId === '') {
+    return null;
+  }
+
+  for (const call of calendarCalls.value) {
+    if (String(call?.id || '') === callId) {
+      return call;
+    }
+  }
+
+  return null;
+}
+
+async function persistCalendarEventWindow(eventApi, revert) {
+  const call = resolveCalendarEventCall(eventApi);
+  const callId = String(call?.id || eventApi?.id || '').trim();
+  if (callId === '') {
+    if (typeof revert === 'function') revert();
+    setNotice('error', 'Could not update call schedule (missing call id).');
+    return;
+  }
+
+  if (!isEditable(call)) {
+    if (typeof revert === 'function') revert();
+    setNotice('error', 'Only scheduled and active calls can be rescheduled.');
+    return;
+  }
+
+  const startDate = eventApi?.start instanceof Date ? new Date(eventApi.start.getTime()) : null;
+  let endDate = eventApi?.end instanceof Date ? new Date(eventApi.end.getTime()) : null;
+  if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) {
+    if (typeof revert === 'function') revert();
+    setNotice('error', 'Could not update call schedule (invalid start timestamp).');
+    return;
+  }
+
+  if (!(endDate instanceof Date) || Number.isNaN(endDate.getTime())) {
+    const fallbackStart = new Date(String(call?.starts_at || ''));
+    const fallbackEnd = new Date(String(call?.ends_at || ''));
+    if (!Number.isNaN(fallbackStart.getTime()) && !Number.isNaN(fallbackEnd.getTime()) && fallbackEnd.getTime() > fallbackStart.getTime()) {
+      endDate = new Date(startDate.getTime() + (fallbackEnd.getTime() - fallbackStart.getTime()));
+    }
+  }
+
+  if (!(endDate instanceof Date) || Number.isNaN(endDate.getTime()) || endDate.getTime() <= startDate.getTime()) {
+    if (typeof revert === 'function') revert();
+    setNotice('error', 'End timestamp must be after start timestamp.');
+    return;
+  }
+
+  const startsAt = startDate.toISOString();
+  const endsAt = endDate.toISOString();
+
+  try {
+    await apiRequest(`/api/calls/${encodeURIComponent(callId)}`, {
+      method: 'PATCH',
+      body: {
+        starts_at: startsAt,
+        ends_at: endsAt,
+      },
+    });
+
+    if (call && typeof call === 'object') {
+      call.starts_at = startsAt;
+      call.ends_at = endsAt;
+    }
+    setNotice('ok', 'Call schedule updated.');
+    await Promise.all([loadCalls(), loadCalendar()]);
+  } catch (error) {
+    if (typeof revert === 'function') revert();
+    setNotice('error', error instanceof Error ? error.message : 'Could not update call schedule.');
+  }
+}
+
+function handleCalendarEventMoveOrResize(info) {
+  if (!info || !info.event) return;
+  const revert = typeof info.revert === 'function' ? info.revert : null;
+  void persistCalendarEventWindow(info.event, revert);
+}
+
 async function initCallsCalendar() {
   if (!(callsCalendarEl.value instanceof HTMLElement) || calendarInstance) return;
   try {
@@ -1017,7 +1105,10 @@ async function initCallsCalendar() {
       contentHeight: 'auto',
       eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
       selectable: true,
-      editable: false,
+      editable: true,
+      eventStartEditable: true,
+      eventDurationEditable: true,
+      eventResizableFromStart: true,
       events: [],
       dateClick(info) {
         const now = Date.now();
@@ -1035,6 +1126,12 @@ async function initCallsCalendar() {
       },
       eventClick(info) {
         openComposeForCalendarEvent(info.event);
+      },
+      eventDrop(info) {
+        handleCalendarEventMoveOrResize(info);
+      },
+      eventResize(info) {
+        handleCalendarEventMoveOrResize(info);
       },
     });
     calendarInstance.render();

@@ -700,6 +700,37 @@ function upsertMyCallsRow(eventId, title, roomUuid, startsAtIso, endsAtIso, user
   myCallsRows.value = rows;
 }
 
+function syncMyCallsRowFromCalendarEvent(eventApi) {
+  if (!eventApi) return;
+  const eventId = String(eventApi.id || '').trim();
+  if (eventId === '') return;
+
+  const startDate = eventApi.start instanceof Date ? new Date(eventApi.start.getTime()) : null;
+  let endDate = eventApi.end instanceof Date ? new Date(eventApi.end.getTime()) : null;
+  if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) {
+    return;
+  }
+
+  if (!(endDate instanceof Date) || Number.isNaN(endDate.getTime()) || endDate.getTime() <= startDate.getTime()) {
+    endDate = new Date(startDate.getTime() + (45 * 60 * 1000));
+  }
+
+  const extended = eventApi.extendedProps || {};
+  const roomUuid = String(extended.roomUuid || extended.roomId || '').trim();
+  const internalParticipantUserIds = Array.isArray(extended.internalParticipantUserIds) ? extended.internalParticipantUserIds : [];
+  const externalParticipants = Array.isArray(extended.externalParticipants) ? extended.externalParticipants : [];
+  const participantsTotal = internalParticipantUserIds.length + externalParticipants.length;
+
+  upsertMyCallsRow(
+    eventId,
+    eventApi.title,
+    roomUuid,
+    startDate.toISOString(),
+    endDate.toISOString(),
+    participantsTotal,
+  );
+}
+
 function nextGeneratedEventId() {
   nextCalendarEventId += 1;
   return `call-generated-${nextCalendarEventId}`;
@@ -798,7 +829,10 @@ async function initOverviewCalendar() {
       expandRows: true,
       eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
       selectable: true,
-      editable: false,
+      editable: true,
+      eventStartEditable: true,
+      eventDurationEditable: true,
+      eventResizableFromStart: true,
       events: [
         {
           id: 'call-sales-standup',
@@ -848,6 +882,12 @@ async function initOverviewCalendar() {
       },
       eventClick(info) {
         openComposeForEvent(info.event);
+      },
+      eventDrop(info) {
+        syncMyCallsRowFromCalendarEvent(info.event);
+      },
+      eventResize(info) {
+        syncMyCallsRowFromCalendarEvent(info.event);
       },
       select(info) {
         if (String(info.view?.type || '') !== 'timeGridDay') return;
