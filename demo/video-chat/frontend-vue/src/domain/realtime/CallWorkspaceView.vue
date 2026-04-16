@@ -4124,42 +4124,54 @@ function resolveBackgroundFilterOptions(runtimeToken) {
   const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
   const qualityProfile = String(callMediaPrefs.backgroundQualityProfile || 'balanced').trim().toLowerCase();
   const baseBlurLevel = Math.max(0, Math.min(4, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurStrength, 2))));
-  let blurPx = baseBlurLevel * 3;
+  const blurStepPx = [1, 2, 3, 4, 5];
+  let blurPx = blurStepPx[baseBlurLevel] ?? 3;
   if (backdrop === 'blur7') {
-    blurPx = Math.round(blurPx * 0.9);
+    blurPx = Math.round(blurPx * 1.0);
   } else if (backdrop === 'blur9') {
-    blurPx = Math.round(blurPx * 1.25);
+    blurPx = Math.round(blurPx * 1.35);
   }
-  blurPx = Math.max(0, Math.min(20, blurPx));
+  blurPx = Math.max(1, Math.min(12, blurPx));
 
-  let detectIntervalMs = 220;
+  let detectIntervalMs = 320;
   if (qualityProfile === 'quality') {
-    detectIntervalMs = 160;
+    detectIntervalMs = 240;
   } else if (qualityProfile === 'realtime') {
-    detectIntervalMs = 320;
+    detectIntervalMs = 420;
   }
 
   const maskVariant = Math.max(1, Math.min(10, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaskVariant, 4))));
   const transitionGain = Math.max(1, Math.min(10, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurTransition, 10))));
-  const maxProcessWidth = Math.max(320, Math.min(1920, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessWidth, 960))));
-  const maxProcessFps = Math.max(8, Math.min(30, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessFps, 24))));
+  const requestedProcessWidth = Math.max(320, Math.min(1920, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessWidth, 960))));
+  const requestedProcessFps = Math.max(8, Math.min(30, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessFps, 24))));
+  let processWidthCap = 960;
+  let processFpsCap = 24;
+  if (qualityProfile === 'quality') {
+    processWidthCap = 1280;
+    processFpsCap = 30;
+  } else if (qualityProfile === 'realtime') {
+    processWidthCap = 960;
+    processFpsCap = 15;
+  }
+  const maxProcessWidth = Math.max(320, Math.min(processWidthCap, requestedProcessWidth));
+  const maxProcessFps = Math.max(8, Math.min(processFpsCap, requestedProcessFps));
 
   return {
     mode,
     blurPx,
     detectIntervalMs,
+    preferFastMatte: false,
     maskVariant,
     transitionGain,
     maxProcessWidth,
     maxProcessFps,
-    autoDisableOnOverload: true,
+    autoDisableOnOverload: false,
     overloadFrameMs: 90,
     overloadConsecutiveFrames: 12,
     statsIntervalMs: 1000,
     onOverload: () => {
       if (runtimeToken !== backgroundRuntimeToken) return;
       resetBackgroundRuntimeMetrics('overload');
-      setCallBackgroundFilterMode('off');
     },
     onStats: (stats) => {
       if (runtimeToken !== backgroundRuntimeToken) return;

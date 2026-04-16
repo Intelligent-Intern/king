@@ -1,20 +1,5 @@
-import { selectBackgroundFilterBackend } from "./backgroundFilterBackendSelector";
-import {
-  createBackgroundSegmentationBackend
-} from "./backgroundFilterBackend";
 import { createMediaPipeSegmentationBackend } from "./backgroundFilterBackendMediapipe";
 import { createTfjsSegmentationBackend } from "./backgroundFilterBackendTfjs";
-
-function parseEnvFlag(value, fallback = false) {
-  if (value === void 0 || value === null || value === "") return fallback;
-  const normalized = String(value).trim().toLowerCase();
-  if (["1", "true", "yes", "on"].includes(normalized)) return true;
-  if (["0", "false", "no", "off"].includes(normalized)) return false;
-  return fallback;
-}
-
-const MEDIAPIPE_SEGMENTATION_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_MEDIAPIPE, false);
-const TFJS_SEGMENTATION_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_TFJS, false);
 function toNumber(value, fallback) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
@@ -159,7 +144,7 @@ function buildInnerFeatherMask(outputCtx, maskSource, videoCtx, video, width, he
       base[i] = Math.max(0, Math.min(255, Math.round(prob)));
     }
     refineAlphaInPlace(base, width, height, 1);
-    applyTemporalMaskHysteresis(base, previousAlpha, 0.35, 0.62);
+    applyTemporalMaskHysteresis(base, previousAlpha, 0.68, 0.82);
     if (previousAlpha && previousAlpha.length === base.length) previousAlpha.set(base);
     const outFast = outputCtx.createImageData(width, height);
     for (let i = 0; i < n; i += 1) {
@@ -232,19 +217,20 @@ function buildInnerFeatherMask(outputCtx, maskSource, videoCtx, video, width, he
       dist[i] = d;
     }
   }
-  const innerFeatherPx = 12;
+  const innerContractPx = 2;
+  const innerFeatherPx = 20;
   const outAlpha = new Uint8ClampedArray(n);
   for (let i = 0; i < n; i += 1) {
     if (!fg[i]) {
       outAlpha[i] = 0;
       continue;
     }
-    const t = clamp01((dist[i] ?? 0) / innerFeatherPx);
+    const t = clamp01(((dist[i] ?? 0) - innerContractPx) / innerFeatherPx);
     const inside = smoothstep(0, 1, t);
     outAlpha[i] = Math.round(inside * (base[i] / 255) * 255);
   }
   refineAlphaInPlace(outAlpha, width, height, 2);
-  applyTemporalMaskHysteresis(outAlpha, previousAlpha, 0.3, 0.62);
+  applyTemporalMaskHysteresis(outAlpha, previousAlpha, 0.6, 0.8);
   if (previousAlpha && previousAlpha.length === outAlpha.length) {
     previousAlpha.set(outAlpha);
   }
@@ -373,23 +359,6 @@ function drawFeatheredFacePatch(ctx, video, canvasWidth, canvasHeight, blurPx, v
     const coreBlurPx = Math.max(1, blurPx * coreUnits / maxBlurUnits);
     ctx.filter = `blur(${coreBlurPx}px)`;
   }
-  ctx.drawImage(video, 0, 0, canvasWidth, canvasHeight);
-  ctx.restore();
-}
-function drawQuickFacePatch(ctx, video, canvasWidth, canvasHeight, vw, vh, face) {
-  const x = face.x / vw * canvasWidth;
-  const y = face.y / vh * canvasHeight;
-  const w = face.width / vw * canvasWidth;
-  const h = face.height / vh * canvasHeight;
-  if (w <= 0 || h <= 0) return;
-  const cx = x + w * 0.5;
-  const cy = y + h * 0.42;
-  const rx = Math.max(6, w * 0.42);
-  const ry = Math.max(8, h * 0.62);
-  ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-  ctx.clip();
   ctx.drawImage(video, 0, 0, canvasWidth, canvasHeight);
   ctx.restore();
 }
@@ -529,11 +498,6 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     return { stream: sourceStream, active: false, reason: "unsupported", backend: "none", dispose: () => {
     } };
   }
-  const selection = selectBackgroundFilterBackend();
-  if (!selection.supported) {
-    return { stream: sourceStream, active: false, reason: "unsupported", backend: "none", dispose: () => {
-    } };
-  }
   const settings = videoTrack.getSettings?.() ?? {};
   const sourceWidth = Math.max(1, Math.round(toNumber(settings.width, 1280)));
   const sourceHeight = Math.max(1, Math.round(toNumber(settings.height, 720)));
@@ -550,7 +514,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   const fps = processing.fps;
   const statsIntervalMs = Math.max(500, Math.min(5e3, Math.round(toNumber(options.statsIntervalMs, 1e3))));
   const onStats = typeof options.onStats === "function" ? options.onStats : null;
-  const blurPx = Math.max(4, Math.min(28, Math.round(toNumber(options.blurPx, 6))));
+  const blurPx = Math.max(1, Math.min(28, Math.round(toNumber(options.blurPx, 3))));
   const maskVariant = Math.max(1, Math.min(10, Math.round(toNumber(options.maskVariant, 1))));
   const transitionGain = Math.max(1, Math.min(10, Math.round(toNumber(options.transitionGain, 10))));
   const backgroundColor = String(options.backgroundColor ?? "").trim();
@@ -558,7 +522,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   const facePaddingPx = Math.max(4, Math.min(64, Math.round(toNumber(options.facePaddingPx, 14))));
   const edgeFeatherPx = Math.max(0, Math.min(48, Math.round(toNumber(options.edgeFeatherPx, 16))));
   const temporalSmoothingAlpha = Math.max(0, Math.min(0.95, toNumber(options.temporalSmoothingAlpha, 0.55)));
-  const detectIntervalMs = Math.max(100, Math.min(1200, Math.round(toNumber(options.detectIntervalMs, 220))));
+  const detectIntervalMs = Math.max(120, Math.min(1600, Math.round(toNumber(options.detectIntervalMs, 320))));
   const preferFastMatte = options.preferFastMatte === true;
   const autoDisableOnOverload = options.autoDisableOnOverload !== false;
   const overloadFrameMs = Math.max(40, Math.min(400, toNumber(options.overloadFrameMs, 90)));
@@ -622,34 +586,27 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     return { stream: sourceStream, active: false, reason: "setup_failed", backend: "none", dispose: () => {
     } };
   }
-  let segmentationBackend;
+  let segmentationBackend = null;
   try {
-    if (selection.backend === "face_detector") {
+    try {
+      segmentationBackend = await createMediaPipeSegmentationBackend({ detectIntervalMs });
+    } catch {
+      segmentationBackend = null;
+    }
+    if (!segmentationBackend) {
       try {
-        segmentationBackend = createBackgroundSegmentationBackend("face_detector", { detectIntervalMs, facePaddingPx });
+        segmentationBackend = await createTfjsSegmentationBackend({ detectIntervalMs, facePaddingPx });
       } catch {
-        segmentationBackend = createBackgroundSegmentationBackend("center_mask_fallback", { detectIntervalMs, facePaddingPx });
+        segmentationBackend = null;
       }
-    } else {
-      let mpBackend = null;
-      let tfBackend = null;
-      if (MEDIAPIPE_SEGMENTATION_ENABLED) {
-        try {
-          mpBackend = await createMediaPipeSegmentationBackend({ detectIntervalMs });
-        } catch {
-          mpBackend = null;
-        }
-      }
-      if (!mpBackend && TFJS_SEGMENTATION_ENABLED) {
-        try {
-          tfBackend = await createTfjsSegmentationBackend({ detectIntervalMs, facePaddingPx });
-        } catch {
-          tfBackend = null;
-        }
-      }
-      segmentationBackend = mpBackend ?? tfBackend ?? createBackgroundSegmentationBackend("center_mask_fallback", { detectIntervalMs, facePaddingPx });
     }
   } catch {
+    video.pause();
+    video.srcObject = null;
+    return { stream: sourceStream, active: false, reason: "setup_failed", backend: "none", dispose: () => {
+    } };
+  }
+  if (!segmentationBackend) {
     video.pause();
     video.srcObject = null;
     return { stream: sourceStream, active: false, reason: "setup_failed", backend: "none", dispose: () => {
@@ -678,13 +635,55 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   let detectDurationSum = 0;
   let processDurationSum = 0;
   let statsWindowStartAt = performance.now();
-  const frameBudgetMs = Math.max(1e3 / Math.max(1, fps), 1e3 / 24);
+  const targetFps = Math.max(8, Math.min(30, Math.round(fps)));
+  let dynamicFps = targetFps;
+  let dynamicFrameBudgetMs = 1e3 / dynamicFps;
   let nextFrameDueAt = performance.now();
   let overloadCooldownUntil = 0;
   let overloadStreak = 0;
   let overloadDisabled = false;
+  let lastFrameProcessMs = 0;
   let lastBackgroundRefreshAt = 0;
-  const backgroundRefreshIntervalMs = 125;
+  let stableFrameStreak = 0;
+  let maskBuildTimer = 0;
+  let maskBuildPending = false;
+  let pendingMaskPayload = null;
+  const backgroundRefreshIntervalMs = 180;
+  const runMaskBuild = () => {
+    maskBuildTimer = 0;
+    if (disposed) {
+      maskBuildPending = false;
+      pendingMaskPayload = null;
+      return;
+    }
+    const job = pendingMaskPayload;
+    pendingMaskPayload = null;
+    if (!job || !job.matteMask) {
+      maskBuildPending = false;
+      return;
+    }
+    if (!previousMaskAlpha || previousMaskAlpha.length !== canvas.width * canvas.height) {
+      previousMaskAlpha = new Uint8ClampedArray(canvas.width * canvas.height);
+    }
+    hasMatteMask = buildInnerFeatherMask(
+      maskLayer,
+      job.matteMask,
+      videoSampleLayer,
+      video,
+      canvas.width,
+      canvas.height,
+      job.faces,
+      job.vw,
+      job.vh,
+      previousMaskAlpha,
+      job.useFastMatte
+    );
+    if (pendingMaskPayload) {
+      maskBuildTimer = setTimeout(runMaskBuild, 0);
+      return;
+    }
+    maskBuildPending = false;
+  };
   const draw = () => {
     if (disposed) return;
     const frameStartedAt = performance.now();
@@ -701,7 +700,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         ctx.restore();
       }
-      nextFrameDueAt = frameStartedAt + frameBudgetMs;
+      nextFrameDueAt = frameStartedAt + dynamicFrameBudgetMs;
       rafId = requestAnimationFrame(draw);
       return;
     }
@@ -720,24 +719,28 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
       detectCount += 1;
       detectDurationSum += Math.max(0, segmentation.detectSampleMs);
     }
-    const shouldRefreshMask = Boolean(segmentation.matteMask) && (segmentation.detectSampleMs !== null || !hasMatteMask);
+    const underLoad = lastFrameProcessMs > dynamicFrameBudgetMs * 0.85;
+    const shouldRefreshMask = Boolean(segmentation.matteMask)
+      && (segmentation.detectSampleMs !== null || !hasMatteMask)
+      && (!underLoad || !hasMatteMask);
     if (shouldRefreshMask && segmentation.matteMask) {
-      if (!previousMaskAlpha || previousMaskAlpha.length !== canvas.width * canvas.height) {
-        previousMaskAlpha = new Uint8ClampedArray(canvas.width * canvas.height);
-      }
-      hasMatteMask = buildInnerFeatherMask(
-        maskLayer,
-        segmentation.matteMask,
-        videoSampleLayer,
-        video,
-        canvas.width,
-        canvas.height,
-        smoothedFaces,
+      const useFastMatte = preferFastMatte || underLoad;
+      pendingMaskPayload = {
+        matteMask: segmentation.matteMask,
+        faces: smoothedFaces.map((face) => ({
+          x: Number(face?.x || 0),
+          y: Number(face?.y || 0),
+          width: Number(face?.width || 0),
+          height: Number(face?.height || 0)
+        })),
         vw,
         vh,
-        previousMaskAlpha,
-        preferFastMatte
-      );
+        useFastMatte
+      };
+      if (!maskBuildPending) {
+        maskBuildPending = true;
+        maskBuildTimer = setTimeout(runMaskBuild, 0);
+      }
     }
     if (backgroundImage) {
       ctx.save();
@@ -751,7 +754,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     } else {
       if (now - lastBackgroundRefreshAt >= backgroundRefreshIntervalMs || lastBackgroundRefreshAt === 0) {
         backgroundLayer.save();
-        backgroundLayer.filter = `blur(${Math.max(2, Math.round(blurPx * 0.75))}px)`;
+        backgroundLayer.filter = `blur(${Math.max(1, Math.round(blurPx * 0.9))}px)`;
         backgroundLayer.drawImage(video, 0, 0, backgroundLayerCanvas.width, backgroundLayerCanvas.height);
         backgroundLayer.restore();
         lastBackgroundRefreshAt = now;
@@ -769,10 +772,6 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
       personLayer.drawImage(maskLayerCanvas, 0, 0, canvas.width, canvas.height);
       personLayer.restore();
       ctx.drawImage(personLayerCanvas, 0, 0, canvas.width, canvas.height);
-    } else if (smoothedFaces.length > 0) {
-      for (const face of smoothedFaces) {
-        drawQuickFacePatch(ctx, video, canvas.width, canvas.height, vw, vh, face);
-      }
     } else {
       ctx.save();
       ctx.filter = "none";
@@ -781,6 +780,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     }
     frameCount += 1;
     const frameProcessMs = Math.max(0, performance.now() - frameStartedAt);
+    lastFrameProcessMs = frameProcessMs;
     processDurationSum += frameProcessMs;
     if (frameProcessMs >= overloadFrameMs) {
       overloadStreak += 1;
@@ -793,15 +793,29 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
         try {
           onOverload({
             avgProcessMs: frameProcessMs,
-            targetFps: fps,
+            targetFps: dynamicFps,
             thresholdMs: overloadFrameMs
           });
         } catch {
         }
       }
     }
-    if (frameProcessMs > frameBudgetMs * 1.5) {
-      overloadCooldownUntil = now + Math.max(frameBudgetMs * 3, 180);
+    if (frameProcessMs > dynamicFrameBudgetMs * 1.5) {
+      overloadCooldownUntil = now + Math.max(dynamicFrameBudgetMs * 3, 180);
+    }
+    if (frameProcessMs > dynamicFrameBudgetMs * 1.15) {
+      stableFrameStreak = 0;
+      if (dynamicFps > 8) {
+        dynamicFps = Math.max(8, dynamicFps - 1);
+        dynamicFrameBudgetMs = 1e3 / dynamicFps;
+      }
+    } else {
+      stableFrameStreak += 1;
+      if (stableFrameStreak >= 45 && dynamicFps < targetFps) {
+        dynamicFps = Math.min(targetFps, dynamicFps + 1);
+        dynamicFrameBudgetMs = 1e3 / dynamicFps;
+        stableFrameStreak = 0;
+      }
     }
     if (onStats) {
       const elapsedMs = now - statsWindowStartAt;
@@ -817,7 +831,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
           processLoad,
           width: canvas.width,
           height: canvas.height,
-          targetFps: fps,
+          targetFps: dynamicFps,
           sourceWidth,
           sourceHeight,
           sourceFps
@@ -833,7 +847,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
         statsWindowStartAt = now;
       }
     }
-    nextFrameDueAt = frameStartedAt + frameBudgetMs;
+    nextFrameDueAt = frameStartedAt + dynamicFrameBudgetMs;
     rafId = requestAnimationFrame(draw);
   };
   rafId = requestAnimationFrame(draw);
@@ -841,6 +855,10 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     if (disposed) return;
     disposed = true;
     if (rafId) cancelAnimationFrame(rafId);
+    if (maskBuildTimer) clearTimeout(maskBuildTimer);
+    maskBuildTimer = 0;
+    maskBuildPending = false;
+    pendingMaskPayload = null;
     try {
       video.pause();
       video.srcObject = null;
@@ -859,7 +877,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   return {
     stream: out,
     active: true,
-    reason: segmentationBackend.kind === "face_detector" ? "ok" : "ok_fallback",
+    reason: "ok",
     backend: segmentationBackend.kind,
     dispose
   };

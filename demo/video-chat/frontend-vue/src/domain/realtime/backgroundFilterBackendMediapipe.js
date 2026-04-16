@@ -176,11 +176,34 @@ export async function createMediaPipeSegmentationBackend(opts = {}) {
   let pendingSampleMs = null;
   let detectStartedAt = 0;
   let disposed = false;
+  let detectInputWidth = 0;
+  let detectInputHeight = 0;
+  let detectSourceWidth = 0;
+  let detectSourceHeight = 0;
 
   try {
     segmenter.onResults((results) => {
       if (disposed) return;
       matteMask = results?.segmentationMask || null;
+      if (
+        matteMask
+        && detectInputWidth > 1
+        && detectInputHeight > 1
+        && detectSourceWidth > 1
+        && detectSourceHeight > 1
+      ) {
+        const estimate = estimatePersonBox(matteMask, scratchCanvas, detectInputWidth, detectInputHeight);
+        if (estimate) {
+          const scaleX = detectSourceWidth / Math.max(1, detectInputWidth);
+          const scaleY = detectSourceHeight / Math.max(1, detectInputHeight);
+          faces = [clampBox({
+            x: estimate.x * scaleX,
+            y: estimate.y * scaleY,
+            width: estimate.width * scaleX,
+            height: estimate.height * scaleY,
+          }, detectSourceWidth, detectSourceHeight)];
+        }
+      }
       pendingSampleMs = Math.max(0, performance.now() - detectStartedAt);
       detectPending = false;
     });
@@ -209,8 +232,12 @@ export async function createMediaPipeSegmentationBackend(opts = {}) {
         detectPending = true;
         lastDetectAt = nowMs;
         detectStartedAt = performance.now();
+        detectSourceWidth = Math.max(1, Math.round(vw));
+        detectSourceHeight = Math.max(1, Math.round(vh));
         frameCanvas.width = Math.max(1, Math.round(vw));
         frameCanvas.height = Math.max(1, Math.round(vh));
+        detectInputWidth = frameCanvas.width;
+        detectInputHeight = frameCanvas.height;
         try {
           frameCtx.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
         } catch {
@@ -220,11 +247,6 @@ export async function createMediaPipeSegmentationBackend(opts = {}) {
         void segmenter.send({ image: frameCanvas }).catch(() => {
           detectPending = false;
         });
-      }
-
-      if (matteMask) {
-        const estimate = estimatePersonBox(matteMask, scratchCanvas, vw, vh);
-        faces = estimate ? [estimate] : faces;
       }
 
       const sample = pendingSampleMs;
@@ -251,6 +273,10 @@ export async function createMediaPipeSegmentationBackend(opts = {}) {
       matteMask = null;
       detectPending = false;
       pendingSampleMs = null;
+      detectInputWidth = 0;
+      detectInputHeight = 0;
+      detectSourceWidth = 0;
+      detectSourceHeight = 0;
     },
   };
 }
