@@ -634,16 +634,22 @@
     <div class="calls-modal" :hidden="!deleteState.open" role="dialog" aria-modal="true" aria-label="Delete call modal">
       <div class="calls-modal-backdrop" @click="closeDelete"></div>
       <div class="calls-modal-dialog calls-modal-dialog-small">
-        <header class="calls-modal-header">
-          <h4>Delete call</h4>
+        <header class="calls-modal-header calls-modal-header-enter">
+          <div class="calls-modal-header-enter-left">
+            <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
+            <h4 class="calls-enter-title">Delete call</h4>
+          </div>
           <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeDelete">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
 
         <div class="calls-modal-body">
-          <p class="calls-inline-error">
-            Delete <strong>{{ deleteState.callTitle }}</strong> permanently? This removes participants, access links and invite codes for this call.
+          <p class="calls-delete-warning">
+            Delete <strong>{{ deleteState.callTitle }}</strong> permanently?
+            <br />
+            <br />
+            This removes participants, access links and invite codes for this call.
           </p>
 
           <section v-if="deleteState.error" class="calls-inline-error">
@@ -652,7 +658,6 @@
         </div>
 
         <footer class="calls-modal-footer">
-          <button class="btn" type="button" :disabled="deleteState.submitting" @click="closeDelete">Close</button>
           <button class="btn" type="button" :disabled="deleteState.submitting" @click="submitDelete">
             {{ deleteState.submitting ? 'Deleting…' : 'Delete call' }}
           </button>
@@ -2903,6 +2908,16 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   background: #331616;
   color: #ffb5b5;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.calls-delete-warning {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: #ff0000;
+  color: #f7f7f7;
   font-size: 12px;
   padding: 8px 10px;
 }
