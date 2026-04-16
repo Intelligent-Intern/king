@@ -3,6 +3,17 @@ import { createBackgroundSegmentationBackend } from './backgroundFilterBackend';
 import { createMediaPipeSegmentationBackend } from './backgroundFilterBackendMediapipe';
 import { createTfjsSegmentationBackend } from './backgroundFilterBackendTfjs';
 
+function parseEnvFlag(value, fallback = false) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+}
+
+const MEDIAPIPE_SEGMENTATION_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_MEDIAPIPE, false);
+const TFJS_SEGMENTATION_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_TFJS, false);
+
 function toNumber(value, fallback) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
@@ -91,17 +102,45 @@ function scaleFaceBox(face, srcW, srcH, dstW, dstH) {
   return { x, y, width, height };
 }
 
-function drawFacePatches(ctx, rawCanvas, faces, sourceW, sourceH, width, height) {
-  if (!Array.isArray(faces) || faces.length === 0) return;
-  for (const face of faces) {
-    const box = scaleFaceBox(face, sourceW, sourceH, width, height);
-    if (box.width <= 0 || box.height <= 0) continue;
-    ctx.drawImage(rawCanvas, box.x, box.y, box.width, box.height, box.x, box.y, box.width, box.height);
-  }
+function resolveMaskTuning(options, blurPx) {
+  const maskVariant = Math.max(1, Math.min(10, Math.round(toNumber(options.maskVariant, 4))));
+  const transitionGain = Math.max(1, Math.min(10, Math.round(toNumber(options.transitionGain, 6))));
+  const faceScale = 0.86 + ((maskVariant - 1) * 0.06);
+  const matteExpandPx = Math.max(0, Math.min(6, Math.round((maskVariant - 1) * 0.55)));
+  const edgeFeatherPx = Math.max(
+    1,
+    Math.min(8, Math.round((transitionGain / 10) * Math.max(1, (blurPx * 0.35) + 1.2))),
+  );
+  return {
+    faceScale,
+    matteExpandPx,
+    edgeFeatherPx,
+  };
 }
 
-function drawMatteMaskedPerson(ctx, rawCanvas, matteMask, width, height, personCanvas, personCtx) {
-  if (!matteMask || !(personCanvas instanceof HTMLCanvasElement) || !personCtx) return false;
+function blurMaskIfNeeded(maskCanvas, maskCtx, softMaskCanvas, softMaskCtx, width, height, featherPx) {
+  if (
+    featherPx <= 0
+    || !(maskCanvas instanceof HTMLCanvasElement)
+    || !(softMaskCanvas instanceof HTMLCanvasElement)
+    || !maskCtx
+    || !softMaskCtx
+  ) {
+    return;
+  }
+  softMaskCanvas.width = width;
+  softMaskCanvas.height = height;
+  softMaskCtx.clearRect(0, 0, width, height);
+  softMaskCtx.filter = `blur(${featherPx}px)`;
+  softMaskCtx.drawImage(maskCanvas, 0, 0, width, height);
+  softMaskCtx.filter = 'none';
+
+  maskCtx.clearRect(0, 0, width, height);
+  maskCtx.drawImage(softMaskCanvas, 0, 0, width, height);
+}
+
+function compositeMaskedPerson(ctx, rawCanvas, maskCanvas, width, height, personCanvas, personCtx) {
+  if (!(personCanvas instanceof HTMLCanvasElement) || !personCtx) return false;
   personCanvas.width = width;
   personCanvas.height = height;
   personCtx.clearRect(0, 0, width, height);
@@ -109,7 +148,7 @@ function drawMatteMaskedPerson(ctx, rawCanvas, matteMask, width, height, personC
   personCtx.drawImage(rawCanvas, 0, 0, width, height);
   personCtx.globalCompositeOperation = 'destination-in';
   try {
-    personCtx.drawImage(matteMask, 0, 0, width, height);
+    personCtx.drawImage(maskCanvas, 0, 0, width, height);
   } catch {
     personCtx.globalCompositeOperation = 'source-over';
     return false;
@@ -119,27 +158,167 @@ function drawMatteMaskedPerson(ctx, rawCanvas, matteMask, width, height, personC
   return true;
 }
 
+function drawMatteMaskedPerson(
+  ctx,
+  rawCanvas,
+  matteMask,
+  width,
+  height,
+  personCanvas,
+  personCtx,
+  maskCanvas,
+  maskCtx,
+  softMaskCanvas,
+  softMaskCtx,
+  maskTuning,
+) {
+  if (
+    !matteMask
+    || !(maskCanvas instanceof HTMLCanvasElement)
+    || !maskCtx
+  ) {
+    return false;
+  }
+
+  const expandPx = Math.max(0, Math.round(maskTuning?.matteExpandPx || 0));
+  maskCanvas.width = width;
+  maskCanvas.height = height;
+  maskCtx.clearRect(0, 0, width, height);
+  maskCtx.globalCompositeOperation = 'source-over';
+  maskCtx.globalAlpha = 1;
+
+  try {
+    maskCtx.drawImage(matteMask, 0, 0, width, height);
+    if (expandPx > 0) {
+      const diagonal = Math.max(1, Math.round(expandPx * 0.75));
+      maskCtx.globalAlpha = 0.9;
+      maskCtx.drawImage(matteMask, -expandPx, 0, width, height);
+      maskCtx.drawImage(matteMask, expandPx, 0, width, height);
+      maskCtx.drawImage(matteMask, 0, -expandPx, width, height);
+      maskCtx.drawImage(matteMask, 0, expandPx, width, height);
+      maskCtx.globalAlpha = 0.65;
+      maskCtx.drawImage(matteMask, -diagonal, -diagonal, width, height);
+      maskCtx.drawImage(matteMask, diagonal, -diagonal, width, height);
+      maskCtx.drawImage(matteMask, -diagonal, diagonal, width, height);
+      maskCtx.drawImage(matteMask, diagonal, diagonal, width, height);
+      maskCtx.globalAlpha = 1;
+    }
+  } catch {
+    maskCtx.globalAlpha = 1;
+    return false;
+  }
+
+  blurMaskIfNeeded(
+    maskCanvas,
+    maskCtx,
+    softMaskCanvas,
+    softMaskCtx,
+    width,
+    height,
+    Math.max(0, Math.round(maskTuning?.edgeFeatherPx || 0)),
+  );
+
+  return compositeMaskedPerson(ctx, rawCanvas, maskCanvas, width, height, personCanvas, personCtx);
+}
+
+function drawFacePatches(
+  ctx,
+  rawCanvas,
+  faces,
+  sourceW,
+  sourceH,
+  width,
+  height,
+  personCanvas,
+  personCtx,
+  maskCanvas,
+  maskCtx,
+  softMaskCanvas,
+  softMaskCtx,
+  maskTuning,
+) {
+  if (
+    !Array.isArray(faces)
+    || faces.length === 0
+    || !(maskCanvas instanceof HTMLCanvasElement)
+    || !maskCtx
+  ) {
+    return false;
+  }
+
+  const faceScale = Math.max(0.8, Number(maskTuning?.faceScale || 1));
+  maskCanvas.width = width;
+  maskCanvas.height = height;
+  maskCtx.clearRect(0, 0, width, height);
+  maskCtx.globalCompositeOperation = 'source-over';
+  maskCtx.fillStyle = '#fff';
+
+  let rendered = false;
+  for (const face of faces) {
+    const box = scaleFaceBox(face, sourceW, sourceH, width, height);
+    if (box.width <= 0 || box.height <= 0) continue;
+
+    const cx = box.x + (box.width / 2);
+    const headCy = box.y + (box.height * 0.5);
+    const headRx = Math.max(10, (box.width * 0.48) * faceScale);
+    const headRy = Math.max(12, (box.height * 0.7) * faceScale);
+    const shoulderCy = box.y + (box.height * 1.24);
+    const shoulderRx = Math.max(headRx * 1.65, box.width * 0.65);
+    const shoulderRy = Math.max(headRy * 1.35, box.height * 0.75);
+
+    maskCtx.globalAlpha = 1;
+    maskCtx.beginPath();
+    maskCtx.ellipse(cx, headCy, headRx, headRy, 0, 0, Math.PI * 2);
+    maskCtx.fill();
+
+    maskCtx.globalAlpha = 0.9;
+    maskCtx.beginPath();
+    maskCtx.ellipse(cx, shoulderCy, shoulderRx, shoulderRy, 0, 0, Math.PI * 2);
+    maskCtx.fill();
+    rendered = true;
+  }
+
+  maskCtx.globalAlpha = 1;
+  if (!rendered) return false;
+
+  blurMaskIfNeeded(
+    maskCanvas,
+    maskCtx,
+    softMaskCanvas,
+    softMaskCtx,
+    width,
+    height,
+    Math.max(0, Math.round(maskTuning?.edgeFeatherPx || 0)),
+  );
+
+  return compositeMaskedPerson(ctx, rawCanvas, maskCanvas, width, height, personCanvas, personCtx);
+}
+
 async function resolveSegmentationBackend(selection, opts) {
+  if (MEDIAPIPE_SEGMENTATION_ENABLED) {
+    try {
+      const mediapipe = await createMediaPipeSegmentationBackend(opts);
+      if (mediapipe) return mediapipe;
+    } catch {
+      // ignore and continue fallback chain.
+    }
+  }
+
+  if (TFJS_SEGMENTATION_ENABLED) {
+    try {
+      const tfjs = await createTfjsSegmentationBackend(opts);
+      if (tfjs) return tfjs;
+    } catch {
+      // ignore and continue fallback chain.
+    }
+  }
+
   if (selection.backend === 'face_detector') {
     try {
       return createBackgroundSegmentationBackend('face_detector', opts);
     } catch {
-      // fall through to async backends.
+      // fall through to static fallback backend.
     }
-  }
-
-  try {
-    const mediapipe = await createMediaPipeSegmentationBackend(opts);
-    if (mediapipe) return mediapipe;
-  } catch {
-    // ignore and continue fallback chain.
-  }
-
-  try {
-    const tfjs = await createTfjsSegmentationBackend(opts);
-    if (tfjs) return tfjs;
-  } catch {
-    // ignore and continue fallback chain.
   }
 
   return createBackgroundSegmentationBackend('center_mask_fallback', opts);
@@ -242,7 +421,8 @@ export async function createBackgroundFilterStream(sourceStream, options = {}) {
   const height = processing.height;
   const fps = processing.fps;
 
-  const blurPx = Math.max(4, Math.min(28, Math.round(toNumber(options.blurPx, 12))));
+  const blurPx = Math.max(0, Math.min(20, Math.round(toNumber(options.blurPx, 6))));
+  const maskTuning = resolveMaskTuning(options, blurPx);
   const detectIntervalMs = Math.max(100, Math.min(1200, Math.round(toNumber(options.detectIntervalMs, 220))));
   const facePaddingPx = Math.max(4, Math.min(64, Math.round(toNumber(options.facePaddingPx, 14))));
   const statsIntervalMs = Math.max(500, Math.min(5000, Math.round(toNumber(options.statsIntervalMs, 1000))));
@@ -280,7 +460,15 @@ export async function createBackgroundFilterStream(sourceStream, options = {}) {
   personCanvas.width = width;
   personCanvas.height = height;
   const personCtx = personCanvas.getContext('2d', { alpha: true, desynchronized: true });
-  if (!rawCtx || !personCtx) {
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = width;
+  maskCanvas.height = height;
+  const maskCtx = maskCanvas.getContext('2d', { alpha: true, desynchronized: true });
+  const softMaskCanvas = document.createElement('canvas');
+  softMaskCanvas.width = width;
+  softMaskCanvas.height = height;
+  const softMaskCtx = softMaskCanvas.getContext('2d', { alpha: true, desynchronized: true });
+  if (!rawCtx || !personCtx || !maskCtx || !softMaskCtx) {
     try {
       video.pause();
     } catch {
@@ -334,7 +522,7 @@ export async function createBackgroundFilterStream(sourceStream, options = {}) {
       return;
     }
 
-    if (video.readyState >= 2) {
+    if (video.readyState >= 2 && !video.ended) {
       const vw = video.videoWidth || width;
       const vh = video.videoHeight || height;
       if (vw > 1 && vh > 1) {
@@ -371,8 +559,36 @@ export async function createBackgroundFilterStream(sourceStream, options = {}) {
           ctx.drawImage(rawCanvas, 0, 0, width, height);
           ctx.restore();
 
-          if (!drawMatteMaskedPerson(ctx, rawCanvas, matteMask, width, height, personCanvas, personCtx)) {
-            drawFacePatches(ctx, rawCanvas, faces, vw, vh, width, height);
+          if (!drawMatteMaskedPerson(
+            ctx,
+            rawCanvas,
+            matteMask,
+            width,
+            height,
+            personCanvas,
+            personCtx,
+            maskCanvas,
+            maskCtx,
+            softMaskCanvas,
+            softMaskCtx,
+            maskTuning,
+          )) {
+            drawFacePatches(
+              ctx,
+              rawCanvas,
+              faces,
+              vw,
+              vh,
+              width,
+              height,
+              personCanvas,
+              personCtx,
+              maskCanvas,
+              maskCtx,
+              softMaskCanvas,
+              softMaskCtx,
+              maskTuning,
+            );
           }
 
           frameCount += 1;
