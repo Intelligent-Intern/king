@@ -166,9 +166,6 @@
               aria-label="Call settings"
             >
               <div class="call-left-settings-title">Call settings</div>
-              <p class="call-left-owner-edit-copy">
-                Change access mode and invite more participants while staying in the call.
-              </p>
               <button
                 class="btn full call-left-owner-edit-btn"
                 type="button"
