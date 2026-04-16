@@ -770,6 +770,19 @@ WHERE participant_user_id IS NULL
 SQL,
             ],
         ],
+        8 => [
+            'name' => '0008_calls_access_mode',
+            'statements' => [
+                "ALTER TABLE calls ADD COLUMN access_mode TEXT NOT NULL DEFAULT 'invite_only' CHECK (access_mode IN ('invite_only', 'free_for_all'))",
+                <<<'SQL'
+UPDATE calls
+SET access_mode = 'invite_only'
+WHERE access_mode IS NULL
+   OR trim(access_mode) = ''
+   OR lower(access_mode) NOT IN ('invite_only', 'free_for_all')
+SQL,
+            ],
+        ],
     ];
 }
 

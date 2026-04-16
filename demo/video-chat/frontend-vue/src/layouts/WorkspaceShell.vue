@@ -434,7 +434,7 @@
 
       <section v-else-if="activeSettingsTile === 'general'" class="settings-panel">
         <h4>{{ sessionState.role === 'admin' ? 'General' : 'Workspace' }}</h4>
-        <p>Branding and icon set management follow the same workflow as in the mock settings.</p>
+        <p>Branding and icon set management follow the same workflow as in the product UX settings.</p>
       </section>
 
       <section v-else-if="activeSettingsTile === 'regional-time'" class="settings-panel">

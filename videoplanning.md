@@ -12,20 +12,20 @@ Der neue Video-Call-Stack wird als produktionsnaher Pfad umgesetzt:
 - Frontend: Vue 3
 - Persistenz: SQLite (Demo-tauglich, deterministisch, migrationsfähig)
 
-Der Mock ist die führende UX- und Funktionsreferenz.
+Die Produkt-UX ist die führende Funktionsreferenz.
 
 ## 2) Nicht verhandelbare Leitplanken
 
-- Keine Funktionsreduktion gegenüber dem Mock.
+- Keine Funktionsreduktion gegenüber dem UX-Vertrag.
 - Kein Node-Provisorium im neuen Realtime-Pfad.
 - Auth, Session, RBAC, CRUD und Signaling laufen serverautorisiert über King.
-- Jeder Mock-Flow besitzt einen expliziten REST- oder WS/IIBIN-Contract.
+- Jeder UX-Flow besitzt einen expliziten REST- oder WS/IIBIN-Contract.
 - Clean-Code-Aufteilung ist Pflicht:
   - Backend in klar getrennte Module (auth/session/rbac/calls/realtime).
   - Frontend in klar getrennte Stores/Views/Components.
   - Keine monolithischen Handler-Dateien mit gemischter Verantwortung.
 
-## 3) Mock-Parität (Abnahmebasis)
+## 3) UX-Parität (Abnahmebasis)
 
 Release-ready ist der neue Stack erst, wenn diese Gruppen vollständig sind:
 - Login/Logout + rollenbasierte Navigation.
@@ -42,7 +42,7 @@ Release-ready ist der neue Stack erst, wenn diese Gruppen vollständig sind:
 - Neuer Pfad:
   - `demo/video-chat/backend-king-php/`
   - `demo/video-chat/frontend-vue/`
-- Umschaltung auf neuen Standardpfad erst nach nachgewiesener Mock-Parität.
+- Umschaltung auf neuen Standardpfad erst nach nachgewiesener UX-Parität.
 
 ## 5) Realtime-Grundsatz
 
@@ -62,7 +62,7 @@ Mindestnachweis je Feature-Leaf:
 
 ## 7) Bewusste Nicht-Ziele für diesen Strang
 
-Folgende Punkte bleiben bewusst außerhalb des aktuellen Mock-Paritätsstrangs,
+Folgende Punkte bleiben bewusst außerhalb des aktuellen UX-Paritätsstrangs,
 auch wenn sie in früheren Entwürfen enthalten waren:
 - Renderer-Eskalation DOM/Canvas/WebGL für 500+ oder 1000+ Teilnehmer.
 - Breakout-Room-Orchestrierung als eigener Produktbereich.
@@ -70,4 +70,4 @@ auch wenn sie in früheren Entwürfen enthalten waren:
 - Langfristige 12-Jahres-Roadmap als aktiver Ausführungsplan.
 
 Diese Themen sind optional spätere Tracks, aber **nicht** Abnahmeblocker für die
-Mock-Parität des aktuellen Replatform-Batches.
+UX-Parität des aktuellen Replatform-Batches.

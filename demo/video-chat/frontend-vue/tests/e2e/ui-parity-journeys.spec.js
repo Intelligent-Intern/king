@@ -4,8 +4,8 @@ test.describe.configure({ mode: 'serial' });
 
 const backendOrigin = process.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || 'http://127.0.0.1:18080';
 const sessionStorageKey = 'ii_videocall_v1_session';
-const mockInviteCode = '11111111-1111-4111-8111-111111111111';
-const mockInviteExpiresAt = '2030-01-01T00:00:00.000Z';
+const inviteFixtureCode = '11111111-1111-4111-8111-111111111111';
+const inviteFixtureExpiresAt = '2030-01-01T00:00:00.000Z';
 
 function buildStoredSession(payload) {
   const session = payload?.session || {};
@@ -67,7 +67,7 @@ async function createAuthenticatedPage(browser, baseURL, { email, password }) {
     },
     { key: sessionStorageKey, value: JSON.stringify(storedSession) },
   );
-  await installMockInviteRoutes(context, storedSession);
+  await installInviteFixtureRoutes(context, storedSession);
 
   const page = await context.newPage();
   return { context, page, storedSession };
@@ -95,15 +95,15 @@ function corsHeaders() {
   };
 }
 
-function buildMockInviteCode({ scope, roomId, callId, issuedByUserId }) {
+function buildInviteFixtureCode({ scope, roomId, callId, issuedByUserId }) {
   return {
     id: '11111111-1111-4111-8111-111111111111',
-    code: mockInviteCode,
+    code: inviteFixtureCode,
     scope,
     room_id: roomId,
     call_id: callId,
     issued_by_user_id: issuedByUserId,
-    expires_at: mockInviteExpiresAt,
+    expires_at: inviteFixtureExpiresAt,
     expires_in_seconds: 86_400,
     max_redemptions: 1,
     redemption_count: 0,
@@ -117,7 +117,7 @@ function buildMockInviteCode({ scope, roomId, callId, issuedByUserId }) {
         ? {
             id: callId,
             room_id: roomId,
-            title: 'Mock parity call',
+            title: 'UI parity call',
             status: 'scheduled',
           }
         : {
@@ -128,7 +128,7 @@ function buildMockInviteCode({ scope, roomId, callId, issuedByUserId }) {
   };
 }
 
-function buildMockRedemption({ code, scope, roomId, callId, userId, role }) {
+function buildInviteRedemptionFixture({ code, scope, roomId, callId, userId, role }) {
   return {
     invite_code: {
       id: '11111111-1111-4111-8111-111111111111',
@@ -137,7 +137,7 @@ function buildMockRedemption({ code, scope, roomId, callId, userId, role }) {
       room_id: roomId,
       call_id: callId,
       issued_by_user_id: userId,
-      expires_at: mockInviteExpiresAt,
+      expires_at: inviteFixtureExpiresAt,
       max_redemptions: 1,
       redemption_count: 1,
       remaining_redemptions: 0,
@@ -155,7 +155,7 @@ function buildMockRedemption({ code, scope, roomId, callId, userId, role }) {
         ? {
             id: callId,
             room_id: roomId,
-            title: 'Mock parity call',
+            title: 'UI parity call',
             status: 'scheduled',
             starts_at: '2026-01-01T00:00:00.000Z',
             ends_at: '2026-01-01T01:00:00.000Z',
@@ -170,7 +170,7 @@ function buildMockRedemption({ code, scope, roomId, callId, userId, role }) {
   };
 }
 
-async function installMockInviteRoutes(context, storedSession) {
+async function installInviteFixtureRoutes(context, storedSession) {
   const role = String(storedSession?.role || '').trim().toLowerCase() || 'user';
   const userId = Number.isInteger(storedSession?.userId) ? storedSession.userId : 0;
 
@@ -205,7 +205,7 @@ async function installMockInviteRoutes(context, storedSession) {
       json: {
         status: 'ok',
         result: {
-          invite_code: buildMockInviteCode({
+          invite_code: buildInviteFixtureCode({
             scope,
             roomId,
             callId,
@@ -234,7 +234,7 @@ async function installMockInviteRoutes(context, storedSession) {
     }
 
     const body = parseRequestBody(request);
-    const code = String(body.code || mockInviteCode).trim() || mockInviteCode;
+    const code = String(body.code || inviteFixtureCode).trim() || inviteFixtureCode;
 
     await route.fulfill({
       status: 200,
@@ -245,7 +245,7 @@ async function installMockInviteRoutes(context, storedSession) {
       json: {
         status: 'ok',
         result: {
-          redemption: buildMockRedemption({
+          redemption: buildInviteRedemptionFixture({
             code,
             scope: 'room',
             roomId: 'lobby',
@@ -292,7 +292,7 @@ async function readCurrentInviteCode(page) {
   return code;
 }
 
-test('admin flow matches the mock-parity admin journey', async ({ browser }) => {
+test('admin flow matches the UI-parity admin journey', async ({ browser }) => {
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
   const { context, page } = await createAuthenticatedPage(browser, baseURL, {
     email: 'admin@intelligent-intern.com',
@@ -326,7 +326,7 @@ test('admin flow matches the mock-parity admin journey', async ({ browser }) => 
   }
 });
 
-test('user flow matches the mock-parity user journey', async ({ browser }) => {
+test('user flow matches the UI-parity user journey', async ({ browser }) => {
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
   const { context, page } = await createAuthenticatedPage(browser, baseURL, {
     email: 'user@intelligent-intern.com',
@@ -341,7 +341,7 @@ test('user flow matches the mock-parity user journey', async ({ browser }) => {
     await page.getByRole('button', { name: 'Join with Invite' }).click();
     const joinModal = page.getByRole('dialog', { name: 'Join invite modal' });
     await expect(joinModal).toBeVisible();
-    await joinModal.getByLabel('Invite code').fill(mockInviteCode);
+    await joinModal.getByLabel('Invite code').fill(inviteFixtureCode);
     await joinModal.getByRole('button', { name: 'Join' }).click();
 
     await expect(page).toHaveURL(/\/workspace\/call\/lobby$/);

@@ -817,8 +817,13 @@ function videochat_create_call_access_link_for_user(
         $expiresAt = null;
     }
 
-    $linkKind = strtolower(trim((string) ($options['link_kind'] ?? 'personal')));
-    if (!in_array($linkKind, ['personal', 'open'], true)) {
+    $callAccessMode = videochat_normalize_call_access_mode((string) ($call['access_mode'] ?? 'invite_only'));
+    $linkKindInput = strtolower(trim((string) ($options['link_kind'] ?? '')));
+    if ($linkKindInput === '') {
+        $linkKind = $callAccessMode === 'free_for_all' ? 'open' : 'personal';
+    } elseif (in_array($linkKindInput, ['personal', 'open'], true)) {
+        $linkKind = $linkKindInput;
+    } else {
         return [
             'ok' => false,
             'reason' => 'validation_failed',
@@ -827,6 +832,27 @@ function videochat_create_call_access_link_for_user(
             'call' => null,
         ];
     }
+
+    if ($callAccessMode === 'free_for_all' && $linkKind !== 'open') {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['link_kind' => 'free_for_all_requires_open_link'],
+            'access_link' => null,
+            'call' => null,
+        ];
+    }
+
+    if ($callAccessMode === 'invite_only' && $linkKind !== 'personal') {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['link_kind' => 'invite_only_requires_personal_link'],
+            'access_link' => null,
+            'call' => null,
+        ];
+    }
+
     $isOpenLinkRequest = $linkKind === 'open';
 
     $targetUserId = $isOpenLinkRequest

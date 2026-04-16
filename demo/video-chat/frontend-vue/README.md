@@ -64,10 +64,10 @@ Run frontend click-through e2e tests:
 npm run test:e2e
 ```
 
-Run the mock-parity journey suite directly:
+Run the UI-parity journey suite directly:
 
 ```bash
-npx playwright test tests/e2e/mock-parity-journeys.spec.js
+npx playwright test tests/e2e/ui-parity-journeys.spec.js
 ```
 
 Run e2e tests headed (visual):

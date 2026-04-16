@@ -317,14 +317,14 @@
                   Invite link for <strong>{{ enterCallState.callId }}</strong>
                 </p>
                 <div class="calls-enter-link-controls">
-                  <label class="field">
-                    <span>Link type</span>
-                    <select class="input" v-model="enterCallState.linkKind" @change="handleEnterLinkSettingsChanged">
-                      <option value="personal">Personalized</option>
-                      <option value="open">Free for all</option>
-                    </select>
-                  </label>
-                  <label v-if="enterCallState.linkKind === 'personal'" class="field">
+                  <p class="invite-popover-label">
+                    {{
+                      enterCallState.callAccessMode === 'free_for_all'
+                        ? 'Free for all mode (open link, guest name required)'
+                        : 'Invite-only mode (personalized link)'
+                    }}
+                  </p>
+                  <label v-if="enterCallState.callAccessMode === 'invite_only'" class="field">
                     <span>Target</span>
                     <select class="input" v-model="enterCallState.targetKey" @change="handleEnterLinkSettingsChanged">
                       <option v-for="option in enterCallState.targetOptions" :key="option.key" :value="option.key">
@@ -381,6 +381,13 @@
             <label class="field">
               <span>Title</span>
               <input v-model="composeState.title" class="input" type="text" placeholder="Weekly Product Sync" />
+            </label>
+            <label v-if="composeState.mode === 'edit'" class="field">
+              <span>Access mode</span>
+              <select v-model="composeState.accessMode" class="input" aria-label="Call access mode">
+                <option value="invite_only">Invite only</option>
+                <option value="free_for_all">Free for all</option>
+              </select>
             </label>
             <label v-if="composeState.mode !== 'create'" class="field">
               <span>Room ID</span>
@@ -1055,7 +1062,7 @@ const enterCallState = reactive({
   expiresAt: '',
   callId: '',
   roomId: '',
-  linkKind: 'personal',
+  callAccessMode: 'invite_only',
   targetKey: '',
   targetOptions: [],
   copyNotice: '',
@@ -1072,7 +1079,7 @@ function resetEnterCallState() {
   enterCallState.expiresAt = '';
   enterCallState.callId = '';
   enterCallState.roomId = '';
-  enterCallState.linkKind = 'personal';
+  enterCallState.callAccessMode = 'invite_only';
   enterCallState.targetKey = '';
   enterCallState.targetOptions = [];
   enterCallState.copyNotice = '';
@@ -1103,6 +1110,11 @@ function fallbackWorkspaceLink(callId) {
   const joinPath = `/workspace/call/${encodeURIComponent(normalizedCallId)}`;
   const origin = typeof window !== 'undefined' ? String(window.location.origin || '').trim() : '';
   return origin !== '' ? `${origin}${joinPath}` : joinPath;
+}
+
+function normalizeCallAccessMode(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'free_for_all' ? 'free_for_all' : 'invite_only';
 }
 
 function normalizeTargetOptionsFromCall(call) {
@@ -1237,7 +1249,7 @@ async function openEnterCallModal(call) {
   enterCallState.expiresAt = '';
   enterCallState.callId = String(call.id);
   enterCallState.roomId = String(call.room_id || 'lobby');
-  enterCallState.linkKind = 'personal';
+  enterCallState.callAccessMode = normalizeCallAccessMode(call.access_mode);
   enterCallState.targetOptions = normalizeTargetOptionsFromCall(call);
   enterCallState.targetKey = enterCallState.targetOptions[0]?.key || '';
   enterCallState.copyNotice = '';
@@ -1270,7 +1282,8 @@ async function generateEnterCallLink() {
   }
 
   const requestBody = {};
-  if (enterCallState.linkKind === 'open') {
+  const callAccessMode = normalizeCallAccessMode(enterCallState.callAccessMode);
+  if (callAccessMode === 'free_for_all') {
     requestBody.link_kind = 'open';
   } else {
     requestBody.link_kind = 'personal';
@@ -1417,6 +1430,7 @@ const composeState = reactive({
   mode: 'create',
   callId: '',
   title: '',
+  accessMode: 'invite_only',
   roomId: 'lobby',
   startsLocal: '',
   endsLocal: '',
@@ -1482,6 +1496,7 @@ function seedComposeWindow(mode) {
 function resetComposeModal() {
   composeState.callId = '';
   composeState.title = '';
+  composeState.accessMode = 'invite_only';
   composeState.roomId = 'lobby';
   composeState.replaceParticipants = false;
   composeState.submitting = false;
@@ -1508,6 +1523,7 @@ function openCompose(mode, call = null) {
   if (mode === 'edit' && call) {
     composeState.callId = String(call.id || '');
     composeState.title = String(call.title || '');
+    composeState.accessMode = normalizeCallAccessMode(call.access_mode);
     composeState.roomId = String(call.room_id || 'lobby');
     composeState.startsLocal = isoToLocalInput(String(call.starts_at || ''));
     composeState.endsLocal = isoToLocalInput(String(call.ends_at || ''));
@@ -1691,6 +1707,7 @@ async function submitCompose() {
   const payload = {
     room_id: String(composeState.roomId || '').trim() || 'lobby',
     title,
+    access_mode: normalizeCallAccessMode(composeState.accessMode),
     starts_at: startsAt,
     ends_at: endsAt,
   };

@@ -5,7 +5,7 @@ workspace on top of King runtime primitives.
 
 What we are building here:
 
-- a Vue workspace UI that matches the approved mock layout/interaction model
+- a Vue workspace UI that follows the approved UX/interaction contract
 - a King PHP backend (`backend-king-php`) as the authoritative API + WS layer
 - contract-first REST + realtime behavior with deterministic error envelopes
 - role-aware collaboration surfaces (admin/moderator/user)
@@ -41,7 +41,7 @@ Latest commit-level progress:
 - 2026-04-13: closed `#59/#60/#68` with backend-bound admin overview metrics + admin user CRUD/pagination/search + admin-only branding parity flow in `frontend-vue/src/views/AdminOverviewView.vue` and `frontend-vue/src/views/AdminUsersView.vue`
 - 2026-04-13: closed `#61/#62/#63` with backend-bound user dashboard calls/calendar/invite parity plus invite redeem -> workspace flow in `frontend-vue/src/views/UserDashboardView.vue`
 - 2026-04-13: closed `#64/#65/#66` with server-driven workspace tab data, moderation feedback states, and control-bar realtime synchronization in `frontend-vue/src/views/CallWorkspaceView.vue`
-- 2026-04-13: closed `#69/#70/#71` with backend integration-matrix tests, Playwright mock-parity journeys, and compose-level smoke gates (`demo/video-chat/scripts/smoke.sh`, `.github/workflows/ci.yml`)
+- 2026-04-13: closed `#69/#70/#71` with backend integration-matrix tests, Playwright UI-parity journeys, and compose-level smoke gates (`demo/video-chat/scripts/smoke.sh`, `.github/workflows/ci.yml`)
 
 Current new-stack baseline capabilities:
 
@@ -53,7 +53,7 @@ Current new-stack baseline capabilities:
 - backend-backed settings modal for profile/avatar/theme/time-format with global theme/time-format application
 - admin overview widgets are live API-driven (auth/session/users/calls snapshots with explicit loading/error states)
 - admin users view is fully server-driven (`GET/POST/PATCH/deactivate/reactivate`) with search + pagination + row-level mutation feedback
-- admin branding parity flow is available as admin-only local persistence for mock parity where no backend branding endpoint exists
+- admin branding parity flow is available as admin-only local persistence for UI contract parity where no backend branding endpoint exists
 - user dashboard now has backend-bound calls list + calendar + create/edit + invite popover/redeem flows
 - room directory is fetched from backend API and normalized to deterministic ordering with live member counters
 - room directory with create/join/switch behavior
@@ -284,8 +284,8 @@ Additional automated coverage:
 - backend integration matrix tests:
   - `demo/video-chat/backend-king-php/tests/videochat-integration-matrix-http-contract.sh`
   - `demo/video-chat/backend-king-php/tests/videochat-integration-matrix-realtime-contract.sh`
-- frontend Playwright mock-parity journeys:
-  - `demo/video-chat/frontend-vue/tests/e2e/mock-parity-journeys.spec.js`
+- frontend Playwright UI-parity journeys:
+  - `demo/video-chat/frontend-vue/tests/e2e/ui-parity-journeys.spec.js`
 
 Release-bound runtime honesty:
 

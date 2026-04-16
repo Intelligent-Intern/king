@@ -373,6 +373,13 @@
               <input v-model="composeState.title" class="input" type="text" placeholder="Weekly Product Sync" />
             </label>
             <label class="field">
+              <span>Access mode</span>
+              <select v-model="composeState.accessMode" class="input" aria-label="Call access mode">
+                <option value="invite_only">Invite only</option>
+                <option value="free_for_all">Free for all</option>
+              </select>
+            </label>
+            <label class="field">
               <span>Room ID</span>
               <input v-model="composeState.roomId" class="input" type="text" placeholder="lobby" />
             </label>
@@ -1043,6 +1050,7 @@ const composeState = reactive({
   mode: 'create',
   callId: '',
   title: '',
+  accessMode: 'invite_only',
   roomId: 'lobby',
   startsLocal: '',
   endsLocal: '',
@@ -1081,6 +1089,7 @@ function seedComposeWindow(mode) {
 function resetComposeModal() {
   composeState.callId = '';
   composeState.title = '';
+  composeState.accessMode = 'invite_only';
   composeState.roomId = 'lobby';
   composeState.submitting = false;
   composeState.error = '';
@@ -1096,6 +1105,7 @@ function openCompose(mode, call = null) {
   if (mode === 'edit' && call) {
     composeState.callId = String(call.id || '');
     composeState.title = String(call.title || '');
+    composeState.accessMode = String(call.access_mode || 'invite_only').trim() || 'invite_only';
     composeState.roomId = String(call.room_id || 'lobby');
     composeState.startsLocal = isoToLocalInput(String(call.starts_at || ''));
     composeState.endsLocal = isoToLocalInput(String(call.ends_at || ''));
@@ -1135,6 +1145,7 @@ async function submitCompose() {
   const payload = {
     room_id: String(composeState.roomId || '').trim() || 'lobby',
     title,
+    access_mode: String(composeState.accessMode || 'invite_only').trim() || 'invite_only',
     starts_at: startsAt,
     ends_at: endsAt,
   };
