@@ -462,6 +462,18 @@ select {
   background: var(--brand-cyan-active);
 }
 
+.btn.btn-primary {
+  background: var(--brand-cyan);
+}
+
+.btn.btn-primary:hover {
+  background: var(--brand-cyan-hover);
+}
+
+.btn.btn-primary:active {
+  background: var(--brand-cyan-active);
+}
+
 .btn.btn-green {
   background: var(--ok);
 }
@@ -2930,13 +2942,13 @@ tbody tr:hover {
 }
 
 .ii-btn--primary {
-  background: var(--ii-primary);
-  border-color: var(--ii-primary-tint);
+  background: var(--brand-cyan);
+  border-color: color-mix(in srgb, var(--brand-cyan) 72%, var(--ii-surface) 28%);
 }
 
 .ii-btn--primary:hover {
-  background: var(--ii-primary-strong);
-  border-color: var(--ii-primary-tint-2);
+  background: var(--brand-cyan-hover);
+  border-color: color-mix(in srgb, var(--brand-cyan-hover) 72%, var(--ii-surface) 28%);
 }
 
 .ii-error {
