@@ -2037,7 +2037,7 @@ tbody tr:hover {
 }
 
 .settings-theme-preview-scale {
-  --preview-scale: 0.2;
+  --preview-scale: 0.4;
   width: calc(1200px * var(--preview-scale));
   height: calc(740px * var(--preview-scale));
   margin: 0 auto;
@@ -2578,13 +2578,13 @@ tbody tr:hover {
   }
 
   .settings-theme-preview-scale {
-    --preview-scale: 0.16;
+    --preview-scale: 0.32;
   }
 }
 
 @media (max-width: 760px) {
   .settings-theme-preview-scale {
-    --preview-scale: 0.13;
+    --preview-scale: 0.26;
   }
 
   .settings-theme-color-row {
