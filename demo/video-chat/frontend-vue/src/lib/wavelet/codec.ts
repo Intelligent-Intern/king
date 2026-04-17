@@ -405,7 +405,12 @@ export class WaveletVideoDecoder {
     const payload = new Uint8Array(frameData.data)
     const yRle    = payload.subarray(HEADER_BYTES, HEADER_BYTES + yBytes)
     const uRle    = payload.subarray(HEADER_BYTES + yBytes, HEADER_BYTES + yBytes + uBytes)
-    const vRle    = payload.subarray(HEADER_BYTES + yBytes + uBytes)
+    const vStart  = HEADER_BYTES + yBytes + uBytes
+    const vEnd    = vStart + vBytes
+    if (vEnd > payload.byteLength) {
+      throw new Error('[WaveletDecoder] Invalid frame: payload length mismatch')
+    }
+    const vRle    = payload.subarray(vStart, vEnd)
 
     // ── Decode channels ───────────────────────────────────────────────────
     const yQ = rleDecode(yRle)

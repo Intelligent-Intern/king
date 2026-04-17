@@ -104,7 +104,6 @@ export class WaveletVideoProcessor {
 
     this.processedStream = outputCanvas.captureStream(this.config.frameRate)
 
-    let frameCount = 0
     const processFrame = (timestamp: number) => {
       if (timestamp - this.lastFrameTime < 1000 / this.config.frameRate) {
         this.animationId = requestAnimationFrame(processFrame)

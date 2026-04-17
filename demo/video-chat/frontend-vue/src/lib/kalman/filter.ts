@@ -95,20 +95,18 @@ export class KalmanFilter2D {
       [[this.R, 0], [0, this.R]]
     )
 
-    const K = this.multiplyMatrix(this.P, this.transpose(H))
     const det = S[0][0] * S[1][1] - S[0][1] * S[1][0]
     if (Math.abs(det) > 1e-10) {
       const SInv = [
         [S[1][1] / det, -S[0][1] / det],
         [-S[1][0] / det, S[0][0] / det],
       ]
-      const K = this.multiplyMatrix(this.P, this.transpose(H))
-      const newK = this.multiplyMatrix(K, SInv)
+      const K = this.multiplyMatrix(this.multiplyMatrix(this.P, this.transpose(H)), SInv)
 
-      this.x += newK[0][0] * y[0] + newK[0][1] * y[1]
-      this.y += newK[1][0] * y[0] + newK[1][1] * y[1]
-      this.vx += newK[2][0] * y[0] + newK[2][1] * y[1]
-      this.vy += newK[3][0] * y[0] + newK[3][1] * y[1]
+      this.x += K[0][0] * y[0] + K[0][1] * y[1]
+      this.y += K[1][0] * y[0] + K[1][1] * y[1]
+      this.vx += K[2][0] * y[0] + K[2][1] * y[1]
+      this.vy += K[3][0] * y[0] + K[3][1] * y[1]
 
       const I = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
       this.P = this.subtractMatrix(I, this.multiplyMatrix(K, H))
@@ -137,6 +135,7 @@ export class KalmanFilter2D {
   private getProcessNoiseMatrix(dt: number): number[][] {
     const dt2 = dt * dt / 2
     const dt3 = dt * dt * dt / 2
+    const dt4 = dt2 * dt2
     return [
       [dt4, 0, dt3, 0],
       [0, dt4, 0, dt3],
@@ -178,10 +177,6 @@ export class KalmanFilter2D {
     return a.map(row => row.map(val => val * s))
   }
 }
-
-const dt2 = 1
-const dt3 = 1
-const dt4 = 1
 
 export class VideoKalmanFilter {
   private config: KalmanConfig

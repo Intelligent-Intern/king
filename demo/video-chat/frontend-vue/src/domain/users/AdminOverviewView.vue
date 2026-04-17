@@ -496,16 +496,51 @@ function localInputToIso(localValue) {
   return date.toISOString();
 }
 
+let roomUuidFallbackCounter = 0;
+
+function uuidFromBytes(bytes) {
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join('-');
+}
+
+function fallbackDeterministicUuid() {
+  const bytes = new Uint8Array(16);
+  const now = BigInt(Date.now());
+  roomUuidFallbackCounter = (roomUuidFallbackCounter + 1) >>> 0;
+  const counter = BigInt(roomUuidFallbackCounter);
+
+  for (let i = 0; i < 8; i += 1) {
+    bytes[7 - i] = Number((now >> BigInt(i * 8)) & 0xffn);
+  }
+  for (let i = 0; i < 4; i += 1) {
+    bytes[15 - i] = Number((counter >> BigInt(i * 8)) & 0xffn);
+  }
+
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  return uuidFromBytes(bytes);
+}
+
 function generateRoomUuid() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
 
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
-    const randomNibble = Math.floor(Math.random() * 16);
-    const value = char === 'x' ? randomNibble : ((randomNibble & 0x3) | 0x8);
-    return value.toString(16);
-  });
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    return uuidFromBytes(bytes);
+  }
+
+  return fallbackDeterministicUuid();
 }
 
 function nextExternalRow(initial = {}) {

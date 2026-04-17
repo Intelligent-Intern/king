@@ -40,24 +40,10 @@ function hasExplicitBackendOriginConfig() {
   return explicitOrigin !== '';
 }
 
-function hasExplicitBackendWebSocketConfig() {
-  const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_WS_ORIGIN || '').trim();
-  const explicitPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
-  return explicitOrigin !== '' || explicitPort !== '';
-}
-
 function hasExplicitBackendSfuConfig() {
   const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_SFU_ORIGIN || '').trim();
   const explicitPort = String(import.meta.env.VITE_VIDEOCHAT_SFU_PORT || '').trim();
   return explicitOrigin !== '' || explicitPort !== '';
-}
-
-function deriveOffsetPort(basePort, offset, fallback) {
-  const parsed = Number.parseInt(String(basePort || '').trim(), 10);
-  if (Number.isInteger(parsed) && parsed > 0 && parsed + offset < 65536) {
-    return String(parsed + offset);
-  }
-  return String(fallback || '').trim();
 }
 
 function detectDefaultBackendOrigin() {

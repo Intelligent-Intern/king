@@ -3029,9 +3029,9 @@ function handleSignalingEvent(payload) {
   const type = String(payload?.type || '').trim().toLowerCase();
   if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup'].includes(type)) return;
 
-  const sender = payload && typeof payload.sender === 'object' ? payload.sender : {};
+  const sender = typeof payload.sender === 'object' ? payload.sender : {};
   const senderUserId = Number(sender.user_id || 0);
-  const payloadBody = payload && typeof payload.payload === 'object' ? payload.payload : null;
+  const payloadBody = typeof payload.payload === 'object' ? payload.payload : null;
   const payloadKind = String(payloadBody?.kind || '').trim().toLowerCase();
   const hasSdpPayload = Boolean(payloadBody && typeof payloadBody.sdp === 'object');
   const hasCandidatePayload = Boolean(payloadBody && typeof payloadBody.candidate === 'object');
@@ -3096,7 +3096,7 @@ function handleSocketMessage(event) {
     serverRoomId.value = welcomeRoom;
     ensureRoomBuckets(welcomeRoom);
     applyViewerContext(payload?.call_context || null);
-    const admission = payload && typeof payload.admission === 'object' ? payload.admission : null;
+    const admission = typeof payload.admission === 'object' ? payload.admission : null;
     const requiresAdmission = Boolean(admission?.requires_admission);
     const pendingRoomId = normalizeRoomId(admission?.pending_room_id || '');
     if (requiresAdmission && pendingRoomId !== '') {

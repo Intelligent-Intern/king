@@ -279,10 +279,23 @@
     max_tokens: document.getElementById('max_tokens'),
   };
 
+  let sessionFallbackCounter = 0;
+  function generateSessionId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      const bytes = new Uint8Array(8);
+      crypto.getRandomValues(bytes);
+      const token = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+      return 'sess-ui-' + token;
+    }
+
+    sessionFallbackCounter += 1;
+    return 'sess-ui-' + Date.now().toString(16) + '-' + sessionFallbackCounter.toString(16).padStart(4, '0');
+  }
+
   const state = {
     ws: null,                // current in-flight WS (null when idle)
     active: null,            // {bubble, body, footer, decoder}
-    sessionId: 'sess-ui-' + Math.random().toString(36).slice(2, 10),
+    sessionId: generateSessionId(),
     inFlight: false,
   };
 

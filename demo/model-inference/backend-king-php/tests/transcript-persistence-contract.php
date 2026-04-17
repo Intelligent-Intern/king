@@ -52,6 +52,29 @@ try {
         str_contains($key, 'req_0123456789abcdef'),
         'transcript key must contain the request_id: got ' . $key
     );
+    transcript_contract_assert(
+        preg_match('/^transcript-\d{8}-/', $key) === 1,
+        'transcript key must include date component YYYYMMDD after prefix: got ' . $key
+    );
+    $expectedDatePrefix = 'transcript-' . gmdate('Ymd') . '-';
+    transcript_contract_assert(
+        str_starts_with($key, $expectedDatePrefix),
+        'transcript key must use UTC current date prefix ' . $expectedDatePrefix . ': got ' . $key
+    );
+
+    $anotherKey = model_inference_transcript_key('req_fedcba9876543210');
+    transcript_contract_assert(
+        preg_match('/^transcript-(\d{8})-/', $key, $m1) === 1 && preg_match('/^transcript-(\d{8})-/', $anotherKey, $m2) === 1,
+        'transcript keys must contain a parsable YYYYMMDD date segment'
+    );
+    transcript_contract_assert(
+        $m1[1] === $m2[1],
+        'transcript keys generated at test time must share the same date segment: got ' . $key . ' and ' . $anotherKey
+    );
+    transcript_contract_assert(
+        $key !== $anotherKey,
+        'transcript keys for different request IDs must differ'
+    );
 
     // 3. Graceful fallback: save/load return false/null without extension.
     if (!function_exists('king_object_store_put')) {
