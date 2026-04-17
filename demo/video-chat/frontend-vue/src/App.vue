@@ -15,7 +15,7 @@ const THEME_PRESETS = {
     '--bg-surface': '#2b3e60',
     '--bg-surface-strong': '#0c1c33',
     '--bg-input': '#d8dadd',
-    '--bg-action': '#162e51',
+    '--bg-action': '#0b1324',
     '--bg-action-hover': '#5696ef',
     '--bg-row': '#2a569f',
     '--bg-row-hover': '#163260',
