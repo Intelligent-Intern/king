@@ -2675,9 +2675,12 @@ onBeforeUnmount(() => {
 .calls-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
-  margin-top: 5px;
   padding-left: 10px;
   padding-right: 10px;
+}
+
+.calls-list-table {
+  margin-top: 5px;
 }
 
 .col-title {
