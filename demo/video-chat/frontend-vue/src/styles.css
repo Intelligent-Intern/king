@@ -18,7 +18,7 @@
 
   --bg-sidebar: #0B1324;
   --bg-main: #0B1324;
-  --bg-tab: var(--bg-action);
+  --bg-tab: #003c93;
   --bg-tab-hover: var(--bg-action-hover);
   --bg-tab-active: var(--bg-row);
   --bg-ui-chrome: #182c4d;
@@ -111,7 +111,7 @@ select {
   --bg-video: #0B1324;
   --bg-surface: #0B1324;
   --bg-surface-strong: #133262;
-  --bg-tab: #133262;
+  --bg-tab: #003c93;
   --bg-tab-hover: #3f79d6;
   --bg-tab-active: #3f79d6;
   --bg-action: #ffffff;
