@@ -388,7 +388,7 @@
 
         <div class="calls-modal-body">
           <section class="calls-modal-grid">
-            <label class="field">
+            <label class="field calls-field-wide">
               <span>Title</span>
               <input v-model="composeState.title" class="input" type="text" placeholder="Weekly Product Sync" />
             </label>
@@ -3023,6 +3023,10 @@ watch(
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.calls-field-wide {
+  grid-column: 1 / -1;
 }
 
 .calls-toggle-row {

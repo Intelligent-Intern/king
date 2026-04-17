@@ -378,16 +378,9 @@
 
         <div class="calls-modal-body">
           <section class="calls-modal-grid">
-            <label class="field">
+            <label class="field calls-field-wide">
               <span>Title</span>
               <input v-model="composeState.title" class="input" type="text" placeholder="Weekly Product Sync" />
-            </label>
-            <label class="field">
-              <span>Access mode</span>
-              <AppSelect v-model="composeState.accessMode" aria-label="Call access mode">
-                <option value="invite_only">Invite only</option>
-                <option value="free_for_all">Free for all</option>
-              </AppSelect>
             </label>
             <label class="field">
               <span>Starts at</span>
@@ -406,6 +399,13 @@
                 type="datetime-local"
                 aria-label="Call ends at"
               />
+            </label>
+            <label class="field calls-field-wide">
+              <span>Access mode</span>
+              <AppSelect v-model="composeState.accessMode" aria-label="Call access mode">
+                <option value="invite_only">Invite only</option>
+                <option value="free_for_all">Free for all</option>
+              </AppSelect>
             </label>
           </section>
 
@@ -1820,6 +1820,10 @@ watch(
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.calls-field-wide {
+  grid-column: 1 / -1;
 }
 
 .calls-inline-error {
