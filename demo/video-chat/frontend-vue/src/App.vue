@@ -36,7 +36,7 @@ const THEME_PRESETS = {
     '--text-primary': '#edf3ff',
     '--text-secondary': '#c6d4eb',
     '--text-dim': '#5e6d86',
-    '--warn': '#8d9500',
+    '--warn': '#4d5011',
   },
   light: {
     '--bg-shell': '#eff4fb',
@@ -65,7 +65,7 @@ const THEME_PRESETS = {
     '--text-primary': '#122035',
     '--text-secondary': '#33425d',
     '--text-dim': '#6d7d96',
-    '--warn': '#9a7b00',
+    '--warn': '#4d5011',
   },
 };
 
