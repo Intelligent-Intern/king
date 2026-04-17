@@ -5,7 +5,7 @@
   --bg-surface: #2b3e60;
   --bg-surface-strong: #0c1c33;
   --bg-input: #d8dadd;
-  --bg-action: #0B1324;
+  --bg-action: #ffffff;
   --bg-action-hover: #5696ef;
   --bg-row: #2a569f;
   --bg-row-hover: #163260;
@@ -33,6 +33,7 @@
   --brand-cyan: #1482BE;
   --brand-cyan-hover: #1a96d8;
   --brand-cyan-active: #0f6ea8;
+  --action-icon-filter: brightness(0) saturate(100%) invert(88%) sepia(8%) saturate(176%) hue-rotate(180deg) brightness(94%) contrast(89%);
 }
 
 * {
@@ -113,7 +114,7 @@ select {
   --bg-tab: #133262;
   --bg-tab-hover: #3f79d6;
   --bg-tab-active: #3f79d6;
-  --bg-action: #0B1324;
+  --bg-action: #ffffff;
   --bg-action-hover: #3f79d6;
   --bg-icon: #133262;
   --bg-icon-active: #3f79d6;
@@ -124,6 +125,7 @@ select {
   --text-secondary: #f7f7f7;
   --text-muted: #3f79d6;
   --text-dim: #3f79d6;
+  --action-icon-filter: brightness(0) saturate(100%) invert(8%) sepia(34%) saturate(1452%) hue-rotate(190deg) brightness(95%) contrast(98%);
 }
 
 .shell.left-collapsed {
@@ -226,7 +228,7 @@ select {
   height: 18px;
   object-fit: contain;
   display: block;
-  filter: brightness(0) invert(1);
+  filter: var(--action-icon-filter);
 }
 
 .sidebar-close-mark {
@@ -346,7 +348,7 @@ select {
   width: 16px;
   height: 16px;
   object-fit: contain;
-  filter: brightness(0) invert(1);
+  filter: var(--action-icon-filter);
 }
 
 .nav-link:hover {
@@ -532,7 +534,7 @@ select {
   object-fit: contain;
   display: block;
   margin: 0 auto;
-  filter: brightness(0) invert(1);
+  filter: var(--action-icon-filter);
 }
 
 .tab-panel {
@@ -1472,7 +1474,7 @@ tbody tr:hover {
   width: 15px;
   height: 15px;
   object-fit: contain;
-  filter: brightness(0) invert(1);
+  filter: var(--action-icon-filter);
 }
 
 .round-icon:hover,
@@ -1520,7 +1522,7 @@ tbody tr:hover {
   width: 15px;
   height: 15px;
   object-fit: contain;
-  filter: brightness(0) invert(1);
+  filter: var(--action-icon-filter);
 }
 
 .icon-copy {
@@ -1534,7 +1536,7 @@ tbody tr:hover {
 .icon-copy::after {
   content: '';
   position: absolute;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--bg-input);
   border-radius: 2px;
 }
 
