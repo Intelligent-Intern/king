@@ -77,6 +77,7 @@ SQL
 
     $invalidValues = videochat_update_user_settings($pdo, $userId, [
         'time_format' => '99h',
+        'date_format' => 'unknown',
         'theme' => '',
     ]);
     videochat_user_settings_assert($invalidValues['ok'] === false, 'invalid settings update should fail');
@@ -84,6 +85,10 @@ SQL
     videochat_user_settings_assert(
         (string) ($invalidValues['errors']['time_format'] ?? '') === 'must_be_24h_or_12h',
         'invalid time_format error mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) ($invalidValues['errors']['date_format'] ?? '') === 'must_be_supported_date_format',
+        'invalid date_format error mismatch'
     );
     videochat_user_settings_assert(
         (string) ($invalidValues['errors']['theme'] ?? '') === 'required_theme',
@@ -103,6 +108,7 @@ SQL
     $validUpdate = videochat_update_user_settings($pdo, $userId, [
         'display_name' => 'Call User Updated',
         'time_format' => '12h',
+        'date_format' => 'ymd_dash',
         'theme' => 'light',
         'avatar_path' => '/avatars/call-user-updated.png',
     ]);
@@ -115,6 +121,10 @@ SQL
     videochat_user_settings_assert(
         (string) (($validUpdate['user'] ?? [])['time_format'] ?? '') === '12h',
         'updated time_format mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) (($validUpdate['user'] ?? [])['date_format'] ?? '') === 'ymd_dash',
+        'updated date_format mismatch'
     );
     videochat_user_settings_assert(
         (string) (($validUpdate['user'] ?? [])['theme'] ?? '') === 'light',
@@ -142,6 +152,10 @@ SQL
     videochat_user_settings_assert(
         (string) (($reauth['user'] ?? [])['time_format'] ?? '') === '12h',
         'reauth time_format should reflect persisted settings'
+    );
+    videochat_user_settings_assert(
+        (string) (($reauth['user'] ?? [])['date_format'] ?? '') === 'ymd_dash',
+        'reauth date_format should reflect persisted settings'
     );
     videochat_user_settings_assert(
         (string) (($reauth['user'] ?? [])['theme'] ?? '') === 'light',

@@ -76,6 +76,7 @@ function videochat_issue_email_change_token(): string
  *   role: string,
  *   status: string,
  *   time_format: string,
+ *   date_format: string,
  *   theme: string,
  *   avatar_path: ?string
  * }|null
@@ -94,6 +95,7 @@ SELECT
     users.display_name,
     users.status,
     users.time_format,
+    users.date_format,
     users.theme,
     users.avatar_path,
     roles.slug AS role_slug
@@ -116,6 +118,7 @@ SQL
         'role' => is_string($row['role_slug'] ?? null) ? (string) $row['role_slug'] : 'user',
         'status' => is_string($row['status'] ?? null) ? (string) $row['status'] : 'disabled',
         'time_format' => is_string($row['time_format'] ?? null) ? (string) $row['time_format'] : '24h',
+        'date_format' => is_string($row['date_format'] ?? null) ? (string) $row['date_format'] : 'dmy_dot',
         'theme' => is_string($row['theme'] ?? null) ? (string) $row['theme'] : 'dark',
         'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
     ];

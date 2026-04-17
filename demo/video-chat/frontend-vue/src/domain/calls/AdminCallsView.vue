@@ -678,6 +678,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import AppSelect from '../../components/AppSelect.vue';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import { formatDateRangeDisplay, formatDateTimeDisplay, fullCalendarEventTimeFormat } from '../../support/dateTimeFormat';
 import { createAdminSyncSocket } from '../../support/adminSyncSocket';
 import {
   attachCallMediaDeviceWatcher,
@@ -786,21 +787,20 @@ function localInputToIso(localValue) {
 }
 
 function formatDateTime(isoValue) {
-  if (typeof isoValue !== 'string' || isoValue.trim() === '') return 'n/a';
-  const date = new Date(isoValue);
-  if (Number.isNaN(date.getTime())) return isoValue;
-
-  return new Intl.DateTimeFormat('en-GB', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+  return formatDateTimeDisplay(isoValue, {
+    dateFormat: sessionState.dateFormat,
+    timeFormat: sessionState.timeFormat,
+    fallback: 'n/a',
+  });
 }
 
 function formatRange(startsAt, endsAt) {
-  return `${formatDateTime(startsAt)} → ${formatDateTime(endsAt)}`;
+  return formatDateRangeDisplay(startsAt, endsAt, {
+    dateFormat: sessionState.dateFormat,
+    timeFormat: sessionState.timeFormat,
+    separator: ' → ',
+    fallback: 'n/a',
+  });
 }
 
 function statusTagClass(status) {
@@ -1181,7 +1181,7 @@ async function initCallsCalendar() {
       },
       height: 'auto',
       contentHeight: 'auto',
-      eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+      eventTimeFormat: fullCalendarEventTimeFormat(sessionState.timeFormat),
       selectable: true,
       editable: true,
       eventStartEditable: true,
@@ -2656,6 +2656,14 @@ watch(
     }
 
     adminSyncClient.reconnect();
+  }
+);
+
+watch(
+  () => sessionState.timeFormat,
+  () => {
+    if (!calendarInstance) return;
+    calendarInstance.setOption('eventTimeFormat', fullCalendarEventTimeFormat(sessionState.timeFormat));
   }
 );
 </script>

@@ -274,6 +274,8 @@ import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import { sessionState } from '../auth/session';
+import { formatDateRangeDisplay, fullCalendarEventTimeFormat } from '../../support/dateTimeFormat';
 
 const router = useRouter();
 const activeOverviewView = ref('dashboard');
@@ -463,9 +465,12 @@ function setActiveOverviewView(view) {
 }
 
 function formatScheduleRange(startValue, endValue) {
-  const start = String(startValue || '').replace('T', ' ');
-  const end = String(endValue || '').replace('T', ' ');
-  return `${start} -> ${end}`;
+  return formatDateRangeDisplay(startValue, endValue, {
+    dateFormat: sessionState.dateFormat,
+    timeFormat: sessionState.timeFormat,
+    separator: ' -> ',
+    fallback: 'n/a',
+  });
 }
 
 function openWorkspace(row) {
@@ -830,7 +835,7 @@ async function initOverviewCalendar() {
       height: '100%',
       contentHeight: '100%',
       expandRows: true,
-      eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+      eventTimeFormat: fullCalendarEventTimeFormat(sessionState.timeFormat),
       selectable: true,
       editable: true,
       eventStartEditable: true,
@@ -927,6 +932,14 @@ watch(activeOverviewView, async (view) => {
   await nextTick();
   calendarInstance.updateSize();
 });
+
+watch(
+  () => sessionState.timeFormat,
+  () => {
+    if (!calendarInstance) return;
+    calendarInstance.setOption('eventTimeFormat', fullCalendarEventTimeFormat(sessionState.timeFormat));
+  }
+);
 </script>
 
 <style scoped>

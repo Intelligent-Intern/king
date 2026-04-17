@@ -147,6 +147,7 @@ function videochat_is_call_joinable_status(string $status): bool
  *   role: string,
  *   status: string,
  *   time_format: string,
+ *   date_format: string,
  *   theme: string,
  *   avatar_path: ?string
  * }|null
@@ -167,6 +168,7 @@ SELECT
     users.display_name,
     users.status,
     users.time_format,
+    users.date_format,
     users.theme,
     users.avatar_path,
     roles.slug AS role_slug
@@ -187,6 +189,7 @@ SELECT
     users.display_name,
     users.status,
     users.time_format,
+    users.date_format,
     users.theme,
     users.avatar_path,
     roles.slug AS role_slug
@@ -212,6 +215,7 @@ SQL
         'role' => is_string($row['role_slug'] ?? null) ? (string) $row['role_slug'] : 'user',
         'status' => (string) ($row['status'] ?? 'disabled'),
         'time_format' => (string) ($row['time_format'] ?? '24h'),
+        'date_format' => (string) ($row['date_format'] ?? 'dmy_dot'),
         'theme' => (string) ($row['theme'] ?? 'dark'),
         'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
     ];
@@ -266,6 +270,7 @@ INSERT INTO users(
     role_id,
     status,
     time_format,
+    date_format,
     theme,
     avatar_path,
     updated_at
@@ -276,6 +281,7 @@ INSERT INTO users(
     :role_id,
     'active',
     '24h',
+    'dmy_dot',
     'dark',
     NULL,
     :updated_at
@@ -745,6 +751,7 @@ SQL
             'role' => videochat_normalize_role_slug((string) ($targetUser['role'] ?? 'user')),
             'status' => (string) ($targetUser['status'] ?? 'active'),
             'time_format' => (string) ($targetUser['time_format'] ?? '24h'),
+            'date_format' => (string) ($targetUser['date_format'] ?? 'dmy_dot'),
             'theme' => (string) ($targetUser['theme'] ?? 'dark'),
             'avatar_path' => is_string($targetUser['avatar_path'] ?? null) ? (string) $targetUser['avatar_path'] : null,
         ],

@@ -31,6 +31,7 @@ function videochat_open_sqlite_pdo(string $databasePath): PDO
  *   role: string,
  *   password: string,
  *   time_format: string,
+ *   date_format: string,
  *   theme: string
  * }>
  */
@@ -60,6 +61,7 @@ function videochat_demo_user_blueprint(): array
             'role' => 'admin',
             'password' => $adminPassword,
             'time_format' => '24h',
+            'date_format' => 'dmy_dot',
             'theme' => 'dark',
         ],
         [
@@ -68,6 +70,7 @@ function videochat_demo_user_blueprint(): array
             'role' => 'user',
             'password' => $userPassword,
             'time_format' => '24h',
+            'date_format' => 'dmy_dot',
             'theme' => 'dark',
         ],
     ];
@@ -103,7 +106,7 @@ function videochat_seed_demo_users(PDO $pdo): array
 
     $selectUser = $pdo->prepare(
         <<<'SQL'
-SELECT id, role_id, display_name, password_hash, status, time_format, theme
+SELECT id, role_id, display_name, password_hash, status, time_format, date_format, theme
 FROM users
 WHERE lower(email) = lower(:email)
 LIMIT 1
@@ -111,8 +114,8 @@ SQL
     );
     $insertUser = $pdo->prepare(
         <<<'SQL'
-INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, updated_at)
-VALUES(:email, :display_name, :password_hash, :role_id, 'active', :time_format, :theme, :updated_at)
+INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, date_format, theme, updated_at)
+VALUES(:email, :display_name, :password_hash, :role_id, 'active', :time_format, :date_format, :theme, :updated_at)
 SQL
     );
     $updateUser = $pdo->prepare(
@@ -123,6 +126,7 @@ SET display_name = :display_name,
     role_id = :role_id,
     status = 'active',
     time_format = :time_format,
+    date_format = :date_format,
     theme = :theme,
     updated_at = :updated_at
 WHERE id = :id
@@ -168,6 +172,9 @@ SQL
             if ((string) ($existing['time_format'] ?? '') !== $demoUser['time_format']) {
                 $needsUpdate = true;
             }
+            if ((string) ($existing['date_format'] ?? '') !== $demoUser['date_format']) {
+                $needsUpdate = true;
+            }
             if ((string) ($existing['theme'] ?? '') !== $demoUser['theme']) {
                 $needsUpdate = true;
             }
@@ -179,6 +186,7 @@ SQL
                     ':password_hash' => $passwordHash,
                     ':role_id' => $roleId,
                     ':time_format' => $demoUser['time_format'],
+                    ':date_format' => $demoUser['date_format'],
                     ':theme' => $demoUser['theme'],
                     ':updated_at' => gmdate('c'),
                 ]);
@@ -195,6 +203,7 @@ SQL
                 ':password_hash' => $passwordHash,
                 ':role_id' => $roleId,
                 ':time_format' => $demoUser['time_format'],
+                ':date_format' => $demoUser['date_format'],
                 ':theme' => $demoUser['theme'],
                 ':updated_at' => gmdate('c'),
             ];
@@ -879,6 +888,19 @@ WHERE trim(coalesce(users.email, '')) <> ''
       FROM user_emails
       WHERE user_emails.user_id = users.id
   )
+SQL,
+            ],
+        ],
+        11 => [
+            'name' => '0011_users_date_format',
+            'statements' => [
+                "ALTER TABLE users ADD COLUMN date_format TEXT NOT NULL DEFAULT 'dmy_dot' CHECK (date_format IN ('dmy_dot', 'dmy_slash', 'dmy_dash', 'ymd_dash', 'ymd_slash', 'ymd_dot', 'ymd_compact', 'mdy_slash', 'mdy_dash', 'mdy_dot'))",
+                <<<'SQL'
+UPDATE users
+SET date_format = 'dmy_dot'
+WHERE date_format IS NULL
+   OR trim(date_format) = ''
+   OR lower(date_format) NOT IN ('dmy_dot', 'dmy_slash', 'dmy_dash', 'ymd_dash', 'ymd_slash', 'ymd_dot', 'ymd_compact', 'mdy_slash', 'mdy_dash', 'mdy_dot')
 SQL,
             ],
         ],

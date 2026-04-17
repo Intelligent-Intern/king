@@ -1,5 +1,6 @@
 import { reactive } from 'vue';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import { normalizeDateFormat, normalizeTimeFormat } from '../../support/dateTimeFormat';
 
 const STORAGE_KEY = 'ii_videocall_v1_session';
 const AUTH_ROLES = new Set(['admin', 'user']);
@@ -7,11 +8,6 @@ const AUTH_ROLES = new Set(['admin', 'user']);
 function normalizeRole(value) {
   const role = String(value || '').trim().toLowerCase();
   return AUTH_ROLES.has(role) ? role : null;
-}
-
-function normalizeTimeFormat(value) {
-  const timeFormat = String(value || '').trim().toLowerCase();
-  return timeFormat === '12h' || timeFormat === '24h' ? timeFormat : '24h';
 }
 
 function normalizeTheme(value) {
@@ -60,6 +56,7 @@ export const sessionState = reactive({
   userId: 0,
   avatarPath: null,
   timeFormat: '24h',
+  dateFormat: 'dmy_dot',
   theme: 'dark',
   status: '',
   sessionId: loaded?.sessionId || '',
@@ -95,6 +92,7 @@ function resetUserFields() {
   sessionState.userId = 0;
   sessionState.avatarPath = null;
   sessionState.timeFormat = '24h';
+  sessionState.dateFormat = 'dmy_dot';
   sessionState.theme = 'dark';
   sessionState.status = '';
 }
@@ -123,6 +121,7 @@ function applyUserSnapshot(user) {
     ? normalizeString(user.avatar_path)
     : null;
   sessionState.timeFormat = normalizeTimeFormat(user.time_format);
+  sessionState.dateFormat = normalizeDateFormat(user.date_format);
   sessionState.theme = normalizeTheme(user.theme);
   sessionState.status = normalizeString(user.status);
 }

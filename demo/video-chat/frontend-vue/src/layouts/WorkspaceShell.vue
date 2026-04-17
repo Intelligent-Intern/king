@@ -366,25 +366,28 @@
         </div>
       </section>
 
-      <section v-else-if="activeSettingsTile === 'regional-time'" class="settings-panel">
-        <div class="settings-row">
-          <label class="settings-field">
-            <span>Time format</span>
-            <AppSelect v-model="settingsDraft.timeFormat">
-              <option value="24h">24h</option>
-              <option value="12h">12h</option>
-            </AppSelect>
-          </label>
-          <label class="settings-field">
-            <span>Language</span>
-            <AppSelect v-model="settingsDraft.language">
-              <option value="en">English</option>
-              <option value="de">Deutsch</option>
-              <option value="fr">Français</option>
-              <option value="es">Español</option>
-            </AppSelect>
-          </label>
-        </div>
+      <section v-else-if="activeSettingsTile === 'regional'" class="settings-panel">
+        <section class="settings-section">
+          <h4>Regional Time</h4>
+          <p>Select how date and time should be displayed across the workspace.</p>
+          <div class="settings-row">
+            <label class="settings-field">
+              <span>Time format</span>
+              <AppSelect v-model="settingsDraft.timeFormat">
+                <option value="24h">24h</option>
+                <option value="12h">12h</option>
+              </AppSelect>
+            </label>
+            <label class="settings-field">
+              <span>Date display</span>
+              <AppSelect v-model="settingsDraft.dateFormat">
+                <option v-for="option in dateFormatOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </AppSelect>
+            </label>
+          </div>
+        </section>
       </section>
 
       <section v-else-if="activeSettingsTile === 'notifications'" class="settings-panel">
@@ -608,6 +611,7 @@ import {
   sessionState,
   uploadSessionAvatar,
 } from '../domain/auth/session';
+import { DATE_FORMAT_OPTIONS, normalizeDateFormat, normalizeTimeFormat } from '../support/dateTimeFormat';
 import { currentBackendOrigin, fetchBackend } from '../support/backendFetch';
 import {
   attachCallMediaDeviceWatcher,
@@ -720,6 +724,7 @@ const settingsDraft = reactive({
   displayName: '',
   theme: 'dark',
   timeFormat: '24h',
+  dateFormat: 'dmy_dot',
   language: 'en',
   avatarDataUrl: '',
 });
@@ -736,11 +741,12 @@ const activeSettingsTile = ref('about-me');
 const settingsTiles = computed(() => ([
   { id: 'about-me', label: 'About Me' },
   { id: 'credentials-email', label: 'Credentials + Email' },
-  { id: 'regional-time', label: 'Regional Time + Language' },
+  { id: 'regional', label: 'Regional' },
   { id: 'theme', label: 'Theme' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'apps', label: 'Apps' },
 ]));
+const dateFormatOptions = DATE_FORMAT_OPTIONS;
 
 const settingsAvatarPreviewSrc = computed(() => settingsDraft.avatarDataUrl || profileAvatarSrc.value);
 
@@ -1751,6 +1757,7 @@ function resetSettingsDraft() {
   settingsDraft.displayName = sessionState.displayName || '';
   settingsDraft.theme = sessionState.theme || 'dark';
   settingsDraft.timeFormat = sessionState.timeFormat || '24h';
+  settingsDraft.dateFormat = sessionState.dateFormat || 'dmy_dot';
   settingsDraft.language = readStoredSettingsLanguage();
   settingsDraft.avatarDataUrl = '';
 }
@@ -1832,7 +1839,10 @@ async function saveSettings() {
 
   const displayName = settingsDraft.displayName.trim();
   const theme = settingsDraft.theme.trim();
-  const timeFormat = settingsDraft.timeFormat.trim();
+  const rawTimeFormat = settingsDraft.timeFormat.trim();
+  const rawDateFormat = settingsDraft.dateFormat.trim();
+  const timeFormat = normalizeTimeFormat(rawTimeFormat);
+  const dateFormat = normalizeDateFormat(rawDateFormat);
   const language = normalizeSettingsLanguage(settingsDraft.language);
 
   if (displayName === '') {
@@ -1845,8 +1855,13 @@ async function saveSettings() {
     return;
   }
 
-  if (!['24h', '12h'].includes(timeFormat)) {
+  if (!['24h', '12h'].includes(rawTimeFormat)) {
     settingsState.message = 'Time format must be 24h or 12h.';
+    return;
+  }
+
+  if (rawDateFormat === '' || rawDateFormat !== dateFormat) {
+    settingsState.message = 'Please choose a supported date format.';
     return;
   }
 
@@ -1877,6 +1892,7 @@ async function saveSettings() {
       display_name: displayName,
       theme,
       time_format: timeFormat,
+      date_format: dateFormat,
       avatar_path: avatarPath,
     });
 

@@ -85,6 +85,7 @@ SELECT
     users.password_hash,
     users.status,
     users.time_format,
+    users.date_format,
     users.theme,
     users.avatar_path,
     roles.slug AS role_slug
@@ -184,6 +185,7 @@ SQL
                     'role' => (string) ($user['role_slug'] ?? 'user'),
                     'status' => (string) $user['status'],
                     'time_format' => (string) ($user['time_format'] ?? '24h'),
+                    'date_format' => (string) ($user['date_format'] ?? 'dmy_dot'),
                     'theme' => (string) ($user['theme'] ?? 'dark'),
                     'avatar_path' => is_string($user['avatar_path'] ?? null) ? (string) $user['avatar_path'] : null,
                 ],
