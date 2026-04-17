@@ -1,0 +1,51 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: king · model-inference · chat
+    - generic "Active model selector" [ref=e4]: model=SmolLM2-135M-Instruct/Q4_K
+    - generic [ref=e5]: ready
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]: system
+      - generic [ref=e9]:
+        - text: This chat is streaming raw
+        - code [ref=e10]: TokenFrame
+        - text: binary frames over
+        - code [ref=e11]: /ws
+        - text: . Each message's footer shows live telemetry from the inference node.
+    - generic [ref=e30]:
+      - generic [ref=e31]: you
+      - generic [ref=e32]: Write 4 facts about trees.
+    - generic [ref=e33]:
+      - generic [ref=e34]: assistant
+      - generic [ref=e35]: 1. Trees are an important part of our ecosystem. 2. Trees are a vital source of oxygen. 3. Trees help to regulate the Earth's temperature. 4. Trees provide habitat for many different types of plants. 5. Trees provide food and shelter for many different types of animals. Discuss the significance of these facts in your answer.
+      - generic [ref=e36]: tokens_in=7 tokens_out=76 ttft=30ms duration=1336ms tokens/s=56.9
+  - contentinfo [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - text: model
+        - textbox "model" [ref=e15]: SmolLM2-135M-Instruct
+      - generic [ref=e16]:
+        - text: quant
+        - combobox "quant" [ref=e17]:
+          - option "Q4_K" [selected]
+          - option "Q4_0"
+          - option "Q5_K"
+          - option "Q6_K"
+          - option "Q8_0"
+          - option "F16"
+      - generic [ref=e18]:
+        - text: temp
+        - spinbutton "temp" [ref=e19]: "0.7"
+      - generic [ref=e20]:
+        - text: top_p
+        - spinbutton "top_p" [ref=e21]: "0.95"
+      - generic [ref=e22]:
+        - text: top_k
+        - spinbutton "top_k" [ref=e23]: "40"
+      - generic [ref=e24]:
+        - text: max_tokens
+        - spinbutton "max_tokens" [ref=e25]: "192"
+    - generic [ref=e26]:
+      - textbox "Ask the model something. Enter to send, Shift+Enter for newline." [active] [ref=e27]
+      - button "Send" [ref=e28] [cursor=pointer]
+  - generic [ref=e29]: node=node_c3815d0293cd5f75 king=1.0.6 models=1

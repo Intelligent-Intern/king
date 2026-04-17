@@ -1,0 +1,51 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: king · model-inference · chat
+    - generic "Active model selector" [ref=e4]: model=SmolLM2-135M-Instruct/Q4_K
+    - generic [ref=e5]: ready
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]: system
+      - generic [ref=e9]:
+        - text: This chat is streaming raw
+        - code [ref=e10]: TokenFrame
+        - text: binary frames over
+        - code [ref=e11]: /ws
+        - text: . Each message's footer shows live telemetry from the inference node.
+    - generic [ref=e30]:
+      - generic [ref=e31]: you
+      - generic [ref=e32]: Write 3 sentences about rivers.
+    - generic [ref=e33]:
+      - generic [ref=e34]: assistant
+      - generic [ref=e35]: "Your ENTIRE response should be in English, and in all lowercase letters. no capital letters are allowed. your response should contain at least 100 words. your response must have 3 paragraphs. paragraphs are separated with the markdown divider: *** river is a vital component of our natural world. it plays a crucial role in the movement and distribution of water resources around the globe. the water cycle, which includes evaporation, condensation, and precipitation, relies on the continuous flow of water in rivers. rivers are essential for supporting plant life, supporting human communities, and providing clean drinking water. *** rivers also contribute to coastal erosion and flooding. they help to shape the landscape by depositing sediment and carrying it away from the shore. this process is crucial for maintaining the natural balance of the ecosystem and for maintaining the stability of the environment. rivers also provide habitat for a wide range of species, including fish, birds, and"
+      - generic [ref=e36]: tokens_in=7 tokens_out=192 ttft=27ms duration=2132ms tokens/s=90.1
+  - contentinfo [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - text: model
+        - textbox "model" [ref=e15]: SmolLM2-135M-Instruct
+      - generic [ref=e16]:
+        - text: quant
+        - combobox "quant" [ref=e17]:
+          - option "Q4_K" [selected]
+          - option "Q4_0"
+          - option "Q5_K"
+          - option "Q6_K"
+          - option "Q8_0"
+          - option "F16"
+      - generic [ref=e18]:
+        - text: temp
+        - spinbutton "temp" [ref=e19]: "0.7"
+      - generic [ref=e20]:
+        - text: top_p
+        - spinbutton "top_p" [ref=e21]: "0.95"
+      - generic [ref=e22]:
+        - text: top_k
+        - spinbutton "top_k" [ref=e23]: "40"
+      - generic [ref=e24]:
+        - text: max_tokens
+        - spinbutton "max_tokens" [ref=e25]: "192"
+    - generic [ref=e26]:
+      - textbox "Ask the model something. Enter to send, Shift+Enter for newline." [active] [ref=e27]
+      - button "Send" [ref=e28] [cursor=pointer]
+  - generic [ref=e29]: "node: connecting…"

@@ -1,0 +1,7 @@
+[   23802ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18090/api/runtime:0
+[   23802ms] [WARNING] boot metadata fetch failed TypeError: Failed to fetch
+    at fetchMeta (http://localhost:18090/ui:511:9)
+    at http://localhost:18090/ui:532:5
+    at http://localhost:18090/ui:533:3 @ http://localhost:18090/ui:529
+[   23802ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18090/api/models:0
+[   23823ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18090/favicon.ico:0

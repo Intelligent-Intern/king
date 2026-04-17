@@ -1,0 +1,53 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: king · model-inference · chat
+    - generic "Active model selector" [ref=e4]: model=SmolLM2-135M-Instruct/Q2_K
+    - generic [ref=e5]: ready
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]: system
+      - generic [ref=e9]:
+        - text: This chat is streaming raw
+        - code [ref=e10]: TokenFrame
+        - text: binary frames over
+        - code [ref=e11]: /ws
+        - text: . Each message's footer shows live telemetry from the inference node.
+    - generic [ref=e30]:
+      - generic [ref=e31]: you
+      - generic [ref=e32]: What color is the sky?
+    - generic [ref=e33]:
+      - generic [ref=e34]: assistant
+      - generic [ref=e35]: The sky is a vast, vibrant expanse of sapphire blue hues. The sky is composed of countless colored shades, but it's the sky's indigo shades that are most fascinating. The indigo hues are a result of the interplay between the different wavelengths of light, which is why they appear as a single, unified color. The indigo hues can be seen from a distance, but they're not necessarily seen in the same way by everyone, due to the varied wavelengths of light that are absorbed by the atmosphere. In general, the indigo hues are associated with the blue light, which is the light that is filtered by the atmosphere. However, the indigo hues can be seen from a distance, which is why they're often associated with the indigo sky. The sky is a wondrous sight to behold, and it's fascinating to see the colors of the sky come alive, revealing the intricate details of the celestial bodies.
+      - generic [ref=e36]: tokens_in=36 tokens_out=184 ttft=12ms duration=3056ms tokens/s=60.2
+  - contentinfo [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - text: model
+        - textbox "model" [ref=e15]: SmolLM2-135M-Instruct
+      - generic [ref=e16]:
+        - text: quant
+        - combobox "quant" [ref=e17]:
+          - option "F16"
+          - option "Q8_0" [selected]
+          - option "Q6_K"
+          - option "Q5_K"
+          - option "Q4_K"
+          - option "Q4_0"
+          - option "Q3_K"
+          - option "Q2_K"
+      - generic [ref=e18]:
+        - text: temp
+        - spinbutton "temp" [ref=e19]: "0.7"
+      - generic [ref=e20]:
+        - text: top_p
+        - spinbutton "top_p" [ref=e21]: "0.95"
+      - generic [ref=e22]:
+        - text: top_k
+        - spinbutton "top_k" [ref=e23]: "40"
+      - generic [ref=e24]:
+        - text: max_tokens
+        - spinbutton "max_tokens" [ref=e25]: "192"
+    - generic [ref=e26]:
+      - textbox "Ask the model something. Enter to send, Shift+Enter for newline." [ref=e27]
+      - button "Send" [ref=e28] [cursor=pointer]
+  - generic [ref=e29]: node=node_121768dc629d4659 king=1.0.6 models=8

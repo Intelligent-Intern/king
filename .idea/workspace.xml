@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="32f4be24-fee8-4eb7-acb1-62eaa4365e3d" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/ISSUES.md" beforeDir="false" afterPath="$PROJECT_DIR$/ISSUES.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/demo/model-inference/backend-king-php/domain/registry/model_registry.php" beforeDir="false" afterPath="$PROJECT_DIR$/demo/model-inference/backend-king-php/domain/registry/model_registry.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/demo/model-inference/backend-king-php/http/module_telemetry.php" beforeDir="false" afterPath="$PROJECT_DIR$/demo/model-inference/backend-king-php/http/module_telemetry.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/demo/model-inference/backend-king-php/http/router.php" beforeDir="false" afterPath="$PROJECT_DIR$/demo/model-inference/backend-king-php/http/router.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/demo/model-inference/backend-king-php/server.php" beforeDir="false" afterPath="$PROJECT_DIR$/demo/model-inference/backend-king-php/server.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/demo/model-inference/backend-king-php/tests/contract-catalog-parity-contract.php" beforeDir="false" afterPath="$PROJECT_DIR$/demo/model-inference/backend-king-php/tests/contract-catalog-parity-contract.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/demo/model-inference/backend-king-php/tests/router-module-order-contract.php" beforeDir="false" afterPath="$PROJECT_DIR$/demo/model-inference/backend-king-php/tests/router-module-order-contract.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/demo/model-inference/contracts/v1/api-ws-contract.catalog.json" beforeDir="false" afterPath="$PROJECT_DIR$/demo/model-inference/contracts/v1/api-ws-contract.catalog.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/quiche/qlog-dancer/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/quiche/qlog-dancer/Cargo.toml" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ChangesViewManager">
+    <option name="groupingKeys">
+      <option value="directory" />
+      <option value="repository" />
+    </option>
+  </component>
+  <component name="ComposerSettings" synchronizationState="SYNCHRONIZE">
+    <pharConfigPath>$PROJECT_DIR$/composer.json</pharConfigPath>
+    <execution />
+  </component>
+  <component name="CopilotPersistence">
+    <persistenceIdMap>
+      <entry key="_/Users/juliuswittekind/IdeaProjects/king_v1" value="3CLQA6NOvkhUJwMe6XVYZsBECjc" />
+    </persistenceIdMap>
+  </component>
+  <component name="EmbeddingIndexingInfo">
+    <option name="cachedIndexableFilesCount" value="51919" />
+    <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="ROOT_SYNC" value="DONT_SYNC" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;jwittekind&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;git@github.com:jwittekind/king_v1.git&quot;,
+    &quot;accountId&quot;: &quot;3db027e8-4fce-4682-9803-4e1144f2a465&quot;
+  }
+}</component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="PhpWorkspaceProjectConfiguration" interpreter_name="/opt/homebrew/Cellar/php/8.2.12_1/bin/php" />
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 7
+}</component>
+  <component name="ProjectId" id="3CLQA6NOvkhUJwMe6XVYZsBECjc" />
+  <component name="ProjectViewState">
+    <option name="autoscrollFromSource" value="true" />
+    <option name="autoscrollToSource" value="true" />
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;SHELLCHECK.PATH&quot;: &quot;/Users/juliuswittekind/Library/Application Support/JetBrains/IntelliJIdea2025.3/plugins/Shell Script/shellcheck&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;feature/rag-pipeline&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/juliuswittekind/IdeaProjects/king_v1&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.stylelint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.stylelint&quot;: &quot;&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;configurable.group.editor&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-30f59d01ecdd-2fc7cc6b9a17-intellij.indexing.shared.core-IU-253.31033.145" />
+        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-IU-253.31033.145" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="32f4be24-fee8-4eb7-acb1-62eaa4365e3d" name="Changes" comment="" />
+      <created>1776162223377</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1776162223377</updated>
+      <workItem from="1776162224792" duration="6278000" />
+      <workItem from="1776196023147" duration="23578000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="github-copilot-workspace">
+    <instructionFileLocations>
+      <option value=".github/instructions" />
+    </instructionFileLocations>
+    <promptFileLocations>
+      <option value=".github/prompts" />
+    </promptFileLocations>
+  </component>
+</project>
