@@ -113,7 +113,7 @@ select {
   --bg-surface-strong: #133262;
   --bg-tab: #003c93;
   --bg-tab-hover: #3f79d6;
-  --bg-tab-active: #3f79d6;
+  --bg-tab-active: var(--bg-row);
   --bg-action: #ffffff;
   --bg-action-hover: #3f79d6;
   --bg-icon: #133262;
