@@ -81,7 +81,7 @@ var DataType = /* @__PURE__ */ ((DataType2) => {
   DataType2[DataType2["OBJECT"] = 11] = "OBJECT";
   DataType2[DataType2["TIMESTAMP"] = 12] = "TIMESTAMP";
   return DataType2;
-})(DataType || {});
+})({});
 var IIBINEncoder = class {
   constructor(initialSize = 1024) {
     this.buffer = new ArrayBuffer(initialSize);
