@@ -28,7 +28,8 @@ var MessageType = /* @__PURE__ */ ((MessageType2) => {
   MessageType2[MessageType2["ERROR"] = 255] = "ERROR";
   return MessageType2;
 })(MessageType || {});
-var DataType = /* @__PURE__ */ ((DataType2) => {
+var DataType = {};
+DataType = /* @__PURE__ */ ((DataType2) => {
   DataType2[DataType2["NULL"] = 0] = "NULL";
   DataType2[DataType2["BOOLEAN"] = 1] = "BOOLEAN";
   DataType2[DataType2["INT8"] = 2] = "INT8";
@@ -43,7 +44,7 @@ var DataType = /* @__PURE__ */ ((DataType2) => {
   DataType2[DataType2["OBJECT"] = 11] = "OBJECT";
   DataType2[DataType2["TIMESTAMP"] = 12] = "TIMESTAMP";
   return DataType2;
-})(DataType || {});
+})(DataType);
 var IIBINEncoder = class {
   constructor(initialSize = 1024) {
     this.buffer = new ArrayBuffer(initialSize);
