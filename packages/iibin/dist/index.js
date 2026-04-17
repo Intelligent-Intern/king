@@ -1,4 +1,5 @@
 // src/iibin.ts
+var MessageType;
 var MessageType = /* @__PURE__ */ ((MessageType2) => {
   MessageType2[MessageType2["TEXT_MESSAGE"] = 1] = "TEXT_MESSAGE";
   MessageType2[MessageType2["VOICE_MESSAGE"] = 2] = "VOICE_MESSAGE";
