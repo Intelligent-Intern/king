@@ -42,6 +42,7 @@ require_once __DIR__ . '/domain/calls/call_management.php';
 require_once __DIR__ . '/domain/calls/call_access.php';
 require_once __DIR__ . '/domain/calls/invite_codes.php';
 require_once __DIR__ . '/domain/realtime/realtime_chat.php';
+require_once __DIR__ . '/domain/realtime/realtime_admin_sync.php';
 require_once __DIR__ . '/domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/domain/realtime/realtime_presence.php';
 require_once __DIR__ . '/domain/realtime/realtime_reaction.php';

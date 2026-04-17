@@ -678,6 +678,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import AppSelect from '../../components/AppSelect.vue';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import { createAdminSyncSocket } from '../../support/adminSyncSocket';
 import {
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
@@ -890,6 +891,70 @@ function clearNotice() {
   noticeMessage.value = '';
 }
 
+let adminSyncReloadTimer = 0;
+let adminSyncClient = null;
+
+function clearAdminSyncReloadTimer() {
+  if (adminSyncReloadTimer > 0) {
+    window.clearTimeout(adminSyncReloadTimer);
+    adminSyncReloadTimer = 0;
+  }
+}
+
+async function reloadCallsFromAdminSync() {
+  await Promise.all([
+    loadCalls(),
+    loadCalendar({ background: true }),
+  ]);
+}
+
+function queueReloadCallsFromAdminSync() {
+  if (adminSyncReloadTimer > 0) return;
+  adminSyncReloadTimer = window.setTimeout(() => {
+    adminSyncReloadTimer = 0;
+    void reloadCallsFromAdminSync();
+  }, 120);
+}
+
+function publishAdminSync(topic, reason) {
+  if (!adminSyncClient) return;
+  adminSyncClient.publish(topic, reason);
+}
+
+function handleAdminSyncEvent(payload) {
+  const sourceSessionId = String(payload?.source_session_id || '').trim();
+  const ownSessionId = String(sessionState.sessionId || sessionState.sessionToken || '').trim();
+  if (sourceSessionId !== '' && sourceSessionId === ownSessionId) {
+    return;
+  }
+
+  const topic = String(payload?.topic || '').trim().toLowerCase();
+  if (!['all', 'calls', 'overview'].includes(topic)) {
+    return;
+  }
+
+  queueReloadCallsFromAdminSync();
+}
+
+function startAdminSyncSocket() {
+  if (adminSyncClient) {
+    adminSyncClient.disconnect();
+    adminSyncClient = null;
+  }
+
+  adminSyncClient = createAdminSyncSocket({
+    getSessionToken: () => String(sessionState.sessionToken || '').trim(),
+    onSync: handleAdminSyncEvent,
+  });
+  adminSyncClient.connect();
+}
+
+function stopAdminSyncSocket() {
+  if (!adminSyncClient) return;
+  adminSyncClient.disconnect();
+  adminSyncClient = null;
+}
+
 async function loadCalls() {
   loadingCalls.value = true;
   callsError.value = '';
@@ -1089,6 +1154,7 @@ async function persistCalendarEventWindow(eventApi, revert) {
       call.ends_at = endsAt;
     }
     setNotice('ok', 'Call schedule updated.');
+    publishAdminSync('calls', 'call_schedule_updated');
     await Promise.all([loadCalls(), loadCalendar({ background: true })]);
   } catch (error) {
     if (typeof revert === 'function') revert();
@@ -2107,6 +2173,7 @@ async function submitCompose() {
         body: payload,
       });
       setNotice('ok', 'Call updated.');
+      publishAdminSync('calls', 'call_updated');
     } else {
       const createResult = await apiRequest('/api/calls', {
         method: 'POST',
@@ -2114,6 +2181,7 @@ async function submitCompose() {
       });
       const createdCallId = String(createResult?.result?.call?.id || '').trim();
       const createdRoomId = String(createResult?.result?.call?.room_id || payload.room_id || 'lobby').trim() || 'lobby';
+      publishAdminSync('calls', 'call_created');
       if (composeState.mode === 'create') {
         closeCompose();
         void openCallWorkspace({ callId: createdCallId, roomId: createdRoomId });
@@ -2483,6 +2551,7 @@ async function submitCancel() {
 
     closeCancel();
     setNotice('ok', 'Call cancelled.');
+    publishAdminSync('calls', 'call_cancelled');
     await Promise.all([loadCalls(), loadCalendar()]);
   } catch (error) {
     cancelState.error = error instanceof Error ? error.message : 'Could not cancel call.';
@@ -2509,6 +2578,7 @@ async function submitDelete() {
 
     closeDelete();
     setNotice('ok', 'Call deleted.');
+    publishAdminSync('calls', 'call_deleted');
     await Promise.all([loadCalls(), loadCalendar()]);
   } catch (error) {
     deleteState.error = error instanceof Error ? error.message : 'Could not delete call.';
@@ -2542,6 +2612,7 @@ function handleEscape(event) {
 
 onMounted(() => {
   detachCallMediaWatcher = attachCallMediaDeviceWatcher({ requestPermissions: false });
+  startAdminSyncSocket();
   updateEnterCallPreviewAspectRatio();
   enterCallPreviewResizeHandler = () => updateEnterCallPreviewAspectRatio();
   window.addEventListener('resize', enterCallPreviewResizeHandler);
@@ -2552,6 +2623,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearAdminSyncReloadTimer();
+  stopAdminSyncSocket();
   if (typeof enterCallPreviewResizeHandler === 'function') {
     window.removeEventListener('resize', enterCallPreviewResizeHandler);
     window.removeEventListener('orientationchange', enterCallPreviewResizeHandler);
@@ -2568,6 +2641,23 @@ onBeforeUnmount(() => {
     calendarInstance = null;
   }
 });
+
+watch(
+  () => sessionState.sessionToken,
+  (nextValue, previousValue) => {
+    const nextToken = String(nextValue || '').trim();
+    const previousToken = String(previousValue || '').trim();
+    if (nextToken === previousToken) return;
+    if (!adminSyncClient) return;
+
+    if (nextToken === '') {
+      adminSyncClient.disconnect();
+      return;
+    }
+
+    adminSyncClient.reconnect();
+  }
+);
 </script>
 
 <style scoped>

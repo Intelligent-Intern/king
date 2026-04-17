@@ -279,9 +279,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppSelect from '../../components/AppSelect.vue';
+import { createAdminSyncSocket } from '../../support/adminSyncSocket';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import { logoutSession, refreshSession, sessionState } from '../auth/session';
 
@@ -342,6 +343,66 @@ const selectedUserPermissions = reactive({
 let loadToken = 0;
 let searchTimer = 0;
 let routeEditRequestToken = 0;
+let adminSyncReloadTimer = 0;
+let adminSyncClient = null;
+
+function clearAdminSyncReloadTimer() {
+  if (adminSyncReloadTimer > 0) {
+    window.clearTimeout(adminSyncReloadTimer);
+    adminSyncReloadTimer = 0;
+  }
+}
+
+async function reloadUsersFromAdminSync() {
+  await loadUsers();
+}
+
+function queueReloadUsersFromAdminSync() {
+  if (adminSyncReloadTimer > 0) return;
+  adminSyncReloadTimer = window.setTimeout(() => {
+    adminSyncReloadTimer = 0;
+    void reloadUsersFromAdminSync();
+  }, 120);
+}
+
+function publishAdminSync(topic, reason) {
+  if (!adminSyncClient) return;
+  adminSyncClient.publish(topic, reason);
+}
+
+function handleAdminSyncEvent(payload) {
+  const sourceSessionId = String(payload?.source_session_id || '').trim();
+  const ownSessionId = String(sessionState.sessionId || sessionState.sessionToken || '').trim();
+  if (sourceSessionId !== '' && sourceSessionId === ownSessionId) {
+    return;
+  }
+
+  const topic = String(payload?.topic || '').trim().toLowerCase();
+  if (!['all', 'users', 'overview'].includes(topic)) {
+    return;
+  }
+
+  queueReloadUsersFromAdminSync();
+}
+
+function startAdminSyncSocket() {
+  if (adminSyncClient) {
+    adminSyncClient.disconnect();
+    adminSyncClient = null;
+  }
+
+  adminSyncClient = createAdminSyncSocket({
+    getSessionToken: () => String(sessionState.sessionToken || '').trim(),
+    onSync: handleAdminSyncEvent,
+  });
+  adminSyncClient.connect();
+}
+
+function stopAdminSyncSocket() {
+  if (!adminSyncClient) return;
+  adminSyncClient.disconnect();
+  adminSyncClient = null;
+}
 
 function normalizeAvatarSrc(rawPath) {
   const value = String(rawPath || '').trim();
@@ -767,6 +828,7 @@ async function createPendingEmail() {
     } else {
       notice.value = `Confirmation for ${nextEmail} has been queued.`;
     }
+    publishAdminSync('users', 'user_email_added');
     userEmailDraft.value = '';
     await loadUserEmails(form.id);
   } catch (err) {
@@ -797,6 +859,7 @@ async function deletePendingEmail(emailRow) {
       method: 'DELETE',
     });
     notice.value = `Removed unconfirmed email ${emailValue || `#${emailId}`}.`;
+    publishAdminSync('users', 'user_email_removed');
     await loadUserEmails(form.id);
   } catch (err) {
     formError.value = err instanceof Error ? err.message : 'Could not delete email.';
@@ -848,6 +911,7 @@ async function submitForm() {
         },
       });
       notice.value = `Created ${displayName}.`;
+      publishAdminSync('users', 'user_created');
       page.value = 1;
     } else {
       const patchBody = {
@@ -868,6 +932,7 @@ async function submitForm() {
         body: patchBody,
       });
       notice.value = `Updated ${displayName}.`;
+      publishAdminSync('users', 'user_updated');
     }
 
     dialogOpen.value = false;
@@ -918,6 +983,7 @@ async function saveAvatarChanges() {
       notice.value = 'Default avatar applied.';
     }
 
+    publishAdminSync('users', 'user_avatar_updated');
     closeAvatarEditor();
     await loadUsers();
   } catch (err) {
@@ -948,6 +1014,7 @@ async function deleteUser(user) {
     });
     const deletedCalls = Number(payload?.result?.deleted_calls || 0);
     notice.value = `Deleted ${label}. Removed ${deletedCalls} owned video calls.`;
+    publishAdminSync('users', 'user_deleted');
 
     if (dialogOpen.value && form.mode === 'edit' && Number(form.id || 0) === userId) {
       closeDialog();
@@ -982,6 +1049,7 @@ async function toggleUserStatus(user) {
       method: 'POST',
     });
     notice.value = `${status === 'disabled' ? 'Reactivated' : 'Deactivated'} ${String(user.display_name || user.email || userId)}.`;
+    publishAdminSync('users', 'user_status_updated');
     await loadUsers();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not update user status.';
@@ -1033,11 +1101,36 @@ watch(
 );
 
 onMounted(() => {
+  startAdminSyncSocket();
   void (async () => {
     await loadUsers();
     await openEditUserFromRouteQuery();
   })();
 });
+
+onBeforeUnmount(() => {
+  window.clearTimeout(searchTimer);
+  searchTimer = 0;
+  clearAdminSyncReloadTimer();
+  stopAdminSyncSocket();
+});
+
+watch(
+  () => sessionState.sessionToken,
+  (nextValue, previousValue) => {
+    const nextToken = String(nextValue || '').trim();
+    const previousToken = String(previousValue || '').trim();
+    if (nextToken === previousToken) return;
+    if (!adminSyncClient) return;
+
+    if (nextToken === '') {
+      adminSyncClient.disconnect();
+      return;
+    }
+
+    adminSyncClient.reconnect();
+  }
+);
 </script>
 
 <style scoped>

@@ -874,6 +874,10 @@ function videochat_handle_realtime_routes(
                         'hangup' => 'call/hangup',
                         'ack' => 'call/ack',
                     ],
+                    'admin_sync' => [
+                        'publish' => 'admin/sync/publish',
+                        'event' => 'admin/sync',
+                    ],
                 ],
                 'auth' => [
                     'session' => $websocketAuth['session'] ?? null,
@@ -963,6 +967,7 @@ function videochat_handle_realtime_routes(
                 $signalingCommand = null;
                 $reactionCommand = null;
                 $lobbyCommand = null;
+                $adminSyncCommand = null;
                 if (!(bool) ($presenceCommand['ok'] ?? false) && $commandError === 'unsupported_type') {
                     $chatCommand = videochat_chat_decode_client_frame($frame);
                     if ((bool) ($chatCommand['ok'] ?? false)) {
@@ -1162,8 +1167,39 @@ function videochat_handle_realtime_routes(
                                         continue;
                                     }
 
-                                    $commandType = (string) ($lobbyCommand['type'] ?? $commandType);
-                                    $commandError = (string) ($lobbyCommand['error'] ?? $commandError);
+                                    if ((string) ($lobbyCommand['error'] ?? '') === 'unsupported_type') {
+                                        $adminSyncCommand = videochat_admin_sync_decode_client_frame($frame);
+                                        if ((bool) ($adminSyncCommand['ok'] ?? false)) {
+                                            $adminSyncResult = videochat_admin_sync_publish(
+                                                $presenceState,
+                                                $presenceConnection,
+                                                $adminSyncCommand
+                                            );
+                                            if (!(bool) ($adminSyncResult['ok'] ?? false)) {
+                                                videochat_presence_send_frame(
+                                                    $websocket,
+                                                    [
+                                                        'type' => 'system/error',
+                                                        'code' => 'admin_sync_publish_failed',
+                                                        'message' => 'Could not publish admin sync event.',
+                                                        'details' => [
+                                                            'error' => (string) ($adminSyncResult['error'] ?? 'unknown'),
+                                                            'topic' => (string) ($adminSyncCommand['topic'] ?? 'all'),
+                                                            'reason' => (string) ($adminSyncCommand['reason'] ?? 'updated'),
+                                                        ],
+                                                        'time' => gmdate('c'),
+                                                    ]
+                                                );
+                                            }
+                                            continue;
+                                        }
+
+                                        $commandType = (string) ($adminSyncCommand['type'] ?? $commandType);
+                                        $commandError = (string) ($adminSyncCommand['error'] ?? $commandError);
+                                    } else {
+                                        $commandType = (string) ($lobbyCommand['type'] ?? $commandType);
+                                        $commandError = (string) ($lobbyCommand['error'] ?? $commandError);
+                                    }
                                 } else {
                                     $commandType = (string) ($reactionCommand['type'] ?? $commandType);
                                     $commandError = (string) ($reactionCommand['error'] ?? $commandError);
