@@ -931,7 +931,7 @@ watch(activeOverviewView, async (view) => {
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 1px;
+  gap: 15px;
   background: var(--bg-main);
   overflow: hidden;
 }

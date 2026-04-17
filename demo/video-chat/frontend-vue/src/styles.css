@@ -1134,10 +1134,6 @@ select {
   font-weight: 700;
 }
 
-.title.title-admin-compact {
-  font-size: 18px;
-}
-
 .subtitle {
   margin: 4px 0 0;
   color: var(--text-muted);

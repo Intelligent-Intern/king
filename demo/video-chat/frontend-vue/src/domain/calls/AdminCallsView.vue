@@ -12,7 +12,7 @@
         >
           <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
         </button>
-        <h3>Video Call Management</h3>
+        <h1>Video Call Management</h1>
       </div>
       <div class="actions">
         <button class="btn btn-cyan" type="button" @click="openPrimaryCompose">{{ primaryActionLabel }}</button>
@@ -2585,7 +2585,7 @@ onBeforeUnmount(() => {
   margin-top: 2px;
 }
 
-.calls-header h3 {
+.calls-header h1 {
   margin: 0;
   font-size: 18px;
 }
@@ -2602,6 +2602,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+  margin-bottom: 14px;
 }
 
 .calls-toolbar-left {

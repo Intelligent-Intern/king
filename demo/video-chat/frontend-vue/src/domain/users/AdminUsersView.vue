@@ -2,7 +2,7 @@
   <section class="view-card admin-users-view">
     <header class="section admin-users-head">
       <div>
-        <h3>User Management</h3>
+        <h1>User Management</h1>
       </div>
       <div class="actions">
         <button class="btn btn-cyan" type="button" @click="openCreateUser">New user</button>
@@ -1071,13 +1071,17 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.admin-users-toolbar {
+  margin-bottom: 15px;
+}
+
 .admin-users-head,
 .admin-users-toolbar,
 .users-footer {
   background: var(--bg-ui-chrome);
 }
 
-.admin-users-head h3 {
+.admin-users-head h1 {
   margin: 0;
   font-size: 18px;
 }
