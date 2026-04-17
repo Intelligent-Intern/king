@@ -551,7 +551,7 @@ var IIBinMessageType = /* @__PURE__ */ ((IIBinMessageType2) => {
   IIBinMessageType2[IIBinMessageType2["INTEREST_MATCH_RESPONSE"] = 82] = "INTEREST_MATCH_RESPONSE";
   IIBinMessageType2[IIBinMessageType2["POLYTOPE_DATA"] = 83] = "POLYTOPE_DATA";
   return IIBinMessageType2;
-})(IIBinMessageType || {});
+})({});
 var _IIBinProtocol = class _IIBinProtocol {
   constructor() {
     this.messageIdCounter = 0n;
