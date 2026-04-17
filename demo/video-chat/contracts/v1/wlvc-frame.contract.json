@@ -1,0 +1,52 @@
+{
+  "contract_name": "king-video-chat-wlvc-frame",
+  "contract_version": "1.0.0",
+  "endianness": "big-endian",
+  "header": {
+    "length_bytes": 28,
+    "magic_ascii": "WLVC",
+    "magic_u32_be": 1464616515,
+    "fields": [
+      { "name": "magic", "offset": 0, "length": 4, "type": "u32", "required": true },
+      { "name": "version", "offset": 4, "length": 1, "type": "u8", "required": true },
+      { "name": "frame_type", "offset": 5, "length": 1, "type": "u8", "required": true, "enum": { "keyframe": 0, "delta": 1 } },
+      { "name": "quality", "offset": 6, "length": 1, "type": "u8", "required": true },
+      { "name": "dwt_levels", "offset": 7, "length": 1, "type": "u8", "required": true },
+      { "name": "width", "offset": 8, "length": 2, "type": "u16", "required": true },
+      { "name": "height", "offset": 10, "length": 2, "type": "u16", "required": true },
+      { "name": "y_length", "offset": 12, "length": 4, "type": "u32", "required": true },
+      { "name": "u_length", "offset": 16, "length": 4, "type": "u32", "required": true },
+      { "name": "v_length", "offset": 20, "length": 4, "type": "u32", "required": true },
+      { "name": "uv_width", "offset": 24, "length": 2, "type": "u16", "required": true },
+      { "name": "uv_height", "offset": 26, "length": 2, "type": "u16", "required": true }
+    ]
+  },
+  "validation": {
+    "supported_versions": [1],
+    "quality_range": { "min": 1, "max": 100 },
+    "dwt_levels_range": { "min": 1, "max": 8 },
+    "dimension_range": { "min": 1, "max": 8192 },
+    "max_channel_bytes": 16777216,
+    "max_total_payload_bytes": 50331648,
+    "payload_layout": "Y + U + V (exactly contiguous)"
+  },
+  "sample_vectors": [
+    {
+      "name": "tiny-keyframe",
+      "frame": {
+        "version": 1,
+        "frame_type": 0,
+        "quality": 73,
+        "dwt_levels": 4,
+        "width": 640,
+        "height": 360,
+        "uv_width": 320,
+        "uv_height": 180,
+        "y_hex": "0a0b0c0d",
+        "u_hex": "1112",
+        "v_hex": "aabbcc"
+      },
+      "expected_frame_hex": "574c56430100490402800168000000040000000200000003014000b40a0b0c0d1112aabbcc"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "contract_name": "king-model-inference-retrieval-request",
+  "contract_version": "1.0.0",
+  "contract_scope": "Client-to-server envelope for semantic retrieval. Consumed by POST /api/retrieve (#R-10). The query is embedded via the embedding worker, then compared against stored vectors via brute-force cosine similarity.",
+  "honesty_rules": [
+    "query is a single string. The backend embeds it using the model_selector's embedding model before searching.",
+    "document_ids is optional. When null or omitted, all indexed documents are searched. When provided, only vectors belonging to those documents are scanned.",
+    "top_k caps the number of results returned. Results below min_score are excluded before top_k truncation.",
+    "Search strategy is brute_force_cosine. No approximate nearest neighbor (HNSW/IVF) is implemented; this is an honest linear scan.",
+    "Returned scores are raw cosine similarity values in [-1, 1]. For L2-normalized vectors (default from POST /api/embed), scores are in [0, 1]."
+  ],
+  "request_envelope": {
+    "query": {
+      "type": "string",
+      "min_length": 1,
+      "max_length": 32768,
+      "required": true
+    },
+    "document_ids": {
+      "type": "array<string>|null",
+      "required": false,
+      "default": null,
+      "note": "null means search all documents"
+    },
+    "top_k": {
+      "type": "int",
+      "min": 1,
+      "max": 100,
+      "required": false,
+      "default": 5
+    },
+    "min_score": {
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "required": false,
+      "default": 0.0
+    },
+    "model_selector": {
+      "type": "object",
+      "required": true,
+      "fields": {
+        "model_name": {"type": "string", "min_length": 1, "max_length": 128, "required": true},
+        "quantization": {"type": "string", "enum": ["Q2_K","Q3_K","Q4_0","Q4_K","Q5_K","Q6_K","Q8_0","F16"], "required": true}
+      }
+    }
+  },
+  "response_envelope": {
+    "status": "ok",
+    "request_id": "string",
+    "results": [{
+      "chunk_id": "string",
+      "document_id": "string",
+      "text": "string",
+      "score": "float",
+      "vector_id": "string"
+    }],
+    "result_count": "int",
+    "search_strategy": "brute_force_cosine",
+    "embedding_ms": "int",
+    "search_ms": "int",
+    "vectors_scanned": "int",
+    "time": "rfc3339"
+  },
+  "rejection_codes": {
+    "invalid_request_envelope": "any required field missing or out of range",
+    "model_not_found": "no embedding model matches the selector",
+    "worker_unavailable": "embedding worker failed"
+  }
+}

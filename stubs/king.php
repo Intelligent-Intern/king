@@ -258,6 +258,47 @@ namespace {
     function king_websocket_send(mixed $websocket, string $data, bool $is_binary = false): bool {}
 
     /**
+     * Bind an RTP socket on a local address.
+     * @return resource|false
+     */
+    function king_rtp_bind(string $host, int $port) {}
+
+    /**
+     * Get ICE credentials (ufrag and password) for an RTP socket.
+     * @return array{ufrag:string,pwd:string}|false
+     */
+    function king_rtp_ice_credentials($socket) {}
+
+    /**
+     * Get the DTLS fingerprint for an RTP socket.
+     * @return string|false
+     */
+    function king_rtp_dtls_fingerprint($socket) {}
+
+    /**
+     * Perform DTLS handshake with a remote peer.
+     * @return bool|false
+     */
+    function king_rtp_dtls_accept($socket, string $ip, int $port, int $timeout_ms) {}
+
+    /**
+     * Receive RTP data from a peer.
+     * @return array|false
+     */
+    function king_rtp_recv($socket, int $timeout_ms) {}
+
+    /**
+     * Send RTP data to a peer.
+     * @return bool|false
+     */
+    function king_rtp_send($socket, string $host, int $port, string $data) {}
+
+    /**
+     * Close an RTP socket.
+     */
+    function king_rtp_close($socket) {}
+
+    /**
      * Create an MCP connection-state resource for the active runtime.
      * This stores host, port, optional `King\Config`, and the explicit
      * open/closed lifecycle for the active remote peer socket.

@@ -1,0 +1,50 @@
+{
+  "contract_name": "king-inference-node-profile",
+  "contract_version": "1.0.0",
+  "contract_scope": "Envelope returned by GET /api/node/profile and published on Semantic-DNS as service type king.inference.v1.",
+  "honesty_rules": [
+    "vram_total_bytes and vram_free_bytes MUST be 0 when gpu.present is false or the platform probe cannot read the value. Probe output is never fabricated or extrapolated.",
+    "cpu.physical_count MAY equal cpu.logical_count when the platform does not expose a physical core count distinct from logical; probe code MUST NOT guess a ratio.",
+    "gpu.kind is set to the detected family; unknown/unreadable hardware maps to 'other' only when a GPU was detected but not classified. 'none' means no GPU detected.",
+    "memory.available_bytes falls back to total_bytes when the probe does not distinguish available from total; this is explicit, not a silent default.",
+    "Every field is observed on each call; there is no lazy caching that could let an earlier boot's numbers leak into a later call on the same process."
+  ],
+  "envelope": {
+    "node_id":      {"type": "string", "pattern": "/^node_[A-Za-z0-9_-]{4,}$/"},
+    "king_version": {"type": "string"},
+    "platform": {
+      "os":     {"type": "string", "enum": ["darwin", "linux", "other"]},
+      "arch":   {"type": "string"},
+      "kernel": {"type": "string"}
+    },
+    "cpu": {
+      "logical_count":  {"type": "int", "min": 1},
+      "physical_count": {"type": "int", "min": 1},
+      "brand":          {"type": "string"}
+    },
+    "memory": {
+      "total_bytes":     {"type": "int", "min": 1},
+      "available_bytes": {"type": "int", "min": 0},
+      "page_size":       {"type": "int", "min": 1}
+    },
+    "gpu": {
+      "present":          {"type": "bool"},
+      "kind":             {"type": "string", "enum": ["none", "metal", "cuda", "rocm", "other"]},
+      "device_count":     {"type": "int", "min": 0},
+      "vram_total_bytes": {"type": "int", "min": 0, "note": "0 when kind=none or unreadable"},
+      "vram_free_bytes":  {"type": "int", "min": 0, "note": "0 when kind=none or unreadable"}
+    },
+    "capabilities": {
+      "loadable_models":        {"type": "array", "items": {"type": "string"}, "note": "filled by M-5 registry; empty array until then"},
+      "max_context_tokens":     {"type": "int", "min": 0, "note": "0 until a model is loaded (M-7)"},
+      "supports_streaming":     {"type": "bool"},
+      "supports_quantizations": {"type": "array", "items": {"type": "string"}}
+    },
+    "service": {
+      "service_type": {"type": "string", "enum": ["king.inference.v1"]},
+      "health_url":   {"type": "string"},
+      "status":       {"type": "string", "enum": ["ready", "draining", "starting", "error"]}
+    },
+    "published_at": {"type": "string", "format": "rfc3339"}
+  }
+}

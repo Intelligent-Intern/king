@@ -27,6 +27,7 @@ ALLOW_MISSING_PROVENANCE=0
 
 archive_entry_path_is_safe() {
     local entry="$1"
+    local normalized_entry=""
 
     if [[ -z "${entry}" ]]; then
         return 1
@@ -36,7 +37,21 @@ archive_entry_path_is_safe() {
         return 1
     fi
 
+    normalized_entry="${entry#./}"
+
+    if [[ "${normalized_entry}" == -* ]]; then
+        return 1
+    fi
+
+    if [[ "${normalized_entry}" =~ (^|/)-[^/]+(/|$) ]]; then
+        return 1
+    fi
+
     if [[ "${entry}" =~ (^|/)\.\.(/|$) ]]; then
+        return 1
+    fi
+
+    if [[ "${entry}" == *$'\n'* || "${entry}" == *$'\r'* ]]; then
         return 1
     fi
 

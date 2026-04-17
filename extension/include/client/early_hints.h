@@ -19,7 +19,7 @@ typedef struct _king_http1_request_context king_http1_request_context;
  * @return TRUE on success, FALSE on failure.
  */
 PHP_FUNCTION(king_client_early_hints_process);
-
+                                
 /**
  * @brief Returns the parsed pending Early Hints for a request context.
  *

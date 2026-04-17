@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>King Model Inference — Chat</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f8;
+    --bg-elev: #ffffff;
+    --fg: #0b0c0f;
+    --fg-muted: #5b6472;
+    --border: #d9dce0;
+    --accent: #2e5aac;
+    --accent-fg: #ffffff;
+    --user-bg: #e7efff;
+    --user-fg: #0b1f3f;
+    --assistant-bg: #ffffff;
+    --assistant-fg: #0b0c0f;
+    --error-bg: #fdecec;
+    --error-fg: #892020;
+    --ok: #277a3a;
+    --warn: #a86b00;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1014;
+      --bg-elev: #181a20;
+      --fg: #e9eaee;
+      --fg-muted: #97a0ad;
+      --border: #2a2f39;
+      --accent: #5f8fff;
+      --user-bg: #1f2a47;
+      --user-fg: #cbd8ff;
+      --assistant-bg: #181a20;
+      --assistant-fg: #e9eaee;
+      --error-bg: #3a1414;
+      --error-fg: #ff8888;
+      --ok: #58c671;
+      --warn: #f0b84a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-elev);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 600;
+  }
+  header .title { flex: 1; }
+  header .status {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--fg-muted);
+    padding: 4px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  header .status.ok { color: var(--ok); border-color: var(--ok); }
+  header .status.err { color: var(--error-fg); border-color: var(--error-fg); }
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 920px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .msg {
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    max-width: 85%;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background: var(--assistant-bg);
+    color: var(--assistant-fg);
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: var(--user-bg);
+    color: var(--user-fg);
+    border-color: transparent;
+  }
+  .msg.assistant { align-self: flex-start; }
+  .msg.error {
+    align-self: stretch;
+    background: var(--error-bg);
+    color: var(--error-fg);
+    border-color: transparent;
+  }
+  .msg .role {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fg-muted);
+    margin-bottom: 4px;
+    font-family: var(--mono);
+  }
+  .msg .body { font-family: inherit; }
+  .msg .footer {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--fg-muted);
+    margin-top: 6px;
+  }
+  .msg.assistant.streaming .body::after {
+    content: "▍";
+    color: var(--accent);
+    animation: blink 1.1s infinite;
+    margin-left: 1px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  footer {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-elev);
+  }
+  footer form {
+    display: flex;
+    gap: 8px;
+    max-width: 920px;
+    margin: 0 auto;
+  }
+  footer .settings {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    max-width: 920px;
+    margin: 0 auto 8px;
+    font-size: 12px;
+    color: var(--fg-muted);
+    font-family: var(--mono);
+    align-items: center;
+  }
+  footer .settings label { display: inline-flex; align-items: center; gap: 4px; }
+  footer .settings input[type="number"] {
+    width: 70px;
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--mono);
+  }
+  textarea {
+    flex: 1;
+    resize: none;
+    min-height: 44px;
+    max-height: 160px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: inherit;
+    font-size: 15px;
+    line-height: 1.4;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    padding: 0 16px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--accent-fg);
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    min-width: 88px;
+  }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .meta {
+    max-width: 920px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 20px 12px;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--fg-muted);
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="title">king · model-inference · chat</div>
+  <div id="model-label" class="status" title="Active model selector">model=…</div>
+  <div id="conn" class="status">loading…</div>
+</header>
+
+<div id="fwd-banner" hidden style="background:#fff3cd;color:#5a4a00;border-bottom:1px solid #e6d68a;padding:10px 20px;font-size:13px;line-height:1.5;">
+  <strong>Heads up:</strong> this page is loaded on <code id="fwd-host"></code>, which on VS Code dev containers routes through a port forwarder that silently drops streaming WebSocket frames mid-burst. Use the direct TCP proxy instead:
+  <a id="fwd-link" href="#" style="color:#5a4a00;text-decoration:underline;font-weight:600;">switch to the working URL</a>.
+</div>
+
+<main id="messages" aria-live="polite">
+  <div class="msg assistant">
+    <div class="role">system</div>
+    <div class="body">This chat is streaming raw <code>TokenFrame</code> binary frames over <code>/ws</code>. Each message's footer shows live telemetry from the inference node.</div>
+  </div>
+</main>
+
+<footer>
+  <div class="settings">
+    <label>model
+      <input type="text" id="model-name" value="SmolLM2-135M-Instruct" size="24">
+    </label>
+    <label>quant
+      <select id="quantization">
+        <option>Q4_K</option>
+        <option>Q4_0</option>
+        <option>Q5_K</option>
+        <option>Q6_K</option>
+        <option>Q8_0</option>
+        <option>F16</option>
+      </select>
+    </label>
+    <label>temp
+      <input type="number" id="temperature" value="0.7" min="0" max="2" step="0.1">
+    </label>
+    <label>top_p
+      <input type="number" id="top_p" value="0.95" min="0" max="1" step="0.01">
+    </label>
+    <label>top_k
+      <input type="number" id="top_k" value="40" min="0" max="1024" step="1">
+    </label>
+    <label>max_tokens
+      <input type="number" id="max_tokens" value="192" min="1" max="8192" step="1">
+    </label>
+  </div>
+  <form id="form" autocomplete="off">
+    <textarea id="prompt" placeholder="Ask the model something. Enter to send, Shift+Enter for newline." required></textarea>
+    <button id="send" type="submit">Send</button>
+  </form>
+</footer>
+<div class="meta" id="node-meta">node: connecting…</div>
+
+<script>
+(() => {
+  "use strict";
+  const KITF = 0x4B495446;                 // magic
+  const FT_DELTA = 0, FT_END = 1, FT_ERROR = 2;
+  const HEADER_SIZE = 24;
+
+  const els = {
+    messages: document.getElementById('messages'),
+    form: document.getElementById('form'),
+    prompt: document.getElementById('prompt'),
+    send: document.getElementById('send'),
+    conn: document.getElementById('conn'),
+    modelLabel: document.getElementById('model-label'),
+    nodeMeta: document.getElementById('node-meta'),
+    modelName: document.getElementById('model-name'),
+    quantization: document.getElementById('quantization'),
+    temperature: document.getElementById('temperature'),
+    top_p: document.getElementById('top_p'),
+    top_k: document.getElementById('top_k'),
+    max_tokens: document.getElementById('max_tokens'),
+  };
+
+  const state = {
+    ws: null,                // current in-flight WS (null when idle)
+    active: null,            // {bubble, body, footer, decoder}
+    sessionId: 'sess-ui-' + Math.random().toString(36).slice(2, 10),
+    inFlight: false,
+  };
+
+  // --------------------- WS lifecycle ---------------------
+  // We open a NEW WebSocket per prompt submit. The current king
+  // runtime runs the WS upgrade handler synchronously (#M-11 scope
+  // fence), so a persistent idle WS would block the HTTP listen loop
+  // on the server. Per-request WS keeps sessions short-lived and
+  // sidesteps that constraint until concurrent WS handling lands.
+  function wsUrl() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return proto + '//' + location.host + '/ws';
+  }
+
+  function setConn(text, kind) {
+    els.conn.textContent = text;
+    els.conn.className = 'status ' + (kind || '');
+  }
+
+  // --------------------- TokenFrame decode ---------------------
+  function decodeFrame(buf) {
+    if (!(buf instanceof ArrayBuffer) || buf.byteLength < HEADER_SIZE) {
+      throw new Error('short_header (' + (buf && buf.byteLength) + ' bytes)');
+    }
+    const v = new DataView(buf);
+    const magic = v.getUint32(0, false);
+    if (magic !== KITF) throw new Error('bad_magic (0x' + magic.toString(16) + ')');
+    const version = v.getUint8(4);
+    if (version !== 1) throw new Error('unsupported_version (' + version + ')');
+    const frameType = v.getUint8(5);
+    const flags = v.getUint8(6);
+    const sequence = v.getUint32(8, false);
+    const requestIdCrc32 = v.getUint32(12, false);
+    const tokenCount = v.getUint16(16, false);
+    const payloadLength = v.getUint32(18, false);
+    if (buf.byteLength !== HEADER_SIZE + payloadLength) {
+      throw new Error('truncated_or_overlong (expected ' + (HEADER_SIZE + payloadLength) + ' bytes, got ' + buf.byteLength + ')');
+    }
+    const payload = new Uint8Array(buf, HEADER_SIZE, payloadLength);
+    return { frameType, flags, sequence, requestIdCrc32, tokenCount, payload };
+  }
+
+  function onMessage(ev) {
+    if (!(ev.data instanceof ArrayBuffer)) {
+      console.warn('unexpected non-binary ws frame', ev.data);
+      return;
+    }
+    let frame;
+    try {
+      frame = decodeFrame(ev.data);
+    } catch (e) {
+      console.error('frame decode failed', e);
+      showErrorMessage('frame_decode_failed', String(e));
+      return;
+    }
+    if (frame.frameType === FT_DELTA) {
+      if (!state.active) return;
+      const text = state.active.decoder.decode(frame.payload, { stream: true });
+      if (text) appendDelta(text);
+    } else if (frame.frameType === FT_END) {
+      const summary = tryParseJson(frame.payload) || {};
+      finalizeActive(null, false, summary);
+      closeWs(1000, 'done');
+    } else if (frame.frameType === FT_ERROR) {
+      const err = tryParseJson(frame.payload) || {};
+      finalizeActive('[' + (err.code || 'error') + '] ' + (err.message || 'inference failed'), true);
+      closeWs(1000, 'error');
+    }
+  }
+
+  function closeWs(code, reason) {
+    if (state.ws) {
+      try { state.ws.close(code, reason); } catch { /* ignore */ }
+      state.ws = null;
+    }
+  }
+
+  function tryParseJson(u8) {
+    try { return JSON.parse(new TextDecoder('utf-8').decode(u8)); } catch { return null; }
+  }
+
+  // --------------------- message rendering ---------------------
+  function scrollToBottom() {
+    els.messages.scrollTop = els.messages.scrollHeight;
+  }
+
+  function renderUser(text) {
+    const bubble = document.createElement('div');
+    bubble.className = 'msg user';
+    bubble.innerHTML = '<div class="role">you</div><div class="body"></div>';
+    bubble.querySelector('.body').textContent = text;
+    els.messages.appendChild(bubble);
+    scrollToBottom();
+  }
+
+  function startAssistantBubble() {
+    const bubble = document.createElement('div');
+    bubble.className = 'msg assistant streaming';
+    bubble.innerHTML = '<div class="role">assistant</div><div class="body"></div><div class="footer">streaming…</div>';
+    els.messages.appendChild(bubble);
+    scrollToBottom();
+    return {
+      bubble,
+      body: bubble.querySelector('.body'),
+      footer: bubble.querySelector('.footer'),
+      decoder: new TextDecoder('utf-8', { fatal: false }),
+    };
+  }
+
+  function appendDelta(text) {
+    if (!state.active) return;
+    state.active.body.textContent += text;
+    scrollToBottom();
+  }
+
+  function finalizeActive(errorText, hadError, summary) {
+    if (!state.active) return;
+    // Flush any pending multi-byte UTF-8 bytes.
+    try {
+      const tail = state.active.decoder.decode();
+      if (tail) appendDelta(tail);
+    } catch { /* ignore */ }
+    state.active.bubble.classList.remove('streaming');
+    if (errorText) {
+      state.active.bubble.classList.add('error');
+      state.active.footer.textContent = errorText;
+    } else if (summary) {
+      const tin = summary.tokens_in | 0;
+      const tout = summary.tokens_out | 0;
+      const ttft = summary.ttft_ms | 0;
+      const dur = summary.duration_ms | 0;
+      const tps = dur > 0 ? (tout / (dur / 1000)).toFixed(1) : '0.0';
+      state.active.footer.textContent = `tokens_in=${tin} tokens_out=${tout} ttft=${ttft}ms duration=${dur}ms tokens/s=${tps}`;
+    } else {
+      state.active.footer.textContent = '(ended)';
+    }
+    state.active = null;
+    state.inFlight = false;
+    // Per-request WS model: Send is enabled whenever no inference is in
+    // flight. A new request opens a fresh WS.
+    els.send.disabled = false;
+    els.prompt.disabled = false;
+    els.prompt.focus();
+  }
+
+  function showErrorMessage(code, message) {
+    const bubble = document.createElement('div');
+    bubble.className = 'msg error';
+    bubble.innerHTML = '<div class="role">error</div><div class="body"></div>';
+    bubble.querySelector('.body').textContent = '[' + code + '] ' + message;
+    els.messages.appendChild(bubble);
+    scrollToBottom();
+  }
+
+  // --------------------- send ---------------------
+  function currentSamplingFromUI() {
+    return {
+      temperature: Math.max(0, Math.min(2, Number(els.temperature.value) || 0)),
+      top_p: Math.max(0, Math.min(1, Number(els.top_p.value) || 0)),
+      top_k: Math.max(0, Math.min(1024, Number(els.top_k.value) | 0)),
+      max_tokens: Math.max(1, Math.min(8192, Number(els.max_tokens.value) | 0)),
+    };
+  }
+
+  function sendPrompt(text) {
+    if (state.inFlight) return;
+    const sampling = currentSamplingFromUI();
+    const payload = {
+      session_id: state.sessionId,
+      model_selector: {
+        model_name: els.modelName.value.trim(),
+        quantization: els.quantization.value,
+        prefer_local: true,
+      },
+      prompt: text,
+      sampling,
+      stream: true,
+    };
+    els.modelLabel.textContent = 'model=' + payload.model_selector.model_name + '/' + payload.model_selector.quantization;
+    state.active = startAssistantBubble();
+    state.inFlight = true;
+    els.send.disabled = true;
+    els.prompt.disabled = true;
+    setConn('connecting…');
+
+    const ws = new WebSocket(wsUrl());
+    ws.binaryType = 'arraybuffer';
+    state.ws = ws;
+
+    ws.addEventListener('open', () => {
+      setConn('streaming…', 'ok');
+      ws.send(JSON.stringify({ event: 'infer.start', payload }));
+    });
+    ws.addEventListener('message', onMessage);
+    ws.addEventListener('error', () => {
+      setConn('ws error', 'err');
+      if (state.inFlight) finalizeActive('[ws_error] WebSocket transport error before the stream completed.', true);
+      state.ws = null;
+    });
+    ws.addEventListener('close', (ev) => {
+      if (state.inFlight) {
+        finalizeActive('[ws_closed ' + ev.code + '] WebSocket closed before the end frame arrived.', true);
+      }
+      setConn('ready');
+      state.ws = null;
+    });
+  }
+
+  els.form.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const text = els.prompt.value.trim();
+    if (!text) return;
+    renderUser(text);
+    els.prompt.value = '';
+    sendPrompt(text);
+  });
+
+  els.prompt.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' && !ev.shiftKey) {
+      ev.preventDefault();
+      if (!state.inFlight) els.form.requestSubmit();
+    }
+  });
+
+  // --------------------- known-bad forwarder banner ---------------------
+  // VS Code dev-container port forwarding silently truncates our
+  // streaming WebSocket. If this page is loaded on port 18090 we show
+  // a visible banner pointing the user at the socat bridge on 18091.
+  (function maybeShowForwardBanner() {
+    if (location.port === '18090') {
+      const banner = document.getElementById('fwd-banner');
+      const host = document.getElementById('fwd-host');
+      const link = document.getElementById('fwd-link');
+      if (banner && host && link) {
+        host.textContent = location.host;
+        const proxyUrl = location.protocol + '//' + location.hostname + ':18091' + location.pathname + location.search;
+        link.href = proxyUrl;
+        link.textContent = proxyUrl;
+        banner.hidden = false;
+      }
+    }
+  })();
+
+  // --------------------- boot ---------------------
+  // The current king HTTP/1 one-shot listener serves ONE request at
+  // a time. A browser page typically fires multiple requests in
+  // parallel (/api/runtime, /api/models, /favicon.ico, …) and the
+  // ones that arrive while another is being handled get dropped.
+  // We work around this by:
+  //   (a) answering /favicon.ico on the server (module_runtime),
+  //   (b) serializing every boot fetch here, one at a time,
+  //   (c) falling back silently if a fetch fails — the UI works
+  //       without the metadata, with the defaults already in the form.
+  // Persistent WS is avoided entirely (see wsUrl header comment).
+  setConn('ready');
+  async function fetchJsonWithRetry(path, attempts = 3) {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const res = await fetch(path, { cache: 'no-store' });
+        if (res.ok) return await res.json();
+      } catch { /* retry */ }
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, 200));
+    }
+    return null;
+  }
+  // The registry (models response) is the source of truth for the
+  // quant dropdown. The old dropdown listed every enum value, which
+  // caused `model_not_found` when the user picked a quant that hadn't
+  // been registered.
+  let registeredModels = [];
+  function refreshQuantOptionsForModelName(modelName) {
+    const matches = registeredModels.filter(m => m.model_name === modelName);
+    const current = els.quantization.value;
+    els.quantization.innerHTML = '';
+    if (matches.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '(none registered)';
+      els.quantization.appendChild(opt);
+      els.quantization.disabled = true;
+      return;
+    }
+    els.quantization.disabled = false;
+    // Quality order: F16 > Q8_0 > Q6_K > Q5_K > Q4_K > Q4_0 > Q3_K > Q2_K.
+    const rank = { 'F16': 100, 'Q8_0': 80, 'Q6_K': 60, 'Q5_K': 50, 'Q4_K': 40, 'Q4_0': 35, 'Q3_K': 30, 'Q2_K': 20 };
+    const seenQuants = [...new Set(matches.map(m => m.quantization))]
+      .sort((a, b) => (rank[b] || 0) - (rank[a] || 0));
+    for (const q of seenQuants) {
+      const opt = document.createElement('option');
+      opt.value = q;
+      opt.textContent = q;
+      els.quantization.appendChild(opt);
+    }
+    els.quantization.value = seenQuants.includes(current) ? current : seenQuants[0];
+  }
+  els.modelName.addEventListener('change', () => refreshQuantOptionsForModelName(els.modelName.value.trim()));
+  els.modelName.addEventListener('input', () => refreshQuantOptionsForModelName(els.modelName.value.trim()));
+
+  (async function fetchMeta() {
+    const runtime = await fetchJsonWithRetry('/api/runtime');
+    const models = await fetchJsonWithRetry('/api/models');
+    if (runtime && runtime.node) {
+      const n = runtime.node.node_id || '?';
+      const ver = (runtime.runtime && runtime.runtime.king_version) || '?';
+      els.nodeMeta.textContent = `node=${n} king=${ver} models=${models && models.count != null ? models.count : '?'}`;
+    }
+    if (models && Array.isArray(models.items) && models.items.length > 0) {
+      registeredModels = models.items.map(m => ({ model_name: m.model_name, quantization: m.quantization }));
+      const first = models.items[0];
+      els.modelName.value = first.model_name;
+      refreshQuantOptionsForModelName(first.model_name);
+      if (els.quantization.value) {
+        els.modelLabel.textContent = 'model=' + first.model_name + '/' + els.quantization.value;
+      }
+    } else if (models && Array.isArray(models.items)) {
+      registeredModels = [];
+      refreshQuantOptionsForModelName('');
+      els.modelLabel.textContent = 'model=(none registered)';
+      showErrorMessage('no_model_registered', 'No models in the registry. Run scripts/seed-model.php or boot the server with MODEL_INFERENCE_AUTOSEED=1.');
+    }
+  })();
+})();
+</script>
+</body>
+</html>

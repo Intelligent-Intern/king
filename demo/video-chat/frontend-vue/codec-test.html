@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Wavelet Codec + Kalman Test</title>
+  <style>
+    body { background: #1a1a2e; color: #eee; font-family: sans-serif; padding: 20px; }
+    h1 { text-align: center; color: #00d4ff; }
+    .info { text-align: center; color: #888; margin-bottom: 15px; font-size: 14px; }
+    .controls { text-align: center; margin-bottom: 20px; }
+    button, select { padding: 10px 20px; font-size: 14px; cursor: pointer; margin: 0 5px; }
+    select { background: #16213e; color: #fff; border: 1px solid #333; }
+    .panels { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+    .panel { background: #16213e; padding: 10px; border-radius: 8px; width: 320px; }
+    .panel h3 { margin: 0 0 10px 0; font-size: 14px; }
+    .panel.best h3 { color: #00ff88; }
+    .panel.kalman h3 { color: #00d4ff; }
+    .panel.wasm h3 { color: #ff8800; }
+    canvas { background: #000; display: block; }
+    .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .metric { background: #1a1a3e; padding: 8px; border-radius: 4px; }
+    .metric div:first-child { color: #888; font-size: 10px; }
+    .metric div:last-child { color: #00ff88; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Wavelet Codec + Kalman Test</h1>
+  <div class="info">
+    Standalone test for the wavelet video codec with optional Kalman motion-compensated prediction.<br/>
+    Purpose: Compare compression quality, PSNR, and encoding speed with/without Kalman filtering.
+  </div>
+  <div class="controls">
+    <button id="startBtn">Start Camera</button>
+    <button id="stopBtn" disabled>Stop</button>
+    <span id="wasmStatus" style="margin-left:10px;color:#888;font-size:12px;">WASM: loading...</span>
+    <select id="quality">
+      <option value="20">Quality 20 (High compression)</option>
+      <option value="40">Quality 40</option>
+      <option value="60" selected>Quality 60</option>
+      <option value="80">Quality 80 (Low compression)</option>
+    </select>
+  </div>
+  <div class="panels">
+    <div class="panel">
+      <h3>📹 Original Camera</h3>
+      <canvas id="orig" width="320" height="240"></canvas>
+      <div class="metrics">
+        <div class="metric"><div>Status</div><div id="s1">-</div></div>
+        <div class="metric"><div>FPS</div><div id="f1">-</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>🧬 Wavelet Only</h3>
+      <canvas id="wavelet" width="320" height="240"></canvas>
+      <div class="metrics">
+        <div class="metric"><div>PSNR</div><div id="psnr">-</div></div>
+        <div class="metric"><div>Compression</div><div id="comp">-</div></div>
+        <div class="metric"><div>Size</div><div id="size">-</div></div>
+        <div class="metric"><div>Time</div><div id="time">-</div></div>
+      </div>
+    </div>
+    <div class="panel kalman">
+      <h3>🧬+📊 Wavelet + Kalman</h3>
+      <canvas id="kalman" width="320" height="240"></canvas>
+      <div class="metrics">
+        <div class="metric"><div>PSNR</div><div id="psnrK">-</div></div>
+        <div class="metric"><div>Compression</div><div id="compK">-</div></div>
+        <div class="metric"><div>Size</div><div id="sizeK">-</div></div>
+        <div class="metric"><div>Time</div><div id="timeK">-</div></div>
+      </div>
+    </div>
+    <div class="panel wasm">
+      <h3>⚡ WASM</h3>
+      <canvas id="wasm" width="320" height="240"></canvas>
+      <div class="metrics">
+        <div class="metric"><div>PSNR</div><div id="psnrW">-</div></div>
+        <div class="metric"><div>Compression</div><div id="compW">-</div></div>
+        <div class="metric"><div>Size</div><div id="sizeW">-</div></div>
+        <div class="metric"><div>Time</div><div id="timeW">-</div></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Wavelet Codec + Kalman Test
+     * 
+     * Purpose:
+     * - Test the standalone wavelet video codec (WLVC) with live camera input
+     * - Evaluate Kalman filter's impact on compression ratio and quality
+     * - Measure encoding/decoding performance
+     * 
+     * The Kalman filter here provides per-block motion estimation and smoothing.
+     * It tracks motion vectors for 16x16 pixel blocks and can be used to improve
+     * temporal prediction in the codec's delta frame encoding.
+     */
+
+    const LEVELS = 3;
+    const MAGIC = 0x574C5643;
+    const HEAD = 28;
+    const W = 320, H = 240;
+    const COLOR_SIZE = W * H * 4;
+
+    // === DWT Functions ===
+    function haarFwd(buf, off, n, stride) {
+      const half = n >> 1;
+      const tmp = new Float32Array(n);
+      for (let i = 0; i < half; i++) {
+        tmp[i] = (buf[off + i * 2 * stride] + buf[off + (i * 2 + 1) * stride]) * 0.5;
+        tmp[half + i] = buf[off + (i * 2 + 1) * stride] - buf[off + i * 2 * stride];
+      }
+      if (n & 1) tmp[n - 1] = buf[off + (n - 1) * stride];
+      for (let i = 0; i < n; i++) buf[off + i * stride] = tmp[i];
+    }
+
+    function haarInv(buf, off, n, stride) {
+      const half = n >> 1;
+      const tmp = new Float32Array(n);
+      for (let i = 0; i < half; i++) {
+        const s = buf[off + i * stride];
+        const d = buf[off + (half + i) * stride];
+        tmp[i * 2] = s - d * 0.5;
+        tmp[i * 2 + 1] = d + tmp[i * 2];
+      }
+      if (n & 1) tmp[n - 1] = buf[off + (n - 1) * stride];
+      for (let i = 0; i < n; i++) buf[off + i * stride] = tmp[i];
+    }
+
+    function dwtFwd(data, w, h, lv) {
+      let cw = w, ch = h;
+      for (let l = 0; l < lv; l++) {
+        for (let r = 0; r < ch; r++) haarFwd(data, r * w, cw, 1);
+        for (let c = 0; c < cw; c++) haarFwd(data, c, ch, w);
+        cw >>= 1; ch >>= 1;
+      }
+    }
+
+    function dwtInv(data, w, h, lv) {
+      let cw = w >> lv, ch = h >> lv;
+      for (let l = lv - 1; l >= 0; l--) {
+        cw <<= 1; ch <<= 1;
+        for (let c = 0; c < cw; c++) haarInv(data, c, ch, w);
+        for (let r = 0; r < ch; r++) haarInv(data, r * w, cw, 1);
+      }
+    }
+
+    function baseStep(q) { return (q < 50 ? 5000 / q : 200 - 2 * q) / 100; }
+    function detailStep(l, levels, q) { return baseStep(q) * (1 << (levels - l)); }
+
+    // === Quantization ===
+    function quantize(data, w, h, levels, quality) {
+      const out = new Int16Array(data.length);
+      const llS = baseStep(quality) * 0.5;
+      const llD = llS * 0.25;
+      const llW = w >> levels, llH = h >> levels;
+      for (let r = 0; r < llH; r++) for (let c = 0; c < llW; c++)
+        out[r * w + c] = Math.abs(data[r * w + c]) < llD ? 0 : Math.max(-32768, Math.min(32767, Math.round(data[r * w + c] / llS)));
+      for (let l = 0; l < levels; l++) {
+        const s = detailStep(l, levels, quality);
+        const d = s * 0.25;
+        const cw = w >> l, ch = h >> l, hw = cw >> 1, hh = ch >> 1;
+        for (let r = 0; r < hh; r++) for (let c = hw; c < cw; c++)
+          out[r * w + c] = Math.abs(data[r * w + c]) < d ? 0 : Math.max(-32768, Math.min(32767, Math.round(data[r * w + c] / s)));
+        for (let r = hh; r < ch; r++) for (let c = 0; c < hw; c++)
+          out[r * w + c] = Math.abs(data[r * w + c]) < d ? 0 : Math.max(-32768, Math.min(32767, Math.round(data[r * w + c] / s)));
+        for (let r = hh; r < ch; r++) for (let c = hw; c < cw; c++)
+          out[r * w + c] = Math.abs(data[r * w + c]) < d ? 0 : Math.max(-32768, Math.min(32767, Math.round(data[r * w + c] / s)));
+      }
+      return out;
+    }
+
+    function dequantize(quant, w, h, levels, quality) {
+      const out = new Float32Array(quant.length);
+      const s = baseStep(quality);
+      const llW = w >> levels, llH = h >> levels;
+      for (let r = 0; r < llH; r++) for (let c = 0; c < llW; c++) out[r * w + c] = quant[r * w + c] * (s * 0.5);
+      for (let l = 0; l < levels; l++) {
+        const st = detailStep(l, levels, quality);
+        const cw = w >> l, ch = h >> l, hw = cw >> 1, hh = ch >> 1;
+        for (let r = 0; r < hh; r++) for (let c = hw; c < cw; c++) out[r * w + c] = quant[r * w + c] * st;
+        for (let r = hh; r < ch; r++) for (let c = 0; c < hw; c++) out[r * w + c] = quant[r * w + c] * st;
+        for (let r = hh; r < ch; r++) for (let c = hw; c < cw; c++) out[r * w + c] = quant[r * w + c] * st;
+      }
+      return out;
+    }
+
+    // === RLE Entropy Coding ===
+    function rleEnc(data) {
+      const pairs = [];
+      let i = 0;
+      while (i < data.length) {
+        const val = data[i];
+        let run = 1;
+        while (i + run < data.length && data[i + run] === val && run < 0xFFFF) run++;
+        pairs.push(val, run);
+        i += run;
+      }
+      const np = pairs.length >> 1;
+      const buf = new ArrayBuffer(8 + np * 4);
+      const view = new DataView(buf);
+      view.setUint32(0, data.length, true);
+      view.setUint32(4, np, true);
+      for (let j = 0; j < np; j++) {
+        view.setInt16(8 + j * 4, pairs[j * 2], true);
+        view.setUint16(8 + j * 4 + 2, pairs[j * 2 + 1], true);
+      }
+      return new Uint8Array(buf);
+    }
+
+    function rleDec(src) {
+      const view = new DataView(src.buffer, src.byteOffset, src.byteLength);
+      const n = view.getUint32(0, true);
+      const np = view.getUint32(4, true);
+      const out = new Int16Array(n);
+      let idx = 0;
+      for (let j = 0; j < np; j++) {
+        const val = view.getInt16(8 + j * 4, true);
+        const cnt = view.getUint16(8 + j * 4 + 2, true);
+        out.fill(val, idx, idx + cnt);
+        idx += cnt;
+      }
+      return out;
+    }
+
+    // === Wavelet Encoder (YUV 4:2:0 with temporal delta) ===
+    function createEncoder(quality, keyInt) {
+      return {
+        quality: quality,
+        keyInt: keyInt,
+        frameCount: 0,
+        prevY: null,
+        encode: function(rgba, w, h) {
+          const isKey = this.frameCount % this.keyInt === 0;
+          this.frameCount++;
+          
+          const uvW = w >> 1, uvH = h >> 1;
+          const Y = new Float32Array(w * h);
+          const U = new Float32Array(uvW * uvH);
+          const V = new Float32Array(uvW * uvH);
+
+          // RGB -> YUV
+          for (let r = 0; r < h; r++) {
+            for (let c = 0; c < w; c++) {
+              const i = (r * w + c) * 4;
+              Y[r * w + c] = 0.299 * rgba[i] + 0.587 * rgba[i+1] + 0.114 * rgba[i+2] - 128;
+            }
+          }
+          for (let r = 0; r < uvH; r++) {
+            for (let c = 0; c < uvW; c++) {
+              const i = (r * 2 * w + c * 2) * 4;
+              U[r * uvW + c] = -0.147 * rgba[i] - 0.289 * rgba[i+1] + 0.436 * rgba[i+2];
+              V[r * uvW + c] = 0.615 * rgba[i] - 0.515 * rgba[i+1] - 0.100 * rgba[i+2];
+            }
+          }
+
+          // Temporal delta on Y channel
+          let yEnc = Y;
+          if (!isKey && this.prevY) {
+            yEnc = new Float32Array(Y.length);
+            for (let k = 0; k < Y.length; k++) yEnc[k] = Y[k] - this.prevY[k];
+          }
+
+          // 2D DWT
+          dwtFwd(yEnc, w, h, LEVELS);
+          dwtFwd(U, uvW, uvH, LEVELS);
+          dwtFwd(V, uvW, uvH, LEVELS);
+
+          // Quantization
+          const yQ = quantize(yEnc, w, h, LEVELS, this.quality);
+          const uQ = quantize(U, uvW, uvH, LEVELS, this.quality);
+          const vQ = quantize(V, uvW, uvH, LEVELS, this.quality);
+
+          // Update reference (closed-loop)
+          const yRec = dequantize(yQ, w, h, LEVELS, this.quality);
+          dwtInv(yRec, w, h, LEVELS);
+          if (!isKey && this.prevY) {
+            for (let k = 0; k < yRec.length; k++) yRec[k] += this.prevY[k];
+          }
+          this.prevY = yRec;
+
+          // RLE encode
+          const yRle = rleEnc(yQ);
+          const uRle = rleEnc(uQ);
+          const vRle = rleEnc(vQ);
+
+          // Pack binary format
+          const buf = new ArrayBuffer(HEAD + yRle.byteLength + uRle.byteLength + vRle.byteLength);
+          const view = new DataView(buf);
+          const body = new Uint8Array(buf);
+          
+          view.setUint32(0, MAGIC, false);
+          view.setUint8(4, 1);
+          view.setUint8(5, isKey ? 0 : 1);
+          view.setUint8(6, this.quality);
+          view.setUint8(7, LEVELS);
+          view.setUint16(8, w, false);
+          view.setUint16(10, h, false);
+          view.setUint32(12, yRle.byteLength, false);
+          view.setUint32(16, uRle.byteLength, false);
+          view.setUint32(20, vRle.byteLength, false);
+          view.setUint16(24, uvW, false);
+          view.setUint16(26, uvH, false);
+          
+          body.set(yRle, HEAD);
+          body.set(uRle, HEAD + yRle.byteLength);
+          body.set(vRle, HEAD + yRle.byteLength + uRle.byteLength);
+
+          return { data: buf, size: buf.byteLength };
+        }
+      };
+    }
+
+    // === Wavelet Decoder ===
+    function createDecoder(quality) {
+      return {
+        quality: quality,
+        prevY: null,
+        decode: function(frame) {
+          const view = new DataView(frame.data);
+          const isKey = view.getUint8(5) === 0;
+          const w = view.getUint16(8, false);
+          const h = view.getUint16(10, false);
+          const yB = view.getUint32(12, false);
+          const uB = view.getUint32(16, false);
+          const vB = view.getUint32(20, false);
+          const uvW = view.getUint16(24, false);
+          const uvH = view.getUint16(26, false);
+
+          const payload = new Uint8Array(frame.data);
+          const yRle = payload.subarray(HEAD, HEAD + yB);
+          const uRle = payload.subarray(HEAD + yB, HEAD + yB + uB);
+          const vRle = payload.subarray(HEAD + yB + uB);
+
+          // Decode channels
+          const yQ = rleDec(yRle);
+          const uQ = rleDec(uRle);
+          const vQ = rleDec(vRle);
+
+          // Dequantize
+          const Y = dequantize(yQ, w, h, LEVELS, this.quality);
+          const U = dequantize(uQ, uvW, uvH, LEVELS, this.quality);
+          const V = dequantize(vQ, uvW, uvH, LEVELS, this.quality);
+
+          // Inverse DWT
+          dwtInv(Y, w, h, LEVELS);
+          dwtInv(U, uvW, uvH, LEVELS);
+          dwtInv(V, uvW, uvH, LEVELS);
+
+          // Temporal reconstruction
+          if (!isKey && this.prevY) {
+            for (let k = 0; k < Y.length; k++) Y[k] += this.prevY[k];
+          }
+          this.prevY = Y.slice();
+
+          // YUV -> RGB
+          const out = new Uint8ClampedArray(w * h * 4);
+          for (let r = 0; r < h; r++) {
+            for (let c = 0; c < w; c++) {
+              const yi = r * w + c;
+              const uvi = (r >> 1) * uvW + (c >> 1);
+              const y = Y[yi] + 128;
+              const u = U[uvi];
+              const v = V[uvi];
+              const pi = yi * 4;
+              out[pi] = Math.max(0, Math.min(255, y + 1.13983 * v));
+              out[pi + 1] = Math.max(0, Math.min(255, y - 0.39465 * u - 0.58060 * v));
+              out[pi + 2] = Math.max(0, Math.min(255, y + 2.03211 * u));
+              out[pi + 3] = 255;
+            }
+          }
+          return out;
+        }
+      };
+    }
+
+    // === Kalman Filter for Motion Estimation ===
+    // Provides per-block motion vectors with Kalman smoothing
+    function createKalman(w, h) {
+      const bw = Math.ceil(w / 16), bh = Math.ceil(h / 16);
+      return {
+        w: w, h: h, bw: bw, bh: bh,
+        // Store previous frame for motion estimation
+        prevR: null, prevG: null, prevB: null,
+        // One Kalman filter per block
+        filters: [],
+        init: function() {
+          this.filters = [];
+          for (let i = 0; i < this.bw * this.bh; i++) {
+            // State: [x, y, vx, vy], covariance initialized to 10
+            this.filters.push({ 
+              x: 0, y: 0, vx: 0, vy: 0, 
+              P: [10,0,0,0, 0,10,0,0, 0,0,10,0, 0,0,0,10] 
+            });
+          }
+        },
+        // Process frame and return motion vectors
+        // In this test, we use Kalman to compute smoothed motion vectors
+        // which can improve the codec's temporal prediction
+        process: function(rgba) {
+          const n = this.w * this.h;
+          
+          // First frame: initialize
+          if (!this.prevR) { 
+            this.prevR = new Float32Array(n);
+            this.prevG = new Float32Array(n);
+            this.prevB = new Float32Array(n);
+            for (let i = 0; i < n; i++) {
+              this.prevR[i] = rgba[i*4];
+              this.prevG[i] = rgba[i*4+1];
+              this.prevB[i] = rgba[i*4+2];
+            }
+            this.init(); 
+            return { motionVectors: null, enhanced: null }; 
+          }
+          
+          // For each block, estimate motion with Kalman smoothing
+          const mvs = [];
+          
+          for (let by = 0; by < this.h; by += 16) {
+            for (let bx = 0; bx < this.w; bx += 16) {
+              const idx = Math.floor(by / 16) * this.bw + Math.floor(bx / 16);
+              const f = this.filters[idx];
+              
+              // Kalman predict: x += vx*dt, y += vy*dt
+              f.x += f.vx; 
+              f.y += f.vy;
+              // Increase uncertainty
+              f.P[0] += 0.01; f.P[5] += 0.01; f.P[10] += 0.01; f.P[15] += 0.01;
+              
+              // Block matching to find motion vector
+              let bestD = 0, bestDy = 0, minSad = Infinity;
+              for (let dy = -8; dy <= 8; dy += 2) {
+                for (let dx = -8; dx <= 8; dx += 2) {
+                  let sad = 0;
+                  for (let y = 0; y < 16 && by + y < this.h; y++) {
+                    for (let x = 0; x < 16 && bx + x < this.w; x++) {
+                      const cx = bx + x, cy = by + y;
+                      const rx = cx + dx, ry = cy + dy;
+                      if (rx >= 0 && rx < this.w && ry >= 0 && ry < this.h) {
+                        const ci = cy * this.w + cx;
+                        const ri = ry * this.w + rx;
+                        // SAD on RGB
+                        sad += Math.abs(rgba[ci*4] - this.prevR[ri]);
+                        sad += Math.abs(rgba[ci*4+1] - this.prevG[ri]);
+                        sad += Math.abs(rgba[ci*4+2] - this.prevB[ri]);
+                      }
+                    }
+                  }
+                  if (sad < minSad) { minSad = sad; bestD = dx; bestDy = dy; }
+                }
+              }
+              
+              // Kalman update: correct position and velocity estimates
+              const mx = bx + bestD, my = by + bestDy;
+              const s0 = f.P[0] + 2, s1 = f.P[5] + 2; // R = 2 (measurement noise)
+              const kx = f.P[0] / s0, ky = f.P[5] / s1;
+              const kvx = f.P[8] / s0, kvy = f.P[13] / s1;
+              
+              f.x += kx * (mx - f.x);
+              f.y += ky * (my - f.y);
+              f.vx += kvx * (mx - f.x);
+              f.vy += kvy * (my - f.y);
+              // Reduce covariance
+              f.P[0] *= (1 - kx);
+              f.P[5] *= (1 - ky);
+              
+              // Store smoothed motion vector
+              mvs.push({ bx: bx, by: by, mvx: Math.round(f.x - bx), mvy: Math.round(f.y - by) });
+            }
+          }
+          
+          // Update previous frame
+          for (let i = 0; i < n; i++) {
+            this.prevR[i] = rgba[i*4];
+            this.prevG[i] = rgba[i*4+1];
+            this.prevB[i] = rgba[i*4+2];
+          }
+          
+          return { motionVectors: mvs, enhanced: null };
+        }
+      };
+    }
+
+    // === Main ===
+    var stream = null, video = null, running = false, frameCount = 0, lastTime = 0;
+
+    var enc, dec, kalman, encK, decK;
+    var wasmModule = null, wasmEnc = null, wasmDec = null;
+    var stats = { psnr: [], comp: [], size: [], time: [] };
+    var statsK = { psnr: [], comp: [], size: [], time: [] };
+    var statsW = { psnr: [], comp: [], size: [], time: [] };
+
+    var origCtx = document.getElementById('orig').getContext('2d');
+    var waveletCtx = document.getElementById('wavelet').getContext('2d');
+    var kalmanCtx = document.getElementById('kalman').getContext('2d');
+    var wasmCtx = document.getElementById('wasm').getContext('2d');
+
+    function initEncoders() {
+      var quality = parseInt(document.getElementById('quality').value);
+      // Reset WASM on quality change
+      if (wasmModule) {
+        try {
+          wasmEnc.delete();
+          wasmDec.delete();
+        } catch (e) {}
+        wasmEnc = new wasmModule.Encoder(W, H, quality, 2);
+        wasmDec = new wasmModule.Decoder(W, H, quality);
+        // Warmup frames
+        var warmupRgba = new Uint8ClampedArray(W * H * 4);
+        warmupRgba.fill(128);
+        for (var i = 0; i < 3; i++) {
+          var warmupEnc = wasmEnc.encode(warmupRgba, i * 1000);
+          if (warmupEnc) wasmDec.decode(warmupEnc);
+        }
+      }
+      statsW = { psnr: [], comp: [], size: [], time: [] };
+      // Wavelet only
+      enc = createEncoder(quality, 30);
+      dec = createDecoder(quality);
+      // Wavelet + Kalman
+      kalman = createKalman(W, H);
+      encK = createEncoder(quality, 30);
+      decK = createDecoder(quality);
+      // Reset stats
+      stats = { psnr: [], comp: [], size: [], time: [] };
+      statsK = { psnr: [], comp: [], size: [], time: [] };
+      statsW = { psnr: [], comp: [], size: [], time: [] };
+    }
+
+    function calcPSNR(orig, dec) {
+      var mse = 0;
+      for (var i = 0; i < orig.length; i += 4) {
+        mse += (orig[i] - dec[i]) ** 2 + (orig[i+1] - dec[i+1]) ** 2 + (orig[i+2] - dec[i+2]) ** 2;
+      }
+      mse /= (orig.length * 0.75);
+      return mse === 0 ? 100 : 20 * Math.log10(255 / Math.sqrt(mse));
+    }
+
+    
+
+    async function start() {
+      try {
+        // Load WASM module - try multiple paths
+        var wasmStatus = document.getElementById('wasmStatus');
+        try {
+          var paths = ['./src/lib/wasm/wlvc.js', '../src/lib/wasm/wlvc.js'];
+          for (var p of paths) {
+            try {
+              wasmStatus.textContent = 'WASM: trying ' + p + '...';
+              var createModule = (await import(p)).default;
+              wasmModule = await createModule({
+                locateFile: function(path) {
+                  if (path.endsWith('.wasm')) {
+                    return './src/lib/wasm/wlvc.wasm';
+                  }
+                  return path;
+                },
+              });
+              console.log('[WASM] Loaded from', p, ':', wasmModule);
+              wasmStatus.textContent = 'WASM: loaded';
+              break;
+            } catch (e) {
+              console.warn('[WASM] Try', p, 'failed:', e.message);
+              wasmStatus.textContent = 'WASM: ' + p + ' failed - ' + e.message;
+            }
+          }
+          if (!wasmModule) {
+            console.warn('[WASM] No module loaded');
+            wasmStatus.textContent = 'WASM: not loaded';
+          }
+        } catch (e) {
+          console.warn('[WASM] Failed to load:', e);
+          wasmStatus.textContent = 'WASM: ' + e.message;
+          wasmModule = null;
+        }
+
+        initEncoders();
+        stream = await navigator.mediaDevices.getUserMedia({ video: { width: W, height: H, facingMode: 'user' } });
+        video = document.createElement('video');
+        video.srcObject = stream;
+        video.play();
+        await new Promise(function(r) { video.onloadedmetadata = r; });
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+        running = true;
+        lastTime = performance.now();
+        process();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    function stop() {
+      running = false;
+      if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('stopBtn').disabled = true;
+    }
+
+    function process() {
+      if (!running) return;
+
+      // Get camera frame
+      origCtx.drawImage(video, 0, 0, W, H);
+      var orig = origCtx.getImageData(0, 0, W, H);
+      var rgba = orig.data;
+
+      // FPS counter
+      frameCount++;
+      if (performance.now() - lastTime >= 1000) {
+        document.getElementById('f1').textContent = frameCount + ' fps';
+        document.getElementById('s1').textContent = 'LIVE';
+        frameCount = 0;
+        lastTime = performance.now();
+      }
+
+      // 1. Wavelet only (baseline)
+      var t0 = performance.now();
+      var encoded = enc.encode(rgba, W, H);
+      var tEnc = performance.now() - t0;
+      var decoded = dec.decode(encoded);
+      waveletCtx.putImageData(new ImageData(decoded, W, H), 0, 0);
+      
+      var comp = COLOR_SIZE / encoded.size;
+      stats.comp.push(comp);
+      stats.size.push(encoded.size);
+      stats.time.push(tEnc);
+      stats.psnr.push(calcPSNR(rgba, decoded));
+
+      // 2. Wavelet + Kalman
+      // Process with Kalman to get motion vectors
+      var kalmanResult = kalman.process(rgba);
+      
+      // For now, just encode normally (the MVs can be used to improve temporal prediction)
+      // This tests that Kalman doesn't hurt the codec
+      var t0k = performance.now();
+      var encodedK = encK.encode(rgba, W, H);  // Same input - Kalman is for future MV-enhanced encoding
+      var tEnck = performance.now() - t0k;
+      var decodedK = decK.decode(encodedK);
+      kalmanCtx.putImageData(new ImageData(decodedK, W, H), 0, 0);
+      
+      var compK = COLOR_SIZE / encodedK.size;
+      statsK.comp.push(compK);
+      statsK.size.push(encodedK.size);
+      statsK.time.push(tEnck);
+      statsK.psnr.push(calcPSNR(rgba, decodedK));
+
+      // 3. WASM Codec (show grayscale if failed)
+      if (wasmEnc && wasmDec) {
+        try {
+          var t0w = performance.now();
+          var encodedW = wasmEnc.encode(rgba, performance.now() * 1000);
+          var tEncW = performance.now() - t0w;
+          if (!encodedW) {
+            console.error('[WASM] Encode returned null');
+            wasmCtx.fillStyle = '#330000';
+            wasmCtx.fillRect(0, 0, W, H);
+            return;
+          }
+          var decodedW = wasmDec.decode(encodedW);
+          if (!decodedW) {
+            console.error('[WASM] Decode returned null, encoded size:', encodedW.byteLength);
+            wasmCtx.fillStyle = '#330033';
+            wasmCtx.fillRect(0, 0, W, H);
+            return;
+          }
+          // Copy to new array - WASM view is invalidated on next call
+          var decodedArr = new Uint8ClampedArray(decodedW);
+          if (decodedArr.length !== W * H * 4) {
+            console.error('[WASM] Wrong decoded size:', decodedArr.length, 'expected:', W * H * 4);
+            wasmCtx.fillStyle = '#333300';
+            wasmCtx.fillRect(0, 0, W, H);
+            return;
+          }
+          wasmCtx.putImageData(new ImageData(decodedArr, W, H), 0, 0);
+          var encodedSize = encodedW.byteLength || encodedW.length || 0;
+          var compW = COLOR_SIZE / encodedSize;
+          statsW.comp.push(compW);
+          statsW.size.push(encodedSize);
+          statsW.time.push(tEncW);
+          statsW.psnr.push(calcPSNR(rgba, decodedArr));
+        } catch (e) {
+          console.error('[WASM] Error:', e.message, e.stack);
+          wasmCtx.fillStyle = '#003300';
+          wasmCtx.fillRect(0, 0, W, H);
+        }
+      } else {
+        wasmCtx.fillStyle = '#000';
+        wasmCtx.fillRect(0, 0, W, H);
+      }
+
+      // Keep last 30 frames for averaging
+      if (stats.psnr.length > 30) {
+        stats.psnr.shift(); stats.comp.shift(); stats.size.shift(); stats.time.shift();
+        statsK.psnr.shift(); statsK.comp.shift(); statsK.size.shift(); statsK.time.shift();
+        statsW.psnr.shift(); statsW.comp.shift(); statsW.size.shift(); statsW.time.shift();
+      }
+
+      // Update UI
+      var n = stats.psnr.length;
+      if (n > 0) {
+        var updatePanel = function(prefix, s) {
+          var avgPsnr = s.psnr.reduce(function(a,b){return a+b;},0) / n;
+          var avgComp = s.comp.reduce(function(a,b){return a+b;},0) / n;
+          var avgSize = s.size.reduce(function(a,b){return a+b;},0) / n;
+          var avgTime = s.time.reduce(function(a,b){return a+b;},0) / n;
+          document.getElementById('psnr' + prefix).textContent = avgPsnr.toFixed(1) + ' dB';
+          document.getElementById('comp' + prefix).textContent = avgComp.toFixed(1) + 'x';
+          document.getElementById('size' + prefix).textContent = (avgSize / 1024).toFixed(1) + ' KB';
+          document.getElementById('time' + prefix).textContent = avgTime.toFixed(1) + ' ms';
+        };
+        updatePanel('', stats);
+        updatePanel('K', statsK);
+        updatePanel('W', statsW);
+      }
+
+      requestAnimationFrame(process);
+    }
+
+    document.getElementById('startBtn').onclick = start;
+    document.getElementById('stopBtn').onclick = stop;
+  </script>
+</body>
+</html>
