@@ -20,16 +20,16 @@
         <button class="btn" type="button" @click="applySearchNow">Search</button>
       </label>
 
-      <select v-model.number="pageSize" class="select" @change="resetAndReload">
+      <AppSelect v-model.number="pageSize" @change="resetAndReload">
         <option :value="10">10 / page</option>
         <option :value="20">20 / page</option>
         <option :value="50">50 / page</option>
-      </select>
+      </AppSelect>
 
-      <select v-model="order" class="select" @change="resetAndReload">
+      <AppSelect v-model="order" @change="resetAndReload">
         <option value="role_then_name_asc">Role + name A-Z</option>
         <option value="role_then_name_desc">Role + name Z-A</option>
-      </select>
+      </AppSelect>
     </section>
 
     <section v-if="notice" class="section users-banner ok">{{ notice }}</section>
@@ -197,34 +197,34 @@
 
           <label class="users-field">
             <span>Role</span>
-            <select v-model="form.role" class="select" :disabled="!canEditRole">
+            <AppSelect v-model="form.role" :disabled="!canEditRole">
               <option value="user">user</option>
               <option value="admin">admin</option>
-            </select>
+            </AppSelect>
           </label>
 
           <label v-if="form.mode === 'edit'" class="users-field">
             <span>Status</span>
-            <select v-model="form.status" class="select" :disabled="!canEditStatus">
+            <AppSelect v-model="form.status" :disabled="!canEditStatus">
               <option value="active">active</option>
               <option value="disabled">disabled</option>
-            </select>
+            </AppSelect>
           </label>
 
           <label v-if="form.mode === 'edit'" class="users-field">
             <span>Time format</span>
-            <select v-model="form.time_format" class="select">
+            <AppSelect v-model="form.time_format">
               <option value="24h">24h</option>
               <option value="12h">12h</option>
-            </select>
+            </AppSelect>
           </label>
 
           <label v-if="form.mode === 'edit'" class="users-field">
             <span>Theme</span>
-            <select v-model="form.theme" class="select">
+            <AppSelect v-model="form.theme">
               <option value="dark">dark</option>
               <option value="light">light</option>
-            </select>
+            </AppSelect>
           </label>
 
           <section v-if="form.mode === 'edit'" class="users-field users-field-wide users-avatar-edit-row">
@@ -283,6 +283,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import AppSelect from '../../components/AppSelect.vue';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import { logoutSession, refreshSession, sessionState } from '../auth/session';
 

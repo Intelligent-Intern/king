@@ -190,36 +190,34 @@
                 <section class="call-left-settings-block" aria-label="Camera">
                   <div class="call-left-settings-title">Camera</div>
                   <div class="call-left-settings-field">
-                    <select
+                    <AppSelect
                       id="user-enter-call-camera-select"
-                      class="input call-left-select"
                       aria-label="Camera"
-                      :value="callMediaPrefs.selectedCameraId"
-                      @change="setCallCameraDevice($event.target.value)"
+                      :model-value="callMediaPrefs.selectedCameraId"
+                      @update:model-value="setCallCameraDevice"
                     >
                       <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
                       <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
                         {{ camera.label }}
                       </option>
-                    </select>
+                    </AppSelect>
                   </div>
                 </section>
 
                 <section class="call-left-settings-block" aria-label="Mic">
                   <div class="call-left-settings-title">Mic</div>
                   <div class="call-left-settings-field">
-                    <select
+                    <AppSelect
                       id="user-enter-call-mic-select"
-                      class="input call-left-select"
                       aria-label="Mic"
-                      :value="callMediaPrefs.selectedMicrophoneId"
-                      @change="setCallMicrophoneDevice($event.target.value)"
+                      :model-value="callMediaPrefs.selectedMicrophoneId"
+                      @update:model-value="setCallMicrophoneDevice"
                     >
                       <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
                       <option v-for="microphone in callMediaPrefs.microphones" :key="microphone.id" :value="microphone.id">
                         {{ microphone.label }}
                       </option>
-                    </select>
+                    </AppSelect>
                   </div>
                   <div class="call-left-settings-field">
                     <label for="user-enter-call-mic-volume">Volume</label>
@@ -242,18 +240,17 @@
                 <section class="call-left-settings-block" aria-label="Speaker">
                   <div class="call-left-settings-title">Speaker</div>
                   <div class="call-left-settings-field">
-                    <select
+                    <AppSelect
                       id="user-enter-call-speaker-select"
-                      class="input call-left-select"
                       aria-label="Speaker"
-                      :value="callMediaPrefs.selectedSpeakerId"
-                      @change="setCallSpeakerDevice($event.target.value)"
+                      :model-value="callMediaPrefs.selectedSpeakerId"
+                      @update:model-value="setCallSpeakerDevice"
                     >
                       <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
                       <option v-for="speaker in callMediaPrefs.speakers" :key="speaker.id" :value="speaker.id">
                         {{ speaker.label }}
                       </option>
-                    </select>
+                    </AppSelect>
                   </div>
                   <div class="call-left-settings-field">
                     <label for="user-enter-call-speaker-volume">Volume</label>
@@ -384,10 +381,10 @@
             </label>
             <label class="field">
               <span>Access mode</span>
-              <select v-model="composeState.accessMode" class="input" aria-label="Call access mode">
+              <AppSelect v-model="composeState.accessMode" aria-label="Call access mode">
                 <option value="invite_only">Invite only</option>
                 <option value="free_for_all">Free for all</option>
-              </select>
+              </AppSelect>
             </label>
             <label class="field">
               <span>Starts at</span>
@@ -427,6 +424,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import AppSelect from '../../components/AppSelect.vue';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import {
@@ -1828,7 +1826,7 @@ onBeforeUnmount(() => {
     font-size: 11px;
   }
 
-  .calls-enter-right-settings .input.call-left-select,
+  .calls-enter-right-settings .ii-select,
   .calls-enter-right-settings .call-left-test-btn {
     height: 30px;
     padding: 0 8px;

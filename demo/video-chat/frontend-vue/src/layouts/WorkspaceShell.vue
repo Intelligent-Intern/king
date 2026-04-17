@@ -21,12 +21,11 @@
             <section class="call-left-settings-block" aria-label="Camera">
               <div class="call-left-settings-title">Camera</div>
               <div class="call-left-settings-field">
-                <select
+                <AppSelect
                   id="call-left-camera-select"
-                  class="input call-left-select"
                   aria-label="Camera"
-                  :value="callMediaPrefs.selectedCameraId"
-                  @change="setCallCameraDevice($event.target.value)"
+                  :model-value="callMediaPrefs.selectedCameraId"
+                  @update:model-value="setCallCameraDevice"
                 >
                   <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
                   <option
@@ -36,19 +35,18 @@
                   >
                     {{ camera.label }}
                   </option>
-                </select>
+                </AppSelect>
               </div>
             </section>
 
             <section class="call-left-settings-block" aria-label="Mic">
               <div class="call-left-settings-title">Mic</div>
               <div class="call-left-settings-field">
-                <select
+                <AppSelect
                   id="call-left-mic-select"
-                  class="input call-left-select"
                   aria-label="Mic"
-                  :value="callMediaPrefs.selectedMicrophoneId"
-                  @change="setCallMicrophoneDevice($event.target.value)"
+                  :model-value="callMediaPrefs.selectedMicrophoneId"
+                  @update:model-value="setCallMicrophoneDevice"
                 >
                   <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
                   <option
@@ -58,7 +56,7 @@
                   >
                     {{ microphone.label }}
                   </option>
-                </select>
+                </AppSelect>
               </div>
               <div class="call-left-settings-field">
                 <label for="call-left-mic-volume">Volume</label>
@@ -91,12 +89,11 @@
             <section class="call-left-settings-block" aria-label="Speaker">
               <div class="call-left-settings-title">Speaker</div>
               <div class="call-left-settings-field">
-                <select
+                <AppSelect
                   id="call-left-speaker-select"
-                  class="input call-left-select"
                   aria-label="Speaker"
-                  :value="callMediaPrefs.selectedSpeakerId"
-                  @change="setCallSpeakerDevice($event.target.value)"
+                  :model-value="callMediaPrefs.selectedSpeakerId"
+                  @update:model-value="setCallSpeakerDevice"
                 >
                   <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
                   <option
@@ -106,7 +103,7 @@
                   >
                     {{ speaker.label }}
                   </option>
-                </select>
+                </AppSelect>
               </div>
               <div class="call-left-settings-field">
                 <label for="call-left-speaker-volume">Volume</label>
@@ -379,10 +376,10 @@
         <div class="settings-row">
           <label class="settings-field">
             <span>Time format</span>
-            <select v-model="settingsDraft.timeFormat" class="ii-input">
+            <AppSelect v-model="settingsDraft.timeFormat">
               <option value="24h">24h</option>
               <option value="12h">12h</option>
-            </select>
+            </AppSelect>
           </label>
         </div>
       </section>
@@ -435,10 +432,10 @@
           </label>
           <label class="field">
             <span>Access mode</span>
-            <select v-model="callOwnerEditState.accessMode" class="input" aria-label="Call access mode">
+            <AppSelect v-model="callOwnerEditState.accessMode" aria-label="Call access mode">
               <option value="invite_only">Invite only</option>
               <option value="free_for_all">Free for all</option>
-            </select>
+            </AppSelect>
           </label>
           <label class="field">
             <span>Room ID</span>
@@ -595,6 +592,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
+import AppSelect from '../components/AppSelect.vue';
 import {
   logoutSession,
   saveSessionSettings,

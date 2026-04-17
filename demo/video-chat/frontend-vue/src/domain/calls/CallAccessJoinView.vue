@@ -43,30 +43,28 @@
         <section class="call-access-join-grid">
           <label class="field">
             <span>Camera</span>
-            <select
-              class="input"
-              :value="callMediaPrefs.selectedCameraId"
-              @change="setCallCameraDevice($event.target.value)"
+            <AppSelect
+              :model-value="callMediaPrefs.selectedCameraId"
+              @update:model-value="setCallCameraDevice"
             >
               <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
               <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
                 {{ camera.label }}
               </option>
-            </select>
+            </AppSelect>
           </label>
 
           <label class="field">
             <span>Microphone</span>
-            <select
-              class="input"
-              :value="callMediaPrefs.selectedMicrophoneId"
-              @change="setCallMicrophoneDevice($event.target.value)"
+            <AppSelect
+              :model-value="callMediaPrefs.selectedMicrophoneId"
+              @update:model-value="setCallMicrophoneDevice"
             >
               <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
               <option v-for="microphone in callMediaPrefs.microphones" :key="microphone.id" :value="microphone.id">
                 {{ microphone.label }}
               </option>
-            </select>
+            </AppSelect>
           </label>
 
           <label class="field">
@@ -84,16 +82,15 @@
 
           <label class="field">
             <span>Speaker</span>
-            <select
-              class="input"
-              :value="callMediaPrefs.selectedSpeakerId"
-              @change="setCallSpeakerDevice($event.target.value)"
+            <AppSelect
+              :model-value="callMediaPrefs.selectedSpeakerId"
+              @update:model-value="setCallSpeakerDevice"
             >
               <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
               <option v-for="speaker in callMediaPrefs.speakers" :key="speaker.id" :value="speaker.id">
                 {{ speaker.label }}
               </option>
-            </select>
+            </AppSelect>
           </label>
 
           <label class="field">
@@ -126,6 +123,7 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import AppSelect from '../../components/AppSelect.vue';
 import { loginWithCallAccess } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import {

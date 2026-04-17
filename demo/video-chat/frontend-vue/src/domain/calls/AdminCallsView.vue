@@ -57,18 +57,18 @@
           <button class="btn" type="button" @click="applyFilters">Search</button>
         </label>
 
-        <select v-model="statusFilter" class="select" @change="applyFilters">
+        <AppSelect v-model="statusFilter" @change="applyFilters">
           <option value="all">All status</option>
           <option value="scheduled">Scheduled</option>
           <option value="active">Active</option>
           <option value="ended">Ended</option>
           <option value="cancelled">Cancelled</option>
-        </select>
+        </AppSelect>
 
-        <select v-model="scopeFilter" class="select" @change="applyFilters">
+        <AppSelect v-model="scopeFilter" @change="applyFilters">
           <option value="all">All scope</option>
           <option value="my">My scope</option>
-        </select>
+        </AppSelect>
       </div>
     </section>
 
@@ -231,36 +231,34 @@
                 <section class="call-left-settings-block" aria-label="Camera">
                   <div class="call-left-settings-title">Camera</div>
                   <div class="call-left-settings-field">
-                    <select
+                    <AppSelect
                       id="admin-enter-call-camera-select"
-                      class="input call-left-select"
                       aria-label="Camera"
-                      :value="callMediaPrefs.selectedCameraId"
-                      @change="setCallCameraDevice($event.target.value)"
+                      :model-value="callMediaPrefs.selectedCameraId"
+                      @update:model-value="setCallCameraDevice"
                     >
                       <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
                       <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
                         {{ camera.label }}
                       </option>
-                    </select>
+                    </AppSelect>
                   </div>
                 </section>
 
                 <section class="call-left-settings-block" aria-label="Mic">
                   <div class="call-left-settings-title">Mic</div>
                   <div class="call-left-settings-field">
-                    <select
+                    <AppSelect
                       id="admin-enter-call-mic-select"
-                      class="input call-left-select"
                       aria-label="Mic"
-                      :value="callMediaPrefs.selectedMicrophoneId"
-                      @change="setCallMicrophoneDevice($event.target.value)"
+                      :model-value="callMediaPrefs.selectedMicrophoneId"
+                      @update:model-value="setCallMicrophoneDevice"
                     >
                       <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
                       <option v-for="microphone in callMediaPrefs.microphones" :key="microphone.id" :value="microphone.id">
                         {{ microphone.label }}
                       </option>
-                    </select>
+                    </AppSelect>
                   </div>
                   <div class="call-left-settings-field">
                     <label for="admin-enter-call-mic-volume">Volume</label>
@@ -283,18 +281,17 @@
                 <section class="call-left-settings-block" aria-label="Speaker">
                   <div class="call-left-settings-title">Speaker</div>
                   <div class="call-left-settings-field">
-                    <select
+                    <AppSelect
                       id="admin-enter-call-speaker-select"
-                      class="input call-left-select"
                       aria-label="Speaker"
-                      :value="callMediaPrefs.selectedSpeakerId"
-                      @change="setCallSpeakerDevice($event.target.value)"
+                      :model-value="callMediaPrefs.selectedSpeakerId"
+                      @update:model-value="setCallSpeakerDevice"
                     >
                       <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
                       <option v-for="speaker in callMediaPrefs.speakers" :key="speaker.id" :value="speaker.id">
                         {{ speaker.label }}
                       </option>
-                    </select>
+                    </AppSelect>
                   </div>
                   <div class="call-left-settings-field">
                     <label for="admin-enter-call-speaker-volume">Volume</label>
@@ -388,10 +385,10 @@
             </label>
             <label v-if="composeState.mode === 'edit'" class="field">
               <span>Access mode</span>
-              <select v-model="composeState.accessMode" class="input" aria-label="Call access mode">
+              <AppSelect v-model="composeState.accessMode" aria-label="Call access mode">
                 <option value="invite_only">Invite only</option>
                 <option value="free_for_all">Free for all</option>
-              </select>
+              </AppSelect>
             </label>
             <label v-if="composeState.mode !== 'create'" class="field">
               <span>Starts at</span>
@@ -556,17 +553,16 @@
 
           <label class="field">
             <span>Cancel reason</span>
-            <select
+            <AppSelect
               v-if="cancelState.overrideTemplate"
               v-model="cancelState.selectedTemplateId"
-              class="input"
               aria-label="Cancel reason template"
               @change="applyCancelTemplate(cancelState.selectedTemplateId)"
             >
               <option v-for="template in cancelTemplates" :key="template.reason" :value="template.reason">
                 {{ template.label }}
               </option>
-            </select>
+            </AppSelect>
             <input
               v-else
               v-model.trim="cancelState.customReason"
@@ -670,6 +666,7 @@ import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import AppSelect from '../../components/AppSelect.vue';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import {
@@ -3179,7 +3176,7 @@ onBeforeUnmount(() => {
     font-size: 11px;
   }
 
-  .calls-enter-right-settings .input.call-left-select,
+  .calls-enter-right-settings .ii-select,
   .calls-enter-right-settings .call-left-test-btn {
     height: 30px;
     padding: 0 8px;
