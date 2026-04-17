@@ -12,7 +12,7 @@ const THEME_PRESETS = {
   dark: {
     '--bg-shell': '#09111e',
     '--bg-pane': '#182c4d',
-    '--bg-surface': '#2b3e60',
+    '--bg-surface': '#003c93',
     '--bg-surface-strong': '#0c1c33',
     '--bg-input': '#d8dadd',
     '--bg-action': '#ffffff',
