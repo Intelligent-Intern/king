@@ -521,7 +521,6 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   const backgroundColor = String(options.backgroundColor ?? "").trim();
   const backgroundImageUrl = String(options.backgroundImageUrl ?? "").trim();
   const facePaddingPx = Math.max(4, Math.min(64, Math.round(toNumber(options.facePaddingPx, 14))));
-  const edgeFeatherPx = Math.max(0, Math.min(48, Math.round(toNumber(options.edgeFeatherPx, 16))));
   const temporalSmoothingAlpha = Math.max(0, Math.min(0.95, toNumber(options.temporalSmoothingAlpha, 0.3)));
   const detectIntervalMs = Math.max(66, Math.min(1200, Math.round(toNumber(options.detectIntervalMs, 140))));
   const preferFastMatte = options.preferFastMatte === true;
