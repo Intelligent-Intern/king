@@ -10,14 +10,13 @@
     </header>
 
     <section class="toolbar admin-users-toolbar">
-      <label class="search-field" aria-label="Search users">
+      <label class="search-field search-field-main" aria-label="Search users">
         <input
           v-model.trim="queryDraft"
           class="input"
           type="search"
           placeholder="Search by name, email, or role"
         />
-        <button class="btn" type="button" @click="applySearchNow">Search</button>
       </label>
 
       <AppSelect v-model.number="pageSize" @change="resetAndReload">
@@ -30,6 +29,8 @@
         <option value="role_then_name_asc">Role + name A-Z</option>
         <option value="role_then_name_desc">Role + name Z-A</option>
       </AppSelect>
+
+      <button class="btn" type="button" @click="applySearchNow">Search</button>
     </section>
 
     <section v-if="notice" class="section users-banner ok">{{ notice }}</section>
@@ -1094,7 +1095,7 @@ onMounted(() => {
 
 .search-field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   flex: 1 1 320px;
 }
