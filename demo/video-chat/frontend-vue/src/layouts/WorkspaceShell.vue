@@ -339,17 +339,114 @@
       </section>
 
       <section v-else-if="activeSettingsTile === 'theme'" class="settings-panel">
-        <div class="settings-row">
-          <label class="settings-field">
-            <span>Theme</span>
-            <input
-              v-model.trim="settingsDraft.theme"
-              class="input"
-              type="text"
-              autocomplete="off"
-              placeholder="dark"
-            />
-          </label>
+        <div class="settings-theme-layout">
+          <section class="settings-theme-palette">
+            <header class="settings-theme-palette-header">
+              <div class="settings-theme-palette-heading">
+                <img class="settings-theme-palette-icon" src="/assets/orgas/kingrt/icons/gear.png" alt="" />
+                <h4>Theme Colors</h4>
+              </div>
+              <button class="btn" type="button" :disabled="settingsState.saving || settingsState.loading" @click="resetThemeColorsToDefault">
+                Reset
+              </button>
+            </header>
+
+            <div class="settings-theme-palette-list">
+              <article v-for="field in themeColorFields" :key="field.key" class="settings-theme-color-row">
+                <div class="settings-theme-color-meta">
+                  <img class="settings-theme-color-meta-icon" src="/assets/orgas/kingrt/icons/gear.png" alt="" />
+                  <div class="settings-theme-color-copy">
+                    <span class="settings-theme-color-label">{{ field.label }}</span>
+                    <code class="settings-theme-color-key">{{ field.key }}</code>
+                  </div>
+                </div>
+                <div class="settings-theme-color-inputs">
+                  <input
+                    class="settings-theme-swatch"
+                    type="color"
+                    :value="settingsDraft.themeColors[field.key] || field.default"
+                    @input="updateThemeColor(field.key, $event?.target?.value)"
+                  />
+                  <input
+                    class="input settings-theme-hex"
+                    type="text"
+                    maxlength="7"
+                    :value="settingsDraft.themeColors[field.key] || field.default"
+                    @input="updateThemeColor(field.key, $event?.target?.value)"
+                  />
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="settings-theme-preview">
+            <header class="settings-theme-preview-header">
+              <img class="settings-theme-preview-header-icon" src="/assets/orgas/kingrt/icons/gear.png" alt="" />
+              <h4>Video Call Management</h4>
+            </header>
+
+            <div class="settings-theme-preview-viewport">
+              <div class="settings-theme-preview-scale">
+                <div class="settings-theme-preview-shell">
+                  <aside class="settings-theme-preview-left">
+                    <div class="settings-theme-preview-brand">
+                      <img src="/assets/orgas/kingrt/logo.svg" alt="" />
+                    </div>
+                    <div class="settings-theme-preview-left-tabs">
+                      <span class="settings-theme-preview-left-tab is-active"></span>
+                      <span class="settings-theme-preview-left-tab"></span>
+                      <span class="settings-theme-preview-left-tab"></span>
+                    </div>
+                    <div class="settings-theme-preview-left-cards">
+                      <div class="settings-theme-preview-left-card"></div>
+                      <div class="settings-theme-preview-left-card"></div>
+                      <div class="settings-theme-preview-left-card"></div>
+                    </div>
+                  </aside>
+
+                  <section class="settings-theme-preview-right">
+                    <header class="settings-theme-preview-right-head">
+                      <h5>Video Call Management</h5>
+                      <button class="settings-theme-preview-new-btn" type="button">New video call</button>
+                    </header>
+                    <div class="settings-theme-preview-top-tabs">
+                      <span class="settings-theme-preview-top-tab is-active">Calls</span>
+                      <span class="settings-theme-preview-top-tab">Calender</span>
+                    </div>
+                    <div class="settings-theme-preview-toolbar">
+                      <span class="settings-theme-preview-filter input"></span>
+                      <span class="settings-theme-preview-filter input"></span>
+                      <span class="settings-theme-preview-filter input"></span>
+                      <span class="settings-theme-preview-search"></span>
+                    </div>
+                    <div class="settings-theme-preview-table">
+                      <div class="settings-theme-preview-table-head">
+                        <span>Call</span>
+                        <span>Status</span>
+                        <span>Window</span>
+                        <span>Participants</span>
+                        <span>Owner</span>
+                      </div>
+                      <div class="settings-theme-preview-table-row">
+                        <span class="settings-theme-preview-line strong"></span>
+                        <span class="settings-theme-preview-tag ok">active</span>
+                        <span class="settings-theme-preview-line"></span>
+                        <span class="settings-theme-preview-line"></span>
+                        <span class="settings-theme-preview-line"></span>
+                      </div>
+                      <div class="settings-theme-preview-table-row">
+                        <span class="settings-theme-preview-line strong"></span>
+                        <span class="settings-theme-preview-tag warn">scheduled</span>
+                        <span class="settings-theme-preview-line"></span>
+                        <span class="settings-theme-preview-line"></span>
+                        <span class="settings-theme-preview-line"></span>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </section>
 
@@ -643,7 +740,104 @@ const LAPTOP_BREAKPOINT = 1440;
 const TABLET_BREAKPOINT = 1180;
 const MOBILE_BREAKPOINT = 760;
 const SETTINGS_LANGUAGE_STORAGE_KEY = 'ii_videocall_v1_workspace_language';
+const SETTINGS_THEME_COLORS_STORAGE_KEY = 'ii_videocall_v1_theme_colors';
 const SUPPORTED_SETTINGS_LANGUAGES = ['en', 'de', 'fr', 'es'];
+const themeColorFields = Object.freeze([
+  { key: '--bg-shell', label: 'Shell background', default: '#0b1324' },
+  { key: '--bg-pane', label: 'Pane background', default: '#182c4d' },
+  { key: '--brand-bg', label: 'Brand strip', default: '#0b1324' },
+  { key: '--bg-surface', label: 'Surface', default: '#2b3e60' },
+  { key: '--bg-surface-strong', label: 'Surface strong', default: '#0c1c33' },
+  { key: '--bg-input', label: 'Input background', default: '#d8dadd' },
+  { key: '--bg-action', label: 'Action', default: '#ffffff' },
+  { key: '--bg-action-hover', label: 'Action hover', default: '#5696ef' },
+  { key: '--bg-row', label: 'Row', default: '#2a569f' },
+  { key: '--bg-row-hover', label: 'Row hover', default: '#163260' },
+  { key: '--line', label: 'Line', default: '#09111e' },
+  { key: '--text-main', label: 'Text main', default: '#edf3ff' },
+  { key: '--text-muted', label: 'Text muted', default: '#8490a1' },
+  { key: '--ok', label: 'OK', default: '#177f22' },
+  { key: '--wait', label: 'Wait', default: '#8d9500' },
+  { key: '--danger', label: 'Danger', default: '#ff0000' },
+  { key: '--bg-sidebar', label: 'Sidebar', default: '#0b1324' },
+  { key: '--bg-main', label: 'Main', default: '#0b1324' },
+  { key: '--bg-tab', label: 'Tab', default: '#003c93' },
+  { key: '--bg-tab-hover', label: 'Tab hover', default: '#5696ef' },
+  { key: '--bg-tab-active', label: 'Tab active', default: '#2a569f' },
+  { key: '--bg-ui-chrome', label: 'UI chrome', default: '#182c4d' },
+  { key: '--bg-ui-chrome-active', label: 'UI chrome active', default: '#2a569f' },
+  { key: '--bg-icon', label: 'Icon background', default: '#ffffff' },
+  { key: '--bg-icon-active', label: 'Icon active', default: '#5696ef' },
+  { key: '--border-subtle', label: 'Border subtle', default: '#09111e' },
+  { key: '--text-primary', label: 'Text primary', default: '#edf3ff' },
+  { key: '--text-secondary', label: 'Text secondary', default: '#c6d4eb' },
+  { key: '--text-dim', label: 'Text dim', default: '#5e6d86' },
+  { key: '--warn', label: 'Warn', default: '#4d5011' },
+  { key: '--brand-cyan', label: 'Brand cyan', default: '#1482be' },
+  { key: '--brand-cyan-hover', label: 'Brand cyan hover', default: '#1a96d8' },
+  { key: '--brand-cyan-active', label: 'Brand cyan active', default: '#0f6ea8' },
+]);
+const themeColorDefaultMap = Object.freeze(themeColorFields.reduce((accumulator, field) => ({
+  ...accumulator,
+  [field.key]: field.default,
+}), {}));
+
+function normalizeHexColor(value, fallback = '#000000') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (/^#[a-f0-9]{6}$/.test(normalized)) return normalized;
+  if (/^[a-f0-9]{6}$/.test(normalized)) return `#${normalized}`;
+  if (/^#[a-f0-9]{3}$/.test(normalized)) {
+    return `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
+  }
+  if (/^[a-f0-9]{3}$/.test(normalized)) {
+    return `#${normalized[0]}${normalized[0]}${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}`;
+  }
+  return normalizeHexColor(fallback, '#000000');
+}
+
+function mergeThemeColorMap(source) {
+  const merged = {};
+  const payload = source && typeof source === 'object' ? source : {};
+  for (const field of themeColorFields) {
+    merged[field.key] = normalizeHexColor(payload[field.key], themeColorDefaultMap[field.key]);
+  }
+  return merged;
+}
+
+function applyThemeColorMap(source) {
+  if (typeof document === 'undefined') return;
+  const merged = mergeThemeColorMap(source);
+  for (const field of themeColorFields) {
+    document.documentElement.style.setProperty(field.key, merged[field.key]);
+  }
+}
+
+function readStoredThemeColorMap() {
+  if (typeof localStorage === 'undefined') return mergeThemeColorMap(null);
+  const raw = localStorage.getItem(SETTINGS_THEME_COLORS_STORAGE_KEY);
+  if (!raw) return mergeThemeColorMap(null);
+  try {
+    const parsed = JSON.parse(raw);
+    return mergeThemeColorMap(parsed);
+  } catch {
+    return mergeThemeColorMap(null);
+  }
+}
+
+function storeThemeColorMap(source) {
+  if (typeof localStorage === 'undefined') return;
+  const merged = mergeThemeColorMap(source);
+  localStorage.setItem(SETTINGS_THEME_COLORS_STORAGE_KEY, JSON.stringify(merged));
+}
+
+function patchThemeColorMap(target, source) {
+  const merged = mergeThemeColorMap(source);
+  for (const field of themeColorFields) {
+    target[field.key] = merged[field.key];
+  }
+}
+
+const persistedThemeColors = reactive(readStoredThemeColorMap());
 
 const navItems = computed(() => {
   const role = sessionState.role;
@@ -727,6 +921,7 @@ const settingsDraft = reactive({
   dateFormat: 'dmy_dot',
   language: 'en',
   avatarDataUrl: '',
+  themeColors: mergeThemeColorMap(persistedThemeColors),
 });
 
 const settingsState = reactive({
@@ -768,6 +963,20 @@ function storeSettingsLanguage(language) {
 function applySettingsLanguage(language) {
   if (typeof document === 'undefined') return;
   document.documentElement.lang = normalizeSettingsLanguage(language);
+}
+
+function updateThemeColor(key, value) {
+  const normalizedKey = String(key || '').trim();
+  if (normalizedKey === '' || !(normalizedKey in themeColorDefaultMap)) return;
+  const fallback = settingsDraft.themeColors[normalizedKey] || themeColorDefaultMap[normalizedKey];
+  const next = normalizeHexColor(value, fallback);
+  settingsDraft.themeColors[normalizedKey] = next;
+  applyThemeColorMap(settingsDraft.themeColors);
+}
+
+function resetThemeColorsToDefault() {
+  patchThemeColorMap(settingsDraft.themeColors, themeColorDefaultMap);
+  applyThemeColorMap(settingsDraft.themeColors);
 }
 
 function normalizeRole(value) {
@@ -1707,6 +1916,7 @@ watch(
 
 onMounted(() => {
   applySettingsLanguage(readStoredSettingsLanguage());
+  applyThemeColorMap(persistedThemeColors);
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
   laptopMedia = window.matchMedia(`(max-width: ${LAPTOP_BREAKPOINT}px)`);
   tabletMedia = window.matchMedia(`(max-width: ${TABLET_BREAKPOINT}px)`);
@@ -1760,6 +1970,7 @@ function resetSettingsDraft() {
   settingsDraft.dateFormat = sessionState.dateFormat || 'dmy_dot';
   settingsDraft.language = readStoredSettingsLanguage();
   settingsDraft.avatarDataUrl = '';
+  patchThemeColorMap(settingsDraft.themeColors, persistedThemeColors);
 }
 
 function setAvatarStatus(message = '') {
@@ -1775,6 +1986,7 @@ function normalizeSettingsTile(tileId) {
 
 function closeSettingsModal() {
   if (settingsState.saving) return;
+  applyThemeColorMap(persistedThemeColors);
   settingsState.open = false;
   settingsState.dragging = false;
   settingsState.loading = false;
@@ -1907,6 +2119,9 @@ async function saveSettings() {
 
     storeSettingsLanguage(language);
     applySettingsLanguage(language);
+    patchThemeColorMap(persistedThemeColors, settingsDraft.themeColors);
+    storeThemeColorMap(persistedThemeColors);
+    applyThemeColorMap(persistedThemeColors);
     settingsState.message = 'Settings saved.';
     settingsState.open = false;
     resetSettingsDraft();
