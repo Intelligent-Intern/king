@@ -297,9 +297,6 @@
       </div>
 
       <section v-if="activeSettingsTile === 'about-me'" class="settings-panel">
-        <h4>About Me</h4>
-        <p>Configure your profile avatar for the sidebar.</p>
-
         <div class="settings-row">
           <label class="settings-field">
             <span>Display name</span>
@@ -342,9 +339,6 @@
       </section>
 
       <section v-else-if="activeSettingsTile === 'theme'" class="settings-panel">
-        <h4>Theme</h4>
-        <p>Choose visual mode for your workspace.</p>
-
         <div class="settings-row">
           <label class="settings-field">
             <span>Theme</span>
@@ -360,9 +354,6 @@
       </section>
 
       <section v-else-if="activeSettingsTile === 'credentials-email'" class="settings-panel">
-        <h4>Credentials + Email</h4>
-        <p>Manage your sign-in identity and upcoming email credential flows.</p>
-
         <div class="settings-row">
           <label class="settings-field">
             <span>Primary email</span>
@@ -373,14 +364,9 @@
             <input class="input" type="password" value="********" disabled autocomplete="off" />
           </label>
         </div>
-
-        <p>Email aliases and password self-service are prepared for the next rollout.</p>
       </section>
 
       <section v-else-if="activeSettingsTile === 'regional-time'" class="settings-panel">
-        <h4>Regional Time + Language</h4>
-        <p>Select how date/time is rendered and which interface language should be preferred.</p>
-
         <div class="settings-row">
           <label class="settings-field">
             <span>Time format</span>
@@ -402,18 +388,15 @@
       </section>
 
       <section v-else-if="activeSettingsTile === 'notifications'" class="settings-panel">
-        <h4>Notifications</h4>
-        <p>Notification channels and sound profiles are prepared in the next rollout.</p>
+        <div class="settings-upload-status">Notifications settings coming soon.</div>
       </section>
 
       <section v-else-if="activeSettingsTile === 'apps'" class="settings-panel">
-        <h4>Apps</h4>
-        <p>Connected app controls will appear here.</p>
+        <div class="settings-upload-status">Apps settings coming soon.</div>
       </section>
 
       <section v-else class="settings-panel">
-        <h4>Settings</h4>
-        <p>Select a settings tab.</p>
+        <div class="settings-upload-status">Select a settings tab.</div>
       </section>
 
       <div class="settings-actions">
