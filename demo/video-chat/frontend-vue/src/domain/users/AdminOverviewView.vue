@@ -1,9 +1,5 @@
 <template>
   <section class="view-card admin-overview-view">
-    <section class="section overview-head">
-      <h1>Video Operations</h1>
-    </section>
-
     <section class="overview-toolbar">
       <div class="overview-view-tabs" role="tablist" aria-label="Overview views">
         <button
@@ -947,7 +943,7 @@ watch(
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 0;
   background: transparent;
   overflow: hidden;
@@ -958,14 +954,8 @@ watch(
   border-top-right-radius: 5px;
 }
 
-.overview-head,
 .overview-toolbar {
   background: var(--bg-ui-chrome);
-}
-
-.overview-head h1 {
-  margin: 0;
-  font-size: 18px;
 }
 
 .overview-toolbar {
