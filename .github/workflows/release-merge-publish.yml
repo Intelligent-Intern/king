@@ -552,7 +552,6 @@ jobs:
         with:
           name: king-release-package-php8.4-linux-arm64
           path: dist/docker-packages/php8.4/linux-arm64
-
       - name: Prepare video-chat image metadata
         id: meta-video-chat
         run: |
