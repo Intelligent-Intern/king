@@ -1539,7 +1539,7 @@ onBeforeUnmount(() => {
 }
 
 .calls-pagination-wrap {
-  border-top: 1px solid var(--border-subtle);
+  border-top: 0;
 }
 
 .calls-modal {

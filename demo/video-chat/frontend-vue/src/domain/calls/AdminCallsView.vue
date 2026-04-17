@@ -2833,7 +2833,6 @@ watch(
   display: flex;
   justify-content: center;
   margin-top: auto;
-  border-top: 1px solid var(--border-subtle);
   padding-left: 10px;
   padding-right: 10px;
 }
