@@ -1673,7 +1673,7 @@ tbody tr:hover {
 }
 
 .settings-title-wrap h3 {
-  margin: 3px 0 0;
+  margin: 8px 0 0;
   font-size: 14px;
   line-height: 1;
   color: var(--text-main);

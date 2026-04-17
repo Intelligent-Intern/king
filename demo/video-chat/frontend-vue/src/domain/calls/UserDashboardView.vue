@@ -366,8 +366,11 @@
     <div class="calls-modal" :hidden="!composeState.open" role="dialog" aria-modal="true" aria-label="Call compose modal">
       <div class="calls-modal-backdrop" @click="closeCompose"></div>
       <div class="calls-modal-dialog">
-        <header class="calls-modal-header">
-          <h4>{{ composeHeadline }}</h4>
+        <header class="calls-modal-header calls-modal-header-enter">
+          <div class="calls-modal-header-enter-left">
+            <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
+            <h4 class="calls-enter-title">{{ composeHeadline }}</h4>
+          </div>
           <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeCompose">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
@@ -1669,6 +1672,7 @@ watch(
 }
 
 .calls-modal-dialog {
+  --calls-enter-dialog-padding: 12px;
   position: relative;
   width: min(1020px, calc(100vw - 30px));
   max-height: calc(100vh - 30px);
@@ -1704,12 +1708,12 @@ watch(
 }
 
 .calls-modal-header h4 {
-  margin: 0;
+  margin: 5px 0 0;
   font-size: 17px;
 }
 
 .calls-modal-header .calls-enter-title {
-  margin: 3px 0 0;
+  margin: 8px 0 0;
   font-size: 14px;
   line-height: 1;
 }

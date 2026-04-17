@@ -379,7 +379,7 @@
         <header class="calls-modal-header calls-modal-header-enter">
           <div class="calls-modal-header-enter-left">
             <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
-            <h4>{{ composeHeadline }}</h4>
+            <h4 class="calls-enter-title">{{ composeHeadline }}</h4>
           </div>
           <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeCompose">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
@@ -2911,12 +2911,12 @@ watch(
 }
 
 .calls-modal-header h4 {
-  margin: 0;
+  margin: 5px 0 0;
   font-size: 17px;
 }
 
 .calls-modal-header .calls-enter-title {
-  margin: 3px 0 0;
+  margin: 8px 0 0;
   font-size: 14px;
   line-height: 1;
 }

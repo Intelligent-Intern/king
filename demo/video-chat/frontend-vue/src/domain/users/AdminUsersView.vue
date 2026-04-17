@@ -1329,7 +1329,7 @@ watch(
 }
 
 .users-modal-head h4 {
-  margin: 0;
+  margin: 5px 0 0;
 }
 
 .users-modal-head-brand {
