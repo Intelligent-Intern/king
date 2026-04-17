@@ -101,9 +101,11 @@ services:
       - sh
       - -lc
       - |
-        if [ ! -e /workspace/node_modules ]; then
-          ln -s /app/node_modules /workspace/node_modules
+        # Always use image-baked dependencies to avoid stale host node_modules.
+        if [ -e /workspace/node_modules ] || [ -L /workspace/node_modules ]; then
+          rm -rf /workspace/node_modules
         fi
+        ln -s /app/node_modules /workspace/node_modules
         cd /workspace
         npm run dev -- --host 0.0.0.0 --port 5174 --strictPort
     ports:
