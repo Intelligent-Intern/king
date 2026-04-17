@@ -925,9 +925,14 @@ async function loadCalls() {
   }
 }
 
-async function loadCalendar() {
-  loadingCalendar.value = true;
-  calendarError.value = '';
+async function loadCalendar({ background = false } = {}) {
+  const hasVisibleCalendarData = Array.isArray(calendarCalls.value) && calendarCalls.value.length > 0;
+  const useBlockingLoadingState = !background || !hasVisibleCalendarData;
+
+  if (useBlockingLoadingState) {
+    loadingCalendar.value = true;
+    calendarError.value = '';
+  }
 
   try {
     const payload = await apiRequest('/api/calls', {
@@ -941,11 +946,16 @@ async function loadCalendar() {
     });
 
     calendarCalls.value = Array.isArray(payload.calls) ? payload.calls : [];
+    calendarError.value = '';
   } catch (error) {
-    calendarCalls.value = [];
-    calendarError.value = error instanceof Error ? error.message : 'Could not load calendar calls.';
+    if (useBlockingLoadingState) {
+      calendarCalls.value = [];
+      calendarError.value = error instanceof Error ? error.message : 'Could not load calendar calls.';
+    }
   } finally {
-    loadingCalendar.value = false;
+    if (useBlockingLoadingState) {
+      loadingCalendar.value = false;
+    }
   }
 }
 
@@ -1079,7 +1089,7 @@ async function persistCalendarEventWindow(eventApi, revert) {
       call.ends_at = endsAt;
     }
     setNotice('ok', 'Call schedule updated.');
-    await Promise.all([loadCalls(), loadCalendar()]);
+    await Promise.all([loadCalls(), loadCalendar({ background: true })]);
   } catch (error) {
     if (typeof revert === 'function') revert();
     setNotice('error', error instanceof Error ? error.message : 'Could not update call schedule.');
