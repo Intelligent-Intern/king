@@ -629,7 +629,7 @@
 
       // 2. Wavelet + Kalman
       // Process with Kalman to get motion vectors
-      var kalmanResult = kalman.process(rgba);
+      kalman.process(rgba);
       
       // For now, just encode normally (the MVs can be used to improve temporal prediction)
       // This tests that Kalman doesn't hurt the codec
