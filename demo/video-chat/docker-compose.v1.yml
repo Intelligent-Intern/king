@@ -1,0 +1,114 @@
+name: king-videochat-v1
+
+services:
+  videochat-backend-v1:
+    build:
+      context: ../..
+      dockerfile: demo/video-chat/backend-king-php/Dockerfile
+      args:
+        VIDEOCHAT_BACKEND_PHP_IMAGE: "${VIDEOCHAT_V1_BACKEND_PHP_IMAGE:-php:8.4-cli-trixie}"
+    environment:
+      VIDEOCHAT_KING_HOST: 0.0.0.0
+      VIDEOCHAT_KING_PORT: 18080
+      VIDEOCHAT_KING_WS_PORT: 18080
+      VIDEOCHAT_KING_SERVER_MODE: http
+      VIDEOCHAT_KING_HTTP_WORKERS: "${VIDEOCHAT_V1_HTTP_WORKERS:-1}"
+      VIDEOCHAT_KING_WS_PATH: /ws
+      VIDEOCHAT_KING_DB_PATH: /data/video-chat.sqlite
+      VIDEOCHAT_DEMO_SEED_CALLS: "${VIDEOCHAT_DEMO_SEED_CALLS:-1}"
+    ports:
+      - "${VIDEOCHAT_V1_BACKEND_PORT:-18080}:18080"
+    volumes:
+      - videochat-v1-sqlite:/data
+    restart: unless-stopped
+
+  videochat-backend-ws-v1:
+    build:
+      context: ../..
+      dockerfile: demo/video-chat/backend-king-php/Dockerfile
+      args:
+        VIDEOCHAT_BACKEND_PHP_IMAGE: "${VIDEOCHAT_V1_BACKEND_PHP_IMAGE:-php:8.4-cli-trixie}"
+    environment:
+      VIDEOCHAT_KING_HOST: 0.0.0.0
+      VIDEOCHAT_KING_PORT: 18080
+      VIDEOCHAT_KING_WS_PORT: 18080
+      VIDEOCHAT_KING_SERVER_MODE: ws
+      VIDEOCHAT_KING_WS_WORKERS: "${VIDEOCHAT_V1_WS_WORKERS:-1}"
+      VIDEOCHAT_KING_WS_PATH: /ws
+      VIDEOCHAT_KING_DB_PATH: /data/video-chat.sqlite
+      VIDEOCHAT_DEMO_SEED_CALLS: "${VIDEOCHAT_DEMO_SEED_CALLS:-1}"
+    ports:
+      - "${VIDEOCHAT_V1_BACKEND_WS_PORT:-18081}:18080"
+    volumes:
+      - videochat-v1-sqlite:/data
+    restart: unless-stopped
+
+  videochat-backend-sfu-v1:
+    build:
+      context: ../..
+      dockerfile: demo/video-chat/backend-king-php/Dockerfile
+      args:
+        VIDEOCHAT_BACKEND_PHP_IMAGE: "${VIDEOCHAT_V1_BACKEND_PHP_IMAGE:-php:8.4-cli-trixie}"
+    environment:
+      VIDEOCHAT_KING_HOST: 0.0.0.0
+      VIDEOCHAT_KING_PORT: 18080
+      VIDEOCHAT_KING_WS_PORT: 18080
+      VIDEOCHAT_KING_SERVER_MODE: ws
+      VIDEOCHAT_KING_WS_WORKERS: "${VIDEOCHAT_V1_SFU_WORKERS:-1}"
+      VIDEOCHAT_KING_WS_PATH: /sfu
+      VIDEOCHAT_KING_DB_PATH: /data/video-chat.sqlite
+      VIDEOCHAT_DEMO_SEED_CALLS: "${VIDEOCHAT_DEMO_SEED_CALLS:-1}"
+    ports:
+      - "${VIDEOCHAT_V1_BACKEND_SFU_PORT:-18082}:18080"
+    volumes:
+      - videochat-v1-sqlite:/data
+    restart: unless-stopped
+
+  videochat-frontend-v1:
+    build:
+      context: ../..
+      dockerfile: demo/video-chat/frontend-vue/Dockerfile
+      args:
+        VITE_VIDEOCHAT_BACKEND_ORIGIN: "${VIDEOCHAT_V1_BACKEND_ORIGIN:-http://127.0.0.1:18080}"
+        VITE_VIDEOCHAT_BACKEND_PORT: "${VIDEOCHAT_V1_BACKEND_PORT:-18080}"
+        VITE_VIDEOCHAT_WS_ORIGIN: "${VIDEOCHAT_V1_BACKEND_WS_ORIGIN:-http://127.0.0.1:18081}"
+        VITE_VIDEOCHAT_WS_PORT: "${VIDEOCHAT_V1_BACKEND_WS_PORT:-18081}"
+        VITE_VIDEOCHAT_SFU_ORIGIN: "${VIDEOCHAT_V1_BACKEND_SFU_ORIGIN:-http://127.0.0.1:18082}"
+        VITE_VIDEOCHAT_SFU_PORT: "${VIDEOCHAT_V1_BACKEND_SFU_PORT:-18082}"
+        VITE_VIDEOCHAT_ICE_SERVERS: "${VITE_VIDEOCHAT_ICE_SERVERS:-}"
+        VITE_VIDEOCHAT_ENABLE_MEDIAPIPE: "${VITE_VIDEOCHAT_ENABLE_MEDIAPIPE:-}"
+        VITE_VIDEOCHAT_ENABLE_TFJS: "${VITE_VIDEOCHAT_ENABLE_TFJS:-}"
+    environment:
+      VIDEOCHAT_VUE_HOST: 0.0.0.0
+      VIDEOCHAT_VUE_PORT: 5174
+      CHOKIDAR_USEPOLLING: "${VIDEOCHAT_VUE_POLLING:-1}"
+      VITE_VIDEOCHAT_BACKEND_ORIGIN: "${VIDEOCHAT_V1_BACKEND_ORIGIN:-http://127.0.0.1:18080}"
+      VITE_VIDEOCHAT_BACKEND_PORT: "${VIDEOCHAT_V1_BACKEND_PORT:-18080}"
+      VITE_VIDEOCHAT_WS_ORIGIN: "${VIDEOCHAT_V1_BACKEND_WS_ORIGIN:-http://127.0.0.1:18081}"
+      VITE_VIDEOCHAT_WS_PORT: "${VIDEOCHAT_V1_BACKEND_WS_PORT:-18081}"
+      VITE_VIDEOCHAT_SFU_ORIGIN: "${VIDEOCHAT_V1_BACKEND_SFU_ORIGIN:-http://127.0.0.1:18082}"
+      VITE_VIDEOCHAT_SFU_PORT: "${VIDEOCHAT_V1_BACKEND_SFU_PORT:-18082}"
+      VITE_VIDEOCHAT_ICE_SERVERS: "${VITE_VIDEOCHAT_ICE_SERVERS:-}"
+      VITE_VIDEOCHAT_ENABLE_MEDIAPIPE: "${VITE_VIDEOCHAT_ENABLE_MEDIAPIPE:-}"
+      VITE_VIDEOCHAT_ENABLE_TFJS: "${VITE_VIDEOCHAT_ENABLE_TFJS:-}"
+    depends_on:
+      - videochat-backend-v1
+      - videochat-backend-ws-v1
+      - videochat-backend-sfu-v1
+    volumes:
+      - ./frontend-vue:/workspace
+    command:
+      - sh
+      - -lc
+      - |
+        if [ ! -e /workspace/node_modules ]; then
+          ln -s /app/node_modules /workspace/node_modules
+        fi
+        cd /workspace
+        npm run dev -- --host 0.0.0.0 --port 5174 --strictPort
+    ports:
+      - "${VIDEOCHAT_V1_FRONTEND_PORT:-5176}:5174"
+    restart: unless-stopped
+
+volumes:
+  videochat-v1-sqlite:

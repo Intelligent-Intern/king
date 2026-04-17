@@ -268,6 +268,42 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_server_upgrade_to_websocket, 0, 0, 2)
     ZEND_ARG_TYPE_INFO(0, stream_id, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_rtp_bind, 0, 0, 2)
+    ZEND_ARG_TYPE_INFO(0, host, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, port, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_rtp_ice_credentials, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, socket, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_rtp_dtls_fingerprint, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, socket, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_rtp_dtls_accept, 0, 0, 4)
+    ZEND_ARG_TYPE_INFO(0, socket, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO(0, ip, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, port, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, timeout_ms, IS_LONG, 0, "5000")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_rtp_recv, 0, 0, 2)
+    ZEND_ARG_TYPE_INFO(0, socket, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, timeout_ms, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_rtp_send, 0, 0, 4)
+    ZEND_ARG_TYPE_INFO(0, socket, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO(0, host, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, port, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, data, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_rtp_close, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, socket, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_server_reload_tls_config, 0, 0, 3)
     ZEND_ARG_TYPE_INFO(0, session, IS_MIXED, 0)
     ZEND_ARG_TYPE_INFO(0, cert_file_path, IS_STRING, 0)

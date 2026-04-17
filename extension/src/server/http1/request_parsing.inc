@@ -239,14 +239,21 @@ static zend_result king_server_http1_parse_request_head(
             name_len == sizeof("Content-Length") - 1
             && strncasecmp(cursor, "Content-Length", name_len) == 0
         ) {
+            zend_string *content_length_value = zend_string_init(
+                value_start,
+                value_len,
+                0
+            );
+            const char *content_length_cursor = ZSTR_VAL(content_length_value);
             char *parse_end = NULL;
-            unsigned long parsed = strtoul(value_start, &parse_end, 10);
+            unsigned long parsed = strtoul(content_length_cursor, &parse_end, 10);
 
             if (
-                parse_end == value_start
+                parse_end == content_length_cursor
                 || king_server_http1_skip_space(parse_end)[0] != '\0'
                 || parsed > KING_SERVER_HTTP1_MAX_REQUEST_BODY_BYTES
             ) {
+                zend_string_release(content_length_value);
                 if (host_value != NULL) {
                     zend_string_release(host_value);
                 }
@@ -259,6 +266,7 @@ static zend_result king_server_http1_parse_request_head(
                 );
                 return FAILURE;
             }
+            zend_string_release(content_length_value);
 
             *content_length_out = (zend_long) parsed;
         } else if (

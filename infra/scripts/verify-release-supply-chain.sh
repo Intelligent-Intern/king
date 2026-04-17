@@ -28,6 +28,35 @@ EXPECTED_GIT_COMMIT=""
 ALLOW_SOURCE_DIRTY=0
 PHP_BIN="${PHP_BIN:-php}"
 
+archive_entry_path_is_safe() {
+    local entry="$1"
+    local normalized_entry=""
+
+    if [[ -z "${entry}" || "${entry}" == /* ]]; then
+        return 1
+    fi
+
+    normalized_entry="${entry#./}"
+
+    if [[ "${normalized_entry}" == -* ]]; then
+        return 1
+    fi
+
+    if [[ "${normalized_entry}" =~ (^|/)-[^/]+(/|$) ]]; then
+        return 1
+    fi
+
+    if [[ "${entry}" =~ (^|/)\.\.(/|$) ]]; then
+        return 1
+    fi
+
+    if [[ "${entry}" == *$'\n'* || "${entry}" == *$'\r'* ]]; then
+        return 1
+    fi
+
+    return 0
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --archive)
@@ -86,9 +115,13 @@ if ! command -v "${PHP_BIN}" >/dev/null 2>&1; then
     exit 1
 fi
 
-if [[ -n "${EXPECTED_GIT_COMMIT}" ]] && ! [[ "${EXPECTED_GIT_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
-    echo "Expected git commit must be a 40-character lowercase hex SHA." >&2
+if [[ -n "${EXPECTED_GIT_COMMIT}" ]] && ! [[ "${EXPECTED_GIT_COMMIT}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    echo "Expected git commit must be a 40-character hex SHA." >&2
     exit 1
+fi
+
+if [[ -n "${EXPECTED_GIT_COMMIT}" ]]; then
+    EXPECTED_GIT_COMMIT="$(printf '%s' "${EXPECTED_GIT_COMMIT}" | tr '[:upper:]' '[:lower:]')"
 fi
 
 declare -a ARCHIVES=()
@@ -114,6 +147,7 @@ fi
 
 for archive in "${ARCHIVES[@]}"; do
     manifest_listing=""
+    manifest_entry=""
 
     if [[ ! -f "${archive}" ]]; then
         echo "Missing archive: ${archive}" >&2
@@ -129,7 +163,12 @@ for archive in "${ARCHIVES[@]}"; do
         exit 1
     fi
 
-    manifest_json="$(tar -xOf "${archive}" "${manifest_entry}")"
+    if ! archive_entry_path_is_safe "${manifest_entry}"; then
+        echo "Unsafe manifest entry path: ${manifest_entry}" >&2
+        exit 1
+    fi
+
+    manifest_json="$(tar -xOf "${archive}" -- "${manifest_entry}")"
 
     MANIFEST_JSON="${manifest_json}" \
     MANIFEST_ARCHIVE_PATH="${archive}" \
@@ -204,9 +243,10 @@ foreach ($required as $key => $path) {
     }
 
     $expectedHash = $provenance[$key] ?? null;
-    if (!is_string($expectedHash) || preg_match('/^[a-f0-9]{64}$/', $expectedHash) !== 1) {
+    if (!is_string($expectedHash) || preg_match('/^[A-Fa-f0-9]{64}$/', $expectedHash) !== 1) {
         $fail("Invalid manifest provenance hash for {$key}.\n");
     }
+    $expectedHash = strtolower($expectedHash);
 
     $actualHash = hash_file('sha256', $path);
     if ($actualHash !== $expectedHash) {

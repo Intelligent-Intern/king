@@ -34,7 +34,41 @@ extension/tests/*.sh
 benchmarks/results/
 compat-artifacts/
 dist/
+!packages/iibin/dist/
+!packages/iibin/dist/**
 .cache/
+demo/video-chat/frontend-vue/.vite/
+demo/video-chat/frontend-vue/dist/
+demo/video-chat/**/src/lib/wasm/build/
+
+# model-inference backend: ephemeral sqlite + object-store + GGUF fixture
+# installed on demand via
+# demo/model-inference/backend-king-php/scripts/install-llama-runtime.sh.
+demo/model-inference/backend-king-php/.local/
+
+# Model weights MUST NEVER be checked in (they are large and provenance
+# belongs on a model registry / object store, not in git). Catch-all
+# patterns repo-wide — if you actually need a tiny test fixture that
+# overlaps, negate it explicitly under the owning demo directory, not
+# by weakening these rules.
+*.gguf
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.tflite
+*.bin
+# Exception: cargo vendor + ring/flate2 test fixtures + quiche cmake
+# artifacts need to keep their `.bin` names. These trees are already
+# scoped by earlier ignore rules (target/, .cargo/) and are not
+# shipped as part of any commit anyway.
+
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake-build-*/
+**/cmake_install.cmake
+**/compile_commands.json
 __pycache__/
 .pytest_cache/
 .mypy_cache/
@@ -49,3 +83,14 @@ __pycache__/
 *.bmp
 *.tiff
 *.svg
+!demo/video-chat/frontend-vue/public/assets/orgas/kingrt/logo.svg
+!demo/video-chat/frontend-vue/public/assets/orgas/kingrt/icon.svg
+!demo/video-chat/frontend-vue/public/assets/orgas/kingrt/king_logo-withslogan.svg
+!demo/video-chat/frontend-vue/public/assets/orgas/kingrt/icons/*.png
+!mock/assets/orgas/intelligent-intern/logo.svg
+!mock/assets/orgas/intelligent-intern/icon.svg
+!mock/assets/orgas/intelligent-intern/icons/*.png
+!mock/assets/orgas/kingrt/logo.svg
+!mock/assets/orgas/kingrt/icon.svg
+!mock/assets/orgas/kingrt/king_logo-withslogan.svg
+!mock/assets/orgas/kingrt/icons/*.png

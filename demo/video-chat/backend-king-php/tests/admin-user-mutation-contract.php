@@ -1,0 +1,274 @@
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../support/database.php';
+require_once __DIR__ . '/../domain/users/user_management.php';
+
+function videochat_admin_user_mutation_assert(bool $condition, string $message): void
+{
+    if ($condition) {
+        return;
+    }
+
+    fwrite(STDERR, "[admin-user-mutation-contract] FAIL: {$message}\n");
+    exit(1);
+}
+
+try {
+    $databasePath = sys_get_temp_dir() . '/videochat-admin-user-mutation-' . bin2hex(random_bytes(6)) . '.sqlite';
+    if (is_file($databasePath)) {
+        @unlink($databasePath);
+    }
+
+    videochat_bootstrap_sqlite($databasePath);
+    $pdo = videochat_open_sqlite_pdo($databasePath);
+
+    $createValidationFail = videochat_admin_create_user($pdo, [
+        'email' => 'not-an-email',
+        'display_name' => '',
+        'role' => 'invalid-role',
+        'password' => '123',
+    ]);
+    videochat_admin_user_mutation_assert($createValidationFail['ok'] === false, 'invalid create payload should fail');
+    videochat_admin_user_mutation_assert($createValidationFail['reason'] === 'validation_failed', 'invalid create reason mismatch');
+    videochat_admin_user_mutation_assert(
+        (string) ($createValidationFail['errors']['email'] ?? '') === 'required_valid_email',
+        'invalid create email error mismatch'
+    );
+
+    $createResult = videochat_admin_create_user($pdo, [
+        'email' => 'ops-user@intelligent-intern.com',
+        'display_name' => 'Ops User',
+        'role' => 'moderator',
+        'password' => 'ops-user-password',
+        'status' => 'active',
+        'time_format' => '12h',
+        'theme' => 'dark',
+        'avatar_path' => '/avatars/ops-user.png',
+    ]);
+    videochat_admin_user_mutation_assert($createResult['ok'] === true, 'valid create should succeed');
+    videochat_admin_user_mutation_assert($createResult['reason'] === 'created', 'valid create reason mismatch');
+    $createdUser = $createResult['user'] ?? null;
+    videochat_admin_user_mutation_assert(is_array($createdUser), 'valid create should return user payload');
+    $createdUserId = (int) ($createdUser['id'] ?? 0);
+    videochat_admin_user_mutation_assert($createdUserId > 0, 'created user id should be positive');
+    videochat_admin_user_mutation_assert((string) ($createdUser['role'] ?? '') === 'moderator', 'created user role mismatch');
+
+    $defaultRoleCreate = videochat_admin_create_user($pdo, [
+        'email' => 'default-role-user@intelligent-intern.com',
+        'display_name' => 'Default Role User',
+        'password' => 'default-role-password',
+    ]);
+    videochat_admin_user_mutation_assert($defaultRoleCreate['ok'] === true, 'create without role should succeed');
+    videochat_admin_user_mutation_assert(
+        (string) (($defaultRoleCreate['user'] ?? [])['role'] ?? '') === 'user',
+        'create without role should default role to user'
+    );
+
+    $duplicateCreate = videochat_admin_create_user($pdo, [
+        'email' => 'ops-user@intelligent-intern.com',
+        'display_name' => 'Ops User Duplicate',
+        'role' => 'user',
+        'password' => 'ops-user-password',
+    ]);
+    videochat_admin_user_mutation_assert($duplicateCreate['ok'] === false, 'duplicate create should fail');
+    videochat_admin_user_mutation_assert($duplicateCreate['reason'] === 'email_conflict', 'duplicate create reason mismatch');
+    videochat_admin_user_mutation_assert(
+        (string) ($duplicateCreate['errors']['email'] ?? '') === 'already_exists',
+        'duplicate create email conflict mismatch'
+    );
+
+    $updateValidationFail = videochat_admin_update_user($pdo, $createdUserId, [
+        'status' => 'waiting',
+    ]);
+    videochat_admin_user_mutation_assert($updateValidationFail['ok'] === false, 'invalid update payload should fail');
+    videochat_admin_user_mutation_assert($updateValidationFail['reason'] === 'validation_failed', 'invalid update reason mismatch');
+    videochat_admin_user_mutation_assert(
+        (string) ($updateValidationFail['errors']['status'] ?? '') === 'must_be_active_or_disabled',
+        'invalid update status error mismatch'
+    );
+
+    $updateResult = videochat_admin_update_user($pdo, $createdUserId, [
+        'display_name' => 'Ops User Updated',
+        'role' => 'user',
+        'status' => 'active',
+        'theme' => 'light',
+        'time_format' => '24h',
+    ]);
+    videochat_admin_user_mutation_assert($updateResult['ok'] === true, 'valid update should succeed');
+    videochat_admin_user_mutation_assert($updateResult['reason'] === 'updated', 'valid update reason mismatch');
+    videochat_admin_user_mutation_assert(
+        (string) (($updateResult['user'] ?? [])['display_name'] ?? '') === 'Ops User Updated',
+        'updated display_name mismatch'
+    );
+    videochat_admin_user_mutation_assert(
+        (string) (($updateResult['user'] ?? [])['role'] ?? '') === 'user',
+        'updated role mismatch'
+    );
+
+    $adminUserQuery = $pdo->query(
+        <<<'SQL'
+SELECT users.id
+FROM users
+INNER JOIN roles ON roles.id = users.role_id
+WHERE roles.slug = 'admin'
+ORDER BY users.id ASC
+LIMIT 1
+SQL
+    );
+    $adminUserId = (int) $adminUserQuery->fetchColumn();
+    videochat_admin_user_mutation_assert($adminUserId > 0, 'seeded admin user should exist');
+
+    $conflictUpdate = videochat_admin_update_user($pdo, $createdUserId, [
+        'email' => 'admin@intelligent-intern.com',
+    ]);
+    videochat_admin_user_mutation_assert($conflictUpdate['ok'] === false, 'duplicate update email should fail');
+    videochat_admin_user_mutation_assert($conflictUpdate['reason'] === 'email_conflict', 'duplicate update reason mismatch');
+
+    $notFoundUpdate = videochat_admin_update_user($pdo, 999999, [
+        'display_name' => 'Should Not Exist',
+    ]);
+    videochat_admin_user_mutation_assert($notFoundUpdate['ok'] === false, 'update on missing user should fail');
+    videochat_admin_user_mutation_assert($notFoundUpdate['reason'] === 'not_found', 'missing user update reason mismatch');
+
+    $insertSession = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent)
+VALUES(:id, :user_id, :issued_at, :expires_at, NULL, '127.0.0.1', 'admin-user-mutation-contract')
+SQL
+    );
+    $insertSession->execute([
+        ':id' => 'sess_ops_user_contract',
+        ':user_id' => $createdUserId,
+        ':issued_at' => gmdate('c', time() - 10),
+        ':expires_at' => gmdate('c', time() + 3600),
+    ]);
+
+    $deactivateResult = videochat_admin_deactivate_user($pdo, $createdUserId);
+    videochat_admin_user_mutation_assert($deactivateResult['ok'] === true, 'deactivate should succeed');
+    videochat_admin_user_mutation_assert($deactivateResult['reason'] === 'deactivated', 'deactivate reason mismatch');
+    videochat_admin_user_mutation_assert(
+        (string) (($deactivateResult['user'] ?? [])['status'] ?? '') === 'disabled',
+        'deactivated user status should be disabled'
+    );
+    videochat_admin_user_mutation_assert(
+        (int) ($deactivateResult['revoked_sessions'] ?? 0) >= 1,
+        'deactivate should revoke active sessions'
+    );
+
+    $sessionCheck = $pdo->prepare('SELECT revoked_at FROM sessions WHERE id = :id LIMIT 1');
+    $sessionCheck->execute([':id' => 'sess_ops_user_contract']);
+    $sessionRow = $sessionCheck->fetch();
+    videochat_admin_user_mutation_assert(is_array($sessionRow), 'session row should exist');
+    videochat_admin_user_mutation_assert(
+        is_string($sessionRow['revoked_at'] ?? null) && trim((string) $sessionRow['revoked_at']) !== '',
+        'deactivate should stamp revoked_at on active sessions'
+    );
+
+    $deactivateAgain = videochat_admin_deactivate_user($pdo, $createdUserId);
+    videochat_admin_user_mutation_assert($deactivateAgain['ok'] === true, 'second deactivate should still succeed');
+    videochat_admin_user_mutation_assert($deactivateAgain['reason'] === 'already_disabled', 'second deactivate reason mismatch');
+    videochat_admin_user_mutation_assert(
+        (int) ($deactivateAgain['revoked_sessions'] ?? -1) === 0,
+        'second deactivate should not revoke additional sessions'
+    );
+
+    $deactivateMissing = videochat_admin_deactivate_user($pdo, 999999);
+    videochat_admin_user_mutation_assert($deactivateMissing['ok'] === false, 'deactivate missing user should fail');
+    videochat_admin_user_mutation_assert($deactivateMissing['reason'] === 'not_found', 'deactivate missing user reason mismatch');
+
+    $reactivateResult = videochat_admin_reactivate_user($pdo, $createdUserId);
+    videochat_admin_user_mutation_assert($reactivateResult['ok'] === true, 'reactivate should succeed');
+    videochat_admin_user_mutation_assert($reactivateResult['reason'] === 'reactivated', 'reactivate reason mismatch');
+    videochat_admin_user_mutation_assert(
+        (string) (($reactivateResult['user'] ?? [])['status'] ?? '') === 'active',
+        'reactivated user status should be active'
+    );
+
+    $reactivateAgain = videochat_admin_reactivate_user($pdo, $createdUserId);
+    videochat_admin_user_mutation_assert($reactivateAgain['ok'] === true, 'second reactivate should still succeed');
+    videochat_admin_user_mutation_assert($reactivateAgain['reason'] === 'already_active', 'second reactivate reason mismatch');
+
+    $reactivateMissing = videochat_admin_reactivate_user($pdo, 999999);
+    videochat_admin_user_mutation_assert($reactivateMissing['ok'] === false, 'reactivate missing user should fail');
+    videochat_admin_user_mutation_assert($reactivateMissing['reason'] === 'not_found', 'reactivate missing user reason mismatch');
+
+    $insertOwnedCall = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO calls(id, room_id, title, owner_user_id, status, starts_at, ends_at, cancelled_at, cancel_reason, cancel_message, created_at, updated_at)
+VALUES(:id, 'lobby', :title, :owner_user_id, 'scheduled', :starts_at, :ends_at, NULL, NULL, NULL, :created_at, :updated_at)
+SQL
+    );
+    $insertOwnedCall->execute([
+        ':id' => 'call_delete_contract',
+        ':title' => 'Delete Cascade Contract Call',
+        ':owner_user_id' => $createdUserId,
+        ':starts_at' => gmdate('c', time() + 1800),
+        ':ends_at' => gmdate('c', time() + 3600),
+        ':created_at' => gmdate('c'),
+        ':updated_at' => gmdate('c'),
+    ]);
+
+    $insertInvite = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO invite_codes(
+    id, code, scope, room_id, call_id, issued_by_user_id, expires_at, redeemed_at, redeemed_by_user_id, max_redemptions, redemption_count, created_at
+) VALUES(
+    :id, :code, :scope, :room_id, :call_id, :issued_by_user_id, :expires_at, NULL, NULL, 1, 0, :created_at
+)
+SQL
+    );
+    $insertInvite->execute([
+        ':id' => 'invite-delete-contract-room',
+        ':code' => 'ROOMDELETE01',
+        ':scope' => 'room',
+        ':room_id' => 'lobby',
+        ':call_id' => null,
+        ':issued_by_user_id' => $createdUserId,
+        ':expires_at' => gmdate('c', time() + 3600),
+        ':created_at' => gmdate('c'),
+    ]);
+    $insertInvite->execute([
+        ':id' => 'invite-delete-contract-call',
+        ':code' => 'CALLDELETE01',
+        ':scope' => 'call',
+        ':room_id' => null,
+        ':call_id' => 'call_delete_contract',
+        ':issued_by_user_id' => $createdUserId,
+        ':expires_at' => gmdate('c', time() + 3600),
+        ':created_at' => gmdate('c'),
+    ]);
+
+    $deleteResult = videochat_admin_delete_user($pdo, $createdUserId);
+    videochat_admin_user_mutation_assert($deleteResult['ok'] === true, 'delete user should succeed');
+    videochat_admin_user_mutation_assert($deleteResult['reason'] === 'deleted', 'delete user reason mismatch');
+    videochat_admin_user_mutation_assert(
+        (int) ($deleteResult['deleted_calls'] ?? 0) >= 1,
+        'delete user should report at least one deleted owned call'
+    );
+    videochat_admin_user_mutation_assert(
+        (int) ($deleteResult['deleted_invite_codes'] ?? 0) >= 1,
+        'delete user should report deleted room invite codes'
+    );
+
+    $deletedUserCheck = videochat_admin_fetch_user_by_id($pdo, $createdUserId);
+    videochat_admin_user_mutation_assert($deletedUserCheck === null, 'deleted user should no longer exist');
+
+    $callCountQuery = $pdo->prepare('SELECT COUNT(*) FROM calls WHERE owner_user_id = :owner_user_id');
+    $callCountQuery->execute([':owner_user_id' => $createdUserId]);
+    $callCount = (int) $callCountQuery->fetchColumn();
+    videochat_admin_user_mutation_assert($callCount === 0, 'owned calls should be deleted with user');
+
+    $inviteCountQuery = $pdo->prepare('SELECT COUNT(*) FROM invite_codes WHERE issued_by_user_id = :issued_by_user_id');
+    $inviteCountQuery->execute([':issued_by_user_id' => $createdUserId]);
+    $inviteCount = (int) $inviteCountQuery->fetchColumn();
+    videochat_admin_user_mutation_assert($inviteCount === 0, 'issued invite codes should be deleted with user');
+
+    @unlink($databasePath);
+    fwrite(STDOUT, "[admin-user-mutation-contract] PASS\n");
+    exit(0);
+} catch (Throwable $error) {
+    fwrite(STDERR, "[admin-user-mutation-contract] ERROR: " . $error->getMessage() . "\n");
+    exit(1);
+}

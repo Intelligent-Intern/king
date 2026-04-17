@@ -5,10 +5,15 @@ dist/*
 !dist/docker-packages/**
 benchmarks/results
 demo/video-chat/node_modules
+demo/video-chat/frontend-vue/node_modules
+demo/video-chat/backend/node_modules
+demo/video-chat/frontend-vue/.vite
 extension/.libs
 extension/autom4te.cache
 extension/build/profiles
 extension/modules
+!extension/modules/
+!extension/modules/king.so
 extension/tests/*.diff
 extension/tests/*.exp
 extension/tests/*.log

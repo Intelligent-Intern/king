@@ -101,6 +101,10 @@ jobs:
         if: matrix.shard-index == 1
         run: bash ./infra/scripts/check-dependency-provenance-doc.sh
 
+      - name: Verify repo artifact hygiene guardrails
+        if: matrix.shard-index == 1
+        run: bash ./infra/scripts/check-repo-artifact-hygiene.sh
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -156,6 +160,17 @@ jobs:
         run: |
           ../infra/scripts/check-stub-parity.sh
           ../infra/scripts/check-public-contract-claims.sh
+
+      - name: Verify video-chat API/WS contract catalog drift gate
+        if: matrix.shard-index == 1
+        run: bash demo/video-chat/backend-king-php/tests/contract-catalog-parity-contract.sh
+
+      - name: Run video-chat compose smoke gate
+        if: matrix.shard-index == 1
+        run: |
+          VIDEOCHAT_SMOKE_COMPOSE_ONLY=1 \
+          VIDEOCHAT_SMOKE_REQUIRE_COMPOSE=1 \
+          bash demo/video-chat/scripts/smoke.sh
 
       - name: Run canonical PHPT suite
         working-directory: extension
