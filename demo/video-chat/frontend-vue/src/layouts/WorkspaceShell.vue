@@ -303,7 +303,7 @@
         <div class="settings-row">
           <label class="settings-field">
             <span>Display name</span>
-            <input v-model.trim="settingsDraft.displayName" class="ii-input" type="text" autocomplete="name" />
+            <input v-model.trim="settingsDraft.displayName" class="input" type="text" autocomplete="name" />
           </label>
           <div class="settings-field">
             <span>Email</span>
@@ -341,11 +341,6 @@
         </div>
       </section>
 
-      <section v-else-if="activeSettingsTile === 'credentials'" class="settings-panel">
-        <h4>Credentials</h4>
-        <p>Password and OAuth provider settings are managed in backend auth settings.</p>
-      </section>
-
       <section v-else-if="activeSettingsTile === 'theme'" class="settings-panel">
         <h4>Theme</h4>
         <p>Choose visual mode for your workspace.</p>
@@ -355,18 +350,13 @@
             <span>Theme</span>
             <input
               v-model.trim="settingsDraft.theme"
-              class="ii-input"
+              class="input"
               type="text"
               autocomplete="off"
               placeholder="dark"
             />
           </label>
         </div>
-      </section>
-
-      <section v-else-if="activeSettingsTile === 'general'" class="settings-panel">
-        <h4>{{ sessionState.role === 'admin' ? 'General' : 'Workspace' }}</h4>
-        <p>Branding and icon set management follow the same workflow as in the product UX settings.</p>
       </section>
 
       <section v-else-if="activeSettingsTile === 'regional-time'" class="settings-panel">
@@ -382,11 +372,6 @@
             </AppSelect>
           </label>
         </div>
-      </section>
-
-      <section v-else-if="activeSettingsTile === 'email-texts'" class="settings-panel">
-        <h4>Email Texts</h4>
-        <p>Email templates and transport profile are configured in backend mail settings.</p>
       </section>
 
       <div class="settings-actions">
@@ -722,11 +707,8 @@ const settingsState = reactive({
 const activeSettingsTile = ref('about-me');
 const settingsTiles = computed(() => ([
   { id: 'about-me', label: 'About Me' },
-  { id: 'credentials', label: 'Credentials' },
   { id: 'theme', label: 'Theme' },
-  { id: 'general', label: sessionState.role === 'admin' ? 'General' : 'Workspace' },
   { id: 'regional-time', label: 'Regional Time' },
-  { id: 'email-texts', label: 'Email Texts' },
 ]));
 
 const settingsAvatarPreviewSrc = computed(() => settingsDraft.avatarDataUrl || profileAvatarSrc.value);
