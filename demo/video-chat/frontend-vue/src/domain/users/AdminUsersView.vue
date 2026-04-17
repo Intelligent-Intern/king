@@ -19,17 +19,6 @@
         />
       </label>
 
-      <AppSelect v-model.number="pageSize" @change="resetAndReload">
-        <option :value="10">10 / page</option>
-        <option :value="20">20 / page</option>
-        <option :value="50">50 / page</option>
-      </AppSelect>
-
-      <AppSelect v-model="order" @change="resetAndReload">
-        <option value="role_then_name_asc">Role + name A-Z</option>
-        <option value="role_then_name_desc">Role + name Z-A</option>
-      </AppSelect>
-
       <button
         class="icon-mini-btn users-toolbar-search-btn"
         type="button"
@@ -306,8 +295,6 @@ const defaultAvatarOptions = [
 const queryDraft = ref('');
 const queryApplied = ref('');
 const page = ref(1);
-const pageSize = ref(10);
-const order = ref('role_then_name_asc');
 const rows = ref([]);
 const loading = ref(false);
 const error = ref('');
@@ -526,8 +513,8 @@ async function loadUsers() {
       query: {
         query: queryApplied.value,
         page: page.value,
-        page_size: pageSize.value,
-        order: order.value,
+        page_size: 10,
+        order: 'role_then_name_asc',
       },
     });
 
@@ -558,11 +545,6 @@ async function loadUsers() {
   } finally {
     if (token === loadToken) loading.value = false;
   }
-}
-
-function resetAndReload() {
-  page.value = 1;
-  void loadUsers();
 }
 
 function applySearchNow() {
