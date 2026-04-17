@@ -30,7 +30,15 @@
         <option value="role_then_name_desc">Role + name Z-A</option>
       </AppSelect>
 
-      <button class="btn" type="button" @click="applySearchNow">Search</button>
+      <button
+        class="icon-mini-btn users-toolbar-search-btn"
+        type="button"
+        title="Search users"
+        aria-label="Search users"
+        @click="applySearchNow"
+      >
+        <img src="/assets/orgas/kingrt/icons/send.png" alt="" />
+      </button>
     </section>
 
     <section v-if="notice" class="section users-banner ok">{{ notice }}</section>
@@ -1098,6 +1106,16 @@ onMounted(() => {
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   flex: 1 1 320px;
+}
+
+.users-toolbar-search-btn {
+  width: 40px;
+  height: 40px;
+}
+
+.users-toolbar-search-btn img {
+  width: 18px;
+  height: 18px;
 }
 
 .users-banner {

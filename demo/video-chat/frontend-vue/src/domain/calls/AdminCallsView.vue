@@ -69,7 +69,15 @@
           <option value="my">My scope</option>
         </AppSelect>
 
-        <button class="btn" type="button" @click="applyFilters">Search</button>
+        <button
+          class="icon-mini-btn calls-toolbar-search-btn"
+          type="button"
+          title="Search calls"
+          aria-label="Search calls"
+          @click="applyFilters"
+        >
+          <img src="/assets/orgas/kingrt/icons/send.png" alt="" />
+        </button>
       </div>
     </section>
 
@@ -2624,6 +2632,16 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.calls-toolbar-search-btn {
+  width: 40px;
+  height: 40px;
+}
+
+.calls-toolbar-search-btn img {
+  width: 18px;
+  height: 18px;
 }
 
 .calls-search {
