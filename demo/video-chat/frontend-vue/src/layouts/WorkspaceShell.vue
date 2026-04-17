@@ -392,15 +392,26 @@
                     <div class="settings-theme-preview-brand">
                       <img src="/assets/orgas/kingrt/logo.svg" alt="" />
                     </div>
-                    <div class="settings-theme-preview-left-tabs">
-                      <span class="settings-theme-preview-left-tab is-active"></span>
-                      <span class="settings-theme-preview-left-tab"></span>
-                      <span class="settings-theme-preview-left-tab"></span>
+                    <div class="settings-theme-preview-left-menu" aria-label="Preview workspace navigation">
+                      <span class="settings-theme-preview-left-menu-item is-active">
+                        <span class="settings-theme-preview-left-menu-dot" aria-hidden="true"></span>
+                        <span>Video Calls</span>
+                      </span>
+                      <span class="settings-theme-preview-left-menu-item">
+                        <span class="settings-theme-preview-left-menu-dot" aria-hidden="true"></span>
+                        <span>User Management</span>
+                      </span>
+                      <span class="settings-theme-preview-left-menu-item">
+                        <span class="settings-theme-preview-left-menu-dot" aria-hidden="true"></span>
+                        <span>Overview</span>
+                      </span>
                     </div>
-                    <div class="settings-theme-preview-left-cards">
-                      <div class="settings-theme-preview-left-card"></div>
-                      <div class="settings-theme-preview-left-card"></div>
-                      <div class="settings-theme-preview-left-card"></div>
+                    <div class="settings-theme-preview-left-profile">
+                      <span class="settings-theme-preview-left-avatar">PA</span>
+                      <div class="settings-theme-preview-left-profile-copy">
+                        <strong>Platform Admin</strong>
+                        <small>admin</small>
+                      </div>
                     </div>
                   </aside>
 
@@ -414,10 +425,10 @@
                       <span class="settings-theme-preview-top-tab">Calender</span>
                     </div>
                     <div class="settings-theme-preview-toolbar">
-                      <span class="settings-theme-preview-filter input"></span>
-                      <span class="settings-theme-preview-filter input"></span>
-                      <span class="settings-theme-preview-filter input"></span>
-                      <span class="settings-theme-preview-search"></span>
+                      <span class="settings-theme-preview-select">Type: all</span>
+                      <span class="settings-theme-preview-select">Status: all</span>
+                      <span class="settings-theme-preview-select">Range: 30 days</span>
+                      <button class="settings-theme-preview-search-btn" type="button">Search</button>
                     </div>
                     <div class="settings-theme-preview-table">
                       <div class="settings-theme-preview-table-head">
@@ -428,19 +439,24 @@
                         <span>Owner</span>
                       </div>
                       <div class="settings-theme-preview-table-row">
-                        <span class="settings-theme-preview-line strong"></span>
+                        <span class="settings-theme-preview-cell-strong">Platform Standup</span>
                         <span class="settings-theme-preview-tag ok">active</span>
-                        <span class="settings-theme-preview-line"></span>
-                        <span class="settings-theme-preview-line"></span>
-                        <span class="settings-theme-preview-line"></span>
+                        <span class="settings-theme-preview-cell">16 Apr 09:30 - 10:00</span>
+                        <span class="settings-theme-preview-cell">3 / 8</span>
+                        <span class="settings-theme-preview-cell">Platform Admin</span>
                       </div>
                       <div class="settings-theme-preview-table-row">
-                        <span class="settings-theme-preview-line strong"></span>
+                        <span class="settings-theme-preview-cell-strong">Quarterly Review</span>
                         <span class="settings-theme-preview-tag warn">scheduled</span>
-                        <span class="settings-theme-preview-line"></span>
-                        <span class="settings-theme-preview-line"></span>
-                        <span class="settings-theme-preview-line"></span>
+                        <span class="settings-theme-preview-cell">17 Apr 14:00 - 14:45</span>
+                        <span class="settings-theme-preview-cell">6 / 12</span>
+                        <span class="settings-theme-preview-cell">Call Moderator</span>
                       </div>
+                    </div>
+                    <div class="settings-theme-preview-pagination">
+                      <span>◀</span>
+                      <span>Page 1 / 4</span>
+                      <span>▶</span>
                     </div>
                   </section>
                 </div>
