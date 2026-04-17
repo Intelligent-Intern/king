@@ -329,7 +329,7 @@
           const payload = new Uint8Array(frame.data);
           const yRle = payload.subarray(HEAD, HEAD + yB);
           const uRle = payload.subarray(HEAD + yB, HEAD + yB + uB);
-          const vRle = payload.subarray(HEAD + yB + uB);
+          const vRle = payload.subarray(HEAD + yB + uB, HEAD + yB + uB + vB);
 
           // Decode channels
           const yQ = rleDec(yRle);
