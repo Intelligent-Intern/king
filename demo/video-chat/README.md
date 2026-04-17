@@ -43,6 +43,17 @@ Latest commit-level progress:
 - 2026-04-13: closed `#64/#65/#66` with server-driven workspace tab data, moderation feedback states, and control-bar realtime synchronization in `frontend-vue/src/views/CallWorkspaceView.vue`
 - 2026-04-13: closed `#69/#70/#71` with backend integration-matrix tests, Playwright UI-parity journeys, and compose-level smoke gates (`demo/video-chat/scripts/smoke.sh`, `.github/workflows/ci.yml`)
 
+Latest UX/runtime updates (2026-04-17):
+
+- call access mode (`invite_only` / `free_for_all`) can now be managed consistently from schedule/edit/admin surfaces and from the in-call owner settings card
+- invite-only join flow is now queue-first: invited users enter waiting state, host/admin/moderator receives lobby badge/toast notification, and admission is explicit
+- free-for-all mode no longer depends on per-user call-access mapping; joins are room-based with explicit display-name capture
+- call participant rail now reflects connected participants only; single-user sessions hide the mini-strip
+- enter-call modal parity was tightened (brand header, unified close behavior, camera/mic/speaker + blur controls)
+- in-call background blur controls are exposed as two presets (`Blur`, `Strong blur`) and support fast mode switching
+- admin/user management shells were aligned for responsive table behavior and consistent action/button semantics
+- settings theme editor now includes a larger live preview surface modeled after the real Video Call Management page
+
 Current new-stack baseline capabilities:
 
 - required login surface (display name) with persisted local session identity across reloads
@@ -132,7 +143,8 @@ docker compose -f docker-compose.v1.yml up --build
 
 - frontend: `http://127.0.0.1:5176`
 - backend health: `http://127.0.0.1:18080/health`
-- websocket endpoints (`/ws`, `/sfu`) are served by backend listener `:18080`
+- websocket signaling gateway: `ws://127.0.0.1:18081/ws`
+- websocket SFU gateway: `ws://127.0.0.1:18082/sfu`
 - frontend container runs Vite dev-server with HMR on compose; source edits under
   `demo/video-chat/frontend-vue` hot-reload automatically in browser
 
