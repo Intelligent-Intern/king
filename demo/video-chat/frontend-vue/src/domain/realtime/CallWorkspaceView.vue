@@ -1512,19 +1512,11 @@ const usersVirtualWindow = computed(() => computeVirtualWindow(usersPageRows.val
 const usersVisibleRows = computed(() => usersVirtualWindow.value.rows);
 
 const lobbyRows = computed(() => {
-  const queued = lobbyQueue.value.map((row) => ({
+  return lobbyQueue.value.map((row) => ({
     ...row,
     status: 'queued',
     sortTs: Number(row.requested_unix_ms || 0),
-  }));
-  const admitted = lobbyAdmitted.value.map((row) => ({
-    ...row,
-    status: 'admitted',
-    sortTs: Number(row.admitted_unix_ms || 0),
-  }));
-
-  return [...queued, ...admitted].sort((left, right) => {
-    if (left.status !== right.status) return left.status.localeCompare(right.status);
+  })).sort((left, right) => {
     if (left.sortTs !== right.sortTs) return left.sortTs - right.sortTs;
     return String(left.display_name || '').localeCompare(String(right.display_name || ''), 'en', { sensitivity: 'base' });
   });
@@ -1567,9 +1559,6 @@ const lobbyEntryByUserId = computed(() => {
   const rows = new Map();
   for (const row of lobbyQueue.value) {
     rows.set(row.user_id, { ...row, status: 'queued' });
-  }
-  for (const row of lobbyAdmitted.value) {
-    rows.set(row.user_id, { ...row, status: 'admitted' });
   }
   return rows;
 });
