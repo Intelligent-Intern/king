@@ -2701,7 +2701,8 @@ watch(
 
 .calls-header h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: 22px;
+  font-weight: 700;
 }
 
 .calls-header p {

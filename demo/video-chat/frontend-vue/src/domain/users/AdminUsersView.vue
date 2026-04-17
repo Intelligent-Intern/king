@@ -1168,7 +1168,8 @@ watch(
 
 .admin-users-head h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: 22px;
+  font-weight: 700;
 }
 
 .admin-users-head p {
