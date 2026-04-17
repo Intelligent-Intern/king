@@ -1216,12 +1216,39 @@ select {
   border-color: var(--bg-tab-hover);
 }
 
+.input[type='date'],
+.input[type='time'],
+.input[type='datetime-local'] {
+  border-color: #133262;
+  background-color: #0b1324;
+  color: #f7f7f7;
+  color-scheme: dark;
+}
+
+.input[type='date']:focus,
+.input[type='time']:focus,
+.input[type='datetime-local']:focus {
+  border-color: #3f79d6;
+}
+
+.input[type='date']::-webkit-datetime-edit,
+.input[type='time']::-webkit-datetime-edit,
+.input[type='datetime-local']::-webkit-datetime-edit {
+  color: #f7f7f7;
+}
+
+.input[type='date']::-webkit-datetime-edit-fields-wrapper,
+.input[type='time']::-webkit-datetime-edit-fields-wrapper,
+.input[type='datetime-local']::-webkit-datetime-edit-fields-wrapper {
+  color: #f7f7f7;
+}
+
 .input[type='date']::-webkit-calendar-picker-indicator,
 .input[type='time']::-webkit-calendar-picker-indicator,
 .input[type='datetime-local']::-webkit-calendar-picker-indicator {
   cursor: pointer;
   opacity: 1;
-  filter: brightness(0) saturate(100%) invert(9%) sepia(26%) saturate(1755%) hue-rotate(192deg) brightness(97%) contrast(94%);
+  filter: brightness(0) saturate(100%) invert(99%) sepia(6%) saturate(145%) hue-rotate(190deg) brightness(118%) contrast(94%);
 }
 
 .table-wrap {
