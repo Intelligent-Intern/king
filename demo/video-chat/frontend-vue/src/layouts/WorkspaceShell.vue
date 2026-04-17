@@ -390,7 +390,6 @@
       </section>
 
       <div class="settings-actions">
-        <button class="btn" type="button" :disabled="settingsState.saving" @click="closeSettingsModal">Cancel</button>
         <button class="btn" type="button" :disabled="settingsState.saving || settingsState.loading" @click="saveSettings">
           {{ settingsState.saving ? 'Saving…' : 'Save settings' }}
         </button>
