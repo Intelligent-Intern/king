@@ -12,14 +12,22 @@ RUN apt-get update \
     && docker-php-ext-install pdo_sqlite \
     && rm -rf /var/lib/apt/lists/*
 
-RUN --mount=type=bind,source=dist/docker-packages,target=/mnt/packages,readonly \
+RUN --mount=type=bind,source=.,target=/src,readonly \
     set -eux; \
-    package_dir="/mnt/packages/php${VIDEOCHAT_BACKEND_PHP_VERSION}/linux-${TARGETARCH}"; \
-    test -d "${package_dir}"; \
-    archive="$(find "${package_dir}" -maxdepth 1 -type f -name '*.tar.gz' | head -n 1)"; \
-    test -n "${archive}"; \
     mkdir -p /opt/king; \
-    tar -xzf "${archive}" -C /opt/king --strip-components=2 --wildcards '*/modules/king.so'; \
+    package_dir="/src/dist/docker-packages/php${VIDEOCHAT_BACKEND_PHP_VERSION}/linux-${TARGETARCH}"; \
+    archive=""; \
+    if [ -d "${package_dir}" ]; then \
+        archive="$(find "${package_dir}" -maxdepth 1 -type f -name '*.tar.gz' | head -n 1 || true)"; \
+    fi; \
+    if [ -n "${archive}" ] && [ -f "${archive}" ]; then \
+        tar -xzf "${archive}" -C /opt/king --strip-components=2 --wildcards '*/modules/king.so'; \
+    elif [ -f /src/extension/modules/king.so ]; then \
+        cp /src/extension/modules/king.so /opt/king/king.so; \
+    else \
+        echo "Missing king extension artifact: expected ${package_dir}/*.tar.gz or /src/extension/modules/king.so" >&2; \
+        exit 1; \
+    fi; \
     test -f /opt/king/king.so
 
 COPY demo/video-chat/backend-king-php/ /app/
