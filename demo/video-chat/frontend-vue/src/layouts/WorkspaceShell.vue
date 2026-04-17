@@ -359,9 +359,27 @@
         </div>
       </section>
 
+      <section v-else-if="activeSettingsTile === 'credentials-email'" class="settings-panel">
+        <h4>Credentials + Email</h4>
+        <p>Manage your sign-in identity and upcoming email credential flows.</p>
+
+        <div class="settings-row">
+          <label class="settings-field">
+            <span>Primary email</span>
+            <div class="settings-readonly-value">{{ sessionState.email || '—' }}</div>
+          </label>
+          <label class="settings-field">
+            <span>Password</span>
+            <input class="input" type="password" value="********" disabled autocomplete="off" />
+          </label>
+        </div>
+
+        <p>Email aliases and password self-service are prepared for the next rollout.</p>
+      </section>
+
       <section v-else-if="activeSettingsTile === 'regional-time'" class="settings-panel">
-        <h4>Regional Time</h4>
-        <p>Select how date and time should be displayed across the workspace.</p>
+        <h4>Regional Time + Language</h4>
+        <p>Select how date/time is rendered and which interface language should be preferred.</p>
 
         <div class="settings-row">
           <label class="settings-field">
@@ -371,7 +389,31 @@
               <option value="12h">12h</option>
             </AppSelect>
           </label>
+          <label class="settings-field">
+            <span>Language</span>
+            <AppSelect v-model="settingsDraft.language">
+              <option value="en">English</option>
+              <option value="de">Deutsch</option>
+              <option value="fr">Français</option>
+              <option value="es">Español</option>
+            </AppSelect>
+          </label>
         </div>
+      </section>
+
+      <section v-else-if="activeSettingsTile === 'notifications'" class="settings-panel">
+        <h4>Notifications</h4>
+        <p>Notification channels and sound profiles are prepared in the next rollout.</p>
+      </section>
+
+      <section v-else-if="activeSettingsTile === 'apps'" class="settings-panel">
+        <h4>Apps</h4>
+        <p>Connected app controls will appear here.</p>
+      </section>
+
+      <section v-else class="settings-panel">
+        <h4>Settings</h4>
+        <p>Select a settings tab.</p>
       </section>
 
       <div class="settings-actions">
@@ -613,6 +655,8 @@ const placeholderAvatar = '/assets/orgas/kingrt/avatar-placeholder.svg';
 const LAPTOP_BREAKPOINT = 1440;
 const TABLET_BREAKPOINT = 1180;
 const MOBILE_BREAKPOINT = 760;
+const SETTINGS_LANGUAGE_STORAGE_KEY = 'ii_videocall_v1_workspace_language';
+const SUPPORTED_SETTINGS_LANGUAGES = ['en', 'de', 'fr', 'es'];
 
 const navItems = computed(() => {
   const role = sessionState.role;
@@ -693,6 +737,7 @@ const settingsDraft = reactive({
   displayName: '',
   theme: 'dark',
   timeFormat: '24h',
+  language: 'en',
   avatarDataUrl: '',
 });
 
@@ -707,11 +752,34 @@ const settingsState = reactive({
 const activeSettingsTile = ref('about-me');
 const settingsTiles = computed(() => ([
   { id: 'about-me', label: 'About Me' },
+  { id: 'credentials-email', label: 'Credentials + Email' },
+  { id: 'regional-time', label: 'Regional Time + Language' },
   { id: 'theme', label: 'Theme' },
-  { id: 'regional-time', label: 'Regional Time' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'apps', label: 'Apps' },
 ]));
 
 const settingsAvatarPreviewSrc = computed(() => settingsDraft.avatarDataUrl || profileAvatarSrc.value);
+
+function normalizeSettingsLanguage(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return SUPPORTED_SETTINGS_LANGUAGES.includes(normalized) ? normalized : 'en';
+}
+
+function readStoredSettingsLanguage() {
+  if (typeof localStorage === 'undefined') return 'en';
+  return normalizeSettingsLanguage(localStorage.getItem(SETTINGS_LANGUAGE_STORAGE_KEY));
+}
+
+function storeSettingsLanguage(language) {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(SETTINGS_LANGUAGE_STORAGE_KEY, normalizeSettingsLanguage(language));
+}
+
+function applySettingsLanguage(language) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.lang = normalizeSettingsLanguage(language);
+}
 
 function normalizeRole(value) {
   const role = String(value || '').trim().toLowerCase();
@@ -1649,6 +1717,7 @@ watch(
 );
 
 onMounted(() => {
+  applySettingsLanguage(readStoredSettingsLanguage());
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
   laptopMedia = window.matchMedia(`(max-width: ${LAPTOP_BREAKPOINT}px)`);
   tabletMedia = window.matchMedia(`(max-width: ${TABLET_BREAKPOINT}px)`);
@@ -1699,6 +1768,7 @@ function resetSettingsDraft() {
   settingsDraft.displayName = sessionState.displayName || '';
   settingsDraft.theme = sessionState.theme || 'dark';
   settingsDraft.timeFormat = sessionState.timeFormat || '24h';
+  settingsDraft.language = readStoredSettingsLanguage();
   settingsDraft.avatarDataUrl = '';
 }
 
@@ -1780,6 +1850,7 @@ async function saveSettings() {
   const displayName = settingsDraft.displayName.trim();
   const theme = settingsDraft.theme.trim();
   const timeFormat = settingsDraft.timeFormat.trim();
+  const language = normalizeSettingsLanguage(settingsDraft.language);
 
   if (displayName === '') {
     settingsState.message = 'Display name is required.';
@@ -1793,6 +1864,11 @@ async function saveSettings() {
 
   if (!['24h', '12h'].includes(timeFormat)) {
     settingsState.message = 'Time format must be 24h or 12h.';
+    return;
+  }
+
+  if (!SUPPORTED_SETTINGS_LANGUAGES.includes(language)) {
+    settingsState.message = 'Unsupported language selected.';
     return;
   }
 
@@ -1830,6 +1906,8 @@ async function saveSettings() {
       return;
     }
 
+    storeSettingsLanguage(language);
+    applySettingsLanguage(language);
     settingsState.message = 'Settings saved.';
     settingsState.open = false;
     resetSettingsDraft();
