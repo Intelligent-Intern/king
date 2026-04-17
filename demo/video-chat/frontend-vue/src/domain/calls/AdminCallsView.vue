@@ -2560,7 +2560,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background: var(--bg-ui-chrome);
-  gap: 1px;
+  gap: 0;
 }
 
 .calls-header {
@@ -2602,7 +2602,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 14px;
+  margin-bottom: 15px;
 }
 
 .calls-toolbar-left {
