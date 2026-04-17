@@ -60,14 +60,11 @@ function getCodec(): WaveletCodec {
 }
 
 export function getCodecStats() {
-  if (!globalCodec) return null
-  return globalCodec.getStats()
+  return getCodec().getStats()
 }
 
 export function resetCodec() {
-  if (globalCodec) {
-    globalCodec.reset()
-  }
+  getCodec().reset()
 }
 
 // Wavelet coding happens at the raw-frame level in processor-pipeline.ts.

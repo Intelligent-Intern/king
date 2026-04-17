@@ -1,5 +1,5 @@
 // src/iibin.ts
-var MessageType;
+var MessageType = {};
 var MessageType = /* @__PURE__ */ ((MessageType2) => {
   MessageType2[MessageType2["TEXT_MESSAGE"] = 1] = "TEXT_MESSAGE";
   MessageType2[MessageType2["VOICE_MESSAGE"] = 2] = "VOICE_MESSAGE";
@@ -27,7 +27,7 @@ var MessageType = /* @__PURE__ */ ((MessageType2) => {
   MessageType2[MessageType2["METRICS"] = 242] = "METRICS";
   MessageType2[MessageType2["ERROR"] = 255] = "ERROR";
   return MessageType2;
-})(MessageType || {});
+})(MessageType);
 var DataType = {};
 DataType = /* @__PURE__ */ ((DataType2) => {
   DataType2[DataType2["NULL"] = 0] = "NULL";
