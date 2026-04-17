@@ -427,6 +427,7 @@ import { useRouter } from 'vue-router';
 import AppSelect from '../../components/AppSelect.vue';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import { createAdminSyncSocket } from '../../support/adminSyncSocket';
 import {
   formatDateDisplay,
   formatDateRangeDisplay,
@@ -637,6 +638,86 @@ function setNotice(kind, message) {
 function clearNotice() {
   noticeKind.value = '';
   noticeMessage.value = '';
+}
+
+let adminSyncReloadTimer = 0;
+let adminSyncClient = null;
+let fallbackRefreshTimer = 0;
+
+function clearAdminSyncReloadTimer() {
+  if (adminSyncReloadTimer > 0) {
+    window.clearTimeout(adminSyncReloadTimer);
+    adminSyncReloadTimer = 0;
+  }
+}
+
+async function reloadCallsFromAdminSync() {
+  await Promise.all([
+    loadCalls(),
+    loadCalendar(),
+  ]);
+}
+
+function queueReloadCallsFromAdminSync() {
+  if (adminSyncReloadTimer > 0) return;
+  adminSyncReloadTimer = window.setTimeout(() => {
+    adminSyncReloadTimer = 0;
+    void reloadCallsFromAdminSync();
+  }, 120);
+}
+
+function handleAdminSyncEvent(payload) {
+  const sourceSessionId = String(payload?.source_session_id || '').trim();
+  const ownSessionId = String(sessionState.sessionId || sessionState.sessionToken || '').trim();
+  if (sourceSessionId !== '' && sourceSessionId === ownSessionId) {
+    return;
+  }
+
+  const topic = String(payload?.topic || '').trim().toLowerCase();
+  if (!['all', 'calls', 'overview'].includes(topic)) {
+    return;
+  }
+
+  queueReloadCallsFromAdminSync();
+}
+
+function startAdminSyncSocket() {
+  if (adminSyncClient) {
+    adminSyncClient.disconnect();
+    adminSyncClient = null;
+  }
+
+  adminSyncClient = createAdminSyncSocket({
+    getSessionToken: () => String(sessionState.sessionToken || '').trim(),
+    onSync: handleAdminSyncEvent,
+  });
+  adminSyncClient.connect();
+}
+
+function stopAdminSyncSocket() {
+  if (!adminSyncClient) return;
+  adminSyncClient.disconnect();
+  adminSyncClient = null;
+}
+
+function startFallbackRefreshLoop() {
+  if (fallbackRefreshTimer > 0) {
+    window.clearInterval(fallbackRefreshTimer);
+    fallbackRefreshTimer = 0;
+  }
+
+  fallbackRefreshTimer = window.setInterval(() => {
+    if (document.visibilityState === 'hidden') return;
+    if (loadingCalls.value || loadingCalendar.value) return;
+    void Promise.all([loadCalls(), loadCalendar()]);
+  }, 5000);
+}
+
+function stopFallbackRefreshLoop() {
+  if (fallbackRefreshTimer > 0) {
+    window.clearInterval(fallbackRefreshTimer);
+    fallbackRefreshTimer = 0;
+  }
 }
 
 async function loadCalls() {
@@ -1393,12 +1474,17 @@ function handleEscape(event) {
 
 onMounted(() => {
   detachCallMediaWatcher = attachCallMediaDeviceWatcher({ requestPermissions: false });
+  startAdminSyncSocket();
+  startFallbackRefreshLoop();
   window.addEventListener('keydown', handleEscape);
 
   void Promise.all([loadCalls(), loadCalendar()]);
 });
 
 onBeforeUnmount(() => {
+  clearAdminSyncReloadTimer();
+  stopAdminSyncSocket();
+  stopFallbackRefreshLoop();
   window.removeEventListener('keydown', handleEscape);
   if (typeof detachCallMediaWatcher === 'function') {
     detachCallMediaWatcher();
@@ -1406,6 +1492,23 @@ onBeforeUnmount(() => {
   }
   stopEnterCallPreview();
 });
+
+watch(
+  () => sessionState.sessionToken,
+  (nextValue, previousValue) => {
+    const nextToken = String(nextValue || '').trim();
+    const previousToken = String(previousValue || '').trim();
+    if (nextToken === previousToken) return;
+    if (!adminSyncClient) return;
+
+    if (nextToken === '') {
+      adminSyncClient.disconnect();
+      return;
+    }
+
+    adminSyncClient.reconnect();
+  }
+);
 </script>
 
 <style scoped>

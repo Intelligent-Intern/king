@@ -119,7 +119,12 @@ function videochat_admin_sync_publish(
             continue;
         }
 
-        if (videochat_normalize_role_slug((string) ($candidateConnection['role'] ?? '')) !== 'admin') {
+        $candidateRole = videochat_normalize_role_slug((string) ($candidateConnection['role'] ?? ''));
+        if (!in_array($candidateRole, ['admin', 'user'], true)) {
+            continue;
+        }
+
+        if ((int) ($candidateConnection['user_id'] ?? 0) <= 0) {
             continue;
         }
 
