@@ -46,7 +46,7 @@
       </div>
 
       <div class="calls-toolbar-right">
-        <label class="calls-search" aria-label="Call search">
+        <label class="calls-search calls-search-main" aria-label="Call search">
           <input
             v-model="queryDraft"
             class="input"
@@ -54,7 +54,6 @@
             placeholder="Search call title"
             @keydown.enter.prevent="applyFilters"
           />
-          <button class="btn" type="button" @click="applyFilters">Search</button>
         </label>
 
         <AppSelect v-model="statusFilter" @change="applyFilters">
@@ -69,6 +68,8 @@
           <option value="all">All scope</option>
           <option value="my">My scope</option>
         </AppSelect>
+
+        <button class="btn" type="button" @click="applyFilters">Search</button>
       </div>
     </section>
 
@@ -2632,6 +2633,10 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
+.calls-search-main {
+  grid-template-columns: minmax(220px, 1fr);
+}
+
 .calls-search.small {
   grid-template-columns: minmax(0, 1fr) auto;
 }
@@ -3104,8 +3109,8 @@ onBeforeUnmount(() => {
     width: 100%;
   }
 
-  .calls-search {
-    grid-template-columns: minmax(0, 1fr) auto;
+  .calls-search-main {
+    grid-template-columns: minmax(0, 1fr);
     width: 100%;
   }
 
