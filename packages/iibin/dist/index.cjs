@@ -558,6 +558,7 @@ function compareWithJSON(data) {
 }
 
 // src/iibin-protocol.ts
+var IIBinMessageType;
 var IIBinMessageType = /* @__PURE__ */ ((IIBinMessageType2) => {
   IIBinMessageType2[IIBinMessageType2["PING"] = 1] = "PING";
   IIBinMessageType2[IIBinMessageType2["PONG"] = 2] = "PONG";
