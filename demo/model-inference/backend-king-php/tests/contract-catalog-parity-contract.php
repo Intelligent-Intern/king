@@ -59,7 +59,17 @@ try {
         'model_delete'     => ['method' => 'DELETE', 'paths' => ['/api/models/{model_id}']],
         'chat_ui'          => ['method' => 'GET',    'paths' => ['/ui', '/ui/']],
         'telemetry_recent' => ['method' => 'GET',    'paths' => ['/api/telemetry/inference/recent']],
+        'documents_list'   => ['method' => 'GET',    'paths' => ['/api/documents']],
+        'documents_create' => ['method' => 'POST',   'paths' => ['/api/documents']],
+        'document_get'     => ['method' => 'GET',    'paths' => ['/api/documents/{document_id}']],
+        'document_chunks'  => ['method' => 'GET',    'paths' => ['/api/documents/{document_id}/chunks']],
+        'embed'            => ['method' => 'POST',   'paths' => ['/api/embed']],
+        'rag'              => ['method' => 'POST',   'paths' => ['/api/rag']],
+        'telemetry_rag_recent' => ['method' => 'GET', 'paths' => ['/api/telemetry/rag/recent']],
+        'retrieve'         => ['method' => 'POST',   'paths' => ['/api/retrieve']],
         'infer_http'       => ['method' => 'POST',   'paths' => ['/api/infer']],
+        'transcripts_get'  => ['method' => 'GET',    'paths' => ['/api/transcripts/{request_id}']],
+        'route_diagnostic' => ['method' => 'GET',    'paths' => ['/api/route']],
     ];
 
     $liveApi = $catalog['api'] ?? null;
@@ -131,6 +141,9 @@ try {
     $getInferenceMetrics = static function () {
         return new InferenceMetricsRing();
     };
+    $getEmbeddingSession = static function () {
+        throw new RuntimeException('embedding session must not be reached by parity probes.');
+    };
 
     // Live-catalog resolution: every path must either resolve to 200 (list /
     // runtime / profile) OR produce a registry-owned 4xx that proves the
@@ -150,7 +163,17 @@ try {
         'model_delete'     => [['method' => 'DELETE', 'path' => '/api/models/mdl-00000000deadbeef',           'expect_not_status' => 404]],
         'chat_ui'          => [['method' => 'GET',    'path' => '/ui',                                       'expect_status' => 200]],
         'telemetry_recent' => [['method' => 'GET',    'path' => '/api/telemetry/inference/recent',           'expect_status' => 200]],
+        'documents_list'   => [['method' => 'GET',    'path' => '/api/documents',                            'expect_not_status' => 404]],
+        'documents_create' => [['method' => 'POST',   'path' => '/api/documents',                            'expect_not_status' => 404]],
+        'document_get'     => [['method' => 'GET',    'path' => '/api/documents/doc-00000000deadbeef',        'expect_not_status' => 404]],
+        'document_chunks'  => [['method' => 'GET',    'path' => '/api/documents/doc-00000000deadbeef/chunks', 'expect_not_status' => 404]],
+        'embed'            => [['method' => 'POST',   'path' => '/api/embed',                                'expect_not_status' => 404]],
+        'rag'              => [['method' => 'POST',   'path' => '/api/rag',                                  'expect_not_status' => 404]],
+        'telemetry_rag_recent' => [['method' => 'GET', 'path' => '/api/telemetry/rag/recent',                'expect_status' => 200]],
+        'retrieve'         => [['method' => 'POST',   'path' => '/api/retrieve',                             'expect_not_status' => 404]],
         'infer_http'       => [['method' => 'POST',   'path' => '/api/infer',                                'expect_not_status' => 404]],
+        'transcripts_get'  => [['method' => 'GET',    'path' => '/api/transcripts/req_00000000deadbeef',      'expect_not_status' => 405]],
+        'route_diagnostic' => [['method' => 'GET',    'path' => '/api/route',                                'expect_status' => 200]],
     ];
     foreach ($parityProbes as $key => $probes) {
         foreach ($probes as $probe) {
@@ -169,7 +192,8 @@ try {
                     $getInferenceMetrics,
                     '/ws',
                     '127.0.0.1',
-                    18090
+                    18090,
+                    $getEmbeddingSession
                 );
             } catch (RuntimeException $error) {
                 // Registry paths trip openDatabase deliberately; infer_http
@@ -180,6 +204,7 @@ try {
                 if (
                     str_contains($error->getMessage(), 'openDatabase must not be reached')
                     || str_contains($error->getMessage(), 'inference session must not be reached')
+                    || str_contains($error->getMessage(), 'embedding session must not be reached')
                 ) {
                     continue;
                 }
@@ -258,6 +283,10 @@ try {
         'model_registry_conflict',
         'model_fit_unavailable',
         'worker_unavailable',
+        'transcript_not_found',
+        'routing_no_candidate',
+        'document_not_found',
+        'document_too_large',
     ] as $required) {
         model_inference_catalog_contract_assert(
             in_array($required, $liveErrorCodes, true),
@@ -274,14 +303,14 @@ try {
         'catalog.planned_surfaces_target_shape must exist so future surfaces are declared without faking parity'
     );
     $targetShapeApi = (array) ($targetShape['api'] ?? []);
-    foreach (['worker_status', 'transcripts_get', 'route_diagnostic'] as $requiredKey) {
+    foreach (['worker_status'] as $requiredKey) {
         model_inference_catalog_contract_assert(
             isset($targetShapeApi[$requiredKey]),
             "catalog.planned_surfaces_target_shape.api must list '{$requiredKey}' until its live leaf lands"
         );
     }
     // A surface MUST NOT appear in both live and target-shape sections.
-    foreach (['node_profile', 'models_list', 'models_create', 'model_get', 'model_delete', 'infer_http', 'telemetry_recent', 'chat_ui'] as $shipped) {
+    foreach (['node_profile', 'models_list', 'models_create', 'model_get', 'model_delete', 'documents_list', 'documents_create', 'document_get', 'document_chunks', 'embed', 'rag', 'telemetry_rag_recent', 'retrieve', 'infer_http', 'telemetry_recent', 'chat_ui', 'transcripts_get', 'route_diagnostic'] as $shipped) {
         model_inference_catalog_contract_assert(
             !isset($targetShapeApi[$shipped]),
             "{$shipped} has shipped and must not remain in planned_surfaces_target_shape"

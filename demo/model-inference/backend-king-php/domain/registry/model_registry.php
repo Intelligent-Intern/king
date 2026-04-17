@@ -15,6 +15,12 @@ function model_inference_registry_allowed_quantizations(): array
     return ['Q2_K', 'Q3_K', 'Q4_0', 'Q4_K', 'Q5_K', 'Q6_K', 'Q8_0', 'F16'];
 }
 
+/** @return array<int, string> */
+function model_inference_registry_allowed_model_types(): array
+{
+    return ['chat', 'embedding'];
+}
+
 /**
  * Apply the M-5 schema: one models table keyed by flat model_id with a
  * uniqueness index on (model_name, quantization) so the same logical model
@@ -41,6 +47,12 @@ function model_inference_registry_schema_migrate(PDO $pdo): void
         registered_at TEXT NOT NULL
     )');
     $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_models_name_quantization ON models(model_name, quantization)');
+
+    $columns = $pdo->query('PRAGMA table_info(models)')->fetchAll();
+    $columnNames = array_column($columns, 'name');
+    if (!in_array('model_type', $columnNames, true)) {
+        $pdo->exec("ALTER TABLE models ADD COLUMN model_type TEXT NOT NULL DEFAULT 'chat'");
+    }
 }
 
 /**
@@ -104,6 +116,11 @@ function model_inference_registry_validate_metadata(array $raw): array
         }
     }
 
+    $modelType = trim((string) ($raw['model_type'] ?? 'chat'));
+    if (!in_array($modelType, model_inference_registry_allowed_model_types(), true)) {
+        throw new InvalidArgumentException('model_type:must be one of ' . implode(',', model_inference_registry_allowed_model_types()));
+    }
+
     return [
         'model_name' => $modelName,
         'family' => $family,
@@ -115,6 +132,7 @@ function model_inference_registry_validate_metadata(array $raw): array
         'min_vram_bytes' => $minVramBytes,
         'prefers_gpu' => $prefersGpu,
         'source_url' => $sourceUrl,
+        'model_type' => $modelType,
     ];
 }
 
@@ -164,13 +182,13 @@ function model_inference_registry_create_from_stream(PDO $pdo, array $rawMetadat
         object_store_key, byte_length, sha256_hex, uploaded_at,
         license, source_url,
         min_ram_bytes, min_vram_bytes, prefers_gpu,
-        registered_at
+        model_type, registered_at
     ) VALUES (
         :model_id, :model_name, :family, :parameter_count, :quantization, :context_length,
         :object_store_key, :byte_length, :sha256_hex, :uploaded_at,
         :license, :source_url,
         :min_ram_bytes, :min_vram_bytes, :prefers_gpu,
-        :registered_at
+        :model_type, :registered_at
     )');
     $insert->execute([
         ':model_id' => $modelId,
@@ -188,6 +206,7 @@ function model_inference_registry_create_from_stream(PDO $pdo, array $rawMetadat
         ':min_ram_bytes' => $metadata['min_ram_bytes'],
         ':min_vram_bytes' => $metadata['min_vram_bytes'],
         ':prefers_gpu' => $metadata['prefers_gpu'] ? 1 : 0,
+        ':model_type' => $metadata['model_type'],
         ':registered_at' => $registeredAt,
     ]);
 
@@ -207,6 +226,7 @@ function model_inference_registry_create_from_stream(PDO $pdo, array $rawMetadat
         'min_ram_bytes' => $metadata['min_ram_bytes'],
         'min_vram_bytes' => $metadata['min_vram_bytes'],
         'prefers_gpu' => $metadata['prefers_gpu'] ? 1 : 0,
+        'model_type' => $metadata['model_type'],
         'registered_at' => $registeredAt,
     ]);
 }
@@ -224,6 +244,7 @@ function model_inference_registry_row_to_envelope(array $row): array
         'parameter_count' => (int) $row['parameter_count'],
         'quantization' => (string) $row['quantization'],
         'context_length' => (int) $row['context_length'],
+        'model_type' => (string) ($row['model_type'] ?? 'chat'),
         'artifact' => [
             'object_store_key' => (string) $row['object_store_key'],
             'byte_length' => (int) $row['byte_length'],
@@ -239,6 +260,29 @@ function model_inference_registry_row_to_envelope(array $row): array
         'source_url' => $row['source_url'] === null ? null : (string) $row['source_url'],
         'registered_at' => (string) $row['registered_at'],
     ];
+}
+
+/** @return array<int, array<string, mixed>> */
+function model_inference_registry_list_by_type(PDO $pdo, string $modelType): array
+{
+    $stmt = $pdo->prepare('SELECT * FROM models WHERE model_type = :type ORDER BY registered_at DESC, model_id ASC');
+    $stmt->execute([':type' => $modelType]);
+    $envelopes = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $envelopes[] = model_inference_registry_row_to_envelope((array) $row);
+    }
+    return $envelopes;
+}
+
+function model_inference_registry_find_embedding_model(PDO $pdo, string $modelName, string $quantization): ?array
+{
+    $stmt = $pdo->prepare('SELECT * FROM models WHERE model_type = :type AND model_name = :name AND quantization = :quant LIMIT 1');
+    $stmt->execute([':type' => 'embedding', ':name' => $modelName, ':quant' => $quantization]);
+    $row = $stmt->fetch();
+    if ($row === false) {
+        return null;
+    }
+    return model_inference_registry_row_to_envelope((array) $row);
 }
 
 /** @return array<int, array<string, mixed>> */

@@ -33,9 +33,16 @@ $log = static function (string $message): void {
 
 require_once __DIR__ . '/support/database.php';
 require_once __DIR__ . '/support/object_store.php';
+require_once __DIR__ . '/support/semantic_dns.php';
 require_once __DIR__ . '/domain/registry/model_registry.php';
 require_once __DIR__ . '/domain/inference/inference_session.php';
+require_once __DIR__ . '/domain/inference/transcript_store.php';
+require_once __DIR__ . '/domain/embedding/embedding_session.php';
+require_once __DIR__ . '/domain/retrieval/document_store.php';
+require_once __DIR__ . '/domain/retrieval/text_chunker.php';
+require_once __DIR__ . '/domain/retrieval/vector_store.php';
 require_once __DIR__ . '/domain/telemetry/inference_metrics.php';
+require_once __DIR__ . '/domain/telemetry/rag_metrics.php';
 require_once __DIR__ . '/http/router.php';
 
 $objectStoreRoot = getenv('MODEL_INFERENCE_KING_OBJECT_STORE_ROOT') ?: (dirname($dbPath) . '/object-store');
@@ -73,9 +80,12 @@ if (!is_array($databaseRuntime)) {
 try {
     $databasePdo = model_inference_open_sqlite_pdo($dbPath);
     model_inference_registry_schema_migrate($databasePdo);
+    model_inference_document_schema_migrate($databasePdo);
+    model_inference_chunk_schema_migrate($databasePdo);
+    model_inference_vector_schema_migrate($databasePdo);
     unset($databasePdo);
 } catch (Throwable $error) {
-    $log('registry schema migration failed: ' . $error->getMessage());
+    $log('schema migration failed: ' . $error->getMessage());
     exit(1);
 }
 
@@ -85,6 +95,20 @@ try {
     $log('object-store init failed: ' . $error->getMessage());
     $log('hint: enable king.security_allow_config_override=1 in the PHP ini');
     exit(1);
+}
+
+require_once __DIR__ . '/domain/profile/hardware_profile.php';
+$bootProfile = model_inference_hardware_profile($nodeId, "http://{$host}:{$port}/health", 'ready');
+$bootProfile['capabilities']['supports_embedding'] = true;
+$bootProfile['capabilities']['supports_retrieval'] = true;
+$bootProfile['capabilities']['supports_rag'] = true;
+$bootProfile['capabilities']['embedding_dimensions'] = 768;
+$dnsRegistered = model_inference_semantic_dns_register($nodeId, $host, $port, $bootProfile);
+if ($dnsRegistered) {
+    $dnsVisible = model_inference_semantic_dns_heartbeat_after_ready($nodeId);
+    $log('semantic-dns: registered as king.inference.v1, visible=' . ($dnsVisible ? 'true' : 'false'));
+} else {
+    $log('semantic-dns: registration skipped (kernel unavailable or failed)');
 }
 
 $openDatabase = static function () use ($dbPath): PDO {
@@ -99,7 +123,20 @@ $inferenceSession = new InferenceSession(
 $getInferenceSession = static function () use ($inferenceSession): InferenceSession {
     return $inferenceSession;
 };
-register_shutdown_function(static function () use ($inferenceSession): void {
+
+$embeddingSession = new EmbeddingSession(
+    $llamaHome . '/llama-server',
+    $llamaHome,
+    $ggufCacheRoot
+);
+$getEmbeddingSession = static function () use ($embeddingSession): EmbeddingSession {
+    return $embeddingSession;
+};
+
+register_shutdown_function(static function () use ($inferenceSession, $embeddingSession, $nodeId, $log): void {
+    model_inference_semantic_dns_deregister($nodeId);
+    $log('semantic-dns: deregistered (drain)');
+    $embeddingSession->drainAll();
     $inferenceSession->drainAll();
 });
 
@@ -107,6 +144,11 @@ $metricsCapacity = (int) (getenv('MODEL_INFERENCE_METRICS_CAPACITY') ?: '100');
 $inferenceMetrics = new InferenceMetricsRing($metricsCapacity);
 $getInferenceMetrics = static function () use ($inferenceMetrics): InferenceMetricsRing {
     return $inferenceMetrics;
+};
+
+$ragMetrics = new RagMetricsRing($metricsCapacity);
+$getRagMetrics = static function () use ($ragMetrics): RagMetricsRing {
+    return $ragMetrics;
 };
 
 // Optional: auto-seed SmolLM2 GGUF fixtures when they are missing from
@@ -178,6 +220,50 @@ if (in_array(strtolower((string) (getenv('MODEL_INFERENCE_AUTOSEED') ?: '0')), [
         unset($seedPdo);
     } catch (Throwable $seedError) {
         $log('auto-seed bootstrap failed (non-fatal): ' . $seedError->getMessage());
+    }
+
+    $knownEmbeddingFixtures = [
+        'nomic-embed-text-v1.5.Q8_0.gguf' => [
+            'quantization' => 'Q8_0',
+            'model_name' => 'nomic-embed-text-v1.5',
+            'family' => 'nomic-embed',
+            'parameter_count' => 137000000,
+            'context_length' => 2048,
+            'license' => 'apache-2.0',
+            'min_ram_bytes' => 268435456,
+            'min_vram_bytes' => 0,
+            'prefers_gpu' => false,
+            'source_url' => 'https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF',
+            'model_type' => 'embedding',
+        ],
+    ];
+
+    foreach ($knownEmbeddingFixtures as $fileName => $embMeta) {
+        $path = $fixtureDir . '/' . $fileName;
+        if (!is_file($path)) {
+            continue;
+        }
+        $conflictStmt->execute([':n' => $embMeta['model_name'], ':q' => $embMeta['quantization']]);
+        if ((int) ($conflictStmt->fetch()['c'] ?? 0) > 0) {
+            $skippedCount++;
+            continue;
+        }
+        $stream = @fopen($path, 'rb');
+        if (!is_resource($stream)) {
+            $log('auto-seed skipped (cannot open): ' . $path);
+            continue;
+        }
+        try {
+            model_inference_registry_create_from_stream($seedPdo, $embMeta, $stream);
+            $seededCount++;
+            $log(sprintf('auto-seeded %s/%s (embedding) from %s', $embMeta['model_name'], $embMeta['quantization'], $fileName));
+        } catch (Throwable $seedEntryError) {
+            $log('auto-seed entry failed (non-fatal): ' . $seedEntryError->getMessage());
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
     }
 
     $log(sprintf('auto-seed summary: seeded=%d skipped_existing=%d fixture_dir=%s', $seededCount, $skippedCount, $fixtureDir));
@@ -339,7 +425,9 @@ $handler = static function (array $request) use (
     $runtimeEnvelope,
     $openDatabase,
     $getInferenceSession,
+    $getEmbeddingSession,
     $getInferenceMetrics,
+    $getRagMetrics,
     $wsPath,
     $host,
     $port,
@@ -382,7 +470,9 @@ $handler = static function (array $request) use (
             $getInferenceMetrics,
             $wsPath,
             $host,
-            $port
+            $port,
+            $getEmbeddingSession,
+            $getRagMetrics
         );
     } catch (Throwable $error) {
         $log(sprintf(

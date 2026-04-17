@@ -1,0 +1,57 @@
+{
+  "contract_name": "king-model-inference-chunk-envelope",
+  "contract_version": "1.0.0",
+  "contract_scope": "Shape of a text chunk produced by the fixed-size chunking strategy (#R-6). Consumed by chunk persistence (#R-7), vector store (#R-8), and retrieval pipeline (#R-10). The envelope is pinned here so all consumers share one authoritative shape.",
+  "honesty_rules": [
+    "chunk_id is deterministic: chk-{doc_prefix_8hex}-{sequence_4digit}. Idempotent re-chunking of the same document with the same parameters produces the same chunk_ids.",
+    "byte_offset and byte_length are byte-level positions in the original document's UTF-8 encoding. char_length is the mb_strlen equivalent for client display.",
+    "Only fixed_size strategy is implemented. Sentence-boundary, paragraph-boundary, and semantic chunking are fenced for a future leaf.",
+    "overlap is in bytes, not characters or tokens. A future leaf may add token-aware overlap."
+  ],
+  "envelope": {
+    "chunk_id": {
+      "type": "string",
+      "pattern": "/^chk-[a-f0-9]{8}-\\d{4}$/",
+      "required": true
+    },
+    "document_id": {
+      "type": "string",
+      "pattern": "/^doc-[a-f0-9]{16}$/",
+      "required": true
+    },
+    "sequence": {
+      "type": "int",
+      "min": 0,
+      "required": true
+    },
+    "text": {
+      "type": "string",
+      "min_length": 1,
+      "required": true
+    },
+    "byte_offset": {
+      "type": "int",
+      "min": 0,
+      "required": true
+    },
+    "byte_length": {
+      "type": "int",
+      "min": 1,
+      "required": true
+    },
+    "char_length": {
+      "type": "int",
+      "min": 1,
+      "required": true
+    },
+    "metadata": {
+      "type": "object",
+      "required": true,
+      "fields": {
+        "strategy": {"type": "string", "enum": ["fixed_size"], "required": true},
+        "chunk_size": {"type": "int", "min": 1, "required": true},
+        "overlap": {"type": "int", "min": 0, "required": true}
+      }
+    }
+  }
+}

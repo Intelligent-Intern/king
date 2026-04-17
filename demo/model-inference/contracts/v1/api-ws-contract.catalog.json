@@ -154,6 +154,126 @@
         "recorded_at": "rfc3339"
       }
     },
+    "documents_list": {
+      "method": "GET",
+      "paths": ["/api/documents"],
+      "introduced_by": "R-5",
+      "envelope": {
+        "status": "ok",
+        "items": "array<document>",
+        "count": "int",
+        "time": "rfc3339"
+      }
+    },
+    "documents_create": {
+      "method": "POST",
+      "paths": ["/api/documents"],
+      "introduced_by": "R-5",
+      "content_type": "text/plain",
+      "body": "raw plain text document",
+      "envelope": {
+        "status": "created",
+        "document": {
+          "document_id": "string",
+          "byte_length": "int",
+          "sha256_hex": "string",
+          "content_type": "text/plain",
+          "ingested_at": "rfc3339"
+        },
+        "time": "rfc3339"
+      }
+    },
+    "document_get": {
+      "method": "GET",
+      "paths": ["/api/documents/{document_id}"],
+      "introduced_by": "R-5",
+      "envelope": {
+        "status": "ok",
+        "document": {
+          "document_id": "string",
+          "byte_length": "int",
+          "sha256_hex": "string",
+          "content_type": "text/plain",
+          "ingested_at": "rfc3339"
+        },
+        "time": "rfc3339"
+      }
+    },
+    "document_chunks": {
+      "method": "GET",
+      "paths": ["/api/documents/{document_id}/chunks"],
+      "introduced_by": "R-7",
+      "envelope": {
+        "status": "ok",
+        "document_id": "string",
+        "items": "array<chunk-envelope>",
+        "count": "int",
+        "time": "rfc3339"
+      }
+    },
+    "embed": {
+      "method": "POST",
+      "paths": ["/api/embed"],
+      "introduced_by": "R-4",
+      "content_type": "application/json",
+      "request_contract": "demo/model-inference/contracts/v1/embedding-request.contract.json",
+      "envelope": {
+        "status": "ok",
+        "request_id": "string",
+        "embeddings": "array<array<float>>",
+        "dimensions": "int",
+        "model": {"model_id": "string", "model_name": "string", "quantization": "string"},
+        "tokens_used": "int",
+        "duration_ms": "int",
+        "time": "rfc3339"
+      }
+    },
+    "rag": {
+      "method": "POST",
+      "paths": ["/api/rag"],
+      "introduced_by": "R-11",
+      "content_type": "application/json",
+      "envelope": {
+        "status": "ok",
+        "request_id": "string",
+        "completion": "string",
+        "context": {"chunks_used": "int", "results": "array", "vectors_scanned": "int"},
+        "model": {"chat": {"model_id": "string", "model_name": "string", "quantization": "string"}, "embedding": {"model_id": "string", "model_name": "string", "quantization": "string"}},
+        "timing": {"embedding_ms": "int", "retrieval_ms": "int", "inference_ms": "int", "total_ms": "int"},
+        "inference": {"tokens_in": "int", "tokens_out": "int", "ttft_ms": "int", "duration_ms": "int"},
+        "time": "rfc3339"
+      }
+    },
+    "telemetry_rag_recent": {
+      "method": "GET",
+      "paths": ["/api/telemetry/rag/recent"],
+      "introduced_by": "R-12",
+      "envelope": {
+        "status": "ok",
+        "items": "array<RagMetricsEntry>",
+        "count": "int",
+        "capacity": "int",
+        "time": "rfc3339"
+      }
+    },
+    "retrieve": {
+      "method": "POST",
+      "paths": ["/api/retrieve"],
+      "introduced_by": "R-10",
+      "content_type": "application/json",
+      "request_contract": "demo/model-inference/contracts/v1/retrieval-request.contract.json",
+      "envelope": {
+        "status": "ok",
+        "request_id": "string",
+        "results": "array<{chunk_id, document_id, text, score, vector_id}>",
+        "result_count": "int",
+        "search_strategy": "brute_force_cosine",
+        "embedding_ms": "int",
+        "search_ms": "int",
+        "vectors_scanned": "int",
+        "time": "rfc3339"
+      }
+    },
     "infer_http": {
       "method": "POST",
       "paths": ["/api/infer"],
@@ -175,6 +295,45 @@
           "stop": {"type": "string", "word": "string", "truncated": "bool"}
         },
         "worker": {"pid": "int", "port": "int", "gguf_path": "string"},
+        "time": "rfc3339"
+      }
+    },
+    "transcripts_get": {
+      "method": "GET",
+      "paths": ["/api/transcripts/{request_id}"],
+      "introduced_by": "M-16",
+      "envelope": {
+        "status": "ok",
+        "transcript": {
+          "request_id": "string",
+          "session_id": "string",
+          "transport": "http|ws",
+          "model": {"model_id": "string", "model_name": "string", "quantization": "string"},
+          "prompt": "string",
+          "system": "string|null",
+          "sampling": "object",
+          "completion": "object",
+          "recorded_at": "rfc3339"
+        },
+        "time": "rfc3339"
+      }
+    },
+    "route_diagnostic": {
+      "method": "GET",
+      "paths": ["/api/route"],
+      "introduced_by": "M-14",
+      "scope": "Diagnostic endpoint exposing the current Semantic-DNS routing resolution for a given model selector. Accepts optional query params: model_name, quantization, min_free_vram_bytes.",
+      "envelope": {
+        "status": "ok",
+        "routing": {
+          "role": "inference",
+          "primary": "node|null",
+          "failover": "list<node>",
+          "candidates": "list<node>",
+          "resolved_at": "rfc3339",
+          "source": "semantic_dns|unavailable"
+        },
+        "criteria": "object|null",
         "time": "rfc3339"
       }
     }
@@ -237,15 +396,17 @@
       "model_artifact_too_large",
       "model_registry_conflict",
       "model_fit_unavailable",
-      "worker_unavailable"
+      "worker_unavailable",
+      "transcript_not_found",
+      "routing_no_candidate",
+      "document_not_found",
+      "document_too_large"
     ]
   },
   "planned_surfaces_target_shape": {
     "note": "Entries below are target-shape only, added to the live api/ws/errors sections as their leaves land. Listed here so readers see the full intended v1 surface without a parity-test false negative.",
     "api": {
-      "worker_status":    {"method": "GET",  "paths": ["/api/worker"],                       "introduced_by": "M-7"},
-      "transcripts_get":  {"method": "GET",  "paths": ["/api/transcripts/{request_id}"],     "introduced_by": "M-16"},
-      "route_diagnostic": {"method": "GET",  "paths": ["/api/route"],                        "introduced_by": "M-14"}
+      "worker_status":    {"method": "GET",  "paths": ["/api/worker"],                       "introduced_by": "M-7"}
     },
     "ws": {
       "infer.cancel": {"direction": "client->server", "body": "json",                    "introduced_by": "future"}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/inference/inference_request.php';
 require_once __DIR__ . '/../domain/inference/inference_session.php';
+require_once __DIR__ . '/../domain/inference/transcript_store.php';
 require_once __DIR__ . '/../domain/registry/model_registry.php';
 require_once __DIR__ . '/../domain/registry/model_fit_selector.php';
 require_once __DIR__ . '/../domain/profile/hardware_profile.php';
@@ -23,6 +24,10 @@ function model_inference_handle_inference_routes(
     callable $getInferenceMetrics,
     callable $runtimeEnvelope
 ): ?array {
+    if (preg_match('#^/api/transcripts/(req_[a-f0-9]+)$#', $path, $m)) {
+        return model_inference_handle_transcript_get($m[1], $method, $jsonResponse, $errorResponse);
+    }
+
     if ($path !== '/api/infer') {
         return null;
     }
@@ -148,10 +153,43 @@ function model_inference_handle_inference_routes(
     $metrics = $getInferenceMetrics();
     $metrics->record(model_inference_metrics_entry_from_http($responseEnvelope, $profile));
 
+    model_inference_transcript_save(
+        $requestId,
+        model_inference_transcript_from_http($responseEnvelope, $validated)
+    );
+
     return $jsonResponse(200, $responseEnvelope);
 }
 
 function model_inference_generate_request_id(): string
 {
     return 'req_' . bin2hex(random_bytes(8));
+}
+
+function model_inference_handle_transcript_get(
+    string $requestId,
+    string $method,
+    callable $jsonResponse,
+    callable $errorResponse
+): array {
+    if ($method !== 'GET') {
+        return $errorResponse(405, 'method_not_allowed', 'GET required.', [
+            'path' => '/api/transcripts/' . $requestId,
+            'method' => $method,
+            'allowed' => ['GET'],
+        ]);
+    }
+
+    $transcript = model_inference_transcript_load($requestId);
+    if ($transcript === null) {
+        return $errorResponse(404, 'transcript_not_found', 'No transcript found for this request_id.', [
+            'request_id' => $requestId,
+        ]);
+    }
+
+    return $jsonResponse(200, [
+        'status' => 'ok',
+        'transcript' => $transcript,
+        'time' => gmdate('c'),
+    ]);
 }

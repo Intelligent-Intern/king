@@ -18,7 +18,7 @@ try {
     // Current deployed module list. Grows as later leaves land their modules.
     // Intended end-of-sprint order (see demo/model-inference/README.md):
     //   runtime, profile, registry, worker, inference, telemetry, routing, realtime
-    $expectedOrder = ['runtime', 'profile', 'registry', 'inference', 'realtime', 'telemetry', 'ui'];
+    $expectedOrder = ['runtime', 'profile', 'registry', 'embed', 'ingest', 'retrieve', 'inference', 'realtime', 'telemetry', 'routing', 'ui'];
     $actualOrder = model_inference_dispatch_route_module_order();
 
     model_inference_router_contract_assert(
@@ -173,10 +173,28 @@ try {
     // Paths owned by not-yet-shipped modules must return 404 not_implemented.
     // This proves the dispatcher does not pretend to serve routes whose
     // module has not landed yet.
+    // Routing module owns /api/route.
+    $routingResponse = model_inference_dispatch_request(
+        ['method' => 'GET', 'path' => '/api/route', 'uri' => '/api/route', 'headers' => []],
+        $jsonResponse,
+        $errorResponse,
+        $methodFromRequest,
+        $pathFromRequest,
+        $runtimeEnvelope,
+        $openDatabase,
+        $getInferenceSession,
+        $getInferenceMetrics,
+        '/ws',
+        '127.0.0.1',
+        18090
+    );
+    model_inference_router_contract_assert(
+        (int) ($routingResponse['status'] ?? 0) === 200,
+        'routing module should serve /api/route via the dispatcher'
+    );
+
     $targetShapePaths = [
         '/api/worker',            // M-7 (still target-shape in this demo)
-        '/api/route',             // M-14
-        '/api/transcripts/req_x', // M-16
     ];
     foreach ($targetShapePaths as $targetPath) {
         $response = model_inference_dispatch_request(
