@@ -617,15 +617,14 @@ select {
   color: var(--text-muted);
 }
 
-.ii-select,
-.input.call-left-select {
-  width: 100%;
-  height: 34px;
+.ii-select {
+  min-width: 0;
+  height: 40px;
   border: 1px solid #133262;
   border-radius: 6px;
   background-color: #0b1324;
   color: #f7f7f7;
-  padding: 0 32px 0 10px;
+  padding: 0 32px 0 12px;
   color-scheme: dark;
   appearance: none;
   -webkit-appearance: none;
@@ -636,32 +635,33 @@ select {
   background-size: 12px 12px;
 }
 
-.ii-select:focus,
-.input.call-left-select:focus {
+.call-left-settings .ii-select,
+.calls-enter-right-settings .ii-select {
+  width: 100%;
+  height: 34px;
+  padding: 0 32px 0 10px;
+}
+
+.ii-select:focus {
   outline: none;
   border-color: #3f79d6;
   border-radius: 6px 6px 0 0;
 }
 
 @supports selector(select:open) {
-  .ii-select:open,
-  .input.call-left-select:open {
+  .ii-select:open {
     border-radius: 6px 6px 0 0;
   }
 }
 
 .ii-select option,
-.ii-select optgroup,
-.input.call-left-select option,
-.input.call-left-select optgroup {
+.ii-select optgroup {
   background: #0b1324;
   color: #f7f7f7;
 }
 
 .ii-select option:checked,
-.ii-select option:hover,
-.input.call-left-select option:checked,
-.input.call-left-select option:hover {
+.ii-select option:hover {
   background: #133262;
   color: #f7f7f7;
 }
