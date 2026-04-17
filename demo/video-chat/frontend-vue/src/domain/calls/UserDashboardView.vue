@@ -769,7 +769,6 @@ const enterCallPreviewRawStreamRef = ref(null);
 const enterCallPreviewStreamRef = ref(null);
 const enterCallPreviewBackgroundController = new BackgroundFilterController();
 let detachCallMediaWatcher = null;
-const callAccessLinkEndpointAvailable = ref(true);
 
 const enterCallState = reactive({
   open: false,
@@ -1118,73 +1117,26 @@ function resolveJoinTarget(joinContext) {
   };
 }
 
-function looksLikeNotFoundError(error) {
-  const message = (error instanceof Error ? error.message : String(error || '')).toLowerCase();
-  return message.includes('404') || message.includes('not found');
-}
-
-async function resolveWorkspaceRoutePath(target = null) {
+async function resolveWorkspaceRouteSegment(target = null) {
   const normalizedTarget = target && typeof target === 'object' ? target : {};
-  const explicitAccessId = String(normalizedTarget.accessId || '').trim();
-  if (explicitAccessId !== '') {
-    return `/join/${encodeURIComponent(explicitAccessId)}`;
-  }
-
   const callId = String(normalizedTarget.callId || '').trim();
   if (callId !== '') {
-    if (callAccessLinkEndpointAvailable.value) {
-      try {
-        const payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/access-link`, {
-          method: 'POST',
-          body: { link_kind: 'personal' },
-        });
-        const result = payload?.result || {};
-        const accessId = String(result?.access_link?.id || '').trim().toLowerCase();
-        const joinPathRaw = String(result?.join_path || '').trim();
-        const joinPath = joinPathRaw !== '' ? joinPathRaw : (accessId !== '' ? `/join/${accessId}` : '');
-        if (joinPath !== '') {
-          return joinPath.startsWith('/') ? joinPath : `/${joinPath}`;
-        }
-      } catch (error) {
-        if (looksLikeNotFoundError(error)) {
-          callAccessLinkEndpointAvailable.value = false;
-        } else {
-          throw error;
-        }
-      }
-    }
+    return callId;
+  }
 
-    return `/workspace/call/${encodeURIComponent(callId)}`;
+  const explicitAccessId = String(normalizedTarget.accessId || '').trim();
+  if (explicitAccessId !== '') {
+    return explicitAccessId;
   }
 
   const roomId = String(normalizedTarget.roomId || '').trim();
-  return `/workspace/call/${encodeURIComponent(roomId === '' ? 'lobby' : roomId)}`;
+  return roomId === '' ? 'lobby' : roomId;
 }
 
 async function openCallWorkspace(target = null) {
-  const normalizedTarget = target && typeof target === 'object' ? target : {};
-  const shouldToggleLoading = enterCallState.open;
-  if (shouldToggleLoading) {
-    enterCallState.loading = true;
-    enterCallState.error = '';
-  }
-
-  try {
-    const routePath = await resolveWorkspaceRoutePath(normalizedTarget);
-    closeEnterCallModal();
-    await router.push(routePath);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Could not open call.';
-    if (enterCallState.open) {
-      enterCallState.error = message;
-      return;
-    }
-    setNotice('error', message);
-  } finally {
-    if (enterCallState.open) {
-      enterCallState.loading = false;
-    }
-  }
+  const routeSegment = await resolveWorkspaceRouteSegment(target);
+  closeEnterCallModal();
+  await router.push(`/workspace/call/${encodeURIComponent(routeSegment)}`);
 }
 
 watch(
