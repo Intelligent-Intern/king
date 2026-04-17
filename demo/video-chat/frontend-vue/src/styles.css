@@ -1634,38 +1634,29 @@ tbody tr:hover {
 .settings-grid {
   display: flex;
   flex-wrap: nowrap;
-  gap: 10px;
-  justify-content: flex-start;
-  align-items: stretch;
+  gap: 1px;
+  justify-content: center;
+  align-items: center;
   overflow-x: auto;
   overflow-y: hidden;
   min-height: 0;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  background: var(--border-subtle);
   padding-bottom: 2px;
 }
 
 .settings-tile {
-  width: auto;
-  flex: 0 0 150px;
-  height: 150px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--bg-ui-chrome);
-  color: #ffffff;
-  font-weight: 700;
-  font-size: 14px;
-  cursor: pointer;
-  display: grid;
+  flex: 0 0 auto;
+  min-width: 120px;
+  height: 40px;
+  border: 0;
+  border-radius: 0;
+  padding: 0 14px;
+  white-space: nowrap;
+  display: inline-grid;
   place-items: center;
-  text-align: center;
-  padding: 8px;
-}
-
-.settings-tile:hover {
-  background: var(--bg-ui-chrome);
-}
-
-.settings-tile.active {
-  background: var(--bg-ui-chrome-active);
 }
 
 .settings-panel {
@@ -2184,10 +2175,6 @@ tbody tr:hover {
     height: calc(100vh - 16px);
     max-height: calc(100vh - 16px);
     padding: var(--settings-dialog-padding);
-  }
-
-  .settings-grid {
-    justify-content: flex-start;
   }
 
   .settings-row {

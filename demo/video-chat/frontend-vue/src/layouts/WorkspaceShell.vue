@@ -289,7 +289,7 @@
         <button
           v-for="tile in settingsTiles"
           :key="tile.id"
-          class="settings-tile"
+          class="settings-tile tab"
           :class="{ active: activeSettingsTile === tile.id }"
           type="button"
           :disabled="settingsState.loading"
