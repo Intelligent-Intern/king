@@ -998,7 +998,7 @@ watch(
 
 .overview-toolbar {
   padding: 10px;
-  margin-bottom: 15px;
+  padding-bottom: 25px;
 }
 
 .overview-view-tabs {
