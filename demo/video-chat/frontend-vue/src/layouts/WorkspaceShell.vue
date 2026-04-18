@@ -765,7 +765,7 @@ const themeColorFields = Object.freeze([
   { key: '--bg-surface', label: 'Surface', default: '#003c93' },
   { key: '--bg-surface-strong', label: 'Surface strong', default: '#0c1c33' },
   { key: '--bg-input', label: 'Input background', default: '#d8dadd' },
-  { key: '--bg-action', label: 'Action', default: '#ffffff' },
+  { key: '--bg-action', label: 'Action', default: '#0b1324' },
   { key: '--bg-action-hover', label: 'Action hover', default: '#5696ef' },
   { key: '--bg-row', label: 'Row', default: '#2a569f' },
   { key: '--bg-row-hover', label: 'Row hover', default: '#163260' },

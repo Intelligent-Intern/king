@@ -5,7 +5,7 @@
   --bg-surface: #003c93;
   --bg-surface-strong: #0c1c33;
   --bg-input: #d8dadd;
-  --bg-action: #ffffff;
+  --bg-action: #0b1324;
   --bg-action-hover: #5696ef;
   --bg-row: #2a569f;
   --bg-row-hover: #163260;
@@ -114,7 +114,7 @@ select {
   --bg-tab: #003c93;
   --bg-tab-hover: #3f79d6;
   --bg-tab-active: var(--bg-row);
-  --bg-action: #ffffff;
+  --bg-action: #0b1324;
   --bg-action-hover: #3f79d6;
   --bg-icon: #133262;
   --bg-icon-active: #3f79d6;
@@ -125,7 +125,7 @@ select {
   --text-secondary: #f7f7f7;
   --text-muted: #3f79d6;
   --text-dim: #3f79d6;
-  --action-icon-filter: brightness(0) saturate(100%) invert(8%) sepia(34%) saturate(1452%) hue-rotate(190deg) brightness(95%) contrast(98%);
+  --action-icon-filter: brightness(0) saturate(100%) invert(88%) sepia(8%) saturate(176%) hue-rotate(180deg) brightness(94%) contrast(89%);
 }
 
 .shell.left-collapsed {
