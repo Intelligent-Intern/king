@@ -906,7 +906,7 @@ const themeColorFields = Object.freeze([
   { key: '--bg-tab', label: 'Tab', default: '#003c93' },
   { key: '--bg-tab-hover', label: 'Tab hover', default: '#5696ef' },
   { key: '--bg-tab-active', label: 'Tab active', default: '#2a569f' },
-  { key: '--bg-ui-chrome', label: 'UI chrome', default: '#182c4d' },
+  { key: '--bg-ui-chrome', label: 'UI chrome', default: '#3d5f98' },
   { key: '--bg-ui-chrome-active', label: 'UI chrome active', default: '#2a569f' },
   { key: '--bg-icon', label: 'Icon background', default: '#ffffff' },
   { key: '--bg-icon-active', label: 'Icon active', default: '#5696ef' },
@@ -943,6 +943,8 @@ function mergeThemeColorMap(source) {
   for (const field of themeColorFields) {
     merged[field.key] = normalizeHexColor(payload[field.key], themeColorDefaultMap[field.key]);
   }
+  // Keep UI chrome on the approved palette color.
+  merged['--bg-ui-chrome'] = '#3d5f98';
   return merged;
 }
 
