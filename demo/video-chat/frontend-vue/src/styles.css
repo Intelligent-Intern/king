@@ -337,7 +337,7 @@ select {
   height: 32px;
   border: 0;
   border-radius: 50%;
-  background: var(--bg-icon);
+  background: var(--brand-cyan);
   color: var(--text-primary);
   display: grid;
   place-items: center;
@@ -346,7 +346,7 @@ select {
 }
 
 .sidebar-toggle-btn:hover {
-  background: var(--bg-icon-active);
+  background: var(--brand-cyan-hover);
 }
 
 .arrow-icon-image {
@@ -372,7 +372,7 @@ select {
   height: 36px;
   border: 0;
   border-radius: 50%;
-  background: var(--bg-icon);
+  background: var(--brand-cyan);
   color: var(--text-primary);
   display: grid;
   place-items: center;
@@ -398,7 +398,7 @@ select {
 }
 
 .show-sidebar-overlay:hover {
-  background: var(--bg-icon-active);
+  background: var(--brand-cyan-hover);
 }
 
 .show-left-sidebar-overlay {

@@ -5267,7 +5267,7 @@ onBeforeUnmount(() => {
   line-height: 0;
   border: 0;
   border-radius: 50%;
-  background: var(--color-133262);
+  background: var(--brand-cyan);
   color: var(--color-f7f7f7);
   display: grid;
   place-items: center;
@@ -5276,7 +5276,7 @@ onBeforeUnmount(() => {
 }
 
 .workspace-compact-toggle:hover {
-  background: var(--color-3f79d6);
+  background: var(--brand-cyan-hover);
 }
 
 .workspace-compact-toggle-icon {
