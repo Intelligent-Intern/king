@@ -5604,7 +5604,7 @@ onBeforeUnmount(() => {
 
 .workspace-context {
   min-height: 0;
-  background: var(--bg-video);
+  background: #0B1324;
   margin: 0 10px var(--call-workspace-sidebar-bottom, 64px) 10px;
   border-radius: 0 5px 5px 0;
   overflow: auto;
@@ -5628,7 +5628,22 @@ onBeforeUnmount(() => {
 
 .workspace-context .tabs.tabs-right {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  background: var(--bg-video);
+  background: #0B1324;
+}
+
+.workspace-context .tab {
+  background: #0B1324;
+  color: #f7f7f7;
+}
+
+.workspace-context .tab:hover {
+  background: #133262;
+  color: #f7f7f7;
+}
+
+.workspace-context .tab.active {
+  background: #3f79d6;
+  color: #f7f7f7;
 }
 
 .tab-icon-wrap {
@@ -5657,7 +5672,7 @@ onBeforeUnmount(() => {
 .tab-panel {
   display: none;
   min-height: 0;
-  background: var(--bg-video);
+  background: #0B1324;
 }
 
 .tab-panel.active {
@@ -5681,7 +5696,7 @@ onBeforeUnmount(() => {
   padding: 10px;
   border-top: 0;
   border-bottom: 0;
-  background: var(--bg-video);
+  background: #0B1324;
 }
 
 .lobby-toolbar-actions {
@@ -5691,26 +5706,26 @@ onBeforeUnmount(() => {
 .search {
   width: 100%;
   height: 38px;
-  border: 0;
+  border: 1px solid #133262;
   border-radius: 6px;
-  background: var(--bg-input);
-  color: var(--text-main);
+  background: #0B1324;
+  color: #f7f7f7;
   padding: 0 10px;
 }
 
 .search::placeholder {
-  color: var(--text-dim);
+  color: #3f79d6;
 }
 
 .workspace-tab-hint {
   margin: 0;
   padding: 8px 10px 0;
   font-size: 11px;
-  color: #c2d4f2;
+  color: #f7f7f7;
 }
 
 .workspace-tab-hint.error {
-  color: #ffc6d4;
+  color: #ff0000;
 }
 
 .user-list,
@@ -5736,7 +5751,7 @@ onBeforeUnmount(() => {
   padding: 10px;
   min-height: 72px;
   box-sizing: border-box;
-  background: var(--bg-row-hover);
+  background: #133262;
 }
 
 .user-list-spacer {
@@ -5748,11 +5763,11 @@ onBeforeUnmount(() => {
 }
 
 .user-row.self {
-  background: #1a3f74;
+  background: #133262;
 }
 
 .user-row.pinned {
-  background: var(--bg-row-pinned);
+  background: #3f79d6;
 }
 
 .user-row.pending {
@@ -5768,14 +5783,15 @@ onBeforeUnmount(() => {
 }
 
 .user-row .actions-inline .icon-mini-btn:not(.danger):disabled {
-  background: #101d34;
+  background: #0B1324;
+  opacity: 0.55;
 }
 
 .user-preview {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--bg-preview);
+  background: #133262;
   display: grid;
   place-items: center;
   font-size: 12px;
@@ -5791,7 +5807,7 @@ onBeforeUnmount(() => {
 
 .user-name {
   font-size: 13px;
-  color: #edf3ff;
+  color: #f7f7f7;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5801,24 +5817,24 @@ onBeforeUnmount(() => {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #9db2d8;
+  color: #3f79d6;
 }
 
 .user-feedback {
   font-size: 11px;
-  color: #d5e3ff;
+  color: #f7f7f7;
 }
 
 .user-list-empty {
   list-style: none;
   padding: 12px;
   font-size: 12px;
-  color: var(--text-muted);
-  background: var(--bg-video);
+  color: #3f79d6;
+  background: #0B1324;
 }
 
 .workspace-tab-footer {
-  background: var(--bg-video);
+  background: #0B1324;
   padding: 8px;
 }
 
@@ -5827,18 +5843,18 @@ onBeforeUnmount(() => {
   display: grid;
   align-content: start;
   gap: 8px;
-  background: var(--bg-video);
+  background: #0B1324;
 }
 
 .workspace-chat-message {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid #133262;
   border-radius: 6px;
   padding: 8px;
-  background: var(--bg-row-hover);
+  background: #133262;
 }
 
 .workspace-chat-message.mine {
-  background: var(--bg-row-pinned);
+  background: #3f79d6;
 }
 
 .workspace-chat-message header {
@@ -5847,41 +5863,41 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  color: var(--text-muted);
+  color: #3f79d6;
 }
 
 .workspace-chat-message p {
   margin: 6px 0 0;
   font-size: 13px;
-  color: #f1f6ff;
+  color: #f7f7f7;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .workspace-chat-empty {
-  border: 1px dashed var(--border-subtle);
+  border: 1px dashed #133262;
   border-radius: 6px;
   padding: 10px;
-  color: var(--text-muted);
+  color: #3f79d6;
   font-size: 12px;
 }
 
 .workspace-typing {
   margin: 0;
   padding: 0 10px 8px;
-  background: var(--bg-video);
+  background: #0B1324;
   font-size: 12px;
-  color: var(--text-muted);
+  color: #3f79d6;
 }
 
 .workspace-chat-compose {
-  background: var(--bg-video);
+  background: #0B1324;
   padding: 8px 10px 10px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid #133262;
 }
 
 @media (max-width: 1440px) {
