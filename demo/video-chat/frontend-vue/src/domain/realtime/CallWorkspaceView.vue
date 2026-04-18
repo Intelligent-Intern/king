@@ -515,6 +515,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import {
+  buildWebSocketUrl,
   resolveBackendWebSocketOriginCandidates,
   setBackendWebSocketOrigin,
 } from '../../support/backendOrigin';
@@ -808,18 +809,15 @@ async function apiRequest(path, { method = 'GET', query = null, body = null } = 
 }
 
 function socketUrlForRoom(roomId, socketOrigin) {
-  const httpUrl = new URL(socketOrigin);
-  httpUrl.protocol = httpUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-  httpUrl.pathname = '/ws';
-  httpUrl.search = '';
-  httpUrl.searchParams.set('room', normalizeRoomId(roomId));
+  const query = new URLSearchParams();
+  query.set('room', normalizeRoomId(roomId));
 
   const token = String(sessionState.sessionToken || '').trim();
   if (token !== '') {
-    httpUrl.searchParams.set('session', token);
+    query.set('session', token);
   }
 
-  return httpUrl.toString();
+  return buildWebSocketUrl(socketOrigin, '/ws', query);
 }
 
 function formatTimestamp(value) {
@@ -3374,8 +3372,13 @@ async function connectSocket() {
     return;
   }
 
-  const discoveredOrigins = resolveBackendWebSocketOriginCandidates();
-  const orderedSocketOrigins = discoveredOrigins.length > 0 ? discoveredOrigins : [currentBackendOrigin()];
+  const orderedSocketOrigins = resolveBackendWebSocketOriginCandidates();
+  if (orderedSocketOrigins.length === 0) {
+    connectionState.value = 'blocked';
+    connectionReason.value = 'secure_transport_required';
+    setNotice('Secure WebSocket transport is required. Configure HTTPS/WSS backend origins.', 'error');
+    return;
+  }
 
   const connectWithOriginAt = (originIndex) => {
     if (generation !== connectGeneration || manualSocketClose) return;
@@ -3386,8 +3389,13 @@ async function connectSocket() {
       return;
     }
 
-    const socketOrigin = orderedSocketOrigins[originIndex] || currentBackendOrigin();
-    const socket = new WebSocket(socketUrlForRoom(desiredRoomId.value, socketOrigin));
+    const socketOrigin = orderedSocketOrigins[originIndex] || '';
+    const socketUrl = socketUrlForRoom(desiredRoomId.value, socketOrigin);
+    if (!socketUrl) {
+      connectWithOriginAt(originIndex + 1);
+      return;
+    }
+    const socket = new WebSocket(socketUrl);
     if (generation !== connectGeneration || manualSocketClose) {
       try {
         socket.close(1000, 'stale_connect');

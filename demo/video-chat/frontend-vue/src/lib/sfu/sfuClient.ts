@@ -8,6 +8,7 @@
  */
 
 import {
+  buildWebSocketUrl,
   resolveBackendSfuOriginCandidates,
   setBackendSfuOrigin,
 } from '../../support/backendOrigin'
@@ -53,18 +54,7 @@ export class SFUClient {
   }
 
   private socketUrlForOrigin(origin: string, query: URLSearchParams): string | null {
-    const normalized = String(origin || '').trim()
-    if (normalized === '') return null
-
-    try {
-      const parsed = new URL(normalized)
-      parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:'
-      parsed.pathname = '/sfu'
-      parsed.search = query.toString()
-      return parsed.toString()
-    } catch {
-      return null
-    }
+    return buildWebSocketUrl(origin, '/sfu', query)
   }
 
   private notifyDisconnectOnce(): void {

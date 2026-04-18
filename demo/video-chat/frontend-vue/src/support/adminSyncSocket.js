@@ -1,4 +1,5 @@
 import {
+  buildWebSocketUrl,
   resolveBackendWebSocketOriginCandidates,
   setBackendWebSocketOrigin,
 } from './backendOrigin';
@@ -21,23 +22,13 @@ function normalizeReason(value) {
 }
 
 function socketUrlForOrigin(origin, sessionToken) {
-  const rawOrigin = String(origin || '').trim();
-  if (rawOrigin === '') return null;
-
-  try {
-    const url = new URL(rawOrigin);
-    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    url.pathname = '/ws';
-    url.search = '';
-    url.searchParams.set('room', 'lobby');
-    const token = String(sessionToken || '').trim();
-    if (token !== '') {
-      url.searchParams.set('session', token);
-    }
-    return url.toString();
-  } catch {
-    return null;
+  const query = new URLSearchParams();
+  query.set('room', 'lobby');
+  const token = String(sessionToken || '').trim();
+  if (token !== '') {
+    query.set('session', token);
   }
+  return buildWebSocketUrl(origin, '/ws', query);
 }
 
 function socketIsOpen(socket) {
@@ -247,6 +238,10 @@ export function createAdminSyncSocket(options = {}) {
 
     emitState('connecting', 'starting');
     const candidates = resolveBackendWebSocketOriginCandidates();
+    if (candidates.length === 0) {
+      emitState('blocked', 'secure_transport_required');
+      return false;
+    }
     connectWithOriginAt(candidates, 0, connectGeneration, sessionToken);
     return true;
   }
