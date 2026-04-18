@@ -975,7 +975,7 @@ const sfuConnected = ref(false);
 let sfuConnectRetryCount = 0;
 let detachMediaDeviceWatcher = null;
 let localTrackReconfigureInFlight = false;
-let localTrackReconfigureQueued = false;
+let localTrackReconfigureQueuedMode = null;
 let compactMediaQuery = null;
 
 const routeCallRef = computed(() => String(route.params.callRef || '').trim());
@@ -3710,7 +3710,7 @@ watch(
     ) {
       return;
     }
-    void reconfigureLocalTracksFromSelectedDevices();
+    void reconfigureLocalBackgroundFilterOnly();
   }
 );
 
@@ -4521,6 +4521,11 @@ function resetBackgroundRuntimeMetrics(reason = 'idle') {
   callMediaPrefs.backgroundFilterReason = reason;
 }
 
+function isBackgroundFilterEnabledForOutgoing() {
+  const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
+  return mode === 'blur' && Boolean(callMediaPrefs.backgroundApplyOutgoing);
+}
+
 function resolveBackgroundFilterOptions(runtimeToken) {
   const toFiniteNumber = (value, fallback) => {
     const numeric = Number(value);
@@ -4678,6 +4683,65 @@ function uniqueLocalStreams(values) {
   return out;
 }
 
+function queueLocalTrackReconfigure(mode = 'devices') {
+  const normalizedMode = mode === 'filter' ? 'filter' : 'devices';
+  if (localTrackReconfigureQueuedMode === 'devices') return;
+  localTrackReconfigureQueuedMode = normalizedMode;
+}
+
+function consumeQueuedLocalTrackReconfigureMode() {
+  const queuedMode = localTrackReconfigureQueuedMode;
+  localTrackReconfigureQueuedMode = null;
+  return queuedMode;
+}
+
+function applyControlStateToLocalTracks(tracks) {
+  if (!Array.isArray(tracks)) return;
+  for (const track of tracks) {
+    if (!track) continue;
+    if (track.kind === 'video') {
+      track.enabled = controlState.cameraEnabled;
+      continue;
+    }
+    if (track.kind === 'audio') {
+      track.enabled = controlState.micEnabled;
+    }
+  }
+}
+
+function unpublishSfuTracks(tracks) {
+  if (!sfuClientRef.value || !Array.isArray(tracks)) return;
+  for (const track of tracks) {
+    if (!track?.id) continue;
+    try {
+      sfuClientRef.value.unpublishTrack(track.id);
+    } catch {
+      // best-effort cleanup for stale tracks
+    }
+  }
+}
+
+function stopRetiredLocalStreams(retiredStreams, preservedStreams = []) {
+  const preserved = new Set();
+  for (const stream of preservedStreams) {
+    if (stream instanceof MediaStream) {
+      preserved.add(stream);
+    }
+  }
+
+  for (const stream of uniqueLocalStreams(retiredStreams)) {
+    if (!(stream instanceof MediaStream)) continue;
+    if (preserved.has(stream)) continue;
+    for (const track of stream.getTracks()) {
+      try {
+        track.stop();
+      } catch {
+        // ignore stop failures during stream turnover
+      }
+    }
+  }
+}
+
 function clearLocalTrackRecoveryTimer() {
   if (localTrackRecoveryTimer !== null) {
     clearTimeout(localTrackRecoveryTimer);
@@ -4685,48 +4749,10 @@ function clearLocalTrackRecoveryTimer() {
   }
 }
 
-function hasLiveLocalTrack(kind) {
-  const normalizedKind = String(kind || '').trim().toLowerCase();
-  const stream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
-  if (!(stream instanceof MediaStream)) return false;
-  return stream.getTracks().some((track) => (
-    String(track?.kind || '').trim().toLowerCase() === normalizedKind
-    && String(track?.readyState || '').trim().toLowerCase() === 'live'
-  ));
-}
-
 function hasLiveLocalMedia() {
   const stream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
   if (!(stream instanceof MediaStream)) return false;
   return stream.getTracks().some((track) => String(track?.readyState || '').trim().toLowerCase() === 'live');
-}
-
-async function canAcquireReplacementLocalMedia() {
-  if (
-    typeof navigator === 'undefined'
-    || !navigator.mediaDevices
-    || typeof navigator.mediaDevices.getUserMedia !== 'function'
-  ) {
-    return false;
-  }
-
-  let probeStream = null;
-  try {
-    probeStream = await acquireLocalMediaStreamWithFallback();
-    return true;
-  } catch {
-    return false;
-  } finally {
-    if (probeStream instanceof MediaStream) {
-      for (const track of probeStream.getTracks()) {
-        try {
-          track.stop();
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }
 }
 
 function scheduleLocalTrackRecovery(reason = 'track_ended') {
@@ -4878,6 +4904,7 @@ async function publishLocalTracks() {
     localFilteredStreamRef.value = stream;
     localStreamRef.value = stream;
     localTracksRef.value = stream.getTracks();
+    applyControlStateToLocalTracks(localTracksRef.value);
     localTracksPublishedToSfu = false;
     localTrackRecoveryAttempts = 0;
     bindLocalTrackLifecycle(stream);
@@ -4905,15 +4932,17 @@ async function publishLocalTracks() {
 async function startEncodingPipeline(videoTrack) {
   stopLocalEncodingPipeline();
 
-  const video = document.createElement('video');
+  let video = localVideoElement.value;
+  if (!(video instanceof HTMLVideoElement)) {
+    video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.autoplay = true;
+    localVideoElement.value = video;
+  }
   video.srcObject = new MediaStream([videoTrack]);
-  video.muted = true;
-  video.playsInline = true;
-  video.autoplay = true;
-  localVideoElement.value = video;
-
   const container = document.getElementById('local-video-container');
-  if (container) {
+  if (container && video.parentElement !== container) {
     container.replaceChildren(video);
   }
   try {
@@ -5016,37 +5045,168 @@ async function startEncodingPipeline(videoTrack) {
   }, 66);
 }
 
+async function reconfigureLocalBackgroundFilterOnly() {
+  const rawStream = localRawStreamRef.value instanceof MediaStream
+    ? localRawStreamRef.value
+    : null;
+  if (!(rawStream instanceof MediaStream)) {
+    return reconfigureLocalTracksFromSelectedDevices();
+  }
+  if (!(localStreamRef.value instanceof MediaStream)) {
+    return publishLocalTracks();
+  }
+  if (localTrackReconfigureInFlight) {
+    queueLocalTrackReconfigure('filter');
+    return false;
+  }
+
+  localTrackReconfigureInFlight = true;
+  try {
+    const previousFilteredStream = localFilteredStreamRef.value instanceof MediaStream
+      ? localFilteredStreamRef.value
+      : null;
+    const previousOutputStream = localStreamRef.value instanceof MediaStream
+      ? localStreamRef.value
+      : null;
+    const previousTracks = Array.isArray(localTracksRef.value) ? [...localTracksRef.value] : [];
+
+    const nextStream = await applyLocalBackgroundFilter(rawStream);
+    if (!(nextStream instanceof MediaStream)) {
+      return false;
+    }
+
+    const streamChanged = nextStream !== previousOutputStream;
+    localFilteredStreamRef.value = nextStream;
+    localStreamRef.value = nextStream;
+    localTracksRef.value = nextStream.getTracks();
+    applyControlStateToLocalTracks(localTracksRef.value);
+    bindLocalTrackLifecycle(nextStream);
+
+    if (streamChanged) {
+      localTracksPublishedToSfu = false;
+      unpublishSfuTracks(previousTracks);
+      publishLocalTracksToSfuIfReady();
+
+      if (isNativeWebRtcRuntimePath()) {
+        syncNativePeerConnectionsWithRoster();
+        for (const peer of nativePeerConnectionsRef.value.values()) {
+          await syncNativePeerLocalTracks(peer);
+        }
+      }
+
+      const videoTrack = nextStream.getVideoTracks()[0] || null;
+      if (videoTrack) {
+        await startEncodingPipeline(videoTrack);
+      }
+      stopRetiredLocalStreams(
+        [previousOutputStream, previousFilteredStream],
+        [nextStream, rawStream],
+      );
+    }
+
+    if (!isBackgroundFilterEnabledForOutgoing()) {
+      backgroundFilterController.dispose();
+    }
+
+    applyCallInputPreferences();
+    applyCallOutputPreferences();
+    localTrackRecoveryAttempts = 0;
+    return true;
+  } catch {
+    return false;
+  } finally {
+    localTrackReconfigureInFlight = false;
+    const queuedMode = consumeQueuedLocalTrackReconfigureMode();
+    if (queuedMode === 'devices') {
+      void reconfigureLocalTracksFromSelectedDevices();
+    } else if (queuedMode === 'filter') {
+      void reconfigureLocalBackgroundFilterOnly();
+    }
+  }
+}
+
 async function reconfigureLocalTracksFromSelectedDevices() {
   if (!(localStreamRef.value instanceof MediaStream)) {
     return publishLocalTracks();
   }
   if (localTrackReconfigureInFlight) {
-    localTrackReconfigureQueued = true;
+    queueLocalTrackReconfigure('devices');
     return false;
   }
+
   localTrackReconfigureInFlight = true;
-  let reconfigured = false;
+  let nextRawStream = null;
+  let nextOutputStream = null;
   try {
-    if (hasLiveLocalMedia()) {
-      const canAcquire = await canAcquireReplacementLocalMedia();
-      if (!canAcquire) {
-        scheduleLocalTrackRecovery('reconfigure_preflight_failed');
-        return false;
+    const previousRawStream = localRawStreamRef.value instanceof MediaStream
+      ? localRawStreamRef.value
+      : null;
+    const previousFilteredStream = localFilteredStreamRef.value instanceof MediaStream
+      ? localFilteredStreamRef.value
+      : null;
+    const previousOutputStream = localStreamRef.value instanceof MediaStream
+      ? localStreamRef.value
+      : null;
+    const previousTracks = Array.isArray(localTracksRef.value) ? [...localTracksRef.value] : [];
+
+    nextRawStream = await acquireLocalMediaStreamWithFallback();
+    nextOutputStream = await applyLocalBackgroundFilter(nextRawStream);
+    if (!(nextOutputStream instanceof MediaStream)) {
+      stopRetiredLocalStreams([nextRawStream], []);
+      return false;
+    }
+
+    localRawStreamRef.value = nextRawStream;
+    localFilteredStreamRef.value = nextOutputStream;
+    localStreamRef.value = nextOutputStream;
+    localTracksRef.value = nextOutputStream.getTracks();
+    applyControlStateToLocalTracks(localTracksRef.value);
+    bindLocalTrackLifecycle(nextOutputStream);
+    localTracksPublishedToSfu = false;
+
+    unpublishSfuTracks(previousTracks);
+    publishLocalTracksToSfuIfReady();
+    applyCallInputPreferences();
+    applyCallOutputPreferences();
+
+    if (isNativeWebRtcRuntimePath()) {
+      syncNativePeerConnectionsWithRoster();
+      for (const peer of nativePeerConnectionsRef.value.values()) {
+        await syncNativePeerLocalTracks(peer);
       }
     }
 
-    teardownLocalPublisher();
-    reconfigured = await publishLocalTracks();
-    if (reconfigured) {
-      await refreshCallMediaDevices();
-      localTrackRecoveryAttempts = 0;
+    const videoTrack = nextOutputStream.getVideoTracks()[0] || null;
+    if (videoTrack) {
+      await startEncodingPipeline(videoTrack);
     }
-    return reconfigured;
+
+    stopRetiredLocalStreams(
+      [previousOutputStream, previousRawStream, previousFilteredStream],
+      [nextOutputStream, nextRawStream],
+    );
+
+    if (!isBackgroundFilterEnabledForOutgoing()) {
+      backgroundFilterController.dispose();
+    }
+
+    await refreshCallMediaDevices();
+    localTrackRecoveryAttempts = 0;
+    return true;
+  } catch {
+    stopRetiredLocalStreams(
+      [nextOutputStream, nextRawStream],
+      [localStreamRef.value, localRawStreamRef.value],
+    );
+    scheduleLocalTrackRecovery('reconfigure_failed');
+    return false;
   } finally {
     localTrackReconfigureInFlight = false;
-    if (localTrackReconfigureQueued) {
-      localTrackReconfigureQueued = false;
+    const queuedMode = consumeQueuedLocalTrackReconfigureMode();
+    if (queuedMode === 'devices') {
       void reconfigureLocalTracksFromSelectedDevices();
+    } else if (queuedMode === 'filter') {
+      void reconfigureLocalBackgroundFilterOnly();
     }
   }
 }
