@@ -1157,7 +1157,7 @@ watch(
 }
 
 .admin-users-toolbar {
-  margin-bottom: 15px;
+  padding-bottom: 25px;
 }
 
 .admin-users-head,
