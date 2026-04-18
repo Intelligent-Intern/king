@@ -1,10 +1,12 @@
 ARG VIDEOCHAT_BACKEND_PHP_IMAGE=php:8.4-cli-trixie
 ARG VIDEOCHAT_BACKEND_PHP_VERSION=8.4
+ARG VIDEOCHAT_BACKEND_PREFER_WORKTREE_EXTENSION=0
 FROM ${VIDEOCHAT_BACKEND_PHP_IMAGE}
 
 WORKDIR /app
 
 ARG VIDEOCHAT_BACKEND_PHP_VERSION
+ARG VIDEOCHAT_BACKEND_PREFER_WORKTREE_EXTENSION
 ARG TARGETARCH
 
 RUN apt-get update \
@@ -20,7 +22,9 @@ RUN --mount=type=bind,source=.,target=/src,readonly \
     if [ -d "${package_dir}" ]; then \
         archive="$(find "${package_dir}" -maxdepth 1 -type f -name '*.tar.gz' | head -n 1 || true)"; \
     fi; \
-    if [ -n "${archive}" ] && [ -f "${archive}" ]; then \
+    if [ "${VIDEOCHAT_BACKEND_PREFER_WORKTREE_EXTENSION}" = "1" ] && [ -f /src/extension/modules/king.so ]; then \
+        cp /src/extension/modules/king.so /opt/king/king.so; \
+    elif [ -n "${archive}" ] && [ -f "${archive}" ]; then \
         tar -xzf "${archive}" -C /opt/king --strip-components=2 --wildcards '*/modules/king.so'; \
     elif [ -f /src/extension/modules/king.so ]; then \
         cp /src/extension/modules/king.so /opt/king/king.so; \
