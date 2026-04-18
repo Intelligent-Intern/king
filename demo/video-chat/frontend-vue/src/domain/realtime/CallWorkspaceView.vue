@@ -5615,7 +5615,7 @@ onBeforeUnmount(() => {
   background: var(--color-0b1324);
   margin: 0 10px var(--call-workspace-sidebar-bottom, 64px) 10px;
   border-radius: 0 5px 5px 0;
-  overflow: auto;
+  overflow: hidden;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   transform: translateX(0);
@@ -5687,6 +5687,7 @@ onBeforeUnmount(() => {
   display: grid;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .panel-users.active,
@@ -5741,6 +5742,8 @@ onBeforeUnmount(() => {
 .workspace-chat-list {
   min-height: 0;
   overflow: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 
 .user-list,
