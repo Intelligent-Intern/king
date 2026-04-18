@@ -1531,15 +1531,15 @@ watch(
 
 .calls-banner {
   font-size: 12px;
-  color: #ffffff;
+  color: var(--color-ffffff);
 }
 
 .calls-banner.ok {
-  background: #1f4f31;
+  background: var(--color-1f4f31);
 }
 
 .calls-banner.error {
-  background: #4f1f1f;
+  background: var(--color-4f1f1f);
 }
 
 .calls-table-wrap {
@@ -1561,7 +1561,7 @@ watch(
 .call-subline {
   display: block;
   margin-top: 2px;
-  color: #c7d7f2;
+  color: var(--color-c7d7f2);
   font-size: 11px;
 }
 
@@ -1572,7 +1572,7 @@ watch(
 }
 
 .calls-error {
-  color: #ff9f9f;
+  color: var(--color-ff9f9f);
 }
 
 .calls-calendar-wrap {
@@ -1591,7 +1591,7 @@ watch(
 .calls-calendar-day {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #122340;
+  background: var(--color-122340);
   overflow: hidden;
 }
 
@@ -1668,7 +1668,7 @@ watch(
 .calls-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: #09111e;
+  background: var(--color-09111e);
 }
 
 .calls-modal-dialog {
@@ -1680,7 +1680,7 @@ watch(
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--bg-surface-strong);
-  box-shadow: 0 16px 32px #000000;
+  box-shadow: 0 16px 32px var(--color-000000);
   padding: 12px;
   display: grid;
   gap: 12px;
@@ -1772,7 +1772,7 @@ watch(
   min-height: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #0b1324;
+  background: var(--color-0b1324);
   overflow: hidden;
 }
 
@@ -1827,10 +1827,10 @@ watch(
 }
 
 .calls-inline-error {
-  border: 1px solid #6b1f1f;
+  border: 1px solid var(--color-6b1f1f);
   border-radius: 6px;
-  background: #331616;
-  color: #ffb5b5;
+  background: var(--color-331616);
+  color: var(--color-ffb5b5);
   font-size: 12px;
   padding: 8px 10px;
 }
@@ -1839,7 +1839,7 @@ watch(
   margin: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #132745;
+  background: var(--color-132745);
   color: var(--text-muted);
   font-size: 12px;
   padding: 8px 10px;
@@ -1869,8 +1869,8 @@ watch(
   width: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #08111f;
-  color: #e6f0ff;
+  background: var(--color-08111f);
+  color: var(--color-e6f0ff);
   padding: 8px 10px;
   font-size: 12px;
   overflow: auto;

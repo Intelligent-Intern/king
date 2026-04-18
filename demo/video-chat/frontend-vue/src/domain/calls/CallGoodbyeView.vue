@@ -24,17 +24,17 @@ function goToLogin() {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: #0B1324;
+  background: var(--color-0b1324);
   padding: 24px;
 }
 
 .call-goodbye-card {
   width: min(520px, 100%);
-  background: #182c4d;
-  border: 1px solid #133262;
+  background: var(--color-182c4d);
+  border: 1px solid var(--color-133262);
   border-radius: 14px;
   padding: 24px;
-  color: #f7f7f7;
+  color: var(--color-f7f7f7);
   text-align: center;
   display: grid;
   gap: 12px;
@@ -54,6 +54,6 @@ function goToLogin() {
 .call-goodbye-meta {
   margin: 0;
   font-size: 0.86rem;
-  color: #c9d5ea;
+  color: var(--color-c9d5ea);
 }
 </style>

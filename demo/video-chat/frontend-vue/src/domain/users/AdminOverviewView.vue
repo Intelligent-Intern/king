@@ -1028,7 +1028,7 @@ watch(
 
 .dashboard-panel {
   padding: 10px;
-  background: var(--bg-main);
+  background: var(--bg-ui-chrome);
 }
 
 .dashboard-panel .metrics {
@@ -1080,7 +1080,7 @@ watch(
 .calls-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: #09111e;
+  background: var(--color-09111e);
 }
 
 .calls-modal-dialog {
@@ -1092,7 +1092,7 @@ watch(
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--bg-surface-strong);
-  box-shadow: 0 16px 32px #000000;
+  box-shadow: 0 16px 32px var(--color-000000);
   padding: 12px;
   display: grid;
   gap: 12px;
@@ -1160,7 +1160,7 @@ watch(
 .calls-participants-panel {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #122340;
+  background: var(--color-122340);
   padding: 10px;
   min-height: 0;
   display: grid;
@@ -1192,7 +1192,7 @@ watch(
 .calls-participants-list {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #0f1f37;
+  background: var(--color-0f1f37);
   max-height: 280px;
   overflow: auto;
   display: grid;
@@ -1214,7 +1214,7 @@ watch(
 
 .calls-participant-main {
   font-size: 12px;
-  color: #ffffff;
+  color: var(--color-ffffff);
 }
 
 .calls-participant-meta {
@@ -1226,7 +1226,7 @@ watch(
 .calls-external-list {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #0f1f37;
+  background: var(--color-0f1f37);
   max-height: 280px;
   overflow: auto;
   padding: 8px;
@@ -1250,10 +1250,10 @@ watch(
 }
 
 .calls-inline-error {
-  border: 1px solid #6b1f1f;
+  border: 1px solid var(--color-6b1f1f);
   border-radius: 6px;
-  background: #331616;
-  color: #ffb5b5;
+  background: var(--color-331616);
+  color: var(--color-ffb5b5);
   font-size: 12px;
   padding: 8px 10px;
 }
@@ -1269,7 +1269,7 @@ watch(
 }
 
 .calls-btn-danger:hover {
-  background: #cc0000;
+  background: var(--color-cc0000);
 }
 
 :deep(.fc-theme-standard .fc-scrollgrid),
@@ -1292,7 +1292,7 @@ watch(
 
 :deep(.fc .fc-daygrid-day.fc-day-today),
 :deep(.fc .fc-timegrid-col.fc-day-today) {
-  background: #213a63;
+  background: var(--color-213a63);
 }
 
 :deep(.fc .fc-button-primary) {
@@ -1310,7 +1310,7 @@ watch(
 :deep(.fc .fc-event) {
   border: 0;
   background: var(--bg-row);
-  color: #ffffff;
+  color: var(--color-ffffff);
   cursor: pointer;
 }
 

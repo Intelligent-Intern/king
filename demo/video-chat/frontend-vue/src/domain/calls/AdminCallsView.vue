@@ -2770,15 +2770,15 @@ watch(
 
 .calls-banner {
   font-size: 12px;
-  color: #ffffff;
+  color: var(--color-ffffff);
 }
 
 .calls-banner.ok {
-  background: #1f4f31;
+  background: var(--color-1f4f31);
 }
 
 .calls-banner.error {
-  background: #4f1f1f;
+  background: var(--color-4f1f1f);
 }
 
 .calls-table-wrap {
@@ -2808,7 +2808,7 @@ watch(
 .call-subline {
   display: block;
   margin-top: 2px;
-  color: #c7d7f2;
+  color: var(--color-c7d7f2);
   font-size: 11px;
 }
 
@@ -2819,7 +2819,7 @@ watch(
 }
 
 .calls-error {
-  color: #ff9f9f;
+  color: var(--color-ff9f9f);
 }
 
 .calls-calendar-wrap {
@@ -2861,7 +2861,7 @@ watch(
 .calls-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(5, 12, 23, 0.72);
+  background: var(--color-rgba-5-12-23-0-72);
 }
 
 .calls-modal-dialog {
@@ -2873,7 +2873,7 @@ watch(
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--bg-surface-strong);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 6px 14px var(--color-rgba-0-0-0-0-28);
   padding: 12px;
   display: grid;
   gap: 12px;
@@ -2975,7 +2975,7 @@ watch(
   min-height: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #0b1324;
+  background: var(--color-0b1324);
   overflow: hidden;
 }
 
@@ -3051,7 +3051,7 @@ watch(
 .calls-participants-panel {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #122340;
+  background: var(--color-122340);
   padding: 10px;
   min-height: 0;
   display: grid;
@@ -3072,7 +3072,7 @@ watch(
 .calls-participants-list {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #0f1f37;
+  background: var(--color-0f1f37);
   max-height: 280px;
   overflow: auto;
   display: grid;
@@ -3098,7 +3098,7 @@ watch(
 
 .calls-participant-main {
   font-size: 12px;
-  color: #ffffff;
+  color: var(--color-ffffff);
 }
 
 .calls-participant-meta {
@@ -3110,7 +3110,7 @@ watch(
 .calls-external-list {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #0f1f37;
+  background: var(--color-0f1f37);
   max-height: 280px;
   overflow: auto;
   padding: 8px;
@@ -3134,10 +3134,10 @@ watch(
 }
 
 .calls-inline-error {
-  border: 1px solid #6b1f1f;
+  border: 1px solid var(--color-6b1f1f);
   border-radius: 6px;
-  background: #331616;
-  color: #ffb5b5;
+  background: var(--color-331616);
+  color: var(--color-ffb5b5);
   font-size: 12px;
   padding: 8px 10px;
 }
@@ -3146,8 +3146,8 @@ watch(
   margin: 0;
   border: 0;
   border-radius: 0;
-  background: #ff0000;
-  color: #f7f7f7;
+  background: var(--color-ff0000);
+  color: var(--color-f7f7f7);
   font-size: 12px;
   padding: 8px 10px;
 }
@@ -3156,7 +3156,7 @@ watch(
   margin: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #132745;
+  background: var(--color-132745);
   color: var(--text-muted);
   font-size: 12px;
   padding: 8px 10px;
@@ -3201,27 +3201,27 @@ watch(
   overflow: auto;
   border-radius: 6px;
   border: 1px solid var(--border-subtle);
-  background: #d8dadd;
-  color: #0b1323;
+  background: var(--color-d8dadd);
+  color: var(--color-0b1323);
   padding: 10px;
   line-height: 1.45;
 }
 
 .calls-rich-editor:empty::before {
   content: 'Write cancellation message...';
-  color: #617082;
+  color: var(--color-617082);
 }
 
 .btn.btn-danger {
-  background: #a81a1a;
+  background: var(--color-a81a1a);
 }
 
 .btn.btn-danger:hover {
-  background: #c91f1f;
+  background: var(--color-c91f1f);
 }
 
 .btn.btn-danger:active {
-  background: #7c1010;
+  background: var(--color-7c1010);
 }
 
 .calls-textarea {
@@ -3229,7 +3229,7 @@ watch(
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--bg-input);
-  color: #0a1322;
+  color: var(--color-0a1322);
   padding: 8px 10px;
   resize: vertical;
 }

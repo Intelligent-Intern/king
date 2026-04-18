@@ -1201,20 +1201,20 @@ watch(
 
 .users-banner.ok {
   border: 1px solid var(--border-subtle);
-  background: #152a49;
+  background: var(--color-152a49);
 }
 
 .users-banner.error {
-  border: 1px solid #8f4a58;
-  background: #311922;
-  color: #ffd7db;
+  border: 1px solid var(--color-8f4a58);
+  background: var(--color-311922);
+  color: var(--color-ffd7db);
 }
 
 .users-empty {
   padding: 12px;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #152a49;
+  background: var(--color-152a49);
   color: var(--text-main);
 }
 
@@ -1303,7 +1303,7 @@ watch(
 .users-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(5, 12, 23, 0.72);
+  background: var(--color-rgba-5-12-23-0-72);
 }
 
 .users-modal-dialog {
@@ -1315,7 +1315,7 @@ watch(
   overflow: auto;
   border-radius: 10px;
   border: 1px solid var(--border-subtle);
-  background: #10203b;
+  background: var(--color-10203b);
   padding: var(--users-modal-padding);
   display: grid;
   gap: 14px;
@@ -1381,7 +1381,7 @@ watch(
   padding: 8px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: #0f1d34;
+  background: var(--color-0f1d34);
 }
 
 .users-email-row {
@@ -1392,7 +1392,7 @@ watch(
   padding: 8px 10px;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: rgba(5, 12, 23, 0.35);
+  background: var(--color-rgba-5-12-23-0-35);
 }
 
 .users-email-main {
@@ -1447,7 +1447,7 @@ watch(
   border-radius: 50%;
   border: 1px solid var(--border-subtle);
   overflow: hidden;
-  background: #0b1324;
+  background: var(--color-0b1324);
 }
 
 .users-avatar-preview {
@@ -1500,7 +1500,7 @@ watch(
 
 .users-form-error {
   margin: 0;
-  color: #ffd7db;
+  color: var(--color-ffd7db);
 }
 
 .users-modal-footer {

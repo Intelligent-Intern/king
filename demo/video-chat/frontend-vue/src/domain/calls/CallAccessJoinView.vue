@@ -379,7 +379,7 @@ onBeforeUnmount(() => {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: #0B1324;
+  background: var(--color-0b1324);
   padding: 24px;
 }
 
@@ -387,14 +387,14 @@ onBeforeUnmount(() => {
   width: min(920px, 100%);
   max-height: calc(100vh - 24px);
   overflow: auto;
-  background: #182c4d;
-  border: 1px solid #133262;
+  background: var(--color-182c4d);
+  border: 1px solid var(--color-133262);
   border-radius: 14px;
   padding: 18px;
-  color: #f7f7f7;
+  color: var(--color-f7f7f7);
   display: grid;
   gap: 14px;
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.26);
+  box-shadow: 0 8px 26px var(--color-rgba-0-0-0-0-26);
 }
 
 .call-access-join-header {
@@ -425,14 +425,14 @@ onBeforeUnmount(() => {
 
 .call-access-join-call-meta {
   font-size: 0.83rem;
-  color: #c9d5ea;
+  color: var(--color-c9d5ea);
 }
 
 .call-access-join-preview {
   position: relative;
   border-radius: 10px;
   overflow: hidden;
-  background: #0B1324;
+  background: var(--color-0b1324);
   width: 100%;
   min-height: 240px;
   max-height: min(60vh, 520px);
@@ -454,7 +454,7 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: 4px 8px;
   border-radius: 7px;
-  background: rgba(11, 19, 36, 0.78);
+  background: var(--color-rgba-11-19-36-0-78);
   font-size: 0.78rem;
 }
 
@@ -489,7 +489,7 @@ onBeforeUnmount(() => {
 
 .call-access-join-status.error,
 .call-access-join-preview-status.error {
-  color: #ff0000;
+  color: var(--color-ff0000);
 }
 
 @media (max-width: 760px) {
