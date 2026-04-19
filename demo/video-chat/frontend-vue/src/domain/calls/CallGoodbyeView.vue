@@ -10,13 +10,34 @@
 </template>
 
 <script setup>
+import { onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import {
+  callListRouteForRole,
+  isAuthenticated,
+  isGuestSession,
+  logoutSession,
+  sessionState,
+} from '../auth/session';
 
 const router = useRouter();
 
-function goToLogin() {
+function redirectAccountSession() {
+  if (isAuthenticated() && !isGuestSession()) {
+    router.replace(callListRouteForRole(sessionState.role));
+  }
+}
+
+async function goToLogin() {
+  await logoutSession();
   router.replace('/login');
 }
+
+onMounted(redirectAccountSession);
+watch(
+  () => [sessionState.sessionToken, sessionState.role, sessionState.accountType],
+  redirectAccountSession,
+);
 </script>
 
 <style scoped>

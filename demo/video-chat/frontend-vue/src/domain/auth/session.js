@@ -4,6 +4,7 @@ import { normalizeDateFormat, normalizeTimeFormat } from '../../support/dateTime
 
 const STORAGE_KEY = 'ii_videocall_v1_session';
 const AUTH_ROLES = new Set(['admin', 'user']);
+const ACCOUNT_TYPES = new Set(['account', 'guest']);
 
 function normalizeRole(value) {
   const role = String(value || '').trim().toLowerCase();
@@ -17,6 +18,29 @@ function normalizeTheme(value) {
 
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeAccountType(value) {
+  const accountType = normalizeString(value).toLowerCase();
+  return ACCOUNT_TYPES.has(accountType) ? accountType : '';
+}
+
+function inferAccountType(user) {
+  const explicitType = normalizeAccountType(user?.account_type);
+  if (explicitType !== '') {
+    return explicitType;
+  }
+
+  if (user?.is_guest === true) {
+    return 'guest';
+  }
+
+  const email = normalizeString(user?.email).toLowerCase();
+  if (email.startsWith('guest+') && email.endsWith('@videochat.local')) {
+    return 'guest';
+  }
+
+  return 'account';
 }
 
 function extractErrorMessage(payload, fallback) {
@@ -54,6 +78,8 @@ export const sessionState = reactive({
   displayName: '',
   email: '',
   userId: 0,
+  accountType: '',
+  isGuest: false,
   avatarPath: null,
   timeFormat: '24h',
   dateFormat: 'dmy_dot',
@@ -90,6 +116,8 @@ function resetUserFields() {
   sessionState.displayName = '';
   sessionState.email = '';
   sessionState.userId = 0;
+  sessionState.accountType = '';
+  sessionState.isGuest = false;
   sessionState.avatarPath = null;
   sessionState.timeFormat = '24h';
   sessionState.dateFormat = 'dmy_dot';
@@ -117,6 +145,8 @@ function applyUserSnapshot(user) {
   sessionState.displayName = normalizeString(user.display_name);
   sessionState.email = normalizeString(user.email);
   sessionState.userId = Number.isInteger(user.id) ? user.id : 0;
+  sessionState.accountType = inferAccountType(user);
+  sessionState.isGuest = sessionState.accountType === 'guest';
   sessionState.avatarPath = typeof user.avatar_path === 'string' && normalizeString(user.avatar_path) !== ''
     ? normalizeString(user.avatar_path)
     : null;
@@ -149,8 +179,16 @@ export function isAuthenticated() {
   return !!sessionState.sessionToken && !!normalizeRole(sessionState.role);
 }
 
+export function isGuestSession() {
+  return isAuthenticated() && sessionState.accountType === 'guest';
+}
+
 export function defaultRouteForRole(role) {
   return role === 'admin' ? '/admin/overview' : '/user/dashboard';
+}
+
+export function callListRouteForRole(role) {
+  return role === 'admin' ? '/admin/calls' : '/user/dashboard';
 }
 
 function sessionHeaders() {

@@ -101,6 +101,22 @@ function videochat_extract_session_token(array $request, string $transport): str
     return '';
 }
 
+function videochat_user_account_type(?string $email, mixed $passwordHash): string
+{
+    $normalizedEmail = strtolower(trim((string) ($email ?? '')));
+    $storedHash = is_string($passwordHash) ? trim($passwordHash) : '';
+    if ($storedHash === '' && str_starts_with($normalizedEmail, 'guest+') && str_ends_with($normalizedEmail, '@videochat.local')) {
+        return 'guest';
+    }
+
+    return 'account';
+}
+
+function videochat_user_is_guest_account(?string $email, mixed $passwordHash): bool
+{
+    return videochat_user_account_type($email, $passwordHash) === 'guest';
+}
+
 /**
  * @return array{
  *   ok: bool,
@@ -122,7 +138,9 @@ function videochat_extract_session_token(array $request, string $transport): str
  *     time_format: string,
  *     date_format: string,
  *     theme: string,
- *     avatar_path: ?string
+ *     avatar_path: ?string,
+ *     account_type: string,
+ *     is_guest: bool
  *   }|null
  * }
  */
@@ -151,6 +169,7 @@ SELECT
     users.email,
     users.display_name,
     users.status AS user_status,
+    users.password_hash,
     users.time_format,
     users.date_format,
     users.theme,
@@ -206,6 +225,11 @@ SQL
         ];
     }
 
+    $accountType = videochat_user_account_type(
+        is_string($row['email'] ?? null) ? (string) $row['email'] : '',
+        $row['password_hash'] ?? null
+    );
+
     return [
         'ok' => true,
         'reason' => 'ok',
@@ -227,6 +251,8 @@ SQL
             'date_format' => is_string($row['date_format'] ?? null) ? (string) $row['date_format'] : 'dmy_dot',
             'theme' => is_string($row['theme'] ?? null) ? (string) $row['theme'] : 'dark',
             'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
+            'account_type' => $accountType,
+            'is_guest' => $accountType === 'guest',
         ],
     ];
 }

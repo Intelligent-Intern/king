@@ -1,8 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import {
+  callListRouteForRole,
   defaultRouteForRole,
   ensureSessionRecovery,
   isAuthenticated,
+  isGuestSession,
   sessionState,
 } from '../domain/auth/session';
 
@@ -17,7 +19,7 @@ const routes = [
     path: '/call-goodbye',
     name: 'call-goodbye',
     component: () => import('../domain/calls/CallGoodbyeView.vue'),
-    meta: { public: true },
+    meta: { requiresAuth: true, roles: ['user'] },
   },
   {
     path: '/login',
@@ -121,6 +123,10 @@ router.beforeEach(async (to) => {
 
   if (to.path === '/login' && loggedIn) {
     return defaultRouteForRole(sessionState.role);
+  }
+
+  if (to.name === 'call-goodbye' && loggedIn && !isGuestSession()) {
+    return callListRouteForRole(sessionState.role);
   }
 
   if (requiresAuth && !loggedIn) {

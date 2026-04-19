@@ -511,7 +511,7 @@
 <script setup>
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { sessionState } from '../auth/session';
+import { isGuestSession, sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import {
   buildWebSocketUrl,
@@ -3569,7 +3569,7 @@ function hangupCall() {
   }
 
   const callEntryMode = String(route.query.entry || '').trim().toLowerCase();
-  if (callEntryMode === 'invite') {
+  if (callEntryMode === 'invite' && isGuestSession()) {
     if (String(route.name || '') !== 'call-goodbye') {
       void router.push({ name: 'call-goodbye' });
     }

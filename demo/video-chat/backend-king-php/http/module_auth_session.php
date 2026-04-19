@@ -168,6 +168,8 @@ SQL
                 ':user_agent' => $userAgent === '' ? null : $userAgent,
             ]);
 
+            $accountType = videochat_user_account_type((string) $user['email'], $user['password_hash'] ?? null);
+
             return $jsonResponse(200, [
                 'status' => 'ok',
                 'session' => [
@@ -188,6 +190,8 @@ SQL
                     'date_format' => (string) ($user['date_format'] ?? 'dmy_dot'),
                     'theme' => (string) ($user['theme'] ?? 'dark'),
                     'avatar_path' => is_string($user['avatar_path'] ?? null) ? (string) $user['avatar_path'] : null,
+                    'account_type' => $accountType,
+                    'is_guest' => $accountType === 'guest',
                 ],
                 'time' => gmdate('c'),
             ]);

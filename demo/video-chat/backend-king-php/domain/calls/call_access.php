@@ -149,7 +149,9 @@ function videochat_is_call_joinable_status(string $status): bool
  *   time_format: string,
  *   date_format: string,
  *   theme: string,
- *   avatar_path: ?string
+ *   avatar_path: ?string,
+ *   account_type: string,
+ *   is_guest: bool
  * }|null
  */
 function videochat_fetch_active_user_for_call_access(PDO $pdo, int $userId = 0, ?string $email = null): ?array
@@ -167,6 +169,7 @@ SELECT
     users.email,
     users.display_name,
     users.status,
+    users.password_hash,
     users.time_format,
     users.date_format,
     users.theme,
@@ -188,6 +191,7 @@ SELECT
     users.email,
     users.display_name,
     users.status,
+    users.password_hash,
     users.time_format,
     users.date_format,
     users.theme,
@@ -208,6 +212,11 @@ SQL
         return null;
     }
 
+    $accountType = videochat_user_account_type(
+        is_string($row['email'] ?? null) ? (string) $row['email'] : '',
+        $row['password_hash'] ?? null
+    );
+
     return [
         'id' => (int) ($row['id'] ?? 0),
         'email' => (string) ($row['email'] ?? ''),
@@ -218,6 +227,8 @@ SQL
         'date_format' => (string) ($row['date_format'] ?? 'dmy_dot'),
         'theme' => (string) ($row['theme'] ?? 'dark'),
         'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
+        'account_type' => $accountType,
+        'is_guest' => $accountType === 'guest',
     ];
 }
 
@@ -754,6 +765,8 @@ SQL
             'date_format' => (string) ($targetUser['date_format'] ?? 'dmy_dot'),
             'theme' => (string) ($targetUser['theme'] ?? 'dark'),
             'avatar_path' => is_string($targetUser['avatar_path'] ?? null) ? (string) $targetUser['avatar_path'] : null,
+            'account_type' => (string) ($targetUser['account_type'] ?? 'account'),
+            'is_guest' => (bool) ($targetUser['is_guest'] ?? false),
         ],
         'access_link' => is_array($freshLink) ? $freshLink : $accessLink,
         'call' => is_array($freshCall['call'] ?? null) ? $freshCall['call'] : $call,
