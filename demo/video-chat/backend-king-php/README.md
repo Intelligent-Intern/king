@@ -163,6 +163,12 @@ Current schema coverage includes:
 - `call_participants`
 - `invite_codes`
 
+`call_participants.invite_state` is the persistent call-admission state:
+`invited` for assigned users, `pending` after the user clicks `Join call` in the
+join modal, `allowed` after an owner/moderator admits the pending user, and
+`declined`/`cancelled` for explicit non-join outcomes. Legacy `accepted` rows are
+migrated as allowed admission.
+
 `/health` and `/api/runtime` now include the database migration/runtime
 snapshot (schema version, migration counts, table inventory, seeded demo users,
 and seeded demo calls when enabled).
@@ -276,10 +282,11 @@ Response includes:
 
 - required fields: `title`, `starts_at`, `ends_at`
 - optional fields:
-  - `room_id` (default `lobby`)
+  - `room_id` (compatibility input only; create always allocates a private room with `room_id = call.id`)
   - `internal_participant_user_ids` (array of active user ids)
   - `external_participants` (`[{email, display_name}]`)
 - owner is always included as internal participant mapping
+- persisted calls never default to the shared `lobby`; each call workspace gets its own generated UUID room
 - validation failures: `422 calls_create_validation_failed` with `error.details.fields`
 - success: `201`, with `result.call` containing normalized owner + participants + totals
 
@@ -343,6 +350,8 @@ Response includes:
 
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).
+Optional query `?call_id=<call-id>` scopes admission/moderation resolution to a
+specific call for legacy/non-dedicated room rows.
 
 Presence channel contract on `WS /ws`:
 
@@ -367,6 +376,7 @@ Presence channel contract on `WS /ws`:
   - `{"type":"reaction/send_batch","emojis":["👍","😂"],"client_reaction_id":"..."}` (optional `client_reaction_id`)
   - `{"type":"lobby/queue/request"}`
   - `{"type":"lobby/queue/join"}`
+  - `{"type":"lobby/queue/cancel"}` (self-removes the current user from queued/admitted lobby state)
   - `{"type":"lobby/allow","target_user_id":123}` (`admin`/`moderator` only)
   - `{"type":"lobby/remove","target_user_id":123}` (`admin`/`moderator` only)
   - `{"type":"lobby/allow_all"}` (`admin`/`moderator` only)
@@ -390,8 +400,10 @@ Presence channel contract on `WS /ws`:
   - typing indicators are room-scoped, debounced, expire automatically, never self-echo, and fail closed when sender room membership is invalid
   - reaction events are room-scoped, enforce emoji/client-id payload boundaries, accept both single and client-batched sends, and switch to server-side `reaction/batch` fanout once per-user reaction volume exceeds the configured flood threshold (`VIDEOCHAT_WS_REACTION_FLOOD_WINDOW_MS`, `VIDEOCHAT_WS_REACTION_FLOOD_THRESHOLD_PER_WINDOW`, `VIDEOCHAT_WS_REACTION_FLOOD_BATCH_SIZE`)
   - lobby queue updates are room-scoped snapshots (`lobby/snapshot`) driven by server-authoritative queue/admitted state
+  - authenticated websocket attach never queues a waiting-room user by itself; invited users become `pending` only after the explicit `lobby/queue/join` command from the join-call flow, and the join-call modal remains open until an owner/moderator admits the user
+  - waiting-room users can cancel their own queued/admitted handoff with `lobby/queue/cancel`; cancel or websocket disconnect resets a `pending` participant back to `invited`, while an admitted handoff is preserved long enough for the admitted browser to reconnect into the call
   - moderator actions (`lobby/allow`, `lobby/remove`, `lobby/allow_all`) are fail-closed for non-moderator roles and for senders not actively present in the room
-  - queue/admitted entries are cleaned when a user disconnects or changes rooms
+  - queue/admitted entries are cleaned when a user cancels, joins the admitted room, disconnects from an active room, or changes rooms
   - signaling commands are target-routed (`call/offer`, `call/answer`, `call/ice`, `call/hangup`) and only delivered when sender+target room authorization is valid
   - invalid signaling authorization paths (invalid sender, sender-not-in-room, missing/invalid/self/not-in-room target) fail closed as `system/error` without cross-room leakage
   - accepted signaling publishes emit `call/ack` to the sender with `signal_id`, `signal_type`, and `sent_count`

@@ -14,7 +14,6 @@
         Yes, I am in
       </button>
     </section>
-
     <section class="workspace-call-body" :class="{ 'right-collapsed': rightSidebarCollapsed }">
       <section class="workspace-stage" :class="{ compact: isCompactHeaderVisible }">
         <header v-if="isCompactHeaderVisible" class="workspace-compact-header">
@@ -656,6 +655,12 @@ function normalizeRoomId(value) {
   return /^[a-z0-9._-]+$/.test(candidate) ? candidate : 'lobby';
 }
 
+function normalizeOptionalRoomId(value) {
+  const candidate = String(value || '').trim().toLowerCase();
+  if (candidate === '' || candidate.length > 120) return '';
+  return /^[a-z0-9._-]+$/.test(candidate) ? candidate : '';
+}
+
 function normalizeRole(value) {
   const role = String(value || '').trim().toLowerCase();
   if (role === 'admin') return role;
@@ -808,9 +813,19 @@ async function apiRequest(path, { method = 'GET', query = null, body = null } = 
   return payload;
 }
 
-function socketUrlForRoom(roomId, socketOrigin) {
+function normalizeSocketCallId(value) {
+  const normalized = String(value || '').trim();
+  if (normalized === '') return '';
+  return /^[A-Za-z0-9._-]{1,200}$/.test(normalized) ? normalized : '';
+}
+
+function socketUrlForRoom(roomId, socketOrigin, callId = '') {
   const query = new URLSearchParams();
   query.set('room', normalizeRoomId(roomId));
+  const normalizedCallId = normalizeSocketCallId(callId);
+  if (normalizedCallId !== '') {
+    query.set('call_id', normalizedCallId);
+  }
 
   const token = String(sessionState.sessionToken || '').trim();
   if (token !== '') {
@@ -944,6 +959,10 @@ const routeCallResolve = reactive({
 });
 let routeCallResolveSeq = 0;
 const pendingAdmissionJoinRoomId = ref('');
+const admissionGateState = reactive({
+  roomId: '',
+  message: '',
+});
 const hasRealtimeRoomSync = ref(false);
 
 const sfuClientRef = ref(null);
@@ -982,6 +1001,10 @@ const routeCallRef = computed(() => String(route.params.callRef || '').trim());
 const desiredRoomId = computed(() => normalizeRoomId(routeCallResolve.roomId || routeCallRef.value || 'lobby'));
 const activeRoomId = computed(() => normalizeRoomId(serverRoomId.value || desiredRoomId.value));
 const currentUserId = computed(() => (Number.isInteger(sessionState.userId) ? sessionState.userId : 0));
+const showAdmissionGate = computed(() => {
+  const gateRoomId = normalizeOptionalRoomId(admissionGateState.roomId);
+  return gateRoomId !== '' && activeRoomId.value !== gateRoomId;
+});
 const canModerate = computed(() => (
   normalizeRole(sessionState.role) === 'admin'
   || viewerCallRole.value === 'owner'
@@ -1700,6 +1723,26 @@ function setNotice(message, kind = 'ok') {
   } else {
     workspaceError.value = '';
   }
+}
+
+function setAdmissionGate(roomId, message = '') {
+  const normalizedRoomId = normalizeOptionalRoomId(roomId);
+  if (normalizedRoomId === '') return;
+  admissionGateState.roomId = normalizedRoomId;
+  admissionGateState.message = String(message || '').trim();
+}
+
+function clearAdmissionGate(roomId = '') {
+  const normalizedRoomId = normalizeOptionalRoomId(roomId);
+  if (normalizedRoomId !== '' && admissionGateState.roomId !== normalizedRoomId) {
+    return;
+  }
+  admissionGateState.roomId = '';
+  admissionGateState.message = '';
+}
+
+function shouldShowWorkspaceAdmissionNotice() {
+  return false;
 }
 
 function normalizeSignalCommandType(type) {
@@ -2668,11 +2711,27 @@ function requestLobbyJoin(roomId = '', options = {}) {
   const announce = options && typeof options === 'object' && options.announce === false ? false : true;
   if (!sendSocketFrame({ type: 'lobby/queue/join', room_id: targetRoomId })) {
     setNotice('Could not join lobby queue while websocket is offline.', 'error');
-    return;
+    return false;
   }
-  if (announce) {
-    setNotice('The host has been notified. Waiting for approval.');
+  setAdmissionGate(targetRoomId);
+  if (announce && shouldShowWorkspaceAdmissionNotice()) {
+    setNotice('Admission request sent.');
   }
+  return true;
+}
+
+function requestLobbyCancel(roomId = '') {
+  const targetRoomId = normalizeRoomId(roomId || admissionGateState.roomId || desiredRoomId.value || activeRoomId.value || 'lobby');
+  return sendSocketFrame({ type: 'lobby/queue/cancel', room_id: targetRoomId });
+}
+
+function cancelAdmissionWait() {
+  const targetRoomId = normalizeOptionalRoomId(admissionGateState.roomId || desiredRoomId.value || activeRoomId.value);
+  if (targetRoomId !== '') {
+    requestLobbyCancel(targetRoomId);
+  }
+  clearAdmissionGate(targetRoomId);
+  hangupCall();
 }
 
 function tryDirectJoinWithModeratorBypass(roomId = '') {
@@ -3001,6 +3060,9 @@ function applyRoomSnapshot(payload) {
   if (pendingAdmissionJoinRoomId.value === roomId) {
     pendingAdmissionJoinRoomId.value = '';
   }
+  if (roomId === desiredRoomId.value) {
+    clearAdmissionGate(roomId);
+  }
   ensureRoomBuckets(roomId);
   applyViewerContext(payload?.viewer || null);
 
@@ -3099,9 +3161,13 @@ function handleSocketMessage(event) {
     const pendingRoomId = normalizeRoomId(admission?.pending_room_id || '');
     if (requiresAdmission && pendingRoomId !== '') {
       if (!tryDirectJoinWithModeratorBypass(pendingRoomId)) {
-        requestLobbyJoin(pendingRoomId);
+        setAdmissionGate(pendingRoomId);
+        requestLobbyJoin(pendingRoomId, { announce: false });
+        requestRoomSnapshot();
+        return;
       }
     }
+    clearAdmissionGate();
     requestRoomSnapshot();
     if (desiredRoomId.value !== welcomeRoom) {
       void sendRoomJoin(desiredRoomId.value);
@@ -3179,10 +3245,18 @@ function handleSocketMessage(event) {
     if (code === 'reaction_publish_failed') {
       return;
     }
+    if (
+      code === 'lobby_command_failed'
+      && (failedCommandType === 'lobby/queue/join' || failedCommandType === 'lobby/queue/request' || failedCommandType === 'lobby/queue/cancel')
+      && showAdmissionGate.value
+    ) {
+      return;
+    }
     if (code === 'room_join_requires_admission' || code === 'room_join_not_allowed') {
       const pendingRoomId = normalizeRoomId(payload?.details?.pending_room_id || desiredRoomId.value);
       if (!tryDirectJoinWithModeratorBypass(pendingRoomId)) {
-        requestLobbyJoin(pendingRoomId);
+        setAdmissionGate(pendingRoomId);
+        requestLobbyJoin(pendingRoomId, { announce: false });
       }
       return;
     }
@@ -3348,6 +3422,7 @@ async function connectSocket() {
   manualSocketClose = false;
   hasRealtimeRoomSync.value = false;
   pendingAdmissionJoinRoomId.value = '';
+  clearAdmissionGate();
   lobbyNotificationState.hasSnapshot = false;
   hideLobbyJoinToast();
   connectionState.value = 'retrying';
@@ -3390,7 +3465,8 @@ async function connectSocket() {
     }
 
     const socketOrigin = orderedSocketOrigins[originIndex] || '';
-    const socketUrl = socketUrlForRoom(desiredRoomId.value, socketOrigin);
+    const socketCallId = normalizeSocketCallId(activeCallId.value || routeCallResolve.callId || '');
+    const socketUrl = socketUrlForRoom(desiredRoomId.value, socketOrigin, socketCallId);
     if (!socketUrl) {
       connectWithOriginAt(originIndex + 1);
       return;
@@ -3910,7 +3986,8 @@ function initSFU() {
 
   sfuClientRef.value.connect(
     { userId: String(sessionState.userId), token, name: sessionState.displayName || 'User' },
-    activeRoomId.value
+    activeRoomId.value,
+    normalizeSocketCallId(activeCallId.value || routeCallResolve.callId || '')
   );
   sfuConnected.value = false;
 }

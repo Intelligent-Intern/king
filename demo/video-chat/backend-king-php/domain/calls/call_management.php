@@ -43,6 +43,21 @@ function videochat_normalize_call_access_mode(mixed $value, string $fallback = '
     return $fallbackNormalized;
 }
 
+function videochat_normalize_call_invite_state(mixed $value, string $fallback = 'invited'): string
+{
+    $fallbackNormalized = strtolower(trim($fallback));
+    if ($fallbackNormalized !== '' && !in_array($fallbackNormalized, ['invited', 'pending', 'allowed', 'accepted', 'declined', 'cancelled'], true)) {
+        $fallbackNormalized = 'invited';
+    }
+
+    $normalized = strtolower(trim((string) $value));
+    if (in_array($normalized, ['invited', 'pending', 'allowed', 'accepted', 'declined', 'cancelled'], true)) {
+        return $normalized;
+    }
+
+    return $fallbackNormalized;
+}
+
 /**
  * @return array{
  *   ok: bool,
@@ -249,20 +264,6 @@ function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload): arra
         ];
     }
 
-    $roomQuery = $pdo->prepare('SELECT id FROM rooms WHERE id = :id AND status = :status LIMIT 1');
-    $roomQuery->execute([
-        ':id' => (string) $data['room_id'],
-        ':status' => 'active',
-    ]);
-    if ($roomQuery->fetch() === false) {
-        return [
-            'ok' => false,
-            'reason' => 'validation_failed',
-            'errors' => ['room_id' => 'room_not_found_or_inactive'],
-            'call' => null,
-        ];
-    }
-
     $requestedInternalIds = array_values(array_filter(
         array_map('intval', $data['internal_participant_user_ids']),
         static fn (int $id): bool => $id > 0
@@ -289,7 +290,7 @@ function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload): arra
         'display_name' => (string) $owner['display_name'],
         'source' => 'internal',
         'call_role' => 'owner',
-        'invite_state' => 'accepted',
+        'invite_state' => 'allowed',
         'is_owner' => true,
     ];
 
@@ -305,7 +306,7 @@ function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload): arra
             'display_name' => (string) $internalUser['display_name'],
             'source' => 'internal',
             'call_role' => 'participant',
-            'invite_state' => 'pending',
+            'invite_state' => 'invited',
             'is_owner' => false,
         ];
     }
@@ -328,11 +329,12 @@ function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload): arra
             'email' => $email,
             'display_name' => (string) ($external['display_name'] ?? ''),
             'source' => 'external',
-            'invite_state' => 'pending',
+            'invite_state' => 'invited',
         ];
     }
 
     $callId = videochat_generate_call_id();
+    $callRoomId = $callId;
     $createdAt = gmdate('c');
     $startsAt = (string) $data['starts_at'];
     $endsAt = (string) $data['ends_at'];
@@ -346,6 +348,20 @@ function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload): arra
 
     $pdo->beginTransaction();
     try {
+        $insertRoom = $pdo->prepare(
+            <<<'SQL'
+INSERT OR IGNORE INTO rooms(id, name, visibility, status, created_by_user_id, created_at, updated_at)
+VALUES(:id, :name, 'private', 'active', :created_by_user_id, :created_at, :updated_at)
+SQL
+        );
+        $insertRoom->execute([
+            ':id' => $callRoomId,
+            ':name' => (string) $data['title'],
+            ':created_by_user_id' => (int) $owner['id'],
+            ':created_at' => $createdAt,
+            ':updated_at' => $createdAt,
+        ]);
+
         $insertCall = $pdo->prepare(
             <<<'SQL'
 INSERT INTO calls(
@@ -357,7 +373,7 @@ SQL
         );
         $insertCall->execute([
             ':id' => $callId,
-            ':room_id' => (string) $data['room_id'],
+            ':room_id' => $callRoomId,
             ':title' => (string) $data['title'],
             ':access_mode' => (string) $data['access_mode'],
             ':owner_user_id' => (int) $owner['id'],
@@ -421,7 +437,7 @@ SQL
         'errors' => [],
         'call' => [
             'id' => $callId,
-            'room_id' => (string) $data['room_id'],
+            'room_id' => $callRoomId,
             'title' => (string) $data['title'],
             'access_mode' => (string) $data['access_mode'],
             'status' => $initialStatus,
@@ -599,7 +615,7 @@ SQL
         }
 
         $source = strtolower(trim((string) ($row['source'] ?? '')));
-        $inviteState = (string) ($row['invite_state'] ?? 'pending');
+        $inviteState = videochat_normalize_call_invite_state($row['invite_state'] ?? 'invited');
         if ($source === 'internal') {
             $callRole = strtolower(trim((string) ($row['call_role'] ?? 'participant')));
             if (!in_array($callRole, ['owner', 'moderator', 'participant'], true)) {
@@ -921,6 +937,7 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
     $participantsNeedUpdate = (bool) $data['has_internal_participants'] || (bool) $data['has_external_participants'];
     $currentParticipants = videochat_fetch_call_participants($pdo, (string) $existingCall['id']);
     $currentInternalRoleByUserId = [];
+    $currentInternalInviteStateByUserId = [];
     foreach ((array) ($currentParticipants['internal'] ?? []) as $participant) {
         $participantUserId = (int) ($participant['user_id'] ?? 0);
         if ($participantUserId <= 0) {
@@ -931,6 +948,9 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
             $participantRole = 'participant';
         }
         $currentInternalRoleByUserId[$participantUserId] = $participantRole;
+        $currentInternalInviteStateByUserId[$participantUserId] = videochat_normalize_call_invite_state(
+            $participant['invite_state'] ?? 'invited'
+        );
     }
 
     if ((bool) $data['has_internal_participants']) {
@@ -956,7 +976,7 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
             'email' => $ownerEmail,
             'display_name' => (string) $existingCall['owner_display_name'],
             'call_role' => 'owner',
-            'invite_state' => 'accepted',
+            'invite_state' => 'allowed',
             'is_owner' => true,
         ];
 
@@ -971,7 +991,7 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
                 'call_role' => (($currentInternalRoleByUserId[(int) $internalUser['id']] ?? 'participant') === 'moderator')
                     ? 'moderator'
                     : 'participant',
-                'invite_state' => 'pending',
+                'invite_state' => $currentInternalInviteStateByUserId[(int) $internalUser['id']] ?? 'invited',
                 'is_owner' => false,
             ];
         }
@@ -987,7 +1007,7 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
                 'email' => strtolower((string) ($participant['email'] ?? '')),
                 'display_name' => (string) ($participant['display_name'] ?? ''),
                 'call_role' => (string) ($participant['call_role'] ?? ($userId === (int) $existingCall['owner_user_id'] ? 'owner' : 'participant')),
-                'invite_state' => (string) ($participant['invite_state'] ?? 'pending'),
+                'invite_state' => videochat_normalize_call_invite_state($participant['invite_state'] ?? 'invited'),
                 'is_owner' => $userId === (int) $existingCall['owner_user_id'],
             ];
         }
@@ -999,7 +1019,7 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
                 return [
                     'email' => strtolower((string) ($participant['email'] ?? '')),
                     'display_name' => (string) ($participant['display_name'] ?? ''),
-                    'invite_state' => 'pending',
+                    'invite_state' => 'invited',
                 ];
             },
             (array) $data['external_participants']
@@ -1010,7 +1030,7 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
             $nextExternalParticipants[] = [
                 'email' => strtolower((string) ($participant['email'] ?? '')),
                 'display_name' => (string) ($participant['display_name'] ?? ''),
-                'invite_state' => (string) ($participant['invite_state'] ?? 'pending'),
+                'invite_state' => videochat_normalize_call_invite_state($participant['invite_state'] ?? 'invited'),
             ];
         }
     }
@@ -1174,7 +1194,7 @@ SQL
                             'email' => (string) ($participant['email'] ?? ''),
                             'display_name' => (string) ($participant['display_name'] ?? ''),
                             'call_role' => $callRole,
-                            'invite_state' => (string) ($participant['invite_state'] ?? 'pending'),
+                            'invite_state' => videochat_normalize_call_invite_state($participant['invite_state'] ?? 'invited'),
                             'is_owner' => (bool) ($participant['is_owner'] ?? false),
                             'is_moderator' => $callRole === 'moderator',
                         ];
@@ -1186,7 +1206,7 @@ SQL
                         return [
                             'email' => (string) ($participant['email'] ?? ''),
                             'display_name' => (string) ($participant['display_name'] ?? ''),
-                            'invite_state' => (string) ($participant['invite_state'] ?? 'pending'),
+                            'invite_state' => videochat_normalize_call_invite_state($participant['invite_state'] ?? 'invited'),
                         ];
                     },
                     $nextExternalParticipants
@@ -1572,7 +1592,7 @@ function videochat_build_call_payload(PDO $pdo, array $callRecord, int $authUser
                 'email' => (string) ($participant['email'] ?? ''),
                 'display_name' => (string) ($participant['display_name'] ?? ''),
                 'call_role' => $callRole,
-                'invite_state' => (string) ($participant['invite_state'] ?? 'pending'),
+                'invite_state' => videochat_normalize_call_invite_state($participant['invite_state'] ?? 'invited'),
                 'is_owner' => $callRole === 'owner',
                 'is_moderator' => $callRole === 'moderator',
             ];
@@ -1584,7 +1604,7 @@ function videochat_build_call_payload(PDO $pdo, array $callRecord, int $authUser
             return [
                 'email' => (string) ($participant['email'] ?? ''),
                 'display_name' => (string) ($participant['display_name'] ?? ''),
-                'invite_state' => (string) ($participant['invite_state'] ?? 'pending'),
+                'invite_state' => videochat_normalize_call_invite_state($participant['invite_state'] ?? 'invited'),
             ];
         },
         (array) ($participants['external'] ?? [])
@@ -1772,7 +1792,7 @@ SQL
 UPDATE call_participants
 SET call_role = 'owner',
     invite_state = CASE
-        WHEN invite_state = 'pending' THEN 'accepted'
+        WHEN invite_state IN ('invited', 'pending', 'accepted') THEN 'allowed'
         ELSE invite_state
     END
 WHERE call_id = :call_id
@@ -1843,6 +1863,7 @@ SQL
  * @return array{
  *   call_id: string,
  *   call_role: string,
+ *   invite_state: string,
  *   can_moderate: bool
  * }
  */
@@ -1851,6 +1872,7 @@ function videochat_call_role_context_for_room_user(PDO $pdo, string $roomId, int
     $fallback = [
         'call_id' => '',
         'call_role' => 'participant',
+        'invite_state' => 'invited',
         'can_moderate' => false,
     ];
     if ($userId <= 0) {
@@ -1867,7 +1889,8 @@ function videochat_call_role_context_for_room_user(PDO $pdo, string $roomId, int
 SELECT
     calls.id,
     calls.owner_user_id,
-    cp.call_role
+    cp.call_role,
+    cp.invite_state
 FROM calls
 LEFT JOIN call_participants cp
     ON cp.call_id = calls.id
@@ -1906,6 +1929,7 @@ SQL
     return [
         'call_id' => (string) ($row['id'] ?? ''),
         'call_role' => $callRole,
+        'invite_state' => videochat_normalize_call_invite_state($row['invite_state'] ?? 'invited'),
         'can_moderate' => in_array($callRole, ['owner', 'moderator'], true),
     ];
 }

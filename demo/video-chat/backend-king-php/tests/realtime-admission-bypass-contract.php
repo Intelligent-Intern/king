@@ -45,7 +45,8 @@ CREATE TABLE call_participants (
     call_id TEXT NOT NULL,
     user_id INTEGER NOT NULL,
     source TEXT NOT NULL,
-    call_role TEXT NOT NULL
+    call_role TEXT NOT NULL,
+    invite_state TEXT NOT NULL DEFAULT 'invited'
 )
 SQL
     );
@@ -63,6 +64,15 @@ SQL
         ':status' => 'active',
         ':starts_at' => '2026-04-17T00:00:00Z',
         ':created_at' => '2026-04-17T00:00:00Z',
+    ]);
+
+    $insertCall->execute([
+        ':id' => 'call-user79-moderator-room',
+        ':room_id' => 'demo-call-room',
+        ':owner_user_id' => 11,
+        ':status' => 'active',
+        ':starts_at' => '2026-04-16T00:00:00Z',
+        ':created_at' => '2026-04-16T00:00:00Z',
     ]);
 
     $insertParticipant = $pdo->prepare(
@@ -84,6 +94,13 @@ SQL
         ':user_id' => 79,
         ':source' => 'internal',
         ':call_role' => 'participant',
+    ]);
+
+    $insertParticipant->execute([
+        ':call_id' => 'call-user79-moderator-room',
+        ':user_id' => 79,
+        ':source' => 'internal',
+        ':call_role' => 'moderator',
     ]);
 
     $openDatabase = static function () use ($pdo): PDO {
@@ -118,12 +135,45 @@ SQL
         'user_id' => 79,
         'role' => 'user',
         'call_role' => 'participant',
+        'requested_call_id' => 'call-owner-room',
         'requested_room_id' => 'demo-call-room',
         'pending_room_id' => 'demo-call-room',
     ];
     videochat_realtime_admission_bypass_assert(
         !videochat_realtime_connection_can_bypass_admission_for_room($participantConnection, 'demo-call-room', $openDatabase),
-        'normal participant must not bypass admission'
+        'participant must not bypass admission when requested_call_id is non-moderator call'
+    );
+
+    $pdo->exec("UPDATE call_participants SET invite_state = 'allowed' WHERE call_id = 'call-owner-room' AND user_id = 79");
+    $allowedParticipantConnection = [
+        'user_id' => 79,
+        'role' => 'user',
+        'call_role' => 'participant',
+        'requested_call_id' => 'call-owner-room',
+        'requested_room_id' => 'demo-call-room',
+        'pending_room_id' => 'demo-call-room',
+    ];
+    videochat_realtime_admission_bypass_assert(
+        videochat_realtime_connection_can_bypass_admission_for_room($allowedParticipantConnection, 'demo-call-room', $openDatabase),
+        'allowed participant must bypass admission after owner approval'
+    );
+    $pdo->exec("UPDATE call_participants SET invite_state = 'invited' WHERE call_id = 'call-owner-room' AND user_id = 79");
+
+    $participantModeratorElsewhereConnection = [
+        'user_id' => 79,
+        'role' => 'user',
+        'call_role' => 'participant',
+        'requested_call_id' => 'call-user79-moderator-room',
+        'requested_room_id' => 'demo-call-room',
+        'pending_room_id' => 'demo-call-room',
+    ];
+    videochat_realtime_admission_bypass_assert(
+        videochat_realtime_connection_can_bypass_admission_for_room(
+            $participantModeratorElsewhereConnection,
+            'demo-call-room',
+            $openDatabase
+        ),
+        'participant must bypass admission when requested_call_id is moderator call'
     );
 
     $adminConnection = [

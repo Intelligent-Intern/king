@@ -232,7 +232,13 @@
             <span class="mobile-menu-btn-bars" aria-hidden="true"></span>
           </button>
         </div>
-        <div class="workspace">
+        <div
+          class="workspace"
+          :class="{
+            'workspace-has-header': showWorkspaceHeader,
+            'workspace-no-header': !showWorkspaceHeader,
+          }"
+        >
           <section v-if="showWorkspaceHeader" class="section">
             <div class="section-head">
               <div class="section-head-left">
@@ -256,6 +262,14 @@
                   <button class="btn btn-cyan" type="button" @click="openCallsRegistry">Open Calls</button>
                   <button class="btn btn-cyan" type="button" @click="openGrafana">Open Grafana</button>
                 </template>
+                <button
+                  v-else-if="route.name === 'user-dashboard'"
+                  class="btn btn-cyan"
+                  type="button"
+                  @click="openUserCreateCall"
+                >
+                  New call
+                </button>
                 <button v-else class="btn" type="button" @click="openSettingsModal('about-me')">Settings</button>
               </div>
             </div>
@@ -425,7 +439,7 @@
                       </section>
 
                       <section class="toolbar calls-toolbar settings-theme-preview-calls-toolbar">
-                        <div class="calls-toolbar-left">
+                        <div class="calls-toolbar-left settings-theme-preview-calls-toolbar-left">
                           <div class="calls-view-tabs" role="tablist" aria-label="Calls view mode preview">
                             <button
                               class="tab"
@@ -448,10 +462,11 @@
                               Calender
                             </button>
                           </div>
-                        </div>
 
-                        <div class="calls-toolbar-right">
-                          <label class="calls-search calls-search-main" aria-label="Preview call search">
+                          <label
+                            class="calls-search calls-search-main settings-theme-preview-inline-search"
+                            aria-label="Preview call search"
+                          >
                             <input
                               v-model="settingsThemePreview.query"
                               class="input"
@@ -460,7 +475,9 @@
                               @keydown.enter.prevent="applySettingsThemePreviewFilters"
                             />
                           </label>
+                        </div>
 
+                        <div class="calls-toolbar-right">
                           <AppSelect v-model="settingsThemePreview.status" @change="applySettingsThemePreviewFilters">
                             <option value="all">All status</option>
                             <option value="scheduled">Scheduled</option>
@@ -883,6 +900,7 @@ const TABLET_BREAKPOINT = 1180;
 const MOBILE_BREAKPOINT = 760;
 const SETTINGS_LANGUAGE_STORAGE_KEY = 'ii_videocall_v1_workspace_language';
 const SETTINGS_THEME_COLORS_STORAGE_KEY = 'ii_videocall_v1_theme_colors';
+const USER_CALL_CREATE_EVENT = 'king:user-calls:create';
 const SUPPORTED_SETTINGS_LANGUAGES = ['en', 'de', 'fr', 'es'];
 const themeColorFields = Object.freeze([
   { key: '--bg-shell', label: 'Shell background', default: '#0b1324' },
@@ -2216,6 +2234,11 @@ function openCallsRegistry() {
 
 function openGrafana() {
   window.open('https://grafana.example.local', '_blank', 'noopener,noreferrer');
+}
+
+function openUserCreateCall() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(USER_CALL_CREATE_EVENT));
 }
 
 function resetSettingsDraft() {

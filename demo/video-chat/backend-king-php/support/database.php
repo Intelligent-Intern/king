@@ -302,7 +302,7 @@ function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null
             'email' => strtolower(trim((string) ($user['email'] ?? ''))),
             'display_name' => (string) ($user['display_name'] ?? 'User'),
             'call_role' => $index === 0 ? 'owner' : ($index === 1 ? 'moderator' : 'participant'),
-            'invite_state' => 'accepted',
+            'invite_state' => $index === 0 ? 'allowed' : 'invited',
             'joined_at' => null,
             'left_at' => null,
         ];
@@ -311,6 +311,7 @@ function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null
     $activeParticipants = [];
     foreach ($baseInternalParticipants as $participant) {
         $participant['joined_at'] = gmdate('c', $effectiveNow - 600);
+        $participant['invite_state'] = 'allowed';
         $activeParticipants[] = $participant;
     }
 
@@ -337,7 +338,7 @@ function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null
                     'email' => 'guest.architecture@example.com',
                     'display_name' => 'Guest Architect',
                     'call_role' => 'participant',
-                    'invite_state' => 'pending',
+                    'invite_state' => 'invited',
                     'joined_at' => null,
                     'left_at' => null,
                 ],
@@ -532,9 +533,9 @@ SQL
                 $displayName = $email;
             }
 
-            $inviteState = strtolower(trim((string) ($participant['invite_state'] ?? 'pending')));
-            if (!in_array($inviteState, ['pending', 'accepted', 'declined', 'cancelled'], true)) {
-                $inviteState = 'pending';
+            $inviteState = strtolower(trim((string) ($participant['invite_state'] ?? 'invited')));
+            if (!in_array($inviteState, ['invited', 'pending', 'allowed', 'accepted', 'declined', 'cancelled'], true)) {
+                $inviteState = 'invited';
             }
 
             $callRole = strtolower(trim((string) ($participant['call_role'] ?? 'participant')));
@@ -688,7 +689,7 @@ CREATE TABLE IF NOT EXISTS call_participants (
     email TEXT NOT NULL,
     display_name TEXT NOT NULL,
     source TEXT NOT NULL CHECK (source IN ('internal', 'external')),
-    invite_state TEXT NOT NULL DEFAULT 'pending' CHECK (invite_state IN ('pending', 'accepted', 'declined', 'cancelled')),
+    invite_state TEXT NOT NULL DEFAULT 'invited' CHECK (invite_state IN ('invited', 'pending', 'allowed', 'accepted', 'declined', 'cancelled')),
     joined_at TEXT,
     left_at TEXT,
     PRIMARY KEY (call_id, email)
@@ -902,6 +903,57 @@ WHERE date_format IS NULL
    OR trim(date_format) = ''
    OR lower(date_format) NOT IN ('dmy_dot', 'dmy_slash', 'dmy_dash', 'ymd_dash', 'ymd_slash', 'ymd_dot', 'ymd_compact', 'mdy_slash', 'mdy_dash', 'mdy_dot')
 SQL,
+            ],
+        ],
+        12 => [
+            'name' => '0012_call_participant_admission_states',
+            'statements' => [
+                <<<'SQL'
+ALTER TABLE call_participants RENAME TO call_participants_0012_old
+SQL,
+                <<<'SQL'
+CREATE TABLE call_participants (
+    call_id TEXT NOT NULL REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    email TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    source TEXT NOT NULL CHECK (source IN ('internal', 'external')),
+    invite_state TEXT NOT NULL DEFAULT 'invited' CHECK (invite_state IN ('invited', 'pending', 'allowed', 'accepted', 'declined', 'cancelled')),
+    joined_at TEXT,
+    left_at TEXT,
+    call_role TEXT NOT NULL DEFAULT 'participant' CHECK (call_role IN ('owner', 'moderator', 'participant')),
+    PRIMARY KEY (call_id, email)
+)
+SQL,
+                <<<'SQL'
+INSERT INTO call_participants(call_id, user_id, email, display_name, source, invite_state, joined_at, left_at, call_role)
+SELECT
+    call_id,
+    user_id,
+    email,
+    display_name,
+    CASE
+        WHEN lower(trim(coalesce(source, ''))) IN ('internal', 'external') THEN lower(trim(source))
+        ELSE 'external'
+    END,
+    CASE
+        WHEN lower(trim(coalesce(invite_state, ''))) = 'accepted' THEN 'allowed'
+        WHEN lower(trim(coalesce(invite_state, ''))) = 'pending' THEN 'invited'
+        WHEN lower(trim(coalesce(invite_state, ''))) IN ('invited', 'allowed', 'declined', 'cancelled') THEN lower(trim(invite_state))
+        ELSE 'invited'
+    END,
+    joined_at,
+    left_at,
+    CASE
+        WHEN lower(trim(coalesce(call_role, ''))) IN ('owner', 'moderator', 'participant') THEN lower(trim(call_role))
+        ELSE 'participant'
+    END
+FROM call_participants_0012_old
+SQL,
+                <<<'SQL'
+DROP TABLE call_participants_0012_old
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_call_participants_user_id ON call_participants(user_id)",
             ],
         ],
     ];

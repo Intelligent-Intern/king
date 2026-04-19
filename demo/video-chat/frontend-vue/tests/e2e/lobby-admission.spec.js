@@ -205,7 +205,7 @@ test('admin creates/invites and admits user from lobby, mini strip shows partici
 
     const adminEnterCallModal = adminPage.getByRole('dialog', { name: 'Enter video call' });
     await expect(adminEnterCallModal).toBeVisible();
-    await adminEnterCallModal.getByRole('button', { name: /Open call|Join call/i }).click();
+    await adminEnterCallModal.getByRole('button', { name: /Join call/i }).click();
 
     await adminPage.waitForURL(/\/workspace\/call\/[^/]+$/, { timeout: 30_000 });
     await expect(adminPage.locator('.workspace-main-video')).toBeVisible({ timeout: 12_000 });
@@ -217,9 +217,7 @@ test('admin creates/invites and admits user from lobby, mini strip shows partici
     const joinCallModal = userPage.getByRole('dialog', { name: 'Join video call' });
     await expect(joinCallModal).toBeVisible({ timeout: 15_000 });
     await joinCallModal.getByRole('button', { name: /Join call/i }).click();
-
-    await userPage.waitForURL(new RegExp(`/workspace/call/${escapeRegExp(callRef)}(?:[/?#].*)?$|/workspace/call/[^/]+$`), { timeout: 30_000 });
-    await expect(userPage.locator('.workspace-main-video')).toBeVisible({ timeout: 12_000 });
+    await expect(joinCallModal).toContainText('Call owner wurde benachrichtigt', { timeout: 15_000 });
 
     const lobbyBadge = adminPage.locator('.tab-lobby .tab-notice-badge');
     await expect(lobbyBadge).toBeVisible({ timeout: 30_000 });
@@ -232,9 +230,13 @@ test('admin creates/invites and admits user from lobby, mini strip shows partici
     await expect(allowUserButton).toBeVisible({ timeout: 20_000 });
     await allowUserButton.click();
 
+    await userPage.waitForURL(new RegExp(`/workspace/call/${escapeRegExp(callRef)}(?:[/?#].*)?$|/workspace/call/[^/]+$`), { timeout: 30_000 });
+    await expect(userPage.locator('.workspace-main-video')).toBeVisible({ timeout: 12_000 });
+
     const miniStrip = adminPage.locator('.workspace-mini-strip');
     await expect(miniStrip).toBeVisible({ timeout: 30_000 });
     await expect(miniStrip.locator('.workspace-mini-tile').first()).toBeVisible({ timeout: 30_000 });
+    await expect(joinCallModal).toBeHidden({ timeout: 30_000 });
   } finally {
     await Promise.allSettled([
       adminContext.close(),

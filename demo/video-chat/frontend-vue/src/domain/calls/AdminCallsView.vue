@@ -362,12 +362,12 @@
 
         <footer class="calls-modal-footer">
           <button
-            class="btn btn-green"
+            class="btn btn-cyan"
             type="button"
             :disabled="enterCallState.loading"
             @click="openCallWorkspace({ callId: enterCallState.callId, roomId: enterCallState.roomId })"
           >
-            Open call
+            Join call
           </button>
         </footer>
       </div>

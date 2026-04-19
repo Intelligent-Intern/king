@@ -1035,6 +1035,10 @@ watch(
   margin-bottom: 10px;
 }
 
+.dashboard-panel .grid-2 {
+  column-gap: 15px;
+}
+
 .panel-grid {
   min-height: 0;
   overflow: auto;

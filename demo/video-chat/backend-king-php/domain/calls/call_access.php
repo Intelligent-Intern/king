@@ -370,7 +370,7 @@ UPDATE call_participants
 SET email = :email,
     display_name = :display_name,
     invite_state = CASE
-        WHEN invite_state IN ('declined', 'cancelled') THEN 'accepted'
+        WHEN invite_state IN ('declined', 'cancelled') THEN 'invited'
         ELSE invite_state
     END
 WHERE call_id = :call_id
@@ -390,7 +390,7 @@ SQL
     $insert = $pdo->prepare(
         <<<'SQL'
 INSERT INTO call_participants(call_id, user_id, email, display_name, source, call_role, invite_state, joined_at, left_at)
-VALUES(:call_id, :user_id, :email, :display_name, 'internal', 'participant', 'accepted', NULL, NULL)
+VALUES(:call_id, :user_id, :email, :display_name, 'internal', 'participant', 'invited', NULL, NULL)
 SQL
     );
     $insert->execute([

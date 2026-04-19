@@ -9,7 +9,6 @@
         @keydown.enter.prevent="applyFilters"
       />
       <button class="btn" type="button" @click="applyFilters">Search</button>
-      <button class="btn" type="button" @click="openCompose('create')">New call</button>
     </section>
 
     <section v-if="noticeMessage" class="section calls-banner" :class="noticeKindClass">
@@ -138,7 +137,7 @@
       </section>
     </section>
 
-    <section class="footer calls-pagination-wrap">
+    <section v-if="viewMode === 'calls'" class="footer calls-pagination-wrap">
       <div class="pagination">
         <button
           class="pager-btn pager-icon-btn"
@@ -310,14 +309,25 @@
           </div>
         </div>
 
-        <footer class="calls-modal-footer">
+        <footer class="calls-modal-footer calls-modal-footer-enter">
+          <p
+            v-if="enterCallState.admissionMessage"
+            class="calls-enter-admission-status"
+            role="status"
+            aria-live="polite"
+          >
+            {{ enterCallState.admissionMessage }}
+          </p>
+          <p v-if="enterCallState.error" class="calls-inline-error calls-enter-footer-error">
+            {{ enterCallState.error }}
+          </p>
           <button
-            class="btn btn-green"
+            class="btn btn-cyan"
             type="button"
-            :disabled="enterCallState.loading"
+            :disabled="enterCallState.loading || enterCallState.waitingForAdmission"
             @click="openCallWorkspace({ callId: enterCallState.callId, roomId: enterCallState.roomId })"
           >
-            Open call
+            {{ enterCallState.loading ? 'Joining...' : 'Join call' }}
           </button>
         </footer>
       </div>
@@ -430,6 +440,11 @@ import { useRouter } from 'vue-router';
 import AppSelect from '../../components/AppSelect.vue';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import {
+  buildWebSocketUrl,
+  resolveBackendWebSocketOriginCandidates,
+  setBackendWebSocketOrigin,
+} from '../../support/backendOrigin';
 import { createAdminSyncSocket } from '../../support/adminSyncSocket';
 import {
   formatDateDisplay,
@@ -455,6 +470,7 @@ import {
 import { BackgroundFilterController } from '../realtime/backgroundFilterController';
 
 const router = useRouter();
+const USER_CALL_CREATE_EVENT = 'king:user-calls:create';
 
 function requestHeaders(withBody = false) {
   const headers = { accept: 'application/json' };
@@ -858,6 +874,15 @@ const enterCallPreviewRawStreamRef = ref(null);
 const enterCallPreviewStreamRef = ref(null);
 const enterCallPreviewBackgroundController = new BackgroundFilterController();
 let detachCallMediaWatcher = null;
+let enterAdmissionSocket = null;
+let enterAdmissionSocketGeneration = 0;
+let enterAdmissionAccepted = false;
+let enterAdmissionManuallyClosed = false;
+let enterAdmissionReconnectTimer = 0;
+let enterAdmissionReconnectAttempt = 0;
+
+const ENTER_ADMISSION_WAIT_MESSAGE = 'Call owner wurde benachrichtigt.';
+const ENTER_ADMISSION_RECONNECT_DELAYS_MS = [500, 1000, 2000, 3000, 5000];
 
 const enterCallState = reactive({
   open: false,
@@ -870,6 +895,8 @@ const enterCallState = reactive({
   copyNotice: '',
   previewReady: false,
   previewError: '',
+  waitingForAdmission: false,
+  admissionMessage: '',
 });
 
 function resetEnterCallState() {
@@ -882,6 +909,296 @@ function resetEnterCallState() {
   enterCallState.copyNotice = '';
   enterCallState.previewReady = false;
   enterCallState.previewError = '';
+  enterCallState.waitingForAdmission = false;
+  enterCallState.admissionMessage = '';
+}
+
+function normalizeRoomId(value) {
+  const candidate = String(value || '').trim().toLowerCase();
+  if (candidate === '' || candidate.length > 120) return 'lobby';
+  return /^[a-z0-9._-]+$/.test(candidate) ? candidate : 'lobby';
+}
+
+function normalizeCallId(value) {
+  const candidate = String(value || '').trim();
+  if (candidate === '') return '';
+  return /^[A-Za-z0-9._-]{1,200}$/.test(candidate) ? candidate : '';
+}
+
+function enterAdmissionSocketUrlForOrigin(origin) {
+  const query = new URLSearchParams();
+  query.set('room', normalizeRoomId(enterCallState.roomId || 'lobby'));
+
+  const callId = normalizeCallId(enterCallState.callId);
+  if (callId !== '') {
+    query.set('call_id', callId);
+  }
+
+  const token = String(sessionState.sessionToken || '').trim();
+  if (token !== '') {
+    query.set('session', token);
+  }
+
+  return buildWebSocketUrl(origin, '/ws', query);
+}
+
+function clearEnterAdmissionReconnectTimer() {
+  if (enterAdmissionReconnectTimer > 0 && typeof window !== 'undefined') {
+    window.clearTimeout(enterAdmissionReconnectTimer);
+  }
+  enterAdmissionReconnectTimer = 0;
+}
+
+function enterAdmissionSocketIsOpen(socket = enterAdmissionSocket) {
+  if (typeof WebSocket === 'undefined') return false;
+  return socket instanceof WebSocket && socket.readyState === WebSocket.OPEN;
+}
+
+function sendEnterAdmissionFrame(payload) {
+  if (!enterAdmissionSocketIsOpen()) return false;
+  try {
+    enterAdmissionSocket.send(JSON.stringify(payload));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function closeEnterAdmissionSocket({ cancel = false } = {}) {
+  enterAdmissionManuallyClosed = true;
+  clearEnterAdmissionReconnectTimer();
+
+  if (cancel && enterCallState.waitingForAdmission && !enterAdmissionAccepted) {
+    sendEnterAdmissionFrame({
+      type: 'lobby/queue/cancel',
+      room_id: normalizeRoomId(enterCallState.roomId || 'lobby'),
+    });
+  }
+
+  const socket = enterAdmissionSocket;
+  enterAdmissionSocket = null;
+  if (typeof WebSocket !== 'undefined' && socket instanceof WebSocket) {
+    try {
+      socket.close(1000, cancel ? 'admission_cancelled' : 'admission_closed');
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function scheduleEnterAdmissionReconnect() {
+  clearEnterAdmissionReconnectTimer();
+  if (enterAdmissionManuallyClosed || enterAdmissionAccepted || !enterCallState.waitingForAdmission) return;
+  if (typeof window === 'undefined') return;
+
+  enterAdmissionReconnectAttempt += 1;
+  const delay = ENTER_ADMISSION_RECONNECT_DELAYS_MS[
+    Math.min(enterAdmissionReconnectAttempt - 1, ENTER_ADMISSION_RECONNECT_DELAYS_MS.length - 1)
+  ];
+  enterCallState.admissionMessage = 'Lobby-Verbindung wird wiederhergestellt...';
+  enterAdmissionReconnectTimer = window.setTimeout(() => {
+    enterAdmissionReconnectTimer = 0;
+    connectEnterAdmissionSocket();
+  }, delay);
+}
+
+async function enterAdmittedCall() {
+  enterAdmissionAccepted = true;
+  closeEnterAdmissionSocket({ cancel: false });
+
+  const callRef = normalizeCallId(enterCallState.callId) || normalizeRoomId(enterCallState.roomId || 'lobby');
+  enterCallState.open = false;
+  enterCallState.loading = false;
+  enterCallState.waitingForAdmission = false;
+  enterCallState.admissionMessage = '';
+  stopEnterCallPreview();
+  resetEnterCallState();
+
+  await router.push({
+    name: 'call-workspace',
+    params: { callRef },
+    query: { entry: 'invite' },
+  });
+}
+
+function handleEnterAdmissionLobbySnapshot(payload) {
+  const admittedRows = Array.isArray(payload?.admitted) ? payload.admitted : [];
+  const currentUserId = Number(sessionState.userId || 0);
+  const isAdmitted = admittedRows.some((entry) => Number(entry?.user_id || 0) === currentUserId);
+  if (!isAdmitted) return;
+
+  void enterAdmittedCall();
+}
+
+function handleEnterAdmissionWelcome(payload) {
+  const admission = payload && typeof payload === 'object' ? payload.admission : null;
+  const requiresAdmission = Boolean(admission?.requires_admission);
+  const pendingRoomId = normalizeRoomId(admission?.pending_room_id || enterCallState.roomId || 'lobby');
+  enterCallState.roomId = pendingRoomId;
+
+  if (!requiresAdmission) {
+    void enterAdmittedCall();
+    return;
+  }
+
+  if (!sendEnterAdmissionFrame({ type: 'lobby/queue/join', room_id: pendingRoomId })) {
+    enterCallState.loading = false;
+    enterCallState.waitingForAdmission = false;
+    enterCallState.admissionMessage = '';
+    enterCallState.error = 'Could not notify call owner while lobby websocket is offline.';
+    return;
+  }
+
+  enterCallState.loading = false;
+  enterCallState.waitingForAdmission = true;
+  enterCallState.error = '';
+  enterCallState.admissionMessage = ENTER_ADMISSION_WAIT_MESSAGE;
+}
+
+function handleEnterAdmissionSocketMessage(event) {
+  let payload = null;
+  try {
+    payload = JSON.parse(String(event.data || ''));
+  } catch {
+    return;
+  }
+
+  if (!payload || typeof payload !== 'object') return;
+  const type = String(payload.type || '').trim().toLowerCase();
+  if (type === 'system/welcome') {
+    handleEnterAdmissionWelcome(payload);
+    return;
+  }
+
+  if (type === 'lobby/snapshot') {
+    handleEnterAdmissionLobbySnapshot(payload);
+    return;
+  }
+
+  if (type === 'system/error') {
+    const code = String(payload.code || '').trim().toLowerCase();
+    if (code === 'lobby_command_failed') {
+      enterCallState.error = 'Could not notify call owner.';
+      enterCallState.admissionMessage = '';
+      enterCallState.waitingForAdmission = false;
+      enterCallState.loading = false;
+    }
+  }
+}
+
+function connectEnterAdmissionSocketWithOriginAt(candidates, originIndex, generation) {
+  if (generation !== enterAdmissionSocketGeneration || enterAdmissionManuallyClosed || enterAdmissionAccepted) return;
+
+  if (originIndex >= candidates.length) {
+    if (enterCallState.waitingForAdmission) {
+      scheduleEnterAdmissionReconnect();
+    } else {
+      enterCallState.loading = false;
+      enterCallState.waitingForAdmission = false;
+      enterCallState.admissionMessage = '';
+      enterCallState.error = 'Could not connect to call lobby.';
+    }
+    return;
+  }
+
+  const socketOrigin = candidates[originIndex];
+  const wsUrl = enterAdmissionSocketUrlForOrigin(socketOrigin);
+  if (!wsUrl) {
+    connectEnterAdmissionSocketWithOriginAt(candidates, originIndex + 1, generation);
+    return;
+  }
+
+  const socket = new WebSocket(wsUrl);
+  enterAdmissionSocket = socket;
+  let opened = false;
+  let failedOver = false;
+
+  const failOverToNextOrigin = () => {
+    if (failedOver) return;
+    failedOver = true;
+    if (enterAdmissionSocket === socket) {
+      enterAdmissionSocket = null;
+    }
+    try {
+      socket.close(1000, 'admission_failover');
+    } catch {
+      // ignore
+    }
+    connectEnterAdmissionSocketWithOriginAt(candidates, originIndex + 1, generation);
+  };
+
+  socket.addEventListener('open', () => {
+    if (generation !== enterAdmissionSocketGeneration || enterAdmissionManuallyClosed || enterAdmissionAccepted) {
+      try {
+        socket.close(1000, 'stale_admission_socket');
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
+    opened = true;
+    enterAdmissionReconnectAttempt = 0;
+    setBackendWebSocketOrigin(socketOrigin);
+  });
+
+  socket.addEventListener('message', (event) => {
+    if (generation !== enterAdmissionSocketGeneration || enterAdmissionManuallyClosed || enterAdmissionAccepted) return;
+    handleEnterAdmissionSocketMessage(event);
+  });
+
+  socket.addEventListener('error', () => {
+    if (generation !== enterAdmissionSocketGeneration || enterAdmissionManuallyClosed || enterAdmissionAccepted) return;
+    if (!opened) {
+      failOverToNextOrigin();
+      return;
+    }
+    enterCallState.admissionMessage = 'Lobby-Verbindung wird wiederhergestellt...';
+  });
+
+  socket.addEventListener('close', () => {
+    if (generation !== enterAdmissionSocketGeneration) return;
+    if (enterAdmissionSocket === socket) {
+      enterAdmissionSocket = null;
+    }
+    if (enterAdmissionManuallyClosed || enterAdmissionAccepted) return;
+
+    if (!opened) {
+      failOverToNextOrigin();
+      return;
+    }
+
+    scheduleEnterAdmissionReconnect();
+  });
+}
+
+function connectEnterAdmissionSocket() {
+  const candidates = resolveBackendWebSocketOriginCandidates();
+  connectEnterAdmissionSocketWithOriginAt(candidates, 0, enterAdmissionSocketGeneration);
+}
+
+function startEnterAdmissionWait(target = null) {
+  if (typeof WebSocket === 'undefined') {
+    enterCallState.loading = false;
+    enterCallState.error = 'Realtime lobby is not supported in this browser.';
+    return false;
+  }
+
+  const normalizedTarget = target && typeof target === 'object' ? target : {};
+  enterCallState.callId = normalizeCallId(normalizedTarget.callId || enterCallState.callId);
+  enterCallState.roomId = normalizeRoomId(normalizedTarget.roomId || enterCallState.roomId || 'lobby');
+  enterCallState.error = '';
+  enterCallState.loading = true;
+  enterCallState.waitingForAdmission = true;
+  enterCallState.admissionMessage = 'Lobby-Verbindung wird hergestellt...';
+
+  closeEnterAdmissionSocket({ cancel: false });
+  enterAdmissionAccepted = false;
+  enterAdmissionManuallyClosed = false;
+  enterAdmissionReconnectAttempt = 0;
+  enterAdmissionSocketGeneration += 1;
+  connectEnterAdmissionSocket();
+  return true;
 }
 
 function isBackgroundPresetActive(preset) {
@@ -1139,6 +1456,9 @@ async function playSpeakerTestSound() {
 }
 
 function closeEnterCallModal() {
+  closeEnterAdmissionSocket({
+    cancel: enterCallState.waitingForAdmission && !enterAdmissionAccepted,
+  });
   enterCallState.open = false;
   resetEnterCallState();
   stopEnterCallPreview();
@@ -1158,6 +1478,9 @@ async function openEnterCallModal(call) {
   enterCallState.callId = String(call.id);
   enterCallState.roomId = String(call.room_id || 'lobby');
   enterCallState.copyNotice = '';
+  enterCallState.waitingForAdmission = false;
+  enterCallState.admissionMessage = '';
+  closeEnterAdmissionSocket({ cancel: false });
 
   try {
     await refreshCallMediaDevices({ requestPermissions: true });
@@ -1206,26 +1529,14 @@ function resolveJoinTarget(joinContext) {
   };
 }
 
-async function resolveWorkspaceRouteSegment(target = null) {
-  const normalizedTarget = target && typeof target === 'object' ? target : {};
-  const callId = String(normalizedTarget.callId || '').trim();
-  if (callId !== '') {
-    return callId;
-  }
-
-  const explicitAccessId = String(normalizedTarget.accessId || '').trim();
-  if (explicitAccessId !== '') {
-    return explicitAccessId;
-  }
-
-  const roomId = String(normalizedTarget.roomId || '').trim();
-  return roomId === '' ? 'lobby' : roomId;
-}
-
 async function openCallWorkspace(target = null) {
-  const routeSegment = await resolveWorkspaceRouteSegment(target);
-  closeEnterCallModal();
-  await router.push(`/workspace/call/${encodeURIComponent(routeSegment)}`);
+  const normalizedTarget = target && typeof target === 'object' ? target : {};
+  enterCallState.callId = normalizeCallId(normalizedTarget.callId || enterCallState.callId);
+  enterCallState.roomId = normalizeRoomId(normalizedTarget.roomId || enterCallState.roomId || 'lobby');
+  startEnterAdmissionWait({
+    callId: enterCallState.callId,
+    roomId: enterCallState.roomId,
+  });
 }
 
 watch(
@@ -1317,7 +1628,21 @@ async function submitJoinInvite() {
 
     closeJoinModal();
     setNotice('ok', `Invite redeemed for ${scope || 'invite'} context.`);
-    void openCallWorkspace(joinTarget);
+    enterCallState.open = true;
+    enterCallState.loading = true;
+    enterCallState.error = '';
+    enterCallState.callId = normalizeCallId(joinTarget.callId || '');
+    enterCallState.roomId = normalizeRoomId(joinTarget.roomId || 'lobby');
+    enterCallState.copyNotice = '';
+    enterCallState.waitingForAdmission = false;
+    enterCallState.admissionMessage = '';
+    closeEnterAdmissionSocket({ cancel: false });
+    try {
+      await refreshCallMediaDevices({ requestPermissions: true });
+      await startEnterCallPreview();
+    } finally {
+      enterCallState.loading = false;
+    }
   } catch (error) {
     joinState.error = error instanceof Error ? error.message : 'Could not redeem invite code.';
   } finally {
@@ -1400,6 +1725,10 @@ function closeCompose() {
   composeState.error = '';
 }
 
+function handleShellCreateCall() {
+  openCompose('create');
+}
+
 async function submitCompose() {
   composeState.error = '';
   clearNotice();
@@ -1480,6 +1809,7 @@ onMounted(() => {
   startAdminSyncSocket();
   startFallbackRefreshLoop();
   window.addEventListener('keydown', handleEscape);
+  window.addEventListener(USER_CALL_CREATE_EVENT, handleShellCreateCall);
 
   void Promise.all([loadCalls(), loadCalendar()]);
 });
@@ -1489,10 +1819,14 @@ onBeforeUnmount(() => {
   stopAdminSyncSocket();
   stopFallbackRefreshLoop();
   window.removeEventListener('keydown', handleEscape);
+  window.removeEventListener(USER_CALL_CREATE_EVENT, handleShellCreateCall);
   if (typeof detachCallMediaWatcher === 'function') {
     detachCallMediaWatcher();
     detachCallMediaWatcher = null;
   }
+  closeEnterAdmissionSocket({
+    cancel: enterCallState.waitingForAdmission && !enterAdmissionAccepted,
+  });
   stopEnterCallPreview();
 });
 
@@ -1516,17 +1850,18 @@ watch(
 
 <style scoped>
 .calls-view {
-  min-height: 0;
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  background: var(--border-subtle);
-  gap: 1px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-ui-chrome);
+  gap: 0;
 }
 
 .calls-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
+  margin-bottom: 15px;
 }
 
 .calls-banner {
@@ -1543,7 +1878,11 @@ watch(
 }
 
 .calls-table-wrap {
+  flex: 1 1 auto;
   min-height: 0;
+  padding-top: 0;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .col-title {
@@ -1576,6 +1915,8 @@ watch(
 }
 
 .calls-calendar-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 10px;
   background: var(--bg-surface);
 }
@@ -1650,6 +1991,11 @@ watch(
 }
 
 .calls-pagination-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: auto;
+  padding-left: 10px;
+  padding-right: 10px;
   border-top: 0;
 }
 
@@ -1849,6 +2195,27 @@ watch(
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.calls-modal-footer-enter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.calls-enter-admission-status,
+.calls-enter-footer-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.calls-enter-admission-status {
+  border: 1px solid var(--brand-cyan);
+  border-radius: 6px;
+  background: var(--color-132745);
+  color: var(--color-e6f0ff);
+  font-size: 12px;
+  padding: 8px 10px;
 }
 
 .invite-popover-label {

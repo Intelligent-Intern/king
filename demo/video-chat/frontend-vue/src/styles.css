@@ -600,18 +600,6 @@ select {
   background: var(--brand-cyan-active);
 }
 
-.btn.btn-green {
-  background: var(--ok);
-}
-
-.btn.btn-green:hover {
-  background: var(--color-1f9d2c);
-}
-
-.btn.btn-green:active {
-  background: var(--color-11661a);
-}
-
 .btn.full {
   width: 100%;
 }
@@ -1246,11 +1234,29 @@ select {
   min-height: 0;
   background: var(--bg-main);
   border: 0;
-  border-radius: 5px;
+  border-radius: 0 5px 5px 5px;
   overflow: hidden;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 1px;
+}
+
+.workspace.workspace-has-header {
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+}
+
+.workspace.workspace-has-header > .panel-grid {
+  grid-row: 2;
+}
+
+.workspace.workspace-no-header {
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+}
+
+.workspace.workspace-no-header > .panel-grid {
+  grid-row: 1;
 }
 
 .workspace > .panel-grid {
@@ -1269,7 +1275,7 @@ select {
   }
 
   .shell.left-collapsed .workspace {
-    border-radius: 5px;
+    border-radius: 0 5px 5px 5px;
   }
 }
 
@@ -2175,7 +2181,7 @@ tbody tr:hover {
 }
 
 .settings-theme-preview-scale {
-  --preview-scale: 0.6;
+  --preview-scale: 0.66;
   width: calc(1320px * var(--preview-scale));
   height: calc(760px * var(--preview-scale));
   margin: 0 auto;
@@ -2242,14 +2248,37 @@ tbody tr:hover {
 
 .settings-theme-preview-calls-toolbar {
   margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.settings-theme-preview-calls-view .settings-theme-preview-calls-toolbar-left {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .settings-theme-preview-calls-view .calls-toolbar-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
   flex-wrap: nowrap;
 }
 
 .settings-theme-preview-calls-view .calls-search-main {
   grid-template-columns: minmax(220px, 1fr);
+}
+
+.settings-theme-preview-calls-view .settings-theme-preview-inline-search {
+  min-width: 240px;
+  max-width: 420px;
+  flex: 1 1 320px;
 }
 
 .settings-theme-preview-calls-view .calls-toolbar-search-btn {

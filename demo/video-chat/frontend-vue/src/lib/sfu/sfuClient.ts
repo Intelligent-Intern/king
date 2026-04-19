@@ -137,7 +137,7 @@ export class SFUClient {
     }
   }
 
-  connect(session: { userId: string; token: string; name: string }, roomId: string): void {
+  connect(session: { userId: string; token: string; name: string }, roomId: string, callId = ''): void {
     this.connectGeneration += 1
     this.disconnectNotified = false
     const generation = this.connectGeneration
@@ -155,6 +155,10 @@ export class SFUClient {
       token:  session.token,
       name:   session.name,
     })
+    const normalizedCallId = String(callId || '').trim()
+    if (/^[A-Za-z0-9._-]{1,200}$/.test(normalizedCallId)) {
+      query.set('call_id', normalizedCallId)
+    }
 
     const candidates = resolveBackendSfuOriginCandidates()
     this.connectWithCandidates(candidates, 0, query, roomId, generation)
