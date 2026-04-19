@@ -208,6 +208,13 @@ What is still missing for robust production operation:
 - secret management + hardened env config (no demo credentials in deployed environments)
 - operational hardening (central logs/metrics/alerts, backups, rollout/rollback strategy)
 
+Edge deployment decision:
+
+- `demo/video-chat` intentionally ships no internal Edge/TLS deploy pack.
+- The active compose file is for dev/staging/internal demos only.
+- A future production Edge path must be introduced as its own issue and must not reuse demo defaults.
+- The static guard is `bash demo/video-chat/scripts/check-edge-deployment-decision.sh`.
+
 Host-runtime note:
 
 - `backend-king-php/run-dev.sh` requires `pdo_sqlite` in host PHP.
@@ -280,6 +287,7 @@ bash demo/video-chat/scripts/smoke.sh
 `demo/video-chat/scripts/smoke.sh` now verifies:
 
 - backend and frontend launchers plus syntax checks
+- demo-scope security policy and no-internal-edge-deploy decision gates
 - docker-compose v1 stack boot (`frontend-vue` + `backend-king-php` + sqlite volume) with runtime migration snapshot and auth/session sanity checks
 - backend boot and live `/health` probe
 - API/WS catalog drift gate against the canonical versioned contract fixture (`contract-catalog-parity-contract`)

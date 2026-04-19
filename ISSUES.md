@@ -788,10 +788,15 @@ Ziel:
 
 Checklist:
 - [x] Entscheidung dokumentiert: Edge-Deploy-Pack aus dem Repo entfernt.
-- [ ] Falls erneut benötigt: neue Deploy-Implementierung separat und bewusst einführen.
+- [x] Falls erneut benötigt: neue Deploy-Implementierung separat und bewusst einführen.
 
 Definition of done:
 - Der aktive Demo-Scope bleibt auf `frontend-vue` + `backend-king-php` ohne internes Edge-Deploy.
+
+Abschluss:
+- `demo/video-chat/EDGE_DEPLOYMENT_DECISION.md` dokumentiert, dass #13 verworfen bleibt und eine spaetere Produktions-Edge-Implementierung ein eigenes Issue mit TLS-/WS-/SFU-/Secret-/Rollback-Anforderungen braucht.
+- `demo/video-chat/scripts/check-edge-deployment-decision.sh` prueft, dass kein internes `deploy/`, `docker-compose.edge.yml` oder top-level Reverse-Proxy-Artefakt als Demo-Default zurueckkommt.
+- `demo/video-chat/scripts/smoke.sh` fuehrt diesen Gate vor dem Compose-Smoke aus.
 
 ---
 
