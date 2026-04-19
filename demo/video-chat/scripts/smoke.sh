@@ -617,6 +617,7 @@ run_step "backend contract: realtime session revocation propagation" bash -lc "'
 run_step "backend contract: API/WS catalog parity" bash -lc "'${BACKEND_DIR}/tests/contract-catalog-parity-contract.sh'"
 run_step "backend contract: WLVC wire envelope" bash -lc "'${BACKEND_DIR}/tests/wlvc-wire-contract.sh'"
 run_step "backend contract: gateway JWT binding" bash -lc "'${BACKEND_DIR}/tests/gateway-jwt-binding-contract.sh'"
+run_step "backend contract: gateway/backend signaling mapping" bash -lc "'${BACKEND_DIR}/tests/gateway-backend-mapping-contract.sh'"
 run_step "backend contract: room join/presence" bash -lc "'${BACKEND_DIR}/tests/realtime-presence-contract.sh'"
 run_step "backend contract: chat fanout" bash -lc "'${BACKEND_DIR}/tests/realtime-chat-contract.sh'"
 run_step "backend contract: reaction stream throttle" bash -lc "'${BACKEND_DIR}/tests/realtime-reaction-contract.sh'"

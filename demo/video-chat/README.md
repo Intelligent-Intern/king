@@ -324,6 +324,7 @@ bash demo/video-chat/scripts/smoke.sh
 - dedicated logout revoke contract (`session-logout-contract`) with persisted revocation metadata assertions
 - WLVC wire envelope contract (`wlvc-wire-contract`) for versioned binary frame packaging/parsing parity
 - gateway JWT binding contract (`gateway-jwt-binding-contract`) for future Gateway Join `sub/effective_id` + `room/call_id` enforcement
+- gateway/backend signaling mapping contract (`gateway-backend-mapping-contract`) for `call.signaling` AMQP payload parity with backend `offer/answer/ice/hangup`
 - room join/presence contract (`realtime-presence-contract`)
 - room chat fanout contract (`realtime-chat-contract`)
 - room reaction stream contract (`realtime-reaction-contract`)

@@ -516,7 +516,7 @@ Interop-Testmatrix (v1):
 | I-09 | SFU Reconnect | WS `/sfu` | Reconnect -> Join/Publisher-Liste/Resubscribe stabil | `tests/realtime-sfu-contract.sh` | abgedeckt |
 | I-10 | Room-Binding Enforcement | WS `/sfu` | Query-`room` und optionales Join-Payload müssen matchen; kein stilles Fallback auf `lobby` | `tests/realtime-sfu-contract.sh` | abgedeckt |
 | I-11 | Gateway JWT-Bindung | Gateway Join (`SignalMessage.Join`) | JWT `sub/effective_id` == `peer_id`, `room/call_id` == `room_id` | `backend-king-php/tests/gateway-jwt-binding-contract.sh` | abgedeckt |
-| I-12 | Gateway <-> Backend Mapping | AMQP `call.signaling` + Backend Signaling | `room_id <-> call_id` mapping konsistent, `offer/answer/ice/hangup` interoperabel | kein E2E-Interop-Test vorhanden | offen |
+| I-12 | Gateway <-> Backend Mapping | AMQP `call.signaling` + Backend Signaling | `room_id <-> call_id` mapping konsistent, `offer/answer/ice/hangup` interoperabel | `backend-king-php/tests/gateway-backend-mapping-contract.sh` | abgedeckt |
 | I-13 | Access-Link Join-Session | REST `/api/call-access/{id}/join|session` -> WS | Access-gebundene Session führt nur in erlaubten Call/Room-Kontext | `backend-king-php/tests/call-access-session-contract.sh` | abgedeckt |
 
 v1-Ausführungsreihenfolge (empfohlen):
@@ -528,7 +528,7 @@ v1-Ausführungsreihenfolge (empfohlen):
 Konkrete neue Test-Artefakte für #8-Folgearbeit:
 - `backend-king-php/tests/realtime-sfu-contract.sh|php` für I-06 bis I-10.
 - `backend-king-php/tests/call-access-session-contract.sh|php` für I-13.
-- `demo/media-gateway/tests/gateway-backend-interop-contract.(rs|sh)` für I-12.
+- `backend-king-php/tests/gateway-backend-mapping-contract.sh|php` für I-12.
 
 ---
 
@@ -1169,6 +1169,31 @@ Abschluss:
 - `demo/video-chat/backend-king-php/domain/realtime/gateway_jwt.php` implementiert die Gateway-JWT-Bindungs- und Rate-Limit-Helfer.
 - `demo/video-chat/backend-king-php/tests/gateway-jwt-binding-contract.php|sh` deckt I-11 ab.
 - `demo/video-chat/scripts/smoke.sh` ruft `gateway-jwt-binding-contract.sh` in der Backend-Contract-Strecke auf.
+
+### #25 Gateway <-> Backend Signaling-Mapping (Implementierung)
+
+Ziel:
+- I-12 schließen: Backend-Signaling (`call/offer`, `call/answer`, `call/ice`, `call/hangup`) muss deterministisch auf den spaeteren Gateway-AMQP-Topic `call.signaling` abbildbar sein und wieder zur Backend-Form zurueckfuehren.
+
+Checklist:
+- [x] `room_id` ist kanonisch; `call_id` bleibt Gateway-/AMQP-Alias und muss exakt auf `room_id` passen.
+- [x] Backend-Events werden auf ein `king.videochat.gateway.signaling.v1`-Payload fuer Topic `call.signaling` und Routing-Key `call.signaling.{room_id}` normalisiert.
+- [x] `call/offer` und `call/answer` werden auf Gateway-`SessionDescription` mit `offer`/`answer` abgebildet.
+- [x] `call/ice` wird auf Gateway-`IceCandidate` abgebildet; Backend-CamelCase-Felder und Gateway-Snake-Case-Felder werden beidseitig normalisiert.
+- [x] `call/hangup` wird auf Gateway-`LeaveRequest` abgebildet.
+- [x] Sender-/Target-Peer-IDs bleiben strikt numerisch, positiv und duerfen nicht identisch sein.
+- [x] Room-/Call-Mismatch, Payload-Room-Mismatch, ungueltiger Topic und unbekannte Gateway-Kinds fail-closed.
+- [x] Round-Trip-Ergebnis erfuellt weiterhin den bestehenden Backend-Signaling-Decoder.
+- [x] Smoke-Gate fuehrt den Mapping-Contract aus.
+
+Definition of done:
+- I-12 ist als ausfuehrbarer Contract pruefbar, obwohl `demo/media-gateway` im aktuellen Checkout nicht vorhanden ist.
+- Das Gateway kann spaeter gegen denselben Mapping-Vertrag implementiert werden, ohne Backend-Signaling-Semantik zu erraten.
+
+Abschluss:
+- `demo/video-chat/backend-king-php/domain/realtime/gateway_backend_mapping.php` implementiert die beidseitige Backend-/AMQP-Mapping-Schicht.
+- `demo/video-chat/backend-king-php/tests/gateway-backend-mapping-contract.php|sh` deckt I-12 ab.
+- `demo/video-chat/scripts/smoke.sh` ruft `gateway-backend-mapping-contract.sh` in der Backend-Contract-Strecke auf.
 
 ## Persistente Research-Notizen (für Folgesessions)
 

@@ -493,6 +493,12 @@ Run the gateway JWT binding contract test (future Gateway Join `sub/effective_id
 demo/video-chat/backend-king-php/tests/gateway-jwt-binding-contract.sh
 ```
 
+Run the gateway/backend signaling mapping contract test (AMQP `call.signaling` parity for backend `offer`/`answer`/`ice`/`hangup`):
+
+```bash
+demo/video-chat/backend-king-php/tests/gateway-backend-mapping-contract.sh
+```
+
 Run the admin user list contract test (search + pagination + deterministic sorting):
 
 ```bash
