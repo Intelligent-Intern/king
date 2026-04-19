@@ -1509,7 +1509,15 @@ function videochat_handle_realtime_routes(
             'joined_room'
         );
         $lastLobbySnapshotSignature = (string) ($initialLobbySnapshot['signature'] ?? '');
+        $initialRoomSnapshot = videochat_realtime_send_room_snapshot(
+            $presenceState,
+            $presenceConnection,
+            $openDatabase,
+            'db_sync'
+        );
+        $lastRoomSnapshotSignature = (string) ($initialRoomSnapshot['signature'] ?? '');
         $nextLobbySnapshotPollMs = videochat_lobby_now_ms() + 1000;
+        $nextRoomSnapshotPollMs = videochat_lobby_now_ms() + 1000;
 
         try {
             while (true) {
@@ -1562,6 +1570,18 @@ function videochat_handle_realtime_routes(
                         $pollNowMs
                     );
                     $nextLobbySnapshotPollMs = $pollNowMs + 1000;
+                }
+                if ($pollNowMs >= $nextRoomSnapshotPollMs) {
+                    $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
+                    $presenceState['connections'][$connectionId] = $presenceConnection;
+                    videochat_realtime_send_room_snapshot_if_changed(
+                        $presenceState,
+                        $presenceConnection,
+                        $openDatabase,
+                        $lastRoomSnapshotSignature,
+                        'db_sync'
+                    );
+                    $nextRoomSnapshotPollMs = $pollNowMs + 1000;
                 }
 
                 videochat_typing_sweep_expired($typingState, $presenceState);
@@ -1967,7 +1987,13 @@ function videochat_handle_realtime_routes(
                 }
 
                 if ($commandType === 'room/snapshot/request') {
-                    videochat_presence_send_room_snapshot($presenceState, $presenceConnection, 'requested');
+                    $requestedRoomSnapshot = videochat_realtime_send_room_snapshot(
+                        $presenceState,
+                        $presenceConnection,
+                        $openDatabase,
+                        'requested'
+                    );
+                    $lastRoomSnapshotSignature = (string) ($requestedRoomSnapshot['signature'] ?? $lastRoomSnapshotSignature);
                     $requestedLobbySnapshot = videochat_realtime_send_synced_lobby_snapshot_to_connection(
                         $lobbyState,
                         $presenceConnection,
@@ -2180,6 +2206,13 @@ function videochat_handle_realtime_routes(
                         'joined_room'
                     );
                     $lastLobbySnapshotSignature = (string) ($joinedLobbySnapshot['signature'] ?? $lastLobbySnapshotSignature);
+                    $joinedRoomSnapshot = videochat_realtime_send_room_snapshot(
+                        $presenceState,
+                        $presenceConnection,
+                        $openDatabase,
+                        'joined_room'
+                    );
+                    $lastRoomSnapshotSignature = (string) ($joinedRoomSnapshot['signature'] ?? $lastRoomSnapshotSignature);
                     continue;
                 }
             }
@@ -2196,6 +2229,495 @@ function videochat_handle_realtime_routes(
 
 
     return null;
+}
+
+/**
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_realtime_db_room_participants(callable $openDatabase, array $connection): array
+{
+    $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
+    $callId = videochat_realtime_normalize_call_id(
+        (string) (($connection['active_call_id'] ?? '') ?: ($connection['requested_call_id'] ?? '')),
+        ''
+    );
+    if ($roomId === '' || $callId === '') {
+        return [];
+    }
+
+    try {
+        $pdo = $openDatabase();
+        $statement = $pdo->prepare(
+            <<<'SQL'
+SELECT
+    cp.user_id,
+    cp.display_name AS participant_display_name,
+    cp.call_role,
+    cp.joined_at,
+    users.display_name AS user_display_name,
+    roles.slug AS role_slug
+FROM call_participants cp
+LEFT JOIN users ON users.id = cp.user_id
+LEFT JOIN roles ON roles.id = users.role_id
+WHERE cp.call_id = :call_id
+  AND cp.source = 'internal'
+  AND cp.user_id IS NOT NULL
+  AND cp.joined_at IS NOT NULL
+  AND cp.left_at IS NULL
+ORDER BY
+    cp.display_name ASC,
+    cp.user_id ASC
+SQL
+        );
+        $statement->execute([':call_id' => $callId]);
+    } catch (Throwable) {
+        return [];
+    }
+
+    $participants = [];
+    while (($row = $statement->fetch(PDO::FETCH_ASSOC)) !== false) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $userId = (int) ($row['user_id'] ?? 0);
+        if ($userId <= 0) {
+            continue;
+        }
+        $displayName = trim((string) ($row['participant_display_name'] ?? ''));
+        if ($displayName === '') {
+            $displayName = trim((string) ($row['user_display_name'] ?? ''));
+        }
+        $callRole = videochat_normalize_call_participant_role((string) ($row['call_role'] ?? 'participant'));
+        $participants[] = [
+            'connection_id' => 'db:' . $callId . ':' . $userId,
+            'room_id' => $roomId,
+            'user' => [
+                'id' => $userId,
+                'display_name' => $displayName !== '' ? $displayName : ('User ' . $userId),
+                'role' => videochat_normalize_role_slug((string) ($row['role_slug'] ?? 'user')),
+                'call_role' => $callRole,
+            ],
+            'connected_at' => (string) ($row['joined_at'] ?? ''),
+        ];
+    }
+
+    return $participants;
+}
+
+/**
+ * @param array<int, array<string, mixed>> $localParticipants
+ * @param array<int, array<string, mixed>> $dbParticipants
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_realtime_merge_room_participants(array $localParticipants, array $dbParticipants): array
+{
+    $byUserId = [];
+    foreach ($dbParticipants as $participant) {
+        $userId = (int) (($participant['user'] ?? [])['id'] ?? 0);
+        if ($userId > 0) {
+            $byUserId[$userId] = $participant;
+        }
+    }
+    foreach ($localParticipants as $participant) {
+        $userId = (int) (($participant['user'] ?? [])['id'] ?? 0);
+        if ($userId > 0) {
+            $byUserId[$userId] = $participant;
+        }
+    }
+
+    $participants = array_values($byUserId);
+    usort(
+        $participants,
+        static function (array $left, array $right): int {
+            $leftRoleRank = videochat_presence_role_rank((string) (($left['user'] ?? [])['role'] ?? ''));
+            $rightRoleRank = videochat_presence_role_rank((string) (($right['user'] ?? [])['role'] ?? ''));
+            if ($leftRoleRank !== $rightRoleRank) {
+                return $leftRoleRank <=> $rightRoleRank;
+            }
+            $leftName = strtolower(trim((string) (($left['user'] ?? [])['display_name'] ?? '')));
+            $rightName = strtolower(trim((string) (($right['user'] ?? [])['display_name'] ?? '')));
+            if ($leftName !== $rightName) {
+                return $leftName <=> $rightName;
+            }
+            return ((int) (($left['user'] ?? [])['id'] ?? 0)) <=> ((int) (($right['user'] ?? [])['id'] ?? 0));
+        }
+    );
+
+    return $participants;
+}
+
+function videochat_realtime_room_snapshot_payload(
+    array $presenceState,
+    array $connection,
+    callable $openDatabase,
+    string $reason
+): array {
+    $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''));
+    $participants = videochat_realtime_merge_room_participants(
+        videochat_presence_room_participants($presenceState, $roomId),
+        videochat_realtime_db_room_participants($openDatabase, $connection)
+    );
+
+    return [
+        'type' => 'room/snapshot',
+        'room_id' => $roomId,
+        'participants' => $participants,
+        'participant_count' => count($participants),
+        'viewer' => [
+            'user_id' => (int) ($connection['user_id'] ?? 0),
+            'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? '')),
+            'call_id' => (string) ($connection['active_call_id'] ?? ''),
+            'call_role' => videochat_normalize_call_participant_role((string) ($connection['call_role'] ?? 'participant')),
+            'can_moderate' => (bool) ($connection['can_moderate_call'] ?? false),
+        ],
+        'reason' => trim($reason) === '' ? 'snapshot' : trim($reason),
+        'time' => gmdate('c'),
+    ];
+}
+
+function videochat_realtime_room_snapshot_signature(array $payload): string
+{
+    return hash('sha256', json_encode([
+        'room_id' => (string) ($payload['room_id'] ?? ''),
+        'participants' => $payload['participants'] ?? [],
+        'viewer' => $payload['viewer'] ?? [],
+    ], JSON_UNESCAPED_SLASHES) ?: '');
+}
+
+function videochat_realtime_send_room_snapshot(
+    array $presenceState,
+    array $connection,
+    callable $openDatabase,
+    string $reason
+): array {
+    $payload = videochat_realtime_room_snapshot_payload($presenceState, $connection, $openDatabase, $reason);
+    videochat_presence_send_frame($connection['socket'] ?? null, $payload);
+    return [
+        'signature' => videochat_realtime_room_snapshot_signature($payload),
+        'payload' => $payload,
+    ];
+}
+
+function videochat_realtime_send_room_snapshot_if_changed(
+    array $presenceState,
+    array $connection,
+    callable $openDatabase,
+    string &$lastSignature,
+    string $reason
+): void {
+    $payload = videochat_realtime_room_snapshot_payload($presenceState, $connection, $openDatabase, $reason);
+    $signature = videochat_realtime_room_snapshot_signature($payload);
+    if ($signature === $lastSignature) {
+        return;
+    }
+    $lastSignature = $signature;
+    videochat_presence_send_frame($connection['socket'] ?? null, $payload);
+}
+
+function videochat_sfu_now_ms(): int
+{
+    return (int) floor(microtime(true) * 1000);
+}
+
+function videochat_sfu_bootstrap(PDO $pdo): void
+{
+    $pdo->exec(
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS sfu_publishers (
+    room_id TEXT NOT NULL,
+    publisher_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    user_name TEXT NOT NULL,
+    updated_at_ms INTEGER NOT NULL,
+    PRIMARY KEY(room_id, publisher_id)
+)
+SQL
+    );
+    $pdo->exec(
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS sfu_tracks (
+    room_id TEXT NOT NULL,
+    publisher_id TEXT NOT NULL,
+    track_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    label TEXT NOT NULL,
+    updated_at_ms INTEGER NOT NULL,
+    PRIMARY KEY(room_id, publisher_id, track_id)
+)
+SQL
+    );
+    $pdo->exec(
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS sfu_frames (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id TEXT NOT NULL,
+    publisher_id TEXT NOT NULL,
+    publisher_user_id TEXT NOT NULL,
+    track_id TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    frame_type TEXT NOT NULL,
+    data_json TEXT NOT NULL,
+    created_at_ms INTEGER NOT NULL
+)
+SQL
+    );
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_sfu_frames_room_id ON sfu_frames(room_id, id)');
+}
+
+function videochat_sfu_upsert_publisher(PDO $pdo, string $roomId, string $publisherId, string $userId, string $userName): void
+{
+    $statement = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO sfu_publishers(room_id, publisher_id, user_id, user_name, updated_at_ms)
+VALUES(:room_id, :publisher_id, :user_id, :user_name, :updated_at_ms)
+ON CONFLICT(room_id, publisher_id) DO UPDATE SET
+    user_id = excluded.user_id,
+    user_name = excluded.user_name,
+    updated_at_ms = excluded.updated_at_ms
+SQL
+    );
+    $statement->execute([
+        ':room_id' => $roomId,
+        ':publisher_id' => $publisherId,
+        ':user_id' => $userId,
+        ':user_name' => $userName,
+        ':updated_at_ms' => videochat_sfu_now_ms(),
+    ]);
+}
+
+function videochat_sfu_remove_publisher(PDO $pdo, string $roomId, string $publisherId): void
+{
+    $deleteTracks = $pdo->prepare('DELETE FROM sfu_tracks WHERE room_id = :room_id AND publisher_id = :publisher_id');
+    $deleteTracks->execute([':room_id' => $roomId, ':publisher_id' => $publisherId]);
+    $deletePublisher = $pdo->prepare('DELETE FROM sfu_publishers WHERE room_id = :room_id AND publisher_id = :publisher_id');
+    $deletePublisher->execute([':room_id' => $roomId, ':publisher_id' => $publisherId]);
+}
+
+function videochat_sfu_upsert_track(PDO $pdo, string $roomId, string $publisherId, string $trackId, string $kind, string $label): void
+{
+    $statement = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO sfu_tracks(room_id, publisher_id, track_id, kind, label, updated_at_ms)
+VALUES(:room_id, :publisher_id, :track_id, :kind, :label, :updated_at_ms)
+ON CONFLICT(room_id, publisher_id, track_id) DO UPDATE SET
+    kind = excluded.kind,
+    label = excluded.label,
+    updated_at_ms = excluded.updated_at_ms
+SQL
+    );
+    $statement->execute([
+        ':room_id' => $roomId,
+        ':publisher_id' => $publisherId,
+        ':track_id' => $trackId,
+        ':kind' => $kind,
+        ':label' => $label,
+        ':updated_at_ms' => videochat_sfu_now_ms(),
+    ]);
+}
+
+function videochat_sfu_remove_track(PDO $pdo, string $roomId, string $publisherId, string $trackId): void
+{
+    $statement = $pdo->prepare(
+        'DELETE FROM sfu_tracks WHERE room_id = :room_id AND publisher_id = :publisher_id AND track_id = :track_id'
+    );
+    $statement->execute([':room_id' => $roomId, ':publisher_id' => $publisherId, ':track_id' => $trackId]);
+}
+
+/**
+ * @return array<int, array{publisher_id: string, user_id: string, user_name: string}>
+ */
+function videochat_sfu_fetch_publishers(PDO $pdo, string $roomId): array
+{
+    $statement = $pdo->prepare(
+        'SELECT publisher_id, user_id, user_name FROM sfu_publishers WHERE room_id = :room_id ORDER BY publisher_id ASC'
+    );
+    $statement->execute([':room_id' => $roomId]);
+    $rows = [];
+    while (($row = $statement->fetch(PDO::FETCH_ASSOC)) !== false) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $rows[] = [
+            'publisher_id' => (string) ($row['publisher_id'] ?? ''),
+            'user_id' => (string) ($row['user_id'] ?? ''),
+            'user_name' => (string) ($row['user_name'] ?? ''),
+        ];
+    }
+    return $rows;
+}
+
+/**
+ * @return array<int, array{id: string, kind: string, label: string}>
+ */
+function videochat_sfu_fetch_tracks(PDO $pdo, string $roomId, string $publisherId): array
+{
+    $statement = $pdo->prepare(
+        <<<'SQL'
+SELECT track_id, kind, label
+FROM sfu_tracks
+WHERE room_id = :room_id
+  AND publisher_id = :publisher_id
+ORDER BY track_id ASC
+SQL
+    );
+    $statement->execute([':room_id' => $roomId, ':publisher_id' => $publisherId]);
+    $tracks = [];
+    while (($row = $statement->fetch(PDO::FETCH_ASSOC)) !== false) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $kind = strtolower(trim((string) ($row['kind'] ?? 'video')));
+        $tracks[] = [
+            'id' => (string) ($row['track_id'] ?? ''),
+            'kind' => in_array($kind, ['audio', 'video'], true) ? $kind : 'video',
+            'label' => (string) ($row['label'] ?? ''),
+        ];
+    }
+    return $tracks;
+}
+
+function videochat_sfu_latest_frame_id(PDO $pdo, string $roomId): int
+{
+    $statement = $pdo->prepare('SELECT COALESCE(MAX(id), 0) FROM sfu_frames WHERE room_id = :room_id');
+    $statement->execute([':room_id' => $roomId]);
+    return (int) ($statement->fetchColumn() ?: 0);
+}
+
+function videochat_sfu_insert_frame(
+    PDO $pdo,
+    string $roomId,
+    string $publisherId,
+    string $publisherUserId,
+    string $trackId,
+    int $timestamp,
+    string $frameType,
+    array $frameData
+): void {
+    $encodedData = json_encode($frameData, JSON_UNESCAPED_SLASHES);
+    if (!is_string($encodedData)) {
+        return;
+    }
+    $statement = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO sfu_frames(room_id, publisher_id, publisher_user_id, track_id, timestamp, frame_type, data_json, created_at_ms)
+VALUES(:room_id, :publisher_id, :publisher_user_id, :track_id, :timestamp, :frame_type, :data_json, :created_at_ms)
+SQL
+    );
+    $statement->execute([
+        ':room_id' => $roomId,
+        ':publisher_id' => $publisherId,
+        ':publisher_user_id' => $publisherUserId,
+        ':track_id' => $trackId,
+        ':timestamp' => $timestamp,
+        ':frame_type' => $frameType,
+        ':data_json' => $encodedData,
+        ':created_at_ms' => videochat_sfu_now_ms(),
+    ]);
+}
+
+/**
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_sfu_fetch_frames_since(PDO $pdo, string $roomId, int $afterId, string $excludePublisherId, int $limit = 50): array
+{
+    $statement = $pdo->prepare(
+        <<<'SQL'
+SELECT id, publisher_id, publisher_user_id, track_id, timestamp, frame_type, data_json
+FROM sfu_frames
+WHERE room_id = :room_id
+  AND id > :after_id
+  AND publisher_id <> :exclude_publisher_id
+ORDER BY id ASC
+LIMIT :limit
+SQL
+    );
+    $statement->bindValue(':room_id', $roomId, PDO::PARAM_STR);
+    $statement->bindValue(':after_id', $afterId, PDO::PARAM_INT);
+    $statement->bindValue(':exclude_publisher_id', $excludePublisherId, PDO::PARAM_STR);
+    $statement->bindValue(':limit', max(1, min(200, $limit)), PDO::PARAM_INT);
+    $statement->execute();
+    $frames = [];
+    while (($row = $statement->fetch(PDO::FETCH_ASSOC)) !== false) {
+        if (is_array($row)) {
+            $frames[] = $row;
+        }
+    }
+    return $frames;
+}
+
+function videochat_sfu_cleanup_frames(PDO $pdo): void
+{
+    $statement = $pdo->prepare('DELETE FROM sfu_frames WHERE created_at_ms < :cutoff_ms');
+    $statement->execute([':cutoff_ms' => videochat_sfu_now_ms() - 15_000]);
+}
+
+function videochat_sfu_poll_broker(
+    PDO $pdo,
+    mixed $websocket,
+    string $roomId,
+    string $clientId,
+    array &$knownPublishers,
+    array &$trackSignatures,
+    int &$lastFrameId
+): void {
+    $activePublishers = [];
+    foreach (videochat_sfu_fetch_publishers($pdo, $roomId) as $publisher) {
+        $publisherId = (string) ($publisher['publisher_id'] ?? '');
+        if ($publisherId === '' || $publisherId === $clientId) {
+            continue;
+        }
+        $activePublishers[$publisherId] = true;
+        if (!isset($knownPublishers[$publisherId])) {
+            $knownPublishers[$publisherId] = true;
+            videochat_presence_send_frame($websocket, [
+                'type' => 'sfu/joined',
+                'room_id' => $roomId,
+                'publishers' => [$publisherId],
+            ]);
+        }
+
+        $tracks = videochat_sfu_fetch_tracks($pdo, $roomId, $publisherId);
+        $trackSignature = hash('sha256', json_encode($tracks, JSON_UNESCAPED_SLASHES) ?: '');
+        if ($tracks !== [] && ($trackSignatures[$publisherId] ?? '') !== $trackSignature) {
+            $trackSignatures[$publisherId] = $trackSignature;
+            videochat_presence_send_frame($websocket, [
+                'type' => 'sfu/tracks',
+                'room_id' => $roomId,
+                'publisher_id' => $publisherId,
+                'publisher_user_id' => (string) ($publisher['user_id'] ?? ''),
+                'publisher_name' => (string) ($publisher['user_name'] ?? ''),
+                'tracks' => $tracks,
+            ]);
+        }
+    }
+
+    foreach (array_keys($knownPublishers) as $publisherId) {
+        if (isset($activePublishers[$publisherId])) {
+            continue;
+        }
+        unset($knownPublishers[$publisherId], $trackSignatures[$publisherId]);
+        videochat_presence_send_frame($websocket, [
+            'type' => 'sfu/publisher_left',
+            'publisher_id' => $publisherId,
+        ]);
+    }
+
+    foreach (videochat_sfu_fetch_frames_since($pdo, $roomId, $lastFrameId, $clientId) as $frame) {
+        $lastFrameId = max($lastFrameId, (int) ($frame['id'] ?? 0));
+        $decodedData = json_decode((string) ($frame['data_json'] ?? '[]'), true);
+        if (!is_array($decodedData)) {
+            continue;
+        }
+        videochat_presence_send_frame($websocket, [
+            'type' => 'sfu/frame',
+            'publisher_id' => (string) ($frame['publisher_id'] ?? ''),
+            'publisher_user_id' => (string) ($frame['publisher_user_id'] ?? ''),
+            'track_id' => (string) ($frame['track_id'] ?? ''),
+            'timestamp' => (int) ($frame['timestamp'] ?? 0),
+            'data' => $decodedData,
+            'frame_type' => (string) ($frame['frame_type'] ?? 'delta'),
+        ]);
+    }
 }
 
 function videochat_handle_sfu_routes(
@@ -2288,13 +2810,10 @@ function videochat_handle_sfu_routes(
         ];
     }
 
-    if (is_object($websocket)) {
-        $clientId = spl_object_id($websocket);
-    } elseif (is_resource($websocket)) {
-        $clientId = get_resource_id($websocket);
-    } else {
-        $clientId = 'sfu_' . bin2hex(random_bytes(8));
-    }
+    $clientObjectId = is_object($websocket)
+        ? (string) spl_object_id($websocket)
+        : (is_resource($websocket) ? (string) get_resource_id($websocket) : bin2hex(random_bytes(4)));
+    $clientId = 'sfu_' . getmypid() . '_' . $clientObjectId . '_' . bin2hex(random_bytes(4));
     $sfuClients[$clientId] = [
         'websocket' => $websocket,
         'user_id' => $userIdString,
@@ -2306,8 +2825,19 @@ function videochat_handle_sfu_routes(
 
     if ($role === 'publisher') {
         $sfuRooms[$roomId]['publishers'][$clientId] = &$sfuClients[$clientId];
-    } else {
-        $sfuRooms[$roomId]['subscribers'][$clientId] = &$sfuClients[$clientId];
+    }
+    // A video-call peer both publishes local media and subscribes to remote media.
+    $sfuRooms[$roomId]['subscribers'][$clientId] = &$sfuClients[$clientId];
+
+    $sfuDatabase = null;
+    try {
+        $sfuDatabase = $openDatabase();
+        videochat_sfu_bootstrap($sfuDatabase);
+        if ($role === 'publisher') {
+            videochat_sfu_upsert_publisher($sfuDatabase, $roomId, $clientId, $userIdString, $userName);
+        }
+    } catch (Throwable) {
+        $sfuDatabase = null;
     }
 
     king_websocket_send($websocket, json_encode([
@@ -2318,7 +2848,10 @@ function videochat_handle_sfu_routes(
         'server_time' => time(),
     ]));
 
-    $publishersInRoom = array_keys($sfuRooms[$roomId]['publishers'] ?? []);
+    $publishersInRoom = array_values(array_filter(
+        array_map('strval', array_keys($sfuRooms[$roomId]['publishers'] ?? [])),
+        static fn (string $publisherId): bool => $publisherId !== (string) $clientId
+    ));
     if (!empty($publishersInRoom)) {
         king_websocket_send($websocket, json_encode([
             'type' => 'sfu/joined',
@@ -2327,34 +2860,64 @@ function videochat_handle_sfu_routes(
         ]));
     }
 
-    foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
-        if ($subClientId !== $clientId) {
+    $joinedPublishers = $role === 'publisher' ? [(string) $clientId] : [];
+    if ($joinedPublishers !== []) {
+        foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
+            if ((string) $subClientId === (string) $clientId) {
+                continue;
+            }
             king_websocket_send($subClient['websocket'], json_encode([
                 'type' => 'sfu/joined',
                 'room_id' => $roomId,
-                'publishers' => $publishersInRoom,
+                'publishers' => $joinedPublishers,
             ]));
         }
     }
 
-    $buffer = '';
-    $firstFrame = true;
+    $knownBrokerPublishers = [];
+    $brokerTrackSignatures = [];
+    $lastBrokerFrameId = $sfuDatabase instanceof PDO ? videochat_sfu_latest_frame_id($sfuDatabase, $roomId) : 0;
+    $nextBrokerPollMs = 0;
+    $nextBrokerCleanupMs = videochat_sfu_now_ms() + 5000;
 
     while (true) {
-        $frame = @king_client_websocket_receive($websocket, 5000);
-        if ($frame === null || $frame === false) {
-            break;
+        if ($sfuDatabase instanceof PDO && videochat_sfu_now_ms() >= $nextBrokerPollMs) {
+            try {
+                videochat_sfu_poll_broker(
+                    $sfuDatabase,
+                    $websocket,
+                    $roomId,
+                    $clientId,
+                    $knownBrokerPublishers,
+                    $brokerTrackSignatures,
+                    $lastBrokerFrameId
+                );
+                if (videochat_sfu_now_ms() >= $nextBrokerCleanupMs) {
+                    videochat_sfu_cleanup_frames($sfuDatabase);
+                    $nextBrokerCleanupMs = videochat_sfu_now_ms() + 5000;
+                }
+            } catch (Throwable) {
+                // Keep the live socket up even if a transient SQLite lock hits the broker poll.
+            }
+            $nextBrokerPollMs = videochat_sfu_now_ms() + 100;
         }
 
-        if ($firstFrame) {
-            $firstFrame = false;
+        $frame = @king_client_websocket_receive($websocket, 100);
+        if ($frame === null || $frame === false) {
+            $status = function_exists('king_client_websocket_get_status')
+                ? (int) king_client_websocket_get_status($websocket)
+                : 1;
+            if ($status === 3) {
+                break;
+            }
             continue;
         }
 
-        $buffer .= $frame;
-        $messages = explode("\n", $buffer);
-        $buffer = array_pop($messages);
+        if (!is_string($frame) || trim($frame) === '') {
+            continue;
+        }
 
+        $messages = preg_split('/\r?\n/', trim($frame)) ?: [];
         foreach ($messages as $msgJson) {
             if (trim($msgJson) === '') {
                 continue;
@@ -2369,7 +2932,7 @@ function videochat_handle_sfu_routes(
 
             switch ($msgType) {
                 case 'sfu/publish':
-                    $trackId = $msg['track_id'] ?? uniqid('track_');
+                    $trackId = $msg['track_id'] ?? $msg['trackId'] ?? uniqid('track_');
                     $kind = $msg['kind'] ?? 'video';
                     $label = $msg['label'] ?? '';
 
@@ -2378,6 +2941,20 @@ function videochat_handle_sfu_routes(
                         'kind' => $kind,
                         'label' => $label,
                     ];
+                    if ($sfuDatabase instanceof PDO) {
+                        try {
+                            videochat_sfu_upsert_track(
+                                $sfuDatabase,
+                                $roomId,
+                                (string) $clientId,
+                                (string) $trackId,
+                                (string) $kind,
+                                (string) $label
+                            );
+                        } catch (Throwable) {
+                            // best-effort cross-worker track advertisement
+                        }
+                    }
 
                     king_websocket_send($websocket, json_encode([
                         'type' => 'sfu/published',
@@ -2386,10 +2963,14 @@ function videochat_handle_sfu_routes(
                     ]));
 
                     foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
+                        if ((string) $subClientId === (string) $clientId) {
+                            continue;
+                        }
                         king_websocket_send($subClient['websocket'], json_encode([
                             'type' => 'sfu/tracks',
                             'room_id' => $roomId,
                             'publisher_id' => $clientId,
+                            'publisher_user_id' => $userIdString,
                             'publisher_name' => $userName,
                             'tracks' => array_values($sfuClients[$clientId]['tracks']),
                         ]));
@@ -2397,46 +2978,94 @@ function videochat_handle_sfu_routes(
                     break;
 
                 case 'sfu/subscribe':
-                    $publisherId = $msg['publisher_id'] ?? null;
+                    $publisherId = $msg['publisher_id'] ?? $msg['publisherId'] ?? null;
                     if (isset($sfuRooms[$roomId]['publishers'][$publisherId])) {
                         king_websocket_send($websocket, json_encode([
                             'type' => 'sfu/tracks',
                             'room_id' => $roomId,
                             'publisher_id' => $publisherId,
+                            'publisher_user_id' => $sfuClients[$publisherId]['user_id'],
                             'publisher_name' => $sfuClients[$publisherId]['user_name'],
                             'tracks' => array_values($sfuClients[$publisherId]['tracks']),
                         ]));
+                    } elseif ($sfuDatabase instanceof PDO && is_string($publisherId) && $publisherId !== '') {
+                        try {
+                            foreach (videochat_sfu_fetch_publishers($sfuDatabase, $roomId) as $publisher) {
+                                if ((string) ($publisher['publisher_id'] ?? '') !== $publisherId) {
+                                    continue;
+                                }
+                                king_websocket_send($websocket, json_encode([
+                                    'type' => 'sfu/tracks',
+                                    'room_id' => $roomId,
+                                    'publisher_id' => $publisherId,
+                                    'publisher_user_id' => (string) ($publisher['user_id'] ?? ''),
+                                    'publisher_name' => (string) ($publisher['user_name'] ?? ''),
+                                    'tracks' => videochat_sfu_fetch_tracks($sfuDatabase, $roomId, $publisherId),
+                                ]));
+                                break;
+                            }
+                        } catch (Throwable) {
+                            // best-effort cross-worker subscribe
+                        }
                     }
                     break;
 
                 case 'sfu/unpublish':
-                    $trackId = $msg['track_id'] ?? null;
+                    $trackId = $msg['track_id'] ?? $msg['trackId'] ?? null;
                     unset($sfuClients[$clientId]['tracks'][$trackId]);
+                    if ($sfuDatabase instanceof PDO && is_string($trackId) && $trackId !== '') {
+                        try {
+                            videochat_sfu_remove_track($sfuDatabase, $roomId, (string) $clientId, $trackId);
+                        } catch (Throwable) {
+                            // best-effort cross-worker unpublish
+                        }
+                    }
 
                     foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
+                        if ((string) $subClientId === (string) $clientId) {
+                            continue;
+                        }
                         king_websocket_send($subClient['websocket'], json_encode([
                             'type' => 'sfu/unpublished',
                             'publisher_id' => $clientId,
+                            'publisher_user_id' => $userIdString,
                             'track_id' => $trackId,
                         ]));
                     }
                     break;
 
                 case 'sfu/frame':
-                    $trackId = $msg['track_id'] ?? '';
+                    $trackId = $msg['track_id'] ?? $msg['trackId'] ?? '';
                     $timestamp = $msg['timestamp'] ?? 0;
                     $frameData = $msg['data'] ?? [];
-                    $frameType = $msg['frameType'] ?? 'delta';
+                    $frameType = $msg['frame_type'] ?? $msg['frameType'] ?? 'delta';
+                    if ($sfuDatabase instanceof PDO && is_array($frameData)) {
+                        try {
+                            videochat_sfu_insert_frame(
+                                $sfuDatabase,
+                                $roomId,
+                                (string) $clientId,
+                                $userIdString,
+                                (string) $trackId,
+                                (int) $timestamp,
+                                (string) $frameType,
+                                $frameData
+                            );
+                        } catch (Throwable) {
+                            // best-effort cross-worker frame relay
+                        }
+                    }
 
                     foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
-                        if ($subClientId !== $clientId) {
+                        if ((string) $subClientId !== (string) $clientId) {
                             king_websocket_send($subClient['websocket'], json_encode([
                                 'type' => 'sfu/frame',
                                 'publisher_id' => $clientId,
+                                'publisher_user_id' => $userIdString,
                                 'track_id' => $trackId,
                                 'timestamp' => $timestamp,
                                 'data' => $frameData,
-                                'frameType' => $frameType,
+                                'frame_type' => $frameType,
                             ]));
                         }
                     }
@@ -2449,12 +3078,23 @@ function videochat_handle_sfu_routes(
     }
 
     unset($sfuClients[$clientId]);
+    if ($sfuDatabase instanceof PDO) {
+        try {
+            videochat_sfu_remove_publisher($sfuDatabase, $roomId, (string) $clientId);
+        } catch (Throwable) {
+            // best-effort cleanup; stale rows are harmless for the next reconnect.
+        }
+    }
     if (isset($sfuRooms[$roomId]['publishers'][$clientId])) {
         unset($sfuRooms[$roomId]['publishers'][$clientId]);
         foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
+            if ((string) $subClientId === (string) $clientId) {
+                continue;
+            }
             king_websocket_send($subClient['websocket'], json_encode([
                 'type' => 'sfu/publisher_left',
                 'publisher_id' => $clientId,
+                'publisher_user_id' => $userIdString,
             ]));
         }
     }

@@ -102,14 +102,19 @@
 
         <section v-if="!isCompactViewport && showMiniParticipantStrip" class="workspace-mini-strip">
           <article
-            v-for="participant in stripParticipants"
+            v-for="participant in miniVideoParticipants"
             :key="participant.userId"
             class="workspace-mini-tile"
           >
+            <div
+              :id="miniVideoSlotId(participant.userId)"
+              class="workspace-mini-video-slot"
+              :data-user-id="participant.userId"
+            ></div>
             <span class="workspace-mini-title">{{ participant.displayName }}</span>
             <span class="workspace-mini-meta">{{ participant.role }}</span>
           </article>
-          <article v-if="stripParticipants.length === 0" class="workspace-mini-empty">
+          <article v-if="miniVideoParticipants.length === 0" class="workspace-mini-empty">
             No users in this room yet.
           </article>
         </section>
@@ -859,6 +864,11 @@ function initials(name) {
   return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
 }
 
+function miniVideoSlotId(userId) {
+  const normalizedUserId = Number(userId);
+  return `workspace-mini-video-slot-${Number.isInteger(normalizedUserId) && normalizedUserId > 0 ? normalizedUserId : 0}`;
+}
+
 const activeTab = ref('users');
 const usersSearch = ref('');
 const usersPage = ref(1);
@@ -999,6 +1009,7 @@ let compactMediaQuery = null;
 const routeCallRef = computed(() => String(route.params.callRef || '').trim());
 const desiredRoomId = computed(() => normalizeRoomId(routeCallResolve.roomId || routeCallRef.value || 'lobby'));
 const activeRoomId = computed(() => normalizeRoomId(serverRoomId.value || desiredRoomId.value));
+const activeSocketCallId = computed(() => normalizeSocketCallId(activeCallId.value || routeCallResolve.callId || ''));
 const currentUserId = computed(() => (Number.isInteger(sessionState.userId) ? sessionState.userId : 0));
 const showAdmissionGate = computed(() => {
   const gateRoomId = normalizeOptionalRoomId(admissionGateState.roomId);
@@ -1015,6 +1026,9 @@ const shouldConnectSfu = computed(() => (
   isWlvcRuntimePath()
   && isSocketOnline.value
   && hasRealtimeRoomSync.value
+  && !routeCallResolve.pending
+  && routeCallResolve.error === ''
+  && activeSocketCallId.value !== ''
   && activeRoomId.value === desiredRoomId.value
 ));
 const isShellLeftSidebarCollapsed = computed(() => {
@@ -1384,6 +1398,18 @@ const stripParticipants = computed(() => {
   return rows.slice(0, VISIBLE_PARTICIPANTS_LIMIT);
 });
 
+const primaryVideoUserId = computed(() => {
+  const pinnedRow = connectedParticipantUsers.value.find((row) => {
+    const userId = Number(row?.userId || 0);
+    return Number.isInteger(userId) && userId > 0 && pinnedUsers[userId] === true;
+  });
+  if (pinnedRow) return Number(pinnedRow.userId);
+  return currentUserId.value;
+});
+const miniVideoParticipants = computed(() => {
+  const primaryUserId = primaryVideoUserId.value;
+  return stripParticipants.value.filter((row) => Number(row?.userId || 0) !== primaryUserId);
+});
 const showMiniParticipantStrip = computed(() => connectedParticipantUsers.value.length > 1);
 const showLobbyRequestBadge = computed(() => (
   canModerate.value
@@ -3429,8 +3455,7 @@ async function connectSocket() {
     }
 
     const socketOrigin = orderedSocketOrigins[originIndex] || '';
-    const socketCallId = normalizeSocketCallId(activeCallId.value || routeCallResolve.callId || '');
-    const socketUrl = socketUrlForRoom(desiredRoomId.value, socketOrigin, socketCallId);
+    const socketUrl = socketUrlForRoom(desiredRoomId.value, socketOrigin, activeSocketCallId.value);
     if (!socketUrl) {
       connectWithOriginAt(originIndex + 1);
       return;
@@ -3643,8 +3668,22 @@ watch(
     .sort((left, right) => left - right)
     .join(','),
   () => {
+    nextTick(() => renderCallVideoLayout());
     if (!isNativeWebRtcRuntimePath()) return;
     syncNativePeerConnectionsWithRoster();
+  }
+);
+
+watch(
+  () => [
+    primaryVideoUserId.value,
+    miniVideoParticipants.value
+      .map((row) => Number(row?.userId || 0))
+      .filter((userId) => Number.isInteger(userId) && userId > 0)
+      .join(','),
+  ].join('|'),
+  () => {
+    nextTick(() => renderCallVideoLayout());
   }
 );
 
@@ -3913,6 +3952,10 @@ function initSFU() {
 
   const token = String(sessionState.sessionToken || '').trim();
   if (!token) return;
+  if (!shouldConnectSfu.value) return;
+
+  const socketCallId = activeSocketCallId.value;
+  if (socketCallId === '') return;
 
   sfuClientRef.value = new SFUClient({
     onTracks: (e) => handleSFUTracks(e),
@@ -3929,6 +3972,10 @@ function initSFU() {
       localTracksPublishedToSfu = false;
       sfuClientRef.value = null;
       if (manualSocketClose) {
+        sfuConnectRetryCount = 0;
+        return;
+      }
+      if (!shouldConnectSfu.value) {
         sfuConnectRetryCount = 0;
         return;
       }
@@ -3951,7 +3998,7 @@ function initSFU() {
   sfuClientRef.value.connect(
     { userId: String(sessionState.userId), token, name: sessionState.displayName || 'User' },
     activeRoomId.value,
-    normalizeSocketCallId(activeCallId.value || routeCallResolve.callId || '')
+    socketCallId
   );
   sfuConnected.value = false;
 }
@@ -3985,6 +4032,13 @@ function handleSFUTracks(e) {
     return;
   }
   (async () => {
+    const publisherId = String(e?.publisherId || '').trim();
+    const publisherUserId = Number(e?.publisherUserId || 0);
+    if (publisherId === '') return;
+    if (Number.isInteger(publisherUserId) && publisherUserId === currentUserId.value) {
+      return;
+    }
+
     let decoder = null;
     if (isWlvcRuntimePath() && mediaRuntimeCapabilities.value.stageA) {
       try {
@@ -4004,17 +4058,14 @@ function handleSFUTracks(e) {
     canvas.height = 480;
     canvas.className = 'remote-video';
 
-    for (const [_, peer] of remotePeersRef.value) {
-      teardownRemotePeer(peer);
-    }
-    remotePeersRef.value.clear();
-
-    const container = document.getElementById('remote-video-container');
-    if (container) {
-      container.replaceChildren(canvas);
+    const existingPeer = remotePeersRef.value.get(publisherId);
+    if (existingPeer) {
+      teardownRemotePeer(existingPeer);
     }
 
-    remotePeersRef.value.set(e.publisherId, {
+    remotePeersRef.value.set(publisherId, {
+      userId: Number.isInteger(publisherUserId) && publisherUserId > 0 ? publisherUserId : 0,
+      displayName: String(e?.publisherName || '').trim(),
       pc: null,
       video: null,
       tracks: e.tracks,
@@ -4023,7 +4074,9 @@ function handleSFUTracks(e) {
       decodedCanvas: canvas,
     });
 
-    mediaDebugLog('[SFU] Subscribed to publisher', e.publisherId, 'with', e.tracks.length, 'tracks');
+    await nextTick();
+    renderCallVideoLayout();
+    mediaDebugLog('[SFU] Subscribed to publisher', publisherId, 'with', e.tracks.length, 'tracks');
   })();
 }
 
@@ -4032,6 +4085,7 @@ function handleSFUUnpublished(publisherId, trackId) {
   if (peer) {
     teardownRemotePeer(peer);
     remotePeersRef.value.delete(publisherId);
+    renderCallVideoLayout();
   }
 }
 
@@ -4040,6 +4094,7 @@ function handleSFUPublisherLeft(publisherId) {
   if (peer) {
     teardownRemotePeer(peer);
     remotePeersRef.value.delete(publisherId);
+    renderCallVideoLayout();
   }
 }
 
@@ -4083,19 +4138,94 @@ function createNativePeerVideoElement(userId) {
   return video;
 }
 
+function remotePeerMediaNode(peer) {
+  if (!peer || typeof peer !== 'object') return null;
+  if (peer.decodedCanvas instanceof HTMLCanvasElement) return peer.decodedCanvas;
+  if (peer.video instanceof HTMLVideoElement) return peer.video;
+  return null;
+}
+
+function mediaNodeForUserId(userId) {
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return null;
+  if (normalizedUserId === currentUserId.value) {
+    return localVideoElement.value instanceof HTMLVideoElement ? localVideoElement.value : null;
+  }
+  for (const peer of remotePeersRef.value.values()) {
+    if (Number(peer?.userId || 0) === normalizedUserId) {
+      return remotePeerMediaNode(peer);
+    }
+  }
+  for (const peer of nativePeerConnectionsRef.value.values()) {
+    if (Number(peer?.userId || 0) === normalizedUserId) {
+      return remotePeerMediaNode(peer);
+    }
+  }
+  return null;
+}
+
+function mountVideoNode(target, node, assignedNodes) {
+  if (!(target instanceof HTMLElement) || !(node instanceof HTMLElement)) return false;
+  assignedNodes.add(node);
+  if (node.parentElement !== target || target.children.length !== 1 || target.firstElementChild !== node) {
+    target.replaceChildren(node);
+  }
+  return true;
+}
+
+function clearUnassignedChildren(target, assignedNodes) {
+  if (!(target instanceof HTMLElement)) return;
+  for (const child of Array.from(target.children)) {
+    if (child instanceof HTMLElement && assignedNodes.has(child)) continue;
+    child.remove();
+  }
+}
+
+function renderCallVideoLayout() {
+  if (typeof document === 'undefined') return;
+
+  const assignedNodes = new Set();
+  const localContainer = document.getElementById('local-video-container');
+  const remoteContainer = document.getElementById('remote-video-container');
+  const primaryUserId = primaryVideoUserId.value;
+  const primaryNode = mediaNodeForUserId(primaryUserId);
+
+  if (primaryUserId === currentUserId.value) {
+    mountVideoNode(localContainer, primaryNode, assignedNodes);
+  } else {
+    mountVideoNode(remoteContainer, primaryNode, assignedNodes);
+  }
+
+  for (const participant of miniVideoParticipants.value) {
+    const userId = Number(participant?.userId || 0);
+    const slot = document.getElementById(miniVideoSlotId(userId));
+    const node = mediaNodeForUserId(userId);
+    if (!mountVideoNode(slot, node, assignedNodes)) {
+      clearUnassignedChildren(slot, assignedNodes);
+    }
+  }
+
+  clearUnassignedChildren(localContainer, assignedNodes);
+  clearUnassignedChildren(remoteContainer, assignedNodes);
+
+  const allRemotePeers = [
+    ...remotePeersRef.value.values(),
+    ...nativePeerConnectionsRef.value.values(),
+  ];
+  for (const peer of allRemotePeers) {
+    const node = remotePeerMediaNode(peer);
+    if (node instanceof HTMLElement && !assignedNodes.has(node)) {
+      node.remove();
+    }
+  }
+
+  applyCallOutputPreferences();
+}
+
 function renderNativeRemoteVideos() {
   if (typeof document === 'undefined') return;
   if (!isNativeWebRtcRuntimePath()) return;
-  const container = document.getElementById('remote-video-container');
-  if (!container) return;
-
-  const nodes = [];
-  for (const peer of nativePeerConnectionsRef.value.values()) {
-    if (!(peer?.video instanceof HTMLVideoElement)) continue;
-    nodes.push(peer.video);
-  }
-  container.replaceChildren(...nodes.slice(0, 1));
-  applyCallOutputPreferences();
+  renderCallVideoLayout();
 }
 
 function nativeWebRtcConfig() {
@@ -4867,6 +4997,7 @@ function clearLocalPreviewElement() {
   if (container) {
     container.innerHTML = '';
   }
+  renderCallVideoLayout();
 }
 
 function unpublishAndStopLocalTracks() {
@@ -4991,6 +5122,7 @@ async function startEncodingPipeline(videoTrack) {
   } catch {
     // keep preview node mounted even when autoplay policy blocks playback.
   }
+  renderCallVideoLayout();
   applyCallOutputPreferences();
 
   if (!isWlvcRuntimePath()) {
@@ -5049,6 +5181,7 @@ async function startEncodingPipeline(videoTrack) {
       
       sfuClientRef.value.sendEncodedFrame({
         publisherId: String(sessionState.userId),
+        publisherUserId: String(sessionState.userId),
         trackId: videoTrack.id,
         timestamp: encoded.timestamp,
         data: encoded.data,
@@ -5254,11 +5387,11 @@ async function reconfigureLocalTracksFromSelectedDevices() {
 
 function handleSFUEncodedFrame(frame) {
   if (!isWlvcRuntimePath()) return;
-  const publisherUserId = Number(frame?.publisherId || 0);
+  const peer = remotePeersRef.value.get(frame.publisherId);
+  const publisherUserId = Number(frame?.publisherUserId || peer?.userId || 0);
   if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
     markParticipantActivity(publisherUserId, 'media_frame');
   }
-  const peer = remotePeersRef.value.get(frame.publisherId);
   if (!peer || !peer.decoder) return;
 
   try {
@@ -5652,6 +5785,8 @@ onBeforeUnmount(() => {
 
 .workspace-mini-tile,
 .workspace-mini-empty {
+  position: relative;
+  min-height: 104px;
   background: var(--bg-mini-video);
   border-radius: 0;
   padding: 8px;
@@ -5659,17 +5794,39 @@ onBeforeUnmount(() => {
   align-content: center;
   justify-items: center;
   gap: 2px;
+  overflow: hidden;
+}
+
+.workspace-mini-video-slot {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-video);
+}
+
+.workspace-mini-video-slot :deep(video),
+.workspace-mini-video-slot :deep(canvas) {
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  object-fit: cover !important;
 }
 
 .workspace-mini-title {
+  position: relative;
+  z-index: 2;
+  align-self: end;
   font-size: 12px;
   font-weight: 700;
   color: var(--color-f1f6ff);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
 }
 
 .workspace-mini-meta {
+  position: relative;
+  z-index: 2;
   font-size: 11px;
   color: var(--color-c9d9f4);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
 }
 
 .workspace-mini-empty {

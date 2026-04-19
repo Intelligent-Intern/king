@@ -22,12 +22,14 @@ export interface SFUTrack {
 export interface SFUTracksEvent {
   roomId: string
   publisherId: string
+  publisherUserId: string
   publisherName: string
   tracks: SFUTrack[]
 }
 
 export interface SFUEncodedFrame {
   publisherId: string
+  publisherUserId?: string
   trackId: string
   timestamp: number
   data: ArrayBuffer
@@ -183,26 +185,27 @@ export class SFUClient {
 
   publishTracks(tracks: SFUTrack[]): void {
     for (const t of tracks) {
-      this.send({ type: 'sfu/publish', trackId: t.id, kind: t.kind, label: t.label })
+      this.send({ type: 'sfu/publish', track_id: t.id, kind: t.kind, label: t.label })
     }
   }
 
   subscribe(publisherId: string): void {
-    this.send({ type: 'sfu/subscribe', publisherId })
+    this.send({ type: 'sfu/subscribe', publisher_id: publisherId })
   }
 
   unpublishTrack(trackId: string): void {
-    this.send({ type: 'sfu/unpublish', trackId })
+    this.send({ type: 'sfu/unpublish', track_id: trackId })
   }
 
   sendEncodedFrame(frame: SFUEncodedFrame): void {
     const payload = {
       type: 'sfu/frame',
-      publisherId: frame.publisherId,
-      trackId: frame.trackId,
+      publisher_id: frame.publisherId,
+      publisher_user_id: frame.publisherUserId || '',
+      track_id: frame.trackId,
       timestamp: frame.timestamp,
       data: Array.from(new Uint8Array(frame.data)),
-      frameType: frame.type,
+      frame_type: frame.type,
     }
     this.send(payload)
   }
@@ -224,38 +227,54 @@ export class SFUClient {
   }
 
   private handleMessage(msg: any): void {
+    const stringField = (...values: any[]): string => {
+      for (const value of values) {
+        const normalized = String(value ?? '').trim()
+        if (normalized !== '') return normalized
+      }
+      return ''
+    }
+
     switch (msg.type) {
       case 'sfu/joined':
         for (const publisherId of (msg.publishers ?? [])) {
-          this.subscribe(publisherId)
+          const normalizedPublisherId = stringField(publisherId)
+          if (normalizedPublisherId !== '') {
+            this.subscribe(normalizedPublisherId)
+          }
         }
         break
 
       case 'sfu/tracks':
         this.cb.onTracks({
-          roomId:        msg.roomId,
-          publisherId:   msg.publisherId,
-          publisherName: msg.publisherName,
+          roomId:          stringField(msg.roomId, msg.room_id),
+          publisherId:     stringField(msg.publisherId, msg.publisher_id),
+          publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id),
+          publisherName:   stringField(msg.publisherName, msg.publisher_name),
           tracks:        msg.tracks ?? [],
         })
         break
 
       case 'sfu/unpublished':
-        this.cb.onUnpublished(msg.publisherId, msg.trackId)
+        this.cb.onUnpublished(
+          stringField(msg.publisherId, msg.publisher_id),
+          stringField(msg.trackId, msg.track_id),
+        )
         break
 
       case 'sfu/publisher_left':
-        this.cb.onPublisherLeft(msg.publisherId)
+        this.cb.onPublisherLeft(stringField(msg.publisherId, msg.publisher_id))
         break
 
       case 'sfu/frame':
         if (this.cb.onEncodedFrame) {
           this.cb.onEncodedFrame({
-            publisherId: msg.publisherId,
-            trackId: msg.trackId,
+            publisherId: stringField(msg.publisherId, msg.publisher_id),
+            publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id),
+            trackId: stringField(msg.trackId, msg.track_id),
             timestamp: msg.timestamp,
             data: new Uint8Array(msg.data).buffer,
-            type: msg.frameType,
+            type: stringField(msg.frameType, msg.frame_type) === 'keyframe' ? 'keyframe' : 'delta',
           })
         }
         break
