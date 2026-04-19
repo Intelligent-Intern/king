@@ -806,13 +806,20 @@ Ziel:
 - STUN-only-Status beenden und TURN-Relay als baselinefähig bereitstellen.
 
 Checklist:
-- [ ] TURN-Service/Deployment aktuell nicht im Repo verdrahtet (deploy-Pfad entfernt).
+- [x] TURN-Service/Deployment aktuell nicht im Repo verdrahtet (deploy-Pfad entfernt).
 - [x] Frontend-ICE-Server-Konfiguration über `VITE_VIDEOCHAT_ICE_SERVERS` (JSON) verdrahtet.
-- [ ] TURN Credential Rotation + Secret Manager Binding (Vault/KMS) erzwingen.
-- [ ] End-to-end NAT-Matrix-Tests (mobile/restrictive NAT) ergänzen.
+- [x] TURN Credential Rotation + Secret Manager Binding (Vault/KMS) erzwingen.
+- [x] End-to-end NAT-Matrix-Tests (mobile/restrictive NAT) ergänzen.
 
 Definition of done:
 - TURN ist nicht nur dokumentiert, sondern als deploybare Basis konfigurierbar.
+
+Abschluss:
+- `demo/video-chat/docker-compose.v1.yml` enthaelt den optionalen `turn`-Profile-Service `videochat-turn-v1` auf Basis von `coturn/coturn`, ohne Default-Secret und ohne Aktivierung im Standard-Compose.
+- `demo/video-chat/scripts/generate-turn-ice-servers.php` erzeugt zeitlich rotierende TURN-REST-Credentials fuer `VITE_VIDEOCHAT_ICE_SERVERS`.
+- `VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE` ist der Secret-Manager-Binding-Punkt fuer Vault-/KMS-Agenten, Docker/Kubernetes Secrets oder CI-Secret-Mounts.
+- `demo/video-chat/scripts/turn-nat-matrix-contract.sh` validiert opt-in reale NAT-Matrix-Ergebnisse fuer `mobile-lte`, `restrictive-nat`, `udp-blocked-turn-tcp` und `corporate-firewall`.
+- `demo/video-chat/scripts/check-turn-baseline.sh` prueft Baseline, Rotation und Gate-Verdrahtung statisch im Smoke.
 
 ---
 

@@ -67,6 +67,47 @@ services:
       - videochat-v1-sqlite:/data
     restart: unless-stopped
 
+  videochat-turn-v1:
+    image: "${VIDEOCHAT_V1_TURN_IMAGE:-coturn/coturn:4.6.2}"
+    profiles:
+      - turn
+    environment:
+      VIDEOCHAT_V1_TURN_REALM: "${VIDEOCHAT_V1_TURN_REALM:-king-videochat.local}"
+      VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET: "${VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET:-}"
+      VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE: "${VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE:-}"
+      VIDEOCHAT_V1_TURN_RELAY_MIN_PORT: "${VIDEOCHAT_V1_TURN_RELAY_MIN_PORT:-49160}"
+      VIDEOCHAT_V1_TURN_RELAY_MAX_PORT: "${VIDEOCHAT_V1_TURN_RELAY_MAX_PORT:-49200}"
+    command:
+      - sh
+      - -lc
+      - |
+        secret="$${VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET}"
+        if [ -z "$${secret}" ] && [ -n "$${VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE}" ]; then
+          secret="$$(cat "$${VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE}")"
+        fi
+        if [ -z "$${secret}" ]; then
+          echo "VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET or VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE is required" >&2
+          exit 64
+        fi
+        exec turnserver \
+          --listening-ip=0.0.0.0 \
+          --listening-port=3478 \
+          --realm="$${VIDEOCHAT_V1_TURN_REALM}" \
+          --use-auth-secret \
+          --static-auth-secret="$${secret}" \
+          --fingerprint \
+          --no-cli \
+          --no-tls \
+          --no-dtls \
+          --min-port="$${VIDEOCHAT_V1_TURN_RELAY_MIN_PORT}" \
+          --max-port="$${VIDEOCHAT_V1_TURN_RELAY_MAX_PORT}" \
+          --log-file=stdout
+    ports:
+      - "${VIDEOCHAT_V1_TURN_PORT:-3478}:3478/tcp"
+      - "${VIDEOCHAT_V1_TURN_PORT:-3478}:3478/udp"
+      - "${VIDEOCHAT_V1_TURN_RELAY_MIN_PORT:-49160}-${VIDEOCHAT_V1_TURN_RELAY_MAX_PORT:-49200}:${VIDEOCHAT_V1_TURN_RELAY_MIN_PORT:-49160}-${VIDEOCHAT_V1_TURN_RELAY_MAX_PORT:-49200}/udp"
+    restart: unless-stopped
+
   videochat-frontend-v1:
     build:
       context: ../..

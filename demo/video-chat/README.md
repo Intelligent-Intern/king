@@ -122,7 +122,7 @@ Current demo caveats:
 
 - login/user directory is persisted in SQLite (`KING_DEMO_DB_PATH`)
 - no durable room/message persistence across backend restart
-- no TURN relay setup (STUN-only by default)
+- TURN relay setup is available through the opt-in `turn` compose profile; default local demo remains STUN-only unless `VITE_VIDEOCHAT_ICE_SERVERS` is set
 - no production moderation/audit policy
 - background blur uses browser `FaceDetector` / center-mask fallback by default; optional MediaPipe/TFJS segmentation backends are opt-in via `VITE_VIDEOCHAT_ENABLE_MEDIAPIPE=true` / `VITE_VIDEOCHAT_ENABLE_TFJS=true`
 - frontend debug console output is quiet by default; enable verbose runtime logs with `VITE_VIDEOCHAT_DEBUG_LOGS=true`
@@ -203,7 +203,7 @@ What is already working:
 What is still missing for robust production operation:
 
 - TLS termination + reverse proxy websocket upgrade config for both `/ws` and `/sfu`
-- TURN infrastructure (currently STUN-only baseline, weak for restrictive NAT/mobile networks)
+- production TURN infrastructure still needs environment-specific NAT evidence; the repo provides an opt-in coturn baseline profile plus credential rotation tooling
 - multi-node architecture (current call/SFU state is in-process; SQLite is single-node local volume)
 - secret management + hardened env config (no demo credentials in deployed environments)
 - operational hardening (central logs/metrics/alerts, backups, rollout/rollback strategy)
@@ -214,6 +214,13 @@ Edge deployment decision:
 - The active compose file is for dev/staging/internal demos only.
 - A future production Edge path must be introduced as its own issue and must not reuse demo defaults.
 - The static guard is `bash demo/video-chat/scripts/check-edge-deployment-decision.sh`.
+
+TURN baseline:
+
+- `docker compose --profile turn -f docker-compose.v1.yml up --build` starts the optional coturn service.
+- TURN requires `VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET` or `VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE`; no demo secret is checked in.
+- Rotating frontend ICE JSON is generated with `php demo/video-chat/scripts/generate-turn-ice-servers.php`.
+- The static guard is `bash demo/video-chat/scripts/check-turn-baseline.sh`.
 
 Host-runtime note:
 
@@ -287,7 +294,7 @@ bash demo/video-chat/scripts/smoke.sh
 `demo/video-chat/scripts/smoke.sh` now verifies:
 
 - backend and frontend launchers plus syntax checks
-- demo-scope security policy and no-internal-edge-deploy decision gates
+- demo-scope security policy, no-internal-edge-deploy, and optional TURN baseline gates
 - docker-compose v1 stack boot (`frontend-vue` + `backend-king-php` + sqlite volume) with runtime migration snapshot and auth/session sanity checks
 - backend boot and live `/health` probe
 - API/WS catalog drift gate against the canonical versioned contract fixture (`contract-catalog-parity-contract`)
@@ -347,6 +354,20 @@ Optional for Docker Desktop/remote FS watcher stability:
 
 ```bash
 VIDEOCHAT_VUE_POLLING=1 docker compose -f docker-compose.v1.yml up --build
+```
+
+Optional TURN relay baseline:
+
+```bash
+export VIDEOCHAT_TURN_STATIC_AUTH_SECRET_FILE=/run/secrets/videochat-turn-static-auth-secret
+export VIDEOCHAT_TURN_URIS='turn:turn.example.com:3478?transport=udp,turn:turn.example.com:3478?transport=tcp'
+export VITE_VIDEOCHAT_ICE_SERVERS="$(php demo/video-chat/scripts/generate-turn-ice-servers.php)"
+
+cd demo/video-chat
+VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE=/run/secrets/videochat-turn-static-auth-secret \
+VIDEOCHAT_V1_TURN_REALM=videochat.example.com \
+VITE_VIDEOCHAT_ICE_SERVERS="${VITE_VIDEOCHAT_ICE_SERVERS}" \
+docker compose --profile turn -f docker-compose.v1.yml up --build
 ```
 
 SQLite data is persisted in a mounted Docker volume:
