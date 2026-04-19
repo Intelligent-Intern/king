@@ -1,0 +1,272 @@
+{
+  "version": "videochat-ops-v1",
+  "pipeline": {
+    "signals": ["metrics", "logs", "traces"],
+    "collector_protocol": "otlp",
+    "collector_endpoint_env": "VIDEOCHAT_OTEL_EXPORTER_ENDPOINT",
+    "service_name_env": "VIDEOCHAT_OTEL_SERVICE_NAME",
+    "required_labels": [
+      "build",
+      "env",
+      "room_size_tier",
+      "client_device_class",
+      "codec_stage"
+    ],
+    "log_streams": [
+      "backend-http",
+      "backend-ws",
+      "backend-sfu",
+      "frontend-runtime",
+      "turn-relay"
+    ],
+    "artifact_outputs": [
+      "load-summary.json",
+      "alerts-during-load.json",
+      "metrics.ndjson.gz"
+    ]
+  },
+  "metrics": [
+    {
+      "id": "K-01",
+      "name": "Join API Latency",
+      "metric_name": "videochat.join_api_latency_ms",
+      "type": "histogram",
+      "source": "frontend_join_event + backend_request_timing",
+      "objective": "p95 <= 800 ms"
+    },
+    {
+      "id": "K-02",
+      "name": "First Media Time",
+      "metric_name": "videochat.first_media_time_ms",
+      "type": "histogram",
+      "source": "frontend_realtime_media_hooks",
+      "objective": "p95 <= 3500 ms"
+    },
+    {
+      "id": "K-03",
+      "name": "Join Success Rate",
+      "metric_name": "videochat.join_success_rate",
+      "type": "ratio",
+      "source": "backend_join_events + frontend_join_events",
+      "objective": ">= 99.0 percent over 5 min"
+    },
+    {
+      "id": "K-04",
+      "name": "Reconnect Recovery Rate",
+      "metric_name": "videochat.reconnect_recovery_rate",
+      "type": "ratio",
+      "source": "ws_sfu_reconnect_events",
+      "objective": ">= 95.0 percent"
+    },
+    {
+      "id": "K-05",
+      "name": "Client Crash/Error Rate",
+      "metric_name": "videochat.client_fatal_errors_per_1000_call_minutes",
+      "type": "gauge",
+      "source": "frontend_global_runtime_errors",
+      "objective": "<= 0.20 per 1000 call-min"
+    },
+    {
+      "id": "K-06",
+      "name": "Outbound FPS",
+      "metric_name": "videochat.media.outbound_fps",
+      "type": "histogram",
+      "source": "client_media_stats",
+      "objective": "p50 >= 20 fps and p95 >= 15 fps"
+    },
+    {
+      "id": "K-07",
+      "name": "Inbound FPS visible set",
+      "metric_name": "videochat.media.inbound_visible_fps",
+      "type": "histogram",
+      "source": "client_render_track_stats",
+      "objective": "p50 >= 20 fps and p95 >= 12 fps"
+    },
+    {
+      "id": "K-08",
+      "name": "Encode Time",
+      "metric_name": "videochat.codec.encode_ms",
+      "type": "histogram",
+      "source": "client_codec_stats",
+      "objective": "p95 <= 20 ms"
+    },
+    {
+      "id": "K-09",
+      "name": "Decode Time",
+      "metric_name": "videochat.codec.decode_ms",
+      "type": "histogram",
+      "source": "client_codec_stats",
+      "objective": "p95 <= 16 ms"
+    },
+    {
+      "id": "K-10",
+      "name": "Packet Loss",
+      "metric_name": "videochat.webrtc.packet_loss_ratio",
+      "type": "histogram",
+      "source": "webrtc_getstats_sfu_counters",
+      "objective": "p95 <= 3.0 percent"
+    },
+    {
+      "id": "K-11",
+      "name": "Jitter",
+      "metric_name": "videochat.webrtc.jitter_ms",
+      "type": "histogram",
+      "source": "webrtc_getstats",
+      "objective": "p95 <= 30 ms"
+    },
+    {
+      "id": "K-12",
+      "name": "RTT",
+      "metric_name": "videochat.webrtc.rtt_ms",
+      "type": "histogram",
+      "source": "webrtc_getstats",
+      "objective": "p95 <= 180 ms"
+    },
+    {
+      "id": "K-13",
+      "name": "SFU CPU",
+      "metric_name": "videochat.sfu.cpu_utilization_percent",
+      "type": "gauge",
+      "source": "host_container_metrics",
+      "objective": "<= 70 percent steady and <= 85 percent peak"
+    },
+    {
+      "id": "K-14",
+      "name": "SFU RAM",
+      "metric_name": "videochat.sfu.memory_utilization_percent",
+      "type": "gauge",
+      "source": "host_container_metrics",
+      "objective": "<= 75 percent steady and <= 90 percent peak"
+    },
+    {
+      "id": "K-15",
+      "name": "Signaling Error Rate",
+      "metric_name": "videochat.signaling_error_rate",
+      "type": "ratio",
+      "source": "backend_error_envelopes_sfu_logs",
+      "objective": "<= 0.5 percent"
+    }
+  ],
+  "alerts": [
+    {
+      "id": "A-01",
+      "signal": "K-03 Join Success Rate",
+      "warning": "< 99.0 percent",
+      "critical": "< 98.0 percent",
+      "window": "rolling 5 min",
+      "action": "on-call informieren; bei critical Incident und Join-Rate-Limiter pruefen"
+    },
+    {
+      "id": "A-02",
+      "signal": "K-01 Join API Latency p95",
+      "warning": "> 900 ms",
+      "critical": "> 1200 ms",
+      "window": "rolling 5 min",
+      "action": "Backend/API-Triage und DB-/Session-Pfad pruefen"
+    },
+    {
+      "id": "A-03",
+      "signal": "K-02 First Media Time p95",
+      "warning": "> 4.0 s",
+      "critical": "> 6.0 s",
+      "window": "rolling 5 min",
+      "action": "SFU/Signaling/Client-Media Startup pruefen"
+    },
+    {
+      "id": "A-04",
+      "signal": "K-04 Reconnect Recovery Rate",
+      "warning": "< 95 percent",
+      "critical": "< 90 percent",
+      "window": "rolling 10 min",
+      "action": "WS/SFU stability incident und reconnect storm mitigation"
+    },
+    {
+      "id": "A-05",
+      "signal": "K-06/K-07 FPS",
+      "warning": "p95 < 12 fps",
+      "critical": "p95 < 8 fps",
+      "window": "rolling 10 min",
+      "action": "Degradation policy pruefen und active-window pressure reduzieren"
+    },
+    {
+      "id": "A-06",
+      "signal": "K-08 Encode p95",
+      "warning": "> 22 ms",
+      "critical": "> 30 ms",
+      "window": "rolling 5 min",
+      "action": "Codec-stage audit und fallback transitions pruefen"
+    },
+    {
+      "id": "A-07",
+      "signal": "K-09 Decode p95",
+      "warning": "> 18 ms",
+      "critical": "> 25 ms",
+      "window": "rolling 5 min",
+      "action": "Decoder pressure und rendering hot path analysieren"
+    },
+    {
+      "id": "A-08",
+      "signal": "K-10 Packet Loss p95",
+      "warning": "> 4.0 percent",
+      "critical": "> 7.0 percent",
+      "window": "rolling 5 min",
+      "action": "Network/SFU routing incident und quality downshift erlauben"
+    },
+    {
+      "id": "A-09",
+      "signal": "K-11 Jitter p95",
+      "warning": "> 40 ms",
+      "critical": "> 70 ms",
+      "window": "rolling 5 min",
+      "action": "Path quality incident und retransmit/fec strategy pruefen"
+    },
+    {
+      "id": "A-10",
+      "signal": "K-12 RTT p95",
+      "warning": "> 220 ms",
+      "critical": "> 350 ms",
+      "window": "rolling 5 min",
+      "action": "Regional routing/backhaul check"
+    },
+    {
+      "id": "A-11",
+      "signal": "K-13 SFU CPU",
+      "warning": "> 80 percent sustained",
+      "critical": "> 90 percent sustained",
+      "window": "5 min sustained",
+      "action": "Autoscale/overflow routing und hot room rebalance"
+    },
+    {
+      "id": "A-12",
+      "signal": "K-14 SFU RAM",
+      "warning": "> 85 percent sustained",
+      "critical": "> 92 percent sustained",
+      "window": "5 min sustained",
+      "action": "Memory pressure incident und pod recycle policy"
+    },
+    {
+      "id": "A-13",
+      "signal": "K-15 Signaling Error Rate",
+      "warning": "> 0.8 percent",
+      "critical": "> 1.5 percent",
+      "window": "rolling 5 min",
+      "action": "signaling contract regression triage"
+    },
+    {
+      "id": "A-14",
+      "signal": "Session endpoint failures",
+      "warning": "> 1.0 percent 5xx",
+      "critical": "> 3.0 percent 5xx",
+      "window": "rolling 5 min",
+      "action": "auth/session incident und deploy rollback check"
+    },
+    {
+      "id": "A-15",
+      "signal": "WS endpoint errors",
+      "warning": "> 2x baseline",
+      "critical": "> 4x baseline",
+      "window": "rolling 10 min vs 24h baseline",
+      "action": "realtime gateway incident"
+    }
+  ]
+}

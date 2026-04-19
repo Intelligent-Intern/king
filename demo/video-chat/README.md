@@ -206,7 +206,7 @@ What is still missing for robust production operation:
 - production TURN infrastructure still needs environment-specific NAT evidence; the repo provides an opt-in coturn baseline profile plus credential rotation tooling
 - multi-node implementation is not active yet; the binding state split, persistence, fanout, SFU, rollout, and rollback contract is in `demo/video-chat/MULTI_NODE_RUNTIME_ARCHITECTURE.md`
 - secret management + hardened env config (no demo credentials in deployed environments)
-- operational hardening (central logs/metrics/alerts, backups, rollout/rollback strategy)
+- operational hardening is baseline-wired for SQLite backup/restore, central OTLP metrics/logs/alerts catalog, and rollout/rollback runbooks in `demo/video-chat/OPS_HARDENING.md`
 
 Edge deployment decision:
 
@@ -235,6 +235,14 @@ Multi-node runtime architecture:
 - The binding architecture and migration contract is `demo/video-chat/MULTI_NODE_RUNTIME_ARCHITECTURE.md`.
 - It defines the required split for Session/Auth, Call State, Roster/Presence, Realtime Fanout, SFU topology, shared SQL replacement for SQLite, inter-node bus topics, zero-downtime rollout, and rollback gates.
 - The static guard is `bash demo/video-chat/scripts/check-multi-node-runtime-architecture.sh`.
+
+Ops hardening baseline:
+
+- SQLite backups use `bash demo/video-chat/scripts/backup-sqlite.sh`; restores use `bash demo/video-chat/scripts/restore-sqlite.sh`.
+- The restore drill and rollout/rollback runbook are in `demo/video-chat/OPS_HARDENING.md`.
+- The K-01..K-15 / A-01..A-15 pipeline catalog is `demo/video-chat/ops/metrics-alerts.catalog.json`.
+- Backend HTTP/WS/SFU compose services accept OTLP collector binding through `VIDEOCHAT_OTEL_EXPORTER_ENDPOINT`.
+- The static guard is `bash demo/video-chat/scripts/check-ops-hardening.sh`.
 
 Host-runtime note:
 
@@ -308,7 +316,7 @@ bash demo/video-chat/scripts/smoke.sh
 `demo/video-chat/scripts/smoke.sh` now verifies:
 
 - backend and frontend launchers plus syntax checks
-- demo-scope security policy, no-internal-edge-deploy, optional TURN, secret-management, and multi-node architecture baseline gates
+- demo-scope security policy, no-internal-edge-deploy, optional TURN, secret-management, multi-node architecture, and ops-hardening baseline gates
 - docker-compose v1 stack boot (`frontend-vue` + `backend-king-php` + sqlite volume) with runtime migration snapshot and auth/session sanity checks
 - backend boot and live `/health` probe
 - API/WS catalog drift gate against the canonical versioned contract fixture (`contract-catalog-parity-contract`)

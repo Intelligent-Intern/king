@@ -523,6 +523,7 @@ run_step "deployment decision: no internal edge pack" bash -lc "'${ROOT_DIR}/scr
 run_step "deployment baseline: optional TURN relay" bash -lc "'${ROOT_DIR}/scripts/check-turn-baseline.sh'"
 run_step "deployment baseline: secret management" bash -lc "'${ROOT_DIR}/scripts/check-secret-management.sh'"
 run_step "deployment baseline: multi-node runtime architecture" bash -lc "'${ROOT_DIR}/scripts/check-multi-node-runtime-architecture.sh'"
+run_step "deployment baseline: ops hardening" bash -lc "'${ROOT_DIR}/scripts/check-ops-hardening.sh'"
 run_step "compose stack boot + migration/auth sanity" compose_smoke
 
 if [[ "${VIDEOCHAT_SMOKE_COMPOSE_ONLY:-0}" == "1" ]]; then

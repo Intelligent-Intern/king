@@ -875,12 +875,20 @@ Ziel:
 
 Checklist:
 - [x] SQLite-Backup-Skript ergänzt (`demo/video-chat/scripts/backup-sqlite.sh`).
-- [ ] Restore-Skript + Restore-Drill dokumentieren.
-- [ ] Zentrale Metrics/Logs/Alerts Pipeline verdrahten (mind. K-01..K-15, A-01..A-15).
-- [ ] Rollout/Rollback-Runbook pro Deployment-Variante ergänzen.
+- [x] Restore-Skript + Restore-Drill dokumentieren.
+- [x] Zentrale Metrics/Logs/Alerts Pipeline verdrahten (mind. K-01..K-15, A-01..A-15).
+- [x] Rollout/Rollback-Runbook pro Deployment-Variante ergänzen.
 
 Definition of done:
 - Backup/Restore ist reproduzierbar und Kern-Operational-Metriken sind zentral sichtbar.
+
+Abschluss:
+- `demo/video-chat/scripts/restore-sqlite.sh` stellt SQLite-Backups checksum- und integrity-geprueft wieder her und schuetzt existierende Ziele per `VIDEOCHAT_RESTORE_OVERWRITE=1`.
+- `demo/video-chat/scripts/check-ops-hardening.sh` fuehrt einen temporaeren Backup/Restore-Drill aus und validiert den Ops-Katalog.
+- `demo/video-chat/ops/metrics-alerts.catalog.json` verdrahtet `K-01..K-15` und `A-01..A-15` als maschinenlesbaren Metrics/Alerts-Katalog mit Pflichtlabels und Artefakt-Outputs.
+- `demo/video-chat/backend-king-php/run-dev.sh` und `demo/video-chat/docker-compose.v1.yml` akzeptieren OTLP-Bindings ueber `VIDEOCHAT_OTEL_EXPORTER_ENDPOINT`, Service-Namen, Metrics- und Logs-Schalter.
+- `demo/video-chat/OPS_HARDENING.md` dokumentiert Restore-Drill, zentrale Pipeline und Rollout/Rollback fuer Local Compose, hardened Single-Node Staging und zukuenftige Multi-Node-Produktion.
+- `demo/video-chat/scripts/smoke.sh` fuehrt den Ops-Hardening-Gate vor dem Compose-Smoke aus.
 
 ---
 
