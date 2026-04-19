@@ -494,6 +494,22 @@ compose_smoke() {
         exit(1);
     }
   '
+
+  if [[ "${VIDEOCHAT_SMOKE_SKIP_FRONTEND_E2E_MATRIX:-0}" != "1" ]]; then
+    log "compose frontend Playwright matrix gate"
+    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
+    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
+    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
+    "${compose_cmd[@]}" exec -T videochat-frontend-v1 sh -lc "\
+      cd /workspace && \
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+      PLAYWRIGHT_FRONTEND_PORT=4174 \
+      VITE_VIDEOCHAT_BACKEND_ORIGIN='http://127.0.0.1:${compose_backend_port}' \
+      npm run test:e2e:matrix -- --reporter=list"
+  fi
 }
 
 log "Root: ${ROOT_DIR}"

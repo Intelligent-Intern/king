@@ -1030,20 +1030,20 @@ Ziel:
 - Tests laufen deterministisch mit zwei Accounts und kontrollierten Fake-Medien/Fake-Dateien.
 
 Checklist:
-- [ ] Test-fixtures für erlaubte Dateien: `txt`, `csv`, `md`, `pdf`, `docx`, `xlsx`, `odt`, `png`, `jpg`, `webp`.
-- [ ] Test-fixtures für verbotene Dateien: `exe`, `sh`, unbekannter Binary-Blob, umbenannte Binary mit erlaubter Extension.
-- [ ] Fake-Media Setup für Audio-Level/Speaking und Motion-Events definieren.
-- [ ] E2E: Paste > Limit -> Auto-Datei -> Senden -> zweiter Teilnehmer sieht Datei.
-- [ ] E2E: Drag-and-drop 10 Bilder -> Senden -> zweiter Teilnehmer sieht 10 Bildattachments.
-- [ ] E2E: 11 Bilder -> sichtbare Ablehnung.
-- [ ] E2E: PDF/Office Upload -> Download funktioniert.
-- [ ] E2E: verbotener Dateityp -> Upload blockiert, keine Chatmessage.
-- [ ] E2E: Chatarchiv nach Call-Ende öffnen, read-only prüfen, Dateien rechts prüfen.
-- [ ] E2E: unberechtigter User kann Archiv/Downloads nicht öffnen.
-- [ ] E2E: Admin Layout-Icons + Strategiewechsel.
-- [ ] E2E: Activity-Score beeinflusst Main/Mini nach Strategie.
-- [ ] E2E: Pinning/Manual-Modus überschreibt Activity.
-- [ ] CI-Gate ergänzen, damit neue Chat-/Activity-Flows nicht nur manuell getestet sind.
+- [x] Test-fixtures für erlaubte Dateien: `txt`, `csv`, `md`, `pdf`, `docx`, `xlsx`, `odt`, `png`, `jpg`, `webp`.
+- [x] Test-fixtures für verbotene Dateien: `exe`, `sh`, unbekannter Binary-Blob, umbenannte Binary mit erlaubter Extension.
+- [x] Fake-Media Setup für Audio-Level/Speaking und Motion-Events definieren.
+- [x] E2E: Paste > Limit -> Auto-Datei -> Senden -> zweiter Teilnehmer sieht Datei.
+- [x] E2E: Drag-and-drop 10 Bilder -> Senden -> zweiter Teilnehmer sieht 10 Bildattachments.
+- [x] E2E: 11 Bilder -> sichtbare Ablehnung.
+- [x] E2E: PDF/Office Upload -> Download funktioniert.
+- [x] E2E: verbotener Dateityp -> Upload blockiert, keine Chatmessage.
+- [x] E2E: Chatarchiv nach Call-Ende öffnen, read-only prüfen, Dateien rechts prüfen.
+- [x] E2E: unberechtigter User kann Archiv/Downloads nicht öffnen.
+- [x] E2E: Admin Layout-Icons + Strategiewechsel.
+- [x] E2E: Activity-Score beeinflusst Main/Mini nach Strategie.
+- [x] E2E: Pinning/Manual-Modus überschreibt Activity.
+- [x] CI-Gate ergänzen, damit neue Chat-/Activity-Flows nicht nur manuell getestet sind.
 
 Definition of done:
 - Relevante User-Journeys sind als Playwright-Spezifikationen abgedeckt.
