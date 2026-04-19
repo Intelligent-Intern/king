@@ -1262,6 +1262,32 @@ Abschluss:
 - `demo/video-chat/backend-king-php/tests/contract-schema-versioning-contract.php|sh` deckt Versionierung, Pflicht-DTOs, Schema-Metadaten und Beispielpayloads ab.
 - `demo/video-chat/scripts/smoke.sh` ruft den Contract in der Backend-Contract-Strecke auf.
 
+### #29 UI-Parity-Acceptance-Matrix mit ausfuehrbaren Gates (Implementierung)
+
+Ziel:
+- Z1 schliessen: UI-Parity darf nicht mehr als Prosa-Behauptung existieren, sondern muss als versionierte Matrix konkrete Playwright-/Backend-Checks und offene release-blocking Gaps ausweisen.
+
+Checklist:
+- [x] `contracts/v1/ui-parity-acceptance.matrix.json` als kanonische Matrix ergaenzt.
+- [x] Covered Slices verweisen auf existierende Playwright-Specs, Backend-Contracts und npm-/Shell-Kommandos.
+- [x] Offene UI-Gaps bleiben explizit als `release_blocking: true` in der Matrix: Admin-Overview-Metriken, Teilnehmermoderation, Control-Bar-Actions, Avatar/Branding-Crop und globale Theme-/Zeitformat-Anwendung.
+- [x] `npm run test:e2e:ui-parity` als ausfuehrbarer UI-Parity-Suite-Einstieg ergaenzt.
+- [x] PHP-Contract validiert Matrix-Version, Release-Policy, npm-Scripts, Pfade, Slice-Status, Covered Checks und Gap-Ehrlichkeit.
+- [x] Strikter Release-Modus `VIDEOCHAT_UI_PARITY_REQUIRE_COVERED=1` blockiert solange Gaps offen sind.
+- [x] Smoke-Gate fuehrt den Matrix-Contract in der Backend-Contract-Strecke aus.
+- [x] Unrelated dirty Frontend-/Realtime-Arbeitsdateien bleiben unangetastet.
+
+Definition of done:
+- UI-Parity ist als versionierter, maschinenlesbarer Vertrag vorhanden.
+- Covered UI-Flaechen sind an existierende Checks gebunden.
+- Offene UI-Flaechen werden nicht als erledigt kaschiert, sondern blockieren spaetere Release-Strictness.
+
+Abschluss:
+- `demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json` enthaelt die Acceptance-Slices.
+- `demo/video-chat/backend-king-php/tests/ui-parity-acceptance-matrix-contract.php|sh` prueft die Matrix.
+- `demo/video-chat/frontend-vue/package.json` enthaelt `test:e2e:ui-parity`.
+- `demo/video-chat/scripts/smoke.sh` ruft den Matrix-Contract auf.
+
 ## Persistente Research-Notizen (für Folgesessions)
 
 - Alex-Relevanz (historisch, inzwischen nach `frontend-vue/src/lib/**` konsolidiert):

@@ -72,6 +72,12 @@ Run the UI-parity journey suite directly:
 npx playwright test tests/e2e/ui-parity-journeys.spec.js
 ```
 
+Run the full UI-parity acceptance suite referenced by the versioned matrix:
+
+```bash
+npm run test:e2e:ui-parity
+```
+
 Run e2e tests headed (visual):
 
 ```bash

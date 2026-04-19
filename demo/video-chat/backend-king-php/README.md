@@ -457,6 +457,12 @@ Run the versioned DTO schema contract (catalog shape, required API/WS DTOs, and 
 demo/video-chat/backend-king-php/tests/contract-schema-versioning-contract.sh
 ```
 
+Run the UI-parity acceptance matrix contract (executable coverage plus release-blocking gaps):
+
+```bash
+demo/video-chat/backend-king-php/tests/ui-parity-acceptance-matrix-contract.sh
+```
+
 Run the auth contract test (REST + websocket token validation coverage):
 
 ```bash

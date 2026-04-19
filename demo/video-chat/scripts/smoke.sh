@@ -616,6 +616,7 @@ run_step "backend contract: RBAC middleware matrix" bash -lc "'${BACKEND_DIR}/te
 run_step "backend contract: realtime session revocation propagation" bash -lc "'${BACKEND_DIR}/tests/realtime-session-revocation-contract.sh'"
 run_step "backend contract: shared REST/WS error envelope" bash -lc "'${BACKEND_DIR}/tests/error-envelope-contract.sh'"
 run_step "backend contract: versioned REST/WS DTO schemas" bash -lc "'${BACKEND_DIR}/tests/contract-schema-versioning-contract.sh'"
+run_step "backend contract: UI parity acceptance matrix" bash -lc "'${BACKEND_DIR}/tests/ui-parity-acceptance-matrix-contract.sh'"
 run_step "backend contract: API/WS catalog parity" bash -lc "'${BACKEND_DIR}/tests/contract-catalog-parity-contract.sh'"
 run_step "backend contract: WLVC wire envelope" bash -lc "'${BACKEND_DIR}/tests/wlvc-wire-contract.sh'"
 run_step "backend contract: gateway JWT binding" bash -lc "'${BACKEND_DIR}/tests/gateway-jwt-binding-contract.sh'"
