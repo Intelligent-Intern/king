@@ -487,6 +487,12 @@ Run the realtime websocket-gateway contract test (strict handshake validation + 
 demo/video-chat/backend-king-php/tests/realtime-websocket-gateway-contract.sh
 ```
 
+Run the gateway JWT binding contract test (future Gateway Join `sub/effective_id`, `room/call_id`, secret, token-length, and rate-limit enforcement):
+
+```bash
+demo/video-chat/backend-king-php/tests/gateway-jwt-binding-contract.sh
+```
+
 Run the admin user list contract test (search + pagination + deterministic sorting):
 
 ```bash

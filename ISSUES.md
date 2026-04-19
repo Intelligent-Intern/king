@@ -19,7 +19,7 @@
 - [x] Das ist **kein** automatischer Fallback auf nativen WebRTC-Codec (VP8/H264); dieser Pfad muss explizit definiert/implementiert werden.
 - [x] Alex-Integration im Frontend kam über Commits `78f4f5c` und `e5d65b7` (Author: `Alice-and-Bob`); `e5d65b7` brachte auch Artefakte mit, später bereinigt (`25e15e7`).
 - [x] In `../intelligent-intern/services/app/compat/src/modules/videocall` existiert ein ausgereiftes Background-Filter-System (FaceDetector/MediaPipe/TFJS/Center-Mask-Fallback + Controller + Runtime-Metriken + Baseline-Gates).
-- [x] In diesem Repo existiert `demo/media-gateway/` (Rust), inkl. SFU-Bausteinen und Signaling/AMQP/QUIC-Skizze.
+- [x] Der fruehere Research-Stand referenzierte `demo/media-gateway/` (Rust) inkl. SFU-/Signaling-/AMQP-/QUIC-Skizze; im aktuellen Checkout ist dieser Pfad nicht vorhanden, deshalb werden Gateway-Vertraege bis zur Integrationsentscheidung als ausfuehrbare Backend-Contracts fixiert.
 
 ## Fallback-Verständnis (verbindlich zu klären und dann umzusetzen)
 
@@ -36,7 +36,7 @@ Noch offen (muss als Vertrag implementiert werden):
 ### #1 Architektur-Inventur und Quellenkatalog (Research)
 
 Ziel:
-- Vollständige Ist-Aufnahme für `frontend-vue` (inkl. übernommener Alex-Libraries), Backend, Extension, `demo/media-gateway`, sowie Referenzen aus `intelligent-intern`.
+- Vollständige Ist-Aufnahme für `frontend-vue` (inkl. übernommener Alex-Libraries), Backend, Extension, historische `demo/media-gateway`-Referenzen, sowie Referenzen aus `intelligent-intern`.
 
 Checklist:
 - [x] Relevante Pfade im aktuellen Repo gesichtet.
@@ -52,7 +52,7 @@ Definition of done:
 Notizen:
 - `demo/video-chat/frontend-vue/src/lib/wasm/wasm-codec.ts`: Hybrid-WASM/TS-Factory.
 - `demo/video-chat/frontend-vue/src/lib/sfu/sfuClient.ts`: SFU-Signaling/Track-Bookkeeping.
-- `demo/media-gateway/src/sfu/*`: Rust-SFU-Prototyp.
+- `demo/media-gateway/src/sfu/*`: historische Rust-SFU-Prototyp-Referenz; im aktuellen Checkout nicht vorhanden.
 
 Architektur-Karte (Snapshot):
 
@@ -67,7 +67,7 @@ Architektur-Karte (Snapshot):
 | `demo/video-chat/frontend` | Historischer, entfernter Pfad (nach `frontend-vue/src/lib/**` übernommen) | Nicht mehr vorhanden | archival |
 | `demo/video-chat/backend-king-php/**` | API/Auth/Calls/Realtime im King-PHP-Backend | Aktiv | Core |
 | `extension/**` | King Runtime/Extension (native APIs) | Aktiv (plattformweit) | Core |
-| `demo/media-gateway/**` | Rust SFU/Gateway Prototyp | Noch nicht produktiv verdrahtet | PoC/Integrationsentscheidung offen |
+| `demo/media-gateway/**` | Rust SFU/Gateway Prototyp | Nicht im aktuellen Checkout vorhanden | PoC/Integrationsentscheidung offen; harte Gateway-Vertraege liegen als Backend-Contracts vor |
 
 ---
 
@@ -445,7 +445,7 @@ Architekturentscheidung (v1, festgelegt):
   - REST auf HTTP-Listener.
   - WebSocket auf WS-Listener (`/ws` + `/sfu`), server mode getrennt (`http` vs `ws`).
   - Frontend `frontend-vue` bindet an `/sfu` via `src/lib/sfu/sfuClient.ts`.
-- `demo/media-gateway` bleibt in v1 Referenz/PoC (nicht produktiv verdrahtet).
+- `demo/media-gateway` bleibt in v1 als historische Referenz/PoC-Entscheidung offen (nicht produktiv verdrahtet und im aktuellen Checkout nicht vorhanden).
   - Zweck: Vorarbeit für späteren externen Gateway-Pfad (AMQP/Proto/QUIC/WebRTC-RS).
   - Kein paralleler Produktbetrieb von zwei SFU-Laufwegen in v1.
 - Konsequenz:
@@ -515,7 +515,7 @@ Interop-Testmatrix (v1):
 | I-08 | SFU Frame Relay | WS `/sfu` (`sfu/frame`) | Frames nur an Subscriber im selben Room, kein self-echo | `tests/realtime-sfu-contract.sh` | abgedeckt |
 | I-09 | SFU Reconnect | WS `/sfu` | Reconnect -> Join/Publisher-Liste/Resubscribe stabil | `tests/realtime-sfu-contract.sh` | abgedeckt |
 | I-10 | Room-Binding Enforcement | WS `/sfu` | Query-`room` und optionales Join-Payload müssen matchen; kein stilles Fallback auf `lobby` | `tests/realtime-sfu-contract.sh` | abgedeckt |
-| I-11 | Gateway JWT-Bindung | Gateway Join (`SignalMessage.Join`) | JWT `sub/effective_id` == `peer_id`, `room/call_id` == `room_id` | Rust Unit in `demo/media-gateway/src/sfu/mod.rs` (rate-limit + token path) | teilweise |
+| I-11 | Gateway JWT-Bindung | Gateway Join (`SignalMessage.Join`) | JWT `sub/effective_id` == `peer_id`, `room/call_id` == `room_id` | `backend-king-php/tests/gateway-jwt-binding-contract.sh` | abgedeckt |
 | I-12 | Gateway <-> Backend Mapping | AMQP `call.signaling` + Backend Signaling | `room_id <-> call_id` mapping konsistent, `offer/answer/ice/hangup` interoperabel | kein E2E-Interop-Test vorhanden | offen |
 | I-13 | Access-Link Join-Session | REST `/api/call-access/{id}/join|session` -> WS | Access-gebundene Session führt nur in erlaubten Call/Room-Kontext | `backend-king-php/tests/call-access-session-contract.sh` | abgedeckt |
 
@@ -1142,6 +1142,34 @@ Abschluss:
 - `demo/video-chat/backend-king-php/tests/call-access-session-contract.php|sh` deckt I-13 ab.
 - `demo/video-chat/scripts/smoke.sh` ruft `call-access-session-contract.sh` in der Backend-Contract-Strecke auf.
 
+---
+
+### #24 Gateway JWT-Bindung (Implementierung)
+
+Ziel:
+- I-11 schließen: Ein spaeterer Gateway-Join darf nur mit einem JWT akzeptiert werden, dessen `sub` und `effective_id` exakt zum `peer_id` passen und dessen `room`/`call_id` exakt zum `room_id` passt.
+
+Checklist:
+- [x] HS256-JWT-Vertragshelfer fuer Gateway-Join in PHP ergaenzen, ohne den aktiven Session-Pfad auf JWT umzustellen.
+- [x] Unsichere oder zu kurze Gateway-Secrets fail-closed abweisen, inkl. `dev-secret-unsafe`.
+- [x] Nur `alg=HS256` akzeptieren; `none`/falsche Algorithmen fail-closed.
+- [x] Signatur, JSON-Header/-Claims und `exp` pruefen.
+- [x] `sub` und `effective_id` muessen vorhanden sein und beide exakt `peer_id` entsprechen.
+- [x] `room` und `call_id` duerfen nicht auseinanderlaufen; mindestens einer der Claims muss vorhanden sein und exakt `room_id` entsprechen.
+- [x] Token-Laengenlimit fuer Gateway-Join pruefen.
+- [x] Join-Rate-Limit als deterministischen Contract-Helfer abdecken.
+- [x] Dedizierter Contract `gateway-jwt-binding-contract` deckt Happy Path, `call_id`-Alias, Peer-/Room-Mismatch, Split-Claims, Expiry, Algorithmen, Signatur, Secret-Policy, Tokenlaenge und Rate-Limit ab.
+- [x] Smoke-Gate fuehrt den Contract aus.
+
+Definition of done:
+- Die Gateway-JWT-Bindung ist nicht mehr nur Research-Notiz, sondern als ausfuehrbarer Contract pruefbar.
+- Der aktive Backend-Pfad bleibt serverseitig persistierte Session-ID; JWT bleibt ein harter Vertrag fuer den spaeteren Gateway-Pfad.
+
+Abschluss:
+- `demo/video-chat/backend-king-php/domain/realtime/gateway_jwt.php` implementiert die Gateway-JWT-Bindungs- und Rate-Limit-Helfer.
+- `demo/video-chat/backend-king-php/tests/gateway-jwt-binding-contract.php|sh` deckt I-11 ab.
+- `demo/video-chat/scripts/smoke.sh` ruft `gateway-jwt-binding-contract.sh` in der Backend-Contract-Strecke auf.
+
 ## Persistente Research-Notizen (für Folgesessions)
 
 - Alex-Relevanz (historisch, inzwischen nach `frontend-vue/src/lib/**` konsolidiert):
@@ -1152,4 +1180,4 @@ Abschluss:
   - Ziel: nativer WebRTC-Fallback ohne TS-WLVC-Runtime-Fallback.
 - Blur-Referenz (`intelligent-intern`) ist weit fortgeschritten:
   - Controller + Backend-Selector + Stream-Processing + Gates + Prefs + Tests.
-- `demo/media-gateway` enthält Rust-SFU-Skizze mit AMQP/Signaling/QUIC und JWT-Checks; Integrationsentscheidung offen.
+- `demo/media-gateway` ist im aktuellen Checkout nicht vorhanden; die Rust-SFU-/AMQP-/QUIC-Skizze bleibt eine historische Research-Referenz, harte Gateway-Vertraege werden bis zur Integrationsentscheidung als Backend-Contracts gepflegt.

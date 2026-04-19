@@ -54,6 +54,13 @@ spaeter JWTs eingefuehrt werden, muessen Signing Keys ueber Vault/KMS/CI-Secret
 gebunden werden und Dual-Key-Rotation dokumentiert sein, bevor der Deploy-Pfad
 aktiviert wird.
 
+Der Gateway-JWT-Vertrag ist trotzdem als inaktiver Backend-Contract fixiert:
+`backend-king-php/tests/gateway-jwt-binding-contract.sh` prueft HS256,
+`sub/effective_id`-Bindung an `peer_id`, `room/call_id`-Bindung an `room_id`,
+Secret-Policy, Token-Laengenlimit und Join-Rate-Limit. Der Contract macht keinen
+JWT-Pfad aktiv, sondern verhindert schwache Semantik bei einer spaeteren
+Gateway-Integration.
+
 ## Rotation Runbook
 
 Admin/User Demo Credentials:
