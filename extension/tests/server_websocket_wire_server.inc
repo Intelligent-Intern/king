@@ -155,6 +155,10 @@ if ($mode === 'oo-registry') {
 }
 
 if ($mode === 'oo-broadcast-shutdown') {
+    king_proto_define_schema('TestRec', [
+        'id' => ['type' => 'uint32', 'tag' => 1],
+        'msg' => ['type' => 'string', 'tag' => 2],
+    ]);
     $server = new King\WebSocket\Server('127.0.0.1', $port);
     $capture['server_class'] = get_class($server);
 
@@ -183,6 +187,21 @@ if ($mode === 'oo-broadcast-shutdown') {
         } catch (Throwable $e) {
             $capture['broadcast_binary_ok'] = false;
             $capture['broadcast_binary_error'] = $e->getMessage();
+        }
+
+        $records = [
+            ['id' => 1, 'msg' => 'batch-1'],
+            ['id' => 2, 'msg' => 'batch-2'],
+            ['id' => 3, 'msg' => 'batch-3'],
+        ];
+        $encodedBatch = \King\IIBIN::encodeBatch('TestRec', $records);
+        try {
+            $server->broadcastBatch($encodedBatch);
+            $capture['broadcast_batch_ok'] = true;
+            $capture['broadcast_batch_error'] = '';
+        } catch (Throwable $e) {
+            $capture['broadcast_batch_ok'] = false;
+            $capture['broadcast_batch_error'] = $e->getMessage();
         }
 
         $server->stop();

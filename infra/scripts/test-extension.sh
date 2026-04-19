@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
-PHP_BIN="${PHP_BIN:-php}"
+PHP_BIN="${PHP_BIN:-/usr/local/bin/php}"
 EXT_SO="${EXT_DIR}/modules/king.so"
 SHARD_TOTAL="${SHARD_TOTAL:-1}"
 SHARD_INDEX="${SHARD_INDEX:-1}"
@@ -39,7 +39,10 @@ if (( SHARD_INDEX < 1 || SHARD_INDEX > SHARD_TOTAL )); then
     exit 1
 fi
 
-mapfile -t TEST_FILES < <(find tests -type f -name '*.phpt' | LC_ALL=C sort)
+TEST_FILES=()
+while IFS= read -r line; do
+  TEST_FILES+=("$line")
+done < <(find tests -type f -name '*.phpt' | LC_ALL=C sort)
 
 if [[ "${#TEST_FILES[@]}" -eq 0 ]]; then
     echo "No PHPT files found under ${EXT_DIR}/tests." >&2

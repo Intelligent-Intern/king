@@ -2,11 +2,26 @@
 <?php
 /**
  * Benchmark: IIBIN Batch Encode/Decode vs Single Call
- * 
+ *
  * Measures the PHP↔C boundary overhead reduction from batch operations.
- * 
+ *
  * Run: php benchmarks/iibin-batch-bench.php
  */
+
+if (!extension_loaded('king')) {
+    $extSo = dirname(__DIR__) . '/extension/modules/king.so';
+    $phpBin = getenv('PHP_BIN') ?: '/usr/local/bin/php';
+    if (!file_exists($extSo)) {
+        fwrite(STDERR, "king.so not found at {$extSo}\nRun: cd extension && make\n");
+        exit(1);
+    }
+    $cmd = escapeshellarg($phpBin) . ' -d ' . escapeshellarg('extension=' . $extSo);
+    foreach ($argv as $arg) {
+        $cmd .= ' ' . escapeshellarg($arg);
+    }
+    passthru($cmd, $exitCode);
+    exit($exitCode);
+}
 
 declare(ticks = 1);
 

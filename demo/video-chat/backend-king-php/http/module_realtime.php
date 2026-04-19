@@ -1003,6 +1003,52 @@ function videochat_handle_sfu_routes(
             $msgType = $msg['type'] ?? '';
 
             switch ($msgType) {
+                case 'ping':
+                    $sfuClients[$clientId]['last_seen'] = time();
+                    king_websocket_send($websocket, json_encode([
+                        'type' => 'pong',
+                        'server_time' => time(),
+                    ]));
+                    break;
+
+                case 'neighbors':
+                    $neighbors = $msg['neighbors'] ?? [];
+                    $sfuClients[$clientId]['neighbors'] = $neighbors;
+                    break;
+
+                case 'offer':
+                    $targetPeer = (int) ($msg['target_peer_id'] ?? 0);
+                    if ($targetPeer && isset($sfuClients[$targetPeer])) {
+                        king_websocket_send($sfuClients[$targetPeer]['websocket'], json_encode([
+                            'type' => 'offer',
+                            'from_peer_id' => $clientId,
+                            'sdp' => $msg['sdp'] ?? null,
+                        ]));
+                    }
+                    break;
+
+                case 'answer':
+                    $targetPeer = (int) ($msg['target_peer_id'] ?? 0);
+                    if ($targetPeer && isset($sfuClients[$targetPeer])) {
+                        king_websocket_send($sfuClients[$targetPeer]['websocket'], json_encode([
+                            'type' => 'answer',
+                            'from_peer_id' => $clientId,
+                            'sdp' => $msg['sdp'] ?? null,
+                        ]));
+                    }
+                    break;
+
+                case 'ice-candidate':
+                    $targetPeer = (int) ($msg['target_peer_id'] ?? 0);
+                    if ($targetPeer && isset($sfuClients[$targetPeer])) {
+                        king_websocket_send($sfuClients[$targetPeer]['websocket'], json_encode([
+                            'type' => 'ice-candidate',
+                            'from_peer_id' => $clientId,
+                            'candidate' => $msg['candidate'] ?? null,
+                        ]));
+                    }
+                    break;
+
                 case 'sfu/publish':
                     $trackId = $msg['track_id'] ?? uniqid('track_');
                     $kind = $msg['kind'] ?? 'video';

@@ -244,7 +244,7 @@ static zend_result king_websocket_read_exact(
     return SUCCESS;
 }
 
-static zend_result king_websocket_send_frame(
+zend_result king_websocket_send_frame(
     king_ws_state *state,
     unsigned char opcode,
     const unsigned char *payload,

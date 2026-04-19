@@ -52,7 +52,7 @@ zend_result king_iibin_encode_batch(
         return FAILURE;
     }
 
-    // Option 2: single concatenated binary string with varint lengths
+    /* Batch encode: varint length-prefixed records */
     smart_str all_buf = {0};
     int count = 0;
 
@@ -65,13 +65,58 @@ zend_result king_iibin_encode_batch(
         }
         if (rec_buf.s) {
             uint32_t rec_len = (uint32_t)ZSTR_LEN(rec_buf.s);
-            // Encode length as varint
             king_proto_encode_varint(&all_buf, rec_len);
-            // Append record data
             smart_str_append(&all_buf, rec_buf.s);
             smart_str_free(&rec_buf);
         }
         count++;
+    } ZEND_HASH_FOREACH_END();
+
+    if (all_buf.s) {
+        smart_str_0(&all_buf);
+        ZVAL_STRINGL(encoded_out, ZSTR_VAL(all_buf.s), ZSTR_LEN(all_buf.s));
+        smart_str_free(&all_buf);
+    }
+
+    return SUCCESS;
+}
+
+/* Varint variant for A/B benchmarking against omega */
+zend_result king_iibin_encode_batch_varint(
+    zend_string *schema_name,
+    zval *records,
+    zval *encoded_out
+)
+{
+    king_proto_runtime_schema *runtime_schema;
+    zval *record;
+
+    if (!king_proto_registry_has_schema(schema_name)) {
+        king_throw_proto_schema_not_defined(schema_name, "batch encoding (varint)");
+        return FAILURE;
+    }
+
+    runtime_schema = king_proto_registry_get_runtime_schema(schema_name);
+    if (runtime_schema == NULL) {
+        king_throw_proto_schema_registered_but_unavailable(schema_name, "batch encoding (varint)");
+        return FAILURE;
+    }
+
+    smart_str all_buf = {0};
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(records), record) {
+        smart_str rec_buf = {0};
+        if (!king_proto_runtime_encode_schema_payload(&rec_buf, schema_name, runtime_schema, record)) {
+            if (rec_buf.s) smart_str_free(&rec_buf);
+            smart_str_free(&all_buf);
+            return FAILURE;
+        }
+        if (rec_buf.s) {
+            uint32_t rec_len = (uint32_t)ZSTR_LEN(rec_buf.s);
+            king_proto_encode_varint(&all_buf, rec_len);
+            smart_str_append(&all_buf, rec_buf.s);
+            smart_str_free(&rec_buf);
+        }
     } ZEND_HASH_FOREACH_END();
 
     if (all_buf.s) {
