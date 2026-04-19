@@ -125,10 +125,10 @@
                 <button
                   class="icon-mini-btn"
                   type="button"
-                  title="Create invite code"
-                  :aria-label="`Create invite for ${call.title || call.id}`"
+                  title="Enter video call"
+                  :aria-label="`Enter video call ${call.title || call.id}`"
                   :disabled="!isInvitable(call)"
-                  @click="toggleInvitePopover($event, call)"
+                  @click="openEnterCallModal(call)"
                 >
                   <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
                 </button>
@@ -193,35 +193,167 @@
       </div>
     </section>
 
-    <div
-      ref="invitePopoverRef"
-      class="invite-popover"
-      :hidden="!invitePopover.open"
-      :style="invitePopoverStyle"
-      role="dialog"
-      aria-label="Invite code"
-    >
-      <p class="invite-popover-label">
-        Invite for <strong>{{ invitePopover.callId }}</strong>
-      </p>
-      <p v-if="invitePopover.loading" class="invite-popover-label">Generating invite code…</p>
-      <p v-else-if="invitePopover.error" class="invite-popover-label calls-error">{{ invitePopover.error }}</p>
-      <template v-else>
-        <div class="invite-popover-row">
-          <code class="invite-code">{{ invitePopover.code }}</code>
-          <button class="icon-mini-btn" type="button" title="Copy invite" @click="copyInviteCode">
-            <span class="icon-copy" aria-hidden="true"></span>
+    <div class="calls-modal" :hidden="!enterCallState.open" role="dialog" aria-modal="true" aria-label="Enter video call">
+      <div class="calls-modal-backdrop" @click="closeEnterCallModal"></div>
+      <div class="calls-modal-dialog calls-modal-dialog-enter">
+        <header class="calls-modal-header">
+          <h4>Enter Video Call</h4>
+          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeEnterCallModal">
+            <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
+        </header>
+
+        <div class="calls-modal-body calls-enter-body">
+          <div class="calls-enter-layout" :class="{ 'panel-open': enterCallState.panelOpen }">
+            <section class="calls-enter-preview">
+              <div class="calls-enter-preview-head">
+                <span>Camera Preview</span>
+                <span class="calls-enter-preview-meta">{{ enterCallState.callId }}</span>
+              </div>
+              <div class="calls-enter-preview-frame">
+                <video ref="enterCallPreviewVideoRef" autoplay playsinline muted></video>
+                <p v-if="enterCallState.previewError" class="calls-inline-error">{{ enterCallState.previewError }}</p>
+                <p v-else-if="!enterCallState.previewReady" class="calls-inline-hint">Preparing preview...</p>
+              </div>
+            </section>
+
+            <button
+              class="calls-enter-panel-toggle"
+              type="button"
+              :aria-label="enterCallState.panelOpen ? 'Close settings panel' : 'Open settings panel'"
+              @click="toggleEnterCallPanel"
+            >
+              <img
+                :src="enterCallState.panelOpen
+                  ? '/assets/orgas/kingrt/icons/forward.png'
+                  : '/assets/orgas/kingrt/icons/backward.png'"
+                alt=""
+              />
+            </button>
+
+            <section class="calls-enter-right">
+              <section class="calls-enter-config-grid">
+                <label class="field">
+                  <span>Camera</span>
+                  <select
+                    class="input"
+                    :value="callMediaPrefs.selectedCameraId"
+                    @change="setCallCameraDevice($event.target.value)"
+                  >
+                    <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
+                    <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
+                      {{ camera.label }}
+                    </option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <span>Mic</span>
+                  <select
+                    class="input"
+                    :value="callMediaPrefs.selectedMicrophoneId"
+                    @change="setCallMicrophoneDevice($event.target.value)"
+                  >
+                    <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
+                    <option v-for="microphone in callMediaPrefs.microphones" :key="microphone.id" :value="microphone.id">
+                      {{ microphone.label }}
+                    </option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <span>Mic volume</span>
+                  <input
+                    class="input"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    :value="callMediaPrefs.microphoneVolume"
+                    @input="setCallMicrophoneVolume($event.target.value)"
+                  />
+                </label>
+
+                <label class="field">
+                  <span>Speaker</span>
+                  <select
+                    class="input"
+                    :value="callMediaPrefs.selectedSpeakerId"
+                    @change="setCallSpeakerDevice($event.target.value)"
+                  >
+                    <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
+                    <option v-for="speaker in callMediaPrefs.speakers" :key="speaker.id" :value="speaker.id">
+                      {{ speaker.label }}
+                    </option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <span>Speaker volume</span>
+                  <input
+                    class="input"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    :value="callMediaPrefs.speakerVolume"
+                    @input="setCallSpeakerVolume($event.target.value)"
+                  />
+                </label>
+              </section>
+
+              <section class="calls-enter-invite">
+                <p class="invite-popover-label">
+                  Invite link for <strong>{{ enterCallState.callId }}</strong>
+                </p>
+                <div class="calls-enter-link-controls">
+                  <label class="field">
+                    <span>Link type</span>
+                    <select class="input" v-model="enterCallState.linkKind" @change="handleEnterLinkSettingsChanged">
+                      <option value="personal">Personalized</option>
+                      <option value="open">Free for all</option>
+                    </select>
+                  </label>
+                  <label v-if="enterCallState.linkKind === 'personal'" class="field">
+                    <span>Target</span>
+                    <select class="input" v-model="enterCallState.targetKey" @change="handleEnterLinkSettingsChanged">
+                      <option v-for="option in enterCallState.targetOptions" :key="option.key" :value="option.key">
+                        {{ option.label }}
+                      </option>
+                    </select>
+                  </label>
+                </div>
+                <p v-if="enterCallState.loading" class="invite-popover-label">Generating invite link...</p>
+                <p v-else-if="enterCallState.error" class="invite-popover-label calls-error">{{ enterCallState.error }}</p>
+                <template v-else>
+                  <div class="invite-popover-row">
+                    <code class="invite-code">{{ enterCallState.linkUrl }}</code>
+                    <button class="icon-mini-btn" type="button" title="Copy invite link" @click="copyInviteCode">
+                      <span class="icon-copy" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                  <p class="invite-popover-label">
+                    Expires: {{ formatDateTime(enterCallState.expiresAt) }}
+                  </p>
+                  <p v-if="enterCallState.copyNotice" class="invite-popover-label">{{ enterCallState.copyNotice }}</p>
+                </template>
+              </section>
+            </section>
+          </div>
         </div>
-        <p class="invite-popover-label">
-          Expires: {{ formatDateTime(invitePopover.expiresAt) }}
-        </p>
-        <p v-if="invitePopover.copyNotice" class="invite-popover-label">{{ invitePopover.copyNotice }}</p>
-        <div class="actions-inline">
-          <button class="btn" type="button" @click="openCallWorkspace(invitePopover.roomId)">Open call</button>
-          <button class="invite-popover-close" type="button" @click="closeInvitePopover">Close</button>
-        </div>
-      </template>
+
+        <footer class="calls-modal-footer">
+          <button class="btn" type="button" :disabled="enterCallState.loading" @click="closeEnterCallModal">Close</button>
+          <button
+            class="btn"
+            type="button"
+            :disabled="enterCallState.loading"
+            @click="openCallWorkspace({ callId: enterCallState.callId, roomId: enterCallState.roomId })"
+          >
+            Open call
+          </button>
+        </footer>
+      </div>
     </div>
 
     <div class="calls-modal" :hidden="!composeState.open" role="dialog" aria-modal="true" aria-label="Call compose modal">
@@ -449,12 +581,21 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { sessionState } from '../auth/session';
-import { resolveBackendOrigin } from '../../support/backendOrigin';
+import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import {
+  attachCallMediaDeviceWatcher,
+  callMediaPrefs,
+  refreshCallMediaDevices,
+  setCallCameraDevice,
+  setCallMicrophoneDevice,
+  setCallMicrophoneVolume,
+  setCallSpeakerDevice,
+  setCallSpeakerVolume,
+} from '../realtime/callMediaPreferences';
 
 const router = useRouter();
 const workspaceSidebarState = inject('workspaceSidebarState', null);
 
-const backendOrigin = resolveBackendOrigin();
 const callsCalendarEl = ref(null);
 let calendarInstance = null;
 let lastCalendarDateClickAt = 0;
@@ -469,7 +610,6 @@ function requestHeaders(withBody = false) {
   const token = String(sessionState.sessionToken || '').trim();
   if (token !== '') {
     headers.authorization = `Bearer ${token}`;
-    headers['x-session-id'] = token;
   }
 
   return headers;
@@ -486,26 +626,23 @@ function extractErrorMessage(payload, fallback) {
   return fallback;
 }
 
-function buildQueryString(params) {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params || {})) {
-    if (value === undefined || value === null) continue;
-    const text = String(value).trim();
-    if (text === '') continue;
-    query.set(key, text);
-  }
-
-  const encoded = query.toString();
-  return encoded === '' ? '' : `?${encoded}`;
-}
-
 async function apiRequest(path, { method = 'GET', query = null, body = null } = {}) {
-  const endpoint = `${backendOrigin}${path}${buildQueryString(query || {})}`;
-  const response = await fetch(endpoint, {
-    method,
-    headers: requestHeaders(body !== null),
-    body: body === null ? undefined : JSON.stringify(body),
-  });
+  let response = null;
+  try {
+    const result = await fetchBackend(path, {
+      method,
+      query,
+      headers: requestHeaders(body !== null),
+      body: body === null ? undefined : JSON.stringify(body),
+    });
+    response = result.response;
+  } catch (error) {
+    const message = error instanceof Error ? error.message.trim() : '';
+    if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
+      throw new Error(`Could not reach backend (${currentBackendOrigin()}).`);
+    }
+    throw new Error(message);
+  }
 
   let payload = null;
   try {
@@ -861,121 +998,300 @@ async function goToPage(nextPage) {
   await loadCalls();
 }
 
-const invitePopoverRef = ref(null);
-const invitePopover = reactive({
+const enterCallPreviewVideoRef = ref(null);
+const enterCallPreviewStreamRef = ref(null);
+let detachCallMediaWatcher = null;
+let enterCallPreviewResizeHandler = null;
+const callAccessLinkEndpointAvailable = ref(true);
+
+const enterCallState = reactive({
   open: false,
   loading: false,
   error: '',
-  code: '',
+  linkUrl: '',
   expiresAt: '',
   callId: '',
   roomId: '',
-  x: 0,
-  y: 0,
+  linkKind: 'personal',
+  targetKey: '',
+  targetOptions: [],
   copyNotice: '',
-  triggerElement: null,
+  previewReady: false,
+  previewError: '',
+  previewAspectRatio: '16 / 9',
+  panelOpen: false,
 });
 
-const invitePopoverStyle = computed(() => ({
-  top: `${invitePopover.y}px`,
-  left: `${invitePopover.x}px`,
-}));
-
-function closeInvitePopover() {
-  invitePopover.open = false;
-  invitePopover.loading = false;
-  invitePopover.error = '';
-  invitePopover.code = '';
-  invitePopover.expiresAt = '';
-  invitePopover.callId = '';
-  invitePopover.roomId = '';
-  invitePopover.copyNotice = '';
-  invitePopover.triggerElement = null;
+function resetEnterCallState() {
+  enterCallState.loading = false;
+  enterCallState.error = '';
+  enterCallState.linkUrl = '';
+  enterCallState.expiresAt = '';
+  enterCallState.callId = '';
+  enterCallState.roomId = '';
+  enterCallState.linkKind = 'personal';
+  enterCallState.targetKey = '';
+  enterCallState.targetOptions = [];
+  enterCallState.copyNotice = '';
+  enterCallState.previewReady = false;
+  enterCallState.previewError = '';
+  enterCallState.previewAspectRatio = '16 / 9';
+  enterCallState.panelOpen = false;
 }
 
-function placeInvitePopover(triggerElement) {
-  if (!(triggerElement instanceof HTMLElement)) {
-    return;
-  }
-
-  const rect = triggerElement.getBoundingClientRect();
-  const popoverWidth = 320;
-  const margin = 10;
-  let nextX = rect.left;
-  let nextY = rect.bottom + 8;
-
-  if (nextX + popoverWidth > window.innerWidth - margin) {
-    nextX = window.innerWidth - popoverWidth - margin;
-  }
-  if (nextX < margin) {
-    nextX = margin;
-  }
-
-  if (nextY > window.innerHeight - 80) {
-    nextY = Math.max(margin, rect.top - 180);
-  }
-
-  invitePopover.x = Math.round(nextX);
-  invitePopover.y = Math.round(nextY);
+function toggleEnterCallPanel() {
+  enterCallState.panelOpen = !enterCallState.panelOpen;
 }
 
-async function toggleInvitePopover(event, call) {
-  if (!call || !call.id) return;
+function updateEnterCallPreviewAspectRatio() {
+  if (typeof window === 'undefined') return;
+  const width = Math.max(1, Number(window.innerWidth || 0));
+  const height = Math.max(1, Number(window.innerHeight || 0));
+  enterCallState.previewAspectRatio = `${width} / ${height}`;
+}
 
-  const trigger = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-  if (invitePopover.open && invitePopover.callId === call.id) {
-    closeInvitePopover();
-    return;
+function looksLikeNotFoundError(error) {
+  const message = (error instanceof Error ? error.message : String(error || '')).toLowerCase();
+  return message.includes('404') || message.includes('not found');
+}
+
+function fallbackWorkspaceLink(callId) {
+  const normalizedCallId = String(callId || '').trim();
+  const joinPath = `/workspace/call/${encodeURIComponent(normalizedCallId)}`;
+  const origin = typeof window !== 'undefined' ? String(window.location.origin || '').trim() : '';
+  return origin !== '' ? `${origin}${joinPath}` : joinPath;
+}
+
+function normalizeTargetOptionsFromCall(call) {
+  const options = [];
+  const seen = new Set();
+  const internalRows = Array.isArray(call?.participants?.internal) ? call.participants.internal : [];
+  for (const row of internalRows) {
+    const userId = Number(row?.user_id || 0);
+    if (!Number.isInteger(userId) || userId <= 0) continue;
+    const key = `user:${userId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const labelName = String(row?.display_name || row?.email || `User ${userId}`).trim();
+    const labelEmail = String(row?.email || '').trim();
+    options.push({
+      key,
+      label: labelEmail !== '' ? `${labelName} · ${labelEmail}` : labelName,
+    });
+  }
+  const externalRows = Array.isArray(call?.participants?.external) ? call.participants.external : [];
+  for (const row of externalRows) {
+    const email = String(row?.email || '').trim().toLowerCase();
+    if (email === '') continue;
+    const key = `email:${email}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const labelName = String(row?.display_name || email).trim();
+    options.push({
+      key,
+      label: `${labelName} · ${email}`,
+    });
   }
 
-  invitePopover.open = true;
-  invitePopover.loading = true;
-  invitePopover.error = '';
-  invitePopover.code = '';
-  invitePopover.expiresAt = '';
-  invitePopover.copyNotice = '';
-  invitePopover.callId = String(call.id);
-  invitePopover.roomId = String(call.room_id || 'lobby');
-  invitePopover.triggerElement = trigger;
-  if (trigger) {
-    placeInvitePopover(trigger);
+  if (options.length === 0 && Number.isInteger(sessionState.userId) && sessionState.userId > 0) {
+    options.push({
+      key: `user:${sessionState.userId}`,
+      label: `${String(sessionState.displayName || sessionState.email || `User ${sessionState.userId}`).trim()} · ${String(sessionState.email || '').trim()}`,
+    });
+  }
+
+  return options;
+}
+
+function stopEnterCallPreview() {
+  const previewNode = enterCallPreviewVideoRef.value;
+  if (previewNode instanceof HTMLVideoElement) {
+    try {
+      previewNode.pause();
+    } catch {
+      // ignore
+    }
+    previewNode.srcObject = null;
+  }
+
+  const stream = enterCallPreviewStreamRef.value;
+  if (stream instanceof MediaStream) {
+    for (const track of stream.getTracks()) {
+      track.stop();
+    }
+  }
+  enterCallPreviewStreamRef.value = null;
+  enterCallState.previewReady = false;
+}
+
+function buildPreviewConstraints() {
+  const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
+  const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
+
+  const video = cameraDeviceId === '' ? true : { deviceId: { exact: cameraDeviceId } };
+  const audio = microphoneDeviceId === '' ? true : { deviceId: { exact: microphoneDeviceId } };
+
+  return { video, audio };
+}
+
+async function startEnterCallPreview() {
+  stopEnterCallPreview();
+  enterCallState.previewReady = false;
+  enterCallState.previewError = '';
+
+  if (
+    typeof navigator === 'undefined'
+    || !navigator.mediaDevices
+    || typeof navigator.mediaDevices.getUserMedia !== 'function'
+  ) {
+    enterCallState.previewError = 'Camera preview is not supported in this browser.';
+    return;
   }
 
   try {
-    const payload = await apiRequest('/api/invite-codes', {
-      method: 'POST',
-      body: {
-        scope: 'call',
-        call_id: String(call.id),
-      },
-    });
-
-    const inviteCode = payload?.result?.invite_code || null;
-    if (!inviteCode || typeof inviteCode.code !== 'string' || inviteCode.code.trim() === '') {
-      throw new Error('Invite code payload is invalid.');
+    const stream = await navigator.mediaDevices.getUserMedia(buildPreviewConstraints());
+    enterCallPreviewStreamRef.value = stream;
+    const volume = Math.max(0, Math.min(100, Number(callMediaPrefs.microphoneVolume || 100))) / 100;
+    for (const track of stream.getAudioTracks()) {
+      if (typeof track.applyConstraints === 'function') {
+        track.applyConstraints({ volume }).catch(() => {});
+      }
     }
 
-    invitePopover.code = inviteCode.code;
-    invitePopover.expiresAt = typeof inviteCode.expires_at === 'string' ? inviteCode.expires_at : '';
+    await nextTick();
+    const previewNode = enterCallPreviewVideoRef.value;
+    if (!(previewNode instanceof HTMLVideoElement)) {
+      return;
+    }
+
+    previewNode.muted = true;
+    previewNode.srcObject = stream;
+    await previewNode.play().catch(() => {});
+    enterCallState.previewReady = true;
   } catch (error) {
-    invitePopover.error = error instanceof Error ? error.message : 'Could not create invite code.';
-  } finally {
-    invitePopover.loading = false;
+    const message = error instanceof Error ? error.message : 'Could not start camera preview.';
+    enterCallState.previewError = message || 'Could not start camera preview.';
   }
 }
 
+function closeEnterCallModal() {
+  enterCallState.open = false;
+  enterCallState.panelOpen = false;
+  resetEnterCallState();
+  stopEnterCallPreview();
+}
+
+async function openEnterCallModal(call) {
+  if (!call || !call.id || !isInvitable(call)) {
+    return;
+  }
+
+  clearNotice();
+  enterCallState.open = true;
+  enterCallState.loading = true;
+  enterCallState.error = '';
+  enterCallState.linkUrl = '';
+  enterCallState.expiresAt = '';
+  enterCallState.callId = String(call.id);
+  enterCallState.roomId = String(call.room_id || 'lobby');
+  enterCallState.linkKind = 'personal';
+  enterCallState.targetOptions = normalizeTargetOptionsFromCall(call);
+  enterCallState.targetKey = enterCallState.targetOptions[0]?.key || '';
+  enterCallState.copyNotice = '';
+  enterCallState.panelOpen = false;
+  updateEnterCallPreviewAspectRatio();
+
+  await refreshCallMediaDevices({ requestPermissions: true });
+  await startEnterCallPreview();
+
+  await generateEnterCallLink();
+}
+
+async function generateEnterCallLink() {
+  const callId = String(enterCallState.callId || '').trim();
+  if (callId === '') {
+    enterCallState.loading = false;
+    enterCallState.error = 'Missing call id.';
+    return;
+  }
+
+  enterCallState.loading = true;
+  enterCallState.error = '';
+  enterCallState.linkUrl = '';
+  enterCallState.expiresAt = '';
+
+  if (!callAccessLinkEndpointAvailable.value) {
+    enterCallState.linkUrl = fallbackWorkspaceLink(callId);
+    enterCallState.loading = false;
+    return;
+  }
+
+  const requestBody = {};
+  if (enterCallState.linkKind === 'open') {
+    requestBody.link_kind = 'open';
+  } else {
+    requestBody.link_kind = 'personal';
+    const targetKey = String(enterCallState.targetKey || '').trim();
+    if (targetKey.startsWith('user:')) {
+      const parsed = Number(targetKey.slice(5));
+      if (Number.isInteger(parsed) && parsed > 0) {
+        requestBody.participant_user_id = parsed;
+      }
+    } else if (targetKey.startsWith('email:')) {
+      const email = targetKey.slice(6).trim().toLowerCase();
+      if (email !== '') {
+        requestBody.participant_email = email;
+      }
+    }
+  }
+
+  try {
+    const payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/access-link`, {
+      method: 'POST',
+      body: requestBody,
+    });
+
+    const result = payload?.result || {};
+    const accessId = String(result?.access_link?.id || '').trim();
+    const joinPathRaw = String(result?.join_path || '').trim();
+    const joinPath = joinPathRaw !== '' ? joinPathRaw : (accessId !== '' ? `/join/${accessId}` : '');
+    if (joinPath === '') {
+      throw new Error('Invite link payload is invalid.');
+    }
+    const origin = typeof window !== 'undefined' ? String(window.location.origin || '').trim() : '';
+    enterCallState.linkUrl = origin !== '' ? `${origin}${joinPath}` : joinPath;
+    enterCallState.expiresAt = typeof result?.access_link?.expires_at === 'string' ? result.access_link.expires_at : '';
+  } catch (error) {
+    if (looksLikeNotFoundError(error)) {
+      callAccessLinkEndpointAvailable.value = false;
+      enterCallState.linkUrl = fallbackWorkspaceLink(callId);
+      enterCallState.error = '';
+      enterCallState.expiresAt = '';
+      return;
+    }
+    enterCallState.error = error instanceof Error ? error.message : 'Could not create invite link.';
+  } finally {
+    enterCallState.loading = false;
+  }
+}
+
+function handleEnterLinkSettingsChanged() {
+  enterCallState.copyNotice = '';
+  void generateEnterCallLink();
+}
+
 async function copyInviteCode() {
-  const code = String(invitePopover.code || '').trim();
-  if (code === '') {
+  const link = String(enterCallState.linkUrl || '').trim();
+  if (link === '') {
     return;
   }
 
   try {
     if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(link);
     } else {
       const textarea = document.createElement('textarea');
-      textarea.value = code;
+      textarea.value = link;
       textarea.setAttribute('readonly', 'readonly');
       textarea.style.position = 'fixed';
       textarea.style.top = '-1000px';
@@ -985,17 +1301,73 @@ async function copyInviteCode() {
       document.body.removeChild(textarea);
     }
 
-    invitePopover.copyNotice = 'Copied.';
+    enterCallState.copyNotice = 'Copied.';
   } catch {
-    invitePopover.copyNotice = 'Copy failed.';
+    enterCallState.copyNotice = 'Copy failed.';
   }
 }
 
-function openCallWorkspace(roomId) {
-  const safeRoomId = String(roomId || 'lobby').trim() || 'lobby';
-  closeInvitePopover();
-  router.push(`/workspace/call/${encodeURIComponent(safeRoomId)}`);
+async function resolveWorkspaceRouteSegment(target = null) {
+  const normalizedTarget = target && typeof target === 'object' ? target : {};
+  const explicitAccessId = String(normalizedTarget.accessId || '').trim();
+  if (explicitAccessId !== '') {
+    return explicitAccessId;
+  }
+
+  const callId = String(normalizedTarget.callId || '').trim();
+  if (callId !== '') {
+    if (!callAccessLinkEndpointAvailable.value) {
+      return callId;
+    }
+    try {
+      const payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/access-link`, {
+        method: 'POST',
+      });
+      const accessId = String(payload?.result?.access_link?.id || '').trim();
+      if (accessId !== '') {
+        return accessId;
+      }
+    } catch (error) {
+      if (looksLikeNotFoundError(error)) {
+        callAccessLinkEndpointAvailable.value = false;
+      }
+      // Fallback to direct call id route if access-link endpoint is unavailable.
+    }
+
+    return callId;
+  }
+
+  const roomId = String(normalizedTarget.roomId || '').trim();
+  return roomId === '' ? 'lobby' : roomId;
 }
+
+async function openCallWorkspace(target = null) {
+  const routeSegment = await resolveWorkspaceRouteSegment(target);
+  closeEnterCallModal();
+  router.push(`/workspace/call/${encodeURIComponent(routeSegment)}`);
+}
+
+watch(
+  () => [callMediaPrefs.selectedCameraId, callMediaPrefs.selectedMicrophoneId],
+  () => {
+    if (!enterCallState.open) return;
+    void startEnterCallPreview();
+  },
+);
+
+watch(
+  () => callMediaPrefs.microphoneVolume,
+  () => {
+    const stream = enterCallPreviewStreamRef.value;
+    if (!(stream instanceof MediaStream)) return;
+    const volume = Math.max(0, Math.min(100, Number(callMediaPrefs.microphoneVolume || 100))) / 100;
+    for (const track of stream.getAudioTracks()) {
+      if (typeof track.applyConstraints === 'function') {
+        track.applyConstraints({ volume }).catch(() => {});
+      }
+    }
+  },
+);
 
 const composeState = reactive({
   open: false,
@@ -1085,7 +1457,7 @@ function resetComposeModal() {
 
 function openCompose(mode, call = null) {
   clearNotice();
-  closeInvitePopover();
+  closeEnterCallModal();
   resetComposeModal();
   composeState.mode = mode;
   composeState.open = true;
@@ -1306,10 +1678,11 @@ async function submitCompose() {
         method: 'POST',
         body: payload,
       });
+      const createdCallId = String(createResult?.result?.call?.id || '').trim();
       const createdRoomId = String(createResult?.result?.call?.room_id || payload.room_id || 'lobby').trim() || 'lobby';
       if (composeState.mode === 'create') {
         closeCompose();
-        router.push(`/workspace/call/${encodeURIComponent(createdRoomId)}`);
+        void openCallWorkspace({ callId: createdCallId, roomId: createdRoomId });
         return;
       }
       setNotice('ok', 'Call created.');
@@ -1336,7 +1709,7 @@ const cancelState = reactive({
 
 function openCancel(call) {
   clearNotice();
-  closeInvitePopover();
+  closeEnterCallModal();
   cancelState.open = true;
   cancelState.submitting = false;
   cancelState.error = '';
@@ -1384,34 +1757,6 @@ async function submitCancel() {
   }
 }
 
-function handleDocumentPointerDown(event) {
-  if (!invitePopover.open) {
-    return;
-  }
-
-  const target = event.target;
-  const popoverNode = invitePopoverRef.value;
-  if (popoverNode instanceof HTMLElement && popoverNode.contains(target)) {
-    return;
-  }
-
-  const trigger = invitePopover.triggerElement;
-  if (trigger instanceof HTMLElement && trigger.contains(target)) {
-    return;
-  }
-
-  closeInvitePopover();
-}
-
-function handleWindowResize() {
-  if (!invitePopover.open) return;
-
-  const trigger = invitePopover.triggerElement;
-  if (trigger instanceof HTMLElement) {
-    placeInvitePopover(trigger);
-  }
-}
-
 function handleEscape(event) {
   if (event.key !== 'Escape') return;
 
@@ -1425,25 +1770,38 @@ function handleEscape(event) {
     return;
   }
 
-  if (invitePopover.open) {
-    closeInvitePopover();
+  if (enterCallState.open) {
+    if (enterCallState.panelOpen) {
+      enterCallState.panelOpen = false;
+      return;
+    }
+    closeEnterCallModal();
   }
 }
 
 onMounted(() => {
-  document.addEventListener('pointerdown', handleDocumentPointerDown, true);
-  window.addEventListener('resize', handleWindowResize);
-  window.addEventListener('scroll', handleWindowResize, true);
+  detachCallMediaWatcher = attachCallMediaDeviceWatcher({ requestPermissions: false });
+  updateEnterCallPreviewAspectRatio();
+  enterCallPreviewResizeHandler = () => updateEnterCallPreviewAspectRatio();
+  window.addEventListener('resize', enterCallPreviewResizeHandler);
+  window.addEventListener('orientationchange', enterCallPreviewResizeHandler);
   window.addEventListener('keydown', handleEscape);
 
   void Promise.all([loadCalls(), loadCalendar()]);
 });
 
 onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
-  window.removeEventListener('resize', handleWindowResize);
-  window.removeEventListener('scroll', handleWindowResize, true);
+  if (typeof enterCallPreviewResizeHandler === 'function') {
+    window.removeEventListener('resize', enterCallPreviewResizeHandler);
+    window.removeEventListener('orientationchange', enterCallPreviewResizeHandler);
+    enterCallPreviewResizeHandler = null;
+  }
   window.removeEventListener('keydown', handleEscape);
+  if (typeof detachCallMediaWatcher === 'function') {
+    detachCallMediaWatcher();
+    detachCallMediaWatcher = null;
+  }
+  stopEnterCallPreview();
   if (calendarInstance) {
     calendarInstance.destroy();
     calendarInstance = null;
@@ -1453,10 +1811,10 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .calls-view {
-  min-height: 0;
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  background: var(--border-subtle);
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-ui-chrome);
   gap: 1px;
 }
 
@@ -1549,7 +1907,10 @@ onBeforeUnmount(() => {
 }
 
 .calls-table-wrap {
+  flex: 1 1 auto;
   min-height: 0;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .col-title {
@@ -1582,19 +1943,29 @@ onBeforeUnmount(() => {
 }
 
 .calls-calendar-wrap {
-  padding: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px 10px 10px;
   background: var(--bg-surface);
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .calls-calendar-full {
-  min-height: 620px;
+  min-height: 0;
+  height: 100%;
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface-strong);
   padding: 10px;
 }
 
 .calls-pagination-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: auto;
   border-top: 1px solid var(--border-subtle);
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .calls-modal {
@@ -1633,6 +2004,14 @@ onBeforeUnmount(() => {
   width: min(620px, calc(100vw - 30px));
 }
 
+.calls-modal-dialog-enter {
+  width: min(1220px, calc(100vw - 24px));
+  height: min(840px, calc(100vh - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: hidden;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
 .calls-modal-header {
   display: flex;
   justify-content: space-between;
@@ -1648,6 +2027,117 @@ onBeforeUnmount(() => {
 .calls-modal-body {
   display: grid;
   gap: 10px;
+}
+
+.calls-enter-body {
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.calls-enter-layout {
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 44%);
+  gap: 12px;
+}
+
+.calls-enter-preview {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.calls-enter-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-main);
+}
+
+.calls-enter-preview-meta {
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.calls-enter-panel-toggle {
+  display: none;
+  border: 0;
+  border-radius: 50%;
+  background: #133262;
+  color: #f7f7f7;
+  cursor: pointer;
+}
+
+.calls-enter-panel-toggle img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+
+.calls-enter-preview-frame {
+  position: relative;
+  width: min(100%, 560px);
+  aspect-ratio: 1 / 1;
+  min-height: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: #0b1324;
+  overflow: hidden;
+}
+
+.calls-enter-preview-frame video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scaleX(-1);
+}
+
+.calls-enter-preview-frame .calls-inline-hint,
+.calls-enter-preview-frame .calls-inline-error {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  margin: 0;
+}
+
+.calls-enter-right {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
+  gap: 10px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.calls-enter-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.calls-enter-link-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.calls-enter-invite {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: #0f1f37;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
 }
 
 .calls-modal-grid {
@@ -1814,8 +2304,85 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
+  .calls-modal-dialog-enter {
+    width: min(1120px, calc(100vw - 20px));
+    height: min(820px, calc(100vh - 20px));
+    max-height: calc(100vh - 20px);
+  }
+
+  .calls-enter-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .calls-enter-preview-frame {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    max-height: 52vh;
+  }
+
+  .calls-enter-panel-toggle {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    z-index: 4;
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+  }
+
+  .calls-enter-right {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(430px, 88vw);
+    transform: translateX(104%);
+    transition: transform 220ms ease;
+    z-index: 3;
+    border-left: 1px solid var(--border-subtle);
+    background: var(--bg-surface-strong);
+    box-shadow: -10px 0 24px rgba(0, 0, 0, 0.3);
+    padding: 10px;
+  }
+
+  .calls-enter-layout.panel-open .calls-enter-right {
+    transform: translateX(0);
+  }
+
+  .calls-enter-config-grid,
+  .calls-enter-link-controls {
+    grid-template-columns: 1fr;
+  }
+
   .calls-calendar-full {
-    min-height: 520px;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .calls-modal-dialog-enter {
+    width: calc(100vw - 10px);
+    height: calc(100vh - 10px);
+    max-height: calc(100vh - 10px);
+  }
+
+  .calls-enter-preview-frame {
+    aspect-ratio: 1 / 1;
+    max-height: 44vh;
+  }
+
+  .calls-enter-right {
+    width: 100%;
+    border-left: 0;
+  }
+
+  .calls-enter-panel-toggle {
+    top: 12px;
+    right: 12px;
+    transform: none;
   }
 }
 </style>

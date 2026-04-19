@@ -8,6 +8,18 @@ import {
 
 const routes = [
   {
+    path: '/join/:accessId',
+    name: 'call-access-join',
+    component: () => import('../domain/calls/CallAccessJoinView.vue'),
+    meta: { public: true },
+  },
+  {
+    path: '/call-goodbye',
+    name: 'call-goodbye',
+    component: () => import('../domain/calls/CallGoodbyeView.vue'),
+    meta: { public: true },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('../domain/auth/LoginView.vue'),
@@ -47,7 +59,7 @@ const routes = [
         meta: { requiresAuth: true, roles: ['user'] },
       },
       {
-        path: 'workspace/call/:roomId?',
+        path: 'workspace/call/:callRef?',
         name: 'call-workspace',
         component: () => import('../domain/realtime/CallWorkspaceView.vue'),
         meta: { requiresAuth: true, roles: ['admin', 'user'] },
@@ -99,7 +111,7 @@ export function resolveAuthorizedRedirect(target, role, routerInstance = router)
 
 router.beforeEach(async (to) => {
   if (sessionState.sessionToken) {
-    await ensureSessionRecovery(true);
+    await ensureSessionRecovery();
   } else if (!sessionState.recovered) {
     await ensureSessionRecovery();
   }

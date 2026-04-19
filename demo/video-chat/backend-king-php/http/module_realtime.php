@@ -456,7 +456,9 @@ function videochat_handle_realtime_routes(
                     ],
                     'reaction' => [
                         'send' => 'reaction/send',
+                        'send_batch' => 'reaction/send_batch',
                         'event' => 'reaction/event',
+                        'batch' => 'reaction/batch',
                     ],
                     'lobby' => [
                         'snapshot' => 'lobby/snapshot',
@@ -687,7 +689,7 @@ function videochat_handle_realtime_routes(
                                             [
                                                 'type' => 'system/error',
                                                 'code' => 'reaction_publish_failed',
-                                                'message' => 'Could not publish reaction event.',
+                                                'message' => 'Reaction could not be sent.',
                                                 'details' => $details,
                                                 'time' => gmdate('c'),
                                             ]
@@ -914,8 +916,9 @@ function videochat_handle_sfu_routes(
     $queryParams = videochat_request_query_params($request);
     $roomId = is_string($queryParams['room'] ?? null) ? (string) $queryParams['room'] : 'lobby';
     $userId = (string) ($websocketAuth['user']['id'] ?? '');
-    $userName = is_string($websocketAuth['user']['name'] ?? $websocketAuth['user']['display_name'] ?? null) 
-        ? (string) $websocketAuth['user']['name'] 
+    $userNameCandidate = $websocketAuth['user']['name'] ?? $websocketAuth['user']['display_name'] ?? null;
+    $userName = is_string($userNameCandidate) && trim($userNameCandidate) !== ''
+        ? trim($userNameCandidate)
         : 'Anonymous';
     $role = is_string($queryParams['role'] ?? null) ? (string) $queryParams['role'] : 'publisher';
 
@@ -929,7 +932,13 @@ function videochat_handle_sfu_routes(
         ];
     }
 
-    $clientId = spl_object_id($websocket);
+    if (is_object($websocket)) {
+        $clientId = spl_object_id($websocket);
+    } elseif (is_resource($websocket)) {
+        $clientId = get_resource_id($websocket);
+    } else {
+        $clientId = 'sfu_' . bin2hex(random_bytes(8));
+    }
     $sfuClients[$clientId] = [
         'websocket' => $websocket,
         'user_id' => $userId,

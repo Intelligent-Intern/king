@@ -470,6 +470,17 @@ try {
     videochat_contract_catalog_assert($reactionPayload !== [], 'reaction frame should be captured');
     videochat_contract_catalog_assert_payload($catalog, 'ws', 'reaction_event', $reactionPayload);
 
+    $batchReaction = is_array($reactionPayload['reaction'] ?? null) ? $reactionPayload['reaction'] : [];
+    videochat_contract_catalog_assert($batchReaction !== [], 'reaction batch source payload should exist');
+    $reactionBatchPayload = videochat_reaction_batch_event_payload(
+        'lobby',
+        videochat_reaction_sender_payload($userConnection),
+        [$batchReaction],
+        'flood',
+        1_780_200_050_500
+    );
+    videochat_contract_catalog_assert_payload($catalog, 'ws', 'reaction_batch', $reactionBatchPayload);
+
     fwrite(STDOUT, "[contract-catalog-parity-contract] PASS\n");
     exit(0);
 } catch (Throwable $error) {

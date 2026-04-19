@@ -1,11 +1,19 @@
-function normalizeExplicitOrigin(rawOrigin) {
+function normalizeExplicitOrigin(rawOrigin, fallbackPort = '') {
   const sanitized = String(rawOrigin || '').trim();
   if (sanitized === '') return '';
+  const normalizedFallbackPort = String(fallbackPort || '').trim();
 
   const candidate = /^[a-z]+:\/\//i.test(sanitized) ? sanitized : `http://${sanitized}`;
 
   try {
     const parsed = new URL(candidate);
+    if (
+      normalizedFallbackPort !== ''
+      && parsed.port === ''
+      && ['http:', 'https:', 'ws:', 'wss:'].includes(parsed.protocol)
+    ) {
+      parsed.port = normalizedFallbackPort;
+    }
     if (
       typeof window !== 'undefined'
       && parsed.hostname.toLowerCase() === 'host.docker.internal'
@@ -23,20 +31,169 @@ function normalizeExplicitOrigin(rawOrigin) {
   }
 }
 
-export function resolveBackendOrigin() {
-  const envOrigin = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || '').trim();
-  if (envOrigin !== '') {
-    return normalizeExplicitOrigin(envOrigin);
-  }
+let preferredBackendOrigin = '';
+let preferredBackendWebSocketOrigin = '';
 
+function hasExplicitBackendOriginConfig() {
+  const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || '').trim();
+  return explicitOrigin !== '';
+}
+
+function hasExplicitBackendWebSocketConfig() {
+  const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_WS_ORIGIN || '').trim();
+  const explicitPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
+  return explicitOrigin !== '' || explicitPort !== '';
+}
+
+function detectDefaultBackendOrigin() {
+  const envOrigin = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || '').trim();
   const port = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_PORT || '18080').trim() || '18080';
+  if (envOrigin !== '') {
+    return normalizeExplicitOrigin(envOrigin, port);
+  }
 
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
-    const host = window.location.hostname || '127.0.0.1';
+    const host = String(window.location.hostname || 'localhost').trim() || 'localhost';
     return `${protocol}://${host}:${port}`;
   }
 
-  return `http://127.0.0.1:${port}`;
+  return `http://localhost:${port}`;
 }
 
+function detectDefaultBackendWebSocketOrigin() {
+  const envOrigin = String(import.meta.env.VITE_VIDEOCHAT_WS_ORIGIN || '').trim();
+  const wsPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
+  const backendPort = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_PORT || '18080').trim() || '18080';
+  const inferredWsPort = wsPort || backendPort;
+  if (envOrigin !== '') {
+    return normalizeExplicitOrigin(envOrigin, inferredWsPort);
+  }
+
+  if (wsPort !== '') {
+    if (typeof window !== 'undefined') {
+      const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
+      const host = String(window.location.hostname || 'localhost').trim() || 'localhost';
+      return `${protocol}://${host}:${wsPort}`;
+    }
+    return `http://localhost:${wsPort}`;
+  }
+
+  return resolveBackendOrigin();
+}
+
+function deriveBackendSiblingWebSocketOriginCandidate() {
+  const explicitWsOrigin = String(import.meta.env.VITE_VIDEOCHAT_WS_ORIGIN || '').trim();
+  const explicitWsPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
+  if (explicitWsOrigin !== '' || explicitWsPort !== '') {
+    return '';
+  }
+
+  try {
+    const parsedBackendOrigin = new URL(resolveBackendOrigin());
+    if (parsedBackendOrigin.port === '') {
+      return '';
+    }
+
+    const backendPort = Number.parseInt(parsedBackendOrigin.port, 10);
+    if (!Number.isInteger(backendPort) || backendPort <= 0 || backendPort >= 65535) {
+      return '';
+    }
+
+    parsedBackendOrigin.port = String(backendPort + 1);
+    return normalizeExplicitOrigin(parsedBackendOrigin.toString());
+  } catch {
+    return '';
+  }
+}
+
+export function resolveBackendOrigin() {
+  if (preferredBackendOrigin !== '') {
+    return preferredBackendOrigin;
+  }
+  preferredBackendOrigin = normalizeExplicitOrigin(detectDefaultBackendOrigin());
+  return preferredBackendOrigin;
+}
+
+export function setBackendOrigin(nextOrigin) {
+  const normalized = normalizeExplicitOrigin(nextOrigin);
+  if (normalized === '') return;
+  preferredBackendOrigin = normalized;
+}
+
+export function setBackendWebSocketOrigin(nextOrigin) {
+  const normalized = normalizeExplicitOrigin(nextOrigin);
+  if (normalized === '') return;
+  preferredBackendWebSocketOrigin = normalized;
+}
+
+export function resolveBackendWebSocketOrigin() {
+  if (preferredBackendWebSocketOrigin !== '') {
+    return preferredBackendWebSocketOrigin;
+  }
+
+  preferredBackendWebSocketOrigin = normalizeExplicitOrigin(detectDefaultBackendWebSocketOrigin());
+  return preferredBackendWebSocketOrigin;
+}
+
+function isLoopbackHost(hostname) {
+  const value = String(hostname || '').trim().toLowerCase();
+  if (value === 'localhost') return true;
+  if (value === '127.0.0.1') return true;
+  if (value === '[::1]' || value === '::1') return true;
+  return false;
+}
+
+export function resolveBackendOriginCandidates() {
+  const primary = resolveBackendOrigin();
+  const candidates = [primary];
+
+  if (hasExplicitBackendOriginConfig()) {
+    return candidates;
+  }
+
+  try {
+    const parsed = new URL(primary);
+    if (isLoopbackHost(parsed.hostname)) {
+      const alternate = new URL(primary);
+      if (parsed.hostname === 'localhost') {
+        alternate.hostname = '127.0.0.1';
+      } else {
+        alternate.hostname = 'localhost';
+      }
+      const alternateOrigin = alternate.toString().replace(/\/+$/, '');
+      if (!candidates.includes(alternateOrigin)) {
+        candidates.push(alternateOrigin);
+      }
+    }
+  } catch {
+    // Ignore parse failures and keep primary origin only.
+  }
+
+  return candidates;
+}
+
+function pushUniqueCandidate(candidates, origin) {
+  const normalized = normalizeExplicitOrigin(origin);
+  if (normalized === '') return;
+  if (!candidates.includes(normalized)) {
+    candidates.push(normalized);
+  }
+}
+
+export function resolveBackendWebSocketOriginCandidates() {
+  const candidates = [];
+
+  const primaryWsOrigin = resolveBackendWebSocketOrigin();
+  const primaryBackendOrigin = resolveBackendOrigin();
+  pushUniqueCandidate(candidates, primaryWsOrigin);
+  pushUniqueCandidate(candidates, primaryBackendOrigin);
+
+  // Only add one sibling fallback candidate (+1) when WS is not explicitly configured.
+  // This avoids drifting retries like :18082 and host alias oscillation.
+  if (!hasExplicitBackendWebSocketConfig()) {
+    pushUniqueCandidate(candidates, deriveBackendSiblingWebSocketOriginCandidate());
+  }
+
+  return candidates;
+}

@@ -7,6 +7,11 @@
  * track discovery and subscription bookkeeping.
  */
 
+import {
+  resolveBackendWebSocketOriginCandidates,
+  setBackendWebSocketOrigin,
+} from '../../support/backendOrigin'
+
 export interface SFUTrack {
   id: string
   kind: 'audio' | 'video'
@@ -32,6 +37,7 @@ export interface SFUClientCallbacks {
   onTracks:        (e: SFUTracksEvent) => void
   onUnpublished:   (publisherId: string, trackId: string) => void
   onPublisherLeft: (publisherId: string) => void
+  onConnected?:    () => void
   onDisconnect:    () => void
   onEncodedFrame?: (frame: SFUEncodedFrame) => void
 }
@@ -39,34 +45,128 @@ export interface SFUClientCallbacks {
 export class SFUClient {
   private ws: WebSocket | null = null
   private cb: SFUClientCallbacks
+  private connectGeneration = 0
+  private disconnectNotified = false
 
   constructor(cb: SFUClientCallbacks) {
     this.cb = cb
   }
 
+  private socketUrlForOrigin(origin: string, query: URLSearchParams): string | null {
+    const normalized = String(origin || '').trim()
+    if (normalized === '') return null
+
+    try {
+      const parsed = new URL(normalized)
+      parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:'
+      parsed.pathname = '/sfu'
+      parsed.search = query.toString()
+      return parsed.toString()
+    } catch {
+      return null
+    }
+  }
+
+  private notifyDisconnectOnce(): void {
+    if (this.disconnectNotified) return
+    this.disconnectNotified = true
+    this.cb.onDisconnect()
+  }
+
+  private connectWithCandidates(
+    candidates: string[],
+    index: number,
+    query: URLSearchParams,
+    roomId: string,
+    generation: number,
+  ): void {
+    if (generation !== this.connectGeneration) return
+    if (index >= candidates.length) {
+      this.notifyDisconnectOnce()
+      return
+    }
+
+    const wsUrl = this.socketUrlForOrigin(candidates[index], query)
+    if (!wsUrl) {
+      this.connectWithCandidates(candidates, index + 1, query, roomId, generation)
+      return
+    }
+
+    const ws = new WebSocket(wsUrl)
+    this.ws = ws
+    let opened = false
+
+    const failToNextCandidate = () => {
+      if (generation !== this.connectGeneration) return
+      if (opened) return
+      if (this.ws === ws) this.ws = null
+      this.connectWithCandidates(candidates, index + 1, query, roomId, generation)
+    }
+
+    ws.onopen = () => {
+      if (generation !== this.connectGeneration) {
+        try { ws.close() } catch {}
+        return
+      }
+      opened = true
+      this.disconnectNotified = false
+      setBackendWebSocketOrigin(candidates[index] || '')
+      this.send({ type: 'sfu/join', roomId, role: 'publisher' })
+      if (this.cb.onConnected) {
+        this.cb.onConnected()
+      }
+    }
+
+    ws.onmessage = (ev) => {
+      let msg: any
+      try { msg = JSON.parse(ev.data) } catch { return }
+      this.handleMessage(msg)
+    }
+
+    ws.onclose = () => {
+      if (generation !== this.connectGeneration) return
+      if (!opened) {
+        failToNextCandidate()
+        return
+      }
+      if (this.ws === ws) {
+        this.ws = null
+      }
+      this.notifyDisconnectOnce()
+    }
+
+    ws.onerror = () => {
+      if (generation !== this.connectGeneration) return
+      if (!opened) {
+        failToNextCandidate()
+        return
+      }
+      try {
+        ws.close()
+      } catch {}
+    }
+  }
+
   connect(session: { userId: string; token: string; name: string }, roomId: string): void {
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const host     = window.location.host || '127.0.0.1:3000'
+    this.connectGeneration += 1
+    this.disconnectNotified = false
+    const generation = this.connectGeneration
+
+    if (this.ws) {
+      try {
+        this.ws.close()
+      } catch {}
+      this.ws = null
+    }
+
     const query    = new URLSearchParams({
       userId: session.userId,
       token:  session.token,
       name:   session.name,
     })
 
-    this.ws = new WebSocket(`${protocol}://${host}/sfu?${query}`)
-
-    this.ws.onopen = () => {
-      this.send({ type: 'sfu/join', roomId, role: 'publisher' })
-    }
-
-    this.ws.onmessage = (ev) => {
-      let msg: any
-      try { msg = JSON.parse(ev.data) } catch { return }
-      this.handleMessage(msg)
-    }
-
-    this.ws.onclose  = () => this.cb.onDisconnect()
-    this.ws.onerror  = () => this.cb.onDisconnect()
+    const candidates = resolveBackendWebSocketOriginCandidates()
+    this.connectWithCandidates(candidates, 0, query, roomId, generation)
   }
 
   publishTracks(tracks: SFUTrack[]): void {
@@ -96,6 +196,8 @@ export class SFUClient {
   }
 
   leave(): void {
+    this.connectGeneration += 1
+    this.disconnectNotified = false
     this.send({ type: 'sfu/leave' })
     this.ws?.close()
     this.ws = null

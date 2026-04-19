@@ -234,6 +234,45 @@
         "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
       }
     },
+    "reaction_batch": {
+      "type": "object",
+      "required": {
+        "type": { "type": "string", "enum": ["reaction/batch"] },
+        "room_id": { "type": "string", "min_length": 1 },
+        "sender": {
+          "type": "object",
+          "required": {
+            "user_id": { "type": "int", "min": 1 },
+            "display_name": { "type": "string", "min_length": 1 },
+            "role": { "type": "string", "enum": ["admin", "moderator", "user"] }
+          }
+        },
+        "batch": {
+          "type": "object",
+          "required": {
+            "id": { "type": "string", "pattern": "/^reaction_batch_/" },
+            "mode": { "type": "string", "min_length": 1 },
+            "size": { "type": "int", "min": 1 },
+            "server_unix_ms": { "type": "int", "min": 1 },
+            "server_time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
+          }
+        },
+        "reactions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": {
+              "id": { "type": "string", "pattern": "/^reaction_/" },
+              "emoji": { "type": "string", "min_length": 1 },
+              "client_reaction_id": { "one_of": [{ "type": "string", "min_length": 1 }, { "type": "null" }] },
+              "server_unix_ms": { "type": "int", "min": 1 },
+              "server_time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
+            }
+          }
+        },
+        "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
+      }
+    },
     "lobby_snapshot": {
       "type": "object",
       "required": {

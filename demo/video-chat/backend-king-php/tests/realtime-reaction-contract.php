@@ -28,8 +28,10 @@ function videochat_realtime_reaction_last_frame(array $frames, string $socket): 
 }
 
 try {
-    putenv('VIDEOCHAT_WS_REACTION_THROTTLE_WINDOW_MS=1000');
-    putenv('VIDEOCHAT_WS_REACTION_THROTTLE_MAX_PER_WINDOW=2');
+    putenv('VIDEOCHAT_WS_REACTION_FLOOD_WINDOW_MS=1000');
+    putenv('VIDEOCHAT_WS_REACTION_FLOOD_THRESHOLD_PER_WINDOW=2');
+    putenv('VIDEOCHAT_WS_REACTION_FLOOD_BATCH_SIZE=3');
+    putenv('VIDEOCHAT_WS_REACTION_CLIENT_BATCH_MAX_COUNT=25');
     putenv("VIDEOCHAT_WS_REACTION_ALLOWED_EMOJIS=\u{1F44D},\u{2764}\u{FE0F}");
 
     $presenceState = videochat_presence_state_init();
@@ -130,7 +132,7 @@ try {
         $sender,
         1_780_400_000_250
     );
-    videochat_realtime_reaction_assert((bool) ($secondPublish['ok'] ?? false), 'second reaction publish should succeed within throttle budget');
+    videochat_realtime_reaction_assert((bool) ($secondPublish['ok'] ?? false), 'second reaction publish should succeed within direct budget');
     videochat_realtime_reaction_assert((int) ($secondPublish['remaining_in_window'] ?? -1) === 0, 'remaining_in_window after second publish mismatch');
 
     $secondSenderFrame = videochat_realtime_reaction_last_frame($frames, 'socket-sender');
@@ -140,7 +142,7 @@ try {
         'reaction id must remain stable for same sender+room+client_reaction_id'
     );
 
-    $throttledPublish = videochat_reaction_publish(
+    $thirdPublish = videochat_reaction_publish(
         $reactionState,
         $presenceState,
         $senderConnection,
@@ -148,9 +150,39 @@ try {
         $sender,
         1_780_400_000_500
     );
-    videochat_realtime_reaction_assert(!(bool) ($throttledPublish['ok'] ?? true), 'third reaction in throttle window must fail');
-    videochat_realtime_reaction_assert((string) ($throttledPublish['error'] ?? '') === 'throttled', 'throttle error mismatch');
-    videochat_realtime_reaction_assert((int) ($throttledPublish['retry_after_ms'] ?? 0) > 0, 'throttle retry_after_ms must be > 0');
+    videochat_realtime_reaction_assert((bool) ($thirdPublish['ok'] ?? false), 'third reaction in flood window should be buffered');
+    videochat_realtime_reaction_assert((int) ($thirdPublish['sent_count'] ?? -1) === 0, 'third reaction should stay buffered until flood batch fills');
+
+    $fourthPublish = videochat_reaction_publish(
+        $reactionState,
+        $presenceState,
+        $senderConnection,
+        $validCommand,
+        $sender,
+        1_780_400_000_600
+    );
+    videochat_realtime_reaction_assert((bool) ($fourthPublish['ok'] ?? false), 'fourth reaction in flood window should be buffered');
+    videochat_realtime_reaction_assert((int) ($fourthPublish['sent_count'] ?? -1) === 0, 'fourth reaction should stay buffered until flood batch fills');
+
+    $fifthPublish = videochat_reaction_publish(
+        $reactionState,
+        $presenceState,
+        $senderConnection,
+        $validCommand,
+        $sender,
+        1_780_400_000_700
+    );
+    videochat_realtime_reaction_assert((bool) ($fifthPublish['ok'] ?? false), 'fifth reaction should flush flood batch');
+    videochat_realtime_reaction_assert((int) ($fifthPublish['sent_count'] ?? 0) === 2, 'fifth reaction should broadcast one flood batch frame');
+
+    $senderBatchFrame = videochat_realtime_reaction_last_frame($frames, 'socket-sender');
+    $peerBatchFrame = videochat_realtime_reaction_last_frame($frames, 'socket-peer');
+    videochat_realtime_reaction_assert((string) ($senderBatchFrame['type'] ?? '') === 'reaction/batch', 'sender should receive reaction/batch after flood threshold');
+    videochat_realtime_reaction_assert((string) ($peerBatchFrame['type'] ?? '') === 'reaction/batch', 'peer should receive reaction/batch after flood threshold');
+    $senderBatchMeta = is_array($senderBatchFrame['batch'] ?? null) ? $senderBatchFrame['batch'] : [];
+    $senderBatchRows = is_array($senderBatchFrame['reactions'] ?? null) ? $senderBatchFrame['reactions'] : [];
+    videochat_realtime_reaction_assert((int) ($senderBatchMeta['size'] ?? 0) === 3, 'flood batch size should match configured batch size');
+    videochat_realtime_reaction_assert(count($senderBatchRows) === 3, 'reaction/batch should include configured chunk size');
 
     $peerCommand = videochat_reaction_decode_client_frame(json_encode([
         'type' => 'reaction/send',
@@ -165,9 +197,9 @@ try {
         $peerConnection,
         $peerCommand,
         $sender,
-        1_780_400_000_600
+        1_780_400_000_800
     );
-    videochat_realtime_reaction_assert((bool) ($peerPublish['ok'] ?? false), 'peer reaction publish should stay responsive while sender is throttled');
+    videochat_realtime_reaction_assert((bool) ($peerPublish['ok'] ?? false), 'peer reaction publish should stay responsive while sender is in flood mode');
     videochat_realtime_reaction_assert((int) ($peerPublish['sent_count'] ?? 0) === 2, 'peer reaction fanout should target active room participants only');
 
     $senderNotInRoom = $senderConnection;
@@ -178,7 +210,7 @@ try {
         $senderNotInRoom,
         $validCommand,
         $sender,
-        1_780_400_000_650
+        1_780_400_000_850
     );
     videochat_realtime_reaction_assert(!(bool) ($senderNotInRoomPublish['ok'] ?? true), 'sender outside room must fail reaction publish');
     videochat_realtime_reaction_assert((string) ($senderNotInRoomPublish['error'] ?? '') === 'sender_not_in_room', 'sender outside room error mismatch');
@@ -191,10 +223,19 @@ try {
         $invalidSender,
         $validCommand,
         $sender,
-        1_780_400_000_700
+        1_780_400_000_900
     );
     videochat_realtime_reaction_assert(!(bool) ($invalidSenderPublish['ok'] ?? true), 'invalid sender must fail reaction publish');
     videochat_realtime_reaction_assert((string) ($invalidSenderPublish['error'] ?? '') === 'invalid_sender', 'invalid sender reaction error mismatch');
+
+    $validBatchCommand = videochat_reaction_decode_client_frame(json_encode([
+        'type' => 'reaction/send_batch',
+        'emojis' => ["\u{1F44D}", "\u{2764}\u{FE0F}"],
+        'client_reaction_id' => 'batch-001',
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    videochat_realtime_reaction_assert((bool) ($validBatchCommand['ok'] ?? false), 'reaction/send_batch should decode');
+    $decodedBatchEmojis = is_array($validBatchCommand['emojis'] ?? null) ? $validBatchCommand['emojis'] : [];
+    videochat_realtime_reaction_assert(count($decodedBatchEmojis) === 2, 'decoded reaction/send_batch emoji count mismatch');
 
     $dropSender = static function (mixed $socket, array $payload): bool {
         return false;
@@ -224,6 +265,13 @@ try {
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     videochat_realtime_reaction_assert(!(bool) ($invalidClientReactionId['ok'] ?? true), 'invalid client_reaction_id must fail decode');
     videochat_realtime_reaction_assert((string) ($invalidClientReactionId['error'] ?? '') === 'invalid_client_reaction_id', 'invalid client_reaction_id error mismatch');
+
+    $tooLargeBatch = videochat_reaction_decode_client_frame(json_encode([
+        'type' => 'reaction/send_batch',
+        'emojis' => array_fill(0, 26, "\u{1F44D}"),
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    videochat_realtime_reaction_assert(!(bool) ($tooLargeBatch['ok'] ?? true), 'reaction/send_batch over max count must fail decode');
+    videochat_realtime_reaction_assert((string) ($tooLargeBatch['error'] ?? '') === 'batch_too_large', 'reaction/send_batch batch_too_large mismatch');
 
     putenv('VIDEOCHAT_WS_REACTION_MAX_CHARS=1');
     $emojiTooLong = videochat_reaction_decode_client_frame(json_encode([
@@ -255,7 +303,7 @@ try {
     videochat_realtime_reaction_assert((string) ($invalidJson['error'] ?? '') === 'invalid_json', 'invalid json reaction error mismatch');
 
     $cleared = videochat_reaction_clear_for_connection($reactionState, $senderConnection);
-    videochat_realtime_reaction_assert((bool) $cleared, 'reaction clear_for_connection should clear sender throttle state');
+    videochat_realtime_reaction_assert((bool) $cleared, 'reaction clear_for_connection should clear sender flood state');
     $postClearPublish = videochat_reaction_publish(
         $reactionState,
         $presenceState,

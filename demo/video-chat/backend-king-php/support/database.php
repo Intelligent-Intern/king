@@ -189,7 +189,7 @@ SQL
                 throw new RuntimeException('Failed to hash demo user password.');
             }
 
-            $insertUser->execute([
+            $insertParams = [
                 ':email' => $demoUser['email'],
                 ':display_name' => $demoUser['display_name'],
                 ':password_hash' => $passwordHash,
@@ -197,7 +197,20 @@ SQL
                 ':time_format' => $demoUser['time_format'],
                 ':theme' => $demoUser['theme'],
                 ':updated_at' => gmdate('c'),
-            ]);
+            ];
+
+            try {
+                $insertUser->execute($insertParams);
+            } catch (Throwable $error) {
+                $message = strtolower($error->getMessage());
+                $isEmailRace = str_contains($message, 'unique constraint failed')
+                    && str_contains($message, 'users.email');
+                if (!$isEmailRace) {
+                    throw $error;
+                }
+                // Another bootstrap process inserted the same demo user between SELECT and INSERT.
+                // Treat as successful seed and continue.
+            }
         }
 
         $seeded[] = [
@@ -720,6 +733,40 @@ SQL,
 UPDATE call_participants
 SET call_role = 'participant'
 WHERE call_role IS NULL OR trim(call_role) = ''
+SQL,
+            ],
+        ],
+        7 => [
+            'name' => '0007_call_access_links',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS call_access_links (
+    id TEXT PRIMARY KEY,
+    call_id TEXT NOT NULL REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    participant_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    participant_email TEXT,
+    invite_code_id TEXT REFERENCES invite_codes(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    created_by_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    expires_at TEXT,
+    last_used_at TEXT,
+    consumed_at TEXT
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_call_access_links_call_id ON call_access_links(call_id)",
+                "CREATE INDEX IF NOT EXISTS idx_call_access_links_participant_user_id ON call_access_links(participant_user_id)",
+                "CREATE INDEX IF NOT EXISTS idx_call_access_links_invite_code_id ON call_access_links(invite_code_id)",
+                <<<'SQL'
+CREATE UNIQUE INDEX IF NOT EXISTS idx_call_access_links_call_user
+ON call_access_links(call_id, participant_user_id)
+WHERE participant_user_id IS NOT NULL
+SQL,
+                <<<'SQL'
+CREATE UNIQUE INDEX IF NOT EXISTS idx_call_access_links_call_email
+ON call_access_links(call_id, participant_email)
+WHERE participant_user_id IS NULL
+  AND participant_email IS NOT NULL
+  AND trim(participant_email) <> ''
 SQL,
             ],
         ],

@@ -1,9 +1,9 @@
 import { reactive } from 'vue';
-import { resolveBackendOrigin } from './backendOrigin';
+import { currentBackendOrigin, fetchBackend } from './backendFetch';
 
 export const backendRuntimeState = reactive({
   status: 'idle',
-  backendOrigin: resolveBackendOrigin(),
+  backendOrigin: currentBackendOrigin(),
   checkedAt: '',
   data: null,
   error: '',
@@ -14,19 +14,20 @@ let inFlight = null;
 export async function probeBackendRuntime() {
   if (inFlight) return inFlight;
 
-  const endpoint = `${backendRuntimeState.backendOrigin}/api/runtime`;
+  backendRuntimeState.backendOrigin = currentBackendOrigin();
   backendRuntimeState.status = 'probing';
   backendRuntimeState.error = '';
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 3500);
 
-  inFlight = fetch(endpoint, {
+  inFlight = fetchBackend('/api/runtime', {
     method: 'GET',
     headers: { accept: 'application/json' },
     signal: controller.signal,
   })
-    .then(async (response) => {
+    .then(async ({ response, origin }) => {
+      backendRuntimeState.backendOrigin = origin || currentBackendOrigin();
       if (!response.ok) {
         throw new Error(`runtime preflight failed with HTTP ${response.status}`);
       }

@@ -5,11 +5,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 HOST="${VIDEOCHAT_KING_HOST:-127.0.0.1}"
 PORT="${VIDEOCHAT_KING_PORT:-18080}"
+WS_PORT="${VIDEOCHAT_KING_WS_PORT:-${PORT}}"
 WS_PATH="${VIDEOCHAT_KING_WS_PATH:-/ws}"
 DB_PATH="${VIDEOCHAT_KING_DB_PATH:-${REPO_ROOT}/demo/video-chat/backend-king-php/.local/video-chat.sqlite}"
 PHP_BIN="${PHP_BIN:-php}"
 DEFAULT_EXT="${REPO_ROOT}/extension/modules/king.so"
 KING_EXTENSION_PATH="${KING_EXTENSION_PATH:-${DEFAULT_EXT}}"
+SERVER_MODE_OVERRIDE="${VIDEOCHAT_KING_SERVER_MODE:-}"
 
 php_args=()
 ext_source=""
@@ -34,25 +36,60 @@ fi
 
 echo "[video-chat][king-php-backend] extension source: ${ext_source}"
 echo "[video-chat][king-php-backend] starting http://$HOST:$PORT/"
-echo "[video-chat][king-php-backend] websocket ws://$HOST:$PORT$WS_PATH"
+if [[ "$WS_PORT" == "$PORT" ]]; then
+  echo "[video-chat][king-php-backend] websocket ws://$HOST:$PORT$WS_PATH (shared listener)"
+else
+  echo "[video-chat][king-php-backend] websocket ws://$HOST:$WS_PORT$WS_PATH (dedicated listener)"
+fi
 mkdir -p "$(dirname "${DB_PATH}")"
 touch "${DB_PATH}"
 export VIDEOCHAT_KING_DB_PATH="${DB_PATH}"
 export VIDEOCHAT_DEMO_SEED_CALLS="${VIDEOCHAT_DEMO_SEED_CALLS:-1}"
 echo "[video-chat][king-php-backend] sqlite path ${DB_PATH}"
 
-"${PHP_BIN}" "${php_args[@]}" "${SCRIPT_DIR}/server.php" &
-backend_pid=$!
+backend_pids=()
+
+start_backend() {
+  local mode="$1"
+  local bind_port="$2"
+  VIDEOCHAT_KING_PORT="${bind_port}" \
+  VIDEOCHAT_KING_SERVER_MODE="${mode}" \
+  "${PHP_BIN}" "${php_args[@]}" "${SCRIPT_DIR}/server.php" &
+  backend_pids+=("$!")
+}
+
+normalized_mode_override="$(echo "${SERVER_MODE_OVERRIDE}" | tr '[:upper:]' '[:lower:]' | xargs || true)"
+if [[ "${normalized_mode_override}" == "all" || "${normalized_mode_override}" == "http" || "${normalized_mode_override}" == "ws" ]]; then
+  echo "[video-chat][king-php-backend] server mode override: ${normalized_mode_override}"
+  start_backend "${normalized_mode_override}" "${PORT}"
+elif [[ "$WS_PORT" == "$PORT" ]]; then
+  start_backend "all" "${PORT}"
+else
+  start_backend "http" "${PORT}"
+  start_backend "ws" "${WS_PORT}"
+fi
 
 cleanup() {
   local signal="${1:-SIGTERM}"
-  echo "[video-chat][king-php-backend] forwarding ${signal} to pid ${backend_pid}" >&2
-  kill -s "${signal}" "${backend_pid}" >/dev/null 2>&1 || true
-  wait "${backend_pid}" 2>/dev/null || true
+  for pid in "${backend_pids[@]}"; do
+    echo "[video-chat][king-php-backend] forwarding ${signal} to pid ${pid}" >&2
+    kill -s "${signal}" "${pid}" >/dev/null 2>&1 || true
+  done
+  for pid in "${backend_pids[@]}"; do
+    wait "${pid}" 2>/dev/null || true
+  done
   echo "[video-chat][king-php-backend] stopped" >&2
 }
 
 trap 'cleanup SIGINT; exit 0' INT
 trap 'cleanup SIGTERM; exit 0' TERM
 
-wait "${backend_pid}"
+if [[ "${#backend_pids[@]}" -eq 1 ]]; then
+  wait "${backend_pids[0]}"
+  exit $?
+fi
+
+wait -n "${backend_pids[@]}"
+exit_code=$?
+cleanup SIGTERM
+exit "${exit_code}"

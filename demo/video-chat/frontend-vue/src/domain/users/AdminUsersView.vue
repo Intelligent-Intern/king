@@ -239,10 +239,11 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { resolveBackendOrigin } from '../../support/backendOrigin';
-import { sessionState } from '../auth/session';
+import { useRouter } from 'vue-router';
+import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import { logoutSession, refreshSession, sessionState } from '../auth/session';
 
-const backendOrigin = resolveBackendOrigin();
+const router = useRouter();
 const avatarPlaceholder = '/assets/orgas/kingrt/avatar-placeholder.svg';
 const defaultAvatarOptions = [
   { label: 'KingRT default', path: '/assets/orgas/kingrt/avatar-placeholder.svg' },
@@ -292,20 +293,8 @@ function normalizeAvatarSrc(rawPath) {
   if (value === '') return avatarPlaceholder;
   if (value.startsWith('data:')) return value;
   if (value.startsWith('http://') || value.startsWith('https://')) return value;
-  if (value.startsWith('/api/')) return `${backendOrigin}${value}`;
+  if (value.startsWith('/api/')) return `${currentBackendOrigin()}${value}`;
   return value;
-}
-
-function buildQueryString(params) {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params || {})) {
-    if (value === undefined || value === null) continue;
-    const text = String(value).trim();
-    if (text === '') continue;
-    query.set(key, text);
-  }
-  const encoded = query.toString();
-  return encoded === '' ? '' : `?${encoded}`;
 }
 
 function requestHeaders(includeBody) {
@@ -314,7 +303,6 @@ function requestHeaders(includeBody) {
   if (includeBody) headers['content-type'] = 'application/json';
   if (token !== '') {
     headers.authorization = `Bearer ${token}`;
-    headers['x-session-id'] = token;
   }
   return headers;
 }
@@ -325,19 +313,20 @@ function extractErrorMessage(payload, fallback) {
   return fallback;
 }
 
-async function apiRequest(path, { method = 'GET', query = null, body = null } = {}) {
-  const endpoint = `${backendOrigin}${path}${buildQueryString(query || {})}`;
+async function apiRequest(path, { method = 'GET', query = null, body = null } = {}, allowRefreshRetry = true) {
   let response = null;
   try {
-    response = await fetch(endpoint, {
+    const result = await fetchBackend(path, {
       method,
+      query,
       headers: requestHeaders(body !== null),
       body: body === null ? undefined : JSON.stringify(body),
     });
+    response = result.response;
   } catch (error) {
     const message = error instanceof Error ? error.message.trim() : '';
-    if (message === '' || /failed to fetch/i.test(message)) {
-      throw new Error(`Could not reach backend (${backendOrigin}).`);
+    if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
+      throw new Error(`Could not reach backend (${currentBackendOrigin()}).`);
     }
     throw new Error(message);
   }
@@ -350,6 +339,15 @@ async function apiRequest(path, { method = 'GET', query = null, body = null } = 
   }
 
   if (!response.ok) {
+    if ((response.status === 401 || response.status === 403) && allowRefreshRetry) {
+      const refreshResult = await refreshSession();
+      if (refreshResult?.ok) {
+        return apiRequest(path, { method, query, body }, false);
+      }
+      await logoutSession();
+      await router.push('/login');
+      throw new Error('Session expired. Please sign in again.');
+    }
     throw new Error(extractErrorMessage(payload, `Request failed (${response.status}).`));
   }
 
@@ -744,6 +742,10 @@ async function toggleUserStatus(user) {
 
   try {
     const status = String(user.status || '').toLowerCase();
+    if (status !== 'disabled' && userId === Number(sessionState.userId || 0)) {
+      error.value = 'You cannot deactivate your own account.';
+      return;
+    }
     await apiRequest(`/api/admin/users/${encodeURIComponent(String(userId))}/${status === 'disabled' ? 'reactivate' : 'deactivate'}`, {
       method: 'POST',
     });
@@ -787,7 +789,7 @@ onMounted(() => {
 .admin-users-head,
 .admin-users-toolbar,
 .users-footer {
-  background: var(--bg-pane);
+  background: var(--bg-ui-chrome);
 }
 
 .admin-users-head h3 {
@@ -891,11 +893,15 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   margin-top: auto;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .users-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .users-modal {

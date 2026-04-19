@@ -1,0 +1,69 @@
+{
+  "contract_name": "king-model-registry-entry",
+  "contract_version": "1.0.0",
+  "contract_scope": "One GGUF model artifact tracked by the model-inference backend registry. Metadata is persisted in SQLite; the artifact itself is stored in the King object store and identified by the flat object_store_key. This envelope is the request/response shape of GET /api/models/{model_id}, the array item shape of GET /api/models, and the body shape accepted by POST /api/models (with X-Model-* headers + raw binary body).",
+  "honesty_rules": [
+    "model_id is deterministically generated server-side on POST; clients MUST NOT supply one. The pattern mdl-<16 lowercase hex chars> is required.",
+    "artifact.sha256_hex MUST equal the SHA-256 of the bytes stored in the object store (king integrity_sha256). The registry does NOT trust a client-supplied checksum; the value returned on create is computed from the actual persisted object.",
+    "artifact.byte_length MUST equal the content_length reported by king_object_store_get_metadata at create time. It is not backfilled from the HTTP Content-Length header.",
+    "artifact.object_store_key MUST be flat (no '/' separators); King rejects slash-containing object IDs.",
+    "On POST the server streams the body through king_object_store_put_from_stream; there is no in-memory copy of the full payload beyond the transport-layer body string that king_http1_server_listen_once already delivers.",
+    "License, source_url, family, parameter_count, and context_length come from the client headers or JSON body and are treated as untrusted metadata. They are NOT independently verified against the GGUF header in this leaf; a separate future leaf will add GGUF magic/metadata parsing.",
+    "Deletion removes the row AND issues king_object_store_delete; a failed object-store delete fails the whole deletion and the row remains."
+  ],
+  "envelope": {
+    "model_id":         {"type": "string", "pattern": "/^mdl-[a-f0-9]{16}$/"},
+    "model_name":       {"type": "string", "min_length": 1, "max_length": 128},
+    "family":           {"type": "string", "min_length": 1, "max_length": 64},
+    "parameter_count":  {"type": "int", "min": 1},
+    "quantization":     {"type": "string", "enum": ["Q2_K","Q3_K","Q4_0","Q4_K","Q5_K","Q6_K","Q8_0","F16"]},
+    "context_length":   {"type": "int", "min": 1},
+    "artifact": {
+      "object_store_key": {"type": "string", "pattern": "/^mdl-[a-f0-9]{16}$/"},
+      "byte_length":      {"type": "int", "min": 1},
+      "sha256_hex":       {"type": "string", "pattern": "/^[0-9a-f]{64}$/"},
+      "uploaded_at":      {"type": "string", "format": "rfc3339"}
+    },
+    "requirements": {
+      "min_ram_bytes":   {"type": "int", "min": 1},
+      "min_vram_bytes":  {"type": "int", "min": 0, "note": "0 means CPU-only is acceptable"},
+      "prefers_gpu":     {"type": "bool"}
+    },
+    "license":          {"type": "string", "min_length": 1, "max_length": 128},
+    "source_url":       {"type": "string|null"},
+    "registered_at":    {"type": "string", "format": "rfc3339"}
+  },
+  "http_surface": {
+    "list": {"method": "GET", "path": "/api/models", "response": "array<envelope>"},
+    "get":  {"method": "GET", "path": "/api/models/{model_id}", "response": "envelope"},
+    "create": {
+      "method": "POST",
+      "path": "/api/models",
+      "content_type": "application/octet-stream",
+      "body": "raw GGUF bytes",
+      "required_headers": {
+        "X-Model-Name":            "string (max 128)",
+        "X-Model-Family":          "string (max 64)",
+        "X-Model-Quantization":    "enum Q2_K|Q3_K|Q4_0|Q4_K|Q5_K|Q6_K|Q8_0|F16",
+        "X-Model-Parameter-Count": "int",
+        "X-Model-Context-Length":  "int",
+        "X-Model-License":         "string (max 128)",
+        "X-Model-Min-Ram-Bytes":   "int"
+      },
+      "optional_headers": {
+        "X-Model-Min-Vram-Bytes":  "int (defaults to 0)",
+        "X-Model-Prefers-Gpu":     "bool 0|1 (defaults to 0)",
+        "X-Model-Source-Url":      "string|absent"
+      },
+      "response": "envelope (201 on success)"
+    },
+    "delete": {"method": "DELETE", "path": "/api/models/{model_id}", "response": "{deleted: true, model_id}"}
+  },
+  "error_codes": [
+    "invalid_request_envelope",
+    "model_not_found",
+    "model_artifact_write_failed",
+    "model_artifact_too_large",
+    "model_registry_conflict"
+  ]
+}

@@ -6,6 +6,7 @@ declare(strict_types=1);
  * @return array{
  *   ok: bool,
  *   query: string,
+ *   status: string,
  *   order: string,
  *   page: int,
  *   page_size: int,
@@ -21,6 +22,8 @@ function videochat_admin_user_list_filters(array $queryParams): array
     if (strlen($query) > 120) {
         $query = substr($query, 0, 120);
     }
+    $statusRaw = $queryParams['status'] ?? 'all';
+    $status = is_string($statusRaw) ? strtolower(trim($statusRaw)) : 'all';
     $orderRaw = $queryParams['order'] ?? 'role_then_name_asc';
     $order = is_string($orderRaw) ? strtolower(trim($orderRaw)) : 'role_then_name_asc';
 
@@ -28,6 +31,12 @@ function videochat_admin_user_list_filters(array $queryParams): array
     $pageSizeRaw = $queryParams['page_size'] ?? '10';
 
     $errors = [];
+
+    $allowedStatusValues = ['all', 'active', 'disabled'];
+    if (!in_array($status, $allowedStatusValues, true)) {
+        $errors['status'] = 'must_be_all_active_or_disabled';
+        $status = 'all';
+    }
 
     $allowedOrderValues = ['role_then_name_asc', 'role_then_name_desc'];
     if (!in_array($order, $allowedOrderValues, true)) {
@@ -53,6 +62,7 @@ function videochat_admin_user_list_filters(array $queryParams): array
     return [
         'ok' => $errors === [],
         'query' => $query,
+        'status' => $status,
         'order' => $order,
         'page' => $page,
         'page_size' => $pageSize,
@@ -80,7 +90,14 @@ function videochat_admin_user_list_filters(array $queryParams): array
  *   page_count: int
  * }
  */
-function videochat_admin_list_users(PDO $pdo, string $query, int $page, int $pageSize, string $order = 'role_then_name_asc'): array
+function videochat_admin_list_users(
+    PDO $pdo,
+    string $query,
+    int $page,
+    int $pageSize,
+    string $order = 'role_then_name_asc',
+    string $status = 'all'
+): array
 {
     $effectivePage = max(1, $page);
     $effectivePageSize = max(1, min(100, $pageSize));
@@ -88,20 +105,33 @@ function videochat_admin_list_users(PDO $pdo, string $query, int $page, int $pag
     $effectiveOrder = in_array($order, ['role_then_name_asc', 'role_then_name_desc'], true)
         ? $order
         : 'role_then_name_asc';
+    $effectiveStatus = in_array($status, ['all', 'active', 'disabled'], true)
+        ? $status
+        : 'all';
     $displayNameDirection = $effectiveOrder === 'role_then_name_desc' ? 'DESC' : 'ASC';
 
     $search = trim($query);
-    $where = '';
+    $whereParts = [];
     $params = [];
     if ($search !== '') {
-        $where = <<<'SQL'
-WHERE (
+        $whereParts[] = <<<'SQL'
+(
     lower(users.email) LIKE :search
     OR lower(users.display_name) LIKE :search
     OR lower(roles.slug) LIKE :search
 )
 SQL;
         $params[':search'] = '%' . strtolower($search) . '%';
+    }
+
+    if ($effectiveStatus !== 'all') {
+        $whereParts[] = 'users.status = :status';
+        $params[':status'] = $effectiveStatus;
+    }
+
+    $where = '';
+    if ($whereParts !== []) {
+        $where = 'WHERE ' . implode("\n  AND ", $whereParts);
     }
 
     $countSql = <<<SQL

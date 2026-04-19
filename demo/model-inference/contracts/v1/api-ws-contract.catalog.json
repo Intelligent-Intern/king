@@ -1,0 +1,265 @@
+{
+  "catalog_version": "v1.0.0",
+  "catalog_name": "king-model-inference-api-ws",
+  "catalog_scope": "king-model-inference demo, M-batch",
+  "catalog_discipline": "every HTTP endpoint and every WS event exposed by the backend must be listed here; a parity contract test fails when code and catalog drift. Entries grow per sprint leaf as their module lands.",
+  "api": {
+    "runtime_health": {
+      "method": "GET",
+      "paths": ["/health", "/api/runtime"],
+      "introduced_by": "M-1",
+      "envelope": {
+        "service": "model-inference-backend-king-php",
+        "app": {"name": "string", "version": "string", "environment": "string"},
+        "runtime": {
+          "king_version": "string",
+          "transport": "king_http1_server_listen_once",
+          "ws_path": "string",
+          "health": {
+            "module_status": "string",
+            "system_status": "string",
+            "build": "string|null",
+            "module_version": "string|null",
+            "active_runtime_count": "int"
+          }
+        },
+        "database": {"status": "string", "schema_version": "int", "path": "string"},
+        "node": {"node_id": "string", "role": "inference-serving"},
+        "status": "ok",
+        "time": "rfc3339"
+      }
+    },
+    "bootstrap": {
+      "method": "GET",
+      "paths": ["/", "/api/bootstrap"],
+      "introduced_by": "M-1",
+      "envelope": {
+        "service": "model-inference-backend-king-php",
+        "status": "bootstrapped",
+        "message": "string",
+        "ws_path": "string",
+        "runtime_endpoint": "/api/runtime",
+        "version_endpoint": "/api/version",
+        "time": "rfc3339"
+      }
+    },
+    "version": {
+      "method": "GET",
+      "paths": ["/api/version"],
+      "introduced_by": "M-1",
+      "envelope": {
+        "service": "string",
+        "app": {"name": "string", "version": "string", "environment": "string"},
+        "runtime": {"king_version": "string", "build": "string|null", "module_version": "string|null"},
+        "time": "rfc3339"
+      }
+    },
+    "node_profile": {
+      "method": "GET",
+      "paths": ["/api/node/profile"],
+      "introduced_by": "M-4",
+      "envelope_contract": "demo/model-inference/contracts/v1/node-profile.contract.json",
+      "envelope": {
+        "node_id": "string",
+        "king_version": "string",
+        "platform": {"os": "darwin|linux|other", "arch": "string", "kernel": "string"},
+        "cpu": {"logical_count": "int", "physical_count": "int", "brand": "string"},
+        "memory": {"total_bytes": "int", "available_bytes": "int", "page_size": "int"},
+        "gpu": {"present": "bool", "kind": "none|metal|cuda|rocm|other", "device_count": "int", "vram_total_bytes": "int", "vram_free_bytes": "int"},
+        "capabilities": {"loadable_models": "array<string>", "max_context_tokens": "int", "supports_streaming": "bool", "supports_quantizations": "array<string>"},
+        "service": {"service_type": "king.inference.v1", "health_url": "string", "status": "ready|draining|starting|error"},
+        "published_at": "rfc3339"
+      }
+    },
+    "models_list": {
+      "method": "GET",
+      "paths": ["/api/models"],
+      "introduced_by": "M-5",
+      "envelope_contract": "demo/model-inference/contracts/v1/model-registry-entry.contract.json",
+      "envelope": {
+        "status": "ok",
+        "items": "array<model-registry-entry>",
+        "count": "int",
+        "time": "rfc3339"
+      }
+    },
+    "models_create": {
+      "method": "POST",
+      "paths": ["/api/models"],
+      "introduced_by": "M-5",
+      "content_type": "application/octet-stream",
+      "body": "raw GGUF bytes; metadata in X-Model-* request headers",
+      "envelope_contract": "demo/model-inference/contracts/v1/model-registry-entry.contract.json",
+      "envelope": {
+        "status": "created",
+        "model": "model-registry-entry",
+        "time": "rfc3339"
+      }
+    },
+    "model_get": {
+      "method": "GET",
+      "paths": ["/api/models/{model_id}"],
+      "introduced_by": "M-5",
+      "envelope_contract": "demo/model-inference/contracts/v1/model-registry-entry.contract.json",
+      "envelope": {
+        "status": "ok",
+        "model": "model-registry-entry",
+        "time": "rfc3339"
+      }
+    },
+    "model_delete": {
+      "method": "DELETE",
+      "paths": ["/api/models/{model_id}"],
+      "introduced_by": "M-5",
+      "envelope": {
+        "status": "deleted",
+        "model_id": "string",
+        "time": "rfc3339"
+      }
+    },
+    "chat_ui": {
+      "method": "GET",
+      "paths": ["/ui", "/ui/"],
+      "introduced_by": "M-11b",
+      "content_type": "text/html; charset=utf-8",
+      "scope": "Browser-visible single-file chat client. Static HTML+CSS+JS; decodes TokenFrame binaries client-side and streams deltas into the live assistant bubble. See backend-king-php/public/chat.html."
+    },
+    "telemetry_recent": {
+      "method": "GET",
+      "paths": ["/api/telemetry/inference/recent"],
+      "introduced_by": "M-12",
+      "envelope": {
+        "status": "ok",
+        "items": "array<InferenceMetricsEntry>",
+        "count": "int",
+        "capacity": "int",
+        "time": "rfc3339"
+      },
+      "item_shape": {
+        "request_id": "string",
+        "session_id": "string",
+        "transport": "http|ws",
+        "model_id": "string",
+        "model_name": "string",
+        "quantization": "string",
+        "node_id": "string",
+        "tokens_in": "int",
+        "tokens_out": "int",
+        "ttft_ms": "int",
+        "duration_ms": "int",
+        "tokens_per_second": "float",
+        "vram_total_bytes": "int",
+        "vram_free_bytes": "int",
+        "gpu_kind": "none|metal|cuda|rocm|other",
+        "recorded_at": "rfc3339"
+      }
+    },
+    "infer_http": {
+      "method": "POST",
+      "paths": ["/api/infer"],
+      "introduced_by": "M-10",
+      "content_type": "application/json",
+      "request_contract": "demo/model-inference/contracts/v1/inference-request.contract.json",
+      "envelope": {
+        "status": "ok",
+        "request_id": "string",
+        "session_id": "string",
+        "model": {"model_id": "string", "model_name": "string", "quantization": "string"},
+        "completion": {
+          "text": "string",
+          "tokens_in": "int",
+          "tokens_out": "int",
+          "ttft_ms": "int",
+          "duration_ms": "int",
+          "request_wall_ms": "int",
+          "stop": {"type": "string", "word": "string", "truncated": "bool"}
+        },
+        "worker": {"pid": "int", "port": "int", "gguf_path": "string"},
+        "time": "rfc3339"
+      }
+    }
+  },
+  "ws": {
+    "path": "/ws",
+    "introduced_by": "M-11",
+    "handshake": {
+      "method": "GET",
+      "required_headers": {
+        "Upgrade": "websocket",
+        "Connection": "Upgrade",
+        "Sec-WebSocket-Key": "base64 nonce",
+        "Sec-WebSocket-Version": "13"
+      }
+    },
+    "client_events": {
+      "infer.start": {
+        "direction": "client->server",
+        "frame_type": "text",
+        "body_shape": {"event": "infer.start", "payload": "inference-request envelope with stream=true"},
+        "request_contract": "demo/model-inference/contracts/v1/inference-request.contract.json"
+      }
+    },
+    "server_events": {
+      "infer.token": {
+        "direction": "server->client",
+        "frame_type": "binary",
+        "body_contract": "demo/model-inference/contracts/v1/token-frame.contract.json",
+        "frame_type_value": "delta"
+      },
+      "infer.end": {
+        "direction": "server->client",
+        "frame_type": "binary",
+        "body_contract": "demo/model-inference/contracts/v1/token-frame.contract.json",
+        "frame_type_value": "end"
+      },
+      "infer.error": {
+        "direction": "server->client",
+        "frame_type": "binary",
+        "body_contract": "demo/model-inference/contracts/v1/token-frame.contract.json",
+        "frame_type_value": "error"
+      }
+    }
+  },
+  "errors": {
+    "envelope": {
+      "status": "error",
+      "error": {"code": "string", "message": "string", "details": "object?"},
+      "time": "rfc3339"
+    },
+    "codes": [
+      "extension_not_loaded",
+      "internal_server_error",
+      "not_implemented",
+      "method_not_allowed",
+      "invalid_request_envelope",
+      "model_not_found",
+      "model_artifact_write_failed",
+      "model_artifact_too_large",
+      "model_registry_conflict",
+      "model_fit_unavailable",
+      "worker_unavailable"
+    ]
+  },
+  "planned_surfaces_target_shape": {
+    "note": "Entries below are target-shape only, added to the live api/ws/errors sections as their leaves land. Listed here so readers see the full intended v1 surface without a parity-test false negative.",
+    "api": {
+      "worker_status":    {"method": "GET",  "paths": ["/api/worker"],                       "introduced_by": "M-7"},
+      "transcripts_get":  {"method": "GET",  "paths": ["/api/transcripts/{request_id}"],     "introduced_by": "M-16"},
+      "route_diagnostic": {"method": "GET",  "paths": ["/api/route"],                        "introduced_by": "M-14"}
+    },
+    "ws": {
+      "infer.cancel": {"direction": "client->server", "body": "json",                    "introduced_by": "future"}
+    },
+    "error_codes": [
+      "invalid_request_envelope",
+      "model_not_found",
+      "model_fit_unavailable",
+      "worker_unavailable",
+      "worker_draining",
+      "routing_no_candidate",
+      "transcript_not_found",
+      "auth_failed",
+      "rbac_forbidden"
+    ]
+  }
+}

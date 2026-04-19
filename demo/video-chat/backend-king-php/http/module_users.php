@@ -51,7 +51,8 @@ function videochat_handle_user_routes(
                     (string) ($filters['query'] ?? ''),
                     (int) ($filters['page'] ?? 1),
                     (int) ($filters['page_size'] ?? 10),
-                    (string) ($filters['order'] ?? 'role_then_name_asc')
+                    (string) ($filters['order'] ?? 'role_then_name_asc'),
+                    (string) ($filters['status'] ?? 'all')
                 );
             } catch (Throwable $error) {
                 return $errorResponse(500, 'admin_user_list_failed', 'Could not load admin user list.', [
@@ -74,6 +75,7 @@ function videochat_handle_user_routes(
                 'users' => $rows,
                 'pagination' => [
                     'query' => (string) ($filters['query'] ?? ''),
+                    'status' => (string) ($filters['status'] ?? 'all'),
                     'order' => $order,
                     'page' => $page,
                     'page_size' => $pageSize,
@@ -341,9 +343,18 @@ function videochat_handle_user_routes(
 
     if (preg_match('#^/api/admin/users/(\d+)/deactivate$#', $path, $matches) === 1) {
         $userId = (int) ($matches[1] ?? 0);
+        $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
         if ($method !== 'POST') {
             return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/admin/users/{id}/deactivate.', [
                 'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        if ($actorUserId > 0 && $actorUserId === $userId) {
+            return $errorResponse(409, 'admin_user_conflict', 'You cannot deactivate your own account.', [
+                'fields' => [
+                    'user_id' => 'cannot_deactivate_self',
+                ],
             ]);
         }
 

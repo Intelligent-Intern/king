@@ -85,7 +85,7 @@ Current new-stack baseline capabilities:
 - multi-user room chat over websocket fanout
 - browser video call signaling (`offer`/`answer`/`ice`) with peer tiles
 - responsive shell layout with reduced-motion-safe slide transitions for chat/call stage switching
-- shared UI token layer in `frontend/src/style.css` for color, spacing, border, radius, and elevation
+- shared UI token layer in `frontend-vue/src/styles.css` for color, spacing, border, radius, and elevation
 - normalized typography and control sizing (inputs/buttons/headlines/body text) from one baseline scale
 
 ## Runtime Boundaries (Active vs Historical)
@@ -114,6 +114,87 @@ Current demo caveats:
 - no TURN relay setup (STUN-only by default)
 - no production moderation/audit policy
 - frontend runtime proxy may emit Node deprecation warnings from transitive proxy dependencies; behavior remains functional
+
+## Quick Video-Call Test (Simple)
+
+Verified on 2026-04-15 with the active stack in this repo.
+
+1. Start everything with Docker:
+
+```bash
+cd demo/video-chat
+docker compose -f docker-compose.v1.yml up --build
+```
+
+2. Open the app:
+
+- frontend: `http://127.0.0.1:5174`
+- backend health: `http://127.0.0.1:18080/health`
+
+3. Login with demo admin:
+
+- email: `admin@intelligent-intern.com`
+- password: `admin123`
+
+4. Open an existing seeded call (for example `Platform Standup`) from the calls view.
+
+5. Optional: generate a join link and open it in a second browser profile/incognito:
+   - route shape: `/join/<access-link-uuid>`
+   - example full URL: `http://127.0.0.1:5174/join/<uuid>`
+
+6. Stop stack:
+
+```bash
+docker compose -f docker-compose.v1.yml down
+```
+
+### API-only sanity check (real call + real access-link UUID)
+
+```bash
+BASE=http://127.0.0.1:18080
+TOKEN=$(curl -sS -X POST "$BASE/api/auth/login" \
+  -H 'content-type: application/json' \
+  -d '{"email":"admin@intelligent-intern.com","password":"admin123"}' | jq -r '.session.token')
+
+CREATE=$(curl -sS -X POST "$BASE/api/calls" \
+  -H 'content-type: application/json' \
+  -H "authorization: Bearer $TOKEN" \
+  -d '{"title":"Readme Test Call","starts_at":"2030-01-01T10:00:00Z","ends_at":"2030-01-01T11:00:00Z"}')
+
+CALL_ID=$(printf '%s' "$CREATE" | jq -r '.result.call.id')
+curl -sS -X POST "$BASE/api/calls/$CALL_ID/access-link" \
+  -H 'content-type: application/json' \
+  -H "authorization: Bearer $TOKEN" \
+  -d '{}' | jq -r '.result.join_path'
+```
+
+The generated `join_path` is UUID-based and points to a real new call (not only seeded demo calls).
+
+## Can We Run This On A Server?
+
+Short answer:
+
+- Yes, for dev/staging and internal demos on a single node.
+- Not yet production-ready for large public traffic.
+
+What is already working:
+
+- backend + frontend containers start with `docker-compose.v1.yml`
+- auth/session/calls/invite/access-link APIs are live
+- websocket endpoints `/ws` and `/sfu` are active
+
+What is still missing for robust production operation:
+
+- TLS termination + reverse proxy websocket upgrade config for both `/ws` and `/sfu`
+- TURN infrastructure (currently STUN-only baseline, weak for restrictive NAT/mobile networks)
+- multi-node architecture (current call/SFU state is in-process; SQLite is single-node local volume)
+- secret management + hardened env config (no demo credentials in deployed environments)
+- operational hardening (central logs/metrics/alerts, backups, rollout/rollback strategy)
+
+Host-runtime note:
+
+- `backend-king-php/run-dev.sh` requires `pdo_sqlite` in host PHP.
+- If host PHP is missing `pdo_sqlite`, use the Docker compose path above.
 
 ## Repeated + Nested Frame Example
 
