@@ -1195,6 +1195,25 @@ Abschluss:
 - `demo/video-chat/backend-king-php/tests/gateway-backend-mapping-contract.php|sh` deckt I-12 ab.
 - `demo/video-chat/scripts/smoke.sh` ruft `gateway-backend-mapping-contract.sh` in der Backend-Contract-Strecke auf.
 
+### #26 Readiness-Tracker mit Video-Chat-Abschlüssen abgleichen (Dokumentation)
+
+Ziel:
+- Der Langform-Tracker darf keine bereits belegten Video-Chat-Arbeiten weiter als offen anzeigen.
+
+Checklist:
+- [x] Aktuelle Abschlüsse #18 bis #25 als Recent-Closure-Notizen in `READYNESS_TRACKER.md` nachgetragen.
+- [x] Bereits belegte Z1/Z2/Z3/Z4/Z5/Z6-Checkboxen anhand vorhandener Contracts und Dokumentation auf erledigt gesetzt.
+- [x] Nicht belegte oder weiterhin fragliche Punkte bewusst offen gelassen, z. B. statische Admin-Overview-Metriken und breitere UI-Parity-Restarbeiten.
+- [x] Keine Produktsemantik reduziert und keine dirty Frontend-/Backend-Arbeitsdateien angefasst.
+
+Definition of done:
+- `ISSUES.md` und `READYNESS_TRACKER.md` widersprechen sich nicht mehr bei bereits geschlossenen Video-Chat-Contracts.
+- Offene Tracker-Punkte bleiben nur dort offen, wo der aktuelle Code noch keinen eindeutigen Nachweis liefert.
+
+Abschluss:
+- `READYNESS_TRACKER.md` enthaelt die Closure-Hinweise zu Chat-Attachments, Chat-Archiv, Activity-Layout, Playwright-Matrix, SFU-Binding, Access-Session, Gateway-JWT und Gateway-Mapping.
+- Stale Checkboxen fuer belegte Backend-/Realtime-/Routing-/Smoke-Arbeiten sind aktualisiert.
+
 ## Persistente Research-Notizen (für Folgesessions)
 
 - Alex-Relevanz (historisch, inzwischen nach `frontend-vue/src/lib/**` konsolidiert):

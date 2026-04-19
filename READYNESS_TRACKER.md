@@ -74,6 +74,14 @@ Status note:
 - Recent video-chat realtime-typing closure: room typing now enforces debounce + expiry semantics with no self-echo, fail-closed sender-in-room validation, and explicit `typing/start` + `typing/stop` WS contract parity, proven by `backend-king-php/tests/realtime-typing-contract.sh` and `backend-king-php/tests/contract-catalog-parity-contract.sh`.
 - Recent video-chat realtime-signaling closure: room signaling now enforces target-routed delivery for `call/offer`/`call/answer`/`call/ice`/`call/hangup` with fail-closed sender+target authorization (`invalid_sender`, `sender_not_in_room`, `invalid_target_user_id`, `target_not_in_room`) and no cross-room leakage, proven by `backend-king-php/tests/realtime-signaling-contract.sh`.
 - Recent video-chat realtime-lobby closure: room lobby queue runtime now enforces atomic `queue/join`, moderator-only `allow/remove/allow_all`, fail-closed sender room-membership guards (`invalid_sender`, `sender_not_in_room`), and consistent room-scoped `lobby/snapshot` fanout, proven by `backend-king-php/tests/realtime-lobby-contract.sh`.
+- Recent video-chat chat-attachment closure: inline chat is bounded, oversized paste is converted to safe attachments, uploads are stored through the King Object Store, executable/binary types are blocked, and download ACLs are proven by backend + Playwright contracts tracked in `ISSUES.md` #18.
+- Recent video-chat chat-archive closure: registered participants can read persisted chat history and grouped attachments through a read-only archive surface with ACL, pagination, guest exclusion, and download authorization tracked in `ISSUES.md` #19.
+- Recent video-chat activity-layout closure: speaker/movement awareness, layout modes, strategy state, activity throttling, and admin-controlled selection are implemented and covered by backend/frontend/Playwright contracts tracked in `ISSUES.md` #20.
+- Recent video-chat Playwright matrix closure: chat limits, attachment acceptance/rejection, archive read-only behavior, and activity layout strategy journeys are covered by deterministic E2E scope tracked in `ISSUES.md` #21.
+- Recent video-chat SFU binding closure: `/sfu` now requires explicit room binding, validates query/join room consistency, keeps publish/subscribe/frame relay room-scoped, and is covered by `backend-king-php/tests/realtime-sfu-contract.sh` tracked in `ISSUES.md` #22.
+- Recent video-chat access-session closure: access-link issued sessions persist call/room/user bindings and resolve websocket room context from those bindings without allowing foreign-room joins, covered by `backend-king-php/tests/call-access-session-contract.sh` tracked in `ISSUES.md` #23.
+- Recent video-chat Gateway JWT closure: future Gateway Join tokens require HS256, safe secret policy, matching `sub`/`effective_id` and `room`/`call_id`, token-length limits, and rate-limit proof in `backend-king-php/tests/gateway-jwt-binding-contract.sh` tracked in `ISSUES.md` #24.
+- Recent video-chat Gateway mapping closure: backend signaling now maps deterministically to/from AMQP `call.signaling` payloads for offer/answer/ice/hangup with room/call alias enforcement in `backend-king-php/tests/gateway-backend-mapping-contract.sh` tracked in `ISSUES.md` #25.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -355,7 +363,7 @@ Scope note:
 
 - [x] Freeze one authoritative REST + WS/IIBIN contract catalog for the new video stack.
 - [ ] Enforce one shared typed error envelope across REST and WS responses.
-- [ ] Split backend runtime code into focused modules (`auth`, `session`, `rbac`, `users`, `calls`, `invites`, `realtime`) with no monolithic mixed-responsibility handler.
+- [x] Split backend runtime code into focused modules (`auth`, `session`, `rbac`, `users`, `calls`, `invites`, `realtime`) with no monolithic mixed-responsibility handler.
 - [ ] Split frontend state into focused stores (`auth`, `calls`, `participants`, `chat`, `presence`, `settings`) with deterministic ownership boundaries.
 - [ ] Add contract-level schema tests for request/response/event DTOs and keep them versioned.
 - [ ] Establish a UI-parity acceptance matrix tied to executable checks instead of prose-only claims.
@@ -367,43 +375,43 @@ Scope note:
 - [x] Implement stable session refresh/rotation policy with replay-safe token handling.
 - [x] Enforce route-level RBAC middleware for admin/moderator/user actions.
 - [ ] Add forbidden/conflict validation semantics for all protected video APIs.
-- [ ] Implement admin user CRUD (`list`, `create`, `update`, `deactivate`) with deterministic pagination/search/sort.
-- [ ] Implement user profile/settings persistence (`display_name`, `avatar_ref`, `theme`, `time_format`).
-- [ ] Prove auth/session/rbac flows with positive + negative integration tests over the King runtime path.
+- [x] Implement admin user CRUD (`list`, `create`, `update`, `deactivate`) with deterministic pagination/search/sort.
+- [x] Implement user profile/settings persistence (`display_name`, `avatar_ref`, `theme`, `time_format`).
+- [x] Prove auth/session/rbac flows with positive + negative integration tests over the King runtime path.
 
 ### Z3. Backend Calls, Calendar, Invites
 
-- [ ] Implement calls list endpoint with owner-bound filtering, stable ordering, and pagination.
-- [ ] Implement create-call endpoint with internal participant references and external invitee rows.
-- [ ] Implement edit-call endpoint with explicit participant diff semantics and no implicit global resend.
-- [ ] Implement cancel-call endpoint with persisted cancellation payload suitable for downstream notification workflows.
+- [x] Implement calls list endpoint with owner-bound filtering, stable ordering, and pagination.
+- [x] Implement create-call endpoint with internal participant references and external invitee rows.
+- [x] Implement edit-call endpoint with explicit participant diff semantics and no implicit global resend.
+- [x] Implement cancel-call endpoint with persisted cancellation payload suitable for downstream notification workflows.
 - [x] Implement invite-code/link generation with deterministic expiry and redemption policy.
 - [x] Implement invite redeem/join endpoint with role-safe join context resolution.
 - [ ] Persist schedule metadata to support calendar view projections without frontend inference hacks.
 - [ ] Add API boundaries for invite-preview/copy flows so invite code is not leaked as table-column default data.
-- [ ] Add call/invite lifecycle contract tests (create/edit/cancel/redeem/expired/duplicate/conflict).
-- [ ] Add owner and permission boundary tests to guarantee cross-user call isolation.
+- [x] Add call/invite lifecycle contract tests (create/edit/cancel/redeem/expired/duplicate/conflict).
+- [x] Add owner and permission boundary tests to guarantee cross-user call isolation.
 
 ### Z4. King Realtime Workspace Channels
 
-- [ ] Implement authenticated websocket gateway handshake with explicit runtime auth context.
+- [x] Implement authenticated websocket gateway handshake with explicit runtime auth context.
 - [x] Implement room presence snapshots plus join/leave/reconnect events from server-authoritative state.
 - [x] Implement room-scoped chat fanout with bounded validation and stable timestamping.
 - [x] Implement typing indicator channel with debounce + expiry and no self-echo.
 - [x] Implement signaling routing (`offer`, `answer`, `ice`, `hangup`) constrained by room membership and target identity.
 - [x] Implement lobby queue state and moderator actions (`allow`, `remove`, `allow_all`) with RBAC enforcement.
-- [ ] Implement reaction eventstream with server-side throttling and deterministic payload limits.
-- [ ] Prove reconnect/recovery semantics for presence/chat/signaling with runtime-level integration tests.
+- [x] Implement reaction eventstream with server-side throttling and deterministic payload limits.
+- [x] Prove reconnect/recovery semantics for presence/chat/signaling with runtime-level integration tests.
 
 ### Z5. Frontend UI Parity (Vue)
 
 - [x] Bind frontend auth store to backend login/logout/session-check and remove local-only identity fallback.
-- [ ] Enforce route-level role guards so admin/user flows cannot drift into hybrid unauthorized views.
+- [x] Enforce route-level role guards so admin/user flows cannot drift into hybrid unauthorized views.
 - [ ] Implement admin dashboard data binding from backend contracts (no static placeholder metrics).
 - [x] Implement admin calls CRUD table with server-backed pagination/search/filter and action parity.
 - [x] Integrate calendar scheduling view and bind create/edit flows to backend call contracts.
 - [x] Implement invite popover/copy/join UX with backend-bound data only.
-- [ ] Implement user dashboard with own calls list and calendar parity semantics.
+- [x] Implement user dashboard with own calls list and calendar parity semantics.
 - [x] Implement workspace sidebars/tabs (`users`, `lobby`, `chat`) as server-driven state projections.
 - [ ] Bind participant list search/pagination/moderation actions to backend-authorized contracts.
 - [ ] Implement control-bar actions (`raise_hand`, reactions, mic/cam/screen, hangup) against realtime/backend state.
@@ -415,12 +423,12 @@ Scope note:
 ### Z6. Verification, Hardening, Release Proof
 
 - [ ] Add end-to-end journey tests covering login, role routing, call create/edit/cancel, invite redeem, chat, and signaling bootstrap.
-- [ ] Add websocket contract tests for auth failure, token expiry, revocation, and unauthorized room access.
-- [ ] Add regression tests for admin/user RBAC boundaries across REST and realtime paths.
-- [ ] Add CI smoke checks for the new compose stack (`frontend-vue` + `backend-king-php` + sqlite volume).
-- [ ] Add deterministic seed fixtures for multi-user integration tests (admin, moderator, user, external invitee).
-- [ ] Add failure-path tests for network interruption and reconnect state machine transitions.
-- [ ] Add documentation closure proving active path is the new stack and legacy path is reference-only.
+- [x] Add websocket contract tests for auth failure, token expiry, revocation, and unauthorized room access.
+- [x] Add regression tests for admin/user RBAC boundaries across REST and realtime paths.
+- [x] Add CI smoke checks for the new compose stack (`frontend-vue` + `backend-king-php` + sqlite volume).
+- [x] Add deterministic seed fixtures for multi-user integration tests (admin, moderator, user, external invitee).
+- [x] Add failure-path tests for network interruption and reconnect state machine transitions.
+- [x] Add documentation closure proving active path is the new stack and legacy path is reference-only.
 - [ ] Gate release readiness on passing UI-parity matrix and runtime tests, not on narrowed feature claims.
 - [x] Implement persistence for registration data
 - [x] Implement rehydration of registration data after restart
