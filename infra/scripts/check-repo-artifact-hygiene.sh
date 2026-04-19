@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+cd "${ROOT_DIR}"
+
+mapfile -t tracked_files < <(git ls-files)
+
+descriptions=(
+  "Vite cache directories must not be versioned (.vite)"
+  "CMake build directories must not be versioned (CMakeFiles)"
+  "CMake cache files must not be versioned (CMakeCache.txt)"
+  "CMake build output roots must not be versioned (cmake-build-*)"
+  "CMake install manifests must not be versioned (cmake_install.cmake)"
+  "CMake compile database must not be versioned (compile_commands.json)"
+  "Transient native build binaries must not be versioned"
+)
+
+patterns=(
+  '(^|/)\.vite/'
+  '(^|/)CMakeFiles/'
+  '(^|/)CMakeCache\.txt$'
+  '(^|/)cmake-build-[^/]+/'
+  '(^|/)cmake_install\.cmake$'
+  '(^|/)compile_commands\.json$'
+  '(^|/)(build|target|modules)/.*\.(o|obj|lo|la|a|so|dylib|dll|exe)$'
+)
+
+failed=0
+total_matches=0
+
+for i in "${!descriptions[@]}"; do
+  desc="${descriptions[i]}"
+  regex="${patterns[i]}"
+
+  mapfile -t matches < <(printf '%s\n' "${tracked_files[@]}" | grep -E "${regex}" || true)
+  if [[ "${#matches[@]}" -eq 0 ]]; then
+    continue
+  fi
+
+  failed=1
+  total_matches=$((total_matches + ${#matches[@]}))
+  echo "${desc}" >&2
+  printf ' - %s\n' "${matches[@]}" >&2
+done
+
+if [[ "${failed}" -ne 0 ]]; then
+  echo "Repo artifact hygiene check failed with ${total_matches} offending tracked path(s)." >&2
+  exit 1
+fi
+
+echo "Repo artifact hygiene check passed."

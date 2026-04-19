@@ -122,7 +122,7 @@ export async function createTfjsSegmentationBackend(opts = {}) {
   }
   if (!segmenter || typeof segmenter.segmentPeople !== 'function') return null;
 
-  const detectIntervalMs = Math.max(100, Math.min(1200, Math.round(Number(opts.detectIntervalMs || 220))));
+  const detectIntervalMs = Math.max(66, Math.min(1200, Math.round(Number(opts.detectIntervalMs || 140))));
   const facePaddingPx = Math.max(4, Math.min(64, Math.round(Number(opts.facePaddingPx || 14))));
 
   let faces = [];

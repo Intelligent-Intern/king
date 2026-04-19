@@ -1,9 +1,9 @@
 <template>
   <section class="view-card admin-overview-view">
     <section class="overview-toolbar">
-      <div class="view-tabs" role="tablist" aria-label="Overview views">
+      <div class="overview-view-tabs" role="tablist" aria-label="Overview views">
         <button
-          class="view-tab"
+          class="tab"
           :class="{ active: activeOverviewView === 'dashboard' }"
           type="button"
           role="tab"
@@ -14,7 +14,7 @@
           Dashboard
         </button>
         <button
-          class="view-tab"
+          class="tab"
           :class="{ active: activeOverviewView === 'calendar' }"
           type="button"
           role="tab"
@@ -22,18 +22,7 @@
           :aria-selected="activeOverviewView === 'calendar'"
           @click="setActiveOverviewView('calendar')"
         >
-          Calendar
-        </button>
-        <button
-          class="view-tab"
-          :class="{ active: activeOverviewView === 'my-calls' }"
-          type="button"
-          role="tab"
-          data-view="my-calls"
-          :aria-selected="activeOverviewView === 'my-calls'"
-          @click="setActiveOverviewView('my-calls')"
-        >
-          My Video Calls
+          Calender
         </button>
       </div>
     </section>
@@ -143,45 +132,14 @@
       <p class="calendar-help">Double-click a date/slot to schedule. In day view, drag a time range to prefill the modal.</p>
     </section>
 
-    <section class="view-panel my-calls-panel" :class="{ active: activeOverviewView === 'my-calls' }" data-panel="my-calls">
-      <article class="card">
-        <h2 class="table-title">My Video Calls</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Schedule</th>
-                <th>Status</th>
-                <th>Users</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in myCallsRows" :key="row.id">
-                <td>{{ row.title }}</td>
-                <td>{{ formatScheduleRange(row.scheduleStart, row.scheduleEnd) }}</td>
-                <td><span class="tag" :class="row.statusTagClass">{{ row.statusLabel }}</span></td>
-                <td>{{ row.users }}</td>
-                <td>
-                  <span class="actions-inline">
-                    <button class="icon-mini-btn" type="button" title="Join call" aria-label="Join call" @click="openWorkspace(row)">
-                      <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
-                    </button>
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </article>
-    </section>
-
     <div class="calls-modal" :hidden="!composeState.open" role="dialog" aria-modal="true" aria-label="Call compose modal">
       <div class="calls-modal-backdrop" @click="closeCompose"></div>
       <div class="calls-modal-dialog">
-        <header class="calls-modal-header">
-          <h4>{{ composeHeadline }}</h4>
+        <header class="calls-modal-header calls-modal-header-enter">
+          <div class="calls-modal-header-enter-left">
+            <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
+            <h4 class="calls-enter-title">{{ composeHeadline }}</h4>
+          </div>
           <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeCompose">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
@@ -251,7 +209,7 @@
             <article class="calls-participants-panel">
               <header class="calls-participants-head">
                 <h5>External participants</h5>
-                <button class="btn" type="button" @click="addExternalRow">Add row</button>
+                <button class="btn btn-cyan" type="button" @click="addExternalRow">Add row</button>
               </header>
 
               <section class="calls-external-list">
@@ -299,8 +257,7 @@
           >
             Delete
           </button>
-          <button class="btn" type="button" :disabled="composeState.submitting" @click="closeCompose">Close</button>
-          <button class="btn" type="button" :disabled="composeState.submitting" @click="submitCompose">
+          <button class="btn btn-cyan" type="button" :disabled="composeState.submitting" @click="submitCompose">
             {{ composeState.submitting ? 'Saving…' : composeSubmitLabel }}
           </button>
         </footer>
@@ -316,6 +273,8 @@ import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import { sessionState } from '../auth/session';
+import { formatDateRangeDisplay, fullCalendarEventTimeFormat } from '../../support/dateTimeFormat';
 
 const router = useRouter();
 const activeOverviewView = ref('dashboard');
@@ -499,15 +458,18 @@ const nodesUnderLoadMetric = computed(() => String(
 ));
 
 function setActiveOverviewView(view) {
-  if (view === 'dashboard' || view === 'calendar' || view === 'my-calls') {
+  if (view === 'dashboard' || view === 'calendar') {
     activeOverviewView.value = view;
   }
 }
 
 function formatScheduleRange(startValue, endValue) {
-  const start = String(startValue || '').replace('T', ' ');
-  const end = String(endValue || '').replace('T', ' ');
-  return `${start} -> ${end}`;
+  return formatDateRangeDisplay(startValue, endValue, {
+    dateFormat: sessionState.dateFormat,
+    timeFormat: sessionState.timeFormat,
+    separator: ' -> ',
+    fallback: 'n/a',
+  });
 }
 
 function openWorkspace(row) {
@@ -534,16 +496,51 @@ function localInputToIso(localValue) {
   return date.toISOString();
 }
 
+let roomUuidFallbackCounter = 0;
+
+function uuidFromBytes(bytes) {
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join('-');
+}
+
+function fallbackDeterministicUuid() {
+  const bytes = new Uint8Array(16);
+  const now = BigInt(Date.now());
+  roomUuidFallbackCounter = (roomUuidFallbackCounter + 1) >>> 0;
+  const counter = BigInt(roomUuidFallbackCounter);
+
+  for (let i = 0; i < 8; i += 1) {
+    bytes[7 - i] = Number((now >> BigInt(i * 8)) & 0xffn);
+  }
+  for (let i = 0; i < 4; i += 1) {
+    bytes[15 - i] = Number((counter >> BigInt(i * 8)) & 0xffn);
+  }
+
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  return uuidFromBytes(bytes);
+}
+
 function generateRoomUuid() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
 
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
-    const randomNibble = Math.floor(Math.random() * 16);
-    const value = char === 'x' ? randomNibble : ((randomNibble & 0x3) | 0x8);
-    return value.toString(16);
-  });
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    return uuidFromBytes(bytes);
+  }
+
+  return fallbackDeterministicUuid();
 }
 
 function nextExternalRow(initial = {}) {
@@ -745,6 +742,37 @@ function upsertMyCallsRow(eventId, title, roomUuid, startsAtIso, endsAtIso, user
   myCallsRows.value = rows;
 }
 
+function syncMyCallsRowFromCalendarEvent(eventApi) {
+  if (!eventApi) return;
+  const eventId = String(eventApi.id || '').trim();
+  if (eventId === '') return;
+
+  const startDate = eventApi.start instanceof Date ? new Date(eventApi.start.getTime()) : null;
+  let endDate = eventApi.end instanceof Date ? new Date(eventApi.end.getTime()) : null;
+  if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) {
+    return;
+  }
+
+  if (!(endDate instanceof Date) || Number.isNaN(endDate.getTime()) || endDate.getTime() <= startDate.getTime()) {
+    endDate = new Date(startDate.getTime() + (45 * 60 * 1000));
+  }
+
+  const extended = eventApi.extendedProps || {};
+  const roomUuid = String(extended.roomUuid || extended.roomId || '').trim();
+  const internalParticipantUserIds = Array.isArray(extended.internalParticipantUserIds) ? extended.internalParticipantUserIds : [];
+  const externalParticipants = Array.isArray(extended.externalParticipants) ? extended.externalParticipants : [];
+  const participantsTotal = internalParticipantUserIds.length + externalParticipants.length;
+
+  upsertMyCallsRow(
+    eventId,
+    eventApi.title,
+    roomUuid,
+    startDate.toISOString(),
+    endDate.toISOString(),
+    participantsTotal,
+  );
+}
+
 function nextGeneratedEventId() {
   nextCalendarEventId += 1;
   return `call-generated-${nextCalendarEventId}`;
@@ -838,11 +866,15 @@ async function initOverviewCalendar() {
         center: 'title',
         right: 'dayGridMonth,timeGridWeek,timeGridDay',
       },
-      height: 'auto',
-      contentHeight: 'auto',
-      eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+      height: '100%',
+      contentHeight: '100%',
+      expandRows: true,
+      eventTimeFormat: fullCalendarEventTimeFormat(sessionState.timeFormat),
       selectable: true,
-      editable: false,
+      editable: true,
+      eventStartEditable: true,
+      eventDurationEditable: true,
+      eventResizableFromStart: true,
       events: [
         {
           id: 'call-sales-standup',
@@ -893,6 +925,12 @@ async function initOverviewCalendar() {
       eventClick(info) {
         openComposeForEvent(info.event);
       },
+      eventDrop(info) {
+        syncMyCallsRowFromCalendarEvent(info.event);
+      },
+      eventResize(info) {
+        syncMyCallsRowFromCalendarEvent(info.event);
+      },
       select(info) {
         if (String(info.view?.type || '') !== 'timeGridDay') return;
         openComposeForSelection(info.start, info.end);
@@ -928,45 +966,51 @@ watch(activeOverviewView, async (view) => {
   await nextTick();
   calendarInstance.updateSize();
 });
+
+watch(
+  () => sessionState.timeFormat,
+  () => {
+    if (!calendarInstance) return;
+    calendarInstance.setOption('eventTimeFormat', fullCalendarEventTimeFormat(sessionState.timeFormat));
+  }
+);
 </script>
 
 <style scoped>
 .admin-overview-view {
+  height: 100%;
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 1px;
-  background: var(--bg-main);
+  gap: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.admin-overview-view > :first-child {
+  border-top-left-radius: 0;
+  border-top-right-radius: 5px;
+}
+
+.overview-toolbar {
+  background: var(--bg-ui-chrome);
 }
 
 .overview-toolbar {
   padding: 10px;
-  background: var(--bg-ui-chrome);
+  margin-bottom: 15px;
 }
 
-.view-tabs {
-  display: inline-flex;
-  gap: 6px;
-  flex-wrap: nowrap;
+.overview-view-tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border-subtle);
 }
 
-.view-tab {
-  height: 36px;
-  min-width: 138px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--bg-action);
-  color: var(--text-main);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.view-tab:hover {
-  background: var(--bg-action-hover);
-}
-
-.view-tab.active {
-  background: var(--bg-row);
+.overview-view-tabs .tab {
+  min-width: 120px;
+  height: 40px;
 }
 
 .view-panel {
@@ -979,6 +1023,7 @@ watch(activeOverviewView, async (view) => {
   display: grid;
   align-content: start;
   gap: 10px;
+  min-height: 0;
 }
 
 .dashboard-panel {
@@ -999,6 +1044,9 @@ watch(activeOverviewView, async (view) => {
 .calendar-panel {
   padding: 10px;
   background: var(--bg-main);
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
 }
 
 #overviewCalendar {
@@ -1006,18 +1054,15 @@ watch(activeOverviewView, async (view) => {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   padding: 10px;
+  min-height: 0;
+  height: 100%;
 }
 
 .calendar-help {
-  margin: 0;
+  margin: 0 0 10px;
   padding: 0 2px;
   font-size: 12px;
   color: var(--text-muted);
-}
-
-.my-calls-panel {
-  padding: 10px;
-  background: var(--bg-main);
 }
 
 .calls-modal {
@@ -1039,6 +1084,7 @@ watch(activeOverviewView, async (view) => {
 }
 
 .calls-modal-dialog {
+  --calls-enter-dialog-padding: 12px;
   position: relative;
   width: min(1020px, calc(100vw - 30px));
   max-height: calc(100vh - 30px);
@@ -1060,8 +1106,34 @@ watch(activeOverviewView, async (view) => {
 }
 
 .calls-modal-header h4 {
-  margin: 0;
+  margin: 5px 0 0;
   font-size: 17px;
+}
+
+.calls-modal-header .calls-enter-title {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.calls-modal-header-enter {
+  margin: calc(var(--calls-enter-dialog-padding) * -1) calc(var(--calls-enter-dialog-padding) * -1) 0;
+  padding: 10px;
+  background: var(--brand-bg);
+  border: 0;
+}
+
+.calls-modal-header-enter-left {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.calls-modal-header-enter-logo {
+  width: auto;
+  height: 24px;
+  display: block;
 }
 
 .calls-modal-body {
@@ -1249,15 +1321,4 @@ watch(activeOverviewView, async (view) => {
   }
 }
 
-@media (max-width: 760px) {
-  .view-tabs {
-    width: 100%;
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .view-tab {
-    width: 100%;
-  }
-}
 </style>

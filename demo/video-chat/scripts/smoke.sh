@@ -120,12 +120,15 @@ compose_smoke() {
   fi
 
   local compose_backend_port_default=38080
+  local compose_backend_sfu_port_default=38082
   local compose_frontend_port_default=35174
   local compose_backend_port_requested="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_PORT:-}"
   local compose_backend_ws_port_requested="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_WS_PORT:-}"
+  local compose_backend_sfu_port_requested="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_SFU_PORT:-}"
   local compose_frontend_port_requested="${VIDEOCHAT_SMOKE_COMPOSE_FRONTEND_PORT:-}"
   local compose_backend_port=""
   local compose_backend_ws_port=""
+  local compose_backend_sfu_port=""
   local compose_frontend_port=""
   local compose_project="${VIDEOCHAT_SMOKE_COMPOSE_PROJECT:-king-videochat-smoke}"
   local compose_backend_php_image="${VIDEOCHAT_SMOKE_COMPOSE_BACKEND_PHP_IMAGE:-}"
@@ -226,14 +229,39 @@ compose_smoke() {
     fi
   fi
 
+  if [[ -n "${compose_backend_sfu_port_requested}" ]]; then
+    if ! validate_tcp_port "${compose_backend_sfu_port_requested}"; then
+      log "ERROR: VIDEOCHAT_SMOKE_COMPOSE_BACKEND_SFU_PORT must be a TCP port between 1 and 65535 (got '${compose_backend_sfu_port_requested}')"
+      return 1
+    fi
+    compose_backend_sfu_port="${compose_backend_sfu_port_requested}"
+    if [[ "${compose_backend_sfu_port}" == "${compose_backend_port}" || "${compose_backend_sfu_port}" == "${compose_backend_ws_port}" ]]; then
+      log "ERROR: backend sfu port must differ from backend/backend-ws ports"
+      return 1
+    fi
+    if ! port_is_bindable "${compose_backend_sfu_port}"; then
+      log "ERROR: requested compose backend sfu port ${compose_backend_sfu_port} is already in use"
+      return 1
+    fi
+  else
+    local sfu_preferred_port=$((compose_backend_ws_port + 1))
+    if (( sfu_preferred_port > 65535 )); then
+      sfu_preferred_port="${compose_backend_sfu_port_default}"
+    fi
+    if ! compose_backend_sfu_port="$(resolve_available_port "${sfu_preferred_port}" "${compose_backend_port}" "${compose_backend_ws_port}")"; then
+      log "ERROR: could not find free backend sfu port starting at ${sfu_preferred_port}"
+      return 1
+    fi
+  fi
+
   if [[ -n "${compose_frontend_port_requested}" ]]; then
     if ! validate_tcp_port "${compose_frontend_port_requested}"; then
       log "ERROR: VIDEOCHAT_SMOKE_COMPOSE_FRONTEND_PORT must be a TCP port between 1 and 65535 (got '${compose_frontend_port_requested}')"
       return 1
     fi
     compose_frontend_port="${compose_frontend_port_requested}"
-    if [[ "${compose_frontend_port}" == "${compose_backend_port}" || "${compose_frontend_port}" == "${compose_backend_ws_port}" ]]; then
-      log "ERROR: frontend port ${compose_frontend_port} collides with backend/backend-ws port"
+    if [[ "${compose_frontend_port}" == "${compose_backend_port}" || "${compose_frontend_port}" == "${compose_backend_ws_port}" || "${compose_frontend_port}" == "${compose_backend_sfu_port}" ]]; then
+      log "ERROR: frontend port ${compose_frontend_port} collides with backend/backend-ws/backend-sfu port"
       return 1
     fi
     if ! port_is_bindable "${compose_frontend_port}"; then
@@ -241,7 +269,7 @@ compose_smoke() {
       return 1
     fi
   else
-    if ! compose_frontend_port="$(resolve_available_port "${compose_frontend_port_default}" "${compose_backend_port}" "${compose_backend_ws_port}")"; then
+    if ! compose_frontend_port="$(resolve_available_port "${compose_frontend_port_default}" "${compose_backend_port}" "${compose_backend_ws_port}" "${compose_backend_sfu_port}")"; then
       log "ERROR: could not find free frontend port starting at ${compose_frontend_port_default}"
       return 1
     fi
@@ -253,11 +281,14 @@ compose_smoke() {
   if [[ -z "${compose_backend_ws_port_requested}" && "${compose_backend_ws_port}" != "$((compose_backend_port + 1))" ]]; then
     log "INFO: backend ws default sibling port busy; selected ${compose_backend_ws_port}"
   fi
+  if [[ -z "${compose_backend_sfu_port_requested}" && "${compose_backend_sfu_port}" != "$((compose_backend_ws_port + 1))" ]]; then
+    log "INFO: backend sfu default sibling port busy; selected ${compose_backend_sfu_port}"
+  fi
   if [[ -z "${compose_frontend_port_requested}" && "${compose_frontend_port}" != "${compose_frontend_port_default}" ]]; then
     log "INFO: frontend default port ${compose_frontend_port_default} busy; selected ${compose_frontend_port}"
   fi
 
-  log "compose smoke project=${compose_project} backend=${compose_backend_port} backend_ws=${compose_backend_ws_port} frontend=${compose_frontend_port} backend_php_image=${compose_backend_php_image} king_extension_api=${king_extension_api:-unknown} king_extension_api_candidates=${king_extension_api_candidates:-none} host_php_api=${host_php_api:-unknown}"
+  log "compose smoke project=${compose_project} backend=${compose_backend_port} backend_ws=${compose_backend_ws_port} backend_sfu=${compose_backend_sfu_port} frontend=${compose_frontend_port} backend_php_image=${compose_backend_php_image} king_extension_api=${king_extension_api:-unknown} king_extension_api_candidates=${king_extension_api_candidates:-none} host_php_api=${host_php_api:-unknown}"
 
   local compose_cmd=(
     docker compose
@@ -268,12 +299,14 @@ compose_smoke() {
   compose_debug_dump() {
     VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
     VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
     VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
     "${compose_cmd[@]}" ps || true
     VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
     VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
     VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
@@ -284,6 +317,7 @@ compose_smoke() {
   compose_up_log="$(mktemp)"
   if VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
     VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
     VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
@@ -295,6 +329,7 @@ compose_smoke() {
     cat "${compose_up_log}" >&2 || true
     VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
     VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
     VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
@@ -308,6 +343,7 @@ compose_smoke() {
     if [[ "${cleanup_compose_enabled:-0}" == "1" ]]; then
       VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
       VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+      VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
       VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
       VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
       VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
@@ -474,7 +510,7 @@ if [[ "${VIDEOCHAT_SMOKE_COMPOSE_ONLY:-0}" == "1" ]]; then
 fi
 
 BACKEND_PORT="${VIDEOCHAT_KING_PORT:-18080}"
-FRONTEND_PORT="${VIDEOCHAT_VUE_PORT:-5174}"
+FRONTEND_PORT="${VIDEOCHAT_VUE_PORT:-5176}"
 
 run_step "backend scaffold boot + auth/login check" bash -lc "
   set -euo pipefail

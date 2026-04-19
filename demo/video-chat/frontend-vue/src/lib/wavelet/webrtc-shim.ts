@@ -17,6 +17,7 @@
 import { createEncoder, createDecoder } from '../wavelet/codec.js'
 import { createKalmanFilter } from '../kalman/filter.js'
 import { WasmWaveletVideoEncoder, WasmWaveletVideoDecoder } from '../wasm/wasm-codec.js'
+import { debugLog, debugWarn } from '../../support/debugLogs.js'
 
 export interface WaveletCodecConfig {
   quality: number
@@ -85,11 +86,11 @@ export class WaveletCodec {
   }
 
   private async initWasm(): Promise<void> {
-    console.log('[WaveletCodec] Starting WASM init...')
+    debugLog('[WaveletCodec] Starting WASM init...')
     try {
       const w = this.config.width
       const h = this.config.height
-      console.log(`[WaveletCodec] WASM dimensions: ${w}x${h} quality=${this.config.quality}`)
+      debugLog(`[WaveletCodec] WASM dimensions: ${w}x${h} quality=${this.config.quality}`)
       const wasmEnc = new WasmWaveletVideoEncoder({
         width: w, height: h,
         quality: this.config.quality,
@@ -99,21 +100,21 @@ export class WaveletCodec {
         width: w, height: h,
         quality: this.config.quality,
       })
-      console.log('[WaveletCodec] WASM objects created, calling init()...')
+      debugLog('[WaveletCodec] WASM objects created, calling init()...')
       const [encOk, decOk] = await Promise.all([wasmEnc.init(), wasmDec.init()])
-      console.log(`[WaveletCodec] WASM init results: enc=${encOk} dec=${decOk}`)
+      debugLog(`[WaveletCodec] WASM init results: enc=${encOk} dec=${decOk}`)
       if (encOk && decOk) {
         this.encoder.reset()
         this.decoder.reset()
         this.encoder = wasmEnc as unknown as ReturnType<typeof createEncoder>
         this.decoder = wasmDec as unknown as ReturnType<typeof createDecoder>
         this.usingWasm = true
-        console.log('[WaveletCodec] Switched to WASM codec')
+        debugLog('[WaveletCodec] Switched to WASM codec')
       } else {
-        console.warn(`[WaveletCodec] WASM init returned false: enc=${encOk} dec=${decOk}`)
+        debugWarn(`[WaveletCodec] WASM init returned false: enc=${encOk} dec=${decOk}`)
       }
     } catch (e) {
-      console.error('[WaveletCodec] WASM init exception:', e)
+      debugWarn('[WaveletCodec] WASM init exception:', e)
     }
   }
 
@@ -163,7 +164,7 @@ export class WaveletCodec {
 
       return encodedData
     } catch (error) {
-      console.error('[WaveletCodec] Encode error:', error)
+      debugWarn('[WaveletCodec] Encode error:', error)
       return null
     }
   }
@@ -208,7 +209,7 @@ export class WaveletCodec {
       this.recordDecodeMetric(performance.now() - startTime)
       return new VideoFrame(canvas, { timestamp })
     } catch (error) {
-      console.error('[WaveletCodec] Decode error:', error)
+      debugWarn('[WaveletCodec] Decode error:', error)
       this.recordDecodeMetric(performance.now() - startTime)
       return null
     }

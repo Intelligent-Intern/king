@@ -28,12 +28,28 @@ function videochat_generate_call_id(): string
     );
 }
 
+function videochat_normalize_call_access_mode(mixed $value, string $fallback = 'invite_only'): string
+{
+    $fallbackNormalized = strtolower(trim($fallback));
+    if (!in_array($fallbackNormalized, ['invite_only', 'free_for_all'], true)) {
+        $fallbackNormalized = 'invite_only';
+    }
+
+    $normalized = strtolower(trim((string) $value));
+    if (in_array($normalized, ['invite_only', 'free_for_all'], true)) {
+        return $normalized;
+    }
+
+    return $fallbackNormalized;
+}
+
 /**
  * @return array{
  *   ok: bool,
  *   data: array{
  *     room_id: string,
  *     title: string,
+ *     access_mode: string,
  *     starts_at: string,
  *     ends_at: string,
  *     internal_participant_user_ids: array<int, int>,
@@ -45,6 +61,12 @@ function videochat_generate_call_id(): string
 function videochat_validate_create_call_payload(array $payload): array
 {
     $errors = [];
+
+    $accessModeInput = strtolower(trim((string) ($payload['access_mode'] ?? 'invite_only')));
+    $accessMode = videochat_normalize_call_access_mode($accessModeInput, 'invite_only');
+    if (!in_array($accessModeInput, ['invite_only', 'free_for_all'], true)) {
+        $errors['access_mode'] = 'must_be_invite_only_or_free_for_all';
+    }
 
     $roomId = trim((string) ($payload['room_id'] ?? 'lobby'));
     if ($roomId === '') {
@@ -138,6 +160,7 @@ function videochat_validate_create_call_payload(array $payload): array
         'data' => [
             'room_id' => $roomId,
             'title' => $title,
+            'access_mode' => $accessMode,
             'starts_at' => $startsAt,
             'ends_at' => $endsAt,
             'internal_participant_user_ids' => $internalIds,
@@ -313,15 +336,22 @@ function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload): arra
     $createdAt = gmdate('c');
     $startsAt = (string) $data['starts_at'];
     $endsAt = (string) $data['ends_at'];
+    $initialStatus = 'scheduled';
+    $startsAtUnix = strtotime($startsAt);
+    $endsAtUnix = strtotime($endsAt);
+    $nowUnix = time();
+    if (is_int($startsAtUnix) && is_int($endsAtUnix) && $startsAtUnix <= $nowUnix && $nowUnix < $endsAtUnix) {
+        $initialStatus = 'active';
+    }
 
     $pdo->beginTransaction();
     try {
         $insertCall = $pdo->prepare(
             <<<'SQL'
 INSERT INTO calls(
-    id, room_id, title, owner_user_id, status, starts_at, ends_at, cancelled_at, cancel_reason, cancel_message, created_at, updated_at
+    id, room_id, title, access_mode, owner_user_id, status, starts_at, ends_at, cancelled_at, cancel_reason, cancel_message, created_at, updated_at
 ) VALUES(
-    :id, :room_id, :title, :owner_user_id, :status, :starts_at, :ends_at, NULL, NULL, NULL, :created_at, :updated_at
+    :id, :room_id, :title, :access_mode, :owner_user_id, :status, :starts_at, :ends_at, NULL, NULL, NULL, :created_at, :updated_at
 )
 SQL
         );
@@ -329,8 +359,9 @@ SQL
             ':id' => $callId,
             ':room_id' => (string) $data['room_id'],
             ':title' => (string) $data['title'],
+            ':access_mode' => (string) $data['access_mode'],
             ':owner_user_id' => (int) $owner['id'],
-            ':status' => 'scheduled',
+            ':status' => $initialStatus,
             ':starts_at' => $startsAt,
             ':ends_at' => $endsAt,
             ':created_at' => $createdAt,
@@ -392,7 +423,8 @@ SQL
             'id' => $callId,
             'room_id' => (string) $data['room_id'],
             'title' => (string) $data['title'],
-            'status' => 'scheduled',
+            'access_mode' => (string) $data['access_mode'],
+            'status' => $initialStatus,
             'starts_at' => $startsAt,
             'ends_at' => $endsAt,
             'cancelled_at' => null,
@@ -450,6 +482,7 @@ SQL
  *   id: string,
  *   room_id: string,
  *   title: string,
+ *   access_mode: string,
  *   owner_user_id: int,
  *   status: string,
  *   starts_at: string,
@@ -476,6 +509,7 @@ SELECT
     calls.id,
     calls.room_id,
     calls.title,
+    calls.access_mode,
     calls.owner_user_id,
     calls.status,
     calls.starts_at,
@@ -503,6 +537,7 @@ SQL
         'id' => (string) ($row['id'] ?? ''),
         'room_id' => (string) ($row['room_id'] ?? ''),
         'title' => (string) ($row['title'] ?? ''),
+        'access_mode' => videochat_normalize_call_access_mode($row['access_mode'] ?? 'invite_only'),
         'owner_user_id' => (int) ($row['owner_user_id'] ?? 0),
         'status' => (string) ($row['status'] ?? 'scheduled'),
         'starts_at' => (string) ($row['starts_at'] ?? ''),
@@ -602,6 +637,8 @@ SQL
  *     room_id: string,
  *     has_title: bool,
  *     title: string,
+ *     has_access_mode: bool,
+ *     access_mode: string,
  *     has_starts_at: bool,
  *     starts_at_unix: int,
  *     has_ends_at: bool,
@@ -620,6 +657,7 @@ function videochat_validate_update_call_payload(array $payload): array
 
     $hasRoomId = array_key_exists('room_id', $payload);
     $hasTitle = array_key_exists('title', $payload);
+    $hasAccessMode = array_key_exists('access_mode', $payload);
     $hasStartsAt = array_key_exists('starts_at', $payload);
     $hasEndsAt = array_key_exists('ends_at', $payload);
     $hasInternalParticipants = array_key_exists('internal_participant_user_ids', $payload);
@@ -653,6 +691,15 @@ function videochat_validate_update_call_payload(array $payload): array
         } elseif (strlen($title) > 200) {
             $errors['title'] = 'title_too_long';
         }
+    }
+
+    $accessMode = 'invite_only';
+    if ($hasAccessMode) {
+        $accessModeInput = strtolower(trim((string) ($payload['access_mode'] ?? '')));
+        if (!in_array($accessModeInput, ['invite_only', 'free_for_all'], true)) {
+            $errors['access_mode'] = 'must_be_invite_only_or_free_for_all';
+        }
+        $accessMode = videochat_normalize_call_access_mode($accessModeInput, 'invite_only');
     }
 
     $startsAtUnix = 0;
@@ -739,6 +786,7 @@ function videochat_validate_update_call_payload(array $payload): array
     if (
         !$hasRoomId
         && !$hasTitle
+        && !$hasAccessMode
         && !$hasStartsAt
         && !$hasEndsAt
         && !$hasInternalParticipants
@@ -755,6 +803,8 @@ function videochat_validate_update_call_payload(array $payload): array
             'room_id' => $roomId,
             'has_title' => $hasTitle,
             'title' => $title,
+            'has_access_mode' => $hasAccessMode,
+            'access_mode' => $accessMode,
             'has_starts_at' => $hasStartsAt,
             'starts_at_unix' => $startsAtUnix,
             'has_ends_at' => $hasEndsAt,
@@ -825,6 +875,10 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
 
     $nextRoomId = (bool) $data['has_room_id'] ? (string) $data['room_id'] : (string) $existingCall['room_id'];
     $nextTitle = (bool) $data['has_title'] ? (string) $data['title'] : (string) $existingCall['title'];
+    $currentAccessMode = videochat_normalize_call_access_mode((string) ($existingCall['access_mode'] ?? 'invite_only'));
+    $nextAccessMode = (bool) ($data['has_access_mode'] ?? false)
+        ? videochat_normalize_call_access_mode((string) ($data['access_mode'] ?? 'invite_only'))
+        : $currentAccessMode;
     $currentStartsUnix = strtotime((string) $existingCall['starts_at']);
     $currentEndsUnix = strtotime((string) $existingCall['ends_at']);
     if (!is_int($currentStartsUnix) || !is_int($currentEndsUnix)) {
@@ -1002,6 +1056,7 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
 UPDATE calls
 SET room_id = :room_id,
     title = :title,
+    access_mode = :access_mode,
     starts_at = :starts_at,
     ends_at = :ends_at,
     updated_at = :updated_at
@@ -1011,6 +1066,7 @@ SQL
         $updateCall->execute([
             ':room_id' => $nextRoomId,
             ':title' => $nextTitle,
+            ':access_mode' => $nextAccessMode,
             ':starts_at' => $nextStartsAt,
             ':ends_at' => $nextEndsAt,
             ':updated_at' => $updatedAt,
@@ -1092,6 +1148,7 @@ SQL
             'id' => (string) $existingCall['id'],
             'room_id' => $nextRoomId,
             'title' => $nextTitle,
+            'access_mode' => $nextAccessMode,
             'status' => (string) $existingCall['status'],
             'starts_at' => $nextStartsAt,
             'ends_at' => $nextEndsAt,
@@ -1347,6 +1404,7 @@ SQL
             'id' => (string) $existingCall['id'],
             'room_id' => (string) $existingCall['room_id'],
             'title' => (string) $existingCall['title'],
+            'access_mode' => videochat_normalize_call_access_mode((string) ($existingCall['access_mode'] ?? 'invite_only')),
             'status' => 'cancelled',
             'starts_at' => (string) $existingCall['starts_at'],
             'ends_at' => (string) $existingCall['ends_at'],
@@ -1370,6 +1428,81 @@ SQL
                 ],
             ],
             'my_participation' => false,
+        ],
+    ];
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   errors: array<string, string>,
+ *   call: ?array{
+ *     id: string,
+ *     room_id: string,
+ *     title: string,
+ *     owner_user_id: int,
+ *     status: string
+ *   }
+ * }
+ */
+function videochat_delete_call(PDO $pdo, string $callId, int $authUserId, string $authRole): array
+{
+    $existingCall = videochat_fetch_call_for_update($pdo, $callId);
+    if ($existingCall === null) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    if (!videochat_can_edit_call($authRole, $authUserId, (int) $existingCall['owner_user_id'])) {
+        return [
+            'ok' => false,
+            'reason' => 'forbidden',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $deleteCall = $pdo->prepare(
+            <<<'SQL'
+DELETE FROM calls
+WHERE id = :id
+SQL
+        );
+        $deleteCall->execute([
+            ':id' => (string) $existingCall['id'],
+        ]);
+
+        $pdo->commit();
+    } catch (Throwable) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'reason' => 'deleted',
+        'errors' => [],
+        'call' => [
+            'id' => (string) $existingCall['id'],
+            'room_id' => (string) $existingCall['room_id'],
+            'title' => (string) $existingCall['title'],
+            'owner_user_id' => (int) $existingCall['owner_user_id'],
+            'status' => (string) $existingCall['status'],
         ],
     ];
 }
@@ -1398,6 +1531,7 @@ function videochat_normalize_call_participant_role(string $role, string $fallbac
  *   id: string,
  *   room_id: string,
  *   title: string,
+ *   access_mode: string,
  *   status: string,
  *   starts_at: string,
  *   ends_at: string,
@@ -1470,6 +1604,7 @@ function videochat_build_call_payload(PDO $pdo, array $callRecord, int $authUser
         'id' => (string) ($callRecord['id'] ?? ''),
         'room_id' => (string) ($callRecord['room_id'] ?? ''),
         'title' => (string) ($callRecord['title'] ?? ''),
+        'access_mode' => videochat_normalize_call_access_mode((string) ($callRecord['access_mode'] ?? 'invite_only')),
         'status' => (string) ($callRecord['status'] ?? ''),
         'starts_at' => (string) ($callRecord['starts_at'] ?? ''),
         'ends_at' => (string) ($callRecord['ends_at'] ?? ''),

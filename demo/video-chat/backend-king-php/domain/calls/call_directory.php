@@ -87,6 +87,7 @@ function videochat_calls_list_filters(array $queryParams, string $authRole): arr
  *     id: string,
  *     room_id: string,
  *     title: string,
+ *     access_mode: string,
  *     status: string,
  *     starts_at: string,
  *     ends_at: string,
@@ -113,6 +114,23 @@ function videochat_calls_list_filters(array $queryParams, string $authRole): arr
  */
 function videochat_list_calls(PDO $pdo, int $authUserId, array $filters): array
 {
+    $effectiveStatusSql = <<<'SQL'
+CASE
+    WHEN calls.status = 'scheduled'
+         AND EXISTS (
+             SELECT 1
+             FROM call_participants cp_owner_presence
+             WHERE cp_owner_presence.call_id = calls.id
+               AND cp_owner_presence.user_id = calls.owner_user_id
+               AND cp_owner_presence.source = 'internal'
+               AND cp_owner_presence.joined_at IS NOT NULL
+               AND cp_owner_presence.left_at IS NULL
+         )
+    THEN 'active'
+    ELSE calls.status
+END
+SQL;
+
     $whereClauses = [];
     $whereParams = [];
 
@@ -134,7 +152,7 @@ SQL;
 
     $status = (string) ($filters['status'] ?? 'all');
     if ($status !== 'all') {
-        $whereClauses[] = 'calls.status = :status';
+        $whereClauses[] = '(' . $effectiveStatusSql . ') = :status';
         $whereParams[':status'] = $status;
     }
 
@@ -174,7 +192,8 @@ SELECT
     calls.id,
     calls.room_id,
     calls.title,
-    calls.status,
+    calls.access_mode,
+    {$effectiveStatusSql} AS effective_status,
     calls.starts_at,
     calls.ends_at,
     calls.cancelled_at,
@@ -241,7 +260,8 @@ SQL;
             'id' => (string) ($row['id'] ?? ''),
             'room_id' => (string) ($row['room_id'] ?? ''),
             'title' => (string) ($row['title'] ?? ''),
-            'status' => (string) ($row['status'] ?? ''),
+            'access_mode' => videochat_normalize_call_access_mode($row['access_mode'] ?? 'invite_only'),
+            'status' => (string) ($row['effective_status'] ?? ''),
             'starts_at' => (string) ($row['starts_at'] ?? ''),
             'ends_at' => (string) ($row['ends_at'] ?? ''),
             'cancelled_at' => is_string($row['cancelled_at'] ?? null) ? (string) $row['cancelled_at'] : null,

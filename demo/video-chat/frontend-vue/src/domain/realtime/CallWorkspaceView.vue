@@ -6,12 +6,20 @@
     <section v-if="workspaceNotice" class="workspace-call-banner ok">
       {{ workspaceNotice }}
     </section>
+    <section v-if="aloneIdlePrompt.visible" class="workspace-idle-toast" role="alert">
+      <span class="workspace-idle-toast-text">
+        Are you still in the call? This call will close in {{ aloneIdleCountdownLabel }} unless you confirm.
+      </span>
+      <button class="workspace-idle-toast-btn" type="button" @click="confirmStillInCall">
+        Yes, I am in
+      </button>
+    </section>
 
     <section class="workspace-call-body" :class="{ 'right-collapsed': rightSidebarCollapsed }">
-      <section class="workspace-stage" :class="{ compact: isCompactViewport }">
-        <header v-if="isCompactViewport" class="workspace-compact-header">
+      <section class="workspace-stage" :class="{ compact: isCompactHeaderVisible }">
+        <header v-if="isCompactHeaderVisible" class="workspace-compact-header">
           <button
-            class="workspace-compact-toggle"
+            class="workspace-compact-toggle workspace-compact-toggle-menu"
             type="button"
             title="Open left sidebar"
             aria-label="Open left sidebar"
@@ -27,7 +35,11 @@
             aria-label="Open right sidebar"
             @click="showRightSidebar"
           >
-            <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/backward.png" alt="" />
+            <img
+              class="arrow-icon-image workspace-compact-toggle-icon workspace-compact-toggle-icon-back"
+              src="/assets/orgas/kingrt/icons/forward.png"
+              alt=""
+            />
           </button>
         </header>
 
@@ -69,7 +81,7 @@
         </button>
 
         <button
-          v-if="rightSidebarCollapsed && !isCompactViewport"
+          v-if="rightSidebarCollapsed && !isCompactHeaderVisible"
           class="show-sidebar-overlay show-right-sidebar-overlay workspace-show-right-btn"
           type="button"
           title="Show sidebar"
@@ -79,7 +91,17 @@
           <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/backward.png" alt="" />
         </button>
 
-        <section v-if="!isCompactViewport" class="workspace-mini-strip">
+        <button
+          v-if="showLobbyJoinToast"
+          class="workspace-lobby-toast"
+          type="button"
+          @click="openLobbyRequestsPanel"
+        >
+          <img class="workspace-lobby-toast-icon" src="/assets/orgas/kingrt/icons/lobby.png" alt="" />
+          <span class="workspace-lobby-toast-text">{{ lobbyJoinToastMessage }}</span>
+        </button>
+
+        <section v-if="!isCompactViewport && showMiniParticipantStrip" class="workspace-mini-strip">
           <article
             v-for="participant in stripParticipants"
             :key="participant.userId"
@@ -187,14 +209,17 @@
             <img class="tab-icon" src="/assets/orgas/kingrt/icons/users.png" alt="" />
           </button>
           <button
-            class="tab"
+            class="tab tab-lobby"
             :class="{ active: activeTab === 'lobby' }"
             type="button"
             role="tab"
             :aria-selected="activeTab === 'lobby'"
             @click="setActiveTab('lobby')"
           >
-            <img class="tab-icon" src="/assets/orgas/kingrt/icons/lobby.png" alt="" />
+            <span class="tab-icon-wrap">
+              <img class="tab-icon" src="/assets/orgas/kingrt/icons/lobby.png" alt="" />
+              <span v-if="showLobbyRequestBadge" class="tab-notice-badge">{{ lobbyRequestBadgeText }}</span>
+            </span>
           </button>
           <button
             class="tab"
@@ -507,6 +532,7 @@ import { detectMediaRuntimeCapabilities } from './mediaRuntimeCapabilities';
 import { appendMediaRuntimeTransitionEvent } from './mediaRuntimeTelemetry';
 import { SFUClient } from '../../lib/sfu/sfuClient';
 import { createWasmEncoder, createWasmDecoder } from '../../lib/wasm/wasm-codec';
+import { debugLog } from '../../support/debugLogs';
 
 const route = useRoute();
 const router = useRouter();
@@ -528,10 +554,23 @@ const REACTION_CLIENT_MAX_QUEUE = 500;
 const MODERATION_SYNC_FLUSH_INTERVAL_MS = 90;
 const SFU_PUBLISH_RETRY_DELAY_MS = 500;
 const SFU_PUBLISH_MAX_RETRIES = 24;
+const SFU_CONNECT_RETRY_DELAY_MS = 1200;
+const SFU_CONNECT_MAX_RETRIES = 8;
 const LOCAL_REACTION_ECHO_TTL_MS = 6000;
-const WLVC_ENCODE_FAILURE_THRESHOLD = 6;
+const WLVC_ENCODE_FAILURE_THRESHOLD = 18;
+const WLVC_ENCODE_FAILURE_WINDOW_MS = 4000;
+const WLVC_ENCODE_WARMUP_MS = 2500;
+const WLVC_ENCODE_ERROR_LOG_COOLDOWN_MS = 3000;
+const LOCAL_TRACK_RECOVERY_BASE_DELAY_MS = 1200;
+const LOCAL_TRACK_RECOVERY_MAX_DELAY_MS = 10_000;
+const LOCAL_TRACK_RECOVERY_MAX_ATTEMPTS = 10;
 const VISIBLE_PARTICIPANTS_LIMIT = 5;
 const PARTICIPANT_ACTIVITY_WINDOW_MS = 15_000;
+const ALONE_IDLE_PROMPT_AFTER_MS = 15 * 60 * 1000;
+const ALONE_IDLE_COUNTDOWN_MS = 5 * 60 * 1000;
+const ALONE_IDLE_TICK_MS = 1000;
+const ALONE_IDLE_POLL_MS = 5000;
+const ALONE_IDLE_ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
 const DIRECTORY_USERS_ORDER_VALUES = ['role_then_name_asc', 'role_then_name_desc'];
 const DIRECTORY_USERS_STATUS_VALUES = ['all', 'active', 'disabled'];
 
@@ -603,6 +642,10 @@ const DEFAULT_NATIVE_ICE_SERVERS = parseIceServersFromEnv(import.meta.env.VITE_V
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
 const SFU_RUNTIME_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_SFU, true);
+
+function mediaDebugLog(...args) {
+  debugLog(...args);
+}
 
 const reactionOptions = ['👍', '❤️', '🐘', '🥳', '😂', '😮', '😢', '🤔', '👏', '👎'];
 
@@ -721,6 +764,13 @@ function extractErrorMessage(payload, fallback) {
   return fallback;
 }
 
+function buildApiRequestError(payload, fallbackMessage, responseStatus = 0) {
+  const error = new Error(extractErrorMessage(payload, fallbackMessage));
+  error.responseStatus = Number(responseStatus) || 0;
+  error.responseCode = String(payload?.error?.code || '').trim().toLowerCase();
+  return error;
+}
+
 async function apiRequest(path, { method = 'GET', query = null, body = null } = {}) {
   let response = null;
   try {
@@ -747,7 +797,7 @@ async function apiRequest(path, { method = 'GET', query = null, body = null } = 
   }
 
   if (!response.ok) {
-    throw new Error(extractErrorMessage(payload, `Request failed (${response.status}).`));
+    throw buildApiRequestError(payload, `Request failed (${response.status}).`, response.status);
   }
 
   if (!payload || payload.status !== 'ok') {
@@ -815,6 +865,16 @@ const serverRoomId = ref('lobby');
 const participantsRaw = ref([]);
 const lobbyQueue = ref([]);
 const lobbyAdmitted = ref([]);
+const lobbyNotificationState = reactive({
+  hasSnapshot: false,
+  toastVisible: false,
+  toastMessage: '',
+});
+const aloneIdlePrompt = reactive({
+  visible: false,
+  deadlineMs: 0,
+  remainingMs: ALONE_IDLE_COUNTDOWN_MS,
+});
 const usersDirectoryRows = ref([]);
 const usersDirectoryLoading = ref(false);
 const usersDirectoryPagination = reactive({
@@ -885,6 +945,8 @@ const routeCallResolve = reactive({
   error: '',
 });
 let routeCallResolveSeq = 0;
+const pendingAdmissionJoinRoomId = ref('');
+const hasRealtimeRoomSync = ref(false);
 
 const sfuClientRef = ref(null);
 const mediaRuntimeCapabilities = ref({
@@ -906,9 +968,13 @@ const mediaRuntimeReason = ref('boot');
 const nativePeerConnectionsRef = ref(new Map());
 let runtimeSwitchInFlight = false;
 let wlvcEncodeFailureCount = 0;
+let wlvcEncodeWarmupUntilMs = 0;
+let wlvcEncodeFirstFailureAtMs = 0;
+let wlvcEncodeLastErrorLogAtMs = 0;
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
 const sfuConnected = ref(false);
+let sfuConnectRetryCount = 0;
 let detachMediaDeviceWatcher = null;
 let localTrackReconfigureInFlight = false;
 let localTrackReconfigureQueued = false;
@@ -923,8 +989,14 @@ const canModerate = computed(() => (
   || viewerCallRole.value === 'owner'
   || viewerCallRole.value === 'moderator'
 ));
-const usersSourceMode = computed(() => (normalizeRole(sessionState.role) === 'admin' ? 'directory' : 'snapshot'));
+const usersSourceMode = computed(() => 'snapshot');
 const isSocketOnline = computed(() => connectionState.value === 'online');
+const shouldConnectSfu = computed(() => (
+  isWlvcRuntimePath()
+  && isSocketOnline.value
+  && hasRealtimeRoomSync.value
+  && activeRoomId.value === desiredRoomId.value
+));
 const isShellLeftSidebarCollapsed = computed(() => {
   const candidate = workspaceSidebarState?.leftSidebarCollapsed;
   if (candidate && typeof candidate === 'object' && 'value' in candidate) {
@@ -939,6 +1011,13 @@ const isShellTabletViewport = computed(() => {
   }
   return Boolean(candidate);
 });
+const isShellTabletSidebarOpen = computed(() => {
+  const candidate = workspaceSidebarState?.isTabletSidebarOpen;
+  if (candidate && typeof candidate === 'object' && 'value' in candidate) {
+    return Boolean(candidate.value);
+  }
+  return Boolean(candidate);
+});
 const isShellMobileViewport = computed(() => {
   const candidate = workspaceSidebarState?.isMobileViewport;
   if (candidate && typeof candidate === 'object' && 'value' in candidate) {
@@ -946,12 +1025,23 @@ const isShellMobileViewport = computed(() => {
   }
   return Boolean(candidate);
 });
-const showLeftSidebarRestoreButton = computed(() => (
-  !isCompactViewport.value
-  && isShellLeftSidebarCollapsed.value
-  && !isShellTabletViewport.value
-  && !isShellMobileViewport.value
+const isCompactLayoutViewport = computed(() => (
+  isShellMobileViewport.value
+  || isShellTabletViewport.value
 ));
+const isCompactHeaderVisible = computed(() => (
+  isCompactViewport.value
+  && isCompactLayoutViewport.value
+));
+const showLeftSidebarRestoreButton = computed(() => {
+  if (isCompactHeaderVisible.value || isShellMobileViewport.value) {
+    return false;
+  }
+  if (isShellTabletViewport.value) {
+    return !isShellTabletSidebarOpen.value;
+  }
+  return !isCompactViewport.value && isShellLeftSidebarCollapsed.value;
+});
 
 function isWlvcRuntimePath() {
   return mediaRuntimePath.value === 'wlvc_wasm';
@@ -1073,29 +1163,60 @@ async function resolveRouteCallRef(callRef) {
 
   if (looksLikeUuid) {
     try {
-      const accessResolution = await tryResolveRouteAsAccessId(normalized);
+      const callResolution = await tryResolveRouteAsCallId(normalized);
       if (seq !== routeCallResolveSeq) return;
       applyRouteCallResolution({
-        ...accessResolution,
+        ...callResolution,
         error: '',
         pending: false,
       });
       return;
     } catch {
-      if (seq !== routeCallResolveSeq) return;
-      applyRouteCallResolution({
-        accessId: '',
-        callId: '',
-        roomId: 'lobby',
-        error: 'route_call_ref_not_found',
-        pending: false,
-      });
+      // UUID-like route refs can be either call ids or access-link ids.
+      // Try access-link resolution when direct call lookup fails.
+      try {
+        const accessResolution = await tryResolveRouteAsAccessId(normalized);
+        if (seq !== routeCallResolveSeq) return;
+        applyRouteCallResolution({
+          ...accessResolution,
+          error: '',
+          pending: false,
+        });
+        return;
+      } catch (accessError) {
+        const accessResponseStatus = Number(accessError?.responseStatus || 0);
+        if (accessResponseStatus === 410) {
+          if (seq !== routeCallResolveSeq) return;
+          applyRouteCallResolution({
+            accessId: normalized.toLowerCase(),
+            callId: '',
+            roomId: 'lobby',
+            error: 'route_call_access_expired',
+            pending: false,
+          });
 
-      const fallbackRouteName = normalizeRole(sessionState.role) === 'admin' ? 'admin-calls' : 'user-dashboard';
-      if (String(route.name || '') === 'call-workspace' && String(routeCallRef.value || '').trim() !== '') {
-        void router.replace({ name: fallbackRouteName });
+          const fallbackRouteName = normalizeRole(sessionState.role) === 'admin' ? 'admin-calls' : 'user-dashboard';
+          if (String(route.name || '') === 'call-workspace' && String(routeCallRef.value || '').trim() !== '') {
+            void router.replace({ name: fallbackRouteName });
+          }
+          return;
+        }
+
+        if (seq !== routeCallResolveSeq) return;
+        applyRouteCallResolution({
+          accessId: '',
+          callId: '',
+          roomId: 'lobby',
+          error: 'route_call_ref_not_found',
+          pending: false,
+        });
+
+        const fallbackRouteName = normalizeRole(sessionState.role) === 'admin' ? 'admin-calls' : 'user-dashboard';
+        if (String(route.name || '') === 'call-workspace' && String(routeCallRef.value || '').trim() !== '') {
+          void router.replace({ name: fallbackRouteName });
+        }
+        return;
       }
-      return;
     }
   }
 
@@ -1135,8 +1256,10 @@ function ensureRoomBuckets(roomId) {
 function normalizeParticipantRow(raw) {
   const user = raw && typeof raw.user === 'object' ? raw.user : {};
   const userId = Number(user.id);
+  const connectionId = String(raw?.connection_id || '').trim();
   return {
-    connectionId: String(raw?.connection_id || ''),
+    connectionId,
+    hasConnection: connectionId !== '',
     roomId: normalizeRoomId(raw?.room_id || 'lobby'),
     userId: Number.isInteger(userId) && userId > 0 ? userId : 0,
     displayName: String(user.display_name || '').trim() || `User ${userId || 'unknown'}`,
@@ -1161,12 +1284,14 @@ const participantUsers = computed(() => {
         role: normalized.role,
         callRole: normalized.callRole,
         connectedAt: normalized.connectedAt,
-        connections: 1,
+        connections: normalized.hasConnection ? 1 : 0,
       });
       continue;
     }
 
-    existing.connections += 1;
+    if (normalized.hasConnection) {
+      existing.connections += 1;
+    }
     if (roleRank(normalized.role) < roleRank(existing.role)) {
       existing.role = normalized.role;
     }
@@ -1185,6 +1310,15 @@ const participantUsers = computed(() => {
     if (nameCmp !== 0) return nameCmp;
     return left.userId - right.userId;
   });
+});
+
+const connectedParticipantUsers = computed(() => (
+  participantUsers.value.filter((row) => Number(row?.connections || 0) > 0)
+));
+const isAloneInCall = computed(() => {
+  const participants = connectedParticipantUsers.value;
+  if (participants.length !== 1) return false;
+  return Number(participants[0]?.userId || 0) === currentUserId.value;
 });
 
 function participantActivityWeight(source) {
@@ -1263,7 +1397,7 @@ function participantVisibilityScore(row, nowMs = Date.now()) {
 
 const stripParticipants = computed(() => {
   const nowMs = Date.now();
-  const rows = [...participantUsers.value];
+  const rows = [...connectedParticipantUsers.value];
   rows.sort((left, right) => {
     const scoreCmp = participantVisibilityScore(right, nowMs) - participantVisibilityScore(left, nowMs);
     if (scoreCmp !== 0) return scoreCmp;
@@ -1274,6 +1408,30 @@ const stripParticipants = computed(() => {
     return left.userId - right.userId;
   });
   return rows.slice(0, VISIBLE_PARTICIPANTS_LIMIT);
+});
+
+const showMiniParticipantStrip = computed(() => connectedParticipantUsers.value.length > 1);
+const showLobbyRequestBadge = computed(() => (
+  canModerate.value
+  && lobbyQueue.value.length > 0
+  && activeTab.value !== 'lobby'
+));
+const lobbyRequestBadgeText = computed(() => (
+  lobbyQueue.value.length > 99 ? '99+' : String(lobbyQueue.value.length)
+));
+const showLobbyJoinToast = computed(() => (
+  canModerate.value
+  && rightSidebarCollapsed.value
+  && lobbyNotificationState.toastVisible
+  && lobbyNotificationState.toastMessage !== ''
+));
+const lobbyJoinToastMessage = computed(() => lobbyNotificationState.toastMessage);
+const aloneIdleCountdownLabel = computed(() => {
+  const remainingMs = Math.max(0, Number(aloneIdlePrompt.remainingMs || 0));
+  const totalSeconds = Math.ceil(remainingMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 });
 
 const snapshotUsersRows = computed(() => participantUsers.value.map((row) => userRowSnapshot(row)));
@@ -1354,19 +1512,11 @@ const usersVirtualWindow = computed(() => computeVirtualWindow(usersPageRows.val
 const usersVisibleRows = computed(() => usersVirtualWindow.value.rows);
 
 const lobbyRows = computed(() => {
-  const queued = lobbyQueue.value.map((row) => ({
+  return lobbyQueue.value.map((row) => ({
     ...row,
     status: 'queued',
     sortTs: Number(row.requested_unix_ms || 0),
-  }));
-  const admitted = lobbyAdmitted.value.map((row) => ({
-    ...row,
-    status: 'admitted',
-    sortTs: Number(row.admitted_unix_ms || 0),
-  }));
-
-  return [...queued, ...admitted].sort((left, right) => {
-    if (left.status !== right.status) return left.status.localeCompare(right.status);
+  })).sort((left, right) => {
     if (left.sortTs !== right.sortTs) return left.sortTs - right.sortTs;
     return String(left.display_name || '').localeCompare(String(right.display_name || ''), 'en', { sensitivity: 'base' });
   });
@@ -1399,7 +1549,7 @@ const typingUsers = computed(() => {
 
 const participantsByUserId = computed(() => {
   const rows = new Map();
-  for (const row of participantUsers.value) {
+  for (const row of connectedParticipantUsers.value) {
     rows.set(row.userId, row);
   }
   return rows;
@@ -1409,9 +1559,6 @@ const lobbyEntryByUserId = computed(() => {
   const rows = new Map();
   for (const row of lobbyQueue.value) {
     rows.set(row.user_id, { ...row, status: 'queued' });
-  }
-  for (const row of lobbyAdmitted.value) {
-    rows.set(row.user_id, { ...row, status: 'admitted' });
   }
   return rows;
 });
@@ -2017,7 +2164,7 @@ function applyRemoteControlState(payload, sender) {
 }
 
 function syncControlStateToPeers() {
-  const peerIds = participantUsers.value
+  const peerIds = connectedParticipantUsers.value
     .map((row) => row.userId)
     .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
 
@@ -2053,7 +2200,7 @@ function syncModerationStateToPeersWithPayload(moderatedUsers) {
   const payloadKeys = Object.keys(normalizedPayload);
   if (payloadKeys.length === 0) return 0;
 
-  const peerIds = participantUsers.value
+  const peerIds = connectedParticipantUsers.value
     .map((row) => row.userId)
     .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
   if (peerIds.length <= 0) return 0;
@@ -2274,12 +2421,155 @@ function onLobbyListScroll(event) {
   updateListViewportMetrics(event?.target, lobbyListViewport);
 }
 
+function clearAloneIdleWatchTimer() {
+  if (aloneIdleWatchTimer !== null) {
+    clearInterval(aloneIdleWatchTimer);
+    aloneIdleWatchTimer = null;
+  }
+}
+
+function clearAloneIdleCountdownTimer() {
+  if (aloneIdleCountdownTimer !== null) {
+    clearInterval(aloneIdleCountdownTimer);
+    aloneIdleCountdownTimer = null;
+  }
+}
+
+function hideAloneIdlePrompt() {
+  clearAloneIdleCountdownTimer();
+  aloneIdlePrompt.visible = false;
+  aloneIdlePrompt.deadlineMs = 0;
+  aloneIdlePrompt.remainingMs = ALONE_IDLE_COUNTDOWN_MS;
+}
+
+function markAloneIdleActivity() {
+  if (!isAloneInCall.value) return;
+  if (aloneIdlePrompt.visible) return;
+  aloneIdleLastActiveMs = Date.now();
+}
+
+function updateAloneIdleCountdown() {
+  const deadlineMs = Number(aloneIdlePrompt.deadlineMs || 0);
+  if (!aloneIdlePrompt.visible || deadlineMs <= 0) {
+    hideAloneIdlePrompt();
+    return;
+  }
+
+  const remainingMs = Math.max(0, deadlineMs - Date.now());
+  aloneIdlePrompt.remainingMs = remainingMs;
+  if (remainingMs > 0) return;
+
+  hideAloneIdlePrompt();
+  setNotice('Ending call due to inactivity while alone.');
+  hangupCall();
+}
+
+function showAloneIdlePrompt() {
+  if (!isAloneInCall.value || aloneIdlePrompt.visible) return;
+  aloneIdlePrompt.visible = true;
+  aloneIdlePrompt.deadlineMs = Date.now() + ALONE_IDLE_COUNTDOWN_MS;
+  aloneIdlePrompt.remainingMs = ALONE_IDLE_COUNTDOWN_MS;
+  clearAloneIdleCountdownTimer();
+  aloneIdleCountdownTimer = setInterval(() => {
+    updateAloneIdleCountdown();
+  }, ALONE_IDLE_TICK_MS);
+}
+
+function evaluateAloneIdlePrompt() {
+  if (!isAloneInCall.value) {
+    hideAloneIdlePrompt();
+    aloneIdleLastActiveMs = Date.now();
+    return;
+  }
+  if (aloneIdlePrompt.visible) return;
+
+  const idleMs = Math.max(0, Date.now() - aloneIdleLastActiveMs);
+  if (idleMs >= ALONE_IDLE_PROMPT_AFTER_MS) {
+    showAloneIdlePrompt();
+  }
+}
+
+function ensureAloneIdleWatchTimer() {
+  if (aloneIdleWatchTimer !== null) return;
+  aloneIdleWatchTimer = setInterval(() => {
+    evaluateAloneIdlePrompt();
+  }, ALONE_IDLE_POLL_MS);
+}
+
+function confirmStillInCall() {
+  aloneIdleLastActiveMs = Date.now();
+  hideAloneIdlePrompt();
+}
+
+function handleAloneIdleActivityEvent() {
+  markAloneIdleActivity();
+}
+
+function attachAloneIdleActivityListeners() {
+  if (typeof window === 'undefined') return;
+  for (const eventName of ALONE_IDLE_ACTIVITY_EVENTS) {
+    window.addEventListener(eventName, handleAloneIdleActivityEvent, { passive: true });
+  }
+}
+
+function detachAloneIdleActivityListeners() {
+  if (typeof window === 'undefined') return;
+  for (const eventName of ALONE_IDLE_ACTIVITY_EVENTS) {
+    window.removeEventListener(eventName, handleAloneIdleActivityEvent);
+  }
+}
+
+function clearLobbyToastTimer() {
+  if (lobbyToastTimer !== null) {
+    clearTimeout(lobbyToastTimer);
+    lobbyToastTimer = null;
+  }
+}
+
+function hideLobbyJoinToast() {
+  clearLobbyToastTimer();
+  lobbyNotificationState.toastVisible = false;
+  lobbyNotificationState.toastMessage = '';
+}
+
+function buildLobbyJoinToastMessage(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  const labels = list
+    .map((entry) => String(entry?.display_name || '').trim())
+    .filter((value) => value !== '');
+  if (labels.length <= 0) return 'A user requested to join.';
+  if (labels.length === 1) return `${labels[0]} requested to join.`;
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]} requested to join.`;
+  return `${labels[0]} and ${labels.length - 1} more requested to join.`;
+}
+
+function notifyLobbyJoinRequests(entries) {
+  if (!canModerate.value) return;
+  if (!rightSidebarCollapsed.value) return;
+  const list = Array.isArray(entries) ? entries : [];
+  if (list.length <= 0) return;
+  lobbyNotificationState.toastMessage = buildLobbyJoinToastMessage(list);
+  lobbyNotificationState.toastVisible = true;
+  clearLobbyToastTimer();
+  lobbyToastTimer = setTimeout(() => {
+    lobbyToastTimer = null;
+    lobbyNotificationState.toastVisible = false;
+  }, 7500);
+}
+
+function openLobbyRequestsPanel() {
+  showRightSidebar();
+  setActiveTab('lobby');
+  hideLobbyJoinToast();
+}
+
 function setActiveTab(tab) {
   const nextTab = ['users', 'lobby', 'chat'].includes(tab) ? tab : 'users';
   activeTab.value = nextTab;
   if (nextTab === 'users') {
     nextTick(() => syncUsersListViewport());
   } else if (nextTab === 'lobby') {
+    hideLobbyJoinToast();
     nextTick(() => syncLobbyListViewport());
   }
   if (isSocketOnline.value && (nextTab === 'users' || nextTab === 'lobby')) {
@@ -2296,6 +2586,7 @@ function hideRightSidebar() {
 
 function showRightSidebar() {
   rightSidebarCollapsed.value = false;
+  hideLobbyJoinToast();
 }
 
 function openLeftSidebarOverlay(event) {
@@ -2317,6 +2608,10 @@ let reconnectTimer = null;
 let pingTimer = null;
 let typingStopTimer = null;
 let typingSweepTimer = null;
+let lobbyToastTimer = null;
+let aloneIdleWatchTimer = null;
+let aloneIdleCountdownTimer = null;
+let aloneIdleLastActiveMs = Date.now();
 let localTypingStarted = false;
 let manualSocketClose = false;
 let connectGeneration = 0;
@@ -2370,10 +2665,24 @@ function sendRoomJoin(roomId) {
   return true;
 }
 
-function requestLobbyJoin() {
-  if (!sendSocketFrame({ type: 'lobby/queue/join' })) {
+function requestLobbyJoin(roomId = '', options = {}) {
+  const targetRoomId = normalizeRoomId(roomId || desiredRoomId.value || activeRoomId.value || 'lobby');
+  const announce = options && typeof options === 'object' && options.announce === false ? false : true;
+  if (!sendSocketFrame({ type: 'lobby/queue/join', room_id: targetRoomId })) {
     setNotice('Could not join lobby queue while websocket is offline.', 'error');
+    return;
   }
+  if (announce) {
+    setNotice('The host has been notified. Waiting for approval.');
+  }
+}
+
+function tryDirectJoinWithModeratorBypass(roomId = '') {
+  const targetRoomId = normalizeRoomId(roomId || desiredRoomId.value || activeRoomId.value || 'lobby');
+  if (!canModerate.value || targetRoomId === '') {
+    return false;
+  }
+  return sendRoomJoin(targetRoomId);
 }
 
 function allowLobbyUser(userId) {
@@ -2637,10 +2946,42 @@ function transferOwnerRole(row) {
 
 function applyLobbySnapshot(payload) {
   const roomId = normalizeRoomId(payload?.room_id || payload?.roomId || activeRoomId.value);
-  if (roomId !== activeRoomId.value) return;
+  const admittedRows = Array.isArray(payload?.admitted) ? payload.admitted.map(normalizeLobbyEntry) : [];
+  const admittedCurrentUser = admittedRows.some((entry) => Number(entry?.user_id || 0) === currentUserId.value);
 
-  lobbyQueue.value = Array.isArray(payload?.queue) ? payload.queue.map(normalizeLobbyEntry) : [];
-  lobbyAdmitted.value = Array.isArray(payload?.admitted) ? payload.admitted.map(normalizeLobbyEntry) : [];
+  if (roomId !== activeRoomId.value) {
+    if (
+      admittedCurrentUser
+      && roomId === desiredRoomId.value
+      && pendingAdmissionJoinRoomId.value !== roomId
+    ) {
+      pendingAdmissionJoinRoomId.value = roomId;
+      if (!sendRoomJoin(roomId)) {
+        pendingAdmissionJoinRoomId.value = '';
+      }
+    }
+    return;
+  }
+
+  const previousQueuedUserIds = new Set(
+    lobbyQueue.value
+      .map((entry) => Number(entry?.user_id || 0))
+      .filter((userId) => Number.isInteger(userId) && userId > 0)
+  );
+  const nextQueueRows = Array.isArray(payload?.queue) ? payload.queue.map(normalizeLobbyEntry) : [];
+  lobbyQueue.value = nextQueueRows;
+  lobbyAdmitted.value = admittedRows;
+
+  const addedQueueRows = nextQueueRows.filter((entry) => {
+    const userId = Number(entry?.user_id || 0);
+    if (!Number.isInteger(userId) || userId <= 0) return false;
+    if (userId === currentUserId.value) return false;
+    return !previousQueuedUserIds.has(userId);
+  });
+  if (lobbyNotificationState.hasSnapshot) {
+    notifyLobbyJoinRequests(addedQueueRows);
+  }
+  lobbyNotificationState.hasSnapshot = true;
 
   for (const key of Object.keys(lobbyActionState)) {
     if (key.startsWith('allow:') || key.startsWith('remove:')) {
@@ -2651,15 +2992,24 @@ function applyLobbySnapshot(payload) {
 }
 
 function applyRoomSnapshot(payload) {
+  hasRealtimeRoomSync.value = true;
   const roomId = normalizeRoomId(payload?.room_id || payload?.roomId || desiredRoomId.value);
+  const previousRoomId = normalizeRoomId(serverRoomId.value || roomId);
+  if (previousRoomId !== roomId) {
+    lobbyNotificationState.hasSnapshot = false;
+    hideLobbyJoinToast();
+  }
   serverRoomId.value = roomId;
+  if (pendingAdmissionJoinRoomId.value === roomId) {
+    pendingAdmissionJoinRoomId.value = '';
+  }
   ensureRoomBuckets(roomId);
   applyViewerContext(payload?.viewer || null);
 
   participantsRaw.value = Array.isArray(payload?.participants) ? payload.participants : [];
 
   const presentUserIds = new Set();
-  for (const row of participantUsers.value) {
+  for (const row of connectedParticipantUsers.value) {
     presentUserIds.add(row.userId);
   }
   pruneParticipantActivity(presentUserIds);
@@ -2679,9 +3029,9 @@ function handleSignalingEvent(payload) {
   const type = String(payload?.type || '').trim().toLowerCase();
   if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup'].includes(type)) return;
 
-  const sender = payload && typeof payload.sender === 'object' ? payload.sender : {};
+  const sender = typeof payload.sender === 'object' ? payload.sender : {};
   const senderUserId = Number(sender.user_id || 0);
-  const payloadBody = payload && typeof payload.payload === 'object' ? payload.payload : null;
+  const payloadBody = typeof payload.payload === 'object' ? payload.payload : null;
   const payloadKind = String(payloadBody?.kind || '').trim().toLowerCase();
   const hasSdpPayload = Boolean(payloadBody && typeof payloadBody.sdp === 'object');
   const hasCandidatePayload = Boolean(payloadBody && typeof payloadBody.candidate === 'object');
@@ -2741,10 +3091,19 @@ function handleSocketMessage(event) {
   if (type === '') return;
 
   if (type === 'system/welcome') {
+    hasRealtimeRoomSync.value = true;
     const welcomeRoom = normalizeRoomId(payload.active_room_id || desiredRoomId.value);
     serverRoomId.value = welcomeRoom;
     ensureRoomBuckets(welcomeRoom);
     applyViewerContext(payload?.call_context || null);
+    const admission = typeof payload.admission === 'object' ? payload.admission : null;
+    const requiresAdmission = Boolean(admission?.requires_admission);
+    const pendingRoomId = normalizeRoomId(admission?.pending_room_id || '');
+    if (requiresAdmission && pendingRoomId !== '') {
+      if (!tryDirectJoinWithModeratorBypass(pendingRoomId)) {
+        requestLobbyJoin(pendingRoomId);
+      }
+    }
     requestRoomSnapshot();
     if (desiredRoomId.value !== welcomeRoom) {
       void sendRoomJoin(desiredRoomId.value);
@@ -2822,6 +3181,13 @@ function handleSocketMessage(event) {
     if (code === 'reaction_publish_failed') {
       return;
     }
+    if (code === 'room_join_requires_admission' || code === 'room_join_not_allowed') {
+      const pendingRoomId = normalizeRoomId(payload?.details?.pending_room_id || desiredRoomId.value);
+      if (!tryDirectJoinWithModeratorBypass(pendingRoomId)) {
+        requestLobbyJoin(pendingRoomId);
+      }
+      return;
+    }
     if (shouldSuppressExpectedSignalingError(payload)) {
       return;
     }
@@ -2847,6 +3213,8 @@ function startPingLoop() {
 function closeSocket() {
   clearReconnectTimer();
   clearPingTimer();
+  hasRealtimeRoomSync.value = false;
+  hideLobbyJoinToast();
   const socket = socketRef.value;
   socketRef.value = null;
   if (!(socket instanceof WebSocket)) return;
@@ -2965,9 +3333,25 @@ async function connectSocket() {
     return;
   }
 
+  const previousSocket = socketRef.value;
+  if (previousSocket) {
+    try {
+      previousSocket.close(1000, 'reconnect');
+    } catch {
+      // ignore
+    }
+    if (socketRef.value === previousSocket) {
+      socketRef.value = null;
+    }
+  }
+
   clearReconnectTimer();
   clearPingTimer();
   manualSocketClose = false;
+  hasRealtimeRoomSync.value = false;
+  pendingAdmissionJoinRoomId.value = '';
+  lobbyNotificationState.hasSnapshot = false;
+  hideLobbyJoinToast();
   connectionState.value = 'retrying';
   connectionReason.value = reconnectAttempt.value > 0 ? 'network_retry' : 'probing_session';
 
@@ -3075,6 +3459,7 @@ async function connectSocket() {
       if (socketRef.value === socket) {
         socketRef.value = null;
       }
+      hasRealtimeRoomSync.value = false;
 
       if (manualSocketClose) {
         return;
@@ -3119,7 +3504,7 @@ function hangupCall() {
   teardownNativePeerConnections();
   teardownSfuRemotePeers();
 
-  const peerIds = participantUsers.value
+  const peerIds = connectedParticipantUsers.value
     .map((participant) => participant.userId)
     .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
 
@@ -3151,6 +3536,7 @@ function hangupCall() {
 
 watch(desiredRoomId, (nextRoomId, previousRoomId) => {
   ensureRoomBuckets(nextRoomId);
+  hasRealtimeRoomSync.value = false;
   usersPage.value = 1;
   lobbyPage.value = 1;
   if (nextRoomId === previousRoomId) return;
@@ -3203,7 +3589,7 @@ watch(
 );
 
 watch(
-  () => participantUsers.value
+  () => connectedParticipantUsers.value
     .map((row) => Number(row?.userId || 0))
     .filter((userId) => Number.isInteger(userId) && userId > 0)
     .sort((left, right) => left - right)
@@ -3212,6 +3598,23 @@ watch(
     if (!isNativeWebRtcRuntimePath()) return;
     syncNativePeerConnectionsWithRoster();
   }
+);
+
+watch(
+  isAloneInCall,
+  (alone) => {
+    if (alone) {
+      aloneIdleLastActiveMs = Date.now();
+      hideAloneIdlePrompt();
+      ensureAloneIdleWatchTimer();
+      return;
+    }
+
+    hideAloneIdlePrompt();
+    aloneIdleLastActiveMs = Date.now();
+    clearAloneIdleWatchTimer();
+  },
+  { immediate: true }
 );
 
 watch(
@@ -3304,8 +3707,32 @@ watch(
 );
 
 watch(isCompactViewport, (nextValue) => {
-  if (nextValue) {
+  if (nextValue && isCompactLayoutViewport.value) {
     rightSidebarCollapsed.value = true;
+  }
+});
+
+watch(isShellMobileViewport, (nextValue) => {
+  if (nextValue && isCompactViewport.value) {
+    rightSidebarCollapsed.value = true;
+  }
+});
+
+watch(isShellTabletViewport, (nextValue) => {
+  if (nextValue && isCompactViewport.value) {
+    rightSidebarCollapsed.value = true;
+  }
+});
+
+watch(rightSidebarCollapsed, (collapsed) => {
+  if (!collapsed) {
+    hideLobbyJoinToast();
+  }
+});
+
+watch(canModerate, (enabled) => {
+  if (!enabled) {
+    hideLobbyJoinToast();
   }
 });
 
@@ -3313,6 +3740,26 @@ watch(isSocketOnline, (online) => {
   if (!online) return;
   flushQueuedReactions();
 });
+
+watch(
+  shouldConnectSfu,
+  (enabled) => {
+    if (!enabled) {
+      if (sfuClientRef.value) {
+        sfuClientRef.value.leave();
+        sfuClientRef.value = null;
+      }
+      sfuConnected.value = false;
+      localTracksPublishedToSfu = false;
+      teardownSfuRemotePeers();
+      return;
+    }
+
+    if (String(sessionState.sessionToken || '').trim() !== '' && Number.isInteger(sessionState.userId) && sessionState.userId > 0) {
+      initSFU();
+    }
+  }
+);
 
 watch(routeCallRef, (nextValue, previousValue) => {
   if (nextValue === previousValue) return;
@@ -3331,9 +3778,12 @@ onMounted(async () => {
   } else if (typeof window !== 'undefined') {
     isCompactViewport.value = window.innerWidth <= COMPACT_BREAKPOINT;
   }
-  if (isCompactViewport.value) {
+  if (isCompactViewport.value && isCompactLayoutViewport.value) {
     rightSidebarCollapsed.value = true;
   }
+
+  attachAloneIdleActivityListeners();
+  aloneIdleLastActiveMs = Date.now();
 
   detachMediaDeviceWatcher = attachCallMediaDeviceWatcher({ requestPermissions: true });
   await resolveRouteCallRef(routeCallRef.value);
@@ -3346,21 +3796,21 @@ onMounted(async () => {
     mediaRuntimeCapabilities.value = await detectMediaRuntimeCapabilities();
     const shouldUseSfuRuntime = SFU_RUNTIME_ENABLED || !mediaRuntimeCapabilities.value.stageB;
     if (mediaRuntimeCapabilities.value.stageA && shouldUseSfuRuntime) {
-      console.log('[Codec] Runtime capability: WLVC WASM available');
+      mediaDebugLog('[Codec] Runtime capability: WLVC WASM available');
       await switchMediaRuntimePath('wlvc_wasm', 'capability_probe_stage_a');
     } else if (mediaRuntimeCapabilities.value.stageB) {
       if (mediaRuntimeCapabilities.value.stageA && !SFU_RUNTIME_ENABLED) {
-        console.info('[Codec] Runtime capability: WLVC WASM available, but SFU runtime is disabled; using native WebRTC');
+        mediaDebugLog('[Codec] Runtime capability: WLVC WASM available, but SFU runtime is disabled; using native WebRTC');
       } else {
-        console.warn('[Codec] Runtime capability: WLVC WASM unavailable, native WebRTC available');
+        mediaDebugLog('[Codec] Runtime capability: WLVC WASM unavailable, native WebRTC available');
       }
       await switchMediaRuntimePath('webrtc_native', 'capability_probe_stage_b');
     } else {
-      console.error('[Codec] Runtime capability: neither WLVC WASM nor native WebRTC available');
+      mediaDebugLog('[Codec] Runtime capability: neither WLVC WASM nor native WebRTC available');
       setMediaRuntimePath('unsupported', 'capability_probe_unsupported');
     }
   } catch (e) {
-    console.warn('[Codec] Runtime capability probe failed:', e);
+    mediaDebugLog('[Codec] Runtime capability probe failed:', e);
     mediaRuntimeCapabilities.value = {
       checkedAt: new Date().toISOString(),
       wlvcWasm: {
@@ -3378,7 +3828,7 @@ onMounted(async () => {
     setMediaRuntimePath('unsupported', 'capability_probe_error');
   }
 
-  if (isWlvcRuntimePath() && sessionState.sessionToken && sessionState.userId) {
+  if (shouldConnectSfu.value && sessionState.sessionToken && sessionState.userId) {
     initSFU();
   }
 
@@ -3422,6 +3872,7 @@ function initSFU() {
     onPublisherLeft: (publisherId) => handleSFUPublisherLeft(publisherId),
     onConnected: () => {
       sfuConnected.value = true;
+      sfuConnectRetryCount = 0;
       scheduleLocalTrackPublish();
     },
     onDisconnect: () => {
@@ -3429,13 +3880,22 @@ function initSFU() {
       sfuConnected.value = false;
       localTracksPublishedToSfu = false;
       sfuClientRef.value = null;
+      if (manualSocketClose) {
+        sfuConnectRetryCount = 0;
+        return;
+      }
       if (!hadActiveConnection) {
+        if (sfuConnectRetryCount < SFU_CONNECT_MAX_RETRIES) {
+          sfuConnectRetryCount += 1;
+          setTimeout(() => initSFU(), SFU_CONNECT_RETRY_DELAY_MS);
+          return;
+        }
+        sfuConnectRetryCount = 0;
         void maybeFallbackToNativeRuntime('sfu_connect_failed');
         return;
       }
-      if (!manualSocketClose) {
-        setTimeout(() => initSFU(), 2000);
-      }
+      sfuConnectRetryCount = 0;
+      setTimeout(() => initSFU(), 2000);
     },
     onEncodedFrame: (frame) => handleSFUEncodedFrame(frame),
   });
@@ -3481,7 +3941,7 @@ function handleSFUTracks(e) {
       try {
         decoder = await createWasmDecoder({ width: 640, height: 480, quality: 75 });
       } catch (error) {
-        console.warn('[SFU] WASM decoder init failed for publisher', e.publisherId, error);
+        mediaDebugLog('[SFU] WASM decoder init failed for publisher', e.publisherId, error);
       }
     }
 
@@ -3514,7 +3974,7 @@ function handleSFUTracks(e) {
       decodedCanvas: canvas,
     });
 
-    console.log('[SFU] Subscribed to publisher', e.publisherId, 'with', e.tracks.length, 'tracks');
+    mediaDebugLog('[SFU] Subscribed to publisher', e.publisherId, 'with', e.tracks.length, 'tracks');
   })();
 }
 
@@ -3541,6 +4001,9 @@ let localFilteredStreamRef = ref(null);
 let localStreamRef = ref(null);
 let encodeIntervalRef = ref(null);
 let localTracksPublishedToSfu = false;
+let localPublisherTeardownInProgress = false;
+let localTrackRecoveryTimer = null;
+let localTrackRecoveryAttempts = 0;
 const backgroundFilterController = new BackgroundFilterController();
 const backgroundBaselineCollector = new BackgroundFilterBaselineCollector(10);
 let backgroundBaselineCaptured = false;
@@ -3716,7 +4179,7 @@ async function sendNativeOffer(peer) {
       },
     });
   } catch (error) {
-    console.warn('[WebRTC] Could not create/send offer for peer', peer.userId, error);
+    mediaDebugLog('[WebRTC] Could not create/send offer for peer', peer.userId, error);
   } finally {
     peer.negotiating = false;
     if (peer.needsRenegotiate) {
@@ -3808,7 +4271,7 @@ function syncNativePeerConnectionsWithRoster() {
   if (!isNativeWebRtcRuntimePath()) return;
 
   const activePeerIds = new Set();
-  for (const row of participantUsers.value) {
+  for (const row of connectedParticipantUsers.value) {
     const userId = Number(row?.userId || 0);
     if (!Number.isInteger(userId) || userId <= 0 || userId === currentUserId.value) continue;
     activePeerIds.add(userId);
@@ -3853,7 +4316,7 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
       },
     });
   } catch (error) {
-    console.warn('[WebRTC] Failed to handle offer from peer', senderUserId, error);
+    mediaDebugLog('[WebRTC] Failed to handle offer from peer', senderUserId, error);
   }
 }
 
@@ -3869,7 +4332,7 @@ async function handleNativeAnswerSignal(senderUserId, payloadBody) {
     await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }));
     await flushNativePendingIce(peer);
   } catch (error) {
-    console.warn('[WebRTC] Failed to handle answer from peer', senderUserId, error);
+    mediaDebugLog('[WebRTC] Failed to handle answer from peer', senderUserId, error);
   }
 }
 
@@ -3915,9 +4378,15 @@ async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {
         void syncNativePeerLocalTracks(peer);
       }
       wlvcEncodeFailureCount = 0;
+      wlvcEncodeWarmupUntilMs = 0;
+      wlvcEncodeFirstFailureAtMs = 0;
+      wlvcEncodeLastErrorLogAtMs = 0;
     } else if (normalizedNextPath === 'wlvc_wasm') {
       teardownNativePeerConnections();
       wlvcEncodeFailureCount = 0;
+      wlvcEncodeWarmupUntilMs = 0;
+      wlvcEncodeFirstFailureAtMs = 0;
+      wlvcEncodeLastErrorLogAtMs = 0;
       const localStream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
       const videoTrack = localStream?.getVideoTracks?.()[0] || null;
       if (videoTrack) {
@@ -3930,7 +4399,7 @@ async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {
     }
 
     setMediaRuntimePath(normalizedNextPath, reason);
-    console.info('[MediaRuntime] switched to', normalizedNextPath, 'reason=', reason);
+    mediaDebugLog('[MediaRuntime] switched to', normalizedNextPath, 'reason=', reason);
     return true;
   } finally {
     runtimeSwitchInFlight = false;
@@ -4061,43 +4530,63 @@ function resolveBackgroundFilterOptions(runtimeToken) {
 
   const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
   const qualityProfile = String(callMediaPrefs.backgroundQualityProfile || 'balanced').trim().toLowerCase();
-  const baseBlur = Math.max(4, Math.min(28, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurStrength, 12))));
-
-  let blurPx = baseBlur;
+  const baseBlurLevel = Math.max(0, Math.min(4, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurStrength, 2))));
+  const blurStepPx = [1, 2, 3, 4, 5];
+  let blurPx = blurStepPx[baseBlurLevel] ?? 3;
   if (backdrop === 'blur7') {
-    blurPx = Math.max(blurPx, 12);
+    blurPx = Math.round(blurPx * 1.0);
   } else if (backdrop === 'blur9') {
-    blurPx = Math.max(blurPx, 16);
+    blurPx = Math.round(blurPx * 1.35);
+  }
+  blurPx = Math.max(1, Math.min(12, blurPx));
+
+  let detectIntervalMs = 110;
+  if (qualityProfile === 'quality') {
+    detectIntervalMs = 80;
+  } else if (qualityProfile === 'realtime') {
+    detectIntervalMs = 140;
   }
 
-  let detectIntervalMs = 220;
+  let temporalSmoothingAlpha = 0.24;
   if (qualityProfile === 'quality') {
-    detectIntervalMs = 160;
+    temporalSmoothingAlpha = 0.18;
   } else if (qualityProfile === 'realtime') {
-    detectIntervalMs = 320;
+    temporalSmoothingAlpha = 0.32;
   }
 
   const maskVariant = Math.max(1, Math.min(10, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaskVariant, 4))));
   const transitionGain = Math.max(1, Math.min(10, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurTransition, 10))));
-  const maxProcessWidth = Math.max(320, Math.min(1920, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessWidth, 960))));
-  const maxProcessFps = Math.max(8, Math.min(30, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessFps, 24))));
+  const requestedProcessWidth = Math.max(320, Math.min(1920, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessWidth, 960))));
+  const requestedProcessFps = Math.max(8, Math.min(30, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessFps, 24))));
+  let processWidthCap = 960;
+  let processFpsCap = 24;
+  if (qualityProfile === 'quality') {
+    processWidthCap = 1280;
+    processFpsCap = 30;
+  } else if (qualityProfile === 'realtime') {
+    processWidthCap = 960;
+    processFpsCap = 15;
+  }
+  const maxProcessWidth = Math.max(320, Math.min(processWidthCap, requestedProcessWidth));
+  const maxProcessFps = Math.max(8, Math.min(processFpsCap, requestedProcessFps));
 
   return {
     mode,
     blurPx,
     detectIntervalMs,
+    temporalSmoothingAlpha,
+    preferFastMatte: false,
     maskVariant,
     transitionGain,
     maxProcessWidth,
     maxProcessFps,
-    autoDisableOnOverload: true,
+    autoDisableOnOverload: false,
     overloadFrameMs: 90,
     overloadConsecutiveFrames: 12,
     statsIntervalMs: 1000,
     onOverload: () => {
       if (runtimeToken !== backgroundRuntimeToken) return;
       resetBackgroundRuntimeMetrics('overload');
-      setCallBackgroundFilterMode('off');
     },
     onStats: (stats) => {
       if (runtimeToken !== backgroundRuntimeToken) return;
@@ -4181,6 +4670,96 @@ function uniqueLocalStreams(values) {
   return out;
 }
 
+function clearLocalTrackRecoveryTimer() {
+  if (localTrackRecoveryTimer !== null) {
+    clearTimeout(localTrackRecoveryTimer);
+    localTrackRecoveryTimer = null;
+  }
+}
+
+function hasLiveLocalTrack(kind) {
+  const normalizedKind = String(kind || '').trim().toLowerCase();
+  const stream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
+  if (!(stream instanceof MediaStream)) return false;
+  return stream.getTracks().some((track) => (
+    String(track?.kind || '').trim().toLowerCase() === normalizedKind
+    && String(track?.readyState || '').trim().toLowerCase() === 'live'
+  ));
+}
+
+function hasLiveLocalMedia() {
+  const stream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
+  if (!(stream instanceof MediaStream)) return false;
+  return stream.getTracks().some((track) => String(track?.readyState || '').trim().toLowerCase() === 'live');
+}
+
+async function canAcquireReplacementLocalMedia() {
+  if (
+    typeof navigator === 'undefined'
+    || !navigator.mediaDevices
+    || typeof navigator.mediaDevices.getUserMedia !== 'function'
+  ) {
+    return false;
+  }
+
+  let probeStream = null;
+  try {
+    probeStream = await acquireLocalMediaStreamWithFallback();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (probeStream instanceof MediaStream) {
+      for (const track of probeStream.getTracks()) {
+        try {
+          track.stop();
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+}
+
+function scheduleLocalTrackRecovery(reason = 'track_ended') {
+  if (localPublisherTeardownInProgress) return;
+  if (localTrackRecoveryTimer !== null) return;
+  if (localTrackRecoveryAttempts >= LOCAL_TRACK_RECOVERY_MAX_ATTEMPTS) return;
+
+  const attempt = localTrackRecoveryAttempts;
+  const delayMs = Math.min(
+    LOCAL_TRACK_RECOVERY_BASE_DELAY_MS * Math.max(1, 2 ** attempt),
+    LOCAL_TRACK_RECOVERY_MAX_DELAY_MS,
+  );
+
+  localTrackRecoveryTimer = setTimeout(async () => {
+    localTrackRecoveryTimer = null;
+    localTrackRecoveryAttempts += 1;
+
+    const recovered = await reconfigureLocalTracksFromSelectedDevices();
+    if (recovered || hasLiveLocalMedia()) {
+      localTrackRecoveryAttempts = 0;
+      return;
+    }
+
+    scheduleLocalTrackRecovery(reason);
+  }, delayMs);
+}
+
+function bindLocalTrackLifecycle(stream) {
+  if (!(stream instanceof MediaStream)) return;
+  for (const track of stream.getTracks()) {
+    track.addEventListener('ended', () => {
+      if (localPublisherTeardownInProgress) return;
+      const currentStream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
+      if (!(currentStream instanceof MediaStream)) return;
+      const isCurrentTrack = currentStream.getTracks().some((row) => row.id === track.id);
+      if (!isCurrentTrack) return;
+      scheduleLocalTrackRecovery(`track_${String(track?.kind || 'media').toLowerCase()}_ended`);
+    });
+  }
+}
+
 function stopLocalEncodingPipeline() {
   if (encodeIntervalRef.value) {
     clearInterval(encodeIntervalRef.value);
@@ -4190,6 +4769,10 @@ function stopLocalEncodingPipeline() {
     videoEncoderRef.value.destroy();
     videoEncoderRef.value = null;
   }
+  wlvcEncodeFailureCount = 0;
+  wlvcEncodeWarmupUntilMs = 0;
+  wlvcEncodeFirstFailureAtMs = 0;
+  wlvcEncodeLastErrorLogAtMs = 0;
 }
 
 function clearLocalPreviewElement() {
@@ -4212,51 +4795,59 @@ function clearLocalPreviewElement() {
 }
 
 function unpublishAndStopLocalTracks() {
+  localPublisherTeardownInProgress = true;
+  clearLocalTrackRecoveryTimer();
   backgroundRuntimeToken += 1;
   backgroundBaselineCollector.reset();
   backgroundBaselineCaptured = false;
   resetBackgroundRuntimeMetrics('idle');
   backgroundFilterController.dispose();
 
-  const tracks = Array.isArray(localTracksRef.value) ? [...localTracksRef.value] : [];
-  if (sfuClientRef.value) {
-    for (const track of tracks) {
-      if (track?.id) {
-        sfuClientRef.value.unpublishTrack(track.id);
+  try {
+    const tracks = Array.isArray(localTracksRef.value) ? [...localTracksRef.value] : [];
+    if (sfuClientRef.value) {
+      for (const track of tracks) {
+        if (track?.id) {
+          sfuClientRef.value.unpublishTrack(track.id);
+        }
       }
     }
-  }
-  for (const track of tracks) {
-    try {
-      track.stop();
-    } catch {
-      // ignore
-    }
-  }
-  localTracksRef.value = [];
-  localTracksPublishedToSfu = false;
 
-  const streamsToStop = uniqueLocalStreams([
-    localStreamRef.value,
-    localRawStreamRef.value,
-    localFilteredStreamRef.value,
-  ]);
-  for (const stream of streamsToStop) {
-    for (const track of stream.getTracks()) {
+    for (const track of tracks) {
       try {
         track.stop();
       } catch {
         // ignore
       }
     }
-  }
+    localTracksRef.value = [];
+    localTracksPublishedToSfu = false;
 
-  localRawStreamRef.value = null;
-  localFilteredStreamRef.value = null;
-  localStreamRef.value = null;
+    const streamsToStop = uniqueLocalStreams([
+      localStreamRef.value,
+      localRawStreamRef.value,
+      localFilteredStreamRef.value,
+    ]);
+    for (const stream of streamsToStop) {
+      for (const track of stream.getTracks()) {
+        try {
+          track.stop();
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    localRawStreamRef.value = null;
+    localFilteredStreamRef.value = null;
+    localStreamRef.value = null;
+  } finally {
+    localPublisherTeardownInProgress = false;
+  }
 }
 
 function teardownLocalPublisher() {
+  clearLocalTrackRecoveryTimer();
   stopLocalEncodingPipeline();
   unpublishAndStopLocalTracks();
   clearLocalPreviewElement();
@@ -4265,10 +4856,10 @@ function teardownLocalPublisher() {
 async function publishLocalTracks() {
   if (localStreamRef.value instanceof MediaStream) {
     publishLocalTracksToSfuIfReady();
-    return;
+    return true;
   }
   if (typeof navigator === 'undefined' || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
-    return;
+    return false;
   }
 
   try {
@@ -4280,6 +4871,8 @@ async function publishLocalTracks() {
     localStreamRef.value = stream;
     localTracksRef.value = stream.getTracks();
     localTracksPublishedToSfu = false;
+    localTrackRecoveryAttempts = 0;
+    bindLocalTrackLifecycle(stream);
     publishLocalTracksToSfuIfReady();
     applyCallInputPreferences();
     applyCallOutputPreferences();
@@ -4294,8 +4887,10 @@ async function publishLocalTracks() {
     if (videoTrack) {
       await startEncodingPipeline(videoTrack);
     }
+    return true;
   } catch (e) {
-    console.error('[SFU] Failed to get user media:', e);
+    mediaDebugLog('[SFU] Failed to get user media:', e);
+    return false;
   }
 }
 
@@ -4325,7 +4920,7 @@ async function startEncodingPipeline(videoTrack) {
   }
 
   if (!mediaRuntimeCapabilities.value.stageA) {
-    console.warn('[SFU] WLVC WASM unavailable; falling back to native WebRTC path');
+    mediaDebugLog('[SFU] WLVC WASM unavailable; falling back to native WebRTC path');
     void maybeFallbackToNativeRuntime('wlvc_runtime_unavailable');
     return;
   }
@@ -4338,14 +4933,17 @@ async function startEncodingPipeline(videoTrack) {
       keyFrameInterval: 30,
     });
     if (!videoEncoderRef.value) {
-      console.warn('[SFU] WASM encoder unavailable; falling back to native WebRTC path');
+      mediaDebugLog('[SFU] WASM encoder unavailable; falling back to native WebRTC path');
       void maybeFallbackToNativeRuntime('wlvc_encoder_unavailable');
       return;
     }
-    console.log('[SFU] WASM encoder initialized');
+    mediaDebugLog('[SFU] WASM encoder initialized');
     wlvcEncodeFailureCount = 0;
+    wlvcEncodeWarmupUntilMs = Date.now() + WLVC_ENCODE_WARMUP_MS;
+    wlvcEncodeFirstFailureAtMs = 0;
+    wlvcEncodeLastErrorLogAtMs = 0;
   } catch (error) {
-    console.error('[SFU] WASM encoder init error; falling back to native WebRTC path:', error);
+    mediaDebugLog('[SFU] WASM encoder init error; falling back to native WebRTC path:', error);
     void maybeFallbackToNativeRuntime('wlvc_encoder_init_error');
     return;
   }
@@ -4360,6 +4958,7 @@ async function startEncodingPipeline(videoTrack) {
     if (!videoEncoderRef.value || !sfuClientRef.value || sfuClientRef.value.ws?.readyState !== WebSocket.OPEN) {
       return;
     }
+    if (typeof document !== 'undefined' && document.hidden) return;
 
     if (video.readyState < 2) return;
 
@@ -4378,10 +4977,31 @@ async function startEncodingPipeline(videoTrack) {
         type: encoded.type,
       });
       wlvcEncodeFailureCount = 0;
+      wlvcEncodeFirstFailureAtMs = 0;
     } catch (e) {
+      const nowMs = Date.now();
+      if (nowMs - wlvcEncodeLastErrorLogAtMs >= WLVC_ENCODE_ERROR_LOG_COOLDOWN_MS) {
+        wlvcEncodeLastErrorLogAtMs = nowMs;
+        mediaDebugLog('[SFU] WASM encode frame failed', e);
+      }
+
+      if (nowMs < wlvcEncodeWarmupUntilMs) {
+        return;
+      }
+
+      if (
+        wlvcEncodeFirstFailureAtMs === 0
+        || nowMs - wlvcEncodeFirstFailureAtMs > WLVC_ENCODE_FAILURE_WINDOW_MS
+      ) {
+        wlvcEncodeFirstFailureAtMs = nowMs;
+        wlvcEncodeFailureCount = 1;
+        return;
+      }
+
       wlvcEncodeFailureCount += 1;
       if (wlvcEncodeFailureCount >= WLVC_ENCODE_FAILURE_THRESHOLD) {
         wlvcEncodeFailureCount = 0;
+        wlvcEncodeFirstFailureAtMs = 0;
         void maybeFallbackToNativeRuntime('wlvc_encode_runtime_error');
       }
     }
@@ -4389,16 +5009,31 @@ async function startEncodingPipeline(videoTrack) {
 }
 
 async function reconfigureLocalTracksFromSelectedDevices() {
-  if (!localStreamRef.value) return;
+  if (!(localStreamRef.value instanceof MediaStream)) {
+    return publishLocalTracks();
+  }
   if (localTrackReconfigureInFlight) {
     localTrackReconfigureQueued = true;
-    return;
+    return false;
   }
   localTrackReconfigureInFlight = true;
+  let reconfigured = false;
   try {
+    if (hasLiveLocalMedia()) {
+      const canAcquire = await canAcquireReplacementLocalMedia();
+      if (!canAcquire) {
+        scheduleLocalTrackRecovery('reconfigure_preflight_failed');
+        return false;
+      }
+    }
+
     teardownLocalPublisher();
-    await publishLocalTracks();
-    await refreshCallMediaDevices();
+    reconfigured = await publishLocalTracks();
+    if (reconfigured) {
+      await refreshCallMediaDevices();
+      localTrackRecoveryAttempts = 0;
+    }
+    return reconfigured;
   } finally {
     localTrackReconfigureInFlight = false;
     if (localTrackReconfigureQueued) {
@@ -4433,7 +5068,7 @@ function handleSFUEncodedFrame(frame) {
       ctx.putImageData(imageData, 0, 0);
     }
   } catch (e) {
-    console.warn('[SFU] Decode error:', e);
+    mediaDebugLog('[SFU] Decode error:', e);
   }
 }
 
@@ -4454,12 +5089,17 @@ onBeforeUnmount(() => {
     detachMediaDeviceWatcher();
     detachMediaDeviceWatcher = null;
   }
+  detachAloneIdleActivityListeners();
   manualSocketClose = true;
   connectGeneration += 1;
   stopLocalTyping();
   clearTypingStopTimer();
+  hideAloneIdlePrompt();
+  clearAloneIdleWatchTimer();
+  clearLobbyToastTimer();
   clearReconnectTimer();
   clearPingTimer();
+  clearLocalTrackRecoveryTimer();
   if (usersRefreshTimer.value !== null) {
     clearTimeout(usersRefreshTimer.value);
     usersRefreshTimer.value = null;
@@ -4494,7 +5134,7 @@ onBeforeUnmount(() => {
   --bg-tab-hover: #2a5aa0;
   --bg-tab-active: #3f79d6;
   --bg-control: #1b427a;
-  --bg-control-active: #3f79d6;
+  --bg-control-active: var(--brand-cyan);
   --bg-reaction-tray: #122d59;
   --bg-reaction-btn: #21508f;
   --bg-reaction-btn-hover: #2e65b3;
@@ -4507,6 +5147,7 @@ onBeforeUnmount(() => {
   --text-secondary: #c0d1ef;
   --text-muted: #94add3;
   --text-dim: #7f9cc8;
+  position: relative;
   height: 100%;
   min-height: 0;
   display: flex;
@@ -4528,6 +5169,46 @@ onBeforeUnmount(() => {
 .workspace-call-banner.error {
   background: #4f1e2e;
   color: #ffd1dc;
+}
+
+.workspace-idle-toast {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  width: min(92vw, 520px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(8, 20, 43, 0.94);
+  border: 1px solid rgba(255, 188, 90, 0.55);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.workspace-idle-toast-text {
+  font-size: 12px;
+  color: #ffe9c2;
+  line-height: 1.35;
+}
+
+.workspace-idle-toast-btn {
+  border: 0;
+  border-radius: 8px;
+  height: 34px;
+  padding: 0 12px;
+  background: #ffba50;
+  color: #1f1808;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.workspace-idle-toast-btn:hover {
+  background: #ffc56a;
 }
 
 .workspace-call-body {
@@ -4574,17 +5255,31 @@ onBeforeUnmount(() => {
 .workspace-compact-toggle {
   width: 32px;
   height: 32px;
+  padding: 0;
+  line-height: 0;
   border: 0;
   border-radius: 50%;
   background: #133262;
   color: #f7f7f7;
   display: grid;
   place-items: center;
+  align-self: center;
   cursor: pointer;
 }
 
 .workspace-compact-toggle:hover {
   background: #3f79d6;
+}
+
+.workspace-compact-toggle-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+  object-fit: contain;
+}
+
+.workspace-compact-toggle-icon-back {
+  transform: rotate(180deg);
 }
 
 .workspace-compact-logo {
@@ -4794,6 +5489,40 @@ onBeforeUnmount(() => {
   transform: translateX(0);
 }
 
+.workspace-lobby-toast {
+  position: absolute;
+  top: 16px;
+  right: 58px;
+  z-index: 65;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: #ffffff;
+  background: rgba(213, 40, 40, 0.92);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.workspace-lobby-toast:hover {
+  background: rgba(225, 58, 58, 0.96);
+}
+
+.workspace-lobby-toast-icon {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+
+.workspace-lobby-toast-text {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .workspace-controls {
   position: relative;
   z-index: 20;
@@ -4902,6 +5631,29 @@ onBeforeUnmount(() => {
   background: var(--bg-video);
 }
 
+.tab-icon-wrap {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+
+.tab-notice-badge {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #e03232;
+  color: #ffffff;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .tab-panel {
   display: none;
   min-height: 0;
@@ -4968,6 +5720,13 @@ onBeforeUnmount(() => {
   overflow: auto;
 }
 
+.user-list,
+.lobby-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .user-row {
   list-style: none;
   display: grid;
@@ -4977,7 +5736,6 @@ onBeforeUnmount(() => {
   padding: 10px;
   min-height: 72px;
   box-sizing: border-box;
-  border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-row-hover);
 }
 
@@ -4999,6 +5757,18 @@ onBeforeUnmount(() => {
 
 .user-row.pending {
   outline: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.user-row .actions-inline .icon-mini-btn:not(.danger) {
+  background: var(--brand-bg);
+}
+
+.user-row .actions-inline .icon-mini-btn:not(.danger):hover:not(:disabled) {
+  background: #133262;
+}
+
+.user-row .actions-inline .icon-mini-btn:not(.danger):disabled {
+  background: #101d34;
 }
 
 .user-preview {
@@ -5044,7 +5814,6 @@ onBeforeUnmount(() => {
   padding: 12px;
   font-size: 12px;
   color: var(--text-muted);
-  border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-video);
 }
 
@@ -5137,8 +5906,13 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1180px) {
+  .workspace-call-view {
+    overflow: hidden;
+  }
+
   .workspace-call-body {
     position: relative;
+    height: 100%;
     overflow: hidden;
     grid-template-columns: 1fr;
     grid-template-rows: minmax(0, 1fr);
@@ -5179,9 +5953,35 @@ onBeforeUnmount(() => {
   .workspace-show-right-btn {
     top: 62px;
   }
+
+  .workspace-lobby-toast {
+    top: 62px;
+    right: 66px;
+    max-width: min(68vw, 290px);
+  }
+
+  .workspace-lobby-toast-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 @media (max-width: 760px) {
+  .workspace-idle-toast {
+    top: 8px;
+    width: min(96vw, 520px);
+    padding: 8px 10px;
+  }
+
+  .workspace-idle-toast {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-idle-toast-btn {
+    width: 100%;
+  }
+
   .workspace-compact-header {
     padding: 0 10px;
   }

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../domain/users/user_emails.php';
+
 function videochat_handle_auth_session_routes(
     string $path,
     string $method,
@@ -83,12 +85,26 @@ SELECT
     users.password_hash,
     users.status,
     users.time_format,
+    users.date_format,
     users.theme,
     users.avatar_path,
     roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
 WHERE lower(users.email) = lower(:email)
+   OR EXISTS (
+       SELECT 1
+       FROM user_emails
+       WHERE user_emails.user_id = users.id
+         AND lower(user_emails.email) = lower(:email)
+         AND user_emails.is_verified = 1
+   )
+ORDER BY
+    CASE
+        WHEN lower(users.email) = lower(:email) THEN 0
+        ELSE 1
+    END ASC,
+    users.id ASC
 LIMIT 1
 SQL
             );
@@ -169,6 +185,7 @@ SQL
                     'role' => (string) ($user['role_slug'] ?? 'user'),
                     'status' => (string) $user['status'],
                     'time_format' => (string) ($user['time_format'] ?? '24h'),
+                    'date_format' => (string) ($user['date_format'] ?? 'dmy_dot'),
                     'theme' => (string) ($user['theme'] ?? 'dark'),
                     'avatar_path' => is_string($user['avatar_path'] ?? null) ? (string) $user['avatar_path'] : null,
                 ],
@@ -194,6 +211,114 @@ SQL
             'user' => $apiAuthContext['user'] ?? null,
             'time' => gmdate('c'),
         ]);
+    }
+
+    if ($path === '/api/auth/email-change/confirm') {
+        if (!in_array($method, ['GET', 'POST'], true)) {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET or POST for /api/auth/email-change/confirm.', [
+                'allowed_methods' => ['GET', 'POST'],
+            ]);
+        }
+
+        $token = '';
+        $query = videochat_request_query_params($request);
+        if (is_scalar($query['token'] ?? null)) {
+            $token = trim((string) $query['token']);
+        }
+
+        if ($token === '') {
+            [$payload, $decodeError] = $decodeJsonBody($request);
+            if (!is_array($payload)) {
+                return $errorResponse(400, 'email_change_confirm_invalid_request_body', 'Email confirmation payload must be a non-empty JSON object.', [
+                    'reason' => $decodeError,
+                ]);
+            }
+            $token = trim((string) ($payload['token'] ?? ''));
+        }
+
+        if ($token === '') {
+            return $errorResponse(422, 'email_change_confirm_validation_failed', 'Email confirmation token is required.', [
+                'fields' => ['token' => 'required'],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $confirmation = videochat_consume_email_change_token($pdo, $token);
+            if (!(bool) ($confirmation['ok'] ?? false)) {
+                $reason = (string) ($confirmation['reason'] ?? 'internal_error');
+                $errors = is_array($confirmation['errors'] ?? null) ? $confirmation['errors'] : [];
+                if ($reason === 'validation_failed') {
+                    return $errorResponse(422, 'email_change_confirm_validation_failed', 'Email confirmation token is invalid.', [
+                        'fields' => $errors,
+                    ]);
+                }
+                if ($reason === 'not_found') {
+                    return $errorResponse(404, 'email_change_confirm_not_found', 'Email confirmation token is invalid or unknown.', [
+                        'fields' => $errors,
+                    ]);
+                }
+                if ($reason === 'expired') {
+                    return $errorResponse(410, 'email_change_confirm_expired', 'Email confirmation token has expired.', [
+                        'fields' => $errors,
+                    ]);
+                }
+                if ($reason === 'conflict') {
+                    return $errorResponse(409, 'email_change_confirm_conflict', 'Email confirmation token cannot be consumed.', [
+                        'fields' => $errors,
+                    ]);
+                }
+
+                return $errorResponse(500, 'email_change_confirm_failed', 'Email confirmation failed due to a backend error.', [
+                    'reason' => $reason,
+                ]);
+            }
+
+            $confirmedUser = is_array($confirmation['user'] ?? null) ? $confirmation['user'] : null;
+            $confirmedUserId = (int) (($confirmedUser['id'] ?? 0));
+            if ($confirmedUserId <= 0 || !is_array($confirmedUser)) {
+                return $errorResponse(500, 'email_change_confirm_failed', 'Email confirmation failed due to a backend error.', [
+                    'reason' => 'invalid_confirmed_user',
+                ]);
+            }
+
+            $sessionIssue = videochat_issue_session_for_user(
+                $pdo,
+                $confirmedUserId,
+                $issueSessionId,
+                null,
+                trim((string) ($request['remote_address'] ?? '')),
+                videochat_request_header_value($request, 'user-agent')
+            );
+            if (!(bool) ($sessionIssue['ok'] ?? false)) {
+                return $errorResponse(500, 'email_change_confirm_failed', 'Email confirmation failed due to a backend error.', [
+                    'reason' => (string) ($sessionIssue['reason'] ?? 'session_issue_failed'),
+                ]);
+            }
+
+            $role = is_string($confirmedUser['role'] ?? null) ? strtolower(trim((string) $confirmedUser['role'])) : 'user';
+            $redirectPath = $role === 'admin'
+                ? '/admin/users?edit_user_id=' . rawurlencode((string) $confirmedUserId) . '&email_verified=1'
+                : '/user/dashboard?email_verified=1';
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'session' => $sessionIssue['session'],
+                'user' => $confirmedUser,
+                'result' => [
+                    'state' => 'confirmed',
+                    'email' => (is_array($confirmation['email_row'] ?? null) ? ($confirmation['email_row']['email'] ?? null) : null),
+                    'consumed_at' => $confirmation['consumed_at'] ?? gmdate('c'),
+                    'redirect_path' => $redirectPath,
+                    'edit_user_id' => $confirmedUserId,
+                ],
+                'time' => gmdate('c'),
+            ]);
+        } catch (Throwable) {
+            return $errorResponse(500, 'email_change_confirm_failed', 'Email confirmation failed due to a backend error.', [
+                'reason' => 'internal_error',
+            ]);
+        }
     }
 
     if ($path === '/api/auth/refresh') {

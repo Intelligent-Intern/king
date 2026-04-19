@@ -50,6 +50,7 @@ cd demo/video-chat/backend-king-php
 - `GET /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
 - `POST /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
 - `PATCH /api/calls/{id}` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
+- `DELETE /api/calls/{id}` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
 - `POST /api/calls/{id}/cancel` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
 - `POST /api/invite-codes` (requires authenticated `admin`/`moderator`/`user` role; call scope requires owner/admin/moderator policy)
 - `POST /api/invite-codes/redeem` (requires authenticated `admin`/`moderator`/`user` role)
@@ -80,6 +81,9 @@ Environment overrides:
 - `VIDEOCHAT_KING_DB_PATH` (default local run: `demo/video-chat/backend-king-php/.local/video-chat.sqlite`; docker compose sets `/data/video-chat.sqlite`)
 - `VIDEOCHAT_KING_BACKEND_VERSION` (default `1.0.6-beta`)
 - `VIDEOCHAT_KING_ENV` (default `development`)
+- `VIDEOCHAT_KING_WORKERS` (default `1`, clamped `1..64`, fallback worker count)
+- `VIDEOCHAT_KING_HTTP_WORKERS` (default `VIDEOCHAT_KING_WORKERS`, clamped `1..64`)
+- `VIDEOCHAT_KING_WS_WORKERS` (default `VIDEOCHAT_KING_WORKERS`, clamped `1..64`)
 - `VIDEOCHAT_SESSION_TTL_SECONDS` (default `43200`, min `60`, max `2592000`)
 - `VIDEOCHAT_DEMO_ADMIN_EMAIL` (default `admin@intelligent-intern.com`)
 - `VIDEOCHAT_DEMO_ADMIN_PASSWORD` (default `admin123`)
@@ -238,7 +242,7 @@ Response includes:
 
 `GET /api/user/settings` + `PATCH /api/user/settings` contract:
 
-- managed fields: `display_name`, `avatar_path`, `time_format`, `theme`
+- managed fields: `display_name`, `avatar_path`, `time_format`, `date_format`, `theme`
 - unsupported fields fail closed with `field_not_updatable`
 - validation failures: `422 user_settings_validation_failed` with `error.details.fields`
 - missing authenticated user row: `404 user_not_found`
@@ -287,6 +291,12 @@ Response includes:
 - global invite resend is not triggered by edit calls
 - explicit invite resend request flags are rejected in update payload
 - success returns `invite_dispatch.global_resend_triggered = false` and `invite_dispatch.explicit_action_required = true`
+
+`DELETE /api/calls/{id}` delete contract:
+
+- authorization: call owner or admin
+- hard-delete semantics: removes the call record and cascades participant/access-link/invite-code bindings
+- success: `200` with `result.state = deleted`
 
 `POST /api/calls/{id}/cancel` cancel contract:
 

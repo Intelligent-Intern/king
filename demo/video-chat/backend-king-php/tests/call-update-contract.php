@@ -6,6 +6,7 @@ require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_directory.php';
+require_once __DIR__ . '/../domain/calls/call_access.php';
 
 function videochat_call_update_assert(bool $condition, string $message): void
 {
@@ -119,8 +120,21 @@ SQL
         'moderator update title mismatch'
     );
 
+    $personalLinkByUser = videochat_create_call_access_link_for_user($pdo, $callId, $adminUserId, 'admin', [
+        'link_kind' => 'personal',
+        'participant_user_id' => $userUserId,
+    ]);
+    videochat_call_update_assert((bool) ($personalLinkByUser['ok'] ?? false), 'setup personal access link by user should succeed');
+
+    $personalLinkByEmail = videochat_create_call_access_link_for_user($pdo, $callId, $adminUserId, 'admin', [
+        'link_kind' => 'personal',
+        'participant_email' => 'second-guest@example.com',
+    ]);
+    videochat_call_update_assert((bool) ($personalLinkByEmail['ok'] ?? false), 'setup personal access link by email should succeed');
+
     $ownerUpdate = videochat_update_call($pdo, $callId, $adminUserId, 'admin', [
         'title' => 'After Update',
+        'access_mode' => 'free_for_all',
         'starts_at' => '2026-06-10T11:00:00Z',
         'ends_at' => '2026-06-10T12:00:00Z',
         'internal_participant_user_ids' => [$moderatorUserId],
@@ -143,6 +157,10 @@ SQL
         'owner update ends_at mismatch'
     );
     videochat_call_update_assert(
+        (string) (($ownerUpdate['call'] ?? [])['access_mode'] ?? '') === 'free_for_all',
+        'owner update access_mode mismatch'
+    );
+    videochat_call_update_assert(
         (int) ((($ownerUpdate['call'] ?? [])['participants']['totals'] ?? [])['total'] ?? 0) === 3,
         'owner update participant total mismatch'
     );
@@ -163,13 +181,49 @@ SQL
         'owner update should require explicit invite action'
     );
 
-    $callRowQuery = $pdo->prepare('SELECT title, starts_at, ends_at FROM calls WHERE id = :id LIMIT 1');
+    $callRowQuery = $pdo->prepare('SELECT title, access_mode, starts_at, ends_at FROM calls WHERE id = :id LIMIT 1');
     $callRowQuery->execute([':id' => $callId]);
     $callRow = $callRowQuery->fetch();
     videochat_call_update_assert(is_array($callRow), 'updated call row should exist');
     videochat_call_update_assert((string) ($callRow['title'] ?? '') === 'After Update', 'updated call title persistence mismatch');
+    videochat_call_update_assert((string) ($callRow['access_mode'] ?? '') === 'free_for_all', 'updated call access_mode persistence mismatch');
     videochat_call_update_assert((string) ($callRow['starts_at'] ?? '') === '2026-06-10T11:00:00+00:00', 'updated call starts_at persistence mismatch');
     videochat_call_update_assert((string) ($callRow['ends_at'] ?? '') === '2026-06-10T12:00:00+00:00', 'updated call ends_at persistence mismatch');
+
+    $personalLinkCountQuery = $pdo->prepare(
+        <<<'SQL'
+SELECT COUNT(*)
+FROM call_access_links
+WHERE call_id = :call_id
+  AND (
+      participant_user_id IS NOT NULL
+      OR (
+          participant_email IS NOT NULL
+          AND trim(participant_email) <> ''
+      )
+  )
+SQL
+    );
+    $personalLinkCountQuery->execute([':call_id' => $callId]);
+    $personalLinkCount = (int) $personalLinkCountQuery->fetchColumn();
+    videochat_call_update_assert($personalLinkCount === 2, 'switching to free_for_all must keep existing personal access links');
+
+    $freeForAllLink = videochat_create_call_access_link_for_user($pdo, $callId, $adminUserId, 'admin', []);
+    videochat_call_update_assert((bool) ($freeForAllLink['ok'] ?? false), 'default access link for free_for_all should succeed');
+    videochat_call_update_assert(
+        videochat_call_access_link_kind(is_array($freeForAllLink['access_link'] ?? null) ? $freeForAllLink['access_link'] : null) === 'open',
+        'default access link for free_for_all should be open'
+    );
+
+    $freeForAllPersonalLink = videochat_create_call_access_link_for_user($pdo, $callId, $adminUserId, 'admin', [
+        'link_kind' => 'personal',
+        'participant_user_id' => $moderatorUserId,
+    ]);
+    videochat_call_update_assert($freeForAllPersonalLink['ok'] === false, 'personal link in free_for_all mode should fail');
+    videochat_call_update_assert(
+        (string) (($freeForAllPersonalLink['errors'] ?? [])['link_kind'] ?? '') === 'free_for_all_requires_open_link',
+        'personal link in free_for_all mode error mismatch'
+    );
 
     $participantRows = $pdo->prepare(
         <<<'SQL'

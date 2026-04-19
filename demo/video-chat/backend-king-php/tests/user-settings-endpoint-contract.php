@@ -173,6 +173,7 @@ SQL
             'method' => 'PATCH',
             'body' => json_encode([
                 'time_format' => '99h',
+                'date_format' => 'broken',
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ],
         $apiAuthContext,
@@ -194,6 +195,10 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['time_format'] ?? '') === 'must_be_24h_or_12h',
         'PATCH invalid-value field mismatch'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['date_format'] ?? '') === 'must_be_supported_date_format',
+        'PATCH invalid-value date_format field mismatch'
     );
 
     $patchUnknownField = videochat_handle_user_routes(
@@ -232,6 +237,7 @@ SQL
             'body' => json_encode([
                 'display_name' => '  Endpoint User Updated  ',
                 'time_format' => '12h',
+                'date_format' => 'mdy_slash',
                 'theme' => 'light',
                 'avatar_path' => ' /avatars/endpoint-user-updated.png ',
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -256,6 +262,10 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['time_format'] ?? '')) === '12h',
         'PATCH valid time_format mismatch'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['date_format'] ?? '')) === 'mdy_slash',
+        'PATCH valid date_format mismatch'
     );
     videochat_user_settings_endpoint_assert(
         (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['theme'] ?? '')) === 'light',
@@ -303,6 +313,10 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) ((($sessionPayload['user'] ?? [])['time_format'] ?? '')) === '12h',
         'session-check should reflect updated time_format'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) ((($sessionPayload['user'] ?? [])['date_format'] ?? '')) === 'mdy_slash',
+        'session-check should reflect updated date_format'
     );
     videochat_user_settings_endpoint_assert(
         (string) ((($sessionPayload['user'] ?? [])['theme'] ?? '')) === 'light',

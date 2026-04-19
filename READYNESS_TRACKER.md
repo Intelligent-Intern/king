@@ -8,7 +8,7 @@ Status note:
 - Unchecked boxes are still open, intentionally fenced out of the current v1 slice, or broader than the proof that exists in this repository today.
 - This file is the long-form closure tracker, not the active execution queue. `ISSUES.md` stays the narrow working backlog.
 - Open boxes are not supposed to be "closed" by redefining the product downward. If a stronger shared, remote, persistent, or otherwise meaningful v1 contract already belongs to King, the default action is to implement it correctly rather than quietly shrinking scope.
-- `ISSUES.md` normally carries the next ~`20` repo-local executable leaves when an explicit batch is active; explicit user-directed mock-parity batches may intentionally exceed this default.
+- `ISSUES.md` normally carries the next ~`20` repo-local executable leaves when an explicit batch is active; explicit user-directed UI-parity batches may intentionally exceed this default.
 - Recent orchestrator closure: worker-loss recovery, deterministic file-worker claim ordering, concurrent claim locking, sustained fairness under contention, real TCP host/port `remote_peer` execution with persisted success/failure snapshots, distributed observability depth, and controller/worker/remote-peer failover harnesses are now verified; the remaining open boxes below are the broader continuation and larger multi-host slices.
 - Recent userland orchestrator contract closure: the public docs and stub surface now explicitly separate durable tool definitions from executable userland handlers, treat closures/object graphs/resources/controller memory as non-durable execution state, pin the public execution contract to per-process handler registration by tool name across local, file-worker, and remote-peer boundaries, and now back the local, file-worker, and remote-peer slices with a real handler API, direct execution plus restart/resume proof, an explicit local/remote handler input-output contract, a durable `handler_boundary`, pre-claim/pre-resume worker readiness validation, and explicit remote fail-closed behavior when a peer lacks the required handler; the remaining open work is the broader failure/control/status slices below.
 - Recent handler-identity closure: the exact durable identity for future userland handler execution is now fixed to the tool-name string, with explicit per-process re-registration duties for local controllers, file workers, restarted replacements, and remote peers instead of vague "the system already knows the handler" folklore.
@@ -344,12 +344,12 @@ Status note:
 - [x] Validate service discovery under parallel updates
 - [x] Validate status updates under concurrent writes
 
-## Z. Video-Call Mock Parity Replatform (Imported from `videoplanning.md`)
+## Z. Video-Call UI Parity Replatform (Imported from `videoplanning.md`)
 
 Scope note:
 - This section is the long-form tracker for the King-PHP + Vue replatform path.
-- It carries only mock-relevant productization work.
-- 1000+ participant renderer escalation (DOM/Canvas/WebGL), breakout orchestration, and super-admin fleet licensing are intentionally not release blockers for this mock-parity slice.
+- It carries only UI-contract-relevant productization work.
+- 1000+ participant renderer escalation (DOM/Canvas/WebGL), breakout orchestration, and super-admin fleet licensing are intentionally not release blockers for this UI-parity slice.
 
 ### Z1. Contract & Clean Architecture
 
@@ -358,7 +358,7 @@ Scope note:
 - [ ] Split backend runtime code into focused modules (`auth`, `session`, `rbac`, `users`, `calls`, `invites`, `realtime`) with no monolithic mixed-responsibility handler.
 - [ ] Split frontend state into focused stores (`auth`, `calls`, `participants`, `chat`, `presence`, `settings`) with deterministic ownership boundaries.
 - [ ] Add contract-level schema tests for request/response/event DTOs and keep them versioned.
-- [ ] Establish a mock-parity acceptance matrix tied to executable checks instead of prose-only claims.
+- [ ] Establish a UI-parity acceptance matrix tied to executable checks instead of prose-only claims.
 
 ### Z2. Backend Auth, Session, RBAC
 
@@ -395,7 +395,7 @@ Scope note:
 - [ ] Implement reaction eventstream with server-side throttling and deterministic payload limits.
 - [ ] Prove reconnect/recovery semantics for presence/chat/signaling with runtime-level integration tests.
 
-### Z5. Frontend Mock Parity (Vue)
+### Z5. Frontend UI Parity (Vue)
 
 - [x] Bind frontend auth store to backend login/logout/session-check and remove local-only identity fallback.
 - [ ] Enforce route-level role guards so admin/user flows cannot drift into hybrid unauthorized views.
@@ -410,7 +410,7 @@ Scope note:
 - [ ] Implement avatar settings flow with drag/drop + crop + zoom and persisted backend profile update.
 - [ ] Implement branding/logo settings flow with equivalent crop quality and admin-only write boundary.
 - [ ] Apply theme/time-format settings globally across tables, calendar, modals, and workspace timestamps.
-- [ ] Close UI parity gaps against mock acceptance matrix and reject cosmetic drift as “good enough”.
+- [ ] Close UI parity gaps against the UI acceptance matrix and reject cosmetic drift as “good enough”.
 
 ### Z6. Verification, Hardening, Release Proof
 
@@ -421,7 +421,7 @@ Scope note:
 - [ ] Add deterministic seed fixtures for multi-user integration tests (admin, moderator, user, external invitee).
 - [ ] Add failure-path tests for network interruption and reconnect state machine transitions.
 - [ ] Add documentation closure proving active path is the new stack and legacy path is reference-only.
-- [ ] Gate release readiness on passing mock-parity matrix and runtime tests, not on narrowed feature claims.
+- [ ] Gate release readiness on passing UI-parity matrix and runtime tests, not on narrowed feature claims.
 - [x] Implement persistence for registration data
 - [x] Implement rehydration of registration data after restart
 - [x] Validate consistency after split-brain / partial-failure scenarios where publicly claimed

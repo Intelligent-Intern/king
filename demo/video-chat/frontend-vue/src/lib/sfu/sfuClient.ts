@@ -8,8 +8,8 @@
  */
 
 import {
-  resolveBackendWebSocketOriginCandidates,
-  setBackendWebSocketOrigin,
+  resolveBackendSfuOriginCandidates,
+  setBackendSfuOrigin,
 } from '../../support/backendOrigin'
 
 export interface SFUTrack {
@@ -110,7 +110,7 @@ export class SFUClient {
       }
       opened = true
       this.disconnectNotified = false
-      setBackendWebSocketOrigin(candidates[index] || '')
+      setBackendSfuOrigin(candidates[index] || '')
       this.send({ type: 'sfu/join', roomId, role: 'publisher' })
       if (this.cb.onConnected) {
         this.cb.onConnected()
@@ -160,12 +160,13 @@ export class SFUClient {
     }
 
     const query    = new URLSearchParams({
+      room: roomId,
       userId: session.userId,
       token:  session.token,
       name:   session.name,
     })
 
-    const candidates = resolveBackendWebSocketOriginCandidates()
+    const candidates = resolveBackendSfuOriginCandidates()
     this.connectWithCandidates(candidates, 0, query, roomId, generation)
   }
 

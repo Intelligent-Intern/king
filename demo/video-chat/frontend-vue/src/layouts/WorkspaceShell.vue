@@ -17,235 +17,167 @@
             </button>
           </div>
 
-          <div class="tabs tabs-left" role="tablist" aria-label="Call left sidebar tabs">
-            <button
-              class="tab"
-              :class="{ active: callLeftTab === 'settings' }"
-              type="button"
-              role="tab"
-              :aria-selected="callLeftTab === 'settings'"
-              @click="setCallLeftTab('settings')"
-            >
-              <img class="tab-icon" src="/assets/orgas/kingrt/icons/gear.png" alt="" />
-            </button>
-            <button
-              class="tab"
-              :class="{ active: callLeftTab === 'background' }"
-              type="button"
-              role="tab"
-              :aria-selected="callLeftTab === 'background'"
-              @click="setCallLeftTab('background')"
-            >
-              <img class="tab-icon" src="/assets/orgas/kingrt/icons/desktop.png" alt="" />
-            </button>
-          </div>
-
-          <section class="tab-panel panel-settings" :class="{ active: callLeftTab === 'settings' }">
-            <div class="call-left-settings">
-              <section class="call-left-settings-block" aria-label="Camera">
-                <div class="call-left-settings-title">Camera</div>
-                <div class="call-left-settings-field">
-                  <select
-                    id="call-left-camera-select"
-                    class="input call-left-select"
-                    aria-label="Camera"
-                    :value="callMediaPrefs.selectedCameraId"
-                    @change="setCallCameraDevice($event.target.value)"
-                  >
-                    <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
-                    <option
-                      v-for="camera in callMediaPrefs.cameras"
-                      :key="camera.id"
-                      :value="camera.id"
-                    >
-                      {{ camera.label }}
-                    </option>
-                  </select>
-                  <div class="call-left-settings-value">Active: {{ activeCameraLabel }}</div>
-                </div>
-              </section>
-
-              <section class="call-left-settings-block" aria-label="Mic">
-                <div class="call-left-settings-title">Mic</div>
-                <div class="call-left-settings-field">
-                  <select
-                    id="call-left-mic-select"
-                    class="input call-left-select"
-                    aria-label="Mic"
-                    :value="callMediaPrefs.selectedMicrophoneId"
-                    @change="setCallMicrophoneDevice($event.target.value)"
-                  >
-                    <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
-                    <option
-                      v-for="microphone in callMediaPrefs.microphones"
-                      :key="microphone.id"
-                      :value="microphone.id"
-                    >
-                      {{ microphone.label }}
-                    </option>
-                  </select>
-                  <div class="call-left-settings-value">Active: {{ activeMicrophoneLabel }}</div>
-                </div>
-                <div class="call-left-settings-field">
-                  <label for="call-left-mic-volume">Volume</label>
-                  <div class="call-left-volume-row">
-                    <input
-                      id="call-left-mic-volume"
-                      class="call-left-range"
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="1"
-                      :value="callMediaPrefs.microphoneVolume"
-                      @input="setCallMicrophoneVolume($event.target.value)"
-                    />
-                    <span class="call-left-volume-value">{{ callMediaPrefs.microphoneVolume }}%</span>
-                  </div>
-                  <div
-                    class="call-left-meter"
-                    role="meter"
-                    aria-label="Microphone level"
-                    aria-valuemin="0"
-                    aria-valuemax="100"
-                    :aria-valuenow="micLevelPercent"
-                  >
-                    <span class="call-left-meter-bar" :style="{ width: `${micLevelPercent}%` }"></span>
-                  </div>
-                </div>
-              </section>
-
-              <section class="call-left-settings-block" aria-label="Speaker">
-                <div class="call-left-settings-title">Speaker</div>
-                <div class="call-left-settings-field">
-                  <select
-                    id="call-left-speaker-select"
-                    class="input call-left-select"
-                    aria-label="Speaker"
-                    :value="callMediaPrefs.selectedSpeakerId"
-                    @change="setCallSpeakerDevice($event.target.value)"
-                  >
-                    <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
-                    <option
-                      v-for="speaker in callMediaPrefs.speakers"
-                      :key="speaker.id"
-                      :value="speaker.id"
-                    >
-                      {{ speaker.label }}
-                    </option>
-                  </select>
-                  <div class="call-left-settings-value">Active: {{ activeSpeakerLabel }}</div>
-                </div>
-                <div class="call-left-settings-field">
-                  <label for="call-left-speaker-volume">Volume</label>
-                  <div class="call-left-volume-row">
-                    <input
-                      id="call-left-speaker-volume"
-                      class="call-left-range"
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="1"
-                      :value="callMediaPrefs.speakerVolume"
-                      @input="setCallSpeakerVolume($event.target.value)"
-                    />
-                    <span class="call-left-volume-value">{{ callMediaPrefs.speakerVolume }}%</span>
-                  </div>
-                </div>
-                <div class="call-left-settings-field">
-                  <button class="btn full call-left-test-btn" type="button" @click="playSpeakerTestSound">
-                    Play test sound
-                  </button>
-                </div>
-              </section>
-
-              <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
-            </div>
-          </section>
-
-          <section class="tab-panel panel-background" :class="{ active: callLeftTab === 'background' }">
-            <div class="call-left-backgrounds">
-              <section class="call-left-background-block">
-                <div class="call-left-settings-title">Background</div>
-                <button
-                  class="btn full call-left-bg-btn"
-                  :class="{ active: isBackgroundPresetActive('off') }"
-                  type="button"
-                  @click="applyBackgroundPreset('off')"
+          <div class="call-left-settings">
+            <section class="call-left-settings-block" aria-label="Camera">
+              <div class="call-left-settings-title">Camera</div>
+              <div class="call-left-settings-field">
+                <AppSelect
+                  id="call-left-camera-select"
+                  aria-label="Camera"
+                  :model-value="callMediaPrefs.selectedCameraId"
+                  @update:model-value="setCallCameraDevice"
                 >
-                  No blur
+                  <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
+                  <option
+                    v-for="camera in callMediaPrefs.cameras"
+                    :key="camera.id"
+                    :value="camera.id"
+                  >
+                    {{ camera.label }}
+                  </option>
+                </AppSelect>
+              </div>
+            </section>
+
+            <section class="call-left-settings-block" aria-label="Mic">
+              <div class="call-left-settings-title">Mic</div>
+              <div class="call-left-settings-field">
+                <AppSelect
+                  id="call-left-mic-select"
+                  aria-label="Mic"
+                  :model-value="callMediaPrefs.selectedMicrophoneId"
+                  @update:model-value="setCallMicrophoneDevice"
+                >
+                  <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
+                  <option
+                    v-for="microphone in callMediaPrefs.microphones"
+                    :key="microphone.id"
+                    :value="microphone.id"
+                  >
+                    {{ microphone.label }}
+                  </option>
+                </AppSelect>
+              </div>
+              <div class="call-left-settings-field">
+                <label for="call-left-mic-volume">Volume</label>
+                <div class="call-left-volume-row">
+                  <input
+                    id="call-left-mic-volume"
+                    class="call-left-range"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    :value="callMediaPrefs.microphoneVolume"
+                    @input="setCallMicrophoneVolume($event.target.value)"
+                  />
+                  <span class="call-left-volume-value">{{ callMediaPrefs.microphoneVolume }}%</span>
+                </div>
+                <div
+                  class="call-left-meter"
+                  role="meter"
+                  aria-label="Microphone level"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  :aria-valuenow="micLevelPercent"
+                >
+                  <span class="call-left-meter-bar" :style="{ width: `${micLevelPercent}%` }"></span>
+                </div>
+              </div>
+            </section>
+
+            <section class="call-left-settings-block" aria-label="Speaker">
+              <div class="call-left-settings-title">Speaker</div>
+              <div class="call-left-settings-field">
+                <AppSelect
+                  id="call-left-speaker-select"
+                  aria-label="Speaker"
+                  :model-value="callMediaPrefs.selectedSpeakerId"
+                  @update:model-value="setCallSpeakerDevice"
+                >
+                  <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
+                  <option
+                    v-for="speaker in callMediaPrefs.speakers"
+                    :key="speaker.id"
+                    :value="speaker.id"
+                  >
+                    {{ speaker.label }}
+                  </option>
+                </AppSelect>
+              </div>
+              <div class="call-left-settings-field">
+                <label for="call-left-speaker-volume">Volume</label>
+                <div class="call-left-volume-row">
+                  <input
+                    id="call-left-speaker-volume"
+                    class="call-left-range"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    :value="callMediaPrefs.speakerVolume"
+                    @input="setCallSpeakerVolume($event.target.value)"
+                  />
+                  <span class="call-left-volume-value">{{ callMediaPrefs.speakerVolume }}%</span>
+                </div>
+              </div>
+              <div class="call-left-settings-field">
+                <button class="btn full call-left-test-btn" type="button" @click="playSpeakerTestSound">
+                  Play test sound
                 </button>
+              </div>
+            </section>
+
+            <section class="call-left-settings-block" aria-label="Background blur">
+              <div class="call-left-settings-title">Background blur</div>
+              <div class="call-left-blur-controls" role="group" aria-label="Background blur controls">
                 <button
-                  class="btn full call-left-bg-btn"
+                  class="call-left-blur-btn"
                   :class="{ active: isBackgroundPresetActive('light') }"
                   type="button"
+                  :aria-pressed="isBackgroundPresetActive('light')"
+                  aria-label="Blur"
+                  title="Blur"
                   @click="applyBackgroundPreset('light')"
                 >
-                  Slight blur
+                  <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/desktop.png" alt="" />
                 </button>
                 <button
-                  class="btn full call-left-bg-btn"
+                  class="call-left-blur-btn"
                   :class="{ active: isBackgroundPresetActive('strong') }"
                   type="button"
+                  :aria-pressed="isBackgroundPresetActive('strong')"
+                  aria-label="Strong blur"
+                  title="Strong blur"
                   @click="applyBackgroundPreset('strong')"
                 >
-                  Strong blur
+                  <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/desktop.png" alt="" />
+                  <span class="call-left-blur-strong-mark" aria-hidden="true">+</span>
                 </button>
-              </section>
+              </div>
+            </section>
 
-              <section class="call-left-background-block">
-                <div class="call-left-settings-title">Backdrop</div>
-                <label class="call-left-settings-field">
-                  <select
-                    id="call-left-backdrop-select"
-                    class="input call-left-select"
-                    aria-label="Background backdrop mode"
-                    :value="callMediaPrefs.backgroundBackdropMode"
-                    @change="setCallBackgroundBackdropMode($event.target.value)"
-                  >
-                    <option value="blur7">Blur light</option>
-                    <option value="blur9">Blur strong</option>
-                    <option value="green">Background image</option>
-                  </select>
-                </label>
-              </section>
+            <section
+              v-if="showInCallOwnerEditCard"
+              class="call-left-owner-edit-block"
+              aria-label="Call settings"
+            >
+              <div class="call-left-settings-title">Call settings</div>
+              <button
+                class="btn btn-cyan full call-left-owner-edit-btn"
+                type="button"
+                :disabled="callOwnerEditState.loadingContext || callOwnerEditState.submitting"
+                @click="openInCallEditModal"
+              >
+                {{ callOwnerEditState.loadingContext ? 'Loading…' : 'Edit call' }}
+              </button>
+              <p v-if="callOwnerEditState.contextError" class="call-left-settings-error">
+                {{ callOwnerEditState.contextError }}
+              </p>
+            </section>
 
-              <section class="call-left-background-block">
-                <div class="call-left-settings-title">Quality</div>
-                <label class="call-left-settings-field">
-                  <select
-                    id="call-left-background-quality-select"
-                    class="input call-left-select"
-                    aria-label="Background quality profile"
-                    :value="callMediaPrefs.backgroundQualityProfile"
-                    @change="setCallBackgroundQualityProfile($event.target.value)"
-                  >
-                    <option value="quality">Quality</option>
-                    <option value="balanced">Balanced</option>
-                    <option value="realtime">Realtime</option>
-                  </select>
-                </label>
-              </section>
-
-              <section class="call-left-background-block">
-                <div class="call-left-settings-title">Blur Strength</div>
-                <label class="call-left-settings-field" for="call-left-background-blur-strength">
-                  <div class="call-left-volume-row">
-                    <input
-                      id="call-left-background-blur-strength"
-                      class="call-left-range"
-                      type="range"
-                      min="4"
-                      max="28"
-                      step="1"
-                      :value="callMediaPrefs.backgroundBlurStrength"
-                      @input="setCallBackgroundBlurStrength($event.target.value)"
-                    />
-                    <span class="call-left-volume-value">{{ callMediaPrefs.backgroundBlurStrength }}</span>
-                  </div>
-                </label>
-              </section>
-            </div>
-          </section>
+            <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
+          </div>
         </div>
 
         <div v-else class="sidebar-content left">
@@ -294,7 +226,7 @@
       </aside>
 
       <section class="main" @click="handleMainClick">
-        <div v-if="isMobileViewport" class="mobile-brand-strip">
+        <div v-if="showMobileShellHeader" class="mobile-brand-strip">
           <img src="/assets/orgas/kingrt/king_logo-withslogan.svg" alt="KingRT" />
           <button class="mobile-menu-btn" type="button" aria-label="Toggle menu" @click.stop="handleLeftSidebarToggle">
             <span class="mobile-menu-btn-bars" aria-hidden="true"></span>
@@ -321,8 +253,8 @@
               </div>
               <div class="actions">
                 <template v-if="route.path === '/admin/overview'">
-                  <button class="btn" type="button" @click="openCallsRegistry">Open Calls</button>
-                  <button class="btn" type="button" @click="openGrafana">Open Grafana</button>
+                  <button class="btn btn-cyan" type="button" @click="openCallsRegistry">Open Calls</button>
+                  <button class="btn btn-cyan" type="button" @click="openGrafana">Open Grafana</button>
                 </template>
                 <button v-else class="btn" type="button" @click="openSettingsModal('about-me')">Settings</button>
               </div>
@@ -342,7 +274,7 @@
     <div class="settings-dialog">
       <header class="settings-header">
         <div class="settings-title-wrap">
-          <img src="/assets/orgas/kingrt/icon.svg" alt="" />
+          <img src="/assets/orgas/kingrt/logo.svg" alt="" />
           <h3>Settings</h3>
         </div>
         <button class="icon-mini-btn" type="button" aria-label="Close settings" @click="closeSettingsModal">
@@ -354,7 +286,7 @@
         <button
           v-for="tile in settingsTiles"
           :key="tile.id"
-          class="settings-tile"
+          class="settings-tile tab"
           :class="{ active: activeSettingsTile === tile.id }"
           type="button"
           :disabled="settingsState.loading"
@@ -365,13 +297,10 @@
       </div>
 
       <section v-if="activeSettingsTile === 'about-me'" class="settings-panel">
-        <h4>About Me</h4>
-        <p>Configure your profile avatar for the sidebar.</p>
-
         <div class="settings-row">
           <label class="settings-field">
             <span>Display name</span>
-            <input v-model.trim="settingsDraft.displayName" class="ii-input" type="text" autocomplete="name" />
+            <input v-model.trim="settingsDraft.displayName" class="input" type="text" autocomplete="name" />
           </label>
           <div class="settings-field">
             <span>Email</span>
@@ -409,56 +338,184 @@
         </div>
       </section>
 
-      <section v-else-if="activeSettingsTile === 'credentials'" class="settings-panel">
-        <h4>Credentials</h4>
-        <p>Password and OAuth provider settings are managed in backend auth settings.</p>
-      </section>
-
       <section v-else-if="activeSettingsTile === 'theme'" class="settings-panel">
-        <h4>Theme</h4>
-        <p>Choose visual mode for your workspace.</p>
+        <div class="settings-theme-layout">
+          <section class="settings-theme-palette">
+            <header class="settings-theme-palette-header">
+              <div class="settings-theme-palette-heading">
+                <img class="settings-theme-palette-icon" src="/assets/orgas/kingrt/icons/gear.png" alt="" />
+                <h4>Theme Colors</h4>
+              </div>
+              <button class="btn" type="button" :disabled="settingsState.saving || settingsState.loading" @click="resetThemeColorsToDefault">
+                Reset
+              </button>
+            </header>
 
+            <div class="settings-theme-palette-list">
+              <article v-for="field in themeColorFields" :key="field.key" class="settings-theme-color-row">
+                <div class="settings-theme-color-meta">
+                  <img class="settings-theme-color-meta-icon" src="/assets/orgas/kingrt/icons/gear.png" alt="" />
+                  <div class="settings-theme-color-copy">
+                    <span class="settings-theme-color-label">{{ field.label }}</span>
+                    <code class="settings-theme-color-key">{{ field.key }}</code>
+                  </div>
+                </div>
+                <div class="settings-theme-color-inputs">
+                  <input
+                    class="settings-theme-swatch"
+                    type="color"
+                    :value="settingsDraft.themeColors[field.key] || field.default"
+                    @input="updateThemeColor(field.key, $event?.target?.value)"
+                  />
+                  <input
+                    class="input settings-theme-hex"
+                    type="text"
+                    maxlength="7"
+                    :value="settingsDraft.themeColors[field.key] || field.default"
+                    @input="updateThemeColor(field.key, $event?.target?.value)"
+                  />
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="settings-theme-preview">
+            <header class="settings-theme-preview-header">
+              <img class="settings-theme-preview-header-icon" src="/assets/orgas/kingrt/icons/gear.png" alt="" />
+              <h4>Video Call Management</h4>
+            </header>
+
+            <div class="settings-theme-preview-viewport">
+              <div class="settings-theme-preview-scale">
+                <div class="settings-theme-preview-shell">
+                  <aside class="settings-theme-preview-left">
+                    <div class="settings-theme-preview-brand">
+                      <img src="/assets/orgas/kingrt/logo.svg" alt="" />
+                    </div>
+                    <div class="settings-theme-preview-left-menu" aria-label="Preview workspace navigation">
+                      <span class="settings-theme-preview-left-menu-item is-active">
+                        <span class="settings-theme-preview-left-menu-dot" aria-hidden="true"></span>
+                        <span>Video Calls</span>
+                      </span>
+                      <span class="settings-theme-preview-left-menu-item">
+                        <span class="settings-theme-preview-left-menu-dot" aria-hidden="true"></span>
+                        <span>User Management</span>
+                      </span>
+                      <span class="settings-theme-preview-left-menu-item">
+                        <span class="settings-theme-preview-left-menu-dot" aria-hidden="true"></span>
+                        <span>Overview</span>
+                      </span>
+                    </div>
+                    <div class="settings-theme-preview-left-profile">
+                      <span class="settings-theme-preview-left-avatar">PA</span>
+                      <div class="settings-theme-preview-left-profile-copy">
+                        <strong>Platform Admin</strong>
+                        <small>admin</small>
+                      </div>
+                    </div>
+                  </aside>
+
+                  <section class="settings-theme-preview-right">
+                    <header class="settings-theme-preview-right-head">
+                      <h5>Video Call Management</h5>
+                      <button class="settings-theme-preview-new-btn" type="button">New video call</button>
+                    </header>
+                    <div class="settings-theme-preview-top-tabs">
+                      <span class="settings-theme-preview-top-tab is-active">Calls</span>
+                      <span class="settings-theme-preview-top-tab">Calender</span>
+                    </div>
+                    <div class="settings-theme-preview-toolbar">
+                      <span class="settings-theme-preview-select">Type: all</span>
+                      <span class="settings-theme-preview-select">Status: all</span>
+                      <span class="settings-theme-preview-select">Range: 30 days</span>
+                      <button class="settings-theme-preview-search-btn" type="button">Search</button>
+                    </div>
+                    <div class="settings-theme-preview-table">
+                      <div class="settings-theme-preview-table-head">
+                        <span>Call</span>
+                        <span>Status</span>
+                        <span>Window</span>
+                        <span>Participants</span>
+                        <span>Owner</span>
+                      </div>
+                      <div class="settings-theme-preview-table-row">
+                        <span class="settings-theme-preview-cell-strong">Platform Standup</span>
+                        <span class="settings-theme-preview-tag ok">active</span>
+                        <span class="settings-theme-preview-cell">16 Apr 09:30 - 10:00</span>
+                        <span class="settings-theme-preview-cell">3 / 8</span>
+                        <span class="settings-theme-preview-cell">Platform Admin</span>
+                      </div>
+                      <div class="settings-theme-preview-table-row">
+                        <span class="settings-theme-preview-cell-strong">Quarterly Review</span>
+                        <span class="settings-theme-preview-tag warn">scheduled</span>
+                        <span class="settings-theme-preview-cell">17 Apr 14:00 - 14:45</span>
+                        <span class="settings-theme-preview-cell">6 / 12</span>
+                        <span class="settings-theme-preview-cell">Call Moderator</span>
+                      </div>
+                    </div>
+                    <div class="settings-theme-preview-pagination">
+                      <span>◀</span>
+                      <span>Page 1 / 4</span>
+                      <span>▶</span>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section v-else-if="activeSettingsTile === 'credentials-email'" class="settings-panel">
         <div class="settings-row">
           <label class="settings-field">
-            <span>Theme</span>
-            <input
-              v-model.trim="settingsDraft.theme"
-              class="ii-input"
-              type="text"
-              autocomplete="off"
-              placeholder="dark"
-            />
+            <span>Primary email</span>
+            <div class="settings-readonly-value">{{ sessionState.email || '—' }}</div>
+          </label>
+          <label class="settings-field">
+            <span>Password</span>
+            <input class="input" type="password" value="********" disabled autocomplete="off" />
           </label>
         </div>
       </section>
 
-      <section v-else-if="activeSettingsTile === 'general'" class="settings-panel">
-        <h4>{{ sessionState.role === 'admin' ? 'General' : 'Workspace' }}</h4>
-        <p>Branding and icon set management follow the same workflow as in the mock settings.</p>
+      <section v-else-if="activeSettingsTile === 'regional'" class="settings-panel">
+        <section class="settings-section">
+          <h4>Regional Time</h4>
+          <p>Select how date and time should be displayed across the workspace.</p>
+          <div class="settings-row">
+            <label class="settings-field">
+              <span>Time format</span>
+              <AppSelect v-model="settingsDraft.timeFormat">
+                <option value="24h">24h</option>
+                <option value="12h">12h</option>
+              </AppSelect>
+            </label>
+            <label class="settings-field">
+              <span>Date display</span>
+              <AppSelect v-model="settingsDraft.dateFormat">
+                <option v-for="option in dateFormatOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </AppSelect>
+            </label>
+          </div>
+        </section>
       </section>
 
-      <section v-else-if="activeSettingsTile === 'regional-time'" class="settings-panel">
-        <h4>Regional Time</h4>
-        <p>Select how date and time should be displayed across the workspace.</p>
-
-        <div class="settings-row">
-          <label class="settings-field">
-            <span>Time format</span>
-            <select v-model="settingsDraft.timeFormat" class="ii-input">
-              <option value="24h">24h</option>
-              <option value="12h">12h</option>
-            </select>
-          </label>
-        </div>
+      <section v-else-if="activeSettingsTile === 'notifications'" class="settings-panel">
+        <div class="settings-upload-status">Notifications settings coming soon.</div>
       </section>
 
-      <section v-else-if="activeSettingsTile === 'email-texts'" class="settings-panel">
-        <h4>Email Texts</h4>
-        <p>Email templates and transport profile are configured in backend mail settings.</p>
+      <section v-else-if="activeSettingsTile === 'apps'" class="settings-panel">
+        <div class="settings-upload-status">Apps settings coming soon.</div>
+      </section>
+
+      <section v-else class="settings-panel">
+        <div class="settings-upload-status">Select a settings tab.</div>
       </section>
 
       <div class="settings-actions">
-        <button class="btn" type="button" :disabled="settingsState.saving" @click="closeSettingsModal">Cancel</button>
         <button class="btn" type="button" :disabled="settingsState.saving || settingsState.loading" @click="saveSettings">
           {{ settingsState.saving ? 'Saving…' : 'Save settings' }}
         </button>
@@ -467,17 +524,208 @@
       <div class="settings-upload-status">{{ settingsState.message }}</div>
     </div>
   </div>
+
+  <div
+    class="call-owner-edit-modal"
+    :hidden="!callOwnerEditState.open"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Edit call from workspace"
+  >
+    <div class="call-owner-edit-backdrop" @click="closeInCallEditModal"></div>
+    <div class="call-owner-edit-dialog">
+      <header class="call-owner-edit-header">
+        <div class="call-owner-edit-title-wrap">
+          <img class="call-owner-edit-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
+          <h4>Edit video call</h4>
+        </div>
+        <button class="icon-mini-btn" type="button" aria-label="Close edit call modal" @click="closeInCallEditModal">
+          <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
+        </button>
+      </header>
+
+      <div class="call-owner-edit-body">
+        <section class="call-owner-edit-grid">
+          <label class="field">
+            <span>Title</span>
+            <input
+              v-model.trim="callOwnerEditState.title"
+              class="input"
+              type="text"
+              placeholder="Weekly Product Sync"
+            />
+          </label>
+          <label class="field">
+            <span>Access mode</span>
+            <AppSelect v-model="callOwnerEditState.accessMode" aria-label="Call access mode">
+              <option value="invite_only">Invite only</option>
+              <option value="free_for_all">Free for all</option>
+            </AppSelect>
+          </label>
+          <label class="field">
+            <span>Room ID</span>
+            <input v-model.trim="callOwnerEditState.roomId" class="input" type="text" placeholder="lobby" />
+          </label>
+          <label class="field">
+            <span>Starts at</span>
+            <input
+              v-model="callOwnerEditState.startsLocal"
+              class="input"
+              type="datetime-local"
+              aria-label="Call starts at"
+            />
+          </label>
+          <label class="field">
+            <span>Ends at</span>
+            <input
+              v-model="callOwnerEditState.endsLocal"
+              class="input"
+              type="datetime-local"
+              aria-label="Call ends at"
+            />
+          </label>
+        </section>
+
+        <section class="call-owner-edit-toggle">
+          <label class="call-owner-edit-checkbox">
+            <input v-model="callOwnerEditState.replaceParticipants" type="checkbox" />
+            <span>Edit participant list</span>
+          </label>
+        </section>
+
+        <section v-if="callOwnerEditState.replaceParticipants" class="call-owner-participants-grid">
+          <article v-if="canLoadCallOwnerInternalDirectory" class="call-owner-participants-panel">
+            <header class="call-owner-participants-head">
+              <h5>Registered users</h5>
+              <label class="call-owner-search" aria-label="Participant search">
+                <input
+                  v-model.trim="callOwnerParticipants.query"
+                  class="input"
+                  type="search"
+                  placeholder="Search users"
+                  @keydown.enter.prevent="applyCallOwnerParticipantSearch"
+                />
+                <button class="btn" type="button" :disabled="callOwnerParticipants.loading" @click="applyCallOwnerParticipantSearch">
+                  Search
+                </button>
+              </label>
+            </header>
+
+            <section v-if="callOwnerParticipants.error" class="call-owner-inline-error">
+              {{ callOwnerParticipants.error }}
+            </section>
+
+            <section class="call-owner-participants-list" :class="{ loading: callOwnerParticipants.loading }">
+              <label
+                v-for="user in callOwnerParticipants.rows"
+                :key="user.id"
+                class="call-owner-participant-row"
+              >
+                <input
+                  type="checkbox"
+                  :checked="isCallOwnerUserSelected(user.id)"
+                  @change="toggleCallOwnerUserSelection(user.id)"
+                />
+                <span class="call-owner-participant-main">{{ user.display_name || user.email }}</span>
+                <span class="call-owner-participant-meta">{{ user.email }} · {{ user.role }}</span>
+              </label>
+              <p v-if="!callOwnerParticipants.loading && callOwnerParticipants.rows.length === 0" class="call-owner-empty-inline">
+                No users in this page.
+              </p>
+            </section>
+
+            <div class="pagination">
+              <button
+                class="pager-btn pager-icon-btn"
+                type="button"
+                :disabled="!callOwnerParticipants.hasPrev || callOwnerParticipants.loading"
+                @click="goToCallOwnerParticipantPage(callOwnerParticipants.page - 1)"
+              >
+                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous" />
+              </button>
+              <div class="page-info">Page {{ callOwnerParticipants.page }} / {{ callOwnerParticipants.pageCount }}</div>
+              <button
+                class="pager-btn pager-icon-btn"
+                type="button"
+                :disabled="!callOwnerParticipants.hasNext || callOwnerParticipants.loading"
+                @click="goToCallOwnerParticipantPage(callOwnerParticipants.page + 1)"
+              >
+                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next" />
+              </button>
+            </div>
+          </article>
+
+          <article v-else class="call-owner-participants-panel">
+            <p class="call-owner-inline-hint">
+              Internal participants stay unchanged in this editor for non-admin owners.
+            </p>
+          </article>
+
+          <article class="call-owner-participants-panel">
+            <header class="call-owner-participants-head">
+              <h5>External participants</h5>
+              <button class="btn" type="button" @click="addCallOwnerExternalRow">Add row</button>
+            </header>
+
+            <section class="call-owner-external-list">
+              <div v-for="(row, index) in callOwnerExternalRows" :key="row.id" class="call-owner-external-row">
+                <input
+                  v-model.trim="row.display_name"
+                  class="input"
+                  type="text"
+                  placeholder="Display name"
+                  :aria-label="`External participant ${index + 1} display name`"
+                />
+                <input
+                  v-model.trim="row.email"
+                  class="input"
+                  type="email"
+                  placeholder="guest@example.com"
+                  :aria-label="`External participant ${index + 1} email`"
+                />
+                <button
+                  class="icon-mini-btn danger"
+                  type="button"
+                  title="Remove external participant"
+                  :aria-label="`Remove external participant row ${index + 1}`"
+                  @click="removeCallOwnerExternalRow(index)"
+                >
+                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
+                </button>
+              </div>
+            </section>
+          </article>
+        </section>
+
+        <section v-if="callOwnerEditState.error" class="call-owner-inline-error">
+          {{ callOwnerEditState.error }}
+        </section>
+      </div>
+
+      <footer class="call-owner-edit-footer">
+        <button class="btn" type="button" :disabled="callOwnerEditState.submitting" @click="closeInCallEditModal">
+          Close
+        </button>
+        <button class="btn" type="button" :disabled="callOwnerEditState.submitting" @click="submitInCallEditModal">
+          {{ callOwnerEditState.submitting ? 'Saving…' : 'Save changes' }}
+        </button>
+      </footer>
+    </div>
+  </div>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
+import AppSelect from '../components/AppSelect.vue';
 import {
   logoutSession,
   saveSessionSettings,
   sessionState,
   uploadSessionAvatar,
 } from '../domain/auth/session';
+import { DATE_FORMAT_OPTIONS, normalizeDateFormat, normalizeTimeFormat } from '../support/dateTimeFormat';
+import { currentBackendOrigin, fetchBackend } from '../support/backendFetch';
 import {
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
@@ -507,6 +755,105 @@ const placeholderAvatar = '/assets/orgas/kingrt/avatar-placeholder.svg';
 const LAPTOP_BREAKPOINT = 1440;
 const TABLET_BREAKPOINT = 1180;
 const MOBILE_BREAKPOINT = 760;
+const SETTINGS_LANGUAGE_STORAGE_KEY = 'ii_videocall_v1_workspace_language';
+const SETTINGS_THEME_COLORS_STORAGE_KEY = 'ii_videocall_v1_theme_colors';
+const SUPPORTED_SETTINGS_LANGUAGES = ['en', 'de', 'fr', 'es'];
+const themeColorFields = Object.freeze([
+  { key: '--bg-shell', label: 'Shell background', default: '#0b1324' },
+  { key: '--bg-pane', label: 'Pane background', default: '#182c4d' },
+  { key: '--brand-bg', label: 'Brand strip', default: '#0b1324' },
+  { key: '--bg-surface', label: 'Surface', default: '#003c93' },
+  { key: '--bg-surface-strong', label: 'Surface strong', default: '#0c1c33' },
+  { key: '--bg-input', label: 'Input background', default: '#d8dadd' },
+  { key: '--bg-action', label: 'Action', default: '#ffffff' },
+  { key: '--bg-action-hover', label: 'Action hover', default: '#5696ef' },
+  { key: '--bg-row', label: 'Row', default: '#2a569f' },
+  { key: '--bg-row-hover', label: 'Row hover', default: '#163260' },
+  { key: '--line', label: 'Line', default: '#09111e' },
+  { key: '--text-main', label: 'Text main', default: '#edf3ff' },
+  { key: '--text-muted', label: 'Text muted', default: '#8490a1' },
+  { key: '--ok', label: 'OK', default: '#177f22' },
+  { key: '--wait', label: 'Wait', default: '#8d9500' },
+  { key: '--danger', label: 'Danger', default: '#ff0000' },
+  { key: '--bg-sidebar', label: 'Sidebar', default: '#0b1324' },
+  { key: '--bg-main', label: 'Main', default: '#0b1324' },
+  { key: '--bg-tab', label: 'Tab', default: '#003c93' },
+  { key: '--bg-tab-hover', label: 'Tab hover', default: '#5696ef' },
+  { key: '--bg-tab-active', label: 'Tab active', default: '#2a569f' },
+  { key: '--bg-ui-chrome', label: 'UI chrome', default: '#182c4d' },
+  { key: '--bg-ui-chrome-active', label: 'UI chrome active', default: '#2a569f' },
+  { key: '--bg-icon', label: 'Icon background', default: '#ffffff' },
+  { key: '--bg-icon-active', label: 'Icon active', default: '#5696ef' },
+  { key: '--border-subtle', label: 'Border subtle', default: '#09111e' },
+  { key: '--text-primary', label: 'Text primary', default: '#edf3ff' },
+  { key: '--text-secondary', label: 'Text secondary', default: '#c6d4eb' },
+  { key: '--text-dim', label: 'Text dim', default: '#5e6d86' },
+  { key: '--warn', label: 'Warn', default: '#4d5011' },
+  { key: '--brand-cyan', label: 'Brand cyan', default: '#1482be' },
+  { key: '--brand-cyan-hover', label: 'Brand cyan hover', default: '#1a96d8' },
+  { key: '--brand-cyan-active', label: 'Brand cyan active', default: '#0f6ea8' },
+]);
+const themeColorDefaultMap = Object.freeze(themeColorFields.reduce((accumulator, field) => ({
+  ...accumulator,
+  [field.key]: field.default,
+}), {}));
+
+function normalizeHexColor(value, fallback = '#000000') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (/^#[a-f0-9]{6}$/.test(normalized)) return normalized;
+  if (/^[a-f0-9]{6}$/.test(normalized)) return `#${normalized}`;
+  if (/^#[a-f0-9]{3}$/.test(normalized)) {
+    return `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
+  }
+  if (/^[a-f0-9]{3}$/.test(normalized)) {
+    return `#${normalized[0]}${normalized[0]}${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}`;
+  }
+  return normalizeHexColor(fallback, '#000000');
+}
+
+function mergeThemeColorMap(source) {
+  const merged = {};
+  const payload = source && typeof source === 'object' ? source : {};
+  for (const field of themeColorFields) {
+    merged[field.key] = normalizeHexColor(payload[field.key], themeColorDefaultMap[field.key]);
+  }
+  return merged;
+}
+
+function applyThemeColorMap(source) {
+  if (typeof document === 'undefined') return;
+  const merged = mergeThemeColorMap(source);
+  for (const field of themeColorFields) {
+    document.documentElement.style.setProperty(field.key, merged[field.key]);
+  }
+}
+
+function readStoredThemeColorMap() {
+  if (typeof localStorage === 'undefined') return mergeThemeColorMap(null);
+  const raw = localStorage.getItem(SETTINGS_THEME_COLORS_STORAGE_KEY);
+  if (!raw) return mergeThemeColorMap(null);
+  try {
+    const parsed = JSON.parse(raw);
+    return mergeThemeColorMap(parsed);
+  } catch {
+    return mergeThemeColorMap(null);
+  }
+}
+
+function storeThemeColorMap(source) {
+  if (typeof localStorage === 'undefined') return;
+  const merged = mergeThemeColorMap(source);
+  localStorage.setItem(SETTINGS_THEME_COLORS_STORAGE_KEY, JSON.stringify(merged));
+}
+
+function patchThemeColorMap(target, source) {
+  const merged = mergeThemeColorMap(source);
+  for (const field of themeColorFields) {
+    target[field.key] = merged[field.key];
+  }
+}
+
+const persistedThemeColors = reactive(readStoredThemeColorMap());
 
 const navItems = computed(() => {
   const role = sessionState.role;
@@ -534,9 +881,6 @@ const pageTitle = computed(() => {
 const isCallWorkspace = computed(() => route.path.startsWith('/workspace/call'));
 
 const pageSubtitle = computed(() => {
-  if (route.path === '/admin/overview') {
-    return 'Monitor active rooms, cluster health and planned call capacity.';
-  }
   return '';
 });
 const showWorkspaceHeader = computed(() => (
@@ -549,6 +893,7 @@ const isMobileViewport = computed(() => viewportMode.value === 'mobile');
 const isLaptopViewport = computed(() => viewportMode.value === 'laptop');
 const isDesktopViewport = computed(() => viewportMode.value === 'desktop');
 const isDesktopLikeViewport = computed(() => isDesktopViewport.value || isLaptopViewport.value);
+const showMobileShellHeader = computed(() => isMobileViewport.value && !isCallWorkspace.value);
 
 const profileAvatarSrc = computed(() => sessionState.avatarPath || placeholderAvatar);
 const sidebarExpanded = computed(() => {
@@ -576,23 +921,7 @@ const shellClasses = computed(() => ({
 const leftSidebarClasses = computed(() => ({
   collapsed: (isDesktopLikeViewport.value && leftSidebarCollapsed.value) || (isMobileViewport.value && !isMobileSidebarOpen.value),
 }));
-const callLeftTab = ref('settings');
 const micLevelPercent = ref(0);
-const activeCameraLabel = computed(() => resolveSelectedDeviceLabel(
-  callMediaPrefs.cameras,
-  callMediaPrefs.selectedCameraId,
-  'No camera detected'
-));
-const activeMicrophoneLabel = computed(() => resolveSelectedDeviceLabel(
-  callMediaPrefs.microphones,
-  callMediaPrefs.selectedMicrophoneId,
-  'No microphone detected'
-));
-const activeSpeakerLabel = computed(() => resolveSelectedDeviceLabel(
-  callMediaPrefs.speakers,
-  callMediaPrefs.selectedSpeakerId,
-  'No speaker detected'
-));
 let micLevelStream = null;
 let micLevelAudioContext = null;
 let micLevelSource = null;
@@ -605,7 +934,10 @@ const settingsDraft = reactive({
   displayName: '',
   theme: 'dark',
   timeFormat: '24h',
+  dateFormat: 'dmy_dot',
+  language: 'en',
   avatarDataUrl: '',
+  themeColors: mergeThemeColorMap(persistedThemeColors),
 });
 
 const settingsState = reactive({
@@ -619,14 +951,187 @@ const settingsState = reactive({
 const activeSettingsTile = ref('about-me');
 const settingsTiles = computed(() => ([
   { id: 'about-me', label: 'About Me' },
-  { id: 'credentials', label: 'Credentials' },
+  { id: 'credentials-email', label: 'Credentials + Email' },
+  { id: 'regional', label: 'Regional' },
   { id: 'theme', label: 'Theme' },
-  { id: 'general', label: sessionState.role === 'admin' ? 'General' : 'Workspace' },
-  { id: 'regional-time', label: 'Regional Time' },
-  { id: 'email-texts', label: 'Email Texts' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'apps', label: 'Apps' },
 ]));
+const dateFormatOptions = DATE_FORMAT_OPTIONS;
 
 const settingsAvatarPreviewSrc = computed(() => settingsDraft.avatarDataUrl || profileAvatarSrc.value);
+
+function normalizeSettingsLanguage(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return SUPPORTED_SETTINGS_LANGUAGES.includes(normalized) ? normalized : 'en';
+}
+
+function readStoredSettingsLanguage() {
+  if (typeof localStorage === 'undefined') return 'en';
+  return normalizeSettingsLanguage(localStorage.getItem(SETTINGS_LANGUAGE_STORAGE_KEY));
+}
+
+function storeSettingsLanguage(language) {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(SETTINGS_LANGUAGE_STORAGE_KEY, normalizeSettingsLanguage(language));
+}
+
+function applySettingsLanguage(language) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.lang = normalizeSettingsLanguage(language);
+}
+
+function updateThemeColor(key, value) {
+  const normalizedKey = String(key || '').trim();
+  if (normalizedKey === '' || !(normalizedKey in themeColorDefaultMap)) return;
+  const fallback = settingsDraft.themeColors[normalizedKey] || themeColorDefaultMap[normalizedKey];
+  const next = normalizeHexColor(value, fallback);
+  settingsDraft.themeColors[normalizedKey] = next;
+  applyThemeColorMap(settingsDraft.themeColors);
+}
+
+function resetThemeColorsToDefault() {
+  patchThemeColorMap(settingsDraft.themeColors, themeColorDefaultMap);
+  applyThemeColorMap(settingsDraft.themeColors);
+}
+
+function normalizeRole(value) {
+  const role = String(value || '').trim().toLowerCase();
+  if (role === 'admin') return 'admin';
+  return 'user';
+}
+
+function normalizeCallAccessMode(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'free_for_all' ? 'free_for_all' : 'invite_only';
+}
+
+function requestHeaders(withBody = false) {
+  const headers = { accept: 'application/json' };
+  if (withBody) headers['content-type'] = 'application/json';
+
+  const token = String(sessionState.sessionToken || '').trim();
+  if (token !== '') {
+    headers.authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+function extractErrorMessage(payload, fallback) {
+  if (payload && typeof payload === 'object') {
+    const message = payload?.error?.message;
+    if (typeof message === 'string' && message.trim() !== '') {
+      return message.trim();
+    }
+  }
+  return fallback;
+}
+
+function buildApiRequestError(payload, fallbackMessage, responseStatus = 0) {
+  const error = new Error(extractErrorMessage(payload, fallbackMessage));
+  error.responseStatus = Number(responseStatus) || 0;
+  error.responseCode = String(payload?.error?.code || '').trim().toLowerCase();
+  return error;
+}
+
+async function apiRequest(path, { method = 'GET', query = null, body = null } = {}) {
+  let response = null;
+  try {
+    const result = await fetchBackend(path, {
+      method,
+      query,
+      headers: requestHeaders(body !== null),
+      body: body === null ? undefined : JSON.stringify(body),
+    });
+    response = result.response;
+  } catch (error) {
+    const message = error instanceof Error ? error.message.trim() : '';
+    if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
+      throw new Error(`Could not reach backend (${currentBackendOrigin()}).`);
+    }
+    throw new Error(message);
+  }
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    throw buildApiRequestError(payload, `Request failed (${response.status}).`, response.status);
+  }
+
+  if (!payload || payload.status !== 'ok') {
+    throw new Error('Backend returned an invalid payload.');
+  }
+
+  return payload;
+}
+
+function isUuidLike(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(normalized);
+}
+
+function isoToLocalInput(isoValue) {
+  if (typeof isoValue !== 'string' || isoValue.trim() === '') return '';
+  const date = new Date(isoValue);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  const hours = `${date.getHours()}`.padStart(2, '0');
+  const minutes = `${date.getMinutes()}`.padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function localInputToIso(localValue) {
+  const text = String(localValue || '').trim();
+  if (text === '') return '';
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString();
+}
+
+const callOwnerEditState = reactive({
+  visible: false,
+  loadingContext: false,
+  contextError: '',
+  open: false,
+  submitting: false,
+  error: '',
+  callId: '',
+  title: '',
+  accessMode: 'invite_only',
+  roomId: 'lobby',
+  startsLocal: '',
+  endsLocal: '',
+  replaceParticipants: false,
+});
+
+const callOwnerParticipants = reactive({
+  loading: false,
+  error: '',
+  query: '',
+  page: 1,
+  pageSize: 10,
+  pageCount: 1,
+  hasPrev: false,
+  hasNext: false,
+  rows: [],
+});
+
+const callOwnerSelectedUserIds = ref([]);
+const callOwnerExistingInternalUserIds = ref([]);
+const callOwnerExternalRows = ref([]);
+let callOwnerExternalRowId = 0;
+let callOwnerContextSeq = 0;
+
+const showInCallOwnerEditCard = computed(() => isCallWorkspace.value && callOwnerEditState.visible);
+const canLoadCallOwnerInternalDirectory = computed(() => normalizeRole(sessionState.role) === 'admin');
 
 function isNavItemActive(item) {
   if (item.to.startsWith('/workspace/call')) {
@@ -727,10 +1232,6 @@ function handleNavItemClick() {
   }
 }
 
-function setCallLeftTab(tabId) {
-  callLeftTab.value = tabId === 'background' ? 'background' : 'settings';
-}
-
 function isBackgroundPresetActive(preset) {
   const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
   const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
@@ -749,7 +1250,13 @@ function isBackgroundPresetActive(preset) {
 }
 
 function applyBackgroundPreset(preset) {
-  if (preset === 'off') {
+  if (preset !== 'light' && preset !== 'strong') {
+    setCallBackgroundFilterMode('off');
+    setCallBackgroundApplyOutgoing(false);
+    return;
+  }
+
+  if (isBackgroundPresetActive(preset)) {
     setCallBackgroundFilterMode('off');
     setCallBackgroundApplyOutgoing(false);
     return;
@@ -761,13 +1268,425 @@ function applyBackgroundPreset(preset) {
   if (preset === 'strong') {
     setCallBackgroundBackdropMode('blur9');
     setCallBackgroundQualityProfile('quality');
-    setCallBackgroundBlurStrength(18);
+    setCallBackgroundBlurStrength(4);
     return;
   }
 
   setCallBackgroundBackdropMode('blur7');
   setCallBackgroundQualityProfile('balanced');
-  setCallBackgroundBlurStrength(12);
+  setCallBackgroundBlurStrength(2);
+}
+
+function extractCallFromPayload(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  if (payload.call && typeof payload.call === 'object') {
+    return payload.call;
+  }
+
+  const result = payload.result;
+  if (result && typeof result === 'object' && result.call && typeof result.call === 'object') {
+    return result.call;
+  }
+
+  return null;
+}
+
+async function fetchCallById(callId) {
+  const normalizedCallId = String(callId || '').trim();
+  if (normalizedCallId === '') {
+    throw new Error('Missing call id.');
+  }
+  const payload = await apiRequest(`/api/calls/${encodeURIComponent(normalizedCallId)}`);
+  const call = extractCallFromPayload(payload);
+  if (!call || typeof call !== 'object') {
+    throw new Error('Call payload is invalid.');
+  }
+  return call;
+}
+
+async function resolveEditableCallFromRouteRef(callRef) {
+  const normalized = String(callRef || '').trim();
+  if (normalized === '') {
+    throw new Error('Missing call reference.');
+  }
+
+  if (isUuidLike(normalized)) {
+    try {
+      return await fetchCallById(normalized);
+    } catch (directError) {
+      const directStatus = Number(directError?.responseStatus || 0);
+      if (directStatus !== 404) {
+        throw directError;
+      }
+
+      const accessPayload = await apiRequest(`/api/call-access/${encodeURIComponent(normalized)}`);
+      const accessCall = extractCallFromPayload(accessPayload);
+      if (accessCall && typeof accessCall === 'object') {
+        return accessCall;
+      }
+      throw new Error('Call payload is invalid.');
+    }
+  }
+
+  return fetchCallById(normalized);
+}
+
+function nextCallOwnerExternalRow(seed = null) {
+  callOwnerExternalRowId += 1;
+  const source = seed && typeof seed === 'object' ? seed : {};
+  return {
+    id: callOwnerExternalRowId,
+    display_name: String(source.display_name || '').trim(),
+    email: String(source.email || '').trim().toLowerCase(),
+  };
+}
+
+function resetCallOwnerParticipantsState() {
+  callOwnerParticipants.loading = false;
+  callOwnerParticipants.error = '';
+  callOwnerParticipants.query = '';
+  callOwnerParticipants.page = 1;
+  callOwnerParticipants.pageCount = 1;
+  callOwnerParticipants.hasPrev = false;
+  callOwnerParticipants.hasNext = false;
+  callOwnerParticipants.rows = [];
+  callOwnerSelectedUserIds.value = [];
+  callOwnerExistingInternalUserIds.value = [];
+  callOwnerExternalRows.value = [];
+}
+
+function hydrateCallOwnerDraftFromCall(call) {
+  const normalizedCall = call && typeof call === 'object' ? call : {};
+
+  callOwnerEditState.callId = String(normalizedCall.id || '').trim();
+  callOwnerEditState.title = String(normalizedCall.title || '').trim();
+  callOwnerEditState.roomId = String(normalizedCall.room_id || 'lobby').trim() || 'lobby';
+  callOwnerEditState.accessMode = normalizeCallAccessMode(normalizedCall.access_mode);
+  callOwnerEditState.startsLocal = isoToLocalInput(String(normalizedCall.starts_at || ''));
+  callOwnerEditState.endsLocal = isoToLocalInput(String(normalizedCall.ends_at || ''));
+  callOwnerEditState.error = '';
+  callOwnerEditState.replaceParticipants = false;
+
+  const ownerUserId = Number(normalizedCall?.owner?.user_id || 0);
+  const internalRows = Array.isArray(normalizedCall?.participants?.internal)
+    ? normalizedCall.participants.internal
+    : [];
+  const externalRows = Array.isArray(normalizedCall?.participants?.external)
+    ? normalizedCall.participants.external
+    : [];
+
+  const nextInternalIds = [];
+  const seenInternalIds = new Set();
+  for (const row of internalRows) {
+    const userId = Number(row?.user_id || 0);
+    if (!Number.isInteger(userId) || userId <= 0 || userId === ownerUserId || seenInternalIds.has(userId)) {
+      continue;
+    }
+    seenInternalIds.add(userId);
+    nextInternalIds.push(userId);
+  }
+
+  const nextExternalRows = [];
+  for (const row of externalRows) {
+    const email = String(row?.email || '').trim().toLowerCase();
+    const displayName = String(row?.display_name || '').trim();
+    if (email === '' && displayName === '') continue;
+    nextExternalRows.push(nextCallOwnerExternalRow({
+      email,
+      display_name: displayName,
+    }));
+  }
+
+  callOwnerExistingInternalUserIds.value = nextInternalIds;
+  callOwnerSelectedUserIds.value = nextInternalIds.slice();
+  callOwnerExternalRows.value = nextExternalRows.length > 0 ? nextExternalRows : [nextCallOwnerExternalRow()];
+}
+
+async function refreshCallOwnerContext() {
+  const sequence = callOwnerContextSeq + 1;
+  callOwnerContextSeq = sequence;
+
+  if (!isCallWorkspace.value) {
+    callOwnerEditState.visible = false;
+    callOwnerEditState.loadingContext = false;
+    callOwnerEditState.contextError = '';
+    callOwnerEditState.callId = '';
+    closeInCallEditModal();
+    resetCallOwnerParticipantsState();
+    return;
+  }
+
+  const callRef = String(route.params.callRef || '').trim();
+  if (callRef === '') {
+    callOwnerEditState.visible = false;
+    callOwnerEditState.loadingContext = false;
+    callOwnerEditState.contextError = '';
+    callOwnerEditState.callId = '';
+    return;
+  }
+
+  callOwnerEditState.loadingContext = true;
+  callOwnerEditState.contextError = '';
+  try {
+    const call = await resolveEditableCallFromRouteRef(callRef);
+    if (sequence !== callOwnerContextSeq) return;
+
+    const currentUserId = Number(sessionState.userId || 0);
+    const ownerUserId = Number(call?.owner?.user_id || 0);
+    const isOwner = Number.isInteger(currentUserId) && currentUserId > 0 && currentUserId === ownerUserId;
+    callOwnerEditState.visible = isOwner;
+
+    if (isOwner) {
+      hydrateCallOwnerDraftFromCall(call);
+    } else {
+      callOwnerEditState.callId = '';
+      closeInCallEditModal();
+      resetCallOwnerParticipantsState();
+    }
+  } catch (error) {
+    if (sequence !== callOwnerContextSeq) return;
+    callOwnerEditState.visible = false;
+    callOwnerEditState.callId = '';
+    closeInCallEditModal();
+    resetCallOwnerParticipantsState();
+    const status = Number(error?.responseStatus || 0);
+    if (status !== 404 && status !== 403 && status !== 410) {
+      callOwnerEditState.contextError = error instanceof Error ? error.message : 'Could not load call settings.';
+    } else {
+      callOwnerEditState.contextError = '';
+    }
+  } finally {
+    if (sequence === callOwnerContextSeq) {
+      callOwnerEditState.loadingContext = false;
+    }
+  }
+}
+
+function isCallOwnerUserSelected(userId) {
+  const id = Number(userId);
+  return callOwnerSelectedUserIds.value.includes(id);
+}
+
+function toggleCallOwnerUserSelection(userId) {
+  const id = Number(userId);
+  const ownUserId = Number(sessionState.userId || 0);
+  if (!Number.isInteger(id) || id <= 0 || id === ownUserId) return;
+
+  const next = callOwnerSelectedUserIds.value.slice();
+  const index = next.indexOf(id);
+  if (index >= 0) {
+    next.splice(index, 1);
+  } else {
+    next.push(id);
+  }
+  callOwnerSelectedUserIds.value = next;
+}
+
+async function loadCallOwnerParticipantsDirectory() {
+  if (!callOwnerEditState.open || !callOwnerEditState.replaceParticipants || !canLoadCallOwnerInternalDirectory.value) {
+    return;
+  }
+
+  callOwnerParticipants.loading = true;
+  callOwnerParticipants.error = '';
+  try {
+    const payload = await apiRequest('/api/admin/users', {
+      query: {
+        query: callOwnerParticipants.query,
+        page: callOwnerParticipants.page,
+        page_size: callOwnerParticipants.pageSize,
+      },
+    });
+    const ownUserId = Number(sessionState.userId || 0);
+    const rows = Array.isArray(payload?.users) ? payload.users : [];
+    callOwnerParticipants.rows = rows.filter((row) => {
+      const rowId = Number(row?.id || 0);
+      return !Number.isInteger(rowId) || rowId !== ownUserId;
+    });
+    const pagination = payload?.pagination || {};
+    callOwnerParticipants.pageCount = Number.isInteger(pagination.page_count) && pagination.page_count > 0
+      ? pagination.page_count
+      : 1;
+    callOwnerParticipants.hasPrev = Boolean(pagination.has_prev);
+    callOwnerParticipants.hasNext = Boolean(pagination.has_next);
+  } catch (error) {
+    callOwnerParticipants.rows = [];
+    callOwnerParticipants.pageCount = 1;
+    callOwnerParticipants.hasPrev = false;
+    callOwnerParticipants.hasNext = false;
+    callOwnerParticipants.error = error instanceof Error ? error.message : 'Could not load users.';
+  } finally {
+    callOwnerParticipants.loading = false;
+  }
+}
+
+async function applyCallOwnerParticipantSearch() {
+  callOwnerParticipants.page = 1;
+  await loadCallOwnerParticipantsDirectory();
+}
+
+async function goToCallOwnerParticipantPage(nextPage) {
+  const normalizedPage = Number(nextPage);
+  if (!Number.isInteger(normalizedPage) || normalizedPage < 1 || normalizedPage === callOwnerParticipants.page) {
+    return;
+  }
+
+  callOwnerParticipants.page = normalizedPage;
+  await loadCallOwnerParticipantsDirectory();
+}
+
+function addCallOwnerExternalRow() {
+  callOwnerExternalRows.value = [...callOwnerExternalRows.value, nextCallOwnerExternalRow()];
+}
+
+function removeCallOwnerExternalRow(index) {
+  if (!Number.isInteger(index) || index < 0 || index >= callOwnerExternalRows.value.length) return;
+  const next = callOwnerExternalRows.value.slice();
+  next.splice(index, 1);
+  callOwnerExternalRows.value = next.length > 0 ? next : [nextCallOwnerExternalRow()];
+}
+
+function normalizeCallOwnerExternalRows() {
+  const rows = [];
+
+  for (let index = 0; index < callOwnerExternalRows.value.length; index += 1) {
+    const row = callOwnerExternalRows.value[index];
+    const displayName = String(row?.display_name || '').trim();
+    const email = String(row?.email || '').trim().toLowerCase();
+
+    if (displayName === '' && email === '') continue;
+
+    if (displayName === '' || email === '') {
+      return {
+        ok: false,
+        error: `External participant row ${index + 1} requires both display name and email.`,
+        rows: [],
+      };
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return {
+        ok: false,
+        error: `External participant row ${index + 1} has an invalid email.`,
+        rows: [],
+      };
+    }
+
+    rows.push({
+      display_name: displayName,
+      email,
+    });
+  }
+
+  return {
+    ok: true,
+    error: '',
+    rows,
+  };
+}
+
+function normalizedCallOwnerInternalParticipantUserIds() {
+  const ownUserId = Number(sessionState.userId || 0);
+  const source = canLoadCallOwnerInternalDirectory.value
+    ? callOwnerSelectedUserIds.value
+    : callOwnerExistingInternalUserIds.value;
+  const seen = new Set();
+  const result = [];
+  for (const rawId of source) {
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id <= 0 || id === ownUserId || seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+  }
+  return result;
+}
+
+async function openInCallEditModal() {
+  callOwnerEditState.error = '';
+  if (callOwnerEditState.loadingContext) return;
+
+  if (!callOwnerEditState.visible || String(callOwnerEditState.callId || '').trim() === '') {
+    await refreshCallOwnerContext();
+  }
+  if (!callOwnerEditState.visible || String(callOwnerEditState.callId || '').trim() === '') {
+    return;
+  }
+
+  callOwnerEditState.open = true;
+  callOwnerEditState.error = '';
+  callOwnerEditState.replaceParticipants = false;
+  if (callOwnerExternalRows.value.length === 0) {
+    callOwnerExternalRows.value = [nextCallOwnerExternalRow()];
+  }
+}
+
+function closeInCallEditModal() {
+  callOwnerEditState.open = false;
+  callOwnerEditState.submitting = false;
+  callOwnerEditState.error = '';
+  callOwnerEditState.replaceParticipants = false;
+  callOwnerParticipants.error = '';
+}
+
+async function submitInCallEditModal() {
+  callOwnerEditState.error = '';
+  const callId = String(callOwnerEditState.callId || '').trim();
+  if (callId === '') {
+    callOwnerEditState.error = 'Missing call id.';
+    return;
+  }
+
+  const title = String(callOwnerEditState.title || '').trim();
+  if (title === '') {
+    callOwnerEditState.error = 'Title is required.';
+    return;
+  }
+
+  const startsAt = localInputToIso(callOwnerEditState.startsLocal);
+  const endsAt = localInputToIso(callOwnerEditState.endsLocal);
+  if (startsAt === '' || endsAt === '') {
+    callOwnerEditState.error = 'Start and end timestamps are required.';
+    return;
+  }
+  if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
+    callOwnerEditState.error = 'End timestamp must be after start timestamp.';
+    return;
+  }
+
+  const payload = {
+    room_id: String(callOwnerEditState.roomId || '').trim() || 'lobby',
+    title,
+    access_mode: normalizeCallAccessMode(callOwnerEditState.accessMode),
+    starts_at: startsAt,
+    ends_at: endsAt,
+  };
+
+  if (callOwnerEditState.replaceParticipants) {
+    const normalizedExternal = normalizeCallOwnerExternalRows();
+    if (!normalizedExternal.ok) {
+      callOwnerEditState.error = normalizedExternal.error;
+      return;
+    }
+    payload.internal_participant_user_ids = normalizedCallOwnerInternalParticipantUserIds();
+    payload.external_participants = normalizedExternal.rows;
+  }
+
+  callOwnerEditState.submitting = true;
+  try {
+    const response = await apiRequest(`/api/calls/${encodeURIComponent(callId)}`, {
+      method: 'PATCH',
+      body: payload,
+    });
+    const updatedCall = extractCallFromPayload(response);
+    if (updatedCall && typeof updatedCall === 'object') {
+      hydrateCallOwnerDraftFromCall(updatedCall);
+    }
+    closeInCallEditModal();
+    await refreshCallOwnerContext();
+  } catch (error) {
+    callOwnerEditState.error = error instanceof Error ? error.message : 'Could not update call.';
+  } finally {
+    callOwnerEditState.submitting = false;
+  }
 }
 
 function stopMicLevelMonitor() {
@@ -845,7 +1764,7 @@ function sampleMicLevel(token) {
 
 async function startMicLevelMonitor() {
   stopMicLevelMonitor();
-  if (!isCallWorkspace.value || callLeftTab.value !== 'settings') return;
+  if (!isCallWorkspace.value) return;
   if (
     typeof window === 'undefined'
     || typeof navigator === 'undefined'
@@ -943,20 +1862,11 @@ async function playSpeakerTestSound() {
   }
 }
 
-function resolveSelectedDeviceLabel(devices, selectedId, emptyLabel) {
-  if (!Array.isArray(devices) || devices.length === 0) return emptyLabel;
-  const normalizedId = String(selectedId || '').trim();
-  const selected = devices.find((device) => String(device?.id || '') === normalizedId);
-  const fallback = devices[0];
-  const candidate = selected || fallback;
-  const label = String(candidate?.label || '').trim();
-  return label === '' ? 'Unknown' : label;
-}
-
 provide('workspaceSidebarState', {
   leftSidebarCollapsed,
   isTabletViewport,
   isMobileViewport,
+  isTabletSidebarOpen,
   showLeftSidebar,
 });
 
@@ -984,9 +1894,9 @@ watch(isCallWorkspace, (nextValue) => {
 }, { immediate: true });
 
 watch(
-  () => [isCallWorkspace.value, callLeftTab.value, callMediaPrefs.selectedMicrophoneId],
-  ([inCallWorkspace, activeTab]) => {
-    if (inCallWorkspace && activeTab === 'settings') {
+  () => [isCallWorkspace.value, callMediaPrefs.selectedMicrophoneId],
+  ([inCallWorkspace]) => {
+    if (inCallWorkspace) {
       void startMicLevelMonitor();
       return;
     }
@@ -995,7 +1905,34 @@ watch(
   { immediate: true }
 );
 
+watch(
+  () => [
+    isCallWorkspace.value,
+    String(route.params.callRef || '').trim(),
+    Number(sessionState.userId || 0),
+    normalizeRole(sessionState.role),
+  ],
+  () => {
+    void refreshCallOwnerContext();
+  },
+  { immediate: true }
+);
+
+watch(
+  () => [
+    callOwnerEditState.open,
+    callOwnerEditState.replaceParticipants,
+    canLoadCallOwnerInternalDirectory.value,
+  ],
+  ([isOpen, replaceParticipants, canLoadInternalDirectory]) => {
+    if (!isOpen || !replaceParticipants || !canLoadInternalDirectory) return;
+    void loadCallOwnerParticipantsDirectory();
+  }
+);
+
 onMounted(() => {
+  applySettingsLanguage(readStoredSettingsLanguage());
+  applyThemeColorMap(persistedThemeColors);
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
   laptopMedia = window.matchMedia(`(max-width: ${LAPTOP_BREAKPOINT}px)`);
   tabletMedia = window.matchMedia(`(max-width: ${TABLET_BREAKPOINT}px)`);
@@ -1046,7 +1983,10 @@ function resetSettingsDraft() {
   settingsDraft.displayName = sessionState.displayName || '';
   settingsDraft.theme = sessionState.theme || 'dark';
   settingsDraft.timeFormat = sessionState.timeFormat || '24h';
+  settingsDraft.dateFormat = sessionState.dateFormat || 'dmy_dot';
+  settingsDraft.language = readStoredSettingsLanguage();
   settingsDraft.avatarDataUrl = '';
+  patchThemeColorMap(settingsDraft.themeColors, persistedThemeColors);
 }
 
 function setAvatarStatus(message = '') {
@@ -1062,6 +2002,7 @@ function normalizeSettingsTile(tileId) {
 
 function closeSettingsModal() {
   if (settingsState.saving) return;
+  applyThemeColorMap(persistedThemeColors);
   settingsState.open = false;
   settingsState.dragging = false;
   settingsState.loading = false;
@@ -1126,7 +2067,11 @@ async function saveSettings() {
 
   const displayName = settingsDraft.displayName.trim();
   const theme = settingsDraft.theme.trim();
-  const timeFormat = settingsDraft.timeFormat.trim();
+  const rawTimeFormat = settingsDraft.timeFormat.trim();
+  const rawDateFormat = settingsDraft.dateFormat.trim();
+  const timeFormat = normalizeTimeFormat(rawTimeFormat);
+  const dateFormat = normalizeDateFormat(rawDateFormat);
+  const language = normalizeSettingsLanguage(settingsDraft.language);
 
   if (displayName === '') {
     settingsState.message = 'Display name is required.';
@@ -1138,8 +2083,18 @@ async function saveSettings() {
     return;
   }
 
-  if (!['24h', '12h'].includes(timeFormat)) {
+  if (!['24h', '12h'].includes(rawTimeFormat)) {
     settingsState.message = 'Time format must be 24h or 12h.';
+    return;
+  }
+
+  if (rawDateFormat === '' || rawDateFormat !== dateFormat) {
+    settingsState.message = 'Please choose a supported date format.';
+    return;
+  }
+
+  if (!SUPPORTED_SETTINGS_LANGUAGES.includes(language)) {
+    settingsState.message = 'Unsupported language selected.';
     return;
   }
 
@@ -1165,6 +2120,7 @@ async function saveSettings() {
       display_name: displayName,
       theme,
       time_format: timeFormat,
+      date_format: dateFormat,
       avatar_path: avatarPath,
     });
 
@@ -1177,6 +2133,11 @@ async function saveSettings() {
       return;
     }
 
+    storeSettingsLanguage(language);
+    applySettingsLanguage(language);
+    patchThemeColorMap(persistedThemeColors, settingsDraft.themeColors);
+    storeThemeColorMap(persistedThemeColors);
+    applyThemeColorMap(persistedThemeColors);
     settingsState.message = 'Settings saved.';
     settingsState.open = false;
     resetSettingsDraft();

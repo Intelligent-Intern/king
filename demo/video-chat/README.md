@@ -5,7 +5,7 @@ workspace on top of King runtime primitives.
 
 What we are building here:
 
-- a Vue workspace UI that matches the approved mock layout/interaction model
+- a Vue workspace UI that follows the approved UX/interaction contract
 - a King PHP backend (`backend-king-php`) as the authoritative API + WS layer
 - contract-first REST + realtime behavior with deterministic error envelopes
 - role-aware collaboration surfaces (admin/moderator/user)
@@ -41,7 +41,18 @@ Latest commit-level progress:
 - 2026-04-13: closed `#59/#60/#68` with backend-bound admin overview metrics + admin user CRUD/pagination/search + admin-only branding parity flow in `frontend-vue/src/views/AdminOverviewView.vue` and `frontend-vue/src/views/AdminUsersView.vue`
 - 2026-04-13: closed `#61/#62/#63` with backend-bound user dashboard calls/calendar/invite parity plus invite redeem -> workspace flow in `frontend-vue/src/views/UserDashboardView.vue`
 - 2026-04-13: closed `#64/#65/#66` with server-driven workspace tab data, moderation feedback states, and control-bar realtime synchronization in `frontend-vue/src/views/CallWorkspaceView.vue`
-- 2026-04-13: closed `#69/#70/#71` with backend integration-matrix tests, Playwright mock-parity journeys, and compose-level smoke gates (`demo/video-chat/scripts/smoke.sh`, `.github/workflows/ci.yml`)
+- 2026-04-13: closed `#69/#70/#71` with backend integration-matrix tests, Playwright UI-parity journeys, and compose-level smoke gates (`demo/video-chat/scripts/smoke.sh`, `.github/workflows/ci.yml`)
+
+Latest UX/runtime updates (2026-04-17):
+
+- call access mode (`invite_only` / `free_for_all`) can now be managed consistently from schedule/edit/admin surfaces and from the in-call owner settings card
+- invite-only join flow is now queue-first: invited users enter waiting state, host/admin/moderator receives lobby badge/toast notification, and admission is explicit
+- free-for-all mode no longer depends on per-user call-access mapping; joins are room-based with explicit display-name capture
+- call participant rail now reflects connected participants only; single-user sessions hide the mini-strip
+- enter-call modal parity was tightened (brand header, unified close behavior, camera/mic/speaker + blur controls)
+- in-call background blur controls are exposed as two presets (`Blur`, `Strong blur`) and support fast mode switching
+- admin/user management shells were aligned for responsive table behavior and consistent action/button semantics
+- settings theme editor now includes a larger live preview surface modeled after the real Video Call Management page
 
 Current new-stack baseline capabilities:
 
@@ -53,7 +64,7 @@ Current new-stack baseline capabilities:
 - backend-backed settings modal for profile/avatar/theme/time-format with global theme/time-format application
 - admin overview widgets are live API-driven (auth/session/users/calls snapshots with explicit loading/error states)
 - admin users view is fully server-driven (`GET/POST/PATCH/deactivate/reactivate`) with search + pagination + row-level mutation feedback
-- admin branding parity flow is available as admin-only local persistence for mock parity where no backend branding endpoint exists
+- admin branding parity flow is available as admin-only local persistence for UI contract parity where no backend branding endpoint exists
 - user dashboard now has backend-bound calls list + calendar + create/edit + invite popover/redeem flows
 - room directory is fetched from backend API and normalized to deterministic ordering with live member counters
 - room directory with create/join/switch behavior
@@ -113,6 +124,8 @@ Current demo caveats:
 - no durable room/message persistence across backend restart
 - no TURN relay setup (STUN-only by default)
 - no production moderation/audit policy
+- background blur uses browser `FaceDetector` / center-mask fallback by default; optional MediaPipe/TFJS segmentation backends are opt-in via `VITE_VIDEOCHAT_ENABLE_MEDIAPIPE=true` / `VITE_VIDEOCHAT_ENABLE_TFJS=true`
+- frontend debug console output is quiet by default; enable verbose runtime logs with `VITE_VIDEOCHAT_DEBUG_LOGS=true`
 - frontend runtime proxy may emit Node deprecation warnings from transitive proxy dependencies; behavior remains functional
 
 ## Quick Video-Call Test (Simple)
@@ -128,8 +141,12 @@ docker compose -f docker-compose.v1.yml up --build
 
 2. Open the app:
 
-- frontend: `http://127.0.0.1:5174`
+- frontend: `http://127.0.0.1:5176`
 - backend health: `http://127.0.0.1:18080/health`
+- websocket signaling gateway: `ws://127.0.0.1:18081/ws`
+- websocket SFU gateway: `ws://127.0.0.1:18082/sfu`
+- frontend container runs Vite dev-server with HMR on compose; source edits under
+  `demo/video-chat/frontend-vue` hot-reload automatically in browser
 
 3. Login with demo admin:
 
@@ -140,7 +157,7 @@ docker compose -f docker-compose.v1.yml up --build
 
 5. Optional: generate a join link and open it in a second browser profile/incognito:
    - route shape: `/join/<access-link-uuid>`
-   - example full URL: `http://127.0.0.1:5174/join/<uuid>`
+   - example full URL: `http://127.0.0.1:5176/join/<uuid>`
 
 6. Stop stack:
 
@@ -250,6 +267,7 @@ Useful commands:
 - `cd demo/video-chat/backend-king-php && ./run-dev.sh`
 - `cd demo/video-chat/frontend-vue && npm run dev`
 - `curl -s http://127.0.0.1:18080/`
+- `bash demo/video-chat/scripts/backup-sqlite.sh`
 
 ## Verification Closure
 
@@ -280,8 +298,8 @@ Additional automated coverage:
 - backend integration matrix tests:
   - `demo/video-chat/backend-king-php/tests/videochat-integration-matrix-http-contract.sh`
   - `demo/video-chat/backend-king-php/tests/videochat-integration-matrix-realtime-contract.sh`
-- frontend Playwright mock-parity journeys:
-  - `demo/video-chat/frontend-vue/tests/e2e/mock-parity-journeys.spec.js`
+- frontend Playwright UI-parity journeys:
+  - `demo/video-chat/frontend-vue/tests/e2e/ui-parity-journeys.spec.js`
 
 Release-bound runtime honesty:
 
@@ -302,7 +320,7 @@ docker compose -f docker-compose.v1.yml up --build
 
 Default host ports:
 
-- frontend: `http://127.0.0.1:5174`
+- frontend: `http://127.0.0.1:5176`
 - backend: `http://127.0.0.1:18080`
 
 Override host ports when needed:
@@ -315,6 +333,12 @@ Optional frontend preflight origin override for non-default routing:
 
 ```bash
 VIDEOCHAT_V1_BACKEND_ORIGIN=http://127.0.0.1:38080 docker compose -f docker-compose.v1.yml up --build
+```
+
+Optional for Docker Desktop/remote FS watcher stability:
+
+```bash
+VIDEOCHAT_VUE_POLLING=1 docker compose -f docker-compose.v1.yml up --build
 ```
 
 SQLite data is persisted in a mounted Docker volume:
@@ -346,9 +370,10 @@ SQLite data is persisted in a mounted Docker volume:
 - backend call create: `POST http://127.0.0.1:18080/api/calls` (authenticated admin/moderator/user)
 - backend call update: `PATCH http://127.0.0.1:18080/api/calls/{id}` (authenticated admin/moderator/user; owner/admin/moderator policy)
 - backend call cancel: `POST http://127.0.0.1:18080/api/calls/{id}/cancel` (authenticated admin/moderator/user; owner/admin/moderator policy)
-- backend websocket endpoint: `WS ws://127.0.0.1:18080/ws`
+- backend websocket endpoint (compose default): `WS ws://127.0.0.1:18081/ws`
+- backend SFU endpoint (compose default): `WS ws://127.0.0.1:18082/sfu`
 - backend startup applies ordered sqlite migrations (`schema_migrations`) and exposes migration state in runtime/health responses
-- frontend scaffold endpoint: `http://127.0.0.1:5174`
+- frontend scaffold endpoint: `http://127.0.0.1:5176`
 - frontend consumes backend preflight metadata on startup (`app/version + runtime health`)
 - the previous Node runtime remains in-repo only as historical reference, not as active dev path
 

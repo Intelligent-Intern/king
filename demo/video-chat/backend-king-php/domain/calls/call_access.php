@@ -147,6 +147,7 @@ function videochat_is_call_joinable_status(string $status): bool
  *   role: string,
  *   status: string,
  *   time_format: string,
+ *   date_format: string,
  *   theme: string,
  *   avatar_path: ?string
  * }|null
@@ -167,6 +168,7 @@ SELECT
     users.display_name,
     users.status,
     users.time_format,
+    users.date_format,
     users.theme,
     users.avatar_path,
     roles.slug AS role_slug
@@ -187,6 +189,7 @@ SELECT
     users.display_name,
     users.status,
     users.time_format,
+    users.date_format,
     users.theme,
     users.avatar_path,
     roles.slug AS role_slug
@@ -212,6 +215,7 @@ SQL
         'role' => is_string($row['role_slug'] ?? null) ? (string) $row['role_slug'] : 'user',
         'status' => (string) ($row['status'] ?? 'disabled'),
         'time_format' => (string) ($row['time_format'] ?? '24h'),
+        'date_format' => (string) ($row['date_format'] ?? 'dmy_dot'),
         'theme' => (string) ($row['theme'] ?? 'dark'),
         'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
     ];
@@ -266,6 +270,7 @@ INSERT INTO users(
     role_id,
     status,
     time_format,
+    date_format,
     theme,
     avatar_path,
     updated_at
@@ -276,6 +281,7 @@ INSERT INTO users(
     :role_id,
     'active',
     '24h',
+    'dmy_dot',
     'dark',
     NULL,
     :updated_at
@@ -745,6 +751,7 @@ SQL
             'role' => videochat_normalize_role_slug((string) ($targetUser['role'] ?? 'user')),
             'status' => (string) ($targetUser['status'] ?? 'active'),
             'time_format' => (string) ($targetUser['time_format'] ?? '24h'),
+            'date_format' => (string) ($targetUser['date_format'] ?? 'dmy_dot'),
             'theme' => (string) ($targetUser['theme'] ?? 'dark'),
             'avatar_path' => is_string($targetUser['avatar_path'] ?? null) ? (string) $targetUser['avatar_path'] : null,
         ],
@@ -817,8 +824,13 @@ function videochat_create_call_access_link_for_user(
         $expiresAt = null;
     }
 
-    $linkKind = strtolower(trim((string) ($options['link_kind'] ?? 'personal')));
-    if (!in_array($linkKind, ['personal', 'open'], true)) {
+    $callAccessMode = videochat_normalize_call_access_mode((string) ($call['access_mode'] ?? 'invite_only'));
+    $linkKindInput = strtolower(trim((string) ($options['link_kind'] ?? '')));
+    if ($linkKindInput === '') {
+        $linkKind = $callAccessMode === 'free_for_all' ? 'open' : 'personal';
+    } elseif (in_array($linkKindInput, ['personal', 'open'], true)) {
+        $linkKind = $linkKindInput;
+    } else {
         return [
             'ok' => false,
             'reason' => 'validation_failed',
@@ -827,6 +839,27 @@ function videochat_create_call_access_link_for_user(
             'call' => null,
         ];
     }
+
+    if ($callAccessMode === 'free_for_all' && $linkKind !== 'open') {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['link_kind' => 'free_for_all_requires_open_link'],
+            'access_link' => null,
+            'call' => null,
+        ];
+    }
+
+    if ($callAccessMode === 'invite_only' && $linkKind !== 'personal') {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['link_kind' => 'invite_only_requires_personal_link'],
+            'access_link' => null,
+            'call' => null,
+        ];
+    }
+
     $isOpenLinkRequest = $linkKind === 'open';
 
     $targetUserId = $isOpenLinkRequest

@@ -5,6 +5,7 @@
 
 import { createVideoEnhancer, VideoEnhancer } from './video.js'
 import type { EnhancedFrame, QualityMetrics } from './video.js'
+import { debugLog, debugWarn } from '../../support/debugLogs.js'
 
 export interface WebRTCVideoProcessorConfig {
   enabled: boolean
@@ -114,7 +115,7 @@ export class WebRTCVideoProcessor {
     this.statsInterval = window.setInterval(() => {
       if (this.metricsCallback && this.videoTrack) {
         const stats = this.videoTrack.getSettings()
-        console.debug('[VideoProcessor]', {
+        debugLog('[VideoProcessor]', {
           width: stats.width,
           height: stats.height,
           frameRate: stats.frameRate,
@@ -143,7 +144,7 @@ export class WebRTCVideoProcessor {
       const decoded = this.enhancer.decodeFrame(frameData.frameData)
       return new ImageData(new Uint8ClampedArray(decoded.data), decoded.width, decoded.height)
     } catch (error) {
-      console.error('Failed to decode frame:', error)
+      debugWarn('Failed to decode frame:', error)
       return null
     }
   }

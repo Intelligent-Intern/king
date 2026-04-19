@@ -4,6 +4,7 @@
  */
 
 import { createWaveletCodec } from './webrtc-shim.js'
+import { debugWarn } from '../../support/debugLogs.js'
 
 export interface WaveletProcessorConfig {
   quality: number
@@ -103,7 +104,6 @@ export class WaveletVideoProcessor {
 
     this.processedStream = outputCanvas.captureStream(this.config.frameRate)
 
-    let frameCount = 0
     const processFrame = (timestamp: number) => {
       if (timestamp - this.lastFrameTime < 1000 / this.config.frameRate) {
         this.animationId = requestAnimationFrame(processFrame)
@@ -146,7 +146,7 @@ export class WaveletVideoProcessor {
           outputCtx.drawImage(sourceVideo, 0, 0, this.config.width, this.config.height)
         }
       } catch (e) {
-        console.error('[Wavelet] Frame error:', e)
+        debugWarn('[Wavelet] Frame error:', e)
         outputCtx.drawImage(sourceVideo, 0, 0, this.config.width, this.config.height)
       }
 

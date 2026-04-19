@@ -16,7 +16,6 @@ function videochat_admin_allowed_roles(): array
 function videochat_admin_allowed_update_fields(): array
 {
     return [
-        'email',
         'display_name',
         'role',
         'password',
@@ -236,17 +235,6 @@ function videochat_admin_validate_update_user_payload(array $payload): array
         }
     }
 
-    if (array_key_exists('email', $payload)) {
-        $email = strtolower(trim((string) $payload['email']));
-        if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
-            $errors['email'] = 'required_valid_email';
-        } elseif (strlen($email) > 320) {
-            $errors['email'] = 'email_too_long';
-        } else {
-            $data['email'] = $email;
-        }
-    }
-
     if (array_key_exists('display_name', $payload)) {
         $displayName = trim((string) $payload['display_name']);
         if ($displayName === '') {
@@ -435,6 +423,14 @@ SQL
         ];
     }
 
+    if (function_exists('videochat_ensure_primary_user_email')) {
+        try {
+            videochat_ensure_primary_user_email($pdo, $createdUserId);
+        } catch (Throwable) {
+            // Ignore sync failures here; create already succeeded and table may not exist in legacy test fixtures.
+        }
+    }
+
     return [
         'ok' => true,
         'reason' => 'created',
@@ -483,23 +479,6 @@ function videochat_admin_update_user(PDO $pdo, int $userId, array $payload): arr
     }
 
     $data = $validation['data'];
-    $nextEmail = array_key_exists('email', $data) ? (string) $data['email'] : (string) $existing['email'];
-    if (strtolower($nextEmail) !== strtolower((string) $existing['email'])) {
-        $emailQuery = $pdo->prepare('SELECT id FROM users WHERE lower(email) = lower(:email) AND id <> :id LIMIT 1');
-        $emailQuery->execute([
-            ':email' => $nextEmail,
-            ':id' => $userId,
-        ]);
-        if ($emailQuery->fetch() !== false) {
-            return [
-                'ok' => false,
-                'reason' => 'email_conflict',
-                'errors' => ['email' => 'already_exists'],
-                'user' => null,
-            ];
-        }
-    }
-
     $roleMap = videochat_admin_role_id_map($pdo);
     $nextRole = array_key_exists('role', $data) ? (string) $data['role'] : (string) $existing['role'];
     $nextRoleId = (int) ($roleMap[$nextRole] ?? 0);
@@ -528,8 +507,7 @@ function videochat_admin_update_user(PDO $pdo, int $userId, array $payload): arr
     $update = $pdo->prepare(
         <<<'SQL'
 UPDATE users
-SET email = :email,
-    display_name = :display_name,
+SET display_name = :display_name,
     role_id = :role_id,
     status = :status,
     time_format = :time_format,
@@ -541,7 +519,6 @@ WHERE id = :id
 SQL
     );
     $update->execute([
-        ':email' => $nextEmail,
         ':display_name' => array_key_exists('display_name', $data) ? (string) $data['display_name'] : (string) $existing['display_name'],
         ':role_id' => $nextRoleId,
         ':status' => array_key_exists('status', $data) ? (string) $data['status'] : (string) $existing['status'],

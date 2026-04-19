@@ -38,6 +38,7 @@ __export(index_exports, {
 module.exports = __toCommonJS(index_exports);
 
 // src/iibin.ts
+var MessageType = {};
 var MessageType = /* @__PURE__ */ ((MessageType2) => {
   MessageType2[MessageType2["TEXT_MESSAGE"] = 1] = "TEXT_MESSAGE";
   MessageType2[MessageType2["VOICE_MESSAGE"] = 2] = "VOICE_MESSAGE";
@@ -65,7 +66,7 @@ var MessageType = /* @__PURE__ */ ((MessageType2) => {
   MessageType2[MessageType2["METRICS"] = 242] = "METRICS";
   MessageType2[MessageType2["ERROR"] = 255] = "ERROR";
   return MessageType2;
-})(MessageType || {});
+})(MessageType);
 var DataType = /* @__PURE__ */ ((DataType2) => {
   DataType2[DataType2["NULL"] = 0] = "NULL";
   DataType2[DataType2["BOOLEAN"] = 1] = "BOOLEAN";
@@ -81,7 +82,7 @@ var DataType = /* @__PURE__ */ ((DataType2) => {
   DataType2[DataType2["OBJECT"] = 11] = "OBJECT";
   DataType2[DataType2["TIMESTAMP"] = 12] = "TIMESTAMP";
   return DataType2;
-})(DataType || {});
+})({});
 var IIBINEncoder = class {
   constructor(initialSize = 1024) {
     this.buffer = new ArrayBuffer(initialSize);
@@ -558,6 +559,7 @@ function compareWithJSON(data) {
 }
 
 // src/iibin-protocol.ts
+var IIBinMessageType = {};
 var IIBinMessageType = /* @__PURE__ */ ((IIBinMessageType2) => {
   IIBinMessageType2[IIBinMessageType2["PING"] = 1] = "PING";
   IIBinMessageType2[IIBinMessageType2["PONG"] = 2] = "PONG";
@@ -588,7 +590,7 @@ var IIBinMessageType = /* @__PURE__ */ ((IIBinMessageType2) => {
   IIBinMessageType2[IIBinMessageType2["INTEREST_MATCH_RESPONSE"] = 82] = "INTEREST_MATCH_RESPONSE";
   IIBinMessageType2[IIBinMessageType2["POLYTOPE_DATA"] = 83] = "POLYTOPE_DATA";
   return IIBinMessageType2;
-})(IIBinMessageType || {});
+})(IIBinMessageType);
 var _IIBinProtocol = class _IIBinProtocol {
   constructor() {
     this.messageIdCounter = 0n;

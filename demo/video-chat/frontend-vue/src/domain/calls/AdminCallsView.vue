@@ -12,10 +12,10 @@
         >
           <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
         </button>
-        <h3>Video Call Management</h3>
+        <h1>Video Call Management</h1>
       </div>
       <div class="actions">
-        <button class="btn" type="button" @click="openPrimaryCompose">{{ primaryActionLabel }}</button>
+        <button class="btn btn-cyan" type="button" @click="openPrimaryCompose">{{ primaryActionLabel }}</button>
       </div>
     </section>
 
@@ -46,7 +46,7 @@
       </div>
 
       <div class="calls-toolbar-right">
-        <label class="calls-search" aria-label="Call search">
+        <label class="calls-search calls-search-main" aria-label="Call search">
           <input
             v-model="queryDraft"
             class="input"
@@ -54,21 +54,30 @@
             placeholder="Search call title"
             @keydown.enter.prevent="applyFilters"
           />
-          <button class="btn" type="button" @click="applyFilters">Search</button>
         </label>
 
-        <select v-model="statusFilter" class="select" @change="applyFilters">
+        <AppSelect v-model="statusFilter" @change="applyFilters">
           <option value="all">All status</option>
           <option value="scheduled">Scheduled</option>
           <option value="active">Active</option>
           <option value="ended">Ended</option>
           <option value="cancelled">Cancelled</option>
-        </select>
+        </AppSelect>
 
-        <select v-model="scopeFilter" class="select" @change="applyFilters">
+        <AppSelect v-model="scopeFilter" @change="applyFilters">
           <option value="all">All scope</option>
           <option value="my">My scope</option>
-        </select>
+        </AppSelect>
+
+        <button
+          class="icon-mini-btn calls-toolbar-search-btn"
+          type="button"
+          title="Search calls"
+          aria-label="Search calls"
+          @click="applyFilters"
+        >
+          <img src="/assets/orgas/kingrt/icons/send.png" alt="" />
+        </button>
       </div>
     </section>
 
@@ -77,7 +86,7 @@
     </section>
 
     <section v-if="viewMode === 'calls'" class="table-wrap calls-table-wrap">
-      <table>
+      <table class="calls-list-table">
         <thead>
           <tr>
             <th class="col-title">Call</th>
@@ -90,27 +99,27 @@
         </thead>
         <tbody v-if="calls.length > 0">
           <tr v-for="call in calls" :key="call.id">
-            <td>
+            <td data-label="Call">
               <div class="call-title">{{ call.title || call.id }}</div>
               <div class="call-subline code">{{ call.id }}</div>
             </td>
-            <td>
+            <td data-label="Status">
               <span class="tag" :class="statusTagClass(call.status)">
                 {{ call.status || 'unknown' }}
               </span>
             </td>
-            <td>{{ formatRange(call.starts_at, call.ends_at) }}</td>
-            <td>
+            <td data-label="Window">{{ formatRange(call.starts_at, call.ends_at) }}</td>
+            <td data-label="Participants">
               {{ call.participants?.total ?? 0 }}
               <span class="call-subline">
                 in {{ call.participants?.internal ?? 0 }} / ex {{ call.participants?.external ?? 0 }}
               </span>
             </td>
-            <td>
+            <td data-label="Owner">
               {{ call.owner?.display_name || 'Unknown' }}
               <span class="call-subline">{{ call.owner?.email || 'n/a' }}</span>
             </td>
-            <td>
+            <td data-label="Actions">
               <div class="actions-inline">
                 <button
                   class="icon-mini-btn"
@@ -142,6 +151,16 @@
                 >
                   <img src="/assets/orgas/kingrt/icons/end_call.png" alt="" />
                 </button>
+                <button
+                  class="icon-mini-btn danger"
+                  type="button"
+                  title="Delete call"
+                  :aria-label="`Delete call ${call.title || call.id}`"
+                  :disabled="!isDeletable(call)"
+                  @click="openDelete(call)"
+                >
+                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
+                </button>
               </div>
             </td>
           </tr>
@@ -169,7 +188,7 @@
       <section v-else ref="callsCalendarEl" class="calls-calendar-full"></section>
     </section>
 
-    <section class="footer calls-pagination-wrap">
+    <section v-if="viewMode === 'calls'" class="footer calls-pagination-wrap">
       <div class="pagination">
         <button
           class="pager-btn pager-icon-btn"
@@ -196,20 +215,19 @@
     <div class="calls-modal" :hidden="!enterCallState.open" role="dialog" aria-modal="true" aria-label="Enter video call">
       <div class="calls-modal-backdrop" @click="closeEnterCallModal"></div>
       <div class="calls-modal-dialog calls-modal-dialog-enter">
-        <header class="calls-modal-header">
-          <h4>Enter Video Call</h4>
+        <header class="calls-modal-header calls-modal-header-enter">
+          <div class="calls-modal-header-enter-left">
+            <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
+            <h4 class="calls-enter-title">Enter Video Call</h4>
+          </div>
           <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeEnterCallModal">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
 
         <div class="calls-modal-body calls-enter-body">
-          <div class="calls-enter-layout" :class="{ 'panel-open': enterCallState.panelOpen }">
+          <div class="calls-enter-layout">
             <section class="calls-enter-preview">
-              <div class="calls-enter-preview-head">
-                <span>Camera Preview</span>
-                <span class="calls-enter-preview-meta">{{ enterCallState.callId }}</span>
-              </div>
               <div class="calls-enter-preview-frame">
                 <video ref="enterCallPreviewVideoRef" autoplay playsinline muted></video>
                 <p v-if="enterCallState.previewError" class="calls-inline-error">{{ enterCallState.previewError }}</p>
@@ -217,135 +235,134 @@
               </div>
             </section>
 
-            <button
-              class="calls-enter-panel-toggle"
-              type="button"
-              :aria-label="enterCallState.panelOpen ? 'Close settings panel' : 'Open settings panel'"
-              @click="toggleEnterCallPanel"
-            >
-              <img
-                :src="enterCallState.panelOpen
-                  ? '/assets/orgas/kingrt/icons/forward.png'
-                  : '/assets/orgas/kingrt/icons/backward.png'"
-                alt=""
-              />
-            </button>
-
-            <section class="calls-enter-right">
-              <section class="calls-enter-config-grid">
-                <label class="field">
-                  <span>Camera</span>
-                  <select
-                    class="input"
-                    :value="callMediaPrefs.selectedCameraId"
-                    @change="setCallCameraDevice($event.target.value)"
-                  >
-                    <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
-                    <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
-                      {{ camera.label }}
-                    </option>
-                  </select>
-                </label>
-
-                <label class="field">
-                  <span>Mic</span>
-                  <select
-                    class="input"
-                    :value="callMediaPrefs.selectedMicrophoneId"
-                    @change="setCallMicrophoneDevice($event.target.value)"
-                  >
-                    <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
-                    <option v-for="microphone in callMediaPrefs.microphones" :key="microphone.id" :value="microphone.id">
-                      {{ microphone.label }}
-                    </option>
-                  </select>
-                </label>
-
-                <label class="field">
-                  <span>Mic volume</span>
-                  <input
-                    class="input"
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    :value="callMediaPrefs.microphoneVolume"
-                    @input="setCallMicrophoneVolume($event.target.value)"
-                  />
-                </label>
-
-                <label class="field">
-                  <span>Speaker</span>
-                  <select
-                    class="input"
-                    :value="callMediaPrefs.selectedSpeakerId"
-                    @change="setCallSpeakerDevice($event.target.value)"
-                  >
-                    <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
-                    <option v-for="speaker in callMediaPrefs.speakers" :key="speaker.id" :value="speaker.id">
-                      {{ speaker.label }}
-                    </option>
-                  </select>
-                </label>
-
-                <label class="field">
-                  <span>Speaker volume</span>
-                  <input
-                    class="input"
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    :value="callMediaPrefs.speakerVolume"
-                    @input="setCallSpeakerVolume($event.target.value)"
-                  />
-                </label>
-              </section>
-
-              <section class="calls-enter-invite">
-                <p class="invite-popover-label">
-                  Invite link for <strong>{{ enterCallState.callId }}</strong>
-                </p>
-                <div class="calls-enter-link-controls">
-                  <label class="field">
-                    <span>Link type</span>
-                    <select class="input" v-model="enterCallState.linkKind" @change="handleEnterLinkSettingsChanged">
-                      <option value="personal">Personalized</option>
-                      <option value="open">Free for all</option>
-                    </select>
-                  </label>
-                  <label v-if="enterCallState.linkKind === 'personal'" class="field">
-                    <span>Target</span>
-                    <select class="input" v-model="enterCallState.targetKey" @change="handleEnterLinkSettingsChanged">
-                      <option v-for="option in enterCallState.targetOptions" :key="option.key" :value="option.key">
-                        {{ option.label }}
+            <section class="calls-enter-right calls-enter-right-settings">
+              <div class="call-left-settings">
+                <section class="call-left-settings-block" aria-label="Camera">
+                  <div class="call-left-settings-title">Camera</div>
+                  <div class="call-left-settings-field">
+                    <AppSelect
+                      id="admin-enter-call-camera-select"
+                      aria-label="Camera"
+                      :model-value="callMediaPrefs.selectedCameraId"
+                      @update:model-value="setCallCameraDevice"
+                    >
+                      <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
+                      <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
+                        {{ camera.label }}
                       </option>
-                    </select>
-                  </label>
-                </div>
-                <p v-if="enterCallState.loading" class="invite-popover-label">Generating invite link...</p>
-                <p v-else-if="enterCallState.error" class="invite-popover-label calls-error">{{ enterCallState.error }}</p>
-                <template v-else>
-                  <div class="invite-popover-row">
-                    <code class="invite-code">{{ enterCallState.linkUrl }}</code>
-                    <button class="icon-mini-btn" type="button" title="Copy invite link" @click="copyInviteCode">
-                      <span class="icon-copy" aria-hidden="true"></span>
+                    </AppSelect>
+                  </div>
+                </section>
+
+                <section class="call-left-settings-block" aria-label="Mic">
+                  <div class="call-left-settings-title">Mic</div>
+                  <div class="call-left-settings-field">
+                    <AppSelect
+                      id="admin-enter-call-mic-select"
+                      aria-label="Mic"
+                      :model-value="callMediaPrefs.selectedMicrophoneId"
+                      @update:model-value="setCallMicrophoneDevice"
+                    >
+                      <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
+                      <option v-for="microphone in callMediaPrefs.microphones" :key="microphone.id" :value="microphone.id">
+                        {{ microphone.label }}
+                      </option>
+                    </AppSelect>
+                  </div>
+                  <div class="call-left-settings-field">
+                    <label for="admin-enter-call-mic-volume">Volume</label>
+                    <div class="call-left-volume-row">
+                      <input
+                        id="admin-enter-call-mic-volume"
+                        class="call-left-range"
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        :value="callMediaPrefs.microphoneVolume"
+                        @input="setCallMicrophoneVolume($event.target.value)"
+                      />
+                      <span class="call-left-volume-value">{{ callMediaPrefs.microphoneVolume }}%</span>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="call-left-settings-block" aria-label="Speaker">
+                  <div class="call-left-settings-title">Speaker</div>
+                  <div class="call-left-settings-field">
+                    <AppSelect
+                      id="admin-enter-call-speaker-select"
+                      aria-label="Speaker"
+                      :model-value="callMediaPrefs.selectedSpeakerId"
+                      @update:model-value="setCallSpeakerDevice"
+                    >
+                      <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
+                      <option v-for="speaker in callMediaPrefs.speakers" :key="speaker.id" :value="speaker.id">
+                        {{ speaker.label }}
+                      </option>
+                    </AppSelect>
+                  </div>
+                  <div class="call-left-settings-field">
+                    <label for="admin-enter-call-speaker-volume">Volume</label>
+                    <div class="call-left-volume-row">
+                      <input
+                        id="admin-enter-call-speaker-volume"
+                        class="call-left-range"
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        :value="callMediaPrefs.speakerVolume"
+                        @input="setCallSpeakerVolume($event.target.value)"
+                      />
+                      <span class="call-left-volume-value">{{ callMediaPrefs.speakerVolume }}%</span>
+                    </div>
+                  </div>
+                  <div class="call-left-settings-field">
+                    <button class="btn full call-left-test-btn" type="button" @click="playSpeakerTestSound">
+                      Play test sound
                     </button>
                   </div>
-                  <p class="invite-popover-label">
-                    Expires: {{ formatDateTime(enterCallState.expiresAt) }}
-                  </p>
-                  <p v-if="enterCallState.copyNotice" class="invite-popover-label">{{ enterCallState.copyNotice }}</p>
-                </template>
-              </section>
+                </section>
+
+                <section class="call-left-settings-block" aria-label="Background blur">
+                  <div class="call-left-settings-title">Background blur</div>
+                  <div class="call-left-blur-controls" role="group" aria-label="Background blur controls">
+                    <button
+                      class="call-left-blur-btn"
+                      :class="{ active: isBackgroundPresetActive('light') }"
+                      type="button"
+                      :aria-pressed="isBackgroundPresetActive('light')"
+                      aria-label="Blur"
+                      title="Blur"
+                      @click="applyBackgroundPreset('light')"
+                    >
+                      <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/desktop.png" alt="" />
+                    </button>
+                    <button
+                      class="call-left-blur-btn"
+                      :class="{ active: isBackgroundPresetActive('strong') }"
+                      type="button"
+                      :aria-pressed="isBackgroundPresetActive('strong')"
+                      aria-label="Strong blur"
+                      title="Strong blur"
+                      @click="applyBackgroundPreset('strong')"
+                    >
+                      <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/desktop.png" alt="" />
+                      <span class="call-left-blur-strong-mark" aria-hidden="true">+</span>
+                    </button>
+                  </div>
+                </section>
+
+                <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
+              </div>
             </section>
           </div>
         </div>
 
         <footer class="calls-modal-footer">
-          <button class="btn" type="button" :disabled="enterCallState.loading" @click="closeEnterCallModal">Close</button>
           <button
-            class="btn"
+            class="btn btn-green"
             type="button"
             :disabled="enterCallState.loading"
             @click="openCallWorkspace({ callId: enterCallState.callId, roomId: enterCallState.roomId })"
@@ -359,8 +376,11 @@
     <div class="calls-modal" :hidden="!composeState.open" role="dialog" aria-modal="true" aria-label="Call compose modal">
       <div class="calls-modal-backdrop" @click="closeCompose"></div>
       <div class="calls-modal-dialog">
-        <header class="calls-modal-header">
-          <h4>{{ composeHeadline }}</h4>
+        <header class="calls-modal-header calls-modal-header-enter">
+          <div class="calls-modal-header-enter-left">
+            <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
+            <h4 class="calls-enter-title">{{ composeHeadline }}</h4>
+          </div>
           <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeCompose">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
@@ -368,13 +388,16 @@
 
         <div class="calls-modal-body">
           <section class="calls-modal-grid">
-            <label class="field">
+            <label class="field calls-field-wide">
               <span>Title</span>
               <input v-model="composeState.title" class="input" type="text" placeholder="Weekly Product Sync" />
             </label>
-            <label v-if="composeState.mode !== 'create'" class="field">
-              <span>Room ID</span>
-              <input v-model="composeState.roomId" class="input" type="text" placeholder="lobby" />
+            <label v-if="composeState.mode === 'edit'" class="field">
+              <span>Access mode</span>
+              <AppSelect v-model="composeState.accessMode" aria-label="Call access mode">
+                <option value="invite_only">Invite only</option>
+                <option value="free_for_all">Free for all</option>
+              </AppSelect>
             </label>
             <label v-if="composeState.mode !== 'create'" class="field">
               <span>Starts at</span>
@@ -415,7 +438,7 @@
                     placeholder="Search users"
                     @keydown.enter.prevent="applyParticipantSearch"
                   />
-                  <button class="btn" type="button" @click="applyParticipantSearch">Search</button>
+                  <button class="btn btn-cyan" type="button" @click="applyParticipantSearch">Search</button>
                 </label>
               </header>
 
@@ -468,7 +491,7 @@
             <article class="calls-participants-panel">
               <header class="calls-participants-head">
                 <h5>External participants</h5>
-                <button class="btn" type="button" @click="addExternalRow">Add row</button>
+                <button class="btn btn-cyan" type="button" @click="addExternalRow">Add row</button>
               </header>
 
               <section class="calls-external-list">
@@ -512,8 +535,7 @@
         </div>
 
         <footer class="calls-modal-footer">
-          <button class="btn" type="button" :disabled="composeState.submitting" @click="closeCompose">Close</button>
-          <button class="btn" type="button" :disabled="composeState.submitting" @click="submitCompose">
+          <button class="btn btn-cyan" type="button" :disabled="composeState.submitting" @click="submitCompose">
             {{ composeState.submitting ? 'Saving…' : composeSubmitLabel }}
           </button>
         </footer>
@@ -522,39 +544,62 @@
 
     <div class="calls-modal" :hidden="!cancelState.open" role="dialog" aria-modal="true" aria-label="Cancel call modal">
       <div class="calls-modal-backdrop" @click="closeCancel"></div>
-      <div class="calls-modal-dialog calls-modal-dialog-small">
-        <header class="calls-modal-header">
-          <h4>Cancel call</h4>
+      <div class="calls-modal-dialog calls-modal-dialog-cancel">
+        <header class="calls-modal-header calls-modal-header-enter">
+          <div class="calls-modal-header-enter-left">
+            <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
+            <h4 class="calls-enter-title">Cancel call</h4>
+          </div>
           <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeCancel">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
 
-        <div class="calls-modal-body">
+        <div class="calls-modal-body calls-cancel-body">
           <p class="calls-inline-hint">
             Cancelling <strong>{{ cancelState.callTitle }}</strong> marks all participants as cancelled.
           </p>
 
           <label class="field">
             <span>Cancel reason</span>
+            <AppSelect
+              v-if="cancelState.overrideTemplate"
+              v-model="cancelState.selectedTemplateId"
+              aria-label="Cancel reason template"
+              @change="applyCancelTemplate(cancelState.selectedTemplateId)"
+            >
+              <option v-for="template in cancelTemplates" :key="template.reason" :value="template.reason">
+                {{ template.label }}
+              </option>
+            </AppSelect>
             <input
-              v-model="cancelState.reason"
+              v-else
+              v-model.trim="cancelState.customReason"
               class="input"
               type="text"
-              placeholder="scheduler_conflict"
+              placeholder="Type custom reason"
               aria-label="Cancel reason"
             />
           </label>
 
           <label class="field">
             <span>Cancel message</span>
-            <textarea
-              v-model="cancelState.message"
-              class="calls-textarea"
-              rows="4"
-              placeholder="Call cancelled due to scheduling conflict."
-              aria-label="Cancel message"
-            ></textarea>
+            <div class="calls-cancel-template-toolbar" role="toolbar" aria-label="Cancel message formatting">
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('bold')">Bold</button>
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('italic')">Italic</button>
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('underline')">Underline</button>
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('insertUnorderedList')">List</button>
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('removeFormat')">Clear</button>
+            </div>
+            <div
+              ref="cancelEditorRef"
+              class="calls-rich-editor"
+              contenteditable="true"
+              role="textbox"
+              aria-multiline="true"
+              aria-label="Cancel message editor"
+              @input="handleCancelEditorInput"
+            ></div>
           </label>
 
           <section v-if="cancelState.error" class="calls-inline-error">
@@ -562,10 +607,60 @@
           </section>
         </div>
 
-        <footer class="calls-modal-footer">
-          <button class="btn" type="button" :disabled="cancelState.submitting" @click="closeCancel">Close</button>
-          <button class="btn" type="button" :disabled="cancelState.submitting" @click="submitCancel">
+        <footer class="calls-modal-footer calls-cancel-footer">
+          <label class="calls-checkbox-row calls-cancel-override-row">
+            <input
+              :checked="cancelState.overrideTemplate"
+              type="checkbox"
+              @change="toggleCancelOverride($event.target.checked)"
+            />
+            <span>Override</span>
+          </label>
+          <button
+            v-if="cancelState.overrideTemplate && cancelState.templateDirty"
+            class="btn btn-cyan"
+            type="button"
+            :disabled="cancelState.submitting || cancelState.templateSaving"
+            @click="saveCancelTemplate"
+          >
+            {{ cancelState.templateSaving ? 'Saving…' : 'Save template' }}
+          </button>
+          <button class="btn btn-danger" type="button" :disabled="cancelState.submitting" @click="submitCancel">
             {{ cancelState.submitting ? 'Cancelling…' : 'Cancel call' }}
+          </button>
+        </footer>
+      </div>
+    </div>
+
+    <div class="calls-modal" :hidden="!deleteState.open" role="dialog" aria-modal="true" aria-label="Delete call modal">
+      <div class="calls-modal-backdrop" @click="closeDelete"></div>
+      <div class="calls-modal-dialog calls-modal-dialog-small">
+        <header class="calls-modal-header calls-modal-header-enter">
+          <div class="calls-modal-header-enter-left">
+            <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
+            <h4 class="calls-enter-title">Delete call</h4>
+          </div>
+          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeDelete">
+            <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
+          </button>
+        </header>
+
+        <div class="calls-modal-body">
+          <p class="calls-delete-warning">
+            Delete <strong>{{ deleteState.callTitle }}</strong> permanently?
+            <br />
+            <br />
+            This removes participants, access links and invite codes for this call.
+          </p>
+
+          <section v-if="deleteState.error" class="calls-inline-error">
+            {{ deleteState.error }}
+          </section>
+        </div>
+
+        <footer class="calls-modal-footer">
+          <button class="btn" type="button" :disabled="deleteState.submitting" @click="submitDelete">
+            {{ deleteState.submitting ? 'Deleting…' : 'Delete call' }}
           </button>
         </footer>
       </div>
@@ -580,18 +675,27 @@ import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import AppSelect from '../../components/AppSelect.vue';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import { formatDateRangeDisplay, formatDateTimeDisplay, fullCalendarEventTimeFormat } from '../../support/dateTimeFormat';
+import { createAdminSyncSocket } from '../../support/adminSyncSocket';
 import {
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
   refreshCallMediaDevices,
+  setCallBackgroundApplyOutgoing,
+  setCallBackgroundBackdropMode,
+  setCallBackgroundBlurStrength,
+  setCallBackgroundFilterMode,
+  setCallBackgroundQualityProfile,
   setCallCameraDevice,
   setCallMicrophoneDevice,
   setCallMicrophoneVolume,
   setCallSpeakerDevice,
   setCallSpeakerVolume,
 } from '../realtime/callMediaPreferences';
+import { BackgroundFilterController } from '../realtime/backgroundFilterController';
 
 const router = useRouter();
 const workspaceSidebarState = inject('workspaceSidebarState', null);
@@ -683,21 +787,20 @@ function localInputToIso(localValue) {
 }
 
 function formatDateTime(isoValue) {
-  if (typeof isoValue !== 'string' || isoValue.trim() === '') return 'n/a';
-  const date = new Date(isoValue);
-  if (Number.isNaN(date.getTime())) return isoValue;
-
-  return new Intl.DateTimeFormat('en-GB', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+  return formatDateTimeDisplay(isoValue, {
+    dateFormat: sessionState.dateFormat,
+    timeFormat: sessionState.timeFormat,
+    fallback: 'n/a',
+  });
 }
 
 function formatRange(startsAt, endsAt) {
-  return `${formatDateTime(startsAt)} → ${formatDateTime(endsAt)}`;
+  return formatDateRangeDisplay(startsAt, endsAt, {
+    dateFormat: sessionState.dateFormat,
+    timeFormat: sessionState.timeFormat,
+    separator: ' → ',
+    fallback: 'n/a',
+  });
 }
 
 function statusTagClass(status) {
@@ -729,6 +832,10 @@ function isEditable(call) {
 function isCancellable(call) {
   const status = String(call?.status || '').toLowerCase();
   return status !== 'cancelled' && status !== 'ended';
+}
+
+function isDeletable(call) {
+  return Boolean(call?.id);
 }
 
 function isInvitable(call) {
@@ -784,6 +891,70 @@ function clearNotice() {
   noticeMessage.value = '';
 }
 
+let adminSyncReloadTimer = 0;
+let adminSyncClient = null;
+
+function clearAdminSyncReloadTimer() {
+  if (adminSyncReloadTimer > 0) {
+    window.clearTimeout(adminSyncReloadTimer);
+    adminSyncReloadTimer = 0;
+  }
+}
+
+async function reloadCallsFromAdminSync() {
+  await Promise.all([
+    loadCalls(),
+    loadCalendar({ background: true }),
+  ]);
+}
+
+function queueReloadCallsFromAdminSync() {
+  if (adminSyncReloadTimer > 0) return;
+  adminSyncReloadTimer = window.setTimeout(() => {
+    adminSyncReloadTimer = 0;
+    void reloadCallsFromAdminSync();
+  }, 120);
+}
+
+function publishAdminSync(topic, reason) {
+  if (!adminSyncClient) return;
+  adminSyncClient.publish(topic, reason);
+}
+
+function handleAdminSyncEvent(payload) {
+  const sourceSessionId = String(payload?.source_session_id || '').trim();
+  const ownSessionId = String(sessionState.sessionId || sessionState.sessionToken || '').trim();
+  if (sourceSessionId !== '' && sourceSessionId === ownSessionId) {
+    return;
+  }
+
+  const topic = String(payload?.topic || '').trim().toLowerCase();
+  if (!['all', 'calls', 'overview'].includes(topic)) {
+    return;
+  }
+
+  queueReloadCallsFromAdminSync();
+}
+
+function startAdminSyncSocket() {
+  if (adminSyncClient) {
+    adminSyncClient.disconnect();
+    adminSyncClient = null;
+  }
+
+  adminSyncClient = createAdminSyncSocket({
+    getSessionToken: () => String(sessionState.sessionToken || '').trim(),
+    onSync: handleAdminSyncEvent,
+  });
+  adminSyncClient.connect();
+}
+
+function stopAdminSyncSocket() {
+  if (!adminSyncClient) return;
+  adminSyncClient.disconnect();
+  adminSyncClient = null;
+}
+
 async function loadCalls() {
   loadingCalls.value = true;
   callsError.value = '';
@@ -819,9 +990,14 @@ async function loadCalls() {
   }
 }
 
-async function loadCalendar() {
-  loadingCalendar.value = true;
-  calendarError.value = '';
+async function loadCalendar({ background = false } = {}) {
+  const hasVisibleCalendarData = Array.isArray(calendarCalls.value) && calendarCalls.value.length > 0;
+  const useBlockingLoadingState = !background || !hasVisibleCalendarData;
+
+  if (useBlockingLoadingState) {
+    loadingCalendar.value = true;
+    calendarError.value = '';
+  }
 
   try {
     const payload = await apiRequest('/api/calls', {
@@ -835,11 +1011,16 @@ async function loadCalendar() {
     });
 
     calendarCalls.value = Array.isArray(payload.calls) ? payload.calls : [];
+    calendarError.value = '';
   } catch (error) {
-    calendarCalls.value = [];
-    calendarError.value = error instanceof Error ? error.message : 'Could not load calendar calls.';
+    if (useBlockingLoadingState) {
+      calendarCalls.value = [];
+      calendarError.value = error instanceof Error ? error.message : 'Could not load calendar calls.';
+    }
   } finally {
-    loadingCalendar.value = false;
+    if (useBlockingLoadingState) {
+      loadingCalendar.value = false;
+    }
   }
 }
 
@@ -858,6 +1039,7 @@ function toCalendarEvents() {
       start: startsAt,
       end: endsAt,
       allDay: false,
+      editable: isEditable(call),
       extendedProps: {
         callPayload: call,
       },
@@ -898,6 +1080,94 @@ function openComposeForCalendarEvent(eventApi) {
   }
 }
 
+function resolveCalendarEventCall(eventApi) {
+  const payloadCall = eventApi?.extendedProps?.callPayload;
+  if (payloadCall && typeof payloadCall === 'object') {
+    return payloadCall;
+  }
+
+  const callId = String(eventApi?.id || '').trim();
+  if (callId === '') {
+    return null;
+  }
+
+  for (const call of calendarCalls.value) {
+    if (String(call?.id || '') === callId) {
+      return call;
+    }
+  }
+
+  return null;
+}
+
+async function persistCalendarEventWindow(eventApi, revert) {
+  const call = resolveCalendarEventCall(eventApi);
+  const callId = String(call?.id || eventApi?.id || '').trim();
+  if (callId === '') {
+    if (typeof revert === 'function') revert();
+    setNotice('error', 'Could not update call schedule (missing call id).');
+    return;
+  }
+
+  if (!isEditable(call)) {
+    if (typeof revert === 'function') revert();
+    setNotice('error', 'Only scheduled and active calls can be rescheduled.');
+    return;
+  }
+
+  const startDate = eventApi?.start instanceof Date ? new Date(eventApi.start.getTime()) : null;
+  let endDate = eventApi?.end instanceof Date ? new Date(eventApi.end.getTime()) : null;
+  if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) {
+    if (typeof revert === 'function') revert();
+    setNotice('error', 'Could not update call schedule (invalid start timestamp).');
+    return;
+  }
+
+  if (!(endDate instanceof Date) || Number.isNaN(endDate.getTime())) {
+    const fallbackStart = new Date(String(call?.starts_at || ''));
+    const fallbackEnd = new Date(String(call?.ends_at || ''));
+    if (!Number.isNaN(fallbackStart.getTime()) && !Number.isNaN(fallbackEnd.getTime()) && fallbackEnd.getTime() > fallbackStart.getTime()) {
+      endDate = new Date(startDate.getTime() + (fallbackEnd.getTime() - fallbackStart.getTime()));
+    }
+  }
+
+  if (!(endDate instanceof Date) || Number.isNaN(endDate.getTime()) || endDate.getTime() <= startDate.getTime()) {
+    if (typeof revert === 'function') revert();
+    setNotice('error', 'End timestamp must be after start timestamp.');
+    return;
+  }
+
+  const startsAt = startDate.toISOString();
+  const endsAt = endDate.toISOString();
+
+  try {
+    await apiRequest(`/api/calls/${encodeURIComponent(callId)}`, {
+      method: 'PATCH',
+      body: {
+        starts_at: startsAt,
+        ends_at: endsAt,
+      },
+    });
+
+    if (call && typeof call === 'object') {
+      call.starts_at = startsAt;
+      call.ends_at = endsAt;
+    }
+    setNotice('ok', 'Call schedule updated.');
+    publishAdminSync('calls', 'call_schedule_updated');
+    await Promise.all([loadCalls(), loadCalendar({ background: true })]);
+  } catch (error) {
+    if (typeof revert === 'function') revert();
+    setNotice('error', error instanceof Error ? error.message : 'Could not update call schedule.');
+  }
+}
+
+function handleCalendarEventMoveOrResize(info) {
+  if (!info || !info.event) return;
+  const revert = typeof info.revert === 'function' ? info.revert : null;
+  void persistCalendarEventWindow(info.event, revert);
+}
+
 async function initCallsCalendar() {
   if (!(callsCalendarEl.value instanceof HTMLElement) || calendarInstance) return;
   try {
@@ -911,9 +1181,12 @@ async function initCallsCalendar() {
       },
       height: 'auto',
       contentHeight: 'auto',
-      eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+      eventTimeFormat: fullCalendarEventTimeFormat(sessionState.timeFormat),
       selectable: true,
-      editable: false,
+      editable: true,
+      eventStartEditable: true,
+      eventDurationEditable: true,
+      eventResizableFromStart: true,
       events: [],
       dateClick(info) {
         const now = Date.now();
@@ -931,6 +1204,12 @@ async function initCallsCalendar() {
       },
       eventClick(info) {
         openComposeForCalendarEvent(info.event);
+      },
+      eventDrop(info) {
+        handleCalendarEventMoveOrResize(info);
+      },
+      eventResize(info) {
+        handleCalendarEventMoveOrResize(info);
       },
     });
     calendarInstance.render();
@@ -999,7 +1278,9 @@ async function goToPage(nextPage) {
 }
 
 const enterCallPreviewVideoRef = ref(null);
+const enterCallPreviewRawStreamRef = ref(null);
 const enterCallPreviewStreamRef = ref(null);
+const enterCallPreviewBackgroundController = new BackgroundFilterController();
 let detachCallMediaWatcher = null;
 let enterCallPreviewResizeHandler = null;
 const callAccessLinkEndpointAvailable = ref(true);
@@ -1012,14 +1293,13 @@ const enterCallState = reactive({
   expiresAt: '',
   callId: '',
   roomId: '',
-  linkKind: 'personal',
+  callAccessMode: 'invite_only',
   targetKey: '',
   targetOptions: [],
   copyNotice: '',
   previewReady: false,
   previewError: '',
   previewAspectRatio: '16 / 9',
-  panelOpen: false,
 });
 
 function resetEnterCallState() {
@@ -1029,18 +1309,123 @@ function resetEnterCallState() {
   enterCallState.expiresAt = '';
   enterCallState.callId = '';
   enterCallState.roomId = '';
-  enterCallState.linkKind = 'personal';
+  enterCallState.callAccessMode = 'invite_only';
   enterCallState.targetKey = '';
   enterCallState.targetOptions = [];
   enterCallState.copyNotice = '';
   enterCallState.previewReady = false;
   enterCallState.previewError = '';
   enterCallState.previewAspectRatio = '16 / 9';
-  enterCallState.panelOpen = false;
 }
 
-function toggleEnterCallPanel() {
-  enterCallState.panelOpen = !enterCallState.panelOpen;
+function isBackgroundPresetActive(preset) {
+  const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
+  const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
+  const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
+
+  if (preset === 'off') {
+    return mode !== 'blur' || !applyOutgoing;
+  }
+  if (preset === 'light') {
+    return mode === 'blur' && applyOutgoing && backdrop === 'blur7';
+  }
+  if (preset === 'strong') {
+    return mode === 'blur' && applyOutgoing && backdrop === 'blur9';
+  }
+  return false;
+}
+
+function applyBackgroundPreset(preset) {
+  if (preset !== 'light' && preset !== 'strong') {
+    setCallBackgroundFilterMode('off');
+    setCallBackgroundApplyOutgoing(false);
+    return;
+  }
+
+  if (isBackgroundPresetActive(preset)) {
+    setCallBackgroundFilterMode('off');
+    setCallBackgroundApplyOutgoing(false);
+    return;
+  }
+
+  setCallBackgroundFilterMode('blur');
+  setCallBackgroundApplyOutgoing(true);
+
+  if (preset === 'strong') {
+    setCallBackgroundBackdropMode('blur9');
+    setCallBackgroundQualityProfile('quality');
+    setCallBackgroundBlurStrength(4);
+    return;
+  }
+
+  setCallBackgroundBackdropMode('blur7');
+  setCallBackgroundQualityProfile('balanced');
+  setCallBackgroundBlurStrength(2);
+}
+
+function resolvePreviewBackgroundFilterOptions() {
+  const toFiniteNumber = (value, fallback) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : fallback;
+  };
+  const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase() === 'blur'
+    ? 'blur'
+    : 'off';
+  const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
+  if (!applyOutgoing || mode !== 'blur') {
+    return { mode: 'off' };
+  }
+
+  const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
+  const qualityProfile = String(callMediaPrefs.backgroundQualityProfile || 'balanced').trim().toLowerCase();
+  const baseBlurLevel = Math.max(0, Math.min(4, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurStrength, 2))));
+  const blurStepPx = [1, 2, 3, 4, 5];
+  let blurPx = blurStepPx[baseBlurLevel] ?? 3;
+  if (backdrop === 'blur9') {
+    blurPx = Math.round(blurPx * 1.35);
+  }
+  blurPx = Math.max(1, Math.min(12, blurPx));
+
+  let detectIntervalMs = 110;
+  if (qualityProfile === 'quality') {
+    detectIntervalMs = 80;
+  } else if (qualityProfile === 'realtime') {
+    detectIntervalMs = 140;
+  }
+
+  let temporalSmoothingAlpha = 0.24;
+  if (qualityProfile === 'quality') {
+    temporalSmoothingAlpha = 0.18;
+  } else if (qualityProfile === 'realtime') {
+    temporalSmoothingAlpha = 0.32;
+  }
+
+  const maskVariant = Math.max(1, Math.min(10, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaskVariant, 4))));
+  const transitionGain = Math.max(1, Math.min(10, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurTransition, 10))));
+  const requestedProcessWidth = Math.max(320, Math.min(1920, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessWidth, 960))));
+  const requestedProcessFps = Math.max(8, Math.min(30, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessFps, 24))));
+  let processWidthCap = 960;
+  let processFpsCap = 24;
+  if (qualityProfile === 'quality') {
+    processWidthCap = 1280;
+    processFpsCap = 30;
+  } else if (qualityProfile === 'realtime') {
+    processWidthCap = 960;
+    processFpsCap = 15;
+  }
+
+  return {
+    mode,
+    blurPx,
+    detectIntervalMs,
+    temporalSmoothingAlpha,
+    preferFastMatte: false,
+    maskVariant,
+    transitionGain,
+    maxProcessWidth: Math.max(320, Math.min(processWidthCap, requestedProcessWidth)),
+    maxProcessFps: Math.max(8, Math.min(processFpsCap, requestedProcessFps)),
+    autoDisableOnOverload: false,
+  };
 }
 
 function updateEnterCallPreviewAspectRatio() {
@@ -1060,6 +1445,11 @@ function fallbackWorkspaceLink(callId) {
   const joinPath = `/workspace/call/${encodeURIComponent(normalizedCallId)}`;
   const origin = typeof window !== 'undefined' ? String(window.location.origin || '').trim() : '';
   return origin !== '' ? `${origin}${joinPath}` : joinPath;
+}
+
+function normalizeCallAccessMode(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'free_for_all' ? 'free_for_all' : 'invite_only';
 }
 
 function normalizeTargetOptionsFromCall(call) {
@@ -1104,6 +1494,8 @@ function normalizeTargetOptionsFromCall(call) {
 }
 
 function stopEnterCallPreview() {
+  enterCallPreviewBackgroundController.dispose();
+
   const previewNode = enterCallPreviewVideoRef.value;
   if (previewNode instanceof HTMLVideoElement) {
     try {
@@ -1113,6 +1505,14 @@ function stopEnterCallPreview() {
     }
     previewNode.srcObject = null;
   }
+
+  const rawStream = enterCallPreviewRawStreamRef.value;
+  if (rawStream instanceof MediaStream) {
+    for (const track of rawStream.getTracks()) {
+      track.stop();
+    }
+  }
+  enterCallPreviewRawStreamRef.value = null;
 
   const stream = enterCallPreviewStreamRef.value;
   if (stream instanceof MediaStream) {
@@ -1149,14 +1549,28 @@ async function startEnterCallPreview() {
   }
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia(buildPreviewConstraints());
-    enterCallPreviewStreamRef.value = stream;
+    const rawStream = await navigator.mediaDevices.getUserMedia(buildPreviewConstraints());
+    enterCallPreviewRawStreamRef.value = rawStream;
     const volume = Math.max(0, Math.min(100, Number(callMediaPrefs.microphoneVolume || 100))) / 100;
-    for (const track of stream.getAudioTracks()) {
+    for (const track of rawStream.getAudioTracks()) {
       if (typeof track.applyConstraints === 'function') {
         track.applyConstraints({ volume }).catch(() => {});
       }
     }
+
+    let previewStream = rawStream;
+    const backgroundOptions = resolvePreviewBackgroundFilterOptions();
+    if (backgroundOptions.mode === 'blur') {
+      try {
+        const result = await enterCallPreviewBackgroundController.apply(rawStream, backgroundOptions);
+        if (result?.stream instanceof MediaStream) {
+          previewStream = result.stream;
+        }
+      } catch {
+        previewStream = rawStream;
+      }
+    }
+    enterCallPreviewStreamRef.value = previewStream;
 
     await nextTick();
     const previewNode = enterCallPreviewVideoRef.value;
@@ -1165,7 +1579,7 @@ async function startEnterCallPreview() {
     }
 
     previewNode.muted = true;
-    previewNode.srcObject = stream;
+    previewNode.srcObject = previewStream;
     await previewNode.play().catch(() => {});
     enterCallState.previewReady = true;
   } catch (error) {
@@ -1174,9 +1588,57 @@ async function startEnterCallPreview() {
   }
 }
 
+async function playSpeakerTestSound() {
+  if (typeof window === 'undefined') return;
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextCtor) return;
+
+  let context = null;
+  const audio = new Audio();
+  try {
+    context = new AudioContextCtor();
+    const destination = context.createMediaStreamDestination();
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    const normalizedVolume = Math.max(0, Math.min(100, Number(callMediaPrefs.speakerVolume || 100))) / 100;
+
+    oscillator.type = 'sine';
+    oscillator.frequency.value = 880;
+    gainNode.gain.value = Math.max(0.01, normalizedVolume * 0.45);
+    oscillator.connect(gainNode);
+    gainNode.connect(destination);
+
+    audio.srcObject = destination.stream;
+    audio.playsInline = true;
+    audio.muted = false;
+    audio.volume = 1;
+
+    const speakerDeviceId = String(callMediaPrefs.selectedSpeakerId || '').trim();
+    if (speakerDeviceId !== '' && typeof audio.setSinkId === 'function') {
+      await audio.setSinkId(speakerDeviceId).catch(() => {});
+    }
+
+    await audio.play();
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.22);
+    await new Promise((resolve) => setTimeout(resolve, 260));
+  } catch {
+    // ignore
+  } finally {
+    try {
+      audio.pause();
+    } catch {
+      // ignore
+    }
+    audio.srcObject = null;
+    if (context && typeof context.close === 'function') {
+      await context.close().catch(() => {});
+    }
+  }
+}
+
 function closeEnterCallModal() {
   enterCallState.open = false;
-  enterCallState.panelOpen = false;
   resetEnterCallState();
   stopEnterCallPreview();
 }
@@ -1194,17 +1656,18 @@ async function openEnterCallModal(call) {
   enterCallState.expiresAt = '';
   enterCallState.callId = String(call.id);
   enterCallState.roomId = String(call.room_id || 'lobby');
-  enterCallState.linkKind = 'personal';
+  enterCallState.callAccessMode = normalizeCallAccessMode(call.access_mode);
   enterCallState.targetOptions = normalizeTargetOptionsFromCall(call);
   enterCallState.targetKey = enterCallState.targetOptions[0]?.key || '';
   enterCallState.copyNotice = '';
-  enterCallState.panelOpen = false;
   updateEnterCallPreviewAspectRatio();
 
-  await refreshCallMediaDevices({ requestPermissions: true });
-  await startEnterCallPreview();
-
-  await generateEnterCallLink();
+  try {
+    await refreshCallMediaDevices({ requestPermissions: true });
+    await startEnterCallPreview();
+  } finally {
+    enterCallState.loading = false;
+  }
 }
 
 async function generateEnterCallLink() {
@@ -1227,7 +1690,8 @@ async function generateEnterCallLink() {
   }
 
   const requestBody = {};
-  if (enterCallState.linkKind === 'open') {
+  const callAccessMode = normalizeCallAccessMode(enterCallState.callAccessMode);
+  if (callAccessMode === 'free_for_all') {
     requestBody.link_kind = 'open';
   } else {
     requestBody.link_kind = 'personal';
@@ -1309,32 +1773,14 @@ async function copyInviteCode() {
 
 async function resolveWorkspaceRouteSegment(target = null) {
   const normalizedTarget = target && typeof target === 'object' ? target : {};
+  const callId = String(normalizedTarget.callId || '').trim();
+  if (callId !== '') {
+    return callId;
+  }
+
   const explicitAccessId = String(normalizedTarget.accessId || '').trim();
   if (explicitAccessId !== '') {
     return explicitAccessId;
-  }
-
-  const callId = String(normalizedTarget.callId || '').trim();
-  if (callId !== '') {
-    if (!callAccessLinkEndpointAvailable.value) {
-      return callId;
-    }
-    try {
-      const payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/access-link`, {
-        method: 'POST',
-      });
-      const accessId = String(payload?.result?.access_link?.id || '').trim();
-      if (accessId !== '') {
-        return accessId;
-      }
-    } catch (error) {
-      if (looksLikeNotFoundError(error)) {
-        callAccessLinkEndpointAvailable.value = false;
-      }
-      // Fallback to direct call id route if access-link endpoint is unavailable.
-    }
-
-    return callId;
   }
 
   const roomId = String(normalizedTarget.roomId || '').trim();
@@ -1344,11 +1790,29 @@ async function resolveWorkspaceRouteSegment(target = null) {
 async function openCallWorkspace(target = null) {
   const routeSegment = await resolveWorkspaceRouteSegment(target);
   closeEnterCallModal();
-  router.push(`/workspace/call/${encodeURIComponent(routeSegment)}`);
+  await router.push(`/workspace/call/${encodeURIComponent(routeSegment)}`);
 }
 
 watch(
   () => [callMediaPrefs.selectedCameraId, callMediaPrefs.selectedMicrophoneId],
+  () => {
+    if (!enterCallState.open) return;
+    void startEnterCallPreview();
+  },
+);
+
+watch(
+  () => [
+    callMediaPrefs.backgroundFilterMode,
+    callMediaPrefs.backgroundBackdropMode,
+    callMediaPrefs.backgroundQualityProfile,
+    callMediaPrefs.backgroundBlurStrength,
+    callMediaPrefs.backgroundApplyOutgoing,
+    callMediaPrefs.backgroundMaskVariant,
+    callMediaPrefs.backgroundBlurTransition,
+    callMediaPrefs.backgroundMaxProcessWidth,
+    callMediaPrefs.backgroundMaxProcessFps,
+  ],
   () => {
     if (!enterCallState.open) return;
     void startEnterCallPreview();
@@ -1374,6 +1838,7 @@ const composeState = reactive({
   mode: 'create',
   callId: '',
   title: '',
+  accessMode: 'invite_only',
   roomId: 'lobby',
   startsLocal: '',
   endsLocal: '',
@@ -1398,6 +1863,26 @@ const composeParticipants = reactive({
 const composeSelectedUserIds = ref([]);
 const composeExternalRows = ref([]);
 let composeExternalRowId = 0;
+
+function currentSessionUserId() {
+  const id = Number(sessionState.userId || 0);
+  return Number.isInteger(id) && id > 0 ? id : 0;
+}
+
+function normalizedInternalParticipantUserIds() {
+  const ownUserId = currentSessionUserId();
+  const seen = new Set();
+  const ids = [];
+  for (const rawId of composeSelectedUserIds.value) {
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id <= 0 || id === ownUserId || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+}
 
 function nextExternalRow() {
   composeExternalRowId += 1;
@@ -1439,6 +1924,7 @@ function seedComposeWindow(mode) {
 function resetComposeModal() {
   composeState.callId = '';
   composeState.title = '';
+  composeState.accessMode = 'invite_only';
   composeState.roomId = 'lobby';
   composeState.replaceParticipants = false;
   composeState.submitting = false;
@@ -1465,6 +1951,7 @@ function openCompose(mode, call = null) {
   if (mode === 'edit' && call) {
     composeState.callId = String(call.id || '');
     composeState.title = String(call.title || '');
+    composeState.accessMode = normalizeCallAccessMode(call.access_mode);
     composeState.roomId = String(call.room_id || 'lobby');
     composeState.startsLocal = isoToLocalInput(String(call.starts_at || ''));
     composeState.endsLocal = isoToLocalInput(String(call.ends_at || ''));
@@ -1504,7 +1991,12 @@ async function loadComposeParticipants() {
       },
     });
 
-    composeParticipants.rows = Array.isArray(payload.users) ? payload.users : [];
+    const ownUserId = currentSessionUserId();
+    const allRows = Array.isArray(payload.users) ? payload.users : [];
+    composeParticipants.rows = allRows.filter((row) => {
+      const candidateId = Number(row?.id ?? row?.user_id ?? 0);
+      return !Number.isInteger(candidateId) || candidateId !== ownUserId;
+    });
     const paging = payload.pagination || {};
     composeParticipants.total = Number.isInteger(paging.total) ? paging.total : composeParticipants.rows.length;
     composeParticipants.pageCount = Number.isInteger(paging.page_count) && paging.page_count > 0
@@ -1512,6 +2004,9 @@ async function loadComposeParticipants() {
       : 1;
     composeParticipants.hasPrev = Boolean(paging.has_prev);
     composeParticipants.hasNext = Boolean(paging.has_next);
+    if (ownUserId > 0) {
+      composeSelectedUserIds.value = composeSelectedUserIds.value.filter((id) => Number(id) !== ownUserId);
+    }
   } catch (error) {
     composeParticipants.rows = [];
     composeParticipants.total = 0;
@@ -1545,7 +2040,11 @@ function isUserSelected(userId) {
 
 function toggleUserSelection(userId) {
   const id = Number(userId);
+  const ownUserId = currentSessionUserId();
   if (!Number.isInteger(id) || id <= 0) {
+    return;
+  }
+  if (ownUserId > 0 && id === ownUserId) {
     return;
   }
 
@@ -1648,6 +2147,7 @@ async function submitCompose() {
   const payload = {
     room_id: String(composeState.roomId || '').trim() || 'lobby',
     title,
+    access_mode: normalizeCallAccessMode(composeState.accessMode),
     starts_at: startsAt,
     ends_at: endsAt,
   };
@@ -1659,7 +2159,7 @@ async function submitCompose() {
       return;
     }
 
-    payload.internal_participant_user_ids = composeSelectedUserIds.value.slice();
+    payload.internal_participant_user_ids = normalizedInternalParticipantUserIds();
     payload.external_participants = normalizedExternal.rows;
   }
 
@@ -1673,6 +2173,7 @@ async function submitCompose() {
         body: payload,
       });
       setNotice('ok', 'Call updated.');
+      publishAdminSync('calls', 'call_updated');
     } else {
       const createResult = await apiRequest('/api/calls', {
         method: 'POST',
@@ -1680,6 +2181,7 @@ async function submitCompose() {
       });
       const createdCallId = String(createResult?.result?.call?.id || '').trim();
       const createdRoomId = String(createResult?.result?.call?.room_id || payload.room_id || 'lobby').trim() || 'lobby';
+      publishAdminSync('calls', 'call_created');
       if (composeState.mode === 'create') {
         closeCompose();
         void openCallWorkspace({ callId: createdCallId, roomId: createdRoomId });
@@ -1697,14 +2199,164 @@ async function submitCompose() {
   }
 }
 
+function sanitizeCancelMessageHtml(value) {
+  const html = String(value || '');
+  if (typeof window === 'undefined') {
+    return html.trim();
+  }
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  for (const node of container.querySelectorAll('script,style')) {
+    node.remove();
+  }
+  for (const element of container.querySelectorAll('*')) {
+    for (const attribute of Array.from(element.attributes)) {
+      const attributeName = String(attribute.name || '').toLowerCase();
+      if (attributeName.startsWith('on')) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+  }
+
+  return container.innerHTML.trim();
+}
+
+function normalizeCancelMessageHtml(value) {
+  return sanitizeCancelMessageHtml(value).replace(/>\s+</g, '><').trim();
+}
+
+function cancelMessageHtmlToPlainText(value) {
+  const html = String(value || '');
+  if (typeof window === 'undefined') {
+    return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  return String(container.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function prettifyCancelReason(reason) {
+  const normalized = String(reason || '').trim().replace(/[_-]+/g, ' ');
+  if (normalized === '') return 'Custom template';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+const CANCEL_TEMPLATE_STORAGE_KEY = 'king.video.calls.cancel.templates.v1';
+const DEFAULT_CANCEL_TEMPLATES = Object.freeze([
+  {
+    reason: 'scheduler_conflict',
+    label: 'Scheduler conflict',
+    messageHtml: '<p>Call cancelled due to scheduling conflict.</p>',
+  },
+  {
+    reason: 'host_unavailable',
+    label: 'Host unavailable',
+    messageHtml: '<p>Call cancelled because the host is currently unavailable.</p>',
+  },
+  {
+    reason: 'technical_issue',
+    label: 'Technical issue',
+    messageHtml: '<p>Call cancelled due to a technical issue. We will reschedule shortly.</p>',
+  },
+  {
+    reason: 'emergency_stop',
+    label: 'Emergency stop',
+    messageHtml: '<p>Call cancelled due to an urgent operational reason.</p>',
+  },
+]);
+
+function normalizeCancelTemplateItem(rawTemplate, index) {
+  const rawReason = String(rawTemplate?.reason || '').trim().toLowerCase();
+  const reason = rawReason.replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+  if (reason === '') {
+    return null;
+  }
+
+  const fallbackLabel = prettifyCancelReason(reason);
+  const label = String(rawTemplate?.label || '').trim() || fallbackLabel;
+  const rawMessage = String(rawTemplate?.messageHtml || rawTemplate?.message || '').trim();
+  const messageHtml = normalizeCancelMessageHtml(rawMessage || `<p>${fallbackLabel}.</p>`);
+
+  return {
+    id: `${reason}-${index}`,
+    reason,
+    label,
+    messageHtml,
+  };
+}
+
+function cloneCancelTemplateList(list) {
+  return list
+    .map((entry, index) => normalizeCancelTemplateItem(entry, index))
+    .filter((entry) => entry !== null);
+}
+
+function loadCancelTemplates() {
+  const fallback = cloneCancelTemplateList(DEFAULT_CANCEL_TEMPLATES);
+  if (typeof window === 'undefined') {
+    return fallback;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(CANCEL_TEMPLATE_STORAGE_KEY);
+    if (typeof raw !== 'string' || raw.trim() === '') {
+      return fallback;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return fallback;
+    }
+    const templates = cloneCancelTemplateList(parsed);
+    return templates.length > 0 ? templates : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function persistCancelTemplates(templates) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      CANCEL_TEMPLATE_STORAGE_KEY,
+      JSON.stringify(
+        templates.map((template) => ({
+          reason: template.reason,
+          label: template.label,
+          messageHtml: template.messageHtml,
+        })),
+      ),
+    );
+  } catch {
+    // ignore storage failures
+  }
+}
+
+const cancelTemplates = ref(loadCancelTemplates());
+const cancelEditorRef = ref(null);
+
 const cancelState = reactive({
+  open: false,
+  submitting: false,
+  templateSaving: false,
+  error: '',
+  callId: '',
+  callTitle: '',
+  overrideTemplate: true,
+  selectedTemplateId: '',
+  customReason: '',
+  reason: '',
+  messageHtml: '',
+  templateDirty: false,
+});
+
+const deleteState = reactive({
   open: false,
   submitting: false,
   error: '',
   callId: '',
   callTitle: '',
-  reason: '',
-  message: '',
 });
 
 function openCancel(call) {
@@ -1712,25 +2364,175 @@ function openCancel(call) {
   closeEnterCallModal();
   cancelState.open = true;
   cancelState.submitting = false;
+  cancelState.templateSaving = false;
   cancelState.error = '';
   cancelState.callId = String(call?.id || '');
   cancelState.callTitle = String(call?.title || call?.id || '');
-  cancelState.reason = 'scheduler_conflict';
-  cancelState.message = 'Call cancelled due to scheduling conflict.';
+  cancelState.overrideTemplate = true;
+  cancelState.customReason = '';
+  const preferredTemplate = findCancelTemplate('scheduler_conflict');
+  const defaultTemplate = preferredTemplate || cancelTemplates.value[0] || null;
+  cancelState.selectedTemplateId = defaultTemplate ? defaultTemplate.reason : '';
+  applyCancelTemplate(cancelState.selectedTemplateId);
 }
 
 function closeCancel() {
   cancelState.open = false;
   cancelState.submitting = false;
+  cancelState.templateSaving = false;
   cancelState.error = '';
+}
+
+function findCancelTemplate(reason) {
+  const normalizedReason = String(reason || '').trim().toLowerCase();
+  if (normalizedReason === '') return null;
+  return cancelTemplates.value.find((template) => template.reason === normalizedReason) || null;
+}
+
+function syncCancelEditorFromState() {
+  const normalizedHtml = normalizeCancelMessageHtml(cancelState.messageHtml);
+  cancelState.messageHtml = normalizedHtml;
+  nextTick(() => {
+    const editor = cancelEditorRef.value;
+    if (!(editor instanceof HTMLElement)) return;
+    if (editor.innerHTML !== normalizedHtml) {
+      editor.innerHTML = normalizedHtml;
+    }
+  });
+}
+
+function refreshCancelTemplateDirty() {
+  if (!cancelState.overrideTemplate) {
+    cancelState.templateDirty = false;
+    return;
+  }
+
+  const template = findCancelTemplate(cancelState.selectedTemplateId);
+  if (!template) {
+    cancelState.templateDirty = false;
+    return;
+  }
+
+  const currentHtml = normalizeCancelMessageHtml(cancelState.messageHtml);
+  const templateHtml = normalizeCancelMessageHtml(template.messageHtml);
+  cancelState.templateDirty = currentHtml !== templateHtml;
+}
+
+function applyCancelTemplate(reason) {
+  const template = findCancelTemplate(reason);
+  if (!template) {
+    cancelState.reason = String(reason || '').trim();
+    cancelState.messageHtml = '';
+    cancelState.templateDirty = false;
+    syncCancelEditorFromState();
+    return;
+  }
+
+  cancelState.selectedTemplateId = template.reason;
+  cancelState.reason = template.reason;
+  cancelState.messageHtml = template.messageHtml;
+  cancelState.templateDirty = false;
+  syncCancelEditorFromState();
+}
+
+function handleCancelEditorInput() {
+  const editor = cancelEditorRef.value;
+  if (!(editor instanceof HTMLElement)) return;
+  cancelState.messageHtml = normalizeCancelMessageHtml(editor.innerHTML);
+  refreshCancelTemplateDirty();
+}
+
+function execCancelEditorCommand(commandName, commandValue = null) {
+  if (typeof document === 'undefined') return;
+  const editor = cancelEditorRef.value;
+  if (!(editor instanceof HTMLElement)) return;
+  editor.focus();
+  document.execCommand(commandName, false, commandValue);
+  handleCancelEditorInput();
+}
+
+function toggleCancelOverride(nextValue) {
+  cancelState.overrideTemplate = Boolean(nextValue);
+  cancelState.error = '';
+
+  if (!cancelState.overrideTemplate) {
+    cancelState.customReason = cancelState.reason || cancelState.selectedTemplateId || '';
+    cancelState.templateDirty = false;
+    return;
+  }
+
+  const defaultReason = String(cancelState.selectedTemplateId || cancelTemplates.value[0]?.reason || '').trim();
+  if (defaultReason !== '') {
+    applyCancelTemplate(defaultReason);
+  }
+}
+
+async function saveCancelTemplate() {
+  cancelState.error = '';
+  if (!cancelState.overrideTemplate) return;
+
+  const template = findCancelTemplate(cancelState.selectedTemplateId);
+  if (!template) {
+    cancelState.error = 'Select a template first.';
+    return;
+  }
+
+  const messageHtml = normalizeCancelMessageHtml(cancelState.messageHtml);
+  const plainText = cancelMessageHtmlToPlainText(messageHtml);
+  if (plainText === '') {
+    cancelState.error = 'Cancel message is required.';
+    return;
+  }
+
+  cancelState.templateSaving = true;
+  try {
+    const nextTemplates = cancelTemplates.value
+      .map((entry, index) => {
+        if (entry.reason !== template.reason) return entry;
+        return normalizeCancelTemplateItem({
+          reason: entry.reason,
+          label: entry.label,
+          messageHtml,
+        }, index);
+      })
+      .filter((entry) => entry !== null);
+
+    cancelTemplates.value = nextTemplates;
+    persistCancelTemplates(nextTemplates);
+    cancelState.templateDirty = false;
+  } finally {
+    cancelState.templateSaving = false;
+  }
+}
+
+function openDelete(call) {
+  if (!call || !call.id || !isDeletable(call)) {
+    return;
+  }
+
+  clearNotice();
+  closeEnterCallModal();
+  deleteState.open = true;
+  deleteState.submitting = false;
+  deleteState.error = '';
+  deleteState.callId = String(call.id || '');
+  deleteState.callTitle = String(call.title || call.id || '');
+}
+
+function closeDelete() {
+  deleteState.open = false;
+  deleteState.submitting = false;
+  deleteState.error = '';
 }
 
 async function submitCancel() {
   cancelState.error = '';
   clearNotice();
 
-  const reason = cancelState.reason.trim();
-  const message = cancelState.message.trim();
+  const reason = cancelState.overrideTemplate
+    ? cancelState.reason.trim()
+    : cancelState.customReason.trim();
+  const message = cancelMessageHtmlToPlainText(cancelState.messageHtml).trim();
   if (reason === '' || message === '') {
     cancelState.error = 'Cancel reason and message are required.';
     return;
@@ -1749,11 +2551,39 @@ async function submitCancel() {
 
     closeCancel();
     setNotice('ok', 'Call cancelled.');
+    publishAdminSync('calls', 'call_cancelled');
     await Promise.all([loadCalls(), loadCalendar()]);
   } catch (error) {
     cancelState.error = error instanceof Error ? error.message : 'Could not cancel call.';
   } finally {
     cancelState.submitting = false;
+  }
+}
+
+async function submitDelete() {
+  deleteState.error = '';
+  clearNotice();
+
+  const callId = String(deleteState.callId || '').trim();
+  if (callId === '') {
+    deleteState.error = 'Missing call id.';
+    return;
+  }
+
+  deleteState.submitting = true;
+  try {
+    await apiRequest(`/api/calls/${encodeURIComponent(callId)}`, {
+      method: 'DELETE',
+    });
+
+    closeDelete();
+    setNotice('ok', 'Call deleted.');
+    publishAdminSync('calls', 'call_deleted');
+    await Promise.all([loadCalls(), loadCalendar()]);
+  } catch (error) {
+    deleteState.error = error instanceof Error ? error.message : 'Could not delete call.';
+  } finally {
+    deleteState.submitting = false;
   }
 }
 
@@ -1770,17 +2600,19 @@ function handleEscape(event) {
     return;
   }
 
+  if (deleteState.open) {
+    closeDelete();
+    return;
+  }
+
   if (enterCallState.open) {
-    if (enterCallState.panelOpen) {
-      enterCallState.panelOpen = false;
-      return;
-    }
     closeEnterCallModal();
   }
 }
 
 onMounted(() => {
   detachCallMediaWatcher = attachCallMediaDeviceWatcher({ requestPermissions: false });
+  startAdminSyncSocket();
   updateEnterCallPreviewAspectRatio();
   enterCallPreviewResizeHandler = () => updateEnterCallPreviewAspectRatio();
   window.addEventListener('resize', enterCallPreviewResizeHandler);
@@ -1791,6 +2623,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearAdminSyncReloadTimer();
+  stopAdminSyncSocket();
   if (typeof enterCallPreviewResizeHandler === 'function') {
     window.removeEventListener('resize', enterCallPreviewResizeHandler);
     window.removeEventListener('orientationchange', enterCallPreviewResizeHandler);
@@ -1807,6 +2641,31 @@ onBeforeUnmount(() => {
     calendarInstance = null;
   }
 });
+
+watch(
+  () => sessionState.sessionToken,
+  (nextValue, previousValue) => {
+    const nextToken = String(nextValue || '').trim();
+    const previousToken = String(previousValue || '').trim();
+    if (nextToken === previousToken) return;
+    if (!adminSyncClient) return;
+
+    if (nextToken === '') {
+      adminSyncClient.disconnect();
+      return;
+    }
+
+    adminSyncClient.reconnect();
+  }
+);
+
+watch(
+  () => sessionState.timeFormat,
+  () => {
+    if (!calendarInstance) return;
+    calendarInstance.setOption('eventTimeFormat', fullCalendarEventTimeFormat(sessionState.timeFormat));
+  }
+);
 </script>
 
 <style scoped>
@@ -1815,7 +2674,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background: var(--bg-ui-chrome);
-  gap: 1px;
+  gap: 0;
 }
 
 .calls-header {
@@ -1840,9 +2699,10 @@ onBeforeUnmount(() => {
   margin-top: 2px;
 }
 
-.calls-header h3 {
+.calls-header h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: 22px;
+  font-weight: 700;
 }
 
 .calls-header p {
@@ -1857,6 +2717,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+  margin-bottom: 15px;
 }
 
 .calls-toolbar-left {
@@ -1882,11 +2743,25 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
+.calls-toolbar-search-btn {
+  width: 40px;
+  height: 40px;
+}
+
+.calls-toolbar-search-btn img {
+  width: 18px;
+  height: 18px;
+}
+
 .calls-search {
   display: inline-grid;
   grid-template-columns: minmax(220px, 1fr) auto;
   gap: 8px;
   align-items: center;
+}
+
+.calls-search-main {
+  grid-template-columns: minmax(220px, 1fr);
 }
 
 .calls-search.small {
@@ -1909,8 +2784,13 @@ onBeforeUnmount(() => {
 .calls-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
+  padding-top: 0;
   padding-left: 10px;
   padding-right: 10px;
+}
+
+.calls-list-table {
+  margin-top: 10px;
 }
 
 .col-title {
@@ -1918,7 +2798,7 @@ onBeforeUnmount(() => {
 }
 
 .col-actions {
-  width: 150px;
+  width: 190px;
 }
 
 .call-title {
@@ -1946,7 +2826,6 @@ onBeforeUnmount(() => {
   flex: 1 1 auto;
   min-height: 0;
   padding: 10px 10px 10px;
-  background: var(--bg-surface);
   display: grid;
   grid-template-rows: minmax(0, 1fr);
 }
@@ -1963,7 +2842,6 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: center;
   margin-top: auto;
-  border-top: 1px solid var(--border-subtle);
   padding-left: 10px;
   padding-right: 10px;
 }
@@ -1983,10 +2861,11 @@ onBeforeUnmount(() => {
 .calls-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: #09111e;
+  background: rgba(5, 12, 23, 0.72);
 }
 
 .calls-modal-dialog {
+  --calls-enter-dialog-padding: 12px;
   position: relative;
   width: min(1020px, calc(100vw - 30px));
   max-height: calc(100vh - 30px);
@@ -1994,7 +2873,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--bg-surface-strong);
-  box-shadow: 0 16px 32px #000000;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.28);
   padding: 12px;
   display: grid;
   gap: 12px;
@@ -2004,12 +2883,24 @@ onBeforeUnmount(() => {
   width: min(620px, calc(100vw - 30px));
 }
 
+.calls-modal-dialog-cancel {
+  --calls-enter-dialog-padding: 12px;
+  width: min(980px, calc(100vw - 24px));
+  height: min(760px, calc(100dvh - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: var(--calls-enter-dialog-padding);
+}
+
 .calls-modal-dialog-enter {
+  --calls-enter-dialog-padding: 12px;
   width: min(1220px, calc(100vw - 24px));
   height: min(840px, calc(100vh - 24px));
   max-height: calc(100vh - 24px);
   overflow: hidden;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: var(--calls-enter-dialog-padding);
 }
 
 .calls-modal-header {
@@ -2020,8 +2911,34 @@ onBeforeUnmount(() => {
 }
 
 .calls-modal-header h4 {
-  margin: 0;
+  margin: 5px 0 0;
   font-size: 17px;
+}
+
+.calls-modal-header .calls-enter-title {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.calls-modal-header-enter {
+  margin: calc(var(--calls-enter-dialog-padding) * -1) calc(var(--calls-enter-dialog-padding) * -1) 0;
+  padding: 10px;
+  background: var(--brand-bg);
+  border: 0;
+}
+
+.calls-modal-header-enter-left {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.calls-modal-header-enter-logo {
+  width: auto;
+  height: 24px;
+  display: block;
 }
 
 .calls-modal-body {
@@ -2047,38 +2964,8 @@ onBeforeUnmount(() => {
 .calls-enter-preview {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 8px;
-}
-
-.calls-enter-preview-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--text-main);
-}
-
-.calls-enter-preview-meta {
-  color: var(--text-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
-
-.calls-enter-panel-toggle {
-  display: none;
-  border: 0;
-  border-radius: 50%;
-  background: #133262;
-  color: #f7f7f7;
-  cursor: pointer;
-}
-
-.calls-enter-panel-toggle img {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-  filter: brightness(0) invert(1);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
 }
 
 .calls-enter-preview-frame {
@@ -2112,38 +2999,34 @@ onBeforeUnmount(() => {
 .calls-enter-right {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   align-content: start;
-  gap: 10px;
-  overflow: auto;
-  padding-right: 2px;
+  overflow: hidden;
 }
 
-.calls-enter-config-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+.calls-enter-right-settings {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.calls-enter-link-controls {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.calls-enter-invite {
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: #0f1f37;
-  padding: 10px;
-  display: grid;
-  gap: 8px;
+.calls-enter-right-settings .call-left-settings {
+  min-height: 0;
+  max-height: 100%;
+  padding: 12px;
 }
 
 .calls-modal-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.calls-field-wide {
+  grid-column: 1 / -1;
 }
 
 .calls-toggle-row {
@@ -2259,6 +3142,16 @@ onBeforeUnmount(() => {
   padding: 8px 10px;
 }
 
+.calls-delete-warning {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: #ff0000;
+  color: #f7f7f7;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
 .calls-inline-hint {
   margin: 0;
   border: 1px solid var(--border-subtle);
@@ -2273,6 +3166,62 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.calls-cancel-footer {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.calls-cancel-override-row {
+  margin-right: auto;
+}
+
+.calls-cancel-body {
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
+}
+
+.calls-cancel-template-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.calls-cancel-template-toolbar .btn {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.calls-rich-editor {
+  min-height: 200px;
+  max-height: 360px;
+  overflow: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: #d8dadd;
+  color: #0b1323;
+  padding: 10px;
+  line-height: 1.45;
+}
+
+.calls-rich-editor:empty::before {
+  content: 'Write cancellation message...';
+  color: #617082;
+}
+
+.btn.btn-danger {
+  background: #a81a1a;
+}
+
+.btn.btn-danger:hover {
+  background: #c91f1f;
+}
+
+.btn.btn-danger:active {
+  background: #7c1010;
 }
 
 .calls-textarea {
@@ -2294,8 +3243,8 @@ onBeforeUnmount(() => {
     width: 100%;
   }
 
-  .calls-search {
-    grid-template-columns: minmax(0, 1fr) auto;
+  .calls-search-main {
+    grid-template-columns: minmax(0, 1fr);
     width: 100%;
   }
 
@@ -2305,56 +3254,86 @@ onBeforeUnmount(() => {
   }
 
   .calls-modal-dialog-enter {
-    width: min(1120px, calc(100vw - 20px));
-    height: min(820px, calc(100vh - 20px));
-    max-height: calc(100vh - 20px);
+    --calls-enter-dialog-padding: 10px;
+    width: min(980px, calc(100vw - 14px));
+    height: min(920px, calc(100dvh - 14px));
+    max-height: calc(100dvh - 14px);
+    padding: var(--calls-enter-dialog-padding);
+    gap: 8px;
+  }
+
+  .calls-modal-dialog-cancel {
+    --calls-enter-dialog-padding: 10px;
+    width: min(980px, calc(100vw - 14px));
+    height: min(920px, calc(100dvh - 14px));
+    max-height: calc(100dvh - 14px);
+    padding: var(--calls-enter-dialog-padding);
+    gap: 8px;
   }
 
   .calls-enter-layout {
     grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
+    grid-template-rows: minmax(0, 42%) minmax(0, 58%);
+    gap: 8px;
+    min-height: 0;
+    height: 100%;
   }
 
   .calls-enter-preview-frame {
     width: 100%;
-    aspect-ratio: 4 / 3;
-    max-height: 52vh;
-  }
-
-  .calls-enter-panel-toggle {
-    position: absolute;
-    top: 50%;
-    right: 10px;
-    transform: translateY(-50%);
-    z-index: 4;
-    width: 36px;
-    height: 36px;
-    display: grid;
-    place-items: center;
+    height: 100%;
+    aspect-ratio: auto;
+    max-height: none;
   }
 
   .calls-enter-right {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(430px, 88vw);
-    transform: translateX(104%);
-    transition: transform 220ms ease;
-    z-index: 3;
-    border-left: 1px solid var(--border-subtle);
-    background: var(--bg-surface-strong);
-    box-shadow: -10px 0 24px rgba(0, 0, 0, 0.3);
-    padding: 10px;
+    position: static;
+    width: 100%;
+    border-left: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
   }
 
-  .calls-enter-layout.panel-open .calls-enter-right {
-    transform: translateX(0);
+  .calls-enter-right-settings .call-left-settings {
+    padding: 8px;
+    gap: 6px;
+    overflow-y: hidden;
   }
 
-  .calls-enter-config-grid,
-  .calls-enter-link-controls {
-    grid-template-columns: 1fr;
+  .calls-enter-right-settings .call-left-settings-block {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .calls-enter-right-settings .call-left-settings-title {
+    font-size: 12px;
+  }
+
+  .calls-enter-right-settings .call-left-settings-field {
+    gap: 4px;
+    font-size: 11px;
+  }
+
+  .calls-enter-right-settings .ii-select,
+  .calls-enter-right-settings .call-left-test-btn {
+    height: 30px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .calls-enter-right-settings .call-left-blur-btn {
+    height: 30px;
+  }
+
+  .calls-enter-right-settings .call-left-volume-value {
+    min-width: 38px;
+    font-size: 11px;
+  }
+
+  .calls-modal-footer .btn {
+    height: 34px;
+    padding: 0 14px;
   }
 
   .calls-calendar-full {
@@ -2363,26 +3342,140 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 760px) {
+  .calls-list-table {
+    width: 100%;
+    table-layout: auto;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+  }
+
+  .calls-list-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .calls-list-table tbody,
+  .calls-list-table tr,
+  .calls-list-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .calls-list-table tbody tr {
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-row);
+  }
+
+  .calls-list-table td {
+    display: grid;
+    grid-template-columns: minmax(90px, 34%) minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .calls-list-table td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .calls-list-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .calls-list-table td:last-child .actions-inline {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .calls-list-table .call-subline.code {
+    word-break: break-all;
+    overflow-wrap: anywhere;
+  }
+
   .calls-modal-dialog-enter {
-    width: calc(100vw - 10px);
-    height: calc(100vh - 10px);
-    max-height: calc(100vh - 10px);
+    --calls-enter-dialog-padding: 8px;
+    width: calc(100vw - 6px);
+    height: calc(100dvh - 6px);
+    max-height: calc(100dvh - 6px);
+    padding: var(--calls-enter-dialog-padding);
+    gap: 6px;
+  }
+
+  .calls-modal-dialog-cancel {
+    --calls-enter-dialog-padding: 8px;
+    width: calc(100vw - 6px);
+    height: calc(100dvh - 6px);
+    max-height: calc(100dvh - 6px);
+    padding: var(--calls-enter-dialog-padding);
+    gap: 6px;
+  }
+
+  .calls-modal-header {
+    gap: 6px;
+  }
+
+  .calls-modal-header h4 {
+    font-size: 14px;
+  }
+
+  .calls-modal-header-enter {
+    padding: 10px;
+  }
+
+  .calls-modal-header-enter-logo {
+    height: 20px;
+  }
+
+  .calls-enter-layout {
+    grid-template-rows: minmax(0, 38%) minmax(0, 62%);
+  }
+
+  .calls-rich-editor {
+    min-height: 150px;
+    max-height: 260px;
   }
 
   .calls-enter-preview-frame {
-    aspect-ratio: 1 / 1;
-    max-height: 44vh;
+    height: 100%;
+    max-height: none;
   }
 
-  .calls-enter-right {
-    width: 100%;
-    border-left: 0;
+  .calls-enter-right-settings .call-left-settings {
+    padding: 6px;
+    gap: 5px;
   }
 
-  .calls-enter-panel-toggle {
-    top: 12px;
-    right: 12px;
-    transform: none;
+  .calls-enter-right-settings .call-left-settings-block {
+    padding: 6px;
+    gap: 5px;
+  }
+
+  .calls-enter-right-settings .call-left-settings-title {
+    font-size: 11px;
+  }
+
+  .calls-enter-right-settings .call-left-settings-field {
+    font-size: 10px;
+  }
+
+  .calls-modal-footer .btn {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 12px;
   }
 }
 </style>

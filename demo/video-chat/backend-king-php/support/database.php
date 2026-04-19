@@ -31,6 +31,7 @@ function videochat_open_sqlite_pdo(string $databasePath): PDO
  *   role: string,
  *   password: string,
  *   time_format: string,
+ *   date_format: string,
  *   theme: string
  * }>
  */
@@ -60,6 +61,7 @@ function videochat_demo_user_blueprint(): array
             'role' => 'admin',
             'password' => $adminPassword,
             'time_format' => '24h',
+            'date_format' => 'dmy_dot',
             'theme' => 'dark',
         ],
         [
@@ -68,6 +70,7 @@ function videochat_demo_user_blueprint(): array
             'role' => 'user',
             'password' => $userPassword,
             'time_format' => '24h',
+            'date_format' => 'dmy_dot',
             'theme' => 'dark',
         ],
     ];
@@ -103,7 +106,7 @@ function videochat_seed_demo_users(PDO $pdo): array
 
     $selectUser = $pdo->prepare(
         <<<'SQL'
-SELECT id, role_id, display_name, password_hash, status, time_format, theme
+SELECT id, role_id, display_name, password_hash, status, time_format, date_format, theme
 FROM users
 WHERE lower(email) = lower(:email)
 LIMIT 1
@@ -111,8 +114,8 @@ SQL
     );
     $insertUser = $pdo->prepare(
         <<<'SQL'
-INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, updated_at)
-VALUES(:email, :display_name, :password_hash, :role_id, 'active', :time_format, :theme, :updated_at)
+INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, date_format, theme, updated_at)
+VALUES(:email, :display_name, :password_hash, :role_id, 'active', :time_format, :date_format, :theme, :updated_at)
 SQL
     );
     $updateUser = $pdo->prepare(
@@ -123,6 +126,7 @@ SET display_name = :display_name,
     role_id = :role_id,
     status = 'active',
     time_format = :time_format,
+    date_format = :date_format,
     theme = :theme,
     updated_at = :updated_at
 WHERE id = :id
@@ -168,6 +172,9 @@ SQL
             if ((string) ($existing['time_format'] ?? '') !== $demoUser['time_format']) {
                 $needsUpdate = true;
             }
+            if ((string) ($existing['date_format'] ?? '') !== $demoUser['date_format']) {
+                $needsUpdate = true;
+            }
             if ((string) ($existing['theme'] ?? '') !== $demoUser['theme']) {
                 $needsUpdate = true;
             }
@@ -179,6 +186,7 @@ SQL
                     ':password_hash' => $passwordHash,
                     ':role_id' => $roleId,
                     ':time_format' => $demoUser['time_format'],
+                    ':date_format' => $demoUser['date_format'],
                     ':theme' => $demoUser['theme'],
                     ':updated_at' => gmdate('c'),
                 ]);
@@ -195,6 +203,7 @@ SQL
                 ':password_hash' => $passwordHash,
                 ':role_id' => $roleId,
                 ':time_format' => $demoUser['time_format'],
+                ':date_format' => $demoUser['date_format'],
                 ':theme' => $demoUser['theme'],
                 ':updated_at' => gmdate('c'),
             ];
@@ -305,10 +314,14 @@ function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null
         $activeParticipants[] = $participant;
     }
 
+    $architectureCallId = 'demo-call-architecture-sync';
+    $platformCallId = 'demo-call-platform-standup';
+    $retroCallId = 'demo-call-retro-weekly';
+
     return [
         [
-            'id' => 'demo-call-architecture-sync',
-            'room_id' => 'lobby',
+            'id' => $architectureCallId,
+            'room_id' => $architectureCallId,
             'title' => 'Architecture Sync',
             'status' => 'scheduled',
             'owner_email' => $adminEmail,
@@ -331,8 +344,8 @@ function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null
             ],
         ],
         [
-            'id' => 'demo-call-platform-standup',
-            'room_id' => 'lobby',
+            'id' => $platformCallId,
+            'room_id' => $platformCallId,
             'title' => 'Platform Standup',
             'status' => 'active',
             'owner_email' => $adminEmail,
@@ -344,8 +357,8 @@ function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null
             'participants' => $activeParticipants,
         ],
         [
-            'id' => 'demo-call-retro-weekly',
-            'room_id' => 'lobby',
+            'id' => $retroCallId,
+            'room_id' => $retroCallId,
             'title' => 'Weekly Retrospective',
             'status' => 'ended',
             'owner_email' => $adminEmail,
@@ -433,6 +446,12 @@ SET room_id = :room_id,
 WHERE id = :id
 SQL
     );
+    $insertRoom = $pdo->prepare(
+        <<<'SQL'
+INSERT OR IGNORE INTO rooms(id, name, visibility, status, created_by_user_id, created_at, updated_at)
+VALUES(:id, :name, 'private', 'active', :created_by_user_id, :created_at, :updated_at)
+SQL
+    );
     $deleteParticipants = $pdo->prepare('DELETE FROM call_participants WHERE call_id = :call_id');
     $insertParticipant = $pdo->prepare(
         <<<'SQL'
@@ -452,7 +471,7 @@ SQL
 
         $callPayload = [
             ':id' => $callId,
-            ':room_id' => (string) ($call['room_id'] ?? 'lobby'),
+            ':room_id' => (string) ($call['room_id'] ?? $callId),
             ':title' => (string) ($call['title'] ?? 'Demo Call'),
             ':owner_user_id' => (int) ($owner['id'] ?? 0),
             ':status' => (string) ($call['status'] ?? 'scheduled'),
@@ -466,6 +485,14 @@ SQL
         ];
         $updateCallPayload = $callPayload;
         unset($updateCallPayload[':created_at']);
+
+        $insertRoom->execute([
+            ':id' => (string) $callPayload[':room_id'],
+            ':name' => (string) $callPayload[':title'],
+            ':created_by_user_id' => (int) ($owner['id'] ?? 0),
+            ':created_at' => (string) $callPayload[':created_at'],
+            ':updated_at' => (string) $callPayload[':updated_at'],
+        ]);
 
         $selectCall->execute([':id' => $callId]);
         $existing = $selectCall->fetch();
@@ -535,7 +562,7 @@ SQL
 
         $seeded[] = [
             'id' => $callId,
-            'room_id' => (string) ($call['room_id'] ?? 'lobby'),
+            'room_id' => (string) ($call['room_id'] ?? $callId),
             'title' => (string) ($call['title'] ?? 'Demo Call'),
             'status' => (string) ($call['status'] ?? 'scheduled'),
             'owner_email' => $ownerEmail,
@@ -770,6 +797,113 @@ WHERE participant_user_id IS NULL
 SQL,
             ],
         ],
+        8 => [
+            'name' => '0008_calls_access_mode',
+            'statements' => [
+                "ALTER TABLE calls ADD COLUMN access_mode TEXT NOT NULL DEFAULT 'invite_only' CHECK (access_mode IN ('invite_only', 'free_for_all'))",
+                <<<'SQL'
+UPDATE calls
+SET access_mode = 'invite_only'
+WHERE access_mode IS NULL
+   OR trim(access_mode) = ''
+   OR lower(access_mode) NOT IN ('invite_only', 'free_for_all')
+SQL,
+            ],
+        ],
+        9 => [
+            'name' => '0009_calls_dedicated_room_ids',
+            'statements' => [
+                <<<'SQL'
+INSERT OR IGNORE INTO rooms(id, name, visibility, status, created_by_user_id, created_at, updated_at)
+SELECT
+    calls.id,
+    CASE
+        WHEN trim(coalesce(calls.title, '')) = '' THEN 'Call Room'
+        ELSE calls.title
+    END,
+    'private',
+    'active',
+    calls.owner_user_id,
+    coalesce(nullif(calls.created_at, ''), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    coalesce(nullif(calls.updated_at, ''), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+FROM calls
+WHERE lower(trim(coalesce(calls.room_id, ''))) = 'lobby'
+SQL,
+                <<<'SQL'
+UPDATE calls
+SET room_id = id
+WHERE lower(trim(coalesce(room_id, ''))) = 'lobby'
+SQL,
+            ],
+        ],
+        10 => [
+            'name' => '0010_user_email_identities',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS user_emails (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    is_verified INTEGER NOT NULL DEFAULT 0 CHECK (is_verified IN (0, 1)),
+    is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1)),
+    verified_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS user_email_change_tokens (
+    id TEXT PRIMARY KEY,
+    user_email_id INTEGER NOT NULL REFERENCES user_emails(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    created_by_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    expires_at TEXT NOT NULL,
+    consumed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_emails_email_nocase ON user_emails(lower(email))",
+                <<<'SQL'
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_emails_primary_per_user
+ON user_emails(user_id)
+WHERE is_primary = 1
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_user_emails_user_id ON user_emails(user_id)",
+                "CREATE INDEX IF NOT EXISTS idx_user_email_change_tokens_user_id ON user_email_change_tokens(user_id)",
+                "CREATE INDEX IF NOT EXISTS idx_user_email_change_tokens_expires_at ON user_email_change_tokens(expires_at)",
+                <<<'SQL'
+INSERT INTO user_emails(user_id, email, is_verified, is_primary, verified_at, created_at, updated_at)
+SELECT
+    users.id,
+    lower(trim(users.email)),
+    1,
+    1,
+    coalesce(nullif(users.updated_at, ''), nullif(users.created_at, ''), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    coalesce(nullif(users.created_at, ''), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    coalesce(nullif(users.updated_at, ''), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+FROM users
+WHERE trim(coalesce(users.email, '')) <> ''
+  AND NOT EXISTS (
+      SELECT 1
+      FROM user_emails
+      WHERE user_emails.user_id = users.id
+  )
+SQL,
+            ],
+        ],
+        11 => [
+            'name' => '0011_users_date_format',
+            'statements' => [
+                "ALTER TABLE users ADD COLUMN date_format TEXT NOT NULL DEFAULT 'dmy_dot' CHECK (date_format IN ('dmy_dot', 'dmy_slash', 'dmy_dash', 'ymd_dash', 'ymd_slash', 'ymd_dot', 'ymd_compact', 'mdy_slash', 'mdy_dash', 'mdy_dot'))",
+                <<<'SQL'
+UPDATE users
+SET date_format = 'dmy_dot'
+WHERE date_format IS NULL
+   OR trim(date_format) = ''
+   OR lower(date_format) NOT IN ('dmy_dot', 'dmy_slash', 'dmy_dash', 'ymd_dash', 'ymd_slash', 'ymd_dot', 'ymd_compact', 'mdy_slash', 'mdy_dash', 'mdy_dot')
+SQL,
+            ],
+        ],
     ];
 }
 
@@ -837,6 +971,16 @@ SQL
             $pdo->commit();
         } catch (Throwable $error) {
             $pdo->rollBack();
+            $message = strtolower($error->getMessage());
+            $isMigrationRace = str_contains($message, 'unique constraint failed')
+                && str_contains($message, 'schema_migrations.version');
+            if ($isMigrationRace) {
+                if (!in_array($version, $appliedVersions, true)) {
+                    $appliedVersions[] = $version;
+                    sort($appliedVersions);
+                }
+                continue;
+            }
             throw $error;
         }
 
