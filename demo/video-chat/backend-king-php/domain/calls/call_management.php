@@ -58,6 +58,173 @@ function videochat_normalize_call_invite_state(mixed $value, string $fallback = 
     return $fallbackNormalized;
 }
 
+function videochat_normalize_call_schedule_timezone(mixed $value, string $fallback = 'UTC'): string
+{
+    $fallbackTimezone = trim($fallback);
+    if ($fallbackTimezone === '') {
+        $fallbackTimezone = 'UTC';
+    }
+
+    try {
+        new DateTimeZone($fallbackTimezone);
+    } catch (Throwable) {
+        $fallbackTimezone = 'UTC';
+    }
+
+    $timezone = trim((string) $value);
+    if ($timezone === '') {
+        return $fallbackTimezone;
+    }
+
+    try {
+        new DateTimeZone($timezone);
+    } catch (Throwable) {
+        return $fallbackTimezone;
+    }
+
+    return $timezone;
+}
+
+/**
+ * @return array{ok: bool, timezone: string, error: ?string}
+ */
+function videochat_validate_call_schedule_timezone(mixed $value): array
+{
+    $timezone = trim((string) $value);
+    if ($timezone === '') {
+        return [
+            'ok' => false,
+            'timezone' => 'UTC',
+            'error' => 'required_valid_timezone',
+        ];
+    }
+
+    if (strlen($timezone) > 80) {
+        return [
+            'ok' => false,
+            'timezone' => 'UTC',
+            'error' => 'timezone_too_long',
+        ];
+    }
+
+    try {
+        new DateTimeZone($timezone);
+    } catch (Throwable) {
+        return [
+            'ok' => false,
+            'timezone' => 'UTC',
+            'error' => 'required_valid_timezone',
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'timezone' => $timezone,
+        'error' => null,
+    ];
+}
+
+/**
+ * @return array{ok: bool, all_day: bool, error: ?string}
+ */
+function videochat_validate_call_schedule_all_day(mixed $value): array
+{
+    if (is_bool($value)) {
+        return ['ok' => true, 'all_day' => $value, 'error' => null];
+    }
+    if (is_int($value)) {
+        if ($value === 0 || $value === 1) {
+            return ['ok' => true, 'all_day' => $value === 1, 'error' => null];
+        }
+        return ['ok' => false, 'all_day' => false, 'error' => 'must_be_boolean'];
+    }
+    if (is_string($value)) {
+        $normalized = strtolower(trim($value));
+        if (in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+            return ['ok' => true, 'all_day' => true, 'error' => null];
+        }
+        if (in_array($normalized, ['0', 'false', 'no', 'off', ''], true)) {
+            return ['ok' => true, 'all_day' => false, 'error' => null];
+        }
+    }
+
+    return ['ok' => false, 'all_day' => false, 'error' => 'must_be_boolean'];
+}
+
+/**
+ * @return array{
+ *   timezone: string,
+ *   date: string,
+ *   starts_at_local: string,
+ *   ends_at_local: string,
+ *   duration_minutes: int,
+ *   all_day: bool
+ * }
+ */
+function videochat_build_call_schedule_metadata(
+    string $startsAt,
+    string $endsAt,
+    mixed $timezone = 'UTC',
+    mixed $allDay = false
+): array {
+    $timezoneId = videochat_normalize_call_schedule_timezone($timezone, 'UTC');
+    $timezoneObject = new DateTimeZone($timezoneId);
+    $startsAtUnix = strtotime($startsAt);
+    $endsAtUnix = strtotime($endsAt);
+    if (!is_int($startsAtUnix)) {
+        $startsAtUnix = 0;
+    }
+    if (!is_int($endsAtUnix)) {
+        $endsAtUnix = $startsAtUnix;
+    }
+
+    $startsAtLocal = (new DateTimeImmutable('@' . $startsAtUnix))->setTimezone($timezoneObject);
+    $endsAtLocal = (new DateTimeImmutable('@' . $endsAtUnix))->setTimezone($timezoneObject);
+    $allDayValidation = videochat_validate_call_schedule_all_day($allDay);
+    $durationSeconds = max(0, $endsAtUnix - $startsAtUnix);
+
+    return [
+        'timezone' => $timezoneId,
+        'date' => $startsAtLocal->format('Y-m-d'),
+        'starts_at_local' => $startsAtLocal->format('Y-m-d\TH:i:sP'),
+        'ends_at_local' => $endsAtLocal->format('Y-m-d\TH:i:sP'),
+        'duration_minutes' => intdiv($durationSeconds, 60),
+        'all_day' => (bool) $allDayValidation['all_day'],
+    ];
+}
+
+/**
+ * @return array{
+ *   timezone: string,
+ *   date: string,
+ *   starts_at_local: string,
+ *   ends_at_local: string,
+ *   duration_minutes: int,
+ *   all_day: bool
+ * }
+ */
+function videochat_call_schedule_from_row(array $row): array
+{
+    $schedule = videochat_build_call_schedule_metadata(
+        (string) ($row['starts_at'] ?? ''),
+        (string) ($row['ends_at'] ?? ''),
+        $row['schedule_timezone'] ?? 'UTC',
+        $row['schedule_all_day'] ?? false
+    );
+
+    $persistedDate = trim((string) ($row['schedule_date'] ?? ''));
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $persistedDate) === 1) {
+        $schedule['date'] = $persistedDate;
+    }
+
+    $persistedDuration = filter_var($row['schedule_duration_minutes'] ?? null, FILTER_VALIDATE_INT);
+    if (is_int($persistedDuration) && $persistedDuration > 0) {
+        $schedule['duration_minutes'] = $persistedDuration;
+    }
+
+    return $schedule;
+}
+
 /**
  * @return array{
  *   ok: bool,
@@ -67,6 +234,14 @@ function videochat_normalize_call_invite_state(mixed $value, string $fallback = 
  *     access_mode: string,
  *     starts_at: string,
  *     ends_at: string,
+ *     schedule: array{
+ *       timezone: string,
+ *       date: string,
+ *       starts_at_local: string,
+ *       ends_at_local: string,
+ *       duration_minutes: int,
+ *       all_day: bool
+ *     },
  *     internal_participant_user_ids: array<int, int>,
  *     external_participants: array<int, array{email: string, display_name: string}>
  *   },
@@ -109,6 +284,25 @@ function videochat_validate_create_call_payload(array $payload): array
     }
     if (!isset($errors['starts_at']) && !isset($errors['ends_at']) && $endsAtUnix <= $startsAtUnix) {
         $errors['ends_at'] = 'must_be_after_starts_at';
+    }
+
+    $timezone = 'UTC';
+    if (array_key_exists('schedule_timezone', $payload) || array_key_exists('timezone', $payload)) {
+        $timezoneField = array_key_exists('schedule_timezone', $payload) ? 'schedule_timezone' : 'timezone';
+        $timezoneValidation = videochat_validate_call_schedule_timezone($payload[$timezoneField] ?? '');
+        if (!(bool) $timezoneValidation['ok']) {
+            $errors[$timezoneField] = (string) $timezoneValidation['error'];
+        }
+        $timezone = (string) $timezoneValidation['timezone'];
+    }
+
+    $scheduleAllDay = false;
+    if (array_key_exists('schedule_all_day', $payload)) {
+        $allDayValidation = videochat_validate_call_schedule_all_day($payload['schedule_all_day']);
+        if (!(bool) $allDayValidation['ok']) {
+            $errors['schedule_all_day'] = (string) $allDayValidation['error'];
+        }
+        $scheduleAllDay = (bool) $allDayValidation['all_day'];
     }
 
     $internalIdsRaw = $payload['internal_participant_user_ids'] ?? [];
@@ -169,6 +363,9 @@ function videochat_validate_create_call_payload(array $payload): array
 
     $startsAt = is_int($startsAtUnix) ? gmdate('c', $startsAtUnix) : '';
     $endsAt = is_int($endsAtUnix) ? gmdate('c', $endsAtUnix) : '';
+    $schedule = $startsAt !== '' && $endsAt !== ''
+        ? videochat_build_call_schedule_metadata($startsAt, $endsAt, $timezone, $scheduleAllDay)
+        : videochat_build_call_schedule_metadata('', '', $timezone, $scheduleAllDay);
 
     return [
         'ok' => $errors === [],
@@ -178,6 +375,7 @@ function videochat_validate_create_call_payload(array $payload): array
             'access_mode' => $accessMode,
             'starts_at' => $startsAt,
             'ends_at' => $endsAt,
+            'schedule' => $schedule,
             'internal_participant_user_ids' => $internalIds,
             'external_participants' => $externalParticipants,
         ],
@@ -338,6 +536,9 @@ function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload): arra
     $createdAt = gmdate('c');
     $startsAt = (string) $data['starts_at'];
     $endsAt = (string) $data['ends_at'];
+    $schedule = is_array($data['schedule'] ?? null)
+        ? $data['schedule']
+        : videochat_build_call_schedule_metadata($startsAt, $endsAt);
     $initialStatus = 'scheduled';
     $startsAtUnix = strtotime($startsAt);
     $endsAtUnix = strtotime($endsAt);
@@ -365,9 +566,13 @@ SQL
         $insertCall = $pdo->prepare(
             <<<'SQL'
 INSERT INTO calls(
-    id, room_id, title, access_mode, owner_user_id, status, starts_at, ends_at, cancelled_at, cancel_reason, cancel_message, created_at, updated_at
+    id, room_id, title, access_mode, owner_user_id, status, starts_at, ends_at,
+    schedule_timezone, schedule_date, schedule_duration_minutes, schedule_all_day,
+    cancelled_at, cancel_reason, cancel_message, created_at, updated_at
 ) VALUES(
-    :id, :room_id, :title, :access_mode, :owner_user_id, :status, :starts_at, :ends_at, NULL, NULL, NULL, :created_at, :updated_at
+    :id, :room_id, :title, :access_mode, :owner_user_id, :status, :starts_at, :ends_at,
+    :schedule_timezone, :schedule_date, :schedule_duration_minutes, :schedule_all_day,
+    NULL, NULL, NULL, :created_at, :updated_at
 )
 SQL
         );
@@ -380,6 +585,10 @@ SQL
             ':status' => $initialStatus,
             ':starts_at' => $startsAt,
             ':ends_at' => $endsAt,
+            ':schedule_timezone' => (string) ($schedule['timezone'] ?? 'UTC'),
+            ':schedule_date' => (string) ($schedule['date'] ?? ''),
+            ':schedule_duration_minutes' => (int) ($schedule['duration_minutes'] ?? 0),
+            ':schedule_all_day' => (bool) ($schedule['all_day'] ?? false) ? 1 : 0,
             ':created_at' => $createdAt,
             ':updated_at' => $createdAt,
         ]);
@@ -443,6 +652,7 @@ SQL
             'status' => $initialStatus,
             'starts_at' => $startsAt,
             'ends_at' => $endsAt,
+            'schedule' => $schedule,
             'cancelled_at' => null,
             'cancel_reason' => null,
             'cancel_message' => null,
@@ -503,6 +713,10 @@ SQL
  *   status: string,
  *   starts_at: string,
  *   ends_at: string,
+ *   schedule_timezone: string,
+ *   schedule_date: string,
+ *   schedule_duration_minutes: int,
+ *   schedule_all_day: int,
  *   cancelled_at: ?string,
  *   cancel_reason: ?string,
  *   cancel_message: ?string,
@@ -530,6 +744,10 @@ SELECT
     calls.status,
     calls.starts_at,
     calls.ends_at,
+    calls.schedule_timezone,
+    calls.schedule_date,
+    calls.schedule_duration_minutes,
+    calls.schedule_all_day,
     calls.cancelled_at,
     calls.cancel_reason,
     calls.cancel_message,
@@ -558,6 +776,10 @@ SQL
         'status' => (string) ($row['status'] ?? 'scheduled'),
         'starts_at' => (string) ($row['starts_at'] ?? ''),
         'ends_at' => (string) ($row['ends_at'] ?? ''),
+        'schedule_timezone' => videochat_normalize_call_schedule_timezone($row['schedule_timezone'] ?? 'UTC'),
+        'schedule_date' => (string) ($row['schedule_date'] ?? ''),
+        'schedule_duration_minutes' => (int) ($row['schedule_duration_minutes'] ?? 0),
+        'schedule_all_day' => (int) ($row['schedule_all_day'] ?? 0),
         'cancelled_at' => is_string($row['cancelled_at'] ?? null) ? (string) $row['cancelled_at'] : null,
         'cancel_reason' => is_string($row['cancel_reason'] ?? null) ? (string) $row['cancel_reason'] : null,
         'cancel_message' => is_string($row['cancel_message'] ?? null) ? (string) $row['cancel_message'] : null,
@@ -659,6 +881,10 @@ SQL
  *     starts_at_unix: int,
  *     has_ends_at: bool,
  *     ends_at_unix: int,
+ *     has_schedule_timezone: bool,
+ *     schedule_timezone: string,
+ *     has_schedule_all_day: bool,
+ *     schedule_all_day: bool,
  *     has_internal_participants: bool,
  *     internal_participant_user_ids: array<int, int>,
  *     has_external_participants: bool,
@@ -676,6 +902,9 @@ function videochat_validate_update_call_payload(array $payload): array
     $hasAccessMode = array_key_exists('access_mode', $payload);
     $hasStartsAt = array_key_exists('starts_at', $payload);
     $hasEndsAt = array_key_exists('ends_at', $payload);
+    $hasScheduleTimezone = array_key_exists('schedule_timezone', $payload) || array_key_exists('timezone', $payload);
+    $scheduleTimezoneField = array_key_exists('schedule_timezone', $payload) ? 'schedule_timezone' : 'timezone';
+    $hasScheduleAllDay = array_key_exists('schedule_all_day', $payload);
     $hasInternalParticipants = array_key_exists('internal_participant_user_ids', $payload);
     $hasExternalParticipants = array_key_exists('external_participants', $payload);
 
@@ -738,6 +967,24 @@ function videochat_validate_update_call_payload(array $payload): array
         } else {
             $endsAtUnix = $endsAtUnixRaw;
         }
+    }
+
+    $scheduleTimezone = 'UTC';
+    if ($hasScheduleTimezone) {
+        $timezoneValidation = videochat_validate_call_schedule_timezone($payload[$scheduleTimezoneField] ?? '');
+        if (!(bool) $timezoneValidation['ok']) {
+            $errors[$scheduleTimezoneField] = (string) $timezoneValidation['error'];
+        }
+        $scheduleTimezone = (string) $timezoneValidation['timezone'];
+    }
+
+    $scheduleAllDay = false;
+    if ($hasScheduleAllDay) {
+        $allDayValidation = videochat_validate_call_schedule_all_day($payload['schedule_all_day']);
+        if (!(bool) $allDayValidation['ok']) {
+            $errors['schedule_all_day'] = (string) $allDayValidation['error'];
+        }
+        $scheduleAllDay = (bool) $allDayValidation['all_day'];
     }
 
     $internalIds = [];
@@ -805,6 +1052,8 @@ function videochat_validate_update_call_payload(array $payload): array
         && !$hasAccessMode
         && !$hasStartsAt
         && !$hasEndsAt
+        && !$hasScheduleTimezone
+        && !$hasScheduleAllDay
         && !$hasInternalParticipants
         && !$hasExternalParticipants
         && !$resendRequested
@@ -825,6 +1074,10 @@ function videochat_validate_update_call_payload(array $payload): array
             'starts_at_unix' => $startsAtUnix,
             'has_ends_at' => $hasEndsAt,
             'ends_at_unix' => $endsAtUnix,
+            'has_schedule_timezone' => $hasScheduleTimezone,
+            'schedule_timezone' => $scheduleTimezone,
+            'has_schedule_all_day' => $hasScheduleAllDay,
+            'schedule_all_day' => $scheduleAllDay,
             'has_internal_participants' => $hasInternalParticipants,
             'internal_participant_user_ids' => $internalIds,
             'has_external_participants' => $hasExternalParticipants,
@@ -1068,6 +1321,18 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
     $updatedAt = gmdate('c');
     $nextStartsAt = gmdate('c', $nextStartsUnix);
     $nextEndsAt = gmdate('c', $nextEndsUnix);
+    $nextScheduleTimezone = (bool) ($data['has_schedule_timezone'] ?? false)
+        ? (string) ($data['schedule_timezone'] ?? 'UTC')
+        : videochat_normalize_call_schedule_timezone($existingCall['schedule_timezone'] ?? 'UTC');
+    $nextScheduleAllDay = (bool) ($data['has_schedule_all_day'] ?? false)
+        ? (bool) ($data['schedule_all_day'] ?? false)
+        : ((int) ($existingCall['schedule_all_day'] ?? 0) === 1);
+    $nextSchedule = videochat_build_call_schedule_metadata(
+        $nextStartsAt,
+        $nextEndsAt,
+        $nextScheduleTimezone,
+        $nextScheduleAllDay
+    );
 
     $pdo->beginTransaction();
     try {
@@ -1079,6 +1344,10 @@ SET room_id = :room_id,
     access_mode = :access_mode,
     starts_at = :starts_at,
     ends_at = :ends_at,
+    schedule_timezone = :schedule_timezone,
+    schedule_date = :schedule_date,
+    schedule_duration_minutes = :schedule_duration_minutes,
+    schedule_all_day = :schedule_all_day,
     updated_at = :updated_at
 WHERE id = :id
 SQL
@@ -1089,6 +1358,10 @@ SQL
             ':access_mode' => $nextAccessMode,
             ':starts_at' => $nextStartsAt,
             ':ends_at' => $nextEndsAt,
+            ':schedule_timezone' => (string) ($nextSchedule['timezone'] ?? 'UTC'),
+            ':schedule_date' => (string) ($nextSchedule['date'] ?? ''),
+            ':schedule_duration_minutes' => (int) ($nextSchedule['duration_minutes'] ?? 0),
+            ':schedule_all_day' => (bool) ($nextSchedule['all_day'] ?? false) ? 1 : 0,
             ':updated_at' => $updatedAt,
             ':id' => (string) $existingCall['id'],
         ]);
@@ -1172,6 +1445,7 @@ SQL
             'status' => (string) $existingCall['status'],
             'starts_at' => $nextStartsAt,
             'ends_at' => $nextEndsAt,
+            'schedule' => $nextSchedule,
             'cancelled_at' => $existingCall['cancelled_at'],
             'cancel_reason' => $existingCall['cancel_reason'],
             'cancel_message' => $existingCall['cancel_message'],
@@ -1428,6 +1702,7 @@ SQL
             'status' => 'cancelled',
             'starts_at' => (string) $existingCall['starts_at'],
             'ends_at' => (string) $existingCall['ends_at'],
+            'schedule' => videochat_call_schedule_from_row($existingCall),
             'cancelled_at' => $cancelledAt,
             'cancel_reason' => $cancelReason,
             'cancel_message' => $cancelMessage,
@@ -1555,6 +1830,14 @@ function videochat_normalize_call_participant_role(string $role, string $fallbac
  *   status: string,
  *   starts_at: string,
  *   ends_at: string,
+ *   schedule: array{
+ *     timezone: string,
+ *     date: string,
+ *     starts_at_local: string,
+ *     ends_at_local: string,
+ *     duration_minutes: int,
+ *     all_day: bool
+ *   },
  *   cancelled_at: ?string,
  *   cancel_reason: ?string,
  *   cancel_message: ?string,
@@ -1628,6 +1911,7 @@ function videochat_build_call_payload(PDO $pdo, array $callRecord, int $authUser
         'status' => (string) ($callRecord['status'] ?? ''),
         'starts_at' => (string) ($callRecord['starts_at'] ?? ''),
         'ends_at' => (string) ($callRecord['ends_at'] ?? ''),
+        'schedule' => videochat_call_schedule_from_row($callRecord),
         'cancelled_at' => is_string($callRecord['cancelled_at'] ?? null) ? (string) $callRecord['cancelled_at'] : null,
         'cancel_reason' => is_string($callRecord['cancel_reason'] ?? null) ? (string) $callRecord['cancel_reason'] : null,
         'cancel_message' => is_string($callRecord['cancel_message'] ?? null) ? (string) $callRecord['cancel_message'] : null,

@@ -176,7 +176,7 @@ TOKEN=$(curl -sS -X POST "$BASE/api/auth/login" \
 CREATE=$(curl -sS -X POST "$BASE/api/calls" \
   -H 'content-type: application/json' \
   -H "authorization: Bearer $TOKEN" \
-  -d '{"title":"Readme Test Call","starts_at":"2030-01-01T10:00:00Z","ends_at":"2030-01-01T11:00:00Z"}')
+  -d '{"title":"Readme Test Call","starts_at":"2030-01-01T10:00:00Z","ends_at":"2030-01-01T11:00:00Z","schedule_timezone":"Europe/Berlin"}')
 
 CALL_ID=$(printf '%s' "$CREATE" | jq -r '.result.call.id')
 curl -sS -X POST "$BASE/api/calls/$CALL_ID/access-link" \
@@ -186,6 +186,7 @@ curl -sS -X POST "$BASE/api/calls/$CALL_ID/access-link" \
 ```
 
 The generated `join_path` is UUID-based and points to a real new call (not only seeded demo calls).
+Call responses include persisted `schedule` metadata so calendar views do not infer local dates or durations in the frontend.
 
 ## Can We Run This On A Server?
 

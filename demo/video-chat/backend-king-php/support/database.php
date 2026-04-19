@@ -376,6 +376,33 @@ function videochat_demo_call_blueprint(array $usersByEmail, ?int $nowUnix = null
 }
 
 /**
+ * @return array{
+ *   schedule_timezone: string,
+ *   schedule_date: string,
+ *   schedule_duration_minutes: int,
+ *   schedule_all_day: int
+ * }
+ */
+function videochat_demo_call_schedule_columns(string $startsAt, string $endsAt): array
+{
+    $startsAtUnix = strtotime($startsAt);
+    $endsAtUnix = strtotime($endsAt);
+    if (!is_int($startsAtUnix)) {
+        $startsAtUnix = 0;
+    }
+    if (!is_int($endsAtUnix)) {
+        $endsAtUnix = $startsAtUnix;
+    }
+
+    return [
+        'schedule_timezone' => 'UTC',
+        'schedule_date' => gmdate('Y-m-d', $startsAtUnix),
+        'schedule_duration_minutes' => intdiv(max(0, $endsAtUnix - $startsAtUnix), 60),
+        'schedule_all_day' => 0,
+    ];
+}
+
+/**
  * @return array<int, array{
  *   id: string,
  *   room_id: string,
@@ -429,8 +456,16 @@ SQL
     $selectCall = $pdo->prepare('SELECT id FROM calls WHERE id = :id LIMIT 1');
     $insertCall = $pdo->prepare(
         <<<'SQL'
-INSERT INTO calls(id, room_id, title, owner_user_id, status, starts_at, ends_at, cancelled_at, cancel_reason, cancel_message, created_at, updated_at)
-VALUES(:id, :room_id, :title, :owner_user_id, :status, :starts_at, :ends_at, :cancelled_at, :cancel_reason, :cancel_message, :created_at, :updated_at)
+INSERT INTO calls(
+    id, room_id, title, owner_user_id, status, starts_at, ends_at,
+    schedule_timezone, schedule_date, schedule_duration_minutes, schedule_all_day,
+    cancelled_at, cancel_reason, cancel_message, created_at, updated_at
+)
+VALUES(
+    :id, :room_id, :title, :owner_user_id, :status, :starts_at, :ends_at,
+    :schedule_timezone, :schedule_date, :schedule_duration_minutes, :schedule_all_day,
+    :cancelled_at, :cancel_reason, :cancel_message, :created_at, :updated_at
+)
 SQL
     );
     $updateCall = $pdo->prepare(
@@ -442,6 +477,10 @@ SET room_id = :room_id,
     status = :status,
     starts_at = :starts_at,
     ends_at = :ends_at,
+    schedule_timezone = :schedule_timezone,
+    schedule_date = :schedule_date,
+    schedule_duration_minutes = :schedule_duration_minutes,
+    schedule_all_day = :schedule_all_day,
     cancelled_at = :cancelled_at,
     cancel_reason = :cancel_reason,
     cancel_message = :cancel_message,
@@ -472,14 +511,22 @@ SQL
             continue;
         }
 
+        $startsAt = (string) ($call['starts_at'] ?? gmdate('c'));
+        $endsAt = (string) ($call['ends_at'] ?? gmdate('c'));
+        $scheduleColumns = videochat_demo_call_schedule_columns($startsAt, $endsAt);
+
         $callPayload = [
             ':id' => $callId,
             ':room_id' => (string) ($call['room_id'] ?? $callId),
             ':title' => (string) ($call['title'] ?? 'Demo Call'),
             ':owner_user_id' => (int) ($owner['id'] ?? 0),
             ':status' => (string) ($call['status'] ?? 'scheduled'),
-            ':starts_at' => (string) ($call['starts_at'] ?? gmdate('c')),
-            ':ends_at' => (string) ($call['ends_at'] ?? gmdate('c')),
+            ':starts_at' => $startsAt,
+            ':ends_at' => $endsAt,
+            ':schedule_timezone' => $scheduleColumns['schedule_timezone'],
+            ':schedule_date' => $scheduleColumns['schedule_date'],
+            ':schedule_duration_minutes' => $scheduleColumns['schedule_duration_minutes'],
+            ':schedule_all_day' => $scheduleColumns['schedule_all_day'],
             ':cancelled_at' => is_string($call['cancelled_at'] ?? null) ? (string) $call['cancelled_at'] : null,
             ':cancel_reason' => is_string($call['cancel_reason'] ?? null) ? (string) $call['cancel_reason'] : null,
             ':cancel_message' => is_string($call['cancel_message'] ?? null) ? (string) $call['cancel_message'] : null,
@@ -1076,6 +1123,44 @@ SQL,
                 "CREATE INDEX IF NOT EXISTS idx_call_access_sessions_access_id ON call_access_sessions(access_id)",
                 "CREATE INDEX IF NOT EXISTS idx_call_access_sessions_call_user ON call_access_sessions(call_id, user_id)",
                 "CREATE INDEX IF NOT EXISTS idx_call_access_sessions_room_id ON call_access_sessions(room_id)",
+            ],
+        ],
+        17 => [
+            'name' => '0017_call_schedule_metadata',
+            'statements' => [
+                "ALTER TABLE calls ADD COLUMN schedule_timezone TEXT NOT NULL DEFAULT 'UTC'",
+                "ALTER TABLE calls ADD COLUMN schedule_date TEXT",
+                "ALTER TABLE calls ADD COLUMN schedule_duration_minutes INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE calls ADD COLUMN schedule_all_day INTEGER NOT NULL DEFAULT 0 CHECK (schedule_all_day IN (0, 1))",
+                <<<'SQL'
+UPDATE calls
+SET schedule_timezone = 'UTC'
+WHERE schedule_timezone IS NULL
+   OR trim(schedule_timezone) = ''
+SQL,
+                <<<'SQL'
+UPDATE calls
+SET schedule_date = substr(starts_at, 1, 10)
+WHERE schedule_date IS NULL
+   OR trim(schedule_date) = ''
+SQL,
+                <<<'SQL'
+UPDATE calls
+SET schedule_duration_minutes = CASE
+    WHEN strftime('%s', ends_at) > strftime('%s', starts_at)
+    THEN CAST((strftime('%s', ends_at) - strftime('%s', starts_at)) / 60 AS INTEGER)
+    ELSE 0
+END
+WHERE schedule_duration_minutes IS NULL
+   OR schedule_duration_minutes <= 0
+SQL,
+                <<<'SQL'
+UPDATE calls
+SET schedule_all_day = 0
+WHERE schedule_all_day IS NULL
+   OR schedule_all_day NOT IN (0, 1)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_calls_schedule_date ON calls(schedule_date, starts_at)",
             ],
         ],
     ];

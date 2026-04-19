@@ -279,7 +279,8 @@ Response includes:
 
 Response includes:
 
-- `calls[]` with owner envelope and participant totals
+- `calls[]` with owner envelope, participant totals, and persisted `schedule`
+  projection metadata (`timezone`, `date`, local start/end, duration, `all_day`)
 - `filters` (requested + effective scope)
 - `pagination` (`page`, `page_size`, `total`, `page_count`, `returned`, `has_prev`, `has_next`)
 - deterministic `sort` metadata
@@ -289,12 +290,14 @@ Response includes:
 - required fields: `title`, `starts_at`, `ends_at`
 - optional fields:
   - `room_id` (compatibility input only; create always allocates a private room with `room_id = call.id`)
+  - `schedule_timezone` (IANA timezone for calendar projections, default `UTC`)
+  - `schedule_all_day` (boolean projection marker, default `false`)
   - `internal_participant_user_ids` (array of active user ids)
   - `external_participants` (`[{email, display_name}]`)
 - owner is always included as internal participant mapping
 - persisted calls never default to the shared `lobby`; each call workspace gets its own generated UUID room
 - validation failures: `422 calls_create_validation_failed` with `error.details.fields`
-- success: `201`, with `result.call` containing normalized owner + participants + totals
+- success: `201`, with `result.call` containing normalized owner + participants + totals + persisted `schedule`
 
 `GET /api/calls/resolve/{ref}` route resolution contract:
 
@@ -315,7 +318,7 @@ Public call-access join/session contract:
 
 `PATCH /api/calls/{id}` update contract:
 
-- editable fields: `room_id`, `title`, `starts_at`, `ends_at`, `internal_participant_user_ids`, `external_participants`
+- editable fields: `room_id`, `title`, `starts_at`, `ends_at`, `schedule_timezone`, `schedule_all_day`, `internal_participant_user_ids`, `external_participants`
 - authorization: call owner, admin, or moderator
 - immutable statuses: `cancelled` and `ended` reject edits (`status: immutable_for_edit`)
 - global invite resend is not triggered by edit calls

@@ -86,6 +86,7 @@ Status note:
 - Recent video-chat DTO-schema closure: the canonical `contracts/v1` API/WS catalog now has a versioned schema contract that validates catalog versioning, required REST/WS DTO presence, schema metadata, and sample REST/WS error payloads in `backend-king-php/tests/contract-schema-versioning-contract.sh`, tracked in `ISSUES.md` #28.
 - Recent video-chat UI-parity matrix closure: `contracts/v1/ui-parity-acceptance.matrix.json` now maps covered UI parity slices to concrete Playwright/backend contracts and keeps 5 remaining UI gaps release-blocking under `VIDEOCHAT_UI_PARITY_REQUIRE_COVERED=1`, proven by `backend-king-php/tests/ui-parity-acceptance-matrix-contract.sh` and tracked in `ISSUES.md` #29.
 - Recent video-chat protected API semantics closure: `contracts/v1/protected-api-semantics.matrix.json` now maps protected REST/WS API families to concrete auth/RBAC, validation, forbidden, and conflict semantics plus endpoint contracts, proven by `backend-king-php/tests/protected-api-semantics-contract.sh` and tracked in `ISSUES.md` #30.
+- Recent video-chat schedule metadata closure: calls now persist timezone/date/duration/all-day schedule metadata and return a shared `schedule` projection on create/update/list/fetch flows, proven by `backend-king-php/tests/call-schedule-metadata-contract.sh` and tracked in `ISSUES.md` #31.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -391,7 +392,7 @@ Scope note:
 - [x] Implement cancel-call endpoint with persisted cancellation payload suitable for downstream notification workflows.
 - [x] Implement invite-code/link generation with deterministic expiry and redemption policy.
 - [x] Implement invite redeem/join endpoint with role-safe join context resolution.
-- [ ] Persist schedule metadata to support calendar view projections without frontend inference hacks.
+- [x] Persist schedule metadata to support calendar view projections without frontend inference hacks.
 - [ ] Add API boundaries for invite-preview/copy flows so invite code is not leaked as table-column default data.
 - [x] Add call/invite lifecycle contract tests (create/edit/cancel/redeem/expired/duplicate/conflict).
 - [x] Add owner and permission boundary tests to guarantee cross-user call isolation.

@@ -1322,3 +1322,27 @@ Abschluss:
 - Blur-Referenz (`intelligent-intern`) ist weit fortgeschritten:
   - Controller + Backend-Selector + Stream-Processing + Gates + Prefs + Tests.
 - `demo/media-gateway` ist im aktuellen Checkout nicht vorhanden; die Rust-SFU-/AMQP-/QUIC-Skizze bleibt eine historische Research-Referenz, harte Gateway-Vertraege werden bis zur Integrationsentscheidung als Backend-Contracts gepflegt.
+
+### #31 Persistente Schedule-Metadaten fuer Call-Kalenderprojektionen (Implementierung)
+
+Ziel:
+- Z3 schliessen: Call-Zeitplanung darf nicht nur aus `starts_at`/`ends_at` im Frontend geraten werden, sondern muss im Backend persistierte Schedule-Metadaten und eine gemeinsame Projektion liefern.
+
+Checklist:
+- [x] SQLite-Schema ergaenzt `calls` um `schedule_timezone`, `schedule_date`, `schedule_duration_minutes` und `schedule_all_day` inklusive Rueckfuell-Migration.
+- [x] Create-Call persistiert Schedule-Metadaten und akzeptiert optional `schedule_timezone` sowie `schedule_all_day`.
+- [x] Update-Call kann Zeitfenster, Zeitzone und All-Day-Marker aktualisieren und schreibt die abgeleitete Kalenderprojektion neu.
+- [x] Call-Create/Update/List/Fetch-Antworten liefern ein einheitliches `schedule` Objekt mit Zeitzone, lokalem Start/Ende, Kalenderdatum, Dauer und All-Day-Flag.
+- [x] Demo-Seed-Calls schreiben Schedule-Spalten deterministisch statt die Kalenderprojektion offen zu lassen.
+- [x] Contract-Test deckt reine Projektion, ungueltige Zeitzonen, Persistenz, List-Projektion und Update-Reprojektion ab.
+- [x] Smoke-Gate fuehrt den Schedule-Metadaten-Contract in der Backend-Contract-Strecke aus.
+- [x] Unrelated dirty Frontend-/Realtime-Arbeitsdateien bleiben unangetastet.
+
+Definition of done:
+- Kalenderansichten koennen `schedule` aus der API verwenden und muessen lokale Daten, Dauer oder Zeitzone nicht aus Rohzeitstempeln rekonstruieren.
+- Persistierte Rows bleiben migrationssicher und neue Calls schreiben die Metadaten sofort mit.
+
+Abschluss:
+- `calls` besitzt persistierte Schedule-Metadaten plus Migration `0017_call_schedule_metadata`.
+- `demo/video-chat/backend-king-php/tests/call-schedule-metadata-contract.php|sh` prueft den Vertrag.
+- `demo/video-chat/scripts/smoke.sh` ruft den Contract auf.
