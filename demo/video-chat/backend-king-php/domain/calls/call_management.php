@@ -1864,6 +1864,8 @@ SQL
  *   call_id: string,
  *   call_role: string,
  *   invite_state: string,
+ *   joined_at: string,
+ *   left_at: string,
  *   can_moderate: bool
  * }
  */
@@ -1873,6 +1875,8 @@ function videochat_call_role_context_for_room_user(PDO $pdo, string $roomId, int
         'call_id' => '',
         'call_role' => 'participant',
         'invite_state' => 'invited',
+        'joined_at' => '',
+        'left_at' => '',
         'can_moderate' => false,
     ];
     if ($userId <= 0) {
@@ -1890,7 +1894,9 @@ SELECT
     calls.id,
     calls.owner_user_id,
     cp.call_role,
-    cp.invite_state
+    cp.invite_state,
+    cp.joined_at,
+    cp.left_at
 FROM calls
 LEFT JOIN call_participants cp
     ON cp.call_id = calls.id
@@ -1930,6 +1936,8 @@ SQL
         'call_id' => (string) ($row['id'] ?? ''),
         'call_role' => $callRole,
         'invite_state' => videochat_normalize_call_invite_state($row['invite_state'] ?? 'invited'),
+        'joined_at' => trim((string) ($row['joined_at'] ?? '')),
+        'left_at' => trim((string) ($row['left_at'] ?? '')),
         'can_moderate' => in_array($callRole, ['owner', 'moderator'], true),
     ];
 }

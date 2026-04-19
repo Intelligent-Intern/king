@@ -226,6 +226,51 @@ SQL
     )->fetchColumn();
     videochat_realtime_lobby_db_sync_assert($inviteState === 'invited', 'remove should reset DB participant to invited');
 
+    $pdo->exec(
+        "UPDATE call_participants SET invite_state = 'allowed', joined_at = '2026-04-19T10:10:00Z', left_at = '2026-04-19T10:15:00Z' WHERE call_id = 'call-db-sync' AND user_id = 20"
+    );
+    $staleAllowedConnection = $waitingConnection;
+    $staleAllowedConnection['room_id'] = 'waiting-room';
+    $staleAllowedConnection['pending_room_id'] = 'room-db-sync';
+    $staleAllowedConnection['requested_room_id'] = 'room-db-sync';
+    $staleAllowedConnection['requested_call_id'] = 'call-db-sync';
+    $staleAllowedConnection['active_call_id'] = 'call-db-sync';
+    $staleAllowedConnection['user_id'] = 20;
+    videochat_realtime_lobby_db_sync_assert(
+        !videochat_realtime_connection_can_bypass_admission_for_room($staleAllowedConnection, 'room-db-sync', $openDatabase),
+        'left allowed participant should be gated again'
+    );
+    videochat_realtime_lobby_db_sync_assert(
+        videochat_realtime_mark_call_participant_pending_for_queue($openDatabase, $staleAllowedConnection),
+        'queue join should turn stale allowed participant back into pending'
+    );
+    $staleQueued = $pdo->query(
+        "SELECT invite_state, joined_at, left_at FROM call_participants WHERE call_id = 'call-db-sync' AND user_id = 20"
+    )->fetch(PDO::FETCH_ASSOC);
+    videochat_realtime_lobby_db_sync_assert(is_array($staleQueued), 'stale queued participant row missing');
+    videochat_realtime_lobby_db_sync_assert((string) ($staleQueued['invite_state'] ?? '') === 'pending', 'stale allowed queue join should write pending');
+    videochat_realtime_lobby_db_sync_assert((string) ($staleQueued['joined_at'] ?? '') === '', 'stale allowed queue join should clear joined_at');
+    videochat_realtime_lobby_db_sync_assert((string) ($staleQueued['left_at'] ?? '') === '', 'stale allowed queue join should clear left_at');
+
+    $pdo->exec(
+        "UPDATE call_participants SET invite_state = 'allowed', joined_at = '2026-04-19T10:20:00Z', left_at = NULL WHERE call_id = 'call-db-sync' AND user_id = 20"
+    );
+    $leftConnection = $waitingConnection;
+    $leftConnection['room_id'] = 'room-db-sync';
+    $leftConnection['pending_room_id'] = '';
+    $leftConnection['requested_room_id'] = 'room-db-sync';
+    $leftConnection['requested_call_id'] = 'call-db-sync';
+    $leftConnection['active_call_id'] = 'call-db-sync';
+    $leftConnection['user_id'] = 20;
+    $leftConnection['call_role'] = 'participant';
+    videochat_realtime_mark_call_participant_left($openDatabase, $leftConnection, videochat_presence_state_init());
+    $leftRow = $pdo->query(
+        "SELECT invite_state, left_at FROM call_participants WHERE call_id = 'call-db-sync' AND user_id = 20"
+    )->fetch(PDO::FETCH_ASSOC);
+    videochat_realtime_lobby_db_sync_assert(is_array($leftRow), 'left participant row missing');
+    videochat_realtime_lobby_db_sync_assert((string) ($leftRow['invite_state'] ?? '') === 'invited', 'leaving an admitted participant should reset to invited');
+    videochat_realtime_lobby_db_sync_assert(trim((string) ($leftRow['left_at'] ?? '')) !== '', 'leaving an admitted participant should set left_at');
+
     fwrite(STDOUT, "[realtime-lobby-db-sync-contract] PASS\n");
     exit(0);
 } catch (Throwable $error) {
