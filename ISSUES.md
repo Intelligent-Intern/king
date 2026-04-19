@@ -1214,6 +1214,31 @@ Abschluss:
 - `READYNESS_TRACKER.md` enthaelt die Closure-Hinweise zu Chat-Attachments, Chat-Archiv, Activity-Layout, Playwright-Matrix, SFU-Binding, Access-Session, Gateway-JWT und Gateway-Mapping.
 - Stale Checkboxen fuer belegte Backend-/Realtime-/Routing-/Smoke-Arbeiten sind aktualisiert.
 
+### #27 Gemeinsames REST/WS Error-Envelope (Implementierung)
+
+Ziel:
+- REST-Fehler und realtime `system/error` Frames muessen denselben typisierten Fehlervertrag tragen, damit Clients Fehler einheitlich auswerten koennen.
+
+Checklist:
+- [x] Gemeinsamen Helper `videochat_error_envelope()` fuer `status: error`, `error.code`, `error.message`, optionale `error.details` und `time` ergaenzt.
+- [x] REST-`$errorResponse` nutzt denselben Helper statt eine eigene Envelope-Struktur zu bauen.
+- [x] Realtime-`system/error` Frames werden zentral vor dem Versand normalisiert.
+- [x] Realtime-Kompatibilitaet bleibt erhalten: `type`, `code`, `message`, `details`, `time` bleiben top-level verfuegbar.
+- [x] Realtime-Frames tragen zusaetzlich dieselbe REST-Envelope `status: error` und `error{code,message,details}`.
+- [x] Dedizierter Contract deckt REST-Envelope, direkte realtime Error-Frames und Legacy-Frame-Normalisierung ueber `videochat_presence_send_frame()` ab.
+- [x] Smoke-Gate fuehrt den Contract aus.
+
+Definition of done:
+- Ein Client kann REST- und WS-Fehler ueber dieselbe `status/error/time` Struktur lesen.
+- Alte realtime Clients brechen nicht, weil die bisherigen Top-Level-Felder erhalten bleiben.
+
+Abschluss:
+- `demo/video-chat/backend-king-php/support/error_envelope.php` enthaelt den gemeinsamen Fehlervertrag.
+- `demo/video-chat/backend-king-php/server.php` nutzt den gemeinsamen REST-Envelope.
+- `demo/video-chat/backend-king-php/domain/realtime/realtime_presence.php` normalisiert `system/error` Frames zentral.
+- `demo/video-chat/backend-king-php/tests/error-envelope-contract.php|sh` deckt den Vertrag ab.
+- `demo/video-chat/scripts/smoke.sh` ruft den Contract in der Backend-Contract-Strecke auf.
+
 ## Persistente Research-Notizen (für Folgesessions)
 
 - Alex-Relevanz (historisch, inzwischen nach `frontend-vue/src/lib/**` konsolidiert):

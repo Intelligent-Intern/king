@@ -481,6 +481,12 @@ Run the realtime session-revocation contract test (revoked/expired token propaga
 demo/video-chat/backend-king-php/tests/realtime-session-revocation-contract.sh
 ```
 
+Run the shared REST/WS error-envelope contract test (REST errors and realtime `system/error` frames expose the same typed `status/error/time` envelope):
+
+```bash
+demo/video-chat/backend-king-php/tests/error-envelope-contract.sh
+```
+
 Run the realtime websocket-gateway contract test (strict handshake validation + structured close descriptors for session invalidation):
 
 ```bash

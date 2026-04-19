@@ -319,6 +319,7 @@ bash demo/video-chat/scripts/smoke.sh
 - demo-scope security policy, no-internal-edge-deploy, optional TURN, secret-management, multi-node architecture, and ops-hardening baseline gates
 - docker-compose v1 stack boot (`frontend-vue` + `backend-king-php` + sqlite volume) with runtime migration snapshot and auth/session sanity checks
 - backend boot and live `/health` probe
+- shared REST/WS error envelope contract (`error-envelope-contract`) for typed REST errors and realtime `system/error` frames
 - API/WS catalog drift gate against the canonical versioned contract fixture (`contract-catalog-parity-contract`)
 - login route handshake (`/api/auth/login`), authenticated session read, and logout revoke path
 - dedicated logout revoke contract (`session-logout-contract`) with persisted revocation metadata assertions

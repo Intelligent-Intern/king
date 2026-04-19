@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../support/error_envelope.php';
+
 function videochat_presence_state_init(): array
 {
     return [
@@ -178,6 +180,8 @@ function videochat_presence_room_participants(array $state, string $roomId): arr
 
 function videochat_presence_send_frame(mixed $socket, array $payload, ?callable $sender = null): bool
 {
+    $payload = videochat_realtime_normalize_error_frame($payload);
+
     if ($sender !== null) {
         try {
             return $sender($socket, $payload) === true;

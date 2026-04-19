@@ -82,6 +82,7 @@ Status note:
 - Recent video-chat access-session closure: access-link issued sessions persist call/room/user bindings and resolve websocket room context from those bindings without allowing foreign-room joins, covered by `backend-king-php/tests/call-access-session-contract.sh` tracked in `ISSUES.md` #23.
 - Recent video-chat Gateway JWT closure: future Gateway Join tokens require HS256, safe secret policy, matching `sub`/`effective_id` and `room`/`call_id`, token-length limits, and rate-limit proof in `backend-king-php/tests/gateway-jwt-binding-contract.sh` tracked in `ISSUES.md` #24.
 - Recent video-chat Gateway mapping closure: backend signaling now maps deterministically to/from AMQP `call.signaling` payloads for offer/answer/ice/hangup with room/call alias enforcement in `backend-king-php/tests/gateway-backend-mapping-contract.sh` tracked in `ISSUES.md` #25.
+- Recent video-chat error-envelope closure: REST errors and realtime `system/error` frames now share the typed `status/error/time` envelope while preserving legacy realtime top-level fields, proven by `backend-king-php/tests/error-envelope-contract.sh` and tracked in `ISSUES.md` #27.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -362,7 +363,7 @@ Scope note:
 ### Z1. Contract & Clean Architecture
 
 - [x] Freeze one authoritative REST + WS/IIBIN contract catalog for the new video stack.
-- [ ] Enforce one shared typed error envelope across REST and WS responses.
+- [x] Enforce one shared typed error envelope across REST and WS responses.
 - [x] Split backend runtime code into focused modules (`auth`, `session`, `rbac`, `users`, `calls`, `invites`, `realtime`) with no monolithic mixed-responsibility handler.
 - [ ] Split frontend state into focused stores (`auth`, `calls`, `participants`, `chat`, `presence`, `settings`) with deterministic ownership boundaries.
 - [ ] Add contract-level schema tests for request/response/event DTOs and keep them versioned.

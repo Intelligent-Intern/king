@@ -37,6 +37,7 @@ $log = static function (string $message): void {
 
 require_once __DIR__ . '/support/database.php';
 require_once __DIR__ . '/support/auth.php';
+require_once __DIR__ . '/support/error_envelope.php';
 require_once __DIR__ . '/domain/users/avatar_upload.php';
 require_once __DIR__ . '/domain/calls/call_directory.php';
 require_once __DIR__ . '/domain/calls/call_management.php';
@@ -139,19 +140,7 @@ $jsonResponse = static function (int $status, array $payload): array {
 };
 
 $errorResponse = static function (int $status, string $code, string $message, array $details = []) use ($jsonResponse): array {
-    $error = [
-        'code' => $code,
-        'message' => $message,
-    ];
-    if ($details !== []) {
-        $error['details'] = $details;
-    }
-
-    return $jsonResponse($status, [
-        'status' => 'error',
-        'error' => $error,
-        'time' => gmdate('c'),
-    ]);
+    return $jsonResponse($status, videochat_error_envelope($code, $message, $details));
 };
 
 $methodFromRequest = static function (array $request): string {
