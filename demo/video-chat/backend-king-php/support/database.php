@@ -982,6 +982,42 @@ SQL,
                 "CREATE INDEX IF NOT EXISTS idx_call_chat_attachments_uploaded_by ON call_chat_attachments(uploaded_by_user_id, status)",
             ],
         ],
+        14 => [
+            'name' => '0014_call_chat_archive',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS call_chat_messages (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id TEXT NOT NULL UNIQUE,
+    call_id TEXT NOT NULL REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    sender_user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    sender_display_name TEXT NOT NULL,
+    sender_role TEXT NOT NULL DEFAULT 'user',
+    text TEXT NOT NULL,
+    message_json TEXT NOT NULL,
+    transcript_object_key TEXT NOT NULL UNIQUE,
+    server_unix_ms INTEGER NOT NULL,
+    server_time TEXT NOT NULL,
+    snapshot_version INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS call_chat_acl (
+    call_id TEXT NOT NULL REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    access_role TEXT NOT NULL CHECK (access_role IN ('owner', 'moderator', 'participant', 'admin')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (call_id, user_id)
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_call_chat_messages_call_seq ON call_chat_messages(call_id, seq)",
+                "CREATE INDEX IF NOT EXISTS idx_call_chat_messages_room_time ON call_chat_messages(room_id, server_unix_ms)",
+                "CREATE INDEX IF NOT EXISTS idx_call_chat_messages_sender ON call_chat_messages(sender_user_id, seq)",
+                "CREATE INDEX IF NOT EXISTS idx_call_chat_acl_user_id ON call_chat_acl(user_id)",
+            ],
+        ],
     ];
 }
 

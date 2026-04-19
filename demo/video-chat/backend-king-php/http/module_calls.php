@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../domain/realtime/chat_archive.php';
+
 function videochat_handle_call_routes(
     string $path,
     string $method,
@@ -507,6 +509,70 @@ function videochat_handle_call_routes(
             'result' => [
                 'state' => 'created',
                 'call' => $createResult['call'] ?? null,
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if (preg_match('#^/api/calls/([A-Za-z0-9._-]{1,200})/chat-archive$#', $path, $chatArchiveMatch) === 1) {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/calls/{id}/chat-archive.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $archiveResult = videochat_chat_archive_fetch(
+                $pdo,
+                (string) ($chatArchiveMatch[1] ?? ''),
+                $authenticatedUserId,
+                $authenticatedUserRole,
+                videochat_request_query_params($request)
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'chat_archive_load_failed', 'Could not load chat archive.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($archiveResult['ok'] ?? false)) {
+            $reason = (string) ($archiveResult['reason'] ?? 'internal_error');
+            if ($reason === 'validation_failed') {
+                return $errorResponse(422, 'chat_archive_validation_failed', 'Chat archive request failed validation.', [
+                    'fields' => is_array($archiveResult['errors'] ?? null) ? $archiveResult['errors'] : [],
+                ]);
+            }
+            if ($reason === 'not_found') {
+                return $errorResponse(404, 'chat_archive_not_found', 'The requested chat archive does not exist.', [
+                    'call_id' => (string) ($chatArchiveMatch[1] ?? ''),
+                ]);
+            }
+            if ($reason === 'forbidden') {
+                return $errorResponse(403, 'chat_archive_forbidden', 'You are not allowed to view this chat archive.', [
+                    'call_id' => (string) ($chatArchiveMatch[1] ?? ''),
+                    'fields' => is_array($archiveResult['errors'] ?? null) ? $archiveResult['errors'] : [],
+                ]);
+            }
+
+            return $errorResponse(500, 'chat_archive_load_failed', 'Could not load chat archive.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'loaded',
+                'archive' => $archiveResult['archive'] ?? null,
             ],
             'time' => gmdate('c'),
         ]);

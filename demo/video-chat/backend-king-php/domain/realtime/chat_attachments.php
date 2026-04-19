@@ -416,15 +416,43 @@ SQL
 /**
  * @return array<string, mixed>|null
  */
-function videochat_chat_attachment_call_context(PDO $pdo, string $callId, int $userId, string $role): ?array
+function videochat_chat_attachment_call_context(
+    PDO $pdo,
+    string $callId,
+    int $userId,
+    string $role,
+    array $allowedStatuses = ['scheduled', 'active']
+): ?array
 {
     $normalizedCallId = videochat_chat_attachment_normalize_call_id($callId);
     if ($normalizedCallId === '' || $userId <= 0) {
         return null;
     }
 
+    $normalizedStatuses = [];
+    foreach ($allowedStatuses as $status) {
+        $normalized = strtolower(trim((string) $status));
+        if (in_array($normalized, ['scheduled', 'active', 'ended', 'cancelled'], true)) {
+            $normalizedStatuses[$normalized] = true;
+        }
+    }
+    if ($normalizedStatuses === []) {
+        $normalizedStatuses = ['scheduled' => true, 'active' => true];
+    }
+
+    $statusPlaceholders = [];
+    $statusParams = [];
+    $index = 0;
+    foreach (array_keys($normalizedStatuses) as $status) {
+        $placeholder = ':status_' . $index;
+        $statusPlaceholders[] = $placeholder;
+        $statusParams[$placeholder] = $status;
+        $index += 1;
+    }
+
     $statement = $pdo->prepare(
-        <<<'SQL'
+        sprintf(
+            <<<'SQL'
 SELECT
     calls.id,
     calls.room_id,
@@ -440,19 +468,23 @@ LEFT JOIN call_participants cp
    AND cp.user_id = :user_id
    AND cp.source = 'internal'
 WHERE calls.id = :call_id
-  AND calls.status IN ('scheduled', 'active')
+  AND calls.status IN (%s)
   AND (
       calls.owner_user_id = :user_id
       OR cp.user_id IS NOT NULL
       OR :is_admin = 1
-  )
+)
 LIMIT 1
 SQL
+            ,
+            implode(', ', $statusPlaceholders)
+        )
     );
     $statement->execute([
         ':call_id' => $normalizedCallId,
         ':user_id' => $userId,
         ':is_admin' => videochat_normalize_role_slug($role) === 'admin' ? 1 : 0,
+        ...$statusParams,
     ]);
     $row = $statement->fetch(PDO::FETCH_ASSOC);
     return is_array($row) ? $row : null;
@@ -905,7 +937,7 @@ SQL
 function videochat_chat_attachment_fetch_for_download(PDO $pdo, string $callId, string $attachmentId, int $userId, string $role): ?array
 {
     videochat_chat_attachments_bootstrap($pdo);
-    $context = videochat_chat_attachment_call_context($pdo, $callId, $userId, $role);
+    $context = videochat_chat_attachment_call_context($pdo, $callId, $userId, $role, ['scheduled', 'active', 'ended']);
     if ($context === null) {
         return null;
     }

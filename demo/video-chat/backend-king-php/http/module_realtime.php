@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/realtime/chat_attachments.php';
+require_once __DIR__ . '/../domain/realtime/chat_archive.php';
 
 function videochat_realtime_normalize_ws_path(string $wsPath): string
 {
@@ -1980,6 +1981,38 @@ function videochat_handle_realtime_routes(
                             ? $chatPublish['event']['message']
                             : [];
                         $chatRoomId = (string) ($chatPublish['event']['room_id'] ?? ($presenceConnection['room_id'] ?? 'lobby'));
+                        $chatArchiveCallId = videochat_realtime_connection_call_id($presenceConnection);
+                        if ($chatArchiveCallId !== '') {
+                            try {
+                                $archiveResult = videochat_chat_archive_append_message(
+                                    $openDatabase(),
+                                    $chatArchiveCallId,
+                                    $chatRoomId,
+                                    is_array($chatPublish['event'] ?? null) ? $chatPublish['event'] : []
+                                );
+                            } catch (Throwable) {
+                                $archiveResult = [
+                                    'ok' => false,
+                                    'reason' => 'archive_exception',
+                                ];
+                            }
+
+                            if (!(bool) ($archiveResult['ok'] ?? false)) {
+                                videochat_presence_send_frame(
+                                    $websocket,
+                                    [
+                                        'type' => 'system/error',
+                                        'code' => 'chat_archive_failed',
+                                        'message' => 'Chat message was sent but could not be archived.',
+                                        'details' => [
+                                            'error' => (string) ($archiveResult['reason'] ?? 'unknown'),
+                                            'room_id' => $chatRoomId,
+                                        ],
+                                        'time' => gmdate('c'),
+                                    ]
+                                );
+                            }
+                        }
                         videochat_presence_send_frame(
                             $websocket,
                             videochat_chat_ack_payload(

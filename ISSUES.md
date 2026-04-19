@@ -927,20 +927,20 @@ Ziel:
 - Das Archivmodal zeigt links den Chatverlauf und rechts die Dateien/Attachments.
 
 Checklist:
-- [ ] Chat-Events append-only persistieren: Message-Metadaten in DB, Payload/Transcript-Snapshots im King Object Store.
-- [ ] Attachment-Refs aus #18 in denselben Archivindex aufnehmen.
-- [ ] Persistenzmodell für `call_chat_messages`, `call_chat_attachments`, `call_chat_acl` definieren.
-- [ ] Read-only API ergänzen, z. B. `GET /api/calls/{call_id}/chat-archive`.
-- [ ] Archivantwort paginieren/cursorbasiert laden; keine vollständigen Monster-Verläufe auf einmal.
-- [ ] Dateien rechts im Modal gruppieren: Bilder, PDFs, Office, Text/CSV/MD.
-- [ ] Linke Modalspalte: chronologischer Chat, Sender, Zeit, Text, Attachment-Chips.
-- [ ] Rechte Modalspalte: Datei-Liste mit Name, Typ, Größe, Sender, Timestamp und Download-Aktion.
-- [ ] Suche/Filter im Archiv definieren: Textsuche, Senderfilter, Dateitypfilter.
-- [ ] Nur registrierte User mit Call-Teilnahme/Call-Berechtigung dürfen das Archiv sehen.
-- [ ] Gäste ohne Account erhalten keinen dauerhaften Archivzugriff.
-- [ ] Admin/Owner/Moderator Berechtigungen für Archivzugriff und ggf. Retention/Export definieren.
-- [ ] Retention-Policy definieren: Standard-Aufbewahrung, Löschpfad bei Call-Löschung/DSGVO-Anfrage.
-- [ ] Exportoption optional vorbereiten: `.json`/`.md` Transcript plus Attachment-Liste.
+- [x] Chat-Events append-only persistieren: Message-Metadaten in DB, Payload/Transcript-Snapshots im King Object Store.
+- [x] Attachment-Refs aus #18 in denselben Archivindex aufnehmen.
+- [x] Persistenzmodell für `call_chat_messages`, `call_chat_attachments`, `call_chat_acl` definieren.
+- [x] Read-only API ergänzen, z. B. `GET /api/calls/{call_id}/chat-archive`.
+- [x] Archivantwort paginieren/cursorbasiert laden; keine vollständigen Monster-Verläufe auf einmal.
+- [x] Dateien rechts im Modal gruppieren: Bilder, PDFs, Office, Text/CSV/MD.
+- [x] Linke Modalspalte: chronologischer Chat, Sender, Zeit, Text, Attachment-Chips.
+- [x] Rechte Modalspalte: Datei-Liste mit Name, Typ, Größe, Sender, Timestamp und Download-Aktion.
+- [x] Suche/Filter im Archiv definieren: Textsuche, Senderfilter, Dateitypfilter.
+- [x] Nur registrierte User mit Call-Teilnahme/Call-Berechtigung dürfen das Archiv sehen.
+- [x] Gäste ohne Account erhalten keinen dauerhaften Archivzugriff.
+- [x] Admin/Owner/Moderator Berechtigungen für Archivzugriff und ggf. Retention/Export definieren.
+- [x] Retention-Policy definieren: Standard-Aufbewahrung, Löschpfad bei Call-Löschung/DSGVO-Anfrage.
+- [x] Exportoption optional vorbereiten: `.json`/`.md` Transcript plus Attachment-Liste.
 
 Definition of done:
 - Nach Call-Ende kann ein registrierter berechtigter User aus der Call-/Chatübersicht das Archiv öffnen.
@@ -948,12 +948,12 @@ Definition of done:
 - Downloads nutzen dieselben ACLs wie Live-Chat-Attachments.
 
 Tests:
-- [ ] Backend Contract: Archiv-API nur für berechtigte registrierte User.
-- [ ] Backend Contract: Gast/Unbeteiligter/Admin-RBAC-Grenzen.
-- [ ] Backend Contract: Pagination, Attachment-Gruppierung, Download-ACL.
-- [ ] Playwright: User öffnet Chatübersicht, klickt Chat-Archiv-Icon, Modal zeigt Chat links und Dateien rechts.
-- [ ] Playwright: Read-only Verhalten; keine Eingabe-/Sendeaktion im Archiv möglich.
-- [ ] Playwright: Datei-Download aus Archiv funktioniert für berechtigten User und scheitert für unberechtigten User.
+- [x] Backend Contract: Archiv-API nur für berechtigte registrierte User.
+- [x] Backend Contract: Gast/Unbeteiligter/Admin-RBAC-Grenzen.
+- [x] Backend Contract: Pagination, Attachment-Gruppierung, Download-ACL.
+- [x] Playwright: User öffnet Chatübersicht, klickt Chat-Archiv-Icon, Modal zeigt Chat links und Dateien rechts.
+- [x] Playwright: Read-only Verhalten; keine Eingabe-/Sendeaktion im Archiv möglich.
+- [x] Playwright: Datei-Download aus Archiv funktioniert für berechtigten User und scheitert für unberechtigten User.
 
 ---
 

@@ -62,6 +62,15 @@
                   <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
                 </button>
                 <button
+                  class="icon-mini-btn"
+                  type="button"
+                  title="Open chat archive"
+                  :aria-label="`Open chat archive for ${call.title || call.id}`"
+                  @click="openChatArchive(call)"
+                >
+                  <img src="/assets/orgas/kingrt/icons/chat.png" alt="" />
+                </button>
+                <button
                   v-if="isInvitable(call)"
                   class="icon-mini-btn"
                   type="button"
@@ -120,6 +129,14 @@
                   @click="openCompose('edit', call)"
                 >
                   <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
+                </button>
+                <button
+                  class="icon-mini-btn"
+                  type="button"
+                  title="Open chat archive"
+                  @click="openChatArchive(call)"
+                >
+                  <img src="/assets/orgas/kingrt/icons/chat.png" alt="" />
                 </button>
                 <button
                   v-if="isInvitable(call)"
@@ -430,6 +447,13 @@
         </footer>
       </div>
     </div>
+
+    <ChatArchiveModal
+      :open="chatArchiveState.open"
+      :call-id="chatArchiveState.callId"
+      :call-title="chatArchiveState.callTitle"
+      @close="closeChatArchive"
+    />
   </section>
 </template>
 
@@ -437,6 +461,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppSelect from '../../components/AppSelect.vue';
+import ChatArchiveModal from './ChatArchiveModal.vue';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import {
@@ -641,6 +666,11 @@ const calendarError = ref('');
 
 const noticeKind = ref('');
 const noticeMessage = ref('');
+const chatArchiveState = reactive({
+  open: false,
+  callId: '',
+  callTitle: '',
+});
 
 const noticeKindClass = computed(() => ({
   ok: noticeKind.value === 'ok',
@@ -655,6 +685,18 @@ function setNotice(kind, message) {
 function clearNotice() {
   noticeKind.value = '';
   noticeMessage.value = '';
+}
+
+function openChatArchive(call) {
+  chatArchiveState.callId = String(call?.id || '').trim();
+  chatArchiveState.callTitle = String(call?.title || call?.id || '').trim();
+  chatArchiveState.open = chatArchiveState.callId !== '';
+}
+
+function closeChatArchive() {
+  chatArchiveState.open = false;
+  chatArchiveState.callId = '';
+  chatArchiveState.callTitle = '';
 }
 
 let adminSyncReloadTimer = 0;
