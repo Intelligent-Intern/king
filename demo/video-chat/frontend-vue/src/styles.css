@@ -874,21 +874,11 @@ select {
 }
 
 .call-left-blur-icon {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   object-fit: contain;
   display: block;
   filter: brightness(0) invert(1);
-}
-
-.call-left-blur-strong-mark {
-  position: absolute;
-  right: 7px;
-  top: 3px;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
-  color: inherit;
 }
 
 .call-left-settings-error {

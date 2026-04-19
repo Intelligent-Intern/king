@@ -316,6 +316,51 @@ export function setCallBackgroundApplyOutgoing(value) {
   persistCallMediaPrefs();
 }
 
+export function isCallBackgroundPresetActive(preset) {
+  const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
+  const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
+  const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
+
+  if (preset === 'off') {
+    return mode !== 'blur' || !applyOutgoing;
+  }
+  if (preset === 'light') {
+    return mode === 'blur' && applyOutgoing && backdrop === 'blur7';
+  }
+  if (preset === 'strong') {
+    return mode === 'blur' && applyOutgoing && backdrop === 'blur9';
+  }
+  return false;
+}
+
+export function applyCallBackgroundPreset(preset) {
+  if (preset !== 'light' && preset !== 'strong') {
+    setCallBackgroundFilterMode('off');
+    setCallBackgroundApplyOutgoing(false);
+    return;
+  }
+
+  if (isCallBackgroundPresetActive(preset)) {
+    setCallBackgroundFilterMode('off');
+    setCallBackgroundApplyOutgoing(false);
+    return;
+  }
+
+  setCallBackgroundFilterMode('blur');
+  setCallBackgroundApplyOutgoing(true);
+
+  if (preset === 'strong') {
+    setCallBackgroundBackdropMode('blur9');
+    setCallBackgroundQualityProfile('quality');
+    setCallBackgroundBlurStrength(4);
+    return;
+  }
+
+  setCallBackgroundBackdropMode('blur7');
+  setCallBackgroundQualityProfile('balanced');
+  setCallBackgroundBlurStrength(2);
+}
+
 export function setCallBackgroundMaxProcessWidth(value) {
   callMediaPrefs.backgroundMaxProcessWidth = clampInteger(value, 960, 320, 1920);
   persistCallMediaPrefs();

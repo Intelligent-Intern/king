@@ -140,7 +140,7 @@
                   title="Blur"
                   @click="applyBackgroundPreset('light')"
                 >
-                  <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/desktop.png" alt="" />
+                  <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
                 </button>
                 <button
                   class="call-left-blur-btn"
@@ -151,8 +151,7 @@
                   title="Strong blur"
                   @click="applyBackgroundPreset('strong')"
                 >
-                  <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/desktop.png" alt="" />
-                  <span class="call-left-blur-strong-mark" aria-hidden="true">+</span>
+                  <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
                 </button>
               </div>
             </section>
@@ -870,22 +869,21 @@ import {
 import { DATE_FORMAT_OPTIONS, normalizeDateFormat, normalizeTimeFormat } from '../support/dateTimeFormat';
 import { currentBackendOrigin, fetchBackend } from '../support/backendFetch';
 import {
+  applyCallBackgroundPreset,
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
-  setCallBackgroundBackdropMode,
-  setCallBackgroundBlurStrength,
-  setCallBackgroundFilterMode,
-  setCallBackgroundQualityProfile,
+  isCallBackgroundPresetActive,
   setCallCameraDevice,
   setCallMicrophoneDevice,
   setCallMicrophoneVolume,
-  setCallBackgroundApplyOutgoing,
   setCallSpeakerDevice,
   setCallSpeakerVolume,
 } from '../domain/realtime/callMediaPreferences';
 
 const router = useRouter();
 const route = useRoute();
+const applyBackgroundPreset = applyCallBackgroundPreset;
+const isBackgroundPresetActive = isCallBackgroundPresetActive;
 const leftSidebarCollapsed = ref(false);
 const isTabletSidebarOpen = ref(false);
 const isMobileSidebarOpen = ref(false);
@@ -1482,51 +1480,6 @@ function handleNavItemClick() {
   if (isMobileViewport.value && isMobileSidebarOpen.value) {
     isMobileSidebarOpen.value = false;
   }
-}
-
-function isBackgroundPresetActive(preset) {
-  const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
-  const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
-  const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
-
-  if (preset === 'off') {
-    return mode !== 'blur' || !applyOutgoing;
-  }
-  if (preset === 'light') {
-    return mode === 'blur' && applyOutgoing && backdrop === 'blur7';
-  }
-  if (preset === 'strong') {
-    return mode === 'blur' && applyOutgoing && backdrop === 'blur9';
-  }
-  return false;
-}
-
-function applyBackgroundPreset(preset) {
-  if (preset !== 'light' && preset !== 'strong') {
-    setCallBackgroundFilterMode('off');
-    setCallBackgroundApplyOutgoing(false);
-    return;
-  }
-
-  if (isBackgroundPresetActive(preset)) {
-    setCallBackgroundFilterMode('off');
-    setCallBackgroundApplyOutgoing(false);
-    return;
-  }
-
-  setCallBackgroundFilterMode('blur');
-  setCallBackgroundApplyOutgoing(true);
-
-  if (preset === 'strong') {
-    setCallBackgroundBackdropMode('blur9');
-    setCallBackgroundQualityProfile('quality');
-    setCallBackgroundBlurStrength(4);
-    return;
-  }
-
-  setCallBackgroundBackdropMode('blur7');
-  setCallBackgroundQualityProfile('balanced');
-  setCallBackgroundBlurStrength(2);
 }
 
 function extractCallFromPayload(payload) {

@@ -189,6 +189,30 @@
             <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/share_screen.png" alt="" />
           </button>
 
+          <button
+            class="call-control-btn"
+            type="button"
+            :class="{ active: isCallBackgroundPresetActive('light') }"
+            :aria-pressed="isCallBackgroundPresetActive('light')"
+            title="Blur background"
+            aria-label="Blur background"
+            @click="applyCallBackgroundPreset('light')"
+          >
+            <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
+          </button>
+
+          <button
+            class="call-control-btn"
+            type="button"
+            :class="{ active: isCallBackgroundPresetActive('strong') }"
+            :aria-pressed="isCallBackgroundPresetActive('strong')"
+            title="Strong background blur"
+            aria-label="Strong background blur"
+            @click="applyCallBackgroundPreset('strong')"
+          >
+            <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
+          </button>
+
           <button class="call-control-btn hangup" type="button" title="Hang up" @click="hangupCall">
             <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/end_call.png" alt="" />
           </button>
@@ -519,11 +543,12 @@ import {
   setBackendWebSocketOrigin,
 } from '../../support/backendOrigin';
 import {
+  applyCallBackgroundPreset,
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
+  isCallBackgroundPresetActive,
   refreshCallMediaDevices,
   resetCallBackgroundRuntimeState,
-  setCallBackgroundFilterMode,
 } from './callMediaPreferences';
 import { BackgroundFilterController } from './backgroundFilterController';
 import { BackgroundFilterBaselineCollector } from './backgroundFilterBaseline';
