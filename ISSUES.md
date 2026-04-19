@@ -759,7 +759,7 @@ Checklist:
 - [x] **Tar option injection** (`verify-release-supply-chain.sh`) verifiziert als bereits mitigiert.
 - [x] **Demo backend userId spoofing** als Demo-scope Risiko einsortiert (nicht Core-Runtime).
 - [x] **McpHost STOP ohne Auth** als Demo/userland-scope Risiko einsortiert.
-- [ ] Für Demo-scope Findings explizite Hardening-Policy ergänzen (akzeptiert vs. absichern).
+- [x] Für Demo-scope Findings explizite Hardening-Policy ergänzen (akzeptiert vs. absichern).
 
 Status je Finding:
 - `Tar option injection in supply-chain verification script`:
@@ -773,6 +773,10 @@ Status je Finding:
   - Status: **informational / demo-scope**.
   - Scope: `demo/userland/flow-php/src/McpHost.php` (repo-lokale Helper).
   - Folge: STOP-Gate optional absichern (token/allowlist) oder Demo-only im Vertrag explizit markieren.
+
+Hardening-Policy:
+- `demo/video-chat/SECURITY_HARDENING.md` definiert die Entscheidungsklassen `geschlossen/mitigiert`, `absichern`, `akzeptiert/demo-only` und `entfernen`.
+- `demo/video-chat/scripts/check-security-hardening-policy.sh` prueft statisch, dass die Policy und die vorhandenen Kontrollen fuer Tar-Extraction, entfernten Legacy-`dev-backend.mjs` und loopback-only `McpHost STOP` nicht auseinanderlaufen.
 
 ---
 

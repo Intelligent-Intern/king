@@ -518,6 +518,7 @@ run_step "backend launcher syntax" bash -lc "bash -n '${BACKEND_DIR}/run-dev.sh'
 run_step "backend php syntax" bash -lc "php -l '${BACKEND_DIR}/public/index.php'"
 run_step "backend server php syntax" bash -lc "php -l '${BACKEND_DIR}/server.php'"
 run_step "frontend launcher syntax" bash -lc "node --check '${FRONTEND_DIR}/scripts/dev-server.mjs'"
+run_step "security policy: demo-scope hardening" bash -lc "'${ROOT_DIR}/scripts/check-security-hardening-policy.sh'"
 run_step "compose stack boot + migration/auth sanity" compose_smoke
 
 if [[ "${VIDEOCHAT_SMOKE_COMPOSE_ONLY:-0}" == "1" ]]; then
