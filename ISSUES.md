@@ -852,13 +852,19 @@ Ziel:
 - Übergang von Single-Node/SQLite auf skalierbare Multi-Node-Architektur.
 
 Checklist:
-- [ ] Zustandsmodell splitten: Session/Auth, Call State, Roster/Presence, Realtime Fanout.
-- [ ] Persistenzstrategie definieren (SQLite-Ersatz + Migrationspfad).
-- [ ] Inter-Node Signaling/Coordination (Bus/Queue) für `/ws` + `/sfu` festlegen.
-- [ ] Rolloutplan mit Zero-Downtime-Migration dokumentieren.
+- [x] Zustandsmodell splitten: Session/Auth, Call State, Roster/Presence, Realtime Fanout.
+- [x] Persistenzstrategie definieren (SQLite-Ersatz + Migrationspfad).
+- [x] Inter-Node Signaling/Coordination (Bus/Queue) für `/ws` + `/sfu` festlegen.
+- [x] Rolloutplan mit Zero-Downtime-Migration dokumentieren.
 
 Definition of done:
 - Es gibt einen verbindlichen Architektur- und Migrationsvertrag für Multi-Node.
+
+Abschluss:
+- `demo/video-chat/MULTI_NODE_RUNTIME_ARCHITECTURE.md` definiert den verbindlichen Multi-Node-Vertrag fuer Session/Auth, Call State, Roster/Presence, Realtime Fanout und Media/SFU.
+- SQLite ist darin nur noch als Dev-/Single-Node-Fallback erlaubt; Multi-Node verlangt shared SQL, King Object Store, presence TTL Store und inter-node bus.
+- Der Migrationspfad deckt Schema-Freeze, Shadow-Import, dual-write, read switch, Canary, Rollback und SQLite-Abbau ab.
+- `demo/video-chat/scripts/check-multi-node-runtime-architecture.sh` prueft die Architekturmarker statisch und ist in `demo/video-chat/scripts/smoke.sh` verdrahtet.
 
 ---
 

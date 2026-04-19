@@ -204,7 +204,7 @@ What is still missing for robust production operation:
 
 - TLS termination + reverse proxy websocket upgrade config for both `/ws` and `/sfu`
 - production TURN infrastructure still needs environment-specific NAT evidence; the repo provides an opt-in coturn baseline profile plus credential rotation tooling
-- multi-node architecture (current call/SFU state is in-process; SQLite is single-node local volume)
+- multi-node implementation is not active yet; the binding state split, persistence, fanout, SFU, rollout, and rollback contract is in `demo/video-chat/MULTI_NODE_RUNTIME_ARCHITECTURE.md`
 - secret management + hardened env config (no demo credentials in deployed environments)
 - operational hardening (central logs/metrics/alerts, backups, rollout/rollback strategy)
 
@@ -228,6 +228,13 @@ Secret-management baseline:
 - `VIDEOCHAT_KING_ENV=production|staging` or `VIDEOCHAT_REQUIRE_SECRET_SOURCES=1` makes backend start fail closed on default demo credentials or enabled demo seed calls.
 - `VIDEOCHAT_DEMO_ADMIN_PASSWORD_FILE` and `VIDEOCHAT_DEMO_USER_PASSWORD_FILE` are supported for mounted secret files.
 - The runbook and static guard are in `demo/video-chat/SECRET_MANAGEMENT.md` and `bash demo/video-chat/scripts/check-secret-management.sh`.
+
+Multi-node runtime architecture:
+
+- Current compose remains a single-node dev/staging path.
+- The binding architecture and migration contract is `demo/video-chat/MULTI_NODE_RUNTIME_ARCHITECTURE.md`.
+- It defines the required split for Session/Auth, Call State, Roster/Presence, Realtime Fanout, SFU topology, shared SQL replacement for SQLite, inter-node bus topics, zero-downtime rollout, and rollback gates.
+- The static guard is `bash demo/video-chat/scripts/check-multi-node-runtime-architecture.sh`.
 
 Host-runtime note:
 
@@ -301,7 +308,7 @@ bash demo/video-chat/scripts/smoke.sh
 `demo/video-chat/scripts/smoke.sh` now verifies:
 
 - backend and frontend launchers plus syntax checks
-- demo-scope security policy, no-internal-edge-deploy, optional TURN, and secret-management baseline gates
+- demo-scope security policy, no-internal-edge-deploy, optional TURN, secret-management, and multi-node architecture baseline gates
 - docker-compose v1 stack boot (`frontend-vue` + `backend-king-php` + sqlite volume) with runtime migration snapshot and auth/session sanity checks
 - backend boot and live `/health` probe
 - API/WS catalog drift gate against the canonical versioned contract fixture (`contract-catalog-parity-contract`)
