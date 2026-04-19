@@ -1018,6 +1018,43 @@ SQL,
                 "CREATE INDEX IF NOT EXISTS idx_call_chat_acl_user_id ON call_chat_acl(user_id)",
             ],
         ],
+        15 => [
+            'name' => '0015_call_activity_layout_state',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS call_layout_state (
+    call_id TEXT PRIMARY KEY REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    mode TEXT NOT NULL DEFAULT 'main_mini' CHECK (mode IN ('grid', 'main_mini', 'main_only')),
+    strategy TEXT NOT NULL DEFAULT 'manual_pinned' CHECK (strategy IN ('manual_pinned', 'most_active_window', 'active_speaker_main', 'round_robin_active')),
+    automation_paused INTEGER NOT NULL DEFAULT 0 CHECK (automation_paused IN (0, 1)),
+    pinned_user_ids_json TEXT NOT NULL DEFAULT '[]',
+    main_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    selected_user_ids_json TEXT NOT NULL DEFAULT '[]',
+    updated_by_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_call_layout_state_room_id ON call_layout_state(room_id)",
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS call_participant_activity (
+    call_id TEXT NOT NULL REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    raw_score REAL NOT NULL DEFAULT 0,
+    audio_level REAL NOT NULL DEFAULT 0,
+    motion_score REAL NOT NULL DEFAULT 0,
+    gesture_score REAL NOT NULL DEFAULT 0,
+    is_speaking INTEGER NOT NULL DEFAULT 0 CHECK (is_speaking IN (0, 1)),
+    source TEXT NOT NULL DEFAULT 'client_observed',
+    updated_at_ms INTEGER NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (call_id, user_id)
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_call_participant_activity_room_score ON call_participant_activity(room_id, updated_at_ms)",
+            ],
+        ],
     ];
 }
 

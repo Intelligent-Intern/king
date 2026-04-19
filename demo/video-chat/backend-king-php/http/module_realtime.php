@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/realtime/chat_attachments.php';
 require_once __DIR__ . '/../domain/realtime/chat_archive.php';
+require_once __DIR__ . '/../domain/realtime/realtime_activity_layout.php';
 
 function videochat_realtime_normalize_ws_path(string $wsPath): string
 {
@@ -1701,6 +1702,15 @@ function videochat_handle_realtime_routes(
                         'event' => 'reaction/event',
                         'batch' => 'reaction/batch',
                     ],
+                    'activity' => [
+                        'publish' => 'participant/activity',
+                        'event' => 'participant/activity',
+                    ],
+                    'layout' => [
+                        'mode' => 'layout/mode',
+                        'strategy' => 'layout/strategy',
+                        'selection' => 'layout/selection',
+                    ],
                     'lobby' => [
                         'snapshot' => 'lobby/snapshot',
                         'request' => 'lobby/queue/request',
@@ -1922,6 +1932,8 @@ function videochat_handle_realtime_routes(
                 $typingCommand = null;
                 $signalingCommand = null;
                 $reactionCommand = null;
+                $activityCommand = null;
+                $layoutCommand = null;
                 $lobbyCommand = null;
                 $adminSyncCommand = null;
                 if (!(bool) ($presenceCommand['ok'] ?? false) && $commandError === 'unsupported_type') {
@@ -2157,169 +2169,68 @@ function videochat_handle_realtime_routes(
                                 }
 
                                 if ((string) ($reactionCommand['error'] ?? '') === 'unsupported_type') {
-                                    $lobbyCommand = videochat_lobby_decode_client_frame($frame);
-                                    if ((bool) ($lobbyCommand['ok'] ?? false)) {
-                                        $lobbyCommandRoomId = videochat_presence_normalize_room_id(
-                                            (string) ($lobbyCommand['room_id'] ?? ''),
-                                            ''
-                                        );
-                                        if ($lobbyCommandRoomId === '') {
-                                            $lobbyCommandRoomId = videochat_realtime_lobby_room_id_for_connection($presenceConnection);
+                                    $activityCommand = videochat_activity_decode_client_frame($frame);
+                                    if ((bool) ($activityCommand['ok'] ?? false)) {
+                                        try {
+                                            $activityResult = videochat_activity_apply_command(
+                                                $openDatabase(),
+                                                $presenceState,
+                                                $presenceConnection,
+                                                $activityCommand
+                                            );
+                                        } catch (Throwable) {
+                                            $activityResult = [
+                                                'ok' => false,
+                                                'error' => 'activity_backend_error',
+                                            ];
                                         }
-                                        videochat_realtime_sync_lobby_room_from_database(
-                                            $lobbyState,
-                                            $openDatabase,
-                                            $lobbyCommandRoomId,
-                                            videochat_realtime_connection_call_id($presenceConnection)
-                                        );
 
-                                        $lobbyResult = videochat_lobby_apply_command(
-                                            $lobbyState,
-                                            $presenceState,
-                                            $presenceConnection,
-                                            $lobbyCommand
-                                        );
-                                        if (!(bool) ($lobbyResult['ok'] ?? false)) {
+                                        if (!(bool) ($activityResult['ok'] ?? false)) {
                                             videochat_presence_send_frame(
                                                 $websocket,
                                                 [
                                                     'type' => 'system/error',
-                                                    'code' => 'lobby_command_failed',
-                                                    'message' => 'Could not apply lobby command.',
+                                                    'code' => 'activity_publish_failed',
+                                                    'message' => 'Could not publish participant activity.',
                                                     'details' => [
-                                                        'error' => (string) ($lobbyResult['error'] ?? 'unknown'),
-                                                        'type' => (string) ($lobbyCommand['type'] ?? ''),
-                                                        'target_user_id' => (int) ($lobbyCommand['target_user_id'] ?? 0),
+                                                        'error' => (string) ($activityResult['error'] ?? 'unknown'),
                                                         'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
                                                     ],
                                                     'time' => gmdate('c'),
                                                 ]
                                             );
-                                        } else {
-                                            $lobbyAction = (string) ($lobbyResult['action'] ?? '');
-                                            $lobbyStateName = (string) ($lobbyResult['state'] ?? '');
-                                            $lobbyResultRoomId = videochat_presence_normalize_room_id(
-                                                (string) ($lobbyResult['room_id'] ?? ($presenceConnection['room_id'] ?? 'lobby'))
-                                            );
-
-                                            if (
-                                                $lobbyAction === 'lobby/queue/join'
-                                                && in_array($lobbyStateName, ['queued', 'already_queued'], true)
-                                            ) {
-                                                videochat_realtime_mark_call_participant_pending_for_queue(
-                                                    $openDatabase,
-                                                    $presenceConnection
-                                                );
-                                                videochat_realtime_sync_lobby_room_from_database(
-                                                    $lobbyState,
-                                                    $openDatabase,
-                                                    $lobbyResultRoomId,
-                                                    videochat_realtime_connection_call_id($presenceConnection)
-                                                );
-                                            } elseif ($lobbyAction === 'lobby/queue/cancel') {
-                                                videochat_realtime_mark_call_participant_invite_state(
-                                                    $openDatabase,
-                                                    $presenceConnection,
-                                                    'invited',
-                                                    ['pending']
-                                                );
-                                                videochat_realtime_sync_lobby_room_from_database(
-                                                    $lobbyState,
-                                                    $openDatabase,
-                                                    $lobbyResultRoomId,
-                                                    videochat_realtime_connection_call_id($presenceConnection)
-                                                );
-                                            }
-
-                                            if ($lobbyAction === 'lobby/remove') {
-                                                $removedCallId = videochat_realtime_connection_call_id($presenceConnection);
-                                                $removedUserIds = is_array($lobbyResult['affected_user_ids'] ?? null)
-                                                    ? array_values(array_filter(
-                                                        array_map('intval', (array) $lobbyResult['affected_user_ids']),
-                                                        static fn (int $id): bool => $id > 0
-                                                    ))
-                                                    : [];
-                                                if ($removedCallId !== '' && $removedUserIds !== []) {
-                                                    foreach ($removedUserIds as $removedUserId) {
-                                                        videochat_realtime_mark_call_participant_invite_state_by_user_id(
-                                                            $openDatabase,
-                                                            $removedCallId,
-                                                            $removedUserId,
-                                                            'invited',
-                                                            ['pending', 'allowed', 'accepted']
-                                                        );
-                                                    }
-                                                    videochat_realtime_sync_lobby_room_from_database(
-                                                        $lobbyState,
-                                                        $openDatabase,
-                                                        $lobbyResultRoomId,
-                                                        $removedCallId
-                                                    );
-                                                }
-                                            }
-
-                                            if (in_array($lobbyAction, ['lobby/allow', 'lobby/allow_all'], true)) {
-                                                $admittedRoomId = videochat_presence_normalize_room_id(
-                                                    (string) ($lobbyResult['room_id'] ?? ($presenceConnection['room_id'] ?? 'lobby'))
-                                                );
-                                                $admittedUserIds = is_array($lobbyResult['affected_user_ids'] ?? null)
-                                                    ? array_values(array_filter(
-                                                        array_map('intval', (array) $lobbyResult['affected_user_ids']),
-                                                        static fn (int $id): bool => $id > 0
-                                                    ))
-                                                    : [];
-                                                if ($admittedRoomId !== '' && $admittedUserIds !== []) {
-                                                    $admittedCallId = videochat_realtime_connection_call_id($presenceConnection);
-                                                    if ($admittedCallId !== '') {
-                                                        foreach ($admittedUserIds as $admittedUserId) {
-                                                            videochat_realtime_mark_call_participant_invite_state_by_user_id(
-                                                                $openDatabase,
-                                                                $admittedCallId,
-                                                                $admittedUserId,
-                                                                'allowed',
-                                                                ['pending']
-                                                            );
-                                                        }
-                                                    }
-                                                    videochat_realtime_sync_lobby_room_from_database(
-                                                        $lobbyState,
-                                                        $openDatabase,
-                                                        $admittedRoomId,
-                                                        $admittedCallId
-                                                    );
-                                                    videochat_realtime_send_lobby_snapshot_to_users(
-                                                        $presenceState,
-                                                        $lobbyState,
-                                                        $admittedRoomId,
-                                                        $admittedUserIds,
-                                                        'admitted',
-                                                        null
-                                                    );
-                                                }
-                                            }
                                         }
                                         continue;
                                     }
 
-                                    if ((string) ($lobbyCommand['error'] ?? '') === 'unsupported_type') {
-                                        $adminSyncCommand = videochat_admin_sync_decode_client_frame($frame);
-                                        if ((bool) ($adminSyncCommand['ok'] ?? false)) {
-                                            $adminSyncResult = videochat_admin_sync_publish(
-                                                $presenceState,
-                                                $presenceConnection,
-                                                $adminSyncCommand
-                                            );
-                                            if (!(bool) ($adminSyncResult['ok'] ?? false)) {
+                                    if ((string) ($activityCommand['error'] ?? '') === 'unsupported_type') {
+                                        $layoutCommand = videochat_layout_decode_client_frame($frame);
+                                        if ((bool) ($layoutCommand['ok'] ?? false)) {
+                                            try {
+                                                $layoutResult = videochat_layout_apply_command(
+                                                    $openDatabase(),
+                                                    $presenceState,
+                                                    $presenceConnection,
+                                                    $layoutCommand
+                                                );
+                                            } catch (Throwable) {
+                                                $layoutResult = [
+                                                    'ok' => false,
+                                                    'error' => 'layout_backend_error',
+                                                ];
+                                            }
+
+                                            if (!(bool) ($layoutResult['ok'] ?? false)) {
                                                 videochat_presence_send_frame(
                                                     $websocket,
                                                     [
                                                         'type' => 'system/error',
-                                                        'code' => 'admin_sync_publish_failed',
-                                                        'message' => 'Could not publish admin sync event.',
+                                                        'code' => 'layout_command_failed',
+                                                        'message' => 'Could not apply layout command.',
                                                         'details' => [
-                                                            'error' => (string) ($adminSyncResult['error'] ?? 'unknown'),
-                                                            'topic' => (string) ($adminSyncCommand['topic'] ?? 'all'),
-                                                            'reason' => (string) ($adminSyncCommand['reason'] ?? 'updated'),
+                                                            'error' => (string) ($layoutResult['error'] ?? 'unknown'),
+                                                            'type' => (string) ($layoutCommand['type'] ?? ''),
+                                                            'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
                                                         ],
                                                         'time' => gmdate('c'),
                                                     ]
@@ -2328,11 +2239,191 @@ function videochat_handle_realtime_routes(
                                             continue;
                                         }
 
-                                        $commandType = (string) ($adminSyncCommand['type'] ?? $commandType);
-                                        $commandError = (string) ($adminSyncCommand['error'] ?? $commandError);
+                                        if ((string) ($layoutCommand['error'] ?? '') === 'unsupported_type') {
+                                            $lobbyCommand = videochat_lobby_decode_client_frame($frame);
+                                            if ((bool) ($lobbyCommand['ok'] ?? false)) {
+                                                $lobbyCommandRoomId = videochat_presence_normalize_room_id(
+                                                    (string) ($lobbyCommand['room_id'] ?? ''),
+                                                    ''
+                                                );
+                                                if ($lobbyCommandRoomId === '') {
+                                                    $lobbyCommandRoomId = videochat_realtime_lobby_room_id_for_connection($presenceConnection);
+                                                }
+                                                videochat_realtime_sync_lobby_room_from_database(
+                                                    $lobbyState,
+                                                    $openDatabase,
+                                                    $lobbyCommandRoomId,
+                                                    videochat_realtime_connection_call_id($presenceConnection)
+                                                );
+
+                                                $lobbyResult = videochat_lobby_apply_command(
+                                                    $lobbyState,
+                                                    $presenceState,
+                                                    $presenceConnection,
+                                                    $lobbyCommand
+                                                );
+                                                if (!(bool) ($lobbyResult['ok'] ?? false)) {
+                                                    videochat_presence_send_frame(
+                                                        $websocket,
+                                                        [
+                                                            'type' => 'system/error',
+                                                            'code' => 'lobby_command_failed',
+                                                            'message' => 'Could not apply lobby command.',
+                                                            'details' => [
+                                                                'error' => (string) ($lobbyResult['error'] ?? 'unknown'),
+                                                                'type' => (string) ($lobbyCommand['type'] ?? ''),
+                                                                'target_user_id' => (int) ($lobbyCommand['target_user_id'] ?? 0),
+                                                                'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
+                                                            ],
+                                                            'time' => gmdate('c'),
+                                                        ]
+                                                    );
+                                                } else {
+                                                    $lobbyAction = (string) ($lobbyResult['action'] ?? '');
+                                                    $lobbyStateName = (string) ($lobbyResult['state'] ?? '');
+                                                    $lobbyResultRoomId = videochat_presence_normalize_room_id(
+                                                        (string) ($lobbyResult['room_id'] ?? ($presenceConnection['room_id'] ?? 'lobby'))
+                                                    );
+
+                                                    if (
+                                                        $lobbyAction === 'lobby/queue/join'
+                                                        && in_array($lobbyStateName, ['queued', 'already_queued'], true)
+                                                    ) {
+                                                        videochat_realtime_mark_call_participant_pending_for_queue(
+                                                            $openDatabase,
+                                                            $presenceConnection
+                                                        );
+                                                        videochat_realtime_sync_lobby_room_from_database(
+                                                            $lobbyState,
+                                                            $openDatabase,
+                                                            $lobbyResultRoomId,
+                                                            videochat_realtime_connection_call_id($presenceConnection)
+                                                        );
+                                                    } elseif ($lobbyAction === 'lobby/queue/cancel') {
+                                                        videochat_realtime_mark_call_participant_invite_state(
+                                                            $openDatabase,
+                                                            $presenceConnection,
+                                                            'invited',
+                                                            ['pending']
+                                                        );
+                                                        videochat_realtime_sync_lobby_room_from_database(
+                                                            $lobbyState,
+                                                            $openDatabase,
+                                                            $lobbyResultRoomId,
+                                                            videochat_realtime_connection_call_id($presenceConnection)
+                                                        );
+                                                    }
+
+                                                    if ($lobbyAction === 'lobby/remove') {
+                                                        $removedCallId = videochat_realtime_connection_call_id($presenceConnection);
+                                                        $removedUserIds = is_array($lobbyResult['affected_user_ids'] ?? null)
+                                                            ? array_values(array_filter(
+                                                                array_map('intval', (array) $lobbyResult['affected_user_ids']),
+                                                                static fn (int $id): bool => $id > 0
+                                                            ))
+                                                            : [];
+                                                        if ($removedCallId !== '' && $removedUserIds !== []) {
+                                                            foreach ($removedUserIds as $removedUserId) {
+                                                                videochat_realtime_mark_call_participant_invite_state_by_user_id(
+                                                                    $openDatabase,
+                                                                    $removedCallId,
+                                                                    $removedUserId,
+                                                                    'invited',
+                                                                    ['pending', 'allowed', 'accepted']
+                                                                );
+                                                            }
+                                                            videochat_realtime_sync_lobby_room_from_database(
+                                                                $lobbyState,
+                                                                $openDatabase,
+                                                                $lobbyResultRoomId,
+                                                                $removedCallId
+                                                            );
+                                                        }
+                                                    }
+
+                                                    if (in_array($lobbyAction, ['lobby/allow', 'lobby/allow_all'], true)) {
+                                                        $admittedRoomId = videochat_presence_normalize_room_id(
+                                                            (string) ($lobbyResult['room_id'] ?? ($presenceConnection['room_id'] ?? 'lobby'))
+                                                        );
+                                                        $admittedUserIds = is_array($lobbyResult['affected_user_ids'] ?? null)
+                                                            ? array_values(array_filter(
+                                                                array_map('intval', (array) $lobbyResult['affected_user_ids']),
+                                                                static fn (int $id): bool => $id > 0
+                                                            ))
+                                                            : [];
+                                                        if ($admittedRoomId !== '' && $admittedUserIds !== []) {
+                                                            $admittedCallId = videochat_realtime_connection_call_id($presenceConnection);
+                                                            if ($admittedCallId !== '') {
+                                                                foreach ($admittedUserIds as $admittedUserId) {
+                                                                    videochat_realtime_mark_call_participant_invite_state_by_user_id(
+                                                                        $openDatabase,
+                                                                        $admittedCallId,
+                                                                        $admittedUserId,
+                                                                        'allowed',
+                                                                        ['pending']
+                                                                    );
+                                                                }
+                                                            }
+                                                            videochat_realtime_sync_lobby_room_from_database(
+                                                                $lobbyState,
+                                                                $openDatabase,
+                                                                $admittedRoomId,
+                                                                $admittedCallId
+                                                            );
+                                                            videochat_realtime_send_lobby_snapshot_to_users(
+                                                                $presenceState,
+                                                                $lobbyState,
+                                                                $admittedRoomId,
+                                                                $admittedUserIds,
+                                                                'admitted',
+                                                                null
+                                                            );
+                                                        }
+                                                    }
+                                                }
+                                                continue;
+                                            }
+
+                                            if ((string) ($lobbyCommand['error'] ?? '') === 'unsupported_type') {
+                                                $adminSyncCommand = videochat_admin_sync_decode_client_frame($frame);
+                                                if ((bool) ($adminSyncCommand['ok'] ?? false)) {
+                                                    $adminSyncResult = videochat_admin_sync_publish(
+                                                        $presenceState,
+                                                        $presenceConnection,
+                                                        $adminSyncCommand
+                                                    );
+                                                    if (!(bool) ($adminSyncResult['ok'] ?? false)) {
+                                                        videochat_presence_send_frame(
+                                                            $websocket,
+                                                            [
+                                                                'type' => 'system/error',
+                                                                'code' => 'admin_sync_publish_failed',
+                                                                'message' => 'Could not publish admin sync event.',
+                                                                'details' => [
+                                                                    'error' => (string) ($adminSyncResult['error'] ?? 'unknown'),
+                                                                    'topic' => (string) ($adminSyncCommand['topic'] ?? 'all'),
+                                                                    'reason' => (string) ($adminSyncCommand['reason'] ?? 'updated'),
+                                                                ],
+                                                                'time' => gmdate('c'),
+                                                            ]
+                                                        );
+                                                    }
+                                                    continue;
+                                                }
+
+                                                $commandType = (string) ($adminSyncCommand['type'] ?? $commandType);
+                                                $commandError = (string) ($adminSyncCommand['error'] ?? $commandError);
+                                            } else {
+                                                $commandType = (string) ($lobbyCommand['type'] ?? $commandType);
+                                                $commandError = (string) ($lobbyCommand['error'] ?? $commandError);
+                                            }
+                                        } else {
+                                            $commandType = (string) ($layoutCommand['type'] ?? $commandType);
+                                            $commandError = (string) ($layoutCommand['error'] ?? $commandError);
+                                        }
                                     } else {
-                                        $commandType = (string) ($lobbyCommand['type'] ?? $commandType);
-                                        $commandError = (string) ($lobbyCommand['error'] ?? $commandError);
+                                        $commandType = (string) ($activityCommand['type'] ?? $commandType);
+                                        $commandError = (string) ($activityCommand['error'] ?? $commandError);
                                     }
                                 } else {
                                     $commandType = (string) ($reactionCommand['type'] ?? $commandType);
@@ -2425,9 +2516,9 @@ function videochat_handle_realtime_routes(
                         'room_leave'
                     );
                     videochat_reaction_clear_for_connection(
-                            $reactionState,
-                            $presenceConnection
-                        );
+                        $reactionState,
+                        $presenceConnection
+                    );
                     $presenceConnection['room_id'] = videochat_realtime_waiting_room_id();
                     $presenceConnection['requested_room_id'] = videochat_realtime_waiting_room_id();
                     $presenceConnection['pending_room_id'] = '';
@@ -2748,16 +2839,36 @@ function videochat_realtime_room_snapshot_payload(
     string $reason
 ): array {
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''));
+    $callId = videochat_realtime_normalize_call_id(
+        (string) (($connection['active_call_id'] ?? '') ?: ($connection['requested_call_id'] ?? '')),
+        ''
+    );
     $participants = videochat_realtime_merge_room_participants(
         videochat_presence_room_participants($presenceState, $roomId),
         videochat_realtime_db_room_participants($openDatabase, $connection)
     );
+    $activityLayout = [
+        'layout' => videochat_layout_default_state($callId, $roomId),
+        'activity' => [],
+    ];
+    if ($callId !== '' && $roomId !== '') {
+        try {
+            $activityLayout = videochat_activity_layout_snapshot($openDatabase(), $callId, $roomId, $participants);
+        } catch (Throwable) {
+            $activityLayout = [
+                'layout' => videochat_layout_default_state($callId, $roomId),
+                'activity' => [],
+            ];
+        }
+    }
 
     return [
         'type' => 'room/snapshot',
         'room_id' => $roomId,
         'participants' => $participants,
         'participant_count' => count($participants),
+        'layout' => is_array($activityLayout['layout'] ?? null) ? $activityLayout['layout'] : videochat_layout_default_state($callId, $roomId),
+        'activity' => is_array($activityLayout['activity'] ?? null) ? $activityLayout['activity'] : [],
         'viewer' => [
             'user_id' => (int) ($connection['user_id'] ?? 0),
             'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? '')),
@@ -2775,6 +2886,8 @@ function videochat_realtime_room_snapshot_signature(array $payload): string
     return hash('sha256', json_encode([
         'room_id' => (string) ($payload['room_id'] ?? ''),
         'participants' => $payload['participants'] ?? [],
+        'layout' => $payload['layout'] ?? [],
+        'activity' => $payload['activity'] ?? [],
         'viewer' => $payload['viewer'] ?? [],
     ], JSON_UNESCAPED_SLASHES) ?: '');
 }

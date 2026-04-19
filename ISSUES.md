@@ -586,6 +586,7 @@ Lastprofile (v1, verbindlich):
 | L-08 | Reconnect Storm | 30% der Clients disconnecten in 10s und reconnecten innerhalb 60s | 20 min | `K-04 >= 95%` (Tier 1/2), keine room-cross leaks, Snapshot-Resync korrekt |
 | L-09 | Mixed-Adverse Network | 25% Clients mit hoher RTT/Jitter/packet-loss (simuliert) | 30 min | Fallback/Degradation kontrolliert, Audio bleibt stabil, keine Massenabbrüche |
 | L-10 | Public Access Burst | 2.000 Access-Link Session-Issues in 2 min (`/api/call-access/*/session`) | 15 min | Session-Issuing stabil, keine ungebundenen Room-Joins, `K-01` unter Ziel |
+| L-11 | Activity Flood | 10% der User senden 4-8 `participant/activity` Updates/s plus 2% Gesture-Spikes | 15 min | Server-Coalescing greift, `layout/*` bleibt bedienbar, `K-15 <= 1.0%`, keine Snapshot-Aufblähung |
 
 Profilparameter (global):
 - Client-Mix: 50% desktop, 30% laptop/tablet, 20% phone.
@@ -965,46 +966,46 @@ Ziel:
 - Große Calls bleiben kontrolliert: maximal definierte Video-Slots, Activity-Score statt chaotischer Client-Entscheidungen.
 
 Activity-Index Vertrag:
-- [ ] Pro Teilnehmer wird ein `activity_score` geführt.
-- [ ] Audio-Quelle: WebRTC Audio-Level/VAD/Speaking-State mit kurzer Glättung.
-- [ ] Bewegung-Quelle: lokale Frame-Differenz/Motion-Metrik für sichtbare Gesten/Bewegung.
-- [ ] Optionaler Gesture-Hinweis: Winken/Handbewegung erhöht Score stärker als normale Hintergrundbewegung.
-- [ ] Privacy-Regel: keine Rohframes für Activity-Erkennung an Backend senden; nur normalisierte Scores/Events.
-- [ ] Score hat Zeitzerfall, z. B. Fenster `2s`, `5s`, `15s`.
-- [ ] Server/SFU aggregiert Score serverautoritativ und verteilt nur kompakte `participant/activity` Updates.
-- [ ] Scores werden rate-limited/coalesced, damit Activity nicht den Realtime-Kanal flutet.
+- [x] Pro Teilnehmer wird ein `activity_score` geführt.
+- [x] Audio-Quelle: WebRTC Audio-Level/VAD/Speaking-State mit kurzer Glättung.
+- [x] Bewegung-Quelle: lokale Frame-Differenz/Motion-Metrik für sichtbare Gesten/Bewegung.
+- [x] Optionaler Gesture-Hinweis: Winken/Handbewegung erhöht Score stärker als normale Hintergrundbewegung.
+- [x] Privacy-Regel: keine Rohframes für Activity-Erkennung an Backend senden; nur normalisierte Scores/Events.
+- [x] Score hat Zeitzerfall, z. B. Fenster `2s`, `5s`, `15s`.
+- [x] Server/SFU aggregiert Score serverautoritativ und verteilt nur kompakte `participant/activity` Updates.
+- [x] Scores werden rate-limited/coalesced, damit Activity nicht den Realtime-Kanal flutet.
 
 Admin-Layoutmodi:
-- [ ] Linke Sidebar erhält Layout-Icons für:
+- [x] Linke Sidebar erhält Layout-Icons für:
   - Grid: bis zu 8 gleich große Videos.
   - Main + Mini: ein Hauptvideo plus vertikale/Story-Mini-Videos.
   - Main only: nur Hauptvideo.
-- [ ] Layoutmodus wird als Call-State persistiert und an Teilnehmer synchronisiert.
-- [ ] Pinned User überschreiben automatische Activity-Auswahl.
-- [ ] Host/Admin kann Layoutstrategie je Call setzen.
+- [x] Layoutmodus wird als Call-State persistiert und an Teilnehmer synchronisiert.
+- [x] Pinned User überschreiben automatische Activity-Auswahl.
+- [x] Host/Admin kann Layoutstrategie je Call setzen.
 
 Aktivitätsstrategien:
-- [ ] `manual_pinned`: Admin/Pinning entscheidet; Activity beeinflusst nur Hinweise/Badges.
-- [ ] `most_active_window`: aktivste Teilnehmer im aktuellen Fenster besetzen Main + Mini-Videos.
-- [ ] `active_speaker_main`: aktivster Teilnehmer der letzten ca. `2s` wechselt ins Main-Video, vorheriger Main rückt in den Mini-Stack.
-- [ ] `round_robin_active`: bei ähnlich aktiven Teilnehmern wird fair rotiert, damit nicht eine Person dauerhaft alles blockiert.
-- [ ] Hysterese/Cooldown definieren, damit Main-Video nicht bei jedem Audio-Spike flackert.
-- [ ] Admin kann automatische Wechsel pausieren.
-- [ ] Teilnehmerliste zeigt optional Activity-Indikator, aber ohne störendes Dauerblinken.
+- [x] `manual_pinned`: Admin/Pinning entscheidet; Activity beeinflusst nur Hinweise/Badges.
+- [x] `most_active_window`: aktivste Teilnehmer im aktuellen Fenster besetzen Main + Mini-Videos.
+- [x] `active_speaker_main`: aktivster Teilnehmer der letzten ca. `2s` wechselt ins Main-Video, vorheriger Main rückt in den Mini-Stack.
+- [x] `round_robin_active`: bei ähnlich aktiven Teilnehmern wird fair rotiert, damit nicht eine Person dauerhaft alles blockiert.
+- [x] Hysterese/Cooldown definieren, damit Main-Video nicht bei jedem Audio-Spike flackert.
+- [x] Admin kann automatische Wechsel pausieren.
+- [x] Teilnehmerliste zeigt optional Activity-Indikator, aber ohne störendes Dauerblinken.
 
 Backend/SFU Aufgaben:
-- [ ] WS/SFU Eventvertrag für `participant/activity`, `layout/mode`, `layout/strategy`, `layout/selection`.
-- [ ] Serverseitige Validierung: nur Admin/Owner/Moderator darf Layoutmodus/Strategie ändern.
-- [ ] Activity-Score darf nicht von beliebigen Clients gefälscht werden; SFU/WebRTC-Metriken bevorzugen.
-- [ ] Reconnect/Join bekommt aktuellen Layout-State im Snapshot.
-- [ ] Lastprofil aus #9 um Activity-Flood ergänzen.
+- [x] WS/SFU Eventvertrag für `participant/activity`, `layout/mode`, `layout/strategy`, `layout/selection`.
+- [x] Serverseitige Validierung: nur Admin/Owner/Moderator darf Layoutmodus/Strategie ändern.
+- [x] Activity-Score darf nicht von beliebigen Clients gefälscht werden; SFU/WebRTC-Metriken bevorzugen.
+- [x] Reconnect/Join bekommt aktuellen Layout-State im Snapshot.
+- [x] Lastprofil aus #9 um Activity-Flood ergänzen.
 
 Frontend Aufgaben:
-- [ ] Sidebar-Icons für Layoutmodi ergänzen.
-- [ ] Admin-Strategie-Auswahl sichtbar und verständlich machen.
-- [ ] Video-Renderer kann Grid bis 8, Main+Mini und Main-only sauber darstellen.
-- [ ] Mini-Stack aktualisiert sich ohne Track-Leaks.
-- [ ] Main-Video-Wechsel animieren/debouncen, ohne Schwarzbild-Flicker.
+- [x] Sidebar-Icons für Layoutmodi ergänzen.
+- [x] Admin-Strategie-Auswahl sichtbar und verständlich machen.
+- [x] Video-Renderer kann Grid bis 8, Main+Mini und Main-only sauber darstellen.
+- [x] Mini-Stack aktualisiert sich ohne Track-Leaks.
+- [x] Main-Video-Wechsel animieren/debouncen, ohne Schwarzbild-Flicker.
 
 Definition of done:
 - Admin kann Layout und Strategie im Call ändern; alle Teilnehmer sehen konsistent dieselbe Auswahl.
@@ -1012,13 +1013,13 @@ Definition of done:
 - Bewegung/Sprechen erhöht den Activity-Index, aber Privatsphäre bleibt gewahrt.
 
 Tests:
-- [ ] Backend Contract: Layout-/Strategy-Commands RBAC-geschützt.
-- [ ] Backend Contract: Activity-Events werden normalisiert, rate-limited und snapshot-fähig.
-- [ ] Frontend Unit: Layout-Auswahl priorisiert Pinning vor Activity.
-- [ ] Playwright: Admin schaltet Grid/Main+Mini/Main-only, User sieht Layoutwechsel.
-- [ ] Playwright: simulierte Speaking-/Activity-Events verschieben Main/Mini nach Strategie.
-- [ ] Playwright: Pinning verhindert automatische Verdrängung aus Main.
-- [ ] Playwright: Activity-Pause stoppt automatische Main-Wechsel.
+- [x] Backend Contract: Layout-/Strategy-Commands RBAC-geschützt.
+- [x] Backend Contract: Activity-Events werden normalisiert, rate-limited und snapshot-fähig.
+- [x] Frontend Unit: Layout-Auswahl priorisiert Pinning vor Activity.
+- [x] Playwright: Admin schaltet Grid/Main+Mini/Main-only, User sieht Layoutwechsel.
+- [x] Playwright: simulierte Speaking-/Activity-Events verschieben Main/Mini nach Strategie.
+- [x] Playwright: Pinning verhindert automatische Verdrängung aus Main.
+- [x] Playwright: Activity-Pause stoppt automatische Main-Wechsel.
 
 ---
 

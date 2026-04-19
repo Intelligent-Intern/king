@@ -21,6 +21,9 @@
           compact: isCompactHeaderVisible,
           'has-mini-strip': showMiniParticipantStrip,
           'mini-strip-above': isMobileMiniStripAbove,
+          'layout-grid': currentLayoutMode === 'grid',
+          'layout-main-mini': currentLayoutMode === 'main_mini',
+          'layout-main-only': currentLayoutMode === 'main_only',
         }"
       >
         <header v-if="isCompactHeaderVisible" class="workspace-compact-header">
@@ -49,10 +52,70 @@
           </button>
         </header>
 
+        <section
+          v-if="canModerate"
+          class="workspace-layout-toolbar"
+          aria-label="Video layout controls"
+        >
+          <div class="workspace-layout-mode-buttons">
+            <button
+              v-for="option in layoutModeOptions"
+              :key="option.mode"
+              class="workspace-layout-mode-btn"
+              :class="{ active: currentLayoutMode === option.mode }"
+              type="button"
+              :title="option.label"
+              :aria-label="option.label"
+              @click="setCallLayoutMode(option.mode)"
+            >
+              <span class="workspace-layout-mode-icon">{{ option.icon }}</span>
+            </button>
+          </div>
+          <label class="workspace-layout-strategy">
+            <span>Strategy</span>
+            <select
+              :value="normalizedCallLayout.strategy"
+              @change="setCallLayoutStrategy($event.target.value)"
+            >
+              <option
+                v-for="strategy in layoutStrategyOptions"
+                :key="strategy"
+                :value="strategy"
+              >
+                {{ layoutStrategyLabel(strategy) }}
+              </option>
+            </select>
+          </label>
+          <button
+            class="workspace-layout-pause-btn"
+            :class="{ active: normalizedCallLayout.automationPaused }"
+            type="button"
+            @click="toggleLayoutAutomationPause"
+          >
+            {{ normalizedCallLayout.automationPaused ? 'Resume' : 'Pause' }}
+          </button>
+        </section>
+
         <article class="workspace-main-video">
-          <div id="local-video-container" class="video-container local"></div>
-          <div id="remote-video-container" class="video-container remote"></div>
-          <div id="decoded-video-container" class="video-container decoded"></div>
+          <section v-if="currentLayoutMode === 'grid'" class="workspace-grid-video">
+            <article
+              v-for="participant in gridVideoParticipants"
+              :key="participant.userId"
+              class="workspace-grid-tile"
+            >
+              <div
+                :id="gridVideoSlotId(participant.userId)"
+                class="workspace-grid-video-slot"
+                :data-user-id="participant.userId"
+              ></div>
+              <span class="workspace-grid-title">{{ participant.displayName }}</span>
+            </article>
+          </section>
+          <template v-else>
+            <div id="local-video-container" class="video-container local"></div>
+            <div id="remote-video-container" class="video-container remote"></div>
+            <div id="decoded-video-container" class="video-container decoded"></div>
+          </template>
 
           <div class="workspace-reaction-flight">
             <span
@@ -319,6 +382,9 @@
               <div class="user-main">
                 <strong class="user-name">{{ row.displayName }}</strong>
                 <span class="user-role">{{ row.callRole }}</span>
+                <span v-if="activityLabelForUser(row.userId)" class="user-activity-pill">
+                  {{ activityLabelForUser(row.userId) }}
+                </span>
                 <span v-if="row.controlBadge" class="user-feedback">{{ row.controlBadge }}</span>
                 <span v-if="row.feedback" class="user-feedback">{{ row.feedback }}</span>
               </div>
@@ -732,6 +798,13 @@ import {
   roleRank,
 } from './callWorkspaceUtils';
 import {
+  CALL_LAYOUT_MODES,
+  CALL_LAYOUT_STRATEGIES,
+  normalizeCallLayoutMode,
+  normalizeCallLayoutState,
+  selectCallLayoutParticipants,
+} from './callLayoutStrategies';
+import {
   apiRequest,
   extractErrorMessage,
   requestHeaders,
@@ -742,6 +815,19 @@ const route = useRoute();
 const router = useRouter();
 const workspaceSidebarState = inject('workspaceSidebarState', null);
 
+const ACTIVITY_PUBLISH_INTERVAL_MS = 800;
+const ACTIVITY_MOTION_SAMPLE_MS = 500;
+const LAYOUT_MODE_OPTIONS = [
+  { mode: 'grid', label: 'Grid', icon: 'G' },
+  { mode: 'main_mini', label: 'Main + Mini', icon: 'M' },
+  { mode: 'main_only', label: 'Main only', icon: '1' },
+];
+const LAYOUT_STRATEGY_LABELS = {
+  manual_pinned: 'Manual / pinned',
+  most_active_window: 'Most active window',
+  active_speaker_main: 'Active speaker main',
+  round_robin_active: 'Round robin active',
+};
 
 const activeTab = ref('users');
 const usersSearch = ref('');
@@ -801,6 +887,23 @@ const chatUnreadByRoom = reactive({});
 const mutedUsers = reactive({});
 const pinnedUsers = reactive({});
 const participantActivityByUserId = reactive({});
+const callLayoutState = reactive({
+  call_id: '',
+  room_id: '',
+  mode: 'main_mini',
+  strategy: 'manual_pinned',
+  automation_paused: false,
+  pinned_user_ids: [],
+  selected_user_ids: [],
+  main_user_id: 0,
+  selection: {
+    main_user_id: 0,
+    visible_user_ids: [],
+    mini_user_ids: [],
+    pinned_user_ids: [],
+  },
+  updated_at: '',
+});
 const moderationActionState = reactive({});
 const peerControlStateByUserId = reactive({});
 const lobbyActionState = reactive({});
@@ -888,6 +991,16 @@ let detachMediaDeviceWatcher = null;
 let localTrackReconfigureInFlight = false;
 let localTrackReconfigureQueuedMode = null;
 let compactMediaQuery = null;
+let activityMonitorTimer = null;
+let activityAudioContext = null;
+let activityAudioAnalyser = null;
+let activityAudioData = null;
+let activityMotionCanvas = null;
+let activityMotionContext = null;
+let activityPreviousFrame = null;
+let activityLastPublishMs = 0;
+let activityLastMotionSampleMs = 0;
+let activityLastMotionScore = 0;
 
 const routeCallRef = computed(() => String(route.params.callRef || '').trim());
 const desiredRoomId = computed(() => normalizeRoomId(routeCallResolve.roomId || routeCallRef.value || 'lobby'));
@@ -1198,6 +1311,8 @@ const isAloneInCall = computed(() => {
 
 function participantActivityWeight(source) {
   const normalized = String(source || '').trim().toLowerCase();
+  if (normalized === 'speaking') return 1;
+  if (normalized === 'motion') return 0.9;
   if (normalized === 'media_frame') return 1;
   if (normalized === 'media_track') return 0.85;
   if (normalized === 'reaction') return 0.72;
@@ -1245,6 +1360,9 @@ function participantActivityScore(userId, nowMs = Date.now()) {
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return 0;
   const entry = participantActivityByUserId[normalizedUserId];
   if (!entry || typeof entry !== 'object') return 0;
+  if (Number.isFinite(Number(entry.score2s))) return Number(entry.score2s);
+  if (Number.isFinite(Number(entry.score_2s))) return Number(entry.score_2s);
+  if (Number.isFinite(Number(entry.score))) return Number(entry.score);
   const lastActiveMs = Number(entry.lastActiveMs || 0);
   if (!Number.isFinite(lastActiveMs) || lastActiveMs <= 0) return 0;
   const ageMs = Math.max(0, nowMs - lastActiveMs);
@@ -1252,6 +1370,73 @@ function participantActivityScore(userId, nowMs = Date.now()) {
   const freshness = 1 - (ageMs / PARTICIPANT_ACTIVITY_WINDOW_MS);
   const weight = Number.isFinite(Number(entry.weight)) ? Number(entry.weight) : 0.5;
   return freshness * Math.max(0.25, Math.min(1, weight)) * 100;
+}
+
+function activityLabelForUser(userId) {
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return '';
+  const entry = participantActivityByUserId[normalizedUserId];
+  const score = participantActivityScore(normalizedUserId);
+  if (Boolean(entry?.isSpeaking) || score >= 55) return 'Speaking';
+  if (score >= 18) return 'Active';
+  return '';
+}
+
+function applyParticipantActivityPayload(activity, participant = null) {
+  const normalizedUserId = Number(activity?.user_id || activity?.userId || participant?.user_id || participant?.userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
+  const updatedAtMs = Number(activity?.updated_at_ms || activity?.updatedAtMs || Date.now());
+  participantActivityByUserId[normalizedUserId] = {
+    lastActiveMs: Number.isFinite(updatedAtMs) && updatedAtMs > 0 ? updatedAtMs : Date.now(),
+    source: String(activity?.source || 'server_activity').trim().toLowerCase(),
+    weight: Number.isFinite(Number(activity?.score)) ? Math.max(0.25, Math.min(1, Number(activity.score) / 100)) : 0.75,
+    score: Number(activity?.score || 0),
+    score_2s: Number(activity?.score_2s ?? activity?.score2s ?? 0),
+    score_5s: Number(activity?.score_5s ?? activity?.score5s ?? 0),
+    score_15s: Number(activity?.score_15s ?? activity?.score15s ?? 0),
+    isSpeaking: Boolean(activity?.is_speaking ?? activity?.isSpeaking ?? false),
+  };
+}
+
+function applyActivitySnapshot(rows) {
+  if (!Array.isArray(rows)) return;
+  for (const row of rows) {
+    applyParticipantActivityPayload(row);
+  }
+}
+
+function replaceNumericArray(target, values) {
+  target.splice(0, target.length, ...values
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value > 0));
+}
+
+function applyCallLayoutPayload(payload) {
+  const normalized = normalizeCallLayoutState(payload);
+  callLayoutState.call_id = normalized.callId;
+  callLayoutState.room_id = normalized.roomId;
+  callLayoutState.mode = normalized.mode;
+  callLayoutState.strategy = normalized.strategy;
+  callLayoutState.automation_paused = normalized.automationPaused;
+  callLayoutState.main_user_id = Number.isInteger(normalized.mainUserId) ? normalized.mainUserId : 0;
+  callLayoutState.updated_at = normalized.updatedAt;
+  replaceNumericArray(callLayoutState.pinned_user_ids, normalized.pinnedUserIds);
+  replaceNumericArray(callLayoutState.selected_user_ids, normalized.selectedUserIds);
+  callLayoutState.selection.main_user_id = Number.isInteger(normalized.selection.mainUserId) ? normalized.selection.mainUserId : 0;
+  replaceNumericArray(callLayoutState.selection.visible_user_ids, normalized.selection.visibleUserIds);
+  replaceNumericArray(callLayoutState.selection.mini_user_ids, normalized.selection.miniUserIds);
+  replaceNumericArray(callLayoutState.selection.pinned_user_ids, normalized.selection.pinnedUserIds);
+
+  for (const key of Object.keys(pinnedUsers)) {
+    if (!normalized.pinnedUserIds.includes(Number(key))) {
+      delete pinnedUsers[key];
+    }
+  }
+  for (const pinnedUserId of normalized.pinnedUserIds) {
+    pinnedUsers[pinnedUserId] = true;
+  }
+
+  nextTick(() => renderCallVideoLayout());
 }
 
 function participantVisibilityScore(row, nowMs = Date.now()) {
@@ -1270,34 +1455,34 @@ function participantVisibilityScore(row, nowMs = Date.now()) {
   return pinnedBoost + localBoost + roleBoost + raisedHandBoost + participantActivityScore(userId, nowMs);
 }
 
-const stripParticipants = computed(() => {
-  const nowMs = Date.now();
-  const rows = [...connectedParticipantUsers.value];
-  rows.sort((left, right) => {
-    const scoreCmp = participantVisibilityScore(right, nowMs) - participantVisibilityScore(left, nowMs);
-    if (scoreCmp !== 0) return scoreCmp;
-    const roleCmp = roleRank(left.role) - roleRank(right.role);
-    if (roleCmp !== 0) return roleCmp;
-    const nameCmp = left.displayName.localeCompare(right.displayName, 'en', { sensitivity: 'base' });
-    if (nameCmp !== 0) return nameCmp;
-    return left.userId - right.userId;
-  });
-  return rows.slice(0, VISIBLE_PARTICIPANTS_LIMIT);
-});
-
+const normalizedCallLayout = computed(() => normalizeCallLayoutState(callLayoutState));
+const currentLayoutMode = computed(() => normalizeCallLayoutMode(normalizedCallLayout.value.mode));
+const layoutSelection = computed(() => selectCallLayoutParticipants({
+  participants: connectedParticipantUsers.value,
+  currentUserId: currentUserId.value,
+  pinnedUsers,
+  activityByUserId: participantActivityByUserId,
+  layoutState: normalizedCallLayout.value,
+  nowMs: Date.now(),
+}));
+const stripParticipants = computed(() => layoutSelection.value.visibleParticipants.slice(0, VISIBLE_PARTICIPANTS_LIMIT));
 const primaryVideoUserId = computed(() => {
-  const pinnedRow = connectedParticipantUsers.value.find((row) => {
-    const userId = Number(row?.userId || 0);
-    return Number.isInteger(userId) && userId > 0 && pinnedUsers[userId] === true;
-  });
-  if (pinnedRow) return Number(pinnedRow.userId);
-  return currentUserId.value;
+  const selectedId = Number(layoutSelection.value.mainUserId || 0);
+  return Number.isInteger(selectedId) && selectedId > 0 ? selectedId : currentUserId.value;
 });
 const miniVideoParticipants = computed(() => {
-  const primaryUserId = primaryVideoUserId.value;
-  return stripParticipants.value.filter((row) => Number(row?.userId || 0) !== primaryUserId);
+  if (currentLayoutMode.value !== 'main_mini') return [];
+  return layoutSelection.value.miniParticipants;
 });
-const showMiniParticipantStrip = computed(() => connectedParticipantUsers.value.length > 1);
+const gridVideoParticipants = computed(() => (
+  currentLayoutMode.value === 'grid' ? layoutSelection.value.gridParticipants : []
+));
+const showMiniParticipantStrip = computed(() => (
+  currentLayoutMode.value === 'main_mini'
+  && connectedParticipantUsers.value.length > 1
+));
+const layoutModeOptions = computed(() => LAYOUT_MODE_OPTIONS.filter((option) => CALL_LAYOUT_MODES.includes(option.mode)));
+const layoutStrategyOptions = computed(() => CALL_LAYOUT_STRATEGIES);
 const showMobileMiniStripToggle = computed(() => (
   isShellMobileViewport.value
   && showMiniParticipantStrip.value
@@ -1311,6 +1496,16 @@ const mobileMiniStripToggleLabel = computed(() => (
 function toggleMobileMiniStripPlacement() {
   mobileMiniStripPlacement.value = isMobileMiniStripAbove.value ? 'below' : 'above';
   nextTick(() => renderCallVideoLayout());
+}
+
+function gridVideoSlotId(userId) {
+  const normalizedUserId = Number(userId);
+  return `workspace-grid-video-slot-${Number.isInteger(normalizedUserId) && normalizedUserId > 0 ? normalizedUserId : 'unknown'}`;
+}
+
+function layoutStrategyLabel(strategy) {
+  const normalized = String(strategy || '').trim().toLowerCase();
+  return LAYOUT_STRATEGY_LABELS[normalized] || normalized || 'Strategy';
 }
 const showLobbyRequestBadge = computed(() => (
   canModerate.value
@@ -2197,12 +2392,73 @@ function togglePinned(userId) {
   markUserActionText(normalizedUserId, 'pin', nextPinned ? 'Pinned' : 'Unpinned', false);
   refreshUsersDirectoryPresentation();
   queueModerationSync('pin', normalizedUserId);
+  publishLayoutSelectionState();
+}
+
+function currentPinnedUserIds() {
+  return Object.entries(pinnedUsers)
+    .filter(([, pinned]) => pinned === true)
+    .map(([id]) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+}
+
+function sendLayoutCommand(type, payload = {}) {
+  if (!canModerate.value || !isSocketOnline.value) return false;
+  return sendSocketFrame({
+    type,
+    ...payload,
+  });
+}
+
+function setCallLayoutMode(mode) {
+  const normalizedMode = normalizeCallLayoutMode(mode, currentLayoutMode.value);
+  callLayoutState.mode = normalizedMode;
+  if (!sendLayoutCommand('layout/mode', { mode: normalizedMode })) {
+    setNotice('Could not update layout mode while websocket is offline.', 'error');
+  }
+  nextTick(() => renderCallVideoLayout());
+}
+
+function setCallLayoutStrategy(strategy) {
+  const normalizedStrategy = String(strategy || '').trim().toLowerCase();
+  if (!CALL_LAYOUT_STRATEGIES.includes(normalizedStrategy)) return;
+  callLayoutState.strategy = normalizedStrategy;
+  if (!sendLayoutCommand('layout/strategy', {
+    strategy: normalizedStrategy,
+    automation_paused: Boolean(callLayoutState.automation_paused),
+  })) {
+    setNotice('Could not update layout strategy while websocket is offline.', 'error');
+  }
+  nextTick(() => renderCallVideoLayout());
+}
+
+function toggleLayoutAutomationPause() {
+  callLayoutState.automation_paused = !Boolean(callLayoutState.automation_paused);
+  if (!sendLayoutCommand('layout/strategy', {
+    strategy: normalizedCallLayout.value.strategy,
+    automation_paused: Boolean(callLayoutState.automation_paused),
+  })) {
+    setNotice('Could not update layout automation while websocket is offline.', 'error');
+  }
+}
+
+function publishLayoutSelectionState() {
+  if (!canModerate.value) return false;
+  const pinnedIds = currentPinnedUserIds();
+  replaceNumericArray(callLayoutState.pinned_user_ids, pinnedIds);
+  callLayoutState.main_user_id = primaryVideoUserId.value;
+  return sendLayoutCommand('layout/selection', {
+    pinned_user_ids: pinnedIds,
+    selected_user_ids: layoutSelection.value.visibleUserIds,
+    main_user_id: primaryVideoUserId.value,
+  });
 }
 
 function toggleHandRaised() {
   controlState.handRaised = !controlState.handRaised;
   refreshUsersDirectoryPresentation();
   void syncControlStateToPeers();
+  publishLocalActivitySample(true);
 }
 
 function toggleCamera() {
@@ -2214,6 +2470,7 @@ function toggleCamera() {
   }
   refreshUsersDirectoryPresentation();
   void syncControlStateToPeers();
+  publishLocalActivitySample(true);
 }
 
 function toggleMicrophone() {
@@ -2225,6 +2482,7 @@ function toggleMicrophone() {
   }
   refreshUsersDirectoryPresentation();
   void syncControlStateToPeers();
+  publishLocalActivitySample(true);
 }
 
 function toggleScreenShare() {
@@ -3253,6 +3511,12 @@ function applyRoomSnapshot(payload) {
   applyViewerContext(payload?.viewer || null);
 
   participantsRaw.value = Array.isArray(payload?.participants) ? payload.participants : [];
+  if (payload?.layout && typeof payload.layout === 'object') {
+    applyCallLayoutPayload(payload.layout);
+  }
+  if (Array.isArray(payload?.activity)) {
+    applyActivitySnapshot(payload.activity);
+  }
 
   const presentUserIds = new Set();
   for (const row of connectedParticipantUsers.value) {
@@ -3388,6 +3652,18 @@ function handleSocketMessage(event) {
 
   if (type === 'typing/start' || type === 'typing/stop') {
     applyTypingEvent(payload);
+    return;
+  }
+
+  if (type === 'participant/activity') {
+    applyParticipantActivityPayload(payload?.activity, payload?.participant);
+    return;
+  }
+
+  if (type === 'layout/mode' || type === 'layout/strategy' || type === 'layout/selection' || type === 'layout/state') {
+    if (payload?.layout && typeof payload.layout === 'object') {
+      applyCallLayoutPayload(payload.layout);
+    }
     return;
   }
 
@@ -3886,8 +4162,13 @@ watch(
 
 watch(
   () => [
+    currentLayoutMode.value,
     primaryVideoUserId.value,
     miniVideoParticipants.value
+      .map((row) => Number(row?.userId || 0))
+      .filter((userId) => Number.isInteger(userId) && userId > 0)
+      .join(','),
+    gridVideoParticipants.value
       .map((row) => Number(row?.userId || 0))
       .filter((userId) => Number.isInteger(userId) && userId > 0)
       .join(','),
@@ -4036,6 +4317,7 @@ watch(canModerate, (enabled) => {
 watch(isSocketOnline, (online) => {
   if (!online) return;
   flushQueuedReactions();
+  publishLocalActivitySample(true);
 });
 
 watch(
@@ -4397,26 +4679,39 @@ function renderCallVideoLayout() {
   const assignedNodes = new Set();
   const localContainer = document.getElementById('local-video-container');
   const remoteContainer = document.getElementById('remote-video-container');
-  const primaryUserId = primaryVideoUserId.value;
-  const primaryNode = mediaNodeForUserId(primaryUserId);
-
-  if (primaryUserId === currentUserId.value) {
-    mountVideoNode(localContainer, primaryNode, assignedNodes);
-  } else {
-    mountVideoNode(remoteContainer, primaryNode, assignedNodes);
-  }
-
-  for (const participant of miniVideoParticipants.value) {
-    const userId = Number(participant?.userId || 0);
-    const slot = document.getElementById(miniVideoSlotId(userId));
-    const node = mediaNodeForUserId(userId);
-    if (!mountVideoNode(slot, node, assignedNodes)) {
-      clearUnassignedChildren(slot, assignedNodes);
+  if (currentLayoutMode.value === 'grid') {
+    for (const participant of gridVideoParticipants.value) {
+      const userId = Number(participant?.userId || 0);
+      const slot = document.getElementById(gridVideoSlotId(userId));
+      const node = mediaNodeForUserId(userId);
+      if (!mountVideoNode(slot, node, assignedNodes)) {
+        clearUnassignedChildren(slot, assignedNodes);
+      }
     }
-  }
+    if (localContainer) clearUnassignedChildren(localContainer, assignedNodes);
+    if (remoteContainer) clearUnassignedChildren(remoteContainer, assignedNodes);
+  } else {
+    const primaryUserId = primaryVideoUserId.value;
+    const primaryNode = mediaNodeForUserId(primaryUserId);
 
-  clearUnassignedChildren(localContainer, assignedNodes);
-  clearUnassignedChildren(remoteContainer, assignedNodes);
+    if (primaryUserId === currentUserId.value) {
+      mountVideoNode(localContainer, primaryNode, assignedNodes);
+    } else {
+      mountVideoNode(remoteContainer, primaryNode, assignedNodes);
+    }
+
+    for (const participant of miniVideoParticipants.value) {
+      const userId = Number(participant?.userId || 0);
+      const slot = document.getElementById(miniVideoSlotId(userId));
+      const node = mediaNodeForUserId(userId);
+      if (!mountVideoNode(slot, node, assignedNodes)) {
+        clearUnassignedChildren(slot, assignedNodes);
+      }
+    }
+
+    clearUnassignedChildren(localContainer, assignedNodes);
+    clearUnassignedChildren(remoteContainer, assignedNodes);
+  }
 
   const allRemotePeers = [
     ...remotePeersRef.value.values(),
@@ -4867,6 +5162,137 @@ function publishLocalTracksToSfuIfReady() {
   return true;
 }
 
+function stopActivityMonitor() {
+  if (activityMonitorTimer !== null) {
+    clearInterval(activityMonitorTimer);
+    activityMonitorTimer = null;
+  }
+  if (activityAudioContext && typeof activityAudioContext.close === 'function') {
+    activityAudioContext.close().catch(() => {});
+  }
+  activityAudioContext = null;
+  activityAudioAnalyser = null;
+  activityAudioData = null;
+  activityMotionCanvas = null;
+  activityMotionContext = null;
+  activityPreviousFrame = null;
+  activityLastPublishMs = 0;
+  activityLastMotionSampleMs = 0;
+  activityLastMotionScore = 0;
+}
+
+function startActivityMonitor(stream) {
+  stopActivityMonitor();
+  if (!(stream instanceof MediaStream) || typeof window === 'undefined') return;
+
+  const audioTrack = stream.getAudioTracks?.()[0] || null;
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  if (audioTrack && AudioContextCtor) {
+    try {
+      activityAudioContext = new AudioContextCtor();
+      const source = activityAudioContext.createMediaStreamSource(new MediaStream([audioTrack]));
+      activityAudioAnalyser = activityAudioContext.createAnalyser();
+      activityAudioAnalyser.fftSize = 512;
+      activityAudioData = new Uint8Array(activityAudioAnalyser.fftSize);
+      source.connect(activityAudioAnalyser);
+    } catch {
+      activityAudioContext = null;
+      activityAudioAnalyser = null;
+      activityAudioData = null;
+    }
+  }
+
+  if (typeof document !== 'undefined') {
+    activityMotionCanvas = document.createElement('canvas');
+    activityMotionCanvas.width = 96;
+    activityMotionCanvas.height = 72;
+    activityMotionContext = activityMotionCanvas.getContext('2d', { willReadFrequently: true });
+  }
+
+  activityMonitorTimer = setInterval(() => {
+    publishLocalActivitySample();
+  }, 200);
+}
+
+function sampleLocalAudioLevel() {
+  if (!activityAudioAnalyser || !(activityAudioData instanceof Uint8Array)) return 0;
+  if (activityAudioContext?.state === 'suspended' && typeof activityAudioContext.resume === 'function') {
+    activityAudioContext.resume().catch(() => {});
+  }
+  try {
+    activityAudioAnalyser.getByteTimeDomainData(activityAudioData);
+  } catch {
+    return 0;
+  }
+
+  let sum = 0;
+  for (const value of activityAudioData) {
+    const centered = (value - 128) / 128;
+    sum += centered * centered;
+  }
+  const rms = Math.sqrt(sum / Math.max(1, activityAudioData.length));
+  return Math.max(0, Math.min(1, rms * 3.2));
+}
+
+function sampleLocalMotionScore(nowMs) {
+  if ((nowMs - activityLastMotionSampleMs) < ACTIVITY_MOTION_SAMPLE_MS) {
+    return activityLastMotionScore;
+  }
+  activityLastMotionSampleMs = nowMs;
+
+  const video = localVideoElement.value;
+  if (!(video instanceof HTMLVideoElement) || video.readyState < 2 || !activityMotionContext || !activityMotionCanvas) {
+    return 0;
+  }
+
+  try {
+    activityMotionContext.drawImage(video, 0, 0, activityMotionCanvas.width, activityMotionCanvas.height);
+    const frame = activityMotionContext.getImageData(0, 0, activityMotionCanvas.width, activityMotionCanvas.height).data;
+    if (!(activityPreviousFrame instanceof Uint8ClampedArray)) {
+      activityPreviousFrame = new Uint8ClampedArray(frame);
+      activityLastMotionScore = 0;
+      return 0;
+    }
+
+    let diff = 0;
+    for (let index = 0; index < frame.length; index += 16) {
+      diff += Math.abs(frame[index] - activityPreviousFrame[index]);
+      diff += Math.abs(frame[index + 1] - activityPreviousFrame[index + 1]);
+      diff += Math.abs(frame[index + 2] - activityPreviousFrame[index + 2]);
+    }
+    activityPreviousFrame = new Uint8ClampedArray(frame);
+    const samples = Math.max(1, frame.length / 16);
+    activityLastMotionScore = Math.max(0, Math.min(1, diff / (samples * 255 * 3) * 5));
+    return activityLastMotionScore;
+  } catch {
+    return activityLastMotionScore;
+  }
+}
+
+function publishLocalActivitySample(force = false) {
+  const nowMs = Date.now();
+  if (!force && (nowMs - activityLastPublishMs) < ACTIVITY_PUBLISH_INTERVAL_MS) return;
+  if (!isSocketOnline.value || currentUserId.value <= 0 || activeSocketCallId.value === '') return;
+
+  const audioLevel = controlState.micEnabled ? sampleLocalAudioLevel() : 0;
+  const motionScore = controlState.cameraEnabled ? sampleLocalMotionScore(nowMs) : 0;
+  const speaking = audioLevel >= 0.08;
+  const gesture = controlState.handRaised || motionScore >= 0.7 ? 'wave' : '';
+  if (!force && audioLevel < 0.03 && motionScore < 0.04 && !gesture) return;
+
+  activityLastPublishMs = nowMs;
+  markParticipantActivity(currentUserId.value, speaking ? 'speaking' : (motionScore > 0.04 ? 'motion' : 'control'), nowMs);
+  sendSocketFrame({
+    type: 'participant/activity',
+    user_id: currentUserId.value,
+    audio_level: Number(audioLevel.toFixed(4)),
+    speaking,
+    motion_score: Number(motionScore.toFixed(4)),
+    gesture,
+    source: 'client_observed',
+  });
+}
+
 function applyCallOutputPreferences() {
   if (typeof document === 'undefined') return;
   const volume = Math.max(0, Math.min(100, Number(callMediaPrefs.speakerVolume || 100))) / 100;
@@ -5264,6 +5690,7 @@ function unpublishAndStopLocalTracks() {
 
 function teardownLocalPublisher() {
   clearLocalTrackRecoveryTimer();
+  stopActivityMonitor();
   stopLocalEncodingPipeline();
   unpublishAndStopLocalTracks();
   clearLocalPreviewElement();
@@ -5287,6 +5714,7 @@ async function publishLocalTracks() {
     localStreamRef.value = stream;
     localTracksRef.value = stream.getTracks();
     applyControlStateToLocalTracks(localTracksRef.value);
+    startActivityMonitor(stream);
     localTracksPublishedToSfu = false;
     localTrackRecoveryAttempts = 0;
     bindLocalTrackLifecycle(stream);
@@ -5464,6 +5892,7 @@ async function reconfigureLocalBackgroundFilterOnly() {
     localStreamRef.value = nextStream;
     localTracksRef.value = nextStream.getTracks();
     applyControlStateToLocalTracks(localTracksRef.value);
+    startActivityMonitor(nextStream);
     bindLocalTrackLifecycle(nextStream);
 
     if (streamChanged) {
@@ -5545,6 +5974,7 @@ async function reconfigureLocalTracksFromSelectedDevices() {
     localStreamRef.value = nextOutputStream;
     localTracksRef.value = nextOutputStream.getTracks();
     applyControlStateToLocalTracks(localTracksRef.value);
+    startActivityMonitor(nextOutputStream);
     bindLocalTrackLifecycle(nextOutputStream);
     localTracksPublishedToSfu = false;
 
