@@ -122,7 +122,7 @@ export class SFUClient {
       opened = true
       this.disconnectNotified = false
       setBackendSfuOrigin(candidates[index] || '')
-      this.send({ type: 'sfu/join', roomId, role: 'publisher' })
+      this.send({ type: 'sfu/join', room_id: roomId, role: 'publisher' })
       if (this.cb.onConnected) {
         this.cb.onConnected()
       }
@@ -170,6 +170,7 @@ export class SFUClient {
 
     const query    = new URLSearchParams({
       room: roomId,
+      room_id: roomId,
       userId: session.userId,
       token:  session.token,
       name:   session.name,

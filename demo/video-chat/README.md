@@ -328,6 +328,7 @@ bash demo/video-chat/scripts/smoke.sh
 - room reaction stream contract (`realtime-reaction-contract`)
 - invite redeem contract (`invite-code-redeem-contract`)
 - call signaling bootstrap contract (`realtime-signaling-contract`)
+- SFU room-binding/publish/subscribe/frame relay contract (`realtime-sfu-contract`)
 - frontend dev-server boot probe
 
 Additional automated coverage:

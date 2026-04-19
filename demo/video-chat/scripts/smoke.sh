@@ -621,6 +621,7 @@ run_step "backend contract: chat fanout" bash -lc "'${BACKEND_DIR}/tests/realtim
 run_step "backend contract: reaction stream throttle" bash -lc "'${BACKEND_DIR}/tests/realtime-reaction-contract.sh'"
 run_step "backend contract: invite redeem" bash -lc "'${BACKEND_DIR}/tests/invite-code-redeem-contract.sh'"
 run_step "backend contract: call signaling bootstrap" bash -lc "'${BACKEND_DIR}/tests/realtime-signaling-contract.sh'"
+run_step "backend contract: SFU room binding and relay" bash -lc "'${BACKEND_DIR}/tests/realtime-sfu-contract.sh'"
 
 run_step "frontend contract: WLVC wire envelope" bash -lc "
   set -euo pipefail

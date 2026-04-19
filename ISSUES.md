@@ -510,11 +510,11 @@ Interop-Testmatrix (v1):
 | I-03 | Presence Join/Leave/Reconnect | WS `/ws` (`room/*`) | Snapshot + Join/Leave-Deltas korrekt; Reconnect-Resync vorhanden; Room-Move konsistent | `tests/realtime-presence-contract.sh` | abgedeckt |
 | I-04 | Directed Signaling | WS `/ws` (`call/offer|answer|ice|hangup`) | nur target-user im selben Room; self-target/invalid target fail-closed | `tests/realtime-signaling-contract.sh` | abgedeckt |
 | I-05 | Reactions Backpressure | WS `/ws` (`reaction/*`) | Flood -> Batch-Fanout, room-scoped, ohne cross-room leak | `tests/realtime-reaction-contract.sh` | abgedeckt |
-| I-06 | SFU Auth-Handshake | WS `/sfu` | Auth + RBAC + WS-Handshake für `/sfu` (wie `/ws`) | kein dedizierter Test vorhanden | offen |
-| I-07 | SFU Publish/Subscribe | WS `/sfu` (`sfu/publish|subscribe|unpublish`) | `sfu/tracks`, `sfu/unpublished`, `sfu/publisher_left` korrekt pro Room | kein dedizierter Test vorhanden | offen |
-| I-08 | SFU Frame Relay | WS `/sfu` (`sfu/frame`) | Frames nur an Subscriber im selben Room, kein self-echo | kein dedizierter Test vorhanden | offen |
-| I-09 | SFU Reconnect | WS `/sfu` | Reconnect -> Join/Publisher-Liste/Resubscribe stabil | kein dedizierter Test vorhanden | offen |
-| I-10 | Room-Binding Enforcement | WS `/sfu` | Query-`room` und optionales Join-Payload müssen matchen; kein stilles Fallback auf `lobby` | kein dedizierter Test vorhanden | offen |
+| I-06 | SFU Auth-Handshake | WS `/sfu` | Auth + RBAC + WS-Handshake für `/sfu` (wie `/ws`) | `tests/realtime-sfu-contract.sh`, `tests/videochat-integration-matrix-realtime-contract.sh` | abgedeckt |
+| I-07 | SFU Publish/Subscribe | WS `/sfu` (`sfu/publish|subscribe|unpublish`) | `sfu/tracks`, `sfu/unpublished`, `sfu/publisher_left` korrekt pro Room | `tests/realtime-sfu-contract.sh` | abgedeckt |
+| I-08 | SFU Frame Relay | WS `/sfu` (`sfu/frame`) | Frames nur an Subscriber im selben Room, kein self-echo | `tests/realtime-sfu-contract.sh` | abgedeckt |
+| I-09 | SFU Reconnect | WS `/sfu` | Reconnect -> Join/Publisher-Liste/Resubscribe stabil | `tests/realtime-sfu-contract.sh` | abgedeckt |
+| I-10 | Room-Binding Enforcement | WS `/sfu` | Query-`room` und optionales Join-Payload müssen matchen; kein stilles Fallback auf `lobby` | `tests/realtime-sfu-contract.sh` | abgedeckt |
 | I-11 | Gateway JWT-Bindung | Gateway Join (`SignalMessage.Join`) | JWT `sub/effective_id` == `peer_id`, `room/call_id` == `room_id` | Rust Unit in `demo/media-gateway/src/sfu/mod.rs` (rate-limit + token path) | teilweise |
 | I-12 | Gateway <-> Backend Mapping | AMQP `call.signaling` + Backend Signaling | `room_id <-> call_id` mapping konsistent, `offer/answer/ice/hangup` interoperabel | kein E2E-Interop-Test vorhanden | offen |
 | I-13 | Access-Link Join-Session | REST `/api/call-access/{id}/join|session` -> WS | Access-gebundene Session führt nur in erlaubten Call/Room-Kontext | kein dedizierter Endpoint-Contract-Test vorhanden | offen |
@@ -1086,6 +1086,33 @@ Definition of done:
 - Relevante User-Journeys sind als Playwright-Spezifikationen abgedeckt.
 - Tests laufen gegen `docker-compose.v1.yml` stabil und ohne externe Services.
 - Fehlerfälle sind sichtbar geprüft, nicht nur Happy Path.
+
+---
+
+### #22 SFU Room-Binding und Relay-Contracts (Implementierung)
+
+Ziel:
+- Offene #8-Interop-Findings I-06 bis I-10 schließen: `/sfu` muss denselben fail-closed Anspruch wie `/ws` haben und darf keine impliziten Lobby-/Room-Fallbacks erzeugen.
+
+Checklist:
+- [x] `/sfu` verlangt einen gültigen Query-Room (`room_id`, kompatibel zusätzlich `room`) und fällt nicht mehr still auf `lobby` zurück.
+- [x] Wenn `room_id` und Legacy-`room` parallel gesendet werden, müssen beide auf denselben Room normalisieren.
+- [x] Optionales `sfu/join.room_id` / Legacy-`roomId` muss exakt zum gebundenen Query-Room passen.
+- [x] Mismatches senden `sfu/error` und beenden die gebundene SFU-Verbindung fail-closed.
+- [x] Frontend-SFU-Client sendet kanonisch `room_id` in Query und `sfu/join`, hält Legacy-`room` aber als kompatibles Query-Feld.
+- [x] Dedizierter Backend-Contract `realtime-sfu-contract` deckt Auth-Handshake, Room-Binding, Publish/Subscribe, Unpublish, Frame-Relay ohne Self-Echo/Cross-Room-Leak und Reconnect-Publisher-/Track-Recovery ab.
+- [x] Smoke-Gate führt den SFU-Contract aus.
+
+Definition of done:
+- I-06 bis I-10 sind nicht mehr nur Tabellen-Findings, sondern durch einen ausführbaren Contract abgedeckt.
+- `/sfu` kann keinen Call-Workspace mehr durch fehlende Room-Angabe in `lobby` einsortieren.
+- Publisher, Tracks und Frames bleiben room-scoped und reconnect-fähig.
+
+Abschluss:
+- `demo/video-chat/backend-king-php/http/module_realtime.php` erzwingt `room_id`/`room`-Binding vor Upgrade und validiert `sfu/join` gegen diesen gebundenen Room.
+- `demo/video-chat/frontend-vue/src/lib/sfu/sfuClient.ts` sendet `room_id` kanonisch in Query und Join-Frame.
+- `demo/video-chat/backend-king-php/tests/realtime-sfu-contract.php|sh` deckt I-06 bis I-10 ab.
+- `demo/video-chat/scripts/smoke.sh` ruft `realtime-sfu-contract.sh` in der Backend-Contract-Strecke auf.
 
 ## Persistente Research-Notizen (für Folgesessions)
 

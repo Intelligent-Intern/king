@@ -3159,6 +3159,116 @@ function videochat_sfu_cleanup_frames(PDO $pdo): void
     $statement->execute([':cutoff_ms' => videochat_sfu_now_ms() - 15_000]);
 }
 
+/**
+ * @return array{ok: bool, room_id: string, error: string}
+ */
+function videochat_sfu_resolve_bound_room(array $queryParams): array
+{
+    $rawRoomId = is_string($queryParams['room_id'] ?? null) ? trim((string) $queryParams['room_id']) : '';
+    $legacyRoom = is_string($queryParams['room'] ?? null) ? trim((string) $queryParams['room']) : '';
+
+    if ($rawRoomId === '' && $legacyRoom === '') {
+        return [
+            'ok' => false,
+            'room_id' => '',
+            'error' => 'missing_room_id',
+        ];
+    }
+
+    $normalizedRoomId = $rawRoomId !== '' ? videochat_presence_normalize_room_id($rawRoomId, '') : '';
+    $normalizedLegacyRoom = $legacyRoom !== '' ? videochat_presence_normalize_room_id($legacyRoom, '') : '';
+    if ($rawRoomId !== '' && $normalizedRoomId === '') {
+        return [
+            'ok' => false,
+            'room_id' => '',
+            'error' => 'invalid_room_id',
+        ];
+    }
+    if ($legacyRoom !== '' && $normalizedLegacyRoom === '') {
+        return [
+            'ok' => false,
+            'room_id' => '',
+            'error' => 'invalid_room_id',
+        ];
+    }
+    if ($normalizedRoomId !== '' && $normalizedLegacyRoom !== '' && $normalizedRoomId !== $normalizedLegacyRoom) {
+        return [
+            'ok' => false,
+            'room_id' => '',
+            'error' => 'room_query_mismatch',
+        ];
+    }
+
+    $boundRoomId = $normalizedRoomId !== '' ? $normalizedRoomId : $normalizedLegacyRoom;
+    return [
+        'ok' => $boundRoomId !== '',
+        'room_id' => $boundRoomId,
+        'error' => $boundRoomId !== '' ? '' : 'invalid_room_id',
+    ];
+}
+
+/**
+ * @return array{ok: bool, type: string, room_id: string, payload: array<string, mixed>, error: string}
+ */
+function videochat_sfu_decode_client_frame(string $frame, string $boundRoomId): array
+{
+    $decoded = json_decode($frame, true);
+    if (!is_array($decoded)) {
+        return [
+            'ok' => false,
+            'type' => '',
+            'room_id' => '',
+            'payload' => [],
+            'error' => 'invalid_json',
+        ];
+    }
+
+    $type = strtolower(trim((string) ($decoded['type'] ?? '')));
+    if (!in_array($type, ['sfu/join', 'sfu/publish', 'sfu/subscribe', 'sfu/unpublish', 'sfu/frame', 'sfu/leave'], true)) {
+        return [
+            'ok' => false,
+            'type' => $type,
+            'room_id' => '',
+            'payload' => [],
+            'error' => $type === '' ? 'missing_type' : 'unsupported_type',
+        ];
+    }
+
+    $normalizedBoundRoomId = videochat_presence_normalize_room_id($boundRoomId, '');
+    $rawCommandRoom = $decoded['room_id'] ?? ($decoded['roomId'] ?? ($decoded['room'] ?? null));
+    if ($rawCommandRoom !== null) {
+        $commandRoomId = videochat_presence_normalize_room_id((string) $rawCommandRoom, '');
+        if ($commandRoomId === '') {
+            return [
+                'ok' => false,
+                'type' => $type,
+                'room_id' => '',
+                'payload' => [],
+                'error' => 'invalid_room_id',
+            ];
+        }
+        if ($normalizedBoundRoomId === '' || $commandRoomId !== $normalizedBoundRoomId) {
+            return [
+                'ok' => false,
+                'type' => $type,
+                'room_id' => $commandRoomId,
+                'payload' => [],
+                'error' => 'sfu_room_mismatch',
+            ];
+        }
+    }
+
+    $payload = $decoded;
+    $payload['room_id'] = $normalizedBoundRoomId;
+    return [
+        'ok' => true,
+        'type' => $type,
+        'room_id' => $normalizedBoundRoomId,
+        'payload' => $payload,
+        'error' => '',
+    ];
+}
+
 function videochat_sfu_poll_broker(
     PDO $pdo,
     mixed $websocket,
@@ -3259,11 +3369,22 @@ function videochat_handle_sfu_routes(
     }
 
     $queryParams = videochat_request_query_params($request);
-    $roomId = videochat_presence_normalize_room_id(
-        is_string($queryParams['room'] ?? null) ? (string) $queryParams['room'] : 'lobby'
-    );
+    $roomResolution = videochat_sfu_resolve_bound_room($queryParams);
+    if (!(bool) ($roomResolution['ok'] ?? false)) {
+        return $errorResponse(
+            400,
+            'sfu_room_binding_invalid',
+            'SFU connections require a valid room_id query parameter.',
+            [
+                'reason' => (string) ($roomResolution['error'] ?? 'invalid_room_id'),
+            ]
+        );
+    }
+    $roomId = (string) ($roomResolution['room_id'] ?? '');
     $requestedCallId = videochat_realtime_normalize_call_id(
-        is_string($queryParams['call_id'] ?? null) ? (string) $queryParams['call_id'] : '',
+        is_string($queryParams['call_id'] ?? null)
+            ? (string) $queryParams['call_id']
+            : (is_string($queryParams['callId'] ?? null) ? (string) $queryParams['callId'] : ''),
         ''
     );
     $userId = (int) ($websocketAuth['user']['id'] ?? 0);
@@ -3431,14 +3552,27 @@ function videochat_handle_sfu_routes(
                 continue;
             }
 
-            $msg = json_decode($msgJson, true);
-            if (!is_array($msg)) {
+            $command = videochat_sfu_decode_client_frame($msgJson, $roomId);
+            if (!(bool) ($command['ok'] ?? false)) {
+                videochat_presence_send_frame($websocket, [
+                    'type' => 'sfu/error',
+                    'room_id' => $roomId,
+                    'error' => (string) ($command['error'] ?? 'invalid_command'),
+                    'command_type' => (string) ($command['type'] ?? ''),
+                ]);
+                if ((string) ($command['error'] ?? '') === 'sfu_room_mismatch') {
+                    break 2;
+                }
                 continue;
             }
 
-            $msgType = $msg['type'] ?? '';
+            $msg = is_array($command['payload'] ?? null) ? $command['payload'] : [];
+            $msgType = (string) ($command['type'] ?? '');
 
             switch ($msgType) {
+                case 'sfu/join':
+                    break;
+
                 case 'sfu/publish':
                     $trackId = $msg['track_id'] ?? $msg['trackId'] ?? uniqid('track_');
                     $kind = $msg['kind'] ?? 'video';
