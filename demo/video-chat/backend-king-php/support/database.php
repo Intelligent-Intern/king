@@ -1041,8 +1041,20 @@ SQL
         $newlyApplied++;
     }
 
-    $seededDemoUsers = videochat_seed_demo_users($pdo);
-    $seededDemoCalls = videochat_seed_demo_calls($pdo);
+    $seededDemoUsers = [];
+    $seededDemoCalls = [];
+    // HTTP workers bootstrap the same SQLite file; serialize fixed demo IDs.
+    $pdo->exec('BEGIN IMMEDIATE');
+    try {
+        $seededDemoUsers = videochat_seed_demo_users($pdo);
+        $seededDemoCalls = videochat_seed_demo_calls($pdo);
+        $pdo->exec('COMMIT');
+    } catch (Throwable $error) {
+        if ($pdo->inTransaction()) {
+            $pdo->exec('ROLLBACK');
+        }
+        throw $error;
+    }
 
     $tableNames = [];
     $tableRows = $pdo->query(

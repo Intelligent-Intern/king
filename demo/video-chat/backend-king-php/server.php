@@ -407,12 +407,13 @@ while (true) {
     $ok = king_http1_server_listen_once($host, $port, null, $handler);
     if ($ok === false) {
         $lastError = function_exists('king_get_last_error') ? trim((string) king_get_last_error()) : '';
-        $isExpectedTimeout = $lastError !== '' && (
+        $isExpectedListenerMiss = $lastError !== '' && (
             stripos($lastError, 'timed out while waiting for the HTTP/1 accept phase') !== false
             || stripos($lastError, 'timed out while waiting for the HTTP/1 request head phase') !== false
+            || stripos($lastError, 'failed before a complete HTTP/1 request head was received (errno 11)') !== false
         );
 
-        if ($lastError !== '' && !$isExpectedTimeout) {
+        if ($lastError !== '' && !$isExpectedListenerMiss) {
             $log('listen_once failure: ' . $lastError);
             usleep(50_000);
             continue;

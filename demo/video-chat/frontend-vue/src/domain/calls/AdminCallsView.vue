@@ -1339,32 +1339,32 @@ function resolvePreviewBackgroundFilterOptions() {
   }
   blurPx = Math.max(1, Math.min(12, blurPx));
 
-  let detectIntervalMs = 110;
+  let detectIntervalMs = 150;
   if (qualityProfile === 'quality') {
-    detectIntervalMs = 80;
+    detectIntervalMs = 110;
   } else if (qualityProfile === 'realtime') {
-    detectIntervalMs = 140;
+    detectIntervalMs = 190;
   }
 
-  let temporalSmoothingAlpha = 0.24;
+  let temporalSmoothingAlpha = 0.28;
   if (qualityProfile === 'quality') {
-    temporalSmoothingAlpha = 0.18;
+    temporalSmoothingAlpha = 0.22;
   } else if (qualityProfile === 'realtime') {
-    temporalSmoothingAlpha = 0.32;
+    temporalSmoothingAlpha = 0.38;
   }
 
   const maskVariant = Math.max(1, Math.min(10, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaskVariant, 4))));
   const transitionGain = Math.max(1, Math.min(10, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurTransition, 10))));
   const requestedProcessWidth = Math.max(320, Math.min(1920, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessWidth, 960))));
   const requestedProcessFps = Math.max(8, Math.min(30, Math.round(toFiniteNumber(callMediaPrefs.backgroundMaxProcessFps, 24))));
-  let processWidthCap = 960;
-  let processFpsCap = 24;
+  let processWidthCap = 720;
+  let processFpsCap = 15;
   if (qualityProfile === 'quality') {
-    processWidthCap = 1280;
-    processFpsCap = 30;
-  } else if (qualityProfile === 'realtime') {
     processWidthCap = 960;
-    processFpsCap = 15;
+    processFpsCap = 24;
+  } else if (qualityProfile === 'realtime') {
+    processWidthCap = 640;
+    processFpsCap = 12;
   }
 
   return {
@@ -1372,7 +1372,7 @@ function resolvePreviewBackgroundFilterOptions() {
     blurPx,
     detectIntervalMs,
     temporalSmoothingAlpha,
-    preferFastMatte: false,
+    preferFastMatte: qualityProfile !== 'quality',
     maskVariant,
     transitionGain,
     maxProcessWidth: Math.max(320, Math.min(processWidthCap, requestedProcessWidth)),

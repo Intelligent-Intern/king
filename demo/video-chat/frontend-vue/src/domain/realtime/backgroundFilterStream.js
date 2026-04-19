@@ -6,6 +6,7 @@ import { createTfjsSegmentationBackend } from "./backgroundFilterBackendTfjs";
 const DEFAULT_INNER_CONTRACT_PX = 2;
 const DEFAULT_INNER_FEATHER_PX = 34;
 const DEFAULT_INNER_FEATHER_CURVE = 0.92;
+const LONG_RAF_FRAME_MS = 44;
 
 // ITU-R BT.601 coefficients for RGB -> YCbCr conversion.
 // Keeping these as named constants documents intent and avoids "magic numbers".
@@ -541,14 +542,18 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     }
     const now = performance.now();
     const canRunSegmentation = now >= overloadCooldownUntil;
-    const segmentation = canRunSegmentation ? segmentationBackend.nextFaces(video, vw, vh, now) : { faces, detectSampleMs: null, matteMask: null };
+    const segmentationWidth = Math.max(1, Math.round(Math.min(vw, canvas.width)));
+    const segmentationHeight = Math.max(1, Math.round(Math.min(vh, canvas.height)));
+    const segmentation = canRunSegmentation
+      ? segmentationBackend.nextFaces(video, segmentationWidth, segmentationHeight, now)
+      : { faces, detectSampleMs: null, matteMask: null };
     faces = segmentation.faces;
     smoothedFaces = smoothFaceBoxes(smoothedFaces, faces, temporalSmoothingAlpha);
     if (typeof segmentation.detectSampleMs === "number" && Number.isFinite(segmentation.detectSampleMs)) {
       detectCount += 1;
       detectDurationSum += Math.max(0, segmentation.detectSampleMs);
     }
-    const underLoad = lastFrameProcessMs > dynamicFrameBudgetMs * 0.85;
+    const underLoad = lastFrameProcessMs > Math.min(LONG_RAF_FRAME_MS, dynamicFrameBudgetMs * 0.75);
     const shouldRefreshMask = Boolean(segmentation.matteMask)
       && (segmentation.detectSampleMs !== null || !hasMatteMask)
       && (!underLoad || !hasMatteMask);
@@ -628,13 +633,13 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
         }
       }
     }
-    if (frameProcessMs > dynamicFrameBudgetMs * 1.5) {
-      overloadCooldownUntil = now + Math.max(dynamicFrameBudgetMs * 3, 180);
+    if (frameProcessMs > Math.min(LONG_RAF_FRAME_MS, dynamicFrameBudgetMs * 1.5)) {
+      overloadCooldownUntil = now + Math.max(dynamicFrameBudgetMs * 4, 240);
     }
-    if (frameProcessMs > dynamicFrameBudgetMs * 1.15) {
+    if (frameProcessMs > Math.min(LONG_RAF_FRAME_MS, dynamicFrameBudgetMs * 1.15)) {
       stableFrameStreak = 0;
       if (dynamicFps > 8) {
-        dynamicFps = Math.max(8, dynamicFps - 1);
+        dynamicFps = Math.max(8, dynamicFps - 2);
         dynamicFrameBudgetMs = 1e3 / dynamicFps;
       }
     } else {
