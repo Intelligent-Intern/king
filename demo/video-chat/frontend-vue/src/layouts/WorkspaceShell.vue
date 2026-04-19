@@ -1327,11 +1327,6 @@ async function apiRequest(path, { method = 'GET', query = null, body = null } = 
   return payload;
 }
 
-function isUuidLike(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  return /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(normalized);
-}
-
 function isoToLocalInput(isoValue) {
   if (typeof isoValue !== 'string' || isoValue.trim() === '') return '';
   const date = new Date(isoValue);
@@ -1548,44 +1543,32 @@ function extractCallFromPayload(payload) {
   return null;
 }
 
-async function fetchCallById(callId) {
-  const normalizedCallId = String(callId || '').trim();
-  if (normalizedCallId === '') {
-    throw new Error('Missing call id.');
-  }
-  const payload = await apiRequest(`/api/calls/${encodeURIComponent(normalizedCallId)}`);
-  const call = extractCallFromPayload(payload);
-  if (!call || typeof call !== 'object') {
-    throw new Error('Call payload is invalid.');
-  }
-  return call;
-}
-
 async function resolveEditableCallFromRouteRef(callRef) {
   const normalized = String(callRef || '').trim();
   if (normalized === '') {
     throw new Error('Missing call reference.');
   }
 
-  if (isUuidLike(normalized)) {
-    try {
-      return await fetchCallById(normalized);
-    } catch (directError) {
-      const directStatus = Number(directError?.responseStatus || 0);
-      if (directStatus !== 404) {
-        throw directError;
-      }
-
-      const accessPayload = await apiRequest(`/api/call-access/${encodeURIComponent(normalized)}`);
-      const accessCall = extractCallFromPayload(accessPayload);
-      if (accessCall && typeof accessCall === 'object') {
-        return accessCall;
-      }
-      throw new Error('Call payload is invalid.');
+  const payload = await apiRequest(`/api/calls/resolve/${encodeURIComponent(normalized)}`);
+  const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+  const state = String(result.state || '').trim().toLowerCase();
+  if (state === 'resolved') {
+    const resolvedCall = extractCallFromPayload({ result });
+    if (resolvedCall && typeof resolvedCall === 'object') {
+      return resolvedCall;
     }
+    throw new Error('Call payload is invalid.');
   }
 
-  return fetchCallById(normalized);
+  const error = new Error('Call reference could not be resolved.');
+  if (state === 'expired') {
+    error.responseStatus = 410;
+  } else if (state === 'forbidden') {
+    error.responseStatus = 403;
+  } else {
+    error.responseStatus = 404;
+  }
+  throw error;
 }
 
 function nextCallOwnerExternalRow(seed = null) {

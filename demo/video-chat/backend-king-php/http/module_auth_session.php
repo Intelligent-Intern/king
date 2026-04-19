@@ -198,6 +198,47 @@ SQL
         }
     }
 
+    if ($path === '/api/auth/session-state') {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/auth/session-state.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $probe = videochat_authenticate_request($pdo, $request, 'rest');
+        } catch (Throwable) {
+            return $errorResponse(500, 'auth_session_probe_failed', 'Session probe failed due to a backend error.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($probe['ok'] ?? false)) {
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'result' => [
+                    'state' => 'unauthenticated',
+                    'reason' => (string) ($probe['reason'] ?? 'invalid_session'),
+                ],
+                'session' => null,
+                'user' => null,
+                'time' => gmdate('c'),
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'authenticated',
+                'reason' => 'ready',
+            ],
+            'session' => $probe['session'] ?? null,
+            'user' => $probe['user'] ?? null,
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if ($path === '/api/auth/session') {
         if ($method !== 'GET') {
             return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/auth/session.', [

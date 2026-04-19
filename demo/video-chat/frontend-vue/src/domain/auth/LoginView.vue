@@ -114,7 +114,7 @@ async function normalizePostLoginRedirectTarget(redirectTarget) {
   }
 
   try {
-    const { response } = await fetchBackend(`/api/call-access/${encodeURIComponent(callRef)}`, {
+    const { response } = await fetchBackend(`/api/calls/resolve/${encodeURIComponent(callRef)}`, {
       method: 'GET',
       headers: {
         accept: 'application/json',
@@ -126,7 +126,12 @@ async function normalizePostLoginRedirectTarget(redirectTarget) {
       return redirectTarget;
     }
 
-    const accessId = String(payload?.result?.access_link?.id || '').trim().toLowerCase();
+    const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+    if (String(result.state || '').trim().toLowerCase() !== 'resolved') {
+      return redirectTarget;
+    }
+
+    const accessId = String(result?.access_link?.id || '').trim().toLowerCase();
     if (!UUID_PATTERN.test(accessId)) {
       return redirectTarget;
     }

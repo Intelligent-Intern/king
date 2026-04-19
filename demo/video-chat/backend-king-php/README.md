@@ -44,10 +44,12 @@ cd demo/video-chat/backend-king-php
 - `GET /api/runtime`
 - `GET /api/version`
 - `POST /api/auth/login`
+- `GET /api/auth/session-state` (soft session probe; never returns 401 for stale/missing tokens)
 - `GET /api/auth/session` (requires session token)
 - `POST /api/auth/refresh` (requires session token, rotates/replaces token)
 - `POST /api/auth/logout` (requires session token)
 - `GET /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
+- `GET /api/calls/resolve/{ref}` (soft route resolver for call/access ids; not-found is a `200` state)
 - `POST /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
 - `PATCH /api/calls/{id}` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
 - `DELETE /api/calls/{id}` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
@@ -207,6 +209,9 @@ Failures use the same error envelope shape:
 
 `GET /api/auth/session` and every non-public `/api/*` path require a valid
 session token (`Authorization: Bearer ...` or `X-Session-Id: ...`).
+`GET /api/auth/session-state` is the browser recovery probe for stale local
+tokens: it returns `200` with `result.state = authenticated|unauthenticated`
+so route guards can clear invalid local state without producing console 401s.
 
 `POST /api/auth/refresh` rotates the current session token atomically, returns a
 replacement token, and invalidates the replaced token so stale replay attempts
@@ -289,6 +294,14 @@ Response includes:
 - persisted calls never default to the shared `lobby`; each call workspace gets its own generated UUID room
 - validation failures: `422 calls_create_validation_failed` with `error.details.fields`
 - success: `201`, with `result.call` containing normalized owner + participants + totals
+
+`GET /api/calls/resolve/{ref}` route resolution contract:
+
+- requires an authenticated session
+- resolves UUID-like refs as call id first, then access-link id
+- returns `200` with `result.state = resolved|not_found|expired|forbidden`
+- `result.resolved_as` is `call_id`, `access_id`, or empty for not found
+- intended for browser route guards so normal stale-link navigation does not emit console 404s
 
 `PATCH /api/calls/{id}` update contract:
 

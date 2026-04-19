@@ -6,6 +6,7 @@ require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_directory.php';
+require_once __DIR__ . '/../domain/calls/call_access.php';
 require_once __DIR__ . '/../http/module_calls.php';
 
 function videochat_call_create_endpoint_assert(bool $condition, string $message): void
@@ -318,6 +319,51 @@ SQL
     $participantCountQuery->execute([':call_id' => $callId]);
     $participantCount = (int) $participantCountQuery->fetchColumn();
     videochat_call_create_endpoint_assert($participantCount === 5, 'persisted participant row count mismatch');
+
+    $resolveCreatedCall = videochat_handle_call_routes(
+        '/api/calls/resolve/' . $callId,
+        'GET',
+        [...$requestTemplate, 'method' => 'GET', 'uri' => '/api/calls/resolve/' . $callId, 'body' => ''],
+        $adminAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_call_create_endpoint_assert(is_array($resolveCreatedCall), 'resolve-created response must be an array');
+    videochat_call_create_endpoint_assert((int) ($resolveCreatedCall['status'] ?? 0) === 200, 'resolve-created status should be 200');
+    $resolveCreatedBody = videochat_call_create_endpoint_decode($resolveCreatedCall);
+    videochat_call_create_endpoint_assert(
+        (string) (((($resolveCreatedBody['result'] ?? [])['state'] ?? ''))) === 'resolved',
+        'resolve-created state mismatch'
+    );
+    videochat_call_create_endpoint_assert(
+        (string) (((($resolveCreatedBody['result'] ?? [])['resolved_as'] ?? ''))) === 'call_id',
+        'resolve-created resolved_as mismatch'
+    );
+    videochat_call_create_endpoint_assert(
+        (string) (((($resolveCreatedBody['result'] ?? [])['call'] ?? [])['id'] ?? '')) === $callId,
+        'resolve-created call id mismatch'
+    );
+
+    $missingResolveId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    $resolveMissingCall = videochat_handle_call_routes(
+        '/api/calls/resolve/' . $missingResolveId,
+        'GET',
+        [...$requestTemplate, 'method' => 'GET', 'uri' => '/api/calls/resolve/' . $missingResolveId, 'body' => ''],
+        $adminAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_call_create_endpoint_assert(is_array($resolveMissingCall), 'resolve-missing response must be an array');
+    videochat_call_create_endpoint_assert((int) ($resolveMissingCall['status'] ?? 0) === 200, 'resolve-missing must not emit HTTP 404');
+    $resolveMissingBody = videochat_call_create_endpoint_decode($resolveMissingCall);
+    videochat_call_create_endpoint_assert(
+        (string) (((($resolveMissingBody['result'] ?? [])['state'] ?? ''))) === 'not_found',
+        'resolve-missing state mismatch'
+    );
 
     $callsCountBeforeDuplicate = (int) $pdo->query('SELECT COUNT(*) FROM calls')->fetchColumn();
     $duplicateExternal = videochat_handle_call_routes(

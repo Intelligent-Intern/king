@@ -1130,26 +1130,20 @@ function callPayloadToRouteResolution(callPayload) {
   };
 }
 
-async function tryResolveRouteAsAccessId(callRef) {
-  const payload = await apiRequest(`/api/call-access/${encodeURIComponent(callRef)}`);
-  const result = payload?.result || {};
+async function resolveRouteRefSafely(callRef) {
+  const payload = await apiRequest(`/api/calls/resolve/${encodeURIComponent(callRef)}`);
+  const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+  const state = String(result.state || '').trim().toLowerCase();
   const accessLink = result?.access_link || {};
   const call = result?.call || {};
   const resolution = callPayloadToRouteResolution(call);
   const normalizedAccessId = String(accessLink?.id || '').trim().toLowerCase();
   return {
+    state,
+    reason: String(result.reason || '').trim().toLowerCase(),
+    resolvedAs: String(result.resolved_as || '').trim().toLowerCase(),
     accessId: normalizedAccessId,
     callId: resolution.callId,
-    roomId: resolution.roomId,
-  };
-}
-
-async function tryResolveRouteAsCallId(callRef) {
-  const payload = await apiRequest(`/api/calls/${encodeURIComponent(callRef)}`);
-  const resolution = callPayloadToRouteResolution(payload?.call || {});
-  return {
-    accessId: '',
-    callId: resolution.callId || String(callRef || '').trim(),
     roomId: resolution.roomId,
   };
 }
@@ -1182,74 +1176,34 @@ async function resolveRouteCallRef(callRef) {
     });
   }
 
-  if (looksLikeUuid) {
-    try {
-      const callResolution = await tryResolveRouteAsCallId(normalized);
-      if (seq !== routeCallResolveSeq) return;
+  try {
+    const callResolution = await resolveRouteRefSafely(normalized);
+    if (seq !== routeCallResolveSeq) return;
+    if (callResolution.state === 'resolved') {
       applyRouteCallResolution({
         ...callResolution,
         error: '',
         pending: false,
       });
       return;
-    } catch {
-      // UUID-like route refs can be either call ids or access-link ids.
-      // Try access-link resolution when direct call lookup fails.
-      try {
-        const accessResolution = await tryResolveRouteAsAccessId(normalized);
-        if (seq !== routeCallResolveSeq) return;
-        applyRouteCallResolution({
-          ...accessResolution,
-          error: '',
-          pending: false,
-        });
-        return;
-      } catch (accessError) {
-        const accessResponseStatus = Number(accessError?.responseStatus || 0);
-        if (accessResponseStatus === 410) {
-          if (seq !== routeCallResolveSeq) return;
-          applyRouteCallResolution({
-            accessId: normalized.toLowerCase(),
-            callId: '',
-            roomId: 'lobby',
-            error: 'route_call_access_expired',
-            pending: false,
-          });
-
-          const fallbackRouteName = normalizeRole(sessionState.role) === 'admin' ? 'admin-calls' : 'user-dashboard';
-          if (String(route.name || '') === 'call-workspace' && String(routeCallRef.value || '').trim() !== '') {
-            void router.replace({ name: fallbackRouteName });
-          }
-          return;
-        }
-
-        if (seq !== routeCallResolveSeq) return;
-        applyRouteCallResolution({
-          accessId: '',
-          callId: '',
-          roomId: 'lobby',
-          error: 'route_call_ref_not_found',
-          pending: false,
-        });
-
-        const fallbackRouteName = normalizeRole(sessionState.role) === 'admin' ? 'admin-calls' : 'user-dashboard';
-        if (String(route.name || '') === 'call-workspace' && String(routeCallRef.value || '').trim() !== '') {
-          void router.replace({ name: fallbackRouteName });
-        }
-        return;
-      }
     }
-  }
 
-  try {
-    const callResolution = await tryResolveRouteAsCallId(normalized);
-    if (seq !== routeCallResolveSeq) return;
-    applyRouteCallResolution({
-      ...callResolution,
-      error: '',
-      pending: false,
-    });
-    return;
+    if (looksLikeUuid) {
+      const isExpired = callResolution.state === 'expired';
+      applyRouteCallResolution({
+        accessId: isExpired ? normalized.toLowerCase() : '',
+        callId: '',
+        roomId: 'lobby',
+        error: isExpired ? 'route_call_access_expired' : 'route_call_ref_not_found',
+        pending: false,
+      });
+
+      const fallbackRouteName = normalizeRole(sessionState.role) === 'admin' ? 'admin-calls' : 'user-dashboard';
+      if (String(route.name || '') === 'call-workspace' && String(routeCallRef.value || '').trim() !== '') {
+        void router.replace({ name: fallbackRouteName });
+      }
+      return;
+    }
   } catch {
     // Fall back to treating param as room id.
   }
@@ -3309,7 +3263,7 @@ async function probeWorkspaceSession() {
   }
 
   try {
-    const { response } = await fetchBackend('/api/auth/session', {
+    const { response } = await fetchBackend('/api/auth/session-state', {
       method: 'GET',
       headers: requestHeaders(false),
     });
@@ -3321,12 +3275,23 @@ async function probeWorkspaceSession() {
       payload = null;
     }
 
-    if (response.ok && payload && payload.status === 'ok') {
+    const sessionProbeState = String(payload?.result?.state || '').trim().toLowerCase();
+    if (response.ok && payload && payload.status === 'ok' && sessionProbeState === 'authenticated') {
       return {
         ok: true,
         state: 'online',
         reason: 'ready',
         message: '',
+      };
+    }
+
+    if (response.ok && payload && payload.status === 'ok' && sessionProbeState === 'unauthenticated') {
+      const failureReason = String(payload?.result?.reason || 'invalid_session').trim().toLowerCase();
+      return {
+        ok: false,
+        state: 'expired',
+        reason: failureReason,
+        message: 'Session is no longer valid.',
       };
     }
 

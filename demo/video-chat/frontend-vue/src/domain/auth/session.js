@@ -374,7 +374,7 @@ export async function ensureSessionRecovery(force = false) {
 
     setRecoveryState('probing');
     try {
-      const { response } = await fetchBackend('/api/auth/session', {
+      const { response } = await fetchBackend('/api/auth/session-state', {
         method: 'GET',
         headers: sessionHeaders(),
       });
@@ -387,6 +387,19 @@ export async function ensureSessionRecovery(force = false) {
         return {
           ok: false,
           reason: 'invalid_session',
+          status: response.status,
+          message,
+        };
+      }
+
+      const sessionStateResult = String(payload?.result?.state || '').trim().toLowerCase();
+      if (sessionStateResult !== 'authenticated') {
+        const reason = String(payload?.result?.reason || 'invalid_session').trim().toLowerCase() || 'invalid_session';
+        const message = 'Session validation failed.';
+        normalizeAuthErrorState(reason, message, true);
+        return {
+          ok: false,
+          reason,
           status: response.status,
           message,
         };

@@ -269,6 +269,139 @@ function videochat_handle_call_routes(
         ]);
     }
 
+    if (preg_match('#^/api/calls/resolve/([A-Za-z0-9._-]{1,200})$#', $path, $resolveMatch) === 1) {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/calls/resolve/{ref}.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        $callRef = trim((string) ($resolveMatch[1] ?? ''));
+        $isUuidRef = preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i', $callRef) === 1;
+
+        try {
+            $pdo = $openDatabase();
+            $callResolution = videochat_get_call_for_user(
+                $pdo,
+                $callRef,
+                $authenticatedUserId,
+                $authenticatedUserRole
+            );
+
+            if ((bool) ($callResolution['ok'] ?? false)) {
+                return $jsonResponse(200, [
+                    'status' => 'ok',
+                    'result' => [
+                        'state' => 'resolved',
+                        'resolved_as' => 'call_id',
+                        'access_link' => null,
+                        'call' => $callResolution['call'] ?? null,
+                    ],
+                    'time' => gmdate('c'),
+                ]);
+            }
+
+            $callReason = (string) ($callResolution['reason'] ?? 'internal_error');
+            if ($callReason === 'forbidden') {
+                return $jsonResponse(200, [
+                    'status' => 'ok',
+                    'result' => [
+                        'state' => 'forbidden',
+                        'resolved_as' => 'call_id',
+                        'reason' => 'calls_forbidden',
+                        'access_link' => null,
+                        'call' => null,
+                    ],
+                    'time' => gmdate('c'),
+                ]);
+            }
+            if ($callReason !== 'not_found') {
+                return $errorResponse(500, 'calls_resolve_failed', 'Could not resolve call route reference.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            if ($isUuidRef) {
+                $accessResolution = videochat_resolve_call_access_for_user(
+                    $pdo,
+                    strtolower($callRef),
+                    $authenticatedUserId,
+                    $authenticatedUserRole
+                );
+
+                if ((bool) ($accessResolution['ok'] ?? false)) {
+                    return $jsonResponse(200, [
+                        'status' => 'ok',
+                        'result' => [
+                            'state' => 'resolved',
+                            'resolved_as' => 'access_id',
+                            'access_link' => $accessResolution['access_link'] ?? null,
+                            'call' => $accessResolution['call'] ?? null,
+                        ],
+                        'time' => gmdate('c'),
+                    ]);
+                }
+
+                $accessReason = (string) ($accessResolution['reason'] ?? 'internal_error');
+                if ($accessReason === 'expired') {
+                    return $jsonResponse(200, [
+                        'status' => 'ok',
+                        'result' => [
+                            'state' => 'expired',
+                            'resolved_as' => 'access_id',
+                            'reason' => 'call_access_expired',
+                            'access_link' => null,
+                            'call' => null,
+                        ],
+                        'time' => gmdate('c'),
+                    ]);
+                }
+                if ($accessReason === 'forbidden') {
+                    return $jsonResponse(200, [
+                        'status' => 'ok',
+                        'result' => [
+                            'state' => 'forbidden',
+                            'resolved_as' => 'access_id',
+                            'reason' => 'call_access_forbidden',
+                            'access_link' => null,
+                            'call' => null,
+                        ],
+                        'time' => gmdate('c'),
+                    ]);
+                }
+                if (!in_array($accessReason, ['not_found', 'validation_failed'], true)) {
+                    return $errorResponse(500, 'calls_resolve_failed', 'Could not resolve call route reference.', [
+                        'reason' => 'internal_error',
+                    ]);
+                }
+            }
+        } catch (Throwable) {
+            return $errorResponse(500, 'calls_resolve_failed', 'Could not resolve call route reference.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'not_found',
+                'resolved_as' => '',
+                'reason' => 'route_call_ref_not_found',
+                'access_link' => null,
+                'call' => null,
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if ($path === '/api/calls') {
         $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
         $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
