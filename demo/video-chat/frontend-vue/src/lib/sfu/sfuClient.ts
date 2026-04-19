@@ -63,6 +63,20 @@ export class SFUClient {
     this.cb.onDisconnect()
   }
 
+  private retireSocket(ws: WebSocket, closeConnecting = false): void {
+    if (this.ws === ws) {
+      this.ws = null
+    }
+
+    if (ws.readyState === WebSocket.CONNECTING && !closeConnecting) {
+      return
+    }
+
+    try {
+      ws.close()
+    } catch {}
+  }
+
   private connectWithCandidates(
     candidates: string[],
     index: number,
@@ -85,11 +99,16 @@ export class SFUClient {
     const ws = new WebSocket(wsUrl)
     this.ws = ws
     let opened = false
+    let failedOver = false
 
     const failToNextCandidate = () => {
       if (generation !== this.connectGeneration) return
       if (opened) return
-      if (this.ws === ws) this.ws = null
+      if (failedOver) return
+      failedOver = true
+      if (this.ws === ws) {
+        this.ws = null
+      }
       this.connectWithCandidates(candidates, index + 1, query, roomId, generation)
     }
 
@@ -143,9 +162,7 @@ export class SFUClient {
     const generation = this.connectGeneration
 
     if (this.ws) {
-      try {
-        this.ws.close()
-      } catch {}
+      this.retireSocket(this.ws)
       this.ws = null
     }
 
@@ -194,7 +211,9 @@ export class SFUClient {
     this.connectGeneration += 1
     this.disconnectNotified = false
     this.send({ type: 'sfu/leave' })
-    this.ws?.close()
+    if (this.ws) {
+      this.retireSocket(this.ws)
+    }
     this.ws = null
   }
 

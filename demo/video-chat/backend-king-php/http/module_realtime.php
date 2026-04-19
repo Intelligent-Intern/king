@@ -542,6 +542,36 @@ function videochat_realtime_is_user_moderator_for_room(
     return (bool) ($context['can_moderate'] ?? false);
 }
 
+function videochat_realtime_user_has_sfu_room_admission(
+    callable $openDatabase,
+    int $userId,
+    string $role,
+    string $roomId,
+    string $requestedCallId = ''
+): bool {
+    if ($userId <= 0) {
+        return false;
+    }
+
+    if (videochat_normalize_role_slug($role) === 'admin') {
+        return true;
+    }
+
+    try {
+        $pdo = $openDatabase();
+        $context = videochat_realtime_call_role_context_for_room_user(
+            $pdo,
+            $roomId,
+            $userId,
+            videochat_realtime_normalize_call_id($requestedCallId, '')
+        );
+    } catch (Throwable) {
+        return false;
+    }
+
+    return videochat_realtime_call_context_allows_admission_bypass($context);
+}
+
 function videochat_realtime_connection_can_bypass_admission_for_room(
     array $connection,
     string $roomId,
@@ -2215,14 +2245,14 @@ function videochat_handle_sfu_routes(
         $userId,
         $sessionId
     );
-    $canBypassAdmission = videochat_realtime_is_user_moderator_for_room(
+    $hasPersistentAdmission = videochat_realtime_user_has_sfu_room_admission(
         $openDatabase,
         $userId,
         $userRole,
         $roomId,
         $requestedCallId
     );
-    if (!$isAdmittedInRoom && !$canBypassAdmission) {
+    if (!$isAdmittedInRoom && !$hasPersistentAdmission) {
         return $errorResponse(
             403,
             'sfu_room_admission_required',
