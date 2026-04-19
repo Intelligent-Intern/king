@@ -99,9 +99,49 @@
         "user_settings_endpoint": { "type": "string", "enum": ["/api/user/settings"] },
         "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
       }
+    },
+    "error_response": {
+      "type": "object",
+      "required": {
+        "status": { "type": "string", "enum": ["error"] },
+        "error": {
+          "type": "object",
+          "required": {
+            "code": { "type": "string", "min_length": 1 },
+            "message": { "type": "string", "min_length": 1 }
+          },
+          "optional": {
+            "details": { "type": "any" }
+          }
+        },
+        "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
+      }
     }
   },
   "ws": {
+    "system_error": {
+      "type": "object",
+      "required": {
+        "type": { "type": "string", "enum": ["system/error"] },
+        "status": { "type": "string", "enum": ["error"] },
+        "code": { "type": "string", "min_length": 1 },
+        "message": { "type": "string", "min_length": 1 },
+        "error": {
+          "type": "object",
+          "required": {
+            "code": { "type": "string", "min_length": 1 },
+            "message": { "type": "string", "min_length": 1 }
+          },
+          "optional": {
+            "details": { "type": "any" }
+          }
+        },
+        "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
+      },
+      "optional": {
+        "details": { "type": "any" }
+      }
+    },
     "room_snapshot": {
       "type": "object",
       "required": {

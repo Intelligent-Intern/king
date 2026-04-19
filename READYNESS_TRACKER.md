@@ -83,6 +83,7 @@ Status note:
 - Recent video-chat Gateway JWT closure: future Gateway Join tokens require HS256, safe secret policy, matching `sub`/`effective_id` and `room`/`call_id`, token-length limits, and rate-limit proof in `backend-king-php/tests/gateway-jwt-binding-contract.sh` tracked in `ISSUES.md` #24.
 - Recent video-chat Gateway mapping closure: backend signaling now maps deterministically to/from AMQP `call.signaling` payloads for offer/answer/ice/hangup with room/call alias enforcement in `backend-king-php/tests/gateway-backend-mapping-contract.sh` tracked in `ISSUES.md` #25.
 - Recent video-chat error-envelope closure: REST errors and realtime `system/error` frames now share the typed `status/error/time` envelope while preserving legacy realtime top-level fields, proven by `backend-king-php/tests/error-envelope-contract.sh` and tracked in `ISSUES.md` #27.
+- Recent video-chat DTO-schema closure: the canonical `contracts/v1` API/WS catalog now has a versioned schema contract that validates catalog versioning, required REST/WS DTO presence, schema metadata, and sample REST/WS error payloads in `backend-king-php/tests/contract-schema-versioning-contract.sh`, tracked in `ISSUES.md` #28.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -366,7 +367,7 @@ Scope note:
 - [x] Enforce one shared typed error envelope across REST and WS responses.
 - [x] Split backend runtime code into focused modules (`auth`, `session`, `rbac`, `users`, `calls`, `invites`, `realtime`) with no monolithic mixed-responsibility handler.
 - [ ] Split frontend state into focused stores (`auth`, `calls`, `participants`, `chat`, `presence`, `settings`) with deterministic ownership boundaries.
-- [ ] Add contract-level schema tests for request/response/event DTOs and keep them versioned.
+- [x] Add contract-level schema tests for request/response/event DTOs and keep them versioned.
 - [ ] Establish a UI-parity acceptance matrix tied to executable checks instead of prose-only claims.
 
 ### Z2. Backend Auth, Session, RBAC

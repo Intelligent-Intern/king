@@ -1239,6 +1239,29 @@ Abschluss:
 - `demo/video-chat/backend-king-php/tests/error-envelope-contract.php|sh` deckt den Vertrag ab.
 - `demo/video-chat/scripts/smoke.sh` ruft den Contract in der Backend-Contract-Strecke auf.
 
+### #28 Versionierte Contract-Schema-Tests fuer REST/WS DTOs (Implementierung)
+
+Ziel:
+- Z1 schliessen: Request-/Response-/Event-DTOs muessen im kanonischen `contracts/v1` Katalog versioniert und per Contract-Test gegen Schema-Drift geschuetzt sein.
+
+Checklist:
+- [x] `api.error_response` und `ws.system_error` sind als DTO-Schemas im kanonischen `contracts/v1/api-ws-contract.catalog.json` ergaenzt.
+- [x] Der Contract erzwingt den Katalogpfad unter `contracts/v1` und eine `v1.x.y[-suffix]` Katalogversion.
+- [x] Pflicht-DTOs fuer REST (`runtime_health`, `bootstrap`, `error_response`) und WS (`system_error`, `room_snapshot`, `chat_message`, `chat_ack`, `typing_start`, `typing_stop`, `reaction_event`, `reaction_batch`, `lobby_snapshot`, `signaling_event`) werden geprueft.
+- [x] Schema-Metadaten werden rekursiv validiert: `type`, `one_of`, Objekt-Buckets, Arrays, Patterns, Enums und numerische Grenzen.
+- [x] Beispielpayloads aus dem gemeinsamen REST/WS Error-Envelope werden gegen `api.error_response` und `ws.system_error` validiert.
+- [x] Smoke-Gate fuehrt den Contract in der Backend-Contract-Strecke aus.
+- [x] Unrelated dirty Frontend-/Realtime-Arbeitsdateien bleiben unangetastet.
+
+Definition of done:
+- Der versionierte API/WS-Katalog bleibt maschinenlesbar und kann nicht stillschweigend DTOs verlieren oder ungueltige Schema-Metadaten aufnehmen.
+- Der gemeinsame Fehlervertrag aus #27 ist zugleich ueber den versionierten REST/WS-Katalog belegbar.
+
+Abschluss:
+- `demo/video-chat/contracts/v1/api-ws-contract.catalog.json` enthaelt die fehlenden Error-DTO-Schemas.
+- `demo/video-chat/backend-king-php/tests/contract-schema-versioning-contract.php|sh` deckt Versionierung, Pflicht-DTOs, Schema-Metadaten und Beispielpayloads ab.
+- `demo/video-chat/scripts/smoke.sh` ruft den Contract in der Backend-Contract-Strecke auf.
+
 ## Persistente Research-Notizen (für Folgesessions)
 
 - Alex-Relevanz (historisch, inzwischen nach `frontend-vue/src/lib/**` konsolidiert):

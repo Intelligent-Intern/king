@@ -451,6 +451,12 @@ Run the catalog parity drift test (runtime payloads must match the versioned cat
 demo/video-chat/backend-king-php/tests/contract-catalog-parity-contract.sh
 ```
 
+Run the versioned DTO schema contract (catalog shape, required API/WS DTOs, and sample REST/WS errors):
+
+```bash
+demo/video-chat/backend-king-php/tests/contract-schema-versioning-contract.sh
+```
+
 Run the auth contract test (REST + websocket token validation coverage):
 
 ```bash
