@@ -304,6 +304,15 @@ Response includes:
 - `result.resolved_as` is `call_id`, `access_id`, or empty for not found
 - intended for browser route guards so normal stale-link navigation does not emit console 404s
 
+Public call-access join/session contract:
+
+- `GET /api/call-access/{access_id}/join` is public and resolves only valid, unexpired, joinable access links.
+- `POST /api/call-access/{access_id}/session` is public and issues a normal session token for the linked user or a newly created guest user for open links.
+- Open links require a valid `guest_name`; missing/invalid guest names fail with `422 call_access_validation_failed`.
+- Every access-issued session is persisted in `call_access_sessions` with `session_id`, `access_id`, `call_id`, `room_id`, `user_id`, `link_kind`, and expiry metadata.
+- `WS /ws` resolves access-issued sessions against that binding: no room query defaults to the bound call room, mismatched room/call queries stay fail-closed in the waiting room without a pending foreign-room admission target.
+- Invited access-bound users enter the waiting room first; only `allowed` participants, owners, moderators, or admins can bypass into the bound call room.
+
 `PATCH /api/calls/{id}` update contract:
 
 - editable fields: `room_id`, `title`, `starts_at`, `ends_at`, `internal_participant_user_ids`, `external_participants`
@@ -602,6 +611,12 @@ Run the invite-code redeem endpoint contract test (`POST /api/invite-codes/redee
 
 ```bash
 demo/video-chat/backend-king-php/tests/invite-code-redeem-endpoint-contract.sh
+```
+
+Run the call-access session contract test (`GET /api/call-access/{id}/join` + `POST /api/call-access/{id}/session` + access-bound WS room resolution):
+
+```bash
+demo/video-chat/backend-king-php/tests/call-access-session-contract.sh
 ```
 
 Run the realtime presence contract test (room snapshots + join/leave deltas + reconnect resync):

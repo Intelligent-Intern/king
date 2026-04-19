@@ -517,7 +517,7 @@ Interop-Testmatrix (v1):
 | I-10 | Room-Binding Enforcement | WS `/sfu` | Query-`room` und optionales Join-Payload müssen matchen; kein stilles Fallback auf `lobby` | `tests/realtime-sfu-contract.sh` | abgedeckt |
 | I-11 | Gateway JWT-Bindung | Gateway Join (`SignalMessage.Join`) | JWT `sub/effective_id` == `peer_id`, `room/call_id` == `room_id` | Rust Unit in `demo/media-gateway/src/sfu/mod.rs` (rate-limit + token path) | teilweise |
 | I-12 | Gateway <-> Backend Mapping | AMQP `call.signaling` + Backend Signaling | `room_id <-> call_id` mapping konsistent, `offer/answer/ice/hangup` interoperabel | kein E2E-Interop-Test vorhanden | offen |
-| I-13 | Access-Link Join-Session | REST `/api/call-access/{id}/join|session` -> WS | Access-gebundene Session führt nur in erlaubten Call/Room-Kontext | kein dedizierter Endpoint-Contract-Test vorhanden | offen |
+| I-13 | Access-Link Join-Session | REST `/api/call-access/{id}/join|session` -> WS | Access-gebundene Session führt nur in erlaubten Call/Room-Kontext | `backend-king-php/tests/call-access-session-contract.sh` | abgedeckt |
 
 v1-Ausführungsreihenfolge (empfohlen):
 - Phase A (muss grün sein): I-01 bis I-05.
@@ -1113,6 +1113,34 @@ Abschluss:
 - `demo/video-chat/frontend-vue/src/lib/sfu/sfuClient.ts` sendet `room_id` kanonisch in Query und Join-Frame.
 - `demo/video-chat/backend-king-php/tests/realtime-sfu-contract.php|sh` deckt I-06 bis I-10 ab.
 - `demo/video-chat/scripts/smoke.sh` ruft `realtime-sfu-contract.sh` in der Backend-Contract-Strecke auf.
+
+---
+
+### #23 Access-Link Join-Session Binding (Implementierung)
+
+Ziel:
+- I-13 schließen: Public Access-Link-Join und Session-Issuing müssen bis in den WebSocket-Room-Kontext nachweisbar an den erlaubten Call gebunden sein.
+
+Checklist:
+- [x] Access-Link-Session-Bindung in `call_access_sessions` persistieren: `session_id`, `access_id`, `call_id`, `room_id`, `user_id`, `link_kind`, Laufzeitdaten.
+- [x] `POST /api/call-access/{id}/session` schreibt diese Bindung atomar mit dem Session-Token.
+- [x] Open-Link-Sessions erzeugen weiterhin Guest-User, verlangen aber `guest_name` und speichern denselben Room/Call-Bindungsvertrag.
+- [x] `WS /ws` löst access-gebundene Sessions über die persistierte Bindung auf.
+- [x] Fehlende Room-/Call-Query fällt für access-gebundene Sessions auf den gebundenen Call zurück, nicht auf `lobby`.
+- [x] Fremde Room-/Call-Query bleibt fail-closed in der Waiting-Room-Ansicht ohne Pending-Ziel auf den fremden Raum.
+- [x] Eingeladene access-gebundene User bleiben vor Admission in `waiting-room`; `allowed` darf in den gebundenen Call-Room.
+- [x] Dedizierter Contract `call-access-session-contract` deckt Join, Session-Issuing, Binding-Persistenz, Personal-Link, Open-Link-Guest und WS-Room-Resolution ab.
+- [x] Smoke-Gate führt den Contract aus.
+
+Definition of done:
+- Access-Link-Sessions können keinen fremden Call-Room öffnen, auch wenn die WebSocket-Query auf einen anderen Call zeigt.
+- Der Join-/Session-Vertrag ist als ausführbarer PHP-Contract abgedeckt und in README/Smoke dokumentiert.
+
+Abschluss:
+- `demo/video-chat/backend-king-php/domain/calls/call_access.php` persistiert und liest `call_access_sessions`.
+- `demo/video-chat/backend-king-php/http/module_realtime.php` erzwingt die Access-Session-Bindung bei der Room-Auflösung.
+- `demo/video-chat/backend-king-php/tests/call-access-session-contract.php|sh` deckt I-13 ab.
+- `demo/video-chat/scripts/smoke.sh` ruft `call-access-session-contract.sh` in der Backend-Contract-Strecke auf.
 
 ## Persistente Research-Notizen (für Folgesessions)
 

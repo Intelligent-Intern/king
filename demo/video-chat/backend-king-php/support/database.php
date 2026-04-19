@@ -1057,6 +1057,27 @@ SQL,
                 "CREATE INDEX IF NOT EXISTS idx_call_participant_activity_room_score ON call_participant_activity(room_id, updated_at_ms)",
             ],
         ],
+        16 => [
+            'name' => '0016_call_access_sessions',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS call_access_sessions (
+    session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    access_id TEXT NOT NULL REFERENCES call_access_links(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    call_id TEXT NOT NULL REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    link_kind TEXT NOT NULL CHECK (link_kind IN ('personal', 'open')),
+    issued_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_call_access_sessions_access_id ON call_access_sessions(access_id)",
+                "CREATE INDEX IF NOT EXISTS idx_call_access_sessions_call_user ON call_access_sessions(call_id, user_id)",
+                "CREATE INDEX IF NOT EXISTS idx_call_access_sessions_room_id ON call_access_sessions(room_id)",
+            ],
+        ],
     ];
 }
 

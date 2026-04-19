@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../domain/realtime/chat_attachments.php';
 require_once __DIR__ . '/../domain/realtime/chat_archive.php';
 require_once __DIR__ . '/../domain/realtime/realtime_activity_layout.php';
+require_once __DIR__ . '/../domain/calls/call_access.php';
 
 function videochat_realtime_normalize_ws_path(string $wsPath): string
 {
@@ -172,6 +173,18 @@ function videochat_realtime_connection_call_id(array $connection): string
     }
 
     return videochat_realtime_normalize_call_id((string) ($connection['requested_call_id'] ?? ''), '');
+}
+
+function videochat_realtime_session_id_from_auth(array $websocketAuth): string
+{
+    $token = is_string($websocketAuth['token'] ?? null) ? trim((string) $websocketAuth['token']) : '';
+    if ($token !== '') {
+        return $token;
+    }
+
+    return is_string($websocketAuth['session']['id'] ?? null)
+        ? trim((string) $websocketAuth['session']['id'])
+        : '';
 }
 
 /**
@@ -646,6 +659,7 @@ function videochat_realtime_resolve_connection_rooms(
 ): array {
     $resolvedRequestedRoomId = videochat_presence_normalize_room_id($requestedRoomId);
     $normalizedRequestedCallId = videochat_realtime_normalize_call_id($requestedCallId, '');
+    $requestedRoomInput = videochat_presence_normalize_room_id($requestedRoomId, '');
     try {
         $pdo = $openDatabase();
         $resolvedRoom = videochat_fetch_active_room_context($pdo, $resolvedRequestedRoomId);
@@ -662,6 +676,41 @@ function videochat_realtime_resolve_connection_rooms(
     $user = is_array($websocketAuth['user'] ?? null) ? $websocketAuth['user'] : [];
     $userId = (int) ($user['id'] ?? 0);
     $userRole = (string) ($user['role'] ?? 'user');
+    $sessionId = videochat_realtime_session_id_from_auth($websocketAuth);
+    if ($sessionId !== '') {
+        try {
+            $pdo = $openDatabase();
+            $accessBinding = videochat_fetch_call_access_session_binding($pdo, $sessionId);
+            if (is_array($accessBinding)) {
+                $boundRoomId = videochat_presence_normalize_room_id((string) ($accessBinding['room_id'] ?? ''), '');
+                $boundCallId = videochat_realtime_normalize_call_id((string) ($accessBinding['call_id'] ?? ''), '');
+                $boundUserId = (int) ($accessBinding['user_id'] ?? 0);
+                $roomMismatch = $requestedRoomInput !== '' && $requestedRoomInput !== $boundRoomId;
+                $callMismatch = $normalizedRequestedCallId !== '' && $normalizedRequestedCallId !== $boundCallId;
+                $userMismatch = $userId > 0 && $boundUserId > 0 && $userId !== $boundUserId;
+
+                if ($boundRoomId === '' || $boundCallId === '' || $roomMismatch || $callMismatch || $userMismatch) {
+                    return [
+                        'initial_room_id' => videochat_realtime_waiting_room_id(),
+                        'requested_room_id' => '',
+                        'pending_room_id' => '',
+                        'access_session_binding' => 'mismatch',
+                    ];
+                }
+
+                $resolvedRequestedRoomId = $boundRoomId;
+                $normalizedRequestedCallId = $boundCallId;
+            }
+        } catch (Throwable) {
+            return [
+                'initial_room_id' => videochat_realtime_waiting_room_id(),
+                'requested_room_id' => '',
+                'pending_room_id' => '',
+                'access_session_binding' => 'unavailable',
+            ];
+        }
+    }
+
     $canBypassLobby = videochat_normalize_role_slug($userRole) === 'admin';
     if (!$canBypassLobby && $userId > 0) {
         try {

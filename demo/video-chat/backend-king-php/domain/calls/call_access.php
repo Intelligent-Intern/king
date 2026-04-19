@@ -103,6 +103,58 @@ SQL
     ];
 }
 
+function videochat_fetch_call_access_session_binding(PDO $pdo, string $sessionId): ?array
+{
+    $normalizedSessionId = trim($sessionId);
+    if ($normalizedSessionId === '') {
+        return null;
+    }
+
+    try {
+        $statement = $pdo->prepare(
+            <<<'SQL'
+SELECT
+    session_id,
+    access_id,
+    call_id,
+    room_id,
+    user_id,
+    link_kind,
+    issued_at,
+    expires_at,
+    created_at
+FROM call_access_sessions
+WHERE session_id = :session_id
+LIMIT 1
+SQL
+        );
+        $statement->execute([':session_id' => $normalizedSessionId]);
+        $row = $statement->fetch();
+    } catch (Throwable $error) {
+        $message = strtolower($error->getMessage());
+        if (str_contains($message, 'no such table') && str_contains($message, 'call_access_sessions')) {
+            return null;
+        }
+        throw $error;
+    }
+
+    if (!is_array($row)) {
+        return null;
+    }
+
+    return [
+        'session_id' => (string) ($row['session_id'] ?? ''),
+        'access_id' => (string) ($row['access_id'] ?? ''),
+        'call_id' => (string) ($row['call_id'] ?? ''),
+        'room_id' => (string) ($row['room_id'] ?? ''),
+        'user_id' => is_numeric($row['user_id'] ?? null) ? (int) $row['user_id'] : 0,
+        'link_kind' => (string) ($row['link_kind'] ?? 'personal'),
+        'issued_at' => (string) ($row['issued_at'] ?? ''),
+        'expires_at' => (string) ($row['expires_at'] ?? ''),
+        'created_at' => (string) ($row['created_at'] ?? ''),
+    ];
+}
+
 function videochat_normalize_call_access_email(?string $email): string
 {
     $normalized = strtolower(trim((string) $email));
@@ -682,6 +734,19 @@ function videochat_issue_session_for_call_access(
     $expiresAt = gmdate('c', time() + $ttlSeconds);
     $clientIp = trim((string) ($requestMeta['client_ip'] ?? ''));
     $userAgent = substr(trim((string) ($requestMeta['user_agent'] ?? '')), 0, 500);
+    $callId = trim((string) ($call['id'] ?? ''));
+    $roomId = trim((string) ($call['room_id'] ?? ''));
+    if ($callId === '' || $roomId === '') {
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'errors' => ['call' => 'missing_call_room_binding'],
+            'session' => null,
+            'user' => null,
+            'access_link' => $accessLink,
+            'call' => $call,
+        ];
+    }
 
     try {
         $pdo->beginTransaction();
@@ -716,6 +781,23 @@ SQL
             ':id' => (string) ($accessLink['id'] ?? ''),
             ':last_used_at' => gmdate('c'),
             ':consumed_at' => gmdate('c'),
+        ]);
+
+        $bind = $pdo->prepare(
+            <<<'SQL'
+INSERT INTO call_access_sessions(session_id, access_id, call_id, room_id, user_id, link_kind, issued_at, expires_at)
+VALUES(:session_id, :access_id, :call_id, :room_id, :user_id, :link_kind, :issued_at, :expires_at)
+SQL
+        );
+        $bind->execute([
+            ':session_id' => $sessionId,
+            ':access_id' => (string) ($accessLink['id'] ?? ''),
+            ':call_id' => $callId,
+            ':room_id' => $roomId,
+            ':user_id' => $userId,
+            ':link_kind' => $linkKind,
+            ':issued_at' => $issuedAt,
+            ':expires_at' => $expiresAt,
         ]);
 
         $pdo->commit();
