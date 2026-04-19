@@ -190,7 +190,7 @@
           </button>
 
           <button
-            class="call-control-btn"
+            class="call-control-btn call-control-btn-blur"
             type="button"
             :class="{ active: isCallBackgroundPresetActive('light') }"
             :aria-pressed="isCallBackgroundPresetActive('light')"
@@ -198,11 +198,11 @@
             aria-label="Blur background"
             @click="applyCallBackgroundPreset('light')"
           >
-            <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
+            <img class="ctrl-icon-image ctrl-blur-icon-image" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
           </button>
 
           <button
-            class="call-control-btn"
+            class="call-control-btn call-control-btn-blur"
             type="button"
             :class="{ active: isCallBackgroundPresetActive('strong') }"
             :aria-pressed="isCallBackgroundPresetActive('strong')"
@@ -210,7 +210,7 @@
             aria-label="Strong background blur"
             @click="applyCallBackgroundPreset('strong')"
           >
-            <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
+            <img class="ctrl-icon-image ctrl-blur-icon-image" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
           </button>
 
           <button class="call-control-btn hangup" type="button" title="Hang up" @click="hangupCall">
@@ -5825,6 +5825,10 @@ onBeforeUnmount(() => {
   background: var(--bg-control-active);
 }
 
+.call-control-btn-blur {
+  border-radius: 10px;
+}
+
 .call-control-btn.hangup {
   width: 88px;
   background: var(--color-ff0000);
@@ -5835,6 +5839,11 @@ onBeforeUnmount(() => {
   height: 20px;
   object-fit: contain;
   filter: brightness(0) invert(1);
+}
+
+.ctrl-blur-icon-image {
+  width: 28px;
+  height: 28px;
 }
 
 .workspace-context {

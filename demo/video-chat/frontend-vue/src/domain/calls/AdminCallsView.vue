@@ -3276,7 +3276,7 @@ watch(
   }
 
   .calls-enter-right-settings .call-left-blur-btn {
-    height: 30px;
+    min-height: 42px;
   }
 
   .calls-enter-right-settings .call-left-volume-value {
