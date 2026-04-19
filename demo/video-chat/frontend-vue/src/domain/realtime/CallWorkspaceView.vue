@@ -189,30 +189,6 @@
             <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/share_screen.png" alt="" />
           </button>
 
-          <button
-            class="call-control-btn call-control-btn-blur"
-            type="button"
-            :class="{ active: isCallBackgroundPresetActive('light') }"
-            :aria-pressed="isCallBackgroundPresetActive('light')"
-            title="Blur background"
-            aria-label="Blur background"
-            @click="applyCallBackgroundPreset('light')"
-          >
-            <img class="ctrl-icon-image ctrl-blur-icon-image" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
-          </button>
-
-          <button
-            class="call-control-btn call-control-btn-blur"
-            type="button"
-            :class="{ active: isCallBackgroundPresetActive('strong') }"
-            :aria-pressed="isCallBackgroundPresetActive('strong')"
-            title="Strong background blur"
-            aria-label="Strong background blur"
-            @click="applyCallBackgroundPreset('strong')"
-          >
-            <img class="ctrl-icon-image ctrl-blur-icon-image" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
-          </button>
-
           <button class="call-control-btn hangup" type="button" title="Hang up" @click="hangupCall">
             <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/end_call.png" alt="" />
           </button>
@@ -543,10 +519,8 @@ import {
   setBackendWebSocketOrigin,
 } from '../../support/backendOrigin';
 import {
-  applyCallBackgroundPreset,
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
-  isCallBackgroundPresetActive,
   refreshCallMediaDevices,
   resetCallBackgroundRuntimeState,
 } from './callMediaPreferences';
@@ -5825,10 +5799,6 @@ onBeforeUnmount(() => {
   background: var(--bg-control-active);
 }
 
-.call-control-btn-blur {
-  border-radius: 10px;
-}
-
 .call-control-btn.hangup {
   width: 88px;
   background: var(--color-ff0000);
@@ -5839,11 +5809,6 @@ onBeforeUnmount(() => {
   height: 20px;
   object-fit: contain;
   filter: brightness(0) invert(1);
-}
-
-.ctrl-blur-icon-image {
-  width: 28px;
-  height: 28px;
 }
 
 .workspace-context {
