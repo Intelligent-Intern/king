@@ -381,6 +381,64 @@ SQL
 }
 
 /**
+ * @return array<string, mixed>
+ */
+function videochat_invite_code_preview(array $inviteCode): array
+{
+    $scope = (string) ($inviteCode['scope'] ?? '');
+    $maxRedemptions = (int) ($inviteCode['max_redemptions'] ?? 0);
+    $redemptionCount = (int) ($inviteCode['redemption_count'] ?? 0);
+    $remainingRedemptions = max(0, $maxRedemptions - $redemptionCount);
+    $ttlSeconds = (int) ($inviteCode['expires_in_seconds'] ?? 0);
+    if ($ttlSeconds <= 0 && in_array($scope, ['room', 'call'], true)) {
+        $ttlSeconds = videochat_invite_scope_ttl_seconds($scope);
+    }
+
+    $preview = [
+        'id' => (string) ($inviteCode['id'] ?? ''),
+        'scope' => $scope,
+        'room_id' => $inviteCode['room_id'] ?? null,
+        'call_id' => $inviteCode['call_id'] ?? null,
+        'issued_by_user_id' => (int) ($inviteCode['issued_by_user_id'] ?? 0),
+        'expires_at' => (string) ($inviteCode['expires_at'] ?? ''),
+        'expires_in_seconds' => $ttlSeconds,
+        'max_redemptions' => $maxRedemptions,
+        'redemption_count' => $redemptionCount,
+        'remaining_redemptions' => $remainingRedemptions,
+        'redeemed_at' => $inviteCode['redeemed_at'] ?? null,
+        'redeemed_by_user_id' => $inviteCode['redeemed_by_user_id'] ?? null,
+        'created_at' => (string) ($inviteCode['created_at'] ?? ''),
+        'secret_available' => false,
+        'expiry_policy' => [
+            'managed_by' => 'server_scope_ttl',
+            'scope_ttl_seconds' => $ttlSeconds,
+        ],
+    ];
+
+    if (is_array($inviteCode['context'] ?? null)) {
+        $preview['context'] = $inviteCode['context'];
+    }
+
+    return $preview;
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_invite_code_copy_payload(array $inviteCode): array
+{
+    $code = strtolower((string) ($inviteCode['code'] ?? ''));
+
+    return [
+        'code' => $code,
+        'copy_text' => $code,
+        'redeem_api_path' => '/api/invite-codes/redeem',
+        'redeem_payload' => ['code' => $code],
+        'expires_at' => (string) ($inviteCode['expires_at'] ?? ''),
+    ];
+}
+
+/**
  * @return array{
  *   ok: bool,
  *   data: array{code: string},
@@ -471,6 +529,174 @@ SQL
         'max_redemptions' => (int) ($row['max_redemptions'] ?? 0),
         'redemption_count' => (int) ($row['redemption_count'] ?? 0),
         'created_at' => (string) ($row['created_at'] ?? ''),
+    ];
+}
+
+/**
+ * @return array{
+ *   id: string,
+ *   code: string,
+ *   scope: string,
+ *   room_id: ?string,
+ *   call_id: ?string,
+ *   issued_by_user_id: int,
+ *   expires_at: string,
+ *   redeemed_at: ?string,
+ *   redeemed_by_user_id: ?int,
+ *   max_redemptions: int,
+ *   redemption_count: int,
+ *   created_at: string
+ * }|null
+ */
+function videochat_fetch_invite_code_by_id(PDO $pdo, string $inviteId): ?array
+{
+    $trimmedInviteId = strtolower(trim($inviteId));
+    if ($trimmedInviteId === '') {
+        return null;
+    }
+
+    $statement = $pdo->prepare(
+        <<<'SQL'
+SELECT
+    id,
+    code,
+    scope,
+    room_id,
+    call_id,
+    issued_by_user_id,
+    expires_at,
+    redeemed_at,
+    redeemed_by_user_id,
+    max_redemptions,
+    redemption_count,
+    created_at
+FROM invite_codes
+WHERE lower(id) = :id
+LIMIT 1
+SQL
+    );
+    $statement->execute([':id' => $trimmedInviteId]);
+    $row = $statement->fetch();
+    if (!is_array($row)) {
+        return null;
+    }
+
+    return [
+        'id' => strtolower((string) ($row['id'] ?? '')),
+        'code' => strtolower((string) ($row['code'] ?? '')),
+        'scope' => (string) ($row['scope'] ?? ''),
+        'room_id' => is_string($row['room_id'] ?? null) ? (string) $row['room_id'] : null,
+        'call_id' => is_string($row['call_id'] ?? null) ? (string) $row['call_id'] : null,
+        'issued_by_user_id' => (int) ($row['issued_by_user_id'] ?? 0),
+        'expires_at' => (string) ($row['expires_at'] ?? ''),
+        'redeemed_at' => is_string($row['redeemed_at'] ?? null) ? (string) $row['redeemed_at'] : null,
+        'redeemed_by_user_id' => is_numeric($row['redeemed_by_user_id'] ?? null)
+            ? (int) $row['redeemed_by_user_id']
+            : null,
+        'max_redemptions' => (int) ($row['max_redemptions'] ?? 0),
+        'redemption_count' => (int) ($row['redemption_count'] ?? 0),
+        'created_at' => (string) ($row['created_at'] ?? ''),
+    ];
+}
+
+function videochat_can_copy_invite_code(PDO $pdo, array $inviteCode, int $authUserId, string $authRole): bool
+{
+    if ($authUserId <= 0) {
+        return false;
+    }
+
+    $normalizedRole = videochat_normalize_role_slug($authRole);
+    if ($normalizedRole === 'admin') {
+        return true;
+    }
+
+    if ((int) ($inviteCode['issued_by_user_id'] ?? 0) === $authUserId) {
+        return true;
+    }
+
+    if ((string) ($inviteCode['scope'] ?? '') !== 'call') {
+        return false;
+    }
+
+    $callId = (string) ($inviteCode['call_id'] ?? '');
+    if ($callId === '') {
+        return false;
+    }
+
+    $call = videochat_fetch_call_for_update($pdo, $callId);
+    if (!is_array($call)) {
+        return false;
+    }
+
+    return videochat_can_edit_call($authRole, $authUserId, (int) ($call['owner_user_id'] ?? 0));
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   errors: array<string, string>,
+ *   invite_code: ?array<string, mixed>,
+ *   copy: ?array<string, mixed>
+ * }
+ */
+function videochat_prepare_invite_code_copy(
+    PDO $pdo,
+    string $inviteId,
+    int $authUserId,
+    string $authRole,
+    ?int $nowUnix = null
+): array {
+    $trimmedInviteId = strtolower(trim($inviteId));
+    if ($trimmedInviteId === '') {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => ['invite_code' => 'invite_code_not_found'],
+            'invite_code' => null,
+            'copy' => null,
+        ];
+    }
+
+    $invite = videochat_fetch_invite_code_by_id($pdo, $trimmedInviteId);
+    if (!is_array($invite)) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => ['invite_code' => 'invite_code_not_found'],
+            'invite_code' => null,
+            'copy' => null,
+        ];
+    }
+
+    if (!videochat_can_copy_invite_code($pdo, $invite, $authUserId, $authRole)) {
+        return [
+            'ok' => false,
+            'reason' => 'forbidden',
+            'errors' => ['invite_code' => 'not_allowed_to_copy_invite_code'],
+            'invite_code' => null,
+            'copy' => null,
+        ];
+    }
+
+    $effectiveNowUnix = is_int($nowUnix) && $nowUnix > 0 ? $nowUnix : time();
+    $expiresAtUnix = strtotime((string) ($invite['expires_at'] ?? ''));
+    if (!is_int($expiresAtUnix) || $expiresAtUnix <= $effectiveNowUnix) {
+        return [
+            'ok' => false,
+            'reason' => 'expired',
+            'errors' => ['invite_code' => 'invite_code_expired'],
+            'invite_code' => null,
+            'copy' => null,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'reason' => 'copy_ready',
+        'errors' => [],
+        'invite_code' => videochat_invite_code_preview($invite),
+        'copy' => videochat_invite_code_copy_payload($invite),
     ];
 }
 

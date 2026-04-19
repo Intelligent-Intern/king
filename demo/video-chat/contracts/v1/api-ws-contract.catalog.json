@@ -68,6 +68,7 @@
           "required": {
             "list_endpoint": { "type": "string", "enum": ["/api/calls"] },
             "invite_code_create_endpoint": { "type": "string", "enum": ["/api/invite-codes"] },
+            "invite_code_copy_endpoint_template": { "type": "string", "enum": ["/api/invite-codes/{id}/copy"] },
             "invite_code_redeem_endpoint": { "type": "string", "enum": ["/api/invite-codes/redeem"] }
           }
         },
@@ -89,6 +90,7 @@
         "call_update_endpoint_template": { "type": "string", "enum": ["/api/calls/{id}"] },
         "call_cancel_endpoint_template": { "type": "string", "enum": ["/api/calls/{id}/cancel"] },
         "invite_code_create_endpoint": { "type": "string", "enum": ["/api/invite-codes"] },
+        "invite_code_copy_endpoint_template": { "type": "string", "enum": ["/api/invite-codes/{id}/copy"] },
         "invite_code_redeem_endpoint": { "type": "string", "enum": ["/api/invite-codes/redeem"] },
         "login_endpoint": { "type": "string", "enum": ["/api/auth/login"] },
         "session_endpoint": { "type": "string", "enum": ["/api/auth/session"] },

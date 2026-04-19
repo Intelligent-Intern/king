@@ -134,10 +134,10 @@
     {
       "id": "invite_codes_create_redeem",
       "surface": "rest",
-      "route_patterns": ["POST /api/invite-codes", "POST /api/invite-codes/redeem"],
+      "route_patterns": ["POST /api/invite-codes", "POST /api/invite-codes/{id}/copy", "POST /api/invite-codes/redeem"],
       "protected_by": "router_rbac_guard",
       "source_paths": ["backend-king-php/http/module_invites.php", "backend-king-php/domain/calls/invite_codes.php"],
-      "contract_paths": ["backend-king-php/tests/invite-code-create-endpoint-contract.sh", "backend-king-php/tests/invite-code-redeem-endpoint-contract.sh"],
+      "contract_paths": ["backend-king-php/tests/invite-code-create-endpoint-contract.sh", "backend-king-php/tests/invite-code-copy-boundary-contract.sh", "backend-king-php/tests/invite-code-redeem-endpoint-contract.sh"],
       "semantics": {
         "auth": { "status": 401, "error_codes": ["auth_failed"] },
         "forbidden": { "status": 403, "error_codes": ["invite_codes_forbidden", "invite_codes_redeem_forbidden"] },

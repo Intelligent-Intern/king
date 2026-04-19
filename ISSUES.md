@@ -1346,3 +1346,28 @@ Abschluss:
 - `calls` besitzt persistierte Schedule-Metadaten plus Migration `0017_call_schedule_metadata`.
 - `demo/video-chat/backend-king-php/tests/call-schedule-metadata-contract.php|sh` prueft den Vertrag.
 - `demo/video-chat/scripts/smoke.sh` ruft den Contract auf.
+
+### #32 Invite-Preview-/Copy-Boundary fuer rohe Invite-Codes (Implementierung)
+
+Ziel:
+- Z3 schliessen: Rohe Invite-Codes duerfen nicht mehr als Defaultdaten aus Create-/Tabellenfluesse herausfallen. Preview und Copy brauchen eine klare API-Grenze.
+
+Checklist:
+- [x] `POST /api/invite-codes` liefert nur noch preview-sichere `invite_code` Metadaten ohne `code` und markiert `secret_available = false`.
+- [x] `POST /api/invite-codes/{id}/copy` als expliziter Copy-Endpoint ergaenzt, der den rohen Code nur in `result.copy` ausliefert.
+- [x] Copy-Berechtigung prueft Admin, Aussteller und Call-Editor/Owner statt den Secret-Code ueber generische Row-Daten freizugeben.
+- [x] Abgelaufene Invite-Codes werden im Copy-Flow mit `410 invite_codes_expired` blockiert.
+- [x] Runtime-/Bootstrap-Katalog und Protected-API-Semantikmatrix kennen die Copy-Boundary.
+- [x] Existing Create-Endpoint-Contract wurde auf Preview-only angepasst und kopiert Codes nur ueber den neuen Copy-Endpoint.
+- [x] Neuer Contract prueft Preview-/Copy-Helfer ohne SQLite und den persistenten Endpoint-Pfad mit SQLite, falls lokal vorhanden.
+- [x] Smoke-Gate fuehrt den Invite-Preview-/Copy-Boundary-Contract in der Backend-Contract-Strecke aus.
+- [x] Unrelated dirty Frontend-/Realtime-Arbeitsdateien bleiben unangetastet.
+
+Definition of done:
+- Frontend-Tabellen/Listendaten koennen Invite-Previews konsumieren, ohne rohe Invite-Secrets zu leaken.
+- Der Secret-Code ist nur noch ueber eine explizite, auditierbare Copy-API mit eigener Autorisierung erreichbar.
+
+Abschluss:
+- `demo/video-chat/backend-king-php/tests/invite-code-copy-boundary-contract.php|sh` prueft den neuen Vertrag.
+- `demo/video-chat/backend-king-php/http/module_invites.php` trennt Create-Preview und Copy-Secret.
+- `demo/video-chat/contracts/v1/protected-api-semantics.matrix.json` und `demo/video-chat/contracts/v1/api-ws-contract.catalog.json` dokumentieren die neue Boundary.

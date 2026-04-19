@@ -352,7 +352,19 @@ Public call-access join/session contract:
 - client-provided expiry overrides are rejected (`expires_at`, `expires_in_seconds`)
 - code/id generation uses UUID-v4 values and retries on uniqueness collisions
 - call-scope authorization: owner/admin/moderator only
-- success: `201`, with `result.invite_code` containing context binding (`scope`, `room_id|call_id`), expiry metadata, and policy metadata
+- success: `201`, with `result.invite_code` containing preview-safe context binding (`scope`, `room_id|call_id`), expiry metadata, policy metadata, and `secret_available = false`
+- the raw invite `code` is never returned by the create response and must not be used as default table/list data
+
+`POST /api/invite-codes/{id}/copy` copy contract:
+
+- required path fields:
+  - `id`: invite-code row id from the create preview
+- authorization:
+  - admin can copy any invite code
+  - issuer can copy its own invite code
+  - call-scope owner/editor can copy invite codes for that call
+- expired invite codes return `410 invite_codes_expired`
+- success: `200`, with `result.invite_code` as preview-only metadata and `result.copy` containing the explicit secret payload (`code`, `copy_text`, `redeem_api_path`, `redeem_payload`)
 
 `POST /api/invite-codes/redeem` contract:
 

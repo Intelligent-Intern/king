@@ -45,6 +45,7 @@ function videochat_handle_runtime_routes(
             'call_access_join_endpoint_template' => '/api/call-access/{access_id}/join',
             'call_access_session_endpoint_template' => '/api/call-access/{access_id}/session',
             'invite_code_create_endpoint' => '/api/invite-codes',
+            'invite_code_copy_endpoint_template' => '/api/invite-codes/{id}/copy',
             'invite_code_redeem_endpoint' => '/api/invite-codes/redeem',
             'login_endpoint' => '/api/auth/login',
             'session_endpoint' => '/api/auth/session',

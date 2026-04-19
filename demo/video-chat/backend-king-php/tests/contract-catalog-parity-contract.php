@@ -328,6 +328,7 @@ try {
             'calls' => [
                 'list_endpoint' => '/api/calls',
                 'invite_code_create_endpoint' => '/api/invite-codes',
+                'invite_code_copy_endpoint_template' => '/api/invite-codes/{id}/copy',
                 'invite_code_redeem_endpoint' => '/api/invite-codes/redeem',
             ],
             'time' => gmdate('c'),
