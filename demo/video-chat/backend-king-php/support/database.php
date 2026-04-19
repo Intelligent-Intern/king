@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/config_hardening.php';
+
 function videochat_open_sqlite_pdo(string $databasePath): PDO
 {
     $trimmedPath = trim($databasePath);
@@ -39,8 +41,8 @@ function videochat_demo_user_blueprint(): array
 {
     $adminEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_ADMIN_EMAIL') ?: 'admin@intelligent-intern.com')));
     $userEmail = strtolower(trim((string) (getenv('VIDEOCHAT_DEMO_USER_EMAIL') ?: 'user@intelligent-intern.com')));
-    $adminPassword = trim((string) (getenv('VIDEOCHAT_DEMO_ADMIN_PASSWORD') ?: 'admin123'));
-    $userPassword = trim((string) (getenv('VIDEOCHAT_DEMO_USER_PASSWORD') ?: 'user123'));
+    $adminPassword = videochat_config_secret_value('VIDEOCHAT_DEMO_ADMIN_PASSWORD', 'admin123');
+    $userPassword = videochat_config_secret_value('VIDEOCHAT_DEMO_USER_PASSWORD', 'user123');
 
     if ($adminEmail === '' || filter_var($adminEmail, FILTER_VALIDATE_EMAIL) === false) {
         throw new InvalidArgumentException('VIDEOCHAT_DEMO_ADMIN_EMAIL must be a valid email address.');

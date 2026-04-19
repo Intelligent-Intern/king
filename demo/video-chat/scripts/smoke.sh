@@ -521,6 +521,7 @@ run_step "frontend launcher syntax" bash -lc "node --check '${FRONTEND_DIR}/scri
 run_step "security policy: demo-scope hardening" bash -lc "'${ROOT_DIR}/scripts/check-security-hardening-policy.sh'"
 run_step "deployment decision: no internal edge pack" bash -lc "'${ROOT_DIR}/scripts/check-edge-deployment-decision.sh'"
 run_step "deployment baseline: optional TURN relay" bash -lc "'${ROOT_DIR}/scripts/check-turn-baseline.sh'"
+run_step "deployment baseline: secret management" bash -lc "'${ROOT_DIR}/scripts/check-secret-management.sh'"
 run_step "compose stack boot + migration/auth sanity" compose_smoke
 
 if [[ "${VIDEOCHAT_SMOKE_COMPOSE_ONLY:-0}" == "1" ]]; then

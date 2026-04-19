@@ -222,6 +222,13 @@ TURN baseline:
 - Rotating frontend ICE JSON is generated with `php demo/video-chat/scripts/generate-turn-ice-servers.php`.
 - The static guard is `bash demo/video-chat/scripts/check-turn-baseline.sh`.
 
+Secret-management baseline:
+
+- Local demo defaults remain available only outside hardened deployments.
+- `VIDEOCHAT_KING_ENV=production|staging` or `VIDEOCHAT_REQUIRE_SECRET_SOURCES=1` makes backend start fail closed on default demo credentials or enabled demo seed calls.
+- `VIDEOCHAT_DEMO_ADMIN_PASSWORD_FILE` and `VIDEOCHAT_DEMO_USER_PASSWORD_FILE` are supported for mounted secret files.
+- The runbook and static guard are in `demo/video-chat/SECRET_MANAGEMENT.md` and `bash demo/video-chat/scripts/check-secret-management.sh`.
+
 Host-runtime note:
 
 - `backend-king-php/run-dev.sh` requires `pdo_sqlite` in host PHP.
@@ -294,7 +301,7 @@ bash demo/video-chat/scripts/smoke.sh
 `demo/video-chat/scripts/smoke.sh` now verifies:
 
 - backend and frontend launchers plus syntax checks
-- demo-scope security policy, no-internal-edge-deploy, and optional TURN baseline gates
+- demo-scope security policy, no-internal-edge-deploy, optional TURN, and secret-management baseline gates
 - docker-compose v1 stack boot (`frontend-vue` + `backend-king-php` + sqlite volume) with runtime migration snapshot and auth/session sanity checks
 - backend boot and live `/health` probe
 - API/WS catalog drift gate against the canonical versioned contract fixture (`contract-catalog-parity-contract`)

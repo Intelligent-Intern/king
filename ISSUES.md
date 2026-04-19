@@ -829,13 +829,20 @@ Ziel:
 - Keine Demo-Secrets in realen Deployments und klare Secret-Übergabepfade.
 
 Checklist:
-- [ ] Keine Edge-Deploy-Vorlage mehr im Repo; Secret-Management bei künftigem Deploy-Pfad neu definieren.
-- [ ] Mandatory Secret Sources (Vault/KMS/CI-Secret) in Deploy-Skripten erzwingen.
-- [ ] Fail-closed Start, falls Demo-/Default-Secrets erkannt werden.
-- [ ] Rotations-Runbook für JWT/Session/TURN-Credentials dokumentieren.
+- [x] Keine Edge-Deploy-Vorlage mehr im Repo; Secret-Management bei künftigem Deploy-Pfad neu definieren.
+- [x] Mandatory Secret Sources (Vault/KMS/CI-Secret) in Deploy-Skripten erzwingen.
+- [x] Fail-closed Start, falls Demo-/Default-Secrets erkannt werden.
+- [x] Rotations-Runbook für JWT/Session/TURN-Credentials dokumentieren.
 
 Definition of done:
 - Deployment startet nicht mehr mit unsicheren Defaults.
+
+Abschluss:
+- `demo/video-chat/backend-king-php/support/config_hardening.php` erzwingt hardened Start bei `VIDEOCHAT_KING_ENV=production|staging` oder `VIDEOCHAT_REQUIRE_SECRET_SOURCES=1`.
+- `backend-king-php/server.php` bricht vor SQLite-Bootstrap ab, wenn Demo-Defaults wie `admin123`/`user123`, identische Passwoerter, zu kurze Secrets oder aktive Demo-Seed-Calls erkannt werden.
+- `VIDEOCHAT_DEMO_ADMIN_PASSWORD_FILE` und `VIDEOCHAT_DEMO_USER_PASSWORD_FILE` sind als Secret-Manager-Bindings fuer gemountete Secrets unterstuetzt.
+- `demo/video-chat/SECRET_MANAGEMENT.md` dokumentiert Secret-Quellen und Rotation fuer Session-IDs, Demo-Credentials, TURN und zukuenftige JWT-Keys.
+- `demo/video-chat/scripts/check-secret-management.sh` und `backend-king-php/tests/config-hardening-contract.sh` pruefen Guard, Runbook und Fail-closed-Verhalten.
 
 ---
 

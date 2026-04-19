@@ -57,6 +57,13 @@ require_once __DIR__ . '/domain/users/user_management.php';
 require_once __DIR__ . '/domain/users/user_settings.php';
 require_once __DIR__ . '/http/router.php';
 
+$secretHardening = videochat_config_hardening_report();
+if (!(bool) ($secretHardening['ok'] ?? false)) {
+    $errors = is_array($secretHardening['errors'] ?? null) ? $secretHardening['errors'] : [];
+    $log('secret/config hardening failed: ' . implode('; ', array_map('strval', $errors)));
+    exit(1);
+}
+
 $avatarMaxBytes = videochat_avatar_max_bytes();
 $chatObjectStoreMaxBytes = videochat_chat_object_store_max_bytes();
 
