@@ -15,7 +15,14 @@
       </button>
     </section>
     <section class="workspace-call-body" :class="{ 'right-collapsed': rightSidebarCollapsed }">
-      <section class="workspace-stage" :class="{ compact: isCompactHeaderVisible }">
+      <section
+        class="workspace-stage"
+        :class="{
+          compact: isCompactHeaderVisible,
+          'has-mini-strip': showMiniParticipantStrip,
+          'mini-strip-above': isMobileMiniStripAbove,
+        }"
+      >
         <header v-if="isCompactHeaderVisible" class="workspace-compact-header">
           <button
             class="workspace-compact-toggle workspace-compact-toggle-menu"
@@ -91,6 +98,17 @@
         </button>
 
         <button
+          v-if="showChatUnreadToast"
+          class="workspace-chat-toast"
+          type="button"
+          title="Open chat"
+          aria-label="Open chat"
+          @click="openChatPanel"
+        >
+          <img class="workspace-chat-toast-icon" src="/assets/orgas/kingrt/icons/chat.png" alt="" />
+        </button>
+
+        <button
           v-if="showLobbyJoinToast"
           class="workspace-lobby-toast"
           type="button"
@@ -100,7 +118,22 @@
           <span class="workspace-lobby-toast-text">{{ lobbyJoinToastMessage }}</span>
         </button>
 
-        <section v-if="!isCompactViewport && showMiniParticipantStrip" class="workspace-mini-strip">
+        <section v-if="showMiniParticipantStrip" class="workspace-mini-strip">
+          <button
+            v-if="showMobileMiniStripToggle"
+            class="workspace-mini-placement-toggle"
+            type="button"
+            :title="mobileMiniStripToggleLabel"
+            :aria-label="mobileMiniStripToggleLabel"
+            @click="toggleMobileMiniStripPlacement"
+          >
+            <img
+              class="workspace-mini-placement-icon"
+              :class="{ up: !isMobileMiniStripAbove, down: isMobileMiniStripAbove }"
+              src="/assets/orgas/kingrt/icons/forward.png"
+              alt=""
+            />
+          </button>
           <article
             v-for="participant in miniVideoParticipants"
             :key="participant.userId"
@@ -233,7 +266,10 @@
             :aria-selected="activeTab === 'chat'"
             @click="setActiveTab('chat')"
           >
-            <img class="tab-icon" src="/assets/orgas/kingrt/icons/chat.png" alt="" />
+            <span class="tab-icon-wrap">
+              <img class="tab-icon" src="/assets/orgas/kingrt/icons/chat.png" alt="" />
+              <span v-if="showChatUnreadBadge" class="tab-chat-unread-badge" aria-label="Unread chat messages"></span>
+            </span>
           </button>
           <button
             class="tab tab-toggle"
@@ -483,7 +519,22 @@
                 <strong>{{ message.sender.display_name }}</strong>
                 <time>{{ formatTimestamp(message.server_time) }}</time>
               </header>
-              <p>{{ message.text }}</p>
+              <p v-if="message.text !== ''">{{ message.text }}</p>
+              <div v-if="message.attachments.length > 0" class="workspace-chat-attachments">
+                <a
+                  v-for="attachment in message.attachments"
+                  :key="attachment.id"
+                  class="workspace-chat-attachment"
+                  :href="attachment.download_url"
+                  target="_blank"
+                  rel="noopener"
+                  download
+                >
+                  <span class="workspace-chat-attachment-kind">{{ attachment.kind }}</span>
+                  <span class="workspace-chat-attachment-name">{{ attachment.name }}</span>
+                  <span class="workspace-chat-attachment-size">{{ formatBytes(attachment.size_bytes) }}</span>
+                </a>
+              </div>
             </article>
             <article v-if="activeMessages.length === 0" class="workspace-chat-empty">
               No chat messages yet.
@@ -494,16 +545,95 @@
             {{ typingUsers.join(', ') }} typing…
           </p>
 
-          <form class="workspace-chat-compose" @submit.prevent="sendChatMessage">
+          <form
+            class="workspace-chat-compose"
+            :class="{ dragging: chatAttachmentDragActive }"
+            @submit.prevent="sendChatMessage"
+            @dragenter.prevent="chatAttachmentDragActive = true"
+            @dragover.prevent="chatAttachmentDragActive = true"
+            @dragleave.prevent="chatAttachmentDragActive = false"
+            @drop.prevent="handleChatAttachmentDrop"
+          >
+            <div v-if="chatAttachmentError !== ''" class="workspace-chat-attachment-error">
+              {{ chatAttachmentError }}
+            </div>
+            <div v-if="chatAttachmentDrafts.length > 0" class="workspace-chat-drafts">
+              <article
+                v-for="draft in chatAttachmentDrafts"
+                :key="draft.localId"
+                class="workspace-chat-draft"
+              >
+                <div class="workspace-chat-draft-main">
+                  <input
+                    class="workspace-chat-draft-name"
+                    type="text"
+                    :value="draft.name"
+                    aria-label="Attachment filename"
+                    @input="updateChatAttachmentDraftName(draft.localId, $event.target.value)"
+                  />
+                  <span>{{ draft.kind }} · {{ formatBytes(draft.sizeBytes) }}</span>
+                </div>
+                <p v-if="draft.preview" class="workspace-chat-draft-preview">{{ draft.preview }}</p>
+                <button
+                  class="icon-mini-btn danger"
+                  type="button"
+                  title="Remove attachment"
+                  aria-label="Remove attachment"
+                  @click="removeChatAttachmentDraft(draft.localId)"
+                >
+                  ×
+                </button>
+              </article>
+            </div>
+            <div v-if="chatEmojiTrayOpen" class="workspace-chat-emoji-tray">
+              <button
+                v-for="emoji in chatEmojiOptions"
+                :key="emoji"
+                class="workspace-chat-emoji-btn"
+                type="button"
+                @click="insertChatEmoji(emoji)"
+              >
+                {{ emoji }}
+              </button>
+            </div>
+            <button
+              class="icon-mini-btn chat-emoji-toggle"
+              type="button"
+              :class="{ active: chatEmojiTrayOpen }"
+              title="Add emoji"
+              aria-label="Add emoji"
+              @click="toggleChatEmojiTray"
+            >
+              🙂
+            </button>
+            <button
+              class="icon-mini-btn"
+              type="button"
+              title="Add attachment"
+              aria-label="Add attachment"
+              @click="openChatAttachmentPicker"
+            >
+              +
+            </button>
             <input
+              ref="chatAttachmentInputRef"
+              class="workspace-chat-file-input"
+              type="file"
+              multiple
+              accept=".jpg,.jpeg,.png,.webp,.gif,.txt,.csv,.md,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp"
+              @change="handleChatAttachmentPick"
+            />
+            <input
+              ref="chatInputRef"
               v-model="chatDraft"
               class="search"
               type="text"
               maxlength="2000"
               placeholder="Write a message"
               @input="handleChatInput"
+              @paste="handleChatPaste"
             />
-            <button class="icon-mini-btn" type="submit" :disabled="!isSocketOnline || chatDraft.trim() === ''">
+            <button class="icon-mini-btn" type="submit" :disabled="!isSocketOnline || !hasChatPayload || chatSending">
               <img src="/assets/orgas/kingrt/icons/send.png" alt="Send" />
             </button>
           </form>
@@ -517,9 +647,7 @@
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { isGuestSession, sessionState } from '../auth/session';
-import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import {
-  buildWebSocketUrl,
   resolveBackendWebSocketOriginCandidates,
   setBackendWebSocketOrigin,
 } from '../../support/backendOrigin';
@@ -536,344 +664,97 @@ import { detectMediaRuntimeCapabilities } from './mediaRuntimeCapabilities';
 import { appendMediaRuntimeTransitionEvent } from './mediaRuntimeTelemetry';
 import { SFUClient } from '../../lib/sfu/sfuClient';
 import { createWasmEncoder, createWasmDecoder } from '../../lib/wasm/wasm-codec';
-import { debugLog } from '../../support/debugLogs';
+import {
+  ALONE_IDLE_ACTIVITY_EVENTS,
+  ALONE_IDLE_COUNTDOWN_MS,
+  ALONE_IDLE_POLL_MS,
+  ALONE_IDLE_PROMPT_AFTER_MS,
+  ALONE_IDLE_TICK_MS,
+  chatEmojiOptions,
+  COMPACT_BREAKPOINT,
+  DEFAULT_NATIVE_ICE_SERVERS,
+  LOBBY_PAGE_SIZE,
+  LOCAL_REACTION_ECHO_TTL_MS,
+  LOCAL_TRACK_RECOVERY_BASE_DELAY_MS,
+  LOCAL_TRACK_RECOVERY_MAX_ATTEMPTS,
+  LOCAL_TRACK_RECOVERY_MAX_DELAY_MS,
+  MODERATION_SYNC_FLUSH_INTERVAL_MS,
+  PARTICIPANT_ACTIVITY_WINDOW_MS,
+  REACTION_CLIENT_BATCH_SIZE,
+  REACTION_CLIENT_DIRECT_PER_WINDOW,
+  REACTION_CLIENT_FLUSH_INTERVAL_MS,
+  REACTION_CLIENT_MAX_QUEUE,
+  REACTION_CLIENT_WINDOW_MS,
+  RECONNECT_DELAYS_MS,
+  ROSTER_VIRTUAL_OVERSCAN,
+  ROSTER_VIRTUAL_ROW_HEIGHT,
+  SFU_CONNECT_MAX_RETRIES,
+  SFU_CONNECT_RETRY_DELAY_MS,
+  SFU_PUBLISH_MAX_RETRIES,
+  SFU_PUBLISH_RETRY_DELAY_MS,
+  SFU_RUNTIME_ENABLED,
+  TYPING_LOCAL_STOP_MS,
+  TYPING_SWEEP_MS,
+  USERS_PAGE_SIZE,
+  VISIBLE_PARTICIPANTS_LIMIT,
+  WLVC_ENCODE_ERROR_LOG_COOLDOWN_MS,
+  WLVC_ENCODE_FAILURE_THRESHOLD,
+  WLVC_ENCODE_FAILURE_WINDOW_MS,
+  WLVC_ENCODE_WARMUP_MS,
+  mediaDebugLog,
+  reactionOptions,
+} from './callWorkspaceConfig';
+import {
+  CHAT_ATTACHMENT_MAX_COUNT,
+  CHAT_INLINE_MAX_BYTES,
+  CHAT_INLINE_MAX_CHARS,
+  buildFileAttachmentDraft,
+  buildTextAttachmentDraft,
+  chatAttachmentDraftToBase64,
+  chatUtf8ByteLength,
+  isChatTextInlineAllowed,
+  sanitizeChatAttachmentName,
+  validateChatAttachmentDraft,
+} from './chatAttachments';
+import {
+  callRoleRank,
+  formatTimestamp,
+  initials,
+  miniVideoSlotId,
+  normalizeCallRole,
+  normalizeOptionalRoomId,
+  normalizeRole,
+  normalizeRoomId,
+  normalizeSocketCallId,
+  normalizeUsersDirectoryOrder,
+  normalizeUsersDirectoryStatus,
+  parseUsersDirectoryQuery,
+  roleRank,
+} from './callWorkspaceUtils';
+import {
+  apiRequest,
+  extractErrorMessage,
+  requestHeaders,
+  socketUrlForRoom,
+} from './callWorkspaceApi';
 
 const route = useRoute();
 const router = useRouter();
 const workspaceSidebarState = inject('workspaceSidebarState', null);
 
-const USERS_PAGE_SIZE = 10;
-const LOBBY_PAGE_SIZE = 10;
-const ROSTER_VIRTUAL_ROW_HEIGHT = 72;
-const ROSTER_VIRTUAL_OVERSCAN = 6;
-const TYPING_LOCAL_STOP_MS = 1200;
-const TYPING_SWEEP_MS = 600;
-const RECONNECT_DELAYS_MS = [750, 1250, 2000, 3200, 5000, 8000];
-const COMPACT_BREAKPOINT = 1180;
-const REACTION_CLIENT_WINDOW_MS = 1000;
-const REACTION_CLIENT_DIRECT_PER_WINDOW = 5;
-const REACTION_CLIENT_BATCH_SIZE = 5;
-const REACTION_CLIENT_FLUSH_INTERVAL_MS = 40;
-const REACTION_CLIENT_MAX_QUEUE = 500;
-const MODERATION_SYNC_FLUSH_INTERVAL_MS = 90;
-const SFU_PUBLISH_RETRY_DELAY_MS = 500;
-const SFU_PUBLISH_MAX_RETRIES = 24;
-const SFU_CONNECT_RETRY_DELAY_MS = 1200;
-const SFU_CONNECT_MAX_RETRIES = 8;
-const LOCAL_REACTION_ECHO_TTL_MS = 6000;
-const WLVC_ENCODE_FAILURE_THRESHOLD = 18;
-const WLVC_ENCODE_FAILURE_WINDOW_MS = 4000;
-const WLVC_ENCODE_WARMUP_MS = 2500;
-const WLVC_ENCODE_ERROR_LOG_COOLDOWN_MS = 3000;
-const LOCAL_TRACK_RECOVERY_BASE_DELAY_MS = 1200;
-const LOCAL_TRACK_RECOVERY_MAX_DELAY_MS = 10_000;
-const LOCAL_TRACK_RECOVERY_MAX_ATTEMPTS = 10;
-const VISIBLE_PARTICIPANTS_LIMIT = 5;
-const PARTICIPANT_ACTIVITY_WINDOW_MS = 15_000;
-const ALONE_IDLE_PROMPT_AFTER_MS = 15 * 60 * 1000;
-const ALONE_IDLE_COUNTDOWN_MS = 5 * 60 * 1000;
-const ALONE_IDLE_TICK_MS = 1000;
-const ALONE_IDLE_POLL_MS = 5000;
-const ALONE_IDLE_ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
-const DIRECTORY_USERS_ORDER_VALUES = ['role_then_name_asc', 'role_then_name_desc'];
-const DIRECTORY_USERS_STATUS_VALUES = ['all', 'active', 'disabled'];
-
-function normalizeIceServerEntry(value) {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  let urls = value.urls;
-  if (Array.isArray(urls)) {
-    urls = urls
-      .map((entry) => String(entry || '').trim())
-      .filter(Boolean);
-    if (urls.length === 0) {
-      return null;
-    }
-  } else {
-    urls = String(urls || '').trim();
-    if (urls === '') {
-      return null;
-    }
-  }
-
-  const normalized = { urls };
-  const username = String(value.username || '').trim();
-  const credential = String(value.credential || '').trim();
-
-  if (username !== '') normalized.username = username;
-  if (credential !== '') normalized.credential = credential;
-
-  return normalized;
-}
-
-function parseIceServersFromEnv(rawValue) {
-  const raw = String(rawValue || '').trim();
-  if (raw === '') {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return null;
-    }
-
-    const normalized = parsed
-      .map((entry) => normalizeIceServerEntry(entry))
-      .filter(Boolean);
-    return normalized.length > 0 ? normalized : null;
-  } catch {
-    const normalized = raw
-      .split(',')
-      .map((entry) => String(entry || '').trim())
-      .filter(Boolean)
-      .map((entry) => normalizeIceServerEntry({ urls: entry }))
-      .filter(Boolean);
-    return normalized.length > 0 ? normalized : null;
-  }
-}
-
-function parseEnvFlag(value, fallback = false) {
-  const normalized = String(value ?? '').trim().toLowerCase();
-  if (normalized === '') return fallback;
-  return ['1', 'true', 'yes', 'on'].includes(normalized);
-}
-
-const DEFAULT_NATIVE_ICE_SERVERS = parseIceServersFromEnv(import.meta.env.VITE_VIDEOCHAT_ICE_SERVERS) || [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-];
-const SFU_RUNTIME_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_SFU, true);
-
-function mediaDebugLog(...args) {
-  debugLog(...args);
-}
-
-const reactionOptions = ['👍', '❤️', '🐘', '🥳', '😂', '😮', '😢', '🤔', '👏', '👎'];
-
-function normalizeRoomId(value) {
-  const candidate = String(value || '').trim().toLowerCase();
-  if (candidate === '' || candidate.length > 120) return 'lobby';
-  return /^[a-z0-9._-]+$/.test(candidate) ? candidate : 'lobby';
-}
-
-function normalizeOptionalRoomId(value) {
-  const candidate = String(value || '').trim().toLowerCase();
-  if (candidate === '' || candidate.length > 120) return '';
-  return /^[a-z0-9._-]+$/.test(candidate) ? candidate : '';
-}
-
-function normalizeRole(value) {
-  const role = String(value || '').trim().toLowerCase();
-  if (role === 'admin') return role;
-  return 'user';
-}
-
-function normalizeUsersDirectoryOrder(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (DIRECTORY_USERS_ORDER_VALUES.includes(normalized)) return normalized;
-  return 'role_then_name_asc';
-}
-
-function normalizeUsersDirectoryStatus(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (DIRECTORY_USERS_STATUS_VALUES.includes(normalized)) return normalized;
-  return 'all';
-}
-
-function parseUsersDirectoryQuery(rawValue) {
-  const input = String(rawValue || '').trim();
-  if (input === '') {
-    return {
-      query: '',
-      status: 'all',
-      order: 'role_then_name_asc',
-    };
-  }
-
-  const queryTerms = [];
-  let status = 'all';
-  let order = 'role_then_name_asc';
-  for (const token of input.split(/\s+/).filter(Boolean)) {
-    const normalized = token.trim().toLowerCase();
-    if (normalized === 'status:active' || normalized === 'is:active') {
-      status = 'active';
-      continue;
-    }
-    if (normalized === 'status:disabled' || normalized === 'is:disabled' || normalized === 'is:inactive') {
-      status = 'disabled';
-      continue;
-    }
-    if (
-      normalized === 'sort:desc'
-      || normalized === 'sort:za'
-      || normalized === 'order:desc'
-      || normalized === 'order:za'
-    ) {
-      order = 'role_then_name_desc';
-      continue;
-    }
-    if (
-      normalized === 'sort:asc'
-      || normalized === 'sort:az'
-      || normalized === 'order:asc'
-      || normalized === 'order:az'
-    ) {
-      order = 'role_then_name_asc';
-      continue;
-    }
-
-    queryTerms.push(token);
-  }
-
-  return {
-    query: queryTerms.join(' ').trim(),
-    status: normalizeUsersDirectoryStatus(status),
-    order: normalizeUsersDirectoryOrder(order),
-  };
-}
-
-function roleRank(role) {
-  if (role === 'admin') return 0;
-  return 1;
-}
-
-function normalizeCallRole(value) {
-  const role = String(value || '').trim().toLowerCase();
-  if (role === 'owner' || role === 'moderator') return role;
-  return 'participant';
-}
-
-function callRoleRank(role) {
-  if (role === 'owner') return 0;
-  if (role === 'moderator') return 1;
-  return 2;
-}
-
-function requestHeaders(withBody = false) {
-  const headers = { accept: 'application/json' };
-  if (withBody) headers['content-type'] = 'application/json';
-
-  const token = String(sessionState.sessionToken || '').trim();
-  if (token !== '') {
-    headers.authorization = `Bearer ${token}`;
-  }
-
-  return headers;
-}
-
-function extractErrorMessage(payload, fallback) {
-  if (payload && typeof payload === 'object') {
-    const message = payload?.error?.message;
-    if (typeof message === 'string' && message.trim() !== '') {
-      return message.trim();
-    }
-  }
-  return fallback;
-}
-
-function buildApiRequestError(payload, fallbackMessage, responseStatus = 0) {
-  const error = new Error(extractErrorMessage(payload, fallbackMessage));
-  error.responseStatus = Number(responseStatus) || 0;
-  error.responseCode = String(payload?.error?.code || '').trim().toLowerCase();
-  return error;
-}
-
-async function apiRequest(path, { method = 'GET', query = null, body = null } = {}) {
-  let response = null;
-  try {
-    const result = await fetchBackend(path, {
-      method,
-      query,
-      headers: requestHeaders(body !== null),
-      body: body === null ? undefined : JSON.stringify(body),
-    });
-    response = result.response;
-  } catch (error) {
-    const message = error instanceof Error ? error.message.trim() : '';
-    if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
-      throw new Error(`Could not reach backend (${currentBackendOrigin()}).`);
-    }
-    throw new Error(message);
-  }
-
-  let payload = null;
-  try {
-    payload = await response.json();
-  } catch {
-    payload = null;
-  }
-
-  if (!response.ok) {
-    throw buildApiRequestError(payload, `Request failed (${response.status}).`, response.status);
-  }
-
-  if (!payload || payload.status !== 'ok') {
-    throw new Error('Backend returned an invalid payload.');
-  }
-
-  return payload;
-}
-
-function normalizeSocketCallId(value) {
-  const normalized = String(value || '').trim();
-  if (normalized === '') return '';
-  return /^[A-Za-z0-9._-]{1,200}$/.test(normalized) ? normalized : '';
-}
-
-function socketUrlForRoom(roomId, socketOrigin, callId = '') {
-  const query = new URLSearchParams();
-  query.set('room', normalizeRoomId(roomId));
-  const normalizedCallId = normalizeSocketCallId(callId);
-  if (normalizedCallId !== '') {
-    query.set('call_id', normalizedCallId);
-  }
-
-  const token = String(sessionState.sessionToken || '').trim();
-  if (token !== '') {
-    query.set('session', token);
-  }
-
-  return buildWebSocketUrl(socketOrigin, '/ws', query);
-}
-
-function formatTimestamp(value) {
-  if (typeof value !== 'string' || value.trim() === '') return '--';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return new Intl.DateTimeFormat('en-GB', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(date);
-}
-
-function initials(name) {
-  const raw = String(name || '').trim();
-  if (raw === '') return 'U';
-  const parts = raw.split(/\s+/).filter(Boolean);
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-  return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
-}
-
-function miniVideoSlotId(userId) {
-  const normalizedUserId = Number(userId);
-  return `workspace-mini-video-slot-${Number.isInteger(normalizedUserId) && normalizedUserId > 0 ? normalizedUserId : 0}`;
-}
 
 const activeTab = ref('users');
 const usersSearch = ref('');
 const usersPage = ref(1);
 const lobbyPage = ref(1);
 const chatDraft = ref('');
+const chatEmojiTrayOpen = ref(false);
+const chatAttachmentDrafts = ref([]);
+const chatAttachmentError = ref('');
+const chatAttachmentDragActive = ref(false);
+const chatSending = ref(false);
+const chatInputRef = ref(null);
+const chatAttachmentInputRef = ref(null);
 const chatListRef = ref(null);
 const usersListRef = ref(null);
 const lobbyListRef = ref(null);
@@ -915,6 +796,7 @@ const usersDirectoryPagination = reactive({
 
 const chatByRoom = reactive({});
 const typingByRoom = reactive({});
+const chatUnreadByRoom = reactive({});
 
 const mutedUsers = reactive({});
 const pinnedUsers = reactive({});
@@ -952,6 +834,7 @@ const controlState = reactive({
 });
 const rightSidebarCollapsed = ref(false);
 const isCompactViewport = ref(false);
+const mobileMiniStripPlacement = ref('below');
 
 const workspaceError = ref('');
 const workspaceNotice = ref('');
@@ -1066,6 +949,10 @@ const isCompactLayoutViewport = computed(() => (
 const isCompactHeaderVisible = computed(() => (
   isCompactViewport.value
   && isCompactLayoutViewport.value
+));
+const isMobileMiniStripAbove = computed(() => (
+  isShellMobileViewport.value
+  && mobileMiniStripPlacement.value === 'above'
 ));
 const showLeftSidebarRestoreButton = computed(() => {
   if (isCompactHeaderVisible.value || isShellMobileViewport.value) {
@@ -1411,6 +1298,20 @@ const miniVideoParticipants = computed(() => {
   return stripParticipants.value.filter((row) => Number(row?.userId || 0) !== primaryUserId);
 });
 const showMiniParticipantStrip = computed(() => connectedParticipantUsers.value.length > 1);
+const showMobileMiniStripToggle = computed(() => (
+  isShellMobileViewport.value
+  && showMiniParticipantStrip.value
+));
+const mobileMiniStripToggleLabel = computed(() => (
+  isMobileMiniStripAbove.value
+    ? 'Move mini videos below main video'
+    : 'Move mini videos above main video'
+));
+
+function toggleMobileMiniStripPlacement() {
+  mobileMiniStripPlacement.value = isMobileMiniStripAbove.value ? 'below' : 'above';
+  nextTick(() => renderCallVideoLayout());
+}
 const showLobbyRequestBadge = computed(() => (
   canModerate.value
   && lobbyQueue.value.length > 0
@@ -1535,6 +1436,10 @@ const activeMessages = computed(() => {
   const bucket = chatByRoom[activeRoomId.value];
   return Array.isArray(bucket) ? bucket : [];
 });
+
+const hasChatPayload = computed(() => chatDraft.value.trim() !== '' || chatAttachmentDrafts.value.length > 0);
+const showChatUnreadBadge = computed(() => chatUnreadByRoom[activeRoomId.value] === true);
+const showChatUnreadToast = computed(() => rightSidebarCollapsed.value && showChatUnreadBadge.value);
 
 const typingUsers = computed(() => {
   const rows = typingByRoom[activeRoomId.value];
@@ -2583,6 +2488,30 @@ function openLobbyRequestsPanel() {
   hideLobbyJoinToast();
 }
 
+function clearChatUnread(roomId = activeRoomId.value) {
+  const normalizedRoomId = normalizeRoomId(roomId || activeRoomId.value);
+  if (normalizedRoomId === '') return;
+  delete chatUnreadByRoom[normalizedRoomId];
+}
+
+function markChatUnread(message) {
+  const roomId = normalizeRoomId(message?.room_id || activeRoomId.value);
+  if (roomId === '') return;
+  const senderUserId = Number(message?.sender?.user_id || 0);
+  if (Number.isInteger(senderUserId) && senderUserId > 0 && senderUserId === currentUserId.value) {
+    return;
+  }
+  if (roomId === activeRoomId.value && activeTab.value === 'chat' && !rightSidebarCollapsed.value) {
+    return;
+  }
+  chatUnreadByRoom[roomId] = true;
+}
+
+function openChatPanel() {
+  showRightSidebar();
+  setActiveTab('chat');
+}
+
 function setActiveTab(tab) {
   const nextTab = ['users', 'lobby', 'chat'].includes(tab) ? tab : 'users';
   activeTab.value = nextTab;
@@ -2591,6 +2520,11 @@ function setActiveTab(tab) {
   } else if (nextTab === 'lobby') {
     hideLobbyJoinToast();
     nextTick(() => syncLobbyListViewport());
+  } else if (nextTab === 'chat') {
+    clearChatUnread();
+  }
+  if (nextTab !== 'chat') {
+    chatEmojiTrayOpen.value = false;
   }
   if (isSocketOnline.value && (nextTab === 'users' || nextTab === 'lobby')) {
     requestRoomSnapshot();
@@ -2602,11 +2536,15 @@ function setActiveTab(tab) {
 
 function hideRightSidebar() {
   rightSidebarCollapsed.value = true;
+  chatEmojiTrayOpen.value = false;
 }
 
 function showRightSidebar() {
   rightSidebarCollapsed.value = false;
   hideLobbyJoinToast();
+  if (activeTab.value === 'chat') {
+    clearChatUnread();
+  }
 }
 
 function openLeftSidebarOverlay(event) {
@@ -2757,7 +2695,243 @@ function stopLocalTyping() {
   void sendSocketFrame({ type: 'typing/stop' });
 }
 
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) return '0 B';
+  if (value < 1024) return `${Math.round(value)} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(value < 10 * 1024 ? 1 : 0)} KiB`;
+  return `${(value / (1024 * 1024)).toFixed(value < 10 * 1024 * 1024 ? 1 : 0)} MiB`;
+}
+
+function clampChatInlineText(value) {
+  const source = String(value || '');
+  if (source.length <= CHAT_INLINE_MAX_CHARS && chatUtf8ByteLength(source) <= CHAT_INLINE_MAX_BYTES) {
+    return source;
+  }
+
+  let next = '';
+  for (const char of source) {
+    const candidate = `${next}${char}`;
+    if (candidate.length > CHAT_INLINE_MAX_CHARS || chatUtf8ByteLength(candidate) > CHAT_INLINE_MAX_BYTES) {
+      break;
+    }
+    next = candidate;
+  }
+  return next;
+}
+
+function setChatAttachmentError(message) {
+  chatAttachmentError.value = String(message || '').trim();
+}
+
+function addChatAttachmentDraft(rawDraft) {
+  setChatAttachmentError('');
+  const currentDrafts = chatAttachmentDrafts.value;
+  const validation = validateChatAttachmentDraft(rawDraft, currentDrafts);
+  if (!validation.ok) {
+    setChatAttachmentError(validation.message || 'Attachment is not allowed.');
+    return false;
+  }
+
+  chatAttachmentDrafts.value = [
+    ...currentDrafts,
+    {
+      ...rawDraft,
+      name: validation.name,
+      extension: validation.extension,
+      kind: validation.kind,
+      contentType: validation.contentType,
+    },
+  ];
+  return true;
+}
+
+function updateChatAttachmentDraftName(localId, value) {
+  const normalizedId = String(localId || '').trim();
+  if (normalizedId === '') return;
+  const index = chatAttachmentDrafts.value.findIndex((draft) => draft.localId === normalizedId);
+  if (index < 0) return;
+  const nextDrafts = [...chatAttachmentDrafts.value];
+  nextDrafts[index] = {
+    ...nextDrafts[index],
+    name: String(value || '').slice(0, 180),
+  };
+  chatAttachmentDrafts.value = nextDrafts;
+}
+
+function removeChatAttachmentDraft(localId) {
+  const normalizedId = String(localId || '').trim();
+  chatAttachmentDrafts.value = chatAttachmentDrafts.value.filter((draft) => draft.localId !== normalizedId);
+  if (chatAttachmentDrafts.value.length === 0) {
+    setChatAttachmentError('');
+  }
+}
+
+function openChatAttachmentPicker() {
+  const input = chatAttachmentInputRef.value;
+  if (input instanceof HTMLInputElement) {
+    input.click();
+  }
+}
+
+async function addChatAttachmentFiles(files) {
+  const incoming = Array.from(files || []).filter(Boolean);
+  if (incoming.length === 0) return;
+  if (chatAttachmentDrafts.value.length + incoming.length > CHAT_ATTACHMENT_MAX_COUNT) {
+    setChatAttachmentError('Only 10 attachments are allowed per chat message.');
+    return;
+  }
+
+  for (const file of incoming) {
+    addChatAttachmentDraft(buildFileAttachmentDraft(file));
+  }
+}
+
+function handleChatAttachmentPick(event) {
+  const input = event?.target;
+  const files = input instanceof HTMLInputElement ? input.files : null;
+  void addChatAttachmentFiles(files);
+  if (input instanceof HTMLInputElement) {
+    input.value = '';
+  }
+}
+
+function handleChatAttachmentDrop(event) {
+  chatAttachmentDragActive.value = false;
+  const files = event?.dataTransfer?.files || null;
+  void addChatAttachmentFiles(files);
+}
+
+function handleChatPaste(event) {
+  const text = event?.clipboardData?.getData('text/plain') || '';
+  if (text === '') return;
+
+  const input = chatInputRef.value;
+  const currentDraft = String(chatDraft.value || '');
+  const selectionStart = input instanceof HTMLInputElement && Number.isInteger(input.selectionStart)
+    ? Number(input.selectionStart)
+    : currentDraft.length;
+  const selectionEnd = input instanceof HTMLInputElement && Number.isInteger(input.selectionEnd)
+    ? Number(input.selectionEnd)
+    : selectionStart;
+  const combined = `${currentDraft.slice(0, selectionStart)}${text}${currentDraft.slice(selectionEnd)}`;
+  if (isChatTextInlineAllowed(text) && isChatTextInlineAllowed(combined)) {
+    return;
+  }
+
+  event.preventDefault();
+  if (addChatAttachmentDraft(buildTextAttachmentDraft(text))) {
+    setNotice('Large pasted text was converted to a chat attachment.');
+  }
+}
+
+async function uploadChatAttachmentDraft(draft) {
+  const callId = String(activeCallId.value || '').trim();
+  if (callId === '') {
+    throw new Error('Cannot upload chat attachment before the call context is loaded.');
+  }
+
+  const validation = validateChatAttachmentDraft(draft, []);
+  if (!validation.ok) {
+    throw new Error(validation.message || 'Attachment is not allowed.');
+  }
+
+  const payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/chat/attachments`, {
+    method: 'POST',
+    body: {
+      file_name: sanitizeChatAttachmentName(draft.name, validation.extension || 'txt'),
+      content_type: validation.contentType,
+      content_base64: await chatAttachmentDraftToBase64({
+        ...draft,
+        name: sanitizeChatAttachmentName(draft.name, validation.extension || 'txt'),
+      }),
+    },
+  });
+
+  const attachment = payload?.result?.attachment;
+  if (!attachment || typeof attachment !== 'object' || String(attachment.id || '').trim() === '') {
+    throw new Error('Backend returned an invalid attachment payload.');
+  }
+  return attachment;
+}
+
+async function uploadChatAttachmentDrafts() {
+  const uploaded = [];
+  try {
+    for (const draft of chatAttachmentDrafts.value) {
+      uploaded.push(await uploadChatAttachmentDraft(draft));
+    }
+  } catch (error) {
+    await cancelUploadedChatAttachments(uploaded);
+    throw error;
+  }
+  return uploaded;
+}
+
+async function cancelUploadedChatAttachments(attachments) {
+  const callId = String(activeCallId.value || '').trim();
+  if (callId === '') return;
+  const rows = Array.isArray(attachments) ? attachments : [];
+  await Promise.all(rows.map(async (attachment) => {
+    const attachmentId = String(attachment?.id || '').trim();
+    if (attachmentId === '') return;
+    try {
+      await apiRequest(`/api/calls/${encodeURIComponent(callId)}/chat/attachments/${encodeURIComponent(attachmentId)}`, {
+        method: 'DELETE',
+      });
+    } catch {
+      // The draft is already invisible to chat peers; best-effort cleanup keeps retry UX intact.
+    }
+  }));
+}
+
+function focusChatInput() {
+  nextTick(() => {
+    const input = chatInputRef.value;
+    if (input instanceof HTMLInputElement) {
+      input.focus();
+    }
+  });
+}
+
+function toggleChatEmojiTray() {
+  chatEmojiTrayOpen.value = !chatEmojiTrayOpen.value;
+  if (chatEmojiTrayOpen.value) {
+    focusChatInput();
+  }
+}
+
+function insertChatEmoji(emoji) {
+  const normalizedEmoji = String(emoji || '').trim();
+  if (normalizedEmoji === '') return;
+
+  const input = chatInputRef.value;
+  const currentDraft = String(chatDraft.value || '');
+  const selectionStart = input instanceof HTMLInputElement && Number.isInteger(input.selectionStart)
+    ? Number(input.selectionStart)
+    : currentDraft.length;
+  const selectionEnd = input instanceof HTMLInputElement && Number.isInteger(input.selectionEnd)
+    ? Number(input.selectionEnd)
+    : selectionStart;
+  const nextDraft = clampChatInlineText(`${currentDraft.slice(0, selectionStart)}${normalizedEmoji}${currentDraft.slice(selectionEnd)}`);
+  const nextCursor = Math.min(selectionStart + normalizedEmoji.length, nextDraft.length);
+  chatDraft.value = nextDraft;
+  handleChatInput();
+
+  nextTick(() => {
+    const nextInput = chatInputRef.value;
+    if (!(nextInput instanceof HTMLInputElement)) return;
+    nextInput.focus();
+    nextInput.setSelectionRange(nextCursor, nextCursor);
+  });
+}
+
 function handleChatInput() {
+  const clamped = clampChatInlineText(chatDraft.value);
+  if (clamped !== chatDraft.value) {
+    chatDraft.value = clamped;
+  }
+
   if (!isSocketOnline.value) return;
   if (chatDraft.value.trim() === '') {
     stopLocalTyping();
@@ -2774,24 +2948,42 @@ function handleChatInput() {
   }, TYPING_LOCAL_STOP_MS);
 }
 
-function sendChatMessage() {
+async function sendChatMessage() {
   const text = chatDraft.value.trim();
-  if (text === '' || !isSocketOnline.value) return;
+  const hasAttachments = chatAttachmentDrafts.value.length > 0;
+  if ((text === '' && !hasAttachments) || !isSocketOnline.value || chatSending.value) return;
   markParticipantActivity(currentUserId.value, 'chat');
 
   const clientMessageId = `client_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+  chatSending.value = true;
+  let attachments = [];
+  try {
+    attachments = hasAttachments ? await uploadChatAttachmentDrafts() : [];
+  } catch (error) {
+    setChatAttachmentError(error instanceof Error ? error.message : 'Could not upload chat attachment.');
+    chatSending.value = false;
+    return;
+  }
+
   const sent = sendSocketFrame({
     type: 'chat/send',
     message: text,
+    attachments: attachments.map((attachment) => ({ id: attachment.id })),
     client_message_id: clientMessageId,
   });
 
   if (!sent) {
+    await cancelUploadedChatAttachments(attachments);
     setNotice('Could not send chat message while websocket is offline.', 'error');
+    chatSending.value = false;
     return;
   }
 
   chatDraft.value = '';
+  chatAttachmentDrafts.value = [];
+  chatAttachmentError.value = '';
+  chatEmojiTrayOpen.value = false;
+  chatSending.value = false;
   stopLocalTyping();
 }
 
@@ -2799,6 +2991,19 @@ function normalizeChatMessage(payload) {
   const roomId = normalizeRoomId(payload?.room_id || payload?.roomId || activeRoomId.value);
   const message = payload && typeof payload.message === 'object' ? payload.message : {};
   const sender = message && typeof message.sender === 'object' ? message.sender : {};
+  const attachments = Array.isArray(message.attachments)
+    ? message.attachments.map((attachment) => {
+      const row = attachment && typeof attachment === 'object' ? attachment : {};
+      return {
+        id: String(row.id || '').trim(),
+        name: String(row.name || 'attachment').trim() || 'attachment',
+        content_type: String(row.content_type || 'application/octet-stream').trim() || 'application/octet-stream',
+        size_bytes: Number(row.size_bytes || 0) || 0,
+        kind: String(row.kind || 'document').trim() || 'document',
+        download_url: String(row.download_url || '').trim(),
+      };
+    }).filter((attachment) => attachment.id !== '' && attachment.download_url !== '')
+    : [];
 
   const idRaw = String(message.id || '').trim();
   const id = idRaw !== '' ? idRaw : `chat_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
@@ -2814,12 +3019,13 @@ function normalizeChatMessage(payload) {
     },
     server_time: String(message.server_time || payload?.time || new Date().toISOString()),
     client_message_id: message.client_message_id ?? null,
+    attachments,
   };
 }
 
 function appendChatMessage(payload) {
   const message = normalizeChatMessage(payload);
-  if (message.text === '') return;
+  if (message.text === '' && message.attachments.length === 0) return;
   if (Number.isInteger(message.sender.user_id) && message.sender.user_id > 0) {
     markParticipantActivity(message.sender.user_id, 'chat');
   }
@@ -2832,6 +3038,7 @@ function appendChatMessage(payload) {
   if (bucket.length > 240) {
     bucket.splice(0, bucket.length - 240);
   }
+  markChatUnread(message);
 }
 
 function applyTypingEvent(payload) {
@@ -3613,6 +3820,9 @@ watch(desiredRoomId, (nextRoomId, previousRoomId) => {
   usersPage.value = 1;
   lobbyPage.value = 1;
   if (nextRoomId === previousRoomId) return;
+  chatAttachmentDrafts.value = [];
+  chatAttachmentError.value = '';
+  chatAttachmentDragActive.value = false;
   teardownNativePeerConnections();
   teardownSfuRemotePeers();
   if (isSocketOnline.value) {
@@ -5462,951 +5672,5 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style scoped>
-.workspace-call-view {
-  --bg-shell: var(--color-0b1324);
-  --bg-sidebar: var(--color-0b1324);
-  --bg-main: var(--color-0b1324);
-  --bg-video: var(--color-133262);
-  --bg-strip: var(--color-091a35);
-  --bg-mini-video: var(--color-25569a);
-  --bg-surface: var(--color-112b55);
-  --bg-surface-strong: var(--color-153665);
-  --bg-tab: var(--color-1c437a);
-  --bg-tab-hover: var(--color-2a5aa0);
-  --bg-tab-active: var(--color-3f79d6);
-  --bg-control: var(--color-1b427a);
-  --bg-control-active: var(--brand-cyan);
-  --bg-reaction-tray: var(--color-122d59);
-  --bg-reaction-btn: var(--color-21508f);
-  --bg-reaction-btn-hover: var(--color-2e65b3);
-  --bg-input: var(--color-0c1f41);
-  --bg-row-hover: var(--color-15305a);
-  --bg-row-pinned: var(--color-2d63b3);
-  --bg-preview: var(--color-2b63ac);
-  --border-subtle: var(--color-24497f);
-  --text-main: var(--color-edf3ff);
-  --text-secondary: var(--color-c0d1ef);
-  --text-muted: var(--color-94add3);
-  --text-dim: var(--color-7f9cc8);
-  position: relative;
-  height: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-shell);
-}
-
-.workspace-call-banner {
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.workspace-call-banner.ok {
-  background: var(--color-14452b);
-  color: var(--color-bdf6cf);
-}
-
-.workspace-call-banner.error {
-  background: var(--color-4f1e2e);
-  color: var(--color-ffd1dc);
-}
-
-.workspace-idle-toast {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 120;
-  width: min(92vw, 520px);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--color-rgba-8-20-43-0-94);
-  border: 1px solid var(--color-rgba-255-188-90-0-55);
-  box-shadow: 0 10px 30px var(--color-rgba-0-0-0-0-35);
-}
-
-.workspace-idle-toast-text {
-  font-size: 12px;
-  color: var(--color-ffe9c2);
-  line-height: 1.35;
-}
-
-.workspace-idle-toast-btn {
-  border: 0;
-  border-radius: 8px;
-  height: 34px;
-  padding: 0 12px;
-  background: var(--color-ffba50);
-  color: var(--color-1f1808);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.workspace-idle-toast-btn:hover {
-  background: var(--color-ffc56a);
-}
-
-.workspace-call-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 390px;
-  gap: 1px;
-  background: var(--bg-shell);
-}
-
-.workspace-call-body.right-collapsed {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.workspace-stage {
-  position: relative;
-  height: 100%;
-  min-height: 0;
-  background: var(--bg-shell);
-  padding: 0;
-  display: grid;
-  gap: 0;
-  grid-template-rows: minmax(0, 1fr) 170px auto;
-}
-
-.workspace-stage.compact {
-  grid-template-rows: 50px minmax(0, 1fr) 60px;
-}
-
-.workspace-compact-header {
-  height: 50px;
-  min-height: 50px;
-  margin: 0 1px 1px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--color-0b1324);
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-}
-
-.workspace-compact-toggle {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  line-height: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--brand-cyan);
-  color: var(--color-f7f7f7);
-  display: grid;
-  place-items: center;
-  align-self: center;
-  cursor: pointer;
-}
-
-.workspace-compact-toggle:hover {
-  background: var(--brand-cyan-hover);
-}
-
-.workspace-compact-toggle-icon {
-  width: 18px;
-  height: 18px;
-  display: block;
-  object-fit: contain;
-}
-
-.workspace-compact-toggle-icon-back {
-  transform: rotate(180deg);
-}
-
-.workspace-compact-logo {
-  width: auto;
-  max-width: 100%;
-  height: 34px;
-  object-fit: contain;
-  justify-self: center;
-}
-
-.workspace-main-video {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--bg-video);
-  color: var(--color-ffffff);
-  display: block;
-  border-radius: 0;
-  border: 0;
-  margin: 0;
-}
-
-.video-container {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-
-.video-container :deep(video),
-.video-container :deep(canvas) {
-  position: absolute;
-  inset: 0;
-  width: 100% !important;
-  height: 100% !important;
-  min-width: 100% !important;
-  min-height: 100% !important;
-  max-width: none !important;
-  max-height: none !important;
-  display: block !important;
-  object-fit: cover !important;
-}
-
-.video-container.local {
-  z-index: 10;
-}
-
-.video-container.local :deep(video) {
-  transform: scaleX(-1);
-}
-
-.video-container.remote {
-  z-index: 5;
-}
-
-.video-container.decoded {
-  z-index: 1;
-  opacity: 0.5;
-}
-
-.workspace-reaction-flight {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 30;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.workspace-reaction-particle {
-  position: absolute;
-  left: var(--start-x);
-  bottom: var(--base-bottom);
-  font-size: 24px;
-  line-height: 1;
-  opacity: 0;
-  will-change: transform, opacity;
-  animation: reactionRiseSine var(--duration) linear forwards;
-  animation-delay: var(--delay);
-}
-
-@keyframes reactionRiseSine {
-  0% {
-    transform: translate3d(calc(var(--wave) * sin(calc(var(--phase) + 0deg))), 0, 0) scale(var(--scale));
-    opacity: 0;
-  }
-
-  10% {
-    opacity: 1;
-    transform: translate3d(
-      calc(var(--wave) * sin(calc(var(--phase) + 54deg))),
-      calc(var(--travel-y) * -0.1),
-      0
-    ) scale(var(--scale));
-  }
-
-  22% {
-    transform: translate3d(
-      calc(var(--wave) * sin(calc(var(--phase) + 108deg))),
-      calc(var(--travel-y) * -0.22),
-      0
-    ) scale(var(--scale));
-  }
-
-  36% {
-    transform: translate3d(
-      calc(var(--wave) * sin(calc(var(--phase) + 162deg))),
-      calc(var(--travel-y) * -0.36),
-      0
-    ) scale(var(--scale));
-  }
-
-  52% {
-    transform: translate3d(
-      calc(var(--wave) * sin(calc(var(--phase) + 216deg))),
-      calc(var(--travel-y) * -0.52),
-      0
-    ) scale(var(--scale));
-  }
-
-  68% {
-    transform: translate3d(
-      calc(var(--wave) * sin(calc(var(--phase) + 270deg))),
-      calc(var(--travel-y) * -0.68),
-      0
-    ) scale(var(--scale));
-  }
-
-  84% {
-    transform: translate3d(
-      calc(var(--wave) * sin(calc(var(--phase) + 324deg))),
-      calc(var(--travel-y) * -0.84),
-      0
-    ) scale(var(--scale));
-    opacity: 0.92;
-  }
-
-  100% {
-    transform: translate3d(
-      calc(var(--wave) * sin(calc(var(--phase) + 360deg))),
-      calc(var(--travel-y) * -1),
-      0
-    ) scale(var(--scale));
-    opacity: 0.04;
-  }
-}
-
-.workspace-mini-strip {
-  min-height: 0;
-  background: var(--bg-strip);
-  margin: 1px;
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 1px;
-}
-
-.workspace-mini-tile,
-.workspace-mini-empty {
-  position: relative;
-  min-height: 104px;
-  background: var(--bg-mini-video);
-  border-radius: 0;
-  padding: 8px;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 2px;
-  overflow: hidden;
-}
-
-.workspace-mini-video-slot {
-  position: absolute;
-  inset: 0;
-  background: var(--bg-video);
-}
-
-.workspace-mini-video-slot :deep(video),
-.workspace-mini-video-slot :deep(canvas) {
-  width: 100% !important;
-  height: 100% !important;
-  display: block !important;
-  object-fit: cover !important;
-}
-
-.workspace-mini-title {
-  position: relative;
-  z-index: 2;
-  align-self: end;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-f1f6ff);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
-}
-
-.workspace-mini-meta {
-  position: relative;
-  z-index: 2;
-  font-size: 11px;
-  color: var(--color-c9d9f4);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
-}
-
-.workspace-mini-empty {
-  grid-column: 1 / -1;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.workspace-show-right-btn {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 60;
-  visibility: visible;
-  pointer-events: auto;
-  transform: translateX(0);
-}
-
-.workspace-show-left-btn {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 60;
-  visibility: visible;
-  pointer-events: auto;
-  transform: translateX(0);
-}
-
-.workspace-lobby-toast {
-  position: absolute;
-  top: 16px;
-  right: 58px;
-  z-index: 65;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 0;
-  border-radius: 999px;
-  padding: 7px 12px;
-  color: var(--color-ffffff);
-  background: var(--color-rgba-213-40-40-0-92);
-  box-shadow: 0 6px 18px var(--color-rgba-0-0-0-0-35);
-  cursor: pointer;
-}
-
-.workspace-lobby-toast:hover {
-  background: var(--color-rgba-225-58-58-0-96);
-}
-
-.workspace-lobby-toast-icon {
-  width: 14px;
-  height: 14px;
-  object-fit: contain;
-  filter: brightness(0) invert(1);
-}
-
-.workspace-lobby-toast-text {
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-}
-
-.workspace-controls {
-  position: relative;
-  z-index: 20;
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 0;
-  min-height: 56px;
-  padding: 0 14px 8px;
-  background: var(--bg-shell);
-}
-
-.workspace-reactions-tray {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translate(-50%, 10px);
-  background: var(--bg-reaction-tray);
-  border-radius: 10px;
-  padding: 6px;
-  display: inline-flex;
-  gap: 6px;
-  opacity: 0;
-  pointer-events: none;
-  transition: transform 180ms ease, opacity 180ms ease;
-}
-
-.workspace-reactions-tray.open {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translate(-50%, 0);
-}
-
-.workspace-reaction-btn {
-  width: 34px;
-  height: 34px;
-  border: 0;
-  border-radius: 9px;
-  background: var(--bg-reaction-btn);
-  color: var(--color-ffffff);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.workspace-reaction-btn:hover {
-  background: var(--bg-reaction-btn-hover);
-}
-
-.call-control-btn {
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--bg-control);
-  color: var(--color-ffffff);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-
-.call-control-btn.active {
-  background: var(--bg-control-active);
-}
-
-.call-control-btn.hangup {
-  width: 88px;
-  background: var(--color-ff0000);
-}
-
-.ctrl-icon-image {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-  filter: brightness(0) invert(1);
-}
-
-.workspace-context {
-  min-height: 0;
-  background: var(--color-0b1324);
-  margin: 0 10px var(--call-workspace-sidebar-bottom, 64px) 10px;
-  border-radius: 0 5px 5px 0;
-  overflow: hidden;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  transform: translateX(0);
-  visibility: visible;
-  transition: transform 240ms ease, visibility 0s linear 0s;
-}
-
-.workspace-context.collapsed {
-  visibility: hidden;
-  transform: translateX(24px);
-  pointer-events: none;
-  transition: transform 240ms ease, visibility 0s linear 240ms;
-}
-
-.workspace-call-body.right-collapsed .workspace-context {
-  display: none;
-}
-
-.workspace-context .tabs.tabs-right {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  background: var(--color-0b1324);
-}
-
-.workspace-context .tab {
-  background: var(--color-0b1324);
-  color: var(--color-f7f7f7);
-}
-
-.workspace-context .tab:hover {
-  background: var(--color-133262);
-  color: var(--color-f7f7f7);
-}
-
-.workspace-context .tab.active {
-  background: var(--color-3f79d6);
-  color: var(--color-f7f7f7);
-}
-
-.tab-icon-wrap {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-}
-
-.tab-notice-badge {
-  position: absolute;
-  top: -8px;
-  right: -10px;
-  min-width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  background: var(--color-e03232);
-  color: var(--color-ffffff);
-  display: inline-grid;
-  place-items: center;
-  padding: 0 4px;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.tab-panel {
-  display: none;
-  min-height: 0;
-  background: var(--color-0b1324);
-}
-
-.tab-panel.active {
-  display: grid;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.panel-users.active,
-.panel-lobby.active {
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  min-height: 0;
-}
-
-.panel-chat.active {
-  grid-template-rows: minmax(0, 1fr) auto auto;
-}
-
-.toolbar,
-.lobby-toolbar {
-  padding: 10px;
-  border-top: 0;
-  border-bottom: 0;
-  background: var(--color-0b1324);
-}
-
-.lobby-toolbar-actions {
-  justify-content: flex-end;
-}
-
-.search {
-  width: 100%;
-  height: 38px;
-  border: 1px solid var(--color-133262);
-  border-radius: 6px;
-  background: var(--color-0b1324);
-  color: var(--color-f7f7f7);
-  padding: 0 10px;
-}
-
-.search::placeholder {
-  color: var(--color-3f79d6);
-}
-
-.workspace-tab-hint {
-  margin: 0;
-  padding: 8px 10px 0;
-  font-size: 11px;
-  color: var(--color-f7f7f7);
-}
-
-.workspace-tab-hint.error {
-  color: var(--color-ff0000);
-}
-
-.user-list,
-.lobby-list,
-.workspace-chat-list {
-  min-height: 0;
-  overflow: auto;
-  overflow-x: hidden;
-  scrollbar-gutter: stable;
-}
-
-.user-list,
-.lobby-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.user-row {
-  list-style: none;
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  padding: 10px;
-  min-height: 72px;
-  box-sizing: border-box;
-  background: var(--color-133262);
-}
-
-.user-list-spacer {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.user-row.self {
-  background: var(--color-133262);
-}
-
-.user-row.pinned {
-  background: var(--color-3f79d6);
-}
-
-.user-row.pending {
-  outline: 1px solid var(--color-rgba-255-255-255-0-15);
-}
-
-.user-row .actions-inline .icon-mini-btn:not(.danger) {
-  background: var(--brand-bg);
-}
-
-.user-row .actions-inline .icon-mini-btn:not(.danger):hover:not(:disabled) {
-  background: var(--color-133262);
-}
-
-.user-row .actions-inline .icon-mini-btn:not(.danger):disabled {
-  background: var(--color-0b1324);
-  opacity: 0.55;
-}
-
-.user-preview {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--color-133262);
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-ffffff);
-}
-
-.user-main {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.user-name {
-  font-size: 13px;
-  color: var(--color-f7f7f7);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.user-role {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--color-3f79d6);
-}
-
-.user-feedback {
-  font-size: 11px;
-  color: var(--color-f7f7f7);
-}
-
-.user-list-empty {
-  list-style: none;
-  padding: 12px;
-  font-size: 12px;
-  color: var(--color-3f79d6);
-  background: var(--color-0b1324);
-}
-
-.workspace-tab-footer {
-  background: var(--color-0b1324);
-  padding: 8px;
-}
-
-.workspace-chat-list {
-  padding: 10px;
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  background: var(--color-0b1324);
-}
-
-.workspace-chat-message {
-  border: 1px solid var(--color-133262);
-  border-radius: 6px;
-  padding: 8px;
-  background: var(--color-133262);
-}
-
-.workspace-chat-message.mine {
-  background: var(--color-3f79d6);
-}
-
-.workspace-chat-message header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--color-3f79d6);
-}
-
-.workspace-chat-message p {
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: var(--color-f7f7f7);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.workspace-chat-empty {
-  border: 1px dashed var(--color-133262);
-  border-radius: 6px;
-  padding: 10px;
-  color: var(--color-3f79d6);
-  font-size: 12px;
-}
-
-.workspace-typing {
-  margin: 0;
-  padding: 0 10px 8px;
-  background: var(--color-0b1324);
-  font-size: 12px;
-  color: var(--color-3f79d6);
-}
-
-.workspace-chat-compose {
-  background: var(--color-0b1324);
-  padding: 8px 10px 10px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  border-top: 1px solid var(--color-133262);
-}
-
-@media (max-width: 1440px) {
-  .workspace-call-body {
-    grid-template-columns: minmax(0, 1fr) 360px;
-  }
-
-  .workspace-mini-strip {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1181px) {
-  .workspace-call-body {
-    gap: 0;
-  }
-
-  .workspace-context {
-    margin-left: 10px;
-    margin-right: 10px;
-  }
-}
-
-@media (max-width: 1180px) {
-  .workspace-call-view {
-    overflow: hidden;
-  }
-
-  .workspace-call-body {
-    position: relative;
-    height: 100%;
-    overflow: hidden;
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 1fr);
-  }
-
-  .workspace-stage {
-    grid-template-rows: minmax(0, 1fr) 120px 60px;
-  }
-
-  .workspace-stage.compact {
-    grid-template-rows: 50px minmax(0, 1fr) 58px;
-  }
-
-  .workspace-mini-strip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .workspace-context {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(360px, 92vw);
-    margin: 0;
-    border-radius: 0;
-    z-index: 50;
-    box-shadow: -6px 0 18px var(--color-rgba-0-0-0-0-28);
-  }
-
-  .workspace-context.collapsed {
-    transform: translateX(100%);
-  }
-
-  .workspace-call-body.right-collapsed .workspace-context {
-    display: grid;
-  }
-
-  .workspace-show-right-btn {
-    top: 62px;
-  }
-
-  .workspace-lobby-toast {
-    top: 62px;
-    right: 66px;
-    max-width: min(68vw, 290px);
-  }
-
-  .workspace-lobby-toast-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
-@media (max-width: 760px) {
-  .workspace-idle-toast {
-    top: 8px;
-    width: min(96vw, 520px);
-    padding: 8px 10px;
-  }
-
-  .workspace-idle-toast {
-    grid-template-columns: 1fr;
-  }
-
-  .workspace-idle-toast-btn {
-    width: 100%;
-  }
-
-  .workspace-compact-header {
-    padding: 0 10px;
-  }
-
-  .workspace-compact-logo {
-    height: 32px;
-  }
-
-  .workspace-context {
-    width: 100%;
-  }
-}
-
-@media (max-width: 760px) and (orientation: landscape) {
-  .workspace-stage.compact {
-    grid-template-rows: 44px minmax(0, 1fr) 50px;
-  }
-
-  .workspace-compact-header {
-    height: 44px;
-    min-height: 44px;
-  }
-
-  .workspace-compact-logo {
-    height: 28px;
-  }
-
-  .workspace-controls {
-    gap: 8px;
-    min-height: 50px;
-    padding: 0 8px 6px;
-  }
-
-  .call-control-btn {
-    width: 40px;
-    height: 40px;
-  }
-
-  .call-control-btn.hangup {
-    width: 76px;
-  }
-}
-</style>
+<style scoped src="./CallWorkspaceStage.css"></style>
+<style scoped src="./CallWorkspacePanels.css"></style>

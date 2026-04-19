@@ -17,7 +17,7 @@ DEFAULT_WS_WORKERS="${VIDEOCHAT_KING_DEFAULT_WS_WORKERS:-8}"
 HTTP_WORKERS="${VIDEOCHAT_KING_HTTP_WORKERS:-${VIDEOCHAT_KING_WORKERS:-${DEFAULT_HTTP_WORKERS}}}"
 WS_WORKERS="${VIDEOCHAT_KING_WS_WORKERS:-${VIDEOCHAT_KING_WORKERS:-${DEFAULT_WS_WORKERS}}}"
 
-php_args=()
+php_args=("-d" "king.security_allow_config_override=1")
 ext_source=""
 
 if "${PHP_BIN}" -m | grep -Eiq '^king$'; then

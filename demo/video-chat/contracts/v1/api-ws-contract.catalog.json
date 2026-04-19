@@ -1,5 +1,5 @@
 {
-  "catalog_version": "v1.0.6-beta",
+  "catalog_version": "v1.0.7-beta",
   "catalog_name": "king-video-chat-api-ws",
   "api": {
     "runtime_health": {
@@ -141,7 +141,22 @@
           "required": {
             "id": { "type": "string", "pattern": "/^chat_/" },
             "client_message_id": { "one_of": [{ "type": "string", "min_length": 1 }, { "type": "null" }] },
-            "text": { "type": "string", "min_length": 1 },
+            "text": { "type": "string", "min_length": 0 },
+            "attachments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": {
+                  "id": { "type": "string", "min_length": 1 },
+                  "name": { "type": "string", "min_length": 1 },
+                  "content_type": { "type": "string", "min_length": 1 },
+                  "size_bytes": { "type": "int", "min": 1 },
+                  "kind": { "type": "string", "enum": ["image", "text", "pdf", "document"] },
+                  "extension": { "type": "string", "min_length": 1 },
+                  "download_url": { "type": "string", "pattern": "/^\\/api\\/calls\\//" }
+                }
+              }
+            },
             "sender": {
               "type": "object",
               "required": {

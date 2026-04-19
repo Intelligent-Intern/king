@@ -1,5 +1,14 @@
 FROM node:22-alpine
 
+RUN apk add --no-cache \
+    ca-certificates \
+    chromium \
+    freetype \
+    harfbuzz \
+    nss \
+    ttf-freefont \
+    && if [ ! -x /usr/bin/chromium-browser ] && [ -x /usr/bin/chromium ]; then ln -s /usr/bin/chromium /usr/bin/chromium-browser; fi
+
 ARG VITE_VIDEOCHAT_BACKEND_ORIGIN=""
 ARG VITE_VIDEOCHAT_BACKEND_PORT="18080"
 ARG VITE_VIDEOCHAT_WS_ORIGIN=""
@@ -18,6 +27,9 @@ ENV VITE_VIDEOCHAT_SFU_PORT="${VITE_VIDEOCHAT_SFU_PORT}"
 ENV VITE_VIDEOCHAT_ICE_SERVERS="${VITE_VIDEOCHAT_ICE_SERVERS}"
 ENV VITE_VIDEOCHAT_ENABLE_MEDIAPIPE="${VITE_VIDEOCHAT_ENABLE_MEDIAPIPE}"
 ENV VITE_VIDEOCHAT_ENABLE_TFJS="${VITE_VIDEOCHAT_ENABLE_TFJS}"
+ENV PLAYWRIGHT_BROWSERS_PATH=0
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 WORKDIR /app
 

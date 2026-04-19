@@ -1,7 +1,7 @@
 # King Issues
 
-> Status: 2026-04-15
-> Fokus: saubere Architektur- und Skalierungsplanung für Video-Calls, inkl. WASM-Fallback, SFU, Background-Blur und issue-basierter Umsetzung.
+> Status: 2026-04-19
+> Fokus: saubere Architektur- und Skalierungsplanung für Video-Calls, inkl. WASM-Fallback, SFU, Background-Blur, persistenter Chat-/Datei-Ablage, Speaker-Awareness und issue-basierter Umsetzung.
 
 ## Harte Anforderungen
 
@@ -244,7 +244,8 @@ Lastgrenzen + Backpressure (definiert):
   - keine harte UI-Warnleiste für normalen Flood-Fall; System drosselt intern.
 - Chat:
   - rate-limit pro Sender + bounded queue; bei Überlauf drop nach Policy (latest-wins oder reject mit code).
-  - Nachrichtenlänge bleibt begrenzt; oversized payloads werden verworfen.
+  - Nachrichtenlänge bleibt begrenzt; direkte oversized `chat/send` Frames werden serverseitig abgelehnt.
+  - Frontend-Produktpfad wandelt oversized Text/Paste-Inhalte in Datei-Anhänge um (siehe #18), statt GB-große WS-Nachrichten zu senden.
 - Participant-Events:
   - Join/Leave/Role/Mute Events als delta-stream mit coalescing bei Burst.
   - serverseitige fanout-throttles für nicht-kritische Events (z. B. speaking indicators).
@@ -850,6 +851,203 @@ Checklist:
 
 Definition of done:
 - Backup/Restore ist reproduzierbar und Kern-Operational-Metriken sind zentral sichtbar.
+
+---
+
+### #18 Chat-Limits, Auto-Datei-Konvertierung und sichere Attachments (Implementierung)
+
+Ziel:
+- Chat darf keine riesigen WebSocket-Payloads akzeptieren, muss aber lange Inhalte und Dateien nutzbar machen.
+- Große Text-/Paste-Inhalte werden automatisch als Datei-Anhang gespeichert und als Download im Chat angeboten.
+- Uploads laufen nicht als Base64-Blob über `/ws`, sondern bounded über HTTP/King Object Store plus realtime Metadaten-Fanout.
+
+Vertragsentscheidung:
+- Inline-Chat bleibt kurz: maximal `2.000` Unicode-Zeichen und maximal `8 KiB` UTF-8 Payload.
+- Größere Texte werden nicht verworfen, sondern clientseitig in einen Text-Anhang umgewandelt.
+- Auto-Dateiformat:
+  - Default: `.txt`
+  - CSV-Erkennung: mehrzeilige tabellarische Struktur mit konsistenten Trennzeichen -> `.csv`
+  - Markdown-Erkennung: Überschriften/Listen/Code-Fences/Links -> `.md`
+  - User kann vor dem Senden den vorgeschlagenen Dateinamen/Typ ändern.
+- Backend bleibt fail-closed: direkte oversized `chat/send` Frames werden weiterhin abgelehnt, wenn sie nicht als Attachment referenziert sind.
+
+Checklist:
+- [x] Frontend-Composer limitiert Inline-Text auf `2.000` Zeichen und `8 KiB` Bytes.
+- [x] Paste-Handler erkennt oversized Text und wandelt ihn automatisch in einen Attachment-Draft um.
+- [x] Auto-Datei-Draft zeigt Dateiname, Typ (`txt`, `csv`, `md`), Größe und Preview-Ausschnitt.
+- [x] Chat-Send unterstützt Nachrichten mit Text plus Attachment-Refs.
+- [x] Backend-Contract für `chat/send` um `attachments[]` erweitern, ohne alte reine Textnachrichten zu brechen.
+- [x] HTTP Upload-Endpunkt für Chat-Dateien ergänzt: `POST /api/calls/{call_id}/chat/attachments`.
+- [x] Uploads schreiben in den King Object Store; SQLite speichert Metadaten/Refs/Status und die Teilnehmer-ACL wird serverseitig aus dem Call geprüft.
+- [x] Object-Keys sind call- und room-scoped als flache King-Object-IDs ohne Slash, weil der Store Pfadseparatoren ablehnt.
+- [x] Download-Endpunkt mit Auth/Call-Teilnehmerprüfung ergänzt: `GET /api/calls/{call_id}/chat/attachments/{attachment_id}`.
+- [x] Dateien werden erst nach erfolgreichem Object-Store-Commit als Chat-Message referenziert.
+- [x] Fehlgeschlagene/stornierte Upload-Drafts werden bereinigt und nicht im Chat sichtbar; unveröffentlichte Drafts können per `DELETE` entfernt werden.
+- [x] Realtime-Event `chat/message` trägt Attachment-Metadaten (`id`, `name`, `content_type`, `size_bytes`, `kind`, `extension`, `download_url`).
+- [x] Attachments sind downloadbar, aber niemals inline ausführbar.
+
+Erlaubte Dateitypen:
+- [x] Bilder: `jpg`, `jpeg`, `png`, `webp`, `gif` bis maximal 10 Bilder pro Nachricht.
+- [x] Text/Tabellen/Markdown: `txt`, `csv`, `md`.
+- [x] PDF: `pdf`.
+- [x] Office/OpenDocument: `doc`, `docx`, `xls`, `xlsx`, `ppt`, `pptx`, `odt`, `ods`, `odp`.
+- [x] Serverseitige MIME-/Magic-Byte-Prüfung; Extension allein reicht nicht.
+- [x] OOXML/ODF Container prüfen, weil sie ZIP-basiert sind; beliebige ZIPs bleiben verboten.
+- [x] Explizite Blocklist: `exe`, `dll`, `com`, `bat`, `cmd`, `ps1`, `sh`, `js`, `msi`, `jar`, `app`, `deb`, `rpm`, rohe Archive (`zip`, `rar`, `7z`, `tar`, `gz`) und sonstige unbekannte Binaries.
+
+Limits und Quotas:
+- [x] Maximal 10 Bilder pro Nachricht.
+- [x] Maximal 10 Attachments pro Nachricht insgesamt.
+- [x] Vorschlag v1: Bilder maximal `8 MiB` je Datei, Office/PDF maximal `25 MiB` je Datei.
+- [x] Vorschlag v1: `100 MiB` Gesamtlimit pro Chat-Nachricht.
+- [x] Vorschlag v1: call-weite Soft-Quota und harte Quota konfigurieren, damit ein Call nicht den Object Store flutet.
+- [x] Backend liefert strukturierte Fehlercodes: `chat_inline_too_large`, `attachment_type_not_allowed`, `attachment_too_large`, `attachment_count_exceeded`, `chat_storage_quota_exceeded`.
+
+Definition of done:
+- Große Pastedaten führen nicht zu Browser-/WS-Freeze und nicht zu oversized WS Frames.
+- Dateien sind sicher typvalidiert, persistent gespeichert, downloadbar und room-/call-scoped autorisiert.
+- Keine ausführbaren oder unbekannten Binärdateien können über den Chat verteilt werden.
+
+Tests:
+- [x] Backend Contract: Inline-Limit, oversized direct send reject, Attachment-Metadaten, Download-ACL.
+- [x] Backend Contract: Allowlist/Blocklist/Magic-Byte-Erkennung inkl. OOXML/ODF.
+- [x] Frontend/Playwright: Paste > Limit erzeugt Datei-Draft statt Chat-Text.
+- [x] Playwright + Backend-Fanout-Contract: großer Paste wird zu `.txt`/`.md`/`.csv` Attachment und Attachment-Metadaten erreichen andere Room-Teilnehmer.
+- [x] Playwright: bis zu 10 Bilder werden clientseitig akzeptiert, das 11. Attachment wird sichtbar abgelehnt.
+- [x] Playwright: PDF/Office Upload-Drafts funktionieren, `.exe`/unbekannte Binary wird sichtbar abgelehnt.
+- [x] Backend Contract: Download-Link funktioniert nur für eingeloggte berechtigte Call-Teilnehmer.
+
+---
+
+### #19 Persistenter Chat-Verlauf und Read-only Archivmodal (Implementierung)
+
+Ziel:
+- Chat und Dateien bleiben nach dem Call für registrierte Teilnehmer verfügbar.
+- Die Call-/Chatübersicht erhält ein zusätzliches Icon, über das registrierte User den Chat read-only öffnen.
+- Das Archivmodal zeigt links den Chatverlauf und rechts die Dateien/Attachments.
+
+Checklist:
+- [ ] Chat-Events append-only persistieren: Message-Metadaten in DB, Payload/Transcript-Snapshots im King Object Store.
+- [ ] Attachment-Refs aus #18 in denselben Archivindex aufnehmen.
+- [ ] Persistenzmodell für `call_chat_messages`, `call_chat_attachments`, `call_chat_acl` definieren.
+- [ ] Read-only API ergänzen, z. B. `GET /api/calls/{call_id}/chat-archive`.
+- [ ] Archivantwort paginieren/cursorbasiert laden; keine vollständigen Monster-Verläufe auf einmal.
+- [ ] Dateien rechts im Modal gruppieren: Bilder, PDFs, Office, Text/CSV/MD.
+- [ ] Linke Modalspalte: chronologischer Chat, Sender, Zeit, Text, Attachment-Chips.
+- [ ] Rechte Modalspalte: Datei-Liste mit Name, Typ, Größe, Sender, Timestamp und Download-Aktion.
+- [ ] Suche/Filter im Archiv definieren: Textsuche, Senderfilter, Dateitypfilter.
+- [ ] Nur registrierte User mit Call-Teilnahme/Call-Berechtigung dürfen das Archiv sehen.
+- [ ] Gäste ohne Account erhalten keinen dauerhaften Archivzugriff.
+- [ ] Admin/Owner/Moderator Berechtigungen für Archivzugriff und ggf. Retention/Export definieren.
+- [ ] Retention-Policy definieren: Standard-Aufbewahrung, Löschpfad bei Call-Löschung/DSGVO-Anfrage.
+- [ ] Exportoption optional vorbereiten: `.json`/`.md` Transcript plus Attachment-Liste.
+
+Definition of done:
+- Nach Call-Ende kann ein registrierter berechtigter User aus der Call-/Chatübersicht das Archiv öffnen.
+- Modal ist read-only, stabil paginiert und zeigt Chat links sowie Dateien rechts.
+- Downloads nutzen dieselben ACLs wie Live-Chat-Attachments.
+
+Tests:
+- [ ] Backend Contract: Archiv-API nur für berechtigte registrierte User.
+- [ ] Backend Contract: Gast/Unbeteiligter/Admin-RBAC-Grenzen.
+- [ ] Backend Contract: Pagination, Attachment-Gruppierung, Download-ACL.
+- [ ] Playwright: User öffnet Chatübersicht, klickt Chat-Archiv-Icon, Modal zeigt Chat links und Dateien rechts.
+- [ ] Playwright: Read-only Verhalten; keine Eingabe-/Sendeaktion im Archiv möglich.
+- [ ] Playwright: Datei-Download aus Archiv funktioniert für berechtigten User und scheitert für unberechtigten User.
+
+---
+
+### #20 Speaker-/Movement-Awareness und Admin-Layoutstrategien (Implementierung)
+
+Ziel:
+- Das Video-Layout reagiert sinnvoll auf Sprecher und sichtbare Aktivität.
+- Admin/Owner kann im Call Layout-Modus und Aktivitätsstrategie wählen.
+- Große Calls bleiben kontrolliert: maximal definierte Video-Slots, Activity-Score statt chaotischer Client-Entscheidungen.
+
+Activity-Index Vertrag:
+- [ ] Pro Teilnehmer wird ein `activity_score` geführt.
+- [ ] Audio-Quelle: WebRTC Audio-Level/VAD/Speaking-State mit kurzer Glättung.
+- [ ] Bewegung-Quelle: lokale Frame-Differenz/Motion-Metrik für sichtbare Gesten/Bewegung.
+- [ ] Optionaler Gesture-Hinweis: Winken/Handbewegung erhöht Score stärker als normale Hintergrundbewegung.
+- [ ] Privacy-Regel: keine Rohframes für Activity-Erkennung an Backend senden; nur normalisierte Scores/Events.
+- [ ] Score hat Zeitzerfall, z. B. Fenster `2s`, `5s`, `15s`.
+- [ ] Server/SFU aggregiert Score serverautoritativ und verteilt nur kompakte `participant/activity` Updates.
+- [ ] Scores werden rate-limited/coalesced, damit Activity nicht den Realtime-Kanal flutet.
+
+Admin-Layoutmodi:
+- [ ] Linke Sidebar erhält Layout-Icons für:
+  - Grid: bis zu 8 gleich große Videos.
+  - Main + Mini: ein Hauptvideo plus vertikale/Story-Mini-Videos.
+  - Main only: nur Hauptvideo.
+- [ ] Layoutmodus wird als Call-State persistiert und an Teilnehmer synchronisiert.
+- [ ] Pinned User überschreiben automatische Activity-Auswahl.
+- [ ] Host/Admin kann Layoutstrategie je Call setzen.
+
+Aktivitätsstrategien:
+- [ ] `manual_pinned`: Admin/Pinning entscheidet; Activity beeinflusst nur Hinweise/Badges.
+- [ ] `most_active_window`: aktivste Teilnehmer im aktuellen Fenster besetzen Main + Mini-Videos.
+- [ ] `active_speaker_main`: aktivster Teilnehmer der letzten ca. `2s` wechselt ins Main-Video, vorheriger Main rückt in den Mini-Stack.
+- [ ] `round_robin_active`: bei ähnlich aktiven Teilnehmern wird fair rotiert, damit nicht eine Person dauerhaft alles blockiert.
+- [ ] Hysterese/Cooldown definieren, damit Main-Video nicht bei jedem Audio-Spike flackert.
+- [ ] Admin kann automatische Wechsel pausieren.
+- [ ] Teilnehmerliste zeigt optional Activity-Indikator, aber ohne störendes Dauerblinken.
+
+Backend/SFU Aufgaben:
+- [ ] WS/SFU Eventvertrag für `participant/activity`, `layout/mode`, `layout/strategy`, `layout/selection`.
+- [ ] Serverseitige Validierung: nur Admin/Owner/Moderator darf Layoutmodus/Strategie ändern.
+- [ ] Activity-Score darf nicht von beliebigen Clients gefälscht werden; SFU/WebRTC-Metriken bevorzugen.
+- [ ] Reconnect/Join bekommt aktuellen Layout-State im Snapshot.
+- [ ] Lastprofil aus #9 um Activity-Flood ergänzen.
+
+Frontend Aufgaben:
+- [ ] Sidebar-Icons für Layoutmodi ergänzen.
+- [ ] Admin-Strategie-Auswahl sichtbar und verständlich machen.
+- [ ] Video-Renderer kann Grid bis 8, Main+Mini und Main-only sauber darstellen.
+- [ ] Mini-Stack aktualisiert sich ohne Track-Leaks.
+- [ ] Main-Video-Wechsel animieren/debouncen, ohne Schwarzbild-Flicker.
+
+Definition of done:
+- Admin kann Layout und Strategie im Call ändern; alle Teilnehmer sehen konsistent dieselbe Auswahl.
+- Activity-basierte Umschaltung ist stabil, nachvollziehbar und flackert nicht.
+- Bewegung/Sprechen erhöht den Activity-Index, aber Privatsphäre bleibt gewahrt.
+
+Tests:
+- [ ] Backend Contract: Layout-/Strategy-Commands RBAC-geschützt.
+- [ ] Backend Contract: Activity-Events werden normalisiert, rate-limited und snapshot-fähig.
+- [ ] Frontend Unit: Layout-Auswahl priorisiert Pinning vor Activity.
+- [ ] Playwright: Admin schaltet Grid/Main+Mini/Main-only, User sieht Layoutwechsel.
+- [ ] Playwright: simulierte Speaking-/Activity-Events verschieben Main/Mini nach Strategie.
+- [ ] Playwright: Pinning verhindert automatische Verdrängung aus Main.
+- [ ] Playwright: Activity-Pause stoppt automatische Main-Wechsel.
+
+---
+
+### #21 Playwright E2E Matrix für Chat, Dateien und Activity (Implementierung)
+
+Ziel:
+- Alle neuen Chat-/Attachment-/Archiv-/Activity-Funktionen erhalten browsernahe Regressionstests.
+- Tests laufen deterministisch mit zwei Accounts und kontrollierten Fake-Medien/Fake-Dateien.
+
+Checklist:
+- [ ] Test-fixtures für erlaubte Dateien: `txt`, `csv`, `md`, `pdf`, `docx`, `xlsx`, `odt`, `png`, `jpg`, `webp`.
+- [ ] Test-fixtures für verbotene Dateien: `exe`, `sh`, unbekannter Binary-Blob, umbenannte Binary mit erlaubter Extension.
+- [ ] Fake-Media Setup für Audio-Level/Speaking und Motion-Events definieren.
+- [ ] E2E: Paste > Limit -> Auto-Datei -> Senden -> zweiter Teilnehmer sieht Datei.
+- [ ] E2E: Drag-and-drop 10 Bilder -> Senden -> zweiter Teilnehmer sieht 10 Bildattachments.
+- [ ] E2E: 11 Bilder -> sichtbare Ablehnung.
+- [ ] E2E: PDF/Office Upload -> Download funktioniert.
+- [ ] E2E: verbotener Dateityp -> Upload blockiert, keine Chatmessage.
+- [ ] E2E: Chatarchiv nach Call-Ende öffnen, read-only prüfen, Dateien rechts prüfen.
+- [ ] E2E: unberechtigter User kann Archiv/Downloads nicht öffnen.
+- [ ] E2E: Admin Layout-Icons + Strategiewechsel.
+- [ ] E2E: Activity-Score beeinflusst Main/Mini nach Strategie.
+- [ ] E2E: Pinning/Manual-Modus überschreibt Activity.
+- [ ] CI-Gate ergänzen, damit neue Chat-/Activity-Flows nicht nur manuell getestet sind.
+
+Definition of done:
+- Relevante User-Journeys sind als Playwright-Spezifikationen abgedeckt.
+- Tests laufen gegen `docker-compose.v1.yml` stabil und ohne externe Services.
+- Fehlerfälle sind sichtbar geprüft, nicht nur Happy Path.
 
 ## Persistente Research-Notizen (für Folgesessions)
 

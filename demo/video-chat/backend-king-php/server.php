@@ -9,6 +9,7 @@ $dbPath = getenv('VIDEOCHAT_KING_DB_PATH') ?: (__DIR__ . '/.local/video-chat.sql
 $appVersion = getenv('VIDEOCHAT_KING_BACKEND_VERSION') ?: '1.0.6-beta';
 $appEnv = getenv('VIDEOCHAT_KING_ENV') ?: 'development';
 $avatarStorageRoot = getenv('VIDEOCHAT_AVATAR_STORAGE_ROOT') ?: (dirname($dbPath) . '/avatars');
+$chatObjectStoreRoot = getenv('VIDEOCHAT_OBJECT_STORE_ROOT') ?: (dirname($dbPath) . '/object-store');
 $rawServerMode = strtolower(trim((string) (getenv('VIDEOCHAT_KING_SERVER_MODE') ?: 'all')));
 $serverMode = in_array($rawServerMode, ['all', 'http', 'ws'], true) ? $rawServerMode : 'all';
 $workerIndex = (int) (getenv('VIDEOCHAT_KING_WORKER_INDEX') ?: '0');
@@ -42,6 +43,7 @@ require_once __DIR__ . '/domain/calls/call_management.php';
 require_once __DIR__ . '/domain/calls/call_access.php';
 require_once __DIR__ . '/domain/calls/invite_codes.php';
 require_once __DIR__ . '/domain/realtime/realtime_chat.php';
+require_once __DIR__ . '/domain/realtime/chat_attachments.php';
 require_once __DIR__ . '/domain/realtime/realtime_admin_sync.php';
 require_once __DIR__ . '/domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/domain/realtime/realtime_presence.php';
@@ -54,6 +56,7 @@ require_once __DIR__ . '/domain/users/user_settings.php';
 require_once __DIR__ . '/http/router.php';
 
 $avatarMaxBytes = videochat_avatar_max_bytes();
+$chatObjectStoreMaxBytes = videochat_chat_object_store_max_bytes();
 
 $databaseRuntime = null;
 $maxBootstrapAttempts = 40;
@@ -79,6 +82,11 @@ for ($attempt = 1; $attempt <= $maxBootstrapAttempts; $attempt += 1) {
 
 if (!is_array($databaseRuntime)) {
     $log('database bootstrap failed: no runtime snapshot returned.');
+    exit(1);
+}
+
+if (!videochat_chat_object_store_init($chatObjectStoreRoot, $chatObjectStoreMaxBytes)) {
+    $log('chat object-store init failed at ' . $chatObjectStoreRoot);
     exit(1);
 }
 
@@ -223,7 +231,8 @@ $runtimeEnvelope = static function () use (
     $databaseRuntime,
     $wsPath,
     $runtimeHealthSummary,
-    $avatarMaxBytes
+    $avatarMaxBytes,
+    $chatObjectStoreMaxBytes
 ): array {
     return [
         'service' => 'video-chat-backend-king-php',
@@ -264,6 +273,18 @@ $runtimeEnvelope = static function () use (
             'upload_limits' => [
                 'avatar_max_bytes' => $avatarMaxBytes,
                 'avatar_allowed_mime_types' => array_keys(videochat_avatar_allowed_mime_to_extension()),
+                'chat_inline_max_chars' => videochat_chat_attachment_inline_max_chars(),
+                'chat_inline_max_bytes' => videochat_chat_attachment_inline_max_bytes(),
+                'chat_attachment_max_count' => videochat_chat_attachment_max_count(),
+                'chat_attachment_max_images' => videochat_chat_attachment_max_images(),
+                'chat_attachment_max_image_bytes' => videochat_chat_attachment_max_image_bytes(),
+                'chat_attachment_max_document_bytes' => videochat_chat_attachment_max_document_bytes(),
+                'chat_attachment_max_message_bytes' => videochat_chat_attachment_max_message_bytes(),
+                'chat_attachment_max_upload_body_bytes' => videochat_chat_attachment_max_upload_body_bytes(),
+                'chat_attachment_call_soft_quota_bytes' => videochat_chat_attachment_call_soft_quota_bytes(),
+                'chat_attachment_call_hard_quota_bytes' => videochat_chat_attachment_call_hard_quota_bytes(),
+                'chat_object_store_max_bytes' => $chatObjectStoreMaxBytes,
+                'chat_attachment_allowed_extensions' => array_keys(videochat_chat_attachment_extension_mime_map()),
             ],
         ],
         'calls' => [

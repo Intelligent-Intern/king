@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 const testPort = Number.parseInt(process.env.PLAYWRIGHT_FRONTEND_PORT || '4174', 10);
 const backendOrigin = process.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || 'http://127.0.0.1:18080';
+const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || '';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -18,6 +19,9 @@ export default defineConfig({
     headless: true,
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
+    launchOptions: chromiumExecutablePath !== '' ? {
+      executablePath: chromiumExecutablePath,
+    } : undefined,
   },
   webServer: {
     command: `npm run dev -- --host 127.0.0.1 --port ${testPort} --strictPort`,

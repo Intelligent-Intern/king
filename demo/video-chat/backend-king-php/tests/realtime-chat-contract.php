@@ -188,7 +188,63 @@ try {
         'message' => str_repeat('a', videochat_chat_max_chars() + 1),
     ], JSON_UNESCAPED_SLASHES));
     videochat_realtime_chat_assert(!(bool) ($decodedTooLong['ok'] ?? true), 'too long chat payload should fail');
-    videochat_realtime_chat_assert((string) ($decodedTooLong['error'] ?? '') === 'message_too_long', 'too long chat error mismatch');
+    videochat_realtime_chat_assert((string) ($decodedTooLong['error'] ?? '') === 'chat_inline_too_large', 'too long chat error mismatch');
+
+    $decodedAttachmentOnly = videochat_chat_decode_client_frame(json_encode([
+        'type' => 'chat/send',
+        'message' => '',
+        'attachments' => [
+            ['id' => 'att_contract_001'],
+        ],
+        'client_message_id' => 'cmsg-attachment-001',
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_chat_assert((bool) ($decodedAttachmentOnly['ok'] ?? false), 'attachment-only chat/send should decode');
+    videochat_realtime_chat_assert((string) (($decodedAttachmentOnly['attachments'] ?? [])[0] ?? '') === 'att_contract_001', 'attachment ref should normalize');
+
+    $attachmentPublish = videochat_chat_publish(
+        $state,
+        $userConnection,
+        $decodedAttachmentOnly,
+        $sender,
+        1_780_100_125_000,
+        null,
+        static function (array $attachmentIds, string $roomId, int $senderUserId, string $messageId, array $connection): array {
+            return [
+                'ok' => true,
+                'error' => '',
+                'attachments' => [[
+                    'id' => $attachmentIds[0] ?? '',
+                    'name' => 'notes.txt',
+                    'content_type' => 'text/plain',
+                    'size_bytes' => 128,
+                    'kind' => 'text',
+                    'extension' => 'txt',
+                    'download_url' => '/api/calls/call-chat/chat/attachments/' . ($attachmentIds[0] ?? ''),
+                    'message_id_seen' => $messageId,
+                    'room_id_seen' => $roomId,
+                    'sender_user_id_seen' => $senderUserId,
+                ]],
+            ];
+        }
+    );
+    videochat_realtime_chat_assert((bool) ($attachmentPublish['ok'] ?? false), 'attachment chat publish should succeed');
+    $attachmentAdminChat = videochat_realtime_chat_last_frame($frames, 'socket-admin');
+    $attachmentMessage = is_array($attachmentAdminChat['message'] ?? null) ? $attachmentAdminChat['message'] : [];
+    $attachmentRows = is_array($attachmentMessage['attachments'] ?? null) ? $attachmentMessage['attachments'] : [];
+    videochat_realtime_chat_assert((string) ($attachmentMessage['text'] ?? 'missing') === '', 'attachment-only message text should stay empty');
+    videochat_realtime_chat_assert(count($attachmentRows) === 1, 'attachment message should fanout one attachment metadata row');
+    videochat_realtime_chat_assert((string) (($attachmentRows[0] ?? [])['id'] ?? '') === 'att_contract_001', 'attachment metadata id mismatch');
+    videochat_realtime_chat_assert((string) (($attachmentRows[0] ?? [])['download_url'] ?? '') !== '', 'attachment metadata needs download url');
+
+    $attachmentWithoutResolver = videochat_chat_publish(
+        $state,
+        $userConnection,
+        $decodedAttachmentOnly,
+        $sender,
+        1_780_100_125_500
+    );
+    videochat_realtime_chat_assert(!(bool) ($attachmentWithoutResolver['ok'] ?? true), 'attachment publish without resolver should fail closed');
+    videochat_realtime_chat_assert((string) ($attachmentWithoutResolver['error'] ?? '') === 'attachment_resolver_missing', 'missing resolver error mismatch');
 
     $decodedInvalidClientId = videochat_chat_decode_client_frame(json_encode([
         'type' => 'chat/send',
@@ -208,6 +264,78 @@ try {
     $decodedInvalidJson = videochat_chat_decode_client_frame('{invalid json');
     videochat_realtime_chat_assert(!(bool) ($decodedInvalidJson['ok'] ?? true), 'invalid JSON should fail');
     videochat_realtime_chat_assert((string) ($decodedInvalidJson['error'] ?? '') === 'invalid_json', 'invalid JSON error mismatch');
+
+    $brokerPdo = new PDO('sqlite::memory:');
+    $brokerPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    videochat_chat_broker_bootstrap($brokerPdo);
+
+    $brokerState = videochat_presence_state_init();
+    $brokerFrames = [];
+    $brokerSender = static function (mixed $socket, array $payload) use (&$brokerFrames): bool {
+        $key = is_scalar($socket) ? (string) $socket : 'unknown';
+        if (!isset($brokerFrames[$key]) || !is_array($brokerFrames[$key])) {
+            $brokerFrames[$key] = [];
+        }
+        $brokerFrames[$key][] = $payload;
+        return true;
+    };
+    $brokerAdminConnection = videochat_presence_connection_descriptor(
+        [
+            'id' => 100,
+            'display_name' => 'Admin User',
+            'role' => 'admin',
+        ],
+        'sess-broker-admin',
+        'conn-broker-admin',
+        'socket-broker-admin',
+        'broker-room',
+        1_780_100_200
+    );
+    $brokerAdminJoin = videochat_presence_join_room($brokerState, $brokerAdminConnection, 'broker-room', $brokerSender);
+    $brokerAdminConnection = (array) ($brokerAdminJoin['connection'] ?? $brokerAdminConnection);
+    $brokerUserConnection = videochat_presence_connection_descriptor(
+        [
+            'id' => 200,
+            'display_name' => 'Call User',
+            'role' => 'user',
+        ],
+        'sess-broker-user',
+        'conn-broker-user',
+        'socket-broker-user',
+        'broker-room',
+        1_780_100_220
+    );
+    $brokerUserJoin = videochat_presence_join_room($brokerState, $brokerUserConnection, 'broker-room', $brokerSender);
+    $brokerUserConnection = (array) ($brokerUserJoin['connection'] ?? $brokerUserConnection);
+
+    $brokerCommand = videochat_chat_decode_client_frame(json_encode([
+        'type' => 'chat/send',
+        'message' => 'Broker fanout message',
+        'client_message_id' => 'broker-chat-001',
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_chat_assert((bool) ($brokerCommand['ok'] ?? false), 'broker chat command should decode');
+    $brokerPublish = videochat_chat_publish(
+        $brokerState,
+        $brokerUserConnection,
+        $brokerCommand,
+        null,
+        1_780_100_222_000,
+        static function (string $roomId, array $event) use ($brokerPdo): bool {
+            return videochat_chat_broker_insert_event($brokerPdo, $roomId, $event);
+        }
+    );
+    videochat_realtime_chat_assert((bool) ($brokerPublish['ok'] ?? false), 'broker chat publish should succeed');
+    videochat_realtime_chat_assert((int) ($brokerPublish['sent_count'] ?? 0) === 1, 'broker chat publish should count persisted fanout event');
+    videochat_realtime_chat_assert(videochat_chat_broker_latest_event_id($brokerPdo, 'broker-room') > 0, 'broker chat latest event id should advance');
+
+    $brokerRows = videochat_chat_broker_fetch_events_since($brokerPdo, 'broker-room', 0);
+    videochat_realtime_chat_assert(count($brokerRows) === 1, 'broker chat fetch should return one persisted event');
+    $brokerEvent = json_decode((string) ($brokerRows[0]['event_json'] ?? ''), true);
+    videochat_realtime_chat_assert(is_array($brokerEvent), 'broker chat event json should decode');
+    videochat_realtime_chat_assert((string) ($brokerEvent['type'] ?? '') === 'chat/message', 'broker chat event type mismatch');
+    $brokerMessage = is_array($brokerEvent['message'] ?? null) ? $brokerEvent['message'] : [];
+    videochat_realtime_chat_assert((string) ($brokerMessage['text'] ?? '') === 'Broker fanout message', 'broker chat message text mismatch');
+    videochat_realtime_chat_assert((string) ($brokerMessage['client_message_id'] ?? '') === 'broker-chat-001', 'broker chat client_message_id mismatch');
 
     videochat_presence_remove_connection($state, (string) ($adminConnection['connection_id'] ?? ''), $sender);
     videochat_presence_remove_connection($state, (string) ($userConnection['connection_id'] ?? ''), $sender);

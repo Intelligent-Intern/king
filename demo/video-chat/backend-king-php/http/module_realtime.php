@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../domain/realtime/chat_attachments.php';
+
 function videochat_realtime_normalize_ws_path(string $wsPath): string
 {
     $normalized = trim($wsPath);
@@ -1254,6 +1256,60 @@ function videochat_realtime_validate_session_liveness(
     ];
 }
 
+function videochat_realtime_method_from_request(array $request): string
+{
+    $method = strtoupper(trim((string) ($request['method'] ?? 'GET')));
+    return $method === '' ? 'GET' : $method;
+}
+
+/**
+ * @return array{0: array<string, mixed>|null, 1: string|null}
+ */
+function videochat_realtime_decode_json_request_body(array $request): array
+{
+    $body = $request['body'] ?? '';
+    if (!is_string($body) || trim($body) === '') {
+        return [null, 'empty_body'];
+    }
+
+    $decoded = json_decode($body, true);
+    if (!is_array($decoded)) {
+        return [null, 'invalid_json'];
+    }
+
+    return [$decoded, null];
+}
+
+function videochat_realtime_content_disposition_filename(string $filename): string
+{
+    $safe = videochat_chat_attachment_safe_filename($filename, 'txt');
+    $ascii = preg_replace('/[^A-Za-z0-9._ -]+/', '_', $safe) ?? 'attachment.txt';
+    $ascii = trim($ascii, " .\t\n\r\0\x0B");
+    if ($ascii === '') {
+        $ascii = 'attachment.txt';
+    }
+
+    return 'attachment; filename="' . addcslashes($ascii, "\\\"") . '"; filename*=UTF-8\'\'' . rawurlencode($safe);
+}
+
+function videochat_realtime_chat_attachment_error_status(string $code, string $reason): int
+{
+    if ($reason === 'forbidden') {
+        return 403;
+    }
+    if ($reason === 'quota_exceeded' || $code === 'attachment_too_large') {
+        return 413;
+    }
+    if ($reason === 'validation_failed') {
+        return 422;
+    }
+    if ($reason === 'not_found') {
+        return 404;
+    }
+
+    return 500;
+}
+
 function videochat_handle_realtime_routes(
     string $path,
     array $request,
@@ -1270,6 +1326,177 @@ function videochat_handle_realtime_routes(
     callable $errorResponse,
     callable $openDatabase
 ): ?array {
+    if (preg_match('#^/api/calls/([A-Za-z0-9._-]{1,200})/chat/attachments$#', $path, $uploadMatch) === 1) {
+        $method = videochat_realtime_method_from_request($request);
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/calls/{call_id}/chat/attachments.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        $restAuth = $authenticateRequest($request, 'rest');
+        if (!(bool) ($restAuth['ok'] ?? false)) {
+            return $authFailureResponse('rest', (string) ($restAuth['reason'] ?? 'invalid_session'));
+        }
+
+        $rawBody = $request['body'] ?? '';
+        if (is_string($rawBody) && strlen($rawBody) > videochat_chat_attachment_max_upload_body_bytes()) {
+            return $errorResponse(413, 'attachment_too_large', 'Chat attachment upload request body exceeds the allowed size.', [
+                'max_request_bytes' => videochat_chat_attachment_max_upload_body_bytes(),
+            ]);
+        }
+
+        [$payload, $decodeError] = videochat_realtime_decode_json_request_body($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'chat_attachment_invalid_request_body', 'Chat attachment upload payload must be a JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $uploadResult = videochat_chat_attachment_upload(
+                $pdo,
+                (string) ($uploadMatch[1] ?? ''),
+                (int) (($restAuth['user']['id'] ?? 0)),
+                (string) (($restAuth['user']['role'] ?? 'user')),
+                $payload
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'chat_attachment_upload_failed', 'Could not upload chat attachment.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($uploadResult['ok'] ?? false)) {
+            $code = (string) ($uploadResult['code'] ?? 'chat_attachment_upload_failed');
+            $reason = (string) ($uploadResult['reason'] ?? 'internal_error');
+            return $errorResponse(
+                videochat_realtime_chat_attachment_error_status($code, $reason),
+                $code,
+                (string) ($uploadResult['message'] ?? 'Could not upload chat attachment.'),
+                is_array($uploadResult['details'] ?? null) ? $uploadResult['details'] : []
+            );
+        }
+
+        return $jsonResponse(201, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'uploaded',
+                'attachment' => $uploadResult['attachment'] ?? null,
+                'limits' => [
+                    'inline_max_chars' => videochat_chat_attachment_inline_max_chars(),
+                    'inline_max_bytes' => videochat_chat_attachment_inline_max_bytes(),
+                    'attachment_max_count' => videochat_chat_attachment_max_count(),
+                    'attachment_max_images' => videochat_chat_attachment_max_images(),
+                    'attachment_max_image_bytes' => videochat_chat_attachment_max_image_bytes(),
+                    'attachment_max_document_bytes' => videochat_chat_attachment_max_document_bytes(),
+                    'attachment_max_message_bytes' => videochat_chat_attachment_max_message_bytes(),
+                    'attachment_max_upload_body_bytes' => videochat_chat_attachment_max_upload_body_bytes(),
+                    'attachment_call_soft_quota_bytes' => videochat_chat_attachment_call_soft_quota_bytes(),
+                    'attachment_call_hard_quota_bytes' => videochat_chat_attachment_call_hard_quota_bytes(),
+                ],
+                'quota' => is_array($uploadResult['details']['quota'] ?? null) ? $uploadResult['details']['quota'] : null,
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if (preg_match('#^/api/calls/([A-Za-z0-9._-]{1,200})/chat/attachments/([A-Za-z0-9._-]{1,80})$#', $path, $downloadMatch) === 1) {
+        $method = videochat_realtime_method_from_request($request);
+        $restAuth = $authenticateRequest($request, 'rest');
+        if (!(bool) ($restAuth['ok'] ?? false)) {
+            return $authFailureResponse('rest', (string) ($restAuth['reason'] ?? 'invalid_session'));
+        }
+
+        if ($method === 'DELETE') {
+            try {
+                $pdo = $openDatabase();
+                $deleteResult = videochat_chat_attachment_cancel_draft(
+                    $pdo,
+                    (string) ($downloadMatch[1] ?? ''),
+                    (string) ($downloadMatch[2] ?? ''),
+                    (int) (($restAuth['user']['id'] ?? 0)),
+                    (string) (($restAuth['user']['role'] ?? 'user'))
+                );
+            } catch (Throwable) {
+                return $errorResponse(500, 'chat_attachment_delete_failed', 'Could not delete chat attachment draft.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            if (!(bool) ($deleteResult['ok'] ?? false)) {
+                $code = (string) ($deleteResult['code'] ?? 'chat_attachment_delete_failed');
+                $reason = (string) ($deleteResult['reason'] ?? 'internal_error');
+                return $errorResponse(
+                    videochat_realtime_chat_attachment_error_status($code, $reason),
+                    $code,
+                    (string) ($deleteResult['message'] ?? 'Could not delete chat attachment draft.'),
+                    is_array($deleteResult['details'] ?? null) ? $deleteResult['details'] : []
+                );
+            }
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'result' => [
+                    'state' => 'deleted',
+                    'attachment_id' => (string) ($downloadMatch[2] ?? ''),
+                ],
+                'time' => gmdate('c'),
+            ]);
+        }
+
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET or DELETE for /api/calls/{call_id}/chat/attachments/{attachment_id}.', [
+                'allowed_methods' => ['GET', 'DELETE'],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $attachment = videochat_chat_attachment_fetch_for_download(
+                $pdo,
+                (string) ($downloadMatch[1] ?? ''),
+                (string) ($downloadMatch[2] ?? ''),
+                (int) (($restAuth['user']['id'] ?? 0)),
+                (string) (($restAuth['user']['role'] ?? 'user'))
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'chat_attachment_download_failed', 'Could not load chat attachment metadata.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!is_array($attachment)) {
+            return $errorResponse(404, 'chat_attachment_not_found', 'Chat attachment does not exist or is not available to this user.', [
+                'attachment_id' => (string) ($downloadMatch[2] ?? ''),
+            ]);
+        }
+
+        $binary = videochat_chat_attachment_store_get((string) ($attachment['object_key'] ?? ''));
+        if (!is_string($binary)) {
+            return $errorResponse(500, 'chat_attachment_download_failed', 'Could not read chat attachment from the King Object Store.', [
+                'attachment_id' => (string) ($attachment['id'] ?? ''),
+            ]);
+        }
+
+        return [
+            'status' => 200,
+            'headers' => [
+                'content-type' => (string) ($attachment['content_type'] ?? 'application/octet-stream'),
+                'content-length' => (string) strlen($binary),
+                'content-disposition' => videochat_realtime_content_disposition_filename((string) ($attachment['original_name'] ?? 'attachment')),
+                'x-content-type-options' => 'nosniff',
+                'cache-control' => 'private, no-store',
+                'access-control-allow-methods' => 'GET,POST,OPTIONS',
+                'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id',
+                'access-control-max-age' => '600',
+                'connection' => 'close',
+            ],
+            'body' => $binary,
+        ];
+    }
+
     if ($path === '/sfu') {
         return videochat_handle_sfu_routes(
             $path,
@@ -1518,6 +1745,33 @@ function videochat_handle_realtime_routes(
         $lastRoomSnapshotSignature = (string) ($initialRoomSnapshot['signature'] ?? '');
         $nextLobbySnapshotPollMs = videochat_lobby_now_ms() + 1000;
         $nextRoomSnapshotPollMs = videochat_lobby_now_ms() + 1000;
+        $reactionBrokerDatabase = null;
+        $chatBrokerDatabase = null;
+        $lastReactionBrokerRoomId = videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? 'lobby'));
+        $lastReactionBrokerEventId = 0;
+        $nextReactionBrokerPollMs = videochat_reaction_broker_now_ms() + 100;
+        $nextReactionBrokerCleanupMs = videochat_reaction_broker_now_ms() + 5000;
+        $lastChatBrokerRoomId = videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? 'lobby'));
+        $lastChatBrokerEventId = 0;
+        $nextChatBrokerPollMs = videochat_chat_broker_now_ms() + 100;
+        $nextChatBrokerCleanupMs = videochat_chat_broker_now_ms() + 5000;
+        try {
+            $reactionBrokerDatabase = $openDatabase();
+            videochat_reaction_broker_bootstrap($reactionBrokerDatabase);
+            videochat_chat_broker_bootstrap($reactionBrokerDatabase);
+            $chatBrokerDatabase = $reactionBrokerDatabase;
+            $lastReactionBrokerEventId = videochat_reaction_broker_latest_event_id(
+                $reactionBrokerDatabase,
+                $lastReactionBrokerRoomId
+            );
+            $lastChatBrokerEventId = videochat_chat_broker_latest_event_id(
+                $chatBrokerDatabase,
+                $lastChatBrokerRoomId
+            );
+        } catch (Throwable) {
+            $reactionBrokerDatabase = null;
+            $chatBrokerDatabase = null;
+        }
 
         try {
             while (true) {
@@ -1583,6 +1837,61 @@ function videochat_handle_realtime_routes(
                     );
                     $nextRoomSnapshotPollMs = $pollNowMs + 1000;
                 }
+                if ($reactionBrokerDatabase instanceof PDO && $pollNowMs >= $nextReactionBrokerPollMs) {
+                    try {
+                        $currentReactionRoomId = videochat_presence_normalize_room_id(
+                            (string) ($presenceConnection['room_id'] ?? 'lobby')
+                        );
+                        if ($currentReactionRoomId !== $lastReactionBrokerRoomId) {
+                            $lastReactionBrokerRoomId = $currentReactionRoomId;
+                            $lastReactionBrokerEventId = videochat_reaction_broker_latest_event_id(
+                                $reactionBrokerDatabase,
+                                $lastReactionBrokerRoomId
+                            );
+                        }
+                        videochat_reaction_broker_poll(
+                            $reactionBrokerDatabase,
+                            $websocket,
+                            $lastReactionBrokerRoomId,
+                            (int) ($presenceConnection['user_id'] ?? 0),
+                            $lastReactionBrokerEventId
+                        );
+                        if ($pollNowMs >= $nextReactionBrokerCleanupMs) {
+                            videochat_reaction_broker_cleanup($reactionBrokerDatabase);
+                            $nextReactionBrokerCleanupMs = $pollNowMs + 5000;
+                        }
+                    } catch (Throwable) {
+                        // Keep the websocket alive; direct local reaction broadcast remains the fallback.
+                    }
+                    $nextReactionBrokerPollMs = $pollNowMs + 100;
+                }
+                if ($chatBrokerDatabase instanceof PDO && $pollNowMs >= $nextChatBrokerPollMs) {
+                    try {
+                        $currentChatRoomId = videochat_presence_normalize_room_id(
+                            (string) ($presenceConnection['room_id'] ?? 'lobby')
+                        );
+                        if ($currentChatRoomId !== $lastChatBrokerRoomId) {
+                            $lastChatBrokerRoomId = $currentChatRoomId;
+                            $lastChatBrokerEventId = videochat_chat_broker_latest_event_id(
+                                $chatBrokerDatabase,
+                                $lastChatBrokerRoomId
+                            );
+                        }
+                        videochat_chat_broker_poll(
+                            $chatBrokerDatabase,
+                            $websocket,
+                            $lastChatBrokerRoomId,
+                            $lastChatBrokerEventId
+                        );
+                        if ($pollNowMs >= $nextChatBrokerCleanupMs) {
+                            videochat_chat_broker_cleanup($chatBrokerDatabase);
+                            $nextChatBrokerCleanupMs = $pollNowMs + 5000;
+                        }
+                    } catch (Throwable) {
+                        // Keep the websocket alive; direct local chat broadcast remains the fallback.
+                    }
+                    $nextChatBrokerPollMs = $pollNowMs + 100;
+                }
 
                 videochat_typing_sweep_expired($typingState, $presenceState);
                 $frame = king_client_websocket_receive($websocket, 250);
@@ -1617,10 +1926,38 @@ function videochat_handle_realtime_routes(
                 if (!(bool) ($presenceCommand['ok'] ?? false) && $commandError === 'unsupported_type') {
                     $chatCommand = videochat_chat_decode_client_frame($frame);
                     if ((bool) ($chatCommand['ok'] ?? false)) {
+                        $chatBroker = $chatBrokerDatabase instanceof PDO
+                            ? static function (string $roomId, array $event) use ($chatBrokerDatabase): bool {
+                                return videochat_chat_broker_insert_event($chatBrokerDatabase, $roomId, $event);
+                            }
+                            : null;
                         $chatPublish = videochat_chat_publish(
                             $presenceState,
                             $presenceConnection,
-                            $chatCommand
+                            $chatCommand,
+                            null,
+                            null,
+                            $chatBroker,
+                            static function (array $attachmentIds, string $roomId, int $senderUserId, string $messageId, array $resolverConnection) use ($openDatabase): array {
+                                $callId = videochat_realtime_connection_call_id($resolverConnection);
+                                if ($callId === '') {
+                                    return [
+                                        'ok' => false,
+                                        'error' => 'attachment_call_missing',
+                                        'attachments' => [],
+                                    ];
+                                }
+
+                                $pdo = $openDatabase();
+                                return videochat_chat_attachment_resolve_for_message(
+                                    $pdo,
+                                    $attachmentIds,
+                                    $callId,
+                                    $roomId,
+                                    $senderUserId,
+                                    $messageId
+                                );
+                            }
                         );
                         if (!(bool) ($chatPublish['ok'] ?? false)) {
                             videochat_presence_send_frame(
@@ -1650,6 +1987,23 @@ function videochat_handle_realtime_routes(
                                 $message,
                                 (int) ($chatPublish['sent_count'] ?? 0)
                             )
+                        );
+                        continue;
+                    }
+
+                    if ((string) ($chatCommand['error'] ?? '') !== 'unsupported_type') {
+                        videochat_presence_send_frame(
+                            $websocket,
+                            [
+                                'type' => 'system/error',
+                                'code' => (string) ($chatCommand['error'] ?? 'chat_invalid_payload'),
+                                'message' => 'Chat message payload is invalid.',
+                                'details' => [
+                                    'type' => 'chat/send',
+                                    'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
+                                ],
+                                'time' => gmdate('c'),
+                            ]
                         );
                         continue;
                     }
@@ -1730,11 +2084,19 @@ function videochat_handle_realtime_routes(
                             if ((string) ($signalingCommand['error'] ?? '') === 'unsupported_type') {
                                 $reactionCommand = videochat_reaction_decode_client_frame($frame);
                                 if ((bool) ($reactionCommand['ok'] ?? false)) {
+                                    $reactionBroker = $reactionBrokerDatabase instanceof PDO
+                                        ? static function (string $roomId, array $event) use ($reactionBrokerDatabase): bool {
+                                            return videochat_reaction_broker_insert_event($reactionBrokerDatabase, $roomId, $event);
+                                        }
+                                        : null;
                                     $reactionPublish = videochat_reaction_publish(
                                         $reactionState,
                                         $presenceState,
                                         $presenceConnection,
-                                        $reactionCommand
+                                        $reactionCommand,
+                                        null,
+                                        null,
+                                        $reactionBroker
                                     );
                                     if (!(bool) ($reactionPublish['ok'] ?? false)) {
                                         $details = [

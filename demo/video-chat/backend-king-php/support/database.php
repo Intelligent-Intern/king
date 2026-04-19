@@ -956,6 +956,32 @@ SQL,
                 "CREATE INDEX IF NOT EXISTS idx_call_participants_user_id ON call_participants(user_id)",
             ],
         ],
+        13 => [
+            'name' => '0013_call_chat_attachments',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS call_chat_attachments (
+    id TEXT PRIMARY KEY,
+    call_id TEXT NOT NULL REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    uploaded_by_user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    original_name TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('image', 'text', 'pdf', 'document')),
+    extension TEXT NOT NULL,
+    object_key TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'attached', 'deleted')),
+    attached_message_id TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    attached_at TEXT
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_call_chat_attachments_call_id ON call_chat_attachments(call_id, status)",
+                "CREATE INDEX IF NOT EXISTS idx_call_chat_attachments_room_id ON call_chat_attachments(room_id, status)",
+                "CREATE INDEX IF NOT EXISTS idx_call_chat_attachments_uploaded_by ON call_chat_attachments(uploaded_by_user_id, status)",
+            ],
+        ],
     ];
 }
 

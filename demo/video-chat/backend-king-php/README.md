@@ -5,6 +5,7 @@ This directory is the active King-based backend track for video-chat.
 ## What this scaffold provides now
 
 - starts with the King extension explicitly loaded (from `KING_EXTENSION_PATH` or `php.ini`)
+- enables `king.security_allow_config_override=1` for this demo backend process so the runtime can initialize its local Object Store root explicitly
 - boots an on-wire King HTTP/1 listener loop via `king_http1_server_listen_once()`
 - exposes HTTP bootstrap and health endpoints
 - exposes a WebSocket upgrade endpoint scaffold
@@ -382,7 +383,7 @@ Presence channel contract on `WS /ws`:
   - `{"type":"room/join","room_id":"<active-room-id>"}`
   - `{"type":"room/leave"}`
   - `{"type":"room/snapshot/request"}`
-  - `{"type":"chat/send","message":"...","client_message_id":"..."}` (optional `client_message_id`)
+  - `{"type":"chat/send","message":"...","attachments":[{"id":"att_..."}],"client_message_id":"..."}` (optional `attachments`, optional `client_message_id`)
   - `{"type":"typing/start"}`
   - `{"type":"typing/stop"}`
   - `{"type":"reaction/send","emoji":"👍","client_reaction_id":"..."}` (optional `client_reaction_id`)
@@ -408,7 +409,13 @@ Presence channel contract on `WS /ws`:
   - initial room snapshot is sent immediately after authenticated websocket attach
   - room changes stream join/leave deltas to room peers
   - chat fanout is room-scoped and server-authoritative (`chat/message` with stable server timestamps)
-  - chat payload validation is bounded (`VIDEOCHAT_WS_CHAT_MAX_CHARS`, `VIDEOCHAT_WS_CHAT_MAX_BYTES`)
+  - chat payload validation is bounded (`VIDEOCHAT_WS_CHAT_MAX_CHARS`, `VIDEOCHAT_WS_CHAT_MAX_BYTES`, defaults: 2,000 Unicode chars and 8 KiB UTF-8)
+  - chat attachments are uploaded over `POST /api/calls/{call_id}/chat/attachments` into the King Object Store; websocket `chat/send` carries only attachment draft refs
+  - attachment metadata fans out on `chat/message.message.attachments[]` as `id`, `name`, `content_type`, `size_bytes`, `kind`, `extension`, and `download_url`
+  - attachment downloads use `GET /api/calls/{call_id}/chat/attachments/{attachment_id}` and are authorized against call ownership/participants/admin role; unsent drafts can be cancelled with `DELETE` on the same URL by the uploader
+  - King Object Store object IDs stay flat and slash-free while embedding call/room scope hashes; SQLite stores only metadata, refs, status, and object IDs
+  - accepted attachment types are images (`jpg`, `jpeg`, `png`, `webp`, `gif`), text (`txt`, `csv`, `md`), PDF, Office, and OpenDocument formats; executable/binary/archive types fail closed with structured error codes
+  - attachment limits are bounded server-side: 10 attachments/message, 10 images/message, 8 MiB/image, 25 MiB document/PDF/Office, 100 MiB/message, call-level soft/hard quotas via `VIDEOCHAT_CHAT_ATTACHMENT_CALL_SOFT_QUOTA_BYTES` and `VIDEOCHAT_CHAT_ATTACHMENT_CALL_HARD_QUOTA_BYTES`
   - accepted chat publishes emit `chat/ack` to the sender with deterministic `ack_id`, stable `message_id`, and `sent_count`
   - typing indicators are room-scoped, debounced, expire automatically, never self-echo, and fail closed when sender room membership is invalid
   - reaction events are room-scoped, enforce emoji/client-id payload boundaries, accept both single and client-batched sends, and switch to server-side `reaction/batch` fanout once per-user reaction volume exceeds the configured flood threshold (`VIDEOCHAT_WS_REACTION_FLOOD_WINDOW_MS`, `VIDEOCHAT_WS_REACTION_FLOOD_THRESHOLD_PER_WINDOW`, `VIDEOCHAT_WS_REACTION_FLOOD_BATCH_SIZE`)
@@ -603,10 +610,16 @@ Run the realtime presence contract test (room snapshots + join/leave deltas + re
 demo/video-chat/backend-king-php/tests/realtime-presence-contract.sh
 ```
 
-Run the realtime chat contract test (room-scoped fanout + payload bounds + stable dedupe/ack ids):
+Run the realtime chat contract test (room-scoped fanout + payload bounds + stable dedupe/ack ids + attachment metadata refs):
 
 ```bash
 demo/video-chat/backend-king-php/tests/realtime-chat-contract.sh
+```
+
+Run the chat attachment contract test (King Object Store metadata path, allowlist/blocklist/magic-byte validation, quotas, download ACL):
+
+```bash
+demo/video-chat/backend-king-php/tests/chat-attachment-contract.sh
 ```
 
 Run the realtime typing contract test (debounce + expiry + no-self-echo semantics + sender room-membership guard):
