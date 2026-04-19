@@ -322,6 +322,7 @@ bash demo/video-chat/scripts/smoke.sh
 - shared REST/WS error envelope contract (`error-envelope-contract`) for typed REST errors and realtime `system/error` frames
 - versioned REST/WS DTO schema contract (`contract-schema-versioning-contract`) for the canonical `contracts/v1` catalog
 - UI-parity acceptance matrix contract (`ui-parity-acceptance-matrix-contract`) for executable frontend/backend coverage plus release-blocking gaps
+- protected API forbidden/conflict semantics contract (`protected-api-semantics-contract`) for auth/RBAC, validation, forbidden, and conflict envelopes
 - API/WS catalog drift gate against the canonical versioned contract fixture (`contract-catalog-parity-contract`)
 - login route handshake (`/api/auth/login`), authenticated session read, and logout revoke path
 - dedicated logout revoke contract (`session-logout-contract`) with persisted revocation metadata assertions
@@ -347,6 +348,9 @@ Additional automated coverage:
   - `demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json`
   - `demo/video-chat/backend-king-php/tests/ui-parity-acceptance-matrix-contract.sh`
   - `cd demo/video-chat/frontend-vue && npm run test:e2e:ui-parity`
+- protected API semantics matrix:
+  - `demo/video-chat/contracts/v1/protected-api-semantics.matrix.json`
+  - `demo/video-chat/backend-king-php/tests/protected-api-semantics-contract.sh`
 
 Release-bound runtime honesty:
 

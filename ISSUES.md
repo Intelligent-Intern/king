@@ -1288,6 +1288,29 @@ Abschluss:
 - `demo/video-chat/frontend-vue/package.json` enthaelt `test:e2e:ui-parity`.
 - `demo/video-chat/scripts/smoke.sh` ruft den Matrix-Contract auf.
 
+### #30 Protected-API Forbidden-/Conflict-Semantikmatrix (Implementierung)
+
+Ziel:
+- Z2 schliessen: Geschuetzte Video-APIs muessen eine explizite, versionierte Semantik fuer Auth/RBAC, Validation, Forbidden und fachliche Conflicts haben, statt dass 403/409 nur verstreut in Endpoint-Code stehen.
+
+Checklist:
+- [x] `contracts/v1/protected-api-semantics.matrix.json` als kanonische Semantikmatrix ergaenzt.
+- [x] Globale REST/WS-RBAC-Grenze (`auth_failed`, `rbac_forbidden`, `websocket_forbidden`) ist als eigene geschuetzte API-Familie erfasst.
+- [x] Admin-User-Create/Update/Delete/Status, Calls-List/Create/View/Update/Delete/Cancel, Participant-Roles, Call-Access, Invite-Codes und Chat-Archive/Attachments sind abgedeckt.
+- [x] Matrix unterscheidet fachliche 409-Conflicts von 400/422-Validation und dokumentiert `not_applicable_*`, wo ein Conflict fachlich nicht passt.
+- [x] Validator prueft Version, Policies, relative Pfade, vorhandene Source-/Contract-Dateien, Error-Code-Evidence und Mindestabdeckung fuer Forbidden/Conflict/Validation.
+- [x] Smoke-Gate fuehrt den Contract in der Backend-Contract-Strecke aus.
+- [x] Unrelated dirty Frontend-/Realtime-Arbeitsdateien bleiben unangetastet.
+
+Definition of done:
+- Jede geschuetzte Video-API-Familie hat eine maschinenlesbare Zuordnung zu Auth/RBAC-, Validation-, Forbidden- und Conflict-Semantik.
+- Einzelne Endpoints muessen keine kuenstliche 409-Semantik vortaeuschen; nicht anwendbare Conflicts werden explizit begruendet.
+
+Abschluss:
+- `demo/video-chat/contracts/v1/protected-api-semantics.matrix.json` enthaelt die Semantikmatrix.
+- `demo/video-chat/backend-king-php/tests/protected-api-semantics-contract.php|sh` prueft die Matrix und Source-/Contract-Evidence.
+- `demo/video-chat/scripts/smoke.sh` ruft den Contract in der Backend-Contract-Strecke auf.
+
 ## Persistente Research-Notizen (für Folgesessions)
 
 - Alex-Relevanz (historisch, inzwischen nach `frontend-vue/src/lib/**` konsolidiert):

@@ -85,6 +85,7 @@ Status note:
 - Recent video-chat error-envelope closure: REST errors and realtime `system/error` frames now share the typed `status/error/time` envelope while preserving legacy realtime top-level fields, proven by `backend-king-php/tests/error-envelope-contract.sh` and tracked in `ISSUES.md` #27.
 - Recent video-chat DTO-schema closure: the canonical `contracts/v1` API/WS catalog now has a versioned schema contract that validates catalog versioning, required REST/WS DTO presence, schema metadata, and sample REST/WS error payloads in `backend-king-php/tests/contract-schema-versioning-contract.sh`, tracked in `ISSUES.md` #28.
 - Recent video-chat UI-parity matrix closure: `contracts/v1/ui-parity-acceptance.matrix.json` now maps covered UI parity slices to concrete Playwright/backend contracts and keeps 5 remaining UI gaps release-blocking under `VIDEOCHAT_UI_PARITY_REQUIRE_COVERED=1`, proven by `backend-king-php/tests/ui-parity-acceptance-matrix-contract.sh` and tracked in `ISSUES.md` #29.
+- Recent video-chat protected API semantics closure: `contracts/v1/protected-api-semantics.matrix.json` now maps protected REST/WS API families to concrete auth/RBAC, validation, forbidden, and conflict semantics plus endpoint contracts, proven by `backend-king-php/tests/protected-api-semantics-contract.sh` and tracked in `ISSUES.md` #30.
 
 ## A. Transport / QUIC / HTTP / WebSocket
 
@@ -377,7 +378,7 @@ Scope note:
 - [x] Enforce session revocation propagation into active websocket connections.
 - [x] Implement stable session refresh/rotation policy with replay-safe token handling.
 - [x] Enforce route-level RBAC middleware for admin/moderator/user actions.
-- [ ] Add forbidden/conflict validation semantics for all protected video APIs.
+- [x] Add forbidden/conflict validation semantics for all protected video APIs.
 - [x] Implement admin user CRUD (`list`, `create`, `update`, `deactivate`) with deterministic pagination/search/sort.
 - [x] Implement user profile/settings persistence (`display_name`, `avatar_ref`, `theme`, `time_format`).
 - [x] Prove auth/session/rbac flows with positive + negative integration tests over the King runtime path.

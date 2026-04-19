@@ -463,6 +463,12 @@ Run the UI-parity acceptance matrix contract (executable coverage plus release-b
 demo/video-chat/backend-king-php/tests/ui-parity-acceptance-matrix-contract.sh
 ```
 
+Run the protected API semantics contract (auth/RBAC, validation, forbidden, and conflict coverage):
+
+```bash
+demo/video-chat/backend-king-php/tests/protected-api-semantics-contract.sh
+```
+
 Run the auth contract test (REST + websocket token validation coverage):
 
 ```bash
