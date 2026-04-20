@@ -841,3 +841,121 @@ Non-negotiable direction for this batch:
   already covers the optional-field rules). Offline suite: 36 pass / 4 skip
   / 1 pre-existing fail (unrelated to T-batch). No readiness tracker boxes
   move; this is honest demo-UX work on top of the shipped M/R/S capabilities.
+
+## C-batch: Conversation Persistence (branch `feature/rag-pipeline`)
+
+> Closes readiness tracker bullet **V.8** (prompt / cache / checkpoint
+> persistence). Every chat turn is now persisted server-side keyed by
+> `session_id`; the browser UI writes its `session_id` into `localStorage`
+> and rehydrates `state.history` on reload.
+
+Non-negotiable direction:
+
+- Backward-compatible: pre-C-batch callers (no UI rehydration) see
+  identical behaviour. The persistence hook is best-effort and never
+  fails the inference response.
+- SQLite-only at this leaf. Object-store-backed durable replay stays
+  fenced — V.8's "checkpoint" axis is a separate hardening axis and is
+  honestly listed in the tracker as a tick on the *persistence* half, not
+  a claim of full KV-cache durability.
+- session_id is client-supplied and NOT authenticated; matches the
+  existing inference-request contract's honesty rule.
+
+### Done in current branch
+
+- [x] `#C-1` `conversations` + `conversation_messages` SQLite schema with
+  per-session monotonic `seq` and a unique index on (session_id, seq).
+  Transactional append path that skips already-persisted client turns
+  when the UI re-sends the full messages[] thread.
+  - Domain: `domain/conversation/conversation_store.php`
+  - Contract: `tests/conversation-store-contract.{sh,php}` (60 rules)
+
+- [x] `#C-2` `GET /api/conversations/{session_id}/messages`,
+  `GET /api/conversations/{session_id}` (meta only), and
+  `DELETE /api/conversations/{session_id}`. All scoped to the regex
+  `^[A-Za-z0-9_.:\-]+$` matching the inference session_id validator.
+  - Module: `http/module_conversations.php`
+  - Contract: `contracts/v1/conversation-message.contract.json` +
+    `tests/conversations-endpoint-contract.{sh,php}` (42 rules)
+
+- [x] `#C-3` HTTP + WS inference paths auto-append each completed turn
+  via `model_inference_conversation_append_turn()`. Wrapped in try/catch
+  so a persistence failure never corrupts the JSON response or WS stream.
+  - Edits: `http/module_inference.php`, `http/module_realtime.php`
+
+- [x] `#C-4` Chat UI persists `session_id` in `localStorage` and
+  rehydrates prior turns as `(restored)` bubbles on load, preserving
+  the state.history invariant so the next submit re-sends the full
+  thread to the model.
+  - Edit: `public/chat.html`
+
+- [x] Catalog grew with `conversation_messages_list`, `conversation_meta_get`,
+  `conversation_delete`; `contract-catalog-parity-contract` updated.
+  Router-module-order contract updated for the new `conversations`
+  module; `router-module-order-contract` green.
+
+### Next step (C-batch)
+
+- C-batch complete. 2 new contract tests (60 + 42 = 102 rules). Closes
+  tracker bullet **V.8**.
+
+## G-batch: Graph-aware Discovery (branch `feature/rag-pipeline`)
+
+> Closes readiness tracker bullets **W.8** (optional graph-aware
+> metadata + relationship traversal) and **W.9** (public contract
+> boundary between core semantic discovery and optional graph
+> integrations).
+
+Non-negotiable direction:
+
+- Core S-batch ranking stays authoritative and unchanged. The graph
+  layer is strictly additive: an /api/discover call without
+  `graph_expand` produces bit-identical output to pre-G-batch behaviour.
+- Traversal is plain BFS bounded by `max_hops` (1..2 in the HTTP
+  surface, 1..3 at the store layer) and a fixed 512-visit budget.
+- Edges are NEVER a ranking signal. Graph only widens the candidate
+  set. Weighted / shortest-path / MoE-style routing stays fenced under
+  tracker V.5.
+
+### Done in current branch
+
+- [x] `#G-1` `service_edges` SQLite schema + unique (from, to, type)
+  index + three secondary indexes for fast traversal. CRUD + BFS
+  traversal with visit-budget cap.
+  - Domain: `domain/discovery/graph_store.php`
+  - Contract: `tests/graph-store-contract.{sh,php}` (46 rules)
+
+- [x] `#G-2` `graph_expand` composition takes a core ranked result
+  set, walks outgoing edges from the top service_ids, and appends
+  unique neighbors under `expanded` tagged `source: "graph_expand"`,
+  `semantic_score: null`. Descriptors rehydrated from
+  `service_embeddings` when available.
+  - Domain: `domain/discovery/graph_expand.php`
+  - Contract: `tests/graph-expand-contract.{sh,php}` (28 rules) —
+    including the W.9 boundary assertion that core `results` is
+    bit-identical with or without `graph_expand`.
+
+- [x] `#G-3` `POST /api/discover` parser accepts an optional
+  `graph_expand: {edge_types?: array<string>(0..16, regex
+  [a-z][a-z0-9_.-]*), max_hops?: int 1..2}` block. Wired into both the
+  keyword and semantic/hybrid branches so all three modes can expand.
+  - Edit: `http/module_discover.php`
+
+- [x] `#G-4` `contracts/v1/service-graph.contract.json` pins the
+  core-vs-extension boundary explicitly. Tracker W.9 is ticked against
+  this file plus the `graph-expand-contract` assertion.
+
+### Next step (G-batch)
+
+- G-batch complete. 2 new contract tests (46 + 28 = 74 rules). Closes
+  tracker bullets **W.8** and **W.9**.
+
+## Tracker post-merge sweep (2026-04-20)
+
+Flipped in `READYNESS_TRACKER.md` with proof citations against contract
+tests shipped in this branch: **W.5**, **W.7**, **W.8**, **W.9**,
+**X.4**, **X.5**, **X.6**, **V.8** — 8 bullets closed in this session.
+
+Still honestly fenced for model-inference scope: V.3 (fleet placement),
+V.4 (sharded execution), V.5 (MoE / expert routing), all of Y-batch
+(fine-tuning), all of AA-batch (advanced extensions, out-of-core).

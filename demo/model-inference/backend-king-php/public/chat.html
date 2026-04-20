@@ -287,7 +287,24 @@
   const state = {
     ws: null,                // current in-flight WS (null when idle)
     active: null,            // {bubble, body, footer, decoder}
-    sessionId: 'sess-ui-' + Math.random().toString(36).slice(2, 10),
+    // C-batch (#V.8): persist session_id in localStorage so a page
+    // reload lands back in the same conversation, which in turn lets
+    // the rehydration loop (below) pull prior turns from the server
+    // and render them again. Fall back to a fresh id when localStorage
+    // is unavailable or blocked.
+    sessionId: (() => {
+      try {
+        const key = 'king-model-inference-session-id';
+        let sid = localStorage.getItem(key);
+        if (!sid || !/^[A-Za-z0-9_.:-]+$/.test(sid)) {
+          sid = 'sess-ui-' + Math.random().toString(36).slice(2, 10);
+          localStorage.setItem(key, sid);
+        }
+        return sid;
+      } catch (_err) {
+        return 'sess-ui-' + Math.random().toString(36).slice(2, 10);
+      }
+    })(),
     inFlight: false,
     bootReady: false,        // gated by fetchMeta() completion
     activePayload: null,     // cached for cold-start retry
@@ -707,6 +724,42 @@
       els.modelLabel.textContent = 'model=(none registered)';
       showErrorMessage('no_model_registered', 'No models in the registry. Run scripts/seed-model.php or boot the server with MODEL_INFERENCE_AUTOSEED=1.');
     }
+    // C-batch (#V.8): rehydrate prior turns for the persisted session.
+    // Best-effort — any failure leaves state.history empty and the user
+    // starts a fresh conversation visually, but the server-side store
+    // is still intact for later re-open.
+    try {
+      const convoUrl = '/api/conversations/' + encodeURIComponent(state.sessionId) + '/messages';
+      const convo = await fetchJsonWithRetry(convoUrl);
+      if (convo && convo.found && Array.isArray(convo.messages) && convo.messages.length > 0) {
+        for (const m of convo.messages) {
+          if (!m || typeof m.role !== 'string' || typeof m.content !== 'string') continue;
+          // Keep the server's transcript mirrored in client state so
+          // the next submit re-sends the full thread.
+          state.history.push({ role: m.role, content: m.content });
+          // Render past turns as finished bubbles (no streaming cursor).
+          if (m.role === 'user') {
+            renderUser(m.content);
+          } else if (m.role === 'assistant') {
+            const bubble = document.createElement('div');
+            bubble.className = 'msg assistant';
+            bubble.innerHTML = '<div class="role">assistant</div><div class="body"></div><div class="footer">(restored)</div>';
+            bubble.querySelector('.body').textContent = m.content;
+            els.messages.appendChild(bubble);
+          } else if (m.role === 'system') {
+            const bubble = document.createElement('div');
+            bubble.className = 'msg assistant';
+            bubble.innerHTML = '<div class="role">system</div><div class="body"></div><div class="footer">(restored)</div>';
+            bubble.querySelector('.body').textContent = m.content;
+            els.messages.appendChild(bubble);
+          }
+        }
+        scrollToBottom();
+      }
+    } catch (_rehydrateError) {
+      // swallow — rehydration is a nice-to-have, not a blocker
+    }
+
     state.bootReady = true;
     els.prompt.disabled = false;
     els.send.disabled = !els.quantization.value;
