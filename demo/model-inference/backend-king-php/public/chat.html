@@ -5,41 +5,55 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>King Model Inference — Chat</title>
 <style>
+  /* A-7e: palette + typography mirrors /ui/login so the two surfaces feel like one app. */
   :root {
     color-scheme: light dark;
-    --bg: #f7f7f8;
+    --bg: #f5f6f9;
     --bg-elev: #ffffff;
+    --bg-brand: #0b0c0f;
+    --bg-tint: #eef1f6;
     --fg: #0b0c0f;
     --fg-muted: #5b6472;
-    --border: #d9dce0;
+    --fg-inverse: #f5f6f9;
+    --border: #e1e4ea;
+    --border-strong: #c9ced7;
+    --border-focus: #2e5aac;
     --accent: #2e5aac;
+    --accent-hover: #234785;
     --accent-fg: #ffffff;
-    --user-bg: #e7efff;
-    --user-fg: #0b1f3f;
-    --assistant-bg: #ffffff;
-    --assistant-fg: #0b0c0f;
-    --error-bg: #fdecec;
-    --error-fg: #892020;
-    --ok: #277a3a;
-    --warn: #a86b00;
+    --accent-soft: rgba(46, 90, 172, 0.12);
+    --accent-soft-strong: rgba(46, 90, 172, 0.22);
+    --ok: #1f7f4d;
+    --danger: #c12a2a;
+    --danger-bg: #fdecec;
+    --radius-lg: 16px;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow-card: 0 12px 28px -16px rgba(15, 23, 42, 0.25), 0 1px 3px rgba(15, 23, 42, 0.05);
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0e1014;
-      --bg-elev: #181a20;
+      --bg: #0b0d11;
+      --bg-elev: #15181f;
+      --bg-brand: #080a0e;
+      --bg-tint: #10131a;
       --fg: #e9eaee;
       --fg-muted: #97a0ad;
-      --border: #2a2f39;
-      --accent: #5f8fff;
-      --user-bg: #1f2a47;
-      --user-fg: #cbd8ff;
-      --assistant-bg: #181a20;
-      --assistant-fg: #e9eaee;
-      --error-bg: #3a1414;
-      --error-fg: #ff8888;
-      --ok: #58c671;
-      --warn: #f0b84a;
+      --fg-inverse: #e9eaee;
+      --border: #242832;
+      --border-strong: #363c47;
+      --border-focus: #7ba2ff;
+      --accent: #7ba2ff;
+      --accent-hover: #94b4ff;
+      --accent-fg: #0b0c0f;
+      --accent-soft: rgba(123, 162, 255, 0.14);
+      --accent-soft-strong: rgba(123, 162, 255, 0.26);
+      --ok: #4fd495;
+      --danger: #ff7373;
+      --danger-bg: #2a1518;
+      --shadow-card: 0 12px 28px -16px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.35);
     }
   }
   * { box-sizing: border-box; }
@@ -48,255 +62,581 @@
     margin: 0;
     background: var(--bg);
     color: var(--fg);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    font-size: 15px;
-    line-height: 1.45;
-    display: flex;
-    flex-direction: column;
+    font: 15px/1.55 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    display: grid;
+    grid-template-rows: auto 1fr;
     height: 100vh;
   }
+
+  /* ── Header ─────────────────────────────────────────────────────── */
   header {
-    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
     border-bottom: 1px solid var(--border);
     background: var(--bg-elev);
+  }
+  header .brand {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    font-size: 13px;
     font-weight: 600;
+    letter-spacing: -0.005em;
   }
-  header .title { flex: 1; }
-  header .status {
-    font-size: 12px;
-    font-family: var(--mono);
-    color: var(--fg-muted);
-    padding: 4px 8px;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-  }
-  header .status.ok { color: var(--ok); border-color: var(--ok); }
-  header .status.err { color: var(--error-fg); border-color: var(--error-fg); }
-  main {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    max-width: 920px;
-    width: 100%;
-    margin: 0 auto;
-  }
-  .msg {
-    padding: 10px 14px;
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    max-width: 85%;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    background: var(--assistant-bg);
-    color: var(--assistant-fg);
-  }
-  .msg.user {
-    align-self: flex-end;
-    background: var(--user-bg);
-    color: var(--user-fg);
-    border-color: transparent;
-  }
-  .msg.assistant { align-self: flex-start; }
-  .msg.error {
-    align-self: stretch;
-    background: var(--error-bg);
-    color: var(--error-fg);
-    border-color: transparent;
-  }
-  .msg .role {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--fg-muted);
-    margin-bottom: 4px;
-    font-family: var(--mono);
-  }
-  .msg .body { font-family: inherit; }
-  .msg .footer {
-    font-size: 11px;
-    font-family: var(--mono);
-    color: var(--fg-muted);
-    margin-top: 6px;
-  }
-  .msg.assistant.streaming .body::after {
-    content: "▍";
-    color: var(--accent);
-    animation: blink 1.1s infinite;
-    margin-left: 1px;
-  }
-  @keyframes blink { 50% { opacity: 0; } }
-  footer {
-    padding: 12px 20px;
-    border-top: 1px solid var(--border);
-    background: var(--bg-elev);
-  }
-  footer form {
-    display: flex;
-    gap: 8px;
-    max-width: 920px;
-    margin: 0 auto;
-  }
-  footer .settings {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    max-width: 920px;
-    margin: 0 auto 8px;
-    font-size: 12px;
-    color: var(--fg-muted);
-    font-family: var(--mono);
-    align-items: center;
-  }
-  footer .settings label { display: inline-flex; align-items: center; gap: 4px; }
-  footer .settings input[type="number"] {
-    width: 70px;
-    padding: 2px 6px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: var(--mono);
-  }
-  textarea {
-    flex: 1;
-    resize: none;
-    min-height: 44px;
-    max-height: 160px;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: inherit;
-    font-size: 15px;
-    line-height: 1.4;
-  }
-  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  button {
-    padding: 0 16px;
-    border: 0;
-    border-radius: 8px;
+  header .brand .dot {
+    width: 8px; height: 8px; border-radius: 2px;
     background: var(--accent);
-    color: var(--accent-fg);
-    font-weight: 600;
-    font-size: 15px;
-    cursor: pointer;
-    min-width: 88px;
+    display: inline-block;
   }
-  button:disabled { opacity: 0.45; cursor: not-allowed; }
-  .meta {
-    max-width: 920px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 0 20px 12px;
-    font-size: 11px;
-    font-family: var(--mono);
+  header .brand .sub {
     color: var(--fg-muted);
+    font-weight: 400;
+    font-family: var(--mono);
+    font-size: 12px;
   }
-  /* A-7b: header auth chip — replaces the old inline banner. When
-     anonymous it's a clickable CTA that routes to /login; when signed
-     in it shows the username and opens a tiny menu for logout. */
+  header .spacer { flex: 1; }
+  header .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--fg-muted);
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+  }
+  header .status.ok { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 40%, var(--border)); }
+  header .status.err { color: var(--danger); border-color: color-mix(in oklab, var(--danger) 40%, var(--border)); }
+  /* A-7b: header auth chip — pill CTA / signed-in indicator. */
   .auth-chip {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 12px;
+    padding: 5px 12px;
     font-size: 12px;
     font-family: var(--mono);
     color: var(--fg);
-    background: color-mix(in oklab, var(--accent) 14%, transparent);
+    background: var(--accent-soft);
     border: 1px solid color-mix(in oklab, var(--accent) 28%, var(--border));
     border-radius: 999px;
     cursor: pointer;
     user-select: none;
     transition: background-color 120ms ease, border-color 120ms ease;
   }
-  .auth-chip:hover {
-    background: color-mix(in oklab, var(--accent) 22%, transparent);
-    border-color: var(--accent);
-  }
+  .auth-chip:hover { background: var(--accent-soft-strong); border-color: var(--accent); }
   .auth-chip[data-state="authed"] {
-    background: color-mix(in oklab, #2a7f5a 20%, transparent);
-    border-color: color-mix(in oklab, #2a7f5a 40%, var(--border));
+    background: color-mix(in oklab, var(--ok) 16%, transparent);
+    border-color: color-mix(in oklab, var(--ok) 38%, var(--border));
   }
   .auth-chip[data-state="authed"]::before {
-    content: "●";
-    color: #2a7f5a;
-    font-size: 9px;
+    content: "●"; color: var(--ok); font-size: 9px;
   }
   .auth-chip[data-state="anon"]::before {
-    content: "○";
-    color: var(--fg-muted);
-    font-size: 9px;
+    content: "○"; color: var(--fg-muted); font-size: 9px;
   }
+
+  /* ── Body shell (sidebar + main) ───────────────────────────────── */
+  #shell {
+    display: grid;
+    grid-template-columns: 0 1fr;   /* default = anon, no sidebar */
+    overflow: hidden;
+    min-height: 0;
+  }
+  body[data-authed="1"] #shell {
+    grid-template-columns: 260px 1fr;
+  }
+
+  /* ── Sidebar ───────────────────────────────────────────────────── */
+  #sidebar {
+    border-right: 1px solid var(--border);
+    background: var(--bg-tint);
+    overflow-y: auto;
+    display: none;
+  }
+  body[data-authed="1"] #sidebar { display: block; }
+  #sidebar .side-head {
+    padding: 14px 16px 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--fg-muted);
+    font-weight: 600;
+  }
+  #sidebar .side-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 8px 16px;
+  }
+  #sidebar .side-empty {
+    padding: 8px 12px;
+    color: var(--fg-muted);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .side-item {
+    all: unset;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .side-item:hover { background: var(--accent-soft); }
+  .side-item[data-active="1"] {
+    background: var(--accent-soft-strong);
+    border-color: color-mix(in oklab, var(--accent) 28%, var(--border));
+  }
+  .side-item .si-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .side-item .si-meta {
+    font-size: 11px;
+    color: var(--fg-muted);
+    font-family: var(--mono);
+  }
+  #sidebar-scrim { display: none; }
+  /* Narrow viewport: sidebar becomes off-canvas. */
+  @media (max-width: 760px) {
+    body[data-authed="1"] #shell { grid-template-columns: 1fr; }
+    #sidebar {
+      position: fixed; inset: 49px 0 0 0;
+      z-index: 20;
+      transform: translateX(-100%);
+      transition: transform 160ms ease;
+      width: min(85vw, 320px);
+    }
+    body[data-sidebar="open"] #sidebar { transform: translateX(0); }
+    body[data-sidebar="open"] #sidebar-scrim {
+      display: block;
+      position: fixed; inset: 49px 0 0 0; background: rgba(0,0,0,0.4); z-index: 19;
+    }
+  }
+  #sidebar-toggle {
+    display: none;
+    all: unset;
+    padding: 6px 10px;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--fg-muted);
+    border-radius: var(--radius-sm);
+  }
+  #sidebar-toggle:hover { background: var(--accent-soft); color: var(--fg); }
+  @media (max-width: 760px) {
+    body[data-authed="1"] #sidebar-toggle { display: inline-flex; }
+  }
+
+  /* ── Main column (messages + composer) ─────────────────────────── */
+  #main {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    min-height: 0;
+    position: relative;
+  }
+  #messages {
+    overflow-y: auto;
+    padding: 32px 24px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    scroll-behavior: smooth;
+  }
+  #messages .inner {
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  /* Empty / welcome state */
+  .welcome {
+    margin: 40px auto;
+    max-width: 560px;
+    text-align: center;
+  }
+  .welcome .w-title {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px 0;
+  }
+  .welcome .w-sub {
+    color: var(--fg-muted);
+    margin: 0 0 22px 0;
+  }
+  .welcome .w-prompts {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  @media (min-width: 600px) {
+    .welcome .w-prompts { grid-template-columns: repeat(3, 1fr); }
+  }
+  .welcome .w-prompt {
+    all: unset;
+    cursor: pointer;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-elev);
+    color: var(--fg);
+    font-size: 13px;
+    text-align: left;
+    transition: border-color 140ms ease, background-color 140ms ease;
+  }
+  .welcome .w-prompt:hover { border-color: var(--border-focus); background: var(--accent-soft); }
+
+  /* Message bubbles */
+  .msg {
+    max-width: 86%;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 15px;
+    border: 1px solid transparent;
+  }
+  .msg .role {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+    font-family: var(--mono);
+    margin-bottom: 6px;
+  }
+  .msg .role::before {
+    content: "●";
+    font-size: 7px;
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: var(--accent-soft-strong);
+    color: var(--fg);
+    border-color: color-mix(in oklab, var(--accent) 28%, transparent);
+  }
+  .msg.user .role { color: var(--accent); }
+  .msg.user .role::before { color: var(--accent); }
+  .msg.assistant {
+    align-self: flex-start;
+    background: var(--bg-elev);
+    border-color: var(--border);
+    box-shadow: var(--shadow-card);
+  }
+  .msg.assistant .role::before { color: var(--ok); }
+  .msg.error {
+    align-self: stretch;
+    background: var(--danger-bg);
+    color: var(--danger);
+    border-color: color-mix(in oklab, var(--danger) 30%, transparent);
+  }
+  .msg.error .role::before { color: var(--danger); }
+  .msg .body code {
+    font-family: var(--mono);
+    font-size: 0.92em;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: color-mix(in oklab, var(--fg) 6%, transparent);
+  }
+  .msg .footer {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--fg-muted);
+    margin-top: 8px;
+    opacity: 0.85;
+  }
+  .msg.assistant.streaming .body::after {
+    content: "▍";
+    color: var(--accent);
+    animation: blink 1.1s infinite;
+    margin-left: 2px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ── Composer (input + send + settings toggle) ─────────────────── */
+  #composer-wrap {
+    border-top: 1px solid var(--border);
+    background: var(--bg-elev);
+    padding: 14px 24px 18px;
+  }
+  #composer-wrap .inner {
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  #form {
+    position: relative;
+  }
+  #form .field {
+    position: relative;
+    display: block;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    transition: border-color 140ms ease, box-shadow 140ms ease;
+  }
+  #form .field:focus-within {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 4px rgba(46, 90, 172, 0.16);
+  }
+  @supports (box-shadow: 0 0 0 4px color-mix(in oklab, red, transparent)) {
+    #form .field:focus-within {
+      box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 22%, transparent);
+    }
+  }
+  #prompt {
+    width: 100%;
+    min-height: 52px;
+    max-height: 200px;
+    resize: none;
+    padding: 14px 64px 14px 16px;
+    border: 0;
+    border-radius: var(--radius-lg);
+    background: transparent;
+    color: var(--fg);
+    font: inherit;
+    font-size: 15px;
+    line-height: 1.45;
+    outline: none;
+  }
+  #prompt::placeholder { color: var(--fg-muted); }
+  #send {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--accent);
+    color: var(--accent-fg);
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 140ms ease, transform 100ms ease;
+  }
+  #send:hover:not(:disabled) { background: var(--accent-hover); }
+  #send:active:not(:disabled) { transform: translateY(1px); }
+  #send:disabled { opacity: 0.4; cursor: not-allowed; }
+  #send svg { width: 18px; height: 18px; }
+
+  #settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--fg-muted);
+  }
+  #settings-toggle {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--fg-muted);
+    font-family: var(--mono);
+  }
+  #settings-toggle:hover { color: var(--fg); background: var(--accent-soft); }
+  #settings-toggle .chev { transition: transform 140ms ease; }
+  body[data-settings="open"] #settings-toggle .chev { transform: rotate(180deg); }
+  #model-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--fg-muted);
+  }
+
+  /* Settings drawer */
+  #settings {
+    display: none;
+    margin-top: 10px;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+  }
+  body[data-settings="open"] #settings { display: block; }
+  #settings .grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  @media (min-width: 640px) {
+    #settings .grid { grid-template-columns: 1fr 1fr; }
+  }
+  #settings label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--fg-muted);
+  }
+  #settings input[type="text"],
+  #settings input[type="number"],
+  #settings select {
+    padding: 9px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--bg-elev);
+    color: var(--fg);
+    font: inherit;
+    font-size: 13px;
+    font-family: var(--mono);
+  }
+  #settings input:focus, #settings select:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(46, 90, 172, 0.18);
+  }
+  @supports (box-shadow: 0 0 0 3px color-mix(in oklab, red, transparent)) {
+    #settings input:focus, #settings select:focus {
+      box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
+    }
+  }
+  #settings .diag {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg-muted);
+  }
+
+  /* Legacy hooks — JS-rendered messages rely on these class names. */
+  .msg .body { font-family: inherit; }
+  #fwd-banner[hidden] { display: none; }
 </style>
 </head>
 <body>
 <header>
-  <div class="title">king · model-inference · chat</div>
-  <div id="model-label" class="status" title="Active model selector">model=…</div>
+  <div class="brand">
+    <span class="dot" aria-hidden="true"></span>
+    <span>king · model-inference</span>
+    <span class="sub">· chat</span>
+  </div>
+  <button id="sidebar-toggle" aria-label="Toggle conversation list">☰</button>
+  <div class="spacer"></div>
   <div id="auth-chip" class="auth-chip" title="Sign in">
     <span id="auth-chip-text">Sign in →</span>
   </div>
   <div id="conn" class="status">loading…</div>
+  <!-- model-label preserved as a hidden diagnostic element the JS updates -->
+  <span id="model-label" hidden></span>
 </header>
 
 <div id="fwd-banner" hidden></div>
 
-<main id="messages" aria-live="polite">
-  <div class="msg assistant">
-    <div class="role">system</div>
-    <div class="body">This chat is streaming raw <code>TokenFrame</code> binary frames over <code>/ws</code>. Each message's footer shows live telemetry from the inference node.</div>
-  </div>
-</main>
+<div id="sidebar-scrim" aria-hidden="true"></div>
+<div id="shell">
+  <aside id="sidebar" aria-label="Your conversations">
+    <div class="side-head">Your conversations</div>
+    <div id="side-list" class="side-list"></div>
+  </aside>
+  <section id="main">
+    <div id="messages" role="log" aria-live="polite">
+      <div class="inner" id="messages-inner">
+        <div class="welcome" id="welcome">
+          <h1 class="w-title">Ready when you are</h1>
+          <p class="w-sub">Messages stream token-by-token over WebSocket. Pick a prompt below or ask your own.</p>
+          <div class="w-prompts">
+            <button type="button" class="w-prompt" data-prompt="What can you do?">What can you do?</button>
+            <button type="button" class="w-prompt" data-prompt="Remember: my favorite food is pizza.">Remember a fact</button>
+            <button type="button" class="w-prompt" data-prompt="Write a short haiku about rain.">Write a haiku</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
-<footer>
-  <div class="settings">
-    <label>model
-      <input type="text" id="model-name" value="SmolLM2-135M-Instruct" size="24">
-    </label>
-    <label>quant
-      <select id="quantization">
-        <option>Q4_K</option>
-        <option>Q4_0</option>
-        <option>Q5_K</option>
-        <option>Q6_K</option>
-        <option>Q8_0</option>
-        <option>F16</option>
-      </select>
-    </label>
-    <label>temp
-      <input type="number" id="temperature" value="0.2" min="0" max="2" step="0.1">
-    </label>
-    <label>top_p
-      <input type="number" id="top_p" value="0.95" min="0" max="1" step="0.01">
-    </label>
-    <label>top_k
-      <input type="number" id="top_k" value="40" min="0" max="1024" step="1">
-    </label>
-    <label>max_tokens
-      <input type="number" id="max_tokens" value="192" min="1" max="8192" step="1">
-    </label>
-    <label title="OpenAI-compat; breaks repetition loops. 0 = off.">freq_pen
-      <input type="number" id="frequency_penalty" value="0.8" min="-2" max="2" step="0.1">
-    </label>
-    <label title="OpenAI-compat; penalizes tokens already in the output. 0 = off.">pres_pen
-      <input type="number" id="presence_penalty" value="0.6" min="-2" max="2" step="0.1">
-    </label>
-  </div>
-  <form id="form" autocomplete="off">
-    <textarea id="prompt" placeholder="Ask the model something. Enter to send, Shift+Enter for newline." required></textarea>
-    <button id="send" type="submit">Send</button>
-  </form>
-</footer>
-<div class="meta" id="node-meta">node: connecting…</div>
+    <div id="composer-wrap">
+      <div class="inner">
+        <form id="form" autocomplete="off">
+          <div class="field">
+            <textarea id="prompt" placeholder="Message SmolLM2… (Enter to send, Shift+Enter for newline)" required rows="1"></textarea>
+            <button id="send" type="submit" aria-label="Send message" title="Send">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12l14 0"></path>
+                <path d="M13 6l6 6l-6 6"></path>
+              </svg>
+            </button>
+          </div>
+        </form>
+
+        <div id="settings-row">
+          <button type="button" id="settings-toggle" aria-expanded="false">
+            <span>Model settings</span>
+            <span class="chev">▾</span>
+          </button>
+          <span id="model-badge" title="Active model selector">model=…</span>
+        </div>
+
+        <div id="settings" aria-hidden="true">
+          <div class="grid">
+            <label>model
+              <input type="text" id="model-name" value="SmolLM2-135M-Instruct">
+            </label>
+            <label>quant
+              <select id="quantization">
+                <option>Q4_K</option>
+                <option>Q4_0</option>
+                <option>Q5_K</option>
+                <option>Q6_K</option>
+                <option>Q8_0</option>
+                <option>F16</option>
+              </select>
+            </label>
+            <label>temperature
+              <input type="number" id="temperature" value="0.2" min="0" max="2" step="0.1">
+            </label>
+            <label>top_p
+              <input type="number" id="top_p" value="0.95" min="0" max="1" step="0.01">
+            </label>
+            <label>top_k
+              <input type="number" id="top_k" value="40" min="0" max="1024" step="1">
+            </label>
+            <label>max_tokens
+              <input type="number" id="max_tokens" value="192" min="1" max="8192" step="1">
+            </label>
+            <label title="OpenAI-compat; breaks repetition loops. 0 = off.">frequency_penalty
+              <input type="number" id="frequency_penalty" value="0.8" min="-2" max="2" step="0.1">
+            </label>
+            <label title="OpenAI-compat; penalizes tokens already in the output. 0 = off.">presence_penalty
+              <input type="number" id="presence_penalty" value="0.6" min="-2" max="2" step="0.1">
+            </label>
+            <div class="diag" id="node-meta">node: connecting…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
 
 <script>
 (() => {
@@ -307,11 +647,14 @@
 
   const els = {
     messages: document.getElementById('messages'),
+    messagesInner: document.getElementById('messages-inner'),
+    welcome: document.getElementById('welcome'),
     form: document.getElementById('form'),
     prompt: document.getElementById('prompt'),
     send: document.getElementById('send'),
     conn: document.getElementById('conn'),
     modelLabel: document.getElementById('model-label'),
+    modelBadge: document.getElementById('model-badge'),
     nodeMeta: document.getElementById('node-meta'),
     modelName: document.getElementById('model-name'),
     quantization: document.getElementById('quantization'),
@@ -323,23 +666,28 @@
     presence_penalty: document.getElementById('presence_penalty'),
     authChip: document.getElementById('auth-chip'),
     authChipText: document.getElementById('auth-chip-text'),
+    sidebar: document.getElementById('sidebar'),
+    sideList: document.getElementById('side-list'),
+    sidebarToggle: document.getElementById('sidebar-toggle'),
+    sidebarScrim: document.getElementById('sidebar-scrim'),
+    settingsToggle: document.getElementById('settings-toggle'),
+    settings: document.getElementById('settings'),
+    welcomePrompts: document.querySelectorAll('.w-prompt'),
   };
 
+  const SESSION_KEY = 'king-model-inference-session-id';
+  const AUTH_STORAGE_KEY = 'king-model-inference-auth';
+  const SETTINGS_OPEN_KEY = 'king-model-inference-settings-open';
+
   const state = {
-    ws: null,                // current in-flight WS (null when idle)
-    active: null,            // {bubble, body, footer, decoder}
-    // C-batch (#V.8): persist session_id in localStorage so a page
-    // reload lands back in the same conversation, which in turn lets
-    // the rehydration loop (below) pull prior turns from the server
-    // and render them again. Fall back to a fresh id when localStorage
-    // is unavailable or blocked.
+    ws: null,
+    active: null,
     sessionId: (() => {
       try {
-        const key = 'king-model-inference-session-id';
-        let sid = localStorage.getItem(key);
+        let sid = localStorage.getItem(SESSION_KEY);
         if (!sid || !/^[A-Za-z0-9_.:-]+$/.test(sid)) {
           sid = 'sess-ui-' + Math.random().toString(36).slice(2, 10);
-          localStorage.setItem(key, sid);
+          localStorage.setItem(SESSION_KEY, sid);
         }
         return sid;
       } catch (_err) {
@@ -347,28 +695,14 @@
       }
     })(),
     inFlight: false,
-    bootReady: false,        // gated by fetchMeta() completion
-    activePayload: null,     // cached for cold-start retry
-    framesReceived: 0,       // any server frame (delta/end/error) seen
-    retriedForActive: false, // one-shot retry budget per prompt
-    // T-1: in-memory chat history. Each entry is {role, content}; sent
-    // on every submit so the model sees the full conversation.
-    // T-2: capped at 8 turns (down from 32) so WS payloads stay small
-    // and we fit inside SmolLM2's 2048-token context window.
+    bootReady: false,
+    activePayload: null,
+    framesReceived: 0,
+    retriedForActive: false,
     history: [],
-    // Buffer for the assistant completion text — finalized after
-    // streaming ends and pushed into history.
     pendingAssistantText: '',
-    // A-7: auth state. Populated from localStorage on boot; kept in sync
-    // with successful /api/auth/login (via the dedicated /login page)
-    // and /api/auth/logout calls.
     authToken: null,
     authUser: null,
-    // T-2/T-3: default system prompt. Prevents small-model mode collapse
-    // (generic refusals AND echo-copying the prior reply). The prompt
-    // explicitly anchors the model to the LATEST user question and asks
-    // for a fresh extraction each turn — required because SmolLM2-135M
-    // otherwise copies whatever it just said as a short confident answer.
     systemPrompt: (
       'You are a concise factual assistant. '
       + 'Read the full conversation history. Answer ONLY the LATEST user question. '
@@ -378,18 +712,163 @@
     ),
   };
 
-  // --------------------- WS lifecycle ---------------------
-  // We open a NEW WebSocket per prompt submit. The current king
-  // runtime runs the WS upgrade handler synchronously (#M-11 scope
-  // fence), so a persistent idle WS would block the HTTP listen loop
-  // on the server. Per-request WS keeps sessions short-lived and
-  // sidesteps that constraint until concurrent WS handling lands.
+  // ── Auth helpers ────────────────────────────────────────────────
+  function loadAuthFromStorage() {
+    try {
+      const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.token !== 'string' || !/^[a-f0-9]{32}$/.test(parsed.token)) return;
+      if (parsed.expires_at && new Date(parsed.expires_at).getTime() < Date.now()) {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        return;
+      }
+      state.authToken = parsed.token;
+      state.authUser = parsed.user || null;
+    } catch { /* ignore */ }
+  }
+  function clearAuth() {
+    state.authToken = null;
+    state.authUser = null;
+    try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch { /* ignore */ }
+  }
+  function authHeaders() {
+    return state.authToken ? { 'Authorization': 'Bearer ' + state.authToken } : {};
+  }
+  function updateAuthChip() {
+    if (state.authUser && state.authToken) {
+      els.authChip.dataset.state = 'authed';
+      els.authChipText.textContent = state.authUser.username + ' · ' + state.authUser.role;
+      els.authChip.title = 'Signed in — click to sign out';
+      document.body.dataset.authed = '1';
+    } else {
+      els.authChip.dataset.state = 'anon';
+      els.authChipText.textContent = 'Sign in →';
+      els.authChip.title = 'Go to the sign-in page';
+      document.body.dataset.authed = '0';
+    }
+  }
+  function goToLogin() { window.location.href = '/ui/login'; }
+  async function doLogout() {
+    const token = state.authToken;
+    clearAuth();
+    updateAuthChip();
+    renderSidebar([]);
+    if (token) {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST', cache: 'no-store',
+          headers: { 'Authorization': 'Bearer ' + token },
+        });
+      } catch { /* fire and forget */ }
+    }
+  }
+
+  async function fetchJsonWithRetry(path, attempts = 3) {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const res = await fetch(path, { cache: 'no-store', headers: { ...authHeaders() } });
+        if (res.ok) return await res.json();
+        if (res.status === 401) {
+          clearAuth();
+          updateAuthChip();
+          return null;
+        }
+      } catch { /* retry */ }
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, 200));
+    }
+    return null;
+  }
+
+  // ── Sidebar (authed conversations list) ────────────────────────
+  function relativeTime(iso) {
+    if (!iso) return '';
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) return '';
+    const delta = Math.max(0, Date.now() - t);
+    const mins = Math.floor(delta / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    const days = Math.floor(hrs / 24);
+    return days + 'd ago';
+  }
+  function renderSidebar(conversations) {
+    els.sideList.innerHTML = '';
+    if (!conversations || conversations.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'side-empty';
+      empty.textContent = 'No conversations yet. Send a message and it will appear here.';
+      els.sideList.appendChild(empty);
+      return;
+    }
+    for (const c of conversations) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'side-item';
+      if (c.session_id === state.sessionId) row.dataset.active = '1';
+      row.dataset.sessionId = c.session_id;
+      const title = document.createElement('div');
+      title.className = 'si-title';
+      title.textContent = c.session_id;
+      const meta = document.createElement('div');
+      meta.className = 'si-meta';
+      const last = c.last_model_name || 'chat';
+      meta.textContent = relativeTime(c.updated_at) + ' · ' + c.turn_count + ' turn' + (c.turn_count === 1 ? '' : 's') + ' · ' + last;
+      row.appendChild(title);
+      row.appendChild(meta);
+      row.addEventListener('click', () => switchSession(c.session_id));
+      els.sideList.appendChild(row);
+    }
+  }
+  async function refreshSidebar() {
+    if (!state.authToken) { renderSidebar([]); return; }
+    const res = await fetchJsonWithRetry('/api/conversations/me');
+    if (!res || !Array.isArray(res.conversations)) { renderSidebar([]); return; }
+    renderSidebar(res.conversations);
+  }
+  async function switchSession(sid) {
+    if (!sid || sid === state.sessionId) {
+      closeSidebarOnMobile();
+      return;
+    }
+    try { localStorage.setItem(SESSION_KEY, sid); } catch { /* ignore */ }
+    state.sessionId = sid;
+    state.history = [];
+    state.pendingAssistantText = '';
+    els.messagesInner.innerHTML = '';
+    hideWelcome();
+    await rehydrateFromServer();
+    await refreshSidebar();
+    closeSidebarOnMobile();
+  }
+  function openSidebarOnMobile() { document.body.dataset.sidebar = 'open'; }
+  function closeSidebarOnMobile() { delete document.body.dataset.sidebar; }
+
+  // ── Welcome / empty state ──────────────────────────────────────
+  function showWelcome() { if (els.welcome) els.welcome.style.display = ''; }
+  function hideWelcome() { if (els.welcome) els.welcome.style.display = 'none'; }
+
+  // ── Settings drawer ────────────────────────────────────────────
+  function loadSettingsOpen() {
+    try { return localStorage.getItem(SETTINGS_OPEN_KEY) === '1'; } catch { return false; }
+  }
+  function persistSettingsOpen(open) {
+    try { localStorage.setItem(SETTINGS_OPEN_KEY, open ? '1' : '0'); } catch { /* ignore */ }
+  }
+  function setSettingsOpen(open) {
+    if (open) document.body.dataset.settings = 'open';
+    else delete document.body.dataset.settings;
+    els.settingsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    els.settings.setAttribute('aria-hidden', open ? 'false' : 'true');
+    persistSettingsOpen(open);
+  }
+
+  // ── WS URL ─────────────────────────────────────────────────────
   function wsUrl() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const base = proto + '//' + location.host + '/ws';
-    // A-5 / A-7: browsers cannot set the Authorization header on a WS
-    // upgrade. Pass the 32-hex bearer token as ?auth_token=...; the
-    // server's bearer extractor honors it for WS paths only.
     if (state.authToken) {
       return base + '?auth_token=' + encodeURIComponent(state.authToken);
     }
@@ -400,8 +879,13 @@
     els.conn.textContent = text;
     els.conn.className = 'status ' + (kind || '');
   }
+  function updateModelBadge(name, quant) {
+    const label = 'model=' + (name || '?') + '/' + (quant || '?');
+    els.modelLabel.textContent = label;
+    els.modelBadge.textContent = label;
+  }
 
-  // --------------------- TokenFrame decode ---------------------
+  // ── TokenFrame decode ──────────────────────────────────────────
   function decodeFrame(buf) {
     if (!(buf instanceof ArrayBuffer) || buf.byteLength < HEADER_SIZE) {
       throw new Error('short_header (' + (buf && buf.byteLength) + ' bytes)');
@@ -464,25 +948,25 @@
     try { return JSON.parse(new TextDecoder('utf-8').decode(u8)); } catch { return null; }
   }
 
-  // --------------------- message rendering ---------------------
+  // ── Message rendering ──────────────────────────────────────────
   function scrollToBottom() {
     els.messages.scrollTop = els.messages.scrollHeight;
   }
-
   function renderUser(text) {
+    hideWelcome();
     const bubble = document.createElement('div');
     bubble.className = 'msg user';
     bubble.innerHTML = '<div class="role">you</div><div class="body"></div>';
     bubble.querySelector('.body').textContent = text;
-    els.messages.appendChild(bubble);
+    els.messagesInner.appendChild(bubble);
     scrollToBottom();
   }
-
   function startAssistantBubble() {
+    hideWelcome();
     const bubble = document.createElement('div');
     bubble.className = 'msg assistant streaming';
     bubble.innerHTML = '<div class="role">assistant</div><div class="body"></div><div class="footer">streaming…</div>';
-    els.messages.appendChild(bubble);
+    els.messagesInner.appendChild(bubble);
     scrollToBottom();
     return {
       bubble,
@@ -491,26 +975,19 @@
       decoder: new TextDecoder('utf-8', { fatal: false }),
     };
   }
-
   function appendDelta(text) {
     if (!state.active) return;
     state.active.body.textContent += text;
     state.pendingAssistantText += text;
     scrollToBottom();
   }
-
   function finalizeActive(errorText, hadError, summary) {
     if (!state.active) return;
-    // Flush any pending multi-byte UTF-8 bytes.
     try {
       const tail = state.active.decoder.decode();
       if (tail) appendDelta(tail);
     } catch { /* ignore */ }
     state.active.bubble.classList.remove('streaming');
-    // T-1: commit the assistant completion to history ONLY if it
-    // succeeded. On error we drop the assistant text AND pop the user
-    // turn that `sendPrompt` pushed before the failed WS call, so a
-    // retry doesn't surface the same user message twice in messages[].
     if (!errorText && state.pendingAssistantText) {
       pushHistory('assistant', state.pendingAssistantText);
     } else if (errorText) {
@@ -526,30 +1003,30 @@
       const ttft = summary.ttft_ms | 0;
       const dur = summary.duration_ms | 0;
       const tps = dur > 0 ? (tout / (dur / 1000)).toFixed(1) : '0.0';
-      state.active.footer.textContent = `tokens_in=${tin} tokens_out=${tout} ttft=${ttft}ms duration=${dur}ms tokens/s=${tps}`;
+      state.active.footer.textContent = `tokens_in=${tin}  tokens_out=${tout}  ttft=${ttft}ms  ${tps} tokens/s`;
     } else {
       state.active.footer.textContent = '(ended)';
     }
     state.active = null;
     state.activePayload = null;
     state.inFlight = false;
-    // Per-request WS model: Send is enabled whenever no inference is in
-    // flight AND a quant is selected.
     els.send.disabled = !els.quantization.value;
     els.prompt.disabled = false;
     els.prompt.focus();
+    if (!hadError) refreshSidebar();
   }
 
   function showErrorMessage(code, message) {
+    hideWelcome();
     const bubble = document.createElement('div');
     bubble.className = 'msg error';
     bubble.innerHTML = '<div class="role">error</div><div class="body"></div>';
     bubble.querySelector('.body').textContent = '[' + code + '] ' + message;
-    els.messages.appendChild(bubble);
+    els.messagesInner.appendChild(bubble);
     scrollToBottom();
   }
 
-  // --------------------- send ---------------------
+  // ── Send pipeline ──────────────────────────────────────────────
   function currentSamplingFromUI() {
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const s = {
@@ -558,45 +1035,24 @@
       top_k: clamp(Number(els.top_k.value) | 0, 0, 1024),
       max_tokens: clamp(Number(els.max_tokens.value) | 0, 1, 8192),
     };
-    // T-3: only include penalty fields when they are non-zero (server
-    // validator accepts them as optional; omitting keeps payload minimal
-    // and is backward-compatible with pre-T-3 test fixtures).
     const freq = els.frequency_penalty ? Number(els.frequency_penalty.value) : 0;
     const pres = els.presence_penalty ? Number(els.presence_penalty.value) : 0;
     if (!Number.isNaN(freq) && freq !== 0) s.frequency_penalty = clamp(freq, -2, 2);
     if (!Number.isNaN(pres) && pres !== 0) s.presence_penalty = clamp(pres, -2, 2);
     return s;
   }
-
   function pushHistory(role, content) {
     if (!content) return;
     state.history.push({ role, content });
-    // T-2: cap at 8 turns (was 32). Small histories keep the WS payload
-    // well inside any receive-buffer limit on the server, and keep the
-    // model's input context under SmolLM2's 2048-token ceiling. Drop
-    // oldest turns and any orphan assistant turn at the head (templates
-    // expect a leading system-or-user turn).
-    while (state.history.length > 8) {
-      state.history.shift();
-    }
-    while (state.history.length > 0 && state.history[0].role === 'assistant') {
-      state.history.shift();
-    }
+    while (state.history.length > 8) state.history.shift();
+    while (state.history.length > 0 && state.history[0].role === 'assistant') state.history.shift();
   }
-
   function popLastHistoryTurn(role) {
-    // Remove the most recent turn if it matches `role` — used on error
-    // paths so a failed submit doesn't duplicate the user turn on retry.
     const last = state.history[state.history.length - 1];
-    if (last && last.role === role) {
-      state.history.pop();
-    }
+    if (last && last.role === role) state.history.pop();
   }
-
   function sendPrompt(text) {
     if (state.inFlight) return;
-    // Commit this user turn to history BEFORE building the payload so
-    // the assistant reply can attribute back to it on the next turn.
     pushHistory('user', text);
     const sampling = currentSamplingFromUI();
     const payload = {
@@ -606,20 +1062,11 @@
         quantization: els.quantization.value,
         prefer_local: true,
       },
-      // T-1 / T-2: send the full conversation so far plus a leading
-      // system turn so the model has explicit instructions to use the
-      // history. Server appends the current user turn only if `prompt`
-      // is also supplied; we embed the new user turn inside messages[]
-      // (via pushHistory above) and omit `prompt` so the server's view
-      // equals the client's rendered transcript exactly.
-      messages: [
-        { role: 'system', content: state.systemPrompt },
-        ...state.history,
-      ],
+      messages: [{ role: 'system', content: state.systemPrompt }, ...state.history],
       sampling,
       stream: true,
     };
-    els.modelLabel.textContent = 'model=' + payload.model_selector.model_name + '/' + payload.model_selector.quantization;
+    updateModelBadge(payload.model_selector.model_name, payload.model_selector.quantization);
     state.active = startAssistantBubble();
     state.inFlight = true;
     state.activePayload = payload;
@@ -629,40 +1076,25 @@
     els.prompt.disabled = true;
     openStreamingWs(payload);
   }
-
   function openStreamingWs(payload) {
     setConn('connecting…');
     const ws = new WebSocket(wsUrl());
     ws.binaryType = 'arraybuffer';
     state.ws = ws;
-
     ws.addEventListener('open', () => {
       setConn('streaming…', 'ok');
       try { ws.send(JSON.stringify({ event: 'infer.start', payload })); }
       catch (e) { console.error('ws send failed', e); }
     });
     ws.addEventListener('message', onMessage);
-    ws.addEventListener('error', () => {
-      setConn('ws error', 'err');
-      // The close handler runs right after; leave recovery to it so we
-      // have the close code available.
-    });
+    ws.addEventListener('error', () => setConn('ws error', 'err'));
     ws.addEventListener('close', (ev) => {
       state.ws = null;
-      if (!state.inFlight) {
-        setConn('ready');
-        return;
-      }
-      // Cold-start race: the one-shot HTTP/1 listener is mid-accept on a
-      // boot fetch (/api/runtime, /api/models, /favicon.ico) when the WS
-      // upgrade races in. We get a clean 1006 before any server frame.
-      // Retry exactly once, then surface the error if it still fails.
+      if (!state.inFlight) { setConn('ready'); return; }
       if (state.framesReceived === 0 && !state.retriedForActive) {
         state.retriedForActive = true;
         setConn('retrying…');
-        setTimeout(() => {
-          if (state.inFlight) openStreamingWs(state.activePayload);
-        }, 150);
+        setTimeout(() => { if (state.inFlight) openStreamingWs(state.activePayload); }, 150);
         return;
       }
       finalizeActive('[ws_closed ' + ev.code + '] WebSocket closed before the end frame arrived.', true);
@@ -670,118 +1102,56 @@
     });
   }
 
+  // ── Textarea auto-resize ───────────────────────────────────────
+  function autoResizePrompt() {
+    els.prompt.style.height = 'auto';
+    els.prompt.style.height = Math.min(200, els.prompt.scrollHeight) + 'px';
+  }
+
+  // ── Wire events ────────────────────────────────────────────────
   els.form.addEventListener('submit', (ev) => {
     ev.preventDefault();
     const text = els.prompt.value.trim();
     if (!text) return;
     renderUser(text);
     els.prompt.value = '';
+    autoResizePrompt();
     sendPrompt(text);
   });
-
+  els.prompt.addEventListener('input', autoResizePrompt);
   els.prompt.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter' && !ev.shiftKey) {
       ev.preventDefault();
       if (!state.inFlight) els.form.requestSubmit();
     }
   });
-
-
-  // --------------------- boot ---------------------
-  // The current king HTTP/1 one-shot listener serves ONE request at
-  // a time. A browser page typically fires multiple requests in
-  // parallel (/api/runtime, /api/models, /favicon.ico, …) and the
-  // ones that arrive while another is being handled get dropped.
-  // We work around this by:
-  //   (a) answering /favicon.ico on the server (module_runtime),
-  //   (b) serializing every boot fetch here, one at a time,
-  //   (c) falling back silently if a fetch fails — the UI works
-  //       without the metadata, with the defaults already in the form.
-  // Persistent WS is avoided entirely (see wsUrl header comment).
-  setConn('booting…');
-  els.send.disabled = true;
-  els.prompt.disabled = true;
-  // A-7b: auth helpers. Login lives on the dedicated /login page; this
-  // file only READS the stored session, attaches Bearer to requests,
-  // and exposes a single-chip UI that CTAs to /login when signed out.
-  const AUTH_STORAGE_KEY = 'king-model-inference-auth';
-
-  function loadAuthFromStorage() {
-    try {
-      const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed.token !== 'string' || !/^[a-f0-9]{32}$/.test(parsed.token)) return;
-      if (parsed.expires_at && new Date(parsed.expires_at).getTime() < Date.now()) {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-        return;
-      }
-      state.authToken = parsed.token;
-      state.authUser = parsed.user || null;
-    } catch { /* ignore */ }
+  els.welcomePrompts.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const text = btn.dataset.prompt || btn.textContent.trim();
+      els.prompt.value = text;
+      autoResizePrompt();
+      els.prompt.focus();
+    });
+  });
+  els.authChip.addEventListener('click', async () => {
+    if (state.authToken) { await doLogout(); }
+    else { goToLogin(); }
+  });
+  els.settingsToggle.addEventListener('click', () => {
+    const open = document.body.dataset.settings !== 'open';
+    setSettingsOpen(open);
+  });
+  if (els.sidebarToggle) {
+    els.sidebarToggle.addEventListener('click', () => {
+      if (document.body.dataset.sidebar === 'open') closeSidebarOnMobile();
+      else openSidebarOnMobile();
+    });
+  }
+  if (els.sidebarScrim) {
+    els.sidebarScrim.addEventListener('click', closeSidebarOnMobile);
   }
 
-  function clearAuth() {
-    state.authToken = null;
-    state.authUser = null;
-    try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch { /* ignore */ }
-  }
-
-  function authHeaders() {
-    return state.authToken ? { 'Authorization': 'Bearer ' + state.authToken } : {};
-  }
-
-  function updateAuthChip() {
-    if (!els.authChip) return;
-    if (state.authUser && state.authToken) {
-      els.authChip.dataset.state = 'authed';
-      els.authChipText.textContent = state.authUser.username + ' · ' + state.authUser.role;
-      els.authChip.title = 'Signed in — click to sign out';
-    } else {
-      els.authChip.dataset.state = 'anon';
-      els.authChipText.textContent = 'Sign in →';
-      els.authChip.title = 'Go to the sign-in page';
-    }
-  }
-
-  async function goToLogin() {
-    window.location.href = '/ui/login';
-  }
-
-  async function doLogout() {
-    const token = state.authToken;
-    clearAuth();
-    updateAuthChip();
-    if (token) {
-      try {
-        await fetch('/api/auth/logout', {
-          method: 'POST',
-          cache: 'no-store',
-          headers: { 'Authorization': 'Bearer ' + token },
-        });
-      } catch { /* fire and forget — server will expire it eventually */ }
-    }
-  }
-
-  async function fetchJsonWithRetry(path, attempts = 3) {
-    for (let i = 0; i < attempts; i++) {
-      try {
-        const res = await fetch(path, { cache: 'no-store', headers: { ...authHeaders() } });
-        if (res.ok) return await res.json();
-        if (res.status === 401) {
-          clearAuth();
-          updateAuthStatus();
-          return null;
-        }
-      } catch { /* retry */ }
-      if (i < attempts - 1) await new Promise(r => setTimeout(r, 200));
-    }
-    return null;
-  }
-  // The registry (models response) is the source of truth for the
-  // quant dropdown. The old dropdown listed every enum value, which
-  // caused `model_not_found` when the user picked a quant that hadn't
-  // been registered.
+  // ── Model quant dropdown (hydrated from /api/models) ───────────
   let registeredModels = [];
   function refreshQuantOptionsForModelName(modelName) {
     const matches = registeredModels.filter(m => m.model_name === modelName);
@@ -796,10 +1166,8 @@
       return;
     }
     els.quantization.disabled = false;
-    // Quality order: F16 > Q8_0 > Q6_K > Q5_K > Q4_K > Q4_0 > Q3_K > Q2_K.
     const rank = { 'F16': 100, 'Q8_0': 80, 'Q6_K': 60, 'Q5_K': 50, 'Q4_K': 40, 'Q4_0': 35, 'Q3_K': 30, 'Q2_K': 20 };
-    const seenQuants = [...new Set(matches.map(m => m.quantization))]
-      .sort((a, b) => (rank[b] || 0) - (rank[a] || 0));
+    const seenQuants = [...new Set(matches.map(m => m.quantization))].sort((a, b) => (rank[b] || 0) - (rank[a] || 0));
     for (const q of seenQuants) {
       const opt = document.createElement('option');
       opt.value = q;
@@ -812,51 +1180,64 @@
     if (!state.bootReady || state.inFlight) return;
     els.send.disabled = !els.quantization.value;
   }
-  els.modelName.addEventListener('change', () => {
-    refreshQuantOptionsForModelName(els.modelName.value.trim());
+  els.modelName.addEventListener('change', () => { refreshQuantOptionsForModelName(els.modelName.value.trim()); syncSendEnabled(); });
+  els.modelName.addEventListener('input', () => { refreshQuantOptionsForModelName(els.modelName.value.trim()); syncSendEnabled(); });
+  els.quantization.addEventListener('change', () => {
+    updateModelBadge(els.modelName.value.trim(), els.quantization.value);
     syncSendEnabled();
   });
-  els.modelName.addEventListener('input', () => {
-    refreshQuantOptionsForModelName(els.modelName.value.trim());
-    syncSendEnabled();
-  });
-  els.quantization.addEventListener('change', syncSendEnabled);
 
-  // A-7b: load persisted auth + wire the chip. The only UI action on
-  // this page is "go to /login" when anonymous or "log out in place"
-  // when signed in — the login form itself lives on /login.
-  loadAuthFromStorage();
-  updateAuthChip();
-  if (els.authChip) {
-    els.authChip.addEventListener('click', async () => {
-      if (state.authToken) {
-        await doLogout();
-      } else {
-        goToLogin();
+  // ── Rehydrate current session history from server ──────────────
+  async function rehydrateFromServer() {
+    try {
+      const convoUrl = '/api/conversations/' + encodeURIComponent(state.sessionId) + '/messages';
+      const convo = await fetchJsonWithRetry(convoUrl);
+      if (convo && convo.found && Array.isArray(convo.messages) && convo.messages.length > 0) {
+        hideWelcome();
+        for (const m of convo.messages) {
+          if (!m || typeof m.role !== 'string' || typeof m.content !== 'string') continue;
+          state.history.push({ role: m.role, content: m.content });
+          if (m.role === 'user') {
+            renderUser(m.content);
+          } else if (m.role === 'assistant') {
+            const bubble = document.createElement('div');
+            bubble.className = 'msg assistant';
+            bubble.innerHTML = '<div class="role">assistant</div><div class="body"></div><div class="footer">restored</div>';
+            bubble.querySelector('.body').textContent = m.content;
+            els.messagesInner.appendChild(bubble);
+          } else if (m.role === 'system') {
+            const bubble = document.createElement('div');
+            bubble.className = 'msg assistant';
+            bubble.innerHTML = '<div class="role">system</div><div class="body"></div><div class="footer">restored</div>';
+            bubble.querySelector('.body').textContent = m.content;
+            els.messagesInner.appendChild(bubble);
+          }
+        }
+        scrollToBottom();
       }
-    });
+    } catch { /* ignore rehydrate failures */ }
   }
 
+  // ── Boot ───────────────────────────────────────────────────────
+  setConn('booting…');
+  els.send.disabled = true;
+  els.prompt.disabled = true;
+  setSettingsOpen(loadSettingsOpen());
+  loadAuthFromStorage();
+  updateAuthChip();
+
   (async function fetchMeta() {
-    // Verify the token before showing the user as logged in. If the
-    // server rejects it (expired / revoked / unknown), silently fall
-    // back to anonymous — don't yank the user out of a working chat.
     if (state.authToken) {
       const who = await fetchJsonWithRetry('/api/auth/whoami');
-      if (!who || who.status !== 'ok') {
-        clearAuth();
-        updateAuthChip();
-      } else if (who.user) {
-        state.authUser = who.user;
-        updateAuthChip();
-      }
+      if (!who || who.status !== 'ok') { clearAuth(); updateAuthChip(); }
+      else if (who.user) { state.authUser = who.user; updateAuthChip(); }
     }
     const runtime = await fetchJsonWithRetry('/api/runtime');
     const models = await fetchJsonWithRetry('/api/models');
     if (runtime && runtime.node) {
       const n = runtime.node.node_id || '?';
       const ver = (runtime.runtime && runtime.runtime.king_version) || '?';
-      els.nodeMeta.textContent = `node=${n} king=${ver} models=${models && models.count != null ? models.count : '?'}`;
+      els.nodeMeta.textContent = `node=${n}  king=${ver}  models=${models && models.count != null ? models.count : '?'}`;
     }
     if (models && Array.isArray(models.items) && models.items.length > 0) {
       registeredModels = models.items.map(m => ({ model_name: m.model_name, quantization: m.quantization }));
@@ -864,49 +1245,18 @@
       els.modelName.value = first.model_name;
       refreshQuantOptionsForModelName(first.model_name);
       if (els.quantization.value) {
-        els.modelLabel.textContent = 'model=' + first.model_name + '/' + els.quantization.value;
+        updateModelBadge(first.model_name, els.quantization.value);
       }
     } else if (models && Array.isArray(models.items)) {
       registeredModels = [];
       refreshQuantOptionsForModelName('');
       els.modelLabel.textContent = 'model=(none registered)';
+      els.modelBadge.textContent = 'model=(none registered)';
       showErrorMessage('no_model_registered', 'No models in the registry. Run scripts/seed-model.php or boot the server with MODEL_INFERENCE_AUTOSEED=1.');
     }
-    // C-batch (#V.8): rehydrate prior turns for the persisted session.
-    // Best-effort — any failure leaves state.history empty and the user
-    // starts a fresh conversation visually, but the server-side store
-    // is still intact for later re-open.
-    try {
-      const convoUrl = '/api/conversations/' + encodeURIComponent(state.sessionId) + '/messages';
-      const convo = await fetchJsonWithRetry(convoUrl);
-      if (convo && convo.found && Array.isArray(convo.messages) && convo.messages.length > 0) {
-        for (const m of convo.messages) {
-          if (!m || typeof m.role !== 'string' || typeof m.content !== 'string') continue;
-          // Keep the server's transcript mirrored in client state so
-          // the next submit re-sends the full thread.
-          state.history.push({ role: m.role, content: m.content });
-          // Render past turns as finished bubbles (no streaming cursor).
-          if (m.role === 'user') {
-            renderUser(m.content);
-          } else if (m.role === 'assistant') {
-            const bubble = document.createElement('div');
-            bubble.className = 'msg assistant';
-            bubble.innerHTML = '<div class="role">assistant</div><div class="body"></div><div class="footer">(restored)</div>';
-            bubble.querySelector('.body').textContent = m.content;
-            els.messages.appendChild(bubble);
-          } else if (m.role === 'system') {
-            const bubble = document.createElement('div');
-            bubble.className = 'msg assistant';
-            bubble.innerHTML = '<div class="role">system</div><div class="body"></div><div class="footer">(restored)</div>';
-            bubble.querySelector('.body').textContent = m.content;
-            els.messages.appendChild(bubble);
-          }
-        }
-        scrollToBottom();
-      }
-    } catch (_rehydrateError) {
-      // swallow — rehydration is a nice-to-have, not a blocker
-    }
+
+    await rehydrateFromServer();
+    await refreshSidebar();
 
     state.bootReady = true;
     els.prompt.disabled = false;

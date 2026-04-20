@@ -1,0 +1,38 @@
+{
+    "name": "King",
+    "build": {
+        "dockerfile": "../infra/king-build.Dockerfile",
+        "context": "..",
+        "args": { "PHP_VERSION": "8.3" }
+    },
+    "runArgs": ["--platform=linux/arm64"],
+    "workspaceFolder": "/workspace",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+    "mounts": [
+        "source=${localEnv:HOME}/.gitconfig,target=/root/.gitconfig,type=bind,readonly",
+        "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,readonly"
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "llvm-vs-code-extensions.vscode-clangd",
+                "bmewburn.vscode-intelephense-client",
+                "ms-azuretools.vscode-docker",           
+                "timonwong.shellcheck",                                                                                                                                       
+                "redhat.vscode-yaml",                                                                                                                                         
+                "ms-vscode.cpptools",
+                "eamodio.gitlens"                                                                                                                                             
+            ],
+            "settings": {
+                "clangd.arguments": [
+                    "--compile-commands-dir=/workspace",
+                    "--background-index",
+                    "--header-insertion=never"
+                ],
+                "terminal.integrated.defaultProfile.linux": "bash"
+            }
+        }
+    },
+    "postCreateCommand": "apt-get update && apt-get install -y --no-install-recommends bear gdb lldb && rm -rf /var/lib/apt/lists/*",
+    "remoteUser": "root"
+}
