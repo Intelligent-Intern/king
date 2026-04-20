@@ -139,6 +139,31 @@ four M-batch tests require the llama.cpp runtime). You can:
 | #R-15 | done | `scripts/rag-smoke.sh` 10-phase end-to-end |
 | #R-16 | done | this README update + scope fences |
 
+**A-batch: Simple Auth / Identity (branch `feature/rag-pipeline`)**
+
+Closes readiness tracker section **AB** (4 bullets: AB.1–AB.4). Demo-grade auth layer mirroring the video-chat auth approach but intentionally minimal: opaque 32-hex bearer sessions, bcrypt password hashing, handshake-time WS validation only (per-frame fenced), flat `user | admin` role, demo users autoseed from `fixtures/demo-users.json`. **Auth is OPTIONAL** — every pre-A-batch caller that omits `Authorization` continues to work anonymously.
+
+| Leaf | Status | Proof |
+|------|--------|-------|
+| #A-1 | done | `users` + `sessions` SQLite schema + bcrypt store (72-rule `auth-store-contract`) |
+| #A-2 | done | `POST /api/auth/login` + `POST /api/auth/logout` + `GET /api/auth/whoami` (45-rule `auth-endpoint-contract`) |
+| #A-3 | done | Non-blocking auth middleware (dispatcher-wide hook, 25-rule `auth-middleware-contract`) |
+| #A-4 | done | `conversations.user_ref` + ownership gate + `GET /api/conversations/me` (28-rule `conversation-ownership-contract`) |
+| #A-5 | done | WS handshake-time auth via Bearer header OR `?auth_token=<32-hex>` query fallback (13-rule `realtime-auth-contract`) |
+| #A-6 | done | Demo user autoseed (`admin/alice/bob`) from `fixtures/demo-users.json`, env-overridable, idempotent re-seed (44-rule `auth-seed-contract`) |
+| #A-7 | done | Inline login banner in `/ui`, Bearer attached to REST + WS, `(username @ role)` chip, click-to-logout |
+| #A-8 | done | Catalog parity + router order + this README + tracker AB section + `scripts/auth-smoke.sh` |
+
+**Demo credentials** (seeded at boot from `fixtures/demo-users.json`, env-overridable):
+
+| Username | Password | Role |
+|---|---|---|
+| `admin` | `admin123` | admin |
+| `alice` | `alice123` | user |
+| `bob` | `bob123` | user |
+
+**Honest scope fences (A-batch):** per-frame WS revalidation is NOT implemented (handshake-time only); session refresh/rotation is NOT implemented (logout + re-login covers the demo); no RBAC path-rule matrix; no SSO/OAuth/OIDC; no password reset; no rate-limit or brute-force lockout. Credentials travel the wire in plaintext over the /api/auth/login POST body — TLS termination is the deployer's responsibility.
+
 **C-batch: Conversation Persistence (branch `feature/rag-pipeline`)**
 
 Closes readiness tracker bullet **V.8** (prompt/cache/checkpoint persistence). Every chat turn is now persisted server-side keyed by `session_id`; the browser UI survives page reloads because it writes its `session_id` into `localStorage` and rehydrates `state.history` from the server on next boot.

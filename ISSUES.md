@@ -960,7 +960,7 @@ Still honestly fenced for model-inference scope: V.3 (fleet placement),
 V.4 (sharded execution), V.5 (MoE / expert routing), all of Y-batch
 (fine-tuning), all of AA-batch (advanced extensions, out-of-core).
 
-## A-batch: Simple Auth / Identity (branch `feature/rag-pipeline`) — PLANNED
+## A-batch: Simple Auth / Identity (branch `feature/rag-pipeline`)
 
 > Demo-grade auth layer that binds model-inference conversations to a
 > logged-in user for cross-device continuation. Borrows patterns from
@@ -990,9 +990,9 @@ Non-negotiable direction:
   path-rule matrix, SSO/OAuth, password-reset, rate-limit/brute-force
   lockout — all intentionally out of scope for the demo.
 
-### Planned leaves (A-1 through A-8)
+### Done in current branch
 
-- [ ] `#A-1` Auth store + users/sessions SQLite schema. Domain API:
+- [x] `#A-1` Auth store + users/sessions SQLite schema. Domain API:
   `model_inference_auth_create_user`, `verify_credentials`,
   `issue_session`, `validate_session`, `revoke_session`. Passwords
   bcrypt-hashed via `password_hash(PASSWORD_DEFAULT)`. Session ids are
@@ -1000,7 +1000,7 @@ Non-negotiable direction:
   - New file: `backend-king-php/domain/auth/auth_store.php`
   - Contract: `tests/auth-store-contract.{sh,php}`
 
-- [ ] `#A-2` `POST /api/auth/login` + `POST /api/auth/logout` +
+- [x] `#A-2` `POST /api/auth/login` + `POST /api/auth/logout` +
   `GET /api/auth/whoami`. Login accepts `{username, password}` JSON,
   issues a session with TTL (env `MODEL_INFERENCE_SESSION_TTL_SECONDS`,
   default 12h, clamped 60s–30d), returns
@@ -1011,7 +1011,7 @@ Non-negotiable direction:
     `contracts/v1/user-session.contract.json`
   - Contract test: `tests/auth-endpoint-contract.{sh,php}`
 
-- [ ] `#A-3` Non-blocking auth middleware. Extracts
+- [x] `#A-3` Non-blocking auth middleware. Extracts
   `Authorization: Bearer <token>`, validates against the sessions table
   (JOIN users + role). On hit: hydrates `$request['user']` and
   `$request['session']`. On miss (no header, invalid, expired, revoked):
@@ -1021,7 +1021,7 @@ Non-negotiable direction:
   - Edit: `backend-king-php/http/router.php` (hook insertion)
   - Contract: `tests/auth-middleware-contract.{sh,php}`
 
-- [ ] `#A-4` Conversation ownership binding. Add nullable `user_ref`
+- [x] `#A-4` Conversation ownership binding. Add nullable `user_ref`
   INTEGER column to `conversations` (idempotent `ALTER TABLE`). When
   authenticated, `model_inference_conversation_append_turn()` populates
   `user_ref = user.id`. `GET /api/conversations/{session_id}/messages`
@@ -1036,7 +1036,7 @@ Non-negotiable direction:
     `backend-king-php/http/module_conversations.php`
   - Contract: `tests/conversation-ownership-contract.{sh,php}`
 
-- [ ] `#A-5` WebSocket handshake-time auth. In the WS upgrade path
+- [x] `#A-5` WebSocket handshake-time auth. In the WS upgrade path
   (`module_realtime.php`), invoke the middleware on the upgrade
   request. On valid Bearer token: bind user into the run-session
   context. On missing/invalid: stream runs anonymously. No per-frame
@@ -1046,7 +1046,7 @@ Non-negotiable direction:
   - Edit: `backend-king-php/http/module_realtime.php`
   - Contract: `tests/realtime-auth-contract.{sh,php}`
 
-- [ ] `#A-6` Demo user autoseed. `server.php` calls
+- [x] `#A-6` Demo user autoseed. `server.php` calls
   `model_inference_auth_seed_demo_users($pdo)` at boot. Seeds three
   fixture users idempotently from
   `backend-king-php/fixtures/demo-users.json` (admin / alice / bob).
@@ -1059,7 +1059,7 @@ Non-negotiable direction:
     `backend-king-php/fixtures/demo-users.json`
   - Contract: `tests/auth-seed-contract.{sh,php}`
 
-- [ ] `#A-7` Chat UI login surface. Minimal additions to
+- [x] `#A-7` Chat UI login surface. Minimal additions to
   `public/chat.html`: on boot `GET /api/auth/whoami`; if 401, show an
   inline login form; on login success store
   `{token, expires_at, user}` in `localStorage` under
@@ -1067,7 +1067,7 @@ Non-negotiable direction:
   all REST + WS calls. Click-on-username to logout. Anonymous mode
   unchanged when the user doesn't log in.
 
-- [ ] `#A-8` Catalog parity + router order + README + tracker tick +
+- [x] `#A-8` Catalog parity + router order + README + tracker tick +
   smoke. Catalog grows with `auth_login`, `auth_logout`, `auth_whoami`
   + 4 new error codes (`invalid_credentials`, `session_expired`,
   `session_revoked`, `ownership_denied`).

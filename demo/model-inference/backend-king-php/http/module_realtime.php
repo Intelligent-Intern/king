@@ -216,14 +216,21 @@ function model_inference_realtime_run_session(
         model_inference_transcript_from_ws($streamSummary, $validated, $entry)
     );
 
-    // C-batch (#V.8): persist the streamed turn for conversation replay.
+    // C-batch (#V.8) + A-5: persist the streamed turn for conversation
+    // replay. When the WS upgrade carried a valid Bearer token, bind
+    // the conversation to the authenticated user via user_ref.
     try {
         $assistantText = (string) ($streamSummary['concatenated_text'] ?? '');
         if ($assistantText !== '') {
             $pdo = $openDatabase();
             model_inference_conversation_schema_migrate($pdo);
+            $userRef = null;
+            $authUser = $request['user'] ?? null;
+            if (is_array($authUser) && isset($authUser['id'])) {
+                $userRef = (int) $authUser['id'];
+            }
             model_inference_conversation_append_turn(
-                $pdo, $validated, $assistantText, $requestId, $entry
+                $pdo, $validated, $assistantText, $requestId, $entry, $userRef
             );
         }
     } catch (Throwable $ignored) {

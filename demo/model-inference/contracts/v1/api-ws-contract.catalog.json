@@ -460,6 +460,55 @@
         "deleted_message_count": "int",
         "time": "rfc3339"
       }
+    },
+    "conversation_list_me": {
+      "method": "GET",
+      "paths": ["/api/conversations/me"],
+      "introduced_by": "A-batch (AB.3)",
+      "auth": "Bearer token required",
+      "scope": "Lists conversations owned by the authenticated user (conversations.user_ref = user.id). Ordered by updated_at DESC, capped at 100. Anonymous conversations (user_ref NULL) never appear here.",
+      "envelope": {
+        "status": "ok",
+        "user": "user-session.contract.json#user",
+        "conversations": "array<{session_id, created_at, updated_at, turn_count, last_request_id, last_model_name, last_model_quantization, user_ref}>",
+        "count": "int",
+        "time": "rfc3339"
+      }
+    },
+    "auth_login": {
+      "method": "POST",
+      "paths": ["/api/auth/login"],
+      "introduced_by": "A-batch (AB.1, AB.2)",
+      "content_type": "application/json",
+      "request_contract": "demo/model-inference/contracts/v1/auth-request.contract.json",
+      "envelope": {
+        "status": "ok",
+        "session": "user-session.contract.json#session",
+        "user": "user-session.contract.json#user",
+        "time": "rfc3339"
+      }
+    },
+    "auth_logout": {
+      "method": "POST",
+      "paths": ["/api/auth/logout"],
+      "introduced_by": "A-batch (AB.2)",
+      "envelope": {
+        "status": "ok",
+        "revocation_state": "revoked|already_revoked",
+        "revoked_at": "rfc3339|null",
+        "time": "rfc3339"
+      }
+    },
+    "auth_whoami": {
+      "method": "GET",
+      "paths": ["/api/auth/whoami"],
+      "introduced_by": "A-batch (AB.2)",
+      "envelope": {
+        "status": "ok",
+        "user": "user-session.contract.json#user",
+        "session": "user-session.contract.json#session",
+        "time": "rfc3339"
+      }
     }
   },
   "ws": {
@@ -528,7 +577,11 @@
       "invalid_service_descriptor",
       "invalid_tool_descriptor",
       "embedding_worker_unavailable_discovery",
-      "no_semantic_match"
+      "no_semantic_match",
+      "invalid_credentials",
+      "session_expired",
+      "session_revoked",
+      "ownership_denied"
     ]
   },
   "planned_surfaces_target_shape": {
