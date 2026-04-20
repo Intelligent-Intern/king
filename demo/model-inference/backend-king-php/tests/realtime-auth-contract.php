@@ -45,7 +45,7 @@ try {
         $hydrated = model_inference_auth_apply_middleware($pdo, $upgradeReq);
         realtime_auth_contract_assert($hydrated['user'] !== null, 'valid bearer on WS upgrade -> user hydrated');
         realtime_auth_contract_assert($hydrated['user']['username'] === 'alice', 'user.username = alice');
-        realtime_auth_contract_assert(($hydrated['session']['id'] ?? '') === $sess['id'], 'session.id preserved on WS upgrade');
+        realtime_auth_contract_assert(($hydrated['auth_session']['id'] ?? '') === $sess['id'], 'auth_session.id preserved on WS upgrade');
         $rulesAsserted += 3;
 
         // 2. WS upgrade without bearer -> anonymous, but handler still

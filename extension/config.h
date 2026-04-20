@@ -1,7 +1,7 @@
 /* config.h.  Generated from config.h.in by configure.  */
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
-/* Define to 1 if the PHP extension 'king' is built as a dynamic module. */
+/* Whether to build king as dynamic module */
 #define COMPILE_DL_KING 1
 
 /* Define to 1 if you have the <dlfcn.h> header file. */

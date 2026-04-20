@@ -25,7 +25,7 @@ try {
         // 1. No headers — anonymous, no 401 raised, just null user.
         $r = model_inference_auth_apply_middleware($pdo, ['headers' => []]);
         auth_middleware_contract_assert($r['user'] === null, 'no header → user=null');
-        auth_middleware_contract_assert($r['session'] === null, 'no header → session=null');
+        auth_middleware_contract_assert($r['auth_session'] === null, 'no header → auth_session=null');
         auth_middleware_contract_assert($r['auth_reason'] === 'anonymous', 'no header → reason=anonymous');
         $rulesAsserted += 3;
 
@@ -45,7 +45,7 @@ try {
         auth_middleware_contract_assert($r['user']['username'] === 'alice', 'user.username = alice');
         auth_middleware_contract_assert($r['user']['role'] === 'user', 'user.role = user');
         auth_middleware_contract_assert(!array_key_exists('password_hash', $r['user']), 'user envelope strips password_hash');
-        auth_middleware_contract_assert($r['session']['id'] === $session['id'], 'session.id matches');
+        auth_middleware_contract_assert($r['auth_session']['id'] === $session['id'], 'auth_session.id matches');
         auth_middleware_contract_assert($r['auth_reason'] === 'authenticated', 'reason=authenticated');
         $rulesAsserted += 6;
 

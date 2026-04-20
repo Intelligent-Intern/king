@@ -74,6 +74,26 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
+# Editor / IDE personal state
+.idea/
+
+# macOS Finder metadata
+.DS_Store
+**/.DS_Store
+
+# Playwright MCP session artifacts (ephemeral browser logs / page dumps)
+.playwright-mcp/
+
+# clangd / IntelliSense (regenerated per build)
+compile_commands.json
+
+# Autotools and merge-conflict backup files
+*~
+*.orig
+
+# Demo local runtime data (SQLite DB, seeded fixtures)
+demo/video-chat/backend-king-php/.local/
+
 # Local image artifacts
 *.png
 *.jpg
