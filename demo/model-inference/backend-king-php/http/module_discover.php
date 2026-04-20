@@ -10,6 +10,8 @@ require_once __DIR__ . '/../domain/discovery/hybrid_discover.php';
 require_once __DIR__ . '/../domain/discovery/tool_descriptor_store.php';
 require_once __DIR__ . '/../domain/discovery/tool_discover.php';
 require_once __DIR__ . '/../domain/discovery/mcp_pick.php';
+require_once __DIR__ . '/../domain/discovery/graph_store.php';
+require_once __DIR__ . '/../domain/discovery/graph_expand.php';
 require_once __DIR__ . '/../domain/telemetry/discovery_metrics.php';
 
 function model_inference_handle_discover_routes(
@@ -93,6 +95,7 @@ function model_inference_handle_service_discover_route(
             'search_ms' => $searchMs,
             'time' => gmdate('c'),
         ];
+        $response = model_inference_discover_attach_graph_expansion($response, $pdo, $validated);
         model_inference_record_discovery_metric($getDiscoveryMetrics, $requestId, $validated, 0, $searchMs, $ranked['candidates_scanned'], 'keyword');
         return $jsonResponse(200, $response);
     }
@@ -191,8 +194,41 @@ function model_inference_handle_service_discover_route(
         $response['bm25_k1'] = $ranked['bm25_k1'];
         $response['bm25_b'] = $ranked['bm25_b'];
     }
+    $response = model_inference_discover_attach_graph_expansion($response, $pdo, $validated);
     model_inference_record_discovery_metric($getDiscoveryMetrics, $requestId, $validated, $embeddingMs, $ranked['search_ms'], $ranked['candidates_scanned'], $mode);
     return $jsonResponse(200, $response);
+}
+
+/**
+ * G-batch (#W.8 / #W.9): attach graph expansion data to a finished
+ * /api/discover response if `graph_expand` was supplied. The core
+ * ranked result is left in place verbatim; we only add an `expanded`
+ * list of graph neighbors plus a `graph_expand` echo block.
+ *
+ * @param array<string, mixed> $response
+ * @param array<string, mixed> $validated
+ * @return array<string, mixed>
+ */
+function model_inference_discover_attach_graph_expansion(array $response, PDO $pdo, array $validated): array
+{
+    $ge = $validated['graph_expand'] ?? null;
+    if (!is_array($ge)) {
+        return $response;
+    }
+    model_inference_graph_schema_migrate($pdo);
+    $enriched = model_inference_graph_expand_results(
+        $pdo,
+        (array) ($response['results'] ?? []),
+        $ge['edge_types'] ?? null,
+        (int) ($ge['max_hops'] ?? 1)
+    );
+    $response['expanded'] = $enriched['expanded'];
+    $response['expanded_count'] = $enriched['neighbor_count'];
+    $response['graph_expand'] = [
+        'hops' => $enriched['hops'],
+        'edge_types' => $enriched['edge_types'],
+    ];
+    return $response;
 }
 
 function model_inference_handle_tool_discover_route(
@@ -403,7 +439,7 @@ function model_inference_parse_discover_body(
 
     $allowedKeys = $forTools
         ? ['query', 'top_k', 'min_score', 'mode', 'alpha', 'model_selector']
-        : ['query', 'service_type', 'top_k', 'min_score', 'mode', 'alpha', 'model_selector'];
+        : ['query', 'service_type', 'top_k', 'min_score', 'mode', 'alpha', 'model_selector', 'graph_expand'];
     foreach (array_keys($decoded) as $k) {
         if (!is_string($k) || !in_array($k, $allowedKeys, true)) {
             return ['__error' => $errorResponse(400, 'invalid_request_envelope', "Unknown top-level key: {$k}.", [
@@ -490,6 +526,47 @@ function model_inference_parse_discover_body(
         ];
     }
 
+    // G-batch (#W.8 / #W.9): optional graph_expand. Enriches the ranked
+    // result with up-to-max_hops graph neighbors. Core ranking is
+    // unchanged regardless of this field.
+    $graphExpand = null;
+    if (!$forTools && array_key_exists('graph_expand', $decoded)) {
+        $ge = $decoded['graph_expand'];
+        if (!is_array($ge)) {
+            return ['__error' => $errorResponse(400, 'invalid_request_envelope', 'graph_expand must be an object.', ['field' => 'graph_expand'])];
+        }
+        foreach (array_keys($ge) as $k) {
+            if (!in_array($k, ['edge_types', 'max_hops'], true)) {
+                return ['__error' => $errorResponse(400, 'invalid_request_envelope', 'unknown key inside graph_expand: ' . $k, ['field' => 'graph_expand.' . $k])];
+            }
+        }
+        $maxHops = 1;
+        if (array_key_exists('max_hops', $ge)) {
+            if (!is_int($ge['max_hops']) || $ge['max_hops'] < 1 || $ge['max_hops'] > 2) {
+                return ['__error' => $errorResponse(400, 'invalid_request_envelope', 'graph_expand.max_hops must be int 1..2.', ['field' => 'graph_expand.max_hops'])];
+            }
+            $maxHops = $ge['max_hops'];
+        }
+        $edgeTypes = null;
+        if (array_key_exists('edge_types', $ge)) {
+            if (!is_array($ge['edge_types']) || $ge['edge_types'] !== array_values($ge['edge_types'])) {
+                return ['__error' => $errorResponse(400, 'invalid_request_envelope', 'graph_expand.edge_types must be an array of strings.', ['field' => 'graph_expand.edge_types'])];
+            }
+            $typesNormalized = [];
+            foreach ($ge['edge_types'] as $i => $t) {
+                if (!is_string($t) || $t === '' || strlen($t) > 64) {
+                    return ['__error' => $errorResponse(400, 'invalid_request_envelope', "graph_expand.edge_types[{$i}] invalid.", ['field' => "graph_expand.edge_types[{$i}]"])];
+                }
+                $typesNormalized[] = $t;
+            }
+            if (count($typesNormalized) > 16) {
+                return ['__error' => $errorResponse(400, 'invalid_request_envelope', 'graph_expand.edge_types must contain at most 16 items.', ['field' => 'graph_expand.edge_types'])];
+            }
+            $edgeTypes = $typesNormalized;
+        }
+        $graphExpand = ['max_hops' => $maxHops, 'edge_types' => $edgeTypes];
+    }
+
     return [
         'query' => $query,
         'service_type' => $serviceType,
@@ -498,6 +575,7 @@ function model_inference_parse_discover_body(
         'mode' => $mode,
         'alpha' => $alpha,
         'model_selector' => $modelSelector,
+        'graph_expand' => $graphExpand,
     ];
 }
 

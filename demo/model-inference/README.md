@@ -139,6 +139,32 @@ four M-batch tests require the llama.cpp runtime). You can:
 | #R-15 | done | `scripts/rag-smoke.sh` 10-phase end-to-end |
 | #R-16 | done | this README update + scope fences |
 
+**C-batch: Conversation Persistence (branch `feature/rag-pipeline`)**
+
+Closes readiness tracker bullet **V.8** (prompt/cache/checkpoint persistence). Every chat turn is now persisted server-side keyed by `session_id`; the browser UI survives page reloads because it writes its `session_id` into `localStorage` and rehydrates `state.history` from the server on next boot.
+
+| Leaf | Status | Proof |
+|------|--------|-------|
+| #C-1 | done | `conversations` + `conversation_messages` SQLite schema (60-rule `conversation-store-contract`) |
+| #C-2 | done | `GET /api/conversations/{session_id}/messages`, `GET /api/conversations/{session_id}`, `DELETE /api/conversations/{session_id}` (42-rule `conversations-endpoint-contract`) |
+| #C-3 | done | HTTP + WS inference paths auto-append each turn (best-effort, never corrupts response) |
+| #C-4 | done | Chat UI persists `session_id` in `localStorage` and rehydrates prior turns as `(restored)` bubbles on load |
+
+**Scope fences (C-batch):** session_id is client-supplied and NOT authenticated — any caller with the string can read/delete the conversation. SQLite-only persistence at this leaf; durable object-store replay is out-of-scope (V.8's "checkpoint" side is the harder axis and stays fenced). No pagination on the message list yet (1000-message cap per request).
+
+**G-batch: Graph-aware Discovery (branch `feature/rag-pipeline`)**
+
+Closes readiness tracker bullets **W.8** (graph-aware metadata + relationship traversal) and **W.9** (public contract boundary between core semantic discovery and optional graph integrations).
+
+| Leaf | Status | Proof |
+|------|--------|-------|
+| #G-1 | done | `service_edges` SQLite schema + `graph_store.php` with upsert / delete / list_outgoing / traverse_outgoing (1..3-hop cap, 512-visit budget) (46-rule `graph-store-contract`) |
+| #G-2 | done | `graph_expand.php` enriches a ranked /api/discover result with 1- or 2-hop neighbors tagged `source: "graph_expand"`, `semantic_score: null` (28-rule `graph-expand-contract`) |
+| #G-3 | done | `POST /api/discover` accepts optional `graph_expand: {edge_types?, max_hops?: 1..2}`; core `results` is bit-identical with or without the field (W.9 contract boundary assertion) |
+| #G-4 | done | `contracts/v1/service-graph.contract.json` pins the core-vs-extension boundary |
+
+**Scope fences (G-batch):** directional edges only (undirected must be written twice). No weighted scoring — traversal is plain BFS. Edges are never a ranking signal; they only widen the candidate set. No HTTP write endpoint for edges yet (direct SQLite or a future admin route). MoE / expert routing (tracker V.5) stays fenced — that is a different problem.
+
 **S-batch: Semantic Discovery (branch `feature/rag-pipeline`)**
 
 Reuses the R-batch embedding infrastructure to replace keyword-only service/tool selection with vector + BM25 ranked discovery. Closes W.5, W.7, X.4, X.5, X.6 in the readiness tracker.

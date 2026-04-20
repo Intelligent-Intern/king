@@ -12,6 +12,7 @@ require_once __DIR__ . '/module_embed.php';
 require_once __DIR__ . '/module_ingest.php';
 require_once __DIR__ . '/module_retrieve.php';
 require_once __DIR__ . '/module_discover.php';
+require_once __DIR__ . '/module_conversations.php';
 require_once __DIR__ . '/module_routing.php';
 require_once __DIR__ . '/module_ui.php';
 
@@ -38,6 +39,7 @@ function model_inference_dispatch_route_module_order(): array
         'ingest',
         'retrieve',
         'discover',
+        'conversations',
         'inference',
         'realtime',
         'telemetry',
@@ -176,6 +178,17 @@ function model_inference_dispatch_request(
     );
     if ($discoverResponse !== null) {
         return $discoverResponse;
+    }
+
+    $conversationsResponse = model_inference_handle_conversations_routes(
+        $path,
+        $method,
+        $jsonResponse,
+        $errorResponse,
+        $openDatabase
+    );
+    if ($conversationsResponse !== null) {
+        return $conversationsResponse;
     }
 
     $inferenceResponse = model_inference_handle_inference_routes(

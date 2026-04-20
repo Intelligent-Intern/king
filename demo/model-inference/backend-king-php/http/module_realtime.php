@@ -6,6 +6,7 @@ require_once __DIR__ . '/../domain/inference/inference_request.php';
 require_once __DIR__ . '/../domain/inference/inference_session.php';
 require_once __DIR__ . '/../domain/inference/inference_stream.php';
 require_once __DIR__ . '/../domain/inference/transcript_store.php';
+require_once __DIR__ . '/../domain/conversation/conversation_store.php';
 require_once __DIR__ . '/../domain/registry/model_registry.php';
 require_once __DIR__ . '/../domain/registry/model_fit_selector.php';
 require_once __DIR__ . '/../domain/profile/hardware_profile.php';
@@ -214,6 +215,20 @@ function model_inference_realtime_run_session(
         $requestId,
         model_inference_transcript_from_ws($streamSummary, $validated, $entry)
     );
+
+    // C-batch (#V.8): persist the streamed turn for conversation replay.
+    try {
+        $assistantText = (string) ($streamSummary['concatenated_text'] ?? '');
+        if ($assistantText !== '') {
+            $pdo = $openDatabase();
+            model_inference_conversation_schema_migrate($pdo);
+            model_inference_conversation_append_turn(
+                $pdo, $validated, $assistantText, $requestId, $entry
+            );
+        }
+    } catch (Throwable $ignored) {
+        // never corrupt the WS stream on persistence failure
+    }
 }
 
 /**

@@ -430,6 +430,36 @@
         "alpha": "float",
         "recorded_at": "rfc3339"
       }
+    },
+    "conversation_messages_list": {
+      "method": "GET",
+      "paths": ["/api/conversations/{session_id}/messages"],
+      "introduced_by": "C-batch (V.8)",
+      "envelope_contract": "demo/model-inference/contracts/v1/conversation-message.contract.json",
+      "scope": "Replay the persisted transcript for a session so the chat UI can rehydrate state.history on page reload. Closes readiness tracker bullet V.8."
+    },
+    "conversation_meta_get": {
+      "method": "GET",
+      "paths": ["/api/conversations/{session_id}"],
+      "introduced_by": "C-batch (V.8)",
+      "envelope": {
+        "status": "ok",
+        "session_id": "string",
+        "found": "bool",
+        "meta": "{created_at, updated_at, turn_count, last_request_id, last_model_name, last_model_quantization}|null",
+        "time": "rfc3339"
+      }
+    },
+    "conversation_delete": {
+      "method": "DELETE",
+      "paths": ["/api/conversations/{session_id}"],
+      "introduced_by": "C-batch (V.8)",
+      "envelope": {
+        "status": "ok",
+        "session_id": "string",
+        "deleted_message_count": "int",
+        "time": "rfc3339"
+      }
     }
   },
   "ws": {

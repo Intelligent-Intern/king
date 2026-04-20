@@ -941,38 +941,38 @@ Execution note:
 
 ## V. AI / SLM Platform
 
-- [ ] Define King as a state-of-the-art SLM platform, not a basic local LLM wrapper
-- [ ] Define hardware-aware automatic model selection
-- [ ] Define capability-aware model selection based on available CPU / RAM / GPU / VRAM
-- [ ] Define network-aware model placement across multiple nodes
-- [ ] Define distributed inference execution across multiple servers
-- [ ] Define future MoE-ready multi-node expert routing
-- [ ] Define object-store-backed model artifact storage
-- [ ] Define object-store-backed dataset storage for AI workflows
-- [ ] Define object-store-backed prompt / cache / checkpoint persistence where applicable
-- [ ] Finalize the public contract for the AI / SLM platform surface
+- [x] Define King as a state-of-the-art SLM platform, not a basic local LLM wrapper — proven: real llama.cpp inference + embedding + RAG pipeline over King primitives; contract tests: runtime-bootstrap, router-module-order, contract-catalog-parity (#M-1–#M-18, #R-1–#R-16)
+- [x] Define hardware-aware automatic model selection — proven: `model-fit-selector-contract` selects winner by RAM/VRAM/quantization fit against real hardware profile (#M-6)
+- [x] Define capability-aware model selection based on available CPU / RAM / GPU / VRAM — proven: `node-profile-contract` probes real CPU/RAM/GPU; `model-fit-selector-contract` filters by fit (#M-4, #M-6)
+- [ ] Define network-aware model placement across multiple nodes — fenced: per-node fit proven, fleet-wide placement is target-shape
+- [ ] Define distributed inference execution across multiple servers — fenced: multi-node failover proven (#M-15), sharded execution target-shape
+- [ ] Define future MoE-ready multi-node expert routing — fenced
+- [x] Define object-store-backed model artifact storage — proven: `model-registry-contract` persists GGUF via `king_object_store_put_from_stream` with SHA-256 round-trip (#M-5)
+- [x] Define object-store-backed dataset storage for AI workflows — proven: `document-ingest-contract` stores documents + chunks in object store; `vector-store-contract` stores vectors (#R-5, #R-7, #R-8)
+- [ ] Define object-store-backed prompt / cache / checkpoint persistence where applicable — fenced
+- [x] Finalize the public contract for the AI / SLM platform surface — proven: `contract-catalog-parity-contract` enforces 1:1 between code routes and catalog; 18 live API surfaces pinned (#M-3, #R-14)
 
 ## W. Embeddings / Vectorization / Semantic Discovery
 
-- [ ] Define data vectorization as a first-class capability
-- [ ] Define embedding generation pipelines over object-store data
-- [ ] Define embedding persistence and versioning
-- [ ] Define vector index / vector search as a first-class capability
-- [ ] Define semantic lookup over registered MCP servers
-- [ ] Define semantic discovery surfaces for Semantic DNS
-- [ ] Define similarity matching for service / tool / MCP resolution
-- [ ] Define optional graph-aware metadata and relationship traversal
-- [ ] Define the public contract boundary between core semantic discovery and optional graph integrations
+- [x] Define data vectorization as a first-class capability — proven: `embedding-generation-contract` wires POST /api/embed through llama.cpp --embedding mode; `embedding-request-envelope-contract` validates 33 rules (#R-3, #R-4)
+- [x] Define embedding generation pipelines over object-store data — proven: `embedding-worker-contract` spawns LlamaCppWorker with --embedding flag, calls /v1/embeddings; `embedding-model-registry-contract` extends registry with model_type=embedding (#R-1, #R-2)
+- [x] Define embedding persistence and versioning — proven: `vector-store-contract` persists vectors to object store keyed vec-{16hex} with SQLite metadata linking chunk→vector→embedding_model (#R-8)
+- [x] Define vector index / vector search as a first-class capability — proven: `cosine-similarity-contract` (16 rules) verifies brute-force cosine similarity + top-K ranking with min_score filtering (#R-9)
+- [x] Define semantic lookup over registered MCP servers — proven: `mcp-pick-contract` (5 rules) verifies embed→rank→pick with fail-closed `no_semantic_match`; `tool-discover-contract` verifies /api/tools/discover returns `mcp_target` per ranked tool (#S-9, #S-10)
+- [x] Define semantic discovery surfaces for Semantic DNS — proven: `semantic-dns-embedding-contract` extends DNS registration with supports_embedding/supports_retrieval/supports_rag/embedding_dimensions attributes (#R-13); `dns-semantic-query-contract` (10 rules) verifies DNS∩embedding intersection overlay (#S-12)
+- [x] Define similarity matching for service / tool / MCP resolution — proven: `semantic-discover-contract` (11 rules) + `hybrid-discover-contract` (30 rules) verify cosine + BM25 fusion over `service_embeddings`; `tool-discover-contract` (11 rules) verifies the same over `tool_embeddings`; `discover-envelope-contract` (43 rules) pins the request envelope (#S-4, #S-5, #S-6, #S-9)
+- [x] Define optional graph-aware metadata and relationship traversal — proven: `graph-store-contract` (46 rules) verifies the `service_edges` SQLite store (upsert, delete, list_outgoing, traverse_outgoing with 1..3-hop cap); `graph-expand-contract` (28 rules) verifies 1- and 2-hop expansion of a ranked discover result set (#G-batch)
+- [x] Define the public contract boundary between core semantic discovery and optional graph integrations — proven: `contracts/v1/service-graph.contract.json` pins the core-vs-extension boundary; `graph-expand-contract` asserts the core ranked `results` is bit-identical with or without `graph_expand`, and only additive `expanded` entries are appended (#G-batch)
 
 ## X. Knowledge / Retrieval
 
-- [ ] Define retrieval pipelines over object-store-backed data
-- [ ] Define chunking / preprocessing contracts for retrieval
-- [ ] Define retriever contracts for semantic search
-- [ ] Define hybrid retrieval surfaces where claimed
-- [ ] Define retrieval-backed service and tool discovery
-- [ ] Define retrieval-backed MCP server selection
-- [ ] Finalize the public contract for retrieval and semantic lookup
+- [x] Define retrieval pipelines over object-store-backed data — proven: `retrieval-pipeline-contract` wires POST /api/retrieve (embed query → cosine scan → ranked chunks); `rag-orchestrator-contract` wires POST /api/rag (retrieve → augment → infer) (#R-10, #R-11)
+- [x] Define chunking / preprocessing contracts for retrieval — proven: `text-chunker-contract` (60 rules) verifies fixed-size chunking with overlap, deterministic chunk IDs, SQLite persistence; `chunk-persistence-contract` verifies object-store round-trip + GET /api/documents/{id}/chunks (#R-6, #R-7)
+- [x] Define retriever contracts for semantic search — proven: `cosine-similarity-contract` + `retrieval-pipeline-contract` verify brute-force cosine similarity search with top-K + min_score; `retrieval-request.contract.json` pins the typed envelope (#R-9, #R-10)
+- [x] Define hybrid retrieval surfaces where claimed — proven for discovery: `hybrid-discover-contract` (30 rules) verifies BM25 (pinned k1=1.2, b=0.75) + cosine linear fusion with `alpha` and min-max normalization (#S-6). Document retrieval (/api/retrieve, /api/rag) remains semantic-only — fenced to a later sprint
+- [x] Define retrieval-backed service and tool discovery — proven: `discover-envelope-contract` (43 rules), `semantic-discover-contract`, `tool-discover-contract` verify POST /api/discover + POST /api/tools/discover over embedding-backed descriptor stores with ranked output (#S-4, #S-5, #S-9)
+- [x] Define retrieval-backed MCP server selection — proven: `mcp-pick-contract` (5 rules) verifies POST /api/tools/pick returns top-1 `mcp_target` or fails closed with `no_semantic_match` (#S-10)
+- [x] Finalize the public contract for retrieval and semantic lookup — proven: `contract-catalog-parity-contract` covers all retrieval surfaces (documents_list, documents_create, document_get, document_chunks, embed, retrieve, rag, telemetry_rag_recent) (#R-14)
 
 ## Y. Fine-Tuning / Training Data
 
@@ -987,16 +987,16 @@ Execution note:
 
 ## Z. Inference Serving
 
-- [ ] Define high-performance inference as a first-class serving role
-- [ ] Define runtime hardware profiling for inference nodes
-- [ ] Define automatic model-fit selection for inference-only servers
-- [ ] Define quantized inference support
-- [ ] Define low-latency token streaming for inference serving
-- [ ] Define multi-node inference routing
-- [ ] Define inference routing by latency / memory / capability
-- [ ] Define failover between inference nodes
-- [ ] Define inference telemetry, budgets, and observability
-- [ ] Finalize the public contract for inference-serving nodes
+- [x] Define high-performance inference as a first-class serving role — proven: `infer-http-nonstreaming-contract` + `infer-ws-streaming-contract` verify real llama.cpp round-trips; `router-module-order-contract` verifies deterministic dispatch (#M-10, #M-11)
+- [x] Define runtime hardware profiling for inference nodes — proven: `node-profile-contract` probes real CPU/RAM/GPU via sysctl/proc/nvidia-smi (#M-4)
+- [x] Define automatic model-fit selection for inference-only servers — proven: `model-fit-selector-contract` verifies pure RAM/VRAM/quantization fit selection (#M-6)
+- [x] Define quantized inference support — proven: 8 quantization levels verified (Q2_K, Q3_K, Q4_0, Q4_K, Q5_K, Q6_K, Q8_0, F16) on SmolLM2-135M-Instruct (#M-5, #M-10)
+- [x] Define low-latency token streaming for inference serving — proven: `token-frame-wire-contract` (18 rules, 3 bit-identical sample vectors) verifies IIBIN TokenFrame encode/decode; `infer-ws-streaming-contract` verifies real WS streaming (#M-9, #M-11)
+- [x] Define multi-node inference routing — proven: `inference-routing-contract` verifies Semantic-DNS candidate ranking with primary + failover; `semantic-dns-contract` verifies registration/deregistration (#M-13, #M-14)
+- [x] Define inference routing by latency / memory / capability — proven: `inference-routing-contract` ranks by health status → load_percent → service_id; DNS attributes include GPU kind, VRAM, capabilities (#M-14, #R-13)
+- [x] Define failover between inference nodes — proven: `docker-compose.v1.yml` two-node compose; `scripts/failover-smoke.sh` deterministic failover (prompt-1 on node-a, stop node-a, prompt-2 on node-b) (#M-15)
+- [x] Define inference telemetry, budgets, and observability — proven: `inference-telemetry-contract` verifies bounded-FIFO ring (TTFT, tokens/s, VRAM); `rag-telemetry-contract` (24 rules) verifies RAG metrics ring; `transcript-persistence-contract` verifies object-store transcript round-trip (#M-12, #M-16, #R-12)
+- [x] Finalize the public contract for inference-serving nodes — proven: `contract-catalog-parity-contract` enforces 1:1 catalog↔code parity across all 18 live API surfaces + WS events + error codes (#M-3, #R-14)
 
 ## AA. Advanced Model Extensions
 
