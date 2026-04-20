@@ -29,6 +29,13 @@ function model_inference_conversation_schema_migrate(PDO $pdo): void
         last_model_name TEXT,
         last_model_quantization TEXT
     )');
+    // #A-4 idempotent ALTER: add user_ref column if it doesn't yet
+    // exist. NULL user_ref means anonymous (pre-A-batch behavior).
+    $existingCols = array_column($pdo->query('PRAGMA table_info(conversations)')->fetchAll(), 'name');
+    if (!in_array('user_ref', $existingCols, true)) {
+        $pdo->exec('ALTER TABLE conversations ADD COLUMN user_ref INTEGER');
+    }
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_conversations_user_ref ON conversations(user_ref)');
     $pdo->exec('CREATE TABLE IF NOT EXISTS conversation_messages (
         message_id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id TEXT NOT NULL,
@@ -58,7 +65,8 @@ function model_inference_conversation_append_turn(
     array $validatedEnvelope,
     string $assistantContent,
     string $requestId,
-    array $modelEnvelope
+    array $modelEnvelope,
+    ?int $userRef = null
 ): array {
     $sessionId = (string) ($validatedEnvelope['session_id'] ?? '');
     if ($sessionId === '') {
@@ -74,11 +82,12 @@ function model_inference_conversation_append_turn(
         if ($meta === null) {
             $insert = $pdo->prepare('INSERT INTO conversations (
                 session_id, created_at, updated_at, turn_count,
-                last_request_id, last_model_name, last_model_quantization
-            ) VALUES (:sid, :created, :updated, 0, :req, :mn, :mq)');
+                last_request_id, last_model_name, last_model_quantization, user_ref
+            ) VALUES (:sid, :created, :updated, 0, :req, :mn, :mq, :uref)');
             $insert->execute([
                 ':sid' => $sessionId, ':created' => $now, ':updated' => $now,
                 ':req' => $requestId, ':mn' => $modelName, ':mq' => $modelQuant,
+                ':uref' => $userRef,
             ]);
             $seq = 0;
         } else {
@@ -147,17 +156,46 @@ function model_inference_conversation_append_turn(
             $appended++;
         }
 
-        $update = $pdo->prepare('UPDATE conversations SET
-            updated_at = :updated,
-            turn_count = turn_count + 1,
-            last_request_id = :req,
-            last_model_name = :mn,
-            last_model_quantization = :mq
-            WHERE session_id = :sid');
-        $update->execute([
-            ':updated' => $now, ':req' => $requestId,
-            ':mn' => $modelName, ':mq' => $modelQuant, ':sid' => $sessionId,
-        ]);
+        // A-4: bind a user on first authenticated turn. Once bound, keep
+        // the owner — an authenticated request from a DIFFERENT user on
+        // an owned session must not silently reassign ownership. The
+        // endpoint's ownership gate catches cross-user reads; here we
+        // simply refuse to overwrite an existing user_ref with a
+        // mismatched one.
+        if ($userRef !== null && $meta !== null) {
+            $existingRef = $meta['user_ref'] ?? null;
+            if ($existingRef !== null && (int) $existingRef !== (int) $userRef) {
+                $userRef = (int) $existingRef;
+            }
+        }
+
+        if ($userRef !== null) {
+            $update = $pdo->prepare('UPDATE conversations SET
+                updated_at = :updated,
+                turn_count = turn_count + 1,
+                last_request_id = :req,
+                last_model_name = :mn,
+                last_model_quantization = :mq,
+                user_ref = COALESCE(user_ref, :uref)
+                WHERE session_id = :sid');
+            $update->execute([
+                ':updated' => $now, ':req' => $requestId,
+                ':mn' => $modelName, ':mq' => $modelQuant,
+                ':uref' => $userRef, ':sid' => $sessionId,
+            ]);
+        } else {
+            $update = $pdo->prepare('UPDATE conversations SET
+                updated_at = :updated,
+                turn_count = turn_count + 1,
+                last_request_id = :req,
+                last_model_name = :mn,
+                last_model_quantization = :mq
+                WHERE session_id = :sid');
+            $update->execute([
+                ':updated' => $now, ':req' => $requestId,
+                ':mn' => $modelName, ':mq' => $modelQuant, ':sid' => $sessionId,
+            ]);
+        }
 
         $pdo->commit();
         return [
@@ -209,7 +247,43 @@ function model_inference_conversation_get_meta(PDO $pdo, string $sessionId): ?ar
         'last_request_id' => $row['last_request_id'] !== null ? (string) $row['last_request_id'] : null,
         'last_model_name' => $row['last_model_name'] !== null ? (string) $row['last_model_name'] : null,
         'last_model_quantization' => $row['last_model_quantization'] !== null ? (string) $row['last_model_quantization'] : null,
+        'user_ref' => isset($row['user_ref']) && $row['user_ref'] !== null ? (int) $row['user_ref'] : null,
     ];
+}
+
+/**
+ * List conversations owned by a specific user. Returns meta rows only
+ * (no messages). Used by #A-7 to power "my conversations" cross-device
+ * continuation.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function model_inference_conversation_list_by_user(PDO $pdo, int $userRef, int $limit = 50): array
+{
+    if ($userRef < 1 || $limit < 1) {
+        return [];
+    }
+    $stmt = $pdo->prepare('SELECT * FROM conversations
+        WHERE user_ref = :uref
+        ORDER BY updated_at DESC
+        LIMIT :limit');
+    $stmt->bindValue(':uref', $userRef, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    $result = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $result[] = [
+            'session_id' => (string) $row['session_id'],
+            'created_at' => (string) $row['created_at'],
+            'updated_at' => (string) $row['updated_at'],
+            'turn_count' => (int) $row['turn_count'],
+            'last_request_id' => $row['last_request_id'] !== null ? (string) $row['last_request_id'] : null,
+            'last_model_name' => $row['last_model_name'] !== null ? (string) $row['last_model_name'] : null,
+            'last_model_quantization' => $row['last_model_quantization'] !== null ? (string) $row['last_model_quantization'] : null,
+            'user_ref' => (int) $row['user_ref'],
+        ];
+    }
+    return $result;
 }
 
 /** @return array<int, array<string, mixed>> */

@@ -13,8 +13,10 @@ require_once __DIR__ . '/module_ingest.php';
 require_once __DIR__ . '/module_retrieve.php';
 require_once __DIR__ . '/module_discover.php';
 require_once __DIR__ . '/module_conversations.php';
+require_once __DIR__ . '/module_auth.php';
 require_once __DIR__ . '/module_routing.php';
 require_once __DIR__ . '/module_ui.php';
+require_once __DIR__ . '/../domain/auth/auth_middleware.php';
 
 /**
  * Deterministic module-registration order for the inference backend.
@@ -35,6 +37,7 @@ function model_inference_dispatch_route_module_order(): array
         'runtime',
         'profile',
         'registry',
+        'auth',
         'embed',
         'ingest',
         'retrieve',
@@ -88,6 +91,22 @@ function model_inference_dispatch_request(
         ];
     }
 
+    // A-3: non-blocking auth middleware — hydrates $request['user'] +
+    // $request['session'] when a valid Bearer token is present,
+    // otherwise leaves them null and lets the request proceed
+    // anonymously. Every downstream module can inspect $request['user']
+    // to decide whether to enforce ownership or continue anonymously.
+    try {
+        $__auth_pdo = $openDatabase();
+        $request = model_inference_auth_apply_middleware($__auth_pdo, $request);
+    } catch (Throwable $ignored) {
+        // auth failure must never block the request — fall through with
+        // user=null; every module already tolerates anonymous access
+        $request['user'] = $request['user'] ?? null;
+        $request['session'] = $request['session'] ?? null;
+        $request['auth_reason'] = 'middleware_error';
+    }
+
     $runtimeResponse = model_inference_handle_runtime_routes(
         $path,
         $method,
@@ -122,6 +141,18 @@ function model_inference_dispatch_request(
     );
     if ($registryResponse !== null) {
         return $registryResponse;
+    }
+
+    $authResponse = model_inference_handle_auth_routes(
+        $path,
+        $method,
+        $request,
+        $jsonResponse,
+        $errorResponse,
+        $openDatabase
+    );
+    if ($authResponse !== null) {
+        return $authResponse;
     }
 
     if ($getEmbeddingSession !== null) {
@@ -185,7 +216,8 @@ function model_inference_dispatch_request(
         $method,
         $jsonResponse,
         $errorResponse,
-        $openDatabase
+        $openDatabase,
+        $request
     );
     if ($conversationsResponse !== null) {
         return $conversationsResponse;

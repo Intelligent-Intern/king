@@ -206,8 +206,20 @@
 <header>
   <div class="title">king · model-inference · chat</div>
   <div id="model-label" class="status" title="Active model selector">model=…</div>
+  <div id="auth-status" class="status" title="Auth state (click to log in/out)" style="cursor:pointer;">anonymous</div>
   <div id="conn" class="status">loading…</div>
 </header>
+
+<div id="auth-banner" hidden style="max-width:920px;margin:8px auto 0;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);font-family:var(--mono);font-size:13px;">
+  <form id="login-form" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <span style="color:var(--fg-muted);">#A-batch login — try <code>alice / alice123</code> or <code>admin / admin123</code>:</span>
+    <input type="text" id="login-username" placeholder="username" autocomplete="username" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);width:120px;">
+    <input type="password" id="login-password" placeholder="password" autocomplete="current-password" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);width:120px;">
+    <button type="submit" id="login-button" style="min-width:auto;padding:4px 12px;">Log in</button>
+    <button type="button" id="login-dismiss" style="min-width:auto;padding:4px 8px;background:transparent;color:var(--fg-muted);border:1px solid var(--border);">Stay anonymous</button>
+    <span id="login-error" style="color:#e53935;"></span>
+  </form>
+</div>
 
 <div id="fwd-banner" hidden></div>
 
@@ -282,6 +294,14 @@
     max_tokens: document.getElementById('max_tokens'),
     frequency_penalty: document.getElementById('frequency_penalty'),
     presence_penalty: document.getElementById('presence_penalty'),
+    authStatus: document.getElementById('auth-status'),
+    authBanner: document.getElementById('auth-banner'),
+    loginForm: document.getElementById('login-form'),
+    loginUsername: document.getElementById('login-username'),
+    loginPassword: document.getElementById('login-password'),
+    loginButton: document.getElementById('login-button'),
+    loginDismiss: document.getElementById('login-dismiss'),
+    loginError: document.getElementById('login-error'),
   };
 
   const state = {
@@ -318,6 +338,11 @@
     // Buffer for the assistant completion text — finalized after
     // streaming ends and pushed into history.
     pendingAssistantText: '',
+    // A-7: auth state. Populated from localStorage on boot; kept in sync
+    // with successful /api/auth/login and /api/auth/logout calls.
+    authToken: null,
+    authUser: null,
+    authDismissed: false,
     // T-2/T-3: default system prompt. Prevents small-model mode collapse
     // (generic refusals AND echo-copying the prior reply). The prompt
     // explicitly anchors the model to the LATEST user question and asks
@@ -340,7 +365,14 @@
   // sidesteps that constraint until concurrent WS handling lands.
   function wsUrl() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return proto + '//' + location.host + '/ws';
+    const base = proto + '//' + location.host + '/ws';
+    // A-5 / A-7: browsers cannot set the Authorization header on a WS
+    // upgrade. Pass the 32-hex bearer token as ?auth_token=...; the
+    // server's bearer extractor honors it for WS paths only.
+    if (state.authToken) {
+      return base + '?auth_token=' + encodeURIComponent(state.authToken);
+    }
+    return base;
   }
 
   function setConn(text, kind) {
@@ -648,11 +680,108 @@
   setConn('booting…');
   els.send.disabled = true;
   els.prompt.disabled = true;
+  // A-7: auth helpers.
+  const AUTH_STORAGE_KEY = 'king-model-inference-auth';
+
+  function loadAuthFromStorage() {
+    try {
+      const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.token !== 'string' || !/^[a-f0-9]{32}$/.test(parsed.token)) return;
+      if (parsed.expires_at && new Date(parsed.expires_at).getTime() < Date.now()) {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        return;
+      }
+      state.authToken = parsed.token;
+      state.authUser = parsed.user || null;
+    } catch { /* ignore */ }
+  }
+
+  function saveAuth(token, user, expiresAt) {
+    state.authToken = token;
+    state.authUser = user;
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token, user, expires_at: expiresAt }));
+    } catch { /* ignore */ }
+  }
+
+  function clearAuth() {
+    state.authToken = null;
+    state.authUser = null;
+    try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch { /* ignore */ }
+  }
+
+  function authHeaders() {
+    return state.authToken ? { 'Authorization': 'Bearer ' + state.authToken } : {};
+  }
+
+  function updateAuthStatus() {
+    if (state.authUser && state.authToken) {
+      els.authStatus.textContent = state.authUser.username + ' @ ' + state.authUser.role;
+      els.authStatus.title = 'Click to log out';
+      if (els.authBanner) els.authBanner.hidden = true;
+    } else {
+      els.authStatus.textContent = 'anonymous';
+      els.authStatus.title = 'Click to log in';
+      if (els.authBanner && !state.authDismissed) els.authBanner.hidden = false;
+    }
+  }
+
+  async function doLogin(username, password) {
+    els.loginError.textContent = '';
+    els.loginButton.disabled = true;
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        els.loginError.textContent = (body.error && body.error.code) || ('HTTP ' + res.status);
+        return false;
+      }
+      saveAuth(body.session.id, body.user, body.session.expires_at);
+      updateAuthStatus();
+      els.loginUsername.value = '';
+      els.loginPassword.value = '';
+      state.authDismissed = false;
+      return true;
+    } catch (e) {
+      els.loginError.textContent = String(e);
+      return false;
+    } finally {
+      els.loginButton.disabled = false;
+    }
+  }
+
+  async function doLogout() {
+    const token = state.authToken;
+    clearAuth();
+    updateAuthStatus();
+    if (token) {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          cache: 'no-store',
+          headers: { 'Authorization': 'Bearer ' + token },
+        });
+      } catch { /* fire and forget */ }
+    }
+  }
+
   async function fetchJsonWithRetry(path, attempts = 3) {
     for (let i = 0; i < attempts; i++) {
       try {
-        const res = await fetch(path, { cache: 'no-store' });
+        const res = await fetch(path, { cache: 'no-store', headers: { ...authHeaders() } });
         if (res.ok) return await res.json();
+        if (res.status === 401) {
+          clearAuth();
+          updateAuthStatus();
+          return null;
+        }
       } catch { /* retry */ }
       if (i < attempts - 1) await new Promise(r => setTimeout(r, 200));
     }
@@ -702,7 +831,46 @@
   });
   els.quantization.addEventListener('change', syncSendEnabled);
 
+  // A-7: wire the login form + status chip.
+  loadAuthFromStorage();
+  updateAuthStatus();
+  if (els.loginForm) {
+    els.loginForm.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const u = (els.loginUsername.value || '').trim();
+      const p = els.loginPassword.value || '';
+      if (!u || !p) { els.loginError.textContent = 'username + password required'; return; }
+      await doLogin(u, p);
+    });
+  }
+  if (els.loginDismiss) {
+    els.loginDismiss.addEventListener('click', () => {
+      state.authDismissed = true;
+      if (els.authBanner) els.authBanner.hidden = true;
+    });
+  }
+  if (els.authStatus) {
+    els.authStatus.addEventListener('click', async () => {
+      if (state.authToken) {
+        await doLogout();
+      } else {
+        state.authDismissed = false;
+        updateAuthStatus();
+      }
+    });
+  }
+
   (async function fetchMeta() {
+    // Verify the token before showing the user as logged in.
+    if (state.authToken) {
+      const who = await fetchJsonWithRetry('/api/auth/whoami');
+      if (!who || who.status !== 'ok') {
+        clearAuth();
+      } else if (who.user) {
+        state.authUser = who.user;
+        updateAuthStatus();
+      }
+    }
     const runtime = await fetchJsonWithRetry('/api/runtime');
     const models = await fetchJsonWithRetry('/api/models');
     if (runtime && runtime.node) {

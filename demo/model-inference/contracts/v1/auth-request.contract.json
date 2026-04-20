@@ -1,0 +1,65 @@
+{
+  "contract_name": "king-model-inference-auth-request",
+  "contract_version": "1.0.0",
+  "contract_scope": "Client-to-server envelope for /api/auth/login (#A-2). The backend returns an opaque bearer session id that the client MUST attach as `Authorization: Bearer <id>` on subsequent REST and WS calls. Auth is OPTIONAL across the rest of the model-inference surface — callers that omit the header continue to operate anonymously.",
+  "honesty_rules": [
+    "Passwords traverse the wire in plaintext over the /api/auth/login POST body. The demo backend hashes them via password_hash(PASSWORD_DEFAULT) before persistence; plaintext never touches SQLite. Production hardening (TLS termination, rate-limit, brute-force lockout) is explicitly fenced for this demo.",
+    "Session ids are opaque 32-char hex strings, NOT JWT. Revocation is a single UPDATE on the sessions table — there is no stateless token to keep consistent.",
+    "TTL is clamped server-side to [60s, 30d]. Client-supplied ttl hints are not accepted — the TTL comes from MODEL_INFERENCE_SESSION_TTL_SECONDS (default 12h).",
+    "Invalid-credential responses never distinguish wrong-username from wrong-password. The error envelope code is always `invalid_credentials`.",
+    "Disabled users (users.status != 'active') cannot log in; the error is `invalid_credentials` (not disclosing account status)."
+  ],
+  "endpoints": {
+    "login": {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "content_type": "application/json",
+      "request_envelope": {
+        "username": {"type": "string", "min_length": 2, "max_length": 64, "pattern": "/^[a-zA-Z0-9_.\\-]+$/", "required": true},
+        "password": {"type": "string", "min_length": 6, "max_length": 256, "required": true}
+      },
+      "response_envelope": {
+        "status": "ok",
+        "session": "user-session.contract.json",
+        "user": "user-session.contract.json#user",
+        "time": "rfc3339"
+      },
+      "rejection_codes": {
+        "invalid_request_envelope": "malformed body, missing field, out-of-range",
+        "invalid_credentials": "no matching user / wrong password / disabled user",
+        "method_not_allowed": "non-POST"
+      }
+    },
+    "logout": {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "auth": "Bearer token required; omitting or expired returns 200 with revocation_state='already_revoked' for idempotency",
+      "response_envelope": {
+        "status": "ok",
+        "revocation_state": "revoked|already_revoked",
+        "revoked_at": "rfc3339|null",
+        "time": "rfc3339"
+      },
+      "rejection_codes": {
+        "method_not_allowed": "non-POST"
+      }
+    },
+    "whoami": {
+      "method": "GET",
+      "path": "/api/auth/whoami",
+      "auth": "Bearer token required; no header or invalid token returns 401 session_expired/session_revoked/invalid_credentials",
+      "response_envelope": {
+        "status": "ok",
+        "user": "user-session.contract.json#user",
+        "session": "user-session.contract.json",
+        "time": "rfc3339"
+      },
+      "rejection_codes": {
+        "session_expired": "bearer token's expires_at is in the past",
+        "session_revoked": "bearer token's revoked_at is set",
+        "invalid_credentials": "no bearer token or token does not match any session row",
+        "method_not_allowed": "non-GET"
+      }
+    }
+  }
+}
