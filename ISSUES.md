@@ -1758,3 +1758,145 @@ tests shipped in this branch: **W.5**, **W.7**, **W.8**, **W.9**,
 Still honestly fenced for model-inference scope: V.3 (fleet placement),
 V.4 (sharded execution), V.5 (MoE / expert routing), all of Y-batch
 (fine-tuning), all of AA-batch (advanced extensions, out-of-core).
+
+## A-batch: Simple Auth / Identity (branch `feature/rag-pipeline`) — PLANNED
+
+> Demo-grade auth layer that binds model-inference conversations to a
+> logged-in user for cross-device continuation. Borrows patterns from
+> the video-chat auth layer (bcrypt + opaque bearer + middleware-at-
+> dispatcher + idempotent demo-user autoseed) but drops the production
+> complexity (session refresh, per-frame WS revalidation, full RBAC
+> matrix, email-based login) to stay demo-sized.
+>
+> Scope map: closes readiness tracker section **AB** (4 bullets). Does
+> NOT move V / W / X / Y / AA.
+
+Non-negotiable direction:
+
+- **Auth is OPTIONAL.** Every pre-A-batch caller that doesn't send an
+  `Authorization: Bearer` header continues to work exactly as before —
+  `/api/infer`, `/api/rag`, `/api/discover`, `/api/tools/*`,
+  `/api/documents/*`, `/api/conversations/*` all stay open to anonymous
+  use. Auth only engages when a Bearer token is present.
+- **No king.so changes.** Everything is PHP-level composition on top of
+  the existing HTTP primitives.
+- **Reuse video-chat patterns; do not import video-chat code.** The
+  video-chat auth at `demo/video-chat/backend-king-php/` is the
+  reference; we mirror the shape (opaque session ids, bcrypt, middleware
+  at dispatcher) but write a new, minimal store + endpoints scoped to
+  the model-inference demo's conventions.
+- **Honest fences**: per-frame WS revalidation, session refresh, RBAC
+  path-rule matrix, SSO/OAuth, password-reset, rate-limit/brute-force
+  lockout — all intentionally out of scope for the demo.
+
+### Planned leaves (A-1 through A-8)
+
+- [ ] `#A-1` Auth store + users/sessions SQLite schema. Domain API:
+  `model_inference_auth_create_user`, `verify_credentials`,
+  `issue_session`, `validate_session`, `revoke_session`. Passwords
+  bcrypt-hashed via `password_hash(PASSWORD_DEFAULT)`. Session ids are
+  opaque 32-byte hex strings. Maps to AB.1, AB.2.
+  - New file: `backend-king-php/domain/auth/auth_store.php`
+  - Contract: `tests/auth-store-contract.{sh,php}`
+
+- [ ] `#A-2` `POST /api/auth/login` + `POST /api/auth/logout` +
+  `GET /api/auth/whoami`. Login accepts `{username, password}` JSON,
+  issues a session with TTL (env `MODEL_INFERENCE_SESSION_TTL_SECONDS`,
+  default 12h, clamped 60s–30d), returns
+  `{session: {id, expires_at, ttl_seconds}, user: {id, username, display_name, role}}`.
+  Logout revokes. Whoami echoes `$request['user']`. Maps to AB.1, AB.2.
+  - New file: `backend-king-php/http/module_auth.php`
+  - New contract JSONs: `contracts/v1/auth-request.contract.json`,
+    `contracts/v1/user-session.contract.json`
+  - Contract test: `tests/auth-endpoint-contract.{sh,php}`
+
+- [ ] `#A-3` Non-blocking auth middleware. Extracts
+  `Authorization: Bearer <token>`, validates against the sessions table
+  (JOIN users + role). On hit: hydrates `$request['user']` and
+  `$request['session']`. On miss (no header, invalid, expired, revoked):
+  request proceeds **anonymously** (no 401). Called once from the
+  dispatcher before module fan-out. Maps to AB.1.
+  - New file: `backend-king-php/domain/auth/auth_middleware.php`
+  - Edit: `backend-king-php/http/router.php` (hook insertion)
+  - Contract: `tests/auth-middleware-contract.{sh,php}`
+
+- [ ] `#A-4` Conversation ownership binding. Add nullable `user_ref`
+  INTEGER column to `conversations` (idempotent `ALTER TABLE`). When
+  authenticated, `model_inference_conversation_append_turn()` populates
+  `user_ref = user.id`. `GET /api/conversations/{session_id}/messages`
+  and `DELETE /api/conversations/{session_id}` enforce ownership: if
+  `user_ref` is set, requester must be the owner (403
+  `ownership_denied` otherwise). Anonymous conversations
+  (user_ref=NULL) remain readable by anyone with the session_id —
+  pre-A-batch behavior preserved. Maps to AB.3.
+  - Edits: `backend-king-php/domain/conversation/conversation_store.php`,
+    `backend-king-php/http/module_inference.php`,
+    `backend-king-php/http/module_realtime.php`,
+    `backend-king-php/http/module_conversations.php`
+  - Contract: `tests/conversation-ownership-contract.{sh,php}`
+
+- [ ] `#A-5` WebSocket handshake-time auth. In the WS upgrade path
+  (`module_realtime.php`), invoke the middleware on the upgrade
+  request. On valid Bearer token: bind user into the run-session
+  context. On missing/invalid: stream runs anonymously. No per-frame
+  revalidation (fenced). Explicit rule in the contract test: a token
+  revoked mid-stream does NOT need to kill the active stream. Maps to
+  AB.4.
+  - Edit: `backend-king-php/http/module_realtime.php`
+  - Contract: `tests/realtime-auth-contract.{sh,php}`
+
+- [ ] `#A-6` Demo user autoseed. `server.php` calls
+  `model_inference_auth_seed_demo_users($pdo)` at boot. Seeds three
+  fixture users idempotently from
+  `backend-king-php/fixtures/demo-users.json` (admin / alice / bob).
+  Passwords bcrypt-hashed at seed time. Credentials overridable via
+  env vars `MODEL_INFERENCE_DEMO_{ADMIN,ALICE,BOB}_{USERNAME,PASSWORD}`.
+  Also ship `scripts/seed-users.sh` for manual / CI invocation. Maps to
+  AB.1.
+  - Edit: `backend-king-php/server.php`
+  - New files: `backend-king-php/scripts/seed-users.sh`,
+    `backend-king-php/fixtures/demo-users.json`
+  - Contract: `tests/auth-seed-contract.{sh,php}`
+
+- [ ] `#A-7` Chat UI login surface. Minimal additions to
+  `public/chat.html`: on boot `GET /api/auth/whoami`; if 401, show an
+  inline login form; on login success store
+  `{token, expires_at, user}` in `localStorage` under
+  `king-model-inference-auth` and attach `Authorization: Bearer` to
+  all REST + WS calls. Click-on-username to logout. Anonymous mode
+  unchanged when the user doesn't log in.
+
+- [ ] `#A-8` Catalog parity + router order + README + tracker tick +
+  smoke. Catalog grows with `auth_login`, `auth_logout`, `auth_whoami`
+  + 4 new error codes (`invalid_credentials`, `session_expired`,
+  `session_revoked`, `ownership_denied`).
+  `contract-catalog-parity-contract` + `router-module-order-contract`
+  updated. README gains "Auth (optional, demo-grade)" section near
+  the C-batch block. `scripts/auth-smoke.sh` mirrors
+  `discovery-smoke.sh`. On merge to main, AB.1–AB.4 flip to `[x]` with
+  contract-test citations.
+
+### Demo user data (seeded at boot from `fixtures/demo-users.json`)
+
+| Username | Password | Role | Display name |
+|---|---|---|---|
+| `admin` | `admin123` | admin | Admin |
+| `alice` | `alice123` | user | Alice |
+| `bob` | `bob123` | user | Bob |
+
+Passwords bcrypt-hashed with `password_hash(PASSWORD_DEFAULT)` at seed
+time. These are **demo-only** credentials — identical treatment to the
+video-chat demo's `admin@intelligent-intern.com / admin123` fixtures.
+Env overrides exist for CI and production-hardening runs that need to
+rotate them.
+
+### Out of scope (honestly fenced for the demo)
+
+- Per-frame WebSocket session revalidation (handshake-time only)
+- Session refresh / rotation (logout + re-login covers it)
+- RBAC path-rule matrix (flat `user | admin`, no path guards)
+- Multi-tenant / organization / team scoping
+- SSO / OAuth / OIDC
+- Password reset / account recovery / email verification
+- Rate limiting / brute-force lockout
+- User profile management surface beyond the demo seeds
