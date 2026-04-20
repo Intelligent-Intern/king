@@ -1007,4 +1007,23 @@ Execution note:
 - [ ] Define advanced multimodal capabilities as extension-based functionality
 - [ ] Define clear public contract boundaries between the built-in AI platform and later model extensions
 
+## AB. Chat Auth / Identity (model-inference demo)
+
+> Demo-grade auth layer introduced by the planned #A-batch so
+> model-inference conversations can be tied to a logged-in user for
+> cross-device continuation. Mirrors the video-chat auth approach (users
+> + opaque bearer sessions + bcrypt hashing + demo-user autoseed) but
+> keeps the surface intentionally minimal: handshake-time WS validation
+> only (per-frame revalidation fenced), flat `user|admin` role (no
+> path-rule matrix), no session refresh/rotation (logout + re-login
+> covers the surface). Auth is OPTIONAL — /api/infer, /api/rag,
+> /api/discover, /api/conversations/* all continue to work anonymously
+> for any caller that omits the `Authorization` header. Existing M/R/S/T/
+> C/G-batch contract tests remain unchanged.
+
+- [ ] Define username/password authentication with hashed credentials for the model-inference demo — planned: `auth-store-contract` + `auth-seed-contract` verify bcrypt round-trip and demo user fixtures (#A-1, #A-6)
+- [ ] Define opaque bearer-token session layer with TTL + revocation — planned: `auth-endpoint-contract` verifies POST /api/auth/login issue, POST /api/auth/logout revoke, GET /api/auth/whoami reads; `auth-middleware-contract` verifies Bearer extraction + validation against live sessions (#A-2, #A-3)
+- [ ] Define conversation ownership binding to authenticated user — planned: `conversation-ownership-contract` verifies `conversations.user_ref` is populated on append-turn when authenticated, NULL when anonymous, and `GET /api/conversations/{id}/messages` enforces 403 `ownership_denied` on cross-user access (#A-4)
+- [ ] Define WebSocket handshake-time auth check — planned: `realtime-auth-contract` verifies the WS upgrade rejects expired/revoked tokens with 401 before handshake and leaves anonymous streaming unchanged (#A-5). Per-frame revalidation fenced.
+
 # // End of file - do not add anything below this line
