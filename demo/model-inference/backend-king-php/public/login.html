@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>king · model-inference · log in</title>
+<style>
+  :root {
+    --bg: #f5f6f9;
+    --bg-elev: #ffffff;
+    --fg: #0b0c0f;
+    --fg-muted: #5b6472;
+    --border: #d9dce0;
+    --border-focus: #2e5aac;
+    --accent: #2e5aac;
+    --accent-hover: #234785;
+    --accent-fg: #ffffff;
+    --danger: #c12a2a;
+    --danger-bg: #fde8e8;
+    --radius: 12px;
+    --radius-sm: 6px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0d11;
+      --bg-elev: #15181f;
+      --fg: #e9eaee;
+      --fg-muted: #97a0ad;
+      --border: #2a2f39;
+      --border-focus: #5f8fff;
+      --accent: #5f8fff;
+      --accent-hover: #7ba2ff;
+      --accent-fg: #0b0c0f;
+      --danger: #ff6b6b;
+      --danger-bg: #2a1518;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    padding: 0;
+    background:
+      radial-gradient(900px 500px at 85% -10%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 60%),
+      radial-gradient(700px 400px at -10% 110%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 55%),
+      var(--bg);
+    color: var(--fg);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .wrap {
+    width: 100%;
+    max-width: 440px;
+    padding: 24px;
+  }
+  .brand {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .brand-logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+    margin-bottom: 8px;
+  }
+  .brand-title {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    box-shadow: 0 24px 60px -20px rgba(0,0,0,0.25);
+  }
+  .card h1 {
+    margin: 0 0 6px 0;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .card .sub {
+    margin: 0 0 22px 0;
+    color: var(--fg-muted);
+    font-size: 14px;
+  }
+  form { display: flex; flex-direction: column; gap: 14px; }
+  label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--fg-muted); }
+  input[type="text"], input[type="password"] {
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--fg);
+    font: inherit;
+    font-size: 15px;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  input[type="text"]:focus, input[type="password"]:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 16px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: var(--accent-fg);
+    font: inherit;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    width: 100%;
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+  .btn:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn:disabled { opacity: 0.5; cursor: progress; }
+  .btn-ghost {
+    background: transparent;
+    color: var(--fg);
+    border-color: var(--border);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--fg) 5%, transparent);
+    border-color: var(--fg-muted);
+  }
+  .sep {
+    display: flex; align-items: center; gap: 12px;
+    color: var(--fg-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 4px 0;
+  }
+  .sep::before, .sep::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid var(--border);
+  }
+  .error {
+    display: none;
+    padding: 10px 12px;
+    background: var(--danger-bg);
+    color: var(--danger);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+  }
+  .error[data-visible="1"] { display: block; }
+  .demo-creds {
+    margin-top: 18px;
+    padding: 12px 14px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    background: color-mix(in oklab, var(--accent) 4%, transparent);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--fg-muted);
+    line-height: 1.6;
+  }
+  .demo-creds b { color: var(--fg); }
+  .demo-creds .row { display: flex; justify-content: space-between; gap: 12px; }
+  .demo-creds .row button {
+    all: unset;
+    cursor: pointer;
+    color: var(--accent);
+    text-decoration: underline;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .foot {
+    margin-top: 18px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--fg-muted);
+  }
+  .foot a { color: inherit; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="brand">
+    <div class="brand-logo">king · model-inference</div>
+    <div class="brand-title">Sign in to your chat</div>
+  </div>
+
+  <div class="card">
+    <h1>Welcome back</h1>
+    <p class="sub">Log in to sync your conversations across devices. Anonymous use stays available — your chats live only in this browser until you sign in.</p>
+
+    <div id="login-error" class="error" role="alert" aria-live="polite"></div>
+
+    <form id="login-form" autocomplete="on" novalidate>
+      <label>
+        Username
+        <input type="text" id="username" name="username" autocomplete="username" autofocus spellcheck="false" autocapitalize="off" required>
+      </label>
+      <label>
+        Password
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+      </label>
+      <button type="submit" class="btn" id="submit-btn">Log in</button>
+    </form>
+
+    <div class="sep">or</div>
+    <button type="button" class="btn btn-ghost" id="guest-btn">Continue as guest</button>
+
+    <div class="demo-creds" aria-label="Demo credentials">
+      <div><b>Demo credentials</b> (click to prefill)</div>
+      <div class="row"><button type="button" data-u="alice" data-p="alice123">alice / alice123</button><span>user</span></div>
+      <div class="row"><button type="button" data-u="bob" data-p="bob123">bob / bob123</button><span>user</span></div>
+      <div class="row"><button type="button" data-u="admin" data-p="admin123">admin / admin123</button><span>admin</span></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span id="already-banner" style="display:none;">
+      Already signed in as <b id="already-user">…</b> · <a href="/ui">Continue to chat →</a>
+    </span>
+    <span id="anon-banner">Anonymous access is fully supported — sign in only if you want cross-device chat history.</span>
+  </div>
+</main>
+
+<script>
+(() => {
+  "use strict";
+  const AUTH_KEY = 'king-model-inference-auth';
+  const els = {
+    form: document.getElementById('login-form'),
+    username: document.getElementById('username'),
+    password: document.getElementById('password'),
+    submit: document.getElementById('submit-btn'),
+    error: document.getElementById('login-error'),
+    guest: document.getElementById('guest-btn'),
+    alreadyBanner: document.getElementById('already-banner'),
+    alreadyUser: document.getElementById('already-user'),
+    anonBanner: document.getElementById('anon-banner'),
+    creds: document.querySelectorAll('.demo-creds [data-u]'),
+  };
+
+  function showError(msg) {
+    els.error.textContent = msg;
+    els.error.setAttribute('data-visible', '1');
+  }
+  function clearError() {
+    els.error.removeAttribute('data-visible');
+    els.error.textContent = '';
+  }
+
+  function saveAuth(token, user, expiresAt) {
+    try {
+      localStorage.setItem(AUTH_KEY, JSON.stringify({ token, user, expires_at: expiresAt }));
+    } catch { /* best-effort */ }
+  }
+
+  function loadAuth() {
+    try {
+      const raw = localStorage.getItem(AUTH_KEY);
+      if (!raw) return null;
+      const p = JSON.parse(raw);
+      if (!p || typeof p.token !== 'string' || !/^[a-f0-9]{32}$/.test(p.token)) return null;
+      if (p.expires_at && new Date(p.expires_at).getTime() < Date.now()) {
+        localStorage.removeItem(AUTH_KEY);
+        return null;
+      }
+      return p;
+    } catch { return null; }
+  }
+
+  // Gate on existing session — if already signed in, surface it. Do NOT
+  // auto-redirect so the user can still explicitly log in as a different
+  // demo account while exploring the app.
+  (async function checkExisting() {
+    const existing = loadAuth();
+    if (!existing) return;
+    try {
+      const res = await fetch('/api/auth/whoami', {
+        cache: 'no-store',
+        headers: { 'Authorization': 'Bearer ' + existing.token },
+      });
+      if (!res.ok) {
+        localStorage.removeItem(AUTH_KEY);
+        return;
+      }
+      const body = await res.json();
+      if (body && body.user && body.user.username) {
+        els.alreadyUser.textContent = body.user.username + ' (' + body.user.role + ')';
+        els.alreadyBanner.style.display = '';
+        els.anonBanner.style.display = 'none';
+      }
+    } catch { /* ignore */ }
+  })();
+
+  // Prefill via demo-cred buttons.
+  els.creds.forEach(btn => {
+    btn.addEventListener('click', () => {
+      els.username.value = btn.dataset.u;
+      els.password.value = btn.dataset.p;
+      els.password.focus();
+    });
+  });
+
+  els.guest.addEventListener('click', () => {
+    window.location.href = '/ui';
+  });
+
+  els.form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    clearError();
+    const u = els.username.value.trim();
+    const p = els.password.value;
+    if (!u || !p) {
+      showError('Username and password are required.');
+      return;
+    }
+    els.submit.disabled = true;
+    const prevLabel = els.submit.textContent;
+    els.submit.textContent = 'Signing in…';
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: u, password: p }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const code = (body && body.error && body.error.code) || ('HTTP ' + res.status);
+        if (code === 'invalid_credentials') {
+          showError('That username and password combination did not match.');
+        } else if (code === 'invalid_request_envelope') {
+          showError('Please enter a valid username (2–64 chars) and password (min 6 chars).');
+        } else {
+          showError('Sign-in failed: ' + code);
+        }
+        els.password.focus();
+        els.password.select();
+        return;
+      }
+      saveAuth(body.session.id, body.user, body.session.expires_at);
+      window.location.href = '/ui';
+    } catch (e) {
+      showError('Network error: ' + String(e));
+    } finally {
+      els.submit.disabled = false;
+      els.submit.textContent = prevLabel;
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -200,26 +200,53 @@
     font-family: var(--mono);
     color: var(--fg-muted);
   }
+  /* A-7b: header auth chip — replaces the old inline banner. When
+     anonymous it's a clickable CTA that routes to /login; when signed
+     in it shows the username and opens a tiny menu for logout. */
+  .auth-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--fg);
+    background: color-mix(in oklab, var(--accent) 14%, transparent);
+    border: 1px solid color-mix(in oklab, var(--accent) 28%, var(--border));
+    border-radius: 999px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+  .auth-chip:hover {
+    background: color-mix(in oklab, var(--accent) 22%, transparent);
+    border-color: var(--accent);
+  }
+  .auth-chip[data-state="authed"] {
+    background: color-mix(in oklab, #2a7f5a 20%, transparent);
+    border-color: color-mix(in oklab, #2a7f5a 40%, var(--border));
+  }
+  .auth-chip[data-state="authed"]::before {
+    content: "●";
+    color: #2a7f5a;
+    font-size: 9px;
+  }
+  .auth-chip[data-state="anon"]::before {
+    content: "○";
+    color: var(--fg-muted);
+    font-size: 9px;
+  }
 </style>
 </head>
 <body>
 <header>
   <div class="title">king · model-inference · chat</div>
   <div id="model-label" class="status" title="Active model selector">model=…</div>
-  <div id="auth-status" class="status" title="Auth state (click to log in/out)" style="cursor:pointer;">anonymous</div>
+  <div id="auth-chip" class="auth-chip" title="Sign in">
+    <span id="auth-chip-text">Sign in →</span>
+  </div>
   <div id="conn" class="status">loading…</div>
 </header>
-
-<div id="auth-banner" hidden style="max-width:920px;margin:8px auto 0;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);font-family:var(--mono);font-size:13px;">
-  <form id="login-form" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-    <span style="color:var(--fg-muted);">#A-batch login — try <code>alice / alice123</code> or <code>admin / admin123</code>:</span>
-    <input type="text" id="login-username" placeholder="username" autocomplete="username" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);width:120px;">
-    <input type="password" id="login-password" placeholder="password" autocomplete="current-password" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);width:120px;">
-    <button type="submit" id="login-button" style="min-width:auto;padding:4px 12px;">Log in</button>
-    <button type="button" id="login-dismiss" style="min-width:auto;padding:4px 8px;background:transparent;color:var(--fg-muted);border:1px solid var(--border);">Stay anonymous</button>
-    <span id="login-error" style="color:#e53935;"></span>
-  </form>
-</div>
 
 <div id="fwd-banner" hidden></div>
 
@@ -294,14 +321,8 @@
     max_tokens: document.getElementById('max_tokens'),
     frequency_penalty: document.getElementById('frequency_penalty'),
     presence_penalty: document.getElementById('presence_penalty'),
-    authStatus: document.getElementById('auth-status'),
-    authBanner: document.getElementById('auth-banner'),
-    loginForm: document.getElementById('login-form'),
-    loginUsername: document.getElementById('login-username'),
-    loginPassword: document.getElementById('login-password'),
-    loginButton: document.getElementById('login-button'),
-    loginDismiss: document.getElementById('login-dismiss'),
-    loginError: document.getElementById('login-error'),
+    authChip: document.getElementById('auth-chip'),
+    authChipText: document.getElementById('auth-chip-text'),
   };
 
   const state = {
@@ -339,10 +360,10 @@
     // streaming ends and pushed into history.
     pendingAssistantText: '',
     // A-7: auth state. Populated from localStorage on boot; kept in sync
-    // with successful /api/auth/login and /api/auth/logout calls.
+    // with successful /api/auth/login (via the dedicated /login page)
+    // and /api/auth/logout calls.
     authToken: null,
     authUser: null,
-    authDismissed: false,
     // T-2/T-3: default system prompt. Prevents small-model mode collapse
     // (generic refusals AND echo-copying the prior reply). The prompt
     // explicitly anchors the model to the LATEST user question and asks
@@ -680,7 +701,9 @@
   setConn('booting…');
   els.send.disabled = true;
   els.prompt.disabled = true;
-  // A-7: auth helpers.
+  // A-7b: auth helpers. Login lives on the dedicated /login page; this
+  // file only READS the stored session, attaches Bearer to requests,
+  // and exposes a single-chip UI that CTAs to /login when signed out.
   const AUTH_STORAGE_KEY = 'king-model-inference-auth';
 
   function loadAuthFromStorage() {
@@ -698,14 +721,6 @@
     } catch { /* ignore */ }
   }
 
-  function saveAuth(token, user, expiresAt) {
-    state.authToken = token;
-    state.authUser = user;
-    try {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token, user, expires_at: expiresAt }));
-    } catch { /* ignore */ }
-  }
-
   function clearAuth() {
     state.authToken = null;
     state.authUser = null;
@@ -716,51 +731,27 @@
     return state.authToken ? { 'Authorization': 'Bearer ' + state.authToken } : {};
   }
 
-  function updateAuthStatus() {
+  function updateAuthChip() {
+    if (!els.authChip) return;
     if (state.authUser && state.authToken) {
-      els.authStatus.textContent = state.authUser.username + ' @ ' + state.authUser.role;
-      els.authStatus.title = 'Click to log out';
-      if (els.authBanner) els.authBanner.hidden = true;
+      els.authChip.dataset.state = 'authed';
+      els.authChipText.textContent = state.authUser.username + ' · ' + state.authUser.role;
+      els.authChip.title = 'Signed in — click to sign out';
     } else {
-      els.authStatus.textContent = 'anonymous';
-      els.authStatus.title = 'Click to log in';
-      if (els.authBanner && !state.authDismissed) els.authBanner.hidden = false;
+      els.authChip.dataset.state = 'anon';
+      els.authChipText.textContent = 'Sign in →';
+      els.authChip.title = 'Go to the sign-in page';
     }
   }
 
-  async function doLogin(username, password) {
-    els.loginError.textContent = '';
-    els.loginButton.disabled = true;
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        cache: 'no-store',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        els.loginError.textContent = (body.error && body.error.code) || ('HTTP ' + res.status);
-        return false;
-      }
-      saveAuth(body.session.id, body.user, body.session.expires_at);
-      updateAuthStatus();
-      els.loginUsername.value = '';
-      els.loginPassword.value = '';
-      state.authDismissed = false;
-      return true;
-    } catch (e) {
-      els.loginError.textContent = String(e);
-      return false;
-    } finally {
-      els.loginButton.disabled = false;
-    }
+  async function goToLogin() {
+    window.location.href = '/login';
   }
 
   async function doLogout() {
     const token = state.authToken;
     clearAuth();
-    updateAuthStatus();
+    updateAuthChip();
     if (token) {
       try {
         await fetch('/api/auth/logout', {
@@ -768,7 +759,7 @@
           cache: 'no-store',
           headers: { 'Authorization': 'Bearer ' + token },
         });
-      } catch { /* fire and forget */ }
+      } catch { /* fire and forget — server will expire it eventually */ }
     }
   }
 
@@ -831,44 +822,33 @@
   });
   els.quantization.addEventListener('change', syncSendEnabled);
 
-  // A-7: wire the login form + status chip.
+  // A-7b: load persisted auth + wire the chip. The only UI action on
+  // this page is "go to /login" when anonymous or "log out in place"
+  // when signed in — the login form itself lives on /login.
   loadAuthFromStorage();
-  updateAuthStatus();
-  if (els.loginForm) {
-    els.loginForm.addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const u = (els.loginUsername.value || '').trim();
-      const p = els.loginPassword.value || '';
-      if (!u || !p) { els.loginError.textContent = 'username + password required'; return; }
-      await doLogin(u, p);
-    });
-  }
-  if (els.loginDismiss) {
-    els.loginDismiss.addEventListener('click', () => {
-      state.authDismissed = true;
-      if (els.authBanner) els.authBanner.hidden = true;
-    });
-  }
-  if (els.authStatus) {
-    els.authStatus.addEventListener('click', async () => {
+  updateAuthChip();
+  if (els.authChip) {
+    els.authChip.addEventListener('click', async () => {
       if (state.authToken) {
         await doLogout();
       } else {
-        state.authDismissed = false;
-        updateAuthStatus();
+        goToLogin();
       }
     });
   }
 
   (async function fetchMeta() {
-    // Verify the token before showing the user as logged in.
+    // Verify the token before showing the user as logged in. If the
+    // server rejects it (expired / revoked / unknown), silently fall
+    // back to anonymous — don't yank the user out of a working chat.
     if (state.authToken) {
       const who = await fetchJsonWithRetry('/api/auth/whoami');
       if (!who || who.status !== 'ok') {
         clearAuth();
+        updateAuthChip();
       } else if (who.user) {
         state.authUser = who.user;
-        updateAuthStatus();
+        updateAuthChip();
       }
     }
     const runtime = await fetchJsonWithRetry('/api/runtime');
