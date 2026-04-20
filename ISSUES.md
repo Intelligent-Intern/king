@@ -644,3 +644,200 @@ Non-negotiable direction for this batch:
 - R-batch sprint complete. All 16 leaves (#R-1 → #R-16) are closed. 30
   contract tests green. Branch `feature/rag-pipeline` is merge-ready.
   Tracker boxes remain unticked pending post-merge sweep on `main`.
+
+## S-batch: Semantic Discovery (branch `feature/rag-pipeline`)
+
+> Stacks directly on top of R-batch. Reuses `model_inference_embed()` +
+> `model_inference_cosine_similarity()` + `model_inference_vector_search()`
+> to replace keyword-only service/tool selection with vector-ranked
+> discovery. Maps to tracker bullets **W.5, W.7, X.4, X.5, X.6**.
+> Tracker boxes NOT ticked from this branch; post-merge sweep only.
+
+Non-negotiable direction for this batch:
+
+- Brute-force cosine over `service_embeddings` / `tool_embeddings`. No ANN /
+  HNSW / IVF. Demo scale only (<1k services).
+- BM25 parameters pinned (`k1=1.2`, `b=0.75`). No learned ranker.
+- Descriptor text (name + description + capabilities + tags) is the sole
+  semantic signal. No graph traversal.
+- C-level Semantic-DNS surface is UNCHANGED. The semantic-query path is an
+  additive PHP overlay so the existing keyword API keeps its behavior.
+- `POST /api/tools/pick` fails closed with `no_semantic_match` when no tool
+  scores above `min_score`. No silent default target.
+- Out of scope: graph-aware metadata (W.8/W.9), retrieval-driven *document*
+  hybrid (stays semantic-only in `/api/retrieve`), fleet-wide model
+  placement (V.3-V.5), fine-tuning (Y), advanced extensions (AA).
+
+### Done in current branch
+
+- [x] `#S-1` `service-descriptor.contract.json` + validator
+  (`domain/discovery/service_descriptor.php`): typed envelope
+  `{service_id, service_type, name, description, capabilities[], tags[]}` +
+  `model_inference_service_descriptor_embedding_text()` helper. Maps to `W.5`.
+  - 40-rule test: `tests/service-descriptor-contract.{sh,php}`
+
+- [x] `#S-2` `service_embeddings` SQLite table + `svec-{hex}` object-store
+  layer (`domain/discovery/service_embedding_store.php`): schema migration,
+  upsert-aware store, load_row, load_all (metadata + dense vector),
+  list-by-type, delete. Maps to `W.5`, `W.7`.
+  - 39-rule test: `tests/service-embedding-store-contract.{sh,php}`
+
+- [x] `#S-3` Embedding composition layer
+  (`domain/discovery/service_embedding_upsert.php`):
+  `model_inference_service_embedding_upsert()` validates descriptor, assembles
+  text, calls injected embedder, persists. Adapter factory converts an
+  `EmbeddingSession` + worker into the callable shape. Maps to `W.5`.
+  - 15-rule test: `tests/service-embedding-upsert-contract.{sh,php}`
+
+- [x] `#S-4` `POST /api/discover` + envelope parser
+  (`http/module_discover.php`). Modes: `keyword | semantic | hybrid`. Wired
+  into dispatcher; `discover` added to deterministic module order. Maps to `X.5`.
+  - 43-rule envelope test: `tests/discover-envelope-contract.{sh,php}`
+
+- [x] `#S-5` Semantic scorer (`domain/discovery/semantic_discover.php`):
+  brute-force cosine over `service_embeddings` with deterministic `service_id`
+  tie-break. Maps to `W.7`, `X.5`.
+  - 11-rule test: `tests/semantic-discover-contract.{sh,php}`
+
+- [x] `#S-6` Hybrid scorer (`domain/discovery/hybrid_discover.php`):
+  normalized BM25 (k1=1.2, b=0.75) + cosine fusion with `alpha`, min-max
+  normalization before fusion, deterministic tie-break on zero scores. Maps
+  to `X.4`.
+  - 30-rule test: `tests/hybrid-discover-contract.{sh,php}`
+
+- [x] `#S-7` `tool-descriptor.contract.json` + `tool_embeddings` store +
+  `model_inference_validate_tool_descriptor()` with full mcp_target shape.
+  Maps to `W.7`.
+  - 43-rule test: `tests/tool-descriptor-contract.{sh,php}`
+
+- [x] `#S-8` Tool embedding upsert
+  (`model_inference_tool_embedding_upsert()`): same pattern as S-3 for tools,
+  persists to `tvec-{hex}`. Maps to `W.7`. (Tested in `tool-descriptor-contract`.)
+
+- [x] `#S-9` `POST /api/tools/discover` + semantic/hybrid tool scorers
+  (`domain/discovery/tool_discover.php`): same shape as `/api/discover`,
+  returns ranked tools with `mcp_target`. Maps to `X.6`.
+  - 11-rule test: `tests/tool-discover-contract.{sh,php}`
+
+- [x] `#S-10` `POST /api/tools/pick` + `model_inference_mcp_pick()`
+  wrapper (`domain/discovery/mcp_pick.php`): fails closed with
+  `McpPickNoMatchException` / `no_semantic_match` when no tool scores above
+  `min_score`. Maps to `W.7`, `X.6`.
+  - 5-rule test: `tests/mcp-pick-contract.{sh,php}`
+
+- [x] `#S-11` `DiscoveryMetricsRing` + `GET /api/telemetry/discovery/recent`
+  (`domain/telemetry/discovery_metrics.php`): bounded-FIFO ring with
+  `embedding_ms`, `search_ms`, `total_ms`, `candidates_scanned`, `mode`,
+  `alpha`, `query_length`, `service_type`, `top_k`, `min_score`. Maps to `X.5`.
+  - 32-rule test: `tests/discovery-telemetry-contract.{sh,php}`
+
+- [x] `#S-12` `dns_semantic_query.php` overlay: intersects
+  `king_semantic_dns_discover_service` candidates with
+  `semantic_discover` results. Fails closed (empty intersection) when a
+  service is only in embeddings but not registered in DNS. Maps to `W.5`, `W.7`.
+  - 10-rule test: `tests/dns-semantic-query-contract.{sh,php}`
+
+- [x] `#S-13` Catalog parity grown by 4 live surfaces (`discover`,
+  `tools_discover`, `tools_pick`, `telemetry_discovery_recent`) + 4 new
+  error codes (`invalid_service_descriptor`, `invalid_tool_descriptor`,
+  `embedding_worker_unavailable_discovery`, `no_semantic_match`).
+  `contract-catalog-parity-contract` stays green; `router-module-order`
+  updated.
+
+- [x] `#S-14` `scripts/discovery-smoke.sh` — 10-phase end-to-end
+  (syntax → contract suite → compose → embedding probe → keyword
+  discovery → semantic → hybrid → tools discover → tools pick
+  fail-closed → telemetry). README updated with S-batch table + scope
+  fences + layout entries. ISSUES updated (this section).
+
+### Next step (S-batch)
+
+- S-batch sprint complete. All 14 leaves (#S-1 → #S-14) are closed. 11 new
+  contract tests green; no regressions in existing 30+ tests. Branch
+  `feature/rag-pipeline` carries both R-batch and S-batch and is
+  merge-ready. Tracker boxes **W.5, W.7, X.4, X.5, X.6** remain unticked
+  pending post-merge sweep on `main`.
+
+## T-batch: Chat Memory & Small-Model Reliability (branch `feature/rag-pipeline`)
+
+> Follow-on to R/S batches on the same branch. Turns the model-inference
+> demo from a single-turn primitive into a working multi-turn chat against
+> SmolLM2-135M, including the surface-level tuning needed to make a tiny
+> model actually usable for context recall. Does NOT tick any readiness
+> tracker boxes — this is demo-UX hardening, not a new capability axis.
+
+Non-negotiable direction for this batch:
+
+- No model swap. Everything must work on the existing 135M fixture.
+- Server envelope stays backward-compatible. Pre-T-batch callers that send
+  only `prompt` (no `messages[]`, no penalties) must see identical behaviour.
+- Shared resolver for HTTP and WS transports so behaviour can't drift.
+- Honest documentation of the failure modes and the specific knobs that fix
+  them — so readers know both *what to do* and *why*.
+
+### Done in current branch
+
+- [x] `#T-1` Multi-turn chat memory: optional `messages[]` field on the
+  inference-request envelope, plumbed through HTTP + WS paths to llama.cpp
+  `/v1/chat/completions`, with transcripts persisted including messages.
+  Browser UI (`public/chat.html`) now keeps an in-memory `state.history`
+  of `{role, content}` turns, re-sent on every submit. Pre-T-1 clients
+  that send only `prompt` are unchanged.
+  - Shared resolver: `domain/inference/chat_messages.php`
+  - Validator + schema: `domain/inference/inference_request.php` (adds
+    `messages` as optional top-level key; roles `system|user|assistant`;
+    1–64 items; content 1–32768 chars)
+  - Transcript round-trip: `domain/inference/transcript_store.php`
+  - Contract test: `tests/chat-memory-contract.{sh,php}` (37 rules)
+
+- [x] `#T-2` Anti-collapse surface fix: add a default system prompt,
+  lower default temperature to 0.2, and cap history at 8 turns (down
+  from 32). Stops SmolLM2-135M from mode-collapsing into training-data
+  snippets (the observed "Croatia/beaches/colors" loop). Single-fact
+  recall (`"What is my name?"`) becomes reliable.
+  - Edits: `public/chat.html` (`state.systemPrompt`, `pushHistory` cap,
+    temperature default 0.7 → 0.2)
+  - Live proof: name-recall across a fresh Playwright session.
+  - Limitation surfaced: multi-fact follow-up questions still fail
+    because the model echo-copies its previous short reply. Resolved
+    in #T-3.
+
+- [x] `#T-3` Repetition penalties + stronger system prompt: extend the
+  sampling envelope with optional `frequency_penalty` and
+  `presence_penalty` (OpenAI-compatible, range -2.0..2.0, default 0.0).
+  Plumb both through HTTP + WS paths to `/v1/chat/completions` only when
+  non-zero (keeps pre-T-3 payloads identical). UI ships defaults
+  `frequency_penalty=0.8, presence_penalty=0.6`. Stronger system prompt
+  explicitly forbids repeating/quoting the previous reply and anchors
+  the model to the LATEST question.
+  - Envelope + validator: `domain/inference/inference_request.php`
+    (sampling: new optional fields with float range check)
+  - Plumbing: `domain/inference/inference_session.php` (HTTP) and
+    `domain/inference/inference_stream.php` (WS); both include the
+    penalty fields only when `!== 0.0`
+  - UI: `public/chat.html` adds two new numeric inputs and the
+    refined system prompt under `state.systemPrompt`
+  - Contract JSON: `contracts/v1/inference-request.contract.json`
+    documents the new sampling fields
+  - Live proof: 4-fact Playwright stress test (name, city, job, food)
+    recalled 4/4 correctly on SmolLM2-135M-Instruct/Q4_K. Same test on
+    T-2 baseline scored 1/3 (first probe correct, subsequent probes all
+    returned `"My name is Julius."`).
+
+- [x] `#T-4` Demo README learnings section: `demo/model-inference/README.md`
+  gets a new "Prompting a tiny model for reliable chat memory" section
+  documenting the two failure modes (training-data echo, previous-reply
+  echo), the three-lever recipe that fixes them (system prompt + penalties
+  + short history), the capacity limits that remain (multi-fact extraction
+  in one turn, chain reasoning), and pointers to every file where the
+  levers live. Positioned next to the existing scope-fences section since
+  it's the same *what works / what doesn't* register.
+
+### Next step (T-batch)
+
+- T-batch complete. No new contract tests beyond T-1's `chat-memory-contract`
+  (T-2 and T-3 edits are UI defaults + backward-compatible envelope
+  extensions that don't need their own test — the existing envelope test
+  already covers the optional-field rules). Offline suite: 36 pass / 4 skip
+  / 1 pre-existing fail (unrelated to T-batch). No readiness tracker boxes
+  move; this is honest demo-UX work on top of the shipped M/R/S capabilities.

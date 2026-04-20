@@ -209,10 +209,7 @@
   <div id="conn" class="status">loading…</div>
 </header>
 
-<div id="fwd-banner" hidden style="background:#fff3cd;color:#5a4a00;border-bottom:1px solid #e6d68a;padding:10px 20px;font-size:13px;line-height:1.5;">
-  <strong>Heads up:</strong> this page is loaded on <code id="fwd-host"></code>, which on VS Code dev containers routes through a port forwarder that silently drops streaming WebSocket frames mid-burst. Use the direct TCP proxy instead:
-  <a id="fwd-link" href="#" style="color:#5a4a00;text-decoration:underline;font-weight:600;">switch to the working URL</a>.
-</div>
+<div id="fwd-banner" hidden></div>
 
 <main id="messages" aria-live="polite">
   <div class="msg assistant">
@@ -237,7 +234,7 @@
       </select>
     </label>
     <label>temp
-      <input type="number" id="temperature" value="0.7" min="0" max="2" step="0.1">
+      <input type="number" id="temperature" value="0.2" min="0" max="2" step="0.1">
     </label>
     <label>top_p
       <input type="number" id="top_p" value="0.95" min="0" max="1" step="0.01">
@@ -247,6 +244,12 @@
     </label>
     <label>max_tokens
       <input type="number" id="max_tokens" value="192" min="1" max="8192" step="1">
+    </label>
+    <label title="OpenAI-compat; breaks repetition loops. 0 = off.">freq_pen
+      <input type="number" id="frequency_penalty" value="0.8" min="-2" max="2" step="0.1">
+    </label>
+    <label title="OpenAI-compat; penalizes tokens already in the output. 0 = off.">pres_pen
+      <input type="number" id="presence_penalty" value="0.6" min="-2" max="2" step="0.1">
     </label>
   </div>
   <form id="form" autocomplete="off">
@@ -277,6 +280,8 @@
     top_p: document.getElementById('top_p'),
     top_k: document.getElementById('top_k'),
     max_tokens: document.getElementById('max_tokens'),
+    frequency_penalty: document.getElementById('frequency_penalty'),
+    presence_penalty: document.getElementById('presence_penalty'),
   };
 
   const state = {
@@ -284,6 +289,30 @@
     active: null,            // {bubble, body, footer, decoder}
     sessionId: 'sess-ui-' + Math.random().toString(36).slice(2, 10),
     inFlight: false,
+    bootReady: false,        // gated by fetchMeta() completion
+    activePayload: null,     // cached for cold-start retry
+    framesReceived: 0,       // any server frame (delta/end/error) seen
+    retriedForActive: false, // one-shot retry budget per prompt
+    // T-1: in-memory chat history. Each entry is {role, content}; sent
+    // on every submit so the model sees the full conversation.
+    // T-2: capped at 8 turns (down from 32) so WS payloads stay small
+    // and we fit inside SmolLM2's 2048-token context window.
+    history: [],
+    // Buffer for the assistant completion text — finalized after
+    // streaming ends and pushed into history.
+    pendingAssistantText: '',
+    // T-2/T-3: default system prompt. Prevents small-model mode collapse
+    // (generic refusals AND echo-copying the prior reply). The prompt
+    // explicitly anchors the model to the LATEST user question and asks
+    // for a fresh extraction each turn — required because SmolLM2-135M
+    // otherwise copies whatever it just said as a short confident answer.
+    systemPrompt: (
+      'You are a concise factual assistant. '
+      + 'Read the full conversation history. Answer ONLY the LATEST user question. '
+      + 'Do not repeat or quote your previous reply. Each answer must directly address the most recent question and use the specific fact it asks about (name, city, job, food, etc.). '
+      + 'If the user told you a fact earlier, recall THAT specific fact — do not substitute a different fact. '
+      + 'Keep replies short (one short sentence) unless asked for detail.'
+    ),
   };
 
   // --------------------- WS lifecycle ---------------------
@@ -338,6 +367,7 @@
       showErrorMessage('frame_decode_failed', String(e));
       return;
     }
+    state.framesReceived++;
     if (frame.frameType === FT_DELTA) {
       if (!state.active) return;
       const text = state.active.decoder.decode(frame.payload, { stream: true });
@@ -395,6 +425,7 @@
   function appendDelta(text) {
     if (!state.active) return;
     state.active.body.textContent += text;
+    state.pendingAssistantText += text;
     scrollToBottom();
   }
 
@@ -406,6 +437,16 @@
       if (tail) appendDelta(tail);
     } catch { /* ignore */ }
     state.active.bubble.classList.remove('streaming');
+    // T-1: commit the assistant completion to history ONLY if it
+    // succeeded. On error we drop the assistant text AND pop the user
+    // turn that `sendPrompt` pushed before the failed WS call, so a
+    // retry doesn't surface the same user message twice in messages[].
+    if (!errorText && state.pendingAssistantText) {
+      pushHistory('assistant', state.pendingAssistantText);
+    } else if (errorText) {
+      popLastHistoryTurn('user');
+    }
+    state.pendingAssistantText = '';
     if (errorText) {
       state.active.bubble.classList.add('error');
       state.active.footer.textContent = errorText;
@@ -420,10 +461,11 @@
       state.active.footer.textContent = '(ended)';
     }
     state.active = null;
+    state.activePayload = null;
     state.inFlight = false;
     // Per-request WS model: Send is enabled whenever no inference is in
-    // flight. A new request opens a fresh WS.
-    els.send.disabled = false;
+    // flight AND a quant is selected.
+    els.send.disabled = !els.quantization.value;
     els.prompt.disabled = false;
     els.prompt.focus();
   }
@@ -439,16 +481,53 @@
 
   // --------------------- send ---------------------
   function currentSamplingFromUI() {
-    return {
-      temperature: Math.max(0, Math.min(2, Number(els.temperature.value) || 0)),
-      top_p: Math.max(0, Math.min(1, Number(els.top_p.value) || 0)),
-      top_k: Math.max(0, Math.min(1024, Number(els.top_k.value) | 0)),
-      max_tokens: Math.max(1, Math.min(8192, Number(els.max_tokens.value) | 0)),
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const s = {
+      temperature: clamp(Number(els.temperature.value) || 0, 0, 2),
+      top_p: clamp(Number(els.top_p.value) || 0, 0, 1),
+      top_k: clamp(Number(els.top_k.value) | 0, 0, 1024),
+      max_tokens: clamp(Number(els.max_tokens.value) | 0, 1, 8192),
     };
+    // T-3: only include penalty fields when they are non-zero (server
+    // validator accepts them as optional; omitting keeps payload minimal
+    // and is backward-compatible with pre-T-3 test fixtures).
+    const freq = els.frequency_penalty ? Number(els.frequency_penalty.value) : 0;
+    const pres = els.presence_penalty ? Number(els.presence_penalty.value) : 0;
+    if (!Number.isNaN(freq) && freq !== 0) s.frequency_penalty = clamp(freq, -2, 2);
+    if (!Number.isNaN(pres) && pres !== 0) s.presence_penalty = clamp(pres, -2, 2);
+    return s;
+  }
+
+  function pushHistory(role, content) {
+    if (!content) return;
+    state.history.push({ role, content });
+    // T-2: cap at 8 turns (was 32). Small histories keep the WS payload
+    // well inside any receive-buffer limit on the server, and keep the
+    // model's input context under SmolLM2's 2048-token ceiling. Drop
+    // oldest turns and any orphan assistant turn at the head (templates
+    // expect a leading system-or-user turn).
+    while (state.history.length > 8) {
+      state.history.shift();
+    }
+    while (state.history.length > 0 && state.history[0].role === 'assistant') {
+      state.history.shift();
+    }
+  }
+
+  function popLastHistoryTurn(role) {
+    // Remove the most recent turn if it matches `role` — used on error
+    // paths so a failed submit doesn't duplicate the user turn on retry.
+    const last = state.history[state.history.length - 1];
+    if (last && last.role === role) {
+      state.history.pop();
+    }
   }
 
   function sendPrompt(text) {
     if (state.inFlight) return;
+    // Commit this user turn to history BEFORE building the payload so
+    // the assistant reply can attribute back to it on the next turn.
+    pushHistory('user', text);
     const sampling = currentSamplingFromUI();
     const payload = {
       session_id: state.sessionId,
@@ -457,37 +536,67 @@
         quantization: els.quantization.value,
         prefer_local: true,
       },
-      prompt: text,
+      // T-1 / T-2: send the full conversation so far plus a leading
+      // system turn so the model has explicit instructions to use the
+      // history. Server appends the current user turn only if `prompt`
+      // is also supplied; we embed the new user turn inside messages[]
+      // (via pushHistory above) and omit `prompt` so the server's view
+      // equals the client's rendered transcript exactly.
+      messages: [
+        { role: 'system', content: state.systemPrompt },
+        ...state.history,
+      ],
       sampling,
       stream: true,
     };
     els.modelLabel.textContent = 'model=' + payload.model_selector.model_name + '/' + payload.model_selector.quantization;
     state.active = startAssistantBubble();
     state.inFlight = true;
+    state.activePayload = payload;
+    state.framesReceived = 0;
+    state.retriedForActive = false;
     els.send.disabled = true;
     els.prompt.disabled = true;
-    setConn('connecting…');
+    openStreamingWs(payload);
+  }
 
+  function openStreamingWs(payload) {
+    setConn('connecting…');
     const ws = new WebSocket(wsUrl());
     ws.binaryType = 'arraybuffer';
     state.ws = ws;
 
     ws.addEventListener('open', () => {
       setConn('streaming…', 'ok');
-      ws.send(JSON.stringify({ event: 'infer.start', payload }));
+      try { ws.send(JSON.stringify({ event: 'infer.start', payload })); }
+      catch (e) { console.error('ws send failed', e); }
     });
     ws.addEventListener('message', onMessage);
     ws.addEventListener('error', () => {
       setConn('ws error', 'err');
-      if (state.inFlight) finalizeActive('[ws_error] WebSocket transport error before the stream completed.', true);
-      state.ws = null;
+      // The close handler runs right after; leave recovery to it so we
+      // have the close code available.
     });
     ws.addEventListener('close', (ev) => {
-      if (state.inFlight) {
-        finalizeActive('[ws_closed ' + ev.code + '] WebSocket closed before the end frame arrived.', true);
-      }
-      setConn('ready');
       state.ws = null;
+      if (!state.inFlight) {
+        setConn('ready');
+        return;
+      }
+      // Cold-start race: the one-shot HTTP/1 listener is mid-accept on a
+      // boot fetch (/api/runtime, /api/models, /favicon.ico) when the WS
+      // upgrade races in. We get a clean 1006 before any server frame.
+      // Retry exactly once, then surface the error if it still fails.
+      if (state.framesReceived === 0 && !state.retriedForActive) {
+        state.retriedForActive = true;
+        setConn('retrying…');
+        setTimeout(() => {
+          if (state.inFlight) openStreamingWs(state.activePayload);
+        }, 150);
+        return;
+      }
+      finalizeActive('[ws_closed ' + ev.code + '] WebSocket closed before the end frame arrived.', true);
+      setConn('ready');
     });
   }
 
@@ -507,24 +616,6 @@
     }
   });
 
-  // --------------------- known-bad forwarder banner ---------------------
-  // VS Code dev-container port forwarding silently truncates our
-  // streaming WebSocket. If this page is loaded on port 18090 we show
-  // a visible banner pointing the user at the socat bridge on 18091.
-  (function maybeShowForwardBanner() {
-    if (location.port === '18090') {
-      const banner = document.getElementById('fwd-banner');
-      const host = document.getElementById('fwd-host');
-      const link = document.getElementById('fwd-link');
-      if (banner && host && link) {
-        host.textContent = location.host;
-        const proxyUrl = location.protocol + '//' + location.hostname + ':18091' + location.pathname + location.search;
-        link.href = proxyUrl;
-        link.textContent = proxyUrl;
-        banner.hidden = false;
-      }
-    }
-  })();
 
   // --------------------- boot ---------------------
   // The current king HTTP/1 one-shot listener serves ONE request at
@@ -537,7 +628,9 @@
   //   (c) falling back silently if a fetch fails — the UI works
   //       without the metadata, with the defaults already in the form.
   // Persistent WS is avoided entirely (see wsUrl header comment).
-  setConn('ready');
+  setConn('booting…');
+  els.send.disabled = true;
+  els.prompt.disabled = true;
   async function fetchJsonWithRetry(path, attempts = 3) {
     for (let i = 0; i < attempts; i++) {
       try {
@@ -578,8 +671,19 @@
     }
     els.quantization.value = seenQuants.includes(current) ? current : seenQuants[0];
   }
-  els.modelName.addEventListener('change', () => refreshQuantOptionsForModelName(els.modelName.value.trim()));
-  els.modelName.addEventListener('input', () => refreshQuantOptionsForModelName(els.modelName.value.trim()));
+  function syncSendEnabled() {
+    if (!state.bootReady || state.inFlight) return;
+    els.send.disabled = !els.quantization.value;
+  }
+  els.modelName.addEventListener('change', () => {
+    refreshQuantOptionsForModelName(els.modelName.value.trim());
+    syncSendEnabled();
+  });
+  els.modelName.addEventListener('input', () => {
+    refreshQuantOptionsForModelName(els.modelName.value.trim());
+    syncSendEnabled();
+  });
+  els.quantization.addEventListener('change', syncSendEnabled);
 
   (async function fetchMeta() {
     const runtime = await fetchJsonWithRetry('/api/runtime');
@@ -603,6 +707,11 @@
       els.modelLabel.textContent = 'model=(none registered)';
       showErrorMessage('no_model_registered', 'No models in the registry. Run scripts/seed-model.php or boot the server with MODEL_INFERENCE_AUTOSEED=1.');
     }
+    state.bootReady = true;
+    els.prompt.disabled = false;
+    els.send.disabled = !els.quantization.value;
+    setConn('ready');
+    els.prompt.focus();
   })();
 })();
 </script>
