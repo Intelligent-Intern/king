@@ -336,6 +336,100 @@
         "criteria": "object|null",
         "time": "rfc3339"
       }
+    },
+    "discover": {
+      "method": "POST",
+      "paths": ["/api/discover"],
+      "introduced_by": "S-4",
+      "content_type": "application/json",
+      "scope": "Retrieval-backed service discovery over registered service_embeddings. Supports mode=keyword|semantic|hybrid with brute-force cosine + BM25 fusion. Returns ranked services for a natural-language query.",
+      "envelope_contract": "demo/model-inference/contracts/v1/service-descriptor.contract.json",
+      "envelope": {
+        "status": "ok",
+        "request_id": "string",
+        "mode": "keyword|semantic|hybrid",
+        "results": "array<{service_id, service_type, vector_id, dimensions, score, descriptor}>",
+        "result_count": "int",
+        "candidates_scanned": "int",
+        "search_strategy": "brute_force_cosine|hybrid_cosine_bm25|keyword_bm25",
+        "embedding_ms": "int",
+        "search_ms": "int",
+        "alpha": "float?",
+        "bm25_k1": "float?",
+        "bm25_b": "float?",
+        "model": {"model_id": "string", "model_name": "string", "quantization": "string"},
+        "time": "rfc3339"
+      }
+    },
+    "tools_discover": {
+      "method": "POST",
+      "paths": ["/api/tools/discover"],
+      "introduced_by": "S-9",
+      "content_type": "application/json",
+      "scope": "Retrieval-backed tool discovery over registered tool_embeddings. Returns ranked tools including their durable mcp_target for subsequent invocation via king_mcp_request.",
+      "envelope_contract": "demo/model-inference/contracts/v1/tool-descriptor.contract.json",
+      "envelope": {
+        "status": "ok",
+        "request_id": "string",
+        "mode": "keyword|semantic|hybrid",
+        "results": "array<{tool_id, vector_id, dimensions, mcp_target, score, descriptor}>",
+        "result_count": "int",
+        "candidates_scanned": "int",
+        "search_strategy": "brute_force_cosine|hybrid_cosine_bm25|keyword_bm25",
+        "embedding_ms": "int",
+        "search_ms": "int",
+        "alpha": "float?",
+        "bm25_k1": "float?",
+        "bm25_b": "float?",
+        "model": {"model_id": "string", "model_name": "string", "quantization": "string"},
+        "time": "rfc3339"
+      }
+    },
+    "tools_pick": {
+      "method": "POST",
+      "paths": ["/api/tools/pick"],
+      "introduced_by": "S-10",
+      "content_type": "application/json",
+      "scope": "Thin wrapper around /api/tools/discover that returns the single highest-scoring mcp_target, fail-closed with no_semantic_match when no tool scores above min_score.",
+      "envelope_contract": "demo/model-inference/contracts/v1/tool-descriptor.contract.json",
+      "envelope": {
+        "status": "ok",
+        "request_id": "string",
+        "tool_id": "string",
+        "mcp_target": {"host": "string", "port": "int", "service": "string", "method": "string"},
+        "score": "float",
+        "mode": "semantic|hybrid",
+        "embedding_ms": "int",
+        "search_ms": "int",
+        "candidates_scanned": "int",
+        "time": "rfc3339"
+      }
+    },
+    "telemetry_discovery_recent": {
+      "method": "GET",
+      "paths": ["/api/telemetry/discovery/recent"],
+      "introduced_by": "S-11",
+      "envelope": {
+        "status": "ok",
+        "items": "array<DiscoveryMetricsEntry>",
+        "count": "int",
+        "capacity": "int",
+        "time": "rfc3339"
+      },
+      "item_shape": {
+        "request_id": "string",
+        "mode": "keyword|semantic|hybrid",
+        "embedding_ms": "int",
+        "search_ms": "int",
+        "total_ms": "int",
+        "candidates_scanned": "int",
+        "query_length": "int",
+        "service_type": "string",
+        "top_k": "int",
+        "min_score": "float",
+        "alpha": "float",
+        "recorded_at": "rfc3339"
+      }
     }
   },
   "ws": {
@@ -400,7 +494,11 @@
       "transcript_not_found",
       "routing_no_candidate",
       "document_not_found",
-      "document_too_large"
+      "document_too_large",
+      "invalid_service_descriptor",
+      "invalid_tool_descriptor",
+      "embedding_worker_unavailable_discovery",
+      "no_semantic_match"
     ]
   },
   "planned_surfaces_target_shape": {

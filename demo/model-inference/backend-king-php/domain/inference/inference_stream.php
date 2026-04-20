@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../support/token_frame.php';
 require_once __DIR__ . '/inference_session.php';
+require_once __DIR__ . '/chat_messages.php';
 
 /**
  * Stream a completion from llama.cpp's /completion?stream=true endpoint
@@ -36,13 +37,9 @@ function model_inference_stream_completion(
     $sampling = (array) $validatedEnvelope['sampling'];
 
     // OpenAI-compatible chat endpoint — llama-server applies the chat
-    // template baked into the GGUF so the model sees ChatML / Llama-2
-    // chat / whatever-the-model-expects framing.
-    $messages = [];
-    if (isset($validatedEnvelope['system']) && is_string($validatedEnvelope['system']) && $validatedEnvelope['system'] !== '') {
-        $messages[] = ['role' => 'system', 'content' => $validatedEnvelope['system']];
-    }
-    $messages[] = ['role' => 'user', 'content' => (string) ($validatedEnvelope['prompt'] ?? '')];
+    // template baked into the GGUF. Shared resolver (#T-1) keeps HTTP
+    // and WS transports identical.
+    $messages = model_inference_build_chat_messages($validatedEnvelope);
 
     $body = [
         'messages' => $messages,
@@ -54,6 +51,15 @@ function model_inference_stream_completion(
     ];
     if (isset($sampling['seed']) && is_int($sampling['seed'])) {
         $body['seed'] = (int) $sampling['seed'];
+    }
+    // T-3: repetition penalties (OpenAI-compat) — only include when non-zero.
+    $freq = (float) ($sampling['frequency_penalty'] ?? 0.0);
+    $pres = (float) ($sampling['presence_penalty'] ?? 0.0);
+    if ($freq !== 0.0) {
+        $body['frequency_penalty'] = $freq;
+    }
+    if ($pres !== 0.0) {
+        $body['presence_penalty'] = $pres;
     }
     $jsonBody = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     if (!is_string($jsonBody)) {

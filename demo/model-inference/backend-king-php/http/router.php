@@ -11,6 +11,7 @@ require_once __DIR__ . '/module_telemetry.php';
 require_once __DIR__ . '/module_embed.php';
 require_once __DIR__ . '/module_ingest.php';
 require_once __DIR__ . '/module_retrieve.php';
+require_once __DIR__ . '/module_discover.php';
 require_once __DIR__ . '/module_routing.php';
 require_once __DIR__ . '/module_ui.php';
 
@@ -36,6 +37,7 @@ function model_inference_dispatch_route_module_order(): array
         'embed',
         'ingest',
         'retrieve',
+        'discover',
         'inference',
         'realtime',
         'telemetry',
@@ -64,7 +66,8 @@ function model_inference_dispatch_request(
     string $host,
     int $port,
     ?callable $getEmbeddingSession = null,
-    ?callable $getRagMetrics = null
+    ?callable $getRagMetrics = null,
+    ?callable $getDiscoveryMetrics = null
 ): array {
     $path = $pathFromRequest($request);
     $method = $methodFromRequest($request);
@@ -161,6 +164,20 @@ function model_inference_dispatch_request(
         return $retrieveResponse;
     }
 
+    $discoverResponse = model_inference_handle_discover_routes(
+        $path,
+        $method,
+        $request,
+        $jsonResponse,
+        $errorResponse,
+        $openDatabase,
+        $getEmbeddingSession,
+        $getDiscoveryMetrics
+    );
+    if ($discoverResponse !== null) {
+        return $discoverResponse;
+    }
+
     $inferenceResponse = model_inference_handle_inference_routes(
         $path,
         $method,
@@ -198,7 +215,8 @@ function model_inference_dispatch_request(
         $jsonResponse,
         $errorResponse,
         $getInferenceMetrics,
-        $getRagMetrics
+        $getRagMetrics,
+        $getDiscoveryMetrics
     );
     if ($telemetryResponse !== null) {
         return $telemetryResponse;
