@@ -19,9 +19,12 @@ function model_inference_handle_ui_routes(
     callable $jsonResponse,
     callable $errorResponse
 ): ?array {
-    // A-7b: dedicated login page at GET /login, served from the same
-    // static-file path as /ui but reading public/login.html.
-    if ($path === '/login' || $path === '/login/') {
+    // A-7c: /ui/* is the browser-UI namespace. /ui/login is the
+    // dedicated login page; /ui (with or without a trailing slash) is
+    // the chat app. Keeping both under the same prefix matches the
+    // rest of the demo and keeps the root path reserved for API +
+    // health surfaces.
+    if ($path === '/ui/login' || $path === '/ui/login/') {
         return model_inference_ui_serve_static(
             $method, __DIR__ . '/../public/login.html', $errorResponse
         );

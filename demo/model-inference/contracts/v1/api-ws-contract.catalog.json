@@ -512,10 +512,10 @@
     },
     "login_ui": {
       "method": "GET",
-      "paths": ["/login", "/login/"],
-      "introduced_by": "A-batch (A-7b)",
+      "paths": ["/ui/login", "/ui/login/"],
+      "introduced_by": "A-batch (A-7c)",
       "content_type": "text/html; charset=utf-8",
-      "scope": "Dedicated static-HTML login page served by module_ui (shared static-file helper). Prefill demo creds, POSTs to /api/auth/login, then window.location = /ui on success. Anonymous continuation via a 'Continue as guest' button."
+      "scope": "Dedicated static-HTML login page under the /ui/* browser-UI namespace. Served by module_ui (shared static-file helper). Prefill demo creds, POSTs to /api/auth/login, then window.location = /ui on success. Anonymous continuation via a 'Continue as guest' button."
     }
   },
   "ws": {

@@ -81,7 +81,7 @@ try {
         'auth_login' => ['method' => 'POST', 'paths' => ['/api/auth/login']],
         'auth_logout' => ['method' => 'POST', 'paths' => ['/api/auth/logout']],
         'auth_whoami' => ['method' => 'GET', 'paths' => ['/api/auth/whoami']],
-        'login_ui' => ['method' => 'GET', 'paths' => ['/login', '/login/']],
+        'login_ui' => ['method' => 'GET', 'paths' => ['/ui/login', '/ui/login/']],
     ];
 
     $liveApi = $catalog['api'] ?? null;
@@ -197,7 +197,7 @@ try {
         'auth_login' => [['method' => 'POST', 'path' => '/api/auth/login',                                   'expect_not_status' => 404]],
         'auth_logout' => [['method' => 'POST', 'path' => '/api/auth/logout',                                 'expect_not_status' => 404]],
         'auth_whoami' => [['method' => 'GET', 'path' => '/api/auth/whoami',                                  'expect_not_status' => 404]],
-        'login_ui' => [['method' => 'GET', 'path' => '/login',                                               'expect_status' => 200]],
+        'login_ui' => [['method' => 'GET', 'path' => '/ui/login',                                            'expect_status' => 200]],
     ];
     foreach ($parityProbes as $key => $probes) {
         foreach ($probes as $probe) {
