@@ -14,7 +14,6 @@
     --bg-tint: #eef1f6;
     --fg: #0b0c0f;
     --fg-muted: #5b6472;
-    --fg-inverse: #f5f6f9;
     --border: #e1e4ea;
     --border-strong: #c9ced7;
     --border-focus: #2e5aac;
@@ -41,7 +40,6 @@
       --bg-tint: #10131a;
       --fg: #e9eaee;
       --fg-muted: #97a0ad;
-      --fg-inverse: #e9eaee;
       --border: #242832;
       --border-strong: #363c47;
       --border-focus: #7ba2ff;
@@ -80,25 +78,25 @@
     background: var(--bg-elev);
   }
   header .brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
     font-size: 13px;
     font-weight: 600;
     letter-spacing: -0.005em;
   }
-  header .brand .dot {
-    width: 8px; height: 8px; border-radius: 2px;
-    background: var(--accent);
-    display: inline-block;
-  }
-  header .brand .sub {
-    color: var(--fg-muted);
-    font-weight: 400;
-    font-family: var(--mono);
-    font-size: 12px;
-  }
   header .spacer { flex: 1; }
+  #new-chat {
+    all: unset;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--fg);
+    background: var(--accent-soft);
+    border: 1px solid color-mix(in oklab, var(--accent) 28%, var(--border));
+    border-radius: 999px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+  #new-chat:hover { background: var(--accent-soft-strong); border-color: var(--accent); }
   header .status {
     display: inline-flex;
     align-items: center;
@@ -143,7 +141,7 @@
   /* ── Body shell (sidebar + main) ───────────────────────────────── */
   #shell {
     display: grid;
-    grid-template-columns: 0 1fr;   /* default = anon, no sidebar */
+    grid-template-columns: 1fr;   /* default = anon, sidebar hidden */
     overflow: hidden;
     min-height: 0;
   }
@@ -312,9 +310,6 @@
     border: 1px solid transparent;
   }
   .msg .role {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.06em;
@@ -323,32 +318,24 @@
     font-family: var(--mono);
     margin-bottom: 6px;
   }
-  .msg .role::before {
-    content: "●";
-    font-size: 7px;
-  }
   .msg.user {
     align-self: flex-end;
     background: var(--accent-soft-strong);
-    color: var(--fg);
     border-color: color-mix(in oklab, var(--accent) 28%, transparent);
   }
   .msg.user .role { color: var(--accent); }
-  .msg.user .role::before { color: var(--accent); }
   .msg.assistant {
     align-self: flex-start;
     background: var(--bg-elev);
     border-color: var(--border);
     box-shadow: var(--shadow-card);
   }
-  .msg.assistant .role::before { color: var(--ok); }
   .msg.error {
     align-self: stretch;
     background: var(--danger-bg);
     color: var(--danger);
     border-color: color-mix(in oklab, var(--danger) 30%, transparent);
   }
-  .msg.error .role::before { color: var(--danger); }
   .msg .body code {
     font-family: var(--mono);
     font-size: 0.92em;
@@ -384,23 +371,14 @@
   }
   #form {
     position: relative;
-  }
-  #form .field {
-    position: relative;
-    display: block;
     background: var(--bg);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg);
     transition: border-color 140ms ease, box-shadow 140ms ease;
   }
-  #form .field:focus-within {
+  #form:focus-within {
     border-color: var(--border-focus);
-    box-shadow: 0 0 0 4px rgba(46, 90, 172, 0.16);
-  }
-  @supports (box-shadow: 0 0 0 4px color-mix(in oklab, red, transparent)) {
-    #form .field:focus-within {
-      box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 22%, transparent);
-    }
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 22%, transparent);
   }
   #prompt {
     width: 100%;
@@ -443,12 +421,8 @@
 
   #settings-row {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 8px;
-    font-size: 12px;
-    color: var(--fg-muted);
+    justify-content: flex-end;
+    margin-bottom: 6px;
   }
   #settings-toggle {
     all: unset;
@@ -460,33 +434,58 @@
     cursor: pointer;
     color: var(--fg-muted);
     font-family: var(--mono);
+    font-size: 12px;
   }
   #settings-toggle:hover { color: var(--fg); background: var(--accent-soft); }
-  #settings-toggle .chev { transition: transform 140ms ease; }
-  body[data-settings="open"] #settings-toggle .chev { transform: rotate(180deg); }
-  #model-badge {
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 3px 8px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    color: var(--fg-muted);
-  }
 
-  /* Settings drawer */
+  /* Settings dialog */
   #settings {
-    display: none;
-    margin-top: 10px;
-    padding: 16px 18px;
+    padding: 0;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg);
+    border-radius: var(--radius-lg);
+    background: var(--bg-elev);
+    color: var(--fg);
+    box-shadow: var(--shadow-card);
+    width: min(560px, 92vw);
+    max-height: 86vh;
   }
-  body[data-settings="open"] #settings { display: block; }
+  #settings::backdrop {
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(2px);
+  }
+  #settings .settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    margin: 0;
+  }
+  #settings .settings-header h2 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+  #settings-close {
+    all: unset;
+    width: 28px; height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--fg-muted);
+    font-size: 18px;
+    line-height: 1;
+  }
+  #settings-close:hover { background: var(--accent-soft); color: var(--fg); }
   #settings .grid {
     display: grid;
     grid-template-columns: 1fr;
     gap: 12px;
+    padding: 18px;
   }
   @media (min-width: 640px) {
     #settings .grid { grid-template-columns: 1fr 1fr; }
@@ -513,12 +512,7 @@
   #settings input:focus, #settings select:focus {
     outline: none;
     border-color: var(--border-focus);
-    box-shadow: 0 0 0 3px rgba(46, 90, 172, 0.18);
-  }
-  @supports (box-shadow: 0 0 0 3px color-mix(in oklab, red, transparent)) {
-    #settings input:focus, #settings select:focus {
-      box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
-    }
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
   }
   #settings .diag {
     grid-column: 1 / -1;
@@ -537,12 +531,9 @@
 </head>
 <body>
 <header>
-  <div class="brand">
-    <span class="dot" aria-hidden="true"></span>
-    <span>king · model-inference</span>
-    <span class="sub">· chat</span>
-  </div>
+  <div class="brand">king · model-inference</div>
   <button id="sidebar-toggle" aria-label="Toggle conversation list">☰</button>
+  <button id="new-chat" type="button" title="Start a new chat">+ New chat</button>
   <div class="spacer"></div>
   <div id="auth-chip" class="auth-chip" title="Sign in">
     <span id="auth-chip-text">Sign in →</span>
@@ -565,7 +556,7 @@
       <div class="inner" id="messages-inner">
         <div class="welcome" id="welcome">
           <h1 class="w-title">Ready when you are</h1>
-          <p class="w-sub">Messages stream token-by-token over WebSocket. Pick a prompt below or ask your own.</p>
+          <p class="w-sub">Pick a prompt or ask your own.</p>
           <div class="w-prompts">
             <button type="button" class="w-prompt" data-prompt="What can you do?">What can you do?</button>
             <button type="button" class="w-prompt" data-prompt="Remember: my favorite food is pizza.">Remember a fact</button>
@@ -577,27 +568,15 @@
 
     <div id="composer-wrap">
       <div class="inner">
-        <form id="form" autocomplete="off">
-          <div class="field">
-            <textarea id="prompt" placeholder="Message SmolLM2… (Enter to send, Shift+Enter for newline)" required rows="1"></textarea>
-            <button id="send" type="submit" aria-label="Send message" title="Send">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M5 12l14 0"></path>
-                <path d="M13 6l6 6l-6 6"></path>
-              </svg>
-            </button>
-          </div>
-        </form>
-
         <div id="settings-row">
-          <button type="button" id="settings-toggle" aria-expanded="false">
-            <span>Model settings</span>
-            <span class="chev">▾</span>
-          </button>
-          <span id="model-badge" title="Active model selector">model=…</span>
+          <button type="button" id="settings-toggle">Model settings</button>
         </div>
 
-        <div id="settings" aria-hidden="true">
+        <dialog id="settings" aria-labelledby="settings-title">
+          <header class="settings-header">
+            <h2 id="settings-title">Model settings</h2>
+            <button type="button" id="settings-close" aria-label="Close">×</button>
+          </header>
           <div class="grid">
             <label>model
               <input type="text" id="model-name" value="SmolLM2-135M-Instruct">
@@ -632,7 +611,17 @@
             </label>
             <div class="diag" id="node-meta">node: connecting…</div>
           </div>
-        </div>
+        </dialog>
+
+        <form id="form" autocomplete="off">
+          <textarea id="prompt" placeholder="Message SmolLM2… (Enter to send, Shift+Enter for newline)" required rows="1"></textarea>
+          <button id="send" type="submit" aria-label="Send message" title="Send">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12l14 0"></path>
+              <path d="M13 6l6 6l-6 6"></path>
+            </svg>
+          </button>
+        </form>
       </div>
     </div>
   </section>
@@ -654,7 +643,6 @@
     send: document.getElementById('send'),
     conn: document.getElementById('conn'),
     modelLabel: document.getElementById('model-label'),
-    modelBadge: document.getElementById('model-badge'),
     nodeMeta: document.getElementById('node-meta'),
     modelName: document.getElementById('model-name'),
     quantization: document.getElementById('quantization'),
@@ -670,30 +658,36 @@
     sideList: document.getElementById('side-list'),
     sidebarToggle: document.getElementById('sidebar-toggle'),
     sidebarScrim: document.getElementById('sidebar-scrim'),
+    newChat: document.getElementById('new-chat'),
     settingsToggle: document.getElementById('settings-toggle'),
+    settingsClose: document.getElementById('settings-close'),
     settings: document.getElementById('settings'),
     welcomePrompts: document.querySelectorAll('.w-prompt'),
   };
 
   const SESSION_KEY = 'king-model-inference-session-id';
   const AUTH_STORAGE_KEY = 'king-model-inference-auth';
-  const SETTINGS_OPEN_KEY = 'king-model-inference-settings-open';
+
+  function generateSessionId() {
+    return 'sess-ui-' + Math.random().toString(36).slice(2, 10);
+  }
+  function loadOrCreateSessionId() {
+    try {
+      let sid = localStorage.getItem(SESSION_KEY);
+      if (!sid || !/^[A-Za-z0-9_.:-]+$/.test(sid)) {
+        sid = generateSessionId();
+        localStorage.setItem(SESSION_KEY, sid);
+      }
+      return sid;
+    } catch {
+      return generateSessionId();
+    }
+  }
 
   const state = {
     ws: null,
     active: null,
-    sessionId: (() => {
-      try {
-        let sid = localStorage.getItem(SESSION_KEY);
-        if (!sid || !/^[A-Za-z0-9_.:-]+$/.test(sid)) {
-          sid = 'sess-ui-' + Math.random().toString(36).slice(2, 10);
-          localStorage.setItem(SESSION_KEY, sid);
-        }
-        return sid;
-      } catch (_err) {
-        return 'sess-ui-' + Math.random().toString(36).slice(2, 10);
-      }
-    })(),
+    sessionId: loadOrCreateSessionId(),
     inFlight: false,
     bootReady: false,
     activePayload: null,
@@ -837,11 +831,32 @@
     state.sessionId = sid;
     state.history = [];
     state.pendingAssistantText = '';
-    els.messagesInner.innerHTML = '';
+    clearMessageBubbles();
     hideWelcome();
     await rehydrateFromServer();
     await refreshSidebar();
     closeSidebarOnMobile();
+  }
+  function newSession() {
+    if (state.inFlight) {
+      closeWs(1000, 'new_session');
+      state.active = null;
+      state.activePayload = null;
+      state.inFlight = false;
+    }
+    const sid = generateSessionId();
+    try { localStorage.setItem(SESSION_KEY, sid); } catch { /* ignore */ }
+    state.sessionId = sid;
+    state.history = [];
+    state.pendingAssistantText = '';
+    clearMessageBubbles();
+    showWelcome();
+    refreshSidebar();
+    closeSidebarOnMobile();
+    setConn('ready');
+    els.send.disabled = !els.quantization.value;
+    els.prompt.disabled = false;
+    els.prompt.focus();
   }
   function openSidebarOnMobile() { document.body.dataset.sidebar = 'open'; }
   function closeSidebarOnMobile() { delete document.body.dataset.sidebar; }
@@ -849,20 +864,21 @@
   // ── Welcome / empty state ──────────────────────────────────────
   function showWelcome() { if (els.welcome) els.welcome.style.display = ''; }
   function hideWelcome() { if (els.welcome) els.welcome.style.display = 'none'; }
+  function clearMessageBubbles() {
+    // Remove rendered message bubbles but keep the welcome template in
+    // place so showWelcome() can re-attach to a live DOM node.
+    const bubbles = els.messagesInner.querySelectorAll('.msg');
+    bubbles.forEach(n => n.remove());
+  }
 
-  // ── Settings drawer ────────────────────────────────────────────
-  function loadSettingsOpen() {
-    try { return localStorage.getItem(SETTINGS_OPEN_KEY) === '1'; } catch { return false; }
+  // ── Settings dialog ────────────────────────────────────────────
+  function openSettings() {
+    if (typeof els.settings.showModal === 'function') els.settings.showModal();
+    else els.settings.setAttribute('open', '');
   }
-  function persistSettingsOpen(open) {
-    try { localStorage.setItem(SETTINGS_OPEN_KEY, open ? '1' : '0'); } catch { /* ignore */ }
-  }
-  function setSettingsOpen(open) {
-    if (open) document.body.dataset.settings = 'open';
-    else delete document.body.dataset.settings;
-    els.settingsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    els.settings.setAttribute('aria-hidden', open ? 'false' : 'true');
-    persistSettingsOpen(open);
+  function closeSettings() {
+    if (typeof els.settings.close === 'function') els.settings.close();
+    else els.settings.removeAttribute('open');
   }
 
   // ── WS URL ─────────────────────────────────────────────────────
@@ -879,10 +895,8 @@
     els.conn.textContent = text;
     els.conn.className = 'status ' + (kind || '');
   }
-  function updateModelBadge(name, quant) {
-    const label = 'model=' + (name || '?') + '/' + (quant || '?');
-    els.modelLabel.textContent = label;
-    els.modelBadge.textContent = label;
+  function updateModelLabel(name, quant) {
+    els.modelLabel.textContent = 'model=' + (name || '?') + '/' + (quant || '?');
   }
 
   // ── TokenFrame decode ──────────────────────────────────────────
@@ -1066,7 +1080,7 @@
       sampling,
       stream: true,
     };
-    updateModelBadge(payload.model_selector.model_name, payload.model_selector.quantization);
+    updateModelLabel(payload.model_selector.model_name, payload.model_selector.quantization);
     state.active = startAssistantBubble();
     state.inFlight = true;
     state.activePayload = payload;
@@ -1137,9 +1151,12 @@
     if (state.authToken) { await doLogout(); }
     else { goToLogin(); }
   });
-  els.settingsToggle.addEventListener('click', () => {
-    const open = document.body.dataset.settings !== 'open';
-    setSettingsOpen(open);
+  els.newChat.addEventListener('click', newSession);
+  els.settingsToggle.addEventListener('click', openSettings);
+  els.settingsClose.addEventListener('click', closeSettings);
+  els.settings.addEventListener('click', (ev) => {
+    // click on the backdrop (outside the dialog content) closes it
+    if (ev.target === els.settings) closeSettings();
   });
   if (els.sidebarToggle) {
     els.sidebarToggle.addEventListener('click', () => {
@@ -1183,7 +1200,7 @@
   els.modelName.addEventListener('change', () => { refreshQuantOptionsForModelName(els.modelName.value.trim()); syncSendEnabled(); });
   els.modelName.addEventListener('input', () => { refreshQuantOptionsForModelName(els.modelName.value.trim()); syncSendEnabled(); });
   els.quantization.addEventListener('change', () => {
-    updateModelBadge(els.modelName.value.trim(), els.quantization.value);
+    updateModelLabel(els.modelName.value.trim(), els.quantization.value);
     syncSendEnabled();
   });
 
@@ -1222,7 +1239,6 @@
   setConn('booting…');
   els.send.disabled = true;
   els.prompt.disabled = true;
-  setSettingsOpen(loadSettingsOpen());
   loadAuthFromStorage();
   updateAuthChip();
 
@@ -1245,13 +1261,12 @@
       els.modelName.value = first.model_name;
       refreshQuantOptionsForModelName(first.model_name);
       if (els.quantization.value) {
-        updateModelBadge(first.model_name, els.quantization.value);
+        updateModelLabel(first.model_name, els.quantization.value);
       }
     } else if (models && Array.isArray(models.items)) {
       registeredModels = [];
       refreshQuantOptionsForModelName('');
       els.modelLabel.textContent = 'model=(none registered)';
-      els.modelBadge.textContent = 'model=(none registered)';
       showErrorMessage('no_model_registered', 'No models in the registry. Run scripts/seed-model.php or boot the server with MODEL_INFERENCE_AUTOSEED=1.');
     }
 

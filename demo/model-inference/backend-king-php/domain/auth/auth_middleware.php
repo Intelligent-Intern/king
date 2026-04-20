@@ -9,10 +9,15 @@ require_once __DIR__ . '/../../http/module_auth.php';
  * #A-3 non-blocking auth middleware.
  *
  * Extracts `Authorization: Bearer <token>` from the incoming request.
- * - Hit: hydrates $request['user'] + $request['session'] and returns the
- *   enriched request.
+ * - Hit: hydrates $request['user'] + $request['auth_session'] and returns
+ *   the enriched request.
  * - Miss (no header, invalid token, expired, revoked): returns the
- *   original request with ['user' => null, 'session' => null, 'auth_reason' => ...].
+ *   original request with ['user' => null, 'auth_session' => null, 'auth_reason' => ...].
+ *
+ * NOTE: this uses the key `auth_session` rather than `session` to avoid
+ * clobbering the King\Session resource that server.php writes into
+ * $request['session'] — the realtime module needs that handle intact
+ * for the WebSocket upgrade call.
  *
  * The middleware NEVER returns a 401 by itself — any route that wants
  * to block anonymous use has to do so explicitly. /api/auth/whoami and
@@ -26,7 +31,7 @@ require_once __DIR__ . '/../../http/module_auth.php';
 function model_inference_auth_apply_middleware(PDO $pdo, array $request): array
 {
     $request['user'] = null;
-    $request['session'] = null;
+    $request['auth_session'] = null;
     $request['auth_reason'] = 'anonymous';
 
     $token = model_inference_auth_extract_bearer_token($request);
@@ -45,7 +50,7 @@ function model_inference_auth_apply_middleware(PDO $pdo, array $request): array
         return $request;
     }
     $request['user'] = $ctx['user'];
-    $request['session'] = $ctx['session'];
+    $request['auth_session'] = $ctx['session'];
     $request['auth_reason'] = 'authenticated';
     return $request;
 }
