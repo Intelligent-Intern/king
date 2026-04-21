@@ -136,7 +136,7 @@ Verified on 2026-04-15 with the active stack in this repo.
 
 ```bash
 cd demo/video-chat
-docker compose -f docker-compose.v1.yml up --build
+./scripts/compose-v1.sh up --build
 ```
 
 2. Open the app:
@@ -162,7 +162,7 @@ docker compose -f docker-compose.v1.yml up --build
 6. Stop stack:
 
 ```bash
-docker compose -f docker-compose.v1.yml down
+./scripts/compose-v1.sh down
 ```
 
 ### API-only sanity check (real call + real access-link UUID)
@@ -192,28 +192,30 @@ Call responses include persisted `schedule` metadata so calendar views do not in
 
 Short answer:
 
-- Yes, for dev/staging and internal demos on a single node.
-- Not yet production-ready for large public traffic.
+- Yes, for a single-node live deployment on a public VM.
+- Not yet production-ready for large multi-node public traffic.
 
 What is already working:
 
 - backend + frontend containers start with `docker-compose.v1.yml`
 - auth/session/calls/invite/access-link APIs are live
 - websocket endpoints `/ws` and `/sfu` are active
+- the `edge` compose profile provides a King/PHP HTTPS entry point on `:80` and `:443`
+- the deploy helper provisions Certbot certs and verifies HTTPS, API, lobby WS routing, SFU routing, and admin login
+- production demo passwords are generated on first deploy, stored on the server under `demo/video-chat/secrets/`, and synced back into the git-ignored local `demo/video-chat/.env.local` as `VIDEOCHAT_DEPLOY_ADMIN_PASSWORD` and `VIDEOCHAT_DEPLOY_USER_PASSWORD`
 
 What is still missing for robust production operation:
 
-- TLS termination + reverse proxy websocket upgrade config for both `/ws` and `/sfu`
 - production TURN infrastructure still needs environment-specific NAT evidence; the repo provides an opt-in coturn baseline profile plus credential rotation tooling
 - multi-node implementation is not active yet; the binding state split, persistence, fanout, SFU, rollout, and rollback contract is in `demo/video-chat/MULTI_NODE_RUNTIME_ARCHITECTURE.md`
-- secret management + hardened env config (no demo credentials in deployed environments)
+- external secret management can still be moved out of local files; hardened deployments already fail closed on demo defaults and use mounted secret files
 - operational hardening is baseline-wired for SQLite backup/restore, central OTLP metrics/logs/alerts catalog, and rollout/rollback runbooks in `demo/video-chat/OPS_HARDENING.md`
 
 Edge deployment decision:
 
-- `demo/video-chat` intentionally ships no internal Edge/TLS deploy pack.
-- The active compose file is for dev/staging/internal demos only.
-- A future production Edge path must be introduced as its own issue and must not reuse demo defaults.
+- `demo/video-chat/edge` is the active King/PHP TLS entry point for the single-node deploy path.
+- The active compose file keeps dev defaults, but the deploy helper writes a production override and starts the `edge` profile.
+- Third-party edge stacks such as nginx, caddy, traefik, and haproxy are intentionally not used.
 - The static guard is `bash demo/video-chat/scripts/check-edge-deployment-decision.sh`.
 
 TURN baseline:
@@ -243,6 +245,11 @@ Ops hardening baseline:
 - The restore drill and rollout/rollback runbook are in `demo/video-chat/OPS_HARDENING.md`.
 - The K-01..K-15 / A-01..A-15 pipeline catalog is `demo/video-chat/ops/metrics-alerts.catalog.json`.
 - Backend HTTP/WS/SFU compose services accept OTLP collector binding through `VIDEOCHAT_OTEL_EXPORTER_ENDPOINT`.
+- Admin operations expose a provider-neutral infrastructure inventory at `GET /api/admin/infrastructure`.
+  It reports deployment domains, providers, nodes, service roles, OpenTelemetry export configuration, and read-only SFU scaling readiness.
+  The DTO supports static/self-hosted nodes now, Hetzner Cloud inventory when `VIDEOCHAT_INFRA_HETZNER_TOKEN` or `VIDEOCHAT_DEPLOY_HCLOUD_TOKEN` is available, and Kubernetes detection for later replica actions.
+- Admin video operations expose live call concurrency at `GET /api/admin/video-operations`.
+  It counts only participants with an open join presence (`joined_at` set and `left_at` empty), so invited or assigned users do not inflate live calls or concurrent participant metrics.
 - The static guard is `bash demo/video-chat/scripts/check-ops-hardening.sh`.
 
 Host-runtime note:
@@ -367,7 +374,7 @@ New-stack compose file:
 Run from `demo/video-chat`:
 
 ```bash
-docker compose -f docker-compose.v1.yml up --build
+./scripts/compose-v1.sh up --build
 ```
 
 Default host ports:
@@ -375,22 +382,269 @@ Default host ports:
 - frontend: `http://127.0.0.1:5176`
 - backend: `http://127.0.0.1:18080`
 
+LAN/remote browser access:
+
+- `scripts/compose-v1.sh` loads `.env` and then `.env.local`; Docker Compose by
+  itself does not load `.env.local`.
+- Set `VIDEOCHAT_V1_PUBLIC_HOST` in `.env.local` to the host IP that other
+  devices should use, for example `192.168.178.189`.
+- For plain `http://` LAN testing also set
+  `VIDEOCHAT_V1_ALLOW_INSECURE_WS=true`, otherwise the frontend intentionally
+  rejects non-loopback `ws://` origins.
+- Open the frontend from another machine at
+  `http://<VIDEOCHAT_V1_PUBLIC_HOST>:5176`.
+
 Override host ports when needed:
 
 ```bash
-VIDEOCHAT_V1_FRONTEND_PORT=35174 VIDEOCHAT_V1_BACKEND_PORT=38080 docker compose -f docker-compose.v1.yml up --build
+VIDEOCHAT_V1_FRONTEND_PORT=35174 VIDEOCHAT_V1_BACKEND_PORT=38080 ./scripts/compose-v1.sh up --build
 ```
 
 Optional frontend preflight origin override for non-default routing:
 
 ```bash
-VIDEOCHAT_V1_BACKEND_ORIGIN=http://127.0.0.1:38080 docker compose -f docker-compose.v1.yml up --build
+VIDEOCHAT_V1_BACKEND_ORIGIN=http://127.0.0.1:38080 ./scripts/compose-v1.sh up --build
 ```
 
 Optional for Docker Desktop/remote FS watcher stability:
 
 ```bash
-VIDEOCHAT_VUE_POLLING=1 docker compose -f docker-compose.v1.yml up --build
+VIDEOCHAT_VUE_POLLING=1 ./scripts/compose-v1.sh up --build
+```
+
+### Live Deployment
+
+The video chat demo includes a deploy helper for a single public Hetzner VM. It
+keeps King as the application webserver and uses Certbot only to provision the
+TLS certificate.
+
+#### Hetzner wizard
+
+Use the wizard when you want the helper to create or reuse the Hetzner server
+for you:
+
+```bash
+demo/video-chat/scripts/deploy.sh wizard
+```
+
+Local requirements:
+
+- `curl`
+- `jq`
+- `ssh`
+- `ssh-keygen`
+- `rsync`
+
+The wizard asks for:
+
+- public domain, for example `video.example.com`
+- email address for Let's Encrypt/Certbot
+- Hetzner Cloud API token with read/write access
+- server name, server type, location, and image, with defaults offered by the
+  script
+- optional API, lobby websocket, SFU, and TURN hostnames; by default the helper
+  uses `api.<domain>`, `ws.<domain>`, `sfu.<domain>`, and `turn.<domain>`
+
+The helper loads `demo/video-chat/.env.local` before it checks required deploy
+variables. The wizard writes the values it collected back to that same file, so
+later runs can reuse them without retyping everything. This includes the Hetzner
+API token, the SSH key path, the selected server settings, and the resolved
+server IP. The file is ignored by git.
+
+The wizard also sets `VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS=1` in `.env.local`.
+Before the first SSH connection it removes stale entries for the deploy host
+from `~/.ssh/known_hosts`, including the `[host]:port` form. This keeps reruns
+idempotent when Hetzner reuses an IP address or a server was recreated. Set
+`VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS=0` if you want to keep SSH host key
+checking fully manual. Override the file with
+`VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE` if you do not use the default
+`~/.ssh/known_hosts`.
+
+Default Hetzner values:
+
+- server type: `cpx21`
+- location: `fsn1`
+- image: `ubuntu-24.04`
+- SSH user: `root`
+- DNS wait timeout: `900` seconds
+
+What the wizard does:
+
+- uses `~/.ssh/id_ed25519` or `~/.ssh/id_rsa` if present
+- creates `~/.ssh/king_videochat_ed25519` if no deploy key exists
+- uploads the SSH public key to Hetzner if it is not already present
+- creates a new Hetzner server or reuses an existing one with the same name
+- stores the new public IPv4 as the deploy target
+- tries to set the Hetzner DNS `A` record when the matching DNS zone is visible
+  to the API token
+- tries to set matching `A` records for `api`, `ws`, `sfu`, and `turn`
+- waits until the domain and those subdomains resolve to the new server IP
+- waits until SSH is reachable
+- runs the same `prepare` flow as the manual deployment path
+- starts the King/PHP HTTPS edge on `:80` and `:443`
+- probes HTTP redirect, HTTPS frontend, HTTPS API health, lobby WS routing, SFU
+  routing, and admin login with `curl`
+
+If DNS is managed outside the Hetzner project, set the `A` record manually when
+the helper prints the new server IP. Set these records to the same IP unless you
+intentionally allocate dedicated IPs:
+
+- `video.example.com`
+- `api.video.example.com`
+- `ws.video.example.com`
+- `sfu.video.example.com`
+- `turn.video.example.com`
+
+The helper waits before requesting the certificate because Certbot needs the
+public domain and subdomains to point at the server.
+
+Useful optional overrides:
+
+```bash
+VIDEOCHAT_DEPLOY_HCLOUD_SERVER_TYPE=cpx31 \
+VIDEOCHAT_DEPLOY_HCLOUD_LOCATION=nbg1 \
+VIDEOCHAT_DEPLOY_HCLOUD_IMAGE=ubuntu-24.04 \
+VIDEOCHAT_DEPLOY_HCLOUD_SERVER_NAME=king-videochat-prod \
+demo/video-chat/scripts/deploy.sh wizard
+```
+
+The admin infrastructure inventory can be pointed at a specific provider without changing frontend code:
+
+```bash
+VIDEOCHAT_INFRA_PROVIDER=auto \
+VIDEOCHAT_INFRA_CLUSTER_NAME=kingrt-prod \
+VIDEOCHAT_INFRA_NODE_ROLES=edge,http,ws,sfu \
+VIDEOCHAT_OTEL_EXPORTER_ENDPOINT=http://otel-collector:4317 \
+demo/video-chat/scripts/deploy.sh deploy
+```
+
+For Hetzner-backed inventory, the deploy token is reused by default. Use
+`VIDEOCHAT_INFRA_HETZNER_TOKEN` if inventory should use a separate read-only
+token. For Kubernetes deployments, set `VIDEOCHAT_INFRA_PROVIDER=kubernetes`
+and project pod/namespace metadata through environment variables until the
+audited Kubernetes API reader is enabled.
+
+Disable automatic DNS mutation and only print/wait for the required record:
+
+```bash
+VIDEOCHAT_DEPLOY_HCLOUD_DNS=0 demo/video-chat/scripts/deploy.sh wizard
+```
+
+The wizard can create billable Hetzner resources. Stop or delete unused servers
+in the Hetzner project when you are done testing.
+
+#### Manual server prepare
+
+For an already-created server, point the DNS `A`/`AAAA` record at the server IP,
+install your SSH public key, and run the deploy helper from this checkout:
+
+```bash
+VIDEOCHAT_DEPLOY_HOST=203.0.113.10 \
+VIDEOCHAT_DEPLOY_DOMAIN=video.example.com \
+VIDEOCHAT_DEPLOY_EMAIL=admin@example.com \
+demo/video-chat/scripts/deploy.sh prepare
+```
+
+The helper bootstraps Docker/Compose/Certbot, syncs the checkout, obtains a
+Let's Encrypt certificate with `certbot certonly --standalone`, writes remote
+secret files, and creates host-local `.env.local`/compose override files that
+must not be committed.
+
+`prepare` intentionally does not start containers. Run the production deploy
+path with:
+
+```bash
+VIDEOCHAT_DEPLOY_HOST=203.0.113.10 \
+VIDEOCHAT_DEPLOY_DOMAIN=video.example.com \
+VIDEOCHAT_DEPLOY_EMAIL=admin@example.com \
+demo/video-chat/scripts/deploy.sh deploy
+```
+
+`deploy` bootstraps the host, syncs the checkout, obtains or renews the
+Let's Encrypt certificate, writes hardened remote secrets, builds the static
+frontend into the King/PHP edge image, starts only the public edge on `:80` and
+`:443`, starts the coturn relay on `:3478`, and keeps API, lobby WS, and SFU
+backend ports bound to `127.0.0.1`.
+
+Public production URLs:
+
+- frontend: `https://<domain>/`
+- API: `https://api.<domain>/`
+- lobby websocket: `wss://ws.<domain>/ws`
+- SFU websocket: `wss://sfu.<domain>/sfu`
+- TURN relay: `turn:turn.<domain>:3478?transport=udp` and
+  `turn:turn.<domain>:3478?transport=tcp`
+
+HTTP on `http://<domain>/` returns `301` to HTTPS.
+
+Authenticated clients load rotating ICE credentials from
+`GET https://api.<domain>/api/user/media/ice-servers`. Production deploy writes
+the TURN secret into the host-local `.env.local` for coturn and mounts the same
+secret read-only for the King backend, so browsers receive short-lived TURN
+credentials without baking them into the frontend bundle.
+
+Override the defaults when needed:
+
+```bash
+VIDEOCHAT_DEPLOY_API_DOMAIN=api.video.example.com \
+VIDEOCHAT_DEPLOY_WS_DOMAIN=ws.video.example.com \
+VIDEOCHAT_DEPLOY_SFU_DOMAIN=sfu.video.example.com \
+VIDEOCHAT_DEPLOY_TURN_DOMAIN=turn.video.example.com \
+demo/video-chat/scripts/deploy.sh deploy
+```
+
+DNS subdomains make browser origins explicit. They all point at the same server
+IP; the King/PHP edge terminates TLS once and routes by host/path to the
+internal King backend services. Dedicated IPs are not required for the current
+single-node deployment.
+
+Compose v2 install behavior on the remote host:
+
+- first uses `docker compose` if the host already has it
+- then tries OS packages `docker-compose-plugin` and `docker-compose-v2`
+- then downloads the official Compose v2 CLI plugin for the host architecture
+- override that fallback URL with `VIDEOCHAT_DEPLOY_COMPOSE_URL` if the default
+  release URL is not reachable from the server
+
+Remote shell commands run with `LC_ALL=C.UTF-8` and `LANG=C.UTF-8` by default to
+avoid missing-locale warnings on fresh server images. Override with
+`VIDEOCHAT_DEPLOY_REMOTE_LOCALE` if needed.
+
+Remote files written by the helper:
+
+- `/opt/king-videochat` by default
+- `demo/video-chat/.env.local`
+- `demo/video-chat/secrets/admin-password`
+- `demo/video-chat/secrets/user-password`
+- `demo/video-chat/secrets/turn-secret`
+- `demo/video-chat/docker-compose.deploy.local.yml`
+- `/etc/letsencrypt/live/<domain>/fullchain.pem`
+- `/etc/letsencrypt/live/<domain>/privkey.pem`
+
+Follow-up commands:
+
+```bash
+VIDEOCHAT_DEPLOY_HOST=203.0.113.10 \
+VIDEOCHAT_DEPLOY_DOMAIN=video.example.com \
+demo/video-chat/scripts/deploy.sh status
+```
+
+```bash
+VIDEOCHAT_DEPLOY_HOST=203.0.113.10 \
+VIDEOCHAT_DEPLOY_DOMAIN=video.example.com \
+demo/video-chat/scripts/deploy.sh sync
+```
+
+`public-http` remains only as a legacy smoke mode for debugging plain HTTP
+connectivity. It is not browser-media-ready and should not be used for live
+testing. `http-preview` remains an explicit high-port server smoke mode:
+
+```bash
+VIDEOCHAT_DEPLOY_ALLOW_HTTP_PREVIEW=1 \
+VIDEOCHAT_DEPLOY_HOST=203.0.113.10 \
+VIDEOCHAT_DEPLOY_DOMAIN=video.example.com \
+VIDEOCHAT_DEPLOY_EMAIL=admin@example.com \
+demo/video-chat/scripts/deploy.sh http-preview
 ```
 
 Optional TURN relay baseline:
@@ -416,12 +670,14 @@ SQLite data is persisted in a mounted Docker volume:
 
 - backend scaffold endpoint: `GET http://127.0.0.1:18080/`
 - backend health endpoint: `GET http://127.0.0.1:18080/health`
-- backend runtime preflight endpoint: `GET http://127.0.0.1:18080/api/runtime`
+- backend runtime preflight endpoint: `GET http://127.0.0.1:18080/api/runtime` (public, redacted liveness only)
 - backend version endpoint: `GET http://127.0.0.1:18080/api/version`
 - backend login endpoint: `POST http://127.0.0.1:18080/api/auth/login`
 - backend session endpoint: `GET http://127.0.0.1:18080/api/auth/session` (requires token)
 - backend logout endpoint: `POST http://127.0.0.1:18080/api/auth/logout` (requires token, revokes session + closes session websocket connections)
 - backend RBAC admin probe: `GET http://127.0.0.1:18080/api/admin/ping` (admin only)
+- backend admin runtime diagnostics: `GET http://127.0.0.1:18080/api/admin/runtime` (admin only)
+- backend admin video operations: `GET http://127.0.0.1:18080/api/admin/video-operations` (admin only; live calls and joined participants)
 - backend admin users list: `GET http://127.0.0.1:18080/api/admin/users?query=&page=1&page_size=10` (admin only)
 - backend admin user create: `POST http://127.0.0.1:18080/api/admin/users` (admin only)
 - backend admin user update: `PATCH http://127.0.0.1:18080/api/admin/users/{id}` (admin only)
@@ -438,9 +694,9 @@ SQLite data is persisted in a mounted Docker volume:
 - backend call cancel: `POST http://127.0.0.1:18080/api/calls/{id}/cancel` (authenticated admin/moderator/user; owner/admin/moderator policy)
 - backend websocket endpoint (compose default): `WS ws://127.0.0.1:18081/ws`
 - backend SFU endpoint (compose default): `WS ws://127.0.0.1:18082/sfu`
-- backend startup applies ordered sqlite migrations (`schema_migrations`) and exposes migration state in runtime/health responses
+- backend startup applies ordered sqlite migrations (`schema_migrations`) and exposes migration state only in admin runtime diagnostics
 - frontend scaffold endpoint: `http://127.0.0.1:5176`
-- frontend consumes backend preflight metadata on startup (`app/version + runtime health`)
+- frontend consumes the redacted backend preflight status on startup
 - the previous Node runtime remains in-repo only as historical reference, not as active dev path
 
 ## Scope

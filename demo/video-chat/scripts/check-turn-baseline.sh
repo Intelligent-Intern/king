@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASELINE="${ROOT_DIR}/TURN_BASELINE.md"
 COMPOSE_FILE="${ROOT_DIR}/docker-compose.v1.yml"
+DEPLOY_SCRIPT="${ROOT_DIR}/scripts/deploy.sh"
 GENERATOR="${ROOT_DIR}/scripts/generate-turn-ice-servers.php"
 NAT_MATRIX="${ROOT_DIR}/scripts/turn-nat-matrix-contract.sh"
 
@@ -25,6 +26,7 @@ require_text() {
 
 require_file "${BASELINE}"
 require_file "${COMPOSE_FILE}"
+require_file "${DEPLOY_SCRIPT}"
 require_file "${GENERATOR}"
 require_file "${NAT_MATRIX}"
 
@@ -46,7 +48,9 @@ for marker in \
   'profiles:' \
   'coturn/coturn' \
   'VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE' \
+  'VIDEOCHAT_V1_TURN_EXTERNAL_IP' \
   'VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET' \
+  '--external-ip=$${VIDEOCHAT_V1_TURN_EXTERNAL_IP}' \
   '--use-auth-secret' \
   '--static-auth-secret="$${secret}"' \
   '--min-port="$${VIDEOCHAT_V1_TURN_RELAY_MIN_PORT}"' \
@@ -55,6 +59,17 @@ for marker in \
   '3478/udp'
 do
   require_text "${COMPOSE_FILE}" "${marker}"
+done
+
+for marker in \
+  '--profile turn' \
+  'VIDEOCHAT_TURN_STATIC_AUTH_SECRET_FILE=/run/secrets/videochat/turn-secret' \
+  'VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET=' \
+  'VIDEOCHAT_TURN_URIS=turn:\${TURN_DOMAIN}:3478?transport=udp,turn:\${TURN_DOMAIN}:3478?transport=tcp' \
+  'videochat-turn-v1' \
+  'wait_for_tcp turn-tcp'
+do
+  require_text "${DEPLOY_SCRIPT}" "${marker}"
 done
 
 bash -n "${NAT_MATRIX}"

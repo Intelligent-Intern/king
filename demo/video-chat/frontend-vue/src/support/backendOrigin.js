@@ -2,12 +2,15 @@ function normalizeExplicitOrigin(rawOrigin, fallbackPort = '') {
   const sanitized = String(rawOrigin || '').trim();
   if (sanitized === '') return '';
   const normalizedFallbackPort = String(fallbackPort || '').trim();
+  const hasExplicitScheme = /^[a-z]+:\/\//i.test(sanitized);
 
-  const candidate = /^[a-z]+:\/\//i.test(sanitized) ? sanitized : `http://${sanitized}`;
+  const candidate = hasExplicitScheme ? sanitized : `http://${sanitized}`;
 
   try {
     const parsed = new URL(candidate);
     if (
+      !hasExplicitScheme
+      &&
       normalizedFallbackPort !== ''
       && parsed.port === ''
       && ['http:', 'https:', 'ws:', 'wss:'].includes(parsed.protocol)

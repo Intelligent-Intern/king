@@ -107,6 +107,7 @@ Environment overrides:
 - `VITE_VIDEOCHAT_BACKEND_PORT` (optional inferred backend port override, default `18080`)
 - `VITE_VIDEOCHAT_WS_PORT` (optional WS gateway port override, default `18081`)
 - `VITE_VIDEOCHAT_SFU_PORT` (optional SFU gateway port override, default `18082`)
+- `VITE_VIDEOCHAT_ALLOW_INSECURE_WS` (optional, default `false`; set `true` for plain `ws://` from non-loopback LAN hosts)
 - `VITE_VIDEOCHAT_ENABLE_MEDIAPIPE` (optional, default `false`; set `true` to allow MediaPipe segmentation backend)
 - `VITE_VIDEOCHAT_ENABLE_TFJS` (optional, default `false`; set `true` to allow TFJS segmentation backend)
 - `VITE_VIDEOCHAT_DEBUG_LOGS` (optional, default `false`; set `true` to re-enable verbose codec/SFU/debug console output)

@@ -1,16 +1,7 @@
-FROM node:22-alpine
-
-RUN apk add --no-cache \
-    ca-certificates \
-    chromium \
-    freetype \
-    harfbuzz \
-    nss \
-    ttf-freefont \
-    && if [ ! -x /usr/bin/chromium-browser ] && [ -x /usr/bin/chromium ]; then ln -s /usr/bin/chromium /usr/bin/chromium-browser; fi
+FROM node:22-alpine AS frontend-build
 
 ARG VITE_VIDEOCHAT_BACKEND_ORIGIN=""
-ARG VITE_VIDEOCHAT_BACKEND_PORT="18080"
+ARG VITE_VIDEOCHAT_BACKEND_PORT=""
 ARG VITE_VIDEOCHAT_WS_ORIGIN=""
 ARG VITE_VIDEOCHAT_WS_PORT=""
 ARG VITE_VIDEOCHAT_SFU_ORIGIN=""
@@ -19,6 +10,7 @@ ARG VITE_VIDEOCHAT_ALLOW_INSECURE_WS=""
 ARG VITE_VIDEOCHAT_ICE_SERVERS=""
 ARG VITE_VIDEOCHAT_ENABLE_MEDIAPIPE=""
 ARG VITE_VIDEOCHAT_ENABLE_TFJS=""
+
 ENV VITE_VIDEOCHAT_BACKEND_ORIGIN="${VITE_VIDEOCHAT_BACKEND_ORIGIN}"
 ENV VITE_VIDEOCHAT_BACKEND_PORT="${VITE_VIDEOCHAT_BACKEND_PORT}"
 ENV VITE_VIDEOCHAT_WS_ORIGIN="${VITE_VIDEOCHAT_WS_ORIGIN}"
@@ -29,18 +21,30 @@ ENV VITE_VIDEOCHAT_ALLOW_INSECURE_WS="${VITE_VIDEOCHAT_ALLOW_INSECURE_WS}"
 ENV VITE_VIDEOCHAT_ICE_SERVERS="${VITE_VIDEOCHAT_ICE_SERVERS}"
 ENV VITE_VIDEOCHAT_ENABLE_MEDIAPIPE="${VITE_VIDEOCHAT_ENABLE_MEDIAPIPE}"
 ENV VITE_VIDEOCHAT_ENABLE_TFJS="${VITE_VIDEOCHAT_ENABLE_TFJS}"
-ENV PLAYWRIGHT_BROWSERS_PATH=0
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
-WORKDIR /app
-
+WORKDIR /frontend
 COPY demo/video-chat/frontend-vue/package.json demo/video-chat/frontend-vue/package-lock.json ./
 RUN npm ci
-
 COPY demo/video-chat/frontend-vue/ ./
 RUN npm run build
 
-EXPOSE 5174
+FROM php:8.4-cli-trixie
 
-CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "5174"]
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && docker-php-ext-install pcntl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY demo/video-chat/edge/edge.php /app/edge.php
+COPY --from=frontend-build /frontend/dist /app/frontend-dist
+
+ENV VIDEOCHAT_EDGE_HOST=0.0.0.0
+ENV VIDEOCHAT_EDGE_HTTP_PORT=8080
+ENV VIDEOCHAT_EDGE_HTTPS_PORT=8443
+ENV VIDEOCHAT_EDGE_STATIC_ROOT=/app/frontend-dist
+
+EXPOSE 8080
+EXPOSE 8443
+
+CMD ["php", "/app/edge.php"]

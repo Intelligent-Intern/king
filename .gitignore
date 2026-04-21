@@ -39,7 +39,13 @@ dist/
 .cache/
 demo/video-chat/frontend-vue/.vite/
 demo/video-chat/frontend-vue/dist/
+demo/video-chat/frontend-vue/test-results/
 demo/video-chat/**/src/lib/wasm/build/
+
+# Local machine-specific environment overrides.
+.env.local
+*.env.local
+demo/video-chat/docker-compose.deploy.local.yml
 
 # model-inference backend: ephemeral sqlite + object-store + GGUF fixture
 # installed on demand via
