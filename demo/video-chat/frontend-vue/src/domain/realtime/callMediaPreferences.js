@@ -71,7 +71,7 @@ function readPersistedCallMediaPrefs() {
       backgroundBackdropMode: toBackgroundBackdropMode(parsed.background_backdrop_mode),
       backgroundQualityProfile: toBackgroundQualityProfile(parsed.background_quality_profile),
       avatarQualityProfile: toAvatarQualityProfile(parsed.avatar_quality_profile),
-      backgroundBlurStrength: clampInteger(parsed.background_blur_strength, 12, 4, 28),
+      backgroundBlurStrength: clampInteger(parsed.background_blur_strength, 2, 0, 4),
       backgroundMaskVariant: clampInteger(parsed.background_mask_variant, 4, 1, 10),
       backgroundBlurTransition: clampInteger(parsed.background_blur_transition, 10, 1, 10),
       backgroundApplyOutgoing: toApplyOutgoing(parsed.background_apply_outgoing),
@@ -95,7 +95,7 @@ function serializeCallMediaPrefs() {
     background_backdrop_mode: toBackgroundBackdropMode(callMediaPrefs.backgroundBackdropMode),
     background_quality_profile: toBackgroundQualityProfile(callMediaPrefs.backgroundQualityProfile),
     avatar_quality_profile: toAvatarQualityProfile(callMediaPrefs.avatarQualityProfile),
-    background_blur_strength: clampInteger(callMediaPrefs.backgroundBlurStrength, 12, 4, 28),
+    background_blur_strength: clampInteger(callMediaPrefs.backgroundBlurStrength, 2, 0, 4),
     background_mask_variant: clampInteger(callMediaPrefs.backgroundMaskVariant, 4, 1, 10),
     background_blur_transition: clampInteger(callMediaPrefs.backgroundBlurTransition, 10, 1, 10),
     background_apply_outgoing: toApplyOutgoing(callMediaPrefs.backgroundApplyOutgoing),
@@ -153,7 +153,7 @@ export const callMediaPrefs = reactive({
   backgroundBackdropMode: persistedPrefs?.backgroundBackdropMode || 'blur7',
   backgroundQualityProfile: persistedPrefs?.backgroundQualityProfile || 'balanced',
   avatarQualityProfile: persistedPrefs?.avatarQualityProfile || 'balanced',
-  backgroundBlurStrength: persistedPrefs?.backgroundBlurStrength ?? 12,
+  backgroundBlurStrength: persistedPrefs?.backgroundBlurStrength ?? 2,
   backgroundMaskVariant: persistedPrefs?.backgroundMaskVariant ?? 4,
   backgroundBlurTransition: persistedPrefs?.backgroundBlurTransition ?? 10,
   backgroundApplyOutgoing: persistedPrefs?.backgroundApplyOutgoing ?? true,
@@ -307,13 +307,58 @@ export function setCallBackgroundQualityProfile(profile) {
 }
 
 export function setCallBackgroundBlurStrength(value) {
-  callMediaPrefs.backgroundBlurStrength = clampInteger(value, 12, 4, 28);
+  callMediaPrefs.backgroundBlurStrength = clampInteger(value, 2, 0, 4);
   persistCallMediaPrefs();
 }
 
 export function setCallBackgroundApplyOutgoing(value) {
   callMediaPrefs.backgroundApplyOutgoing = Boolean(value);
   persistCallMediaPrefs();
+}
+
+export function isCallBackgroundPresetActive(preset) {
+  const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
+  const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
+  const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
+
+  if (preset === 'off') {
+    return mode !== 'blur' || !applyOutgoing;
+  }
+  if (preset === 'light') {
+    return mode === 'blur' && applyOutgoing && backdrop === 'blur7';
+  }
+  if (preset === 'strong') {
+    return mode === 'blur' && applyOutgoing && backdrop === 'blur9';
+  }
+  return false;
+}
+
+export function applyCallBackgroundPreset(preset) {
+  if (preset !== 'light' && preset !== 'strong') {
+    setCallBackgroundFilterMode('off');
+    setCallBackgroundApplyOutgoing(false);
+    return;
+  }
+
+  if (isCallBackgroundPresetActive(preset)) {
+    setCallBackgroundFilterMode('off');
+    setCallBackgroundApplyOutgoing(false);
+    return;
+  }
+
+  setCallBackgroundFilterMode('blur');
+  setCallBackgroundApplyOutgoing(true);
+
+  if (preset === 'strong') {
+    setCallBackgroundBackdropMode('blur9');
+    setCallBackgroundQualityProfile('quality');
+    setCallBackgroundBlurStrength(4);
+    return;
+  }
+
+  setCallBackgroundBackdropMode('blur7');
+  setCallBackgroundQualityProfile('balanced');
+  setCallBackgroundBlurStrength(2);
 }
 
 export function setCallBackgroundMaxProcessWidth(value) {

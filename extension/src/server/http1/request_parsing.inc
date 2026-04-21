@@ -239,21 +239,10 @@ static zend_result king_server_http1_parse_request_head(
             name_len == sizeof("Content-Length") - 1
             && strncasecmp(cursor, "Content-Length", name_len) == 0
         ) {
-            zend_string *content_length_value = zend_string_init(
-                value_start,
-                value_len,
-                0
-            );
-            const char *content_length_cursor = ZSTR_VAL(content_length_value);
-            char *parse_end = NULL;
-            unsigned long parsed = strtoul(content_length_cursor, &parse_end, 10);
+            size_t i;
+            zend_ulong parsed = 0;
 
-            if (
-                parse_end == content_length_cursor
-                || king_server_http1_skip_space(parse_end)[0] != '\0'
-                || parsed > KING_SERVER_HTTP1_MAX_REQUEST_BODY_BYTES
-            ) {
-                zend_string_release(content_length_value);
+            if (value_len == 0) {
                 if (host_value != NULL) {
                     zend_string_release(host_value);
                 }
@@ -266,7 +255,46 @@ static zend_result king_server_http1_parse_request_head(
                 );
                 return FAILURE;
             }
-            zend_string_release(content_length_value);
+
+            for (i = 0; i < value_len; i++) {
+                unsigned char ch = (unsigned char) value_start[i];
+                if (ch < '0' || ch > '9') {
+                    if (host_value != NULL) {
+                        zend_string_release(host_value);
+                    }
+                    zval_ptr_dtor(&headers);
+                    zval_ptr_dtor(request);
+                    ZVAL_UNDEF(request);
+                    king_server_local_set_errorf(
+                        "%s() received an invalid HTTP/1 Content-Length header.",
+                        function_name
+                    );
+                    return FAILURE;
+                }
+
+                if (
+                    parsed > (zend_ulong) KING_SERVER_HTTP1_MAX_REQUEST_BODY_BYTES / 10
+                    || (
+                        parsed == (zend_ulong) KING_SERVER_HTTP1_MAX_REQUEST_BODY_BYTES / 10
+                        && (zend_ulong) (ch - '0')
+                            > (zend_ulong) KING_SERVER_HTTP1_MAX_REQUEST_BODY_BYTES % 10
+                    )
+                ) {
+                    if (host_value != NULL) {
+                        zend_string_release(host_value);
+                    }
+                    zval_ptr_dtor(&headers);
+                    zval_ptr_dtor(request);
+                    ZVAL_UNDEF(request);
+                    king_server_local_set_errorf(
+                        "%s() received an invalid HTTP/1 Content-Length header.",
+                        function_name
+                    );
+                    return FAILURE;
+                }
+
+                parsed = (parsed * 10) + (zend_ulong) (ch - '0');
+            }
 
             *content_length_out = (zend_long) parsed;
         } else if (

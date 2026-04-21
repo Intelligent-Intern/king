@@ -9,7 +9,7 @@ This directory is the active Vue + Vite frontend for the new video-chat stack.
 - `/admin/users`
 - `/admin/calls`
 - `/user/dashboard`
-- `/workspace/call/:roomId?`
+- `/workspace/call/:callRef?`
 
 All listed routes are now backend-bound (no placeholder-only route left):
 
@@ -17,17 +17,19 @@ All listed routes are now backend-bound (no placeholder-only route left):
 - `/admin/users`: server-driven CRUD table with search/pagination/deactivate/reactivate
 - `/admin/calls`: backend-bound CRUD/calendar/invite actions
 - `/user/dashboard`: backend-bound calls list/calendar + schedule/edit + invite redeem
-- `/workspace/call/:roomId?`: realtime snapshots/moderation/chat/control-bar flows with reconnect/auth state machine
+- `/workspace/call/:callRef?`: realtime snapshots/moderation/chat/control-bar flows with reconnect/auth state machine
 
 ## Call workspace (backend-bound)
 
-`/workspace/call/:roomId?` is now wired to the active King backend contracts:
+`/workspace/call/:callRef?` is now wired to the active King backend contracts:
 
 - authenticated websocket session attach (`/ws`) with reconnect + resync
 - server-driven room presence snapshots (`room/snapshot`, `room/joined`, `room/left`)
 - server-driven lobby queue/admitted snapshots (`lobby/snapshot`) with moderator actions
 - room-scoped chat + typing (`chat/send`, `chat/message`, `typing/start`, `typing/stop`)
 - room invite create/redeem flows (`/api/invite-codes`, `/api/invite-codes/redeem`)
+- invite-only waiting-room flow (`queued` -> explicit host/admin/moderator admit) with lobby badge + toast notification
+- access-mode aware entry semantics (`invite_only` queue vs `free_for_all` direct room join)
 
 ## Route guard behavior
 
@@ -64,10 +66,10 @@ Run frontend click-through e2e tests:
 npm run test:e2e
 ```
 
-Run the mock-parity journey suite directly:
+Run the UI-parity journey suite directly:
 
 ```bash
-npx playwright test tests/e2e/mock-parity-journeys.spec.js
+npx playwright test tests/e2e/ui-parity-journeys.spec.js
 ```
 
 Run e2e tests headed (visual):
@@ -84,7 +86,7 @@ npm run test:contract:wlvc
 
 Default endpoint:
 
-- `http://127.0.0.1:5174`
+- `http://127.0.0.1:5176`
 
 Backend runtime preflight:
 
@@ -94,6 +96,11 @@ Backend runtime preflight:
 Environment overrides:
 
 - `VIDEOCHAT_VUE_HOST` (default `127.0.0.1`)
-- `VIDEOCHAT_VUE_PORT` (default `5174`)
+- `VIDEOCHAT_VUE_PORT` (default `5176`)
 - `VITE_VIDEOCHAT_BACKEND_ORIGIN` (optional full origin override, e.g. `http://127.0.0.1:18080`)
 - `VITE_VIDEOCHAT_BACKEND_PORT` (optional inferred backend port override, default `18080`)
+- `VITE_VIDEOCHAT_WS_PORT` (optional WS gateway port override, default `18081`)
+- `VITE_VIDEOCHAT_SFU_PORT` (optional SFU gateway port override, default `18082`)
+- `VITE_VIDEOCHAT_ENABLE_MEDIAPIPE` (optional, default `false`; set `true` to allow MediaPipe segmentation backend)
+- `VITE_VIDEOCHAT_ENABLE_TFJS` (optional, default `false`; set `true` to allow TFJS segmentation backend)
+- `VITE_VIDEOCHAT_DEBUG_LOGS` (optional, default `false`; set `true` to re-enable verbose codec/SFU/debug console output)

@@ -2,34 +2,32 @@
   <section class="view-card admin-users-view">
     <header class="section admin-users-head">
       <div>
-        <h3>User Management</h3>
+        <h1>User Management</h1>
       </div>
       <div class="actions">
-        <button class="btn" type="button" @click="openCreateUser">New user</button>
+        <button class="btn btn-cyan" type="button" @click="openCreateUser">New user</button>
       </div>
     </header>
 
     <section class="toolbar admin-users-toolbar">
-      <label class="search-field" aria-label="Search users">
+      <label class="search-field search-field-main" aria-label="Search users">
         <input
           v-model.trim="queryDraft"
           class="input"
           type="search"
           placeholder="Search by name, email, or role"
         />
-        <button class="btn" type="button" @click="applySearchNow">Search</button>
       </label>
 
-      <select v-model.number="pageSize" class="select" @change="resetAndReload">
-        <option :value="10">10 / page</option>
-        <option :value="20">20 / page</option>
-        <option :value="50">50 / page</option>
-      </select>
-
-      <select v-model="order" class="select" @change="resetAndReload">
-        <option value="role_then_name_asc">Role + name A-Z</option>
-        <option value="role_then_name_desc">Role + name Z-A</option>
-      </select>
+      <button
+        class="icon-mini-btn users-toolbar-search-btn"
+        type="button"
+        title="Search users"
+        aria-label="Search users"
+        @click="applySearchNow"
+      >
+        <img src="/assets/orgas/kingrt/icons/send.png" alt="" />
+      </button>
     </section>
 
     <section v-if="notice" class="section users-banner ok">{{ notice }}</section>
@@ -50,23 +48,24 @@
         </thead>
         <tbody>
           <tr v-for="user in rows" :key="user.id">
-            <td>
+            <td data-label="Name">
               <div class="users-name">{{ user.display_name }}</div>
               <div class="users-subline code">#{{ user.id }}</div>
             </td>
-            <td>
+            <td data-label="Email">
               <div>{{ user.email }}</div>
               <div class="users-subline">{{ user.time_format }} · {{ user.theme }}</div>
             </td>
-            <td><span class="tag" :class="roleTagClass(user.role)">{{ user.role }}</span></td>
-            <td><span class="tag" :class="statusTagClass(user.status)">{{ user.status }}</span></td>
-            <td>{{ formatDateTime(user.updated_at) }}</td>
-            <td>
+            <td data-label="Role"><span class="tag" :class="roleTagClass(user.role)">{{ user.role }}</span></td>
+            <td data-label="Status"><span class="tag" :class="statusTagClass(user.status)">{{ user.status }}</span></td>
+            <td data-label="Updated">{{ formatDateTime(user.updated_at) }}</td>
+            <td data-label="Actions">
               <div class="actions-inline">
                 <button class="icon-mini-btn" type="button" title="Edit user" @click="openEditUser(user)">
                   <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
                 </button>
                 <button
+                  v-if="canToggleStatus(user)"
                   class="icon-mini-btn"
                   type="button"
                   :disabled="mutatingUserId === user.id"
@@ -80,6 +79,7 @@
                   />
                 </button>
                 <button
+                  v-if="canDeleteUser(user)"
                   class="icon-mini-btn danger"
                   type="button"
                   title="Delete user"
@@ -113,20 +113,70 @@
     <div v-if="dialogOpen" class="users-modal" role="dialog" aria-modal="true" :aria-label="dialogTitle">
       <div class="users-modal-backdrop" @click="closeDialog"></div>
       <div class="users-modal-dialog">
-        <header class="users-modal-head">
-          <div>
+        <header class="users-modal-head users-modal-head-brand">
+          <div class="users-modal-head-left">
+            <img class="users-modal-head-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
             <h4>{{ dialogTitle }}</h4>
           </div>
           <button class="icon-mini-btn" type="button" @click="closeDialog">
-            <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
+            <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
 
         <div v-if="!avatarEditorOpen" class="users-modal-body">
-          <label class="users-field">
+          <label v-if="form.mode === 'create'" class="users-field">
             <span>Email</span>
             <input v-model.trim="form.email" class="input" type="email" autocomplete="email" />
           </label>
+
+          <section v-else class="users-field users-field-wide">
+            <span>Emails</span>
+            <div class="users-email-list">
+              <article
+                v-for="emailRow in userEmailRows"
+                :key="emailRow.id"
+                class="users-email-row"
+              >
+                <div class="users-email-main">
+                  <div class="users-email-value">{{ emailRow.email }}</div>
+                  <div class="users-email-meta">
+                    <span class="tag" :class="emailRow.is_verified ? 'ok' : 'warn'">
+                      {{ emailRow.is_verified ? 'confirmed' : 'unconfirmed' }}
+                    </span>
+                    <span v-if="emailRow.is_primary" class="tag ok">primary</span>
+                  </div>
+                </div>
+                <button
+                  v-if="!emailRow.is_verified"
+                  class="icon-mini-btn danger"
+                  type="button"
+                  :disabled="formSaving || userEmailMutatingId === emailRow.id"
+                  @click="deletePendingEmail(emailRow)"
+                >
+                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
+                </button>
+              </article>
+              <p v-if="userEmailRows.length === 0" class="users-email-empty">No emails configured.</p>
+            </div>
+            <div class="users-email-create">
+              <input
+                v-model.trim="userEmailDraft"
+                class="input"
+                type="email"
+                autocomplete="email"
+                placeholder="Add new email"
+                :disabled="formSaving || userEmailSubmitting || userEmailLoading"
+              />
+              <button
+                class="btn"
+                type="button"
+                :disabled="formSaving || userEmailSubmitting || userEmailLoading"
+                @click="createPendingEmail"
+              >
+                {{ userEmailSubmitting ? 'Sending…' : 'Send confirmation' }}
+              </button>
+            </div>
+          </section>
 
           <label class="users-field">
             <span>Display name</span>
@@ -145,34 +195,34 @@
 
           <label class="users-field">
             <span>Role</span>
-            <select v-model="form.role" class="select">
+            <AppSelect v-model="form.role" :disabled="!canEditRole">
               <option value="user">user</option>
               <option value="admin">admin</option>
-            </select>
+            </AppSelect>
           </label>
 
           <label v-if="form.mode === 'edit'" class="users-field">
             <span>Status</span>
-            <select v-model="form.status" class="select">
+            <AppSelect v-model="form.status" :disabled="!canEditStatus">
               <option value="active">active</option>
               <option value="disabled">disabled</option>
-            </select>
+            </AppSelect>
           </label>
 
           <label v-if="form.mode === 'edit'" class="users-field">
             <span>Time format</span>
-            <select v-model="form.time_format" class="select">
+            <AppSelect v-model="form.time_format">
               <option value="24h">24h</option>
               <option value="12h">12h</option>
-            </select>
+            </AppSelect>
           </label>
 
           <label v-if="form.mode === 'edit'" class="users-field">
             <span>Theme</span>
-            <select v-model="form.theme" class="select">
+            <AppSelect v-model="form.theme">
               <option value="dark">dark</option>
               <option value="light">light</option>
-            </select>
+            </AppSelect>
           </label>
 
           <section v-if="form.mode === 'edit'" class="users-field users-field-wide users-avatar-edit-row">
@@ -180,8 +230,7 @@
               <img class="users-avatar-preview" :src="avatarPreviewSrc" alt="User avatar preview" />
             </div>
             <div class="users-avatar-edit-actions">
-              <button class="btn" type="button" :disabled="formSaving" @click="openAvatarEditor">Change avatar</button>
-              <button class="btn" type="button" :disabled="formSaving" @click="deleteAvatar">Delete avatar</button>
+              <button class="btn btn-cyan" type="button" :disabled="formSaving" @click="openAvatarEditor">Change avatar</button>
             </div>
           </section>
         </div>
@@ -216,15 +265,7 @@
 
         <footer class="users-modal-footer">
           <button
-            class="btn"
-            type="button"
-            :disabled="formSaving"
-            @click="avatarEditorOpen ? closeAvatarEditor() : closeDialog()"
-          >
-            {{ avatarEditorOpen ? 'Back' : 'Cancel' }}
-          </button>
-          <button
-            class="btn"
+            class="btn btn-cyan"
             type="button"
             :disabled="formSaving"
             @click="avatarEditorOpen ? saveAvatarChanges() : submitForm()"
@@ -238,12 +279,15 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import AppSelect from '../../components/AppSelect.vue';
+import { createAdminSyncSocket } from '../../support/adminSyncSocket';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import { logoutSession, refreshSession, sessionState } from '../auth/session';
 
 const router = useRouter();
+const route = useRoute();
 const avatarPlaceholder = '/assets/orgas/kingrt/avatar-placeholder.svg';
 const defaultAvatarOptions = [
   { label: 'KingRT default', path: '/assets/orgas/kingrt/avatar-placeholder.svg' },
@@ -252,8 +296,6 @@ const defaultAvatarOptions = [
 const queryDraft = ref('');
 const queryApplied = ref('');
 const page = ref(1);
-const pageSize = ref(10);
-const order = ref('role_then_name_asc');
 const rows = ref([]);
 const loading = ref(false);
 const error = ref('');
@@ -284,9 +326,83 @@ const form = reactive({
   theme: 'dark',
   avatar_path: '',
 });
+const userEmailRows = ref([]);
+const userEmailDraft = ref('');
+const userEmailLoading = ref(false);
+const userEmailSubmitting = ref(false);
+const userEmailMutatingId = ref(0);
+const selectedUserPermissions = reactive({
+  isSelf: false,
+  isPrimaryAdmin: false,
+  canChangeRole: true,
+  canChangeStatus: true,
+  canToggleStatus: true,
+  canDelete: true,
+});
 
 let loadToken = 0;
 let searchTimer = 0;
+let routeEditRequestToken = 0;
+let adminSyncReloadTimer = 0;
+let adminSyncClient = null;
+
+function clearAdminSyncReloadTimer() {
+  if (adminSyncReloadTimer > 0) {
+    window.clearTimeout(adminSyncReloadTimer);
+    adminSyncReloadTimer = 0;
+  }
+}
+
+async function reloadUsersFromAdminSync() {
+  await loadUsers();
+}
+
+function queueReloadUsersFromAdminSync() {
+  if (adminSyncReloadTimer > 0) return;
+  adminSyncReloadTimer = window.setTimeout(() => {
+    adminSyncReloadTimer = 0;
+    void reloadUsersFromAdminSync();
+  }, 120);
+}
+
+function publishAdminSync(topic, reason) {
+  if (!adminSyncClient) return;
+  adminSyncClient.publish(topic, reason);
+}
+
+function handleAdminSyncEvent(payload) {
+  const sourceSessionId = String(payload?.source_session_id || '').trim();
+  const ownSessionId = String(sessionState.sessionId || sessionState.sessionToken || '').trim();
+  if (sourceSessionId !== '' && sourceSessionId === ownSessionId) {
+    return;
+  }
+
+  const topic = String(payload?.topic || '').trim().toLowerCase();
+  if (!['all', 'users', 'overview'].includes(topic)) {
+    return;
+  }
+
+  queueReloadUsersFromAdminSync();
+}
+
+function startAdminSyncSocket() {
+  if (adminSyncClient) {
+    adminSyncClient.disconnect();
+    adminSyncClient = null;
+  }
+
+  adminSyncClient = createAdminSyncSocket({
+    getSessionToken: () => String(sessionState.sessionToken || '').trim(),
+    onSync: handleAdminSyncEvent,
+  });
+  adminSyncClient.connect();
+}
+
+function stopAdminSyncSocket() {
+  if (!adminSyncClient) return;
+  adminSyncClient.disconnect();
+  adminSyncClient = null;
+}
 
 function normalizeAvatarSrc(rawPath) {
   const value = String(rawPath || '').trim();
@@ -385,6 +501,69 @@ function statusTagClass(status) {
   return 'warn';
 }
 
+function normalizeBoolean(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  return fallback;
+}
+
+function deriveUserPermissions(user) {
+  if (!user || typeof user !== 'object') {
+    return {
+      isSelf: false,
+      isPrimaryAdmin: false,
+      canChangeRole: true,
+      canChangeStatus: true,
+      canToggleStatus: true,
+      canDelete: true,
+    };
+  }
+
+  const userPermissions = user.permissions && typeof user.permissions === 'object'
+    ? user.permissions
+    : {};
+  const userId = Number(user.id || 0);
+  const fallbackIsSelf = userId > 0 && userId === Number(sessionState.userId || 0);
+  const isSelf = normalizeBoolean(user.is_self, fallbackIsSelf);
+  const isPrimaryAdmin = normalizeBoolean(user.is_primary_admin, false);
+  const fallbackAllowed = !isSelf && !isPrimaryAdmin;
+
+  return {
+    isSelf,
+    isPrimaryAdmin,
+    canChangeRole: normalizeBoolean(userPermissions.can_change_role, fallbackAllowed),
+    canChangeStatus: normalizeBoolean(userPermissions.can_change_status, fallbackAllowed),
+    canToggleStatus: normalizeBoolean(userPermissions.can_toggle_status, fallbackAllowed),
+    canDelete: normalizeBoolean(userPermissions.can_delete, fallbackAllowed),
+  };
+}
+
+function applySelectedUserPermissions(user) {
+  const permissions = deriveUserPermissions(user);
+  selectedUserPermissions.isSelf = permissions.isSelf;
+  selectedUserPermissions.isPrimaryAdmin = permissions.isPrimaryAdmin;
+  selectedUserPermissions.canChangeRole = permissions.canChangeRole;
+  selectedUserPermissions.canChangeStatus = permissions.canChangeStatus;
+  selectedUserPermissions.canToggleStatus = permissions.canToggleStatus;
+  selectedUserPermissions.canDelete = permissions.canDelete;
+}
+
+function resetSelectedUserPermissions() {
+  selectedUserPermissions.isSelf = false;
+  selectedUserPermissions.isPrimaryAdmin = false;
+  selectedUserPermissions.canChangeRole = true;
+  selectedUserPermissions.canChangeStatus = true;
+  selectedUserPermissions.canToggleStatus = true;
+  selectedUserPermissions.canDelete = true;
+}
+
+function canToggleStatus(user) {
+  return deriveUserPermissions(user).canToggleStatus;
+}
+
+function canDeleteUser(user) {
+  return deriveUserPermissions(user).canDelete;
+}
+
 async function loadUsers() {
   const token = ++loadToken;
   loading.value = true;
@@ -395,8 +574,8 @@ async function loadUsers() {
       query: {
         query: queryApplied.value,
         page: page.value,
-        page_size: pageSize.value,
-        order: order.value,
+        page_size: 10,
+        order: 'role_then_name_asc',
       },
     });
 
@@ -427,11 +606,6 @@ async function loadUsers() {
   } finally {
     if (token === loadToken) loading.value = false;
   }
-}
-
-function resetAndReload() {
-  page.value = 1;
-  void loadUsers();
 }
 
 function applySearchNow() {
@@ -470,6 +644,12 @@ function resetForm(mode = 'create') {
   avatarEditorOpen.value = false;
   avatarUploadDataUrl.value = '';
   avatarDefaultSelection.value = '';
+  userEmailRows.value = [];
+  userEmailDraft.value = '';
+  userEmailLoading.value = false;
+  userEmailSubmitting.value = false;
+  userEmailMutatingId.value = 0;
+  resetSelectedUserPermissions();
   formError.value = '';
 }
 
@@ -478,7 +658,51 @@ function openCreateUser() {
   dialogOpen.value = true;
 }
 
-function openEditUser(user) {
+function clearEditUserQueryFromRoute() {
+  const query = { ...route.query };
+  let changed = false;
+  if (Object.prototype.hasOwnProperty.call(query, 'edit_user_id')) {
+    delete query.edit_user_id;
+    changed = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(query, 'email_verified')) {
+    delete query.email_verified;
+    changed = true;
+  }
+  if (!changed) return;
+  void router.replace({ query }).catch(() => {});
+}
+
+function routeEditUserId() {
+  const raw = typeof route.query.edit_user_id === 'string'
+    ? route.query.edit_user_id.trim()
+    : '';
+  const userId = Number(raw);
+  return Number.isInteger(userId) && userId > 0 ? userId : 0;
+}
+
+async function loadUserEmails(userId) {
+  const normalizedUserId = Number(userId || 0);
+  if (normalizedUserId <= 0) {
+    userEmailRows.value = [];
+    return;
+  }
+
+  userEmailLoading.value = true;
+  try {
+    const payload = await apiRequest(`/api/admin/users/${encodeURIComponent(String(normalizedUserId))}/emails`);
+    const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+    const emails = Array.isArray(result.emails) ? result.emails : [];
+    userEmailRows.value = emails;
+  } catch (err) {
+    userEmailRows.value = [];
+    formError.value = err instanceof Error ? err.message : 'Could not load user emails.';
+  } finally {
+    userEmailLoading.value = false;
+  }
+}
+
+async function openEditUser(user) {
   resetForm('edit');
   form.id = Number(user.id || 0);
   form.email = String(user.email || '');
@@ -488,21 +712,34 @@ function openEditUser(user) {
   form.time_format = String(user.time_format || '24h');
   form.theme = String(user.theme || 'dark');
   form.avatar_path = String(user.avatar_path || '');
+  applySelectedUserPermissions(user);
   dialogOpen.value = true;
+  await loadUserEmails(form.id);
 }
 
 function closeDialog() {
+  if (form.mode === 'edit') {
+    clearEditUserQueryFromRoute();
+  }
   dialogOpen.value = false;
   formSaving.value = false;
   avatarEditorOpen.value = false;
   avatarUploadDataUrl.value = '';
   avatarDefaultSelection.value = '';
+  userEmailRows.value = [];
+  userEmailDraft.value = '';
+  userEmailLoading.value = false;
+  userEmailSubmitting.value = false;
+  userEmailMutatingId.value = 0;
+  resetSelectedUserPermissions();
   formError.value = '';
 }
 
 const dialogTitle = computed(() => (form.mode === 'create' ? 'Create user' : 'Edit user'));
 const dialogSubmitLabel = computed(() => (form.mode === 'create' ? 'Create user' : 'Save changes'));
 const pageCount = computed(() => Math.max(1, pagination.pageCount));
+const canEditRole = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeRole));
+const canEditStatus = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeStatus));
 const avatarPreviewSrc = computed(() => normalizeAvatarSrc(form.avatar_path));
 const avatarEditorPreviewSrc = computed(() => {
   if (avatarUploadDataUrl.value !== '') return avatarUploadDataUrl.value;
@@ -558,6 +795,79 @@ function setDefaultAvatar(path) {
   formError.value = '';
 }
 
+async function createPendingEmail() {
+  if (form.mode !== 'edit' || form.id <= 0 || userEmailSubmitting.value) return;
+
+  const nextEmail = String(userEmailDraft.value || '').trim().toLowerCase();
+  if (nextEmail === '') {
+    formError.value = 'Email is required.';
+    return;
+  }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(nextEmail)) {
+    formError.value = 'Email is invalid.';
+    return;
+  }
+
+  userEmailSubmitting.value = true;
+  formError.value = '';
+  try {
+    const payload = await apiRequest(`/api/admin/users/${encodeURIComponent(String(form.id))}/emails`, {
+      method: 'POST',
+      body: {
+        email: nextEmail,
+      },
+    });
+    const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+    const delivery = result.delivery && typeof result.delivery === 'object' ? result.delivery : {};
+    const sent = Boolean(delivery.sent);
+    const channel = String(delivery.channel || '').trim();
+    if (sent) {
+      notice.value = `Confirmation email sent to ${nextEmail}.`;
+    } else if (channel !== '') {
+      notice.value = `Confirmation for ${nextEmail} queued via ${channel}.`;
+    } else {
+      notice.value = `Confirmation for ${nextEmail} has been queued.`;
+    }
+    publishAdminSync('users', 'user_email_added');
+    userEmailDraft.value = '';
+    await loadUserEmails(form.id);
+  } catch (err) {
+    formError.value = err instanceof Error ? err.message : 'Could not create email confirmation.';
+  } finally {
+    userEmailSubmitting.value = false;
+  }
+}
+
+async function deletePendingEmail(emailRow) {
+  if (form.mode !== 'edit' || form.id <= 0) return;
+
+  const emailId = Number(emailRow?.id || 0);
+  const emailValue = String(emailRow?.email || '').trim();
+  if (emailId <= 0) return;
+  if (normalizeBoolean(emailRow?.is_verified, false)) {
+    formError.value = 'Confirmed emails cannot be deleted.';
+    return;
+  }
+
+  const confirmed = window.confirm(`Delete unconfirmed email ${emailValue || `#${emailId}`}?`);
+  if (!confirmed) return;
+
+  userEmailMutatingId.value = emailId;
+  formError.value = '';
+  try {
+    await apiRequest(`/api/admin/users/${encodeURIComponent(String(form.id))}/emails/${encodeURIComponent(String(emailId))}`, {
+      method: 'DELETE',
+    });
+    notice.value = `Removed unconfirmed email ${emailValue || `#${emailId}`}.`;
+    publishAdminSync('users', 'user_email_removed');
+    await loadUserEmails(form.id);
+  } catch (err) {
+    formError.value = err instanceof Error ? err.message : 'Could not delete email.';
+  } finally {
+    userEmailMutatingId.value = 0;
+  }
+}
+
 async function submitForm() {
   if (formSaving.value) return;
 
@@ -565,8 +875,13 @@ async function submitForm() {
   const displayName = String(form.display_name || '').trim();
   const role = String(form.role || 'user').trim();
 
-  if (email === '' || displayName === '') {
-    formError.value = 'Email and display name are required.';
+  if (displayName === '') {
+    formError.value = 'Display name is required.';
+    return;
+  }
+
+  if (form.mode === 'create' && email === '') {
+    formError.value = 'Email is required.';
     return;
   }
 
@@ -596,21 +911,28 @@ async function submitForm() {
         },
       });
       notice.value = `Created ${displayName}.`;
+      publishAdminSync('users', 'user_created');
       page.value = 1;
     } else {
+      const patchBody = {
+        display_name: displayName,
+        time_format: String(form.time_format || '24h'),
+        theme: String(form.theme || 'dark'),
+        avatar_path: String(form.avatar_path || '').trim() === '' ? null : String(form.avatar_path || '').trim(),
+      };
+      if (canEditRole.value) {
+        patchBody.role = role;
+      }
+      if (canEditStatus.value) {
+        patchBody.status = String(form.status || 'active');
+      }
+
       await apiRequest(`/api/admin/users/${encodeURIComponent(String(form.id))}`, {
         method: 'PATCH',
-        body: {
-          email,
-          display_name: displayName,
-          role,
-          status: String(form.status || 'active'),
-          time_format: String(form.time_format || '24h'),
-          theme: String(form.theme || 'dark'),
-          avatar_path: String(form.avatar_path || '').trim() === '' ? null : String(form.avatar_path || '').trim(),
-        },
+        body: patchBody,
       });
       notice.value = `Updated ${displayName}.`;
+      publishAdminSync('users', 'user_updated');
     }
 
     dialogOpen.value = false;
@@ -661,6 +983,7 @@ async function saveAvatarChanges() {
       notice.value = 'Default avatar applied.';
     }
 
+    publishAdminSync('users', 'user_avatar_updated');
     closeAvatarEditor();
     await loadUsers();
   } catch (err) {
@@ -670,36 +993,10 @@ async function saveAvatarChanges() {
   }
 }
 
-async function deleteAvatar() {
-  if (formSaving.value || form.mode !== 'edit' || form.id <= 0) return;
-
-  const userId = Number(form.id || 0);
-  if (userId <= 0) return;
-
-  formSaving.value = true;
-  formError.value = '';
-  error.value = '';
-  notice.value = '';
-
-  try {
-    await apiRequest(`/api/admin/users/${encodeURIComponent(String(userId))}/avatar`, {
-      method: 'DELETE',
-    });
-    form.avatar_path = '';
-    avatarUploadDataUrl.value = '';
-    avatarDefaultSelection.value = '';
-    notice.value = 'Avatar removed.';
-    await loadUsers();
-  } catch (err) {
-    formError.value = err instanceof Error ? err.message : 'Could not delete avatar.';
-  } finally {
-    formSaving.value = false;
-  }
-}
-
 async function deleteUser(user) {
   const userId = Number(user?.id || 0);
   if (userId <= 0) return;
+  if (!canDeleteUser(user)) return;
   if (mutatingUserId.value === userId) return;
 
   const label = String(user?.display_name || user?.email || `#${userId}`);
@@ -717,6 +1014,7 @@ async function deleteUser(user) {
     });
     const deletedCalls = Number(payload?.result?.deleted_calls || 0);
     notice.value = `Deleted ${label}. Removed ${deletedCalls} owned video calls.`;
+    publishAdminSync('users', 'user_deleted');
 
     if (dialogOpen.value && form.mode === 'edit' && Number(form.id || 0) === userId) {
       closeDialog();
@@ -736,6 +1034,7 @@ async function deleteUser(user) {
 async function toggleUserStatus(user) {
   const userId = Number(user.id || 0);
   if (userId <= 0) return;
+  if (!canToggleStatus(user)) return;
   mutatingUserId.value = userId;
   error.value = '';
   notice.value = '';
@@ -750,6 +1049,7 @@ async function toggleUserStatus(user) {
       method: 'POST',
     });
     notice.value = `${status === 'disabled' ? 'Reactivated' : 'Deactivated'} ${String(user.display_name || user.email || userId)}.`;
+    publishAdminSync('users', 'user_status_updated');
     await loadUsers();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not update user status.';
@@ -758,9 +1058,79 @@ async function toggleUserStatus(user) {
   }
 }
 
+async function fetchUserById(userId) {
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
+    return null;
+  }
+  const payload = await apiRequest(`/api/admin/users/${encodeURIComponent(String(normalizedUserId))}`);
+  const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+  const user = result.user && typeof result.user === 'object' ? result.user : null;
+  return user;
+}
+
+async function openEditUserFromRouteQuery() {
+  const userId = routeEditUserId();
+  if (userId <= 0) return;
+
+  const alreadyOpen = dialogOpen.value
+    && form.mode === 'edit'
+    && Number(form.id || 0) === userId;
+  if (alreadyOpen) return;
+
+  const requestToken = ++routeEditRequestToken;
+  try {
+    const user = await fetchUserById(userId);
+    if (requestToken !== routeEditRequestToken) return;
+    if (!user) return;
+    await openEditUser(user);
+    if (String(route.query.email_verified || '').trim() === '1') {
+      notice.value = 'Email change confirmed.';
+    }
+  } catch (err) {
+    if (requestToken !== routeEditRequestToken) return;
+    error.value = err instanceof Error ? err.message : 'Could not open user editor.';
+  }
+}
+
+watch(
+  () => [route.query.edit_user_id, route.query.email_verified],
+  () => {
+    void openEditUserFromRouteQuery();
+  }
+);
+
 onMounted(() => {
-  void loadUsers();
+  startAdminSyncSocket();
+  void (async () => {
+    await loadUsers();
+    await openEditUserFromRouteQuery();
+  })();
 });
+
+onBeforeUnmount(() => {
+  window.clearTimeout(searchTimer);
+  searchTimer = 0;
+  clearAdminSyncReloadTimer();
+  stopAdminSyncSocket();
+});
+
+watch(
+  () => sessionState.sessionToken,
+  (nextValue, previousValue) => {
+    const nextToken = String(nextValue || '').trim();
+    const previousToken = String(previousValue || '').trim();
+    if (nextToken === previousToken) return;
+    if (!adminSyncClient) return;
+
+    if (nextToken === '') {
+      adminSyncClient.disconnect();
+      return;
+    }
+
+    adminSyncClient.reconnect();
+  }
+);
 </script>
 
 <style scoped>
@@ -768,8 +1138,8 @@ onMounted(() => {
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  background: var(--border-subtle);
+  gap: 0;
+  background: transparent;
 }
 
 .admin-users-view > :first-child {
@@ -786,14 +1156,20 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.admin-users-toolbar {
+  padding-bottom: 25px;
+}
+
 .admin-users-head,
 .admin-users-toolbar,
 .users-footer {
   background: var(--bg-ui-chrome);
 }
 
-.admin-users-head h3 {
+.admin-users-head h1 {
   margin: 0;
+  font-size: 22px;
+  font-weight: 700;
 }
 
 .admin-users-head p {
@@ -803,9 +1179,19 @@ onMounted(() => {
 
 .search-field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   flex: 1 1 320px;
+}
+
+.users-toolbar-search-btn {
+  width: 40px;
+  height: 40px;
+}
+
+.users-toolbar-search-btn img {
+  width: 18px;
+  height: 18px;
 }
 
 .users-banner {
@@ -815,25 +1201,26 @@ onMounted(() => {
 
 .users-banner.ok {
   border: 1px solid var(--border-subtle);
-  background: #152a49;
+  background: var(--color-152a49);
 }
 
 .users-banner.error {
-  border: 1px solid #8f4a58;
-  background: #311922;
-  color: #ffd7db;
+  border: 1px solid var(--color-8f4a58);
+  background: var(--color-311922);
+  color: var(--color-ffd7db);
 }
 
 .users-empty {
   padding: 12px;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #152a49;
+  background: var(--color-152a49);
   color: var(--text-main);
 }
 
 .users-table {
   table-layout: fixed;
+  margin-top: 10px;
 }
 
 .users-table th:nth-child(1),
@@ -900,6 +1287,7 @@ onMounted(() => {
 .users-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
+  margin-top: 0;
   padding-left: 10px;
   padding-right: 10px;
 }
@@ -915,38 +1303,52 @@ onMounted(() => {
 .users-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(5, 12, 23, 0.72);
+  background: var(--color-rgba-5-12-23-0-72);
 }
 
 .users-modal-dialog {
+  --users-modal-padding: 16px;
   position: relative;
   z-index: 1;
-  width: min(860px, calc(100vw - 24px));
-  max-height: min(90vh, 900px);
+  width: min(980px, calc(100vw - 24px));
+  max-height: min(94vh, 980px);
   overflow: auto;
   border-radius: 10px;
   border: 1px solid var(--border-subtle);
-  background: #10203b;
-  padding: 16px;
+  background: var(--color-10203b);
+  padding: var(--users-modal-padding);
   display: grid;
   gap: 14px;
 }
 
 .users-modal-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.users-modal-head h4,
-.users-modal-head p {
-  margin: 0;
+.users-modal-head h4 {
+  margin: 5px 0 0;
 }
 
-.users-modal-head p {
-  margin-top: 4px;
-  color: var(--text-muted);
+.users-modal-head-brand {
+  margin: calc(var(--users-modal-padding) * -1) calc(var(--users-modal-padding) * -1) 0;
+  padding: 10px;
+  background: var(--brand-bg);
+}
+
+.users-modal-head-left {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.users-modal-head-logo {
+  width: auto;
+  height: 24px;
+  display: block;
 }
 
 .users-modal-body {
@@ -971,6 +1373,62 @@ onMounted(() => {
   grid-column: 1 / -1;
 }
 
+.users-email-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--color-0f1d34);
+}
+
+.users-email-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--color-rgba-5-12-23-0-35);
+}
+
+.users-email-main {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.users-email-value {
+  font-size: 13px;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.users-email-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.users-email-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.users-email-create {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
 .users-avatar-edit-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -989,7 +1447,7 @@ onMounted(() => {
   border-radius: 50%;
   border: 1px solid var(--border-subtle);
   overflow: hidden;
-  background: #0b1324;
+  background: var(--color-0b1324);
 }
 
 .users-avatar-preview {
@@ -1042,7 +1500,7 @@ onMounted(() => {
 
 .users-form-error {
   margin: 0;
-  color: #ffd7db;
+  color: var(--color-ffd7db);
 }
 
 .users-modal-footer {
@@ -1059,6 +1517,101 @@ onMounted(() => {
   .users-table th:nth-child(5),
   .users-table td:nth-child(5) {
     width: 18%;
+  }
+}
+
+@media (max-width: 760px) {
+  .users-email-create {
+    grid-template-columns: 1fr;
+  }
+
+  .users-table {
+    width: 100%;
+    table-layout: auto;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+  }
+
+  .users-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .users-table th:nth-child(1),
+  .users-table td:nth-child(1),
+  .users-table th:nth-child(2),
+  .users-table td:nth-child(2),
+  .users-table th:nth-child(3),
+  .users-table td:nth-child(3),
+  .users-table th:nth-child(4),
+  .users-table td:nth-child(4),
+  .users-table th:nth-child(5),
+  .users-table td:nth-child(5),
+  .users-table th:nth-child(6),
+  .users-table td:nth-child(6) {
+    width: auto;
+  }
+
+  .users-table tbody,
+  .users-table tr,
+  .users-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .users-table tbody tr {
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-row);
+  }
+
+  .users-table td {
+    display: grid;
+    grid-template-columns: minmax(90px, 34%) minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .users-table td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .users-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .users-table td:last-child .actions-inline {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .users-table .users-subline.code {
+    word-break: break-all;
+    overflow-wrap: anywhere;
+  }
+
+  .users-table .users-empty-cell {
+    display: block;
+    padding: 12px 10px;
+    border-bottom: 0;
+  }
+
+  .users-table .users-empty-cell::before {
+    content: none;
   }
 }
 </style>

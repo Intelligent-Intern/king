@@ -52,7 +52,6 @@ function videochat_dispatch_request(
     $path = $pathFromRequest($request);
     $method = $methodFromRequest($request);
     $corsHeaders = [
-        'access-control-allow-origin' => '*',
         'access-control-allow-methods' => 'GET,POST,PATCH,DELETE,OPTIONS',
         'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id',
         'access-control-max-age' => '600',
@@ -73,7 +72,7 @@ function videochat_dispatch_request(
 
         if (in_array(
             $requestPath,
-            ['/', '/health', '/api/bootstrap', '/api/runtime', '/api/version', '/api/auth/login'],
+                ['/', '/health', '/api/bootstrap', '/api/runtime', '/api/version', '/api/auth/login', '/api/auth/session-state', '/api/auth/email-change/confirm'],
             true
         )) {
             return true;

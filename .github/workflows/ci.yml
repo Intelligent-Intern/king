@@ -101,6 +101,10 @@ jobs:
         if: matrix.shard-index == 1
         run: bash ./infra/scripts/check-dependency-provenance-doc.sh
 
+      - name: Verify repo artifact hygiene guardrails
+        if: matrix.shard-index == 1
+        run: bash ./infra/scripts/check-repo-artifact-hygiene.sh
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -166,8 +170,6 @@ jobs:
         run: |
           VIDEOCHAT_SMOKE_COMPOSE_ONLY=1 \
           VIDEOCHAT_SMOKE_REQUIRE_COMPOSE=1 \
-          VIDEOCHAT_SMOKE_COMPOSE_BACKEND_PORT=38080 \
-          VIDEOCHAT_SMOKE_COMPOSE_FRONTEND_PORT=35174 \
           bash demo/video-chat/scripts/smoke.sh
 
       - name: Run canonical PHPT suite

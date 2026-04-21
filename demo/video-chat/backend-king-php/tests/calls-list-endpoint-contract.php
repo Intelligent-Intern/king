@@ -174,6 +174,16 @@ SQL
         ':joined_at' => null,
         ':left_at' => null,
     ]);
+    $insertParticipant->execute([
+        ':call_id' => 'call-endpoint-001',
+        ':user_id' => $adminUserId,
+        ':email' => 'admin@intelligent-intern.com',
+        ':display_name' => 'Platform Admin',
+        ':source' => 'internal',
+        ':invite_state' => 'accepted',
+        ':joined_at' => '2026-06-01T09:05:00Z',
+        ':left_at' => null,
+    ]);
 
     $adminSessionId = 'sess_calls_list_admin_contract';
     $userSessionId = 'sess_calls_list_user_contract';
@@ -295,6 +305,10 @@ SQL
     videochat_calls_list_endpoint_assert((string) ($adminRows[0]['id'] ?? '') === 'call-endpoint-001', 'admin calls-list first row order mismatch');
     videochat_calls_list_endpoint_assert((string) ($adminRows[1]['id'] ?? '') === 'call-endpoint-002', 'admin calls-list second row order mismatch');
     videochat_calls_list_endpoint_assert(
+        (string) ($adminRows[0]['status'] ?? '') === 'active',
+        'scheduled call with owner joined must resolve to active status'
+    );
+    videochat_calls_list_endpoint_assert(
         (string) ((($adminGetPayload['sort'] ?? [])['primary'] ?? '')) === 'starts_at_asc',
         'admin calls-list sort primary mismatch'
     );
@@ -328,6 +342,29 @@ SQL
     videochat_calls_list_endpoint_assert(
         (int) ((($adminSearchPayload['pagination'] ?? [])['total'] ?? 0)) === 2,
         'admin search total mismatch'
+    );
+
+    $adminActiveFilter = videochat_handle_call_routes(
+        '/api/calls',
+        'GET',
+        [
+            'method' => 'GET',
+            'uri' => '/api/calls?scope=all&status=active&page=1&page_size=10',
+            'headers' => ['Authorization' => 'Bearer ' . $adminSessionId],
+            'body' => '',
+        ],
+        $adminAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_calls_list_endpoint_assert(is_array($adminActiveFilter), 'admin active-filter response must be an array');
+    videochat_calls_list_endpoint_assert((int) ($adminActiveFilter['status'] ?? 0) === 200, 'admin active-filter status should be 200');
+    $adminActivePayload = videochat_calls_list_endpoint_decode($adminActiveFilter);
+    videochat_calls_list_endpoint_assert(
+        (int) ((($adminActivePayload['pagination'] ?? [])['total'] ?? 0)) === 2,
+        'admin active-filter total mismatch'
     );
 
     $invalidFilterResponse = videochat_handle_call_routes(

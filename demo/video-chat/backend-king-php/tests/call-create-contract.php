@@ -50,26 +50,26 @@ SQL
     )->fetchColumn();
     videochat_call_create_assert($userUserId > 0, 'expected seeded user user');
 
-    $moderatorRoleId = (int) $pdo->query("SELECT id FROM roles WHERE slug = 'moderator' LIMIT 1")->fetchColumn();
-    videochat_call_create_assert($moderatorRoleId > 0, 'expected moderator role');
+    $standardRoleId = (int) $pdo->query("SELECT id FROM roles WHERE slug = 'user' LIMIT 1")->fetchColumn();
+    videochat_call_create_assert($standardRoleId > 0, 'expected user role');
 
-    $moderatorPassword = password_hash('moderator123', PASSWORD_DEFAULT);
-    videochat_call_create_assert(is_string($moderatorPassword) && $moderatorPassword !== '', 'moderator password hash failed');
-    $createModerator = $pdo->prepare(
+    $extraUserPassword = password_hash('participant123', PASSWORD_DEFAULT);
+    videochat_call_create_assert(is_string($extraUserPassword) && $extraUserPassword !== '', 'extra user password hash failed');
+    $createExtraUser = $pdo->prepare(
         <<<'SQL'
 INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, updated_at)
 VALUES(:email, :display_name, :password_hash, :role_id, 'active', '24h', 'dark', :updated_at)
 SQL
     );
-    $createModerator->execute([
-        ':email' => 'moderator-create-call@intelligent-intern.com',
-        ':display_name' => 'Moderator Create Call',
-        ':password_hash' => $moderatorPassword,
-        ':role_id' => $moderatorRoleId,
+    $createExtraUser->execute([
+        ':email' => 'participant-create-call@intelligent-intern.com',
+        ':display_name' => 'Participant Create Call',
+        ':password_hash' => $extraUserPassword,
+        ':role_id' => $standardRoleId,
         ':updated_at' => gmdate('c'),
     ]);
-    $moderatorUserId = (int) $pdo->lastInsertId();
-    videochat_call_create_assert($moderatorUserId > 0, 'expected inserted moderator user');
+    $extraUserId = (int) $pdo->lastInsertId();
+    videochat_call_create_assert($extraUserId > 0, 'expected inserted extra user');
 
     $invalidPayload = videochat_create_call($pdo, $adminUserId, [
         'title' => '',
@@ -81,6 +81,18 @@ SQL
     videochat_call_create_assert(
         (string) (($invalidPayload['errors'] ?? [])['title'] ?? '') === 'required_title',
         'invalid create title error mismatch'
+    );
+
+    $invalidAccessMode = videochat_create_call($pdo, $adminUserId, [
+        'title' => 'Invalid Access Mode',
+        'starts_at' => '2026-06-01T10:00:00Z',
+        'ends_at' => '2026-06-01T11:00:00Z',
+        'access_mode' => 'everyone',
+    ]);
+    videochat_call_create_assert($invalidAccessMode['ok'] === false, 'invalid access_mode should fail');
+    videochat_call_create_assert(
+        (string) (($invalidAccessMode['errors'] ?? [])['access_mode'] ?? '') === 'must_be_invite_only_or_free_for_all',
+        'invalid access_mode error mismatch'
     );
 
     $invalidInternal = videochat_create_call($pdo, $adminUserId, [
@@ -99,9 +111,10 @@ SQL
     $validCreate = videochat_create_call($pdo, $adminUserId, [
         'room_id' => 'lobby',
         'title' => 'Weekly Product Sync',
+        'access_mode' => 'free_for_all',
         'starts_at' => '2026-06-02T09:00:00Z',
         'ends_at' => '2026-06-02T10:00:00Z',
-        'internal_participant_user_ids' => [$userUserId, $moderatorUserId],
+        'internal_participant_user_ids' => [$userUserId, $extraUserId],
         'external_participants' => [
             ['email' => 'guest-a@example.com', 'display_name' => 'Guest A'],
             ['email' => 'guest-b@example.com', 'display_name' => 'Guest B'],
@@ -114,6 +127,7 @@ SQL
     videochat_call_create_assert(is_array($createdCall), 'valid call create should return call envelope');
     $callId = (string) ($createdCall['id'] ?? '');
     videochat_call_create_assert($callId !== '', 'created call id should be non-empty');
+    videochat_call_create_assert((string) ($createdCall['room_id'] ?? '') === $callId, 'created call must use a dedicated room id');
     videochat_call_create_assert((string) ($createdCall['status'] ?? '') === 'scheduled', 'created call status mismatch');
     videochat_call_create_assert((string) ($createdCall['title'] ?? '') === 'Weekly Product Sync', 'created call title mismatch');
     videochat_call_create_assert(
@@ -128,14 +142,30 @@ SQL
         (int) (($createdCall['participants']['totals'] ?? [])['external'] ?? 0) === 2,
         'created call external participant total mismatch'
     );
+    videochat_call_create_assert(
+        (string) ($createdCall['access_mode'] ?? '') === 'free_for_all',
+        'created call access_mode mismatch'
+    );
 
-    $callRowQuery = $pdo->prepare('SELECT id, title, owner_user_id, status FROM calls WHERE id = :id LIMIT 1');
+    $roomRowQuery = $pdo->prepare('SELECT id, name, visibility, status, created_by_user_id FROM rooms WHERE id = :id LIMIT 1');
+    $roomRowQuery->execute([':id' => $callId]);
+    $roomRow = $roomRowQuery->fetch();
+    videochat_call_create_assert(is_array($roomRow), 'created call room should exist in database');
+    videochat_call_create_assert((string) ($roomRow['id'] ?? '') === $callId, 'created call room id mismatch');
+    videochat_call_create_assert((string) ($roomRow['name'] ?? '') === 'Weekly Product Sync', 'created call room name mismatch');
+    videochat_call_create_assert((string) ($roomRow['visibility'] ?? '') === 'private', 'created call room visibility mismatch');
+    videochat_call_create_assert((string) ($roomRow['status'] ?? '') === 'active', 'created call room status mismatch');
+    videochat_call_create_assert((int) ($roomRow['created_by_user_id'] ?? 0) === $adminUserId, 'created call room owner mismatch');
+
+    $callRowQuery = $pdo->prepare('SELECT id, room_id, title, owner_user_id, status, access_mode FROM calls WHERE id = :id LIMIT 1');
     $callRowQuery->execute([':id' => $callId]);
     $callRow = $callRowQuery->fetch();
     videochat_call_create_assert(is_array($callRow), 'created call row should exist in database');
+    videochat_call_create_assert((string) ($callRow['room_id'] ?? '') === $callId, 'persisted call room_id must use dedicated room');
     videochat_call_create_assert((string) ($callRow['title'] ?? '') === 'Weekly Product Sync', 'persisted call title mismatch');
     videochat_call_create_assert((int) ($callRow['owner_user_id'] ?? 0) === $adminUserId, 'persisted owner mismatch');
     videochat_call_create_assert((string) ($callRow['status'] ?? '') === 'scheduled', 'persisted status mismatch');
+    videochat_call_create_assert((string) ($callRow['access_mode'] ?? '') === 'free_for_all', 'persisted access_mode mismatch');
 
     $participantCountQuery = $pdo->prepare('SELECT COUNT(*) FROM call_participants WHERE call_id = :call_id');
     $participantCountQuery->execute([':call_id' => $callId]);

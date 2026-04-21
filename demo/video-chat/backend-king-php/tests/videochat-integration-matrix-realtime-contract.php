@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/realtime/realtime_presence.php';
 require_once __DIR__ . '/../domain/realtime/realtime_chat.php';
 require_once __DIR__ . '/../domain/realtime/realtime_typing.php';
@@ -247,6 +248,88 @@ SQL
     $missingLiveness = videochat_realtime_validate_session_liveness($authenticateRequest, '', $wsPath);
     videochat_integration_realtime_assert(!(bool) ($missingLiveness['ok'] ?? true), 'missing session should fail realtime liveness');
     videochat_integration_realtime_assert((string) ($missingLiveness['reason'] ?? '') === 'missing_session', 'missing session liveness reason mismatch');
+
+    $admissionRoomId = 'sfu-admission-room';
+    $admissionCallId = 'sfu-admission-call';
+    $nowIso = gmdate('c', $now);
+    $pdo->prepare(
+        <<<'SQL'
+INSERT INTO rooms(id, name, visibility, status, created_by_user_id, created_at, updated_at)
+VALUES(:id, 'SFU Admission Room', 'private', 'active', :owner_user_id, :created_at, :updated_at)
+SQL
+    )->execute([
+        ':id' => $admissionRoomId,
+        ':owner_user_id' => $adminUserId,
+        ':created_at' => $nowIso,
+        ':updated_at' => $nowIso,
+    ]);
+    $pdo->prepare(
+        <<<'SQL'
+INSERT INTO calls(id, room_id, title, owner_user_id, status, starts_at, ends_at, created_at, updated_at)
+VALUES(:id, :room_id, 'SFU Admission Call', :owner_user_id, 'active', :starts_at, :ends_at, :created_at, :updated_at)
+SQL
+    )->execute([
+        ':id' => $admissionCallId,
+        ':room_id' => $admissionRoomId,
+        ':owner_user_id' => $adminUserId,
+        ':starts_at' => gmdate('c', $now - 60),
+        ':ends_at' => gmdate('c', $now + 3600),
+        ':created_at' => $nowIso,
+        ':updated_at' => $nowIso,
+    ]);
+    $insertParticipant = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO call_participants(call_id, user_id, email, display_name, source, call_role, invite_state, joined_at, left_at)
+VALUES(:call_id, :user_id, :email, :display_name, 'internal', :call_role, :invite_state, :joined_at, NULL)
+SQL
+    );
+    $insertParticipant->execute([
+        ':call_id' => $admissionCallId,
+        ':user_id' => $adminUserId,
+        ':email' => 'admin@intelligent-intern.com',
+        ':display_name' => 'Platform Admin',
+        ':call_role' => 'owner',
+        ':invite_state' => 'allowed',
+        ':joined_at' => $nowIso,
+    ]);
+    $insertParticipant->execute([
+        ':call_id' => $admissionCallId,
+        ':user_id' => $userUserId,
+        ':email' => 'user@intelligent-intern.com',
+        ':display_name' => 'Call User',
+        ':call_role' => 'participant',
+        ':invite_state' => 'allowed',
+        ':joined_at' => $nowIso,
+    ]);
+    $openAdmissionDatabase = static function () use ($pdo): PDO {
+        return $pdo;
+    };
+    videochat_integration_realtime_assert(
+        videochat_realtime_user_has_sfu_room_admission(
+            $openAdmissionDatabase,
+            $userUserId,
+            'user',
+            $admissionRoomId,
+            $admissionCallId
+        ),
+        'SFU admission should accept DB-admitted call participants without process-local /ws presence'
+    );
+    $pdo->prepare(
+        "UPDATE call_participants SET invite_state = 'pending', joined_at = NULL WHERE call_id = :call_id AND user_id = :user_id"
+    )->execute([
+        ':call_id' => $admissionCallId,
+        ':user_id' => $userUserId,
+    ]);
+    videochat_integration_realtime_assert(
+        !videochat_realtime_user_has_sfu_room_admission(
+            $openAdmissionDatabase,
+            $userUserId,
+            'user',
+            $admissionRoomId,
+            $admissionCallId
+        ),
+        'SFU admission must still reject pending lobby participants'
+    );
 
     $closeAuthBackend = videochat_realtime_close_descriptor_for_reason('auth_backend_error');
     videochat_integration_realtime_assert((int) ($closeAuthBackend['close_code'] ?? 0) === 1011, 'auth backend close code mismatch');

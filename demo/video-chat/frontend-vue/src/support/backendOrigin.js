@@ -33,15 +33,29 @@ function normalizeExplicitOrigin(rawOrigin, fallbackPort = '') {
 
 let preferredBackendOrigin = '';
 let preferredBackendWebSocketOrigin = '';
+let preferredBackendSfuOrigin = '';
+
+function parseBooleanEnv(value, fallback = false) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') {
+    return true;
+  }
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') {
+    return false;
+  }
+  return fallback;
+}
+
+const allowInsecureWebSockets = parseBooleanEnv(import.meta.env.VITE_VIDEOCHAT_ALLOW_INSECURE_WS, false);
 
 function hasExplicitBackendOriginConfig() {
   const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || '').trim();
   return explicitOrigin !== '';
 }
 
-function hasExplicitBackendWebSocketConfig() {
-  const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_WS_ORIGIN || '').trim();
-  const explicitPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
+function hasExplicitBackendSfuConfig() {
+  const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_SFU_ORIGIN || '').trim();
+  const explicitPort = String(import.meta.env.VITE_VIDEOCHAT_SFU_PORT || '').trim();
   return explicitOrigin !== '' || explicitPort !== '';
 }
 
@@ -70,41 +84,37 @@ function detectDefaultBackendWebSocketOrigin() {
     return normalizeExplicitOrigin(envOrigin, inferredWsPort);
   }
 
-  if (wsPort !== '') {
-    if (typeof window !== 'undefined') {
-      const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
-      const host = String(window.location.hostname || 'localhost').trim() || 'localhost';
-      return `${protocol}://${host}:${wsPort}`;
-    }
-    return `http://localhost:${wsPort}`;
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
+    const host = String(window.location.hostname || 'localhost').trim() || 'localhost';
+    return `${protocol}://${host}:${inferredWsPort}`;
   }
 
-  return resolveBackendOrigin();
+  return `http://localhost:${inferredWsPort}`;
 }
 
-function deriveBackendSiblingWebSocketOriginCandidate() {
-  const explicitWsOrigin = String(import.meta.env.VITE_VIDEOCHAT_WS_ORIGIN || '').trim();
-  const explicitWsPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
-  if (explicitWsOrigin !== '' || explicitWsPort !== '') {
-    return '';
+function detectDefaultBackendSfuOrigin() {
+  const envOrigin = String(import.meta.env.VITE_VIDEOCHAT_SFU_ORIGIN || '').trim();
+  const sfuPort = String(import.meta.env.VITE_VIDEOCHAT_SFU_PORT || '').trim();
+  const wsPort = String(import.meta.env.VITE_VIDEOCHAT_WS_PORT || '').trim();
+  const backendPort = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_PORT || '18080').trim() || '18080';
+
+  const inferredSfuPort = sfuPort
+    || (wsPort !== ''
+      ? wsPort
+      : backendPort);
+
+  if (envOrigin !== '') {
+    return normalizeExplicitOrigin(envOrigin, inferredSfuPort);
   }
 
-  try {
-    const parsedBackendOrigin = new URL(resolveBackendOrigin());
-    if (parsedBackendOrigin.port === '') {
-      return '';
-    }
-
-    const backendPort = Number.parseInt(parsedBackendOrigin.port, 10);
-    if (!Number.isInteger(backendPort) || backendPort <= 0 || backendPort >= 65535) {
-      return '';
-    }
-
-    parsedBackendOrigin.port = String(backendPort + 1);
-    return normalizeExplicitOrigin(parsedBackendOrigin.toString());
-  } catch {
-    return '';
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
+    const host = String(window.location.hostname || 'localhost').trim() || 'localhost';
+    return `${protocol}://${host}:${inferredSfuPort}`;
   }
+
+  return `http://localhost:${inferredSfuPort}`;
 }
 
 export function resolveBackendOrigin() {
@@ -127,6 +137,12 @@ export function setBackendWebSocketOrigin(nextOrigin) {
   preferredBackendWebSocketOrigin = normalized;
 }
 
+export function setBackendSfuOrigin(nextOrigin) {
+  const normalized = normalizeExplicitOrigin(nextOrigin);
+  if (normalized === '') return;
+  preferredBackendSfuOrigin = normalized;
+}
+
 export function resolveBackendWebSocketOrigin() {
   if (preferredBackendWebSocketOrigin !== '') {
     return preferredBackendWebSocketOrigin;
@@ -136,12 +152,77 @@ export function resolveBackendWebSocketOrigin() {
   return preferredBackendWebSocketOrigin;
 }
 
+export function resolveBackendSfuOrigin() {
+  if (preferredBackendSfuOrigin !== '') {
+    return preferredBackendSfuOrigin;
+  }
+
+  preferredBackendSfuOrigin = normalizeExplicitOrigin(detectDefaultBackendSfuOrigin());
+  return preferredBackendSfuOrigin;
+}
+
 function isLoopbackHost(hostname) {
   const value = String(hostname || '').trim().toLowerCase();
   if (value === 'localhost') return true;
   if (value === '127.0.0.1') return true;
   if (value === '[::1]' || value === '::1') return true;
   return false;
+}
+
+function isSecureOriginProtocol(protocol) {
+  const value = String(protocol || '').trim().toLowerCase();
+  return value === 'https:' || value === 'wss:';
+}
+
+function isInsecureOriginProtocol(protocol) {
+  const value = String(protocol || '').trim().toLowerCase();
+  return value === 'http:' || value === 'ws:';
+}
+
+export function isOriginAllowedForWebSocket(origin) {
+  try {
+    const parsed = new URL(String(origin || '').trim());
+    if (isSecureOriginProtocol(parsed.protocol)) {
+      return true;
+    }
+    if (!isInsecureOriginProtocol(parsed.protocol)) {
+      return false;
+    }
+    return allowInsecureWebSockets || isLoopbackHost(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function buildWebSocketUrl(origin, path, query = null) {
+  const rawOrigin = String(origin || '').trim();
+  if (rawOrigin === '') return null;
+
+  try {
+    const parsed = new URL(rawOrigin);
+    const normalizedPath = String(path || '/').startsWith('/') ? String(path || '/') : `/${String(path || '')}`;
+    if (isSecureOriginProtocol(parsed.protocol)) {
+      parsed.protocol = 'wss:';
+    } else if (isInsecureOriginProtocol(parsed.protocol)) {
+      if (!isOriginAllowedForWebSocket(parsed.toString())) {
+        return null;
+      }
+      parsed.protocol = 'ws:';
+    } else {
+      return null;
+    }
+
+    parsed.pathname = normalizedPath;
+    parsed.search = '';
+    parsed.hash = '';
+    if (query instanceof URLSearchParams) {
+      parsed.search = query.toString();
+    }
+
+    return parsed.toString();
+  } catch {
+    return null;
+  }
 }
 
 export function resolveBackendOriginCandidates() {
@@ -176,8 +257,21 @@ export function resolveBackendOriginCandidates() {
 function pushUniqueCandidate(candidates, origin) {
   const normalized = normalizeExplicitOrigin(origin);
   if (normalized === '') return;
+  if (!isOriginAllowedForWebSocket(normalized)) return;
   if (!candidates.includes(normalized)) {
     candidates.push(normalized);
+  }
+}
+
+function appendLoopbackHostVariant(candidates, origin) {
+  try {
+    const parsed = new URL(origin);
+    if (!isLoopbackHost(parsed.hostname)) return;
+    const variant = new URL(parsed.toString());
+    variant.hostname = parsed.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+    pushUniqueCandidate(candidates, variant.toString());
+  } catch {
+    // Ignore parse failures and keep current candidates.
   }
 }
 
@@ -185,15 +279,34 @@ export function resolveBackendWebSocketOriginCandidates() {
   const candidates = [];
 
   const primaryWsOrigin = resolveBackendWebSocketOrigin();
-  const primaryBackendOrigin = resolveBackendOrigin();
   pushUniqueCandidate(candidates, primaryWsOrigin);
-  pushUniqueCandidate(candidates, primaryBackendOrigin);
+  appendLoopbackHostVariant(candidates, primaryWsOrigin);
 
-  // Only add one sibling fallback candidate (+1) when WS is not explicitly configured.
-  // This avoids drifting retries like :18082 and host alias oscillation.
-  if (!hasExplicitBackendWebSocketConfig()) {
-    pushUniqueCandidate(candidates, deriveBackendSiblingWebSocketOriginCandidate());
+  const backendOrigin = resolveBackendOrigin();
+  pushUniqueCandidate(candidates, backendOrigin);
+  appendLoopbackHostVariant(candidates, backendOrigin);
+
+  return candidates;
+}
+
+export function resolveBackendSfuOriginCandidates() {
+  const candidates = [];
+
+  const primarySfuOrigin = resolveBackendSfuOrigin();
+  pushUniqueCandidate(candidates, primarySfuOrigin);
+  appendLoopbackHostVariant(candidates, primarySfuOrigin);
+
+  if (hasExplicitBackendSfuConfig()) {
+    return candidates;
   }
+
+  const websocketOrigin = resolveBackendWebSocketOrigin();
+  pushUniqueCandidate(candidates, websocketOrigin);
+  appendLoopbackHostVariant(candidates, websocketOrigin);
+
+  const backendOrigin = resolveBackendOrigin();
+  pushUniqueCandidate(candidates, backendOrigin);
+  appendLoopbackHostVariant(candidates, backendOrigin);
 
   return candidates;
 }

@@ -12,6 +12,10 @@ PHP_BIN="${PHP_BIN:-php}"
 DEFAULT_EXT="${REPO_ROOT}/extension/modules/king.so"
 KING_EXTENSION_PATH="${KING_EXTENSION_PATH:-${DEFAULT_EXT}}"
 SERVER_MODE_OVERRIDE="${VIDEOCHAT_KING_SERVER_MODE:-}"
+DEFAULT_HTTP_WORKERS="${VIDEOCHAT_KING_DEFAULT_HTTP_WORKERS:-24}"
+DEFAULT_WS_WORKERS="${VIDEOCHAT_KING_DEFAULT_WS_WORKERS:-8}"
+HTTP_WORKERS="${VIDEOCHAT_KING_HTTP_WORKERS:-${VIDEOCHAT_KING_WORKERS:-${DEFAULT_HTTP_WORKERS}}}"
+WS_WORKERS="${VIDEOCHAT_KING_WS_WORKERS:-${VIDEOCHAT_KING_WORKERS:-${DEFAULT_WS_WORKERS}}}"
 
 php_args=()
 ext_source=""
@@ -49,13 +53,56 @@ echo "[video-chat][king-php-backend] sqlite path ${DB_PATH}"
 
 backend_pids=()
 
+normalize_worker_count() {
+  local raw="$1"
+  if [[ ! "${raw}" =~ ^[0-9]+$ ]]; then
+    echo "1"
+    return
+  fi
+  if (( raw < 1 )); then
+    echo "1"
+    return
+  fi
+  if (( raw > 64 )); then
+    echo "64"
+    return
+  fi
+  echo "${raw}"
+}
+
+worker_count_for_mode() {
+  local mode="$1"
+  case "${mode}" in
+    ws)
+      normalize_worker_count "${WS_WORKERS}"
+      ;;
+    http|all)
+      normalize_worker_count "${HTTP_WORKERS}"
+      ;;
+    *)
+      echo "1"
+      ;;
+  esac
+}
+
 start_backend() {
   local mode="$1"
   local bind_port="$2"
-  VIDEOCHAT_KING_PORT="${bind_port}" \
-  VIDEOCHAT_KING_SERVER_MODE="${mode}" \
-  "${PHP_BIN}" "${php_args[@]}" "${SCRIPT_DIR}/server.php" &
-  backend_pids+=("$!")
+  local worker_count
+  worker_count="$(worker_count_for_mode "${mode}")"
+
+  local worker_index=1
+  while (( worker_index <= worker_count )); do
+    VIDEOCHAT_KING_PORT="${bind_port}" \
+    VIDEOCHAT_KING_SERVER_MODE="${mode}" \
+    VIDEOCHAT_KING_WORKER_INDEX="${worker_index}" \
+    VIDEOCHAT_KING_WORKER_COUNT="${worker_count}" \
+    "${PHP_BIN}" "${php_args[@]}" "${SCRIPT_DIR}/server.php" &
+    backend_pids+=("$!")
+    worker_index=$((worker_index + 1))
+  done
+
+  echo "[video-chat][king-php-backend] started ${worker_count} worker(s) in ${mode} mode on port ${bind_port}"
 }
 
 normalized_mode_override="$(echo "${SERVER_MODE_OVERRIDE}" | tr '[:upper:]' '[:lower:]' | xargs || true)"

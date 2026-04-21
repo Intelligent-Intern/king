@@ -56,10 +56,16 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { resolveAuthorizedRedirect } from '../../http/router';
-import { defaultRouteForRole, loginWithPassword } from './session';
+import { fetchBackend } from '../../support/backendFetch';
+import {
+  defaultRouteForRole,
+  loginWithEmailChangeToken,
+  loginWithPassword,
+  sessionState,
+} from './session';
 
 const router = useRouter();
 const route = useRoute();
@@ -70,10 +76,70 @@ const emailError = ref('');
 const passwordError = ref('');
 const authError = ref('');
 const submitting = ref(false);
+const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
 function getRedirectTarget(role) {
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '';
   return resolveAuthorizedRedirect(redirect, role, router) || defaultRouteForRole(role);
+}
+
+function extractWorkspaceCallRef(redirectTarget) {
+  const resolved = router.resolve(String(redirectTarget || '').trim());
+  if (String(resolved?.name || '') !== 'call-workspace') {
+    return '';
+  }
+
+  const entryMode = String(resolved.query?.entry || '').trim().toLowerCase();
+  if (entryMode === 'invite') {
+    return '';
+  }
+
+  const callRef = String(resolved.params?.callRef || '').trim().toLowerCase();
+  if (!UUID_PATTERN.test(callRef)) {
+    return '';
+  }
+
+  return callRef;
+}
+
+async function normalizePostLoginRedirectTarget(redirectTarget) {
+  const callRef = extractWorkspaceCallRef(redirectTarget);
+  if (callRef === '') {
+    return redirectTarget;
+  }
+
+  const sessionToken = String(sessionState.sessionToken || '').trim();
+  if (sessionToken === '') {
+    return redirectTarget;
+  }
+
+  try {
+    const { response } = await fetchBackend(`/api/calls/resolve/${encodeURIComponent(callRef)}`, {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${sessionToken}`,
+      },
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload || payload.status !== 'ok') {
+      return redirectTarget;
+    }
+
+    const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+    if (String(result.state || '').trim().toLowerCase() !== 'resolved') {
+      return redirectTarget;
+    }
+
+    const accessId = String(result?.access_link?.id || '').trim().toLowerCase();
+    if (!UUID_PATTERN.test(accessId)) {
+      return redirectTarget;
+    }
+
+    return `/join/${encodeURIComponent(accessId)}`;
+  } catch {
+    return redirectTarget;
+  }
 }
 
 async function handleSubmit() {
@@ -111,9 +177,43 @@ async function handleSubmit() {
       return;
     }
 
-    router.replace(getRedirectTarget(result.role));
+    const redirectTarget = getRedirectTarget(result.role);
+    const normalizedTarget = await normalizePostLoginRedirectTarget(redirectTarget);
+    router.replace(normalizedTarget || defaultRouteForRole(result.role));
   } finally {
     submitting.value = false;
   }
 }
+
+async function handleEmailChangeTokenLogin(token) {
+  if (submitting.value) return;
+  submitting.value = true;
+  emailError.value = '';
+  passwordError.value = '';
+  authError.value = '';
+
+  try {
+    const result = await loginWithEmailChangeToken(token);
+    if (!result.ok) {
+      authError.value = result.message || 'Email confirmation failed.';
+      return;
+    }
+
+    const fallbackTarget = getRedirectTarget(result.role);
+    const tokenTarget = typeof result.redirectPath === 'string' ? result.redirectPath.trim() : '';
+    const nextTarget = tokenTarget !== '' ? tokenTarget : fallbackTarget;
+    router.replace(nextTarget || defaultRouteForRole(result.role));
+  } finally {
+    submitting.value = false;
+  }
+}
+
+onMounted(() => {
+  const tokenFromQuery = typeof route.query.email_change_token === 'string'
+    ? route.query.email_change_token.trim()
+    : '';
+  if (tokenFromQuery !== '') {
+    void handleEmailChangeTokenLogin(tokenFromQuery);
+  }
+});
 </script>

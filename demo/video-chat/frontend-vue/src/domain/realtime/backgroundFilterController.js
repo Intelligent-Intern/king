@@ -19,7 +19,7 @@ export class BackgroundFilterController {
 
   async apply(sourceStream, options) {
     const revision = ++this.revision;
-    this.disposeCurrentHandle();
+    const previousHandle = this.currentHandle;
 
     const handle = await createBackgroundFilterStream(sourceStream, options);
     if (revision !== this.revision) {
@@ -38,6 +38,13 @@ export class BackgroundFilterController {
     }
 
     this.currentHandle = handle;
+    if (previousHandle && previousHandle !== handle) {
+      try {
+        previousHandle.dispose();
+      } catch {
+        // best-effort cleanup; never break call flow.
+      }
+    }
     return {
       stream: handle.stream,
       active: Boolean(handle.active),

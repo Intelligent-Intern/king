@@ -1,17 +1,14 @@
 import { reactive } from 'vue';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import { normalizeDateFormat, normalizeTimeFormat } from '../../support/dateTimeFormat';
 
 const STORAGE_KEY = 'ii_videocall_v1_session';
 const AUTH_ROLES = new Set(['admin', 'user']);
+const ACCOUNT_TYPES = new Set(['account', 'guest']);
 
 function normalizeRole(value) {
   const role = String(value || '').trim().toLowerCase();
   return AUTH_ROLES.has(role) ? role : null;
-}
-
-function normalizeTimeFormat(value) {
-  const timeFormat = String(value || '').trim().toLowerCase();
-  return timeFormat === '12h' || timeFormat === '24h' ? timeFormat : '24h';
 }
 
 function normalizeTheme(value) {
@@ -21,6 +18,29 @@ function normalizeTheme(value) {
 
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeAccountType(value) {
+  const accountType = normalizeString(value).toLowerCase();
+  return ACCOUNT_TYPES.has(accountType) ? accountType : '';
+}
+
+function inferAccountType(user) {
+  const explicitType = normalizeAccountType(user?.account_type);
+  if (explicitType !== '') {
+    return explicitType;
+  }
+
+  if (user?.is_guest === true) {
+    return 'guest';
+  }
+
+  const email = normalizeString(user?.email).toLowerCase();
+  if (email.startsWith('guest+') && email.endsWith('@videochat.local')) {
+    return 'guest';
+  }
+
+  return 'account';
 }
 
 function extractErrorMessage(payload, fallback) {
@@ -58,8 +78,11 @@ export const sessionState = reactive({
   displayName: '',
   email: '',
   userId: 0,
+  accountType: '',
+  isGuest: false,
   avatarPath: null,
   timeFormat: '24h',
+  dateFormat: 'dmy_dot',
   theme: 'dark',
   status: '',
   sessionId: loaded?.sessionId || '',
@@ -93,8 +116,11 @@ function resetUserFields() {
   sessionState.displayName = '';
   sessionState.email = '';
   sessionState.userId = 0;
+  sessionState.accountType = '';
+  sessionState.isGuest = false;
   sessionState.avatarPath = null;
   sessionState.timeFormat = '24h';
+  sessionState.dateFormat = 'dmy_dot';
   sessionState.theme = 'dark';
   sessionState.status = '';
 }
@@ -119,10 +145,13 @@ function applyUserSnapshot(user) {
   sessionState.displayName = normalizeString(user.display_name);
   sessionState.email = normalizeString(user.email);
   sessionState.userId = Number.isInteger(user.id) ? user.id : 0;
+  sessionState.accountType = inferAccountType(user);
+  sessionState.isGuest = sessionState.accountType === 'guest';
   sessionState.avatarPath = typeof user.avatar_path === 'string' && normalizeString(user.avatar_path) !== ''
     ? normalizeString(user.avatar_path)
     : null;
   sessionState.timeFormat = normalizeTimeFormat(user.time_format);
+  sessionState.dateFormat = normalizeDateFormat(user.date_format);
   sessionState.theme = normalizeTheme(user.theme);
   sessionState.status = normalizeString(user.status);
 }
@@ -150,8 +179,16 @@ export function isAuthenticated() {
   return !!sessionState.sessionToken && !!normalizeRole(sessionState.role);
 }
 
+export function isGuestSession() {
+  return isAuthenticated() && sessionState.accountType === 'guest';
+}
+
 export function defaultRouteForRole(role) {
   return role === 'admin' ? '/admin/overview' : '/user/dashboard';
+}
+
+export function callListRouteForRole(role) {
+  return role === 'admin' ? '/admin/calls' : '/user/dashboard';
 }
 
 function sessionHeaders() {
@@ -243,6 +280,61 @@ export async function loginWithPassword(email, password) {
   }
 }
 
+export async function loginWithEmailChangeToken(token) {
+  const normalizedToken = normalizeString(token);
+  if (normalizedToken === '') {
+    return {
+      ok: false,
+      status: 422,
+      message: 'Email confirmation token is required.',
+    };
+  }
+
+  try {
+    const { response } = await fetchBackend('/api/auth/email-change/confirm', {
+      method: 'GET',
+      query: {
+        token: normalizedToken,
+      },
+      headers: {
+        accept: 'application/json',
+      },
+    });
+
+    const payload = await readJsonResponse(response);
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        message: extractErrorMessage(payload, 'Could not confirm email change.'),
+      };
+    }
+
+    if (!payload || payload.status !== 'ok') {
+      return {
+        ok: false,
+        status: response.status,
+        message: 'Email confirmation response is invalid.',
+      };
+    }
+
+    applySessionEnvelope(payload.session, payload.user);
+    const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+    return {
+      ok: true,
+      role: sessionState.role,
+      redirectPath: typeof result.redirect_path === 'string' ? result.redirect_path : '',
+      editUserId: Number.isInteger(result.edit_user_id) ? result.edit_user_id : 0,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      message: normalizeNetworkErrorMessage(error, 'Email confirmation request failed.'),
+    };
+  }
+}
+
 export async function loginWithCallAccess(accessId, options = {}) {
   const normalizedAccessId = String(accessId || '').trim().toLowerCase();
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(normalizedAccessId)) {
@@ -320,7 +412,7 @@ export async function ensureSessionRecovery(force = false) {
 
     setRecoveryState('probing');
     try {
-      const { response } = await fetchBackend('/api/auth/session', {
+      const { response } = await fetchBackend('/api/auth/session-state', {
         method: 'GET',
         headers: sessionHeaders(),
       });
@@ -333,6 +425,19 @@ export async function ensureSessionRecovery(force = false) {
         return {
           ok: false,
           reason: 'invalid_session',
+          status: response.status,
+          message,
+        };
+      }
+
+      const sessionStateResult = String(payload?.result?.state || '').trim().toLowerCase();
+      if (sessionStateResult !== 'authenticated') {
+        const reason = String(payload?.result?.reason || 'invalid_session').trim().toLowerCase() || 'invalid_session';
+        const message = 'Session validation failed.';
+        normalizeAuthErrorState(reason, message, true);
+        return {
+          ok: false,
+          reason,
           status: response.status,
           message,
         };

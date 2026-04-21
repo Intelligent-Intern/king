@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
+require_once __DIR__ . '/../domain/calls/call_access.php';
 require_once __DIR__ . '/../http/module_calls.php';
 
 function videochat_call_update_endpoint_assert(bool $condition, string $message): void
@@ -301,6 +302,18 @@ SQL
         'missing-call update error code mismatch'
     );
 
+    $personalLinkByUser = videochat_create_call_access_link_for_user($pdo, $callId, $adminUserId, 'admin', [
+        'link_kind' => 'personal',
+        'participant_user_id' => $standardUserId,
+    ]);
+    videochat_call_update_endpoint_assert((bool) ($personalLinkByUser['ok'] ?? false), 'setup personal access link by user should succeed');
+
+    $personalLinkByEmail = videochat_create_call_access_link_for_user($pdo, $callId, $adminUserId, 'admin', [
+        'link_kind' => 'personal',
+        'participant_email' => 'first-guest@example.com',
+    ]);
+    videochat_call_update_endpoint_assert((bool) ($personalLinkByEmail['ok'] ?? false), 'setup personal access link by email should succeed');
+
     $validUpdate = videochat_handle_call_routes(
         '/api/calls/' . $callId,
         'PATCH',
@@ -309,6 +322,7 @@ SQL
             'method' => 'PATCH',
             'body' => json_encode([
                 'title' => 'After Endpoint Update',
+                'access_mode' => 'free_for_all',
                 'starts_at' => '2026-06-10T11:00:00Z',
                 'ends_at' => '2026-06-10T12:00:00Z',
                 'internal_participant_user_ids' => [$moderatorUserId],
@@ -335,6 +349,7 @@ SQL
     $updatedCall = (($validUpdateBody['result'] ?? [])['call'] ?? null);
     videochat_call_update_endpoint_assert(is_array($updatedCall), 'valid update should return call envelope');
     videochat_call_update_endpoint_assert((string) ($updatedCall['title'] ?? '') === 'After Endpoint Update', 'valid update title mismatch');
+    videochat_call_update_endpoint_assert((string) ($updatedCall['access_mode'] ?? '') === 'free_for_all', 'valid update access_mode mismatch');
     videochat_call_update_endpoint_assert((string) ($updatedCall['starts_at'] ?? '') === '2026-06-10T11:00:00+00:00', 'valid update starts_at mismatch');
     videochat_call_update_endpoint_assert((string) ($updatedCall['ends_at'] ?? '') === '2026-06-10T12:00:00+00:00', 'valid update ends_at mismatch');
     videochat_call_update_endpoint_assert(
@@ -374,6 +389,32 @@ SQL
     videochat_call_update_endpoint_assert((string) ($participants[0]['email'] ?? '') === 'admin@intelligent-intern.com', 'owner participant should remain after valid update');
     videochat_call_update_endpoint_assert((string) ($participants[1]['email'] ?? '') === 'moderator-update-endpoint@intelligent-intern.com', 'new internal participant missing after valid update');
     videochat_call_update_endpoint_assert((string) ($participants[2]['email'] ?? '') === 'second-guest@example.com', 'replacement external participant missing after valid update');
+
+    $accessModeRowQuery = $pdo->prepare('SELECT access_mode FROM calls WHERE id = :id LIMIT 1');
+    $accessModeRowQuery->execute([':id' => $callId]);
+    $accessModeRow = $accessModeRowQuery->fetch();
+    videochat_call_update_endpoint_assert(is_array($accessModeRow), 'updated call row should exist');
+    videochat_call_update_endpoint_assert((string) ($accessModeRow['access_mode'] ?? '') === 'free_for_all', 'persisted access_mode mismatch after valid update');
+
+    $personalLinkCountQuery = $pdo->prepare(
+        <<<'SQL'
+SELECT COUNT(*)
+FROM call_access_links
+WHERE call_id = :call_id
+  AND (
+      participant_user_id IS NOT NULL
+      OR (
+          participant_email IS NOT NULL
+          AND trim(participant_email) <> ''
+      )
+  )
+SQL
+    );
+    $personalLinkCountQuery->execute([':call_id' => $callId]);
+    videochat_call_update_endpoint_assert(
+        (int) $personalLinkCountQuery->fetchColumn() === 2,
+        'switching to free_for_all must keep existing personal access links'
+    );
 
     $callRowBeforeInvalid = $pdo->prepare('SELECT title, updated_at FROM calls WHERE id = :id LIMIT 1');
     $callRowBeforeInvalid->execute([':id' => $callId]);

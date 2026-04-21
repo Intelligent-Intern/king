@@ -11,6 +11,8 @@ $appEnv = getenv('VIDEOCHAT_KING_ENV') ?: 'development';
 $avatarStorageRoot = getenv('VIDEOCHAT_AVATAR_STORAGE_ROOT') ?: (dirname($dbPath) . '/avatars');
 $rawServerMode = strtolower(trim((string) (getenv('VIDEOCHAT_KING_SERVER_MODE') ?: 'all')));
 $serverMode = in_array($rawServerMode, ['all', 'http', 'ws'], true) ? $rawServerMode : 'all';
+$workerIndex = (int) (getenv('VIDEOCHAT_KING_WORKER_INDEX') ?: '0');
+$workerCount = (int) (getenv('VIDEOCHAT_KING_WORKER_COUNT') ?: '0');
 $debugRequests = in_array(
     strtolower(trim((string) (getenv('VIDEOCHAT_DEBUG_REQUESTS') ?: '0'))),
     ['1', 'true', 'yes', 'on'],
@@ -40,6 +42,7 @@ require_once __DIR__ . '/domain/calls/call_management.php';
 require_once __DIR__ . '/domain/calls/call_access.php';
 require_once __DIR__ . '/domain/calls/invite_codes.php';
 require_once __DIR__ . '/domain/realtime/realtime_chat.php';
+require_once __DIR__ . '/domain/realtime/realtime_admin_sync.php';
 require_once __DIR__ . '/domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/domain/realtime/realtime_presence.php';
 require_once __DIR__ . '/domain/realtime/realtime_reaction.php';
@@ -102,7 +105,6 @@ register_shutdown_function(static function () use ($log): void {
 
 $jsonResponse = static function (int $status, array $payload): array {
     $corsHeaders = [
-        'access-control-allow-origin' => '*',
         'access-control-allow-methods' => 'GET,POST,PATCH,DELETE,OPTIONS',
         'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id',
         'access-control-max-age' => '600',
@@ -112,6 +114,7 @@ $jsonResponse = static function (int $status, array $payload): array {
         'status' => $status,
         'headers' => [
             'content-type' => 'application/json; charset=utf-8',
+            'connection' => 'close',
             ...$corsHeaders,
         ],
         'body' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -304,6 +307,9 @@ $log('auth demo users: ' . json_encode($databaseRuntime['demo_users'] ?? [], JSO
 $log("http endpoint bound: http://{$host}:{$port}/");
 $log("websocket endpoint bound: ws://{$host}:{$port}{$wsPath}");
 $log("server mode: {$serverMode}");
+if ($workerIndex > 0 && $workerCount > 0) {
+    $log("worker index: {$workerIndex}/{$workerCount}");
+}
 $log('starting King HTTP/1 listener...');
 $handler = static function (array $request) use (
     &$activeWebsocketsBySession,
@@ -349,7 +355,7 @@ $handler = static function (array $request) use (
     }
 
     try {
-        return videochat_dispatch_request(
+        $response = videochat_dispatch_request(
             $request,
             $activeWebsocketsBySession,
             $presenceState,
@@ -368,6 +374,16 @@ $handler = static function (array $request) use (
             $avatarStorageRoot,
             $avatarMaxBytes
         );
+
+        if (is_array($response) && (int) ($response['status'] ?? 0) !== 101) {
+            $headers = $response['headers'] ?? [];
+            if (is_array($headers)) {
+                $headers['connection'] = 'close';
+                $response['headers'] = $headers;
+            }
+        }
+
+        return $response;
     } catch (Throwable $error) {
         $log(sprintf(
             'unhandled request error on %s %s: %s (%s:%d)',
@@ -391,13 +407,21 @@ while (true) {
     $ok = king_http1_server_listen_once($host, $port, null, $handler);
     if ($ok === false) {
         $lastError = function_exists('king_get_last_error') ? trim((string) king_get_last_error()) : '';
-        if (
-            $lastError !== ''
-            && stripos($lastError, 'timed out while waiting for the HTTP/1 accept phase') === false
-        ) {
+        $isExpectedListenerMiss = $lastError !== '' && (
+            stripos($lastError, 'timed out while waiting for the HTTP/1 accept phase') !== false
+            || stripos($lastError, 'timed out while waiting for the HTTP/1 request head phase') !== false
+            || stripos($lastError, 'failed before a complete HTTP/1 request head was received (errno 11)') !== false
+        );
+
+        if ($lastError !== '' && !$isExpectedListenerMiss) {
             $log('listen_once failure: ' . $lastError);
+            usleep(50_000);
+            continue;
         }
-        usleep(50_000);
+
+        // Keep the one-shot listener hot between requests; long sleeps here
+        // cause observable connection resets under light traffic.
+        usleep(1_000);
     }
 }
 

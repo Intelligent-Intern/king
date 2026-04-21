@@ -19,6 +19,7 @@ declare global {
 }
 
 import { createWaveletCodec, WaveletCodec } from './webrtc-shim.js'
+import { debugLog, debugWarn } from '../../support/debugLogs.js'
 
 export interface WaveletTransformConfig {
   quality: number
@@ -59,14 +60,11 @@ function getCodec(): WaveletCodec {
 }
 
 export function getCodecStats() {
-  if (!globalCodec) return null
-  return globalCodec.getStats()
+  return getCodec().getStats()
 }
 
 export function resetCodec() {
-  if (globalCodec) {
-    globalCodec.reset()
-  }
+  getCodec().reset()
 }
 
 // Wavelet coding happens at the raw-frame level in processor-pipeline.ts.
@@ -91,33 +89,33 @@ export async function receiverTransform(
 
 export function setupSenderTransform(sender: RTCRtpSender): void {
   if (!sender.createEncodedStreams) {
-    console.warn('[WaveletTransform] createEncodedStreams not supported')
+    debugWarn('[WaveletTransform] createEncodedStreams not supported')
     return
   }
 
   try {
     const { readable, writable } = sender.createEncodedStreams()
     senderTransform(readable, writable, null as any).catch((error) => {
-      console.error('[WaveletTransform] Sender transform error:', error)
+      debugWarn('[WaveletTransform] Sender transform error:', error)
     })
-    console.log('[WaveletTransform] Sender transform setup complete')
+    debugLog('[WaveletTransform] Sender transform setup complete')
   } catch (error) {
-    console.error('[WaveletTransform] Failed to setup sender transform:', error)
+    debugWarn('[WaveletTransform] Failed to setup sender transform:', error)
   }
 }
 
 export function setupReceiverTransform(receiver: RTCRtpReceiver): void {
   if (!receiver.createEncodedStreams) {
-    console.warn('[WaveletTransform] createEncodedStreams not supported')
+    debugWarn('[WaveletTransform] createEncodedStreams not supported')
     return
   }
 
   try {
     const { readable, writable } = receiver.createEncodedStreams()
     receiverTransform(readable, writable, null as any)
-    console.log('[WaveletTransform] Receiver transform setup complete')
+    debugLog('[WaveletTransform] Receiver transform setup complete')
   } catch (error) {
-    console.error('[WaveletTransform] Failed to setup receiver transform:', error)
+    debugWarn('[WaveletTransform] Failed to setup receiver transform:', error)
   }
 }
 

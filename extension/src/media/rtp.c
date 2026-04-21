@@ -340,15 +340,23 @@ int king_rtp_handle_stun(king_rtp_socket_t *sock,
     int username_ok = 0;
 
     while (attr + 4 <= end) {
+        size_t remain = (size_t)(end - attr);
         uint16_t atype = stun_read_u16(attr);
         uint16_t alen  = stun_read_u16(attr + 2);
+        size_t pad_len = (size_t)((4 - (alen & 3)) & 3);
+        size_t attr_len = 4 + (size_t)alen + pad_len;
+
+        if (remain < 4 + (size_t)alen || remain < attr_len) {
+            break;
+        }
+
         if (atype == KING_STUN_ATTR_USERNAME) {
             size_t ul = strlen(sock->ufrag);
             if (alen >= ul && memcmp(attr + 4, sock->ufrag, ul) == 0 &&
                 (alen == ul || attr[4 + ul] == ':'))
                 username_ok = 1;
         }
-        attr += 4 + alen + ((4 - (alen & 3)) & 3);
+        attr += attr_len;
     }
     if (!username_ok) return 1;
 

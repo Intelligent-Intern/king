@@ -4,7 +4,7 @@
   "version": "0.1.0-v1-shell",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --config ./vite.config.js",
     "build": "vite build",
     "test:contract:wlvc": "node tests/contract/wlvc-wire-contract.mjs",
     "preview": "vite preview",

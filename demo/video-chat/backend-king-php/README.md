@@ -44,12 +44,15 @@ cd demo/video-chat/backend-king-php
 - `GET /api/runtime`
 - `GET /api/version`
 - `POST /api/auth/login`
+- `GET /api/auth/session-state` (soft session probe; never returns 401 for stale/missing tokens)
 - `GET /api/auth/session` (requires session token)
 - `POST /api/auth/refresh` (requires session token, rotates/replaces token)
 - `POST /api/auth/logout` (requires session token)
 - `GET /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
+- `GET /api/calls/resolve/{ref}` (soft route resolver for call/access ids; not-found is a `200` state)
 - `POST /api/calls` (requires authenticated `admin`/`moderator`/`user` role)
 - `PATCH /api/calls/{id}` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
+- `DELETE /api/calls/{id}` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
 - `POST /api/calls/{id}/cancel` (requires authenticated `admin`/`moderator`/`user` role, owner/admin/moderator policy)
 - `POST /api/invite-codes` (requires authenticated `admin`/`moderator`/`user` role; call scope requires owner/admin/moderator policy)
 - `POST /api/invite-codes/redeem` (requires authenticated `admin`/`moderator`/`user` role)
@@ -80,6 +83,9 @@ Environment overrides:
 - `VIDEOCHAT_KING_DB_PATH` (default local run: `demo/video-chat/backend-king-php/.local/video-chat.sqlite`; docker compose sets `/data/video-chat.sqlite`)
 - `VIDEOCHAT_KING_BACKEND_VERSION` (default `1.0.6-beta`)
 - `VIDEOCHAT_KING_ENV` (default `development`)
+- `VIDEOCHAT_KING_WORKERS` (optional shared fallback worker count, clamped `1..64`)
+- `VIDEOCHAT_KING_HTTP_WORKERS` (default `VIDEOCHAT_KING_WORKERS`, otherwise `24`, clamped `1..64`)
+- `VIDEOCHAT_KING_WS_WORKERS` (default `VIDEOCHAT_KING_WORKERS`, otherwise `8`, clamped `1..64`)
 - `VIDEOCHAT_SESSION_TTL_SECONDS` (default `43200`, min `60`, max `2592000`)
 - `VIDEOCHAT_DEMO_ADMIN_EMAIL` (default `admin@intelligent-intern.com`)
 - `VIDEOCHAT_DEMO_ADMIN_PASSWORD` (default `admin123`)
@@ -159,6 +165,12 @@ Current schema coverage includes:
 - `call_participants`
 - `invite_codes`
 
+`call_participants.invite_state` is the persistent call-admission state:
+`invited` for assigned users, `pending` after the user clicks `Join call` in the
+join modal, `allowed` after an owner/moderator admits the pending user, and
+`declined`/`cancelled` for explicit non-join outcomes. Legacy `accepted` rows are
+migrated as allowed admission.
+
 `/health` and `/api/runtime` now include the database migration/runtime
 snapshot (schema version, migration counts, table inventory, seeded demo users,
 and seeded demo calls when enabled).
@@ -197,6 +209,9 @@ Failures use the same error envelope shape:
 
 `GET /api/auth/session` and every non-public `/api/*` path require a valid
 session token (`Authorization: Bearer ...` or `X-Session-Id: ...`).
+`GET /api/auth/session-state` is the browser recovery probe for stale local
+tokens: it returns `200` with `result.state = authenticated|unauthenticated`
+so route guards can clear invalid local state without producing console 401s.
 
 `POST /api/auth/refresh` rotates the current session token atomically, returns a
 replacement token, and invalidates the replaced token so stale replay attempts
@@ -238,7 +253,7 @@ Response includes:
 
 `GET /api/user/settings` + `PATCH /api/user/settings` contract:
 
-- managed fields: `display_name`, `avatar_path`, `time_format`, `theme`
+- managed fields: `display_name`, `avatar_path`, `time_format`, `date_format`, `theme`
 - unsupported fields fail closed with `field_not_updatable`
 - validation failures: `422 user_settings_validation_failed` with `error.details.fields`
 - missing authenticated user row: `404 user_not_found`
@@ -272,12 +287,21 @@ Response includes:
 
 - required fields: `title`, `starts_at`, `ends_at`
 - optional fields:
-  - `room_id` (default `lobby`)
+  - `room_id` (compatibility input only; create always allocates a private room with `room_id = call.id`)
   - `internal_participant_user_ids` (array of active user ids)
   - `external_participants` (`[{email, display_name}]`)
 - owner is always included as internal participant mapping
+- persisted calls never default to the shared `lobby`; each call workspace gets its own generated UUID room
 - validation failures: `422 calls_create_validation_failed` with `error.details.fields`
 - success: `201`, with `result.call` containing normalized owner + participants + totals
+
+`GET /api/calls/resolve/{ref}` route resolution contract:
+
+- requires an authenticated session
+- resolves UUID-like refs as call id first, then access-link id
+- returns `200` with `result.state = resolved|not_found|expired|forbidden`
+- `result.resolved_as` is `call_id`, `access_id`, or empty for not found
+- intended for browser route guards so normal stale-link navigation does not emit console 404s
 
 `PATCH /api/calls/{id}` update contract:
 
@@ -287,6 +311,12 @@ Response includes:
 - global invite resend is not triggered by edit calls
 - explicit invite resend request flags are rejected in update payload
 - success returns `invite_dispatch.global_resend_triggered = false` and `invite_dispatch.explicit_action_required = true`
+
+`DELETE /api/calls/{id}` delete contract:
+
+- authorization: call owner or admin
+- hard-delete semantics: removes the call record and cascades participant/access-link/invite-code bindings
+- success: `200` with `result.state = deleted`
 
 `POST /api/calls/{id}/cancel` cancel contract:
 
@@ -333,6 +363,8 @@ Response includes:
 
 `WS /ws` also requires a valid session token (Bearer/X-Session-Id header or
 query `?session=<token>`/`?token=<token>` for browser handshake compatibility).
+Optional query `?call_id=<call-id>` scopes admission/moderation resolution to a
+specific call for legacy/non-dedicated room rows.
 
 Presence channel contract on `WS /ws`:
 
@@ -357,6 +389,7 @@ Presence channel contract on `WS /ws`:
   - `{"type":"reaction/send_batch","emojis":["👍","😂"],"client_reaction_id":"..."}` (optional `client_reaction_id`)
   - `{"type":"lobby/queue/request"}`
   - `{"type":"lobby/queue/join"}`
+  - `{"type":"lobby/queue/cancel"}` (self-removes the current user from queued/admitted lobby state)
   - `{"type":"lobby/allow","target_user_id":123}` (`admin`/`moderator` only)
   - `{"type":"lobby/remove","target_user_id":123}` (`admin`/`moderator` only)
   - `{"type":"lobby/allow_all"}` (`admin`/`moderator` only)
@@ -380,8 +413,10 @@ Presence channel contract on `WS /ws`:
   - typing indicators are room-scoped, debounced, expire automatically, never self-echo, and fail closed when sender room membership is invalid
   - reaction events are room-scoped, enforce emoji/client-id payload boundaries, accept both single and client-batched sends, and switch to server-side `reaction/batch` fanout once per-user reaction volume exceeds the configured flood threshold (`VIDEOCHAT_WS_REACTION_FLOOD_WINDOW_MS`, `VIDEOCHAT_WS_REACTION_FLOOD_THRESHOLD_PER_WINDOW`, `VIDEOCHAT_WS_REACTION_FLOOD_BATCH_SIZE`)
   - lobby queue updates are room-scoped snapshots (`lobby/snapshot`) driven by server-authoritative queue/admitted state
+  - authenticated websocket attach never queues a waiting-room user by itself; invited users become `pending` only after the explicit `lobby/queue/join` command from the join-call flow, and the join-call modal remains open until an owner/moderator admits the user
+  - waiting-room users can cancel their own queued/admitted handoff with `lobby/queue/cancel`; cancel or websocket disconnect resets a `pending` participant back to `invited`, while an admitted handoff is preserved long enough for the admitted browser to reconnect into the call
   - moderator actions (`lobby/allow`, `lobby/remove`, `lobby/allow_all`) are fail-closed for non-moderator roles and for senders not actively present in the room
-  - queue/admitted entries are cleaned when a user disconnects or changes rooms
+  - queue/admitted entries are cleaned when a user cancels, joins the admitted room, disconnects from an active room, or changes rooms
   - signaling commands are target-routed (`call/offer`, `call/answer`, `call/ice`, `call/hangup`) and only delivered when sender+target room authorization is valid
   - invalid signaling authorization paths (invalid sender, sender-not-in-room, missing/invalid/self/not-in-room target) fail closed as `system/error` without cross-room leakage
   - accepted signaling publishes emit `call/ack` to the sender with `signal_id`, `signal_type`, and `sent_count`

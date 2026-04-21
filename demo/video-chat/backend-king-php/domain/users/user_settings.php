@@ -7,7 +7,26 @@ declare(strict_types=1);
  */
 function videochat_allowed_user_settings_patch_fields(): array
 {
-    return ['display_name', 'time_format', 'theme', 'avatar_path'];
+    return ['display_name', 'time_format', 'date_format', 'theme', 'avatar_path'];
+}
+
+/**
+ * @return array<int, string>
+ */
+function videochat_supported_user_date_formats(): array
+{
+    return [
+        'dmy_dot',
+        'dmy_slash',
+        'dmy_dash',
+        'ymd_dash',
+        'ymd_slash',
+        'ymd_dot',
+        'ymd_compact',
+        'mdy_slash',
+        'mdy_dash',
+        'mdy_dot',
+    ];
 }
 
 /**
@@ -18,6 +37,7 @@ function videochat_allowed_user_settings_patch_fields(): array
  *   role: string,
  *   status: string,
  *   time_format: string,
+ *   date_format: string,
  *   theme: string,
  *   avatar_path: ?string
  * }|null
@@ -36,6 +56,7 @@ SELECT
     users.display_name,
     users.status,
     users.time_format,
+    users.date_format,
     users.theme,
     users.avatar_path,
     roles.slug AS role_slug
@@ -58,6 +79,7 @@ SQL
         'role' => (string) ($row['role_slug'] ?? 'user'),
         'status' => (string) ($row['status'] ?? 'disabled'),
         'time_format' => (string) ($row['time_format'] ?? '24h'),
+        'date_format' => (string) ($row['date_format'] ?? 'dmy_dot'),
         'theme' => (string) ($row['theme'] ?? 'dark'),
         'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
     ];
@@ -100,6 +122,15 @@ function videochat_validate_user_settings_patch(array $payload): array
             $errors['time_format'] = 'must_be_24h_or_12h';
         } else {
             $data['time_format'] = $timeFormat;
+        }
+    }
+
+    if (array_key_exists('date_format', $payload)) {
+        $dateFormat = strtolower(trim((string) $payload['date_format']));
+        if (!in_array($dateFormat, videochat_supported_user_date_formats(), true)) {
+            $errors['date_format'] = 'must_be_supported_date_format';
+        } else {
+            $data['date_format'] = $dateFormat;
         }
     }
 
@@ -184,6 +215,7 @@ function videochat_update_user_settings(PDO $pdo, int $userId, array $payload): 
 UPDATE users
 SET display_name = :display_name,
     time_format = :time_format,
+    date_format = :date_format,
     theme = :theme,
     avatar_path = :avatar_path,
     updated_at = :updated_at
@@ -193,6 +225,7 @@ SQL
     $update->execute([
         ':display_name' => array_key_exists('display_name', $data) ? (string) $data['display_name'] : (string) $existing['display_name'],
         ':time_format' => array_key_exists('time_format', $data) ? (string) $data['time_format'] : (string) $existing['time_format'],
+        ':date_format' => array_key_exists('date_format', $data) ? (string) $data['date_format'] : (string) $existing['date_format'],
         ':theme' => array_key_exists('theme', $data) ? (string) $data['theme'] : (string) $existing['theme'],
         ':avatar_path' => array_key_exists('avatar_path', $data) ? $data['avatar_path'] : $existing['avatar_path'],
         ':updated_at' => gmdate('c'),
