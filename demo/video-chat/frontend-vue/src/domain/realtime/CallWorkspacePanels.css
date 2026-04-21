@@ -214,6 +214,7 @@
   min-width: 0;
   display: grid;
   gap: 2px;
+  grid-template-rows: auto auto 18px;
 }
 
 .user-name {
@@ -236,7 +237,16 @@
   color: var(--color-f7f7f7);
 }
 
+.user-status-line {
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+}
+
 .user-activity-pill {
+  flex: 0 0 auto;
   width: fit-content;
   padding: 2px 7px;
   border-radius: 999px;
@@ -539,11 +549,6 @@
     right: 16px;
   }
 
-  .workspace-layout-toolbar {
-    top: 62px;
-    left: 12px;
-  }
-
   .workspace-lobby-toast-text {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -600,22 +605,6 @@
 
   .workspace-mini-placement-toggle {
     display: grid;
-  }
-
-  .workspace-layout-toolbar {
-    width: 142px;
-    padding: 6px;
-  }
-
-  .workspace-layout-mode-btn,
-  .workspace-layout-pause-btn {
-    min-height: 32px;
-    border-radius: 10px;
-  }
-
-  .workspace-layout-strategy select {
-    min-height: 32px;
-    font-size: 11px;
   }
 
   .workspace-grid-video {

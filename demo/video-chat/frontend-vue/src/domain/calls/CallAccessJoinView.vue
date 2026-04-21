@@ -161,7 +161,7 @@ let admissionManuallyClosed = false;
 let admissionReconnectTimer = 0;
 let admissionReconnectAttempt = 0;
 
-const ADMISSION_WAIT_MESSAGE = 'Call owner wurde benachrichtigt.';
+const ADMISSION_WAIT_MESSAGE = 'Call owner has been notified.';
 const ADMISSION_RECONNECT_DELAYS_MS = [500, 1000, 2000, 3000, 5000];
 
 const state = reactive({
@@ -304,7 +304,7 @@ function scheduleAdmissionReconnect(accessId) {
   const delay = ADMISSION_RECONNECT_DELAYS_MS[
     Math.min(admissionReconnectAttempt - 1, ADMISSION_RECONNECT_DELAYS_MS.length - 1)
   ];
-  state.admissionMessage = 'Lobby-Verbindung wird wiederhergestellt...';
+  state.admissionMessage = 'Reconnecting lobby connection...';
   admissionReconnectTimer = window.setTimeout(() => {
     admissionReconnectTimer = 0;
     connectAdmissionSocket(accessId);
@@ -350,7 +350,7 @@ function handleAdmissionWelcome(payload, accessId) {
   if (!sendAdmissionFrame({ type: 'lobby/queue/join', room_id: pendingRoomId })) {
     state.waitingForAdmission = false;
     state.admissionMessage = '';
-    state.joinError = 'Could not notify call owner while lobby websocket is offline.';
+    state.joinError = 'Could not notify call owner because the lobby connection is offline.';
     return;
   }
 
@@ -457,7 +457,7 @@ function connectAdmissionSocketWithOriginAt(candidates, originIndex, generation,
       failOverToNextOrigin();
       return;
     }
-    state.admissionMessage = 'Lobby-Verbindung wird wiederhergestellt...';
+    state.admissionMessage = 'Reconnecting lobby connection...';
   });
 
   socket.addEventListener('close', () => {
@@ -495,7 +495,7 @@ function startAdmissionWait(accessId) {
   admissionSocketGeneration += 1;
   state.joining = false;
   state.waitingForAdmission = true;
-  state.admissionMessage = 'Lobby-Verbindung wird hergestellt...';
+  state.admissionMessage = 'Connecting lobby connection...';
   connectAdmissionSocket(accessId);
   return true;
 }
@@ -679,163 +679,4 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style scoped>
-.call-access-join-page {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  background: var(--color-0b1324);
-  padding: 24px;
-}
-
-.call-access-join-modal {
-  width: min(920px, 100%);
-  max-height: calc(100vh - 24px);
-  overflow: auto;
-  background: var(--color-182c4d);
-  border: 1px solid var(--color-133262);
-  border-radius: 14px;
-  padding: 18px;
-  color: var(--color-f7f7f7);
-  display: grid;
-  gap: 14px;
-  box-shadow: 0 8px 26px var(--color-rgba-0-0-0-0-26);
-}
-
-.call-access-join-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.call-access-join-header h1 {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 600;
-}
-
-.call-access-join-logo {
-  width: 28px;
-  height: 28px;
-}
-
-.call-access-join-call {
-  display: grid;
-  gap: 2px;
-}
-
-.call-access-join-call-title {
-  font-weight: 600;
-}
-
-.call-access-join-call-meta {
-  font-size: 0.83rem;
-  color: var(--color-c9d5ea);
-}
-
-.call-access-join-preview {
-  position: relative;
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--color-0b1324);
-  width: 100%;
-  min-height: 240px;
-  max-height: min(60vh, 520px);
-  display: grid;
-  place-items: center;
-}
-
-.call-access-join-preview video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: scaleX(-1);
-}
-
-.call-access-join-preview-status {
-  position: absolute;
-  left: 12px;
-  bottom: 10px;
-  margin: 0;
-  padding: 4px 8px;
-  border-radius: 7px;
-  background: var(--color-rgba-11-19-36-0-78);
-  font-size: 0.78rem;
-}
-
-.call-access-join-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.field {
-  display: grid;
-  gap: 6px;
-}
-
-.field span {
-  font-size: 0.82rem;
-}
-
-.input {
-  width: 100%;
-}
-
-.call-access-join-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.call-access-join-status {
-  font-size: 0.85rem;
-}
-
-.call-access-join-status.waiting {
-  border: 1px solid var(--brand-cyan);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--brand-cyan) 18%, var(--color-182c4d) 82%);
-  color: var(--color-f7f7f7);
-  padding: 10px 12px;
-  font-weight: 700;
-}
-
-.call-access-join-status.error,
-.call-access-join-preview-status.error {
-  color: var(--color-ff0000);
-}
-
-@media (max-width: 760px) {
-  .call-access-join-page {
-    padding: 0;
-  }
-
-  .call-access-join-modal {
-    width: 100%;
-    min-height: 100vh;
-    border: 0;
-    border-radius: 0;
-    padding: 14px;
-  }
-
-  .call-access-join-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .call-access-join-preview {
-    max-height: 48vh;
-  }
-}
-
-@media (max-width: 760px) and (orientation: landscape) {
-  .call-access-join-modal {
-    padding: 12px;
-    gap: 10px;
-  }
-
-  .call-access-join-preview {
-    max-height: 44vh;
-  }
-}
-</style>
+<style scoped src="./CallAccessJoinView.css"></style>

@@ -46,16 +46,17 @@ function buildStoredSession(payload) {
 }
 
 async function fetchStoredSession(email, password) {
-  const params = new URLSearchParams({ email, password });
   let lastError = new Error('Login failed.');
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
-      const response = await fetch(`${backendOrigin}/api/auth/login?${params.toString()}`, {
-        method: 'GET',
+      const response = await fetch(`${backendOrigin}/api/auth/login`, {
+        method: 'POST',
         headers: {
           accept: 'application/json',
+          'content-type': 'application/json',
         },
+        body: JSON.stringify({ email, password }),
       });
 
       let payload = null;
@@ -108,16 +109,16 @@ async function waitForCallRow(page, callTitle) {
     await page.getByRole('button', { name: 'Search' }).first().click();
   };
 
-  await searchCalls();
   for (let attempt = 0; attempt < 10; attempt += 1) {
-    const row = page.locator('tbody tr', { hasText: callTitle }).first();
-    if ((await row.count()) > 0) {
-      await expect(row).toBeVisible();
-      return row;
-    }
-    await page.waitForTimeout(1000);
-    await page.reload({ waitUntil: 'domcontentloaded' });
     await searchCalls();
+    const row = page.locator('tbody tr', { hasText: callTitle }).first();
+    try {
+      await expect(row).toBeVisible({ timeout: 2500 });
+      return row;
+    } catch {
+      // The table refresh is async after filtering; reload and retry below.
+    }
+    await page.reload({ waitUntil: 'domcontentloaded' });
   }
 
   throw new Error(`Could not find call row for title: ${callTitle}`);
@@ -170,7 +171,6 @@ test('admin creates/invites and admits user from lobby, mini strip shows partici
     await expect(composeModal).toBeVisible();
 
     await composeModal.locator('input[placeholder="Weekly Product Sync"]').fill(callTitle);
-    await composeModal.locator('input[placeholder="lobby"]').fill('lobby');
     const startsAt = new Date(Date.now() - 60_000);
     const endsAt = new Date(Date.now() + (59 * 60_000));
     await composeModal.getByLabel('Call starts at').fill(toLocalDateTimeInputValue(startsAt));
@@ -217,7 +217,7 @@ test('admin creates/invites and admits user from lobby, mini strip shows partici
     const joinCallModal = userPage.getByRole('dialog', { name: 'Join video call' });
     await expect(joinCallModal).toBeVisible({ timeout: 15_000 });
     await joinCallModal.getByRole('button', { name: /Join call/i }).click();
-    await expect(joinCallModal).toContainText('Call owner wurde benachrichtigt', { timeout: 15_000 });
+    await expect(joinCallModal).toContainText('Call owner has been notified', { timeout: 15_000 });
 
     const lobbyBadge = adminPage.locator('.tab-lobby .tab-notice-badge');
     await expect(lobbyBadge).toBeVisible({ timeout: 30_000 });
@@ -237,6 +237,20 @@ test('admin creates/invites and admits user from lobby, mini strip shows partici
     await expect(miniStrip).toBeVisible({ timeout: 30_000 });
     await expect(miniStrip.locator('.workspace-mini-tile').first()).toBeVisible({ timeout: 30_000 });
     await expect(joinCallModal).toBeHidden({ timeout: 30_000 });
+    await expect(userPage.locator('button.tab-lobby')).toHaveCount(0);
+
+    const chatMessage = `chat button e2e ${Date.now()}`;
+    await adminPage.getByRole('tab', { name: 'Chat' }).click();
+    const adminChatInput = adminPage.getByPlaceholder('Write a message');
+    await expect(adminChatInput).toBeVisible({ timeout: 10_000 });
+    await adminChatInput.fill(chatMessage);
+    const adminSendButton = adminPage.locator('.workspace-chat-compose button[type="submit"]');
+    await expect(adminSendButton).toBeEnabled({ timeout: 10_000 });
+    await adminSendButton.click();
+    await expect(adminPage.locator('.workspace-chat-message').last()).toContainText(chatMessage, { timeout: 10_000 });
+
+    await userPage.getByRole('tab', { name: 'Chat' }).click();
+    await expect(userPage.locator('.workspace-chat-message').last()).toContainText(chatMessage, { timeout: 15_000 });
   } finally {
     await Promise.allSettled([
       adminContext.close(),

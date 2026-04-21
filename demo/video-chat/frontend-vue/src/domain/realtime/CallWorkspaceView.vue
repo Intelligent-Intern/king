@@ -52,50 +52,6 @@
           </button>
         </header>
 
-        <section
-          v-if="canModerate"
-          class="workspace-layout-toolbar"
-          aria-label="Video layout controls"
-        >
-          <div class="workspace-layout-mode-buttons">
-            <button
-              v-for="option in layoutModeOptions"
-              :key="option.mode"
-              class="workspace-layout-mode-btn"
-              :class="{ active: currentLayoutMode === option.mode }"
-              type="button"
-              :title="option.label"
-              :aria-label="option.label"
-              @click="setCallLayoutMode(option.mode)"
-            >
-              <span class="workspace-layout-mode-icon">{{ option.icon }}</span>
-            </button>
-          </div>
-          <label class="workspace-layout-strategy">
-            <span>Strategy</span>
-            <select
-              :value="normalizedCallLayout.strategy"
-              @change="setCallLayoutStrategy($event.target.value)"
-            >
-              <option
-                v-for="strategy in layoutStrategyOptions"
-                :key="strategy"
-                :value="strategy"
-              >
-                {{ layoutStrategyLabel(strategy) }}
-              </option>
-            </select>
-          </label>
-          <button
-            class="workspace-layout-pause-btn"
-            :class="{ active: normalizedCallLayout.automationPaused }"
-            type="button"
-            @click="toggleLayoutAutomationPause"
-          >
-            {{ normalizedCallLayout.automationPaused ? 'Resume' : 'Pause' }}
-          </button>
-        </section>
-
         <article class="workspace-main-video">
           <section v-if="currentLayoutMode === 'grid'" class="workspace-grid-video">
             <article
@@ -303,16 +259,21 @@
             :class="{ active: activeTab === 'users' }"
             type="button"
             role="tab"
+            aria-label="Users"
+            title="Users"
             :aria-selected="activeTab === 'users'"
             @click="setActiveTab('users')"
           >
             <img class="tab-icon" src="/assets/orgas/kingrt/icons/users.png" alt="" />
           </button>
           <button
+            v-if="showLobbyTab"
             class="tab tab-lobby"
             :class="{ active: activeTab === 'lobby' }"
             type="button"
             role="tab"
+            aria-label="Lobby"
+            title="Lobby"
             :aria-selected="activeTab === 'lobby'"
             @click="setActiveTab('lobby')"
           >
@@ -326,6 +287,8 @@
             :class="{ active: activeTab === 'chat' }"
             type="button"
             role="tab"
+            aria-label="Chat"
+            title="Chat"
             :aria-selected="activeTab === 'chat'"
             @click="setActiveTab('chat')"
           >
@@ -382,11 +345,13 @@
               <div class="user-main">
                 <strong class="user-name">{{ row.displayName }}</strong>
                 <span class="user-role">{{ row.callRole }}</span>
-                <span v-if="activityLabelForUser(row.userId)" class="user-activity-pill">
-                  {{ activityLabelForUser(row.userId) }}
+                <span class="user-status-line">
+                  <span v-if="activityLabelForUser(row.userId)" class="user-activity-pill">
+                    {{ activityLabelForUser(row.userId) }}
+                  </span>
+                  <span v-if="row.controlBadge" class="user-feedback">{{ row.controlBadge }}</span>
+                  <span v-if="row.feedback" class="user-feedback">{{ row.feedback }}</span>
                 </span>
-                <span v-if="row.controlBadge" class="user-feedback">{{ row.controlBadge }}</span>
-                <span v-if="row.feedback" class="user-feedback">{{ row.feedback }}</span>
               </div>
             <div class="actions-inline">
               <button
@@ -435,7 +400,7 @@
                 class="icon-mini-btn"
                 type="button"
                 title="Transfer owner role"
-                :disabled="viewerCallRole !== 'owner' || !activeCallId || rowActionPending(row.userId) || !row.isRoomMember || row.callRole === 'owner'"
+                :disabled="!canManageOwnerRole || !activeCallId || rowActionPending(row.userId) || !row.isRoomMember || row.callRole === 'owner'"
                 @click="transferOwnerRole(row)"
               >
                 <img src="/assets/orgas/kingrt/icons/forward.png" alt="" />
@@ -487,7 +452,7 @@
           </footer>
         </section>
 
-        <section class="tab-panel panel-lobby" :class="{ active: activeTab === 'lobby' }">
+        <section v-if="showLobbyTab" class="tab-panel panel-lobby" :class="{ active: activeTab === 'lobby' }">
           <div class="lobby-toolbar">
             <div class="actions-inline lobby-toolbar-actions">
               <button
@@ -817,6 +782,7 @@ const workspaceSidebarState = inject('workspaceSidebarState', null);
 
 const ACTIVITY_PUBLISH_INTERVAL_MS = 800;
 const ACTIVITY_MOTION_SAMPLE_MS = 500;
+const REMOTE_FRAME_ACTIVITY_MARK_INTERVAL_MS = 1000;
 const LAYOUT_MODE_OPTIONS = [
   { mode: 'grid', label: 'Grid', icon: 'G' },
   { mode: 'main_mini', label: 'Main + Mini', icon: 'M' },
@@ -852,6 +818,8 @@ const socketRef = ref(null);
 const serverRoomId = ref('lobby');
 
 const participantsRaw = ref([]);
+let participantsRawSignature = '';
+const currentUserConnectedAt = new Date().toISOString();
 const lobbyQueue = ref([]);
 const lobbyAdmitted = ref([]);
 const lobbyNotificationState = reactive({
@@ -978,6 +946,7 @@ const mediaRuntimeCapabilities = ref({
 const mediaRuntimePath = ref('pending');
 const mediaRuntimeReason = ref('boot');
 const nativePeerConnectionsRef = ref(new Map());
+const dynamicIceServers = ref([]);
 let runtimeSwitchInFlight = false;
 let wlvcEncodeFailureCount = 0;
 let wlvcEncodeWarmupUntilMs = 0;
@@ -985,6 +954,8 @@ let wlvcEncodeFirstFailureAtMs = 0;
 let wlvcEncodeLastErrorLogAtMs = 0;
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
+const pendingSfuRemotePeerInitializers = new Map();
+const remoteFrameActivityLastByUserId = new Map();
 const sfuConnected = ref(false);
 let sfuConnectRetryCount = 0;
 let detachMediaDeviceWatcher = null;
@@ -1001,6 +972,8 @@ let activityPreviousFrame = null;
 let activityLastPublishMs = 0;
 let activityLastMotionSampleMs = 0;
 let activityLastMotionScore = 0;
+let dynamicIceServersPromise = null;
+let dynamicIceServersExpiresAtMs = 0;
 
 const routeCallRef = computed(() => String(route.params.callRef || '').trim());
 const desiredRoomId = computed(() => normalizeRoomId(routeCallResolve.roomId || routeCallRef.value || 'lobby'));
@@ -1016,6 +989,11 @@ const canModerate = computed(() => (
   || viewerCallRole.value === 'owner'
   || viewerCallRole.value === 'moderator'
 ));
+const canManageOwnerRole = computed(() => (
+  normalizeRole(sessionState.role) === 'admin'
+  || viewerCallRole.value === 'owner'
+));
+const showLobbyTab = computed(() => canModerate.value);
 const usersSourceMode = computed(() => 'snapshot');
 const isSocketOnline = computed(() => connectionState.value === 'online');
 const shouldConnectSfu = computed(() => (
@@ -1257,6 +1235,52 @@ function normalizeParticipantRow(raw) {
   };
 }
 
+function participantSnapshotSignature(rows) {
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  return normalizedRows
+    .map((row) => normalizeParticipantRow(row))
+    .filter((row) => row.userId > 0 || row.connectionId !== '')
+    .map((row) => [
+      row.roomId,
+      row.connectionId,
+      row.userId,
+      row.displayName,
+      row.role,
+      row.callRole,
+      row.hasConnection ? '1' : '0',
+      row.connectedAt,
+    ].join('\u001f'))
+    .sort()
+    .join('\u001e');
+}
+
+function applyParticipantsSnapshot(rows) {
+  const nextRows = Array.isArray(rows) ? rows : [];
+  const nextSignature = participantSnapshotSignature(nextRows);
+  if (nextSignature === participantsRawSignature) {
+    return false;
+  }
+  participantsRawSignature = nextSignature;
+  participantsRaw.value = nextRows;
+  return true;
+}
+
+function currentUserParticipantRow() {
+  const userId = currentUserId.value;
+  if (!Number.isInteger(userId) || userId <= 0) return null;
+
+  const displayName = String(sessionState.displayName || sessionState.email || '').trim() || 'You';
+  const callRole = normalizeCallRole(callParticipantRoles[userId] || viewerCallRole.value || 'participant');
+  return {
+    userId,
+    displayName,
+    role: normalizeRole(sessionState.role),
+    callRole,
+    connectedAt: currentUserConnectedAt,
+    connections: 1,
+  };
+}
+
 const participantUsers = computed(() => {
   const aggregate = new Map();
 
@@ -1288,6 +1312,44 @@ const participantUsers = computed(() => {
     }
     if (callRoleRank(normalized.callRole) < callRoleRank(existing.callRole)) {
       existing.callRole = normalized.callRole;
+    }
+  }
+
+  for (const peer of remotePeersRef.value.values()) {
+    const peerUserId = Number(peer?.userId || 0);
+    if (!Number.isInteger(peerUserId) || peerUserId <= 0 || peerUserId === currentUserId.value) continue;
+
+    const existing = aggregate.get(peerUserId);
+    const displayName = String(peer?.displayName || '').trim() || `User ${peerUserId}`;
+    if (existing) {
+      existing.connections = Math.max(1, Number(existing.connections || 0));
+      if (displayName.length > existing.displayName.length) {
+        existing.displayName = displayName;
+      }
+      existing.callRole = normalizeCallRole(callParticipantRoles[peerUserId] || existing.callRole || 'participant');
+      continue;
+    }
+
+    aggregate.set(peerUserId, {
+      userId: peerUserId,
+      displayName,
+      role: 'user',
+      callRole: normalizeCallRole(callParticipantRoles[peerUserId] || 'participant'),
+      connectedAt: '',
+      connections: 1,
+    });
+  }
+
+  const currentUser = currentUserParticipantRow();
+  if (currentUser) {
+    const existing = aggregate.get(currentUser.userId);
+    if (existing) {
+      existing.displayName = currentUser.displayName;
+      existing.role = currentUser.role;
+      existing.callRole = currentUser.callRole;
+      existing.connections = Math.max(1, Number(existing.connections || 0));
+    } else {
+      aggregate.set(currentUser.userId, currentUser);
     }
   }
 
@@ -1507,8 +1569,65 @@ function layoutStrategyLabel(strategy) {
   const normalized = String(strategy || '').trim().toLowerCase();
   return LAYOUT_STRATEGY_LABELS[normalized] || normalized || 'Strategy';
 }
+
+function currentCallLayoutSidebarControls() {
+  const controls = workspaceSidebarState?.callLayoutControls;
+  return controls && typeof controls === 'object' ? controls : null;
+}
+
+function syncCallLayoutSidebarControls() {
+  const controls = currentCallLayoutSidebarControls();
+  if (!controls) return;
+
+  controls.visible = true;
+  controls.canModerate = canModerate.value;
+  controls.currentMode = currentLayoutMode.value;
+  controls.currentStrategy = normalizedCallLayout.value.strategy;
+  controls.modeOptions = layoutModeOptions.value.map((option) => ({
+    mode: option.mode,
+    label: option.label,
+    icon: option.icon,
+  }));
+  controls.strategyOptions = layoutStrategyOptions.value.map((strategy) => ({
+    strategy,
+    label: layoutStrategyLabel(strategy),
+  }));
+  controls.setMode = setCallLayoutMode;
+  controls.setStrategy = setCallLayoutStrategy;
+}
+
+function clearCallLayoutSidebarControls() {
+  const controls = currentCallLayoutSidebarControls();
+  if (!controls) return;
+
+  controls.visible = false;
+  controls.canModerate = false;
+  controls.currentMode = 'main_mini';
+  controls.currentStrategy = 'manual_pinned';
+  controls.modeOptions = [];
+  controls.strategyOptions = [];
+  controls.setMode = null;
+  controls.setStrategy = null;
+}
+
+watch(
+  () => [
+    canModerate.value,
+    currentLayoutMode.value,
+    normalizedCallLayout.value.strategy,
+    layoutModeOptions.value.map((option) => option.mode).join(','),
+    layoutStrategyOptions.value.join(','),
+  ],
+  () => syncCallLayoutSidebarControls(),
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  clearCallLayoutSidebarControls();
+});
+
 const showLobbyRequestBadge = computed(() => (
-  canModerate.value
+  showLobbyTab.value
   && lobbyQueue.value.length > 0
   && activeTab.value !== 'lobby'
 ));
@@ -1516,7 +1635,7 @@ const lobbyRequestBadgeText = computed(() => (
   lobbyQueue.value.length > 99 ? '99+' : String(lobbyQueue.value.length)
 ));
 const showLobbyJoinToast = computed(() => (
-  canModerate.value
+  showLobbyTab.value
   && rightSidebarCollapsed.value
   && lobbyNotificationState.toastVisible
   && lobbyNotificationState.toastMessage !== ''
@@ -2416,6 +2535,7 @@ function setCallLayoutMode(mode) {
   if (!sendLayoutCommand('layout/mode', { mode: normalizedMode })) {
     setNotice('Could not update layout mode while websocket is offline.', 'error');
   }
+  syncCallLayoutSidebarControls();
   nextTick(() => renderCallVideoLayout());
 }
 
@@ -2423,23 +2543,15 @@ function setCallLayoutStrategy(strategy) {
   const normalizedStrategy = String(strategy || '').trim().toLowerCase();
   if (!CALL_LAYOUT_STRATEGIES.includes(normalizedStrategy)) return;
   callLayoutState.strategy = normalizedStrategy;
+  callLayoutState.automation_paused = false;
   if (!sendLayoutCommand('layout/strategy', {
     strategy: normalizedStrategy,
-    automation_paused: Boolean(callLayoutState.automation_paused),
+    automation_paused: false,
   })) {
     setNotice('Could not update layout strategy while websocket is offline.', 'error');
   }
+  syncCallLayoutSidebarControls();
   nextTick(() => renderCallVideoLayout());
-}
-
-function toggleLayoutAutomationPause() {
-  callLayoutState.automation_paused = !Boolean(callLayoutState.automation_paused);
-  if (!sendLayoutCommand('layout/strategy', {
-    strategy: normalizedCallLayout.value.strategy,
-    automation_paused: Boolean(callLayoutState.automation_paused),
-  })) {
-    setNotice('Could not update layout automation while websocket is offline.', 'error');
-  }
 }
 
 function publishLayoutSelectionState() {
@@ -2741,6 +2853,7 @@ function notifyLobbyJoinRequests(entries) {
 }
 
 function openLobbyRequestsPanel() {
+  if (!showLobbyTab.value) return;
   showRightSidebar();
   setActiveTab('lobby');
   hideLobbyJoinToast();
@@ -2771,7 +2884,8 @@ function openChatPanel() {
 }
 
 function setActiveTab(tab) {
-  const nextTab = ['users', 'lobby', 'chat'].includes(tab) ? tab : 'users';
+  const requestedTab = ['users', 'lobby', 'chat'].includes(tab) ? tab : 'users';
+  const nextTab = requestedTab === 'lobby' && !showLobbyTab.value ? 'users' : requestedTab;
   activeTab.value = nextTab;
   if (nextTab === 'users') {
     nextTick(() => syncUsersListViewport());
@@ -3237,6 +3351,24 @@ async function sendChatMessage() {
     return;
   }
 
+  appendChatMessage({
+    type: 'chat/message',
+    room_id: activeRoomId.value,
+    message: {
+      id: clientMessageId,
+      client_message_id: clientMessageId,
+      text,
+      attachments,
+      sender: {
+        user_id: currentUserId.value,
+        display_name: String(sessionState.displayName || sessionState.email || '').trim() || 'You',
+        role: normalizeRole(sessionState.role),
+      },
+      server_time: new Date().toISOString(),
+    },
+    time: new Date().toISOString(),
+  });
+
   chatDraft.value = '';
   chatAttachmentDrafts.value = [];
   chatAttachmentError.value = '';
@@ -3290,7 +3422,18 @@ function appendChatMessage(payload) {
 
   ensureRoomBuckets(message.room_id);
   const bucket = chatByRoom[message.room_id];
-  if (bucket.some((row) => row.id === message.id)) return;
+  const clientMessageId = String(message.client_message_id || '').trim();
+  const existingIndex = bucket.findIndex((row) => (
+    row.id === message.id
+    || (clientMessageId !== '' && String(row.client_message_id || '').trim() === clientMessageId)
+  ));
+  if (existingIndex >= 0) {
+    bucket[existingIndex] = {
+      ...bucket[existingIndex],
+      ...message,
+    };
+    return;
+  }
 
   bucket.push(message);
   if (bucket.length > 240) {
@@ -3439,6 +3582,7 @@ function toggleModeratorRole(row) {
 }
 
 function transferOwnerRole(row) {
+  if (!canManageOwnerRole.value) return;
   const userId = Number(row?.userId || 0);
   if (!Number.isInteger(userId) || userId <= 0) return;
   if (normalizeCallRole(row?.callRole || callParticipantRoles[userId] || 'participant') === 'owner') return;
@@ -3499,6 +3643,7 @@ function applyRoomSnapshot(payload) {
   if (previousRoomId !== roomId) {
     lobbyNotificationState.hasSnapshot = false;
     hideLobbyJoinToast();
+    participantsRawSignature = '';
   }
   serverRoomId.value = roomId;
   if (pendingAdmissionJoinRoomId.value === roomId) {
@@ -3510,7 +3655,7 @@ function applyRoomSnapshot(payload) {
   ensureRoomBuckets(roomId);
   applyViewerContext(payload?.viewer || null);
 
-  participantsRaw.value = Array.isArray(payload?.participants) ? payload.participants : [];
+  applyParticipantsSnapshot(payload?.participants);
   if (payload?.layout && typeof payload.layout === 'object') {
     applyCallLayoutPayload(payload.layout);
   }
@@ -3669,6 +3814,9 @@ function handleSocketMessage(event) {
 
   if (type === 'call/ack') {
     const signalType = String(payload?.signal_type || '').replace('call/', '').trim() || 'signal';
+    if (signalType === 'offer' && Number(payload?.sent_count ?? 0) === 0) {
+      scheduleNativeOfferRetryForUserId(payload?.target_user_id, 'brokered_offer_unanswered');
+    }
     if (!shouldSuppressCallAckNotice(signalType)) {
       setNotice(`Sent ${signalType} to ${payload?.sent_count ?? 0} peer(s).`);
     }
@@ -3723,6 +3871,7 @@ function handleSocketMessage(event) {
       return;
     }
     if (shouldSuppressExpectedSignalingError(payload)) {
+      scheduleNativeOfferRetryForUserId(failedTargetUserId, 'signaling_publish_retry');
       return;
     }
     setNotice(message, 'error');
@@ -3907,17 +4056,16 @@ async function connectSocket() {
   }
   if (!sessionProbe.ok) {
     connectionReason.value = sessionProbe.reason;
-    connectionState.value = sessionProbe.state;
     if (sessionProbe.state === 'retrying') {
+      // A transient HTTP probe failure must not block realtime; the WS handshake
+      // validates the same session token and will close explicitly if it is invalid.
       workspaceNotice.value = '';
       workspaceError.value = '';
     } else {
+      connectionState.value = sessionProbe.state;
       setNotice(sessionProbe.message, 'error');
+      return;
     }
-    if (sessionProbe.state === 'retrying' && !manualSocketClose) {
-      scheduleReconnect();
-    }
-    return;
   }
 
   const orderedSocketOrigins = resolveBackendWebSocketOriginCandidates();
@@ -4310,6 +4458,9 @@ watch(rightSidebarCollapsed, (collapsed) => {
 
 watch(canModerate, (enabled) => {
   if (!enabled) {
+    if (activeTab.value === 'lobby') {
+      setActiveTab('users');
+    }
     hideLobbyJoinToast();
   }
 });
@@ -4369,6 +4520,7 @@ onMounted(async () => {
   ensureRoomBuckets(desiredRoomId.value);
   serverRoomId.value = desiredRoomId.value;
   await refreshCallMediaDevices({ requestPermissions: true });
+  await loadDynamicIceServers();
   void connectSocket();
 
   try {
@@ -4519,73 +4671,183 @@ function teardownRemotePeer(peer) {
   }
 }
 
+function normalizeSfuPublisherId(publisherId) {
+  return String(publisherId || '').trim();
+}
+
+function setSfuRemotePeer(publisherId, peer) {
+  const normalizedPublisherId = normalizeSfuPublisherId(publisherId);
+  if (normalizedPublisherId === '') return;
+  const nextPeers = new Map(remotePeersRef.value);
+  nextPeers.set(normalizedPublisherId, peer);
+  remotePeersRef.value = nextPeers;
+}
+
+function deleteSfuRemotePeer(publisherId) {
+  const normalizedPublisherId = normalizeSfuPublisherId(publisherId);
+  if (normalizedPublisherId === '') return false;
+  if (!remotePeersRef.value.has(normalizedPublisherId)) return false;
+  const nextPeers = new Map(remotePeersRef.value);
+  nextPeers.delete(normalizedPublisherId);
+  remotePeersRef.value = nextPeers;
+  pendingSfuRemotePeerInitializers.delete(normalizedPublisherId);
+  return true;
+}
+
+function sfuTrackRows(tracks) {
+  return Array.isArray(tracks) ? tracks : [];
+}
+
+async function createOrUpdateSfuRemotePeer(options = {}) {
+  if (!isWlvcRuntimePath()) return null;
+  const publisherId = normalizeSfuPublisherId(options.publisherId);
+  const publisherUserId = Number(options.publisherUserId || 0);
+  if (publisherId === '') return null;
+  if (Number.isInteger(publisherUserId) && publisherUserId === currentUserId.value) {
+    return null;
+  }
+
+  const tracks = sfuTrackRows(options.tracks);
+  const existingPeer = remotePeersRef.value.get(publisherId);
+  if (existingPeer?.decoder) {
+    const updatedPeer = {
+      ...existingPeer,
+      userId: Number.isInteger(publisherUserId) && publisherUserId > 0
+        ? publisherUserId
+        : Number(existingPeer.userId || 0),
+      displayName: String(options.publisherName || existingPeer.displayName || '').trim(),
+      tracks,
+    };
+    setSfuRemotePeer(publisherId, updatedPeer);
+    await nextTick();
+    renderCallVideoLayout();
+    return updatedPeer;
+  }
+
+  let decoder = null;
+  if (isWlvcRuntimePath() && mediaRuntimeCapabilities.value.stageA) {
+    try {
+      decoder = await createWasmDecoder({ width: 640, height: 480, quality: 75 });
+    } catch (error) {
+      mediaDebugLog('[SFU] WASM decoder init failed for publisher', publisherId, error);
+    }
+  }
+
+  if (!decoder) {
+    void maybeFallbackToNativeRuntime('wlvc_decoder_unavailable');
+    return null;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 640;
+  canvas.height = 480;
+  canvas.className = 'remote-video';
+  canvas.dataset.publisherId = publisherId;
+  if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
+    canvas.dataset.userId = String(publisherUserId);
+  }
+
+  if (existingPeer) {
+    teardownRemotePeer(existingPeer);
+  }
+
+  const peer = {
+    userId: Number.isInteger(publisherUserId) && publisherUserId > 0 ? publisherUserId : 0,
+    displayName: String(options.publisherName || '').trim(),
+    pc: null,
+    video: null,
+    tracks,
+    stream: null,
+    decoder,
+    decodedCanvas: canvas,
+  };
+  setSfuRemotePeer(publisherId, peer);
+
+  await nextTick();
+  renderCallVideoLayout();
+  mediaDebugLog('[SFU] Subscribed to publisher', publisherId, 'with', tracks.length, 'tracks');
+  return peer;
+}
+
+function ensureSfuRemotePeerForFrame(frame) {
+  const publisherId = normalizeSfuPublisherId(frame?.publisherId);
+  if (publisherId === '') return null;
+  const existingPeer = remotePeersRef.value.get(publisherId);
+  if (existingPeer?.decoder) return Promise.resolve(existingPeer);
+  const pending = pendingSfuRemotePeerInitializers.get(publisherId);
+  if (pending) return pending;
+
+  const trackId = String(frame?.trackId || '').trim();
+  const init = createOrUpdateSfuRemotePeer({
+    publisherId,
+    publisherUserId: frame?.publisherUserId,
+    publisherName: '',
+    tracks: trackId === '' ? [] : [{ id: trackId, kind: 'video', label: 'Remote video' }],
+  })
+    .catch((error) => {
+      mediaDebugLog('[SFU] Could not create peer from frame', publisherId, error);
+      return null;
+    })
+    .finally(() => {
+      pendingSfuRemotePeerInitializers.delete(publisherId);
+    });
+  pendingSfuRemotePeerInitializers.set(publisherId, init);
+  return init;
+}
+
+function updateSfuRemotePeerUserId(publisherId, peer, publisherUserId) {
+  if (!peer || typeof peer !== 'object') return peer;
+  const normalizedUserId = Number(publisherUserId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return peer;
+  if (Number(peer?.userId || 0) === normalizedUserId) return peer;
+  const updatedPeer = {
+    ...peer,
+    userId: normalizedUserId,
+  };
+  if (updatedPeer.decodedCanvas instanceof HTMLElement) {
+    updatedPeer.decodedCanvas.dataset.userId = String(normalizedUserId);
+  }
+  setSfuRemotePeer(publisherId, updatedPeer);
+  return updatedPeer;
+}
+
 function handleSFUTracks(e) {
   if (!isWlvcRuntimePath()) {
     return;
   }
-  (async () => {
-    const publisherId = String(e?.publisherId || '').trim();
-    const publisherUserId = Number(e?.publisherUserId || 0);
-    if (publisherId === '') return;
-    if (Number.isInteger(publisherUserId) && publisherUserId === currentUserId.value) {
-      return;
-    }
-
-    let decoder = null;
-    if (isWlvcRuntimePath() && mediaRuntimeCapabilities.value.stageA) {
-      try {
-        decoder = await createWasmDecoder({ width: 640, height: 480, quality: 75 });
-      } catch (error) {
-        mediaDebugLog('[SFU] WASM decoder init failed for publisher', e.publisherId, error);
-      }
-    }
-
-    if (!decoder) {
-      void maybeFallbackToNativeRuntime('wlvc_decoder_unavailable');
-      return;
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 640;
-    canvas.height = 480;
-    canvas.className = 'remote-video';
-
-    const existingPeer = remotePeersRef.value.get(publisherId);
-    if (existingPeer) {
-      teardownRemotePeer(existingPeer);
-    }
-
-    remotePeersRef.value.set(publisherId, {
-      userId: Number.isInteger(publisherUserId) && publisherUserId > 0 ? publisherUserId : 0,
-      displayName: String(e?.publisherName || '').trim(),
-      pc: null,
-      video: null,
-      tracks: e.tracks,
-      stream: null,
-      decoder: decoder,
-      decodedCanvas: canvas,
-    });
-
-    await nextTick();
-    renderCallVideoLayout();
-    mediaDebugLog('[SFU] Subscribed to publisher', publisherId, 'with', e.tracks.length, 'tracks');
-  })();
+  const publisherId = normalizeSfuPublisherId(e?.publisherId);
+  if (publisherId === '') return;
+  const init = createOrUpdateSfuRemotePeer({
+    publisherId,
+    publisherUserId: e?.publisherUserId,
+    publisherName: e?.publisherName,
+    tracks: e?.tracks,
+  }).catch((error) => {
+    mediaDebugLog('[SFU] Could not subscribe to publisher', publisherId, error);
+    return null;
+  });
+  pendingSfuRemotePeerInitializers.set(
+    publisherId,
+    init.finally(() => pendingSfuRemotePeerInitializers.delete(publisherId))
+  );
 }
 
 function handleSFUUnpublished(publisherId, trackId) {
-  const peer = remotePeersRef.value.get(publisherId);
+  const normalizedPublisherId = normalizeSfuPublisherId(publisherId);
+  const peer = remotePeersRef.value.get(normalizedPublisherId);
   if (peer) {
     teardownRemotePeer(peer);
-    remotePeersRef.value.delete(publisherId);
+    deleteSfuRemotePeer(normalizedPublisherId);
     renderCallVideoLayout();
   }
 }
 
 function handleSFUPublisherLeft(publisherId) {
-  const peer = remotePeersRef.value.get(publisherId);
+  const normalizedPublisherId = normalizeSfuPublisherId(publisherId);
+  const peer = remotePeersRef.value.get(normalizedPublisherId);
   if (peer) {
     teardownRemotePeer(peer);
-    remotePeersRef.value.delete(publisherId);
+    deleteSfuRemotePeer(normalizedPublisherId);
     renderCallVideoLayout();
   }
 }
@@ -4604,6 +4866,7 @@ const backgroundFilterController = new BackgroundFilterController();
 const backgroundBaselineCollector = new BackgroundFilterBaselineCollector(10);
 let backgroundBaselineCaptured = false;
 let backgroundRuntimeToken = 0;
+const NATIVE_OFFER_RETRY_DELAYS_MS = [800, 1_500, 2_500, 4_000, 6_000];
 
 function clearRemoteVideoContainer() {
   if (typeof document === 'undefined') return;
@@ -4617,7 +4880,9 @@ function teardownSfuRemotePeers() {
   for (const [_, peer] of remotePeersRef.value) {
     teardownRemotePeer(peer);
   }
-  remotePeersRef.value.clear();
+  remotePeersRef.value = new Map();
+  pendingSfuRemotePeerInitializers.clear();
+  remoteFrameActivityLastByUserId.clear();
   clearRemoteVideoContainer();
 }
 
@@ -4735,9 +5000,67 @@ function renderNativeRemoteVideos() {
 
 function nativeWebRtcConfig() {
   return {
-    iceServers: DEFAULT_NATIVE_ICE_SERVERS,
+    iceServers: currentNativeIceServers(),
     iceCandidatePoolSize: 4,
   };
+}
+
+function normalizeIceServerEntry(value) {
+  if (!value || typeof value !== 'object') return null;
+  const urlsValue = Array.isArray(value.urls)
+    ? value.urls.map((entry) => String(entry || '').trim()).filter(Boolean)
+    : String(value.urls || '').trim();
+  if ((Array.isArray(urlsValue) && urlsValue.length === 0) || (!Array.isArray(urlsValue) && urlsValue === '')) {
+    return null;
+  }
+
+  const server = { urls: urlsValue };
+  const username = String(value.username || '').trim();
+  const credential = String(value.credential || '').trim();
+  if (username !== '') server.username = username;
+  if (credential !== '') server.credential = credential;
+  return server;
+}
+
+function currentNativeIceServers() {
+  return dynamicIceServers.value.length > 0 ? dynamicIceServers.value : DEFAULT_NATIVE_ICE_SERVERS;
+}
+
+async function loadDynamicIceServers(force = false) {
+  const token = String(sessionState.sessionToken || '').trim();
+  if (token === '') return currentNativeIceServers();
+
+  const nowMs = Date.now();
+  if (!force && dynamicIceServers.value.length > 0 && dynamicIceServersExpiresAtMs > nowMs + 60_000) {
+    return currentNativeIceServers();
+  }
+  if (dynamicIceServersPromise) return dynamicIceServersPromise;
+
+  dynamicIceServersPromise = apiRequest('/api/user/media/ice-servers')
+    .then((payload) => {
+      const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+      const servers = Array.isArray(result.ice_servers)
+        ? result.ice_servers.map(normalizeIceServerEntry).filter(Boolean)
+        : [];
+      if (servers.length > 0) {
+        dynamicIceServers.value = servers;
+      }
+
+      const expiresAtMs = Date.parse(String(result.expires_at || ''));
+      dynamicIceServersExpiresAtMs = Number.isFinite(expiresAtMs)
+        ? expiresAtMs
+        : (Date.now() + 30 * 60_000);
+      return currentNativeIceServers();
+    })
+    .catch((error) => {
+      mediaDebugLog('[WebRTC] ICE server discovery failed; using static ICE config', error);
+      return currentNativeIceServers();
+    })
+    .finally(() => {
+      dynamicIceServersPromise = null;
+    });
+
+  return dynamicIceServersPromise;
 }
 
 function localTracksByKind(stream) {
@@ -4801,6 +5124,63 @@ async function flushNativePendingIce(peer) {
   }
 }
 
+function clearNativeOfferRetry(peer) {
+  if (!peer || typeof peer !== 'object') return;
+  if (peer.offerRetryTimer !== null && peer.offerRetryTimer !== undefined) {
+    clearTimeout(peer.offerRetryTimer);
+  }
+  peer.offerRetryTimer = null;
+}
+
+function resetNativeOfferRetry(peer) {
+  if (!peer || typeof peer !== 'object') return;
+  clearNativeOfferRetry(peer);
+  peer.offerRetryCount = 0;
+}
+
+function nativePeerHasRemoteAnswer(peer) {
+  return Boolean(peer?.pc?.remoteDescription?.type);
+}
+
+function nativePeerConnectionIsFinal(peer) {
+  const state = String(peer?.pc?.connectionState || '').trim().toLowerCase();
+  return state === 'connected' || state === 'completed' || state === 'closed';
+}
+
+function shouldRetryNativeOffer(peer) {
+  if (!peer?.initiator || !peer?.pc) return false;
+  if (!isNativeWebRtcRuntimePath()) return false;
+  if (nativePeerHasRemoteAnswer(peer)) return false;
+  if (nativePeerConnectionIsFinal(peer)) return false;
+  const signalingState = String(peer.pc.signalingState || '').trim().toLowerCase();
+  return signalingState === 'stable' || signalingState === 'have-local-offer';
+}
+
+function scheduleNativeOfferRetry(peer, reason = 'retry') {
+  if (!shouldRetryNativeOffer(peer)) return;
+  if (peer.offerRetryTimer !== null && peer.offerRetryTimer !== undefined) return;
+
+  const retryCount = Number.isInteger(peer.offerRetryCount) ? peer.offerRetryCount : 0;
+  if (retryCount >= NATIVE_OFFER_RETRY_DELAYS_MS.length) return;
+
+  const delayMs = NATIVE_OFFER_RETRY_DELAYS_MS[retryCount] || 6_000;
+  peer.offerRetryCount = retryCount + 1;
+  peer.offerRetryTimer = setTimeout(() => {
+    peer.offerRetryTimer = null;
+    if (!shouldRetryNativeOffer(peer)) return;
+    mediaDebugLog('[WebRTC] retrying native offer', { userId: peer.userId, reason, retry: peer.offerRetryCount });
+    void sendNativeOffer(peer);
+  }, delayMs);
+}
+
+function scheduleNativeOfferRetryForUserId(userId, reason = 'signaling') {
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
+  const peer = nativePeerConnectionsRef.value.get(normalizedUserId);
+  if (!peer) return;
+  scheduleNativeOfferRetry(peer, reason);
+}
+
 function closeNativePeerConnection(targetUserId) {
   const normalizedTargetUserId = Number(targetUserId);
   if (!Number.isInteger(normalizedTargetUserId) || normalizedTargetUserId <= 0) return;
@@ -4808,6 +5188,7 @@ function closeNativePeerConnection(targetUserId) {
   if (!peer) return;
 
   nativePeerConnectionsRef.value.delete(normalizedTargetUserId);
+  clearNativeOfferRetry(peer);
   if (peer.pc) {
     try {
       peer.pc.close();
@@ -4843,13 +5224,16 @@ async function sendNativeOffer(peer) {
 
   peer.negotiating = true;
   try {
-    await syncNativePeerLocalTracks(peer);
-    const offer = await peer.pc.createOffer();
-    await peer.pc.setLocalDescription(offer);
-    const local = peer.pc.localDescription;
+    let local = peer.pc.localDescription;
+    if (!(peer.pc.signalingState === 'have-local-offer' && local?.type === 'offer' && local?.sdp)) {
+      await syncNativePeerLocalTracks(peer);
+      const offer = await peer.pc.createOffer();
+      await peer.pc.setLocalDescription(offer);
+      local = peer.pc.localDescription;
+    }
     if (!local || !local.sdp) return;
 
-    sendSocketFrame({
+    const sent = sendSocketFrame({
       type: 'call/offer',
       target_user_id: peer.userId,
       payload: {
@@ -4862,8 +5246,15 @@ async function sendNativeOffer(peer) {
         },
       },
     });
+    peer.lastOfferSentAtMs = Date.now();
+    if (sent) {
+      scheduleNativeOfferRetry(peer, 'offer_unanswered');
+    } else {
+      scheduleNativeOfferRetry(peer, 'socket_not_ready');
+    }
   } catch (error) {
     mediaDebugLog('[WebRTC] Could not create/send offer for peer', peer.userId, error);
+    scheduleNativeOfferRetry(peer, 'offer_failed');
   } finally {
     peer.negotiating = false;
     if (peer.needsRenegotiate) {
@@ -4880,7 +5271,10 @@ function ensureNativePeerConnection(targetUserId) {
   if (typeof RTCPeerConnection !== 'function') return null;
 
   const existing = nativePeerConnectionsRef.value.get(normalizedTargetUserId);
-  if (existing) return existing;
+  if (existing) {
+    scheduleNativeOfferRetry(existing, 'peer_roster_sync');
+    return existing;
+  }
 
   const pc = new RTCPeerConnection(nativeWebRtcConfig());
   const remoteStream = new MediaStream();
@@ -4892,6 +5286,9 @@ function ensureNativePeerConnection(targetUserId) {
     initiator: currentUserId.value > 0 && currentUserId.value < normalizedTargetUserId,
     negotiating: false,
     needsRenegotiate: false,
+    offerRetryCount: 0,
+    offerRetryTimer: null,
+    lastOfferSentAtMs: 0,
     pendingIce: [],
     pc,
     video,
@@ -4928,12 +5325,27 @@ function ensureNativePeerConnection(targetUserId) {
       }
     }
     renderNativeRemoteVideos();
+    if (video instanceof HTMLVideoElement) {
+      video.play().catch(() => {});
+    }
   });
 
   pc.addEventListener('connectionstatechange', () => {
     const state = String(pc.connectionState || '').toLowerCase();
-    if (state === 'closed' || state === 'failed') {
+    if (state === 'connected' || state === 'completed') {
+      resetNativeOfferRetry(peer);
+      return;
+    }
+    if (state === 'closed') {
       closeNativePeerConnection(normalizedTargetUserId);
+      return;
+    }
+    if (state === 'failed') {
+      closeNativePeerConnection(normalizedTargetUserId);
+      setTimeout(() => {
+        if (!isNativeWebRtcRuntimePath()) return;
+        syncNativePeerConnectionsWithRoster();
+      }, 250);
     }
   });
 
@@ -4970,6 +5382,7 @@ function syncNativePeerConnectionsWithRoster() {
 }
 
 async function handleNativeOfferSignal(senderUserId, payloadBody) {
+  await loadDynamicIceServers();
   const peer = ensureNativePeerConnection(senderUserId);
   if (!peer?.pc) return;
 
@@ -4979,6 +5392,7 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
   if (type !== 'offer' || sdp === '') return;
 
   try {
+    resetNativeOfferRetry(peer);
     await syncNativePeerLocalTracks(peer);
     await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
     await flushNativePendingIce(peer);
@@ -5015,6 +5429,7 @@ async function handleNativeAnswerSignal(senderUserId, payloadBody) {
   try {
     await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }));
     await flushNativePendingIce(peer);
+    resetNativeOfferRetry(peer);
   } catch (error) {
     mediaDebugLog('[WebRTC] Failed to handle answer from peer', senderUserId, error);
   }
@@ -5054,9 +5469,19 @@ async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {
 
   runtimeSwitchInFlight = true;
   try {
+    setMediaRuntimePath(normalizedNextPath, reason);
+
     if (normalizedNextPath === 'webrtc_native') {
       stopLocalEncodingPipeline();
       teardownSfuRemotePeers();
+      if (!(localStreamRef.value instanceof MediaStream)) {
+        await publishLocalTracks();
+      } else {
+        const videoTrack = localStreamRef.value.getVideoTracks?.()[0] || null;
+        if (videoTrack) {
+          await startEncodingPipeline(videoTrack);
+        }
+      }
       syncNativePeerConnectionsWithRoster();
       for (const peer of nativePeerConnectionsRef.value.values()) {
         void syncNativePeerLocalTracks(peer);
@@ -5082,7 +5507,6 @@ async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {
       teardownSfuRemotePeers();
     }
 
-    setMediaRuntimePath(normalizedNextPath, reason);
     mediaDebugLog('[MediaRuntime] switched to', normalizedNextPath, 'reason=', reason);
     return true;
   } finally {
@@ -6025,14 +6449,22 @@ async function reconfigureLocalTracksFromSelectedDevices() {
   }
 }
 
-function handleSFUEncodedFrame(frame) {
-  if (!isWlvcRuntimePath()) return;
-  const peer = remotePeersRef.value.get(frame.publisherId);
+function markRemoteFrameActivity(publisherUserId) {
+  const normalizedUserId = Number(publisherUserId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
+  const nowMs = Date.now();
+  const lastMarkedMs = Number(remoteFrameActivityLastByUserId.get(normalizedUserId) || 0);
+  if ((nowMs - lastMarkedMs) < REMOTE_FRAME_ACTIVITY_MARK_INTERVAL_MS) return;
+  remoteFrameActivityLastByUserId.set(normalizedUserId, nowMs);
+  markParticipantActivity(normalizedUserId, 'media_frame', nowMs);
+}
+
+function decodeSfuFrameForPeer(publisherId, peer, frame) {
+  if (!peer || !peer.decoder) return;
   const publisherUserId = Number(frame?.publisherUserId || peer?.userId || 0);
   if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
-    markParticipantActivity(publisherUserId, 'media_frame');
+    markRemoteFrameActivity(publisherUserId);
   }
-  if (!peer || !peer.decoder) return;
 
   try {
     const decoded = peer.decoder.decodeFrame({
@@ -6048,10 +6480,41 @@ function handleSFUEncodedFrame(frame) {
       const ctx = canvas.getContext('2d');
       const imageData = new ImageData(decoded.data, decoded.width, decoded.height);
       ctx.putImageData(imageData, 0, 0);
+      if (!(canvas.parentElement instanceof HTMLElement)) {
+        renderCallVideoLayout();
+      }
     }
   } catch (e) {
     mediaDebugLog('[SFU] Decode error:', e);
   }
+}
+
+function handleSFUEncodedFrame(frame) {
+  if (!isWlvcRuntimePath()) return;
+  const publisherId = normalizeSfuPublisherId(frame?.publisherId);
+  if (publisherId === '') return;
+  let peer = remotePeersRef.value.get(publisherId);
+  peer = updateSfuRemotePeerUserId(publisherId, peer, frame?.publisherUserId);
+  const publisherUserId = Number(frame?.publisherUserId || peer?.userId || 0);
+  if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
+    markRemoteFrameActivity(publisherUserId);
+  }
+  if (!peer || !peer.decoder) {
+    const init = ensureSfuRemotePeerForFrame(frame);
+    if (init) {
+      void init.then((createdPeer) => {
+        const nextPeer = updateSfuRemotePeerUserId(
+          publisherId,
+          createdPeer || remotePeersRef.value.get(publisherId),
+          frame?.publisherUserId
+        );
+        decodeSfuFrameForPeer(publisherId, nextPeer, frame);
+      });
+    }
+    return;
+  }
+
+  decodeSfuFrameForPeer(publisherId, peer, frame);
 }
 
 onBeforeUnmount(() => {

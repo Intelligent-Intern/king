@@ -233,11 +233,16 @@ async function installLayoutApiRoutes(page) {
   });
 }
 
-async function installFakeLayoutSocket(page) {
-  await page.addInitScript(() => {
+async function installFakeLayoutSocket(page, options = {}) {
+  await page.addInitScript((socketOptions) => {
     const listenersSymbol = Symbol('listeners');
     const roomId = 'room-layout-ui';
     const callId = 'call-layout-ui';
+    const defaultParticipants = [
+      { connection_id: 'conn-admin', room_id: roomId, user: { id: 1, display_name: 'Layout Admin', role: 'admin', call_role: 'owner' }, connected_at: '2026-04-19T12:00:00.000Z' },
+      { connection_id: 'conn-user', room_id: roomId, user: { id: 2, display_name: 'Active User', role: 'user', call_role: 'participant' }, connected_at: '2026-04-19T12:00:01.000Z' },
+    ];
+    const participants = Array.isArray(socketOptions?.participants) ? socketOptions.participants : defaultParticipants;
     window.__layoutSocketFrames = [];
     window.__layoutSocketState = {
       layout: {
@@ -256,10 +261,7 @@ async function installFakeLayoutSocket(page) {
           pinned_user_ids: [],
         },
       },
-      participants: [
-        { connection_id: 'conn-admin', room_id: roomId, user: { id: 1, display_name: 'Layout Admin', role: 'admin', call_role: 'owner' }, connected_at: '2026-04-19T12:00:00.000Z' },
-        { connection_id: 'conn-user', room_id: roomId, user: { id: 2, display_name: 'Active User', role: 'user', call_role: 'participant' }, connected_at: '2026-04-19T12:00:01.000Z' },
-      ],
+      participants,
     };
     window.__layoutSockets = [];
 
@@ -375,10 +377,10 @@ async function installFakeLayoutSocket(page) {
         removeEventListener: () => {},
       },
     });
-  });
+  }, options);
 }
 
-test('admin layout toolbar switches mode, strategy, and pause state in the call UI', async ({ page }) => {
+test('admin sidebar switches layout mode and activity strategy in the call UI', async ({ page }) => {
   await installLayoutApiRoutes(page);
   await installFakeLayoutSocket(page);
   await page.addInitScript(
@@ -397,17 +399,38 @@ test('admin layout toolbar switches mode, strategy, and pause state in the call 
   );
 
   await page.goto('/workspace/call/room-layout-ui');
-  await expect(page.locator('.workspace-layout-toolbar')).toBeVisible();
+  const layoutControls = page.locator('.call-left-layout-controls');
+  await expect(layoutControls).toBeVisible();
 
-  await page.locator('.workspace-layout-mode-btn[aria-label="Grid"]').click();
+  await layoutControls.getByLabel('Video layout mode').selectOption('grid');
   await expect(page.locator('.workspace-stage.layout-grid')).toBeVisible();
 
-  await page.locator('.workspace-layout-strategy select').selectOption('active_speaker_main');
-  await expect(page.locator('.workspace-layout-strategy select')).toHaveValue('active_speaker_main');
+  await layoutControls.getByLabel('Activity strategy').selectOption('active_speaker_main');
+  await expect(layoutControls.getByLabel('Activity strategy')).toHaveValue('active_speaker_main');
 
-  await page.locator('.workspace-layout-pause-btn').click();
-  await expect(page.locator('.workspace-layout-pause-btn')).toHaveText('Resume');
-
-  await page.locator('.workspace-layout-mode-btn[aria-label="Main only"]').click();
+  await layoutControls.getByLabel('Video layout mode').selectOption('main_only');
   await expect(page.locator('.workspace-stage.layout-main-only')).toBeVisible();
+});
+
+test('call owner remains visible when the room snapshot has no participant rows yet', async ({ page }) => {
+  await installLayoutApiRoutes(page);
+  await installFakeLayoutSocket(page, { participants: [] });
+  await page.addInitScript(
+    ({ key }) => {
+      localStorage.setItem(key, JSON.stringify({
+        role: 'admin',
+        displayName: 'Layout Admin',
+        email: 'admin@example.test',
+        userId: 1,
+        sessionId: 'sess_layout_ui',
+        sessionToken: 'sess_layout_ui',
+        expiresAt: '2030-01-01T00:00:00.000Z',
+      }));
+    },
+    { key: sessionStorageKey },
+  );
+
+  await page.goto('/workspace/call/room-layout-ui');
+  await expect(page.locator('.user-list-empty')).toHaveCount(0);
+  await expect(page.locator('.user-row.self .user-name')).toHaveText('Layout Admin');
 });

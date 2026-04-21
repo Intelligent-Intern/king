@@ -190,23 +190,24 @@ test('admin layout controls react to activity and pinning overrides active-speak
 
   try {
     await openMatrixWorkspace(admin.page);
-    await expect(admin.page.locator('.workspace-layout-toolbar')).toBeVisible();
+    const layoutControls = admin.page.locator('.call-left-layout-controls');
+    await expect(layoutControls).toBeVisible();
     await expect(admin.page.locator('.workspace-mini-title')).toContainText('Active User');
 
-    await admin.page.locator('.workspace-layout-mode-btn[aria-label="Grid"]').click();
+    await layoutControls.getByLabel('Video layout mode').selectOption('grid');
     await expect(admin.page.locator('.workspace-stage.layout-grid')).toBeVisible();
     await expect(admin.page.locator('.workspace-grid-tile')).toHaveCount(2);
-    await admin.page.locator('.workspace-layout-mode-btn[aria-label="Main + Mini"]').click();
+    await layoutControls.getByLabel('Video layout mode').selectOption('main_mini');
     await expect(admin.page.locator('.workspace-stage.layout-main-mini')).toBeVisible();
 
-    await admin.page.locator('.workspace-layout-strategy select').selectOption('active_speaker_main');
-    await expect(admin.page.locator('.workspace-layout-strategy select')).toHaveValue('active_speaker_main');
+    await layoutControls.getByLabel('Activity strategy').selectOption('active_speaker_main');
+    await expect(layoutControls.getByLabel('Activity strategy')).toHaveValue('active_speaker_main');
     await admin.page.evaluate(() => window.__matrixEmitActivity(2, 95));
     await expect(admin.page.locator('.workspace-mini-title')).toContainText('Layout Admin');
     await expect(admin.page.locator('.user-row', { hasText: 'Active User' }).locator('.user-activity-pill')).toContainText(/Speaking|Active/);
 
-    await admin.page.locator('.workspace-layout-strategy select').selectOption('manual_pinned');
-    await expect(admin.page.locator('.workspace-layout-strategy select')).toHaveValue('manual_pinned');
+    await layoutControls.getByLabel('Activity strategy').selectOption('manual_pinned');
+    await expect(layoutControls.getByLabel('Activity strategy')).toHaveValue('manual_pinned');
     await admin.page.locator('.user-row', { hasText: 'Active User' }).locator('button[title="Pin user"]').click();
     await admin.page.evaluate(() => window.__matrixEmitActivity(1, 99));
     await expect(admin.page.locator('.workspace-mini-title')).toContainText('Layout Admin');

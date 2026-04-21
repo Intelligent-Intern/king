@@ -1,0 +1,244 @@
+@media (max-width: 1180px) {
+  .calls-toolbar {
+    align-items: stretch;
+  }
+
+  .calls-toolbar-right {
+    width: 100%;
+  }
+
+  .calls-search-main {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .calls-modal-grid,
+  .calls-participants-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .calls-modal-dialog-enter {
+    --calls-enter-dialog-padding: 10px;
+    width: min(980px, calc(100vw - 14px));
+    height: min(920px, calc(100dvh - 14px));
+    max-height: calc(100dvh - 14px);
+    padding: var(--calls-enter-dialog-padding);
+    gap: 8px;
+  }
+
+  .calls-modal-dialog-cancel {
+    --calls-enter-dialog-padding: 10px;
+    width: min(980px, calc(100vw - 14px));
+    height: min(920px, calc(100dvh - 14px));
+    max-height: calc(100dvh - 14px);
+    padding: var(--calls-enter-dialog-padding);
+    gap: 8px;
+  }
+
+  .calls-enter-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 42%) minmax(0, 58%);
+    gap: 8px;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .calls-enter-preview-frame {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    max-height: none;
+  }
+
+  .calls-enter-right {
+    position: static;
+    width: 100%;
+    border-left: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
+  }
+
+  .calls-enter-right-settings .call-left-settings {
+    padding: 8px;
+    gap: 6px;
+    overflow-y: hidden;
+  }
+
+  .calls-enter-right-settings .call-left-settings-block {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .calls-enter-right-settings .call-left-settings-title {
+    font-size: 12px;
+  }
+
+  .calls-enter-right-settings .call-left-settings-field {
+    gap: 4px;
+    font-size: 11px;
+  }
+
+  .calls-enter-right-settings .ii-select,
+  .calls-enter-right-settings .call-left-test-btn {
+    height: 30px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .calls-enter-right-settings .call-left-blur-btn {
+    min-height: 42px;
+  }
+
+  .calls-enter-right-settings .call-left-volume-value {
+    min-width: 38px;
+    font-size: 11px;
+  }
+
+  .calls-modal-footer .btn {
+    height: 34px;
+    padding: 0 14px;
+  }
+
+  .calls-calendar-full {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .calls-list-table {
+    width: 100%;
+    table-layout: auto;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+  }
+
+  .calls-list-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .calls-list-table tbody,
+  .calls-list-table tr,
+  .calls-list-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .calls-list-table tbody tr {
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-row);
+  }
+
+  .calls-list-table td {
+    display: grid;
+    grid-template-columns: minmax(90px, 34%) minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .calls-list-table td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .calls-list-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .calls-list-table td:last-child .actions-inline {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .calls-list-table .call-subline.code {
+    word-break: break-all;
+    overflow-wrap: anywhere;
+  }
+
+  .calls-modal-dialog-enter {
+    --calls-enter-dialog-padding: 8px;
+    width: calc(100vw - 6px);
+    height: calc(100dvh - 6px);
+    max-height: calc(100dvh - 6px);
+    padding: var(--calls-enter-dialog-padding);
+    gap: 6px;
+  }
+
+  .calls-modal-dialog-cancel {
+    --calls-enter-dialog-padding: 8px;
+    width: calc(100vw - 6px);
+    height: calc(100dvh - 6px);
+    max-height: calc(100dvh - 6px);
+    padding: var(--calls-enter-dialog-padding);
+    gap: 6px;
+  }
+
+  .calls-modal-header {
+    gap: 6px;
+  }
+
+  .calls-modal-header h4 {
+    font-size: 14px;
+  }
+
+  .calls-modal-header-enter {
+    padding: 10px;
+  }
+
+  .calls-modal-header-enter-logo {
+    height: 20px;
+  }
+
+  .calls-enter-layout {
+    grid-template-rows: minmax(0, 38%) minmax(0, 62%);
+  }
+
+  .calls-rich-editor {
+    min-height: 150px;
+    max-height: 260px;
+  }
+
+  .calls-enter-preview-frame {
+    height: 100%;
+    max-height: none;
+  }
+
+  .calls-enter-right-settings .call-left-settings {
+    padding: 6px;
+    gap: 5px;
+  }
+
+  .calls-enter-right-settings .call-left-settings-block {
+    padding: 6px;
+    gap: 5px;
+  }
+
+  .calls-enter-right-settings .call-left-settings-title {
+    font-size: 11px;
+  }
+
+  .calls-enter-right-settings .call-left-settings-field {
+    font-size: 10px;
+  }
+
+  .calls-modal-footer .btn {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+}

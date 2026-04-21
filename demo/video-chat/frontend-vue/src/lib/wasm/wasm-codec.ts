@@ -50,6 +50,7 @@ function isBindingMismatchError(error: unknown, className: string): boolean {
 
 let wasmModule: WLVCModule | null = null
 let loadPromise: Promise<WLVCModule | null> | null = null
+const WASM_MIME_CACHE_BUSTER = 'application-wasm-20260421'
 
 /**
  * Load the WASM module (singleton, cached across calls).
@@ -65,7 +66,9 @@ async function loadWasmModule(): Promise<WLVCModule | null> {
       wasmModule = await createModule({
         locateFile: (path: string) => {
           if (path.endsWith('.wasm')) {
-            return new URL('./wlvc.wasm', import.meta.url).href
+            const url = new URL('./wlvc.wasm', import.meta.url)
+            url.searchParams.set('v', WASM_MIME_CACHE_BUSTER)
+            return url.href
           }
           return path
         },

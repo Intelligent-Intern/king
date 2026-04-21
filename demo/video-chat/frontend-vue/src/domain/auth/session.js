@@ -1,6 +1,7 @@
 import { reactive } from 'vue';
-import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import { fetchBackend } from '../../support/backendFetch';
 import { normalizeDateFormat, normalizeTimeFormat } from '../../support/dateTimeFormat';
+import { extractErrorMessage, normalizeNetworkErrorMessage } from './sessionErrors';
 
 const STORAGE_KEY = 'ii_videocall_v1_session';
 const AUTH_ROLES = new Set(['admin', 'user']);
@@ -41,17 +42,6 @@ function inferAccountType(user) {
   }
 
   return 'account';
-}
-
-function extractErrorMessage(payload, fallback) {
-  if (payload && typeof payload === 'object') {
-    const message = payload?.error?.message;
-    if (typeof message === 'string' && message.trim() !== '') {
-      return message.trim();
-    }
-  }
-
-  return fallback;
 }
 
 function safeParse(raw) {
@@ -227,25 +217,18 @@ function normalizeAuthErrorState(reason, message, clearState = false) {
   sessionState.recovered = !sessionState.sessionToken;
 }
 
-function normalizeNetworkErrorMessage(error, fallback) {
-  const message = error instanceof Error ? error.message.trim() : '';
-  if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
-    return `Could not reach backend (${currentBackendOrigin()}).`;
-  }
-  return message || fallback;
-}
-
 export async function loginWithPassword(email, password) {
   try {
     const { response } = await fetchBackend('/api/auth/login', {
-      method: 'GET',
-      query: {
-        email: normalizeString(email).toLowerCase(),
-        password: String(password || ''),
-      },
+      method: 'POST',
       headers: {
         accept: 'application/json',
+        'content-type': 'application/json',
       },
+      body: JSON.stringify({
+        email: normalizeString(email).toLowerCase(),
+        password: String(password || ''),
+      }),
     });
 
     const payload = await readJsonResponse(response);

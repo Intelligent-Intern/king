@@ -158,7 +158,7 @@
 
             <section
               v-if="showInCallOwnerEditCard"
-              class="call-left-owner-edit-block"
+              class="call-left-settings-block call-left-owner-edit-block"
               aria-label="Call settings"
             >
               <div class="call-left-settings-title">Call settings</div>
@@ -173,6 +173,47 @@
               <p v-if="callOwnerEditState.contextError" class="call-left-settings-error">
                 {{ callOwnerEditState.contextError }}
               </p>
+
+              <section
+                v-if="callLayoutSidebarState.visible && callLayoutSidebarState.canModerate"
+                class="call-left-layout-controls"
+                aria-label="Video layout"
+              >
+                <div class="call-left-settings-field">
+                  <label for="call-left-layout-mode">Video layout</label>
+                  <AppSelect
+                    id="call-left-layout-mode"
+                    aria-label="Video layout mode"
+                    :model-value="callLayoutSidebarState.currentMode"
+                    @update:model-value="applySidebarLayoutMode"
+                  >
+                    <option
+                      v-for="option in callLayoutSidebarState.modeOptions"
+                      :key="option.mode"
+                      :value="option.mode"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </AppSelect>
+                </div>
+                <div class="call-left-settings-field">
+                  <label for="call-left-layout-strategy">Activity strategy</label>
+                  <AppSelect
+                    id="call-left-layout-strategy"
+                    aria-label="Activity strategy"
+                    :model-value="callLayoutSidebarState.currentStrategy"
+                    @update:model-value="applySidebarLayoutStrategy"
+                  >
+                    <option
+                      v-for="option in callLayoutSidebarState.strategyOptions"
+                      :key="option.strategy"
+                      :value="option.strategy"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </AppSelect>
+                </div>
+              </section>
             </section>
 
             <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
@@ -703,10 +744,6 @@
               <option value="invite_only">Invite only</option>
               <option value="free_for_all">Free for all</option>
             </AppSelect>
-          </label>
-          <label class="field">
-            <span>Room ID</span>
-            <input v-model.trim="callOwnerEditState.roomId" class="input" type="text" placeholder="lobby" />
           </label>
           <label class="field">
             <span>Starts at</span>
@@ -1379,9 +1416,29 @@ const callOwnerExistingInternalUserIds = ref([]);
 const callOwnerExternalRows = ref([]);
 let callOwnerExternalRowId = 0;
 let callOwnerContextSeq = 0;
+const callLayoutSidebarState = reactive({
+  visible: false,
+  canModerate: false,
+  currentMode: 'main_mini',
+  currentStrategy: 'manual_pinned',
+  modeOptions: [],
+  strategyOptions: [],
+  setMode: null,
+  setStrategy: null,
+});
 
 const showInCallOwnerEditCard = computed(() => isCallWorkspace.value && callOwnerEditState.visible);
 const canLoadCallOwnerInternalDirectory = computed(() => normalizeRole(sessionState.role) === 'admin');
+
+function applySidebarLayoutMode(mode) {
+  if (typeof callLayoutSidebarState.setMode !== 'function') return;
+  callLayoutSidebarState.setMode(mode);
+}
+
+function applySidebarLayoutStrategy(strategy) {
+  if (typeof callLayoutSidebarState.setStrategy !== 'function') return;
+  callLayoutSidebarState.setStrategy(strategy);
+}
 
 function isNavItemActive(item) {
   if (item.to.startsWith('/workspace/call')) {
@@ -1846,7 +1903,6 @@ async function submitInCallEditModal() {
   }
 
   const payload = {
-    room_id: String(callOwnerEditState.roomId || '').trim() || 'lobby',
     title,
     access_mode: normalizeCallAccessMode(callOwnerEditState.accessMode),
     starts_at: startsAt,
@@ -2061,6 +2117,7 @@ provide('workspaceSidebarState', {
   isMobileViewport,
   isTabletSidebarOpen,
   showLeftSidebar,
+  callLayoutControls: callLayoutSidebarState,
 });
 
 watch([isMobileViewport, isMobileSidebarOpen], () => {

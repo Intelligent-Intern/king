@@ -13,7 +13,7 @@
         </div>
 
         <div class="ii-authSplit__form">
-          <form class="ii-form" novalidate @submit.prevent="handleSubmit">
+          <form class="ii-form" method="post" novalidate @submit.prevent="handleSubmit">
             <div>
               <label class="ii-fieldLabel" for="email">Email</label>
               <input

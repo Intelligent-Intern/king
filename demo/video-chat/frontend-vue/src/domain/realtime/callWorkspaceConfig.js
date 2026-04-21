@@ -17,7 +17,7 @@ export const MODERATION_SYNC_FLUSH_INTERVAL_MS = 90;
 export const SFU_PUBLISH_RETRY_DELAY_MS = 500;
 export const SFU_PUBLISH_MAX_RETRIES = 24;
 export const SFU_CONNECT_RETRY_DELAY_MS = 1200;
-export const SFU_CONNECT_MAX_RETRIES = 8;
+export const SFU_CONNECT_MAX_RETRIES = 1;
 export const LOCAL_REACTION_ECHO_TTL_MS = 6000;
 export const WLVC_ENCODE_FAILURE_THRESHOLD = 18;
 export const WLVC_ENCODE_FAILURE_WINDOW_MS = 4000;
@@ -87,7 +87,7 @@ export const DEFAULT_NATIVE_ICE_SERVERS = parseIceServersFromEnv(import.meta.env
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
-export const SFU_RUNTIME_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_SFU, true);
+export const SFU_RUNTIME_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_SFU, false);
 
 export function mediaDebugLog(...args) {
   debugLog(...args);

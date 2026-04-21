@@ -435,6 +435,111 @@
             </label>
           </section>
 
+          <section v-if="shouldSendParticipants" class="calls-participants-grid">
+            <article class="calls-participants-panel">
+              <header class="calls-participants-head">
+                <h5>Registered users</h5>
+                <label class="calls-search small" aria-label="Participant search">
+                  <input
+                    v-model.trim="composeParticipants.query"
+                    class="input"
+                    type="search"
+                    placeholder="Search users"
+                    @keydown.enter.prevent="applyParticipantSearch"
+                  />
+                  <button class="btn btn-cyan" type="button" :disabled="composeParticipants.loading" @click="applyParticipantSearch">
+                    Search
+                  </button>
+                </label>
+              </header>
+
+              <section v-if="composeParticipants.error" class="calls-inline-error">
+                {{ composeParticipants.error }}
+              </section>
+
+              <section class="calls-participants-list" :class="{ loading: composeParticipants.loading }">
+                <label
+                  v-for="user in composeParticipants.rows"
+                  :key="user.id"
+                  class="calls-participant-row"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="isUserSelected(user.id)"
+                    @change="toggleUserSelection(user.id)"
+                  />
+                  <span class="calls-participant-main">{{ user.display_name || user.email }}</span>
+                  <span class="calls-participant-meta">{{ user.email }} · {{ user.role }}</span>
+                </label>
+                <p v-if="!composeParticipants.loading && composeParticipants.rows.length === 0" class="calls-empty-inline">
+                  No users in this page.
+                </p>
+              </section>
+
+              <div class="pagination">
+                <button
+                  class="pager-btn pager-icon-btn"
+                  type="button"
+                  :disabled="!composeParticipants.hasPrev || composeParticipants.loading"
+                  @click="goToParticipantPage(composeParticipants.page - 1)"
+                >
+                  <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous" />
+                </button>
+                <div class="page-info">
+                  Page {{ composeParticipants.page }} / {{ composeParticipants.pageCount }}
+                </div>
+                <button
+                  class="pager-btn pager-icon-btn"
+                  type="button"
+                  :disabled="!composeParticipants.hasNext || composeParticipants.loading"
+                  @click="goToParticipantPage(composeParticipants.page + 1)"
+                >
+                  <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next" />
+                </button>
+              </div>
+            </article>
+
+            <article class="calls-participants-panel">
+              <header class="calls-participants-head">
+                <h5>External participants</h5>
+                <button class="btn btn-cyan" type="button" @click="addExternalRow">Add row</button>
+              </header>
+
+              <section class="calls-external-list">
+                <div v-for="(row, index) in composeExternalRows" :key="row.id" class="calls-external-row">
+                  <input
+                    v-model="row.display_name"
+                    class="input"
+                    type="text"
+                    placeholder="Display name"
+                    :aria-label="`External participant ${index + 1} display name`"
+                  />
+                  <input
+                    v-model="row.email"
+                    class="input"
+                    type="email"
+                    placeholder="guest@example.com"
+                    :aria-label="`External participant ${index + 1} email`"
+                  />
+                  <button
+                    class="icon-mini-btn danger"
+                    type="button"
+                    title="Remove external participant"
+                    :aria-label="`Remove external participant row ${index + 1}`"
+                    @click="removeExternalRow(index)"
+                  >
+                    <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
+                  </button>
+                </div>
+                <p v-if="composeExternalRows.length === 0" class="calls-empty-inline">No external participants configured.</p>
+              </section>
+            </article>
+          </section>
+
+          <section v-else-if="composeState.mode === 'edit'" class="calls-inline-hint">
+            Existing participants remain unchanged for this edit.
+          </section>
+
           <section v-if="composeState.error" class="calls-inline-error">
             {{ composeState.error }}
           </section>
@@ -921,7 +1026,7 @@ let enterAdmissionManuallyClosed = false;
 let enterAdmissionReconnectTimer = 0;
 let enterAdmissionReconnectAttempt = 0;
 
-const ENTER_ADMISSION_WAIT_MESSAGE = 'Call owner wurde benachrichtigt.';
+const ENTER_ADMISSION_WAIT_MESSAGE = 'Call owner has been notified.';
 const ENTER_ADMISSION_RECONNECT_DELAYS_MS = [500, 1000, 2000, 3000, 5000];
 
 const enterCallState = reactive({
@@ -1035,7 +1140,7 @@ function scheduleEnterAdmissionReconnect() {
   const delay = ENTER_ADMISSION_RECONNECT_DELAYS_MS[
     Math.min(enterAdmissionReconnectAttempt - 1, ENTER_ADMISSION_RECONNECT_DELAYS_MS.length - 1)
   ];
-  enterCallState.admissionMessage = 'Lobby-Verbindung wird wiederhergestellt...';
+  enterCallState.admissionMessage = 'Reconnecting lobby connection...';
   enterAdmissionReconnectTimer = window.setTimeout(() => {
     enterAdmissionReconnectTimer = 0;
     connectEnterAdmissionSocket();
@@ -1085,7 +1190,7 @@ function handleEnterAdmissionWelcome(payload) {
     enterCallState.loading = false;
     enterCallState.waitingForAdmission = false;
     enterCallState.admissionMessage = '';
-    enterCallState.error = 'Could not notify call owner while lobby websocket is offline.';
+    enterCallState.error = 'Could not notify call owner because the lobby connection is offline.';
     return;
   }
 
@@ -1193,7 +1298,7 @@ function connectEnterAdmissionSocketWithOriginAt(candidates, originIndex, genera
       failOverToNextOrigin();
       return;
     }
-    enterCallState.admissionMessage = 'Lobby-Verbindung wird wiederhergestellt...';
+    enterCallState.admissionMessage = 'Reconnecting lobby connection...';
   });
 
   socket.addEventListener('close', () => {
@@ -1230,7 +1335,7 @@ function startEnterAdmissionWait(target = null) {
   enterCallState.error = '';
   enterCallState.loading = true;
   enterCallState.waitingForAdmission = true;
-  enterCallState.admissionMessage = 'Lobby-Verbindung wird hergestellt...';
+  enterCallState.admissionMessage = 'Connecting lobby connection...';
 
   closeEnterAdmissionSocket({ cancel: false });
   enterAdmissionAccepted = false;
@@ -1658,6 +1763,23 @@ const composeState = reactive({
   error: '',
 });
 
+const composeParticipants = reactive({
+  loading: false,
+  error: '',
+  query: '',
+  page: 1,
+  pageSize: 10,
+  total: 0,
+  pageCount: 1,
+  hasPrev: false,
+  hasNext: false,
+  rows: [],
+});
+
+const composeSelectedUserIds = ref([]);
+const composeExternalRows = ref([]);
+let composeExternalRowId = 0;
+
 const composeHeadline = computed(() => {
   if (composeState.mode === 'edit') return 'Edit video call';
   if (composeState.mode === 'schedule') return 'Schedule video call';
@@ -1669,6 +1791,37 @@ const composeSubmitLabel = computed(() => {
   if (composeState.mode === 'schedule') return 'Schedule call';
   return 'Create call';
 });
+
+const shouldSendParticipants = computed(() => composeState.mode !== 'edit');
+
+function currentSessionUserId() {
+  const id = Number(sessionState.userId || 0);
+  return Number.isInteger(id) && id > 0 ? id : 0;
+}
+
+function normalizedInternalParticipantUserIds() {
+  const ownUserId = currentSessionUserId();
+  const seen = new Set();
+  const ids = [];
+  for (const rawId of composeSelectedUserIds.value) {
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id <= 0 || id === ownUserId || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+}
+
+function nextExternalRow() {
+  composeExternalRowId += 1;
+  return {
+    id: composeExternalRowId,
+    display_name: '',
+    email: '',
+  };
+}
 
 function seedComposeWindow(mode) {
   const now = new Date();
@@ -1693,6 +1846,17 @@ function resetComposeModal() {
   composeState.roomId = 'lobby';
   composeState.submitting = false;
   composeState.error = '';
+  composeParticipants.loading = false;
+  composeParticipants.error = '';
+  composeParticipants.query = '';
+  composeParticipants.page = 1;
+  composeParticipants.total = 0;
+  composeParticipants.pageCount = 1;
+  composeParticipants.hasPrev = false;
+  composeParticipants.hasNext = false;
+  composeParticipants.rows = [];
+  composeSelectedUserIds.value = [];
+  composeExternalRows.value = [];
 }
 
 function openCompose(mode, call = null) {
@@ -1711,6 +1875,11 @@ function openCompose(mode, call = null) {
     composeState.endsLocal = isoToLocalInput(String(call.ends_at || ''));
   } else {
     seedComposeWindow(mode);
+    composeExternalRows.value = [nextExternalRow()];
+  }
+
+  if (shouldSendParticipants.value) {
+    void loadComposeParticipants();
   }
 }
 
@@ -1722,6 +1891,141 @@ function closeCompose() {
 
 function handleShellCreateCall() {
   openCompose('create');
+}
+
+async function loadComposeParticipants() {
+  if (!composeState.open) return;
+
+  composeParticipants.loading = true;
+  composeParticipants.error = '';
+
+  try {
+    const payload = await apiRequest('/api/user/directory', {
+      query: {
+        query: composeParticipants.query,
+        page: composeParticipants.page,
+        page_size: composeParticipants.pageSize,
+      },
+    });
+
+    const ownUserId = currentSessionUserId();
+    const allRows = Array.isArray(payload.users) ? payload.users : [];
+    composeParticipants.rows = allRows.filter((row) => {
+      const candidateId = Number(row?.id ?? row?.user_id ?? 0);
+      return !Number.isInteger(candidateId) || candidateId !== ownUserId;
+    });
+    const paging = payload.pagination || {};
+    composeParticipants.total = Number.isInteger(paging.total) ? paging.total : composeParticipants.rows.length;
+    composeParticipants.pageCount = Number.isInteger(paging.page_count) && paging.page_count > 0
+      ? paging.page_count
+      : 1;
+    composeParticipants.hasPrev = Boolean(paging.has_prev);
+    composeParticipants.hasNext = Boolean(paging.has_next);
+    if (ownUserId > 0) {
+      composeSelectedUserIds.value = composeSelectedUserIds.value.filter((id) => Number(id) !== ownUserId);
+    }
+  } catch (error) {
+    composeParticipants.rows = [];
+    composeParticipants.total = 0;
+    composeParticipants.pageCount = 1;
+    composeParticipants.hasPrev = false;
+    composeParticipants.hasNext = false;
+    composeParticipants.error = error instanceof Error ? error.message : 'Could not load users.';
+  } finally {
+    composeParticipants.loading = false;
+  }
+}
+
+async function applyParticipantSearch() {
+  composeParticipants.page = 1;
+  await loadComposeParticipants();
+}
+
+async function goToParticipantPage(nextPage) {
+  if (!Number.isInteger(nextPage) || nextPage < 1 || nextPage === composeParticipants.page) {
+    return;
+  }
+
+  composeParticipants.page = nextPage;
+  await loadComposeParticipants();
+}
+
+function isUserSelected(userId) {
+  const id = Number(userId);
+  return composeSelectedUserIds.value.includes(id);
+}
+
+function toggleUserSelection(userId) {
+  const id = Number(userId);
+  const ownUserId = currentSessionUserId();
+  if (!Number.isInteger(id) || id <= 0 || id === ownUserId) {
+    return;
+  }
+
+  const next = composeSelectedUserIds.value.slice();
+  const index = next.indexOf(id);
+  if (index >= 0) {
+    next.splice(index, 1);
+  } else {
+    next.push(id);
+  }
+
+  composeSelectedUserIds.value = next;
+}
+
+function addExternalRow() {
+  composeExternalRows.value = [...composeExternalRows.value, nextExternalRow()];
+}
+
+function removeExternalRow(index) {
+  if (!Number.isInteger(index) || index < 0 || index >= composeExternalRows.value.length) {
+    return;
+  }
+
+  const next = composeExternalRows.value.slice();
+  next.splice(index, 1);
+  composeExternalRows.value = next;
+}
+
+function normalizeExternalRows() {
+  const rows = [];
+
+  for (let index = 0; index < composeExternalRows.value.length; index += 1) {
+    const row = composeExternalRows.value[index];
+    const displayName = String(row?.display_name || '').trim();
+    const email = String(row?.email || '').trim().toLowerCase();
+
+    if (displayName === '' && email === '') {
+      continue;
+    }
+
+    if (displayName === '' || email === '') {
+      return {
+        ok: false,
+        error: `External participant row ${index + 1} requires both display name and email.`,
+        rows: [],
+      };
+    }
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return {
+        ok: false,
+        error: `External participant row ${index + 1} has an invalid email.`,
+        rows: [],
+      };
+    }
+
+    rows.push({
+      display_name: displayName,
+      email,
+    });
+  }
+
+  return {
+    ok: true,
+    error: '',
+    rows,
+  };
 }
 
 async function submitCompose() {
@@ -1753,6 +2057,17 @@ async function submitCompose() {
     starts_at: startsAt,
     ends_at: endsAt,
   };
+
+  if (shouldSendParticipants.value) {
+    const normalizedExternal = normalizeExternalRows();
+    if (!normalizedExternal.ok) {
+      composeState.error = normalizedExternal.error;
+      return;
+    }
+
+    payload.internal_participant_user_ids = normalizedInternalParticipantUserIds();
+    payload.external_participants = normalizedExternal.rows;
+  }
 
   composeState.submitting = true;
 
@@ -1843,610 +2158,4 @@ watch(
 );
 </script>
 
-<style scoped>
-.calls-view {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-ui-chrome);
-  gap: 0;
-}
-
-.calls-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  margin-bottom: 15px;
-}
-
-.calls-banner {
-  font-size: 12px;
-  color: var(--color-ffffff);
-}
-
-.calls-banner.ok {
-  background: var(--color-1f4f31);
-}
-
-.calls-banner.error {
-  background: var(--color-4f1f1f);
-}
-
-.calls-table-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-  padding-top: 0;
-  padding-left: 10px;
-  padding-right: 10px;
-}
-
-.col-title {
-  width: 28%;
-}
-
-.col-actions {
-  width: 150px;
-}
-
-.call-title {
-  font-weight: 700;
-}
-
-.call-subline {
-  display: block;
-  margin-top: 2px;
-  color: var(--color-c7d7f2);
-  font-size: 11px;
-}
-
-.calls-empty {
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.calls-error {
-  color: var(--color-ff9f9f);
-}
-
-.calls-calendar-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: 10px;
-  background: var(--bg-surface);
-}
-
-.calls-calendar-grid {
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 10px;
-  align-content: start;
-}
-
-.calls-calendar-day {
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--color-122340);
-  overflow: hidden;
-}
-
-.calls-calendar-day-head {
-  padding: 10px;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.calls-calendar-day-head h4 {
-  margin: 0;
-  font-size: 13px;
-}
-
-.calls-calendar-day-head span {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.calls-calendar-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-}
-
-.calls-calendar-item {
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 10px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.calls-calendar-item:last-child {
-  border-bottom: 0;
-}
-
-.calls-calendar-item-meta {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.calls-calendar-item-meta strong {
-  font-size: 13px;
-}
-
-.calls-calendar-item-meta span {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.calls-pagination-wrap {
-  display: flex;
-  justify-content: center;
-  margin-top: auto;
-  padding-left: 10px;
-  padding-right: 10px;
-  border-top: 0;
-}
-
-.calls-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  display: grid;
-  place-items: center;
-}
-
-.calls-modal[hidden] {
-  display: none;
-}
-
-.calls-modal-backdrop {
-  position: absolute;
-  inset: 0;
-  background: var(--color-09111e);
-}
-
-.calls-modal-dialog {
-  --calls-enter-dialog-padding: 12px;
-  position: relative;
-  width: min(1020px, calc(100vw - 30px));
-  max-height: calc(100vh - 30px);
-  overflow: auto;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--bg-surface-strong);
-  box-shadow: 0 16px 32px var(--color-000000);
-  padding: 12px;
-  display: grid;
-  gap: 12px;
-}
-
-.calls-modal-dialog-small {
-  width: min(620px, calc(100vw - 30px));
-}
-
-.calls-modal-dialog-enter {
-  --calls-enter-dialog-padding: 12px;
-  width: min(1220px, calc(100vw - 24px));
-  height: min(840px, calc(100vh - 24px));
-  max-height: calc(100vh - 24px);
-  overflow: hidden;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  padding: var(--calls-enter-dialog-padding);
-}
-
-.calls-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-}
-
-.calls-modal-header h4 {
-  margin: 5px 0 0;
-  font-size: 17px;
-}
-
-.calls-modal-header .calls-enter-title {
-  margin: 8px 0 0;
-  font-size: 14px;
-  line-height: 1;
-}
-
-.calls-modal-header-enter {
-  margin: calc(var(--calls-enter-dialog-padding) * -1) calc(var(--calls-enter-dialog-padding) * -1) 0;
-  padding: 10px;
-  background: var(--brand-bg);
-  border: 0;
-}
-
-.calls-modal-header-enter-left {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.calls-modal-header-enter-logo {
-  width: auto;
-  height: 24px;
-  display: block;
-}
-
-.calls-modal-body {
-  display: grid;
-  gap: 10px;
-}
-
-.calls-enter-body {
-  grid-template-rows: minmax(0, 1fr);
-  min-height: 0;
-  overflow: hidden;
-}
-
-.calls-enter-layout {
-  position: relative;
-  min-height: 0;
-  height: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 44%);
-  gap: 12px;
-}
-
-.calls-enter-preview {
-  min-height: 0;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  gap: 0;
-}
-
-.calls-enter-preview-frame {
-  position: relative;
-  width: min(100%, 560px);
-  aspect-ratio: 1 / 1;
-  min-height: 0;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--color-0b1324);
-  overflow: hidden;
-}
-
-.calls-enter-preview-frame video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  transform: scaleX(-1);
-}
-
-.calls-enter-preview-frame .calls-inline-hint,
-.calls-enter-preview-frame .calls-inline-error {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
-  margin: 0;
-}
-
-.calls-enter-right {
-  min-height: 0;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  align-content: start;
-  overflow: hidden;
-}
-
-.calls-enter-right-settings {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.calls-enter-right-settings .call-left-settings {
-  min-height: 0;
-  max-height: 100%;
-  padding: 12px;
-}
-
-.calls-modal-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.calls-field-wide {
-  grid-column: 1 / -1;
-}
-
-.calls-inline-error {
-  border: 1px solid var(--color-6b1f1f);
-  border-radius: 6px;
-  background: var(--color-331616);
-  color: var(--color-ffb5b5);
-  font-size: 12px;
-  padding: 8px 10px;
-}
-
-.calls-inline-hint {
-  margin: 0;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--color-132745);
-  color: var(--text-muted);
-  font-size: 12px;
-  padding: 8px 10px;
-}
-
-.calls-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.calls-modal-footer-enter {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-}
-
-.calls-enter-admission-status,
-.calls-enter-footer-error {
-  grid-column: 1 / -1;
-  margin: 0;
-}
-
-.calls-enter-admission-status {
-  border: 1px solid var(--brand-cyan);
-  border-radius: 6px;
-  background: var(--color-132745);
-  color: var(--color-e6f0ff);
-  font-size: 12px;
-  padding: 8px 10px;
-}
-
-.invite-popover-label {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-main);
-}
-
-.invite-popover-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-}
-
-.invite-code {
-  display: block;
-  width: 100%;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--color-08111f);
-  color: var(--color-e6f0ff);
-  padding: 8px 10px;
-  font-size: 12px;
-  overflow: auto;
-}
-
-@media (max-width: 1180px) {
-  .calls-toolbar {
-    grid-template-columns: 1fr;
-  }
-
-  .calls-modal-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .calls-calendar-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .calls-modal-dialog-enter {
-    --calls-enter-dialog-padding: 10px;
-    width: min(980px, calc(100vw - 14px));
-    height: min(920px, calc(100dvh - 14px));
-    max-height: calc(100dvh - 14px);
-    padding: var(--calls-enter-dialog-padding);
-    gap: 8px;
-  }
-
-  .calls-enter-layout {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 42%) minmax(0, 58%);
-    gap: 8px;
-    min-height: 0;
-    height: 100%;
-  }
-
-  .calls-enter-preview-frame {
-    width: 100%;
-    height: 100%;
-    aspect-ratio: auto;
-    max-height: none;
-  }
-
-  .calls-enter-right {
-    position: static;
-    width: 100%;
-    border-left: 0;
-    box-shadow: none;
-    background: transparent;
-    padding: 0;
-  }
-
-  .calls-enter-right-settings .call-left-settings {
-    padding: 8px;
-    gap: 6px;
-    overflow-y: hidden;
-  }
-
-  .calls-enter-right-settings .call-left-settings-block {
-    padding: 8px;
-    gap: 6px;
-  }
-
-  .calls-enter-right-settings .call-left-settings-title {
-    font-size: 12px;
-  }
-
-  .calls-enter-right-settings .call-left-settings-field {
-    gap: 4px;
-    font-size: 11px;
-  }
-
-  .calls-enter-right-settings .ii-select,
-  .calls-enter-right-settings .call-left-test-btn {
-    height: 30px;
-    padding: 0 8px;
-    font-size: 12px;
-  }
-
-  .calls-enter-right-settings .call-left-blur-btn {
-    min-height: 42px;
-  }
-
-  .calls-enter-right-settings .call-left-volume-value {
-    min-width: 38px;
-    font-size: 11px;
-  }
-
-  .calls-modal-footer .btn {
-    height: 34px;
-    padding: 0 14px;
-  }
-}
-
-@media (max-width: 760px) {
-  .calls-list-table {
-    width: 100%;
-    table-layout: auto;
-    border-collapse: separate;
-    border-spacing: 0 8px;
-  }
-
-  .calls-list-table thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    border: 0;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  .calls-list-table tbody,
-  .calls-list-table tr,
-  .calls-list-table td {
-    display: block;
-    width: 100%;
-  }
-
-  .calls-list-table tbody tr {
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    overflow: hidden;
-    background: var(--bg-row);
-  }
-
-  .calls-list-table td {
-    display: grid;
-    grid-template-columns: minmax(90px, 34%) minmax(0, 1fr);
-    gap: 8px;
-    align-items: start;
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .calls-list-table td::before {
-    content: attr(data-label);
-    color: var(--text-muted);
-    font-size: 11px;
-    font-weight: 600;
-  }
-
-  .calls-list-table td:last-child {
-    border-bottom: 0;
-  }
-
-  .calls-list-table td:last-child .actions-inline {
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .calls-list-table .call-subline.code {
-    word-break: break-all;
-    overflow-wrap: anywhere;
-  }
-
-  .calls-modal-dialog-enter {
-    --calls-enter-dialog-padding: 8px;
-    width: calc(100vw - 6px);
-    height: calc(100dvh - 6px);
-    max-height: calc(100dvh - 6px);
-    padding: var(--calls-enter-dialog-padding);
-    gap: 6px;
-  }
-
-  .calls-modal-header {
-    gap: 6px;
-  }
-
-  .calls-modal-header h4 {
-    font-size: 14px;
-  }
-
-  .calls-modal-header-enter {
-    padding: 10px;
-  }
-
-  .calls-modal-header-enter-logo {
-    height: 20px;
-  }
-
-  .calls-enter-layout {
-    grid-template-rows: minmax(0, 38%) minmax(0, 62%);
-  }
-
-  .calls-enter-preview-frame {
-    height: 100%;
-    max-height: none;
-  }
-
-  .calls-enter-right-settings .call-left-settings {
-    padding: 6px;
-    gap: 5px;
-  }
-
-  .calls-enter-right-settings .call-left-settings-block {
-    padding: 6px;
-    gap: 5px;
-  }
-
-  .calls-enter-right-settings .call-left-settings-title {
-    font-size: 11px;
-  }
-
-  .calls-enter-right-settings .call-left-settings-field {
-    font-size: 10px;
-  }
-
-  .calls-modal-footer .btn {
-    height: 32px;
-    padding: 0 12px;
-    font-size: 12px;
-  }
-}
-</style>
+<style scoped src="./UserDashboardView.css"></style>

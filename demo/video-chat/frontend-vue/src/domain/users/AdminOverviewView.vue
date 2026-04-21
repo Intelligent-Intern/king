@@ -47,6 +47,25 @@
         </article>
       </section>
 
+      <section class="infra-overview-card">
+        <header class="infra-overview-head">
+          <div>
+            <h2>Infrastructure Inventory</h2>
+            <p>{{ infrastructureSubtitle }}</p>
+          </div>
+          <span class="tag" :class="infrastructureStatusTagClass">{{ infrastructureStatusLabel }}</span>
+        </header>
+        <p v-if="infrastructureState.loading" class="infra-inline-state">Loading infrastructure inventory…</p>
+        <p v-else-if="infrastructureState.error" class="infra-inline-state error">{{ infrastructureState.error }}</p>
+        <section v-else class="infra-provider-grid">
+          <article v-for="provider in providerRows" :key="provider.id" class="infra-provider-card">
+            <span class="infra-provider-label">{{ provider.label }}</span>
+            <strong>{{ provider.statusLabel }}</strong>
+            <span>{{ provider.capabilityLabel }}</span>
+          </article>
+        </section>
+      </section>
+
       <section class="panel-grid grid-2">
         <article class="card">
           <h2 class="table-title">Running Calls</h2>
@@ -56,44 +75,60 @@
                 <tr>
                   <th>Call</th>
                   <th>Host</th>
-                  <th>Users</th>
+                  <th>Live Users</th>
                   <th>Uptime</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="row in runningCallsRows" :key="row.id">
-                  <td>{{ row.call }}</td>
-                  <td>{{ row.host }}</td>
-                  <td>{{ row.users }}</td>
-                  <td>{{ row.uptime }}</td>
-                  <td><span class="tag" :class="row.statusTagClass">{{ row.statusLabel }}</span></td>
+                <tr v-if="operationsState.loading">
+                  <td colspan="5">Loading live call metrics…</td>
                 </tr>
+                <tr v-else-if="operationsState.error">
+                  <td colspan="5">{{ operationsState.error }}</td>
+                </tr>
+                <tr v-else-if="runningCallsRows.length === 0">
+                  <td colspan="5">No live calls right now.</td>
+                </tr>
+                <template v-else>
+                  <tr v-for="row in runningCallsRows" :key="row.id">
+                    <td>{{ row.call }}</td>
+                    <td>{{ row.host }}</td>
+                    <td>{{ row.users }}</td>
+                    <td>{{ row.uptime }}</td>
+                    <td><span class="tag" :class="row.statusTagClass">{{ row.statusLabel }}</span></td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>
         </article>
 
         <article class="card">
-          <h2 class="table-title">Cluster Health</h2>
+          <h2 class="table-title">Infrastructure Nodes</h2>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>Node</th>
+                  <th>Provider</th>
                   <th>Region</th>
-                  <th>CPU</th>
-                  <th>Peers</th>
+                  <th>Roles</th>
+                  <th>Services</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="row in clusterHealthRows" :key="row.node">
+                <tr v-for="row in clusterHealthRows" :key="row.id">
                   <td>{{ row.node }}</td>
+                  <td>{{ row.provider }}</td>
                   <td>{{ row.region }}</td>
-                  <td>{{ row.cpu }}</td>
-                  <td>{{ row.peers }}</td>
+                  <td>{{ row.roles }}</td>
+                  <td>{{ row.services }}</td>
                   <td><span class="tag" :class="row.statusTagClass">{{ row.status }}</span></td>
+                </tr>
+                <tr v-if="clusterHealthRows.length === 0">
+                  <td colspan="6">No infrastructure nodes reported.</td>
                 </tr>
               </tbody>
             </table>
@@ -101,7 +136,7 @@
         </article>
 
         <article class="card grid-full">
-          <h2 class="table-title">Routing Policy</h2>
+          <h2 class="table-title">Telemetry & Scaling</h2>
           <div class="table-wrap">
             <table>
               <thead>
@@ -273,7 +308,8 @@ import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { sessionState } from '../auth/session';
+import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import { logoutSession, refreshSession, sessionState } from '../auth/session';
 import { formatDateRangeDisplay, fullCalendarEventTimeFormat } from '../../support/dateTimeFormat';
 
 const router = useRouter();
@@ -283,107 +319,34 @@ let calendarInstance = null;
 let lastDateKey = '';
 let lastDateClickAt = 0;
 let nextCalendarEventId = 1000;
+let infrastructureLoadSeq = 0;
+let operationsLoadSeq = 0;
+let operationsRefreshTimer = null;
 
-const runningCallsRows = ref([
-  {
-    id: 'running-sales-standup',
-    call: 'Sales Standup',
-    host: 'jochen',
-    users: 8,
-    uptime: '00:42:18',
-    statusLabel: 'running',
-    statusTagClass: 'ok',
-  },
-  {
-    id: 'running-incident-bridge',
-    call: 'Incident Bridge',
-    host: 'ops.bot',
-    users: 21,
-    uptime: '01:17:04',
-    statusLabel: 'running',
-    statusTagClass: 'ok',
-  },
-  {
-    id: 'running-quarterly-sync',
-    call: 'Quarterly Sync',
-    host: 'lisa',
-    users: 0,
-    uptime: 'scheduled',
-    statusLabel: 'waiting',
-    statusTagClass: 'warn',
-  },
-]);
+const infrastructureState = reactive({
+  loading: false,
+  error: '',
+  lastLoadedAt: '',
+  deployment: {},
+  providers: [],
+  nodes: [],
+  services: [],
+  telemetry: {},
+  scaling: {},
+});
 
-const clusterHealthRows = ref([
-  {
-    node: 'king-call-eu-01',
-    region: 'eu-central',
-    cpu: '42%',
-    peers: 342,
-    status: 'healthy',
-    statusTagClass: 'ok',
+const operationsState = reactive({
+  loading: false,
+  error: '',
+  lastLoadedAt: '',
+  metrics: {
+    live_calls: 0,
+    concurrent_participants: 0,
   },
-  {
-    node: 'king-call-eu-02',
-    region: 'eu-central',
-    cpu: '57%',
-    peers: 410,
-    status: 'healthy',
-    statusTagClass: 'ok',
-  },
-  {
-    node: 'king-call-us-01',
-    region: 'us-east',
-    cpu: '79%',
-    peers: 602,
-    status: 'high load',
-    statusTagClass: 'warn',
-  },
-]);
+  runningCalls: [],
+});
 
-const routingPolicyRows = ref([
-  {
-    topic: 'Invite routing',
-    policy: 'UUID route per call',
-    runtime: '/call/{uuid}',
-    code: true,
-  },
-  {
-    topic: 'External discovery',
-    policy: 'No per-call subdomain mapping',
-    runtime: 'Hidden call topology',
-    code: false,
-  },
-  {
-    topic: 'Realtime monitoring',
-    policy: 'Control center + metrics board',
-    runtime: 'Enabled for operations team',
-    code: false,
-  },
-]);
-
-const myCallsRows = ref([
-  {
-    id: 'call-sales-standup',
-    title: 'Sales Standup',
-    scheduleStart: '2026-04-13T09:00',
-    scheduleEnd: '2026-04-13T09:30',
-    statusLabel: 'running',
-    statusTagClass: 'ok',
-    users: 8,
-    roomId: '2fcb4d0f-2616-43f7-bfe5-8e108f9e9e6a',
-  },
-  {
-    id: 'call-backend-sync',
-    title: 'Backend Sync',
-    scheduleStart: '2026-04-13T10:00',
-    scheduleEnd: '2026-04-13T11:00',
-    statusLabel: 'scheduled',
-    statusTagClass: 'warn',
-    users: 0,
-    roomId: '0e5f2d9f-83b4-4f39-94f4-f83347fef04b',
-  },
-]);
+const myCallsRows = ref([]);
 
 const registeredUsers = [
   { id: 1, display_name: 'Jochen', email: 'jochen@kingrt.com', role: 'admin' },
@@ -437,25 +400,325 @@ const filteredRegisteredUsers = computed(() => {
   });
 });
 
-const liveCallsMetric = computed(() => String(
-  runningCallsRows.value.filter((row) => String(row.statusLabel).toLowerCase() === 'running').length,
+function requestHeaders(includeBody = false) {
+  const token = String(sessionState.sessionToken || '').trim();
+  const headers = { accept: 'application/json' };
+  if (includeBody) headers['content-type'] = 'application/json';
+  if (token !== '') {
+    headers.authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+function extractErrorMessage(payload, fallback) {
+  const message = payload && typeof payload === 'object' ? payload?.error?.message : '';
+  if (typeof message === 'string' && message.trim() !== '') return message.trim();
+  return fallback;
+}
+
+async function apiRequest(path, { method = 'GET', query = null, body = null } = {}, allowRefreshRetry = true) {
+  let response = null;
+  try {
+    const result = await fetchBackend(path, {
+      method,
+      query,
+      headers: requestHeaders(body !== null),
+      body: body === null ? undefined : JSON.stringify(body),
+    });
+    response = result.response;
+  } catch (error) {
+    const message = error instanceof Error ? error.message.trim() : '';
+    if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
+      throw new Error(`Could not reach backend (${currentBackendOrigin()}).`);
+    }
+    throw new Error(message);
+  }
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    if ((response.status === 401 || response.status === 403) && allowRefreshRetry) {
+      const refreshResult = await refreshSession();
+      if (refreshResult?.ok) {
+        return apiRequest(path, { method, query, body }, false);
+      }
+      await logoutSession();
+      await router.push('/login');
+      throw new Error('Session expired. Please sign in again.');
+    }
+    throw new Error(extractErrorMessage(payload, `Request failed (${response.status}).`));
+  }
+
+  if (!payload || payload.status !== 'ok') {
+    throw new Error('Backend returned an invalid payload.');
+  }
+
+  return payload;
+}
+
+function normalizeArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function tagClassForStatus(status) {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (['ok', 'healthy', 'live', 'running', 'connected', 'configured', 'detected'].includes(normalized)) return 'ok';
+  if (['warning', 'warn', 'degraded', 'high load', 'error'].includes(normalized)) return 'warn';
+  return 'warn';
+}
+
+function applyInfrastructurePayload(payload) {
+  infrastructureState.deployment = payload?.deployment && typeof payload.deployment === 'object' ? payload.deployment : {};
+  infrastructureState.providers = normalizeArray(payload?.providers);
+  infrastructureState.nodes = normalizeArray(payload?.nodes);
+  infrastructureState.services = normalizeArray(payload?.services);
+  infrastructureState.telemetry = payload?.telemetry && typeof payload.telemetry === 'object' ? payload.telemetry : {};
+  infrastructureState.scaling = payload?.scaling && typeof payload.scaling === 'object' ? payload.scaling : {};
+  infrastructureState.lastLoadedAt = String(payload?.time || new Date().toISOString());
+}
+
+async function loadInfrastructure() {
+  const seq = ++infrastructureLoadSeq;
+  infrastructureState.loading = true;
+  infrastructureState.error = '';
+  try {
+    const payload = await apiRequest('/api/admin/infrastructure');
+    if (seq !== infrastructureLoadSeq) return;
+    applyInfrastructurePayload(payload);
+  } catch (error) {
+    if (seq !== infrastructureLoadSeq) return;
+    infrastructureState.error = error instanceof Error ? error.message : 'Could not load infrastructure inventory.';
+  } finally {
+    if (seq === infrastructureLoadSeq) {
+      infrastructureState.loading = false;
+    }
+  }
+}
+
+function normalizeNonNegativeInteger(value) {
+  if (Number.isInteger(value)) return Math.max(0, value);
+  const parsed = Number.parseInt(String(value ?? '').trim(), 10);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
+function formatUptimeSeconds(value) {
+  const seconds = normalizeNonNegativeInteger(value);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  return [
+    String(hours).padStart(2, '0'),
+    String(minutes).padStart(2, '0'),
+    String(remainingSeconds).padStart(2, '0'),
+  ].join(':');
+}
+
+function normalizeOwnerHost(call) {
+  const host = String(call?.host || '').trim();
+  if (host !== '') return host;
+  const displayName = String(call?.owner?.display_name || '').trim();
+  if (displayName !== '') return displayName;
+  const email = String(call?.owner?.email || '').trim();
+  return email !== '' ? email : 'unknown';
+}
+
+function applyVideoOperationsPayload(payload) {
+  const metrics = payload?.metrics && typeof payload.metrics === 'object' ? payload.metrics : {};
+  operationsState.metrics = {
+    live_calls: normalizeNonNegativeInteger(metrics.live_calls),
+    concurrent_participants: normalizeNonNegativeInteger(metrics.concurrent_participants),
+  };
+  operationsState.runningCalls = normalizeArray(payload?.running_calls);
+  operationsState.lastLoadedAt = String(payload?.time || new Date().toISOString());
+}
+
+async function loadVideoOperations({ background = false } = {}) {
+  const seq = ++operationsLoadSeq;
+  if (!background) {
+    operationsState.loading = true;
+  }
+  operationsState.error = '';
+  try {
+    const payload = await apiRequest('/api/admin/video-operations');
+    if (seq !== operationsLoadSeq) return;
+    applyVideoOperationsPayload(payload);
+  } catch (error) {
+    if (seq !== operationsLoadSeq) return;
+    operationsState.error = error instanceof Error ? error.message : 'Could not load live video operations.';
+  } finally {
+    if (seq === operationsLoadSeq) {
+      operationsState.loading = false;
+    }
+  }
+}
+
+function startVideoOperationsRefreshLoop() {
+  if (operationsRefreshTimer !== null) return;
+  operationsRefreshTimer = window.setInterval(() => {
+    if (activeOverviewView.value !== 'dashboard') return;
+    void loadVideoOperations({ background: true });
+  }, 15000);
+}
+
+function stopVideoOperationsRefreshLoop() {
+  if (operationsRefreshTimer === null) return;
+  window.clearInterval(operationsRefreshTimer);
+  operationsRefreshTimer = null;
+}
+
+const runningCallsRows = computed(() => (
+  operationsState.runningCalls.map((call, index) => {
+    const id = String(call?.id || call?.room_id || `running-call-${index}`).trim();
+    const liveParticipants = call?.live_participants && typeof call.live_participants === 'object'
+      ? call.live_participants
+      : {};
+    const statusLabel = String(call?.status || 'live').trim() || 'live';
+
+    return {
+      id,
+      call: String(call?.title || 'Untitled call'),
+      host: normalizeOwnerHost(call),
+      users: normalizeNonNegativeInteger(liveParticipants.total),
+      uptime: formatUptimeSeconds(call?.uptime_seconds),
+      statusLabel,
+      statusTagClass: tagClassForStatus(statusLabel),
+    };
+  })
 ));
 
-const participantsMetric = computed(() => String(
-  runningCallsRows.value.reduce((sum, row) => (
-    String(row.statusLabel).toLowerCase() === 'running' ? sum + Number(row.users || 0) : sum
-  ), 0),
-));
+const liveCallsMetric = computed(() => String(normalizeNonNegativeInteger(
+  operationsState.metrics.live_calls,
+)));
+
+const participantsMetric = computed(() => String(normalizeNonNegativeInteger(
+  operationsState.metrics.concurrent_participants,
+)));
 
 const healthyNodesMetric = computed(() => {
   const total = clusterHealthRows.value.length;
-  const healthy = clusterHealthRows.value.filter((row) => String(row.status).toLowerCase() === 'healthy').length;
+  const healthy = clusterHealthRows.value.filter((row) => String(row.health).toLowerCase() === 'healthy').length;
   return `${healthy} / ${total}`;
 });
 
 const nodesUnderLoadMetric = computed(() => String(
-  clusterHealthRows.value.filter((row) => String(row.status).toLowerCase() !== 'healthy').length,
+  clusterHealthRows.value.filter((row) => String(row.health).toLowerCase() !== 'healthy').length,
 ));
+
+const servicesByNodeId = computed(() => {
+  const map = new Map();
+  for (const service of infrastructureState.services) {
+    const nodeId = String(service?.node_id || '').trim();
+    if (nodeId === '') continue;
+    if (!map.has(nodeId)) map.set(nodeId, []);
+    map.get(nodeId).push(service);
+  }
+  return map;
+});
+
+const clusterHealthRows = computed(() => (
+  infrastructureState.nodes.map((node) => {
+    const nodeId = String(node?.id || '').trim();
+    const services = servicesByNodeId.value.get(nodeId) || [];
+    const roles = normalizeArray(node?.roles).map((role) => String(role || '').trim()).filter(Boolean);
+    const health = String(node?.health || node?.status || 'unknown').trim().toLowerCase();
+    return {
+      id: nodeId || String(node?.name || 'unknown-node'),
+      node: String(node?.name || nodeId || 'unknown-node'),
+      provider: String(node?.provider || 'unknown'),
+      region: String(node?.region || 'n/a'),
+      roles: roles.length > 0 ? roles.join(', ') : 'n/a',
+      services: services.length > 0 ? services.map((service) => String(service?.kind || service?.label || 'service')).join(', ') : 'n/a',
+      status: String(node?.status || 'unknown'),
+      health,
+      statusTagClass: tagClassForStatus(health),
+    };
+  })
+));
+
+const providerRows = computed(() => (
+  infrastructureState.providers.map((provider) => {
+    const capabilities = provider?.capabilities && typeof provider.capabilities === 'object' ? provider.capabilities : {};
+    const activeCapabilities = Object.entries(capabilities)
+      .filter(([, value]) => Boolean(value))
+      .map(([key]) => key.replaceAll('_', ' '));
+    return {
+      id: String(provider?.id || provider?.label || 'provider'),
+      label: String(provider?.label || provider?.id || 'Provider'),
+      statusLabel: String(provider?.status || 'unknown'),
+      capabilityLabel: activeCapabilities.length > 0 ? activeCapabilities.join(' / ') : 'inventory only',
+    };
+  })
+));
+
+const infrastructureSubtitle = computed(() => {
+  const deployment = infrastructureState.deployment || {};
+  const name = String(deployment.name || deployment.id || 'deployment');
+  const publicDomain = String(deployment.public_domain || 'local');
+  const mode = String(deployment.inventory_mode || 'auto');
+  return `${name} · ${publicDomain} · inventory ${mode}`;
+});
+
+const infrastructureStatusLabel = computed(() => {
+  if (infrastructureState.loading) return 'loading';
+  if (infrastructureState.error) return 'error';
+  return clusterHealthRows.value.length > 0 ? 'inventory online' : 'no nodes';
+});
+
+const infrastructureStatusTagClass = computed(() => (
+  infrastructureState.error ? 'warn' : 'ok'
+));
+
+const telemetrySummary = computed(() => {
+  const openTelemetry = infrastructureState.telemetry?.open_telemetry || {};
+  if (!openTelemetry.enabled) return 'OpenTelemetry not enabled';
+  const metrics = openTelemetry.metrics_enabled ? 'metrics' : '';
+  const logs = openTelemetry.logs_enabled ? 'logs' : '';
+  const signals = [metrics, logs].filter(Boolean).join(' + ') || 'exporter configured';
+  return `${signals} via ${openTelemetry.protocol || 'grpc'}`;
+});
+
+const scalingModesSummary = computed(() => {
+  const modes = normalizeArray(infrastructureState.scaling?.modes);
+  const available = modes.filter((mode) => Boolean(mode?.available)).map((mode) => String(mode?.label || mode?.id || '').trim()).filter(Boolean);
+  return available.length > 0 ? available.join(' / ') : 'No scaling mode available';
+});
+
+const routingPolicyRows = computed(() => [
+  {
+    topic: 'Deployment routing',
+    policy: 'Domain + API/WS/SFU subdomains',
+    runtime: [
+      infrastructureState.deployment?.public_domain,
+      infrastructureState.deployment?.api_domain,
+      infrastructureState.deployment?.ws_domain,
+      infrastructureState.deployment?.sfu_domain,
+    ].filter(Boolean).join(' / ') || 'n/a',
+    code: false,
+  },
+  {
+    topic: 'Telemetry source',
+    policy: 'OpenTelemetry exporter contract',
+    runtime: telemetrySummary.value,
+    code: false,
+  },
+  {
+    topic: 'SFU scaling',
+    policy: String(infrastructureState.scaling?.strategy || 'not reported'),
+    runtime: scalingModesSummary.value,
+    code: false,
+  },
+  {
+    topic: 'Write actions',
+    policy: 'Provisioning is read-only until audited admin actions exist',
+    runtime: infrastructureState.scaling?.write_actions_enabled ? 'Enabled' : 'Disabled',
+    code: false,
+  },
+]);
 
 function setActiveOverviewView(view) {
   if (view === 'dashboard' || view === 'calendar') {
@@ -875,44 +1138,7 @@ async function initOverviewCalendar() {
       eventStartEditable: true,
       eventDurationEditable: true,
       eventResizableFromStart: true,
-      events: [
-        {
-          id: 'call-sales-standup',
-          title: 'Sales Standup',
-          start: '2026-04-13T09:00:00',
-          end: '2026-04-13T09:30:00',
-          extendedProps: {
-            roomUuid: '2fcb4d0f-2616-43f7-bfe5-8e108f9e9e6a',
-            roomId: '2fcb4d0f-2616-43f7-bfe5-8e108f9e9e6a',
-            internalParticipantUserIds: [1, 2, 3],
-            externalParticipants: [],
-          },
-        },
-        {
-          id: 'call-backend-sync',
-          title: 'Backend Sync',
-          start: '2026-04-13T10:00:00',
-          end: '2026-04-13T11:00:00',
-          extendedProps: {
-            roomUuid: '0e5f2d9f-83b4-4f39-94f4-f83347fef04b',
-            roomId: '0e5f2d9f-83b4-4f39-94f4-f83347fef04b',
-            internalParticipantUserIds: [],
-            externalParticipants: [],
-          },
-        },
-        {
-          id: 'call-incident-bridge',
-          title: 'Incident Bridge',
-          start: '2026-04-13T11:30:00',
-          end: '2026-04-13T12:30:00',
-          extendedProps: {
-            roomUuid: '8ee8fbf5-7f9f-47dd-8ece-5a19f7aa8059',
-            roomId: '8ee8fbf5-7f9f-47dd-8ece-5a19f7aa8059',
-            internalParticipantUserIds: [1, 2, 4],
-            externalParticipants: [],
-          },
-        },
-      ],
+      events: [],
       dateClick(info) {
         const now = Date.now();
         const dateKey = `${String(info.view?.type || '')}:${info.dateStr}`;
@@ -946,11 +1172,15 @@ async function initOverviewCalendar() {
 
 onMounted(() => {
   window.addEventListener('keydown', handleEscape);
+  void loadInfrastructure();
+  void loadVideoOperations();
+  startVideoOperationsRefreshLoop();
   void initOverviewCalendar();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleEscape);
+  stopVideoOperationsRefreshLoop();
   if (calendarInstance) {
     calendarInstance.destroy();
     calendarInstance = null;
@@ -967,6 +1197,12 @@ watch(activeOverviewView, async (view) => {
   calendarInstance.updateSize();
 });
 
+watch(activeOverviewView, (view) => {
+  if (view === 'dashboard') {
+    void loadVideoOperations({ background: true });
+  }
+});
+
 watch(
   () => sessionState.timeFormat,
   () => {
@@ -976,353 +1212,4 @@ watch(
 );
 </script>
 
-<style scoped>
-.admin-overview-view {
-  height: 100%;
-  min-height: 0;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 0;
-  background: transparent;
-  overflow: hidden;
-}
-
-.admin-overview-view > :first-child {
-  border-top-left-radius: 0;
-  border-top-right-radius: 5px;
-}
-
-.overview-toolbar {
-  background: var(--bg-ui-chrome);
-}
-
-.overview-toolbar {
-  padding: 10px;
-  padding-bottom: 25px;
-}
-
-.overview-view-tabs {
-  display: inline-grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
-  background: var(--border-subtle);
-}
-
-.overview-view-tabs .tab {
-  min-width: 120px;
-  height: 40px;
-}
-
-.view-panel {
-  display: none;
-  min-height: 0;
-  overflow: auto;
-}
-
-.view-panel.active {
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  min-height: 0;
-}
-
-.dashboard-panel {
-  padding: 10px;
-  background: var(--bg-ui-chrome);
-}
-
-.dashboard-panel .metrics {
-  margin-bottom: 10px;
-}
-
-.dashboard-panel .grid-2 {
-  column-gap: 15px;
-}
-
-.panel-grid {
-  min-height: 0;
-  overflow: auto;
-  background: var(--bg-main);
-}
-
-.calendar-panel {
-  padding: 10px;
-  background: var(--bg-main);
-  min-height: 0;
-  grid-template-rows: minmax(0, 1fr) auto;
-  align-content: stretch;
-}
-
-#overviewCalendar {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  padding: 10px;
-  min-height: 0;
-  height: 100%;
-}
-
-.calendar-help {
-  margin: 0 0 10px;
-  padding: 0 2px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.calls-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  display: grid;
-  place-items: center;
-}
-
-.calls-modal[hidden] {
-  display: none;
-}
-
-.calls-modal-backdrop {
-  position: absolute;
-  inset: 0;
-  background: var(--color-09111e);
-}
-
-.calls-modal-dialog {
-  --calls-enter-dialog-padding: 12px;
-  position: relative;
-  width: min(1020px, calc(100vw - 30px));
-  max-height: calc(100vh - 30px);
-  overflow: auto;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--bg-surface-strong);
-  box-shadow: 0 16px 32px var(--color-000000);
-  padding: 12px;
-  display: grid;
-  gap: 12px;
-}
-
-.calls-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-}
-
-.calls-modal-header h4 {
-  margin: 5px 0 0;
-  font-size: 17px;
-}
-
-.calls-modal-header .calls-enter-title {
-  margin: 8px 0 0;
-  font-size: 14px;
-  line-height: 1;
-}
-
-.calls-modal-header-enter {
-  margin: calc(var(--calls-enter-dialog-padding) * -1) calc(var(--calls-enter-dialog-padding) * -1) 0;
-  padding: 10px;
-  background: var(--brand-bg);
-  border: 0;
-}
-
-.calls-modal-header-enter-left {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.calls-modal-header-enter-logo {
-  width: auto;
-  height: 24px;
-  display: block;
-}
-
-.calls-modal-body {
-  display: grid;
-  gap: 10px;
-}
-
-.calls-modal-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.calls-field-wide {
-  grid-column: 1 / -1;
-}
-
-.calls-participants-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
-}
-
-.calls-participants-panel {
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--color-122340);
-  padding: 10px;
-  min-height: 0;
-  display: grid;
-  gap: 10px;
-  align-content: start;
-}
-
-.calls-participants-head {
-  display: grid;
-  gap: 8px;
-}
-
-.calls-participants-head h5 {
-  margin: 0;
-  font-size: 13px;
-}
-
-.calls-search {
-  display: inline-grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-}
-
-.calls-search.small {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.calls-participants-list {
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--color-0f1f37);
-  max-height: 280px;
-  overflow: auto;
-  display: grid;
-  align-content: start;
-}
-
-.calls-participant-row {
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border-subtle);
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  column-gap: 8px;
-  align-items: start;
-}
-
-.calls-participant-row:last-child {
-  border-bottom: 0;
-}
-
-.calls-participant-main {
-  font-size: 12px;
-  color: var(--color-ffffff);
-}
-
-.calls-participant-meta {
-  grid-column: 2;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.calls-external-list {
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--color-0f1f37);
-  max-height: 280px;
-  overflow: auto;
-  padding: 8px;
-  display: grid;
-  gap: 8px;
-  align-content: start;
-}
-
-.calls-external-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-}
-
-.calls-empty-inline {
-  margin: 0;
-  padding: 8px 10px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.calls-inline-error {
-  border: 1px solid var(--color-6b1f1f);
-  border-radius: 6px;
-  background: var(--color-331616);
-  color: var(--color-ffb5b5);
-  font-size: 12px;
-  padding: 8px 10px;
-}
-
-.calls-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.calls-btn-danger {
-  background: var(--danger);
-}
-
-.calls-btn-danger:hover {
-  background: var(--color-cc0000);
-}
-
-:deep(.fc-theme-standard .fc-scrollgrid),
-:deep(.fc-theme-standard td),
-:deep(.fc-theme-standard th) {
-  border-color: var(--border-subtle);
-}
-
-:deep(.fc .fc-toolbar-title) {
-  color: var(--text-main);
-  font-size: 19px;
-}
-
-:deep(.fc .fc-col-header-cell-cushion),
-:deep(.fc .fc-daygrid-day-number),
-:deep(.fc .fc-timegrid-axis-cushion),
-:deep(.fc .fc-timegrid-slot-label-cushion) {
-  color: var(--text-main);
-}
-
-:deep(.fc .fc-daygrid-day.fc-day-today),
-:deep(.fc .fc-timegrid-col.fc-day-today) {
-  background: var(--color-213a63);
-}
-
-:deep(.fc .fc-button-primary) {
-  background: var(--bg-action);
-  border-color: var(--bg-action);
-}
-
-:deep(.fc .fc-button-primary:hover),
-:deep(.fc .fc-button-primary:focus),
-:deep(.fc .fc-button-primary:active) {
-  background: var(--bg-action-hover);
-  border-color: var(--bg-action-hover);
-}
-
-:deep(.fc .fc-event) {
-  border: 0;
-  background: var(--bg-row);
-  color: var(--color-ffffff);
-  cursor: pointer;
-}
-
-@media (max-width: 1180px) {
-  .calls-modal-grid,
-  .calls-participants-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-</style>
+<style scoped src="./AdminOverviewView.css"></style>
