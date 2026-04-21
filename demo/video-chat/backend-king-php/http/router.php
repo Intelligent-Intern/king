@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/module_runtime.php';
 require_once __DIR__ . '/module_auth_session.php';
+require_once __DIR__ . '/module_infrastructure.php';
+require_once __DIR__ . '/module_operations.php';
 require_once __DIR__ . '/module_users.php';
 require_once __DIR__ . '/module_invites.php';
 require_once __DIR__ . '/module_calls.php';
@@ -17,6 +19,8 @@ function videochat_dispatch_route_module_order(): array
     return [
         'runtime',
         'auth_session',
+        'infrastructure',
+        'operations',
         'users',
         'invites',
         'calls',
@@ -163,6 +167,21 @@ function videochat_dispatch_request(
                 $decodeJsonBody,
                 $openDatabase,
                 $issueSessionId
+            );
+        } elseif ($moduleName === 'infrastructure') {
+            $response = videochat_handle_infrastructure_routes(
+                $path,
+                $method,
+                $jsonResponse,
+                $errorResponse
+            );
+        } elseif ($moduleName === 'operations') {
+            $response = videochat_handle_operations_routes(
+                $path,
+                $method,
+                $jsonResponse,
+                $errorResponse,
+                $openDatabase
             );
         } elseif ($moduleName === 'users') {
             $response = videochat_handle_user_routes(

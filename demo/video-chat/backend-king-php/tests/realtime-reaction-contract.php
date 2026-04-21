@@ -314,6 +314,90 @@ try {
     );
     videochat_realtime_reaction_assert((bool) ($postClearPublish['ok'] ?? false), 'reaction publish should recover after clear_for_connection');
 
+    $brokerPdo = new PDO('sqlite::memory:');
+    $brokerPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    videochat_reaction_broker_bootstrap($brokerPdo);
+
+    $brokerPresenceState = videochat_presence_state_init();
+    $brokerReactionState = videochat_reaction_state_init();
+    $brokerFrames = [];
+    $brokerJoinSender = static function (mixed $socket, array $payload) use (&$brokerFrames): bool {
+        $key = is_scalar($socket) ? (string) $socket : 'unknown';
+        if (!isset($brokerFrames[$key]) || !is_array($brokerFrames[$key])) {
+            $brokerFrames[$key] = [];
+        }
+        $brokerFrames[$key][] = $payload;
+        return true;
+    };
+    $brokerSenderConnection = videochat_presence_connection_descriptor(
+        [
+            'id' => 100,
+            'display_name' => 'Caller Admin',
+            'role' => 'admin',
+        ],
+        'sess-broker-sender',
+        'conn-broker-sender',
+        'socket-broker-sender',
+        'broker-room'
+    );
+    $brokerSenderJoin = videochat_presence_join_room($brokerPresenceState, $brokerSenderConnection, 'broker-room', $brokerJoinSender);
+    $brokerSenderConnection = (array) ($brokerSenderJoin['connection'] ?? $brokerSenderConnection);
+    $brokerPeerConnection = videochat_presence_connection_descriptor(
+        [
+            'id' => 200,
+            'display_name' => 'Peer User',
+            'role' => 'user',
+        ],
+        'sess-broker-peer',
+        'conn-broker-peer',
+        'socket-broker-peer',
+        'broker-room'
+    );
+    $brokerPeerJoin = videochat_presence_join_room($brokerPresenceState, $brokerPeerConnection, 'broker-room', $brokerJoinSender);
+    $brokerPeerConnection = (array) ($brokerPeerJoin['connection'] ?? $brokerPeerConnection);
+
+    $brokerCommand = videochat_reaction_decode_client_frame(json_encode([
+        'type' => 'reaction/send',
+        'emoji' => "\u{1F44D}",
+        'client_reaction_id' => 'broker-001',
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    $brokerPublish = videochat_reaction_publish(
+        $brokerReactionState,
+        $brokerPresenceState,
+        $brokerSenderConnection,
+        $brokerCommand,
+        null,
+        1_780_400_002_000,
+        static function (string $roomId, array $event) use ($brokerPdo): bool {
+            return videochat_reaction_broker_insert_event($brokerPdo, $roomId, $event);
+        }
+    );
+    videochat_realtime_reaction_assert((bool) ($brokerPublish['ok'] ?? false), 'broker reaction publish should succeed');
+    videochat_realtime_reaction_assert((int) ($brokerPublish['sent_count'] ?? 0) === 1, 'broker publish should count persisted fanout event');
+
+    $brokerLatestId = videochat_reaction_broker_latest_event_id($brokerPdo, 'broker-room');
+    videochat_realtime_reaction_assert($brokerLatestId > 0, 'broker latest event id should advance after publish');
+    $brokerPeerRows = videochat_reaction_broker_fetch_events_since(
+        $brokerPdo,
+        'broker-room',
+        0,
+        (int) ($brokerPeerConnection['user_id'] ?? 0)
+    );
+    videochat_realtime_reaction_assert(count($brokerPeerRows) === 1, 'broker peer should fetch one cross-worker reaction event');
+    $brokerSenderRows = videochat_reaction_broker_fetch_events_since(
+        $brokerPdo,
+        'broker-room',
+        0,
+        (int) ($brokerSenderConnection['user_id'] ?? 0)
+    );
+    videochat_realtime_reaction_assert(count($brokerSenderRows) === 0, 'broker sender should not receive its own persisted echo');
+    $brokerPeerEvent = json_decode((string) ($brokerPeerRows[0]['event_json'] ?? ''), true);
+    videochat_realtime_reaction_assert(is_array($brokerPeerEvent), 'broker peer event json should decode');
+    videochat_realtime_reaction_assert((string) ($brokerPeerEvent['type'] ?? '') === 'reaction/event', 'broker peer event type mismatch');
+    $brokerPeerReaction = is_array($brokerPeerEvent['reaction'] ?? null) ? $brokerPeerEvent['reaction'] : [];
+    videochat_realtime_reaction_assert((string) ($brokerPeerReaction['emoji'] ?? '') === "\u{1F44D}", 'broker peer reaction emoji mismatch');
+    videochat_realtime_reaction_assert((string) ($brokerPeerReaction['client_reaction_id'] ?? '') === 'broker-001', 'broker peer client_reaction_id mismatch');
+
     videochat_presence_remove_connection($presenceState, (string) ($senderConnection['connection_id'] ?? ''), $sender);
     videochat_presence_remove_connection($presenceState, (string) ($peerConnection['connection_id'] ?? ''), $sender);
     videochat_presence_remove_connection($presenceState, (string) ($otherRoomConnection['connection_id'] ?? ''), $sender);

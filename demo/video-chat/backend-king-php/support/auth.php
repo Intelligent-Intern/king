@@ -2,148 +2,10 @@
 
 declare(strict_types=1);
 
-function videochat_request_header_value(array $request, string $headerName): string
-{
-    $headers = $request['headers'] ?? null;
-    if (!is_array($headers) || $headerName === '') {
-        return '';
-    }
+require_once __DIR__ . '/auth_request.php';
+require_once __DIR__ . '/auth_session_cache.php';
+require_once __DIR__ . '/auth_rbac.php';
 
-    foreach ($headers as $name => $value) {
-        if (strcasecmp((string) $name, $headerName) !== 0) {
-            continue;
-        }
-
-        if (is_string($value)) {
-            return trim($value);
-        }
-        if (is_array($value)) {
-            $flat = [];
-            foreach ($value as $item) {
-                if (is_scalar($item)) {
-                    $flat[] = trim((string) $item);
-                }
-            }
-            $flat = array_values(array_filter($flat, static fn (string $item): bool => $item !== ''));
-            return trim(implode(', ', $flat));
-        }
-        if (is_scalar($value)) {
-            return trim((string) $value);
-        }
-    }
-
-    return '';
-}
-
-/**
- * @return array<string, scalar|null>
- */
-function videochat_request_query_params(array $request): array
-{
-    $uri = $request['uri'] ?? null;
-    if (!is_string($uri) || $uri === '') {
-        return [];
-    }
-
-    $query = parse_url($uri, PHP_URL_QUERY);
-    if (!is_string($query) || $query === '') {
-        return [];
-    }
-
-    $parsed = [];
-    parse_str($query, $parsed);
-    if (!is_array($parsed)) {
-        return [];
-    }
-
-    $normalized = [];
-    foreach ($parsed as $key => $value) {
-        if (!is_string($key) || $key === '') {
-            continue;
-        }
-        if (is_scalar($value) || $value === null) {
-            $normalized[$key] = $value;
-        }
-    }
-
-    return $normalized;
-}
-
-function videochat_extract_session_token(array $request, string $transport): string
-{
-    $authorization = videochat_request_header_value($request, 'authorization');
-    if ($authorization !== '' && preg_match('/^\s*Bearer\s+(.+)\s*$/i', $authorization, $matches) === 1) {
-        $token = trim((string) ($matches[1] ?? ''));
-        if ($token !== '') {
-            return $token;
-        }
-    }
-
-    $sessionHeader = videochat_request_header_value($request, 'x-session-id');
-    if ($sessionHeader !== '') {
-        return $sessionHeader;
-    }
-
-    if ($transport === 'websocket') {
-        $query = videochat_request_query_params($request);
-        foreach (['session', 'token', 'session_id'] as $key) {
-            $value = $query[$key] ?? null;
-            if (!is_string($value)) {
-                continue;
-            }
-            $trimmed = trim($value);
-            if ($trimmed !== '') {
-                return $trimmed;
-            }
-        }
-    }
-
-    return '';
-}
-
-function videochat_user_account_type(?string $email, mixed $passwordHash): string
-{
-    $normalizedEmail = strtolower(trim((string) ($email ?? '')));
-    $storedHash = is_string($passwordHash) ? trim($passwordHash) : '';
-    if ($storedHash === '' && str_starts_with($normalizedEmail, 'guest+') && str_ends_with($normalizedEmail, '@videochat.local')) {
-        return 'guest';
-    }
-
-    return 'account';
-}
-
-function videochat_user_is_guest_account(?string $email, mixed $passwordHash): bool
-{
-    return videochat_user_account_type($email, $passwordHash) === 'guest';
-}
-
-/**
- * @return array{
- *   ok: bool,
- *   reason: string,
- *   session: array{
- *     id: string,
- *     issued_at: string,
- *     expires_at: string,
- *     revoked_at: ?string,
- *     client_ip: ?string,
- *     user_agent: ?string
- *   }|null,
- *   user: array{
- *     id: int,
- *     email: string,
- *     display_name: string,
- *     role: string,
- *     status: string,
- *     time_format: string,
- *     date_format: string,
- *     theme: string,
- *     avatar_path: ?string,
- *     account_type: string,
- *     is_guest: bool
- *   }|null
- * }
- */
 function videochat_validate_session_token(PDO $pdo, string $sessionId, ?int $nowUnix = null): array
 {
     $trimmedSessionId = trim($sessionId);
@@ -151,6 +13,14 @@ function videochat_validate_session_token(PDO $pdo, string $sessionId, ?int $now
         return [
             'ok' => false,
             'reason' => 'missing_session',
+            'session' => null,
+            'user' => null,
+        ];
+    }
+    if (videochat_session_revoked_locally($trimmedSessionId)) {
+        return [
+            'ok' => false,
+            'reason' => 'revoked_session',
             'session' => null,
             'user' => null,
         ];
@@ -185,6 +55,11 @@ SQL
     $query->execute([':session_id' => $trimmedSessionId]);
     $row = $query->fetch();
     if (!is_array($row)) {
+        $localValidation = videochat_validate_locally_issued_session_token($pdo, $trimmedSessionId, $nowUnix);
+        if (is_array($localValidation)) {
+            return $localValidation;
+        }
+
         return [
             'ok' => false,
             'reason' => 'invalid_session',
@@ -195,6 +70,7 @@ SQL
 
     $revokedAt = is_string($row['revoked_at'] ?? null) ? trim((string) $row['revoked_at']) : '';
     if ($revokedAt !== '') {
+        videochat_mark_session_revoked_locally($trimmedSessionId, $revokedAt);
         return [
             'ok' => false,
             'reason' => 'revoked_session',
@@ -289,229 +165,6 @@ function videochat_authenticate_request(PDO $pdo, array $request, string $transp
     ];
 }
 
-function videochat_normalize_role_slug(string $role): string
-{
-    $normalized = strtolower(trim($role));
-    return in_array($normalized, ['admin', 'user'], true) ? $normalized : 'unknown';
-}
-
-/**
- * @return array<int, array{
- *   id: string,
- *   transport: string,
- *   matcher: string,
- *   allowed_roles: array<int, string>,
- *   path?: string,
- *   paths?: array<int, string>,
- *   prefix?: string
- * }>
- */
-function videochat_rbac_permission_matrix(string $wsPath = '/ws'): array
-{
-    $normalizedWsPath = trim($wsPath);
-    if ($normalizedWsPath === '') {
-        $normalizedWsPath = '/ws';
-    }
-    if ($normalizedWsPath[0] !== '/') {
-        $normalizedWsPath = '/' . $normalizedWsPath;
-    }
-
-    $authenticatedRoles = ['admin', 'user'];
-
-    return [
-        [
-            'id' => 'rest_auth_session',
-            'transport' => 'rest',
-            'matcher' => 'exact_any',
-            'paths' => ['/api/auth/session', '/api/auth/refresh', '/api/auth/logout'],
-            'allowed_roles' => $authenticatedRoles,
-        ],
-        [
-            'id' => 'websocket_gateway',
-            'transport' => 'websocket',
-            'matcher' => 'exact',
-            'path' => $normalizedWsPath,
-            'allowed_roles' => $authenticatedRoles,
-        ],
-        [
-            'id' => 'rest_admin_scope',
-            'transport' => 'rest',
-            'matcher' => 'prefix',
-            'prefix' => '/api/admin/',
-            'allowed_roles' => ['admin'],
-        ],
-        [
-            'id' => 'rest_moderation_scope',
-            'transport' => 'rest',
-            'matcher' => 'prefix',
-            'prefix' => '/api/moderation/',
-            'allowed_roles' => ['admin'],
-        ],
-        [
-            'id' => 'rest_calls_collection',
-            'transport' => 'rest',
-            'matcher' => 'exact',
-            'path' => '/api/calls',
-            'allowed_roles' => $authenticatedRoles,
-        ],
-        [
-            'id' => 'rest_calls_items',
-            'transport' => 'rest',
-            'matcher' => 'prefix',
-            'prefix' => '/api/calls/',
-            'allowed_roles' => $authenticatedRoles,
-        ],
-        [
-            'id' => 'rest_invite_codes_collection',
-            'transport' => 'rest',
-            'matcher' => 'exact',
-            'path' => '/api/invite-codes',
-            'allowed_roles' => $authenticatedRoles,
-        ],
-        [
-            'id' => 'rest_invite_codes_items',
-            'transport' => 'rest',
-            'matcher' => 'prefix',
-            'prefix' => '/api/invite-codes/',
-            'allowed_roles' => $authenticatedRoles,
-        ],
-        [
-            'id' => 'rest_call_access_scope',
-            'transport' => 'rest',
-            'matcher' => 'prefix',
-            'prefix' => '/api/call-access/',
-            'allowed_roles' => $authenticatedRoles,
-        ],
-        [
-            'id' => 'rest_user_scope',
-            'transport' => 'rest',
-            'matcher' => 'prefix',
-            'prefix' => '/api/user/',
-            'allowed_roles' => $authenticatedRoles,
-        ],
-    ];
-}
-
-/**
- * @return array{
- *   id: string,
- *   transport: string,
- *   matcher: string,
- *   allowed_roles: array<int, string>,
- *   path?: string,
- *   paths?: array<int, string>,
- *   prefix?: string
- * }|null
- */
-function videochat_rbac_rule_for_path(string $path, string $wsPath = '/ws'): ?array
-{
-    $trimmedPath = trim($path);
-    if ($trimmedPath === '') {
-        return null;
-    }
-
-    foreach (videochat_rbac_permission_matrix($wsPath) as $rule) {
-        $matcher = (string) ($rule['matcher'] ?? '');
-        if ($matcher === 'exact') {
-            if ($trimmedPath === (string) ($rule['path'] ?? '')) {
-                return $rule;
-            }
-            continue;
-        }
-
-        if ($matcher === 'exact_any') {
-            $paths = is_array($rule['paths'] ?? null) ? $rule['paths'] : [];
-            if (in_array($trimmedPath, $paths, true)) {
-                return $rule;
-            }
-            continue;
-        }
-
-        if ($matcher === 'prefix') {
-            $prefix = (string) ($rule['prefix'] ?? '');
-            if ($prefix !== '' && str_starts_with($trimmedPath, $prefix)) {
-                return $rule;
-            }
-        }
-    }
-
-    return null;
-}
-
-/**
- * @return array<int, string>
- */
-function videochat_rbac_allowed_roles_for_path(string $path, string $wsPath = '/ws'): array
-{
-    $rule = videochat_rbac_rule_for_path($path, $wsPath);
-    if (!is_array($rule)) {
-        return [];
-    }
-
-    $allowedRoles = $rule['allowed_roles'] ?? [];
-    return is_array($allowedRoles) ? array_values($allowedRoles) : [];
-}
-
-/**
- * @return array{
- *   ok: bool,
- *   reason: string,
- *   rule_id: string,
- *   role: string,
- *   allowed_roles: array<int, string>
- * }
- */
-function videochat_authorize_role_for_path(array $user, string $path, string $wsPath = '/ws'): array
-{
-    $rule = videochat_rbac_rule_for_path($path, $wsPath);
-    $allowedRoles = is_array($rule['allowed_roles'] ?? null) ? array_values($rule['allowed_roles']) : [];
-    $ruleId = is_string($rule['id'] ?? null) ? (string) $rule['id'] : 'not_applicable';
-    if ($allowedRoles === []) {
-        return [
-            'ok' => true,
-            'reason' => 'not_applicable',
-            'rule_id' => $ruleId,
-            'role' => videochat_normalize_role_slug((string) ($user['role'] ?? '')),
-            'allowed_roles' => [],
-        ];
-    }
-
-    $role = videochat_normalize_role_slug((string) ($user['role'] ?? ''));
-    if ($role === 'unknown') {
-        return [
-            'ok' => false,
-            'reason' => 'invalid_role',
-            'rule_id' => $ruleId,
-            'role' => $role,
-            'allowed_roles' => $allowedRoles,
-        ];
-    }
-    if (!in_array($role, $allowedRoles, true)) {
-        return [
-            'ok' => false,
-            'reason' => 'role_not_allowed',
-            'rule_id' => $ruleId,
-            'role' => $role,
-            'allowed_roles' => $allowedRoles,
-        ];
-    }
-
-    return [
-        'ok' => true,
-        'reason' => 'ok',
-        'rule_id' => $ruleId,
-        'role' => $role,
-        'allowed_roles' => $allowedRoles,
-    ];
-}
-
-/**
- * @return array{
- *   ok: bool,
- *   reason: string,
- *   revoked_at: ?string
- * }
- */
 function videochat_revoke_session(PDO $pdo, string $sessionId, ?string $revokedAt = null): array
 {
     $trimmedSessionId = trim($sessionId);
@@ -536,6 +189,7 @@ function videochat_revoke_session(PDO $pdo, string $sessionId, ?string $revokedA
 
     $existingRevokedAt = is_string($row['revoked_at'] ?? null) ? trim((string) $row['revoked_at']) : '';
     if ($existingRevokedAt !== '') {
+        videochat_mark_session_revoked_locally($trimmedSessionId, $existingRevokedAt);
         return [
             'ok' => true,
             'reason' => 'already_revoked',
@@ -555,6 +209,7 @@ function videochat_revoke_session(PDO $pdo, string $sessionId, ?string $revokedA
         ':revoked_at' => $effectiveRevokedAt,
         ':session_id' => $trimmedSessionId,
     ]);
+    videochat_mark_session_revoked_locally($trimmedSessionId, $effectiveRevokedAt);
 
     return [
         'ok' => true,
@@ -603,6 +258,15 @@ function videochat_rotate_session_token(
         return [
             'ok' => false,
             'reason' => 'invalid_user',
+            'replaced_session_id' => $trimmedCurrentSessionId,
+            'revoked_at' => null,
+            'new_session' => null,
+        ];
+    }
+    if (videochat_session_revoked_locally($trimmedCurrentSessionId)) {
+        return [
+            'ok' => false,
+            'reason' => 'session_not_rotatable',
             'replaced_session_id' => $trimmedCurrentSessionId,
             'revoked_at' => null,
             'new_session' => null,
@@ -695,6 +359,15 @@ SQL
         if ($startedTransaction && $pdo->inTransaction()) {
             $pdo->commit();
         }
+        videochat_mark_session_revoked_locally($trimmedCurrentSessionId, $revokedAt);
+        videochat_mark_session_issued_locally(
+            $newSessionId,
+            $userId,
+            $issuedAt,
+            $expiresAt,
+            $trimmedClientIp === '' ? null : $trimmedClientIp,
+            $trimmedUserAgent === '' ? null : $trimmedUserAgent
+        );
 
         return [
             'ok' => true,
@@ -809,6 +482,14 @@ SQL
             'session' => null,
         ];
     }
+    videochat_mark_session_issued_locally(
+        $sessionId,
+        $userId,
+        $issuedAt,
+        $expiresAt,
+        $trimmedClientIp === '' ? null : $trimmedClientIp,
+        $trimmedUserAgent === '' ? null : $trimmedUserAgent
+    );
 
     return [
         'ok' => true,

@@ -131,13 +131,21 @@ try {
 
     $moderatorSnapshot = videochat_realtime_lobby_last_frame($frames, 'socket-mod');
     $userASnapshot = videochat_realtime_lobby_last_frame($frames, 'socket-a');
+    $userASecondSnapshot = videochat_realtime_lobby_last_frame($frames, 'socket-a-2');
+    $userBSnapshot = videochat_realtime_lobby_last_frame($frames, 'socket-b');
     $otherRoomSnapshot = videochat_realtime_lobby_last_frame($frames, 'socket-other');
     videochat_realtime_lobby_assert((string) ($moderatorSnapshot['type'] ?? '') === 'lobby/snapshot', 'moderator should receive lobby snapshot');
     videochat_realtime_lobby_assert((string) ($userASnapshot['type'] ?? '') === 'lobby/snapshot', 'queue sender should receive lobby snapshot');
+    videochat_realtime_lobby_assert((string) ($userASecondSnapshot['type'] ?? '') === 'lobby/snapshot', 'queue sender second connection should receive lobby snapshot');
+    videochat_realtime_lobby_assert((string) ($userBSnapshot['type'] ?? '') === 'lobby/snapshot', 'non-moderator room peer should receive redacted lobby snapshot');
     videochat_realtime_lobby_assert($otherRoomSnapshot === [], 'other room must not receive lobby snapshot');
     videochat_realtime_lobby_assert((int) ($moderatorSnapshot['queue_count'] ?? 0) === 1, 'queue_count should be one after first join');
     videochat_realtime_lobby_assert((int) (($moderatorSnapshot['queue'][0]['user_id'] ?? 0)) === 20, 'queued user id mismatch');
+    videochat_realtime_lobby_assert((int) ($userASecondSnapshot['queue_count'] ?? 0) === 1, 'same queued user connection should see own queued state');
+    videochat_realtime_lobby_assert((int) ($userBSnapshot['queue_count'] ?? -1) === 0, 'non-moderator room peer must not see other lobby queue entries');
+    videochat_realtime_lobby_assert(($userBSnapshot['queue'] ?? []) === [], 'non-moderator room peer queue payload must be redacted');
 
+    $frames = [];
     $queueJoinAgain = videochat_lobby_apply_command(
         $lobbyState,
         $presenceState,
@@ -148,6 +156,10 @@ try {
     );
     videochat_realtime_lobby_assert((bool) ($queueJoinAgain['ok'] ?? false), 'repeated queue join should stay successful');
     videochat_realtime_lobby_assert(!(bool) ($queueJoinAgain['changed'] ?? true), 'repeated queue join should not mutate queue');
+    videochat_realtime_lobby_assert((int) ($queueJoinAgain['sent_count'] ?? 0) === 4, 'repeated queue join should rebroadcast lobby snapshot');
+    $repeatedModeratorSnapshot = videochat_realtime_lobby_last_frame($frames, 'socket-mod');
+    videochat_realtime_lobby_assert((string) ($repeatedModeratorSnapshot['type'] ?? '') === 'lobby/snapshot', 'moderator should receive repeated queued snapshot');
+    videochat_realtime_lobby_assert((string) ($repeatedModeratorSnapshot['reason'] ?? '') === 'already_queued', 'repeated queued snapshot reason mismatch');
 
     $invalidSenderConnection = $userA;
     $invalidSenderConnection['user_id'] = 0;
@@ -210,17 +222,23 @@ try {
         'type' => 'lobby/queue/join',
         'room_id' => 'lobby',
     ], JSON_UNESCAPED_SLASHES));
+    $frames = [];
     $waitingQueueJoinResult = videochat_lobby_apply_command(
         $waitingLobbyState,
         $waitingPresenceState,
         $waitingConnection,
         $waitingQueueJoinCommand,
-        null,
+        $sender,
         1_780_400_101_900
     );
     videochat_realtime_lobby_assert((bool) ($waitingQueueJoinResult['ok'] ?? false), 'waiting-room user should queue for pending room');
     videochat_realtime_lobby_assert((bool) ($waitingQueueJoinResult['changed'] ?? false), 'waiting-room queue join should mutate queue');
     videochat_realtime_lobby_assert((string) ($waitingQueueJoinResult['room_id'] ?? '') === 'lobby', 'waiting-room queue target room mismatch');
+    videochat_realtime_lobby_assert((int) ($waitingQueueJoinResult['sent_count'] ?? 0) === 1, 'waiting-room queue join should confirm snapshot to requester');
+    $waitingQueueSnapshot = videochat_realtime_lobby_last_frame($frames, 'socket-waiting');
+    videochat_realtime_lobby_assert((string) ($waitingQueueSnapshot['type'] ?? '') === 'lobby/snapshot', 'waiting-room queue requester should receive snapshot');
+    videochat_realtime_lobby_assert((string) ($waitingQueueSnapshot['reason'] ?? '') === 'queued', 'waiting-room queue requester reason mismatch');
+    videochat_realtime_lobby_assert((int) ($waitingQueueSnapshot['queue_count'] ?? 0) === 1, 'waiting-room queue requester should see queued state');
 
     $waitingQueueCancelCommand = videochat_lobby_decode_client_frame(json_encode([
         'type' => 'lobby/queue/cancel',

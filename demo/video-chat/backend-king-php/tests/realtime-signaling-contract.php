@@ -245,6 +245,52 @@ try {
     videochat_realtime_signaling_assert(!(bool) ($notInRoomPublish['ok'] ?? true), 'target outside room should fail signaling publish');
     videochat_realtime_signaling_assert((string) ($notInRoomPublish['error'] ?? '') === 'target_not_in_room', 'target not in room error mismatch');
 
+    if (extension_loaded('pdo_sqlite')) {
+        $brokerPdo = new PDO('sqlite::memory:');
+        $brokerPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        videochat_signaling_broker_bootstrap($brokerPdo);
+
+        $decodedBrokerOffer = videochat_signaling_decode_client_frame(json_encode([
+            'type' => 'call/offer',
+            'target_user_id' => 400,
+            'payload' => [
+                'kind' => 'webrtc_offer',
+                'sdp' => ['type' => 'offer', 'sdp' => 'broker-offer-sdp'],
+            ],
+        ], JSON_UNESCAPED_SLASHES));
+        videochat_realtime_signaling_assert((bool) ($decodedBrokerOffer['ok'] ?? false), 'broker offer command should decode');
+
+        $brokerPublish = videochat_signaling_publish(
+            $presenceState,
+            $senderConnection,
+            $decodedBrokerOffer,
+            $sender,
+            1_780_300_127_000,
+            static function (string $roomId, int $targetUserId, array $event) use ($brokerPdo): bool {
+                return videochat_signaling_broker_insert_event($brokerPdo, $roomId, $targetUserId, $event);
+            }
+        );
+        videochat_realtime_signaling_assert((bool) ($brokerPublish['ok'] ?? false), 'brokered offer should succeed when target is on another worker');
+        videochat_realtime_signaling_assert((int) ($brokerPublish['sent_count'] ?? -1) === 0, 'brokered offer should not claim local socket delivery');
+
+        $brokerFrames = [];
+        $brokerSender = static function (mixed $socket, array $payload) use (&$brokerFrames): bool {
+            $key = is_scalar($socket) ? (string) $socket : 'unknown';
+            if (!isset($brokerFrames[$key]) || !is_array($brokerFrames[$key])) {
+                $brokerFrames[$key] = [];
+            }
+            $brokerFrames[$key][] = $payload;
+            return true;
+        };
+        $lastBrokerEventId = 0;
+        videochat_signaling_broker_poll($brokerPdo, 'socket-target-broker', 'lobby', 400, $lastBrokerEventId, $brokerSender);
+        $brokerTargetFrame = videochat_realtime_signaling_last_frame($brokerFrames, 'socket-target-broker');
+        videochat_realtime_signaling_assert((string) ($brokerTargetFrame['type'] ?? '') === 'call/offer', 'broker target should receive call/offer');
+        videochat_realtime_signaling_assert((int) ($brokerTargetFrame['target_user_id'] ?? 0) === 400, 'broker target_user_id mismatch');
+        videochat_realtime_signaling_assert((string) (($brokerTargetFrame['payload'] ?? [])['kind'] ?? '') === 'webrtc_offer', 'broker payload kind mismatch');
+        videochat_realtime_signaling_assert($lastBrokerEventId > 0, 'broker poll should advance last event id');
+    }
+
     videochat_presence_remove_connection($presenceState, (string) ($senderConnection['connection_id'] ?? ''), $sender);
     videochat_presence_remove_connection($presenceState, (string) ($targetPrimary['connection_id'] ?? ''), $sender);
     videochat_presence_remove_connection($presenceState, (string) ($targetSecondary['connection_id'] ?? ''), $sender);

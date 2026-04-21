@@ -1,0 +1,332 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @return array<int, string>
+ */
+function videochat_admin_allowed_roles(): array
+{
+    return ['admin', 'user'];
+}
+
+/**
+ * @return array<int, string>
+ */
+function videochat_admin_allowed_update_fields(): array
+{
+    return [
+        'display_name',
+        'role',
+        'password',
+        'status',
+        'time_format',
+        'theme',
+        'avatar_path',
+    ];
+}
+
+/**
+ * @return array<string, int>
+ */
+function videochat_admin_role_id_map(PDO $pdo): array
+{
+    $map = [];
+    $rows = $pdo->query('SELECT id, slug FROM roles')->fetchAll();
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+
+        $slug = strtolower(trim((string) ($row['slug'] ?? '')));
+        if ($slug === '') {
+            continue;
+        }
+        $map[$slug] = (int) ($row['id'] ?? 0);
+    }
+
+    return $map;
+}
+
+/**
+ * @return array{
+ *   id: int,
+ *   email: string,
+ *   display_name: string,
+ *   role: string,
+ *   status: string,
+ *   time_format: string,
+ *   theme: string,
+ *   avatar_path: ?string,
+ *   created_at: string,
+ *   updated_at: string
+ * }|null
+ */
+function videochat_admin_fetch_user_by_id(PDO $pdo, int $userId): ?array
+{
+    if ($userId <= 0) {
+        return null;
+    }
+
+    $statement = $pdo->prepare(
+        <<<'SQL'
+SELECT
+    users.id,
+    users.email,
+    users.display_name,
+    users.status,
+    users.time_format,
+    users.theme,
+    users.avatar_path,
+    users.created_at,
+    users.updated_at,
+    roles.slug AS role_slug
+FROM users
+INNER JOIN roles ON roles.id = users.role_id
+WHERE users.id = :id
+LIMIT 1
+SQL
+    );
+    $statement->execute([':id' => $userId]);
+    $row = $statement->fetch();
+    if (!is_array($row)) {
+        return null;
+    }
+
+    return [
+        'id' => (int) ($row['id'] ?? 0),
+        'email' => (string) ($row['email'] ?? ''),
+        'display_name' => (string) ($row['display_name'] ?? ''),
+        'role' => (string) ($row['role_slug'] ?? 'user'),
+        'status' => (string) ($row['status'] ?? 'disabled'),
+        'time_format' => (string) ($row['time_format'] ?? '24h'),
+        'theme' => (string) ($row['theme'] ?? 'dark'),
+        'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
+        'created_at' => (string) ($row['created_at'] ?? ''),
+        'updated_at' => (string) ($row['updated_at'] ?? ''),
+    ];
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   data: array{
+ *     email: string,
+ *     display_name: string,
+ *     role: string,
+ *     password: string,
+ *     status: string,
+ *     time_format: string,
+ *     theme: string,
+ *     avatar_path: ?string
+ *   },
+ *   errors: array<string, string>
+ * }
+ */
+function videochat_admin_validate_create_user_payload(array $payload): array
+{
+    $errors = [];
+
+    $email = strtolower(trim((string) ($payload['email'] ?? '')));
+    if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+        $errors['email'] = 'required_valid_email';
+    } elseif (strlen($email) > 320) {
+        $errors['email'] = 'email_too_long';
+    }
+
+    $displayName = trim((string) ($payload['display_name'] ?? ''));
+    if ($displayName === '') {
+        $errors['display_name'] = 'required_display_name';
+    } elseif (strlen($displayName) > 120) {
+        $errors['display_name'] = 'display_name_too_long';
+    }
+
+    $role = 'user';
+    if (array_key_exists('role', $payload)) {
+        $candidateRole = strtolower(trim((string) $payload['role']));
+        if ($candidateRole === '' || !in_array($candidateRole, videochat_admin_allowed_roles(), true)) {
+            $errors['role'] = 'required_valid_role';
+        } else {
+            $role = $candidateRole;
+        }
+    }
+
+    $password = (string) ($payload['password'] ?? '');
+    if (trim($password) === '') {
+        $errors['password'] = 'required_password';
+    } elseif (strlen($password) < 8) {
+        $errors['password'] = 'password_too_short';
+    } elseif (strlen($password) > 256) {
+        $errors['password'] = 'password_too_long';
+    }
+
+    if (array_key_exists('password_repeat', $payload)) {
+        $passwordRepeat = (string) ($payload['password_repeat'] ?? '');
+        if ($passwordRepeat !== $password) {
+            $errors['password_repeat'] = 'must_match_password';
+        }
+    }
+
+    $status = strtolower(trim((string) ($payload['status'] ?? 'active')));
+    if (!in_array($status, ['active', 'disabled'], true)) {
+        $errors['status'] = 'must_be_active_or_disabled';
+    }
+
+    $timeFormat = strtolower(trim((string) ($payload['time_format'] ?? '24h')));
+    if (!in_array($timeFormat, ['24h', '12h'], true)) {
+        $errors['time_format'] = 'must_be_24h_or_12h';
+    }
+
+    $theme = trim((string) ($payload['theme'] ?? 'dark'));
+    if ($theme === '') {
+        $errors['theme'] = 'required_theme';
+    } elseif (strlen($theme) > 64) {
+        $errors['theme'] = 'theme_too_long';
+    }
+
+    $avatarPath = null;
+    if (array_key_exists('avatar_path', $payload)) {
+        $avatarRaw = $payload['avatar_path'];
+        if ($avatarRaw !== null && !is_string($avatarRaw)) {
+            $errors['avatar_path'] = 'must_be_string_or_null';
+        } else {
+            $trimmedAvatar = trim((string) ($avatarRaw ?? ''));
+            if ($trimmedAvatar !== '' && strlen($trimmedAvatar) > 512) {
+                $errors['avatar_path'] = 'avatar_path_too_long';
+            } else {
+                $avatarPath = $trimmedAvatar === '' ? null : $trimmedAvatar;
+            }
+        }
+    }
+
+    return [
+        'ok' => $errors === [],
+        'data' => [
+            'email' => $email,
+            'display_name' => $displayName,
+            'role' => $role,
+            'password' => $password,
+            'status' => $status,
+            'time_format' => $timeFormat,
+            'theme' => $theme,
+            'avatar_path' => $avatarPath,
+        ],
+        'errors' => $errors,
+    ];
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   data: array<string, mixed>,
+ *   errors: array<string, string>
+ * }
+ */
+function videochat_admin_validate_update_user_payload(array $payload): array
+{
+    $errors = [];
+    $data = [];
+    $allowedUpdateFields = videochat_admin_allowed_update_fields();
+
+    foreach ($payload as $field => $_value) {
+        $fieldName = is_string($field) ? trim($field) : (string) $field;
+        if ($fieldName === '' || !in_array($fieldName, $allowedUpdateFields, true)) {
+            $errors[$fieldName === '' ? 'payload' : $fieldName] = 'field_not_updatable';
+        }
+    }
+
+    if (array_key_exists('display_name', $payload)) {
+        $displayName = trim((string) $payload['display_name']);
+        if ($displayName === '') {
+            $errors['display_name'] = 'required_display_name';
+        } elseif (strlen($displayName) > 120) {
+            $errors['display_name'] = 'display_name_too_long';
+        } else {
+            $data['display_name'] = $displayName;
+        }
+    }
+
+    if (array_key_exists('role', $payload)) {
+        $role = strtolower(trim((string) $payload['role']));
+        if (!in_array($role, videochat_admin_allowed_roles(), true)) {
+            $errors['role'] = 'required_valid_role';
+        } else {
+            $data['role'] = $role;
+        }
+    }
+
+    if (array_key_exists('password', $payload)) {
+        $password = (string) $payload['password'];
+        if (trim($password) === '') {
+            $errors['password'] = 'required_password';
+        } elseif (strlen($password) < 8) {
+            $errors['password'] = 'password_too_short';
+        } elseif (strlen($password) > 256) {
+            $errors['password'] = 'password_too_long';
+        } else {
+            $data['password'] = $password;
+        }
+    }
+
+    if (array_key_exists('status', $payload)) {
+        $status = strtolower(trim((string) $payload['status']));
+        if (!in_array($status, ['active', 'disabled'], true)) {
+            $errors['status'] = 'must_be_active_or_disabled';
+        } else {
+            $data['status'] = $status;
+        }
+    }
+
+    if (array_key_exists('time_format', $payload)) {
+        $timeFormat = strtolower(trim((string) $payload['time_format']));
+        if (!in_array($timeFormat, ['24h', '12h'], true)) {
+            $errors['time_format'] = 'must_be_24h_or_12h';
+        } else {
+            $data['time_format'] = $timeFormat;
+        }
+    }
+
+    if (array_key_exists('theme', $payload)) {
+        $theme = trim((string) $payload['theme']);
+        if ($theme === '') {
+            $errors['theme'] = 'required_theme';
+        } elseif (strlen($theme) > 64) {
+            $errors['theme'] = 'theme_too_long';
+        } else {
+            $data['theme'] = $theme;
+        }
+    }
+
+    if (array_key_exists('avatar_path', $payload)) {
+        $avatarRaw = $payload['avatar_path'];
+        if ($avatarRaw !== null && !is_string($avatarRaw)) {
+            $errors['avatar_path'] = 'must_be_string_or_null';
+        } else {
+            $trimmedAvatar = trim((string) ($avatarRaw ?? ''));
+            if ($trimmedAvatar !== '' && strlen($trimmedAvatar) > 512) {
+                $errors['avatar_path'] = 'avatar_path_too_long';
+            } else {
+                $data['avatar_path'] = $trimmedAvatar === '' ? null : $trimmedAvatar;
+            }
+        }
+    }
+
+    if ($data === []) {
+        $errors['payload'] = 'at_least_one_supported_field_required';
+    }
+
+    return [
+        'ok' => $errors === [],
+        'data' => $data,
+        'errors' => $errors,
+    ];
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   errors: array<string, string>,
+ *   user: ?array<string, mixed>
+ * }
+ */

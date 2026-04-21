@@ -1,162 +1,590 @@
 {
-  "matrix_version": "v1.0.7-beta",
+  "matrix_version": "v1.0.8-beta",
   "matrix_name": "king-video-chat-protected-api-semantics",
   "policy": {
     "auth_status": 401,
     "forbidden_status": 403,
     "conflict_status": 409,
-    "validation_statuses": [400, 422],
+    "validation_statuses": [
+      400,
+      422
+    ],
     "notes": "Every protected REST/WebSocket family is covered by global auth/RBAC failure semantics plus endpoint-specific validation, forbidden, or conflict semantics where applicable. Conflict is explicit and justified per endpoint instead of being implied where no business conflict exists."
   },
   "endpoints": [
     {
       "id": "router_rbac_guard",
       "surface": "rest_ws",
-      "route_patterns": ["/api/admin/*", "/api/moderation/*", "/api/user/*", "/api/calls*", "/api/invite-codes*", "/ws"],
+      "route_patterns": [
+        "/api/admin/*",
+        "/api/moderation/*",
+        "/api/user/*",
+        "/api/calls*",
+        "/api/invite-codes*",
+        "/ws"
+      ],
       "protected_by": "videochat_authorize_role_for_path",
-      "source_paths": ["backend-king-php/http/router.php", "backend-king-php/support/auth.php"],
-      "contract_paths": ["backend-king-php/tests/rbac-middleware-contract.sh", "backend-king-php/tests/realtime-websocket-gateway-contract.sh"],
+      "source_paths": [
+        "backend-king-php/http/router.php",
+        "backend-king-php/support/auth.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/rbac-middleware-contract.sh",
+        "backend-king-php/tests/realtime-websocket-gateway-contract.sh"
+      ],
       "semantics": {
-        "auth": { "status": 401, "error_codes": ["auth_failed", "websocket_auth_failed"] },
-        "forbidden": { "status": 403, "error_codes": ["rbac_forbidden", "websocket_forbidden"] }
+        "auth": {
+          "status": 401,
+          "error_codes": [
+            "auth_failed",
+            "websocket_auth_failed"
+          ]
+        },
+        "forbidden": {
+          "status": 403,
+          "error_codes": [
+            "rbac_forbidden",
+            "websocket_forbidden"
+          ]
+        }
       },
       "conflict_applicability": "not_applicable_global_guard"
     },
     {
       "id": "admin_user_create",
       "surface": "rest",
-      "route_patterns": ["POST /api/admin/users"],
+      "route_patterns": [
+        "POST /api/admin/users"
+      ],
       "protected_by": "router_rbac_guard",
-      "source_paths": ["backend-king-php/http/module_users.php", "backend-king-php/domain/users/user_management.php"],
-      "contract_paths": ["backend-king-php/tests/admin-user-create-contract.sh"],
+      "source_paths": [
+        "backend-king-php/http/module_users.php",
+        "backend-king-php/domain/users/user_management.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/admin-user-create-contract.sh"
+      ],
       "semantics": {
-        "validation": { "statuses": [400, 422], "error_codes": ["admin_user_invalid_request_body", "admin_user_validation_failed"] },
-        "conflict": { "status": 409, "error_codes": ["admin_user_conflict", "email_conflict"] }
+        "validation": {
+          "statuses": [
+            400,
+            422
+          ],
+          "error_codes": [
+            "admin_user_invalid_request_body",
+            "admin_user_validation_failed"
+          ]
+        },
+        "conflict": {
+          "status": 409,
+          "error_codes": [
+            "admin_user_conflict",
+            "email_conflict"
+          ]
+        }
       },
       "conflict_applicability": "duplicate_email"
     },
     {
+      "id": "admin_infrastructure_inventory",
+      "surface": "rest",
+      "route_patterns": [
+        "GET /api/admin/infrastructure"
+      ],
+      "protected_by": "router_rbac_guard",
+      "source_paths": [
+        "backend-king-php/http/router.php",
+        "backend-king-php/support/auth.php",
+        "backend-king-php/http/module_infrastructure.php",
+        "backend-king-php/domain/infrastructure/infrastructure_inventory.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/admin-infrastructure-contract.sh"
+      ],
+      "semantics": {
+        "auth": {
+          "status": 401,
+          "error_codes": [
+            "auth_failed"
+          ]
+        },
+        "forbidden": {
+          "status": 403,
+          "error_codes": [
+            "rbac_forbidden"
+          ]
+        }
+      },
+      "conflict_applicability": "not_applicable_read_only_inventory"
+    },
+    {
+      "id": "admin_video_operations",
+      "surface": "rest",
+      "route_patterns": [
+        "GET /api/admin/video-operations"
+      ],
+      "protected_by": "router_rbac_guard",
+      "source_paths": [
+        "backend-king-php/http/router.php",
+        "backend-king-php/support/auth.php",
+        "backend-king-php/http/module_operations.php",
+        "backend-king-php/domain/operations/video_operations.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/admin-video-operations-contract.sh"
+      ],
+      "semantics": {
+        "auth": {
+          "status": 401,
+          "error_codes": [
+            "auth_failed"
+          ]
+        },
+        "forbidden": {
+          "status": 403,
+          "error_codes": [
+            "rbac_forbidden"
+          ]
+        }
+      },
+      "conflict_applicability": "not_applicable_read_only_operations_metrics"
+    },
+    {
+      "id": "admin_runtime_diagnostics",
+      "surface": "rest",
+      "route_patterns": [
+        "GET /api/admin/runtime"
+      ],
+      "protected_by": "router_rbac_guard",
+      "source_paths": [
+        "backend-king-php/http/router.php",
+        "backend-king-php/support/auth.php",
+        "backend-king-php/http/module_runtime.php",
+        "backend-king-php/server.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/rbac-middleware-contract.sh",
+        "backend-king-php/tests/contract-catalog-parity-contract.sh"
+      ],
+      "semantics": {
+        "auth": {
+          "status": 401,
+          "error_codes": [
+            "auth_failed"
+          ]
+        },
+        "forbidden": {
+          "status": 403,
+          "error_codes": [
+            "rbac_forbidden"
+          ]
+        }
+      },
+      "conflict_applicability": "not_applicable_read_only_diagnostics"
+    },
+    {
       "id": "admin_user_update_delete",
       "surface": "rest",
-      "route_patterns": ["PATCH /api/admin/users/{id}", "DELETE /api/admin/users/{id}"],
+      "route_patterns": [
+        "PATCH /api/admin/users/{id}",
+        "DELETE /api/admin/users/{id}"
+      ],
       "protected_by": "router_rbac_guard",
-      "source_paths": ["backend-king-php/http/module_users.php", "backend-king-php/domain/users/user_management.php"],
-      "contract_paths": ["backend-king-php/tests/admin-user-update-contract.sh", "backend-king-php/tests/admin-user-mutation-contract.sh"],
+      "source_paths": [
+        "backend-king-php/http/module_users.php",
+        "backend-king-php/domain/users/user_management.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/admin-user-update-contract.sh",
+        "backend-king-php/tests/admin-user-mutation-contract.sh"
+      ],
       "semantics": {
-        "validation": { "statuses": [400, 422], "error_codes": ["admin_user_invalid_request_body", "admin_user_validation_failed"] },
-        "conflict": { "status": 409, "error_codes": ["admin_user_conflict", "cannot_change_own_role", "primary_admin_role_locked", "cannot_delete_self"] }
+        "validation": {
+          "statuses": [
+            400,
+            422
+          ],
+          "error_codes": [
+            "admin_user_invalid_request_body",
+            "admin_user_validation_failed"
+          ]
+        },
+        "conflict": {
+          "status": 409,
+          "error_codes": [
+            "admin_user_conflict",
+            "cannot_change_own_role",
+            "primary_admin_role_locked",
+            "cannot_delete_self"
+          ]
+        }
       },
       "conflict_applicability": "self_or_primary_admin_protection"
     },
     {
       "id": "admin_user_status",
       "surface": "rest",
-      "route_patterns": ["POST /api/admin/users/{id}/deactivate", "POST /api/admin/users/{id}/reactivate"],
+      "route_patterns": [
+        "POST /api/admin/users/{id}/deactivate",
+        "POST /api/admin/users/{id}/reactivate"
+      ],
       "protected_by": "router_rbac_guard",
-      "source_paths": ["backend-king-php/http/module_users.php", "backend-king-php/domain/users/user_management.php"],
-      "contract_paths": ["backend-king-php/tests/admin-user-status-contract.sh"],
+      "source_paths": [
+        "backend-king-php/http/module_users.php",
+        "backend-king-php/domain/users/user_management.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/admin-user-status-contract.sh"
+      ],
       "semantics": {
-        "conflict": { "status": 409, "error_codes": ["admin_user_conflict", "cannot_deactivate_self", "primary_admin_cannot_be_disabled"] }
+        "conflict": {
+          "status": 409,
+          "error_codes": [
+            "admin_user_conflict",
+            "cannot_deactivate_self",
+            "primary_admin_cannot_be_disabled"
+          ]
+        }
       },
       "conflict_applicability": "self_or_primary_admin_status_protection"
     },
     {
       "id": "calls_collection_create_list",
       "surface": "rest",
-      "route_patterns": ["GET /api/calls", "POST /api/calls"],
+      "route_patterns": [
+        "GET /api/calls",
+        "POST /api/calls"
+      ],
       "protected_by": "router_rbac_guard",
-      "source_paths": ["backend-king-php/http/module_calls.php", "backend-king-php/domain/calls/call_management.php", "backend-king-php/domain/calls/call_directory.php"],
-      "contract_paths": ["backend-king-php/tests/calls-list-endpoint-contract.sh", "backend-king-php/tests/call-create-endpoint-contract.sh", "backend-king-php/tests/rbac-middleware-contract.sh"],
+      "source_paths": [
+        "backend-king-php/http/router.php",
+        "backend-king-php/support/auth.php",
+        "backend-king-php/http/module_calls.php",
+        "backend-king-php/domain/calls/call_management.php",
+        "backend-king-php/domain/calls/call_directory.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/calls-list-endpoint-contract.sh",
+        "backend-king-php/tests/call-create-endpoint-contract.sh",
+        "backend-king-php/tests/rbac-middleware-contract.sh"
+      ],
       "semantics": {
-        "auth": { "status": 401, "error_codes": ["auth_failed"] },
-        "validation": { "statuses": [400, 422], "error_codes": ["calls_list_validation_failed", "calls_create_invalid_request_body", "calls_create_validation_failed"] }
+        "auth": {
+          "status": 401,
+          "error_codes": [
+            "auth_failed"
+          ]
+        },
+        "validation": {
+          "statuses": [
+            400,
+            422
+          ],
+          "error_codes": [
+            "calls_list_validation_failed",
+            "calls_create_invalid_request_body",
+            "calls_create_validation_failed"
+          ]
+        }
       },
       "conflict_applicability": "not_applicable_create_is_validation_or_not_found"
     },
     {
       "id": "calls_item_view_update_delete",
       "surface": "rest",
-      "route_patterns": ["GET /api/calls/{id}", "PATCH /api/calls/{id}", "DELETE /api/calls/{id}"],
+      "route_patterns": [
+        "GET /api/calls/{id}",
+        "PATCH /api/calls/{id}",
+        "DELETE /api/calls/{id}"
+      ],
       "protected_by": "router_rbac_guard",
-      "source_paths": ["backend-king-php/http/module_calls.php", "backend-king-php/domain/calls/call_management.php"],
-      "contract_paths": ["backend-king-php/tests/call-update-endpoint-contract.sh", "backend-king-php/tests/call-update-contract.sh"],
+      "source_paths": [
+        "backend-king-php/http/router.php",
+        "backend-king-php/support/auth.php",
+        "backend-king-php/http/module_calls.php",
+        "backend-king-php/domain/calls/call_management.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/call-update-endpoint-contract.sh",
+        "backend-king-php/tests/call-update-contract.sh"
+      ],
       "semantics": {
-        "auth": { "status": 401, "error_codes": ["auth_failed"] },
-        "forbidden": { "status": 403, "error_codes": ["calls_forbidden"] },
-        "validation": { "statuses": [400, 422], "error_codes": ["calls_update_invalid_request_body", "calls_update_validation_failed", "immutable_for_edit"] }
+        "auth": {
+          "status": 401,
+          "error_codes": [
+            "auth_failed"
+          ]
+        },
+        "forbidden": {
+          "status": 403,
+          "error_codes": [
+            "calls_forbidden"
+          ]
+        },
+        "validation": {
+          "statuses": [
+            400,
+            422
+          ],
+          "error_codes": [
+            "calls_update_invalid_request_body",
+            "calls_update_validation_failed",
+            "immutable_for_edit"
+          ]
+        }
       },
       "conflict_applicability": "not_applicable_immutable_edit_is_field_validation"
     },
     {
       "id": "calls_cancel",
       "surface": "rest",
-      "route_patterns": ["POST /api/calls/{id}/cancel"],
+      "route_patterns": [
+        "POST /api/calls/{id}/cancel"
+      ],
       "protected_by": "router_rbac_guard",
-      "source_paths": ["backend-king-php/http/module_calls.php", "backend-king-php/domain/calls/call_management.php"],
-      "contract_paths": ["backend-king-php/tests/call-cancel-endpoint-contract.sh", "backend-king-php/tests/call-cancel-contract.sh"],
+      "source_paths": [
+        "backend-king-php/http/router.php",
+        "backend-king-php/support/auth.php",
+        "backend-king-php/http/module_calls.php",
+        "backend-king-php/domain/calls/call_management.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/call-cancel-endpoint-contract.sh",
+        "backend-king-php/tests/call-cancel-contract.sh"
+      ],
       "semantics": {
-        "auth": { "status": 401, "error_codes": ["auth_failed"] },
-        "forbidden": { "status": 403, "error_codes": ["calls_forbidden"] },
-        "validation": { "statuses": [400, 422], "error_codes": ["calls_cancel_invalid_request_body", "calls_cancel_validation_failed"] },
-        "conflict": { "status": 409, "error_codes": ["calls_cancel_state_conflict", "already_cancelled", "transition_not_allowed"] }
+        "auth": {
+          "status": 401,
+          "error_codes": [
+            "auth_failed"
+          ]
+        },
+        "forbidden": {
+          "status": 403,
+          "error_codes": [
+            "calls_forbidden"
+          ]
+        },
+        "validation": {
+          "statuses": [
+            400,
+            422
+          ],
+          "error_codes": [
+            "calls_cancel_invalid_request_body",
+            "calls_cancel_validation_failed"
+          ]
+        },
+        "conflict": {
+          "status": 409,
+          "error_codes": [
+            "calls_cancel_state_conflict",
+            "already_cancelled",
+            "transition_not_allowed"
+          ]
+        }
       },
       "conflict_applicability": "cancelled_or_ended_call_state"
     },
     {
       "id": "call_participant_role",
       "surface": "rest",
-      "route_patterns": ["PATCH /api/calls/{id}/participants/{userId}/role"],
+      "route_patterns": [
+        "PATCH /api/calls/{id}/participants/{userId}/role"
+      ],
       "protected_by": "router_rbac_guard",
-      "source_paths": ["backend-king-php/http/module_calls.php", "backend-king-php/domain/calls/call_management.php"],
-      "contract_paths": ["backend-king-php/tests/call-update-endpoint-contract.sh"],
+      "source_paths": [
+        "backend-king-php/http/router.php",
+        "backend-king-php/support/auth.php",
+        "backend-king-php/http/module_calls.php",
+        "backend-king-php/domain/calls/call_management.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/call-update-endpoint-contract.sh"
+      ],
       "semantics": {
-        "auth": { "status": 401, "error_codes": ["auth_failed"] },
-        "forbidden": { "status": 403, "error_codes": ["calls_forbidden"] },
-        "validation": { "statuses": [400, 422], "error_codes": ["calls_role_update_invalid_request_body", "calls_role_update_validation_failed"] }
+        "auth": {
+          "status": 401,
+          "error_codes": [
+            "auth_failed"
+          ]
+        },
+        "forbidden": {
+          "status": 403,
+          "error_codes": [
+            "calls_forbidden"
+          ]
+        },
+        "validation": {
+          "statuses": [
+            400,
+            422
+          ],
+          "error_codes": [
+            "calls_role_update_invalid_request_body",
+            "calls_role_update_validation_failed"
+          ]
+        }
       },
       "conflict_applicability": "not_applicable_role_errors_are_authorization_or_validation"
     },
     {
       "id": "call_access_links",
       "surface": "rest",
-      "route_patterns": ["POST /api/calls/{id}/access-link", "GET /api/call-access/{id}", "GET /api/call-access/{id}/join", "POST /api/call-access/{id}/session"],
+      "route_patterns": [
+        "POST /api/calls/{id}/access-link",
+        "GET /api/call-access/{id}",
+        "GET /api/call-access/{id}/join",
+        "POST /api/call-access/{id}/session"
+      ],
       "protected_by": "router_rbac_guard_or_access_token_binding",
-      "source_paths": ["backend-king-php/http/module_calls.php", "backend-king-php/domain/calls/call_access.php"],
-      "contract_paths": ["backend-king-php/tests/call-access-session-contract.sh"],
+      "source_paths": [
+        "backend-king-php/http/router.php",
+        "backend-king-php/support/auth.php",
+        "backend-king-php/http/module_calls.php",
+        "backend-king-php/domain/calls/call_access.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/call-access-session-contract.sh"
+      ],
       "semantics": {
-        "auth": { "status": 401, "error_codes": ["auth_failed"] },
-        "forbidden": { "status": 403, "error_codes": ["call_access_forbidden", "calls_forbidden"] },
-        "validation": { "statuses": [400, 422], "error_codes": ["call_access_invalid_request_body", "call_access_validation_failed"] },
-        "conflict": { "status": 409, "error_codes": ["call_access_conflict", "invite_only_requires_personal_link"] }
+        "auth": {
+          "status": 401,
+          "error_codes": [
+            "auth_failed"
+          ]
+        },
+        "forbidden": {
+          "status": 403,
+          "error_codes": [
+            "call_access_forbidden",
+            "calls_forbidden"
+          ]
+        },
+        "validation": {
+          "statuses": [
+            400,
+            422
+          ],
+          "error_codes": [
+            "call_access_invalid_request_body",
+            "call_access_validation_failed"
+          ]
+        },
+        "conflict": {
+          "status": 409,
+          "error_codes": [
+            "call_access_conflict",
+            "invite_only_requires_personal_link"
+          ]
+        }
       },
       "conflict_applicability": "expired_or_non_joinable_call_access_state"
     },
     {
       "id": "invite_codes_create_redeem",
       "surface": "rest",
-      "route_patterns": ["POST /api/invite-codes", "POST /api/invite-codes/{id}/copy", "POST /api/invite-codes/redeem"],
+      "route_patterns": [
+        "POST /api/invite-codes",
+        "POST /api/invite-codes/{id}/copy",
+        "POST /api/invite-codes/redeem"
+      ],
       "protected_by": "router_rbac_guard",
-      "source_paths": ["backend-king-php/http/module_invites.php", "backend-king-php/domain/calls/invite_codes.php"],
-      "contract_paths": ["backend-king-php/tests/invite-code-create-endpoint-contract.sh", "backend-king-php/tests/invite-code-copy-boundary-contract.sh", "backend-king-php/tests/invite-code-redeem-endpoint-contract.sh"],
+      "source_paths": [
+        "backend-king-php/http/router.php",
+        "backend-king-php/support/auth.php",
+        "backend-king-php/http/module_invites.php",
+        "backend-king-php/domain/calls/invite_codes.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/invite-code-create-endpoint-contract.sh",
+        "backend-king-php/tests/invite-code-copy-boundary-contract.sh",
+        "backend-king-php/tests/invite-code-redeem-endpoint-contract.sh"
+      ],
       "semantics": {
-        "auth": { "status": 401, "error_codes": ["auth_failed"] },
-        "forbidden": { "status": 403, "error_codes": ["invite_codes_forbidden", "invite_codes_redeem_forbidden"] },
-        "validation": { "statuses": [400, 422], "error_codes": ["invite_codes_invalid_request_body", "invite_codes_validation_failed", "invite_codes_redeem_invalid_request_body", "invite_codes_redeem_validation_failed"] },
-        "conflict": { "status": 409, "error_codes": ["invite_codes_conflict", "invite_codes_redeem_exhausted", "invite_codes_redeem_conflict"] }
+        "auth": {
+          "status": 401,
+          "error_codes": [
+            "auth_failed"
+          ]
+        },
+        "forbidden": {
+          "status": 403,
+          "error_codes": [
+            "invite_codes_forbidden",
+            "invite_codes_redeem_forbidden"
+          ]
+        },
+        "validation": {
+          "statuses": [
+            400,
+            422
+          ],
+          "error_codes": [
+            "invite_codes_invalid_request_body",
+            "invite_codes_validation_failed",
+            "invite_codes_redeem_invalid_request_body",
+            "invite_codes_redeem_validation_failed"
+          ]
+        },
+        "conflict": {
+          "status": 409,
+          "error_codes": [
+            "invite_codes_conflict",
+            "invite_codes_redeem_exhausted",
+            "invite_codes_redeem_conflict"
+          ]
+        }
       },
       "conflict_applicability": "code_collision_exhausted_or_non_joinable_destination"
     },
     {
       "id": "chat_archive_attachments",
       "surface": "rest_realtime",
-      "route_patterns": ["GET /api/calls/{id}/chat-archive", "POST /api/calls/{id}/chat/attachments", "GET /api/calls/{id}/chat/attachments/{attachmentId}", "chat/send"],
+      "route_patterns": [
+        "GET /api/calls/{id}/chat-archive",
+        "POST /api/calls/{id}/chat/attachments",
+        "GET /api/calls/{id}/chat/attachments/{attachmentId}",
+        "chat/send"
+      ],
       "protected_by": "router_rbac_guard_and_call_participation_acl",
-      "source_paths": ["backend-king-php/http/module_calls.php", "backend-king-php/domain/realtime/chat_archive.php", "backend-king-php/domain/realtime/chat_attachments.php"],
-      "contract_paths": ["backend-king-php/tests/chat-archive-contract.sh", "backend-king-php/tests/chat-attachment-contract.sh", "backend-king-php/tests/realtime-chat-contract.sh"],
+      "source_paths": [
+        "backend-king-php/http/router.php",
+        "backend-king-php/support/auth.php",
+        "backend-king-php/http/module_calls.php",
+        "backend-king-php/domain/realtime/chat_archive.php",
+        "backend-king-php/domain/realtime/chat_attachments.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/chat-archive-contract.sh",
+        "backend-king-php/tests/chat-attachment-contract.sh",
+        "backend-king-php/tests/realtime-chat-contract.sh"
+      ],
       "semantics": {
-        "auth": { "status": 401, "error_codes": ["auth_failed"] },
-        "forbidden": { "status": 403, "error_codes": ["chat_archive_forbidden", "chat_attachment_forbidden"] },
-        "validation": { "statuses": [400, 422], "error_codes": ["chat_archive_validation_failed", "attachment_count_exceeded", "attachment_type_not_allowed"] }
+        "auth": {
+          "status": 401,
+          "error_codes": [
+            "auth_failed"
+          ]
+        },
+        "forbidden": {
+          "status": 403,
+          "error_codes": [
+            "chat_archive_forbidden",
+            "chat_attachment_forbidden"
+          ]
+        },
+        "validation": {
+          "statuses": [
+            400,
+            422
+          ],
+          "error_codes": [
+            "chat_archive_validation_failed",
+            "attachment_count_exceeded",
+            "attachment_type_not_allowed"
+          ]
+        }
       },
       "conflict_applicability": "not_applicable_upload_limits_are_validation_and_acl_is_forbidden"
     }

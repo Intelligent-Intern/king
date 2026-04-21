@@ -37,6 +37,7 @@ $log = static function (string $message): void {
 
 require_once __DIR__ . '/support/database.php';
 require_once __DIR__ . '/support/auth.php';
+require_once __DIR__ . '/support/config_hardening.php';
 require_once __DIR__ . '/support/error_envelope.php';
 require_once __DIR__ . '/domain/users/avatar_upload.php';
 require_once __DIR__ . '/domain/calls/call_directory.php';

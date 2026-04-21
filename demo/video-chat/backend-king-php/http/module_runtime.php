@@ -11,6 +11,17 @@ function videochat_handle_runtime_routes(
 ): ?array {
     if ($path === '/health' || $path === '/api/runtime') {
         $payload = $runtimeEnvelope();
+        return $jsonResponse(200, [
+            'service' => is_string($payload['service'] ?? null)
+                ? $payload['service']
+                : 'video-chat-backend-king-php',
+            'status' => 'ok',
+            'time' => is_string($payload['time'] ?? null) ? $payload['time'] : gmdate('c'),
+        ]);
+    }
+
+    if ($path === '/api/admin/runtime') {
+        $payload = $runtimeEnvelope();
         $payload['status'] = 'ok';
         return $jsonResponse(200, $payload);
     }
@@ -37,6 +48,7 @@ function videochat_handle_runtime_routes(
             'ws_path' => $wsPath,
             'runtime_endpoint' => '/api/runtime',
             'version_endpoint' => '/api/version',
+            'admin_runtime_endpoint' => '/api/admin/runtime',
             'calls_endpoint' => '/api/calls',
             'call_create_endpoint' => '/api/calls',
             'call_update_endpoint_template' => '/api/calls/{id}',
@@ -53,12 +65,14 @@ function videochat_handle_runtime_routes(
             'refresh_endpoint' => '/api/auth/refresh',
             'logout_endpoint' => '/api/auth/logout',
             'admin_probe_endpoint' => '/api/admin/ping',
+            'admin_infrastructure_endpoint' => '/api/admin/infrastructure',
             'admin_users_endpoint' => '/api/admin/users',
             'admin_user_update_endpoint_template' => '/api/admin/users/{id}',
             'admin_user_deactivate_endpoint_template' => '/api/admin/users/{id}/deactivate',
             'admin_user_reactivate_endpoint_template' => '/api/admin/users/{id}/reactivate',
             'moderation_probe_endpoint' => '/api/moderation/ping',
             'user_probe_endpoint' => '/api/user/ping',
+            'user_directory_endpoint' => '/api/user/directory',
             'user_avatar_upload_endpoint' => '/api/user/avatar',
             'user_avatar_file_endpoint_template' => '/api/user/avatar-files/{filename}',
             'user_settings_endpoint' => '/api/user/settings',

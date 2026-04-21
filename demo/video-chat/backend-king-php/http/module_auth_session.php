@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/users/user_emails.php';
 
+function videochat_auth_session_is_transient_sqlite_lock(Throwable $error): bool
+{
+    $message = strtolower($error->getMessage());
+    return str_contains($message, 'database is locked')
+        || str_contains($message, 'database schema is locked');
+}
+
 function videochat_handle_auth_session_routes(
     string $path,
     string $method,
@@ -17,9 +24,9 @@ function videochat_handle_auth_session_routes(
     callable $issueSessionId
 ): ?array {
     if ($path === '/api/auth/login') {
-        if (!in_array($method, ['GET', 'POST'], true)) {
-            return $errorResponse(405, 'method_not_allowed', 'Use GET or POST for /api/auth/login.', [
-                'allowed_methods' => ['GET', 'POST'],
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/auth/login.', [
+                'allowed_methods' => ['POST'],
             ]);
         }
 
@@ -36,20 +43,6 @@ function videochat_handle_auth_session_routes(
                 [$basicEmail, $basicPassword] = explode(':', $decoded, 2);
                 $email = strtolower(trim($basicEmail));
                 $password = $basicPassword;
-            }
-        }
-
-        if ($email === '' || trim($password) === '') {
-            $query = videochat_request_query_params($request);
-            $queryEmail = is_scalar($query['email'] ?? null)
-                ? strtolower(trim((string) $query['email']))
-                : '';
-            $queryPassword = is_scalar($query['password'] ?? null)
-                ? (string) $query['password']
-                : '';
-            if ($queryEmail !== '' && trim($queryPassword) !== '') {
-                $email = $queryEmail;
-                $password = $queryPassword;
             }
         }
 
@@ -74,7 +67,9 @@ function videochat_handle_auth_session_routes(
             ]);
         }
 
-        try {
+        $maxLoginAttempts = 5;
+        for ($loginAttempt = 1; $loginAttempt <= $maxLoginAttempts; $loginAttempt += 1) {
+            try {
             $pdo = $openDatabase();
             $userQuery = $pdo->prepare(
                 <<<'SQL'
@@ -195,11 +190,25 @@ SQL
                 ],
                 'time' => gmdate('c'),
             ]);
-        } catch (Throwable $error) {
-            return $errorResponse(500, 'auth_login_failed', 'Login failed due to a backend error.', [
-                'reason' => 'internal_error',
-            ]);
+            } catch (Throwable $error) {
+                if (
+                    $loginAttempt < $maxLoginAttempts
+                    && videochat_auth_session_is_transient_sqlite_lock($error)
+                ) {
+                    usleep(100_000 * $loginAttempt);
+                    continue;
+                }
+
+                error_log('[video-chat][auth] login failed: ' . get_class($error) . ': ' . $error->getMessage());
+                return $errorResponse(500, 'auth_login_failed', 'Login failed due to a backend error.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
         }
+
+        return $errorResponse(500, 'auth_login_failed', 'Login failed due to a backend error.', [
+            'reason' => 'internal_error',
+        ]);
     }
 
     if ($path === '/api/auth/session-state') {
@@ -250,10 +259,24 @@ SQL
             ]);
         }
 
+        try {
+            $freshContext = videochat_authenticate_request($openDatabase(), $request, 'rest');
+        } catch (Throwable) {
+            return $errorResponse(500, 'auth_session_probe_failed', 'Session probe failed due to a backend error.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($freshContext['ok'] ?? false)) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => (string) ($freshContext['reason'] ?? 'invalid_session'),
+            ]);
+        }
+
         return $jsonResponse(200, [
             'status' => 'ok',
-            'session' => $apiAuthContext['session'] ?? null,
-            'user' => $apiAuthContext['user'] ?? null,
+            'session' => $freshContext['session'] ?? null,
+            'user' => $freshContext['user'] ?? null,
             'time' => gmdate('c'),
         ]);
     }

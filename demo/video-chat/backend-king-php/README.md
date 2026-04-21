@@ -43,6 +43,7 @@ cd demo/video-chat/backend-king-php
 - `GET /` or `GET /api/bootstrap`
 - `GET /health`
 - `GET /api/runtime`
+- `GET /api/admin/runtime` (requires admin session; full runtime diagnostics)
 - `GET /api/version`
 - `POST /api/auth/login`
 - `GET /api/auth/session-state` (soft session probe; never returns 401 for stale/missing tokens)
@@ -172,9 +173,11 @@ join modal, `allowed` after an owner/moderator admits the pending user, and
 `declined`/`cancelled` for explicit non-join outcomes. Legacy `accepted` rows are
 migrated as allowed admission.
 
-`/health` and `/api/runtime` now include the database migration/runtime
-snapshot (schema version, migration counts, table inventory, seeded demo users,
-and seeded demo calls when enabled).
+`/health` and `/api/runtime` are public liveness/preflight endpoints and only
+return `service`, `status`, and `time`. The full database migration/runtime
+snapshot (schema version, migration counts, table inventory, seeded users, RBAC
+matrix, and endpoint inventory) is available only through the admin-protected
+`/api/admin/runtime` diagnostics endpoint.
 
 API and realtime contracts are expanded in subsequent V1 leaves.
 

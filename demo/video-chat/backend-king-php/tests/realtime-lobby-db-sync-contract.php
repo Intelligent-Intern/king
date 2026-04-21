@@ -263,6 +263,19 @@ SQL
     $leftConnection['active_call_id'] = 'call-db-sync';
     $leftConnection['user_id'] = 20;
     $leftConnection['call_role'] = 'participant';
+
+    $activeConnection = $leftConnection;
+    $activeConnection['connection_id'] = 'conn-waiting-active-other-worker';
+    videochat_realtime_touch_call_presence($openDatabase, $activeConnection);
+    videochat_realtime_mark_call_participant_left($openDatabase, $leftConnection, videochat_presence_state_init());
+    $stillActiveRow = $pdo->query(
+        "SELECT invite_state, left_at FROM call_participants WHERE call_id = 'call-db-sync' AND user_id = 20"
+    )->fetch(PDO::FETCH_ASSOC);
+    videochat_realtime_lobby_db_sync_assert(is_array($stillActiveRow), 'active participant row missing');
+    videochat_realtime_lobby_db_sync_assert((string) ($stillActiveRow['invite_state'] ?? '') === 'allowed', 'active cross-worker participant must not be reset to invited');
+    videochat_realtime_lobby_db_sync_assert(trim((string) ($stillActiveRow['left_at'] ?? '')) === '', 'active cross-worker participant must not get left_at');
+    videochat_realtime_remove_call_presence($openDatabase, $activeConnection);
+
     videochat_realtime_mark_call_participant_left($openDatabase, $leftConnection, videochat_presence_state_init());
     $leftRow = $pdo->query(
         "SELECT invite_state, left_at FROM call_participants WHERE call_id = 'call-db-sync' AND user_id = 20"

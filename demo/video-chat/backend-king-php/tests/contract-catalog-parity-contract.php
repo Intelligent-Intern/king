@@ -340,6 +340,15 @@ try {
     videochat_contract_catalog_assert((int) ($runtimeResponse['status'] ?? 0) === 200, 'runtime status must be 200');
     $runtimePayload = videochat_contract_catalog_decode_json((string) ($runtimeResponse['body'] ?? ''), 'runtime_payload');
     videochat_contract_catalog_assert_payload($catalog, 'api', 'runtime_health', $runtimePayload);
+    videochat_contract_catalog_assert(!array_key_exists('database', $runtimePayload), 'public runtime payload must not expose database details');
+    videochat_contract_catalog_assert(!array_key_exists('auth', $runtimePayload), 'public runtime payload must not expose auth details');
+    videochat_contract_catalog_assert(!array_key_exists('calls', $runtimePayload), 'public runtime payload must not expose call endpoint details');
+
+    $adminRuntimeResponse = videochat_handle_runtime_routes('/api/admin/runtime', 'GET', $jsonResponse, $runtimeEnvelope, '/ws');
+    videochat_contract_catalog_assert(is_array($adminRuntimeResponse), 'admin runtime route should respond');
+    videochat_contract_catalog_assert((int) ($adminRuntimeResponse['status'] ?? 0) === 200, 'admin runtime status must be 200');
+    $adminRuntimePayload = videochat_contract_catalog_decode_json((string) ($adminRuntimeResponse['body'] ?? ''), 'admin_runtime_payload');
+    videochat_contract_catalog_assert_payload($catalog, 'api', 'runtime_admin_detail', $adminRuntimePayload);
 
     $bootstrapResponse = videochat_handle_runtime_routes('/api/bootstrap', 'GET', $jsonResponse, $runtimeEnvelope, '/ws');
     videochat_contract_catalog_assert(is_array($bootstrapResponse), 'bootstrap route should respond');

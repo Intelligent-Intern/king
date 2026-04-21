@@ -196,6 +196,23 @@ SQL
         videochat_realtime_connection_can_bypass_admission_for_room($adminConnection, 'demo-call-room', $openDatabase),
         'admin must bypass admission'
     );
+    $adminContextConnection = videochat_realtime_connection_with_call_context(
+        [
+            'user_id' => 1,
+            'role' => 'admin',
+            'room_id' => 'demo-call-room',
+            'requested_call_id' => 'call-owner-room',
+        ],
+        $openDatabase
+    );
+    videochat_realtime_admission_bypass_assert(
+        ($adminContextConnection['active_call_id'] ?? '') === 'call-owner-room',
+        'admin must resolve requested call context without being owner or participant'
+    );
+    videochat_realtime_admission_bypass_assert(
+        ($adminContextConnection['can_moderate_call'] ?? false) === true,
+        'admin resolved call context must grant owner-equivalent moderation'
+    );
 
     $ownerFastPathConnection = [
         'user_id' => 77,
