@@ -1,39 +1,42 @@
 <template>
-  <div class="calls-modal" :hidden="!open" role="dialog" aria-modal="true" aria-label="Chat archive modal">
-    <div class="calls-modal-backdrop" @click="closeArchive"></div>
-    <div class="calls-modal-dialog chat-archive-dialog">
-      <header class="calls-modal-header calls-modal-header-enter">
-        <div class="calls-modal-header-enter-left">
-          <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
-          <div>
-            <h4 class="calls-enter-title">Chat archive</h4>
-            <p class="chat-archive-subtitle">{{ callTitle || callId || 'Read-only transcript' }}</p>
-          </div>
-        </div>
-        <button class="icon-mini-btn" type="button" aria-label="Close chat archive" @click="closeArchive">
-          <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
-        </button>
-      </header>
-
-      <div class="chat-archive-controls" aria-label="Chat archive filters">
-        <input
-          v-model="queryDraft"
-          class="input"
-          type="search"
-          placeholder="Search messages or files"
-          @keydown.enter.prevent="reloadArchive"
-        />
-        <select v-model="fileKind" class="chat-archive-select" aria-label="File type filter" @change="reloadArchive">
-          <option v-for="option in fileKindOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
-        <button class="btn btn-cyan" type="button" :disabled="loading || !callId" @click="reloadArchive">
+  <AppModalShell
+    :open="open"
+    title="Chat archive"
+    :subtitle="callTitle || callId || 'Read-only transcript'"
+    title-id="chat-archive-title"
+    subtitle-class="chat-archive-subtitle"
+    dialog-class="calls-modal-dialog chat-archive-dialog"
+    body-class="calls-modal-body chat-archive-body"
+    footer-class="calls-modal-footer chat-archive-footer"
+    close-label="Close chat archive"
+    @close="closeArchive"
+  >
+    <template #body>
+      <section class="chat-archive-toolbar" aria-label="Chat archive filters">
+        <label class="chat-archive-field">
+          <span>Search</span>
+          <input
+            v-model="queryDraft"
+            class="input"
+            type="search"
+            placeholder="Search messages or files"
+            @keydown.enter.prevent="reloadArchive"
+          />
+        </label>
+        <label class="chat-archive-field">
+          <span>File type</span>
+          <AppSelect v-model="fileKind" aria-label="File type filter" @change="reloadArchive">
+            <option v-for="option in fileKindOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </AppSelect>
+        </label>
+        <button class="btn btn-cyan chat-archive-search" type="button" :disabled="loading || !callId" @click="reloadArchive">
           Search
         </button>
-      </div>
+      </section>
 
-      <div class="calls-modal-body chat-archive-body">
+      <div class="chat-archive-grid">
         <section class="chat-archive-column chat-archive-messages" aria-label="Archived chat messages">
           <header class="chat-archive-column-header">
             <span>Messages</span>
@@ -107,17 +110,19 @@
           </section>
         </aside>
       </div>
+    </template>
 
-      <footer class="calls-modal-footer chat-archive-footer">
-        <span class="chat-archive-readonly">Read-only archive. Messages and files cannot be changed here.</span>
-        <button class="btn" type="button" @click="closeArchive">Close</button>
-      </footer>
-    </div>
-  </div>
+    <template #footer>
+      <span class="chat-archive-readonly">Read-only archive. Messages and files cannot be changed here.</span>
+      <button class="btn" type="button" @click="closeArchive">Close</button>
+    </template>
+  </AppModalShell>
 </template>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
+import AppModalShell from '../../components/AppModalShell.vue';
+import AppSelect from '../../components/AppSelect.vue';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import { formatDateTimeDisplay } from '../../support/dateTimeFormat';
@@ -260,47 +265,69 @@ watch(
 </script>
 
 <style scoped>
-.chat-archive-dialog {
+:deep(.chat-archive-dialog) {
   width: min(1180px, calc(100vw - 32px));
-  max-height: calc(100vh - 36px);
+  height: min(820px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
-.chat-archive-subtitle {
+:deep(.chat-archive-subtitle) {
   margin: 4px 0 0;
-  color: rgba(255, 255, 255, 0.66);
+  color: var(--text-muted);
   font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.chat-archive-controls {
+:deep(.chat-archive-body) {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(160px, 220px) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-archive-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 220px) auto;
+  align-items: end;
   gap: 10px;
-  padding: 0 22px 16px;
 }
 
-.chat-archive-select {
-  min-height: 42px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 14px;
-  background: rgba(7, 12, 20, 0.78);
-  color: #f7fbff;
-  padding: 0 12px;
-}
-
-.chat-archive-body {
+.chat-archive-field {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
-  gap: 16px;
-  min-height: min(62vh, 680px);
-  max-height: min(66vh, 720px);
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.chat-archive-field .ii-select {
+  width: 100%;
+}
+
+.chat-archive-search {
+  min-width: 94px;
+}
+
+.chat-archive-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.75fr);
+  gap: 12px;
+  min-height: 0;
   overflow: hidden;
 }
 
 .chat-archive-column {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 20px;
-  background: rgba(3, 8, 16, 0.44);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-surface-strong);
   overflow: hidden;
 }
 
@@ -308,31 +335,36 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 14px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  font-weight: 800;
+  gap: 10px;
+  min-height: 42px;
+  padding: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--brand-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .chat-archive-column-header small {
-  color: rgba(255, 255, 255, 0.58);
+  color: var(--text-muted);
   font-weight: 700;
 }
 
 .chat-archive-message-list {
   display: grid;
+  align-content: start;
   gap: 10px;
-  max-height: calc(100% - 108px);
   margin: 0;
-  padding: 14px;
+  padding: 10px;
   overflow: auto;
   list-style: none;
 }
 
 .chat-archive-message {
-  padding: 14px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.06);
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-surface);
 }
 
 .chat-archive-message-head,
@@ -349,7 +381,7 @@ watch(
 .chat-archive-message-head time,
 .chat-archive-file time,
 .chat-archive-file span {
-  color: rgba(255, 255, 255, 0.58);
+  color: var(--text-muted);
   font-size: 0.78rem;
 }
 
@@ -357,6 +389,7 @@ watch(
   margin: 10px 0 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  line-height: 1.45;
 }
 
 .chat-archive-chips {
@@ -367,35 +400,46 @@ watch(
 }
 
 .chat-archive-chip {
-  border: 1px solid rgba(98, 219, 255, 0.38);
-  border-radius: 999px;
-  color: #8be6ff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--brand-cyan);
   padding: 6px 10px;
   text-decoration: none;
-  font-weight: 800;
+  font-weight: 700;
   font-size: 0.78rem;
 }
 
 .chat-archive-empty {
-  padding: 18px;
-  color: rgba(255, 255, 255, 0.62);
+  padding: 12px;
+  color: var(--text-muted);
 }
 
 .chat-archive-error {
-  color: #ff9aa8;
+  color: var(--color-ffb5b5);
 }
 
 .chat-archive-load-more {
-  padding: 0 14px 14px;
+  padding: 0 10px 10px;
 }
 
 .chat-archive-files {
+  display: block;
   overflow: auto;
 }
 
+.chat-archive-files .chat-archive-column-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
 .chat-archive-file-group {
-  padding: 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.chat-archive-file-group:last-child {
+  border-bottom: 0;
 }
 
 .chat-archive-file-group h5 {
@@ -406,7 +450,7 @@ watch(
 
 .chat-archive-file-group.empty p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--text-muted);
 }
 
 .chat-archive-file-list {
@@ -422,9 +466,17 @@ watch(
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-surface);
+}
+
+.chat-archive-file strong,
+.chat-archive-file span,
+.chat-archive-file time,
+.chat-archive-chip {
+  overflow-wrap: anywhere;
 }
 
 .chat-archive-download-fallback {
@@ -433,32 +485,155 @@ watch(
   font-weight: 800;
 }
 
-.chat-archive-footer {
+:deep(.chat-archive-footer) {
+  align-items: center;
   justify-content: space-between;
+  min-width: 0;
 }
 
 .chat-archive-readonly {
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--text-muted);
   font-size: 0.82rem;
+  min-width: 0;
 }
 
-@media (max-width: 840px) {
-  .chat-archive-controls,
-  .chat-archive-body {
+@media (max-width: 980px) {
+  :deep(.chat-archive-dialog) {
+    width: min(960px, calc(100vw - 14px));
+    height: min(920px, calc(100dvh - 14px));
+    max-height: calc(100dvh - 14px);
+    --calls-enter-dialog-padding: 10px;
+    gap: 8px;
+  }
+
+  .chat-archive-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1.1fr) minmax(220px, 0.9fr);
+    gap: 10px;
+  }
+
+  .chat-archive-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) auto;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 720px) {
+  :deep(.calls-modal) {
+    padding: 4px;
+    place-items: stretch;
+  }
+
+  :deep(.chat-archive-dialog) {
+    width: 100%;
+    height: calc(100dvh - 8px);
+    max-height: calc(100dvh - 8px);
+    --calls-enter-dialog-padding: 8px;
+    border-radius: 8px;
+    gap: 8px;
+  }
+
+  :deep(.calls-modal-header) {
+    gap: 8px;
+  }
+
+  :deep(.calls-modal-header-enter) {
+    padding: 10px;
+  }
+
+  :deep(.calls-modal-header-enter-logo) {
+    height: 20px;
+  }
+
+  :deep(.calls-modal-header .calls-enter-title) {
+    font-size: 13px;
+  }
+
+  :deep(.chat-archive-subtitle) {
+    font-size: 0.74rem;
+  }
+
+  :deep(.chat-archive-body) {
+    overflow: auto;
+    grid-template-rows: auto auto;
+    align-content: start;
+  }
+
+  .chat-archive-toolbar {
     grid-template-columns: 1fr;
   }
 
-  .chat-archive-body {
-    max-height: none;
+  .chat-archive-search {
+    width: 100%;
+  }
+
+  .chat-archive-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
     overflow: visible;
   }
 
   .chat-archive-message-list {
-    max-height: 52vh;
+    max-height: min(48dvh, 420px);
   }
 
   .chat-archive-files {
-    max-height: 42vh;
+    max-height: min(38dvh, 360px);
+    overflow: auto;
+  }
+
+  .chat-archive-column-header {
+    min-height: 38px;
+    padding: 8px;
+  }
+
+  .chat-archive-message,
+  .chat-archive-file {
+    padding: 8px;
+  }
+
+  .chat-archive-message-head {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-archive-file {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chat-archive-file .icon-mini-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .chat-archive-download-fallback {
+    display: inline;
+  }
+
+  :deep(.chat-archive-footer) {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  :deep(.chat-archive-footer .btn) {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  :deep(.calls-modal) {
+    padding: 0;
+  }
+
+  :deep(.chat-archive-dialog) {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .chat-archive-readonly {
+    font-size: 0.76rem;
   }
 }
 </style>
