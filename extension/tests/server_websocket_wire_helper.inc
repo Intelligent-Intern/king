@@ -29,7 +29,7 @@ function king_server_websocket_wire_launch(string $mode, int $iterations, int $p
     $capture = tempnam(sys_get_temp_dir(), 'king-server-websocket-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';
     $commandParts = [
-        escapeshellarg(PHP_BINARY),
+        '/usr/local/bin/php',
         '-n',
         '-d',
         escapeshellarg('extension=' . $extensionPath),

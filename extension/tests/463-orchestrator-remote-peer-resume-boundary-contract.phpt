@@ -5,6 +5,12 @@ King pipeline orchestrator keeps resumed running runs on the remote peer backend
 if (!function_exists('proc_open') || !function_exists('stream_socket_server')) {
     echo "skip proc_open and stream_socket_server are required";
 }
+if (!function_exists('pcntl_signal')) {
+    echo "skip pcntl is required for remote peer signal handling";
+}
+if (!extension_loaded('king')) {
+    echo "skip king extension is required";
+}
 ?>
 --FILE--
 <?php

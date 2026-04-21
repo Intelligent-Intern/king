@@ -5,6 +5,9 @@ King admin API rejects self-signed client certificates outside the configured CA
 if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the admin API TLS fixture";
 }
+if (!extension_loaded('openssl')) {
+    echo "skip openssl extension required for TLS";
+}
 ?>
 --INI--
 king.security_allow_config_override=1

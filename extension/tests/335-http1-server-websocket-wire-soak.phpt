@@ -1,5 +1,17 @@
 --TEST--
 King HTTP/1 on-wire websocket upgrade stays stable across repeated close and drain cycles
+--SKIPIF--
+<?php
+if (!function_exists('proc_open')) {
+    echo "skip proc_open is required for websocket wire soak tests";
+}
+if (!function_exists('socket_create')) {
+    echo "skip socket extension is required for websocket wire soak tests";
+}
+if (!extension_loaded('king')) {
+    echo "skip king extension is required";
+}
+?>
 --FILE--
 <?php
 require __DIR__ . '/server_websocket_wire_helper.inc';

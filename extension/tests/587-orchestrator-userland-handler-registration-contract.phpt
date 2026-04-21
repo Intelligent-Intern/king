@@ -2,6 +2,12 @@
 King pipeline orchestrator exposes a process-local userland handler registration API over durable tool names
 --INI--
 king.security_allow_config_override=1
+--SKIPIF--
+<?php
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required";
+}
+?>
 --FILE--
 <?php
 $statePath = tempnam(sys_get_temp_dir(), 'king-orchestrator-handler-state-');

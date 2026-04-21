@@ -1,5 +1,17 @@
 --TEST--
 King Smart-DNS keeps mother-node sync statistics coherent under concurrent larger-topology churn
+--SKIPIF--
+<?php
+if (!function_exists('proc_open')) {
+    echo "skip proc_open is required for mother-node concurrent sync tests";
+}
+if (!function_exists('pcntl_signal')) {
+    echo "skip pcntl is required for process management in concurrent DNS tests";
+}
+if (!extension_loaded('king')) {
+    echo "skip king extension is required";
+}
+?>
 --INI--
 king.security_allow_config_override=1
 --FILE--

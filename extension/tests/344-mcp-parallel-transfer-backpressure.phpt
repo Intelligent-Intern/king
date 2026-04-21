@@ -1,5 +1,11 @@
 --TEST--
 King MCP parallel transfers keep one slow peer connection from blocking unrelated work
+--SKIPIF--
+<?php
+if (!function_exists('pcntl_fork')) {
+    echo "skip pcntl extension not available";
+}
+?>
 --INI--
 king.security_allow_config_override=1
 --FILE--

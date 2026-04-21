@@ -2,6 +2,12 @@
 King telemetry exposes complete export failure diagnostics across transport TLS HTTP and collector failures
 --INI--
 king.security_allow_config_override=1
+--SKIPIF--
+<?php
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required";
+}
+?>
 --FILE--
 <?php
 require __DIR__ . '/telemetry_otlp_test_helper.inc';

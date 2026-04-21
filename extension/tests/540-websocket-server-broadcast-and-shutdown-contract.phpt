@@ -1,5 +1,11 @@
 --TEST--
 King WebSocket Server broadcasts across live accepted peers and stop() drains a real shutdown handshake over those same connections
+--SKIPIF--
+<?php
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required for websocket server tests";
+}
+?>
 --FILE--
 <?php
 require __DIR__ . '/server_websocket_wire_helper.inc';

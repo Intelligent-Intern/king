@@ -1,5 +1,17 @@
 --TEST--
 King WebSocket Server accepted peers support a documented OO receive path with open-timeout null and closed-connection exceptions
+--SKIPIF--
+<?php
+if (!function_exists('proc_open')) {
+    echo "skip proc_open is required for websocket server tests";
+}
+if (!function_exists('socket_create')) {
+    echo "skip socket extension is required for websocket wire tests";
+}
+if (!extension_loaded('king')) {
+    echo "skip king extension is required";
+}
+?>
 --FILE--
 <?php
 require __DIR__ . '/server_websocket_wire_helper.inc';

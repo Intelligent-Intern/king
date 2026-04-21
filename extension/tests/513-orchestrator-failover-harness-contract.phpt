@@ -5,6 +5,9 @@ King pipeline orchestrator failover harness proves controller, worker, and remot
 if (!function_exists('proc_open') || !function_exists('stream_socket_server')) {
     echo "skip proc_open and stream_socket_server are required";
 }
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required for orchestrator tests";
+}
 ?>
 --FILE--
 <?php

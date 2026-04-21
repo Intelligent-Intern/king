@@ -49,6 +49,9 @@ together.
 | [Getting Started](./getting-started.md) | What King is, what problems it solves, and what the first successful program looks like. | Read first if you are new to the extension. |
 | [Glossary](./glossary.md) | Plain-language definitions for recurring technical terms. | Read when a term is unfamiliar, or once up front. |
 | [Platform Model](./platform-model.md) | How sessions, streams, responses, config, storage, orchestration, telemetry, and operations fit together. | Read when you want the whole system picture. |
+| [IIBIN](./iibin.md) | Binary schema system, encode/decode, compatibility. | Read when encoding binary data. |
+| [Protobuf](./protobuf.md) | Batch encoding, varint optimization, WebSocket speedups. | Read when tuning performance. |
+| [GossipMesh](./gossipmesh.md) | Decentralized SFU for 100+ participants. | Read when building video calls. |
 | [Configuration Handbook](./configuration-handbook.md) | How runtime config and deployment config work, how namespacing is used, and how changes are applied safely. | Read before tuning any subsystem. |
 | [Solution Blueprints](./solution-blueprints.md) | Three concrete starting paths, from one-node service to a full chat and video platform. | Read when you want to pick a deployment shape quickly. |
 

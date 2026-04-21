@@ -1,5 +1,11 @@
 --TEST--
 King Smart-DNS preserves counters and route stability across mother-node departure replacement and rejoin pressure
+--SKIPIF--
+<?php
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required for multi-process tests";
+}
+?>
 --INI--
 king.security_allow_config_override=1
 --FILE--

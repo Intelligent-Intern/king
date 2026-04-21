@@ -5,6 +5,9 @@ King remote-peer userland handler boundary rejects unsupported topology shapes a
 if (!function_exists('proc_open') || !function_exists('stream_socket_server')) {
     echo "skip proc_open and stream_socket_server are required";
 }
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required";
+}
 ?>
 --FILE--
 <?php

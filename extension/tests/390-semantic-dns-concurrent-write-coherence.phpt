@@ -1,5 +1,17 @@
 --TEST--
 King Smart-DNS preserves coherent discovery and routing state across concurrent service and status writers
+--SKIPIF--
+<?php
+if (!function_exists('proc_open')) {
+    echo "skip proc_open is required for concurrent DNS write coherence tests";
+}
+if (!function_exists('pcntl_signal')) {
+    echo "skip pcntl is required for process management in concurrent DNS tests";
+}
+if (!extension_loaded('king')) {
+    echo "skip king extension is required";
+}
+?>
 --INI--
 king.security_allow_config_override=1
 --FILE--

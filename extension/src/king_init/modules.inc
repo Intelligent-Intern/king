@@ -14,6 +14,9 @@ int king_init_modules(int type, int module_number)
 
     king_ini_module_number = module_number;
 
+    /* Initialize ticket ring */
+    king_ticket_ring_init();
+
     /* Initialize all config modules */
     kg_config_security_and_traffic_init();
     kg_config_tls_and_crypto_init();

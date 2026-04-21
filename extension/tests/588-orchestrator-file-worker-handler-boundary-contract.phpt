@@ -2,6 +2,12 @@
 King queued file-worker runs persist only durable userland handler references, not executable PHP callables
 --INI--
 king.security_allow_config_override=1
+--SKIPIF--
+<?php
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required";
+}
+?>
 --FILE--
 <?php
 $statePath = tempnam(sys_get_temp_dir(), 'king-orchestrator-handler-boundary-state-');

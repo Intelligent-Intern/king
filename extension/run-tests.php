@@ -312,6 +312,8 @@ function main(): void
         'zend.exception_ignore_args=0',
         'zend.exception_string_param_max_len=15',
         'short_open_tag=0',
+        'extension_dir=' . realpath(__DIR__ . '/modules'),
+        'extension=king.so'
     ];
 
     $no_file_cache = '-d opcache.file_cache= -d opcache.file_cache_only=0';

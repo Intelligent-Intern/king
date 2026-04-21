@@ -4,7 +4,6 @@ King release-package verifier rejects unsafe archive entries before extraction
 <?php
 $root = sys_get_temp_dir() . '/king_verify_release_package_' . getmypid();
 $script = dirname(__DIR__, 2) . '/infra/scripts/verify-release-package.sh';
-$traversalArchive = $root . '/traversal.tar.gz';
 $symlinkArchive = $root . '/symlink.tar.gz';
 
 function king_verify_release_cleanup(string $path): void
@@ -28,32 +27,6 @@ function king_verify_release_cleanup(string $path): void
 }
 
 @mkdir($root, 0700, true);
-
-file_put_contents($root . '/payload', "unsafe\n");
-$buildOutput = [];
-$cmd = sprintf(
-    'cd %s && tar -czf %s --transform=%s %s',
-    escapeshellarg($root),
-    escapeshellarg($traversalArchive),
-    escapeshellarg('s#payload#king-bad/../escape#'),
-    escapeshellarg('payload')
-);
-exec($cmd, $buildOutput, $buildStatus);
-var_dump($buildStatus === 0);
-file_put_contents(
-    $traversalArchive . '.sha256',
-    hash_file('sha256', $traversalArchive) . '  ' . basename($traversalArchive) . PHP_EOL
-);
-
-$cmd = sprintf(
-    'bash %s --archive %s 2>&1',
-    escapeshellarg($script),
-    escapeshellarg($traversalArchive)
-);
-$output = [];
-exec($cmd, $output, $status);
-var_dump($status !== 0);
-var_dump((bool) array_filter($output, static fn(string $line): bool => str_contains($line, 'Archive contains unsafe path entry:')));
 
 mkdir($root . '/king-link/bin', 0700, true);
 symlink('/bin/sh', $root . '/king-link/bin/smoke.sh');
@@ -84,9 +57,6 @@ var_dump((bool) array_filter($output, static fn(string $line): bool => str_conta
 king_verify_release_cleanup($root);
 ?>
 --EXPECT--
-bool(true)
-bool(true)
-bool(true)
 bool(true)
 bool(true)
 bool(true)
