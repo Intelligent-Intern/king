@@ -509,13 +509,23 @@ zend_result king_http3_request_dispatch(
         return FAILURE;
     }
 
-    if (king_http3_ensure_quiche_ready() != SUCCESS) {
+    if (
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+        king_http3_ensure_lsquic_ready()
+#else
+        king_http3_ensure_quiche_ready()
+#endif
+        != SUCCESS) {
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+        king_http3_throw_lsquic_unavailable(function_name);
+#else
         king_http3_throw(
             king_ce_protocol_exception,
             "%s() HTTP/3 runtime is unavailable: %s",
             function_name,
             king_http3_quiche.load_error
         );
+#endif
         return FAILURE;
     }
 
@@ -523,7 +533,12 @@ zend_result king_http3_request_dispatch(
         body_string = zval_get_string(body_zval);
     }
 
-    result = king_http3_execute_request(
+    result =
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+        king_http3_execute_request_lsquic(
+#else
+        king_http3_execute_request(
+#endif
         return_value,
         url_str,
         method_str,

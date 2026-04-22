@@ -363,5 +363,6 @@ static void king_http3_lsquic_runtime_destroy(king_http3_request_runtime_t *runt
 #include "http3/runtime_helpers.inc"
 #include "http3/runtime_init.inc"
 #include "http3/request_response.inc"
+#include "http3/lsquic_dispatch.inc"
 #include "http3/multi_request.inc"
 #include "http3/dispatch_api.inc"

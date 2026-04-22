@@ -151,11 +151,21 @@ static void king_http3_refresh_tls_state(king_http3_request_runtime_t *runtime)
     const uint8_t *session_bytes = NULL;
     size_t session_len = 0;
 
-    if (runtime == NULL || runtime->conn == NULL) {
+    if (runtime == NULL) {
         return;
     }
 
     king_http3_refresh_transport_stats(runtime);
+
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+    if (runtime->lsquic_backend_active) {
+        return;
+    }
+#endif
+
+    if (runtime->conn == NULL) {
+        return;
+    }
 
     if (king_http3_quiche.quiche_conn_is_resumed_fn != NULL) {
         runtime->tls_session_resumed =
@@ -231,6 +241,18 @@ static void king_http3_flush_egress_best_effort(king_http3_request_runtime_t *ru
 static void king_http3_propagate_cancel_close(king_http3_request_runtime_t *runtime)
 {
     bool use_application_close;
+
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+    if (runtime != NULL && runtime->lsquic_backend_active) {
+        if (runtime->lsquic_conn != NULL
+            && !runtime->lsquic_connection_closed
+            && king_http3_lsquic.lsquic_conn_close_fn != NULL) {
+            king_http3_lsquic.lsquic_conn_close_fn(runtime->lsquic_conn);
+            (void) king_http3_lsquic_runtime_process_egress(runtime, "king_http3_propagate_cancel_close");
+        }
+        return;
+    }
+#endif
 
     if (runtime == NULL
         || runtime->conn == NULL

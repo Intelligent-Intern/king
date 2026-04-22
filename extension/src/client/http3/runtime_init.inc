@@ -1,19 +1,17 @@
-static zend_result king_http3_runtime_init(
+static zend_result king_http3_runtime_open_udp_socket(
     king_http3_request_runtime_t *runtime,
     const king_http3_request_target_t *target,
-    const king_http3_request_options_t *options,
     const char *function_name)
 {
     struct addrinfo hints;
     struct addrinfo *result = NULL;
     struct addrinfo *candidate;
     char port_buffer[16];
-    uint8_t scid[QUICHE_MAX_CONN_ID_LEN];
 
     memset(runtime, 0, sizeof(*runtime));
     runtime->socket_fd = -1;
 
-    snprintf(port_buffer, sizeof(port_buffer), "%ld", options->config != NULL ? target->port : target->port);
+    snprintf(port_buffer, sizeof(port_buffer), "%ld", (long) target->port);
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_DGRAM;
@@ -118,9 +116,24 @@ static zend_result king_http3_runtime_init(
         return FAILURE;
     }
 
+    freeaddrinfo(result);
+    return SUCCESS;
+}
+
+static zend_result king_http3_runtime_init(
+    king_http3_request_runtime_t *runtime,
+    const king_http3_request_target_t *target,
+    const king_http3_request_options_t *options,
+    const char *function_name)
+{
+    uint8_t scid[QUICHE_MAX_CONN_ID_LEN];
+
+    if (king_http3_runtime_open_udp_socket(runtime, target, function_name) != SUCCESS) {
+        return FAILURE;
+    }
+
     runtime->config = king_http3_quiche.quiche_config_new_fn(QUICHE_PROTOCOL_VERSION);
     if (runtime->config == NULL) {
-        freeaddrinfo(result);
         king_http3_throw(
             king_ce_system_exception,
             "%s() failed to allocate the active libquiche config.",
@@ -134,7 +147,6 @@ static zend_result king_http3_runtime_init(
                 runtime->config,
                 options->tls_default_ca_file
             ) != 0) {
-            freeaddrinfo(result);
             king_http3_throw(
                 king_ce_tls_exception,
                 "%s() failed to load the active HTTP/3 CA file '%s'.",
@@ -153,7 +165,6 @@ static zend_result king_http3_runtime_init(
                 runtime->config,
                 options->tls_default_cert_file
             ) != 0) {
-            freeaddrinfo(result);
             king_http3_throw(
                 king_ce_tls_exception,
                 "%s() failed to load the active HTTP/3 client certificate '%s'.",
@@ -167,7 +178,6 @@ static zend_result king_http3_runtime_init(
                 runtime->config,
                 options->tls_default_key_file
             ) != 0) {
-            freeaddrinfo(result);
             king_http3_throw(
                 king_ce_tls_exception,
                 "%s() failed to load the active HTTP/3 client key '%s'.",
@@ -191,7 +201,6 @@ static zend_result king_http3_runtime_init(
             (const uint8_t *) QUICHE_H3_APPLICATION_PROTOCOL,
             sizeof(QUICHE_H3_APPLICATION_PROTOCOL) - 1
         ) != 0) {
-        freeaddrinfo(result);
         king_http3_throw(
             king_ce_protocol_exception,
             "%s() failed to configure the active HTTP/3 ALPN list.",
@@ -223,7 +232,6 @@ static zend_result king_http3_runtime_init(
 
     if (options->quic_cc_algorithm != NULL && options->quic_cc_algorithm[0] != '\0') {
         if (king_http3_quiche.quiche_config_set_cc_algorithm_name_fn(runtime->config, options->quic_cc_algorithm) != 0) {
-            freeaddrinfo(result);
             king_http3_throw(
                 king_ce_validation_exception,
                 "%s() received an unsupported QUIC congestion-control algorithm '%s'.",
@@ -235,7 +243,6 @@ static zend_result king_http3_runtime_init(
     }
 
     if (king_http3_fill_random_bytes(scid, sizeof(scid)) != SUCCESS) {
-        freeaddrinfo(result);
         king_http3_throw(
             king_ce_system_exception,
             "%s() failed to initialize a QUIC source connection ID.",
@@ -254,7 +261,6 @@ static zend_result king_http3_runtime_init(
         runtime->peer_addr_len,
         runtime->config
     );
-    freeaddrinfo(result);
 
     if (runtime->conn == NULL) {
         king_http3_throw(
@@ -352,4 +358,3 @@ static zend_result king_http3_flush_egress(
 
     return SUCCESS;
 }
-

@@ -7,6 +7,10 @@ $root = dirname(__DIR__, 2);
 $clientPath = $root . '/extension/src/client/http3.c';
 $loaderPath = $root . '/extension/src/client/http3/lsquic_loader.inc';
 $runtimePath = $root . '/extension/src/client/http3/lsquic_runtime.inc';
+$lsquicDispatchPath = $root . '/extension/src/client/http3/lsquic_dispatch.inc';
+$runtimeInitPath = $root . '/extension/src/client/http3/runtime_init.inc';
+$requestResponsePath = $root . '/extension/src/client/http3/request_response.inc';
+$dispatchPath = $root . '/extension/src/client/http3/dispatch_api.inc';
 $errorsAndValidationPath = $root . '/extension/src/client/http3/errors_and_validation.inc';
 $errors = [];
 
@@ -101,6 +105,10 @@ function king_http3_loader_require_order(
 $client = king_http3_loader_require_file($clientPath, $errors);
 $loader = king_http3_loader_require_file($loaderPath, $errors);
 $runtime = king_http3_loader_require_file($runtimePath, $errors);
+$lsquicDispatch = king_http3_loader_require_file($lsquicDispatchPath, $errors);
+$runtimeInit = king_http3_loader_require_file($runtimeInitPath, $errors);
+$requestResponse = king_http3_loader_require_file($requestResponsePath, $errors);
+$dispatch = king_http3_loader_require_file($dispatchPath, $errors);
 $errorsAndValidation = king_http3_loader_require_file($errorsAndValidationPath, $errors);
 
 if ($errors !== []) {
@@ -117,6 +125,12 @@ king_http3_loader_require_contains(
     'Client HTTP/3 source',
     $client,
     '#include "http3/lsquic_runtime.inc"',
+    $errors
+);
+king_http3_loader_require_contains(
+    'Client HTTP/3 source',
+    $client,
+    '#include "http3/lsquic_dispatch.inc"',
     $errors
 );
 king_http3_loader_require_contains(
@@ -295,6 +309,43 @@ $requiredRuntimeNeedles = [
 foreach ($requiredRuntimeNeedles as $needle) {
     king_http3_loader_require_contains('LSQUIC runtime adapter', $runtime, $needle, $errors);
 }
+
+foreach ([
+    'king_http3_runtime_open_udp_socket',
+    'getaddrinfo(',
+    'SOCK_DGRAM',
+    'king_http3_make_socket_nonblocking',
+] as $needle) {
+    king_http3_loader_require_contains('Shared HTTP/3 UDP runtime init', $runtimeInit, $needle, $errors);
+}
+
+foreach ([
+    'king_http3_ensure_lsquic_ready()',
+    'king_http3_throw_lsquic_unavailable(function_name)',
+    'king_http3_execute_request_lsquic(',
+] as $needle) {
+    king_http3_loader_require_contains('HTTP/3 dispatch backend selection', $dispatch, $needle, $errors);
+}
+
+foreach ([
+    'king_http3_execute_request_lsquic',
+    'king_http3_runtime_open_udp_socket(&runtime, &target, function_name)',
+    'king_http3_lsquic_runtime_init(&runtime, &target, options, function_name)',
+    'king_http3_lsquic_runtime_prepare_request(',
+    'king_http3_lsquic_runtime_process_egress(&runtime, function_name)',
+    'king_http3_lsquic_runtime_packet_in(',
+    'king_http3_lsquic_poll_timeout_ms(&runtime',
+    'king_http3_materialize_response(return_value, &response, &runtime, url_str)',
+] as $needle) {
+    king_http3_loader_require_contains('LSQUIC one-shot dispatch', $lsquicDispatch, $needle, $errors);
+}
+
+king_http3_loader_require_contains(
+    'LSQUIC response materialization',
+    $requestResponse,
+    '"lsquic_h3"',
+    $errors
+);
 
 $ensureBody = king_http3_loader_extract_function(
     $loader,

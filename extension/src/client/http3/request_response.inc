@@ -188,7 +188,14 @@ static zend_result king_http3_materialize_response(
         response->body.s != NULL ? ZSTR_LEN(response->body.s) : 0
     );
     add_assoc_string(return_value, "protocol", "http/3");
-    add_assoc_string(return_value, "transport_backend", "quiche_h3");
+    add_assoc_string(
+        return_value,
+        "transport_backend",
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+        runtime != NULL && runtime->lsquic_backend_active ? "lsquic_h3" :
+#endif
+        "quiche_h3"
+    );
     add_assoc_string(return_value, "effective_url", (char *) url_str);
     add_assoc_long(
         return_value,
@@ -292,4 +299,3 @@ static bool king_http3_multi_all_responses_complete(
 
     return true;
 }
-
