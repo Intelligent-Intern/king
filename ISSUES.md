@@ -200,7 +200,7 @@ Checklist:
 
 Done:
 - [x] `rg -n "quiche|QUICHE"` finds no active product-path references.
-- [ ] Remaining matches are only historical migration notes or release history.
+- [x] Remaining `rg -n "quiche|QUICHE"` matches are classified as historical migration notes, release history, guard literals, contract-test literals, or temporary test fixtures.
 
 ---
 

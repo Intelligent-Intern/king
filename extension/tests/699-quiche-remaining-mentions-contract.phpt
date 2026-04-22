@@ -1,5 +1,5 @@
 --TEST--
-King remaining Quiche mentions are historical, guard literals, or temporary fixtures
+King remaining Quiche mentions are classified and outside active product paths
 --FILE--
 <?php
 $root = dirname(__DIR__, 2);
@@ -34,6 +34,71 @@ function require_active_product_path_quiche_free(string $path): void
     if (preg_match('/quiche/i', $source) === 1) {
         throw new RuntimeException($path . ' contains an active product-path Quiche reference.');
     }
+}
+
+function tracked_files(): array
+{
+    global $root;
+
+    $command = 'git -C ' . escapeshellarg($root) . ' ls-files -z 2>/dev/null';
+    $output = shell_exec($command);
+    if (!is_string($output) || $output === '') {
+        throw new RuntimeException('Could not list tracked files.');
+    }
+
+    $files = array_values(array_filter(explode("\0", $output), static fn (string $path): bool => $path !== ''));
+    sort($files);
+
+    return $files;
+}
+
+function remaining_quiche_match_category(string $path, array $temporaryFixtures): ?string
+{
+    if (isset($temporaryFixtures[$path])) {
+        return 'temporary_test_fixture';
+    }
+
+    if (in_array($path, [
+        'README.md',
+        'PROJECT_ASSESSMENT.md',
+        'READYNESS_TRACKER.md',
+        'DEPENDENCY_PROVENANCE.md',
+        'benchmarks/README.md',
+        'ISSUES.md',
+    ], true)) {
+        return 'historical_migration_note';
+    }
+
+    if (in_array($path, [
+        '.dockerignore',
+        '.gitignore',
+        'Makefile',
+        'extension/Makefile.frag',
+        'infra/scripts/check-ci-linux-reproducible-builds.rb',
+        'infra/scripts/check-dependency-provenance-doc.sh',
+        'infra/scripts/check-http3-lsquic-loader-contract.php',
+        'infra/scripts/check-http3-product-build-path.rb',
+        'infra/scripts/check-repo-artifact-hygiene.sh',
+        'infra/scripts/package-pie-source.sh',
+    ], true)) {
+        return 'guard_or_packaging_literal';
+    }
+
+    if (in_array($path, [
+        'extension/tests/http3_peer_replacement_strategy.inc',
+        'extension/tests/http3_rust_peer_classification.inc',
+    ], true)) {
+        return 'temporary_fixture_migration_contract';
+    }
+
+    if (preg_match('#^extension/tests/[0-9]+-[^/]+\.phpt$#', $path) === 1
+        || in_array($path, [
+            'extension/tests/http3_skip_rule_audit.inc',
+        ], true)) {
+        return 'contract_test_literal';
+    }
+
+    return null;
 }
 
 $activeProductFiles = [
@@ -137,6 +202,46 @@ foreach ($classification as $path => $entry) {
     }
 }
 
+$unclassifiedMatches = [];
+$categoryCounts = [];
+foreach (tracked_files() as $path) {
+    if (!is_file($root . '/' . $path)) {
+        continue;
+    }
+
+    $source = file_get_contents($root . '/' . $path);
+    if (!is_string($source) || stripos($source, 'quiche') === false) {
+        continue;
+    }
+
+    $category = remaining_quiche_match_category($path, $classification);
+    if ($category === null) {
+        $unclassifiedMatches[] = $path;
+        continue;
+    }
+
+    $categoryCounts[$category] = ($categoryCounts[$category] ?? 0) + 1;
+}
+
+if ($unclassifiedMatches !== []) {
+    throw new RuntimeException(
+        "Unclassified remaining Quiche matches:\n" .
+        implode("\n", $unclassifiedMatches)
+    );
+}
+
+foreach ([
+    'historical_migration_note',
+    'guard_or_packaging_literal',
+    'contract_test_literal',
+    'temporary_fixture_migration_contract',
+    'temporary_test_fixture',
+] as $expectedCategory) {
+    if (($categoryCounts[$expectedCategory] ?? 0) < 1) {
+        throw new RuntimeException('Remaining Quiche match category not exercised: ' . $expectedCategory);
+    }
+}
+
 require_contains(
     'Q-9 issue leaf',
     source('ISSUES.md'),
@@ -146,6 +251,11 @@ require_contains(
     'Q-9 active product path leaf',
     source('ISSUES.md'),
     '- [x] `rg -n "quiche|QUICHE"` finds no active product-path references.'
+);
+require_contains(
+    'Q-9 remaining match classification leaf',
+    source('ISSUES.md'),
+    '- [x] Remaining `rg -n "quiche|QUICHE"` matches are classified as historical migration notes, release history, guard literals, contract-test literals, or temporary test fixtures.'
 );
 
 echo "OK\n";
