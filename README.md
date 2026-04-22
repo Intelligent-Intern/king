@@ -388,7 +388,7 @@ Configuration and Lifecycle Layer
   -> defaults, ini, config snapshot, runtime policy, shutdown semantics
 
 External Backends
-  -> quiche, OpenSSL, libcurl, kernel networking facilities
+  -> LSQUIC, BoringSSL, libcurl, kernel networking facilities
 ```
 
 The important boundary is this:
@@ -409,8 +409,8 @@ cd king
 ./infra/scripts/build-extension.sh
 ```
 
-For a fully runnable local release profile, including `libquiche.so` and
-`quiche-server`, use:
+For a fully runnable local release profile, including the pinned LSQUIC source
+bootstrap and release-profile staging, use:
 
 ```bash
 cd king
@@ -418,9 +418,54 @@ cd king
 ```
 
 The build path above bootstraps the pinned QUIC dependency checkout recorded in
-[`infra/scripts/quiche-bootstrap.lock`](infra/scripts/quiche-bootstrap.lock)
-and normalizes the matching workspace lockfile before cargo is invoked. Do not
-replace it with ad hoc local `quiche` clones or unlocked cargo retries.
+[`infra/scripts/lsquic-bootstrap.lock`](infra/scripts/lsquic-bootstrap.lock).
+Do not replace it with ad hoc local LSQUIC/BoringSSL clones, local package
+manager paths, or unlocked source retries.
+
+### macOS / Dev Dependency Paths
+
+The repository build must stay portable. macOS and other developer machines may
+use locally installed LSQUIC or BoringSSL, but those paths are passed through
+`pkg-config` or explicit environment variables. Homebrew/Cellar paths must
+stay local and must not be committed into build scripts, CI, or documentation.
+
+Preferred `pkg-config` shape:
+
+```bash
+export PKG_CONFIG_PATH="/path/to/lsquic/lib/pkgconfig:/path/to/boringssl/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+cd extension
+phpize
+./configure --enable-king --with-king-lsquic=yes --with-king-boringssl=yes
+make
+```
+
+Explicit environment override shape:
+
+```bash
+export KING_LSQUIC_CFLAGS="-I/path/to/lsquic/include"
+export KING_LSQUIC_LIBS="-L/path/to/lsquic/lib -llsquic"
+export KING_BORINGSSL_CFLAGS="-I/path/to/boringssl/include"
+export KING_BORINGSSL_LIBS="-L/path/to/boringssl/lib -lssl -lcrypto"
+cd extension
+phpize
+./configure --enable-king
+make
+```
+
+Root-directory overrides are also supported when a dependency has the expected
+`include` and `lib` layout:
+
+```bash
+export KING_LSQUIC_ROOT="/path/to/lsquic-prefix"
+export KING_BORINGSSL_ROOT="/path/to/boringssl-prefix"
+cd extension
+phpize
+./configure --enable-king
+make
+```
+
+`infra/scripts/check-dev-path-configuration.rb` enforces that active build
+files keep this contract.
 
 The build entrypoint above is the repository build path.
 Canonical release-install verification then runs through
@@ -441,9 +486,9 @@ The intended package shape is:
   [`./infra/scripts/package-pie-source.sh`](infra/scripts/package-pie-source.sh)
 
 That source asset is the important part. King cannot rely on the default
-repository ZIP for PIE because the bundled `quiche/` tree is part of the active
-build. The maintainer workflow is documented in
-[`documentation/pie-install.md`](documentation/pie-install.md).
+repository ZIP for PIE because the pinned QUIC dependency bootstrap and
+package provenance have to travel with the source asset. The maintainer
+workflow is documented in [`documentation/pie-install.md`](documentation/pie-install.md).
 
 ## Contributing
 

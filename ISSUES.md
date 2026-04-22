@@ -27,7 +27,7 @@ Checklist:
 - [x] Remove or replace Quiche scripts: `bootstrap-quiche.sh`, `check-quiche-bootstrap.sh`, `ensure-quiche-toolchain.sh`.
 - [x] Remove Cargo/Rust bootstrap from the HTTP/3 build path.
 - [x] Make CI build reproducibly on Linux amd64 and arm64.
-- [ ] Support macOS/dev only through documented env/pkg-config paths.
+- [x] Support macOS/dev only through documented env/pkg-config paths.
 - [ ] Update release package manifests for new artifacts and new provenance.
 
 Done:
@@ -59,6 +59,12 @@ CI Reproducibility Contract:
 - `install-package-matrix` and `build-release-packages` cover PHP 8.1-8.5 on `linux-amd64` and `linux-arm64`.
 - Both package jobs run `package-release.sh --verify-reproducible` before upload.
 - `infra/scripts/check-ci-linux-reproducible-builds.rb` blocks missing Linux arch rows or Rust/Cargo bootstrap in the product package jobs.
+
+macOS/Dev Path Contract:
+
+- macOS/dev builds are documented through `PKG_CONFIG_PATH`, `KING_LSQUIC_*`, and `KING_BORINGSSL_*` overrides only.
+- Active build scripts, CI workflows, and user-facing build docs must not commit local Homebrew/Cellar dependency paths.
+- `infra/scripts/check-dev-path-configuration.rb` enforces the documented path contract from `static-checks.sh`.
 
 ---
 

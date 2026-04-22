@@ -64,6 +64,9 @@ done
 echo "Checking Linux reproducible CI build matrix..."
 ruby infra/scripts/check-ci-linux-reproducible-builds.rb
 
+echo "Checking macOS/dev dependency path policy..."
+ruby infra/scripts/check-dev-path-configuration.rb
+
 echo "Checking extension include layout..."
 infra/scripts/check-include-layout.sh
 

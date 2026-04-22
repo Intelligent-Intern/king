@@ -65,7 +65,8 @@ easier to remember.
 | `./infra/scripts/audit-runtime-surface.sh` | Does the runtime or documentation surface drift from the expected contract? |
 | `./infra/scripts/check-include-layout.sh` | Are project-owned headers still under `extension/include/` where they belong? |
 | `./infra/scripts/check-php-support-matrix.sh` | Do CI and matrix scripts still claim the supported PHP versions honestly? |
-| `./infra/scripts/check-quiche-bootstrap.sh` | Is the QUIC dependency bootstrap still pinned and deterministic? |
+| `./infra/scripts/check-lsquic-bootstrap.sh` | Is the QUIC dependency bootstrap still pinned and deterministic? |
+| `./infra/scripts/check-dev-path-configuration.rb` | Are developer dependency paths documented and free of committed local machine paths? |
 | `./infra/scripts/build-extension.sh` | Can the extension compile in the ordinary development path? |
 | `./infra/scripts/build-profile.sh release` | Can the full release profile build from the pinned dependency set? |
 | `./infra/scripts/test-extension.sh` | Does the PHPT runtime contract still pass? |
@@ -103,7 +104,8 @@ following commands are the usual manual path:
 ./infra/scripts/audit-runtime-surface.sh
 ./infra/scripts/check-include-layout.sh
 ./infra/scripts/check-php-support-matrix.sh
-./infra/scripts/check-quiche-bootstrap.sh
+./infra/scripts/check-lsquic-bootstrap.sh
+./infra/scripts/check-dev-path-configuration.rb
 ```
 
 Each one answers a slightly different question. Stub parity checks that the
@@ -129,6 +131,51 @@ rebuilt quickly.
 The output of this path is the compiled module under `extension/modules/` and
 the usual build products produced by the PHP extension toolchain.
 
+### macOS / Dev Dependency Paths
+
+Developer machines may provide LSQUIC and BoringSSL from any local package or
+source build, including macOS setups, but the repository accepts those paths
+only through `pkg-config` or explicit environment variables. Homebrew/Cellar
+paths must stay local and must not be committed into build scripts, CI, or
+operator docs.
+
+Preferred `pkg-config` shape:
+
+```bash
+export PKG_CONFIG_PATH="/path/to/lsquic/lib/pkgconfig:/path/to/boringssl/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+cd extension
+phpize
+./configure --enable-king --with-king-lsquic=yes --with-king-boringssl=yes
+make
+```
+
+Explicit environment override shape:
+
+```bash
+export KING_LSQUIC_CFLAGS="-I/path/to/lsquic/include"
+export KING_LSQUIC_LIBS="-L/path/to/lsquic/lib -llsquic"
+export KING_BORINGSSL_CFLAGS="-I/path/to/boringssl/include"
+export KING_BORINGSSL_LIBS="-L/path/to/boringssl/lib -lssl -lcrypto"
+cd extension
+phpize
+./configure --enable-king
+make
+```
+
+Root-directory overrides are also supported:
+
+```bash
+export KING_LSQUIC_ROOT="/path/to/lsquic-prefix"
+export KING_BORINGSSL_ROOT="/path/to/boringssl-prefix"
+cd extension
+phpize
+./configure --enable-king
+make
+```
+
+The static guard `infra/scripts/check-dev-path-configuration.rb` fails if
+active build files reintroduce committed local dependency paths.
+
 ## Build The Release Profile
 
 When you are preparing a release, the development build is not enough. The
@@ -147,7 +194,7 @@ of the shipping pipeline.
 
 ```mermaid
 flowchart TD
-    A[build-profile.sh release] --> B[Check pinned quiche bootstrap]
+    A[build-profile.sh release] --> B[Check pinned LSQUIC bootstrap]
     B --> C[Normalize QUIC workspace]
     C --> D[Build king.so]
     D --> E[Assemble runtime payload]
