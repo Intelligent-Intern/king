@@ -17,53 +17,6 @@
 
 ## Open Issues
 
-### #Q-3 Dependency Provenance For New Stack
-
-Goal:
-- Create reproducible pins for the new QUIC/HTTP3 stack.
-
-Checklist:
-- [x] Define release/commit pins for the new stack.
-- [x] Document checksums and sources in `DEPENDENCY_PROVENANCE.md`.
-- [x] Create a new bootstrap lockfile, for example `infra/scripts/lsquic-bootstrap.lock`.
-- [x] Register old `quiche-bootstrap.lock` and `quiche-workspace.Cargo.lock` as Quiche artifacts to remove.
-- [x] Add offline/CI validation for pins and checksums.
-
-Pin Decision:
-
-| Component | Source | Pin | Commit | Purpose |
-| --- | --- | --- | --- | --- |
-| LSQUIC | `https://github.com/litespeedtech/lsquic.git` | `v4.6.1` | `c1ca7980107b1495298c93ab54e798fa050c3c7b` | C-based QUIC/HTTP3 stack for the active product path; current release pin above the documented `v4.3.1` minimum line. |
-| BoringSSL | `https://github.com/google/boringssl.git` | `0.20260413.0` | `e1acfa3193d44166ce77df74c5285afea983fc63` | Reproducible TLS backend pin without system ABI or Homebrew dependency. |
-| LSQUIC submodules | recursive from LSQUIC `v4.6.1` | fixed in the new lockfile | fixed in the new lockfile | No floating submodules; `git submodule status --recursive` must feed `lsquic-bootstrap.lock`. |
-
-Pin Rules:
-
-- No floating branches such as `master`, `main`, or local checkout paths.
-- The new bootstrap lockfile must record URLs, tags, commits, recursive submodules, checksums, and license sources.
-- If `v4.6.1` does not carry King v1 parity for 0-RTT, STOP_SENDING, stream lifecycle, stats, or WebSocket-over-HTTP3, that is a blocker and not a reason to reduce the contract.
-- The pins were verified against the upstream repositories on 2026-04-22 with `git ls-remote --tags --refs`.
-
-Quiche Artifact Inventory For Removal:
-
-| Path | Status | Removal Path |
-| --- | --- | --- |
-| `infra/scripts/quiche-bootstrap.lock` | Tracked legacy lock for Cloudflare Quiche, Quiche-BoringSSL, and Wirefilter. | Remove once `infra/scripts/lsquic-bootstrap.lock` is read by the provenance check and build bootstrap. |
-| `infra/scripts/quiche-workspace.Cargo.lock` | Tracked generated Cargo lockfile for the old Quiche/Rust bootstrap. | Remove together with Quiche bootstrap scripts and the Cargo build path; must not be carried into the active HTTP/3 product path. |
-
-Untracked local bootstrap caches such as `.cargo/`, `quiche/`, and `quiche/Cargo.lock` are excluded by `.gitignore` and remain non-sprint output.
-
-Done:
-- [x] Dependencies can be reproduced from repository-owned pins.
-- [ ] Active provenance no longer names Quiche pins for the product path.
-
-Reproduction Evidence:
-
-- `infra/scripts/lsquic-bootstrap.lock` owns every source URL, tag, commit, archive SHA-256, archive byte size, and submodule gitlink for LSQUIC, BoringSSL, `ls-qpack`, and `ls-hpack`.
-- `infra/scripts/check-lsquic-bootstrap.sh --print-source-plan` emits the complete archive fetch plan from repository-owned pins without using network or external metadata.
-
----
-
 ### #Q-4 Build System Without Local Paths And Without Cargo Bootstrap
 
 Goal:

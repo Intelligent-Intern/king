@@ -50,12 +50,34 @@ require_literal() {
     fi
 }
 
+require_active_http3_provenance_quiche_free() {
+    local active_section
+
+    active_section="$(awk '
+        /^## HTTP\/3 Replacement Stack Provenance Pins$/ { in_section = 1; next }
+        /^## / && in_section { exit }
+        in_section { print }
+    ' "${DOC_FILE}")"
+
+    if [[ -z "${active_section}" ]]; then
+        echo "Missing active HTTP/3 replacement provenance section." >&2
+        exit 1
+    fi
+
+    if grep -Eiq 'cloudflare/quiche|KING_QUICHE|(^|[^[:alnum:]])quiche([^[:alnum:]]|$)' <<<"${active_section}"; then
+        echo "Active HTTP/3 replacement provenance still names Quiche." >&2
+        exit 1
+    fi
+}
+
 require_literal "${KING_CANONICAL_PHP_VERSION:-}" "KING_CANONICAL_PHP_VERSION"
 require_literal "${KING_RUST_TOOLCHAIN_VERSION:-}" "KING_RUST_TOOLCHAIN_VERSION"
 require_literal "${KING_QUICHE_REPO_URL:-}" "KING_QUICHE_REPO_URL"
 require_literal "${KING_QUICHE_COMMIT:-}" "KING_QUICHE_COMMIT"
 require_literal "${KING_QUICHE_BORINGSSL_COMMIT:-}" "KING_QUICHE_BORINGSSL_COMMIT"
 require_literal "${KING_QUICHE_WIREFILTER_COMMIT:-}" "KING_QUICHE_WIREFILTER_COMMIT"
+
+require_active_http3_provenance_quiche_free
 
 "${LSQUIC_CHECK}"
 
