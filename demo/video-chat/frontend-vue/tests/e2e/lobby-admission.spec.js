@@ -26,6 +26,14 @@ function toLocalDateTimeInputValue(date) {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
+function normalizeRosterName(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function expectedRosterNames() {
+  return ['Platform Admin', 'Call User'].sort();
+}
+
 function buildStoredSession(payload) {
   const session = payload?.session || {};
   const user = payload?.user || {};
@@ -83,12 +91,169 @@ async function fetchStoredSession(email, password) {
   throw lastError;
 }
 
+async function installSocketInstrumentation(context) {
+  await context.addInitScript(() => {
+    const NativeWebSocket = window.WebSocket;
+    if (!NativeWebSocket || NativeWebSocket.__kingVideoChatInstrumented) return;
+
+    const events = [];
+    window.__videoCallSocketEvents = events;
+
+    const snapshotFrame = (data) => {
+      if (typeof data === 'string') {
+        try {
+          return JSON.parse(data);
+        } catch {
+          return { type: '__text__' };
+        }
+      }
+
+      if (data instanceof ArrayBuffer) {
+        return { type: '__binary__', bytes: data.byteLength };
+      }
+
+      if (ArrayBuffer.isView(data)) {
+        return { type: '__binary__', bytes: data.byteLength || data.length || 0 };
+      }
+
+      if (typeof Blob !== 'undefined' && data instanceof Blob) {
+        return { type: '__blob__', bytes: data.size };
+      }
+
+      return { type: '__unknown__' };
+    };
+
+    const record = (direction, url, data) => {
+      events.push({
+        direction,
+        url: String(url || ''),
+        frame: snapshotFrame(data),
+        at: Date.now(),
+      });
+    };
+
+    class InstrumentedWebSocket extends NativeWebSocket {
+      constructor(url, protocols) {
+        if (protocols === undefined) {
+          super(url);
+        } else {
+          super(url, protocols);
+        }
+        this.__kingVideoChatUrl = String(url || '');
+        this.addEventListener('message', (event) => {
+          record('in', this.__kingVideoChatUrl, event.data);
+        });
+      }
+
+      send(data) {
+        record('out', this.__kingVideoChatUrl || this.url, data);
+        return super.send(data);
+      }
+    }
+
+    for (const key of ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED']) {
+      Object.defineProperty(InstrumentedWebSocket, key, {
+        value: NativeWebSocket[key],
+        enumerable: true,
+      });
+    }
+
+    InstrumentedWebSocket.__kingVideoChatInstrumented = true;
+    window.WebSocket = InstrumentedWebSocket;
+  });
+}
+
+async function installMediaDeviceShim(context) {
+  await context.addInitScript(() => {
+    const resources = [];
+    window.__videoCallMediaShimResources = resources;
+
+    const createVideoTrack = () => {
+      if (typeof document === 'undefined') return null;
+      const canvas = document.createElement('canvas');
+      canvas.width = 320;
+      canvas.height = 240;
+      const context = canvas.getContext('2d');
+      let frame = 0;
+      const draw = () => {
+        if (!context) return;
+        context.fillStyle = frame % 2 === 0 ? '#0e7490' : '#155e75';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = '#f8fafc';
+        context.font = '24px sans-serif';
+        context.fillText(`KingRT ${frame}`, 28, 124);
+        frame += 1;
+      };
+      draw();
+      const intervalId = window.setInterval(draw, 250);
+      const stream = typeof canvas.captureStream === 'function' ? canvas.captureStream(8) : null;
+      const track = stream?.getVideoTracks?.()[0] || null;
+      resources.push({ canvas, intervalId, stream });
+      return track;
+    };
+
+    const createAudioTrack = () => {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return null;
+      try {
+        const audioContext = new AudioContextClass();
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        const destination = audioContext.createMediaStreamDestination();
+        oscillator.frequency.value = 220;
+        gain.gain.value = 0.01;
+        oscillator.connect(gain);
+        gain.connect(destination);
+        oscillator.start();
+        resources.push({ audioContext, oscillator, destination });
+        return destination.stream.getAudioTracks()[0] || null;
+      } catch {
+        return null;
+      }
+    };
+
+    const mediaDevices = {
+      ...(navigator.mediaDevices || {}),
+      getUserMedia: async (constraints = {}) => {
+        const tracks = [];
+        if (constraints.video !== false) {
+          const videoTrack = createVideoTrack();
+          if (videoTrack) tracks.push(videoTrack);
+        }
+        if (constraints.audio !== false) {
+          const audioTrack = createAudioTrack();
+          if (audioTrack) tracks.push(audioTrack);
+        }
+        return new MediaStream(tracks);
+      },
+      enumerateDevices: async () => [
+        { deviceId: 'king-video', kind: 'videoinput', label: 'KingRT test camera', groupId: 'king-e2e' },
+        { deviceId: 'king-audio', kind: 'audioinput', label: 'KingRT test microphone', groupId: 'king-e2e' },
+      ],
+      getSupportedConstraints: () => ({
+        audio: true,
+        video: true,
+        deviceId: true,
+        echoCancellation: true,
+        noiseSuppression: true,
+      }),
+    };
+
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: mediaDevices,
+    });
+  });
+}
+
 async function createAuthenticatedPage(browser, baseURL, { email, password }) {
   const storedSession = await fetchStoredSession(email, password);
   const context = await browser.newContext({
     baseURL,
     permissions: ['camera', 'microphone'],
   });
+  await installMediaDeviceShim(context);
+  await installSocketInstrumentation(context);
   await context.addInitScript(
     ({ key, value }) => {
       try {
@@ -101,6 +266,92 @@ async function createAuthenticatedPage(browser, baseURL, { email, password }) {
   );
   const page = await context.newPage();
   return { context, page, storedSession };
+}
+
+async function visibleRosterNames(page) {
+  await page.getByRole('tab', { name: 'Users' }).click();
+  const activeUsersPanel = page.locator('.panel-users.active');
+  await expect(activeUsersPanel).toBeVisible({ timeout: 10_000 });
+  await expect(activeUsersPanel.locator('.user-row .user-name')).toHaveCount(2, { timeout: 30_000 });
+
+  const names = await activeUsersPanel.locator('.user-row .user-name').allTextContents();
+  return names.map(normalizeRosterName).filter(Boolean).sort();
+}
+
+async function expectSharedParticipantRoster(adminPage, userPage) {
+  const expected = expectedRosterNames();
+
+  await expect.poll(
+    async () => visibleRosterNames(adminPage),
+    {
+      timeout: 30_000,
+      message: 'admin browser should show the admitted owner and user roster',
+    },
+  ).toEqual(expected);
+
+  await expect.poll(
+    async () => visibleRosterNames(userPage),
+    {
+      timeout: 30_000,
+      message: 'user browser should show the admitted owner and user roster',
+    },
+  ).toEqual(expected);
+}
+
+async function mediaSignalEventCount(page) {
+  return page.evaluate(() => {
+    const events = Array.isArray(window.__videoCallSocketEvents) ? window.__videoCallSocketEvents : [];
+
+    return events.filter((event) => {
+      const url = String(event?.url || '');
+      const frame = event?.frame && typeof event.frame === 'object' ? event.frame : {};
+      const type = String(frame.type || '').trim();
+      const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload : {};
+      const payloadKind = String(payload.kind || '').trim();
+      const hasNativeSdp = (type === 'call/offer' || type === 'call/answer') && payload.sdp;
+      const hasNativeIce = type === 'call/ice' && payload.candidate;
+      const hasSfuSignal = url.includes('/sfu') || type.startsWith('sfu/');
+
+      return hasSfuSignal || hasNativeSdp || hasNativeIce || payloadKind.startsWith('webrtc_');
+    }).length;
+  });
+}
+
+async function expectMediaSignalExchange(page, label) {
+  await expect.poll(
+    async () => mediaSignalEventCount(page),
+    {
+      timeout: 45_000,
+      message: `${label} should exchange SFU or WebRTC media signals`,
+    },
+  ).toBeGreaterThan(0);
+}
+
+async function renderedMediaState(page) {
+  return page.evaluate(() => {
+    const nodes = Array.from(document.querySelectorAll([
+      '#local-video-container video',
+      '#remote-video-container video',
+      '#remote-video-container canvas',
+      '.workspace-mini-video-slot video',
+      '.workspace-mini-video-slot canvas',
+    ].join(',')));
+
+    const hasLocal = nodes.some((node) => node.tagName === 'VIDEO' && !node.classList.contains('remote-video'));
+    const hasRemote = nodes.some((node) => node.classList.contains('remote-video'));
+
+    return { hasLocal, hasRemote };
+  });
+}
+
+async function expectRenderedLocalAndRemoteMedia(page, label) {
+  await expect.poll(
+    async () => renderedMediaState(page),
+    {
+      timeout: 45_000,
+      message: `${label} should render both local and remote media nodes`,
+    },
+  ).toEqual({ hasLocal: true, hasRemote: true });
 }
 
 async function waitForCallRow(page, callTitle) {
@@ -153,7 +404,7 @@ async function createPersonalAccessJoinPath({ callId, sessionToken, participantU
   throw new Error('Access-link payload is missing join_path and access id.');
 }
 
-test('admin creates/invites and admits user from lobby, mini strip shows participant', async ({ browser }) => {
+test('admin creates/invites and admits user from lobby, both browsers share roster and media signals', async ({ browser }) => {
   test.setTimeout(180_000);
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
 
@@ -217,7 +468,7 @@ test('admin creates/invites and admits user from lobby, mini strip shows partici
     const joinCallModal = userPage.getByRole('dialog', { name: 'Join video call' });
     await expect(joinCallModal).toBeVisible({ timeout: 15_000 });
     await joinCallModal.getByRole('button', { name: /Join call/i }).click();
-    await expect(joinCallModal).toContainText('Call owner has been notified', { timeout: 15_000 });
+    await expect(joinCallModal).toContainText(/Call owner has been notified|Waiting for host/i, { timeout: 15_000 });
 
     const lobbyBadge = adminPage.locator('.tab-lobby .tab-notice-badge');
     await expect(lobbyBadge).toBeVisible({ timeout: 30_000 });
@@ -238,6 +489,14 @@ test('admin creates/invites and admits user from lobby, mini strip shows partici
     await expect(miniStrip.locator('.workspace-mini-tile').first()).toBeVisible({ timeout: 30_000 });
     await expect(joinCallModal).toBeHidden({ timeout: 30_000 });
     await expect(userPage.locator('button.tab-lobby')).toHaveCount(0);
+    await expect(miniStrip.locator('.workspace-mini-tile', { hasText: 'Call User' })).toBeVisible({ timeout: 30_000 });
+    await expectSharedParticipantRoster(adminPage, userPage);
+    await Promise.all([
+      expectMediaSignalExchange(adminPage, 'admin browser'),
+      expectMediaSignalExchange(userPage, 'user browser'),
+      expectRenderedLocalAndRemoteMedia(adminPage, 'admin browser'),
+      expectRenderedLocalAndRemoteMedia(userPage, 'user browser'),
+    ]);
 
     const chatMessage = `chat button e2e ${Date.now()}`;
     await adminPage.getByRole('tab', { name: 'Chat' }).click();

@@ -27,10 +27,10 @@ Checklist:
 - [x] Ensure remote participants render in mini-video slots unless pinned/promoted to the main stage.
 - [x] Ensure participant roster entries are derived from stable server-authoritative presence and do not jitter on polling/reconnect ticks.
 - [x] Keep admin rights equivalent to call-owner rights inside the call.
-- [ ] Add a two-browser Playwright journey that proves admin plus user see each other, hear/receive media signals, and share the same participant list.
+- [x] Add a two-browser Playwright journey that proves admin plus user see each other, hear/receive media signals, and share the same participant list.
 
 Done:
-- [ ] Admin and user in the same call both see local and remote media plus the same roster without flicker.
+- [x] Admin and user in the same call both see local and remote media plus the same roster without flicker.
 
 ### #Q-17 Video-Chat Lobby, Admission, And Role Boundary
 
