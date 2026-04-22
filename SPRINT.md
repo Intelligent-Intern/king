@@ -80,7 +80,7 @@ Checklist:
 - [x] Keep Hetzner-specific discovery behind provider abstractions so Kubernetes or other providers can be added later.
 
 Done:
-- [ ] A fresh production deploy is repeatable and the admin operations page reports real safe state.
+- [x] A fresh production deploy is repeatable and the admin operations page reports real safe state.
 
 ### #Q-20 Video-Chat Responsive Call Management And Workspace UI Parity
 

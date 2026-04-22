@@ -175,6 +175,236 @@ REMOTE
   log "certbot renewal hook and certificate SANs verified on ${ssh_dest}"
 }
 
+admin_password() {
+  if [[ -n "${VIDEOCHAT_DEPLOY_ADMIN_PASSWORD:-}" ]]; then
+    printf '%s' "${VIDEOCHAT_DEPLOY_ADMIN_PASSWORD}"
+    return 0
+  fi
+  if [[ -n "${VIDEOCHAT_DEPLOY_ADMIN_PASSWORD_FILE:-}" && -f "${VIDEOCHAT_DEPLOY_ADMIN_PASSWORD_FILE}" ]]; then
+    cat "${VIDEOCHAT_DEPLOY_ADMIN_PASSWORD_FILE}"
+    return 0
+  fi
+  if [[ -f "${VIDEOCHAT_DIR}/secrets/admin-password" ]]; then
+    cat "${VIDEOCHAT_DIR}/secrets/admin-password"
+    return 0
+  fi
+
+  return 1
+}
+
+admin_session_token() {
+  local password payload response_file code token attempt
+  password="$(admin_password)" || fail "VIDEOCHAT_DEPLOY_ADMIN_PASSWORD, VIDEOCHAT_DEPLOY_ADMIN_PASSWORD_FILE, or secrets/admin-password is required for admin operations smoke"
+  payload="$(
+    ADMIN_PASSWORD="${password}" php -r '
+      echo json_encode([
+          "email" => "admin@intelligent-intern.com",
+          "password" => getenv("ADMIN_PASSWORD"),
+      ], JSON_UNESCAPED_SLASHES);
+    '
+  )"
+  response_file="$(mktemp)"
+  for attempt in $(seq 1 30); do
+    code="$(
+      curl -sS --max-time "${TIMEOUT}" \
+        -o "${response_file}" \
+        -w '%{http_code}' \
+        -X POST \
+        -H 'content-type: application/json' \
+        --data "${payload}" \
+        "https://${DEPLOY_API_DOMAIN}/api/auth/login" || true
+    )"
+    if [[ "${code}" == "200" ]]; then
+      token="$(
+        php -r '
+          $raw = stream_get_contents(STDIN);
+          $payload = json_decode($raw, true);
+          if (!is_array($payload)) {
+              exit(1);
+          }
+          $candidates = [
+              $payload["session"]["token"] ?? null,
+              $payload["result"]["session_token"] ?? null,
+              $payload["result"]["token"] ?? null,
+              $payload["token"] ?? null,
+          ];
+          foreach ($candidates as $candidate) {
+              if (is_string($candidate) && trim($candidate) !== "") {
+                  echo trim($candidate);
+                  exit(0);
+              }
+          }
+          exit(1);
+        ' < "${response_file}" 2>/dev/null || true
+      )"
+      if [[ -n "${token}" ]]; then
+        rm -f "${response_file}"
+        printf '%s' "${token}"
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+
+  rm -f "${response_file}"
+  fail "admin login did not return a session token after deploy readiness retries"
+}
+
+assert_admin_infrastructure_payload() {
+  php -r '
+    function fail(string $message): void {
+        fwrite(STDERR, $message . "\n");
+        exit(1);
+    }
+    function deny_sensitive(mixed $value, string $path = "$"): void {
+        if (is_array($value)) {
+            foreach ($value as $key => $item) {
+                $segment = is_string($key) ? $key : (string) $key;
+                if (preg_match("/(password|secret|token)/i", $segment) === 1) {
+                    fail("sensitive key leaked in infrastructure payload: " . $path . "." . $segment);
+                }
+                deny_sensitive($item, $path . "." . $segment);
+            }
+            return;
+        }
+        if (is_string($value) && preg_match("/(sess_[a-f0-9]{20,}|Bearer\\s+)/i", $value) === 1) {
+            fail("sensitive value leaked in infrastructure payload: " . $path);
+        }
+    }
+    $raw = stream_get_contents(STDIN);
+    $payload = json_decode($raw, true);
+    if (!is_array($payload) || ($payload["status"] ?? "") !== "ok") {
+        fail("infrastructure payload status is not ok");
+    }
+    foreach (["deployment", "telemetry", "scaling"] as $key) {
+        if (!is_array($payload[$key] ?? null)) {
+            fail("infrastructure payload missing object: " . $key);
+        }
+    }
+    foreach (["providers", "nodes", "services"] as $key) {
+        if (!is_array($payload[$key] ?? null) || count($payload[$key]) < 1) {
+            fail("infrastructure payload missing non-empty list: " . $key);
+        }
+    }
+    $providerIds = [];
+    foreach ($payload["providers"] as $provider) {
+        if (is_array($provider) && is_string($provider["id"] ?? null)) {
+            $providerIds[] = $provider["id"];
+        }
+    }
+    if ($providerIds === []) {
+        fail("infrastructure payload has no provider ids");
+    }
+    $otel = $payload["telemetry"]["open_telemetry"] ?? [];
+    if (is_array($otel) && isset($otel["exporter_endpoint"]) && !in_array($otel["exporter_endpoint"], ["", "[configured]"], true)) {
+        fail("infrastructure payload exposes raw OpenTelemetry endpoint");
+    }
+    if (($payload["scaling"]["write_actions_enabled"] ?? null) !== false) {
+        fail("infrastructure scaling writes must stay disabled in smoke");
+    }
+    deny_sensitive($payload);
+  '
+}
+
+assert_admin_video_operations_payload() {
+  php -r '
+    function fail(string $message): void {
+        fwrite(STDERR, $message . "\n");
+        exit(1);
+    }
+    function deny_sensitive(mixed $value, string $path = "$"): void {
+        if (is_array($value)) {
+            foreach ($value as $key => $item) {
+                $segment = is_string($key) ? $key : (string) $key;
+                if (preg_match("/(password|secret|token)/i", $segment) === 1) {
+                    fail("sensitive key leaked in operations payload: " . $path . "." . $segment);
+                }
+                deny_sensitive($item, $path . "." . $segment);
+            }
+            return;
+        }
+        if (is_string($value) && preg_match("/(sess_[a-f0-9]{20,}|Bearer\\s+)/i", $value) === 1) {
+            fail("sensitive value leaked in operations payload: " . $path);
+        }
+    }
+    $raw = stream_get_contents(STDIN);
+    $payload = json_decode($raw, true);
+    if (!is_array($payload) || ($payload["status"] ?? "") !== "ok") {
+        fail("video operations payload status is not ok");
+    }
+    $metrics = $payload["metrics"] ?? null;
+    if (!is_array($metrics)) {
+        fail("video operations payload missing metrics");
+    }
+    foreach (["live_calls", "concurrent_participants"] as $key) {
+        if (!is_int($metrics[$key] ?? null) || $metrics[$key] < 0) {
+            fail("video operations metric is invalid: " . $key);
+        }
+    }
+    if (!is_array($payload["running_calls"] ?? null)) {
+        fail("video operations payload missing running_calls list");
+    }
+    $sampleTitles = ["Sales Standup", "Incident Bridge", "Quarterly Sync"];
+    foreach ($payload["running_calls"] as $call) {
+        if (!is_array($call)) {
+            fail("video operations running call row is not an object");
+        }
+        if (in_array((string) ($call["title"] ?? ""), $sampleTitles, true)) {
+            fail("video operations payload still exposes static sample call data");
+        }
+        if ((int) (($call["live_participants"] ?? [])["total"] ?? 0) <= 0) {
+            fail("video operations running call without live participants");
+        }
+        if ((string) (($call["presence"] ?? [])["source"] ?? "") !== "realtime_presence_connections") {
+            fail("video operations running call is not sourced from realtime presence");
+        }
+    }
+    deny_sensitive($payload);
+  '
+}
+
+verify_admin_operations() {
+  case "${VIDEOCHAT_DEPLOY_SMOKE_SKIP_ADMIN:-0}" in
+    1|true|TRUE|yes|YES)
+      log "admin operations check skipped"
+      return 0
+      ;;
+  esac
+
+  local token infrastructure_payload operations_payload
+  token="$(admin_session_token)"
+  infrastructure_payload="$(admin_get_json "admin infrastructure" "https://${DEPLOY_API_DOMAIN}/api/admin/infrastructure" "${token}")"
+  printf '%s' "${infrastructure_payload}" | assert_admin_infrastructure_payload
+  log "admin infrastructure: provider-neutral safe payload verified"
+
+  operations_payload="$(admin_get_json "admin video operations" "https://${DEPLOY_API_DOMAIN}/api/admin/video-operations" "${token}")"
+  printf '%s' "${operations_payload}" | assert_admin_video_operations_payload
+  log "admin video operations: realtime safe payload verified"
+}
+
+admin_get_json() {
+  local label="$1" url="$2" token="$3" output code attempt
+  output="$(mktemp)"
+  for attempt in $(seq 1 30); do
+    code="$(
+      curl -sS --max-time "${TIMEOUT}" \
+        -o "${output}" \
+        -w '%{http_code}' \
+        -H "authorization: Bearer ${token}" \
+        "${url}" || true
+    )"
+    if [[ "${code}" == "200" ]]; then
+      cat "${output}"
+      rm -f "${output}"
+      return 0
+    fi
+    sleep 1
+  done
+
+  rm -f "${output}"
+  fail "${label}: expected HTTP 200 after deploy readiness retries, got ${code:-none}"
+}
+
 load_local_env
 require_cmd curl
 require_cmd php
@@ -205,5 +435,6 @@ websocket_upgrade_smoke "sfu websocket host" "https://${DEPLOY_SFU_DOMAIN}/sfu?r
 websocket_upgrade_smoke "sfu websocket api fallback" "https://${DEPLOY_API_DOMAIN}/sfu?room_id=smoke"
 
 verify_remote_certbot_hook
+verify_admin_operations
 
 log "Production deploy smoke checks passed."
