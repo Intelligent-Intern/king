@@ -214,7 +214,7 @@ Checklist:
 - [x] CI runs HTTP/3 client/server contract suites.
 - [x] CI blocks local absolute paths, Homebrew paths, Cargo HTTP/3 bootstrap, and Quiche locks.
 - [x] Release supply-chain verification checks new provenance pins.
-- [ ] Package manifests contain new dependency hashes and no Quiche manifests.
+- [x] Package manifests contain new dependency hashes and no Quiche manifests.
 
 Done:
 - [ ] A PR cannot silently bring back Quiche or local paths.

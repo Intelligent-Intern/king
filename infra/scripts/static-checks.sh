@@ -95,6 +95,9 @@ infra/scripts/check-lsquic-bootstrap.sh
 echo "Checking release supply-chain provenance gates..."
 ruby infra/scripts/check-release-supply-chain-provenance.rb
 
+echo "Checking release package manifest dependency hashes..."
+ruby infra/scripts/check-release-package-manifest-contract.rb
+
 echo "Checking dependency provenance documentation..."
 infra/scripts/check-dependency-provenance-doc.sh
 

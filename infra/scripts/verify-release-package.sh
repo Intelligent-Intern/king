@@ -260,6 +260,45 @@ if (!is_string($resolvedPackageDir) || $resolvedPackageDir === '') {
 $manifestPath = $packageDir . '/manifest.json';
 $manifest = json_decode((string) file_get_contents($manifestPath), true, 512, JSON_THROW_ON_ERROR);
 
+$legacyHttp3Tokens = [
+    'qui' . 'che',
+    'KING_' . 'QUI' . 'CHE',
+    'lib' . 'qui' . 'che',
+    'qui' . 'che-server',
+    'qui' . 'che-bootstrap',
+    'qui' . 'che-workspace',
+    'Cargo.toml',
+    'Cargo.lock',
+];
+
+$assertLegacyHttp3Free = static function (mixed $value, string $path) use (&$assertLegacyHttp3Free, $legacyHttp3Tokens): void {
+    if (is_string($value)) {
+        foreach ($legacyHttp3Tokens as $token) {
+            if (stripos($value, $token) !== false) {
+                fwrite(STDERR, "Manifest contains legacy HTTP/3 metadata at {$path}.\n");
+                exit(1);
+            }
+        }
+
+        return;
+    }
+
+    if (!is_array($value)) {
+        return;
+    }
+
+    foreach ($value as $key => $child) {
+        $keyPath = $path . '[' . (is_int($key) ? $key : (string) $key) . ']';
+        if (is_string($key)) {
+            $assertLegacyHttp3Free($key, $keyPath . ':key');
+        }
+
+        $assertLegacyHttp3Free($child, $keyPath);
+    }
+};
+
+$assertLegacyHttp3Free($manifest, 'manifest');
+
 if (($manifest['package_format'] ?? null) !== 1) {
     fwrite(STDERR, "Unexpected manifest package_format.\n");
     exit(1);
@@ -281,6 +320,12 @@ if (!is_array($manifest['platform'] ?? null) || !is_string($manifest['platform']
 }
 
 $expectedComponents = ['lsquic', 'boringssl', 'ls-qpack', 'ls-hpack'];
+$dependencyProvenanceHashKeys = [
+    'lsquic' => 'lsquic_archive_sha256',
+    'boringssl' => 'boringssl_archive_sha256',
+    'ls-qpack' => 'ls_qpack_archive_sha256',
+    'ls-hpack' => 'ls_hpack_archive_sha256',
+];
 $provenance = $manifest['provenance'] ?? null;
 if (!is_array($provenance)) {
     if ($allowMissingProvenance) {
@@ -346,6 +391,11 @@ if (is_array($provenance)) {
         exit(1);
     }
 
+    if (array_keys($dependencyProvenance) !== $expectedComponents) {
+        fwrite(STDERR, "Manifest dependency provenance component list is invalid.\n");
+        exit(1);
+    }
+
     foreach ($expectedComponents as $componentName) {
         $component = $dependencyProvenance[$componentName] ?? null;
         if (!is_array($component)) {
@@ -367,6 +417,12 @@ if (is_array($provenance)) {
 
         if (preg_match('/^[a-f0-9]{64}$/', (string) $component['archive_sha256']) !== 1) {
             fwrite(STDERR, "Manifest dependency provenance archive hash is invalid for {$componentName}.\n");
+            exit(1);
+        }
+
+        $provenanceKey = $dependencyProvenanceHashKeys[$componentName];
+        if (($provenance[$provenanceKey] ?? null) !== $component['archive_sha256']) {
+            fwrite(STDERR, "Manifest dependency provenance hash does not match top-level provenance for {$componentName}.\n");
             exit(1);
         }
 
