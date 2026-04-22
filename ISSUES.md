@@ -22,11 +22,29 @@ Ziel:
 - Alle Quiche-, Rust-, Cargo- und HTTP/3-Testhelper-Abhaengigkeiten im aktuellen Baum erfassen und klassifizieren.
 
 Checklist:
-- [ ] `quiche`-Referenzen in Source, Headers, Tests, Docs, CI, Release-Scripts und Provenance erfassen.
+- [x] `quiche`-Referenzen in Source, Headers, Tests, Docs, CI, Release-Scripts und Provenance erfassen.
 - [ ] Rust-/Cargo-Pfade im HTTP/3-Kontext erfassen: `Cargo.toml`, `Cargo.lock`, `.rs`, Workspace-Locks, Bootstrap-Scripts.
 - [ ] Jede Fundstelle klassifizieren: `remove`, `replace`, `rename`, `keep-temporary`, `keep-unrelated`.
 - [ ] Unrelated Rust im Repo vom Quiche-/HTTP3-Rust trennen.
 - [ ] Generierte oder lokale Artefakte markieren, die nicht versioniert bleiben duerfen.
+
+Quiche-Fundstellen:
+
+| Bereich | Fundstellen | Folge |
+|---|---|---|
+| CI | `.github/workflows/ci.yml`, `.github/workflows/release-merge-publish.yml` | In #Q-10 auf neuen Stack und neue Gates umstellen. |
+| Provenance | `DEPENDENCY_PROVENANCE.md`, `infra/scripts/quiche-bootstrap.lock`, `infra/scripts/quiche-workspace.Cargo.lock`, `infra/scripts/check-dependency-provenance-doc.sh` | In #Q-3 ersetzen, danach in #Q-9 alte Quiche-Provenance entfernen. |
+| Build-Konfiguration | `extension/Makefile.frag`, `extension/config.m4`, `extension/config.m4.full`, `extension/config.h`, `extension/config.h.in`, `extension/include/config/config.h`, `Makefile` | In #Q-4 auf portable neue Detection ohne Quiche/Cargo umbauen. |
+| Runtime Source, Client | `extension/src/client/http3.c`, `extension/src/client/http3/*.inc`, besonders `extension/src/client/http3/quiche_loader.inc`, plus `extension/src/client/index.c` | In #Q-5 Loader und Quiche-Symbolnutzung ersetzen; Stats/Options in #Q-7 mappen. |
+| Runtime Source, Server | `extension/src/server/http3.c`, `extension/src/server/http3/*.inc`, besonders `extension/src/server/http3/quiche_loader.inc` | In #Q-6 Listener/Serverpfad ersetzen; Stats/Options in #Q-7 mappen. |
+| Runtime Metadaten/Stubs | `stubs/king.php`, `extension/src/php_king.c`, `extension/src/php_king/lifecycle.inc`, `extension/src/config/internal/snapshot.inc` | Nach Runtime-Migration in #Q-9 auf neuen Backendnamen aktualisieren. |
+| HTTP/3 Tests | `extension/tests/*http3*.phpt`, `extension/tests/366-quiche-bootstrap-contract.phpt`, `extension/tests/668-ensure-quiche-toolchain-lockfile-v4-branch-contract.phpt`, `extension/tests/http3_test_helper/**`, `extension/tests/http3_*.rs`, `extension/tests/http3_ticket_server/**` | In #Q-8 Harness migrieren, in #Q-11 voll gegen neuen Stack laufen lassen. |
+| Benchmarks/Smoke/Release-Scripts | `benchmarks/README.md`, `benchmarks/run-canonical.sh`, `infra/scripts/build-profile.sh`, `infra/scripts/package-release.sh`, `infra/scripts/package-pie-source.sh`, `infra/scripts/smoke-profile.sh`, `infra/scripts/soak-runtime.sh`, `infra/scripts/test-extension.sh`, `infra/scripts/check-stub-parity.sh`, `infra/scripts/verify-release-package.sh`, `infra/scripts/verify-release-supply-chain.sh`, `infra/scripts/prebuild-http3-test-helpers.sh`, `infra/scripts/bootstrap-quiche.sh`, `infra/scripts/check-quiche-bootstrap.sh`, `infra/scripts/ensure-quiche-toolchain.sh`, `infra/scripts/cargo-build-compat.sh` | In #Q-4/#Q-10 ersetzen oder entfernen. |
+| Dokumentation | `README.md`, `CONTRIBUTE`, `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, `documentation/quic-and-tls.md`, `documentation/operations-and-release.md`, `documentation/pie-install.md` | In #Q-9 nach der technischen Migration aktualisieren. |
+
+Suchbasis:
+- `rg -l -i "quiche" --glob '!ISSUES.md' --glob '!extension/build/**' --glob '!compat-artifacts/**' --glob '!quiche/**' --glob '!extension/quiche/**'`
+- `git ls-files | rg -i 'quiche'`
 
 Done:
 - [ ] Eine Fundstellen-Tabelle mit Aktion pro Datei liegt vor.
