@@ -2,40 +2,7 @@
 
 function king_http3_ticket_server_binary(): string
 {
-    $root = dirname(dirname(KING_HTTP3_TESTS_DIR));
-    $manifest = KING_HTTP3_TESTS_DIR . '/http3_ticket_server/Cargo.toml';
-    $source = KING_HTTP3_TESTS_DIR . '/http3_ticket_server/src/main.rs';
-    $lock = KING_HTTP3_TESTS_DIR . '/http3_ticket_server/Cargo.lock';
-    $targetDir = $root . '/quiche/target';
-    $binary = $targetDir . '/release/king-http3-ticket-server';
-
-    if (trim((string) shell_exec('command -v cargo')) === '') {
-        throw new RuntimeException('cargo is required to build the HTTP/3 ticket server helper');
-    }
-
-    if (
-        is_file($binary)
-        && filemtime($binary) >= filemtime($source)
-        && filemtime($binary) >= filemtime($manifest)
-        && (!is_file($lock) || filemtime($binary) >= filemtime($lock))
-    ) {
-        return $binary;
-    }
-
-    $command = sprintf(
-        'env CARGO_TARGET_DIR=%s cargo build --manifest-path %s --release --locked 2>&1',
-        escapeshellarg($targetDir),
-        escapeshellarg($manifest)
-    );
-
-    exec($command, $output, $exitCode);
-    if ($exitCode !== 0 || !is_file($binary)) {
-        throw new RuntimeException(
-            "failed to build HTTP/3 ticket server helper:\n" . implode("\n", $output)
-        );
-    }
-
-    return $binary;
+    return king_http3_helper_binary('king-http3-ticket-server');
 }
 
 function king_http3_start_ticket_test_server(
@@ -118,6 +85,11 @@ function king_http3_test_server_url(array $server, string $path): string
 
 function king_http3_stop_test_server(array $server): void
 {
+    if (($server['wire_server'] ?? false) === true) {
+        king_http3_server_wire_stop_server($server);
+        return;
+    }
+
     $process = $server['process'];
     $pipes = $server['pipes'];
     foreach ($pipes as $pipe) {

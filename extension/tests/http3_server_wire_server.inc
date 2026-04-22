@@ -140,6 +140,41 @@ $result = king_http3_server_listen_once(
             ];
         }
 
+        if ($mode === 'static-root') {
+            $rootDir = (string) ($modeArgs[0] ?? '');
+            $path = parse_url((string) $request['uri'], PHP_URL_PATH);
+            if (!is_string($path) || $path === '' || str_contains($path, '..')) {
+                return [
+                    'status' => 400,
+                    'headers' => [
+                        'content-type' => 'text/plain',
+                    ],
+                    'body' => 'invalid path',
+                ];
+            }
+
+            $file = rtrim($rootDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($path, '/');
+            if (!is_file($file)) {
+                return [
+                    'status' => 404,
+                    'headers' => [
+                        'content-type' => 'text/plain',
+                    ],
+                    'body' => 'not found',
+                ];
+            }
+
+            $body = (string) file_get_contents($file);
+            return [
+                'status' => 200,
+                'headers' => [
+                    'content-type' => 'text/plain',
+                    'content-length' => (string) strlen($body),
+                ],
+                'body' => $body,
+            ];
+        }
+
         return [
             'status' => 201,
             'headers' => [

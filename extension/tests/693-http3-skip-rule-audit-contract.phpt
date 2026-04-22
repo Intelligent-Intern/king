@@ -40,7 +40,7 @@ if (!is_array($legacySkipLiterals) || $legacySkipLiterals === []) {
 }
 
 $requiredFutureGates = array_fill_keys($audit['required_future_gates'] ?? [], true);
-foreach (['KING_LSQUIC_LIBRARY', 'KING_HTTP3_BACKEND_LSQUIC', 'infra/scripts/build-http3-test-helpers.sh --verify-plan'] as $gate) {
+foreach (['KING_LSQUIC_LIBRARY', 'KING_HTTP3_BACKEND_LSQUIC', 'infra/scripts/build-http3-test-helpers.sh build'] as $gate) {
     if (!isset($requiredFutureGates[$gate])) {
         king_http3_skip_audit_fail('audit missing required future gate: ' . $gate);
     }
@@ -80,7 +80,7 @@ if (count($auditPaths) !== 16) {
 }
 
 $legacyBlockerCount = 0;
-$cargoBlockerCount = 0;
+$helperGateCount = 0;
 foreach ($auditTests as $path => $entry) {
     if (!is_array($entry)) {
         king_http3_skip_audit_fail("{$path} has malformed audit entry");
@@ -98,8 +98,8 @@ foreach ($auditTests as $path => $entry) {
     $skipif = king_http3_extract_skipif($path, $source);
 
     $declaredLegacy = $entry['legacy_skip_literals'] ?? null;
-    if (!is_array($declaredLegacy) || $declaredLegacy === []) {
-        king_http3_skip_audit_fail("{$path} has no declared legacy skip literals");
+    if (!is_array($declaredLegacy)) {
+        king_http3_skip_audit_fail("{$path} has invalid declared legacy skip literals");
     }
 
     $legacyInSource = [];
@@ -124,20 +124,15 @@ foreach ($auditTests as $path => $entry) {
         );
     }
 
-    foreach ($declaredLegacy as $literal) {
-        if (!str_contains($skipif, $literal)) {
-            king_http3_skip_audit_fail("{$path} does not contain declared legacy skip literal: {$literal}");
-        }
-    }
-
     if ($legacyInSource !== []) {
         $legacyBlockerCount++;
         if (($entry['blocks_done'] ?? false) !== true) {
             king_http3_skip_audit_fail("{$path} does not block the final done checkbox");
         }
-        if (($entry['missing_new_stack_counts_as_success'] ?? true) !== false) {
-            king_http3_skip_audit_fail("{$path} allows a missing new stack to count as success");
-        }
+    }
+
+    if (($entry['missing_new_stack_counts_as_success'] ?? true) !== false) {
+        king_http3_skip_audit_fail("{$path} allows a missing new stack to count as success");
     }
 
     $futureGates = $entry['future_gates'] ?? null;
@@ -150,28 +145,26 @@ foreach ($auditTests as $path => $entry) {
         }
     }
 
-    if (str_contains($skipif, 'KING_QUICHE_LIBRARY')) {
-        foreach (['KING_LSQUIC_LIBRARY', 'KING_HTTP3_BACKEND_LSQUIC'] as $gate) {
-            if (!in_array($gate, $futureGates, true)) {
-                king_http3_skip_audit_fail("{$path} lacks runtime replacement gate {$gate}");
-            }
+    foreach (['KING_LSQUIC_LIBRARY', 'KING_HTTP3_BACKEND_LSQUIC'] as $gate) {
+        if (!in_array($gate, $futureGates, true)) {
+            king_http3_skip_audit_fail("{$path} lacks runtime replacement gate {$gate}");
         }
     }
 
-    if (str_contains($skipif, 'command -v cargo')) {
-        $cargoBlockerCount++;
-        if (!in_array('infra/scripts/build-http3-test-helpers.sh --verify-plan', $futureGates, true)) {
-            king_http3_skip_audit_fail("{$path} lacks deterministic helper-build replacement gate");
+    if (!str_contains($skipif, 'king_http3_skipif_require_lsquic_runtime')) {
+        king_http3_skip_audit_fail("{$path} skipif does not require the LSQUIC runtime");
+    }
+
+    if (in_array('infra/scripts/build-http3-test-helpers.sh build', $futureGates, true)) {
+        $helperGateCount++;
+        if (!str_contains($skipif, 'king_http3_skipif_require_c_helpers')) {
+            king_http3_skip_audit_fail("{$path} skipif does not require repo-owned C helpers");
         }
     }
 }
 
-if ($legacyBlockerCount !== 16) {
-    king_http3_skip_audit_fail('all 16 behavior tests must remain explicitly blocked while legacy skips exist');
-}
-
-if ($cargoBlockerCount < 12) {
-    king_http3_skip_audit_fail('cargo skip blocker coverage unexpectedly collapsed');
+if ($helperGateCount < 12) {
+    king_http3_skip_audit_fail('helper-backed behavior coverage unexpectedly collapsed');
 }
 
 $issues = file_get_contents($root . '/ISSUES.md');
@@ -180,11 +173,15 @@ if (!is_string($issues) || $issues === '') {
 }
 
 $doneCheckbox = preg_quote($audit['done_checkbox'] ?? '', '/');
-if (preg_match('/- \[x\]\s+' . $doneCheckbox . '/', $issues) === 1) {
+if ($legacyBlockerCount > 0 && preg_match('/- \[x\]\s+' . $doneCheckbox . '/', $issues) === 1) {
     king_http3_skip_audit_fail('final HTTP/3 done checkbox is checked while legacy skip blockers remain');
 }
 
-echo "HTTP/3 skip audit blocks final success for {$legacyBlockerCount} legacy-gated behavior tests.\n";
+if ($legacyBlockerCount === 0 && preg_match('/- \[ \]\s+' . $doneCheckbox . '/', $issues) === 1) {
+    king_http3_skip_audit_fail('final HTTP/3 done checkbox is still open after legacy skip blockers were removed');
+}
+
+echo "HTTP/3 skip audit allows final success with {$legacyBlockerCount} legacy-gated behavior tests.\n";
 ?>
 --EXPECT--
-HTTP/3 skip audit blocks final success for 16 legacy-gated behavior tests.
+HTTP/3 skip audit allows final success with 0 legacy-gated behavior tests.
