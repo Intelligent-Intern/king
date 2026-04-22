@@ -218,7 +218,7 @@ Checklist:
 
 Done:
 - [x] A PR cannot silently bring back Quiche or local paths.
-- [ ] Release artifacts are reproducible and traceable for the new stack.
+- [x] Release artifacts are reproducible and traceable for the new stack.
 
 ---
 
