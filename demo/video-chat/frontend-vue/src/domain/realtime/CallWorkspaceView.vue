@@ -1253,13 +1253,11 @@ function participantSnapshotSignature(rows) {
     .filter((row) => row.userId > 0 || row.connectionId !== '')
     .map((row) => [
       row.roomId,
-      row.connectionId,
       row.userId,
       row.displayName,
       row.role,
       row.callRole,
       row.hasConnection ? '1' : '0',
-      row.connectedAt,
     ].join('\u001f'))
     .sort()
     .join('\u001e');
@@ -1290,6 +1288,10 @@ function currentUserParticipantRow() {
     connectedAt: currentUserConnectedAt,
     connections: 1,
   };
+}
+
+function shouldUseLocalPeerRosterFallback() {
+  return hasRealtimeRoomSync.value !== true;
 }
 
 const participantUsers = computed(() => {
@@ -1333,11 +1335,9 @@ const participantUsers = computed(() => {
     const existing = aggregate.get(peerUserId);
     const displayName = String(peer?.displayName || '').trim() || `User ${peerUserId}`;
     if (existing) {
-      existing.connections = Math.max(1, Number(existing.connections || 0));
-      if (displayName.length > existing.displayName.length) {
-        existing.displayName = displayName;
-      }
-      existing.callRole = normalizeCallRole(callParticipantRoles[peerUserId] || existing.callRole || 'participant');
+      continue;
+    }
+    if (!shouldUseLocalPeerRosterFallback()) {
       continue;
     }
 
@@ -1359,9 +1359,9 @@ const participantUsers = computed(() => {
     const displayName = String(peer?.displayName || existing?.displayName || '').trim() || `User ${peerUserId}`;
     const callRole = normalizeCallRole(callParticipantRoles[peerUserId] || existing?.callRole || 'participant');
     if (existing) {
-      existing.connections = Math.max(1, Number(existing.connections || 0));
-      existing.displayName = displayName;
-      existing.callRole = callRole;
+      continue;
+    }
+    if (!shouldUseLocalPeerRosterFallback()) {
       continue;
     }
 
@@ -3701,7 +3701,7 @@ function applyRoomSnapshot(payload) {
   ensureRoomBuckets(roomId);
   applyViewerContext(payload?.viewer || null);
 
-  applyParticipantsSnapshot(payload?.participants);
+  const participantsChanged = applyParticipantsSnapshot(payload?.participants);
   if (payload?.layout && typeof payload.layout === 'object') {
     applyCallLayoutPayload(payload.layout);
   }
@@ -3719,7 +3719,9 @@ function applyRoomSnapshot(payload) {
       delete peerControlStateByUserId[userId];
     }
   }
-  refreshUsersDirectoryPresentation();
+  if (participantsChanged) {
+    refreshUsersDirectoryPresentation();
+  }
   if (isSocketOnline.value) {
     void syncControlStateToPeers();
     void syncModerationStateToPeers();
