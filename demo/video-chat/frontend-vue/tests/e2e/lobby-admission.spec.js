@@ -523,9 +523,66 @@ test('direct workspace link keeps invited user on join modal until Join call que
         message: 'Join call should be the only action that moves the participant to pending',
       },
     ).toBe('pending');
+
+    await joinCallModal.getByRole('button', { name: 'Cancel' }).click();
+    await expect.poll(
+      () => fetchInternalParticipantInviteState({
+        callId,
+        sessionToken: userStoredSession.sessionToken,
+        participantUserId: 2,
+      }),
+      {
+        timeout: 15_000,
+        message: 'closing the join modal should reset pending participants back to invited',
+      },
+    ).toBe('invited');
   } finally {
     await userContext.close();
   }
+});
+
+test('waiting admission resets to invited when the websocket disappears before approval', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const adminStoredSession = await fetchStoredSession(adminCredentials.email, adminCredentials.password);
+  const callTitle = `E2E Admission Close ${Date.now()}`;
+  const callId = await createInvitedCallViaApi({
+    sessionToken: adminStoredSession.sessionToken,
+    title: callTitle,
+    participantUserId: 2,
+  });
+  const { context: userContext, page: userPage, storedSession: userStoredSession } = await createAuthenticatedPage(browser, baseURL, userCredentials);
+
+  await userPage.goto(`/workspace/call/${callId}`);
+  await userPage.waitForURL(/\/join\/[a-f0-9-]+$/, { timeout: 20_000 });
+
+  const joinCallModal = userPage.getByRole('dialog', { name: 'Join video call' });
+  await expect(joinCallModal).toBeVisible({ timeout: 15_000 });
+  await joinCallModal.getByRole('button', { name: /Join call/i }).click();
+  await expect.poll(
+    () => fetchInternalParticipantInviteState({
+      callId,
+      sessionToken: userStoredSession.sessionToken,
+      participantUserId: 2,
+    }),
+    {
+      timeout: 15_000,
+      message: 'Join call should move the participant to pending before the browser disappears',
+    },
+  ).toBe('pending');
+
+  await userContext.close();
+  await expect.poll(
+    () => fetchInternalParticipantInviteState({
+      callId,
+      sessionToken: userStoredSession.sessionToken,
+      participantUserId: 2,
+    }),
+    {
+      timeout: 15_000,
+      message: 'closing the waiting browser should reset pending participants back to invited',
+    },
+  ).toBe('invited');
 });
 
 test('admin creates/invites and admits user from lobby, both browsers share roster and media signals', async ({ browser }) => {

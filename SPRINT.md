@@ -39,7 +39,7 @@ Goal:
 
 Checklist:
 - [x] Keep invited users on the existing join modal until `Join call` moves their participant state to `pending`.
-- [ ] Reset `pending` back to `invited` when the modal closes or the websocket/session disappears before approval.
+- [x] Reset `pending` back to `invited` when the modal closes or the websocket/session disappears before approval.
 - [ ] Show the host notification and lobby badge/list for pending users to call owner, admins, and moderators.
 - [ ] Admit users only after an authorized owner/admin/moderator grants access, then redirect the waiting browser into the same call.
 - [x] Hide the lobby tab from plain invited users unless they are explicitly promoted to moderator or are the call owner/admin.
