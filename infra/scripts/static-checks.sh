@@ -68,6 +68,9 @@ infra/scripts/check-repo-artifact-hygiene.sh
 echo "Checking Linux reproducible CI build matrix..."
 ruby infra/scripts/check-ci-linux-reproducible-builds.rb
 
+echo "Checking CI HTTP/3 stack build gates..."
+ruby infra/scripts/check-ci-builds-http3-stack.rb
+
 echo "Checking macOS/dev dependency path policy..."
 ruby infra/scripts/check-dev-path-configuration.rb
 

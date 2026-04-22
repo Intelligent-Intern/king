@@ -210,7 +210,7 @@ Goal:
 - Permanently protect the migration with CI and release gates.
 
 Checklist:
-- [ ] CI builds the new stack.
+- [x] CI builds the new stack.
 - [ ] CI runs HTTP/3 client/server contract suites.
 - [ ] CI blocks local absolute paths, Homebrew paths, Cargo HTTP/3 bootstrap, and Quiche locks.
 - [ ] Release supply-chain verification checks new provenance pins.
