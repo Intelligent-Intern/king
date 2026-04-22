@@ -134,7 +134,7 @@ Goal:
 Checklist:
 - [x] Implement a server loader with real initialization.
 - [x] Move `king_http3_server_listen_once` and listener paths to the new runtime context.
-- [ ] Prove request headers, body drain, early hints, response normalization, and CORS behavior stay unchanged.
+- [x] Prove request headers, body drain, early hints, response normalization, and CORS behavior stay unchanged.
 - [ ] Preserve TLS reload, cancel, and shutdown paths.
 - [ ] Keep WebSocket-over-HTTP3 honesty slices covered.
 
@@ -142,6 +142,7 @@ Done:
 - [x] `extension/src/server/http3/lsquic_loader.inc` binds real LSQUIC server symbols via `dlsym()` and initializes server globals with `lsquic_global_init(KING_LSQUIC_GLOBAL_SERVER)`.
 - [x] `infra/scripts/check-http3-lsquic-loader-contract.php` now checks the server LSQUIC loader for real symbol binding, initialization, and non-placeholder readiness.
 - [x] `king_http3_server_listen_once` dispatches LSQUIC builds through a server runtime context with LSQUIC engine settings, TLS context, stream callbacks, packet ingress, egress, and response writes.
+- [x] `extension/tests/680-server-http3-lsquic-behavior-contract.phpt` proves the LSQUIC listener keeps shared request header normalization, body-FIN gating, early-hints session state, response normalization, and CORS semantics.
 - [ ] HTTP/3 server listeners run on the new stack against real clients/peers.
 - [ ] No server path needs Quiche code.
 
