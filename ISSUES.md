@@ -163,7 +163,7 @@ Checklist:
 - [x] `extension/tests/688-client-http3-lsquic-byte-stats-contract.phpt` proves LSQUIC lost/retransmit byte response stats are derived from live connection byte and packet counters instead of stale bookkeeping or permanent zero placeholders.
 
 Done:
-- [ ] Existing stats and config tests stay green or have equally strong new proof.
+- [x] `extension/tests/147-oo-config-parity.phpt`, `148-oo-config-policy-and-read-slice.phpt`, and `684`-`688` pass together as the config/stats proof set for the LSQUIC HTTP/3 stack.
 - [ ] Documentation names the new stack, not Quiche counters.
 
 ---
