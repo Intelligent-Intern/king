@@ -24,10 +24,18 @@ var_dump(str_contains($supplyChainVerifier, "'lsquic_archive_sha256' => \$readLo
 var_dump(str_contains($supplyChainVerifier, "'boringssl_archive_sha256' => \$readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256')"));
 var_dump(str_contains($supplyChainVerifier, "'ls_qpack_archive_sha256' => \$readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256')"));
 var_dump(str_contains($supplyChainVerifier, "'ls_hpack_archive_sha256' => \$readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256')"));
+var_dump(str_contains($supplyChainVerifier, "'license_files' => preg_split('/\s+/', \$readLock('KING_LSQUIC_LICENSE_FILES')) ?: []"));
+var_dump(str_contains($supplyChainVerifier, "'license_files' => preg_split('/\s+/', \$readLock('KING_LSQUIC_BORINGSSL_LICENSE_FILES')) ?: []"));
+var_dump(str_contains($supplyChainVerifier, "'license_files' => preg_split('/\s+/', \$readLock('KING_LSQUIC_LS_QPACK_LICENSE_FILES')) ?: []"));
+var_dump(str_contains($supplyChainVerifier, "'license_files' => preg_split('/\s+/', \$readLock('KING_LSQUIC_LS_HPACK_LICENSE_FILES')) ?: []"));
 var_dump(!str_contains($packageScript, 'runtime/libquiche.so'));
 var_dump(!str_contains($packageScript, 'runtime/quiche-server'));
 ?>
 --EXPECT--
+bool(true)
+bool(true)
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 bool(true)

@@ -92,6 +92,9 @@ infra/scripts/check-include-layout.sh
 echo "Checking deterministic LSQUIC bootstrap..."
 infra/scripts/check-lsquic-bootstrap.sh
 
+echo "Checking release supply-chain provenance gates..."
+ruby infra/scripts/check-release-supply-chain-provenance.rb
+
 echo "Checking dependency provenance documentation..."
 infra/scripts/check-dependency-provenance-doc.sh
 

@@ -294,6 +294,7 @@ $expectedDependencyProvenance = [
         'archive_url' => $readLock('KING_LSQUIC_ARCHIVE_URL'),
         'archive_sha256' => $readLock('KING_LSQUIC_ARCHIVE_SHA256'),
         'archive_bytes' => (int) $readLock('KING_LSQUIC_ARCHIVE_BYTES'),
+        'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LICENSE_FILES')) ?: [],
     ],
     'boringssl' => [
         'repo_url' => $readLock('KING_LSQUIC_BORINGSSL_REPO_URL'),
@@ -302,6 +303,7 @@ $expectedDependencyProvenance = [
         'archive_url' => $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_URL'),
         'archive_sha256' => $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256'),
         'archive_bytes' => (int) $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_BYTES'),
+        'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_BORINGSSL_LICENSE_FILES')) ?: [],
     ],
     'ls-qpack' => [
         'path' => $readLock('KING_LSQUIC_LS_QPACK_PATH'),
@@ -311,6 +313,7 @@ $expectedDependencyProvenance = [
         'archive_url' => $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_URL'),
         'archive_sha256' => $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256'),
         'archive_bytes' => (int) $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_BYTES'),
+        'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LS_QPACK_LICENSE_FILES')) ?: [],
     ],
     'ls-hpack' => [
         'path' => $readLock('KING_LSQUIC_LS_HPACK_PATH'),
@@ -320,6 +323,7 @@ $expectedDependencyProvenance = [
         'archive_url' => $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_URL'),
         'archive_sha256' => $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256'),
         'archive_bytes' => (int) $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_BYTES'),
+        'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LS_HPACK_LICENSE_FILES')) ?: [],
     ],
 ];
 
