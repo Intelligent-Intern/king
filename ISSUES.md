@@ -24,7 +24,7 @@ Ziel:
 Checklist:
 - [x] Release-/Commit-Pins fuer den neuen Stack festlegen.
 - [x] Checksums und Quellen in `DEPENDENCY_PROVENANCE.md` dokumentieren.
-- [ ] Neues Bootstrap-Lockfile erstellen, z. B. `infra/scripts/lsquic-bootstrap.lock`.
+- [x] Neues Bootstrap-Lockfile erstellen, z. B. `infra/scripts/lsquic-bootstrap.lock`.
 - [ ] Alte `quiche-bootstrap.lock` und `quiche-workspace.Cargo.lock` als zu entfernende Quiche-Artefakte erfassen.
 - [ ] Offline-/CI-Validierung fuer Pins und Checksums ergaenzen.
 
