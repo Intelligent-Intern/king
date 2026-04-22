@@ -12,8 +12,7 @@ if [[ ! -f "${LOCK_FILE}" ]]; then
 fi
 
 if [[ ! -d "${EXT_DIR}/lsquic" ]]; then
-    echo "lsquic sources not found under ${EXT_DIR}/lsquic" >&2
-    exit 1
+    echo "WARNING: lsquic sources not found under ${EXT_DIR}/lsquic" >&2
 fi
 
 if [[ -f "${EXT_DIR}/lsquic/liblsquic.a" ]]; then
