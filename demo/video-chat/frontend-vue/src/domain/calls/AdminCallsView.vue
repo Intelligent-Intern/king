@@ -2132,7 +2132,6 @@ async function submitCompose() {
   }
 
   const payload = {
-    room_id: String(composeState.roomId || '').trim() || 'lobby',
     title,
     access_mode: normalizeCallAccessMode(composeState.accessMode),
     starts_at: startsAt,
@@ -2167,7 +2166,7 @@ async function submitCompose() {
         body: payload,
       });
       const createdCallId = String(createResult?.result?.call?.id || '').trim();
-      const createdRoomId = String(createResult?.result?.call?.room_id || payload.room_id || 'lobby').trim() || 'lobby';
+      const createdRoomId = String(createResult?.result?.call?.room_id || createdCallId || 'lobby').trim() || 'lobby';
       publishAdminSync('calls', 'call_created');
       if (composeState.mode === 'create') {
         closeCompose();

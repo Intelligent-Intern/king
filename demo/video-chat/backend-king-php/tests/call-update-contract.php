@@ -84,6 +84,31 @@ SQL
     videochat_call_update_assert($created['ok'] === true, 'setup create should succeed');
     $callId = (string) (($created['call'] ?? [])['id'] ?? '');
     videochat_call_update_assert($callId !== '', 'setup call id should be non-empty');
+    $originalRoomId = (string) (($created['call'] ?? [])['room_id'] ?? '');
+    videochat_call_update_assert($originalRoomId !== '', 'setup call room id should be non-empty');
+
+    $roomMutationUpdate = videochat_update_call($pdo, $callId, $adminUserId, 'admin', [
+        'room_id' => 'lobby',
+        'title' => 'Room Mutation Attempt',
+    ]);
+    videochat_call_update_assert($roomMutationUpdate['ok'] === false, 'room_id update should fail');
+    videochat_call_update_assert($roomMutationUpdate['reason'] === 'validation_failed', 'room_id update reason mismatch');
+    videochat_call_update_assert(
+        (string) (($roomMutationUpdate['errors'] ?? [])['room_id'] ?? '') === 'immutable_for_call',
+        'room_id update immutable error mismatch'
+    );
+    $roomMutationRowQuery = $pdo->prepare('SELECT room_id, title FROM calls WHERE id = :id LIMIT 1');
+    $roomMutationRowQuery->execute([':id' => $callId]);
+    $roomMutationRow = $roomMutationRowQuery->fetch();
+    videochat_call_update_assert(is_array($roomMutationRow), 'room mutation call row should exist');
+    videochat_call_update_assert(
+        (string) ($roomMutationRow['room_id'] ?? '') === $originalRoomId,
+        'room_id update must not change the call room'
+    );
+    videochat_call_update_assert(
+        (string) ($roomMutationRow['title'] ?? '') === 'Before Update',
+        'room_id update must not partially update title'
+    );
 
     $emptyUpdate = videochat_update_call($pdo, $callId, $adminUserId, 'admin', []);
     videochat_call_update_assert($emptyUpdate['ok'] === false, 'empty update payload should fail');

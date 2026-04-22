@@ -2051,7 +2051,6 @@ async function submitCompose() {
   }
 
   const payload = {
-    room_id: String(composeState.roomId || '').trim() || 'lobby',
     title,
     access_mode: String(composeState.accessMode || 'invite_only').trim() || 'invite_only',
     starts_at: startsAt,
