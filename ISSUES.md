@@ -174,7 +174,7 @@ Goal:
 - Migrate HTTP/3 tests to the new stack without Quiche/Cargo bootstrap.
 
 Checklist:
-- [ ] Classify Rust test peers and Cargo locks in the HTTP/3 context.
+- [x] `extension/tests/http3_rust_peer_classification.inc` and `689-http3-rust-peer-classification-contract.phpt` classify every tracked HTTP/3 Rust peer and Cargo lock as temporary, non-product-bootstrap test context.
 - [ ] Choose replacement strategy: C helper, King-owned listeners, CI artifacts with provenance, or another reproducible path.
 - [ ] Preserve tests for handshake failure, transport close, timeout, flow control, packet loss, 0-RTT, session tickets, and multi-stream fairness.
 - [ ] Build helper binaries deterministically and do not commit build leftovers.
