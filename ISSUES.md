@@ -23,7 +23,7 @@ Ziel:
 
 Checklist:
 - [x] Entscheidung dokumentieren: `LSQUIC + BoringSSL` oder begruendeter Alternativstack.
-- [ ] Feature-Parity fuer Client, Server, Listener, TLS, Session-Tickets, 0-RTT, Stream-Reset, Stop-Sending, Flow-Control, Congestion-Control, Stats und Cancel pruefen.
+- [x] Feature-Parity fuer Client, Server, Listener, TLS, Session-Tickets, 0-RTT, Stream-Reset, Stop-Sending, Flow-Control, Congestion-Control, Stats und Cancel pruefen.
 - [ ] Unsupported Features als Blocker oder Umsetzungsaufgabe erfassen, nicht still entfernen.
 - [ ] Public API und Exception-Mapping gegen den bestehenden Vertrag pruefen.
 - [ ] Lizenz-, Security- und Maintenance-Risiko dokumentieren.
@@ -38,6 +38,25 @@ Backend-Entscheidung:
 Primaerquellen fuer die Entscheidung:
 - LSQUIC README: `https://github.com/litespeedtech/lsquic`
 - LSQUIC Getting Started: `https://lsquic.readthedocs.io/en/stable/gettingstarted.html`
+
+Feature-Parity-Pruefung:
+
+| Vertragsbereich | King-v1-Vertrag | LSQUIC-/BoringSSL-Anker | Ergebnis / Folge |
+|---|---|---|---|
+| Client HTTP/3 | `king_http3_request_send()`, Dispatcher, OO-Client und `king_http3_request_send_multi()` bleiben echte HTTP/3-over-QUIC Pfade. | LSQUIC bietet HTTP/3-Clientbetrieb, `lsquic_engine_connect()`, `lsquic_conn_make_stream()`, Stream-Callbacks und pending streams. | Parity-Ziel ist tragfaehig; Umsetzung in #Q-5, Wire-Beweis in #Q-11. |
+| Server / Listener | `king_http3_server_listen_once()` bleibt realer UDP-/QUIC-/HTTP/3-Accept-Pfad mit normalisiertem Request/Response-Verhalten. | LSQUIC erzeugt Server-Verbindungen aus eingehenden Paketen, ruft `on_new_conn` nach erfolgreichem Handshake und erzeugt Request-Streams im Servermodus. | Tragfaehig; Umsetzung in #Q-6, Harness-Beweis in #Q-8/#Q-11. |
+| TLS / Handshake | TLS-Fehler, Zertifikatspruefung, Reload-Verhalten und stabile Exceptions bleiben erhalten. | LSQUIC nutzt BoringSSL, exposes Handshake-Callback `on_hsk_done` und Zertifikatszugriff wie `lsquic_conn_get_server_cert_chain()`. | Tragfaehig, aber King-eigenes Error-Mapping bleibt #Q-2/#Q-5/#Q-6 Arbeit. |
+| Session-Tickets / Retry-Token | Shared Ticket Ring, stale-ticket Recovery und Token-Reuse duerfen nicht verschwinden. | LSQUIC exposes `on_sess_resume_info`, `on_new_token`, `sess_resume` und `token` in `lsquic_engine_connect()`. | Tragfaehig; Mapping in #Q-5 und Testersatz in #Q-8. |
+| 0-RTT | Akzeptierte 0-RTT Requests und server-disabled fallback replay muessen weiter bewiesen werden. | LSQUIC/BoringSSL-Resumption ist vorhanden; konkrete early-data Steuerung muss am gepinnten Zielstand gegen Wire-Tests bestaetigt werden. | Bedingte Parity: kein Vertragsabbau erlaubt; falls early-data nicht sauber abbildbar ist, wird es Blocker statt Silent-Drop. |
+| Stream-Reset / Stop-Sending | Peer reset, stop-sending, lokale Cancel-Abbrueche und Stream-Lifecycle bleiben unterscheidbar. | LSQUIC bietet `on_reset`, `lsquic_stream_shutdown()`, `lsquic_stream_close()`, `ECONNRESET`-Lesefehler und Connection close/abort. | Tragfaehig; exaktes Error-/Cancel-Mapping in #Q-5/#Q-7/#Q-8. |
+| Flow-Control / Multiplexing | `quic.initial_max_*`, Backpressure, stalled peer recovery und multi-stream fairness bleiben sichtbar. | LSQUIC exposes `es_init_max_data`, `es_init_max_stream_data_*`, `es_init_max_streams_*`, stream read/write backpressure und pending stream management. | Tragfaehig; Config-Mapping und Tests in #Q-7/#Q-11. |
+| Congestion-Control / Pacing | `cubic`, `bbr`, pacing, loss/retransmit und recovery counters bleiben echte Runtime-Werte. | LSQUIC exposes `es_cc_algo` mit Cubic, BBRv1 und adaptive CC sowie pacing settings. | Tragfaehig; BBR-Semantik als BBRv1 markieren und in #Q-7 exakt mappen. |
+| Stats | `quic_packets_*`, lost bytes, retransmit bytes, RTT/Pacing und Backendname duerfen nicht zu stale bookkeeping werden. | LSQUIC exposes `lsquic_conn_get_info()` mit bytes, packets, loss, retransmit, RTT, cwnd, pacing und bandwidth estimates. | Tragfaehig; fehlende King-Felder muessen in #Q-7 aus echten LSQUIC-Werten oder expliziten Adapterzaehlern kommen. |
+| Cancel / Timeout | `CancelToken`, Timeouts, application close und cleanup bleiben echte aktive Transportaktionen. | LSQUIC exposes connection close/abort, stream shutdown/close, progress/no-progress timeout settings und event-loop callbacks. | Tragfaehig; King-Cancel darf nur als echter stream/connection operation gelten, nicht als lokales Flag. |
+
+Parity-Suchbasis:
+- King-Vertrag: `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, `documentation/quic-and-tls.md`, `documentation/runtime-configuration.md`, `stubs/king.php`, `extension/tests/*http3*.phpt`.
+- LSQUIC API: `https://lsquic.readthedocs.io/en/stable/apiref.html`.
 
 Done:
 - [ ] Der Zielstack ist entschieden.
