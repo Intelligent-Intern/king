@@ -68,15 +68,19 @@ try {
     videochat_media_security_assert(is_string($root) && $root !== '', 'video-chat root must resolve');
 
     $session = videochat_media_security_json($root . '/contracts/v1/e2ee-session.contract.json', 'e2ee-session contract');
+    $kex = videochat_media_security_json($root . '/contracts/v1/media-kex.contract.json', 'media-kex contract');
     $frame = videochat_media_security_json($root . '/contracts/v1/protected-media-frame.contract.json', 'protected-media-frame contract');
     $transport = videochat_media_security_json($root . '/contracts/v1/protected-media-transport-envelope.contract.json', 'protected-media-transport-envelope contract');
 
     videochat_media_security_assert(($session['contract_name'] ?? null) === 'king-video-chat-e2ee-session', 'session contract_name mismatch');
+    videochat_media_security_assert(($kex['contract_name'] ?? null) === 'king-video-chat-media-kex', 'kex contract_name mismatch');
     videochat_media_security_assert(($frame['contract_name'] ?? null) === 'king-video-chat-protected-media-frame', 'frame contract_name mismatch');
     videochat_media_security_assert(($transport['contract_name'] ?? null) === 'king-video-chat-protected-media-transport-envelope', 'transport contract_name mismatch');
     videochat_media_security_assert(preg_match('/^v1\.\d+\.\d+(?:-[A-Za-z0-9._-]+)?$/', (string) ($session['contract_version'] ?? '')) === 1, 'session contract_version must be v1 semver');
+    videochat_media_security_assert(preg_match('/^v1\.\d+\.\d+(?:-[A-Za-z0-9._-]+)?$/', (string) ($kex['contract_version'] ?? '')) === 1, 'kex contract_version must be v1 semver');
     videochat_media_security_assert(preg_match('/^v1\.\d+\.\d+(?:-[A-Za-z0-9._-]+)?$/', (string) ($frame['contract_version'] ?? '')) === 1, 'frame contract_version must be v1 semver');
     videochat_media_security_assert(preg_match('/^v1\.\d+\.\d+(?:-[A-Za-z0-9._-]+)?$/', (string) ($transport['contract_version'] ?? '')) === 1, 'transport contract_version must be v1 semver');
+    videochat_media_security_assert(($session['kex_contract'] ?? null) === 'king-video-chat-media-kex', 'session must pin KEX contract');
 
     $requiredStates = ['transport_only', 'protected_not_ready', 'media_e2ee_active', 'blocked_capability', 'rekeying', 'decrypt_error'];
     $stateIds = videochat_media_security_string_ids((array) ($session['security_states'] ?? []));
@@ -102,6 +106,10 @@ try {
 
     $policy = (array) (($session['capability_negotiation'] ?? [])['policy_modes'] ?? []);
     videochat_media_security_assert($policy === ['required', 'preferred', 'disabled'], 'capability policy modes must be required, preferred, disabled');
+    videochat_media_security_assert((array) (($session['capability_negotiation'] ?? [])['kex_policy_modes'] ?? []) === ['classical_required', 'hybrid_preferred', 'hybrid_required'], 'KEX policy modes mismatch');
+    videochat_media_security_assert((string) (($session['capability_negotiation'] ?? [])['default_kex_suite'] ?? '') === 'x25519_hkdf_sha256_v1', 'default KEX suite mismatch');
+    videochat_media_security_assert((string) (($session['capability_negotiation'] ?? [])['hybrid_kex_suite'] ?? '') === 'hybrid_x25519_mlkem768_hkdf_sha256_v1', 'hybrid KEX suite mismatch');
+    videochat_media_security_assert(($session['capability_negotiation']['hybrid_requires_explicit_policy'] ?? false) === true, 'hybrid KEX must require explicit policy');
     foreach ((array) (($session['capability_negotiation'] ?? [])['deterministic_policy'] ?? []) as $row) {
         videochat_media_security_assert(is_array($row), 'policy row must be object');
         if (($row['mode'] ?? null) === 'required') {
@@ -109,6 +117,13 @@ try {
             videochat_media_security_assert(($row['when_any_participant_lacks_support'] ?? null) === 'blocked_capability', 'required policy must fail closed on missing capability');
         }
     }
+
+    $keyEstablishment = (array) ($session['key_establishment'] ?? []);
+    videochat_media_security_assert(($keyEstablishment['contract'] ?? null) === 'king-video-chat-media-kex', 'key_establishment must reference media-kex');
+    videochat_media_security_assert(($keyEstablishment['transcript_hash'] ?? null) === 'sha256_base64url', 'KEX transcript hash mismatch');
+    videochat_media_security_assert(($keyEstablishment['downgrade_behavior'] ?? null) === 'downgrade_attempt', 'KEX downgrade behavior mismatch');
+    videochat_media_security_assert_contains_all((array) ($keyEstablishment['selected_suite_pinned_in'] ?? []), ['hello_transcript', 'sender_key', 'protected_media_frame_header'], 'selected_suite_pinned_in');
+    videochat_media_security_assert_contains_all((array) ($keyEstablishment['sender_key_aad_bound_to'] ?? []), ['call_id', 'room_id', 'participant_set_hash', 'kex_transcript_hash', 'kex_suite', 'media_suite', 'epoch', 'sender_key_id'], 'sender_key_aad_bound_to');
 
     $keyStates = (array) (($session['participant_key_state'] ?? [])['states'] ?? []);
     videochat_media_security_assert_contains_all($keyStates, ['unknown', 'capability_ready', 'keying', 'active', 'rekeying', 'removed', 'failed'], 'participant_key_state.states');
@@ -123,6 +138,7 @@ try {
 
     videochat_media_security_assert(($frame['magic_ascii'] ?? null) === 'KPMF', 'protected frame magic must be KPMF');
     videochat_media_security_assert(($frame['wire_encoding'] ?? null) === 'typed_binary_envelope_v1', 'protected frame wire encoding must be typed binary envelope');
+    videochat_media_security_assert(($frame['kex_contract'] ?? null) === 'king-video-chat-media-kex', 'protected frame must pin KEX contract');
     videochat_media_security_assert(($frame['transport_envelope_contract'] ?? null) === 'king-video-chat-protected-media-transport-envelope', 'protected frame must pin transport envelope contract');
     videochat_media_security_assert((int) (($frame['header'] ?? [])['min_length_bytes'] ?? 0) >= 80, 'protected frame header must be bounded and explicit');
 
@@ -147,6 +163,51 @@ try {
         }
     }
     videochat_media_security_assert_contains_all($frameErrors, ['malformed_protected_frame', 'unsupported_capability', 'wrong_epoch', 'wrong_key_id', 'replay_detected', 'decrypt_failed'], 'protected frame error codes');
+
+    $kexSelection = (array) ($kex['suite_selection'] ?? []);
+    videochat_media_security_assert(($kexSelection['default_suite'] ?? null) === 'x25519_hkdf_sha256_v1', 'KEX default suite mismatch');
+    videochat_media_security_assert((array) ($kexSelection['policy_modes'] ?? []) === ['classical_required', 'hybrid_preferred', 'hybrid_required'], 'KEX policy modes must be exact and ordered');
+    videochat_media_security_assert(($kexSelection['hybrid_requires_explicit_policy'] ?? false) === true, 'hybrid suite must require explicit KEX policy');
+    videochat_media_security_assert(($kexSelection['required_policy_missing_suite_behavior'] ?? null) === 'blocked_capability', 'hybrid_required missing suite behavior mismatch');
+    videochat_media_security_assert(($kexSelection['downgrade_behavior'] ?? null) === 'downgrade_attempt', 'KEX downgrade behavior must fail closed');
+
+    $suiteIds = [];
+    $suiteFamilies = [];
+    foreach ((array) ($kex['suites'] ?? []) as $suite) {
+        if (is_array($suite) && is_string($suite['id'] ?? null)) {
+            $suiteIds[] = (string) $suite['id'];
+            $suiteFamilies[(string) $suite['id']] = (string) ($suite['family'] ?? '');
+            if (($suite['id'] ?? null) === 'hybrid_x25519_mlkem768_hkdf_sha256_v1') {
+                videochat_media_security_assert(($suite['requires_external_provider'] ?? false) === true, 'hybrid suite must require external provider');
+                videochat_media_security_assert(($suite['enabled_by_default'] ?? true) === false, 'hybrid suite must not be enabled by default');
+            }
+        }
+    }
+    videochat_media_security_assert_contains_all($suiteIds, ['x25519_hkdf_sha256_v1', 'hybrid_x25519_mlkem768_hkdf_sha256_v1'], 'KEX suites');
+    videochat_media_security_assert(($suiteFamilies['x25519_hkdf_sha256_v1'] ?? '') === 'classical', 'classical KEX family mismatch');
+    videochat_media_security_assert(($suiteFamilies['hybrid_x25519_mlkem768_hkdf_sha256_v1'] ?? '') === 'hybrid_classical_pq', 'hybrid KEX family mismatch');
+
+    $kexNegotiation = (array) ($kex['capability_negotiation'] ?? []);
+    videochat_media_security_assert_contains_all((array) ($kexNegotiation['hello_fields'] ?? []), ['supported_kex_suites', 'preferred_kex_suites', 'kex_policy', 'public_key', 'hybrid_public_key'], 'KEX hello fields');
+    videochat_media_security_assert_contains_all((array) ($kexNegotiation['sender_key_fields'] ?? []), ['kex_suite', 'kex_transcript_hash', 'participant_set_hash', 'rekey_reason'], 'KEX sender-key fields');
+    videochat_media_security_assert(($kexNegotiation['mixed_suite_behavior'] ?? null) === 'downgrade_attempt', 'mixed KEX suite behavior mismatch');
+
+    $transcript = (array) ($kex['transcript_binding'] ?? []);
+    videochat_media_security_assert(($transcript['hash'] ?? null) === 'sha256_base64url', 'KEX transcript binding hash mismatch');
+    videochat_media_security_assert_contains_all((array) ($transcript['bound_fields'] ?? []), ['call_id', 'room_id', 'participant_set_hash', 'participant_user_ids', 'device_ids', 'x25519_public_keys', 'hybrid_public_keys', 'selected_kex_suite', 'media_suite', 'kex_policy', 'epoch', 'sender_key_id'], 'KEX transcript bound fields');
+    videochat_media_security_assert(($transcript['sender_key_aad_must_include_transcript_hash'] ?? false) === true, 'sender-key AAD must include transcript hash');
+    videochat_media_security_assert(($transcript['sender_key_aad_must_include_participant_set_hash'] ?? false) === true, 'sender-key AAD must include participant set hash');
+
+    $kexTelemetry = (array) (($kex['telemetry'] ?? [])['public_fields'] ?? []);
+    videochat_media_security_assert_contains_all($kexTelemetry, ['security_state', 'runtime_path', 'policy_mode', 'kex_policy', 'kex_suite', 'kex_family', 'media_suite', 'epoch', 'rekey_reason'], 'KEX telemetry public fields');
+    $kexTelemetryForbidden = (array) (($kex['telemetry'] ?? [])['forbidden_fields'] ?? []);
+    videochat_media_security_assert_contains_all($kexTelemetryForbidden, ['raw_media_key', 'private_key', 'shared_secret', 'plaintext_frame', 'sdp_body', 'ice_credentials', 'mlkem_private_key'], 'KEX telemetry forbidden fields');
+
+    $kexScope = (array) ($kex['post_quantum_scope'] ?? []);
+    videochat_media_security_assert(($kexScope['readme_claim_allowed_before_green_downgrade_tests'] ?? true) === false, 'PQ wording must stay out of README/security claims before downgrade tests');
+    videochat_media_security_assert_contains_all((array) ($kexScope['not_claimed'] ?? []), ['metadata secrecy', 'topology secrecy', 'signaling secrecy', 'traffic analysis resistance', 'post-quantum protection without negotiated hybrid suite'], 'PQ not-claimed scope');
+
+    videochat_media_security_assert_contains_all((array) ($kex['negative_tests'] ?? []), ['hybrid_required_without_provider_blocks', 'sender_key_suite_downgrade_rejected', 'protected_frame_suite_downgrade_rejected', 'transcript_hash_mismatch_rejected', 'participant_churn_forces_new_epoch'], 'KEX negative tests');
 
     $transportLayers = (array) ($transport['layers'] ?? []);
     videochat_media_security_assert(is_string($transportLayers['codec_frame'] ?? null) && (string) $transportLayers['codec_frame'] !== '', 'transport layer must separate codec frame');

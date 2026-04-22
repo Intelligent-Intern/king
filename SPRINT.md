@@ -79,20 +79,20 @@ Goal:
 - Make the media-E2EE design algorithm-agile and able to support hybrid classical + post-quantum key establishment without redesigning the media-protection layer.
 
 Checklist:
-- [ ] Add a KEX abstraction independent from the protected-media frame format.
-- [ ] Pin the negotiated KEX suite in capability negotiation and session state.
-- [ ] Ship one production classical KEX path first on the shared abstraction.
-- [ ] Add hybrid classical + PQ suite negotiation behind explicit policy.
-- [ ] Bind transcript, room, participants, and selected suite into derived media epoch material.
-- [ ] Add downgrade rejection across KEX suites.
-- [ ] Add rejoin, reconnect, participant churn, and forced-rekey coverage under hybrid mode.
-- [ ] Add telemetry that distinguishes classical vs hybrid sessions without leaking secrets.
-- [ ] Document exactly what “post-quantum” means in this stack: key-establishment posture, not blanket secrecy of metadata, topology, or signaling.
-- [ ] Keep post-quantum wording out of README/security claims until suite agreement, transcript binding, and downgrade tests are green.
+- [x] Add a KEX abstraction independent from the protected-media frame format.
+- [x] Pin the negotiated KEX suite in capability negotiation and session state.
+- [x] Ship one production classical KEX path first on the shared abstraction.
+- [x] Add hybrid classical + PQ suite negotiation behind explicit policy.
+- [x] Bind transcript, room, participants, and selected suite into derived media epoch material.
+- [x] Add downgrade rejection across KEX suites.
+- [x] Add rejoin, reconnect, participant churn, and forced-rekey coverage under hybrid mode.
+- [x] Add telemetry that distinguishes classical vs hybrid sessions without leaking secrets.
+- [x] Document exactly what “post-quantum” means in this stack: key-establishment posture, not blanket secrecy of metadata, topology, or signaling.
+- [x] Keep post-quantum wording out of README/security claims until suite agreement, transcript binding, and downgrade tests are green.
 
 Done:
-- [ ] Media-key derivation is algorithm-agile and hybrid PQ works under the same pinned session-state contract as the classical path.
-- [ ] Downgrade across KEX suites fails closed and is CI-covered.
+- [x] Media-key derivation is algorithm-agile and hybrid PQ works under the same pinned session-state contract as the classical path.
+- [x] Downgrade across KEX suites fails closed and is CI-covered.
 
 ### #E2E-1 Video-Chat End-To-End Acceptance Matrix
 

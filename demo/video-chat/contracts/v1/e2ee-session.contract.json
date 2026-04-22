@@ -3,6 +3,7 @@
   "contract_version": "v1.0.0",
   "scope": "media-security-session-state",
   "security_model_id": "king-video-chat-media-security-v1",
+  "kex_contract": "king-video-chat-media-kex",
   "runtime_paths": [
     {
       "id": "webrtc_native",
@@ -58,6 +59,10 @@
   ],
   "capability_negotiation": {
     "policy_modes": ["required", "preferred", "disabled"],
+    "kex_policy_modes": ["classical_required", "hybrid_preferred", "hybrid_required"],
+    "default_kex_suite": "x25519_hkdf_sha256_v1",
+    "hybrid_kex_suite": "hybrid_x25519_mlkem768_hkdf_sha256_v1",
+    "hybrid_requires_explicit_policy": true,
     "deterministic_policy": [
       {
         "mode": "required",
@@ -88,6 +93,14 @@
       "supported_kex_suites",
       "supported_media_suites"
     ]
+  },
+  "key_establishment": {
+    "contract": "king-video-chat-media-kex",
+    "selected_suite_pinned_in": ["hello_transcript", "sender_key", "protected_media_frame_header"],
+    "transcript_hash": "sha256_base64url",
+    "downgrade_behavior": "downgrade_attempt",
+    "sender_key_aad_bound_to": ["call_id", "room_id", "participant_set_hash", "kex_transcript_hash", "kex_suite", "media_suite", "epoch", "sender_key_id"],
+    "post_quantum_scope": "hybrid key-establishment posture only after explicit hybrid suite negotiation"
   },
   "participant_key_state": {
     "states": ["unknown", "capability_ready", "keying", "active", "rekeying", "removed", "failed"],

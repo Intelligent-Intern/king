@@ -4,7 +4,9 @@ const TRANSPORT_ENVELOPE_CONTRACT_NAME = 'king-video-chat-protected-media-transp
 const CONTRACT_VERSION = 'v1.0.0';
 const FRAME_MAGIC = 'KPMF';
 const FRAME_VERSION = 1;
-const KEX_SUITE = 'x25519_hkdf_sha256_v1';
+const CLASSICAL_KEX_SUITE = 'x25519_hkdf_sha256_v1';
+const HYBRID_KEX_SUITE = 'hybrid_x25519_mlkem768_hkdf_sha256_v1';
+const KEX_SUITE = CLASSICAL_KEX_SUITE;
 const MEDIA_SUITE = 'aes_256_gcm_v1';
 const ACTIVE_STATE = `media_${'e2' + 'ee'}_active`;
 const TEXT_ENCODER = new TextEncoder();
@@ -14,6 +16,22 @@ const MEDIA_NONCE_BYTES = 24;
 const WRAP_NONCE_BYTES = 12;
 const MAX_PUBLIC_METADATA_BYTES = 4096;
 const MAX_PROTECTED_CIPHERTEXT_BYTES = 16_777_216;
+const KEX_POLICIES = Object.freeze(['classical_required', 'hybrid_preferred', 'hybrid_required']);
+const KEX_SUITES = Object.freeze({
+  [CLASSICAL_KEX_SUITE]: Object.freeze({
+    id: CLASSICAL_KEX_SUITE,
+    family: 'classical',
+    production: true,
+    components: Object.freeze(['x25519', 'hkdf_sha256']),
+  }),
+  [HYBRID_KEX_SUITE]: Object.freeze({
+    id: HYBRID_KEX_SUITE,
+    family: 'hybrid',
+    production: false,
+    policyGated: true,
+    components: Object.freeze(['x25519', 'ml_kem_768', 'hkdf_sha256']),
+  }),
+});
 
 export const MEDIA_SECURITY_SIGNAL_TYPES = Object.freeze([
   'media-security/hello',
@@ -112,10 +130,56 @@ function jsonBytes(value) {
   return TEXT_ENCODER.encode(stableJson(value));
 }
 
+async function sha256Base64Url(value) {
+  const subtle = subtleCrypto();
+  if (!subtle) throw new Error('unsupported_capability');
+  const bytes = typeof value === 'string' ? TEXT_ENCODER.encode(value) : bytesFromData(value);
+  return bytesToBase64Url(new Uint8Array(await subtle.digest('SHA-256', bytes)));
+}
+
 function importHkdfKey(sharedBits) {
   const subtle = subtleCrypto();
   if (!subtle) throw new Error('unsupported_capability');
   return subtle.importKey('raw', sharedBits, 'HKDF', false, ['deriveKey']);
+}
+
+function normalizeKexPolicy(value) {
+  const policy = asString(value);
+  return KEX_POLICIES.includes(policy) ? policy : 'classical_required';
+}
+
+function normalizeKexSuite(value) {
+  const suite = asString(value);
+  return Object.prototype.hasOwnProperty.call(KEX_SUITES, suite) ? suite : '';
+}
+
+function hasHybridProvider(provider) {
+  return !!provider
+    && typeof provider.generateKeyPair === 'function'
+    && typeof provider.deriveSharedSecret === 'function';
+}
+
+function normalizeSuiteList(values) {
+  return Array.from(new Set((Array.isArray(values) ? values : [])
+    .map(normalizeKexSuite)
+    .filter((suite) => suite !== '')));
+}
+
+function selectKexSuite(localCapability, remoteCapability, kexPolicy) {
+  const localSuites = normalizeSuiteList(localCapability?.supported_kex_suites);
+  const remoteSuites = normalizeSuiteList(remoteCapability?.supported_kex_suites);
+  const bothSupport = (suite) => localSuites.includes(suite) && remoteSuites.includes(suite);
+  const policy = normalizeKexPolicy(kexPolicy);
+  if (policy !== 'classical_required' && bothSupport(HYBRID_KEX_SUITE)) {
+    return HYBRID_KEX_SUITE;
+  }
+  if (policy === 'hybrid_required') {
+    throw new Error('unsupported_capability');
+  }
+  if (bothSupport(CLASSICAL_KEX_SUITE)) {
+    return CLASSICAL_KEX_SUITE;
+  }
+  throw new Error('unsupported_capability');
 }
 
 function nativeFrameKind(encodedFrame) {
@@ -142,7 +206,18 @@ function buildAadContext({ callId, roomId, senderUserId, receiverUserId, trackId
   };
 }
 
-function buildWrapAad({ callId, roomId, senderUserId, targetUserId, epoch, senderKeyId }) {
+function buildWrapAad({
+  callId,
+  roomId,
+  senderUserId,
+  targetUserId,
+  epoch,
+  senderKeyId,
+  kexSuite,
+  transcriptHash,
+  participantSetHash,
+  rekeyReason,
+}) {
   return jsonBytes({
     contract_name: SESSION_CONTRACT_NAME,
     contract_version: CONTRACT_VERSION,
@@ -152,8 +227,11 @@ function buildWrapAad({ callId, roomId, senderUserId, targetUserId, epoch, sende
     target_user_id: normalizeUserId(targetUserId),
     epoch: Number(epoch || 0),
     sender_key_id: asString(senderKeyId),
-    kex_suite: KEX_SUITE,
+    kex_suite: normalizeKexSuite(kexSuite) || KEX_SUITE,
     media_suite: MEDIA_SUITE,
+    kex_transcript_hash: asString(transcriptHash),
+    participant_set_hash: asString(participantSetHash),
+    rekey_reason: asString(rekeyReason) || 'sender_key',
   });
 }
 
@@ -165,7 +243,7 @@ function validateProtectedHeader(header) {
   if (!['webrtc_native', 'wlvc_sfu'].includes(asString(header.runtime_path))) throw new Error('unsupported_capability');
   if (!['video', 'audio', 'data'].includes(asString(header.track_kind))) throw new Error('malformed_protected_frame');
   if (!['keyframe', 'delta', 'audio', 'control'].includes(asString(header.frame_kind))) throw new Error('malformed_protected_frame');
-  if (header.kex_suite !== KEX_SUITE || header.media_suite !== MEDIA_SUITE) throw new Error('unsupported_capability');
+  if (!normalizeKexSuite(header.kex_suite) || header.media_suite !== MEDIA_SUITE) throw new Error('unsupported_capability');
   if (Number(header.epoch || 0) < 1) throw new Error('wrong_epoch');
   if (asString(header.sender_key_id) === '') throw new Error('wrong_key_id');
   if (Number(header.sequence || 0) < 1) throw new Error('replay_detected');
@@ -230,14 +308,21 @@ export class MediaSecuritySession {
     this.roomId = asString(options.roomId);
     this.userId = normalizeUserId(options.userId);
     this.policy = asString(options.policy) || 'preferred';
+    this.kexPolicy = normalizeKexPolicy(options.kexPolicy);
     this.deviceId = asString(options.deviceId) || `dev_${randomToken(16)}`;
     this.logger = typeof options.logger === 'function' ? options.logger : () => {};
+    this.hybridKexProvider = hasHybridProvider(options.hybridKexProvider) ? options.hybridKexProvider : null;
     this.state = 'transport_only';
     this.epoch = 1;
     this.sequence = 0;
     this.participantSignature = '';
+    this.participantSetHash = '';
+    this.selectedKexSuite = KEX_SUITE;
+    this.lastRekeyReason = 'initial';
     this.keyPair = null;
     this.publicKeyBytes = null;
+    this.hybridKeyPair = null;
+    this.hybridPublicKeyBytes = null;
     this.senderKey = null;
     this.senderKeyId = '';
     this.peers = new Map();
@@ -270,6 +355,20 @@ export class MediaSecuritySession {
     try {
       this.keyPair = await subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
       this.publicKeyBytes = new Uint8Array(await subtle.exportKey('raw', this.keyPair.publicKey));
+      if (this.hybridKexProvider) {
+        this.hybridKeyPair = await this.hybridKexProvider.generateKeyPair({
+          suite: HYBRID_KEX_SUITE,
+          callId: this.callId,
+          roomId: this.roomId,
+          userId: this.userId,
+          deviceId: this.deviceId,
+        });
+        this.hybridPublicKeyBytes = bytesFromData(this.hybridKeyPair?.publicKey || this.hybridKeyPair?.publicKeyBytes);
+        if (this.hybridPublicKeyBytes.byteLength <= 0) throw new Error('unsupported_capability');
+      } else if (this.kexPolicy === 'hybrid_required') {
+        this.state = 'blocked_capability';
+        return false;
+      }
       await this.rotateSenderKey('initial');
       this.state = 'protected_not_ready';
       return true;
@@ -287,18 +386,72 @@ export class MediaSecuritySession {
     this.sequence = 0;
     this.senderKey = await subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
     this.senderKeyId = bytesToBase64Url(randomBytes(16));
+    this.lastRekeyReason = asString(reason) || 'rekey';
     this.state = 'rekeying';
   }
 
   capabilityPayload(runtimePath = 'wlvc_sfu') {
+    const supportedKexSuites = [CLASSICAL_KEX_SUITE];
+    if (this.hybridKexProvider && this.hybridPublicKeyBytes?.byteLength > 0) {
+      supportedKexSuites.unshift(HYBRID_KEX_SUITE);
+    }
     return {
       runtime_path: asString(runtimePath) || 'wlvc_sfu',
       supports_protected_media_frame_v1: true,
       supports_insertable_streams: MediaSecuritySession.supportsNativeTransforms(),
       supports_wlvc_protected_frame: true,
-      supported_kex_suites: [KEX_SUITE],
+      supported_kex_suites: supportedKexSuites,
+      preferred_kex_suites: this.kexPolicy === 'classical_required' ? [CLASSICAL_KEX_SUITE] : supportedKexSuites,
+      kex_policy: this.kexPolicy,
       supported_media_suites: [MEDIA_SUITE],
     };
+  }
+
+  participantIdsForPeer(peerUserId) {
+    const ids = new Set([this.userId, normalizeUserId(peerUserId)]);
+    for (const value of (this.participantSignature || '').split(',')) {
+      const userId = normalizeUserId(value);
+      if (userId > 0) ids.add(userId);
+    }
+    return Array.from(ids).filter((userId) => userId > 0).sort((left, right) => left - right);
+  }
+
+  async participantHashForPeer(peerUserId) {
+    return sha256Base64Url(stableJson({
+      call_id: this.callId,
+      room_id: this.roomId,
+      participant_user_ids: this.participantIdsForPeer(peerUserId),
+    }));
+  }
+
+  async transcriptHashForPeer({ sender, selectedKexSuite, payload, participantSetHash }) {
+    const peerPublicKey = asString(payload.public_key);
+    const peerHybridPublicKey = asString(payload.hybrid_public_key);
+    const entries = [
+      {
+        user_id: this.userId,
+        device_id: this.deviceId,
+        x25519_public_key: bytesToBase64Url(this.publicKeyBytes),
+        hybrid_public_key: this.hybridPublicKeyBytes?.byteLength > 0 ? bytesToBase64Url(this.hybridPublicKeyBytes) : '',
+      },
+      {
+        user_id: normalizeUserId(sender),
+        device_id: asString(payload.device_id),
+        x25519_public_key: peerPublicKey,
+        hybrid_public_key: peerHybridPublicKey,
+      },
+    ].sort((left, right) => left.user_id - right.user_id || left.device_id.localeCompare(right.device_id));
+    return sha256Base64Url(stableJson({
+      contract_name: SESSION_CONTRACT_NAME,
+      contract_version: CONTRACT_VERSION,
+      call_id: this.callId,
+      room_id: this.roomId,
+      selected_kex_suite: selectedKexSuite,
+      media_suite: MEDIA_SUITE,
+      kex_policy: this.kexPolicy,
+      participant_set_hash: participantSetHash,
+      participants: entries,
+    }));
   }
 
   async buildHelloSignal(targetUserId, runtimePath = 'wlvc_sfu') {
@@ -316,6 +469,7 @@ export class MediaSecuritySession {
         epoch: this.epoch,
         sender_key_id: this.senderKeyId,
         public_key: bytesToBase64Url(this.publicKeyBytes),
+        hybrid_public_key: this.hybridPublicKeyBytes?.byteLength > 0 ? bytesToBase64Url(this.hybridPublicKeyBytes) : '',
         capability: this.capabilityPayload(runtimePath),
       },
     };
@@ -327,22 +481,75 @@ export class MediaSecuritySession {
     if (sender <= 0 || sender === this.userId) return false;
     if (payload.contract_name !== SESSION_CONTRACT_NAME || payload.contract_version !== CONTRACT_VERSION) return false;
     const capability = payload.capability && typeof payload.capability === 'object' ? payload.capability : {};
-    if (!capability.supports_protected_media_frame_v1 || !Array.isArray(capability.supported_kex_suites) || !capability.supported_kex_suites.includes(KEX_SUITE)) {
+    if (!capability.supports_protected_media_frame_v1 || !Array.isArray(capability.supported_kex_suites)) {
       this.peers.set(sender, { state: 'blocked_capability' });
       return false;
     }
+
+    let selectedKexSuite = '';
+    try {
+      selectedKexSuite = selectKexSuite(this.capabilityPayload(capability.runtime_path), capability, this.kexPolicy);
+    } catch {
+      this.peers.set(sender, { state: 'blocked_capability', capability });
+      return false;
+    }
+    const activeKexSuite = Array.from(this.peers.values()).find((peer) => normalizeKexSuite(peer?.kexSuite) !== '')?.kexSuite || '';
+    if (activeKexSuite !== '' && activeKexSuite !== selectedKexSuite) {
+      this.peers.set(sender, { state: 'blocked_capability', capability, error: 'downgrade_attempt' });
+      throw new Error('downgrade_attempt');
+    }
+    this.selectedKexSuite = selectedKexSuite;
 
     const publicKeyBytes = base64UrlToBytes(payload.public_key);
     const subtle = subtleCrypto();
     const peerPublicKey = await subtle.importKey('raw', publicKeyBytes, { name: 'X25519' }, false, []);
     const sharedBits = await subtle.deriveBits({ name: 'X25519', public: peerPublicKey }, this.keyPair.privateKey, 256);
-    const hkdfKey = await importHkdfKey(sharedBits);
+    const participantSetHash = await this.participantHashForPeer(sender);
+    this.participantSetHash = participantSetHash;
+    const transcriptHash = await this.transcriptHashForPeer({
+      sender,
+      selectedKexSuite,
+      payload,
+      participantSetHash,
+    });
+    const sharedSecretParts = [new Uint8Array(sharedBits)];
+    if (selectedKexSuite === HYBRID_KEX_SUITE) {
+      if (!this.hybridKexProvider || !this.hybridKeyPair) {
+        this.peers.set(sender, { state: 'blocked_capability', capability });
+        return false;
+      }
+      const peerHybridPublicKeyBytes = base64UrlToBytes(payload.hybrid_public_key);
+      if (peerHybridPublicKeyBytes.byteLength <= 0) {
+        this.peers.set(sender, { state: 'blocked_capability', capability });
+        return false;
+      }
+      const hybridSecret = await this.hybridKexProvider.deriveSharedSecret({
+        suite: HYBRID_KEX_SUITE,
+        localKeyPair: this.hybridKeyPair,
+        localPublicKey: this.hybridPublicKeyBytes,
+        peerPublicKey: peerHybridPublicKeyBytes,
+        transcriptHash,
+        role: this.userId < sender ? 'left' : 'right',
+      });
+      const hybridSecretBytes = bytesFromData(hybridSecret);
+      if (hybridSecretBytes.byteLength <= 0) throw new Error('unsupported_capability');
+      sharedSecretParts.push(hybridSecretBytes);
+    }
+    const hkdfKey = await importHkdfKey(concatBytes(...sharedSecretParts));
     const wrappingKey = await subtle.deriveKey(
       {
         name: 'HKDF',
         hash: 'SHA-256',
-        salt: jsonBytes({ call_id: this.callId, room_id: this.roomId }),
-        info: jsonBytes({ suite: KEX_SUITE, left: Math.min(this.userId, sender), right: Math.max(this.userId, sender) }),
+        salt: jsonBytes({ call_id: this.callId, room_id: this.roomId, participant_set_hash: participantSetHash }),
+        info: jsonBytes({
+          contract_name: SESSION_CONTRACT_NAME,
+          contract_version: CONTRACT_VERSION,
+          suite: selectedKexSuite,
+          media_suite: MEDIA_SUITE,
+          transcript_hash: transcriptHash,
+          left: Math.min(this.userId, sender),
+          right: Math.max(this.userId, sender),
+        }),
       },
       hkdfKey,
       { name: 'AES-GCM', length: 256 },
@@ -358,6 +565,14 @@ export class MediaSecuritySession {
       wrappingKey,
       deviceId: asString(payload.device_id),
       capability,
+      helloPayload: {
+        device_id: asString(payload.device_id),
+        public_key: asString(payload.public_key),
+        hybrid_public_key: asString(payload.hybrid_public_key),
+      },
+      kexSuite: selectedKexSuite,
+      transcriptHash,
+      participantSetHash,
     });
 
     const pending = this.pendingSenderKeys.get(sender);
@@ -376,6 +591,20 @@ export class MediaSecuritySession {
     const subtle = subtleCrypto();
     const mediaKeyBytes = new Uint8Array(await subtle.exportKey('raw', this.senderKey));
     const nonce = randomBytes(WRAP_NONCE_BYTES);
+    const participantSetHash = await this.participantHashForPeer(target);
+    const transcriptHash = await this.transcriptHashForPeer({
+      sender: target,
+      selectedKexSuite: peer.kexSuite || this.selectedKexSuite || KEX_SUITE,
+      payload: peer.helloPayload || {
+        device_id: peer.deviceId,
+        public_key: bytesToBase64Url(peer.publicKeyBytes || new Uint8Array()),
+        hybrid_public_key: '',
+      },
+      participantSetHash,
+    });
+    this.participantSetHash = participantSetHash;
+    peer.participantSetHash = participantSetHash;
+    peer.transcriptHash = transcriptHash;
     const aad = buildWrapAad({
       callId: this.callId,
       roomId: this.roomId,
@@ -383,6 +612,10 @@ export class MediaSecuritySession {
       targetUserId: target,
       epoch: this.epoch,
       senderKeyId: this.senderKeyId,
+      kexSuite: peer.kexSuite,
+      transcriptHash,
+      participantSetHash,
+      rekeyReason: this.lastRekeyReason,
     });
     const encryptedKey = await subtle.encrypt({ name: 'AES-GCM', iv: nonce, additionalData: aad, tagLength: 128 }, peer.wrappingKey, mediaKeyBytes);
     return {
@@ -395,8 +628,11 @@ export class MediaSecuritySession {
         device_id: this.deviceId,
         epoch: this.epoch,
         sender_key_id: this.senderKeyId,
-        kex_suite: KEX_SUITE,
+        kex_suite: peer.kexSuite || this.selectedKexSuite || KEX_SUITE,
         media_suite: MEDIA_SUITE,
+        kex_transcript_hash: transcriptHash,
+        participant_set_hash: participantSetHash,
+        rekey_reason: this.lastRekeyReason,
         nonce: bytesToBase64Url(nonce),
         encrypted_key: bytesToBase64Url(new Uint8Array(encryptedKey)),
       },
@@ -413,7 +649,24 @@ export class MediaSecuritySession {
       return false;
     }
     if (payload.contract_name !== SESSION_CONTRACT_NAME || payload.contract_version !== CONTRACT_VERSION) return false;
-    if (payload.kex_suite !== KEX_SUITE || payload.media_suite !== MEDIA_SUITE) return false;
+    const payloadKexSuite = normalizeKexSuite(payload.kex_suite);
+    if (payloadKexSuite === '' || payloadKexSuite !== peer.kexSuite || payload.media_suite !== MEDIA_SUITE) {
+      throw new Error('downgrade_attempt');
+    }
+    const participantSetHash = await this.participantHashForPeer(sender);
+    const transcriptHash = await this.transcriptHashForPeer({
+      sender,
+      selectedKexSuite: payloadKexSuite,
+      payload: peer.helloPayload || {
+        device_id: peer.deviceId,
+        public_key: bytesToBase64Url(peer.publicKeyBytes || new Uint8Array()),
+        hybrid_public_key: '',
+      },
+      participantSetHash,
+    });
+    this.participantSetHash = participantSetHash;
+    if (asString(payload.kex_transcript_hash) !== transcriptHash) throw new Error('downgrade_attempt');
+    if (asString(payload.participant_set_hash) !== participantSetHash) throw new Error('downgrade_attempt');
 
     const epoch = Number(payload.epoch || 0);
     const senderKeyId = asString(payload.sender_key_id);
@@ -429,6 +682,10 @@ export class MediaSecuritySession {
       targetUserId: this.userId,
       epoch,
       senderKeyId,
+      kexSuite: payloadKexSuite,
+      transcriptHash,
+      participantSetHash,
+      rekeyReason: asString(payload.rekey_reason) || 'sender_key',
     });
     const mediaKeyBytes = await subtle.decrypt({ name: 'AES-GCM', iv: nonce, additionalData: aad, tagLength: 128 }, peer.wrappingKey, encryptedKey);
     const receiverKey = await subtle.importKey('raw', mediaKeyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
@@ -439,7 +696,11 @@ export class MediaSecuritySession {
       state: 'active',
       receiverKeys,
       highestEpoch: Math.max(Number(peer.highestEpoch || 0), epoch),
+      kexSuite: payloadKexSuite,
+      transcriptHash,
+      participantSetHash,
     });
+    this.selectedKexSuite = payloadKexSuite;
     this.state = ACTIVE_STATE;
     return true;
   }
@@ -458,6 +719,30 @@ export class MediaSecuritySession {
     const changed = this.participantSignature !== '' && this.participantSignature !== nextSignature;
     this.participantSignature = nextSignature;
     return { changed, userIds: normalized };
+  }
+
+  async forceRekey(reason = 'forced_rekey') {
+    await this.rotateSenderKey(asString(reason) || 'forced_rekey');
+    for (const peer of this.peers.values()) {
+      if (peer && peer.state === 'active') peer.state = 'rekeying';
+    }
+    return { epoch: this.epoch, senderKeyId: this.senderKeyId, reason: this.lastRekeyReason };
+  }
+
+  telemetrySnapshot(runtimePath = 'wlvc_sfu') {
+    const suite = this.selectedKexSuite || KEX_SUITE;
+    return {
+      security_state: this.state,
+      runtime_path: asString(runtimePath) || 'wlvc_sfu',
+      policy_mode: this.policy,
+      kex_policy: this.kexPolicy,
+      kex_suite: suite,
+      kex_family: KEX_SUITES[suite]?.family || 'unknown',
+      media_suite: MEDIA_SUITE,
+      epoch: this.epoch,
+      rekey_reason: this.lastRekeyReason,
+      participant_set_hash: this.participantSetHash,
+    };
   }
 
   markPeerRemoved(userId) {
@@ -485,7 +770,7 @@ export class MediaSecuritySession {
       runtime_path: asString(runtimePath),
       track_kind: asString(trackKind) || 'video',
       frame_kind: asString(frameKind) || 'delta',
-      kex_suite: KEX_SUITE,
+      kex_suite: this.selectedKexSuite || KEX_SUITE,
       media_suite: MEDIA_SUITE,
       epoch: this.epoch,
       sender_key_id: this.senderKeyId,
@@ -523,6 +808,7 @@ export class MediaSecuritySession {
     if (sender <= 0) throw new Error('wrong_key_id');
     if (runtimePath && header.runtime_path !== runtimePath) throw new Error('unsupported_capability');
     const peer = this.peers.get(sender);
+    if (peer?.kexSuite && header.kex_suite !== peer.kexSuite) throw new Error('downgrade_attempt');
     const receiverKey = peer?.receiverKeys instanceof Map
       ? peer.receiverKeys.get(`${Number(header.epoch)}:${asString(header.sender_key_id)}`)
       : null;
@@ -654,6 +940,10 @@ export const mediaSecurityInternalsForTests = Object.freeze({
   TRANSPORT_ENVELOPE_CONTRACT_NAME,
   CONTRACT_VERSION,
   KEX_SUITE,
+  CLASSICAL_KEX_SUITE,
+  HYBRID_KEX_SUITE,
+  KEX_POLICIES,
+  KEX_SUITES,
   MEDIA_SUITE,
   ACTIVE_STATE,
   MEDIA_NONCE_BYTES,
@@ -664,4 +954,5 @@ export const mediaSecurityInternalsForTests = Object.freeze({
   decodeProtectedFrameEnvelope,
   encodeProtectedFrameEnvelopeBase64Url,
   decodeProtectedFrameEnvelopeBase64Url,
+  selectKexSuite,
 });
