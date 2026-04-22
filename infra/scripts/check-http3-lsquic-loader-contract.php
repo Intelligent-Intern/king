@@ -706,7 +706,8 @@ foreach ([
 foreach ([
     'king_http3_request_send(',
     'king_client_send_request(',
-    'KING_LSQUIC_LIBRARY',
+    "require __DIR__ . '/http3_new_stack_skip.inc';",
+    'king_http3_skipif_require_lsquic_runtime',
     'lsquic_h3',
     "string(9) \"lsquic_h3\"",
 ] as $needle) {
@@ -725,7 +726,8 @@ foreach ([
 foreach ([
     'new King\\Client\\Http3Client($config)',
     '$client->request(',
-    'KING_LSQUIC_LIBRARY',
+    "require __DIR__ . '/http3_new_stack_skip.inc';",
+    'king_http3_skipif_require_lsquic_runtime',
     '$warmup[\'transport_backend\']',
     "string(9) \"lsquic_h3\"",
 ] as $needle) {

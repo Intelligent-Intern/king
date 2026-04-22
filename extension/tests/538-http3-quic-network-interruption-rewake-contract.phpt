@@ -82,7 +82,7 @@ try {
             },
             static fn (array $result) => ($result['response']['status'] ?? 0) === 200
                 && ($result['response']['body'] ?? null) === $expectedBody
-                && ($result['response']['transport_backend'] ?? null) === 'quiche_h3'
+                && ($result['response']['transport_backend'] ?? null) === 'lsquic_h3'
                 && ($result['response']['response_complete'] ?? false) === true
                 && ($result['response']['quic_packets_lost'] ?? 0) > 0
                 && ($result['response']['quic_packets_retransmitted'] ?? 0) > 0
@@ -137,7 +137,7 @@ try {
         var_dump($case['label']);
         var_dump($response['status']);
         var_dump($response['body'] === $expectedBody);
-        var_dump($response['transport_backend'] === 'quiche_h3');
+        var_dump($response['transport_backend'] === 'lsquic_h3');
         var_dump($response['response_complete'] === true);
         var_dump($elapsedMs >= 450);
         var_dump($elapsedMs < 8000);
