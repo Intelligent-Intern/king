@@ -113,7 +113,7 @@ Checklist:
 - [x] Keep refactor commits small enough that regressions can be bisected.
 
 Done:
-- [ ] Shared UI primitives reduce duplicate modal/table/header/action code while existing flows still pass.
+- [x] Shared UI primitives reduce duplicate modal/table/header/action code while existing flows still pass.
 
 ### #VC-TEST-1 Frontend Gherkin Feature Coverage Intake
 
