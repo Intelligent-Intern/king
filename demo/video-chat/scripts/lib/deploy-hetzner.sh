@@ -351,7 +351,7 @@ hcloud_find_zone_for_domain() {
   local zones
   zones="$(hcloud_api GET '/zones?per_page=100')" || return 1
   jq -r --arg domain "${target_domain}" '
-    [.zones[]? | select($domain == .name or ($domain | endswith("." + .name)))]
+    [.zones[]? | .name as $zone | select($domain == $zone or ($domain | endswith("." + $zone)))]
     | sort_by(.name | length)
     | reverse
     | .[0]
