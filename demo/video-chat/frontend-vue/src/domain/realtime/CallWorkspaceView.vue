@@ -687,6 +687,11 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, 
 import { useRoute, useRouter } from 'vue-router';
 import { isGuestSession, sessionState } from '../auth/session';
 import {
+  CALL_UUID_PATTERN,
+  callRequiresJoinModalForViewer,
+  joinPathFromAccessPayload,
+} from '../calls/callAdmissionGate';
+import {
   resolveBackendWebSocketOriginCandidates,
   setBackendWebSocketOrigin,
 } from '../../support/backendOrigin';
@@ -929,6 +934,7 @@ const routeCallResolve = reactive({
   callId: '',
   roomId: 'lobby',
   pending: false,
+  redirecting: false,
   error: '',
 });
 let routeCallResolveSeq = 0;
@@ -1105,7 +1111,7 @@ function setMediaRuntimePath(nextPath, reason) {
 
 function isUuidLike(value) {
   const normalized = String(value || '').trim().toLowerCase();
-  return /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(normalized);
+  return CALL_UUID_PATTERN.test(normalized);
 }
 
 function applyRouteCallResolution({
@@ -1114,12 +1120,14 @@ function applyRouteCallResolution({
   roomId = 'lobby',
   error = '',
   pending = false,
+  redirecting = false,
 } = {}) {
   routeCallResolve.accessId = String(accessId || '').trim().toLowerCase();
   routeCallResolve.callId = String(callId || '').trim();
   routeCallResolve.roomId = normalizeRoomId(String(roomId || '').trim() || 'lobby');
   routeCallResolve.error = String(error || '').trim();
   routeCallResolve.pending = Boolean(pending);
+  routeCallResolve.redirecting = Boolean(redirecting);
 
   if (routeCallResolve.callId !== '') {
     activeCallId.value = routeCallResolve.callId;
@@ -1150,7 +1158,57 @@ async function resolveRouteRefSafely(callRef) {
     accessId: normalizedAccessId,
     callId: resolution.callId,
     roomId: resolution.roomId,
+    call,
   };
+}
+
+function currentWorkspaceEntryMode() {
+  return String(route.query.entry || '').trim().toLowerCase();
+}
+
+async function createSelfJoinPathForCall(callId) {
+  const normalizedCallId = String(callId || '').trim().toLowerCase();
+  if (!CALL_UUID_PATTERN.test(normalizedCallId)) {
+    return '';
+  }
+
+  const payload = await apiRequest(`/api/calls/${encodeURIComponent(normalizedCallId)}/access-link`, {
+    method: 'POST',
+  });
+  return joinPathFromAccessPayload(payload);
+}
+
+async function redirectInvitedRouteToJoinModal(callResolution) {
+  if (String(route.name || '') !== 'call-workspace' || currentWorkspaceEntryMode() === 'invite') {
+    return false;
+  }
+
+  const call = callResolution?.call && typeof callResolution.call === 'object' ? callResolution.call : {};
+  const hasCallPayload = Object.keys(call).length > 0;
+  if (hasCallPayload && !callRequiresJoinModalForViewer(call, {
+    userId: currentUserId.value,
+    role: sessionState.role,
+    email: sessionState.email,
+  })) {
+    return false;
+  }
+  if (!hasCallPayload && normalizeRole(sessionState.role) === 'admin') {
+    return false;
+  }
+
+  const directAccessId = String(callResolution?.accessId || '').trim().toLowerCase();
+  let joinPath = CALL_UUID_PATTERN.test(directAccessId) ? `/join/${encodeURIComponent(directAccessId)}` : '';
+  if (joinPath === '') {
+    joinPath = await createSelfJoinPathForCall(callResolution?.callId || call?.id || '');
+  }
+  if (joinPath === '') {
+    workspaceError.value = 'Could not open the join modal for this invited call.';
+    workspaceNotice.value = '';
+    return true;
+  }
+
+  await router.replace(joinPath);
+  return true;
 }
 
 async function resolveRouteCallRef(callRef) {
@@ -1160,7 +1218,7 @@ async function resolveRouteCallRef(callRef) {
   const looksLikeUuid = isUuidLike(normalized);
 
   if (normalized === '') {
-    if (seq !== routeCallResolveSeq) return;
+    if (seq !== routeCallResolveSeq) return false;
     applyRouteCallResolution({
       accessId: '',
       callId: '',
@@ -1168,7 +1226,7 @@ async function resolveRouteCallRef(callRef) {
       error: '',
       pending: false,
     });
-    return;
+    return true;
   }
 
   if (seq === routeCallResolveSeq) {
@@ -1183,14 +1241,23 @@ async function resolveRouteCallRef(callRef) {
 
   try {
     const callResolution = await resolveRouteRefSafely(normalized);
-    if (seq !== routeCallResolveSeq) return;
+    if (seq !== routeCallResolveSeq) return false;
     if (callResolution.state === 'resolved') {
+      if (await redirectInvitedRouteToJoinModal(callResolution)) {
+        applyRouteCallResolution({
+          ...callResolution,
+          error: '',
+          pending: false,
+          redirecting: true,
+        });
+        return false;
+      }
       applyRouteCallResolution({
         ...callResolution,
         error: '',
         pending: false,
       });
-      return;
+      return true;
     }
 
     if (looksLikeUuid) {
@@ -1207,13 +1274,13 @@ async function resolveRouteCallRef(callRef) {
       if (String(route.name || '') === 'call-workspace' && String(routeCallRef.value || '').trim() !== '') {
         void router.replace({ name: fallbackRouteName });
       }
-      return;
+      return false;
     }
   } catch {
     // Fall back to treating param as room id.
   }
 
-  if (seq !== routeCallResolveSeq) return;
+  if (seq !== routeCallResolveSeq) return false;
   applyRouteCallResolution({
     accessId: '',
     callId: '',
@@ -1221,6 +1288,7 @@ async function resolveRouteCallRef(callRef) {
     error: '',
     pending: false,
   });
+  return true;
 }
 
 function ensureRoomBuckets(roomId) {
@@ -3822,7 +3890,12 @@ function handleSocketMessage(event) {
     if (requiresAdmission && pendingRoomId !== '') {
       if (!tryDirectJoinWithModeratorBypass(pendingRoomId)) {
         setAdmissionGate(pendingRoomId);
-        requestLobbyJoin(pendingRoomId, { announce: false });
+        void redirectInvitedRouteToJoinModal({
+          accessId: routeCallResolve.accessId,
+          callId: activeCallId.value || routeCallResolve.callId,
+          roomId: pendingRoomId,
+          call: {},
+        });
         requestRoomSnapshot();
         return;
       }
@@ -3931,7 +4004,12 @@ function handleSocketMessage(event) {
       const pendingRoomId = normalizeRoomId(payload?.details?.pending_room_id || desiredRoomId.value);
       if (!tryDirectJoinWithModeratorBypass(pendingRoomId)) {
         setAdmissionGate(pendingRoomId);
-        requestLobbyJoin(pendingRoomId, { announce: false });
+        void redirectInvitedRouteToJoinModal({
+          accessId: routeCallResolve.accessId,
+          callId: activeCallId.value || routeCallResolve.callId,
+          roomId: pendingRoomId,
+          call: {},
+        });
       }
       return;
     }
@@ -4581,7 +4659,10 @@ onMounted(async () => {
   aloneIdleLastActiveMs = Date.now();
 
   detachMediaDeviceWatcher = attachCallMediaDeviceWatcher({ requestPermissions: true });
-  await resolveRouteCallRef(routeCallRef.value);
+  const canEnterWorkspace = await resolveRouteCallRef(routeCallRef.value);
+  if (!canEnterWorkspace) {
+    return;
+  }
   ensureRoomBuckets(desiredRoomId.value);
   serverRoomId.value = desiredRoomId.value;
   await refreshCallMediaDevices({ requestPermissions: true });

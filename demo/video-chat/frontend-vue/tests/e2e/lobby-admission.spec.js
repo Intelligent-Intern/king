@@ -397,6 +397,60 @@ async function waitForCallRow(page, callTitle) {
   throw new Error(`Could not find call row for title: ${callTitle}`);
 }
 
+async function createInvitedCallViaApi({ sessionToken, title, participantUserId }) {
+  const startsAt = new Date(Date.now() - 60_000).toISOString();
+  const endsAt = new Date(Date.now() + (59 * 60_000)).toISOString();
+  const response = await fetch(`${backendOrigin}/api/calls`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({
+      title,
+      access_mode: 'invite_only',
+      room_id: title.toLowerCase().replace(/[^a-z0-9-]+/g, '-').slice(0, 80) || 'lobby',
+      starts_at: startsAt,
+      ends_at: endsAt,
+      internal_participant_user_ids: [participantUserId],
+      external_participants: [],
+    }),
+  });
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok || !payload || payload.status !== 'ok') {
+    const message = payload?.error?.message || `Call creation failed (${response.status}).`;
+    throw new Error(message);
+  }
+
+  const callId = String(payload?.result?.call?.id || '').trim();
+  if (callId === '') {
+    throw new Error('Call creation payload is missing call id.');
+  }
+  return callId;
+}
+
+async function fetchInternalParticipantInviteState({ callId, sessionToken, participantUserId }) {
+  const response = await fetch(`${backendOrigin}/api/calls/resolve/${encodeURIComponent(callId)}`, {
+    headers: {
+      accept: 'application/json',
+      authorization: `Bearer ${sessionToken}`,
+    },
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload || payload.status !== 'ok') {
+    const message = payload?.error?.message || `Call resolve failed (${response.status}).`;
+    throw new Error(message);
+  }
+
+  const participants = Array.isArray(payload?.result?.call?.participants?.internal)
+    ? payload.result.call.participants.internal
+    : [];
+  const participant = participants.find((entry) => Number(entry?.user_id || 0) === participantUserId);
+  return String(participant?.invite_state || '').trim().toLowerCase();
+}
+
 async function createPersonalAccessJoinPath({ callId, sessionToken, participantUserId }) {
   const response = await fetch(`${backendOrigin}/api/calls/${encodeURIComponent(callId)}/access-link`, {
     method: 'POST',
@@ -425,6 +479,54 @@ async function createPersonalAccessJoinPath({ callId, sessionToken, participantU
 
   throw new Error('Access-link payload is missing join_path and access id.');
 }
+
+test('direct workspace link keeps invited user on join modal until Join call queues admission', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const adminStoredSession = await fetchStoredSession(adminCredentials.email, adminCredentials.password);
+  const callTitle = `E2E Direct Gate ${Date.now()}`;
+  const callId = await createInvitedCallViaApi({
+    sessionToken: adminStoredSession.sessionToken,
+    title: callTitle,
+    participantUserId: 2,
+  });
+  const { context: userContext, page: userPage, storedSession: userStoredSession } = await createAuthenticatedPage(browser, baseURL, userCredentials);
+
+  try {
+    await userPage.goto(`/workspace/call/${callId}`);
+    await userPage.waitForURL(/\/join\/[a-f0-9-]+$/, { timeout: 20_000 });
+
+    const joinCallModal = userPage.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinCallModal).toBeVisible({ timeout: 15_000 });
+    await expect.poll(
+      () => fetchInternalParticipantInviteState({
+        callId,
+        sessionToken: userStoredSession.sessionToken,
+        participantUserId: 2,
+      }),
+      {
+        timeout: 2500,
+        message: 'direct workspace redirect must keep the invite state unchanged before Join call',
+      },
+    ).toBe('invited');
+
+    await joinCallModal.getByRole('button', { name: /Join call/i }).click();
+    await expect(joinCallModal).toContainText(/Call owner has been notified|Waiting for host/i, { timeout: 15_000 });
+    await expect.poll(
+      () => fetchInternalParticipantInviteState({
+        callId,
+        sessionToken: userStoredSession.sessionToken,
+        participantUserId: 2,
+      }),
+      {
+        timeout: 15_000,
+        message: 'Join call should be the only action that moves the participant to pending',
+      },
+    ).toBe('pending');
+  } finally {
+    await userContext.close();
+  }
+});
 
 test('admin creates/invites and admits user from lobby, both browsers share roster and media signals', async ({ browser }) => {
   test.setTimeout(180_000);
