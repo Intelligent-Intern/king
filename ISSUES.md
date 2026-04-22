@@ -1,227 +1,227 @@
 # King Sprint Issues
 
 > Sprint: Q-Batch, 2026-04-22
-> Fokus: Quiche aus dem aktiven HTTP/3-/QUIC-Pfad entfernen und durch einen sauberen, reproduzierbaren C-basierten Stack ersetzen.
+> Focus: remove Quiche from the active HTTP/3/QUIC product path and replace it with a clean, reproducible C-based stack.
 
-## Sprint-Regeln
+## Sprint Rules
 
-- Dieses Dokument enthaelt nur offene Sprint-Arbeit.
-- Erledigte Issues werden in dem Commit geloescht, der sie abschliesst.
-- Quiche wird aus dem aktiven HTTP/3-/QUIC-Produktpfad entfernt.
-- Der bestehende King-v1-Vertrag bleibt erhalten: HTTP/3, QUIC, TLS, Session-Tickets, 0-RTT, Stream-Lifecycle, Cancel, Stats, Listener und WebSocket-over-HTTP3.
-- Kein Stub-Ersatz: ein neuer Loader muss echte Runtime-Symbole laden, initialisieren und durch Wire-Tests belegt sein.
-- Keine lokalen Pfade, besonders keine Homebrew-Pfade wie `/opt/homebrew/Cellar/...`.
-- Kein Quiche-getriebener Rust-/Cargo-Bootstrap im HTTP/3-Produktpfad.
-- Keine generierten Test-Resultate, Buildtrees, libtool/phpize-Churn oder lokale Lockfiles als Sprint-Output.
-- Contributor-Credits bleiben erhalten: passende Commits werden cherry-picked; manuelle Portierungen bekommen Source-Branch-Verweis und `Co-authored-by`, sobald der Autor identifiziert ist.
+- This document contains only open sprint work.
+- Completed issues are removed in the commit that closes them.
+- Quiche is removed from the active HTTP/3/QUIC product path.
+- The existing King v1 contract remains intact: HTTP/3, QUIC, TLS, session tickets, 0-RTT, stream lifecycle, cancel, stats, listener, and WebSocket-over-HTTP3.
+- No stub replacement: a new loader must bind real runtime symbols, initialize them, and be proven by wire tests.
+- No local paths, especially no Homebrew paths such as `/opt/homebrew/Cellar/...`.
+- No Quiche-driven Rust/Cargo bootstrap in the HTTP/3 product path.
+- No generated test results, build trees, libtool/phpize churn, or local lockfiles as sprint output.
+- Contributor credits are preserved: matching commits are cherry-picked; manual ports get a source-branch reference and `Co-authored-by` once the author is identified.
 
-## Offene Issues
+## Open Issues
 
-### #Q-3 Dependency-Provenance fuer neuen Stack
+### #Q-3 Dependency Provenance For New Stack
 
-Ziel:
-- Reproduzierbare Pins fuer den neuen QUIC/HTTP3-Stack schaffen.
+Goal:
+- Create reproducible pins for the new QUIC/HTTP3 stack.
 
 Checklist:
-- [x] Release-/Commit-Pins fuer den neuen Stack festlegen.
-- [x] Checksums und Quellen in `DEPENDENCY_PROVENANCE.md` dokumentieren.
-- [x] Neues Bootstrap-Lockfile erstellen, z. B. `infra/scripts/lsquic-bootstrap.lock`.
-- [x] Alte `quiche-bootstrap.lock` und `quiche-workspace.Cargo.lock` als zu entfernende Quiche-Artefakte erfassen.
-- [ ] Offline-/CI-Validierung fuer Pins und Checksums ergaenzen.
+- [x] Define release/commit pins for the new stack.
+- [x] Document checksums and sources in `DEPENDENCY_PROVENANCE.md`.
+- [x] Create a new bootstrap lockfile, for example `infra/scripts/lsquic-bootstrap.lock`.
+- [x] Register old `quiche-bootstrap.lock` and `quiche-workspace.Cargo.lock` as Quiche artifacts to remove.
+- [ ] Add offline/CI validation for pins and checksums.
 
-Pin-Entscheidung:
+Pin Decision:
 
-| Komponente | Quelle | Pin | Commit | Zweck |
+| Component | Source | Pin | Commit | Purpose |
 | --- | --- | --- | --- | --- |
-| LSQUIC | `https://github.com/litespeedtech/lsquic.git` | `v4.6.1` | `c1ca7980107b1495298c93ab54e798fa050c3c7b` | C-basierter QUIC/HTTP3-Stack fuer den aktiven Produktpfad; aktueller Release-Pin oberhalb der dokumentierten `v4.3.1`-Mindestlinie. |
-| BoringSSL | `https://github.com/google/boringssl.git` | `0.20260413.0` | `e1acfa3193d44166ce77df74c5285afea983fc63` | Reproduzierbarer TLS-Backend-Pin ohne System-ABI- oder Homebrew-Abhaengigkeit. |
-| LSQUIC-Submodule | rekursiv aus LSQUIC `v4.6.1` | wird im neuen Lockfile fixiert | wird im neuen Lockfile fixiert | Keine floating Submodule; `git submodule status --recursive` muss in `lsquic-bootstrap.lock` einfliessen. |
+| LSQUIC | `https://github.com/litespeedtech/lsquic.git` | `v4.6.1` | `c1ca7980107b1495298c93ab54e798fa050c3c7b` | C-based QUIC/HTTP3 stack for the active product path; current release pin above the documented `v4.3.1` minimum line. |
+| BoringSSL | `https://github.com/google/boringssl.git` | `0.20260413.0` | `e1acfa3193d44166ce77df74c5285afea983fc63` | Reproducible TLS backend pin without system ABI or Homebrew dependency. |
+| LSQUIC submodules | recursive from LSQUIC `v4.6.1` | fixed in the new lockfile | fixed in the new lockfile | No floating submodules; `git submodule status --recursive` must feed `lsquic-bootstrap.lock`. |
 
-Pin-Regeln:
+Pin Rules:
 
-- Keine floating Branches wie `master`, `main` oder lokale Checkout-Pfade.
-- Das neue Bootstrap-Lockfile muss URLs, Tags, Commits, rekursive Submodule, Checksums und Lizenzquellen festhalten.
-- Wenn `v4.6.1` die King-v1-Paritaet fuer 0-RTT, STOP_SENDING, Stream-Lifecycle, Stats oder WebSocket-over-HTTP3 nicht traegt, ist das ein Blocker und kein Grund fuer Vertragsabbau.
-- Die Pins wurden am 2026-04-22 per `git ls-remote --tags --refs` gegen die Upstream-Repositories verifiziert.
+- No floating branches such as `master`, `main`, or local checkout paths.
+- The new bootstrap lockfile must record URLs, tags, commits, recursive submodules, checksums, and license sources.
+- If `v4.6.1` does not carry King v1 parity for 0-RTT, STOP_SENDING, stream lifecycle, stats, or WebSocket-over-HTTP3, that is a blocker and not a reason to reduce the contract.
+- The pins were verified against the upstream repositories on 2026-04-22 with `git ls-remote --tags --refs`.
 
-Quiche-Artefakt-Inventar fuer Entfernung:
+Quiche Artifact Inventory For Removal:
 
-| Pfad | Status | Entfernungspfad |
+| Path | Status | Removal Path |
 | --- | --- | --- |
-| `infra/scripts/quiche-bootstrap.lock` | Getrackter Legacy-Lock fuer Cloudflare Quiche, Quiche-BoringSSL und Wirefilter. | Entfernen, sobald `infra/scripts/lsquic-bootstrap.lock` vom Provenance-Check und Build-Bootstrap gelesen wird. |
-| `infra/scripts/quiche-workspace.Cargo.lock` | Getracktes, generiertes Cargo-Lockfile fuer den alten Quiche/Rust-Bootstrap. | Entfernen zusammen mit Quiche-Bootstrap-Scripts und Cargo-Buildpfad; darf nicht in den aktiven HTTP/3-Produktpfad uebernommen werden. |
+| `infra/scripts/quiche-bootstrap.lock` | Tracked legacy lock for Cloudflare Quiche, Quiche-BoringSSL, and Wirefilter. | Remove once `infra/scripts/lsquic-bootstrap.lock` is read by the provenance check and build bootstrap. |
+| `infra/scripts/quiche-workspace.Cargo.lock` | Tracked generated Cargo lockfile for the old Quiche/Rust bootstrap. | Remove together with Quiche bootstrap scripts and the Cargo build path; must not be carried into the active HTTP/3 product path. |
 
-Nicht getrackte lokale Bootstrap-Caches wie `.cargo/`, `quiche/` und `quiche/Cargo.lock` sind durch `.gitignore` ausgeschlossen und bleiben kein Sprint-Output.
+Untracked local bootstrap caches such as `.cargo/`, `quiche/`, and `quiche/Cargo.lock` are excluded by `.gitignore` and remain non-sprint output.
 
 Done:
-- [ ] Dependencies koennen aus Repo-eigenen Pins reproduzierbar bezogen werden.
-- [ ] Aktive Provenance nennt keine Quiche-Pins mehr fuer den Produktpfad.
+- [ ] Dependencies can be reproduced from repository-owned pins.
+- [ ] Active provenance no longer names Quiche pins for the product path.
 
 ---
 
-### #Q-4 Build-System ohne lokale Pfade und ohne Cargo-Bootstrap
+### #Q-4 Build System Without Local Paths And Without Cargo Bootstrap
 
-Ziel:
-- `config.m4`, Build-Scripts, CI und Release-Builds auf den neuen C-basierten Stack umstellen.
+Goal:
+- Move `config.m4`, build scripts, CI, and release builds to the new C-based stack.
 
 Checklist:
-- [ ] `extension/config.m4` auf portable Detection umstellen: pkg-config, env overrides, system paths oder vendored build outputs.
-- [ ] Quiche-Scripts entfernen oder ersetzen: `bootstrap-quiche.sh`, `check-quiche-bootstrap.sh`, `ensure-quiche-toolchain.sh`.
-- [ ] Cargo-/Rust-Bootstrap aus dem HTTP/3-Buildpfad entfernen.
-- [ ] CI fuer Linux amd64 und arm64 reproduzierbar bauen lassen.
-- [ ] macOS/dev nur ueber dokumentierte env/pkg-config Pfade unterstuetzen.
-- [ ] Release-Package-Manifeste auf neue Artefakte und neue Provenance umstellen.
+- [ ] Update `extension/config.m4` to portable detection: pkg-config, env overrides, system paths, or vendored build outputs.
+- [ ] Remove or replace Quiche scripts: `bootstrap-quiche.sh`, `check-quiche-bootstrap.sh`, `ensure-quiche-toolchain.sh`.
+- [ ] Remove Cargo/Rust bootstrap from the HTTP/3 build path.
+- [ ] Make CI build reproducibly on Linux amd64 and arm64.
+- [ ] Support macOS/dev only through documented env/pkg-config paths.
+- [ ] Update release package manifests for new artifacts and new provenance.
 
 Done:
-- [ ] Frischer HTTP/3-Build braucht keine lokale Rust-/Cargo-Konfiguration.
-- [ ] Frischer HTTP/3-Build braucht keine lokalen Homebrew-Pfade.
-- [ ] CI blockiert Quiche-/Cargo-Bootstrap im aktiven HTTP/3-Pfad.
+- [ ] Fresh HTTP/3 build needs no local Rust/Cargo configuration.
+- [ ] Fresh HTTP/3 build needs no local Homebrew paths.
+- [ ] CI blocks Quiche/Cargo bootstrap in the active HTTP/3 path.
 
 ---
 
-### #Q-5 Client-HTTP/3 Loader ersetzen
+### #Q-5 Replace Client HTTP/3 Loader
 
-Ziel:
-- `extension/src/client/http3/quiche_loader.inc` durch einen echten Loader fuer den neuen Stack ersetzen.
+Goal:
+- Replace `extension/src/client/http3/quiche_loader.inc` with a real loader for the new stack.
 
 Checklist:
-- [ ] Neuen Loader mit echter Symbolbindung und Initialisierung implementieren.
-- [ ] Failure-Stub oder vorgetaeuschte Feature-Checks verhindern.
-- [ ] Fehlerpfade auf bestehende King-Exceptions mappen.
-- [ ] Runtime-Init, Request/Response, Multi-Request, Ticket-Reuse und Stats anbinden.
-- [ ] Alte Quiche-Symbole, Handles und Runtime-Namen entfernen oder migrieren.
+- [ ] Implement a new loader with real symbol binding and initialization.
+- [ ] Prevent failure stubs or fake feature checks.
+- [ ] Map error paths to existing King exceptions.
+- [ ] Wire runtime init, request/response, multi-request, ticket reuse, and stats.
+- [ ] Remove or migrate old Quiche symbols, handles, and runtime names.
 
 Done:
-- [ ] `king_http3_request_send()` nutzt den neuen Stack in echten Wire-Tests.
-- [ ] OO-HTTP3-Client nutzt den neuen Stack in echten Wire-Tests.
-- [ ] Alter Quiche-Loader wird von keinem aktiven Include mehr referenziert.
+- [ ] `king_http3_request_send()` uses the new stack in real wire tests.
+- [ ] OO HTTP3 client uses the new stack in real wire tests.
+- [ ] Old Quiche loader is no longer referenced by any active include.
 
 ---
 
-### #Q-6 Server-HTTP/3 Listener ersetzen
+### #Q-6 Replace Server HTTP/3 Listener
 
-Ziel:
-- Serverseitige Quiche-Annahmen durch den neuen Stack ersetzen.
+Goal:
+- Replace server-side Quiche assumptions with the new stack.
 
 Checklist:
-- [ ] Server-Loader mit echter Initialisierung implementieren.
-- [ ] `king_http3_server_listen_once` und Listener-Pfade auf neuen Runtime-Kontext umstellen.
-- [ ] Request-Header, Body-Drain, Early-Hints, Response-Normalisierung und CORS-Verhalten unveraendert beweisen.
-- [ ] TLS-Reload-, Cancel- und Shutdown-Pfade erhalten.
-- [ ] WebSocket-over-HTTP3-Honesty-Slices weiter abdecken.
+- [ ] Implement a server loader with real initialization.
+- [ ] Move `king_http3_server_listen_once` and listener paths to the new runtime context.
+- [ ] Prove request headers, body drain, early hints, response normalization, and CORS behavior stay unchanged.
+- [ ] Preserve TLS reload, cancel, and shutdown paths.
+- [ ] Keep WebSocket-over-HTTP3 honesty slices covered.
 
 Done:
-- [ ] HTTP/3 Server-Listener laufen auf dem neuen Stack gegen reale Clients/Peers.
-- [ ] Kein Serverpfad benoetigt Quiche-Code.
+- [ ] HTTP/3 server listeners run on the new stack against real clients/peers.
+- [ ] No server path needs Quiche code.
 
 ---
 
-### #Q-7 QUIC-Optionen, Stats und Semantik-Mapping
+### #Q-7 QUIC Options, Stats, And Semantic Mapping
 
-Ziel:
-- Bestehende `quic.*` Konfigurationen und Live-Stats korrekt auf den neuen Stack abbilden.
+Goal:
+- Correctly map existing `quic.*` configurations and live stats to the new stack.
 
 Checklist:
-- [ ] Alle `quic.*` Optionen inventarisieren und mappen.
-- [ ] Unsupported Optionen fail-closed oder mit expliziter Diagnose behandeln.
-- [ ] Live-Stats an echte Runtime-Counter binden.
-- [ ] Congestion-Control, pacing, flow-control und idle-timeout verifizieren.
-- [ ] Stale bookkeeping fields oder dauerhaft nullende Zaehler verhindern.
+- [ ] Inventory and map all `quic.*` options.
+- [ ] Handle unsupported options fail-closed or with explicit diagnostics.
+- [ ] Bind live stats to real runtime counters.
+- [ ] Verify congestion control, pacing, flow control, and idle timeout.
+- [ ] Prevent stale bookkeeping fields or permanently zeroed counters.
 
 Done:
-- [ ] Bestehende Stats- und Config-Tests bleiben gruen oder haben gleich starken neuen Nachweis.
-- [ ] Dokumentation nennt den neuen Stack, nicht Quiche-Counter.
+- [ ] Existing stats and config tests stay green or have equally strong new proof.
+- [ ] Documentation names the new stack, not Quiche counters.
 
 ---
 
-### #Q-8 HTTP/3 Test-Peer-Harness ohne Quiche-/Cargo-Abhaengigkeit
+### #Q-8 HTTP/3 Test Peer Harness Without Quiche/Cargo Dependency
 
-Ziel:
-- HTTP/3-Tests auf den neuen Stack migrieren, ohne Quiche/Cargo-Bootstrap.
+Goal:
+- Migrate HTTP/3 tests to the new stack without Quiche/Cargo bootstrap.
 
 Checklist:
-- [ ] Rust-Test-Peers und Cargo-Locks im HTTP/3-Kontext klassifizieren.
-- [ ] Ersatzstrategie festlegen: C-Helfer, King-eigene Listener, CI-Artefakte mit Provenance oder anderer reproduzierbarer Pfad.
-- [ ] Tests fuer Handshake-Failure, Transport-Close, Timeout, Flow-Control, Packet-Loss, 0-RTT, Session-Tickets und Multi-Stream-Fairness erhalten.
-- [ ] Helper-Binaries deterministisch bauen und nicht als Build-Leichen committen.
-- [ ] Skip-Regeln auditieren, damit fehlender neuer Stack nicht als Erfolg zaehlt.
+- [ ] Classify Rust test peers and Cargo locks in the HTTP/3 context.
+- [ ] Choose replacement strategy: C helper, King-owned listeners, CI artifacts with provenance, or another reproducible path.
+- [ ] Preserve tests for handshake failure, transport close, timeout, flow control, packet loss, 0-RTT, session tickets, and multi-stream fairness.
+- [ ] Build helper binaries deterministically and do not commit build leftovers.
+- [ ] Audit skip rules so a missing new stack cannot count as success.
 
 Done:
-- [ ] HTTP/3-Tests beweisen den neuen Stack ohne Quiche- oder Cargo-Bootstrap.
-- [ ] Temporaere Rust-Helfer sind nicht Produkt-Bootstrap und haben ein Ablauf-Issue.
+- [ ] HTTP/3 tests prove the new stack without Quiche or Cargo bootstrap.
+- [ ] Temporary Rust helpers are not product bootstrap and have an expiry issue.
 
 ---
 
-### #Q-9 Quiche-Entfernung aus Source, Scripts und Docs
+### #Q-9 Remove Quiche From Source, Scripts, And Docs
 
-Ziel:
-- Quiche als aktive Dependency vollstaendig entfernen.
+Goal:
+- Fully remove Quiche as an active dependency.
 
 Checklist:
-- [ ] `extension/src/**/quiche_loader.inc` entfernen.
-- [ ] Quiche-spezifische Build-Scripts, Locks und Docs entfernen oder ersetzen.
-- [ ] `README.md`, `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, `DEPENDENCY_PROVENANCE.md` und `documentation/quic-and-tls.md` aktualisieren.
-- [ ] Verbleibende Quiche-Erwaehnungen als historische Notiz markieren oder entfernen.
-- [ ] Artifact-Hygiene-Gate um Quiche-/Cargo-Artefakte erweitern.
+- [ ] Remove `extension/src/**/quiche_loader.inc`.
+- [ ] Remove or replace Quiche-specific build scripts, locks, and docs.
+- [ ] Update `README.md`, `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, `DEPENDENCY_PROVENANCE.md`, and `documentation/quic-and-tls.md`.
+- [ ] Mark remaining Quiche mentions as historical notes or remove them.
+- [ ] Extend artifact hygiene gate for Quiche/Cargo artifacts.
 
 Done:
-- [ ] `rg -n "quiche|QUICHE"` findet keine aktiven Produktpfad-Referenzen mehr.
-- [ ] Verbleibende Treffer sind ausschliesslich historische Migrationsnotizen oder Release-History.
+- [ ] `rg -n "quiche|QUICHE"` finds no active product-path references.
+- [ ] Remaining matches are only historical migration notes or release history.
 
 ---
 
-### #Q-10 CI-, Release- und Supply-Chain-Gates
+### #Q-10 CI, Release, And Supply Chain Gates
 
-Ziel:
-- Die Migration dauerhaft durch CI und Release-Gates absichern.
+Goal:
+- Permanently protect the migration with CI and release gates.
 
 Checklist:
-- [ ] CI baut den neuen Stack.
-- [ ] CI fuehrt HTTP/3 Client/Server Contract-Suites aus.
-- [ ] CI blockiert lokale absolute Pfade, Homebrew-Pfade, Cargo-HTTP3-Bootstrap und Quiche-Locks.
-- [ ] Release-Supply-Chain-Verification prueft neue Provenance-Pins.
-- [ ] Package-Manifeste enthalten neue Dependency-Hashes und keine Quiche-Manifeste.
+- [ ] CI builds the new stack.
+- [ ] CI runs HTTP/3 client/server contract suites.
+- [ ] CI blocks local absolute paths, Homebrew paths, Cargo HTTP/3 bootstrap, and Quiche locks.
+- [ ] Release supply-chain verification checks new provenance pins.
+- [ ] Package manifests contain new dependency hashes and no Quiche manifests.
 
 Done:
-- [ ] Ein PR kann Quiche oder lokale Pfade nicht unbemerkt zurueckbringen.
-- [ ] Release-Artefakte sind fuer den neuen Stack nachvollziehbar reproduzierbar.
+- [ ] A PR cannot silently bring back Quiche or local paths.
+- [ ] Release artifacts are reproducible and traceable for the new stack.
 
 ---
 
-### #Q-11 Vollstaendige HTTP/3 Regression gegen neuen Stack
+### #Q-11 Full HTTP/3 Regression Against New Stack
 
-Ziel:
-- Beweisen, dass der neue Stack den bisherigen HTTP/3-/QUIC-Vertrag traegt.
+Goal:
+- Prove the new stack carries the previous HTTP/3/QUIC contract.
 
 Checklist:
-- [ ] Client one-shot request/response Tests gruen.
-- [ ] OO `Http3Client` Exception-Matrix gruen.
-- [ ] Server one-shot listener Tests gruen.
-- [ ] Session-ticket und 0-RTT Tests gruen.
-- [ ] Stream lifecycle, reset, stop-sending, cancel und timeout Tests gruen.
-- [ ] Packet-loss, retransmit, congestion-control, flow-control und long-duration soak gruen.
-- [ ] WebSocket-over-HTTP3 relevante Slices gruen.
-- [ ] Performance-Baseline gegen vorherigen Quiche-Stand dokumentiert.
+- [ ] Client one-shot request/response tests are green.
+- [ ] OO `Http3Client` exception matrix is green.
+- [ ] Server one-shot listener tests are green.
+- [ ] Session-ticket and 0-RTT tests are green.
+- [ ] Stream lifecycle, reset, stop-sending, cancel, and timeout tests are green.
+- [ ] Packet loss, retransmit, congestion control, flow control, and long-duration soak are green.
+- [ ] WebSocket-over-HTTP3 relevant slices are green.
+- [ ] Performance baseline against the previous Quiche state is documented.
 
 Done:
-- [ ] Neuer Stack ist auf bestehendem Contract-Level nachgewiesen.
-- [ ] Abweichungen sind gefixt oder als neue Blocker-Issues erfasst.
+- [ ] New stack is proven at the existing contract level.
+- [ ] Deviations are fixed or registered as new blocker issues.
 
 ---
 
-### #Q-12 Migrationsabschluss und Repo-Cleanup
+### #Q-12 Migration Closure And Repo Cleanup
 
-Ziel:
-- Sprint sauber abschliessen: keine Restartefakte, keine halben Namen, keine alten Buildannahmen.
+Goal:
+- Close the sprint cleanly: no leftover artifacts, no half-renamed paths, no old build assumptions.
 
 Checklist:
-- [ ] `rg`-Sweep fuer Quiche, Cargo, Rust-HTTP3, lokale Pfade und Stub-Loader abgeschlossen.
-- [ ] `git status` enthaelt keine generierten Build- oder Test-Artefakte.
-- [ ] Docs, tests, CI und Release-Manifeste referenzieren denselben neuen Stack.
-- [ ] Abschlussnotiz in `PROJECT_ASSESSMENT.md` und `READYNESS_TRACKER.md` mit Testbelegen ergaenzt.
-- [ ] Migrationsarbeit ist in logische Commits geteilt: Inventur, Build, Client, Server, Tests, Docs/Cleanup.
+- [ ] Complete `rg` sweep for Quiche, Cargo, Rust-HTTP3, local paths, and stub loaders.
+- [ ] `git status` contains no generated build or test artifacts.
+- [ ] Docs, tests, CI, and release manifests reference the same new stack.
+- [ ] Add closure note to `PROJECT_ASSESSMENT.md` and `READYNESS_TRACKER.md` with test evidence.
+- [ ] Split migration work into logical commits: inventory, build, client, server, tests, docs/cleanup.
 
 Done:
-- [ ] Quiche ist aus dem aktiven Produktpfad entfernt.
-- [ ] HTTP/3/QUIC ist auf dem neuen Stack voll belegt.
-- [ ] Repository-Zustand ist artifact-clean und release-faehig.
+- [ ] Quiche is removed from the active product path.
+- [ ] HTTP/3/QUIC is fully proven on the new stack.
+- [ ] Repository state is artifact-clean and release-ready.
