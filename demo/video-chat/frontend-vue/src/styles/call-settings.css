@@ -354,12 +354,6 @@
   letter-spacing: 0.04em;
 }
 
-.call-left-layout-controls {
-  display: grid;
-  gap: 8px;
-  padding-top: 4px;
-}
-
 .call-owner-edit-modal {
   position: fixed;
   inset: 0;

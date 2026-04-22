@@ -174,11 +174,7 @@
                 {{ callOwnerEditState.contextError }}
               </p>
 
-              <section
-                v-if="callLayoutSidebarState.visible && callLayoutSidebarState.canModerate"
-                class="call-left-layout-controls"
-                aria-label="Call settings video layout"
-              >
+              <template v-if="callLayoutSidebarState.visible && callLayoutSidebarState.canModerate">
                 <div class="call-left-settings-field">
                   <label for="call-left-layout-mode">Video layout</label>
                   <AppSelect
@@ -213,7 +209,7 @@
                     </option>
                   </AppSelect>
                 </div>
-              </section>
+              </template>
             </section>
 
             <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
