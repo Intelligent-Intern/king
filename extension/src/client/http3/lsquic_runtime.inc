@@ -24,12 +24,24 @@ static void king_http3_lsquic_seed_ticket_from_ring(
 static void king_http3_lsquic_refresh_transport_stats(
     king_http3_request_runtime_t *runtime)
 {
-    if (runtime == NULL || !runtime->lsquic_backend_active) {
+    struct lsquic_conn_info info;
+
+    if (runtime == NULL
+        || !runtime->lsquic_backend_active
+        || runtime->lsquic_conn == NULL
+        || king_http3_lsquic.lsquic_conn_get_info_fn == NULL) {
         return;
     }
 
-    runtime->quic_packets_lost = 0;
-    runtime->quic_packets_retransmitted = 0;
+    memset(&info, 0, sizeof(info));
+    if (king_http3_lsquic.lsquic_conn_get_info_fn(runtime->lsquic_conn, &info) != 0) {
+        return;
+    }
+
+    runtime->quic_packets_sent = (zend_long) MIN(info.lci_pkts_sent, (uint64_t) ZEND_LONG_MAX);
+    runtime->quic_packets_received = (zend_long) MIN(info.lci_pkts_rcvd, (uint64_t) ZEND_LONG_MAX);
+    runtime->quic_packets_lost = (zend_long) MIN(info.lci_pkts_lost, (uint64_t) ZEND_LONG_MAX);
+    runtime->quic_packets_retransmitted = (zend_long) MIN(info.lci_pkts_retx, (uint64_t) ZEND_LONG_MAX);
     runtime->quic_lost_bytes = 0;
     runtime->quic_stream_retransmitted_bytes = 0;
 }

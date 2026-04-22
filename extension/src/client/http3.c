@@ -333,6 +333,7 @@ typedef struct _king_http3_lsquic_api {
     unsigned (*lsquic_conn_n_pending_streams_fn)(const void *);
     unsigned (*lsquic_conn_cancel_pending_streams_fn)(void *, unsigned);
     int (*lsquic_conn_status_fn)(void *, char *, size_t);
+    int (*lsquic_conn_get_info_fn)(void *, void *);
     void (*lsquic_conn_close_fn)(void *);
     int (*lsquic_stream_send_headers_fn)(void *, const void *, int);
     void *(*lsquic_stream_get_hset_fn)(void *);

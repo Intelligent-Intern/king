@@ -154,6 +154,7 @@ static zend_result king_http3_ensure_lsquic_ready(void)
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_conn_n_pending_streams_fn, "lsquic_conn_n_pending_streams") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_conn_cancel_pending_streams_fn, "lsquic_conn_cancel_pending_streams") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_conn_status_fn, "lsquic_conn_status") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_conn_get_info_fn, "lsquic_conn_get_info") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_conn_close_fn, "lsquic_conn_close") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_send_headers_fn, "lsquic_stream_send_headers") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_get_hset_fn, "lsquic_stream_get_hset") != SUCCESS

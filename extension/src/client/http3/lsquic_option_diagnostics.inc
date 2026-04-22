@@ -125,6 +125,7 @@ static zend_result king_http3_lsquic_apply_quic_options(
         return FAILURE;
     }
     runtime->lsquic_settings.es_cc_algo = value;
+    runtime->lsquic_settings.es_enable_bw_sampler = 1;
     runtime->lsquic_settings.es_pace_packets = options->quic_pacing_enable ? 1 : 0;
     runtime->lsquic_settings.es_ping_period = (unsigned) (options->quic_ping_interval_ms / 1000);
 
