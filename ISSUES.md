@@ -22,11 +22,22 @@ Ziel:
 - Ersatz fuer Quiche verbindlich festlegen und gegen den bestehenden HTTP/3-Vertrag pruefen.
 
 Checklist:
-- [ ] Entscheidung dokumentieren: `LSQUIC + BoringSSL` oder begruendeter Alternativstack.
+- [x] Entscheidung dokumentieren: `LSQUIC + BoringSSL` oder begruendeter Alternativstack.
 - [ ] Feature-Parity fuer Client, Server, Listener, TLS, Session-Tickets, 0-RTT, Stream-Reset, Stop-Sending, Flow-Control, Congestion-Control, Stats und Cancel pruefen.
 - [ ] Unsupported Features als Blocker oder Umsetzungsaufgabe erfassen, nicht still entfernen.
 - [ ] Public API und Exception-Mapping gegen den bestehenden Vertrag pruefen.
 - [ ] Lizenz-, Security- und Maintenance-Risiko dokumentieren.
+
+Backend-Entscheidung:
+- Zielstack ist `LSQUIC + BoringSSL`.
+- Begruendung: LSQUIC ist eine C-basierte QUIC-/HTTP/3-Bibliothek fuer Client- und Serverpfade, nutzt BoringSSL, ist ueber CMake reproduzierbar pinbar und entfernt den aktiven Rust-/Cargo-/Quiche-Bootstrap aus dem King-HTTP/3-Produktpfad.
+- King bindet nicht die LSQUIC-Beispielprogramme als Produktpfad ein. `http_client`, `http_server` und libevent bleiben hoechstens Referenz- oder Testharness-Material; der Runtime-Loader muss echte LSQUIC-/BoringSSL-Symbole direkt fuer King initialisieren.
+- `ngtcp2 + nghttp3` bleibt nur Fallback, falls die offene Feature-Parity-Pruefung LSQUIC als ungeeignet beweist. Ein Wechsel braucht dann ein eigenes Issue, weil QUIC-, HTTP/3-, TLS- und Runtime-Semantik getrennt gemappt werden muessten.
+- `MsQuic` ist fuer diesen Sprint nicht Zielstack, weil der King-v1-Vertrag HTTP/3-Client und -Server plus bestehende H3-API-Semantik erhalten muss; ein reiner QUIC-Transport-Ersatz waere ohne zusaetzliche HTTP/3-Schicht kein gleichwertiger Drop-in.
+
+Primaerquellen fuer die Entscheidung:
+- LSQUIC README: `https://github.com/litespeedtech/lsquic`
+- LSQUIC Getting Started: `https://lsquic.readthedocs.io/en/stable/gettingstarted.html`
 
 Done:
 - [ ] Der Zielstack ist entschieden.
