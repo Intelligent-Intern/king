@@ -77,7 +77,10 @@ SQL
         <<<'SQL'
 INSERT INTO users(id, email, display_name, role_id) VALUES
     (10, 'owner@example.test', 'Owner User', 1),
-    (20, 'waiting@example.test', 'Waiting User', 1)
+    (20, 'waiting@example.test', 'Waiting User', 1),
+    (30, 'admin@example.test', 'Admin User', 2),
+    (40, 'moderator@example.test', 'Moderator User', 1),
+    (50, 'plain@example.test', 'Plain User', 1)
 SQL
     );
     $pdo->exec(
@@ -138,6 +141,84 @@ SQL
     videochat_realtime_lobby_db_sync_assert((string) ($ownerFrame['type'] ?? '') === 'lobby/snapshot', 'owner should receive lobby snapshot');
     videochat_realtime_lobby_db_sync_assert((int) ($ownerFrame['queue_count'] ?? 0) === 1, 'owner snapshot should include one pending DB participant');
     videochat_realtime_lobby_db_sync_assert((int) (($ownerFrame['queue'][0]['user_id'] ?? 0)) === 20, 'pending DB participant id mismatch');
+
+    $adminConnection = videochat_presence_connection_descriptor(
+        [
+            'id' => 30,
+            'display_name' => 'Admin User',
+            'role' => 'admin',
+        ],
+        'sess-admin',
+        'conn-admin',
+        'socket-admin',
+        'room-db-sync'
+    );
+    $adminConnection['active_call_id'] = 'call-db-sync';
+    $adminConnection['requested_call_id'] = 'call-db-sync';
+    $adminConnection['call_role'] = 'participant';
+    videochat_realtime_send_synced_lobby_snapshot_to_connection(
+        $ownerLobbyState,
+        $adminConnection,
+        $openDatabase,
+        'assert_admin_backfill',
+        $sender,
+        1_777_000_000_100
+    );
+    $adminFrame = end($frames['socket-admin']);
+    videochat_realtime_lobby_db_sync_assert((int) ($adminFrame['queue_count'] ?? 0) === 1, 'admin snapshot should include pending DB participant');
+    videochat_realtime_lobby_db_sync_assert((int) (($adminFrame['queue'][0]['user_id'] ?? 0)) === 20, 'admin pending DB participant id mismatch');
+
+    $moderatorConnection = videochat_presence_connection_descriptor(
+        [
+            'id' => 40,
+            'display_name' => 'Moderator User',
+            'role' => 'user',
+        ],
+        'sess-moderator',
+        'conn-moderator',
+        'socket-moderator',
+        'room-db-sync'
+    );
+    $moderatorConnection['active_call_id'] = 'call-db-sync';
+    $moderatorConnection['requested_call_id'] = 'call-db-sync';
+    $moderatorConnection['call_role'] = 'moderator';
+    videochat_realtime_send_synced_lobby_snapshot_to_connection(
+        $ownerLobbyState,
+        $moderatorConnection,
+        $openDatabase,
+        'assert_moderator_backfill',
+        $sender,
+        1_777_000_000_200
+    );
+    $moderatorFrame = end($frames['socket-moderator']);
+    videochat_realtime_lobby_db_sync_assert((int) ($moderatorFrame['queue_count'] ?? 0) === 1, 'moderator snapshot should include pending DB participant');
+    videochat_realtime_lobby_db_sync_assert((int) (($moderatorFrame['queue'][0]['user_id'] ?? 0)) === 20, 'moderator pending DB participant id mismatch');
+
+    $plainConnection = videochat_presence_connection_descriptor(
+        [
+            'id' => 50,
+            'display_name' => 'Plain User',
+            'role' => 'user',
+        ],
+        'sess-plain',
+        'conn-plain',
+        'socket-plain',
+        'room-db-sync'
+    );
+    $plainConnection['active_call_id'] = 'call-db-sync';
+    $plainConnection['requested_call_id'] = 'call-db-sync';
+    $plainConnection['call_role'] = 'participant';
+    videochat_realtime_send_synced_lobby_snapshot_to_connection(
+        $ownerLobbyState,
+        $plainConnection,
+        $openDatabase,
+        'assert_plain_redaction',
+        $sender,
+        1_777_000_000_300
+    );
+    $plainFrame = end($frames['socket-plain']);
+    videochat_realtime_lobby_db_sync_assert((int) ($plainFrame['queue_count'] ?? -1) === 0, 'plain participant must not see other pending DB participants');
+    videochat_realtime_lobby_db_sync_assert(($plainFrame['queue'] ?? []) === [], 'plain participant queue payload must be redacted');
 
     $presenceState = videochat_presence_state_init();
     videochat_presence_join_room($presenceState, $ownerConnection, 'room-db-sync', $sender);

@@ -247,6 +247,7 @@ Ops hardening baseline:
 - Backend HTTP/WS/SFU compose services accept OTLP collector binding through `VIDEOCHAT_OTEL_EXPORTER_ENDPOINT`.
 - Admin operations expose a provider-neutral infrastructure inventory at `GET /api/admin/infrastructure`.
   It reports deployment domains, providers, nodes, service roles, OpenTelemetry export configuration, and read-only SFU scaling readiness.
+  The backend collects inventory through `videochat_infra_provider_adapters()`, so Hetzner Cloud discovery, Kubernetes detection, and static/self-hosted fallback stay behind the same provider adapter contract.
   The DTO supports static/self-hosted nodes now, Hetzner Cloud inventory when `VIDEOCHAT_INFRA_HETZNER_TOKEN` or `VIDEOCHAT_DEPLOY_HCLOUD_TOKEN` is available, and Kubernetes detection for later replica actions.
 - Admin video operations expose live call concurrency at `GET /api/admin/video-operations`.
   It counts only participants with an open join presence (`joined_at` set and `left_at` empty), so invited or assigned users do not inflate live calls or concurrent participant metrics.
@@ -446,19 +447,21 @@ The wizard asks for:
   uses `api.<domain>`, `ws.<domain>`, `sfu.<domain>`, and `turn.<domain>`
 
 The helper loads `demo/video-chat/.env.local` before it checks required deploy
-variables. The wizard writes the values it collected back to that same file, so
-later runs can reuse them without retyping everything. This includes the Hetzner
-API token, the SSH key path, the selected server settings, and the resolved
-server IP. The file is ignored by git.
+variables. The wizard and manual deploy actions write the effective deploy
+settings back to that same file, so later runs can reuse them without retyping
+everything. This includes the Hetzner API token, derived `api/ws/sfu/turn`
+hostnames, the SSH key path, selected server settings, and the resolved server
+IP. The file is ignored by git.
 
 The wizard also sets `VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS=1` in `.env.local`.
-Before the first SSH connection it removes stale entries for the deploy host
+Manual deploy actions also auto-enable this when `VIDEOCHAT_DEPLOY_PUBLIC_IP` is
+known. Before the first SSH connection the helper removes stale entries for the
+deploy host, expected public IP, root domain, and `api/ws/sfu/turn` hostnames
 from `~/.ssh/known_hosts`, including the `[host]:port` form. This keeps reruns
 idempotent when Hetzner reuses an IP address or a server was recreated. Set
 `VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS=0` if you want to keep SSH host key
-checking fully manual. Override the file with
-`VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE` if you do not use the default
-`~/.ssh/known_hosts`.
+checking fully manual. Override the file with `VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE`
+if you do not use the default `~/.ssh/known_hosts`.
 
 Default Hetzner values:
 
@@ -496,7 +499,10 @@ intentionally allocate dedicated IPs:
 - `turn.video.example.com`
 
 The helper waits before requesting the certificate because Certbot needs the
-public domain and subdomains to point at the server.
+public domain and subdomains to point at the server. Production actions run the
+same DNS preflight for the root domain and `api/ws/sfu/turn`; when
+`VIDEOCHAT_DEPLOY_PUBLIC_IP` is set every name must resolve to that IP before
+Certbot is allowed to run.
 
 Useful optional overrides:
 
@@ -522,7 +528,9 @@ For Hetzner-backed inventory, the deploy token is reused by default. Use
 `VIDEOCHAT_INFRA_HETZNER_TOKEN` if inventory should use a separate read-only
 token. For Kubernetes deployments, set `VIDEOCHAT_INFRA_PROVIDER=kubernetes`
 and project pod/namespace metadata through environment variables until the
-audited Kubernetes API reader is enabled.
+audited Kubernetes API reader is enabled. New infrastructure providers should
+be added as backend provider adapters instead of branching the admin endpoint or
+frontend operations page.
 
 Disable automatic DNS mutation and only print/wait for the required record:
 
@@ -565,6 +573,11 @@ Let's Encrypt certificate, writes hardened remote secrets, builds the static
 frontend into the King/PHP edge image, starts only the public edge on `:80` and
 `:443`, starts the coturn relay on `:3478`, and keeps API, lobby WS, and SFU
 backend ports bound to `127.0.0.1`.
+
+The production path is safe to rerun. Certbot uses `--keep-until-expiring`, the
+helper only replaces host-local generated env/compose files, generated secrets
+are reused unless explicit values are supplied, and any service stopped for the
+standalone certificate challenge is restored even if Certbot fails.
 
 Public production URLs:
 
@@ -628,6 +641,26 @@ VIDEOCHAT_DEPLOY_HOST=203.0.113.10 \
 VIDEOCHAT_DEPLOY_DOMAIN=video.example.com \
 demo/video-chat/scripts/deploy.sh status
 ```
+
+Run the production endpoint smoke after `deploy` or `wizard`:
+
+```bash
+demo/video-chat/scripts/deploy-smoke.sh
+```
+
+The smoke loads `demo/video-chat/.env.local`, then verifies the HTTP to HTTPS
+redirect, HTTPS frontend, public API health allow-list, protected admin runtime
+boundary, API version endpoint, lobby websocket routing, SFU websocket routing,
+the remote Certbot renewal hook, certificate SANs for the root domain plus
+`api/ws/sfu/turn`, and authenticated admin operations payloads for
+infrastructure and live video operations. The admin checks use
+`VIDEOCHAT_DEPLOY_ADMIN_PASSWORD`, `VIDEOCHAT_DEPLOY_ADMIN_PASSWORD_FILE`, or
+`demo/video-chat/secrets/admin-password` and assert that operations data is
+provider-neutral, realtime-sourced, non-static, and does not leak secret keys.
+Set `VIDEOCHAT_DEPLOY_SMOKE_SKIP_REMOTE=1` to skip the SSH Certbot hook/SAN
+check when only public endpoints should be tested. Set
+`VIDEOCHAT_DEPLOY_SMOKE_SKIP_ADMIN=1` to skip authenticated admin operations
+checks.
 
 ```bash
 VIDEOCHAT_DEPLOY_HOST=203.0.113.10 \

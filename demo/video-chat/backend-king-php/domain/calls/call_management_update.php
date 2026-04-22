@@ -27,14 +27,8 @@ function videochat_validate_update_call_payload(array $payload): array
         $errors['resend_invites'] = 'global_invite_resend_not_supported_use_explicit_action';
     }
 
-    $roomId = '';
     if ($hasRoomId) {
-        $roomId = trim((string) ($payload['room_id'] ?? ''));
-        if ($roomId === '') {
-            $errors['room_id'] = 'required_room_id';
-        } elseif (strlen($roomId) > 120) {
-            $errors['room_id'] = 'room_id_too_long';
-        }
+        $errors['room_id'] = 'immutable_for_call';
     }
 
     $title = '';
@@ -156,8 +150,7 @@ function videochat_validate_update_call_payload(array $payload): array
     }
 
     if (
-        !$hasRoomId
-        && !$hasTitle
+        !$hasTitle
         && !$hasAccessMode
         && !$hasStartsAt
         && !$hasEndsAt
@@ -166,6 +159,7 @@ function videochat_validate_update_call_payload(array $payload): array
         && !$hasInternalParticipants
         && !$hasExternalParticipants
         && !$resendRequested
+        && !$hasRoomId
     ) {
         $errors['payload'] = 'at_least_one_supported_field_required';
     }
@@ -173,8 +167,8 @@ function videochat_validate_update_call_payload(array $payload): array
     return [
         'ok' => $errors === [],
         'data' => [
-            'has_room_id' => $hasRoomId,
-            'room_id' => $roomId,
+            'has_room_id' => false,
+            'room_id' => '',
             'has_title' => $hasTitle,
             'title' => $title,
             'has_access_mode' => $hasAccessMode,
@@ -251,7 +245,7 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
 
     $data = $validation['data'];
 
-    $nextRoomId = (bool) $data['has_room_id'] ? (string) $data['room_id'] : (string) $existingCall['room_id'];
+    $nextRoomId = (string) $existingCall['room_id'];
     $nextTitle = (bool) $data['has_title'] ? (string) $data['title'] : (string) $existingCall['title'];
     $currentAccessMode = videochat_normalize_call_access_mode((string) ($existingCall['access_mode'] ?? 'invite_only'));
     $nextAccessMode = (bool) ($data['has_access_mode'] ?? false)

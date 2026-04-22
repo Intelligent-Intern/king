@@ -50,6 +50,27 @@ async function waitForLastChatMessage(page, expectedAttachmentCount) {
   return page.evaluate(() => window.__matrixLastChatMessage);
 }
 
+async function waitForLastChatText(page, expectedText) {
+  const handle = await page.waitForFunction((text) => (
+    window.__matrixLastChatMessage
+    && window.__matrixLastChatMessage.message
+    && window.__matrixLastChatMessage.message.text === text
+  ), expectedText);
+  await handle.dispose();
+  return page.evaluate(() => window.__matrixLastChatMessage);
+}
+
+async function waitForLastReactionEvent(page, expectedEmoji) {
+  const handle = await page.waitForFunction((emoji) => {
+    const payload = window.__matrixLastReactionEvent || {};
+    const reaction = payload.reaction || {};
+    const reactions = Array.isArray(payload.reactions) ? payload.reactions : [];
+    return reaction.emoji === emoji || reactions.some((row) => row && row.emoji === emoji);
+  }, expectedEmoji);
+  await handle.dispose();
+  return page.evaluate(() => window.__matrixLastReactionEvent);
+}
+
 test('chat matrix fixture set covers allowed and blocked upload types', async ({ page }) => {
   for (const name of allowedFixtureNames) {
     expect(fixtureExists('allowed', name), `missing allowed fixture ${name}`).toBe(true);
@@ -70,6 +91,103 @@ test('chat matrix fixture set covers allowed and blocked upload types', async ({
   expect(result.allowed).toBe(true);
   expect(result.blockedCodes).toEqual(['attachment_type_not_allowed', 'attachment_type_not_allowed', 'attachment_type_not_allowed']);
   expect(result.disguisedPdfClientSide.ok).toBe(true);
+});
+
+test('text and emoji chat payloads enable the submit button and send through realtime', async ({ browser }) => {
+  test.setTimeout(60_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const admin = await createMatrixPage(browser, baseURL, matrixUsers.admin);
+
+  try {
+    await openMatrixWorkspace(admin.page);
+    await openChatTab(admin.page);
+
+    const input = admin.page.getByPlaceholder('Write a message');
+    const sendButton = admin.page.locator('.workspace-chat-compose button[type="submit"]');
+    await expect(sendButton).toBeDisabled();
+
+    const textMessage = `matrix text ${Date.now()}`;
+    await input.fill(textMessage);
+    await expect(sendButton).toBeEnabled();
+    await sendButton.click();
+    const textPayload = await waitForLastChatText(admin.page, textMessage);
+    expect(textPayload.message.text).toBe(textMessage);
+
+    await admin.page.locator('.chat-emoji-toggle').click();
+    await admin.page.locator('.workspace-chat-emoji-btn', { hasText: '🚀' }).click();
+    await expect(input).toHaveValue('🚀');
+    await expect(sendButton).toBeEnabled();
+    await sendButton.click();
+    const emojiPayload = await waitForLastChatText(admin.page, '🚀');
+    expect(emojiPayload.message.text).toBe('🚀');
+  } finally {
+    await Promise.allSettled([admin.context.close()]);
+  }
+});
+
+test('reaction emoji and chat emoji are visible to every call participant', async ({ browser }) => {
+  test.setTimeout(60_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const admin = await createMatrixPage(browser, baseURL, matrixUsers.admin);
+  const user = await createMatrixPage(browser, baseURL, matrixUsers.user);
+
+  try {
+    await openMatrixWorkspace(admin.page);
+    await openMatrixWorkspace(user.page);
+
+    await admin.page.getByTitle('Reactions').click();
+    await admin.page.locator('.workspace-reaction-btn', { hasText: '👏' }).click();
+    await expect(admin.page.locator('.workspace-reaction-particle', { hasText: '👏' }).first()).toBeVisible();
+
+    const reactionPayload = await waitForLastReactionEvent(admin.page, '👏');
+    await user.page.evaluate((event) => window.__matrixEmit(event), reactionPayload);
+    await expect(user.page.locator('.workspace-reaction-particle', { hasText: '👏' }).first()).toBeVisible();
+
+    await openChatTab(admin.page);
+    await admin.page.locator('.chat-emoji-toggle').click();
+    await admin.page.locator('.workspace-chat-emoji-btn', { hasText: '🚀' }).click();
+    await admin.page.locator('.workspace-chat-compose button[type="submit"]').click();
+    const chatPayload = await waitForLastChatText(admin.page, '🚀');
+
+    await user.page.evaluate((event) => window.__matrixEmit(event), chatPayload);
+    await openChatTab(user.page);
+    await expect(user.page.locator('.workspace-chat-message').last()).toContainText('🚀');
+  } finally {
+    await Promise.allSettled([admin.context.close(), user.context.close()]);
+  }
+});
+
+test('first incoming chat message shows unread badge and chat icon notification only for peers', async ({ browser }) => {
+  test.setTimeout(60_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const admin = await createMatrixPage(browser, baseURL, matrixUsers.admin);
+  const user = await createMatrixPage(browser, baseURL, matrixUsers.user);
+
+  try {
+    await openMatrixWorkspace(admin.page);
+    await openMatrixWorkspace(user.page);
+    await openChatTab(admin.page);
+
+    const firstMessage = `first unread ${Date.now()}`;
+    await admin.page.getByPlaceholder('Write a message').fill(firstMessage);
+    await admin.page.locator('.workspace-chat-compose button[type="submit"]').click();
+    const payload = await waitForLastChatText(admin.page, firstMessage);
+
+    await expect(admin.page.locator('.tab-chat-unread-badge')).toHaveCount(0);
+    await expect(admin.page.locator('.workspace-chat-toast')).toHaveCount(0);
+
+    await user.page.evaluate((event) => window.__matrixEmit(event), payload);
+    await expect(user.page.locator('.tab-chat-unread-badge')).toBeVisible();
+    await expect(user.page.locator('.workspace-chat-toast')).toBeVisible();
+
+    await user.page.locator('.workspace-chat-toast').click();
+    await expect(user.page.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+    await expect(user.page.locator('.workspace-chat-message').last()).toContainText(firstMessage);
+    await expect(user.page.locator('.tab-chat-unread-badge')).toHaveCount(0);
+    await expect(user.page.locator('.workspace-chat-toast')).toHaveCount(0);
+  } finally {
+    await Promise.allSettled([admin.context.close(), user.context.close()]);
+  }
 });
 
 test('large paste becomes a chat file and the other participant gets unread badge plus attachment', async ({ browser }) => {
@@ -190,7 +308,10 @@ test('admin layout controls react to activity and pinning overrides active-speak
 
   try {
     await openMatrixWorkspace(admin.page);
-    const layoutControls = admin.page.locator('.call-left-layout-controls');
+    const layoutControls = admin.page.locator('.call-left-owner-edit-block');
+    if (!(await layoutControls.isVisible())) {
+      await admin.page.getByRole('button', { name: 'Open left sidebar' }).click();
+    }
     await expect(layoutControls).toBeVisible();
     await expect(admin.page.locator('.workspace-mini-title')).toContainText('Active User');
 

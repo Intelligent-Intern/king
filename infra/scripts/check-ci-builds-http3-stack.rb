@@ -5,6 +5,7 @@ require "yaml"
 ROOT_DIR = File.expand_path("../..", __dir__)
 CI_WORKFLOW = ".github/workflows/ci.yml"
 BUILD_PROFILE = "infra/scripts/build-profile.sh"
+CI_SYSTEM_DEPS = "infra/scripts/install-ci-system-dependencies.sh"
 CONFIG_M4 = "extension/config.m4"
 CLIENT_HTTP3 = "extension/src/client/http3.c"
 SERVER_HTTP3 = "extension/src/server/http3.c"
@@ -58,6 +59,7 @@ end
 workflow_source, workflow = load_workflow(CI_WORKFLOW)
 jobs = workflow_jobs(workflow)
 build_profile = read_repo(BUILD_PROFILE)
+ci_system_deps = read_repo(CI_SYSTEM_DEPS)
 config_m4 = read_repo(CONFIG_M4)
 client_http3 = read_repo(CLIENT_HTTP3)
 server_http3 = read_repo(SERVER_HTTP3)
@@ -86,9 +88,10 @@ require_job_step_literal(
   "../infra/scripts/build-profile.sh \"${{ matrix.profile }}\"",
   "sanitizer soak profile build"
 )
+require_literal(workflow_source, "./infra/scripts/install-ci-system-dependencies.sh", "shared CI system dependency installer")
 
 %w[cmake ninja-build pkg-config libssl-dev].each do |package_name|
-  require_literal(workflow_source, package_name, "system dependency for LSQUIC/BoringSSL build inputs")
+  require_literal(ci_system_deps, package_name, "system dependency for LSQUIC/BoringSSL build inputs")
 end
 
 require_literal(build_profile, "LSQUIC_BOOTSTRAP_SCRIPT=\"${SCRIPT_DIR}/bootstrap-lsquic.sh\"", "build-profile LSQUIC bootstrap script binding")

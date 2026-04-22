@@ -174,11 +174,7 @@
                 {{ callOwnerEditState.contextError }}
               </p>
 
-              <section
-                v-if="callLayoutSidebarState.visible && callLayoutSidebarState.canModerate"
-                class="call-left-layout-controls"
-                aria-label="Video layout"
-              >
+              <template v-if="callLayoutSidebarState.visible && callLayoutSidebarState.canModerate">
                 <div class="call-left-settings-field">
                   <label for="call-left-layout-mode">Video layout</label>
                   <AppSelect
@@ -213,7 +209,7 @@
                     </option>
                   </AppSelect>
                 </div>
-              </section>
+              </template>
             </section>
 
             <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
@@ -1393,7 +1389,6 @@ const callOwnerEditState = reactive({
   callId: '',
   title: '',
   accessMode: 'invite_only',
-  roomId: 'lobby',
   startsLocal: '',
   endsLocal: '',
   replaceParticipants: false,
@@ -1610,7 +1605,6 @@ function hydrateCallOwnerDraftFromCall(call) {
 
   callOwnerEditState.callId = String(normalizedCall.id || '').trim();
   callOwnerEditState.title = String(normalizedCall.title || '').trim();
-  callOwnerEditState.roomId = String(normalizedCall.room_id || 'lobby').trim() || 'lobby';
   callOwnerEditState.accessMode = normalizeCallAccessMode(normalizedCall.access_mode);
   callOwnerEditState.startsLocal = isoToLocalInput(String(normalizedCall.starts_at || ''));
   callOwnerEditState.endsLocal = isoToLocalInput(String(normalizedCall.ends_at || ''));

@@ -20,7 +20,7 @@
         :class="{
           compact: isCompactHeaderVisible,
           'has-mini-strip': showMiniParticipantStrip,
-          'mini-strip-above': isMobileMiniStripAbove,
+          'mini-strip-above': isCompactMiniStripAbove,
           'layout-grid': currentLayoutMode === 'grid',
           'layout-main-mini': currentLayoutMode === 'main_mini',
           'layout-main-only': currentLayoutMode === 'main_only',
@@ -139,16 +139,16 @@
 
         <section v-if="showMiniParticipantStrip" class="workspace-mini-strip">
           <button
-            v-if="showMobileMiniStripToggle"
+            v-if="showCompactMiniStripToggle"
             class="workspace-mini-placement-toggle"
             type="button"
-            :title="mobileMiniStripToggleLabel"
-            :aria-label="mobileMiniStripToggleLabel"
-            @click="toggleMobileMiniStripPlacement"
+            :title="compactMiniStripToggleLabel"
+            :aria-label="compactMiniStripToggleLabel"
+            @click="toggleCompactMiniStripPlacement"
           >
             <img
               class="workspace-mini-placement-icon"
-              :class="{ up: !isMobileMiniStripAbove, down: isMobileMiniStripAbove }"
+              :class="{ up: !isCompactMiniStripAbove, down: isCompactMiniStripAbove }"
               src="/assets/orgas/kingrt/icons/forward.png"
               alt=""
             />
@@ -163,6 +163,14 @@
               class="workspace-mini-video-slot"
               :data-user-id="participant.userId"
             ></div>
+            <div
+              v-if="!participantHasRenderableMedia(participant.userId)"
+              class="workspace-mini-video-placeholder"
+              aria-hidden="true"
+            >
+              <span class="workspace-mini-video-initials">{{ participantInitials(participant.displayName) }}</span>
+              <span class="workspace-mini-video-status">Connecting media</span>
+            </div>
             <span class="workspace-mini-title">{{ participant.displayName }}</span>
             <span class="workspace-mini-meta">{{ participant.role }}</span>
           </article>
@@ -664,7 +672,7 @@
               @input="handleChatInput"
               @paste="handleChatPaste"
             />
-            <button class="icon-mini-btn" type="submit" :disabled="!isSocketOnline || !hasChatPayload || chatSending">
+            <button class="icon-mini-btn" type="submit" :disabled="!canSubmitChatMessage">
               <img src="/assets/orgas/kingrt/icons/send.png" alt="Send" />
             </button>
           </form>
@@ -678,6 +686,11 @@
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { isGuestSession, sessionState } from '../auth/session';
+import {
+  CALL_UUID_PATTERN,
+  callRequiresJoinModalForViewer,
+  joinPathFromAccessPayload,
+} from '../calls/callAdmissionGate';
 import {
   resolveBackendWebSocketOriginCandidates,
   setBackendWebSocketOrigin,
@@ -770,6 +783,11 @@ import {
   selectCallLayoutParticipants,
 } from './callLayoutStrategies';
 import {
+  gridVideoSlotId,
+  layoutModeOptionsFor,
+  layoutStrategyOptionsFor,
+} from './callLayoutUiOptions';
+import {
   apiRequest,
   extractErrorMessage,
   requestHeaders,
@@ -783,17 +801,6 @@ const workspaceSidebarState = inject('workspaceSidebarState', null);
 const ACTIVITY_PUBLISH_INTERVAL_MS = 800;
 const ACTIVITY_MOTION_SAMPLE_MS = 500;
 const REMOTE_FRAME_ACTIVITY_MARK_INTERVAL_MS = 1000;
-const LAYOUT_MODE_OPTIONS = [
-  { mode: 'grid', label: 'Grid', icon: 'G' },
-  { mode: 'main_mini', label: 'Main + Mini', icon: 'M' },
-  { mode: 'main_only', label: 'Main only', icon: '1' },
-];
-const LAYOUT_STRATEGY_LABELS = {
-  manual_pinned: 'Manual / pinned',
-  most_active_window: 'Most active window',
-  active_speaker_main: 'Active speaker main',
-  round_robin_active: 'Round robin active',
-};
 
 const activeTab = ref('users');
 const usersSearch = ref('');
@@ -905,11 +912,14 @@ const controlState = reactive({
 });
 const rightSidebarCollapsed = ref(false);
 const isCompactViewport = ref(false);
-const mobileMiniStripPlacement = ref('below');
+const compactMiniStripPlacement = ref('below');
 
 const workspaceError = ref('');
 const workspaceNotice = ref('');
 const viewerCallRole = ref('participant');
+const viewerEffectiveCallRole = ref('participant');
+const viewerCanModerateCall = ref(false);
+const viewerCanManageOwnerRole = ref(false);
 const activeCallId = ref('');
 const loadedCallId = ref('');
 const callParticipantRoles = reactive({});
@@ -918,6 +928,7 @@ const routeCallResolve = reactive({
   callId: '',
   roomId: 'lobby',
   pending: false,
+  redirecting: false,
   error: '',
 });
 let routeCallResolveSeq = 0;
@@ -946,6 +957,7 @@ const mediaRuntimeCapabilities = ref({
 const mediaRuntimePath = ref('pending');
 const mediaRuntimeReason = ref('boot');
 const nativePeerConnectionsRef = ref(new Map());
+const mediaRenderVersion = ref(0);
 const dynamicIceServers = ref([]);
 let runtimeSwitchInFlight = false;
 let wlvcEncodeFailureCount = 0;
@@ -986,12 +998,14 @@ const showAdmissionGate = computed(() => {
 });
 const canModerate = computed(() => (
   normalizeRole(sessionState.role) === 'admin'
-  || viewerCallRole.value === 'owner'
-  || viewerCallRole.value === 'moderator'
+  || viewerCanModerateCall.value
+  || viewerEffectiveCallRole.value === 'owner'
+  || viewerEffectiveCallRole.value === 'moderator'
 ));
 const canManageOwnerRole = computed(() => (
   normalizeRole(sessionState.role) === 'admin'
-  || viewerCallRole.value === 'owner'
+  || viewerCanManageOwnerRole.value
+  || viewerEffectiveCallRole.value === 'owner'
 ));
 const showLobbyTab = computed(() => canModerate.value);
 const usersSourceMode = computed(() => 'snapshot');
@@ -1041,9 +1055,9 @@ const isCompactHeaderVisible = computed(() => (
   isCompactViewport.value
   && isCompactLayoutViewport.value
 ));
-const isMobileMiniStripAbove = computed(() => (
-  isShellMobileViewport.value
-  && mobileMiniStripPlacement.value === 'above'
+const isCompactMiniStripAbove = computed(() => (
+  isCompactLayoutViewport.value
+  && compactMiniStripPlacement.value === 'above'
 ));
 const showLeftSidebarRestoreButton = computed(() => {
   if (isCompactHeaderVisible.value || isShellMobileViewport.value) {
@@ -1091,7 +1105,7 @@ function setMediaRuntimePath(nextPath, reason) {
 
 function isUuidLike(value) {
   const normalized = String(value || '').trim().toLowerCase();
-  return /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(normalized);
+  return CALL_UUID_PATTERN.test(normalized);
 }
 
 function applyRouteCallResolution({
@@ -1100,12 +1114,14 @@ function applyRouteCallResolution({
   roomId = 'lobby',
   error = '',
   pending = false,
+  redirecting = false,
 } = {}) {
   routeCallResolve.accessId = String(accessId || '').trim().toLowerCase();
   routeCallResolve.callId = String(callId || '').trim();
   routeCallResolve.roomId = normalizeRoomId(String(roomId || '').trim() || 'lobby');
   routeCallResolve.error = String(error || '').trim();
   routeCallResolve.pending = Boolean(pending);
+  routeCallResolve.redirecting = Boolean(redirecting);
 
   if (routeCallResolve.callId !== '') {
     activeCallId.value = routeCallResolve.callId;
@@ -1136,7 +1152,57 @@ async function resolveRouteRefSafely(callRef) {
     accessId: normalizedAccessId,
     callId: resolution.callId,
     roomId: resolution.roomId,
+    call,
   };
+}
+
+function currentWorkspaceEntryMode() {
+  return String(route.query.entry || '').trim().toLowerCase();
+}
+
+async function createSelfJoinPathForCall(callId) {
+  const normalizedCallId = String(callId || '').trim().toLowerCase();
+  if (!CALL_UUID_PATTERN.test(normalizedCallId)) {
+    return '';
+  }
+
+  const payload = await apiRequest(`/api/calls/${encodeURIComponent(normalizedCallId)}/access-link`, {
+    method: 'POST',
+  });
+  return joinPathFromAccessPayload(payload);
+}
+
+async function redirectInvitedRouteToJoinModal(callResolution) {
+  if (String(route.name || '') !== 'call-workspace' || currentWorkspaceEntryMode() === 'invite') {
+    return false;
+  }
+
+  const call = callResolution?.call && typeof callResolution.call === 'object' ? callResolution.call : {};
+  const hasCallPayload = Object.keys(call).length > 0;
+  if (hasCallPayload && !callRequiresJoinModalForViewer(call, {
+    userId: currentUserId.value,
+    role: sessionState.role,
+    email: sessionState.email,
+  })) {
+    return false;
+  }
+  if (!hasCallPayload && normalizeRole(sessionState.role) === 'admin') {
+    return false;
+  }
+
+  const directAccessId = String(callResolution?.accessId || '').trim().toLowerCase();
+  let joinPath = CALL_UUID_PATTERN.test(directAccessId) ? `/join/${encodeURIComponent(directAccessId)}` : '';
+  if (joinPath === '') {
+    joinPath = await createSelfJoinPathForCall(callResolution?.callId || call?.id || '');
+  }
+  if (joinPath === '') {
+    workspaceError.value = 'Could not open the join modal for this invited call.';
+    workspaceNotice.value = '';
+    return true;
+  }
+
+  await router.replace(joinPath);
+  return true;
 }
 
 async function resolveRouteCallRef(callRef) {
@@ -1146,7 +1212,7 @@ async function resolveRouteCallRef(callRef) {
   const looksLikeUuid = isUuidLike(normalized);
 
   if (normalized === '') {
-    if (seq !== routeCallResolveSeq) return;
+    if (seq !== routeCallResolveSeq) return false;
     applyRouteCallResolution({
       accessId: '',
       callId: '',
@@ -1154,7 +1220,7 @@ async function resolveRouteCallRef(callRef) {
       error: '',
       pending: false,
     });
-    return;
+    return true;
   }
 
   if (seq === routeCallResolveSeq) {
@@ -1169,14 +1235,23 @@ async function resolveRouteCallRef(callRef) {
 
   try {
     const callResolution = await resolveRouteRefSafely(normalized);
-    if (seq !== routeCallResolveSeq) return;
+    if (seq !== routeCallResolveSeq) return false;
     if (callResolution.state === 'resolved') {
+      if (await redirectInvitedRouteToJoinModal(callResolution)) {
+        applyRouteCallResolution({
+          ...callResolution,
+          error: '',
+          pending: false,
+          redirecting: true,
+        });
+        return false;
+      }
       applyRouteCallResolution({
         ...callResolution,
         error: '',
         pending: false,
       });
-      return;
+      return true;
     }
 
     if (looksLikeUuid) {
@@ -1193,13 +1268,13 @@ async function resolveRouteCallRef(callRef) {
       if (String(route.name || '') === 'call-workspace' && String(routeCallRef.value || '').trim() !== '') {
         void router.replace({ name: fallbackRouteName });
       }
-      return;
+      return false;
     }
   } catch {
     // Fall back to treating param as room id.
   }
 
-  if (seq !== routeCallResolveSeq) return;
+  if (seq !== routeCallResolveSeq) return false;
   applyRouteCallResolution({
     accessId: '',
     callId: '',
@@ -1207,6 +1282,7 @@ async function resolveRouteCallRef(callRef) {
     error: '',
     pending: false,
   });
+  return true;
 }
 
 function ensureRoomBuckets(roomId) {
@@ -1242,13 +1318,11 @@ function participantSnapshotSignature(rows) {
     .filter((row) => row.userId > 0 || row.connectionId !== '')
     .map((row) => [
       row.roomId,
-      row.connectionId,
       row.userId,
       row.displayName,
       row.role,
       row.callRole,
       row.hasConnection ? '1' : '0',
-      row.connectedAt,
     ].join('\u001f'))
     .sort()
     .join('\u001e');
@@ -1270,7 +1344,7 @@ function currentUserParticipantRow() {
   if (!Number.isInteger(userId) || userId <= 0) return null;
 
   const displayName = String(sessionState.displayName || sessionState.email || '').trim() || 'You';
-  const callRole = normalizeCallRole(callParticipantRoles[userId] || viewerCallRole.value || 'participant');
+  const callRole = normalizeCallRole(viewerEffectiveCallRole.value || callParticipantRoles[userId] || viewerCallRole.value || 'participant');
   return {
     userId,
     displayName,
@@ -1279,6 +1353,10 @@ function currentUserParticipantRow() {
     connectedAt: currentUserConnectedAt,
     connections: 1,
   };
+}
+
+function shouldUseLocalPeerRosterFallback() {
+  return hasRealtimeRoomSync.value !== true;
 }
 
 const participantUsers = computed(() => {
@@ -1322,11 +1400,9 @@ const participantUsers = computed(() => {
     const existing = aggregate.get(peerUserId);
     const displayName = String(peer?.displayName || '').trim() || `User ${peerUserId}`;
     if (existing) {
-      existing.connections = Math.max(1, Number(existing.connections || 0));
-      if (displayName.length > existing.displayName.length) {
-        existing.displayName = displayName;
-      }
-      existing.callRole = normalizeCallRole(callParticipantRoles[peerUserId] || existing.callRole || 'participant');
+      continue;
+    }
+    if (!shouldUseLocalPeerRosterFallback()) {
       continue;
     }
 
@@ -1335,6 +1411,30 @@ const participantUsers = computed(() => {
       displayName,
       role: 'user',
       callRole: normalizeCallRole(callParticipantRoles[peerUserId] || 'participant'),
+      connectedAt: '',
+      connections: 1,
+    });
+  }
+
+  for (const peer of nativePeerConnectionsRef.value.values()) {
+    const peerUserId = Number(peer?.userId || 0);
+    if (!Number.isInteger(peerUserId) || peerUserId <= 0 || peerUserId === currentUserId.value) continue;
+
+    const existing = aggregate.get(peerUserId);
+    const displayName = String(peer?.displayName || existing?.displayName || '').trim() || `User ${peerUserId}`;
+    const callRole = normalizeCallRole(callParticipantRoles[peerUserId] || existing?.callRole || 'participant');
+    if (existing) {
+      continue;
+    }
+    if (!shouldUseLocalPeerRosterFallback()) {
+      continue;
+    }
+
+    aggregate.set(peerUserId, {
+      userId: peerUserId,
+      displayName,
+      role: 'user',
+      callRole,
       connectedAt: '',
       connections: 1,
     });
@@ -1543,31 +1643,21 @@ const showMiniParticipantStrip = computed(() => (
   currentLayoutMode.value === 'main_mini'
   && connectedParticipantUsers.value.length > 1
 ));
-const layoutModeOptions = computed(() => LAYOUT_MODE_OPTIONS.filter((option) => CALL_LAYOUT_MODES.includes(option.mode)));
+const layoutModeOptions = computed(() => layoutModeOptionsFor(CALL_LAYOUT_MODES));
 const layoutStrategyOptions = computed(() => CALL_LAYOUT_STRATEGIES);
-const showMobileMiniStripToggle = computed(() => (
-  isShellMobileViewport.value
+const showCompactMiniStripToggle = computed(() => (
+  isCompactLayoutViewport.value
   && showMiniParticipantStrip.value
 ));
-const mobileMiniStripToggleLabel = computed(() => (
-  isMobileMiniStripAbove.value
+const compactMiniStripToggleLabel = computed(() => (
+  isCompactMiniStripAbove.value
     ? 'Move mini videos below main video'
     : 'Move mini videos above main video'
 ));
 
-function toggleMobileMiniStripPlacement() {
-  mobileMiniStripPlacement.value = isMobileMiniStripAbove.value ? 'below' : 'above';
+function toggleCompactMiniStripPlacement() {
+  compactMiniStripPlacement.value = isCompactMiniStripAbove.value ? 'below' : 'above';
   nextTick(() => renderCallVideoLayout());
-}
-
-function gridVideoSlotId(userId) {
-  const normalizedUserId = Number(userId);
-  return `workspace-grid-video-slot-${Number.isInteger(normalizedUserId) && normalizedUserId > 0 ? normalizedUserId : 'unknown'}`;
-}
-
-function layoutStrategyLabel(strategy) {
-  const normalized = String(strategy || '').trim().toLowerCase();
-  return LAYOUT_STRATEGY_LABELS[normalized] || normalized || 'Strategy';
 }
 
 function currentCallLayoutSidebarControls() {
@@ -1588,10 +1678,7 @@ function syncCallLayoutSidebarControls() {
     label: option.label,
     icon: option.icon,
   }));
-  controls.strategyOptions = layoutStrategyOptions.value.map((strategy) => ({
-    strategy,
-    label: layoutStrategyLabel(strategy),
-  }));
+  controls.strategyOptions = layoutStrategyOptionsFor(layoutStrategyOptions.value);
   controls.setMode = setCallLayoutMode;
   controls.setStrategy = setCallLayoutStrategy;
 }
@@ -1629,7 +1716,6 @@ onBeforeUnmount(() => {
 const showLobbyRequestBadge = computed(() => (
   showLobbyTab.value
   && lobbyQueue.value.length > 0
-  && activeTab.value !== 'lobby'
 ));
 const lobbyRequestBadgeText = computed(() => (
   lobbyQueue.value.length > 99 ? '99+' : String(lobbyQueue.value.length)
@@ -1752,8 +1838,9 @@ const activeMessages = computed(() => {
 });
 
 const hasChatPayload = computed(() => chatDraft.value.trim() !== '' || chatAttachmentDrafts.value.length > 0);
+const canSubmitChatMessage = computed(() => hasChatPayload.value && !chatSending.value);
 const showChatUnreadBadge = computed(() => chatUnreadByRoom[activeRoomId.value] === true);
-const showChatUnreadToast = computed(() => rightSidebarCollapsed.value && showChatUnreadBadge.value);
+const showChatUnreadToast = computed(() => showChatUnreadBadge.value && (rightSidebarCollapsed.value || activeTab.value !== 'chat'));
 
 const typingUsers = computed(() => {
   const rows = typingByRoom[activeRoomId.value];
@@ -1843,9 +1930,9 @@ function userRowSnapshot(row) {
   const feedback = rowActionFeedback(row.userId);
   const isRoomMember = Boolean(participant);
   const mappedCallRole = normalizeCallRole(
-    callParticipantRoles[row.userId]
-      || participant?.callRole
-      || (row.userId === currentUserId.value ? viewerCallRole.value : row.callRole || 'participant')
+    row.userId === currentUserId.value
+      ? viewerEffectiveCallRole.value
+      : (callParticipantRoles[row.userId] || participant?.callRole || row.callRole || 'participant')
   );
   const peerState = peerControlStateByUserId[row.userId] || {};
   return {
@@ -2840,7 +2927,6 @@ function buildLobbyJoinToastMessage(entries) {
 
 function notifyLobbyJoinRequests(entries) {
   if (!canModerate.value) return;
-  if (!rightSidebarCollapsed.value) return;
   const list = Array.isArray(entries) ? entries : [];
   if (list.length <= 0) return;
   lobbyNotificationState.toastMessage = buildLobbyJoinToastMessage(list);
@@ -2978,6 +3064,11 @@ function sendSocketFrame(payload) {
   } catch {
     return false;
   }
+}
+
+function hasOpenRealtimeSocket() {
+  const socket = socketRef.value;
+  return socket instanceof WebSocket && socket.readyState === WebSocket.OPEN;
 }
 
 function requestRoomSnapshot() {
@@ -3323,7 +3414,15 @@ function handleChatInput() {
 async function sendChatMessage() {
   const text = chatDraft.value.trim();
   const hasAttachments = chatAttachmentDrafts.value.length > 0;
-  if ((text === '' && !hasAttachments) || !isSocketOnline.value || chatSending.value) return;
+  if ((text === '' && !hasAttachments) || chatSending.value) return;
+  if (!hasOpenRealtimeSocket()) {
+    if (connectionState.value === 'retrying') {
+      reconnectAttempt.value = 0;
+      void connectSocket();
+    }
+    setNotice('Realtime chat is reconnecting. The message is still in the composer.', 'error');
+    return;
+  }
   markParticipantActivity(currentUserId.value, 'chat');
 
   const clientMessageId = `client_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
@@ -3486,17 +3585,37 @@ function resetCallParticipantRoles() {
 }
 
 function applyViewerContext(viewerPayload) {
+  const viewer = viewerPayload && typeof viewerPayload === 'object' ? viewerPayload : {};
   const nextCallId = String(viewerPayload?.call_id || viewerPayload?.callId || '').trim();
   if (nextCallId !== activeCallId.value) {
     activeCallId.value = nextCallId;
     loadedCallId.value = '';
     resetCallParticipantRoles();
+    viewerCallRole.value = 'participant';
+    viewerEffectiveCallRole.value = 'participant';
+    viewerCanModerateCall.value = false;
+    viewerCanManageOwnerRole.value = false;
     if (nextCallId !== '') {
       void loadActiveCallDetails(true);
     }
   }
 
-  viewerCallRole.value = normalizeCallRole(viewerPayload?.call_role || viewerPayload?.callRole || viewerCallRole.value);
+  viewerCallRole.value = normalizeCallRole(viewer.call_role || viewer.callRole || 'participant');
+  viewerEffectiveCallRole.value = normalizeCallRole(
+    viewer.effective_call_role
+    || viewer.effectiveCallRole
+    || viewer.call_role
+    || viewer.callRole
+    || 'participant'
+  );
+  viewerCanModerateCall.value = Boolean(viewer.can_moderate ?? viewer.canModerate ?? false);
+  viewerCanManageOwnerRole.value = Boolean(
+    viewer.can_manage_owner
+    ?? viewer.canManageOwner
+    ?? viewer.can_manage_call_owner
+    ?? viewer.canManageCallOwner
+    ?? false
+  );
 }
 
 function applyCallDetails(callPayload) {
@@ -3515,13 +3634,31 @@ function applyCallDetails(callPayload) {
     callParticipantRoles[userId] = normalizeCallRole(participant?.call_role || participant?.callRole || 'participant');
   }
 
+  const isAdmin = normalizeRole(sessionState.role) === 'admin';
   if (callParticipantRoles[currentUserId.value]) {
-    viewerCallRole.value = normalizeCallRole(callParticipantRoles[currentUserId.value]);
+    const currentCallRole = normalizeCallRole(callParticipantRoles[currentUserId.value]);
+    viewerCallRole.value = currentCallRole;
+    viewerEffectiveCallRole.value = isAdmin ? 'owner' : currentCallRole;
+    viewerCanModerateCall.value = isAdmin || currentCallRole === 'owner' || currentCallRole === 'moderator';
+    viewerCanManageOwnerRole.value = isAdmin || currentCallRole === 'owner';
     return;
   }
   const ownerUserId = Number(call?.owner?.user_id || 0);
   if (Number.isInteger(ownerUserId) && ownerUserId > 0 && ownerUserId === currentUserId.value) {
     viewerCallRole.value = 'owner';
+    viewerEffectiveCallRole.value = 'owner';
+    viewerCanModerateCall.value = true;
+    viewerCanManageOwnerRole.value = true;
+  } else if (isAdmin) {
+    viewerCallRole.value = 'participant';
+    viewerEffectiveCallRole.value = 'owner';
+    viewerCanModerateCall.value = true;
+    viewerCanManageOwnerRole.value = true;
+  } else {
+    viewerCallRole.value = 'participant';
+    viewerEffectiveCallRole.value = 'participant';
+    viewerCanModerateCall.value = false;
+    viewerCanManageOwnerRole.value = false;
   }
 }
 
@@ -3531,6 +3668,9 @@ async function loadActiveCallDetails(force = false) {
     loadedCallId.value = '';
     resetCallParticipantRoles();
     viewerCallRole.value = 'participant';
+    viewerEffectiveCallRole.value = 'participant';
+    viewerCanModerateCall.value = false;
+    viewerCanManageOwnerRole.value = false;
     return;
   }
   if (!force && loadedCallId.value === callId) return;
@@ -3655,7 +3795,7 @@ function applyRoomSnapshot(payload) {
   ensureRoomBuckets(roomId);
   applyViewerContext(payload?.viewer || null);
 
-  applyParticipantsSnapshot(payload?.participants);
+  const participantsChanged = applyParticipantsSnapshot(payload?.participants);
   if (payload?.layout && typeof payload.layout === 'object') {
     applyCallLayoutPayload(payload.layout);
   }
@@ -3673,7 +3813,9 @@ function applyRoomSnapshot(payload) {
       delete peerControlStateByUserId[userId];
     }
   }
-  refreshUsersDirectoryPresentation();
+  if (participantsChanged) {
+    refreshUsersDirectoryPresentation();
+  }
   if (isSocketOnline.value) {
     void syncControlStateToPeers();
     void syncModerationStateToPeers();
@@ -3705,24 +3847,8 @@ function handleSignalingEvent(payload) {
   }
 
   if (isNativeSignal && Number.isInteger(senderUserId) && senderUserId > 0) {
-    if (!isNativeWebRtcRuntimePath() && !mediaRuntimeCapabilities.value.stageB) {
-      return;
-    }
-    if (!isNativeWebRtcRuntimePath() && mediaRuntimeCapabilities.value.stageB) {
-      void switchMediaRuntimePath('webrtc_native', 'inbound_native_signaling');
-    }
-    if (type === 'call/offer') {
-      void handleNativeOfferSignal(senderUserId, payloadBody || {});
-      return;
-    }
-    if (type === 'call/answer') {
-      void handleNativeAnswerSignal(senderUserId, payloadBody || {});
-      return;
-    }
-    if (type === 'call/ice') {
-      void handleNativeIceSignal(senderUserId, payloadBody || {});
-      return;
-    }
+    void handleNativeSignalingEvent(type, senderUserId, payloadBody || {});
+    return;
   }
 
   if (applyRemoteControlState(payload?.payload, sender)) {
@@ -3757,7 +3883,12 @@ function handleSocketMessage(event) {
     if (requiresAdmission && pendingRoomId !== '') {
       if (!tryDirectJoinWithModeratorBypass(pendingRoomId)) {
         setAdmissionGate(pendingRoomId);
-        requestLobbyJoin(pendingRoomId, { announce: false });
+        void redirectInvitedRouteToJoinModal({
+          accessId: routeCallResolve.accessId,
+          callId: activeCallId.value || routeCallResolve.callId,
+          roomId: pendingRoomId,
+          call: {},
+        });
         requestRoomSnapshot();
         return;
       }
@@ -3866,7 +3997,12 @@ function handleSocketMessage(event) {
       const pendingRoomId = normalizeRoomId(payload?.details?.pending_room_id || desiredRoomId.value);
       if (!tryDirectJoinWithModeratorBypass(pendingRoomId)) {
         setAdmissionGate(pendingRoomId);
-        requestLobbyJoin(pendingRoomId, { announce: false });
+        void redirectInvitedRouteToJoinModal({
+          accessId: routeCallResolve.accessId,
+          callId: activeCallId.value || routeCallResolve.callId,
+          roomId: pendingRoomId,
+          call: {},
+        });
       }
       return;
     }
@@ -4516,7 +4652,10 @@ onMounted(async () => {
   aloneIdleLastActiveMs = Date.now();
 
   detachMediaDeviceWatcher = attachCallMediaDeviceWatcher({ requestPermissions: true });
-  await resolveRouteCallRef(routeCallRef.value);
+  const canEnterWorkspace = await resolveRouteCallRef(routeCallRef.value);
+  if (!canEnterWorkspace) {
+    return;
+  }
   ensureRoomBuckets(desiredRoomId.value);
   serverRoomId.value = desiredRoomId.value;
   await refreshCallMediaDevices({ requestPermissions: true });
@@ -4681,6 +4820,7 @@ function setSfuRemotePeer(publisherId, peer) {
   const nextPeers = new Map(remotePeersRef.value);
   nextPeers.set(normalizedPublisherId, peer);
   remotePeersRef.value = nextPeers;
+  bumpMediaRenderVersion();
 }
 
 function deleteSfuRemotePeer(publisherId) {
@@ -4691,6 +4831,7 @@ function deleteSfuRemotePeer(publisherId) {
   nextPeers.delete(normalizedPublisherId);
   remotePeersRef.value = nextPeers;
   pendingSfuRemotePeerInitializers.delete(normalizedPublisherId);
+  bumpMediaRenderVersion();
   return true;
 }
 
@@ -4884,6 +5025,7 @@ function teardownSfuRemotePeers() {
   pendingSfuRemotePeerInitializers.clear();
   remoteFrameActivityLastByUserId.clear();
   clearRemoteVideoContainer();
+  bumpMediaRenderVersion();
 }
 
 function createNativePeerVideoElement(userId) {
@@ -4897,9 +5039,60 @@ function createNativePeerVideoElement(userId) {
 
 function remotePeerMediaNode(peer) {
   if (!peer || typeof peer !== 'object') return null;
-  if (peer.decodedCanvas instanceof HTMLCanvasElement) return peer.decodedCanvas;
-  if (peer.video instanceof HTMLVideoElement) return peer.video;
+  if (typeof HTMLCanvasElement !== 'undefined' && peer.decodedCanvas instanceof HTMLCanvasElement) return peer.decodedCanvas;
+  if (typeof HTMLVideoElement !== 'undefined' && peer.video instanceof HTMLVideoElement) return peer.video;
   return null;
+}
+
+function bumpMediaRenderVersion() {
+  mediaRenderVersion.value = mediaRenderVersion.value >= 1_000_000 ? 0 : mediaRenderVersion.value + 1;
+}
+
+function streamHasTracks(stream) {
+  if (typeof MediaStream === 'undefined' || !(stream instanceof MediaStream)) return false;
+  return stream.getTracks().some((track) => track?.readyState !== 'ended');
+}
+
+function remotePeerHasRenderableMedia(peer) {
+  if (!peer || typeof peer !== 'object') return false;
+  if (typeof HTMLCanvasElement !== 'undefined' && peer.decodedCanvas instanceof HTMLCanvasElement) return true;
+  if (streamHasTracks(peer.remoteStream) || streamHasTracks(peer.stream)) return true;
+  if (typeof HTMLVideoElement !== 'undefined' && peer.video instanceof HTMLVideoElement) {
+    return streamHasTracks(peer.video.srcObject) || Number(peer.video.readyState || 0) > 0;
+  }
+  return false;
+}
+
+function participantHasRenderableMedia(userId) {
+  mediaRenderVersion.value;
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+  if (normalizedUserId === currentUserId.value) {
+    return streamHasTracks(localStreamRef.value)
+      || streamHasTracks(localFilteredStreamRef.value)
+      || streamHasTracks(localRawStreamRef.value);
+  }
+  for (const peer of remotePeersRef.value.values()) {
+    if (Number(peer?.userId || 0) === normalizedUserId && remotePeerHasRenderableMedia(peer)) {
+      return true;
+    }
+  }
+  for (const peer of nativePeerConnectionsRef.value.values()) {
+    if (Number(peer?.userId || 0) === normalizedUserId && remotePeerHasRenderableMedia(peer)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function participantInitials(displayName) {
+  const parts = String(displayName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return '?';
+  const initials = parts.slice(0, 2).map((part) => part.slice(0, 1).toUpperCase()).join('');
+  return initials || '?';
 }
 
 function mediaNodeForUserId(userId) {
@@ -5110,6 +5303,12 @@ async function syncNativePeerLocalTracks(peer) {
   }
 }
 
+async function ensureLocalMediaForNativeNegotiation() {
+  if (!isNativeWebRtcRuntimePath()) return false;
+  if (localStreamRef.value instanceof MediaStream) return true;
+  return publishLocalTracks();
+}
+
 async function flushNativePendingIce(peer) {
   if (!peer?.pc) return;
   if (!peer.pc.remoteDescription || !peer.pc.remoteDescription.type) return;
@@ -5181,13 +5380,33 @@ function scheduleNativeOfferRetryForUserId(userId, reason = 'signaling') {
   scheduleNativeOfferRetry(peer, reason);
 }
 
+function setNativePeerConnection(targetUserId, peer) {
+  const normalizedTargetUserId = Number(targetUserId);
+  if (!Number.isInteger(normalizedTargetUserId) || normalizedTargetUserId <= 0 || !peer) return;
+  const nextPeers = new Map(nativePeerConnectionsRef.value);
+  nextPeers.set(normalizedTargetUserId, peer);
+  nativePeerConnectionsRef.value = nextPeers;
+  bumpMediaRenderVersion();
+}
+
+function takeNativePeerConnection(targetUserId) {
+  const normalizedTargetUserId = Number(targetUserId);
+  if (!Number.isInteger(normalizedTargetUserId) || normalizedTargetUserId <= 0) return null;
+  const peer = nativePeerConnectionsRef.value.get(normalizedTargetUserId) || null;
+  if (!peer) return null;
+  const nextPeers = new Map(nativePeerConnectionsRef.value);
+  nextPeers.delete(normalizedTargetUserId);
+  nativePeerConnectionsRef.value = nextPeers;
+  bumpMediaRenderVersion();
+  return peer;
+}
+
 function closeNativePeerConnection(targetUserId) {
   const normalizedTargetUserId = Number(targetUserId);
   if (!Number.isInteger(normalizedTargetUserId) || normalizedTargetUserId <= 0) return;
-  const peer = nativePeerConnectionsRef.value.get(normalizedTargetUserId);
+  const peer = takeNativePeerConnection(normalizedTargetUserId);
   if (!peer) return;
 
-  nativePeerConnectionsRef.value.delete(normalizedTargetUserId);
   clearNativeOfferRetry(peer);
   if (peer.pc) {
     try {
@@ -5204,10 +5423,12 @@ function closeNativePeerConnection(targetUserId) {
 }
 
 function teardownNativePeerConnections() {
-  for (const [targetUserId] of nativePeerConnectionsRef.value) {
+  for (const targetUserId of Array.from(nativePeerConnectionsRef.value.keys())) {
     closeNativePeerConnection(targetUserId);
   }
-  nativePeerConnectionsRef.value.clear();
+  if (nativePeerConnectionsRef.value.size > 0) {
+    nativePeerConnectionsRef.value = new Map();
+  }
   if (isNativeWebRtcRuntimePath()) {
     clearRemoteVideoContainer();
   }
@@ -5224,6 +5445,7 @@ async function sendNativeOffer(peer) {
 
   peer.negotiating = true;
   try {
+    await ensureLocalMediaForNativeNegotiation();
     let local = peer.pc.localDescription;
     if (!(peer.pc.signalingState === 'have-local-offer' && local?.type === 'offer' && local?.sdp)) {
       await syncNativePeerLocalTracks(peer);
@@ -5317,13 +5539,16 @@ function ensureNativePeerConnection(targetUserId) {
       for (const track of incoming.getTracks()) {
         if (!remoteStream.getTracks().some((row) => row.id === track.id)) {
           remoteStream.addTrack(track);
+          track.addEventListener?.('ended', bumpMediaRenderVersion, { once: true });
         }
       }
     } else if (event?.track) {
       if (!remoteStream.getTracks().some((row) => row.id === event.track.id)) {
         remoteStream.addTrack(event.track);
+        event.track.addEventListener?.('ended', bumpMediaRenderVersion, { once: true });
       }
     }
+    bumpMediaRenderVersion();
     renderNativeRemoteVideos();
     if (video instanceof HTMLVideoElement) {
       video.play().catch(() => {});
@@ -5354,7 +5579,7 @@ function ensureNativePeerConnection(targetUserId) {
     void sendNativeOffer(peer);
   });
 
-  nativePeerConnectionsRef.value.set(normalizedTargetUserId, peer);
+  setNativePeerConnection(normalizedTargetUserId, peer);
   void syncNativePeerLocalTracks(peer);
   renderNativeRemoteVideos();
   if (peer.initiator) {
@@ -5381,6 +5606,13 @@ function syncNativePeerConnectionsWithRoster() {
   }
 }
 
+function normalizeNativeSdpForRemoteDescription(value) {
+  const raw = String(value || '').trim();
+  if (raw === '') return '';
+  const normalized = raw.replace(/\r?\n/g, '\r\n');
+  return normalized.endsWith('\r\n') ? normalized : `${normalized}\r\n`;
+}
+
 async function handleNativeOfferSignal(senderUserId, payloadBody) {
   await loadDynamicIceServers();
   const peer = ensureNativePeerConnection(senderUserId);
@@ -5388,11 +5620,12 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
 
   const sdpPayload = payloadBody && typeof payloadBody.sdp === 'object' ? payloadBody.sdp : null;
   const type = String(sdpPayload?.type || '').trim().toLowerCase();
-  const sdp = String(sdpPayload?.sdp || '').trim();
+  const sdp = normalizeNativeSdpForRemoteDescription(sdpPayload?.sdp);
   if (type !== 'offer' || sdp === '') return;
 
   try {
     resetNativeOfferRetry(peer);
+    await ensureLocalMediaForNativeNegotiation();
     await syncNativePeerLocalTracks(peer);
     await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
     await flushNativePendingIce(peer);
@@ -5423,7 +5656,7 @@ async function handleNativeAnswerSignal(senderUserId, payloadBody) {
   if (!peer?.pc) return;
   const sdpPayload = payloadBody && typeof payloadBody.sdp === 'object' ? payloadBody.sdp : null;
   const type = String(sdpPayload?.type || '').trim().toLowerCase();
-  const sdp = String(sdpPayload?.sdp || '').trim();
+  const sdp = normalizeNativeSdpForRemoteDescription(sdpPayload?.sdp);
   if (type !== 'answer' || sdp === '') return;
 
   try {
@@ -5450,6 +5683,55 @@ async function handleNativeIceSignal(senderUserId, payloadBody) {
     return;
   }
   peer.pendingIce.push(candidatePayload);
+}
+
+function waitForNativeRuntimeTick(ms = 50) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForNativeCapabilityForSignaling() {
+  if (mediaRuntimeCapabilities.value.stageB) return true;
+
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const path = String(mediaRuntimePath.value || '').trim();
+    if (mediaRuntimeCapabilities.value.stageB) return true;
+    if (path !== 'pending' && !runtimeSwitchInFlight) return false;
+    await waitForNativeRuntimeTick();
+  }
+
+  return mediaRuntimeCapabilities.value.stageB;
+}
+
+async function ensureNativeRuntimeForSignaling() {
+  if (isNativeWebRtcRuntimePath() && !runtimeSwitchInFlight) return true;
+  if (!(await waitForNativeCapabilityForSignaling())) return false;
+
+  if (!runtimeSwitchInFlight) {
+    await switchMediaRuntimePath('webrtc_native', 'inbound_native_signaling');
+  }
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (isNativeWebRtcRuntimePath() && !runtimeSwitchInFlight) return true;
+    await waitForNativeRuntimeTick();
+  }
+
+  return isNativeWebRtcRuntimePath() && !runtimeSwitchInFlight;
+}
+
+async function handleNativeSignalingEvent(type, senderUserId, payloadBody) {
+  if (!(await ensureNativeRuntimeForSignaling())) return;
+
+  if (type === 'call/offer') {
+    await handleNativeOfferSignal(senderUserId, payloadBody || {});
+    return;
+  }
+  if (type === 'call/answer') {
+    await handleNativeAnswerSignal(senderUserId, payloadBody || {});
+    return;
+  }
+  if (type === 'call/ice') {
+    await handleNativeIceSignal(senderUserId, payloadBody || {});
+  }
 }
 
 async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {
@@ -6148,7 +6430,11 @@ async function publishLocalTracks() {
     if (isNativeWebRtcRuntimePath()) {
       syncNativePeerConnectionsWithRoster();
       for (const peer of nativePeerConnectionsRef.value.values()) {
-        void syncNativePeerLocalTracks(peer);
+        void syncNativePeerLocalTracks(peer).then(() => {
+          if (peer.initiator && !peer.negotiating) {
+            void sendNativeOffer(peer);
+          }
+        });
       }
     }
 
@@ -6328,6 +6614,9 @@ async function reconfigureLocalBackgroundFilterOnly() {
         syncNativePeerConnectionsWithRoster();
         for (const peer of nativePeerConnectionsRef.value.values()) {
           await syncNativePeerLocalTracks(peer);
+          if (peer.initiator && !peer.negotiating) {
+            void sendNativeOffer(peer);
+          }
         }
       }
 
@@ -6411,6 +6700,9 @@ async function reconfigureLocalTracksFromSelectedDevices() {
       syncNativePeerConnectionsWithRoster();
       for (const peer of nativePeerConnectionsRef.value.values()) {
         await syncNativePeerLocalTracks(peer);
+        if (peer.initiator && !peer.negotiating) {
+          void sendNativeOffer(peer);
+        }
       }
     }
 

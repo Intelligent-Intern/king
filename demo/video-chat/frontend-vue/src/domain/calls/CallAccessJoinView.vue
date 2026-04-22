@@ -328,6 +328,10 @@ async function enterAdmittedCall(accessId) {
 }
 
 function handleAdmissionLobbySnapshot(payload, accessId) {
+  const snapshotRoomId = normalizeRoomId(payload?.room_id || '');
+  const expectedRoomId = normalizeRoomId(state.roomId || 'lobby');
+  if (snapshotRoomId !== expectedRoomId) return;
+
   const admittedRows = Array.isArray(payload?.admitted) ? payload.admitted : [];
   const currentUserId = Number(sessionState.userId || 0);
   const isAdmitted = admittedRows.some((entry) => Number(entry?.user_id || 0) === currentUserId);

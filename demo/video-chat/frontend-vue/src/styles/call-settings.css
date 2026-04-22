@@ -329,11 +329,6 @@
   gap: 8px;
 }
 
-.shell.call-workspace-mode .sidebar-content.left.left-call-content .call-left-owner-edit-block {
-  width: 100%;
-  margin: 0;
-}
-
 .call-left-owner-edit-copy {
   margin: 0;
   font-size: 12px;
@@ -352,12 +347,6 @@
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-}
-
-.call-left-layout-controls {
-  display: grid;
-  gap: 8px;
-  padding-top: 4px;
 }
 
 .call-owner-edit-modal {

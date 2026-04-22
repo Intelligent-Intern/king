@@ -65,6 +65,8 @@ demo/model-inference/backend-king-php/.local/
 *.onnx
 *.tflite
 *.bin
+# Tiny video-chat upload rejection fixture; keep the global model-artifact guard above.
+!demo/video-chat/frontend-vue/tests/fixtures/chat/blocked/blob.bin
 # Exception: cargo vendor + ring/flate2 test fixtures + quiche cmake
 # artifacts need to keep their `.bin` names. These trees are already
 # scoped by earlier ignore rules (target/, .cargo/) and are not

@@ -19,7 +19,10 @@ test('large pasted chat text becomes txt, md, or csv attachment drafts instead o
 
     return {
       shortInlineAllowed: helpers.isChatTextInlineAllowed('short message'),
+      exactInlineBoundaryAllowed: helpers.isChatTextInlineAllowed('a'.repeat(2000)),
+      charOverflowInlineAllowed: helpers.isChatTextInlineAllowed('a'.repeat(2001)),
       markdownInlineAllowed: helpers.isChatTextInlineAllowed(markdown),
+      emojiOverflowInlineAllowed: helpers.isChatTextInlineAllowed('🚀'.repeat(2048)),
       markdownExtension: markdownDraft.extension,
       markdownName: markdownDraft.name,
       markdownValidationOk: helpers.validateChatAttachmentDraft(markdownDraft, []).ok,
@@ -30,7 +33,10 @@ test('large pasted chat text becomes txt, md, or csv attachment drafts instead o
   });
 
   expect(result.shortInlineAllowed).toBe(true);
+  expect(result.exactInlineBoundaryAllowed).toBe(true);
+  expect(result.charOverflowInlineAllowed).toBe(false);
   expect(result.markdownInlineAllowed).toBe(false);
+  expect(result.emojiOverflowInlineAllowed).toBe(false);
   expect(result.markdownExtension).toBe('md');
   expect(result.markdownName).toMatch(/chat-paste-20260419T120000Z\.md$/);
   expect(result.markdownValidationOk).toBe(true);

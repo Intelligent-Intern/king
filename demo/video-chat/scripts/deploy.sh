@@ -44,8 +44,9 @@ Optional environment:
   VIDEOCHAT_DEPLOY_PUBLIC_IP       Optional expected DNS target IP for preflight.
   VIDEOCHAT_DEPLOY_COMPOSE_URL     Override Compose v2 plugin fallback download URL.
   VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS
-                              Remove stale SSH known_hosts entries before connecting, default: 0.
-                              The Hetzner wizard sets this to 1.
+                              Remove stale SSH known_hosts entries before connecting.
+                              Default: auto-enabled when VIDEOCHAT_DEPLOY_PUBLIC_IP is known.
+                              The Hetzner wizard persists this as 1.
   VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE
                               Known hosts file for refresh, default: ~/.ssh/known_hosts.
   VIDEOCHAT_DEPLOY_REMOTE_LOCALE
@@ -161,6 +162,10 @@ refresh_deploy_config() {
   DEPLOY_PATH="${VIDEOCHAT_DEPLOY_PATH:-/opt/king-videochat}"
   DEPLOY_RSYNC_DELETE="${VIDEOCHAT_DEPLOY_RSYNC_DELETE:-1}"
   DEPLOY_PUBLIC_IP="${VIDEOCHAT_DEPLOY_PUBLIC_IP:-}"
+  DEPLOY_REFRESH_KNOWN_HOSTS="${VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS:-}"
+  if [[ -z "${DEPLOY_REFRESH_KNOWN_HOSTS}" && -n "${DEPLOY_PUBLIC_IP}" ]]; then
+    DEPLOY_REFRESH_KNOWN_HOSTS="1"
+  fi
   DEPLOY_REMOTE_LOCALE="${VIDEOCHAT_DEPLOY_REMOTE_LOCALE:-C.UTF-8}"
   DEPLOY_API_DOMAIN="${VIDEOCHAT_DEPLOY_API_DOMAIN:-}"
   DEPLOY_WS_DOMAIN="${VIDEOCHAT_DEPLOY_WS_DOMAIN:-}"
@@ -179,6 +184,15 @@ refresh_deploy_config() {
     DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_DOMAIN},${DEPLOY_API_DOMAIN},${DEPLOY_WS_DOMAIN},${DEPLOY_SFU_DOMAIN},${DEPLOY_TURN_DOMAIN}"
   fi
 
+  export VIDEOCHAT_DEPLOY_API_DOMAIN="${DEPLOY_API_DOMAIN}"
+  export VIDEOCHAT_DEPLOY_WS_DOMAIN="${DEPLOY_WS_DOMAIN}"
+  export VIDEOCHAT_DEPLOY_SFU_DOMAIN="${DEPLOY_SFU_DOMAIN}"
+  export VIDEOCHAT_DEPLOY_TURN_DOMAIN="${DEPLOY_TURN_DOMAIN}"
+  export VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_VUE_ALLOWED_HOSTS}"
+  if [[ -n "${DEPLOY_REFRESH_KNOWN_HOSTS}" ]]; then
+    export VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS="${DEPLOY_REFRESH_KNOWN_HOSTS}"
+  fi
+
   SSH_DEST="${DEPLOY_USER}@${DEPLOY_HOST}"
   SSH_ARGS=(-p "${DEPLOY_SSH_PORT}" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
   RSYNC_SSH=(ssh -p "${DEPLOY_SSH_PORT}" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
@@ -191,23 +205,43 @@ refresh_deploy_config() {
 
 refresh_deploy_config
 
-refresh_known_hosts_for_target() {
-  case "${VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS:-0}" in
-    1|true|TRUE|yes|YES) ;;
-    *) return 0 ;;
+deploy_refresh_known_hosts_enabled() {
+  case "${DEPLOY_REFRESH_KNOWN_HOSTS:-}" in
+    1|true|TRUE|yes|YES) return 0 ;;
+    *) return 1 ;;
   esac
+}
+
+deploy_dns_targets() {
+  local target seen=""
+  for target in "${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}"; do
+    [[ -n "${target}" ]] || continue
+    case " ${seen} " in
+      *" ${target} "*) continue ;;
+    esac
+    seen="${seen} ${target}"
+    printf '%s\n' "${target}"
+  done
+}
+
+refresh_known_hosts_for_target() {
+  deploy_refresh_known_hosts_enabled || return 0
 
   [[ -n "${DEPLOY_HOST}" ]] || return 0
   require_cmd ssh-keygen
 
-  local known_hosts_file target_targets=()
+  local known_hosts_file target target_targets=()
   known_hosts_file="${VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE:-${HOME:-}/.ssh/known_hosts}"
   [[ -n "${known_hosts_file}" && -f "${known_hosts_file}" ]] || return 0
 
-  target_targets+=("${DEPLOY_HOST}" "[${DEPLOY_HOST}]:${DEPLOY_SSH_PORT}")
-  if [[ -n "${DEPLOY_DOMAIN}" && "${DEPLOY_DOMAIN}" != "${DEPLOY_HOST}" ]]; then
-    target_targets+=("${DEPLOY_DOMAIN}" "[${DEPLOY_DOMAIN}]:${DEPLOY_SSH_PORT}")
-  fi
+  for target in "${DEPLOY_HOST}" "${DEPLOY_PUBLIC_IP}"; do
+    [[ -n "${target}" ]] || continue
+    target_targets+=("${target}" "[${target}]:${DEPLOY_SSH_PORT}")
+  done
+  while IFS= read -r target; do
+    [[ -n "${target}" ]] || continue
+    target_targets+=("${target}" "[${target}]:${DEPLOY_SSH_PORT}")
+  done < <(deploy_dns_targets)
 
   for target in "${target_targets[@]}"; do
     ssh-keygen -f "${known_hosts_file}" -R "${target}" >/dev/null 2>&1 || true
@@ -237,22 +271,53 @@ sudo_prefix() {
 # shellcheck source=demo/video-chat/scripts/lib/deploy-hetzner.sh
 source "${SCRIPT_DIR}/lib/deploy-hetzner.sh"
 
+persist_current_deploy_config() {
+  case "${VIDEOCHAT_DEPLOY_PERSIST_LOCAL:-1}" in
+    1|true|TRUE|yes|YES) ;;
+    *) return 0 ;;
+  esac
+
+  [[ -n "${DEPLOY_HOST}" && -n "${DEPLOY_DOMAIN}" ]] || return 0
+
+  local_env_upsert VIDEOCHAT_DEPLOY_HOST "${DEPLOY_HOST}"
+  local_env_upsert VIDEOCHAT_DEPLOY_DOMAIN "${DEPLOY_DOMAIN}"
+  [[ -n "${DEPLOY_EMAIL}" ]] && local_env_upsert VIDEOCHAT_DEPLOY_EMAIL "${DEPLOY_EMAIL}"
+  [[ -n "${DEPLOY_PUBLIC_IP}" ]] && local_env_upsert VIDEOCHAT_DEPLOY_PUBLIC_IP "${DEPLOY_PUBLIC_IP}"
+  local_env_upsert VIDEOCHAT_DEPLOY_USER "${DEPLOY_USER}"
+  local_env_upsert VIDEOCHAT_DEPLOY_SSH_PORT "${DEPLOY_SSH_PORT}"
+  local_env_upsert VIDEOCHAT_DEPLOY_PATH "${DEPLOY_PATH}"
+  local_env_upsert VIDEOCHAT_DEPLOY_RSYNC_DELETE "${DEPLOY_RSYNC_DELETE}"
+  local_env_upsert VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS "${DEPLOY_REFRESH_KNOWN_HOSTS:-0}"
+  local_env_upsert VIDEOCHAT_DEPLOY_REMOTE_LOCALE "${DEPLOY_REMOTE_LOCALE}"
+  local_env_upsert VIDEOCHAT_DEPLOY_API_DOMAIN "${DEPLOY_API_DOMAIN}"
+  local_env_upsert VIDEOCHAT_DEPLOY_WS_DOMAIN "${DEPLOY_WS_DOMAIN}"
+  local_env_upsert VIDEOCHAT_DEPLOY_SFU_DOMAIN "${DEPLOY_SFU_DOMAIN}"
+  local_env_upsert VIDEOCHAT_DEPLOY_TURN_DOMAIN "${DEPLOY_TURN_DOMAIN}"
+  local_env_upsert VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS "${DEPLOY_VUE_ALLOWED_HOSTS}"
+  [[ -n "${VIDEOCHAT_DEPLOY_SSH_KEY:-}" ]] && local_env_upsert VIDEOCHAT_DEPLOY_SSH_KEY "${VIDEOCHAT_DEPLOY_SSH_KEY}"
+  [[ -n "${VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE:-}" ]] && local_env_upsert VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE "${VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE}"
+  [[ -n "${VIDEOCHAT_DEPLOY_COMPOSE_URL:-}" ]] && local_env_upsert VIDEOCHAT_DEPLOY_COMPOSE_URL "${VIDEOCHAT_DEPLOY_COMPOSE_URL}"
+  return 0
+}
+
 check_dns_hint() {
   if ! command -v getent >/dev/null 2>&1; then
     return 0
   fi
 
-  local resolved
-  resolved="$(getent ahosts "${DEPLOY_DOMAIN}" | awk '{ print $1; exit }' || true)"
-  if [[ -z "${resolved}" ]]; then
-    log "WARN: ${DEPLOY_DOMAIN} does not resolve locally yet. Certbot will fail until DNS points to the server."
-    return 0
-  fi
+  local resolved target
+  while IFS= read -r target; do
+    [[ -n "${target}" ]] || continue
+    resolved="$(resolved_ips_for_domain "${target}" | tr '\n' ' ' | sed -E 's/[[:space:]]+$//')"
+    if [[ -z "${resolved}" ]]; then
+      die "DNS preflight missing: ${target} does not resolve. Certbot requires DNS before deploy."
+    fi
 
-  log "DNS local resolve: ${DEPLOY_DOMAIN} -> ${resolved}"
-  if [[ -n "${DEPLOY_PUBLIC_IP}" && "${resolved}" != "${DEPLOY_PUBLIC_IP}" ]]; then
-    die "DNS preflight mismatch: expected ${DEPLOY_PUBLIC_IP}, got ${resolved}"
-  fi
+    log "DNS local resolve: ${target} -> ${resolved}"
+    if [[ -n "${DEPLOY_PUBLIC_IP}" ]] && ! resolved_ips_for_domain "${target}" | grep -Fxq "${DEPLOY_PUBLIC_IP}"; then
+      die "DNS preflight mismatch for ${target}: expected ${DEPLOY_PUBLIC_IP}, got ${resolved}"
+    fi
+  done < <(deploy_dns_targets)
 }
 
 bootstrap_remote() {
@@ -419,7 +484,30 @@ if ! command -v certbot >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ -f "\${VIDEOCHAT_DIR}/docker-compose.v1.yml" ] && [ -f "\${VIDEOCHAT_DIR}/.env.local" ]; then
+restore_certbot_stopped_services() {
+  if [ ! -d "\${VIDEOCHAT_DIR}" ] || [ ! -f "\${VIDEOCHAT_DIR}/docker-compose.v1.yml" ] || [ ! -f "\${VIDEOCHAT_DIR}/docker-compose.deploy.local.yml" ]; then
+    return 0
+  fi
+  cd "\${VIDEOCHAT_DIR}"
+  if [ "\${FRONTEND_WAS_RUNNING}" = "1" ]; then
+    docker compose --env-file .env --env-file .env.local \\
+      -f docker-compose.v1.yml \\
+      -f docker-compose.deploy.local.yml \\
+      up -d --no-deps videochat-frontend-v1 >/dev/null || true
+  fi
+
+  if [ "\${EDGE_WAS_RUNNING}" = "1" ]; then
+    docker compose --env-file .env --env-file .env.local \\
+      -f docker-compose.v1.yml \\
+      -f docker-compose.deploy.local.yml \\
+      --profile edge \\
+      --profile turn \\
+      up -d --no-deps videochat-edge-v1 >/dev/null || true
+  fi
+}
+trap restore_certbot_stopped_services EXIT
+
+if [ -f "\${VIDEOCHAT_DIR}/docker-compose.v1.yml" ] && [ -f "\${VIDEOCHAT_DIR}/.env.local" ] && [ -f "\${VIDEOCHAT_DIR}/docker-compose.deploy.local.yml" ]; then
   cd "\${VIDEOCHAT_DIR}"
   if docker compose --env-file .env --env-file .env.local \\
       -f docker-compose.v1.yml \\
@@ -465,23 +553,8 @@ fi
 \${SUDO}test -r "/etc/letsencrypt/live/\${DOMAIN}/fullchain.pem"
 \${SUDO}test -r "/etc/letsencrypt/live/\${DOMAIN}/privkey.pem"
 
-if [ "\${FRONTEND_WAS_RUNNING}" = "1" ]; then
-  cd "\${VIDEOCHAT_DIR}"
-  docker compose --env-file .env --env-file .env.local \\
-    -f docker-compose.v1.yml \\
-    -f docker-compose.deploy.local.yml \\
-    up -d --no-deps videochat-frontend-v1 >/dev/null || true
-fi
-
-if [ "\${EDGE_WAS_RUNNING}" = "1" ]; then
-  cd "\${VIDEOCHAT_DIR}"
-  docker compose --env-file .env --env-file .env.local \\
-    -f docker-compose.v1.yml \\
-    -f docker-compose.deploy.local.yml \\
-    --profile edge \\
-    --profile turn \\
-    up -d --no-deps videochat-edge-v1 >/dev/null || true
-fi
+restore_certbot_stopped_services
+trap - EXIT
 REMOTE
 }
 
@@ -934,9 +1007,17 @@ wait_for_allowed_code wss-route /tmp/king-videochat-ws-probe.out \\
   --resolve "\${WS_DOMAIN}:443:127.0.0.1" \\
   "https://\${WS_DOMAIN}/ws"
 
+wait_for_allowed_code api-wss-route /tmp/king-videochat-api-ws-probe.out \\
+  --resolve "\${API_DOMAIN}:443:127.0.0.1" \\
+  "https://\${API_DOMAIN}/ws"
+
 wait_for_allowed_code sfu-route /tmp/king-videochat-sfu-probe.out \\
   --resolve "\${SFU_DOMAIN}:443:127.0.0.1" \\
   "https://\${SFU_DOMAIN}/sfu"
+
+wait_for_allowed_code api-sfu-route /tmp/king-videochat-api-sfu-probe.out \\
+  --resolve "\${API_DOMAIN}:443:127.0.0.1" \\
+  "https://\${API_DOMAIN}/sfu"
 
 wait_for_tcp() {
   local label="\$1"
@@ -1213,6 +1294,10 @@ prepare() {
   write_remote_runtime_files
   sync_remote_secrets_to_local
 }
+
+if [[ "${ACTION}" != "wizard" && "${ACTION}" != "hetzner" ]]; then
+  persist_current_deploy_config
+fi
 
 case "${ACTION}" in
   wizard|hetzner)

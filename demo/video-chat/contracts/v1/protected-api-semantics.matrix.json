@@ -164,7 +164,8 @@
       ],
       "contract_paths": [
         "backend-king-php/tests/rbac-middleware-contract.sh",
-        "backend-king-php/tests/contract-catalog-parity-contract.sh"
+        "backend-king-php/tests/contract-catalog-parity-contract.sh",
+        "backend-king-php/tests/runtime-public-safety-contract.sh"
       ],
       "semantics": {
         "auth": {

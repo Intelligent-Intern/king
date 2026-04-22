@@ -86,95 +86,21 @@
     </section>
 
     <section v-if="viewMode === 'calls'" class="table-wrap calls-table-wrap">
-      <table class="calls-list-table">
-        <thead>
-          <tr>
-            <th class="col-title">Call</th>
-            <th>Status</th>
-            <th>Window</th>
-            <th>Participants</th>
-            <th>Owner</th>
-            <th class="col-actions">Actions</th>
-          </tr>
-        </thead>
-        <tbody v-if="calls.length > 0">
-          <tr v-for="call in calls" :key="call.id">
-            <td data-label="Call">
-              <div class="call-title">{{ call.title || call.id }}</div>
-              <div class="call-subline code">{{ call.id }}</div>
-            </td>
-            <td data-label="Status">
-              <span class="tag" :class="statusTagClass(call.status)">
-                {{ call.status || 'unknown' }}
-              </span>
-            </td>
-            <td data-label="Window">{{ formatRange(call.starts_at, call.ends_at) }}</td>
-            <td data-label="Participants">
-              {{ call.participants?.total ?? 0 }}
-              <span class="call-subline">
-                in {{ call.participants?.internal ?? 0 }} / ex {{ call.participants?.external ?? 0 }}
-              </span>
-            </td>
-            <td data-label="Owner">
-              {{ call.owner?.display_name || 'Unknown' }}
-              <span class="call-subline">{{ call.owner?.email || 'n/a' }}</span>
-            </td>
-            <td data-label="Actions">
-              <div class="actions-inline">
-                <button
-                  class="icon-mini-btn"
-                  type="button"
-                  title="Edit call"
-                  :aria-label="`Edit call ${call.title || call.id}`"
-                  :disabled="!isEditable(call)"
-                  @click="openCompose('edit', call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn"
-                  type="button"
-                  title="Open chat archive"
-                  :aria-label="`Open chat archive for ${call.title || call.id}`"
-                  @click="openChatArchive(call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/chat.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn"
-                  type="button"
-                  title="Enter video call"
-                  :aria-label="`Enter video call ${call.title || call.id}`"
-                  :disabled="!isInvitable(call)"
-                  @click="openEnterCallModal(call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn danger"
-                  type="button"
-                  title="Cancel call"
-                  :aria-label="`Cancel call ${call.title || call.id}`"
-                  :disabled="!isCancellable(call)"
-                  @click="openCancel(call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/end_call.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn danger"
-                  type="button"
-                  title="Delete call"
-                  :aria-label="`Delete call ${call.title || call.id}`"
-                  :disabled="!isDeletable(call)"
-                  @click="openDelete(call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <CallsListTable
+        :calls="calls"
+        :format-range="formatRange"
+        :status-tag-class="statusTagClass"
+        :is-editable="isEditable"
+        :is-invitable="isInvitable"
+        :is-cancellable="isCancellable"
+        :is-deletable="isDeletable"
+        admin-mode
+        @edit-call="(call) => openCompose('edit', call)"
+        @open-chat-archive="openChatArchive"
+        @enter-call="openEnterCallModal"
+        @cancel-call="openCancel"
+        @delete-call="openDelete"
+      />
 
       <section v-if="!loadingCalls && calls.length === 0" class="section calls-empty">
         No calls match the active filters.
@@ -198,27 +124,16 @@
     </section>
 
     <section v-if="viewMode === 'calls'" class="footer calls-pagination-wrap">
-      <div class="pagination">
-        <button
-          class="pager-btn pager-icon-btn"
-          type="button"
-          :disabled="!pagination.hasPrev || loadingCalls"
-          @click="goToPage(pagination.page - 1)"
-        >
-          <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous" />
-        </button>
-        <div class="page-info">
-          Page {{ pagination.page }} / {{ pagination.pageCount }} · {{ pagination.total }} total
-        </div>
-        <button
-          class="pager-btn pager-icon-btn"
-          type="button"
-          :disabled="!pagination.hasNext || loadingCalls"
-          @click="goToPage(pagination.page + 1)"
-        >
-          <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next" />
-        </button>
-      </div>
+      <AppPagination
+        :page="pagination.page"
+        :page-count="pagination.pageCount"
+        :total="pagination.total"
+        total-label="total"
+        :has-prev="pagination.hasPrev"
+        :has-next="pagination.hasNext"
+        :disabled="loadingCalls"
+        @page-change="goToPage"
+      />
     </section>
 
     <div class="calls-modal" :hidden="!enterCallState.open" role="dialog" aria-modal="true" aria-label="Enter video call">
@@ -690,8 +605,16 @@ import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import AppPagination from '../../components/AppPagination.vue';
 import AppSelect from '../../components/AppSelect.vue';
 import ChatArchiveModal from './ChatArchiveModal.vue';
+import CallsListTable from './CallsListTable.vue';
+import {
+  createCallListStore,
+  createChatArchiveStore,
+  createNoticeStore,
+  createParticipantDirectoryStore,
+} from './callViewState';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import { formatDateRangeDisplay, formatDateTimeDisplay, fullCalendarEventTimeFormat } from '../../support/dateTimeFormat';
@@ -858,11 +781,21 @@ function isInvitable(call) {
   return status !== 'cancelled' && status !== 'ended';
 }
 
-const viewMode = ref('calls');
-const queryDraft = ref('');
-const queryApplied = ref('');
-const statusFilter = ref('all');
-const scopeFilter = ref('all');
+const callListStore = createCallListStore({ defaultScope: 'all' });
+const {
+  viewMode,
+  queryDraft,
+  queryApplied,
+  statusFilter,
+  scopeFilter,
+  calls,
+  loadingCalls,
+  callsError,
+  pagination,
+  calendarCalls,
+  loadingCalendar,
+  calendarError,
+} = callListStore;
 const primaryActionLabel = computed(() => (viewMode.value === 'calendar'
   ? 'Schedule video call'
   : 'New video call'));
@@ -871,57 +804,16 @@ function openPrimaryCompose() {
   openCompose(viewMode.value === 'calendar' ? 'schedule' : 'create');
 }
 
-const calls = ref([]);
-const loadingCalls = ref(false);
-const callsError = ref('');
-
-const pagination = reactive({
-  page: 1,
-  pageSize: 10,
-  total: 0,
-  pageCount: 1,
-  hasPrev: false,
-  hasNext: false,
-});
-
-const calendarCalls = ref([]);
-const loadingCalendar = ref(false);
-const calendarError = ref('');
-
-const noticeKind = ref('');
-const noticeMessage = ref('');
-const chatArchiveState = reactive({
-  open: false,
-  callId: '',
-  callTitle: '',
-});
-
-const noticeKindClass = computed(() => ({
-  ok: noticeKind.value === 'ok',
-  error: noticeKind.value === 'error',
-}));
-
-function setNotice(kind, message) {
-  noticeKind.value = kind;
-  noticeMessage.value = String(message || '').trim();
-}
-
-function clearNotice() {
-  noticeKind.value = '';
-  noticeMessage.value = '';
-}
-
-function openChatArchive(call) {
-  chatArchiveState.callId = String(call?.id || '').trim();
-  chatArchiveState.callTitle = String(call?.title || call?.id || '').trim();
-  chatArchiveState.open = chatArchiveState.callId !== '';
-}
-
-function closeChatArchive() {
-  chatArchiveState.open = false;
-  chatArchiveState.callId = '';
-  chatArchiveState.callTitle = '';
-}
+const {
+  noticeKind,
+  noticeMessage,
+  noticeKindClass,
+  setNotice,
+  clearNotice,
+} = createNoticeStore();
+const chatArchiveStore = createChatArchiveStore();
+const chatArchiveState = chatArchiveStore.state;
+const { openChatArchive, closeChatArchive } = chatArchiveStore;
 
 let adminSyncReloadTimer = 0;
 let adminSyncClient = null;
@@ -1003,20 +895,11 @@ async function loadCalls() {
     });
 
     calls.value = Array.isArray(payload.calls) ? payload.calls : [];
-    const paging = payload.pagination || {};
-    pagination.page = Number.isInteger(paging.page) ? paging.page : pagination.page;
-    pagination.pageSize = Number.isInteger(paging.page_size) ? paging.page_size : pagination.pageSize;
-    pagination.total = Number.isInteger(paging.total) ? paging.total : calls.value.length;
-    pagination.pageCount = Number.isInteger(paging.page_count) && paging.page_count > 0 ? paging.page_count : 1;
-    pagination.hasPrev = Boolean(paging.has_prev);
-    pagination.hasNext = Boolean(paging.has_next);
+    callListStore.applyPagination(payload.pagination || {}, calls.value.length);
   } catch (error) {
     calls.value = [];
     callsError.value = error instanceof Error ? error.message : 'Could not load calls.';
-    pagination.total = 0;
-    pagination.pageCount = 1;
-    pagination.hasPrev = false;
-    pagination.hasNext = false;
+    callListStore.resetPagination();
   } finally {
     loadingCalls.value = false;
   }
@@ -1826,7 +1709,6 @@ const composeState = reactive({
   callId: '',
   title: '',
   accessMode: 'invite_only',
-  roomId: 'lobby',
   startsLocal: '',
   endsLocal: '',
   replaceParticipants: false,
@@ -1834,18 +1716,8 @@ const composeState = reactive({
   error: '',
 });
 
-const composeParticipants = reactive({
-  loading: false,
-  error: '',
-  query: '',
-  page: 1,
-  pageSize: 10,
-  total: 0,
-  pageCount: 1,
-  hasPrev: false,
-  hasNext: false,
-  rows: [],
-});
+const composeParticipantStore = createParticipantDirectoryStore();
+const composeParticipants = composeParticipantStore.state;
 
 const composeSelectedUserIds = ref([]);
 const composeExternalRows = ref([]);
@@ -1912,18 +1784,10 @@ function resetComposeModal() {
   composeState.callId = '';
   composeState.title = '';
   composeState.accessMode = 'invite_only';
-  composeState.roomId = 'lobby';
   composeState.replaceParticipants = false;
   composeState.submitting = false;
   composeState.error = '';
-  composeParticipants.query = '';
-  composeParticipants.page = 1;
-  composeParticipants.error = '';
-  composeParticipants.rows = [];
-  composeParticipants.total = 0;
-  composeParticipants.pageCount = 1;
-  composeParticipants.hasPrev = false;
-  composeParticipants.hasNext = false;
+  composeParticipantStore.reset();
   composeSelectedUserIds.value = [];
   composeExternalRows.value = [];
 }
@@ -1939,7 +1803,6 @@ function openCompose(mode, call = null) {
     composeState.callId = String(call.id || '');
     composeState.title = String(call.title || '');
     composeState.accessMode = normalizeCallAccessMode(call.access_mode);
-    composeState.roomId = String(call.room_id || 'lobby');
     composeState.startsLocal = isoToLocalInput(String(call.starts_at || ''));
     composeState.endsLocal = isoToLocalInput(String(call.ends_at || ''));
     composeState.replaceParticipants = false;
@@ -1980,27 +1843,16 @@ async function loadComposeParticipants() {
 
     const ownUserId = currentSessionUserId();
     const allRows = Array.isArray(payload.users) ? payload.users : [];
-    composeParticipants.rows = allRows.filter((row) => {
+    const rows = allRows.filter((row) => {
       const candidateId = Number(row?.id ?? row?.user_id ?? 0);
       return !Number.isInteger(candidateId) || candidateId !== ownUserId;
     });
-    const paging = payload.pagination || {};
-    composeParticipants.total = Number.isInteger(paging.total) ? paging.total : composeParticipants.rows.length;
-    composeParticipants.pageCount = Number.isInteger(paging.page_count) && paging.page_count > 0
-      ? paging.page_count
-      : 1;
-    composeParticipants.hasPrev = Boolean(paging.has_prev);
-    composeParticipants.hasNext = Boolean(paging.has_next);
+    composeParticipantStore.applyRows(rows, payload.pagination || {});
     if (ownUserId > 0) {
       composeSelectedUserIds.value = composeSelectedUserIds.value.filter((id) => Number(id) !== ownUserId);
     }
   } catch (error) {
-    composeParticipants.rows = [];
-    composeParticipants.total = 0;
-    composeParticipants.pageCount = 1;
-    composeParticipants.hasPrev = false;
-    composeParticipants.hasNext = false;
-    composeParticipants.error = error instanceof Error ? error.message : 'Could not load users.';
+    composeParticipantStore.fail(error instanceof Error ? error.message : 'Could not load users.');
   } finally {
     composeParticipants.loading = false;
   }
@@ -2132,7 +1984,6 @@ async function submitCompose() {
   }
 
   const payload = {
-    room_id: String(composeState.roomId || '').trim() || 'lobby',
     title,
     access_mode: normalizeCallAccessMode(composeState.accessMode),
     starts_at: startsAt,
@@ -2167,7 +2018,7 @@ async function submitCompose() {
         body: payload,
       });
       const createdCallId = String(createResult?.result?.call?.id || '').trim();
-      const createdRoomId = String(createResult?.result?.call?.room_id || payload.room_id || 'lobby').trim() || 'lobby';
+      const createdRoomId = String(createResult?.result?.call?.room_id || createdCallId || 'lobby').trim() || 'lobby';
       publishAdminSync('calls', 'call_created');
       if (composeState.mode === 'create') {
         closeCompose();

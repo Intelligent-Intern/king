@@ -2,6 +2,25 @@
 
 declare(strict_types=1);
 
+/**
+ * Public health must stay on a strict allow-list. Database paths, schema
+ * details, demo users, RBAC maps, and runtime internals belong behind
+ * /api/admin/runtime only.
+ *
+ * @param array<string, mixed> $runtimePayload
+ * @return array<string, mixed>
+ */
+function videochat_public_runtime_health_payload(array $runtimePayload): array
+{
+    return [
+        'service' => is_string($runtimePayload['service'] ?? null)
+            ? $runtimePayload['service']
+            : 'video-chat-backend-king-php',
+        'status' => 'ok',
+        'time' => is_string($runtimePayload['time'] ?? null) ? $runtimePayload['time'] : gmdate('c'),
+    ];
+}
+
 function videochat_handle_runtime_routes(
     string $path,
     string $method,
@@ -11,13 +30,7 @@ function videochat_handle_runtime_routes(
 ): ?array {
     if ($path === '/health' || $path === '/api/runtime') {
         $payload = $runtimeEnvelope();
-        return $jsonResponse(200, [
-            'service' => is_string($payload['service'] ?? null)
-                ? $payload['service']
-                : 'video-chat-backend-king-php',
-            'status' => 'ok',
-            'time' => is_string($payload['time'] ?? null) ? $payload['time'] : gmdate('c'),
-        ]);
+        return $jsonResponse(200, videochat_public_runtime_health_payload($payload));
     }
 
     if ($path === '/api/admin/runtime') {

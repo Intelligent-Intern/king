@@ -61,6 +61,11 @@ import { useRoute, useRouter } from 'vue-router';
 import { resolveAuthorizedRedirect } from '../../http/router';
 import { fetchBackend } from '../../support/backendFetch';
 import {
+  CALL_UUID_PATTERN,
+  callRequiresJoinModalForViewer,
+  joinPathFromAccessPayload,
+} from '../calls/callAdmissionGate';
+import {
   defaultRouteForRole,
   loginWithEmailChangeToken,
   loginWithPassword,
@@ -76,7 +81,6 @@ const emailError = ref('');
 const passwordError = ref('');
 const authError = ref('');
 const submitting = ref(false);
-const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
 function getRedirectTarget(role) {
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '';
@@ -95,11 +99,32 @@ function extractWorkspaceCallRef(redirectTarget) {
   }
 
   const callRef = String(resolved.params?.callRef || '').trim().toLowerCase();
-  if (!UUID_PATTERN.test(callRef)) {
+  if (!CALL_UUID_PATTERN.test(callRef)) {
     return '';
   }
 
   return callRef;
+}
+
+async function createSelfJoinPathForCall(callId, sessionToken) {
+  const normalizedCallId = String(callId || '').trim().toLowerCase();
+  if (!CALL_UUID_PATTERN.test(normalizedCallId) || String(sessionToken || '').trim() === '') {
+    return '';
+  }
+
+  const { response } = await fetchBackend(`/api/calls/${encodeURIComponent(normalizedCallId)}/access-link`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      authorization: `Bearer ${sessionToken}`,
+    },
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload || payload.status !== 'ok') {
+    return '';
+  }
+
+  return joinPathFromAccessPayload(payload);
 }
 
 async function normalizePostLoginRedirectTarget(redirectTarget) {
@@ -132,11 +157,25 @@ async function normalizePostLoginRedirectTarget(redirectTarget) {
     }
 
     const accessId = String(result?.access_link?.id || '').trim().toLowerCase();
-    if (!UUID_PATTERN.test(accessId)) {
-      return redirectTarget;
+    if (CALL_UUID_PATTERN.test(accessId)) {
+      return `/join/${encodeURIComponent(accessId)}`;
     }
 
-    return `/join/${encodeURIComponent(accessId)}`;
+    const call = result?.call && typeof result.call === 'object' ? result.call : {};
+    const callId = String(call?.id || '').trim().toLowerCase();
+    if (
+      CALL_UUID_PATTERN.test(callId)
+      && callRequiresJoinModalForViewer(call, {
+        userId: sessionState.userId,
+        role: sessionState.role,
+        email: sessionState.email,
+      })
+    ) {
+      const joinPath = await createSelfJoinPathForCall(callId, sessionToken);
+      return joinPath || redirectTarget;
+    }
+
+    return redirectTarget;
   } catch {
     return redirectTarget;
   }

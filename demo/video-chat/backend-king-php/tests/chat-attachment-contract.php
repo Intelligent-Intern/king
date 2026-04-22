@@ -31,6 +31,7 @@ try {
     $userId = 9101;
     $otherUserId = 9102;
     $ownerUserId = 9100;
+    $platformAdminUserId = 9103;
     $roomId = 'room-chat-attachments-contract';
     $callId = 'call-chat-attachments-contract';
 
@@ -44,6 +45,7 @@ SQL
         [$ownerUserId, 'owner-chat-attachments-contract@example.test', 'Contract Owner', $adminRoleId],
         [$userId, 'user-chat-attachments-contract@example.test', 'Contract User', $userRoleId],
         [$otherUserId, 'other-chat-attachments-contract@example.test', 'Other User', $userRoleId],
+        [$platformAdminUserId, 'platform-admin-chat-attachments-contract@example.test', 'Platform Admin', $adminRoleId],
     ] as [$id, $email, $displayName, $roleId]) {
         $insertUser->execute([
             ':id' => $id,
@@ -133,6 +135,7 @@ SQL
     videochat_chat_attachment_contract_assert((string) ($attachment['id'] ?? '') !== '', 'upload returns attachment id');
     videochat_chat_attachment_contract_assert((string) ($attachment['kind'] ?? '') === 'image', 'upload image kind mismatch');
     videochat_chat_attachment_contract_assert((string) ($attachment['download_url'] ?? '') === '/api/calls/' . rawurlencode($callId) . '/chat/attachments/' . rawurlencode((string) $attachment['id']), 'download url mismatch');
+    videochat_chat_attachment_contract_assert(!array_key_exists('object_key', $attachment), 'public attachment payload must not expose object key');
 
     $storedRows = $pdo->query('SELECT * FROM call_chat_attachments')->fetchAll(PDO::FETCH_ASSOC);
     videochat_chat_attachment_contract_assert(count($storedRows) === 1, 'one attachment metadata row expected');
@@ -142,6 +145,16 @@ SQL
     videochat_chat_attachment_contract_assert(isset($objects[$objectKey]), 'object store write should use object key');
     videochat_chat_attachment_contract_assert(is_array($upload['details']['quota'] ?? null), 'upload should report call quota details');
 
+    $objectCountBeforeForbiddenUpload = count($objects);
+    $forbiddenUpload = videochat_chat_attachment_upload($pdo, $callId, $otherUserId, 'user', [
+        'file_name' => 'outsider.txt',
+        'content_type' => 'text/plain',
+        'content_base64' => base64_encode('outsider upload must not be stored'),
+    ]);
+    videochat_chat_attachment_contract_assert(!(bool) ($forbiddenUpload['ok'] ?? true), 'non participant upload must fail');
+    videochat_chat_attachment_contract_assert((string) ($forbiddenUpload['code'] ?? '') === 'chat_attachment_forbidden', 'non participant upload error code mismatch');
+    videochat_chat_attachment_contract_assert(count($objects) === $objectCountBeforeForbiddenUpload, 'forbidden upload must not write object store bytes');
+
     $resolve = videochat_chat_attachment_resolve_for_message($pdo, [(string) $attachment['id']], $callId, $roomId, $userId, 'chat_contract_msg_001');
     videochat_chat_attachment_contract_assert((bool) ($resolve['ok'] ?? false), 'attachment resolve should succeed');
     videochat_chat_attachment_contract_assert(count($resolve['attachments'] ?? []) === 1, 'resolved attachment count mismatch');
@@ -150,6 +163,12 @@ SQL
     $downloadRow = videochat_chat_attachment_fetch_for_download($pdo, $callId, (string) $attachment['id'], $userId, 'user');
     videochat_chat_attachment_contract_assert(is_array($downloadRow), 'participant should fetch attached download metadata');
     videochat_chat_attachment_contract_assert(videochat_chat_attachment_store_get((string) ($downloadRow['object_key'] ?? '')) === $pngBinary, 'object store download bytes mismatch');
+
+    $ownerDownload = videochat_chat_attachment_fetch_for_download($pdo, $callId, (string) $attachment['id'], $ownerUserId, 'admin');
+    videochat_chat_attachment_contract_assert(is_array($ownerDownload), 'call owner should download participant attachment');
+
+    $platformAdminDownload = videochat_chat_attachment_fetch_for_download($pdo, $callId, (string) $attachment['id'], $platformAdminUserId, 'admin');
+    videochat_chat_attachment_contract_assert(is_array($platformAdminDownload), 'platform admin should download participant attachment');
 
     $forbiddenDownload = videochat_chat_attachment_fetch_for_download($pdo, $callId, (string) $attachment['id'], $otherUserId, 'user');
     videochat_chat_attachment_contract_assert($forbiddenDownload === null, 'non participant download must be denied');

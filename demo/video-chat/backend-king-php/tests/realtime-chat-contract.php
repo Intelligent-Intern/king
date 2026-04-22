@@ -190,6 +190,27 @@ try {
     videochat_realtime_chat_assert(!(bool) ($decodedTooLong['ok'] ?? true), 'too long chat payload should fail');
     videochat_realtime_chat_assert((string) ($decodedTooLong['error'] ?? '') === 'chat_inline_too_large', 'too long chat error mismatch');
 
+    $originalMaxCharsEnv = getenv('VIDEOCHAT_WS_CHAT_MAX_CHARS');
+    $originalMaxBytesEnv = getenv('VIDEOCHAT_WS_CHAT_MAX_BYTES');
+    putenv('VIDEOCHAT_WS_CHAT_MAX_CHARS=8000');
+    putenv('VIDEOCHAT_WS_CHAT_MAX_BYTES=8192');
+    $decodedTooManyBytes = videochat_chat_decode_client_frame(json_encode([
+        'type' => 'chat/send',
+        'message' => str_repeat('€', 2731),
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    if ($originalMaxCharsEnv === false) {
+        putenv('VIDEOCHAT_WS_CHAT_MAX_CHARS');
+    } else {
+        putenv('VIDEOCHAT_WS_CHAT_MAX_CHARS=' . $originalMaxCharsEnv);
+    }
+    if ($originalMaxBytesEnv === false) {
+        putenv('VIDEOCHAT_WS_CHAT_MAX_BYTES');
+    } else {
+        putenv('VIDEOCHAT_WS_CHAT_MAX_BYTES=' . $originalMaxBytesEnv);
+    }
+    videochat_realtime_chat_assert(!(bool) ($decodedTooManyBytes['ok'] ?? true), 'byte-overflow chat payload should fail');
+    videochat_realtime_chat_assert((string) ($decodedTooManyBytes['error'] ?? '') === 'chat_inline_too_large', 'byte-overflow chat error mismatch');
+
     $decodedAttachmentOnly = videochat_chat_decode_client_frame(json_encode([
         'type' => 'chat/send',
         'message' => '',

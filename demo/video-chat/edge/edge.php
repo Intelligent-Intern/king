@@ -22,6 +22,7 @@ $httpIdleTimeout = (int) (getenv('VIDEOCHAT_EDGE_HTTP_IDLE_TIMEOUT_SECONDS') ?: 
 $wsIdleTimeout = (int) (getenv('VIDEOCHAT_EDGE_WS_IDLE_TIMEOUT_SECONDS') ?: '86400');
 $writeStallTimeout = max(1.0, (float) (getenv('VIDEOCHAT_EDGE_WRITE_STALL_TIMEOUT_SECONDS') ?: '10'));
 $zeroWriteSleepMicros = max(1000, (int) (getenv('VIDEOCHAT_EDGE_ZERO_WRITE_SLEEP_MICROS') ?: '10000'));
+$readStallTimeout = max(1.0, (float) (getenv('VIDEOCHAT_EDGE_READ_STALL_TIMEOUT_SECONDS') ?: (string) $writeStallTimeout));
 $maxChildren = (int) (getenv('VIDEOCHAT_EDGE_MAX_CHILDREN') ?: '512');
 
 if ($httpPort < 1 || $httpPort > 65535 || $httpsPort < 1 || $httpsPort > 65535) {
@@ -118,9 +119,10 @@ $parseUpstream = static function (string $upstream): array {
     return [$parts[0] ?: '127.0.0.1', isset($parts[1]) ? (int) $parts[1] : 80];
 };
 
-$readRequestHead = static function ($client) use ($maxHeaderBytes): ?string {
+$readRequestHead = static function ($client) use ($maxHeaderBytes, $readStallTimeout, $zeroWriteSleepMicros): ?string {
     $head = '';
     $deadline = microtime(true) + 10.0;
+    $lastReadProgress = microtime(true);
     stream_set_blocking($client, false);
 
     while (microtime(true) < $deadline) {
@@ -143,9 +145,14 @@ $readRequestHead = static function ($client) use ($maxHeaderBytes): ?string {
             if (feof($client)) {
                 return null;
             }
+            if ((microtime(true) - $lastReadProgress) >= $readStallTimeout) {
+                return null;
+            }
+            usleep($zeroWriteSleepMicros);
             continue;
         }
 
+        $lastReadProgress = microtime(true);
         $head .= $chunk;
         if (strlen($head) > $maxHeaderBytes) {
             return null;
@@ -317,7 +324,7 @@ $injectForwardHeaders = static function (string $head, array $request): string {
     return $requestLine . "\r\n" . implode("\r\n", $filtered) . "\r\n\r\n" . $body;
 };
 
-$proxy = static function ($client, string $head, array $request, string $upstream) use ($parseUpstream, $connectTimeout, $httpIdleTimeout, $wsIdleTimeout, $writeStallTimeout, $zeroWriteSleepMicros, $writeResponse, $injectForwardHeaders): void {
+$proxy = static function ($client, string $head, array $request, string $upstream) use ($parseUpstream, $connectTimeout, $httpIdleTimeout, $wsIdleTimeout, $writeStallTimeout, $readStallTimeout, $zeroWriteSleepMicros, $writeResponse, $injectForwardHeaders): void {
     [$upstreamHost, $upstreamPort] = $parseUpstream($upstream);
     $upstreamStream = @stream_socket_client(
         "tcp://{$upstreamHost}:{$upstreamPort}",
@@ -342,10 +349,15 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     $isWebSocket = $request['upgrade'] === 'websocket';
     $idleTimeout = $isWebSocket ? $wsIdleTimeout : $httpIdleTimeout;
     $lastActivity = microtime(true);
+    $lastClientReadProgress = $lastActivity;
+    $lastUpstreamReadProgress = $lastActivity;
     $lastClientWriteProgress = $lastActivity;
     $lastUpstreamWriteProgress = $lastActivity;
 
     while ($clientOpen || $upstreamOpen || $toUpstream !== '' || $toClient !== '') {
+        if ((microtime(true) - $lastActivity) > $idleTimeout) {
+            break;
+        }
         if (!$clientOpen) {
             $toClient = '';
         }
@@ -385,12 +397,11 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             break;
         }
         if ($ready === 0) {
-            if ((microtime(true) - $lastActivity) > $idleTimeout) {
-                break;
-            }
             continue;
         }
 
+        $madeProgress = false;
+        $needsBackoff = false;
         foreach ($read as $stream) {
             $chunk = @fread($stream, 16384);
             if ($chunk === false) {
@@ -408,21 +419,41 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
                     } else {
                         $upstreamOpen = false;
                     }
+                    $madeProgress = true;
+                    continue;
+                }
+                if ($stream === $client) {
+                    if ((microtime(true) - $lastClientReadProgress) >= $readStallTimeout) {
+                        $clientOpen = false;
+                        $madeProgress = true;
+                    } else {
+                        $needsBackoff = true;
+                    }
+                } else {
+                    if ((microtime(true) - $lastUpstreamReadProgress) >= $readStallTimeout) {
+                        $upstreamOpen = false;
+                        $madeProgress = true;
+                    } else {
+                        $needsBackoff = true;
+                    }
                 }
                 continue;
             }
             $lastActivity = microtime(true);
             if ($stream === $client) {
+                $lastClientReadProgress = $lastActivity;
                 if ($toUpstream === '') {
                     $lastUpstreamWriteProgress = $lastActivity;
                 }
                 $toUpstream .= $chunk;
             } else {
+                $lastUpstreamReadProgress = $lastActivity;
                 if ($toClient === '') {
                     $lastClientWriteProgress = $lastActivity;
                 }
                 $toClient .= $chunk;
             }
+            $madeProgress = true;
         }
 
         foreach ($write as $stream) {
@@ -445,6 +476,7 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
                 $toUpstream = substr($toUpstream, $written);
                 $lastActivity = microtime(true);
                 $lastUpstreamWriteProgress = $lastActivity;
+                $madeProgress = true;
             }
             if ($stream === $client && $toClient !== '') {
                 $written = @fwrite($client, $toClient);
@@ -465,7 +497,12 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
                 $toClient = substr($toClient, $written);
                 $lastActivity = microtime(true);
                 $lastClientWriteProgress = $lastActivity;
+                $madeProgress = true;
             }
+        }
+
+        if (!$madeProgress && $needsBackoff) {
+            usleep($zeroWriteSleepMicros);
         }
     }
 
@@ -475,14 +512,14 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
 $route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $apiUpstream, $wsUpstream, $sfuUpstream): ?string {
     $host = $request['host'];
     $path = $request['path'];
-    if ($host === $apiDomain || $path === '/api' || str_starts_with($path, '/api/') || $path === '/health') {
-        return $apiUpstream;
-    }
-    if ($host === $wsDomain || $path === '/ws') {
+    if ($path === '/ws' || $host === $wsDomain) {
         return $wsUpstream;
     }
-    if ($host === $sfuDomain || $path === '/sfu') {
+    if ($path === '/sfu' || $host === $sfuDomain) {
         return $sfuUpstream;
+    }
+    if ($host === $apiDomain || $path === '/api' || str_starts_with($path, '/api/') || $path === '/health') {
+        return $apiUpstream;
     }
     if ($host === $turnDomain) {
         return null;

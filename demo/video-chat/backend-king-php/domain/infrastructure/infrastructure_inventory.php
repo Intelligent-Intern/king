@@ -347,6 +347,103 @@ function videochat_infra_kubernetes_provider(): array
     ]);
 }
 
+/** @return array{provider: array<string, mixed>, nodes: array<int, array<string, mixed>>, services: array<int, array<string, mixed>>} */
+function videochat_infra_kubernetes_inventory(array $deployment): array
+{
+    unset($deployment);
+
+    return [
+        'provider' => videochat_infra_kubernetes_provider(),
+        'nodes' => [],
+        'services' => [],
+    ];
+}
+
+/** @return array<string, mixed> */
+function videochat_infra_provider_adapter(string $id, array $modes, callable $inventory): array
+{
+    return [
+        'id' => $id,
+        'modes' => array_values(array_unique($modes)),
+        'inventory' => $inventory,
+    ];
+}
+
+/** @return array<string, array<string, mixed>> */
+function videochat_infra_provider_adapters(): array
+{
+    return [
+        'hetzner' => videochat_infra_provider_adapter('hetzner', ['auto', 'hetzner'], 'videochat_infra_hcloud_inventory'),
+        'kubernetes' => videochat_infra_provider_adapter('kubernetes', ['auto', 'hetzner', 'kubernetes', 'static'], 'videochat_infra_kubernetes_inventory'),
+        'static' => videochat_infra_provider_adapter('static', ['auto', 'hetzner', 'kubernetes', 'static'], 'videochat_infra_static_inventory'),
+    ];
+}
+
+function videochat_infra_provider_adapter_matches(array $adapter, string $mode): bool
+{
+    $modes = is_array($adapter['modes'] ?? null) ? $adapter['modes'] : [];
+    return in_array($mode, $modes, true);
+}
+
+/** @return array{provider: array<string, mixed>, nodes: array<int, array<string, mixed>>, services: array<int, array<string, mixed>>} */
+function videochat_infra_discover_provider(array $adapter, array $deployment): array
+{
+    $inventory = $adapter['inventory'] ?? null;
+    if (!is_callable($inventory)) {
+        $id = is_string($adapter['id'] ?? null) ? $adapter['id'] : 'unknown';
+        return [
+            'provider' => videochat_infra_provider_row($id, $id, 'unknown', false, 'error', [], [
+                'error' => 'provider_inventory_not_callable',
+            ]),
+            'nodes' => [],
+            'services' => [],
+        ];
+    }
+
+    $result = $inventory($deployment);
+    return [
+        'provider' => is_array($result['provider'] ?? null) ? $result['provider'] : videochat_infra_provider_row((string) ($adapter['id'] ?? 'unknown'), (string) ($adapter['id'] ?? 'unknown'), 'unknown', false, 'error'),
+        'nodes' => is_array($result['nodes'] ?? null) ? array_values($result['nodes']) : [],
+        'services' => is_array($result['services'] ?? null) ? array_values($result['services']) : [],
+    ];
+}
+
+/** @return array{providers: array<int, array<string, mixed>>, nodes: array<int, array<string, mixed>>, services: array<int, array<string, mixed>>} */
+function videochat_infra_collect_provider_inventory(array $deployment, string $mode): array
+{
+    $adapters = videochat_infra_provider_adapters();
+    $providers = [];
+    $nodes = [];
+    $services = [];
+
+    foreach ($adapters as $id => $adapter) {
+        if ($id === 'static' || !videochat_infra_provider_adapter_matches($adapter, $mode)) {
+            continue;
+        }
+
+        $result = videochat_infra_discover_provider($adapter, $deployment);
+        $providers[] = $result['provider'];
+        array_push($nodes, ...$result['nodes']);
+        array_push($services, ...$result['services']);
+    }
+
+    $staticAdapter = $adapters['static'] ?? null;
+    if (is_array($staticAdapter) && ($mode === 'static' || $mode === 'auto' || $nodes === [])) {
+        $result = videochat_infra_discover_provider($staticAdapter, $deployment);
+        $providers[] = $result['provider'];
+        if ($nodes === []) {
+            array_push($nodes, ...$result['nodes']);
+            array_push($services, ...$result['services']);
+        }
+    }
+
+    return [
+        'providers' => $providers,
+        'nodes' => $nodes,
+        'services' => $services,
+    ];
+}
+
 /** @return array<string, mixed> */
 function videochat_infra_telemetry_snapshot(): array
 {
@@ -425,28 +522,10 @@ function videochat_infra_inventory_snapshot(): array
 {
     $deployment = videochat_infra_deployment_snapshot();
     $mode = strtolower((string) ($deployment['inventory_mode'] ?? 'auto'));
-
-    $providers = [];
-    $nodes = [];
-    $services = [];
-
-    if ($mode === 'auto' || $mode === 'hetzner') {
-        $hetzner = videochat_infra_hcloud_inventory($deployment);
-        $providers[] = $hetzner['provider'];
-        $nodes = array_merge($nodes, $hetzner['nodes']);
-        $services = array_merge($services, $hetzner['services']);
-    }
-
-    $providers[] = videochat_infra_kubernetes_provider();
-
-    if ($mode === 'static' || $mode === 'auto' || $nodes === []) {
-        $static = videochat_infra_static_inventory($deployment);
-        $providers[] = $static['provider'];
-        if ($nodes === []) {
-            $nodes = array_merge($nodes, $static['nodes']);
-            $services = array_merge($services, $static['services']);
-        }
-    }
+    $inventory = videochat_infra_collect_provider_inventory($deployment, $mode);
+    $providers = $inventory['providers'];
+    $nodes = $inventory['nodes'];
+    $services = $inventory['services'];
 
     return [
         'status' => 'ok',

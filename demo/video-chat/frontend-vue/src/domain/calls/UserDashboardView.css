@@ -321,6 +321,19 @@
   grid-column: 1 / -1;
 }
 
+.calls-toggle-row {
+  display: flex;
+  align-items: center;
+}
+
+.calls-checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-main);
+  font-size: 12px;
+}
+
 .calls-participants-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

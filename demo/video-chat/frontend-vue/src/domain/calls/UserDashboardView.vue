@@ -16,75 +16,16 @@
     </section>
 
     <section v-if="viewMode === 'calls'" class="table-wrap calls-table-wrap">
-      <table class="calls-list-table">
-        <thead>
-          <tr>
-            <th class="col-title">Call</th>
-            <th>Status</th>
-            <th>Window</th>
-            <th>Participants</th>
-            <th>Owner</th>
-            <th class="col-actions">Actions</th>
-          </tr>
-        </thead>
-        <tbody v-if="calls.length > 0">
-          <tr v-for="call in calls" :key="call.id">
-            <td data-label="Call">
-              <div class="call-title">{{ call.title || call.id }}</div>
-              <div class="call-subline code">{{ call.id }}</div>
-            </td>
-            <td data-label="Status">
-              <span class="tag" :class="statusTagClass(call.status)">
-                {{ call.status || 'unknown' }}
-              </span>
-            </td>
-            <td data-label="Window">{{ formatRange(call.starts_at, call.ends_at) }}</td>
-            <td data-label="Participants">
-              {{ call.participants?.total ?? 0 }}
-              <span class="call-subline">
-                in {{ call.participants?.internal ?? 0 }} / ex {{ call.participants?.external ?? 0 }}
-              </span>
-            </td>
-            <td data-label="Owner">
-              {{ call.owner?.display_name || 'Unknown' }}
-              <span class="call-subline">{{ call.owner?.email || 'n/a' }}</span>
-            </td>
-            <td data-label="Actions">
-              <div class="actions-inline">
-                <button
-                  v-if="isEditable(call)"
-                  class="icon-mini-btn"
-                  type="button"
-                  title="Edit call"
-                  :aria-label="`Edit call ${call.title || call.id}`"
-                  @click="openCompose('edit', call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn"
-                  type="button"
-                  title="Open chat archive"
-                  :aria-label="`Open chat archive for ${call.title || call.id}`"
-                  @click="openChatArchive(call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/chat.png" alt="" />
-                </button>
-                <button
-                  v-if="isInvitable(call)"
-                  class="icon-mini-btn"
-                  type="button"
-                  title="Enter video call"
-                  :aria-label="`Enter video call ${call.title || call.id}`"
-                  @click="openEnterCallModal(call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <CallsListTable
+        :calls="calls"
+        :format-range="formatRange"
+        :status-tag-class="statusTagClass"
+        :is-editable="isEditable"
+        :is-invitable="isInvitable"
+        @edit-call="(call) => openCompose('edit', call)"
+        @open-chat-archive="openChatArchive"
+        @enter-call="openEnterCallModal"
+      />
 
       <section v-if="!loadingCalls && calls.length === 0" class="section calls-empty">
         No calls match the active filters.
@@ -155,27 +96,16 @@
     </section>
 
     <section v-if="viewMode === 'calls'" class="footer calls-pagination-wrap">
-      <div class="pagination">
-        <button
-          class="pager-btn pager-icon-btn"
-          type="button"
-          :disabled="!pagination.hasPrev || loadingCalls"
-          @click="goToPage(pagination.page - 1)"
-        >
-          <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous" />
-        </button>
-        <div class="page-info">
-          Page {{ pagination.page }} / {{ pagination.pageCount }} · {{ pagination.total }} total
-        </div>
-        <button
-          class="pager-btn pager-icon-btn"
-          type="button"
-          :disabled="!pagination.hasNext || loadingCalls"
-          @click="goToPage(pagination.page + 1)"
-        >
-          <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next" />
-        </button>
-      </div>
+      <AppPagination
+        :page="pagination.page"
+        :page-count="pagination.pageCount"
+        :total="pagination.total"
+        total-label="total"
+        :has-prev="pagination.hasPrev"
+        :has-next="pagination.hasNext"
+        :disabled="loadingCalls"
+        @page-change="goToPage"
+      />
     </section>
 
     <div class="calls-modal" :hidden="!enterCallState.open" role="dialog" aria-modal="true" aria-label="Enter video call">
@@ -435,6 +365,17 @@
             </label>
           </section>
 
+          <section v-if="composeState.mode === 'edit'" class="calls-toggle-row">
+            <label class="calls-checkbox-row">
+              <input
+                v-model="composeState.replaceParticipants"
+                type="checkbox"
+                @change="handleReplaceParticipantsToggle"
+              />
+              <span>Replace participant list during edit</span>
+            </label>
+          </section>
+
           <section v-if="shouldSendParticipants" class="calls-participants-grid">
             <article class="calls-participants-panel">
               <header class="calls-participants-head">
@@ -565,8 +506,16 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import AppPagination from '../../components/AppPagination.vue';
 import AppSelect from '../../components/AppSelect.vue';
 import ChatArchiveModal from './ChatArchiveModal.vue';
+import CallsListTable from './CallsListTable.vue';
+import {
+  createCallListStore,
+  createChatArchiveStore,
+  createNoticeStore,
+  createParticipantDirectoryStore,
+} from './callViewState';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import {
@@ -746,63 +695,31 @@ function isInvitable(call) {
 
 const canReadAllScope = computed(() => sessionState.role === 'admin');
 
-const viewMode = ref('calls');
-const queryDraft = ref('');
-const queryApplied = ref('');
-const statusFilter = ref('all');
-const scopeFilter = ref('my');
-
-const calls = ref([]);
-const loadingCalls = ref(false);
-const callsError = ref('');
-
-const pagination = reactive({
-  page: 1,
-  pageSize: 10,
-  total: 0,
-  pageCount: 1,
-  hasPrev: false,
-  hasNext: false,
-});
-
-const calendarCalls = ref([]);
-const loadingCalendar = ref(false);
-const calendarError = ref('');
-
-const noticeKind = ref('');
-const noticeMessage = ref('');
-const chatArchiveState = reactive({
-  open: false,
-  callId: '',
-  callTitle: '',
-});
-
-const noticeKindClass = computed(() => ({
-  ok: noticeKind.value === 'ok',
-  error: noticeKind.value === 'error',
-}));
-
-function setNotice(kind, message) {
-  noticeKind.value = kind;
-  noticeMessage.value = String(message || '').trim();
-}
-
-function clearNotice() {
-  noticeKind.value = '';
-  noticeMessage.value = '';
-}
-
-function openChatArchive(call) {
-  chatArchiveState.callId = String(call?.id || '').trim();
-  chatArchiveState.callTitle = String(call?.title || call?.id || '').trim();
-  chatArchiveState.open = chatArchiveState.callId !== '';
-}
-
-function closeChatArchive() {
-  chatArchiveState.open = false;
-  chatArchiveState.callId = '';
-  chatArchiveState.callTitle = '';
-}
+const callListStore = createCallListStore({ defaultScope: 'my' });
+const {
+  viewMode,
+  queryDraft,
+  queryApplied,
+  statusFilter,
+  scopeFilter,
+  calls,
+  loadingCalls,
+  callsError,
+  pagination,
+  calendarCalls,
+  loadingCalendar,
+  calendarError,
+} = callListStore;
+const {
+  noticeKind,
+  noticeMessage,
+  noticeKindClass,
+  setNotice,
+  clearNotice,
+} = createNoticeStore();
+const chatArchiveStore = createChatArchiveStore();
+const chatArchiveState = chatArchiveStore.state;
+const { openChatArchive, closeChatArchive } = chatArchiveStore;
 
 let adminSyncReloadTimer = 0;
 let adminSyncClient = null;
@@ -900,20 +817,11 @@ async function loadCalls() {
     });
 
     calls.value = Array.isArray(payload.calls) ? payload.calls : [];
-    const paging = payload.pagination || {};
-    pagination.page = Number.isInteger(paging.page) ? paging.page : pagination.page;
-    pagination.pageSize = Number.isInteger(paging.page_size) ? paging.page_size : pagination.pageSize;
-    pagination.total = Number.isInteger(paging.total) ? paging.total : calls.value.length;
-    pagination.pageCount = Number.isInteger(paging.page_count) && paging.page_count > 0 ? paging.page_count : 1;
-    pagination.hasPrev = Boolean(paging.has_prev);
-    pagination.hasNext = Boolean(paging.has_next);
+    callListStore.applyPagination(payload.pagination || {}, calls.value.length);
   } catch (error) {
     calls.value = [];
     callsError.value = error instanceof Error ? error.message : 'Could not load calls.';
-    pagination.total = 0;
-    pagination.pageCount = 1;
-    pagination.hasPrev = false;
-    pagination.hasNext = false;
+    callListStore.resetPagination();
   } finally {
     loadingCalls.value = false;
   }
@@ -1756,25 +1664,16 @@ const composeState = reactive({
   callId: '',
   title: '',
   accessMode: 'invite_only',
-  roomId: 'lobby',
   startsLocal: '',
   endsLocal: '',
+  replaceParticipants: false,
+  participantsReady: false,
   submitting: false,
   error: '',
 });
 
-const composeParticipants = reactive({
-  loading: false,
-  error: '',
-  query: '',
-  page: 1,
-  pageSize: 10,
-  total: 0,
-  pageCount: 1,
-  hasPrev: false,
-  hasNext: false,
-  rows: [],
-});
+const composeParticipantStore = createParticipantDirectoryStore();
+const composeParticipants = composeParticipantStore.state;
 
 const composeSelectedUserIds = ref([]);
 const composeExternalRows = ref([]);
@@ -1792,7 +1691,9 @@ const composeSubmitLabel = computed(() => {
   return 'Create call';
 });
 
-const shouldSendParticipants = computed(() => composeState.mode !== 'edit');
+const shouldSendParticipants = computed(
+  () => composeState.mode !== 'edit' || composeState.replaceParticipants,
+);
 
 function currentSessionUserId() {
   const id = Number(sessionState.userId || 0);
@@ -1843,18 +1744,11 @@ function resetComposeModal() {
   composeState.callId = '';
   composeState.title = '';
   composeState.accessMode = 'invite_only';
-  composeState.roomId = 'lobby';
+  composeState.replaceParticipants = false;
+  composeState.participantsReady = false;
   composeState.submitting = false;
   composeState.error = '';
-  composeParticipants.loading = false;
-  composeParticipants.error = '';
-  composeParticipants.query = '';
-  composeParticipants.page = 1;
-  composeParticipants.total = 0;
-  composeParticipants.pageCount = 1;
-  composeParticipants.hasPrev = false;
-  composeParticipants.hasNext = false;
-  composeParticipants.rows = [];
+  composeParticipantStore.reset();
   composeSelectedUserIds.value = [];
   composeExternalRows.value = [];
 }
@@ -1870,17 +1764,90 @@ function openCompose(mode, call = null) {
     composeState.callId = String(call.id || '');
     composeState.title = String(call.title || '');
     composeState.accessMode = String(call.access_mode || 'invite_only').trim() || 'invite_only';
-    composeState.roomId = String(call.room_id || 'lobby');
     composeState.startsLocal = isoToLocalInput(String(call.starts_at || ''));
     composeState.endsLocal = isoToLocalInput(String(call.ends_at || ''));
+    seedComposeParticipantsFromCall(call);
+    void loadEditableCallParticipants(composeState.callId);
   } else {
     seedComposeWindow(mode);
+    composeState.replaceParticipants = true;
     composeExternalRows.value = [nextExternalRow()];
   }
 
   if (shouldSendParticipants.value) {
     void loadComposeParticipants();
   }
+}
+
+function seedComposeParticipantsFromCall(call) {
+  const participants = call?.participants || {};
+  const hasDetailedParticipants = Array.isArray(participants.internal) || Array.isArray(participants.external);
+  if (!hasDetailedParticipants) {
+    return false;
+  }
+
+  const ownUserId = currentSessionUserId();
+  const internalRows = Array.isArray(participants.internal) ? participants.internal : [];
+  const externalRows = Array.isArray(participants.external) ? participants.external : [];
+  const selectedIds = [];
+  const seen = new Set();
+
+  for (const participant of internalRows) {
+    const id = Number(participant?.user_id ?? participant?.id ?? 0);
+    if (!Number.isInteger(id) || id <= 0 || id === ownUserId || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    selectedIds.push(id);
+  }
+
+  composeSelectedUserIds.value = selectedIds;
+  composeExternalRows.value = externalRows.map((participant) => ({
+    ...nextExternalRow(),
+    display_name: String(participant?.display_name || ''),
+    email: String(participant?.email || ''),
+  }));
+  composeState.participantsReady = true;
+  return true;
+}
+
+async function loadEditableCallParticipants(callId) {
+  const normalizedCallId = String(callId || '').trim();
+  if (normalizedCallId === '') return false;
+
+  try {
+    const payload = await apiRequest(`/api/calls/${encodeURIComponent(normalizedCallId)}`);
+    if (
+      composeState.open
+      && composeState.mode === 'edit'
+      && composeState.callId === normalizedCallId
+      && payload?.call
+    ) {
+      return seedComposeParticipantsFromCall(payload.call);
+    }
+  } catch {
+    // Metadata edits still work; participant replacement is blocked until details load.
+  }
+  return false;
+}
+
+async function handleReplaceParticipantsToggle() {
+  if (!shouldSendParticipants.value) {
+    composeState.error = '';
+    return;
+  }
+
+  composeState.error = '';
+  if (composeState.mode === 'edit' && !composeState.participantsReady) {
+    const loaded = await loadEditableCallParticipants(composeState.callId);
+    if (!loaded) {
+      composeState.replaceParticipants = false;
+      composeState.error = 'Could not load existing participants. Try again before replacing the list.';
+      return;
+    }
+  }
+
+  void loadComposeParticipants();
 }
 
 function closeCompose() {
@@ -1910,27 +1877,16 @@ async function loadComposeParticipants() {
 
     const ownUserId = currentSessionUserId();
     const allRows = Array.isArray(payload.users) ? payload.users : [];
-    composeParticipants.rows = allRows.filter((row) => {
+    const rows = allRows.filter((row) => {
       const candidateId = Number(row?.id ?? row?.user_id ?? 0);
       return !Number.isInteger(candidateId) || candidateId !== ownUserId;
     });
-    const paging = payload.pagination || {};
-    composeParticipants.total = Number.isInteger(paging.total) ? paging.total : composeParticipants.rows.length;
-    composeParticipants.pageCount = Number.isInteger(paging.page_count) && paging.page_count > 0
-      ? paging.page_count
-      : 1;
-    composeParticipants.hasPrev = Boolean(paging.has_prev);
-    composeParticipants.hasNext = Boolean(paging.has_next);
+    composeParticipantStore.applyRows(rows, payload.pagination || {});
     if (ownUserId > 0) {
       composeSelectedUserIds.value = composeSelectedUserIds.value.filter((id) => Number(id) !== ownUserId);
     }
   } catch (error) {
-    composeParticipants.rows = [];
-    composeParticipants.total = 0;
-    composeParticipants.pageCount = 1;
-    composeParticipants.hasPrev = false;
-    composeParticipants.hasNext = false;
-    composeParticipants.error = error instanceof Error ? error.message : 'Could not load users.';
+    composeParticipantStore.fail(error instanceof Error ? error.message : 'Could not load users.');
   } finally {
     composeParticipants.loading = false;
   }
@@ -2051,7 +2007,6 @@ async function submitCompose() {
   }
 
   const payload = {
-    room_id: String(composeState.roomId || '').trim() || 'lobby',
     title,
     access_mode: String(composeState.accessMode || 'invite_only').trim() || 'invite_only',
     starts_at: startsAt,
@@ -2059,6 +2014,11 @@ async function submitCompose() {
   };
 
   if (shouldSendParticipants.value) {
+    if (composeState.mode === 'edit' && !composeState.participantsReady) {
+      composeState.error = 'Could not load existing participants. Try again before replacing the list.';
+      return;
+    }
+
     const normalizedExternal = normalizeExternalRows();
     if (!normalizedExternal.ok) {
       composeState.error = normalizedExternal.error;
