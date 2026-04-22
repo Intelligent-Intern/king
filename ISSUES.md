@@ -13,6 +13,7 @@
 - Keine lokalen Pfade, besonders keine Homebrew-Pfade wie `/opt/homebrew/Cellar/...`.
 - Kein Quiche-getriebener Rust-/Cargo-Bootstrap im HTTP/3-Produktpfad.
 - Keine generierten Test-Resultate, Buildtrees, libtool/phpize-Churn oder lokale Lockfiles als Sprint-Output.
+- Contributor-Credits bleiben erhalten: passende Commits werden cherry-picked; manuelle Portierungen bekommen Source-Branch-Verweis und `Co-authored-by`, sobald der Autor identifiziert ist.
 
 ## Offene Issues
 
@@ -25,7 +26,7 @@ Checklist:
 - [x] Release-/Commit-Pins fuer den neuen Stack festlegen.
 - [x] Checksums und Quellen in `DEPENDENCY_PROVENANCE.md` dokumentieren.
 - [x] Neues Bootstrap-Lockfile erstellen, z. B. `infra/scripts/lsquic-bootstrap.lock`.
-- [ ] Alte `quiche-bootstrap.lock` und `quiche-workspace.Cargo.lock` als zu entfernende Quiche-Artefakte erfassen.
+- [x] Alte `quiche-bootstrap.lock` und `quiche-workspace.Cargo.lock` als zu entfernende Quiche-Artefakte erfassen.
 - [ ] Offline-/CI-Validierung fuer Pins und Checksums ergaenzen.
 
 Pin-Entscheidung:
@@ -42,6 +43,15 @@ Pin-Regeln:
 - Das neue Bootstrap-Lockfile muss URLs, Tags, Commits, rekursive Submodule, Checksums und Lizenzquellen festhalten.
 - Wenn `v4.6.1` die King-v1-Paritaet fuer 0-RTT, STOP_SENDING, Stream-Lifecycle, Stats oder WebSocket-over-HTTP3 nicht traegt, ist das ein Blocker und kein Grund fuer Vertragsabbau.
 - Die Pins wurden am 2026-04-22 per `git ls-remote --tags --refs` gegen die Upstream-Repositories verifiziert.
+
+Quiche-Artefakt-Inventar fuer Entfernung:
+
+| Pfad | Status | Entfernungspfad |
+| --- | --- | --- |
+| `infra/scripts/quiche-bootstrap.lock` | Getrackter Legacy-Lock fuer Cloudflare Quiche, Quiche-BoringSSL und Wirefilter. | Entfernen, sobald `infra/scripts/lsquic-bootstrap.lock` vom Provenance-Check und Build-Bootstrap gelesen wird. |
+| `infra/scripts/quiche-workspace.Cargo.lock` | Getracktes, generiertes Cargo-Lockfile fuer den alten Quiche/Rust-Bootstrap. | Entfernen zusammen mit Quiche-Bootstrap-Scripts und Cargo-Buildpfad; darf nicht in den aktiven HTTP/3-Produktpfad uebernommen werden. |
+
+Nicht getrackte lokale Bootstrap-Caches wie `.cargo/`, `quiche/` und `quiche/Cargo.lock` sind durch `.gitignore` ausgeschlossen und bleiben kein Sprint-Output.
 
 Done:
 - [ ] Dependencies koennen aus Repo-eigenen Pins reproduzierbar bezogen werden.
