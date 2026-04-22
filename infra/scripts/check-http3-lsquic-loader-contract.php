@@ -6,6 +6,7 @@ declare(strict_types=1);
 $root = dirname(__DIR__, 2);
 $clientPath = $root . '/extension/src/client/http3.c';
 $loaderPath = $root . '/extension/src/client/http3/lsquic_loader.inc';
+$errorsAndValidationPath = $root . '/extension/src/client/http3/errors_and_validation.inc';
 $errors = [];
 
 function king_http3_loader_fail(string $message): void
@@ -98,6 +99,7 @@ function king_http3_loader_require_order(
 
 $client = king_http3_loader_require_file($clientPath, $errors);
 $loader = king_http3_loader_require_file($loaderPath, $errors);
+$errorsAndValidation = king_http3_loader_require_file($errorsAndValidationPath, $errors);
 
 if ($errors !== []) {
     king_http3_loader_fail(implode(PHP_EOL, $errors));
@@ -115,12 +117,28 @@ king_http3_loader_require_contains(
     'king_http3_lsquic_api_t',
     $errors
 );
+king_http3_loader_require_contains(
+    'Client HTTP/3 source',
+    $client,
+    'king_http3_lsquic_load_error_kind_t',
+    $errors
+);
+king_http3_loader_require_contains(
+    'Client HTTP/3 source',
+    $client,
+    'load_error_kind',
+    $errors
+);
 
 $requiredLoaderNeedles = [
     'KING_LSQUIC_LIBRARY',
     'dlopen(',
     'dlsym(',
+    'KING_HTTP3_LSQUIC_LOAD_ERROR_LIBRARY',
+    'KING_HTTP3_LSQUIC_LOAD_ERROR_SYMBOL',
+    'KING_HTTP3_LSQUIC_LOAD_ERROR_GLOBAL_INIT',
     'king_http3_lsquic.load_error',
+    'king_http3_lsquic.load_error_kind',
     'return FAILURE',
     'lsquic_global_init',
     'lsquic_global_cleanup',
@@ -178,6 +196,18 @@ if ($ensureBody === null) {
         ],
         $errors
     );
+}
+
+foreach ([
+    'king_http3_lsquic_loader_exception_class',
+    'king_http3_throw_lsquic_unavailable',
+    'KING_HTTP3_LSQUIC_LOAD_ERROR_LIBRARY',
+    'KING_HTTP3_LSQUIC_LOAD_ERROR_SYMBOL',
+    'KING_HTTP3_LSQUIC_LOAD_ERROR_GLOBAL_INIT',
+    'king_ce_system_exception',
+    'king_ce_protocol_exception',
+] as $needle) {
+    king_http3_loader_require_contains('HTTP/3 error mapper', $errorsAndValidation, $needle, $errors);
 }
 
 if ($errors !== []) {

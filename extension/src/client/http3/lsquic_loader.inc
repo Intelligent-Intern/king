@@ -11,6 +11,7 @@ static zend_result king_http3_lsquic_load_symbol(void **target, const char *name
 {
     *target = dlsym(king_http3_lsquic.handle, name);
     if (*target == NULL) {
+        king_http3_lsquic.load_error_kind = KING_HTTP3_LSQUIC_LOAD_ERROR_SYMBOL;
         snprintf(
             king_http3_lsquic.load_error,
             sizeof(king_http3_lsquic.load_error),
@@ -124,6 +125,7 @@ static zend_result king_http3_ensure_lsquic_ready(void)
     }
 
     if (king_http3_lsquic.handle == NULL) {
+        king_http3_lsquic.load_error_kind = KING_HTTP3_LSQUIC_LOAD_ERROR_LIBRARY;
         snprintf(
             king_http3_lsquic.load_error,
             sizeof(king_http3_lsquic.load_error),
@@ -157,6 +159,7 @@ static zend_result king_http3_ensure_lsquic_ready(void)
 
     init_result = king_http3_lsquic.lsquic_global_init_fn(KING_LSQUIC_GLOBAL_CLIENT);
     if (init_result != 0) {
+        king_http3_lsquic.load_error_kind = KING_HTTP3_LSQUIC_LOAD_ERROR_GLOBAL_INIT;
         snprintf(
             king_http3_lsquic.load_error,
             sizeof(king_http3_lsquic.load_error),
@@ -169,5 +172,7 @@ static zend_result king_http3_ensure_lsquic_ready(void)
 
     king_http3_lsquic.global_initialized = true;
     king_http3_lsquic.ready = true;
+    king_http3_lsquic.load_error_kind = KING_HTTP3_LSQUIC_LOAD_ERROR_NONE;
+    king_http3_lsquic.load_error[0] = '\0';
     return SUCCESS;
 }

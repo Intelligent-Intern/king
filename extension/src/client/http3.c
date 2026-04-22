@@ -258,11 +258,19 @@ typedef struct _king_http3_quiche_api {
 
 static king_http3_quiche_api_t king_http3_quiche = {0};
 
+typedef enum _king_http3_lsquic_load_error_kind {
+    KING_HTTP3_LSQUIC_LOAD_ERROR_NONE = 0,
+    KING_HTTP3_LSQUIC_LOAD_ERROR_LIBRARY,
+    KING_HTTP3_LSQUIC_LOAD_ERROR_SYMBOL,
+    KING_HTTP3_LSQUIC_LOAD_ERROR_GLOBAL_INIT
+} king_http3_lsquic_load_error_kind_t;
+
 typedef struct _king_http3_lsquic_api {
     void *handle;
     bool load_attempted;
     bool ready;
     bool global_initialized;
+    king_http3_lsquic_load_error_kind_t load_error_kind;
     char load_error[KING_ERR_LEN];
     int (*lsquic_global_init_fn)(int);
     void (*lsquic_global_cleanup_fn)(void);

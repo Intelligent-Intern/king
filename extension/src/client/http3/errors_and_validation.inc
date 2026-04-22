@@ -31,6 +31,34 @@ static void king_http3_throw(
     );
 }
 
+static zend_class_entry *king_http3_lsquic_loader_exception_class(void)
+{
+    switch (king_http3_lsquic.load_error_kind) {
+        case KING_HTTP3_LSQUIC_LOAD_ERROR_LIBRARY:
+        case KING_HTTP3_LSQUIC_LOAD_ERROR_SYMBOL:
+        case KING_HTTP3_LSQUIC_LOAD_ERROR_GLOBAL_INIT:
+            return king_ce_system_exception;
+
+        case KING_HTTP3_LSQUIC_LOAD_ERROR_NONE:
+        default:
+            return king_ce_protocol_exception;
+    }
+}
+
+static void king_http3_throw_lsquic_unavailable(const char *function_name)
+{
+    const char *detail = king_http3_lsquic.load_error[0] != '\0'
+        ? king_http3_lsquic.load_error
+        : "The LSQUIC runtime did not report a loader error.";
+
+    king_http3_throw(
+        king_http3_lsquic_loader_exception_class(),
+        "%s() HTTP/3 LSQUIC runtime is unavailable: %s",
+        function_name,
+        detail
+    );
+}
+
 static void king_http3_format_close_reason(
     const uint8_t *reason_bytes,
     size_t reason_len,

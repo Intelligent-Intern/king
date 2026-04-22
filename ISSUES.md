@@ -98,13 +98,14 @@ Goal:
 Checklist:
 - [x] Implement a new loader with real symbol binding and initialization.
 - [x] Prevent failure stubs or fake feature checks.
-- [ ] Map error paths to existing King exceptions.
+- [x] Map error paths to existing King exceptions.
 - [ ] Wire runtime init, request/response, multi-request, ticket reuse, and stats.
 - [ ] Remove or migrate old Quiche symbols, handles, and runtime names.
 
 Done:
 - [x] `extension/src/client/http3/lsquic_loader.inc` binds LSQUIC symbols via `dlsym()` and initializes client globals via `lsquic_global_init`.
 - [x] `infra/scripts/check-http3-lsquic-loader-contract.php` runs in static checks and rejects placeholder success paths or compile-flag-only readiness.
+- [x] LSQUIC library, symbol, and global-init loader failures map through existing King exception classes via `king_http3_throw_lsquic_unavailable()`.
 - [ ] `king_http3_request_send()` uses the new stack in real wire tests.
 - [ ] OO HTTP3 client uses the new stack in real wire tests.
 - [ ] Old Quiche loader is no longer referenced by any active include.
