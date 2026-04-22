@@ -3786,24 +3786,8 @@ function handleSignalingEvent(payload) {
   }
 
   if (isNativeSignal && Number.isInteger(senderUserId) && senderUserId > 0) {
-    if (!isNativeWebRtcRuntimePath() && !mediaRuntimeCapabilities.value.stageB) {
-      return;
-    }
-    if (!isNativeWebRtcRuntimePath() && mediaRuntimeCapabilities.value.stageB) {
-      void switchMediaRuntimePath('webrtc_native', 'inbound_native_signaling');
-    }
-    if (type === 'call/offer') {
-      void handleNativeOfferSignal(senderUserId, payloadBody || {});
-      return;
-    }
-    if (type === 'call/answer') {
-      void handleNativeAnswerSignal(senderUserId, payloadBody || {});
-      return;
-    }
-    if (type === 'call/ice') {
-      void handleNativeIceSignal(senderUserId, payloadBody || {});
-      return;
-    }
+    void handleNativeSignalingEvent(type, senderUserId, payloadBody || {});
+    return;
   }
 
   if (applyRemoteControlState(payload?.payload, sender)) {
@@ -5548,6 +5532,13 @@ function syncNativePeerConnectionsWithRoster() {
   }
 }
 
+function normalizeNativeSdpForRemoteDescription(value) {
+  const raw = String(value || '').trim();
+  if (raw === '') return '';
+  const normalized = raw.replace(/\r?\n/g, '\r\n');
+  return normalized.endsWith('\r\n') ? normalized : `${normalized}\r\n`;
+}
+
 async function handleNativeOfferSignal(senderUserId, payloadBody) {
   await loadDynamicIceServers();
   const peer = ensureNativePeerConnection(senderUserId);
@@ -5555,7 +5546,7 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
 
   const sdpPayload = payloadBody && typeof payloadBody.sdp === 'object' ? payloadBody.sdp : null;
   const type = String(sdpPayload?.type || '').trim().toLowerCase();
-  const sdp = String(sdpPayload?.sdp || '').trim();
+  const sdp = normalizeNativeSdpForRemoteDescription(sdpPayload?.sdp);
   if (type !== 'offer' || sdp === '') return;
 
   try {
@@ -5591,7 +5582,7 @@ async function handleNativeAnswerSignal(senderUserId, payloadBody) {
   if (!peer?.pc) return;
   const sdpPayload = payloadBody && typeof payloadBody.sdp === 'object' ? payloadBody.sdp : null;
   const type = String(sdpPayload?.type || '').trim().toLowerCase();
-  const sdp = String(sdpPayload?.sdp || '').trim();
+  const sdp = normalizeNativeSdpForRemoteDescription(sdpPayload?.sdp);
   if (type !== 'answer' || sdp === '') return;
 
   try {
@@ -5618,6 +5609,55 @@ async function handleNativeIceSignal(senderUserId, payloadBody) {
     return;
   }
   peer.pendingIce.push(candidatePayload);
+}
+
+function waitForNativeRuntimeTick(ms = 50) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForNativeCapabilityForSignaling() {
+  if (mediaRuntimeCapabilities.value.stageB) return true;
+
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const path = String(mediaRuntimePath.value || '').trim();
+    if (mediaRuntimeCapabilities.value.stageB) return true;
+    if (path !== 'pending' && !runtimeSwitchInFlight) return false;
+    await waitForNativeRuntimeTick();
+  }
+
+  return mediaRuntimeCapabilities.value.stageB;
+}
+
+async function ensureNativeRuntimeForSignaling() {
+  if (isNativeWebRtcRuntimePath() && !runtimeSwitchInFlight) return true;
+  if (!(await waitForNativeCapabilityForSignaling())) return false;
+
+  if (!runtimeSwitchInFlight) {
+    await switchMediaRuntimePath('webrtc_native', 'inbound_native_signaling');
+  }
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (isNativeWebRtcRuntimePath() && !runtimeSwitchInFlight) return true;
+    await waitForNativeRuntimeTick();
+  }
+
+  return isNativeWebRtcRuntimePath() && !runtimeSwitchInFlight;
+}
+
+async function handleNativeSignalingEvent(type, senderUserId, payloadBody) {
+  if (!(await ensureNativeRuntimeForSignaling())) return;
+
+  if (type === 'call/offer') {
+    await handleNativeOfferSignal(senderUserId, payloadBody || {});
+    return;
+  }
+  if (type === 'call/answer') {
+    await handleNativeAnswerSignal(senderUserId, payloadBody || {});
+    return;
+  }
+  if (type === 'call/ice') {
+    await handleNativeIceSignal(senderUserId, payloadBody || {});
+  }
 }
 
 async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {

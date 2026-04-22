@@ -337,10 +337,32 @@ async function renderedMediaState(page) {
       '.workspace-mini-video-slot canvas',
     ].join(',')));
 
-    const hasLocal = nodes.some((node) => node.tagName === 'VIDEO' && !node.classList.contains('remote-video'));
-    const hasRemote = nodes.some((node) => node.classList.contains('remote-video'));
+    const liveTrackCount = (value) => {
+      if (!(value instanceof MediaStream)) return 0;
+      return value.getTracks().filter((track) => track?.readyState !== 'ended').length;
+    };
 
-    return { hasLocal, hasRemote };
+    const localLiveTrackCount = nodes
+      .filter((node) => node.tagName === 'VIDEO' && !node.classList.contains('remote-video'))
+      .reduce((count, node) => count + liveTrackCount(node.srcObject), 0);
+    const remoteLiveTrackCount = nodes
+      .filter((node) => node.tagName === 'VIDEO' && node.classList.contains('remote-video'))
+      .reduce((count, node) => count + liveTrackCount(node.srcObject), 0);
+    const remoteCanvasCount = nodes.filter((node) => (
+      node.tagName === 'CANVAS'
+      && node.classList.contains('remote-video')
+      && Number(node.width || 0) > 0
+      && Number(node.height || 0) > 0
+    )).length;
+    const remoteVideoCount = nodes.filter((node) => (
+      node.tagName === 'VIDEO'
+      && node.classList.contains('remote-video')
+    )).length;
+
+    const hasLocal = localLiveTrackCount > 0;
+    const hasRemote = remoteLiveTrackCount > 0 || remoteCanvasCount > 0;
+
+    return { hasLocal, hasRemote, localLiveTrackCount, remoteLiveTrackCount, remoteCanvasCount, remoteVideoCount };
   });
 }
 
@@ -351,7 +373,7 @@ async function expectRenderedLocalAndRemoteMedia(page, label) {
       timeout: 45_000,
       message: `${label} should render both local and remote media nodes`,
     },
-  ).toEqual({ hasLocal: true, hasRemote: true });
+  ).toMatchObject({ hasLocal: true, hasRemote: true });
 }
 
 async function waitForCallRow(page, callTitle) {
@@ -494,6 +516,8 @@ test('admin creates/invites and admits user from lobby, both browsers share rost
     await Promise.all([
       expectMediaSignalExchange(adminPage, 'admin browser'),
       expectMediaSignalExchange(userPage, 'user browser'),
+    ]);
+    await Promise.all([
       expectRenderedLocalAndRemoteMedia(adminPage, 'admin browser'),
       expectRenderedLocalAndRemoteMedia(userPage, 'user browser'),
     ]);
