@@ -145,7 +145,7 @@ Done:
 - [x] `extension/tests/680-server-http3-lsquic-behavior-contract.phpt` proves the LSQUIC listener keeps shared request header normalization, body-FIN gating, early-hints session state, response normalization, and CORS semantics.
 - [x] `extension/tests/681-server-http3-lsquic-lifecycle-contract.phpt` covers TLS option/reload semantics, LSQUIC cancel bridging, premature close handling, and shutdown cleanup without leaking unowned listener sockets.
 - [x] `extension/tests/682-server-websocket-http3-onwire-honesty-contract.phpt` keeps local HTTP/3 WebSocket upgrades explicit while rejecting fake on-wire HTTP/3 Extended CONNECT upgrades.
-- [ ] HTTP/3 server listeners run on the new stack against real clients/peers.
+- [x] `extension/tests/384-http3-server-listen-on-wire-runtime.phpt` now targets LSQUIC-built server listeners with real direct and dispatcher HTTP/3 clients, asserting `lsquic_h3` client responses and `server_http3_lsquic_socket` server captures.
 - [ ] No server path needs Quiche code.
 
 ---

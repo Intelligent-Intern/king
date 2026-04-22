@@ -22,6 +22,7 @@ $dispatchPath = $root . '/extension/src/client/http3/dispatch_api.inc';
 $errorsAndValidationPath = $root . '/extension/src/client/http3/errors_and_validation.inc';
 $oneShotWireTestPath = $root . '/extension/tests/190-http3-request-send-roundtrip.phpt';
 $ooWireTestPath = $root . '/extension/tests/191-oo-http3-client-runtime.phpt';
+$serverWireTestPath = $root . '/extension/tests/384-http3-server-listen-on-wire-runtime.phpt';
 $errors = [];
 
 function king_http3_loader_fail(string $message): void
@@ -156,6 +157,7 @@ $dispatch = king_http3_loader_require_file($dispatchPath, $errors);
 $errorsAndValidation = king_http3_loader_require_file($errorsAndValidationPath, $errors);
 $oneShotWireTest = king_http3_loader_require_file($oneShotWireTestPath, $errors);
 $ooWireTest = king_http3_loader_require_file($ooWireTestPath, $errors);
+$serverWireTest = king_http3_loader_require_file($serverWireTestPath, $errors);
 
 if ($errors !== []) {
     king_http3_loader_fail(implode(PHP_EOL, $errors));
@@ -729,6 +731,15 @@ foreach ([
 ] as $forbidden) {
     if (str_contains($ooWireTest, $forbidden)) {
         $errors[] = 'OO HTTP/3 wire test must target LSQUIC client runtime, not ' . $forbidden;
+    }
+}
+
+foreach (['king_http3_server_wire_start_server', 'king_http3_request_send(', 'king_client_send_request(', 'KING_LSQUIC_LIBRARY', 'runtime-loaded LSQUIC', 'KING_HTTP3_BACKEND_LSQUIC', 'lsquic_h3', "string(9) \"lsquic_h3\"", 'server_http3_lsquic_socket', "string(26) \"server_http3_lsquic_socket\""] as $needle) {
+    king_http3_loader_require_contains('HTTP/3 server one-shot wire test', $serverWireTest, $needle, $errors);
+}
+foreach (['KING_QUICHE_LIBRARY', 'string(9) "quiche_h3"', 'string(19) "server_http3_socket"', "'server_http3_socket'", '"server_http3_socket"'] as $forbidden) {
+    if (str_contains($serverWireTest, $forbidden)) {
+        $errors[] = 'HTTP/3 server one-shot wire test must target LSQUIC server runtime, not ' . $forbidden;
     }
 }
 
