@@ -26,7 +26,7 @@ Checklist:
 - [x] Update `extension/config.m4` to portable detection: pkg-config, env overrides, system paths, or vendored build outputs.
 - [x] Remove or replace Quiche scripts: `bootstrap-quiche.sh`, `check-quiche-bootstrap.sh`, `ensure-quiche-toolchain.sh`.
 - [x] Remove Cargo/Rust bootstrap from the HTTP/3 build path.
-- [ ] Make CI build reproducibly on Linux amd64 and arm64.
+- [x] Make CI build reproducibly on Linux amd64 and arm64.
 - [ ] Support macOS/dev only through documented env/pkg-config paths.
 - [ ] Update release package manifests for new artifacts and new provenance.
 
@@ -53,6 +53,12 @@ Build Path Contract:
 - `infra/scripts/build-profile.sh` stages `king.so` without invoking Cargo, Rust, or Quiche runtime artifact builds.
 - `extension/Makefile.frag` no longer extends `all` or `install` with Quiche runtime targets.
 - Release packages no longer require or ship `runtime/libquiche.so` or `runtime/quiche-server`.
+
+CI Reproducibility Contract:
+
+- `install-package-matrix` and `build-release-packages` cover PHP 8.1-8.5 on `linux-amd64` and `linux-arm64`.
+- Both package jobs run `package-release.sh --verify-reproducible` before upload.
+- `infra/scripts/check-ci-linux-reproducible-builds.rb` blocks missing Linux arch rows or Rust/Cargo bootstrap in the product package jobs.
 
 ---
 

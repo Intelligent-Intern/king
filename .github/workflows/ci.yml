@@ -321,6 +321,9 @@ jobs:
             runner: ubuntu-24.04-arm
             arch-label: linux-arm64
           - php-version: "8.5"
+            runner: ubuntu-24.04
+            arch-label: linux-amd64
+          - php-version: "8.5"
             runner: ubuntu-24.04-arm
             arch-label: linux-arm64
 

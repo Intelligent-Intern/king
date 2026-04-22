@@ -32,13 +32,17 @@ if [ ! -r "${YAML_VALIDATOR}" ]; then
     exit 1
 fi
 
+php_lint() {
+    php -n -l "$1"
+}
+
 echo "Linting PHP entry surfaces..."
-php -l stubs/king.php
-php -l benchmarks/run.php
-php -l infra/scripts/check-stub-parity.php
-php -l infra/scripts/runtime-config-compatibility.php
-php -l infra/scripts/runtime-install-smoke.php
-php -l infra/scripts/runtime-persistence-migration.php
+php_lint stubs/king.php
+php_lint benchmarks/run.php
+php_lint infra/scripts/check-stub-parity.php
+php_lint infra/scripts/runtime-config-compatibility.php
+php_lint infra/scripts/runtime-install-smoke.php
+php_lint infra/scripts/runtime-persistence-migration.php
 
 echo "Validating Composer metadata..."
 composer validate "${ROOT_DIR}/composer.json"
@@ -56,6 +60,9 @@ shopt -u nullglob
 for workflow in "${workflow_files[@]}"; do
     ruby "${YAML_VALIDATOR}" "${workflow}"
 done
+
+echo "Checking Linux reproducible CI build matrix..."
+ruby infra/scripts/check-ci-linux-reproducible-builds.rb
 
 echo "Checking extension include layout..."
 infra/scripts/check-include-layout.sh
