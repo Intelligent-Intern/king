@@ -163,6 +163,14 @@
               class="workspace-mini-video-slot"
               :data-user-id="participant.userId"
             ></div>
+            <div
+              v-if="!participantHasRenderableMedia(participant.userId)"
+              class="workspace-mini-video-placeholder"
+              aria-hidden="true"
+            >
+              <span class="workspace-mini-video-initials">{{ participantInitials(participant.displayName) }}</span>
+              <span class="workspace-mini-video-status">Connecting media</span>
+            </div>
             <span class="workspace-mini-title">{{ participant.displayName }}</span>
             <span class="workspace-mini-meta">{{ participant.role }}</span>
           </article>
@@ -947,6 +955,7 @@ const mediaRuntimeCapabilities = ref({
 const mediaRuntimePath = ref('pending');
 const mediaRuntimeReason = ref('boot');
 const nativePeerConnectionsRef = ref(new Map());
+const mediaRenderVersion = ref(0);
 const dynamicIceServers = ref([]);
 let runtimeSwitchInFlight = false;
 let wlvcEncodeFailureCount = 0;
@@ -4718,6 +4727,7 @@ function setSfuRemotePeer(publisherId, peer) {
   const nextPeers = new Map(remotePeersRef.value);
   nextPeers.set(normalizedPublisherId, peer);
   remotePeersRef.value = nextPeers;
+  bumpMediaRenderVersion();
 }
 
 function deleteSfuRemotePeer(publisherId) {
@@ -4728,6 +4738,7 @@ function deleteSfuRemotePeer(publisherId) {
   nextPeers.delete(normalizedPublisherId);
   remotePeersRef.value = nextPeers;
   pendingSfuRemotePeerInitializers.delete(normalizedPublisherId);
+  bumpMediaRenderVersion();
   return true;
 }
 
@@ -4921,6 +4932,7 @@ function teardownSfuRemotePeers() {
   pendingSfuRemotePeerInitializers.clear();
   remoteFrameActivityLastByUserId.clear();
   clearRemoteVideoContainer();
+  bumpMediaRenderVersion();
 }
 
 function createNativePeerVideoElement(userId) {
@@ -4934,9 +4946,60 @@ function createNativePeerVideoElement(userId) {
 
 function remotePeerMediaNode(peer) {
   if (!peer || typeof peer !== 'object') return null;
-  if (peer.decodedCanvas instanceof HTMLCanvasElement) return peer.decodedCanvas;
-  if (peer.video instanceof HTMLVideoElement) return peer.video;
+  if (typeof HTMLCanvasElement !== 'undefined' && peer.decodedCanvas instanceof HTMLCanvasElement) return peer.decodedCanvas;
+  if (typeof HTMLVideoElement !== 'undefined' && peer.video instanceof HTMLVideoElement) return peer.video;
   return null;
+}
+
+function bumpMediaRenderVersion() {
+  mediaRenderVersion.value = mediaRenderVersion.value >= 1_000_000 ? 0 : mediaRenderVersion.value + 1;
+}
+
+function streamHasTracks(stream) {
+  if (typeof MediaStream === 'undefined' || !(stream instanceof MediaStream)) return false;
+  return stream.getTracks().some((track) => track?.readyState !== 'ended');
+}
+
+function remotePeerHasRenderableMedia(peer) {
+  if (!peer || typeof peer !== 'object') return false;
+  if (typeof HTMLCanvasElement !== 'undefined' && peer.decodedCanvas instanceof HTMLCanvasElement) return true;
+  if (streamHasTracks(peer.remoteStream) || streamHasTracks(peer.stream)) return true;
+  if (typeof HTMLVideoElement !== 'undefined' && peer.video instanceof HTMLVideoElement) {
+    return streamHasTracks(peer.video.srcObject) || Number(peer.video.readyState || 0) > 0;
+  }
+  return false;
+}
+
+function participantHasRenderableMedia(userId) {
+  mediaRenderVersion.value;
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+  if (normalizedUserId === currentUserId.value) {
+    return streamHasTracks(localStreamRef.value)
+      || streamHasTracks(localFilteredStreamRef.value)
+      || streamHasTracks(localRawStreamRef.value);
+  }
+  for (const peer of remotePeersRef.value.values()) {
+    if (Number(peer?.userId || 0) === normalizedUserId && remotePeerHasRenderableMedia(peer)) {
+      return true;
+    }
+  }
+  for (const peer of nativePeerConnectionsRef.value.values()) {
+    if (Number(peer?.userId || 0) === normalizedUserId && remotePeerHasRenderableMedia(peer)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function participantInitials(displayName) {
+  const parts = String(displayName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return '?';
+  const initials = parts.slice(0, 2).map((part) => part.slice(0, 1).toUpperCase()).join('');
+  return initials || '?';
 }
 
 function mediaNodeForUserId(userId) {
@@ -5224,6 +5287,7 @@ function setNativePeerConnection(targetUserId, peer) {
   const nextPeers = new Map(nativePeerConnectionsRef.value);
   nextPeers.set(normalizedTargetUserId, peer);
   nativePeerConnectionsRef.value = nextPeers;
+  bumpMediaRenderVersion();
 }
 
 function takeNativePeerConnection(targetUserId) {
@@ -5234,6 +5298,7 @@ function takeNativePeerConnection(targetUserId) {
   const nextPeers = new Map(nativePeerConnectionsRef.value);
   nextPeers.delete(normalizedTargetUserId);
   nativePeerConnectionsRef.value = nextPeers;
+  bumpMediaRenderVersion();
   return peer;
 }
 
@@ -5374,13 +5439,16 @@ function ensureNativePeerConnection(targetUserId) {
       for (const track of incoming.getTracks()) {
         if (!remoteStream.getTracks().some((row) => row.id === track.id)) {
           remoteStream.addTrack(track);
+          track.addEventListener?.('ended', bumpMediaRenderVersion, { once: true });
         }
       }
     } else if (event?.track) {
       if (!remoteStream.getTracks().some((row) => row.id === event.track.id)) {
         remoteStream.addTrack(event.track);
+        event.track.addEventListener?.('ended', bumpMediaRenderVersion, { once: true });
       }
     }
+    bumpMediaRenderVersion();
     renderNativeRemoteVideos();
     if (video instanceof HTMLVideoElement) {
       video.play().catch(() => {});
