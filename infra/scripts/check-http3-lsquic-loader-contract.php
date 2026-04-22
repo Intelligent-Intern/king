@@ -6,6 +6,7 @@ declare(strict_types=1);
 $root = dirname(__DIR__, 2);
 $clientPath = $root . '/extension/src/client/http3.c';
 $loaderPath = $root . '/extension/src/client/http3/lsquic_loader.inc';
+$runtimePath = $root . '/extension/src/client/http3/lsquic_runtime.inc';
 $errorsAndValidationPath = $root . '/extension/src/client/http3/errors_and_validation.inc';
 $errors = [];
 
@@ -99,6 +100,7 @@ function king_http3_loader_require_order(
 
 $client = king_http3_loader_require_file($clientPath, $errors);
 $loader = king_http3_loader_require_file($loaderPath, $errors);
+$runtime = king_http3_loader_require_file($runtimePath, $errors);
 $errorsAndValidation = king_http3_loader_require_file($errorsAndValidationPath, $errors);
 
 if ($errors !== []) {
@@ -109,6 +111,12 @@ king_http3_loader_require_contains(
     'Client HTTP/3 source',
     $client,
     '#include "http3/lsquic_loader.inc"',
+    $errors
+);
+king_http3_loader_require_contains(
+    'Client HTTP/3 source',
+    $client,
+    '#include "http3/lsquic_runtime.inc"',
     $errors
 );
 king_http3_loader_require_contains(
@@ -233,6 +241,40 @@ foreach (['stub', 'fake', 'HAVE_KING_LSQUIC', 'KING_HTTP3_BACKEND_LSQUIC'] as $f
     if (stripos($loader, $forbidden) !== false) {
         $errors[] = 'LSQUIC loader must not contain feature-only or placeholder marker: ' . $forbidden;
     }
+}
+
+$requiredRuntimeNeedles = [
+    'king_http3_lsquic_runtime_init',
+    'king_http3_lsquic_runtime_destroy',
+    'king_http3_lsquic_packets_out',
+    'king_http3_lsquic_runtime_packet_in',
+    'sendmsg(runtime->socket_fd',
+    'lsquic_engine_packet_in_fn',
+    'lsquic_engine_init_settings_fn',
+    'lsquic_engine_check_settings_fn',
+    'lsquic_engine_new_fn',
+    'lsquic_engine_connect_fn',
+    'N_LSQVER',
+    'LSENG_HTTP',
+    'king_http3_lsquic_stream_if',
+    '.on_new_conn = king_http3_lsquic_on_new_conn',
+    '.on_new_stream = king_http3_lsquic_on_new_stream',
+    '.on_read = king_http3_lsquic_on_read',
+    '.on_write = king_http3_lsquic_on_write',
+    '.on_close = king_http3_lsquic_on_close',
+    '.on_hsk_done = king_http3_lsquic_on_hsk_done',
+    '.on_sess_resume_info = king_http3_lsquic_on_sess_resume_info',
+    'king_ticket_ring_get(runtime->lsquic_session_resume',
+    'king_ticket_ring_put(session, session_len)',
+    'runtime->tls_ticket_source = "ring"',
+    'runtime->tls_session_resumed = status == LSQ_HSK_RESUMED_OK',
+    'runtime->quic_packets_received++',
+    'lsquic_engine_earliest_adv_tick_fn',
+    'king_secure_zero(runtime->lsquic_session_resume',
+];
+
+foreach ($requiredRuntimeNeedles as $needle) {
+    king_http3_loader_require_contains('LSQUIC runtime adapter', $runtime, $needle, $errors);
 }
 
 $ensureBody = king_http3_loader_extract_function(

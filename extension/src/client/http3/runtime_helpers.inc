@@ -56,6 +56,12 @@ static void king_http3_multi_requests_destroy(
 
 static void king_http3_runtime_destroy(king_http3_request_runtime_t *runtime)
 {
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+    if (runtime->lsquic_backend_active) {
+        king_http3_lsquic_runtime_destroy(runtime);
+    }
+#endif
+
     if (runtime->h3_conn != NULL && king_http3_quiche.quiche_h3_conn_free_fn != NULL) {
         king_http3_quiche.quiche_h3_conn_free_fn(runtime->h3_conn);
     }
@@ -114,6 +120,13 @@ static void king_http3_seed_ticket_from_ring(king_http3_request_runtime_t *runti
 {
     uint8_t ticket_buffer[KING_MAX_TICKET_SIZE];
     size_t ticket_len = sizeof(ticket_buffer);
+
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+    if (runtime != NULL && runtime->lsquic_backend_active) {
+        king_http3_lsquic_seed_ticket_from_ring(runtime);
+        return;
+    }
+#endif
 
     if (runtime == NULL
         || runtime->conn == NULL

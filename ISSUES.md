@@ -100,6 +100,7 @@ Checklist:
 - [x] Prevent failure stubs or fake feature checks.
 - [x] Map error paths to existing King exceptions.
 - [x] Bind the real LSQUIC request-runtime symbol surface for settings, packet ingress, stream headers, stream contexts, and stats.
+- [x] Add the LSQUIC runtime adapter for engine init, UDP egress, stream callbacks, ticket seed/publish, destroy, and live-counter refresh.
 - [ ] Wire runtime init, request/response, multi-request, ticket reuse, and stats.
 - [ ] Remove or migrate old Quiche symbols, handles, and runtime names.
 
@@ -108,6 +109,7 @@ Done:
 - [x] `infra/scripts/check-http3-lsquic-loader-contract.php` runs in static checks and rejects placeholder success paths or compile-flag-only readiness.
 - [x] LSQUIC library, symbol, and global-init loader failures map through existing King exception classes via `king_http3_throw_lsquic_unavailable()`.
 - [x] LSQUIC runtime binding now uses the official packet-in, header, context, stream-shutdown, settings, and live-counter API surface instead of stale intermediate signatures.
+- [x] `extension/src/client/http3/lsquic_runtime.inc` owns the real LSQUIC engine API wiring and callback bridge, including session resume information into the King ticket ring.
 - [ ] `king_http3_request_send()` uses the new stack in real wire tests.
 - [ ] OO HTTP3 client uses the new stack in real wire tests.
 - [ ] Old Quiche loader is no longer referenced by any active include.

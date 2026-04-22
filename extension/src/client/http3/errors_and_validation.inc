@@ -461,6 +461,13 @@ static void king_http3_refresh_transport_stats(
 {
     king_http3_quiche_stats_t stats;
 
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+    if (runtime != NULL && runtime->lsquic_backend_active) {
+        king_http3_lsquic_refresh_transport_stats(runtime);
+        return;
+    }
+#endif
+
     if (runtime == NULL
         || runtime->conn == NULL
         || king_http3_quiche.quiche_conn_stats_fn == NULL) {

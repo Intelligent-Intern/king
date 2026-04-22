@@ -25,6 +25,11 @@
 #include "Zend/zend_smart_str.h"
 #include "ext/standard/url.h"
 
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+#include <lsquic.h>
+#include <lsxpack_header.h>
+#endif
+
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dlfcn.h>
@@ -119,6 +124,18 @@ typedef struct _king_http3_request_runtime {
     zend_long quic_packets_retransmitted;
     zend_long quic_lost_bytes;
     zend_long quic_stream_retransmitted_bytes;
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+    bool lsquic_backend_active;
+    struct lsquic_engine_settings lsquic_settings;
+    struct lsquic_engine_api lsquic_api;
+    lsquic_engine_t *lsquic_engine;
+    lsquic_conn_t *lsquic_conn;
+    lsquic_stream_t *lsquic_stream;
+    unsigned char lsquic_session_resume[KING_MAX_TICKET_SIZE];
+    size_t lsquic_session_resume_len;
+    bool lsquic_connection_closed;
+    bool lsquic_stream_closed;
+#endif
 } king_http3_request_runtime_t;
 
 typedef struct _king_http3_response_header_context {
@@ -318,10 +335,17 @@ static void king_http3_request_target_destroy(
     php_url *parsed_url,
     king_http3_request_target_t *target);
 
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+static void king_http3_lsquic_seed_ticket_from_ring(king_http3_request_runtime_t *runtime);
+static void king_http3_lsquic_refresh_transport_stats(king_http3_request_runtime_t *runtime);
+static void king_http3_lsquic_runtime_destroy(king_http3_request_runtime_t *runtime);
+#endif
+
 
 #include "http3/errors_and_validation.inc"
 #include "http3/quiche_loader.inc"
 #include "http3/lsquic_loader.inc"
+#include "http3/lsquic_runtime.inc"
 #include "http3/runtime_helpers.inc"
 #include "http3/runtime_init.inc"
 #include "http3/request_response.inc"
