@@ -1393,7 +1393,6 @@ const callOwnerEditState = reactive({
   callId: '',
   title: '',
   accessMode: 'invite_only',
-  roomId: 'lobby',
   startsLocal: '',
   endsLocal: '',
   replaceParticipants: false,
@@ -1610,7 +1609,6 @@ function hydrateCallOwnerDraftFromCall(call) {
 
   callOwnerEditState.callId = String(normalizedCall.id || '').trim();
   callOwnerEditState.title = String(normalizedCall.title || '').trim();
-  callOwnerEditState.roomId = String(normalizedCall.room_id || 'lobby').trim() || 'lobby';
   callOwnerEditState.accessMode = normalizeCallAccessMode(normalizedCall.access_mode);
   callOwnerEditState.startsLocal = isoToLocalInput(String(normalizedCall.starts_at || ''));
   callOwnerEditState.endsLocal = isoToLocalInput(String(normalizedCall.ends_at || ''));

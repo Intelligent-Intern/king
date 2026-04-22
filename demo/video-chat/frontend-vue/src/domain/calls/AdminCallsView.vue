@@ -1826,7 +1826,6 @@ const composeState = reactive({
   callId: '',
   title: '',
   accessMode: 'invite_only',
-  roomId: 'lobby',
   startsLocal: '',
   endsLocal: '',
   replaceParticipants: false,
@@ -1912,7 +1911,6 @@ function resetComposeModal() {
   composeState.callId = '';
   composeState.title = '';
   composeState.accessMode = 'invite_only';
-  composeState.roomId = 'lobby';
   composeState.replaceParticipants = false;
   composeState.submitting = false;
   composeState.error = '';
@@ -1939,7 +1937,6 @@ function openCompose(mode, call = null) {
     composeState.callId = String(call.id || '');
     composeState.title = String(call.title || '');
     composeState.accessMode = normalizeCallAccessMode(call.access_mode);
-    composeState.roomId = String(call.room_id || 'lobby');
     composeState.startsLocal = isoToLocalInput(String(call.starts_at || ''));
     composeState.endsLocal = isoToLocalInput(String(call.ends_at || ''));
     composeState.replaceParticipants = false;
