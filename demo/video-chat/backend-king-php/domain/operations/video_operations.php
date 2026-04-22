@@ -2,18 +2,27 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../realtime/realtime_call_presence_db.php';
+require_once __DIR__ . '/../realtime/realtime_sfu_store.php';
+
 /**
- * Build the admin video-operations snapshot from real participant presence.
+ * Build the admin video-operations snapshot from current realtime presence.
  *
  * The dashboard must not count invited/assigned participants as concurrent
- * users. A participant is live only while joined_at is set and left_at is open.
+ * users. A participant is live only while a fresh websocket call-presence row
+ * exists; SFU publisher state is reported separately as media-plane telemetry.
  *
  * @return array<string, mixed>
  */
 function videochat_video_operations_snapshot(PDO $pdo, ?int $nowEpoch = null): array
 {
     $now = $nowEpoch ?? time();
-    $rows = videochat_video_operations_fetch_live_call_rows($pdo);
+    $nowMs = $now * 1000;
+    videochat_realtime_presence_db_bootstrap($pdo);
+    videochat_sfu_bootstrap($pdo);
+    videochat_realtime_presence_db_prune($pdo, $nowMs);
+
+    $rows = videochat_video_operations_fetch_live_call_rows($pdo, $nowMs);
     $runningCalls = [];
     $concurrentParticipants = 0;
 
@@ -46,10 +55,18 @@ function videochat_video_operations_snapshot(PDO $pdo, ?int $nowEpoch = null): a
                 'internal' => videochat_video_operations_int($row['live_internal'] ?? 0),
                 'external' => videochat_video_operations_int($row['live_external'] ?? 0),
             ],
+            'sfu' => [
+                'publishers' => videochat_video_operations_int($row['sfu_publishers'] ?? 0),
+                'publisher_users' => videochat_video_operations_int($row['sfu_publisher_users'] ?? 0),
+            ],
             'assigned_participants' => [
                 'total' => videochat_video_operations_int($row['assigned_total'] ?? 0),
                 'internal' => videochat_video_operations_int($row['assigned_internal'] ?? 0),
                 'external' => videochat_video_operations_int($row['assigned_external'] ?? 0),
+            ],
+            'presence' => [
+                'ttl_ms' => videochat_realtime_presence_db_ttl_ms(),
+                'source' => 'realtime_presence_connections',
             ],
             'running_since' => $runningSince,
             'uptime_seconds' => videochat_video_operations_uptime_seconds($runningSince, $now),
@@ -72,9 +89,13 @@ function videochat_video_operations_snapshot(PDO $pdo, ?int $nowEpoch = null): a
 /**
  * @return array<int, array<string, mixed>>
  */
-function videochat_video_operations_fetch_live_call_rows(PDO $pdo): array
+function videochat_video_operations_fetch_live_call_rows(PDO $pdo, int $nowMs): array
 {
-    $statement = $pdo->query(
+    $freshnessMs = videochat_realtime_presence_db_ttl_ms();
+    $presenceCutoffMs = max(0, $nowMs - $freshnessMs);
+    $sfuCutoffMs = max(0, $nowMs - $freshnessMs);
+
+    $statement = $pdo->prepare(
         <<<'SQL'
 SELECT
     calls.id,
@@ -94,22 +115,33 @@ SELECT
     live.running_since,
     COALESCE(assigned.assigned_total, 0) AS assigned_total,
     COALESCE(assigned.assigned_internal, 0) AS assigned_internal,
-    COALESCE(assigned.assigned_external, 0) AS assigned_external
+    COALESCE(assigned.assigned_external, 0) AS assigned_external,
+    COALESCE(sfu.sfu_publishers, 0) AS sfu_publishers,
+    COALESCE(sfu.sfu_publisher_users, 0) AS sfu_publisher_users
 FROM calls
 INNER JOIN users owners ON owners.id = calls.owner_user_id
 INNER JOIN (
     SELECT
-        call_id,
-        COUNT(*) AS live_total,
-        SUM(CASE WHEN source = 'internal' THEN 1 ELSE 0 END) AS live_internal,
-        SUM(CASE WHEN source = 'external' THEN 1 ELSE 0 END) AS live_external,
-        MIN(joined_at) AS running_since
-    FROM call_participants
-    WHERE joined_at IS NOT NULL
-      AND trim(joined_at) <> ''
-      AND (left_at IS NULL OR trim(left_at) = '')
-    GROUP BY call_id
-) live ON live.call_id = calls.id
+        presence.call_id,
+        presence.room_id,
+        COUNT(DISTINCT presence.user_id) AS live_total,
+        COUNT(DISTINCT CASE WHEN COALESCE(participants.is_external, 0) = 1 THEN presence.user_id END) AS live_external,
+        COUNT(DISTINCT CASE WHEN COALESCE(participants.is_external, 0) = 0 THEN presence.user_id END) AS live_internal,
+        MIN(presence.connected_at) AS running_since
+    FROM realtime_presence_connections presence
+    LEFT JOIN (
+        SELECT
+            call_id,
+            user_id,
+            MAX(CASE WHEN source = 'external' THEN 1 ELSE 0 END) AS is_external
+        FROM call_participants
+        WHERE user_id IS NOT NULL
+        GROUP BY call_id, user_id
+    ) participants ON participants.call_id = presence.call_id
+       AND participants.user_id = presence.user_id
+    WHERE presence.last_seen_at_ms >= :presence_cutoff_ms
+    GROUP BY presence.call_id, presence.room_id
+) live ON live.call_id = calls.id AND live.room_id = calls.room_id
 LEFT JOIN (
     SELECT
         call_id,
@@ -119,6 +151,15 @@ LEFT JOIN (
     FROM call_participants
     GROUP BY call_id
 ) assigned ON assigned.call_id = calls.id
+LEFT JOIN (
+    SELECT
+        room_id,
+        COUNT(*) AS sfu_publishers,
+        COUNT(DISTINCT user_id) AS sfu_publisher_users
+    FROM sfu_publishers
+    WHERE updated_at_ms >= :sfu_cutoff_ms
+    GROUP BY room_id
+) sfu ON sfu.room_id = calls.room_id
 WHERE lower(trim(calls.status)) NOT IN ('ended', 'cancelled')
 ORDER BY
     live.running_since ASC,
@@ -127,6 +168,10 @@ ORDER BY
     calls.id ASC
 SQL
     );
+    $statement->execute([
+        ':presence_cutoff_ms' => $presenceCutoffMs,
+        ':sfu_cutoff_ms' => $sfuCutoffMs,
+    ]);
 
     $rows = $statement instanceof PDOStatement ? $statement->fetchAll(PDO::FETCH_ASSOC) : [];
     return is_array($rows) ? array_values(array_filter($rows, 'is_array')) : [];
