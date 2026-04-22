@@ -103,6 +103,7 @@ Checklist:
 - [x] Add the LSQUIC runtime adapter for engine init, UDP egress, stream callbacks, ticket seed/publish, destroy, and live-counter refresh.
 - [x] Add the LSQUIC request callback bridge for header encoding, body streaming, response header decode, body read, and request stream creation.
 - [x] Wire the one-shot `king_http3_request_send()` dispatch loop behind the configured LSQUIC backend.
+- [x] Move LSQUIC request lifecycle state onto stream-owned request contexts for future multi-stream dispatch.
 - [ ] Wire runtime init, request/response, multi-request, ticket reuse, and stats.
 - [ ] Remove or migrate old Quiche symbols, handles, and runtime names.
 
@@ -114,6 +115,7 @@ Done:
 - [x] `extension/src/client/http3/lsquic_runtime.inc` owns the real LSQUIC engine API wiring and callback bridge, including session resume information into the King ticket ring.
 - [x] The LSQUIC request bridge now drives `lsquic_conn_make_stream`, `lsquic_stream_send_headers`, `lsquic_stream_write`, `lsquic_stream_read`, and the header-set decode interface.
 - [x] `king_http3_request_send()` now has a LSQUIC one-shot dispatch path with shared UDP socket init, packet ingress, egress processing, cancel close, response materialization, and LSQUIC backend metadata.
+- [x] LSQUIC stream callbacks now resolve a `king_http3_lsquic_request_state_t` from stream context instead of reading mutable request fields from the shared runtime.
 - [ ] `king_http3_request_send()` uses the new stack in real wire tests.
 - [ ] OO HTTP3 client uses the new stack in real wire tests.
 - [ ] Old Quiche loader is no longer referenced by any active include.

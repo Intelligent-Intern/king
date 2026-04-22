@@ -101,6 +101,10 @@ typedef struct _king_http3_response {
     bool response_complete;
 } king_http3_response_t;
 
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+typedef struct _king_http3_lsquic_request_state king_http3_lsquic_request_state_t;
+#endif
+
 typedef struct _king_http3_request_runtime {
     int socket_fd;
     struct sockaddr_storage peer_addr;
@@ -130,19 +134,10 @@ typedef struct _king_http3_request_runtime {
     struct lsquic_engine_api lsquic_api;
     lsquic_engine_t *lsquic_engine;
     lsquic_conn_t *lsquic_conn;
-    lsquic_stream_t *lsquic_stream;
-    const quiche_h3_header *lsquic_request_headers;
-    size_t lsquic_request_header_count;
-    zend_string *lsquic_body_string;
-    size_t lsquic_body_offset;
-    king_http3_response_t *lsquic_response;
+    king_http3_lsquic_request_state_t *lsquic_pending_request;
     unsigned char lsquic_session_resume[KING_MAX_TICKET_SIZE];
     size_t lsquic_session_resume_len;
     bool lsquic_connection_closed;
-    bool lsquic_stream_closed;
-    bool lsquic_headers_sent;
-    bool lsquic_request_failed;
-    bool lsquic_hset_claimed;
 #endif
 } king_http3_request_runtime_t;
 
@@ -359,6 +354,7 @@ static void king_http3_lsquic_runtime_destroy(king_http3_request_runtime_t *runt
 #include "http3/errors_and_validation.inc"
 #include "http3/quiche_loader.inc"
 #include "http3/lsquic_loader.inc"
+#include "http3/lsquic_stream_runtime.inc"
 #include "http3/lsquic_runtime.inc"
 #include "http3/runtime_helpers.inc"
 #include "http3/runtime_init.inc"

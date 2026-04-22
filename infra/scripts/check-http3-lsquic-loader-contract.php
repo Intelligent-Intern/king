@@ -6,6 +6,7 @@ declare(strict_types=1);
 $root = dirname(__DIR__, 2);
 $clientPath = $root . '/extension/src/client/http3.c';
 $loaderPath = $root . '/extension/src/client/http3/lsquic_loader.inc';
+$streamRuntimePath = $root . '/extension/src/client/http3/lsquic_stream_runtime.inc';
 $runtimePath = $root . '/extension/src/client/http3/lsquic_runtime.inc';
 $lsquicDispatchPath = $root . '/extension/src/client/http3/lsquic_dispatch.inc';
 $runtimeInitPath = $root . '/extension/src/client/http3/runtime_init.inc';
@@ -104,6 +105,7 @@ function king_http3_loader_require_order(
 
 $client = king_http3_loader_require_file($clientPath, $errors);
 $loader = king_http3_loader_require_file($loaderPath, $errors);
+$streamRuntime = king_http3_loader_require_file($streamRuntimePath, $errors);
 $runtime = king_http3_loader_require_file($runtimePath, $errors);
 $lsquicDispatch = king_http3_loader_require_file($lsquicDispatchPath, $errors);
 $runtimeInit = king_http3_loader_require_file($runtimeInitPath, $errors);
@@ -119,6 +121,12 @@ king_http3_loader_require_contains(
     'Client HTTP/3 source',
     $client,
     '#include "http3/lsquic_loader.inc"',
+    $errors
+);
+king_http3_loader_require_contains(
+    'Client HTTP/3 source',
+    $client,
+    '#include "http3/lsquic_stream_runtime.inc"',
     $errors
 );
 king_http3_loader_require_contains(
@@ -257,10 +265,10 @@ foreach (['stub', 'fake', 'HAVE_KING_LSQUIC', 'KING_HTTP3_BACKEND_LSQUIC'] as $f
     }
 }
 
-$requiredRuntimeNeedles = [
-    'king_http3_lsquic_runtime_init',
-    'king_http3_lsquic_runtime_destroy',
-    'king_http3_lsquic_runtime_prepare_request',
+$requiredStreamRuntimeNeedles = [
+    'struct _king_http3_lsquic_request_state',
+    'king_http3_lsquic_request_from_stream_ctx',
+    'king_http3_lsquic_request_from_stream',
     'king_http3_lsquic_send_headers',
     'king_http3_lsquic_write_body',
     'king_http3_lsquic_read_response',
@@ -269,15 +277,7 @@ $requiredRuntimeNeedles = [
     'king_http3_lsquic_hsi_prepare_decode',
     'king_http3_lsquic_hsi_process_header',
     'king_http3_lsquic_packets_out',
-    'king_http3_lsquic_runtime_packet_in',
     'sendmsg(runtime->socket_fd',
-    'lsquic_engine_packet_in_fn',
-    'lsquic_engine_init_settings_fn',
-    'lsquic_engine_check_settings_fn',
-    'lsquic_engine_new_fn',
-    'lsquic_engine_connect_fn',
-    'N_LSQVER',
-    'LSENG_HTTP',
     'king_http3_lsquic_stream_if',
     '.on_new_conn = king_http3_lsquic_on_new_conn',
     '.on_new_stream = king_http3_lsquic_on_new_stream',
@@ -294,13 +294,36 @@ $requiredRuntimeNeedles = [
     'lsxpack_header_set_offset2',
     'lsxpack_header_prepare_decode',
     'king_http3_collect_response_header',
-    'smart_str_appendl(&runtime->lsquic_response->body',
-    'runtime->lsquic_response->response_complete = true',
-    'king_http3_lsquic.lsquic_conn_make_stream_fn(runtime->lsquic_conn)',
-    'king_ticket_ring_get(runtime->lsquic_session_resume',
+    'smart_str_appendl(&request->response->body',
+    'request->response->response_complete = true',
+    'request->headers_sent = true',
+    'request->request_failed = true',
     'king_ticket_ring_put(session, session_len)',
-    'runtime->tls_ticket_source = "ring"',
     'runtime->tls_session_resumed = status == LSQ_HSK_RESUMED_OK',
+];
+
+foreach ($requiredStreamRuntimeNeedles as $needle) {
+    king_http3_loader_require_contains('LSQUIC stream runtime bridge', $streamRuntime, $needle, $errors);
+}
+
+$requiredRuntimeNeedles = [
+    'king_http3_lsquic_runtime_init',
+    'king_http3_lsquic_runtime_destroy',
+    'king_http3_lsquic_runtime_prepare_request',
+    'king_http3_lsquic_runtime_packet_in',
+    'lsquic_engine_packet_in_fn',
+    'lsquic_engine_init_settings_fn',
+    'lsquic_engine_check_settings_fn',
+    'lsquic_engine_new_fn',
+    'lsquic_engine_connect_fn',
+    'N_LSQVER',
+    'LSENG_HTTP',
+    'king_http3_lsquic_stream_if',
+    'king_http3_lsquic_packets_out',
+    'king_http3_lsquic.lsquic_conn_make_stream_fn(runtime->lsquic_conn)',
+    'runtime->lsquic_pending_request = request',
+    'king_ticket_ring_get(runtime->lsquic_session_resume',
+    'runtime->tls_ticket_source = "ring"',
     'runtime->quic_packets_received++',
     'lsquic_engine_earliest_adv_tick_fn',
     'king_secure_zero(runtime->lsquic_session_resume',

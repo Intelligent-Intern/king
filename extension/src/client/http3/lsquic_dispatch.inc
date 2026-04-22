@@ -12,6 +12,7 @@ static zend_result king_http3_execute_request_lsquic(
     php_url *parsed_url = NULL;
     king_http3_request_target_t target;
     king_http3_request_runtime_t runtime;
+    king_http3_lsquic_request_state_t request;
     king_http3_response_t response;
     quiche_h3_header *request_headers = NULL;
     zend_string **owned_strings = NULL;
@@ -26,6 +27,7 @@ static zend_result king_http3_execute_request_lsquic(
     memset(&target, 0, sizeof(target));
     memset(&runtime, 0, sizeof(runtime));
     runtime.socket_fd = -1;
+    memset(&request, 0, sizeof(request));
     memset(&response, 0, sizeof(response));
     array_init(&response.headers);
     response.headers_initialized = true;
@@ -79,6 +81,7 @@ static zend_result king_http3_execute_request_lsquic(
 
     if (king_http3_lsquic_runtime_prepare_request(
             &runtime,
+            &request,
             request_headers,
             request_header_count,
             body_string,
@@ -112,7 +115,7 @@ static zend_result king_http3_execute_request_lsquic(
             goto failure;
         }
 
-        if (runtime.lsquic_request_failed) {
+        if (request.request_failed) {
             if (response.header_overflowed) {
                 king_http3_throw(
                     king_ce_protocol_exception,
@@ -144,7 +147,7 @@ static zend_result king_http3_execute_request_lsquic(
             goto failure;
         }
 
-        if (!runtime.lsquic_headers_sent && now_ms >= connect_deadline_ms) {
+        if (!request.headers_sent && now_ms >= connect_deadline_ms) {
             king_http3_throw(
                 king_ce_timeout_exception,
                 "%s() timed out while establishing the QUIC connection.",
@@ -158,7 +161,7 @@ static zend_result king_http3_execute_request_lsquic(
         }
         king_http3_refresh_tls_state(&runtime);
 
-        if (runtime.lsquic_request_failed) {
+        if (request.request_failed) {
             continue;
         }
 
@@ -196,7 +199,7 @@ static zend_result king_http3_execute_request_lsquic(
         remaining_overall_ms = overall_deadline_ms - now_ms;
         remaining_connect_ms = connect_deadline_ms - now_ms;
         poll_timeout_ms = remaining_overall_ms;
-        if (!runtime.lsquic_headers_sent
+        if (!request.headers_sent
             && remaining_connect_ms > 0
             && poll_timeout_ms > remaining_connect_ms) {
             poll_timeout_ms = remaining_connect_ms;
